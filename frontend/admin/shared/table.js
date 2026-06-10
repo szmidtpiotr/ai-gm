@@ -6,8 +6,8 @@ export function esc(s) {
 }
 
 /**
- * Wire click-to-sort on all <th> containing .sort-icon.
- * Reads data-sort-val from <td> cells (positional — col index of th).
+ * Wire click-to-sort on ALL <th> elements in the table.
+ * Auto-detects numeric vs string; extracts data-sort-val from cells or uses text content.
  * Call after injecting table HTML. Safe to call multiple times (idempotent).
  *
  * @param {HTMLElement|string} tableOrId — table element or its id
@@ -23,50 +23,92 @@ export function initSortableTable(tableOrId) {
   if (!thead) return;
 
   const ths = Array.from(thead.querySelectorAll('th'));
+  if (!ths.length) return;
+
+  // Skip action columns (last th if it has no visible label or is "Akcje")
+  const actionColIdx = ths.findIndex(th => {
+    const txt = th.textContent?.trim().toLowerCase();
+    return txt === 'akcje' || txt === 'actions' || !txt;
+  });
 
   ths.forEach((th, colIdx) => {
-    const inner = th.querySelector('.th-inner');
-    const icon = inner && inner.querySelector('.sort-icon');
-    if (!icon) return; // not sortable
+    // Skip action/checkbox columns
+    if (colIdx === actionColIdx || th.classList.contains('col-check')) return;
 
-    let asc = icon.classList.contains('asc');
+    const inner = th.querySelector('.th-inner') || th;
+    if (!inner.textContent?.trim()) return; // Skip empty headers
+
+    let asc = true;
+    let sortActive = false;
+
+    // Ensure sort-icon exists (create if missing)
+    let icon = inner.querySelector('.sort-icon');
+    if (!icon) {
+      icon = document.createElement('span');
+      icon.className = 'sort-icon asc';
+      icon.textContent = '▲';
+      icon.style.marginLeft = '4px';
+      icon.style.opacity = '0.3';
+      inner.appendChild(icon);
+    }
 
     inner.style.cursor = 'pointer';
+    inner.style.userSelect = 'none';
+
     inner.addEventListener('click', () => {
-      // Toggle direction; first click → asc (unless already active+asc → switch to desc)
-      const wasActive = inner.classList.contains('sorted');
+      // Toggle direction
+      const wasActive = sortActive;
       asc = wasActive ? !asc : true;
+      sortActive = true;
 
       // Reset all headers
       ths.forEach(t => {
-        const i2 = t.querySelector('.th-inner');
-        const s2 = i2 && i2.querySelector('.sort-icon');
-        if (i2) i2.classList.remove('sorted');
-        if (s2) { s2.classList.remove('asc', 'desc'); }
+        const i2 = t.querySelector('.th-inner') || t;
+        const s2 = i2.querySelector('.sort-icon');
+        if (i2 !== inner) {
+          i2.classList.remove('sorted');
+          if (s2) { s2.classList.remove('asc', 'desc'); s2.style.opacity = '0.3'; }
+        }
       });
 
       // Mark this one active
       inner.classList.add('sorted');
+      icon.classList.remove('asc', 'desc');
       icon.classList.add(asc ? 'asc' : 'desc');
+      icon.style.opacity = '1';
 
       // Sort tbody rows
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
-      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const rows = Array.from(tbody.querySelectorAll('tr:not([style*="display: none"])'));
+
+      // Auto-detect numeric
       const numeric = rows.every(r => {
         const td = r.querySelectorAll('td')[colIdx];
-        const v = td ? td.dataset.sortVal : '';
-        return v === '' || v === undefined || !isNaN(Number(v));
+        if (!td) return false;
+        const v = (td.dataset.sortVal ?? td.textContent ?? '').trim();
+        return v === '' || !isNaN(Number(v));
       });
 
       rows.sort((a, b) => {
         const tda = a.querySelectorAll('td')[colIdx];
         const tdb = b.querySelectorAll('td')[colIdx];
-        const va = tda ? (tda.dataset.sortVal ?? '') : '';
-        const vb = tdb ? (tdb.dataset.sortVal ?? '') : '';
-        let cmp = numeric
-          ? (Number(va) || 0) - (Number(vb) || 0)
-          : va.localeCompare(vb, 'pl', { sensitivity: 'base' });
+
+        // Extract value: prefer data-sort-val, fallback to text content
+        const getVal = (td) => {
+          if (!td) return '';
+          return (td.dataset.sortVal ?? td.textContent ?? '').trim();
+        };
+
+        const va = getVal(tda);
+        const vb = getVal(tdb);
+
+        let cmp;
+        if (numeric) {
+          cmp = (Number(va) || 0) - (Number(vb) || 0);
+        } else {
+          cmp = va.localeCompare(vb, 'pl', { sensitivity: 'base' });
+        }
         return asc ? cmp : -cmp;
       });
 

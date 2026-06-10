@@ -4,7 +4,6 @@
  */
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
-import { initSortableTable } from '../shared/table.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 const _loaded = new Set();
@@ -394,7 +393,6 @@ async function _loadBestiaryLoot() {
         </td>
       </tr>`).join('')}</tbody>
     </table></div>`;
-    initSortableTable('world-loot-table');
   } catch(e) { container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${_esc(e.message)}</div>`; }
 }
 
@@ -641,7 +639,6 @@ async function _loadBestiaryPending() {
       </tr></thead>
       <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow)].join('')}</tbody>
     </table></div>`;
-    initSortableTable('bestiary-pending-table');
   } catch(e) {
     container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
   }

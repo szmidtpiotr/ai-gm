@@ -5,7 +5,6 @@
  */
 import { apiFetch }  from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
-import { initSortableTable } from '../shared/table.js';
 
 // ─── Module-local helpers ────────────────────────────────────────────────────
 function _esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -475,7 +474,6 @@ function _sectionHtml() { return `
       </tr>`).join('');
       const pg = document.getElementById('dungeons-count');
       if (pg) pg.textContent = `${items.length} lochów`;
-      initSortableTable('dungeons-table');
     } catch(e) { tbody.innerHTML = _errRow(10, e.message); }
   }
 
