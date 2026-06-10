@@ -25,6 +25,7 @@ const SLASH_COMMANDS = [
     { cmd: '/history', desc: 'Ostatnie 10 tur sesji' },
     { cmd: '/search',  desc: 'Przeszukaj lokację lub postać' },
     { cmd: '/atak',    desc: 'Synchronizuj panel walki lub zacznij walkę' },
+    { cmd: '/czar',    desc: 'Rzuć zaklęcie poza walką (np. /czar mend_wounds)' },
 ];
 
 // ============================================================================
@@ -2732,6 +2733,17 @@ async function handleSlashCommand(text) {
         return true;
     }
 
+    if (/^\/czar(\s|$)/i.test(t)) {
+        const spellKey = t.replace(/^\/czar\s*/i, '').trim().toLowerCase();
+        if (!spellKey) {
+            appendMessage({ role: 'system', content: '**Użyj:** `/czar [klucz_zaklęcia]`\nNp. `/czar mend_wounds` lub `/czar magic_light`', created_at: new Date() });
+            scrollToBottom();
+            return true;
+        }
+        await castSpellOutOfCombat(spellKey);
+        return true;
+    }
+
     return false; // let other commands pass through to turns API
 }
 
@@ -2825,6 +2837,40 @@ async function _fetchRollSkills() {
         ];
     }
     return _rollSkillCache;
+}
+
+let _czarSpellCache = null;
+
+async function _fetchCzarSpells() {
+    if (_czarSpellCache && _czarSpellCache._charId === characterData?.id) return _czarSpellCache;
+    try {
+        const token = localStorage.getItem('aigm_access_token');
+        const r = await fetch(`/api/characters/${characterData.id}/spells`,
+            token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+        const data = await r.json();
+        const spells = (data?.spells || []).filter(s =>
+            s.spell_type !== 'attack' && s.spell_type !== 'attack_aoe' && s.spell_type !== 'effect'
+        );
+        _czarSpellCache = spells;
+        _czarSpellCache._charId = characterData?.id;
+    } catch {
+        _czarSpellCache = [];
+        _czarSpellCache._charId = characterData?.id;
+    }
+    return _czarSpellCache;
+}
+
+function getCzarSuggestions(afterCzar, spells) {
+    const typed = afterCzar.trimStart().toLowerCase();
+    if (afterCzar.trimStart().includes(' ')) return [];
+    const ICONS = { heal: '💚', defense: '🛡', narrative: '🕯', effect: '✨' };
+    return (spells || [])
+        .filter(s => !typed || s.spell_key.startsWith(typed) || (s.label || '').toLowerCase().startsWith(typed))
+        .slice(0, 8)
+        .map(s => ({
+            cmd: `/czar ${s.spell_key}`,
+            desc: `${ICONS[s.spell_type] || '✨'} ${s.label || s.spell_key}${s.mana_cost ? ` (🔮${s.mana_cost})` : ' (bezpłatne)'}`,
+        }));
 }
 
 function getRollSuggestions(afterRoll, cachedSkills) {
@@ -5604,12 +5650,26 @@ async function renderSpellsTab(character, sheet) {
             listEl.innerHTML = '<p class="sheet-lore-text">Brak wyuczonych zaklęć.</p>';
             return;
         }
-        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥' };
+        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥', narrative:'🕯' };
+        const currentMana = sheet.current_mana ?? 0;
         listEl.innerHTML = spells.map(s => {
             const icon = TYPE_ICONS[s.spell_type] || '✨';
             const rankPips = Array.from({length: 3}, (_, i) =>
                 `<span class="spell-rank-pip${i < (s.rank || 1) ? ' active' : ''}"></span>`
             ).join('');
+            const isOffensive = s.spell_type === 'attack' || s.spell_type === 'attack_aoe';
+            const manaOk = (s.mana_cost || 0) === 0 || currentMana >= (s.mana_cost || 0);
+            let castBtn;
+            if (isOffensive) {
+                castBtn = `<button class="spell-card__cast-btn spell-card__cast-btn--combat-only" disabled title="Tylko w walce — użyj panelu walki">⚔ w walce</button>`;
+            } else if (combatActive) {
+                castBtn = `<button class="spell-card__cast-btn spell-card__cast-btn--combat-only" disabled title="Jesteś w walce — użyj przycisku Zaklęcie w panelu walki">↕ panel walki</button>`;
+            } else if (!manaOk) {
+                castBtn = `<button class="spell-card__cast-btn spell-card__cast-btn--nomana" disabled title="Za mało many">🔮 mana</button>`;
+            } else {
+                const btnLabel = s.spell_type === 'narrative' ? 'Użyj' : s.spell_type === 'heal' ? 'Lecz' : 'Rzuć';
+                castBtn = `<button class="spell-card__cast-btn" data-spell-key="${escapeHtml(s.spell_key)}" title="Rzuć zaklęcie">🔮 ${btnLabel}</button>`;
+            }
             return `<div class="spell-card">
                 <div class="spell-card__header">
                     <span class="spell-card__icon">${icon}</span>
@@ -5622,8 +5682,12 @@ async function renderSpellsTab(character, sheet) {
                     <span class="spell-card__ranks" title="Ranga">${rankPips}</span>
                 </div>
                 ${s.description ? `<p class="spell-card__desc">${escapeHtml(s.description)}</p>` : ''}
+                <div class="spell-card__actions">${castBtn}</div>
             </div>`;
         }).join('');
+        listEl.querySelectorAll('.spell-card__cast-btn:not(:disabled)').forEach(btn => {
+            btn.addEventListener('click', () => castSpellOutOfCombat(btn.dataset.spellKey));
+        });
     } catch {
         listEl.innerHTML = '<p class="sheet-lore-text">Błąd ładowania zaklęć.</p>';
     }
@@ -8504,6 +8568,10 @@ function initSlashAutocomplete(inputEl) {
         if (/^roll(\s|$)/i.test(token)) {
             return { idx, query: token, isRoll: true };
         }
+        // /czar [spell_key] — autocomplete from known non-offensive spells
+        if (/^czar(\s|$)/i.test(token)) {
+            return { idx, query: token, isCzar: true };
+        }
         if (/\s/.test(token)) return null;
         return { idx, query: token, isAdmin: false };
     }
@@ -8596,6 +8664,17 @@ function initSlashAutocomplete(inputEl) {
                 showPopup();
             });
             return; // async path — skip synchronous found assignment
+        } else if (ctx.isCzar) {
+            if (!characterData?.id) { hide(); return; }
+            const afterCzar = ctx.query.replace(/^czar\s*/i, '');
+            _fetchCzarSpells().then(spells => {
+                const sugg = getCzarSuggestions(afterCzar, spells);
+                if (!sugg.length) { hide(); return; }
+                matches = sugg;
+                hi = 0;
+                showPopup();
+            });
+            return;
         } else {
             found = SLASH_COMMANDS
                 .filter(c => !c.adminOnly || playerIsAdmin())
@@ -9117,7 +9196,7 @@ async function openSpellPicker() {
             list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Brak wyuczonych zaklęć.</div>';
             return;
         }
-        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥' };
+        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥', narrative:'🕯' };
         list.innerHTML = spells.map(s => {
             const canCast = mana >= (s.mana_cost || 2);
             return `<button class="spell-pick-btn${canCast ? '' : ' spell-pick-btn--nomana'}"
@@ -9143,6 +9222,43 @@ async function openSpellPicker() {
 
 function closeSpellPicker() {
     document.getElementById('spell-picker-overlay')?.setAttribute('hidden', '');
+}
+
+async function castSpellOutOfCombat(spellKey) {
+    if (!currentCampaignId || !characterData?.id) {
+        showToast('Brak aktywnej kampanii.', 'error');
+        return;
+    }
+    const token = localStorage.getItem('aigm_access_token');
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/cast-spell`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ spell_key: spellKey, character_id: characterData.id }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            showToast(data?.detail || 'Błąd rzucania zaklęcia.', 'error');
+            return;
+        }
+        _cachedSpells = null;
+        _czarSpellCache = null;
+        if (data.spell_type === 'narrative') {
+            // Narrative spells go through the LLM so the GM narrates the effect
+            const actionText = `Rzucam zaklęcie ${data.label || spellKey}. ${data.message || ''}`.trim();
+            await sendTurn(actionText, 'free_text', `🕯 ${data.label || spellKey}`);
+        } else {
+            const msg = data.message || `Rzucono ${data.label || spellKey}.`;
+            appendMessage({ role: 'system', content: `🔮 ${msg}`, created_at: new Date() });
+            scrollToBottom();
+            await refreshCharacterData();
+        }
+    } catch (e) {
+        showToast(e.message || 'Błąd zaklęcia.', 'error');
+    }
 }
 
 async function handleCombatSpellAttack(spellKey) {

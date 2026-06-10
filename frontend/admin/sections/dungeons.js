@@ -743,6 +743,7 @@ function _sectionHtml() { return `
                 <div></div>
               </div>
             </div>
+            ${p.image_url ? `<button type="button" id="tf-door-apply" class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px;font-size:.74rem" title="Rekomponuj obraz z nowymi drzwiami (bez nowej generacji AI)">🔄 Rekomponuj drzwi</button>` : ''}
           </div>
         </div>
       </div>
@@ -811,13 +812,13 @@ function _sectionHtml() { return `
         </div>
       </div>
 
-      <!-- Door overlay editor -->
-      <div class="tf-section" id="tf-door-overlay-section" style="${p.image_url?'':'display:none'}">
+      <!-- Door overlay editor (legacy drag-position editor — hidden; compositor uses fixed midpoint markers) -->
+      <div class="tf-section" id="tf-door-overlay-section" style="display:none">
         <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
           <span>🚪 Pozycje drzwi <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3);font-size:.7rem">(kompozytor backend)</span></span>
           <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
             <button type="button" class="btn btn-secondary btn-sm" id="tf-door-reset" title="Powrót do kanonicznych pozycji domyślnych">🎲 Auto</button>
-            <button type="button" class="btn btn-primary btn-sm" id="tf-door-apply" title="Zapisz pozycje i zrekomponuj obraz (bez nowej generacji AI)">✓ Zastosuj</button>
+            <button type="button" class="btn btn-primary btn-sm" id="tf-door-apply-legacy" title="Zapisz pozycje i zrekomponuj obraz (bez nowej generacji AI)">✓ Zastosuj</button>
           </span>
         </div>
         <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij łuk = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
@@ -897,12 +898,34 @@ function _sectionHtml() { return `
     document.body.appendChild(overlay);
 
     // ── Door buttons ──────────────────────────────────────────
+    function _updatePreviewDoorBars() {
+      const preview = overlay.querySelector('#tf-img-preview');
+      if (!preview) return;
+      preview.style.position = 'relative';
+      preview.querySelectorAll('.tf-door-bar').forEach(el => el.remove());
+      const activeDoors = Array.from(overlay.querySelectorAll('#tf-doors input:checked'))
+        .map(i => i.dataset.door);
+      const BAR = {
+        N: 'top:0;left:15%;width:70%;height:26px;border-radius:0 0 6px 6px;',
+        S: 'bottom:0;left:15%;width:70%;height:26px;border-radius:6px 6px 0 0;',
+        E: 'top:15%;right:0;width:26px;height:70%;border-radius:6px 0 0 6px;',
+        W: 'top:15%;left:0;width:26px;height:70%;border-radius:0 6px 6px 0;',
+      };
+      activeDoors.forEach(side => {
+        if (!BAR[side]) return;
+        const bar = document.createElement('div');
+        bar.className = 'tf-door-bar';
+        bar.style.cssText = `position:absolute;background:#f59e0b;opacity:.85;z-index:10;pointer-events:none;${BAR[side]}`;
+        preview.appendChild(bar);
+      });
+    }
     overlay.querySelectorAll('#tf-doors .tf-door-btn').forEach(lbl => {
-      lbl.addEventListener('click', () => {
+      lbl.addEventListener('click', (ev) => {
+        ev.preventDefault(); // prevent browser double-toggle on label+checkbox
         const cb = lbl.querySelector('input');
         cb.checked = !cb.checked;
         lbl.classList.toggle('on', cb.checked);
-        // Refresh door overlay editor — active doors changed
+        _updatePreviewDoorBars();
         if (typeof _renderDoorEditor === 'function') _renderDoorEditor();
       });
     });
@@ -1033,9 +1056,9 @@ function _sectionHtml() { return `
           sprites.push({ enemyIdx: ei, instIdx: ii, info, t: e.overlays[ii] });
         });
       });
-      sec.style.display = tileImg && sprites.length ? '' : 'none';
+      sec.style.display = tileImg ? '' : 'none';
       if (!tileImg || !sprites.length) {
-        surf.innerHTML = `<div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>`;
+        surf.innerHTML = `<div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Dodaj wroga i wygeneruj jego obraz (🖼),<br>aby ustawić jego pozycję na kafelku.</div>`;
         return;
       }
       const showColl = overlay.querySelector('#tf-ov-collision-warn')?.checked !== false;
@@ -1127,6 +1150,8 @@ function _sectionHtml() { return `
       _tfDoorOverlays[side] = { ..._getDoorOverlay(side), ...patch };
     }
     function _renderDoorEditor() {
+      // legacy drag-position editor — permanently hidden, compositor uses fixed midpoint markers
+      return;
       const sec  = overlay.querySelector('#tf-door-overlay-section');
       const surf = overlay.querySelector('#tf-door-overlay-surface');
       if (!sec || !surf) return;
@@ -1442,8 +1467,9 @@ function _sectionHtml() { return `
 
     // Initial chip render (before pools arrive)
     _rfEnemy(); _rfItem(); _rfState(); _rfExit();
-    // Initial door overlay editor render
+    // Initial door overlay editor render + preview bars
     _renderDoorEditor();
+    _updatePreviewDoorBars();
 
     // ── Save & actions ────────────────────────────────────────
     overlay.querySelector('#tf-save-btn').addEventListener('click', () => _saveTile(overlay, p.id, {

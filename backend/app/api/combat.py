@@ -166,6 +166,23 @@ def post_flee(campaign_id: int):
     )
 
 
+class CastSpellRequest(BaseModel):
+    spell_key: str
+    character_id: int | None = None
+
+
+@router.post("/campaigns/{campaign_id}/cast-spell")
+def post_cast_spell(campaign_id: int, body: CastSpellRequest):
+    """Cast a non-offensive spell (heal/defense/narrative) outside active combat."""
+    from app.services import spell_service
+    char_id = body.character_id if body.character_id is not None else _first_character_id(campaign_id)
+    try:
+        result = spell_service.cast_spell_out_of_combat(char_id, body.spell_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return result
+
+
 @router.post("/campaigns/{campaign_id}/combat/loot/claim")
 def post_claim_loot(campaign_id: int, body: ClaimLootRequest):
     try:
