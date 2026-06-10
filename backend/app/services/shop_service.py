@@ -80,7 +80,8 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
     if t == "weapon":
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp,
+            SELECT key, label, description,
+                   COALESCE(price_gp, value_gp, 0) AS effective_price,
                    COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_weapons
             WHERE key = ? AND COALESCE(is_active, 1) = 1
@@ -94,7 +95,7 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
             "key": row["key"],
             "label": row["label"] or row["key"],
             "description": row["description"] or "",
-            "value_gp": int(row["price_gp"] or 0),
+            "value_gp": int(row["effective_price"] or 0),
             "min_level": int(row["min_level"] or 1),
             "location_tags": row["location_tags"],
         }
@@ -103,7 +104,8 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
         try:
             row = conn.execute(
                 """
-                SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type,
+                SELECT key, label, description,
+                       COALESCE(price_gp, value_gp, 0) AS effective_price, item_type,
                        COALESCE(min_level, 1) AS min_level, location_tags
                 FROM game_config_items
                 WHERE key = ? AND COALESCE(is_active, 1) = 1
@@ -119,13 +121,14 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
                 "key": row["key"],
                 "label": row["label"] or row["key"],
                 "description": row["description"] or "",
-                "value_gp": int(row["price_gp"] or 0),
+                "value_gp": int(row["effective_price"] or 0),
                 "min_level": int(row["min_level"] or 1),
                 "location_tags": row["location_tags"],
             }
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(base_price, 0) AS price_gp,
+            SELECT key, label, description,
+                   COALESCE(price_gp, base_price, 0) AS effective_price,
                    COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_consumables
             WHERE key = ? AND COALESCE(is_active, 1) = 1
@@ -139,7 +142,7 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
             "key": row["key"],
             "label": row["label"] or row["key"],
             "description": row["description"] or "",
-            "value_gp": int(row["price_gp"] or 0),
+            "value_gp": int(row["effective_price"] or 0),
             "min_level": int(row["min_level"] or 1),
             "location_tags": row["location_tags"],
         }
@@ -148,7 +151,8 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
     try:
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type,
+            SELECT key, label, description,
+                   COALESCE(price_gp, value_gp, 0) AS effective_price, item_type,
                    COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_items
             WHERE key = ? AND COALESCE(is_active, 1) = 1
@@ -159,7 +163,7 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
     except sqlite3.OperationalError:
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp
+            SELECT key, label, description, COALESCE(price_gp, value_gp, 0) AS effective_price
             FROM game_config_items
             WHERE key = ? AND COALESCE(is_active, 1) = 1
             """,
@@ -180,7 +184,7 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
         "key": row["key"],
         "label": row["label"] or row["key"],
         "description": row["description"] or "",
-        "value_gp": int(row["price_gp"] or 0),
+        "value_gp": int(row["effective_price"] or 0),
         "min_level": min_level_val,
         "location_tags": location_tags_val,
     }
@@ -242,6 +246,30 @@ def _buy_price(base_price: int, cha: int) -> int:
     if base <= 0:
         return base
     return max(1, int(math.floor(base * _cha_buy_multiplier(cha))))
+
+
+# F11 (#471): tier bonuses for affixed item instances
+_AFFIX_TIER_BONUS: dict[int, int] = {1: 25, 2: 75, 3: 200}
+
+
+def _affix_price_bonus(conn: sqlite3.Connection, affix_keys: list[str]) -> int:
+    """Sum of price bonuses for each affix key based on its tier.
+
+    T1 = +25 gp, T2 = +75 gp, T3 = +200 gp. Unknown keys contribute 0.
+    """
+    if not affix_keys:
+        return 0
+    total = 0
+    for key in affix_keys:
+        try:
+            row = conn.execute(
+                "SELECT tier FROM game_config_affixes WHERE key = ?", (str(key),)
+            ).fetchone()
+            if row:
+                total += _AFFIX_TIER_BONUS.get(int(row[0] or row["tier"] or 0), 0)
+        except Exception:
+            pass
+    return total
 
 
 def _cha_sell_ratio(cha: int) -> float:

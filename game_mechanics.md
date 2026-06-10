@@ -955,7 +955,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F8 | Napady: encounter kradnący % złota (✅ #468 KOMPLETNE: `robbery_service.py` + turns.py hook + 2 seedy; default 20%; 18 testów GREEN) | D7 |
 | F9 | Dynamiczny asortyment sklepu (lokacja+poziom) (✅ #469 KOMPLETNE: `_get_character_level` + `_item_passes_filters`; `min_level`+`location_tags` migration na weapons/items/consumables; `location_key` query param; 12 testów GREEN) | — |
 | F10 | CHA na kupno (nie tylko sprzedaż) (✅ #470 KOMPLETNE: `_cha_buy_multiplier` = 1 - CHA_mod×0.05 klamp 0.5; `_buy_price`; `buy_price_gp` per item; `buy_item` pobiera zniżoną cenę → `paid_gp`; 11 testów GREEN) | — |
-| F11 | Unifikacja ceny → jeden price_gp | F2 |
+| F11 | ✅ Unifikacja ceny (#471 KOMPLETNE: `COALESCE(price_gp, value_gp/base_price)` w `_catalog_item`; `_affix_price_bonus` T1=+25/T2=+75/T3=+200gp; migracja backfill z legacy fields; 13 testów GREEN) | F2 |
 | F12 | ✅ Anti-farm: malejąca cena przy spam-sprzedaży (#472 KOMPLETNE: `anti_farm_service.get_anti_farm_multiplier`; decay po 3 sprzedażach w 24h, min 10%; `sell_item` taguje gold_log z `item_key`; 13 testów GREEN) | — |
 | F13 | ✅ Background expire wynajmu (sweep) (#473 KOMPLETNE: `rental_service.expire_rentals()` + hook w turns.py) | — |
 | F14 | ✅ Usunięcie martwego economy_service kodu (#474 KOMPLETNE: generate_combat_loot/claim_loot/expire_loot_on_location_change usunięte) | — |
@@ -3122,7 +3122,7 @@ grind loch / walka → złoto + przedmioty
 | F8 | ✅ Napady (#468, commit b7ff32e) — encounter_type='robbery'; `robbery_service.apply_robbery()` kradnie floor(gold * pct/100); turns.py hook; 2 seedy (trakt + miasto); domyślnie 20% | encountery |
 | F9 | ✅ Dynamiczny asortyment sklepu (#469) — `min_level`+`location_tags` na katalogach; `_item_passes_filters(cat, char_level, location_key)`; `location_key` query param w GET /shop; NULL tags = wszędzie | — |
 | F10 | ✅ CHA na kupno (#470) — `_cha_buy_multiplier(cha)`=1-CHA_mod×0.05 (klamp 0.5); `_buy_price(base, cha)`; `get_shop_inventory` zwraca `buy_price_gp` per item + `buy_multiplier`; `buy_item` pobiera zniżoną/podwyższoną cenę → `paid_gp` | — |
-| F11 | Unifikacja ceny → jeden `price_gp` + wycena egzemplarza z afiksami | unifikacja przedmiotów (CZĘŚĆ X) |
+| F11 | ✅ Unifikacja ceny (#471) — `COALESCE(price_gp, value_gp/base_price)` in `_catalog_item`; `_affix_price_bonus(conn, keys)` T1/T2/T3 bonuses; migration backfills from legacy fields | unifikacja przedmiotów (CZĘŚĆ X) |
 | F12 | ✅ Anti-farm (#472) — `anti_farm_service.get_anti_farm_multiplier(conn, char_id, item_key)`; LIMIT=3 sprzedaże/24h; decay 10%/extra; min 10%; `sell_item` taguje gold_log row `meta_json={item_key}` | — |
 | F13 | ✅ Background expire wynajmu (#473) — `rental_service.expire_rentals(conn, campaign_id, current_turn)` marks status=expired, deletes inventory_id rows; hooked at start of each turn | — |
 | F14 | ✅ Dead code removed (#474) — `generate_combat_loot` / `claim_loot` / `expire_loot_on_location_change` removed from economy_service (~210 lines) | — |

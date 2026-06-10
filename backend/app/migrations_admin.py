@@ -2922,6 +2922,34 @@ def _ensure_shop_item_level_location_schema(conn: sqlite3.Connection) -> None:
                     raise
 
 
+def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
+    """F11 (#471): add unified price_gp column to item catalog tables.
+
+    price_gp overrides value_gp / base_price when set. Backfill from existing values.
+    """
+    for table, legacy_col in (
+        ("game_config_weapons", "value_gp"),
+        ("game_config_items", "value_gp"),
+        ("game_config_consumables", "base_price"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN price_gp INTEGER DEFAULT NULL")
+            conn.commit()
+        except Exception as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                raise
+        # Backfill price_gp from legacy column where not yet set
+        try:
+            conn.execute(
+                f"UPDATE {table} SET price_gp = {legacy_col} WHERE price_gp IS NULL AND {legacy_col} > 0"
+            )
+            conn.commit()
+        except Exception:
+            pass
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2996,6 +3024,7 @@ def run_admin_migrations() -> None:
         _ensure_game_config_services(conn)
         _ensure_submap_schema(conn)
         _ensure_shop_item_level_location_schema(conn)
+        _ensure_price_gp_schema(conn)
     finally:
         conn.close()
 

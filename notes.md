@@ -12,11 +12,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
-| F (Faza 4) | 13/21 | 62% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F12✅ F13✅ F14✅) |
+| F (Faza 4) | 14/21 | 67% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **90/140** | **64%** |
+| **TOTAL** | **91/140** | **65%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -141,7 +141,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] F8 — Napady: encounter kradnący % złota przy porażce/zaskoczeniu — [#468](https://github.com/szmidtpiotr/ai-gm/issues/468) — ✅ commit b7ff32e: `robbery_service.py` (apply/config/is_robbery); turns.py hook przed combat; 2 robbery seedy w encounter pool; 18 pytest + 3 Playwright GREEN
 - [x] F9 — Dynamiczny asortyment sklepu (lokacja + poziom gracza) — [#469](https://github.com/szmidtpiotr/ai-gm/issues/469) — ✅ `shop_service.py` `_get_character_level` + `_item_passes_filters`; `min_level`+`location_tags` na 3 tabelach; `location_key` query param w GET /shop; 12 pytest + 3 Playwright GREEN
 - [x] F10 — CHA na kupno — bonus/malus przy zakupach (nie tylko sprzedaży) — [#470](https://github.com/szmidtpiotr/ai-gm/issues/470) — ✅ `_cha_buy_multiplier` (1 - CHA_mod×0.05, klamp 0.5) + `_buy_price`; `buy_price_gp` per item + `buy_multiplier` w odpowiedzi; `buy_item` pobiera zniżoną cenę → `paid_gp`; 11 pytest + 3 Playwright GREEN
-- [ ] F11 — Unifikacja ceny → jeden price_gp + wycena egzemplarza z afiksami — [#471](https://github.com/szmidtpiotr/ai-gm/issues/471)
+- [x] F11 — Unifikacja ceny → jeden price_gp + wycena egzemplarza z afiksami — [#471](https://github.com/szmidtpiotr/ai-gm/issues/471) — ✅ `_catalog_item` używa `COALESCE(price_gp, value_gp/base_price)`; `_affix_price_bonus` T1=+25/T2=+75/T3=+200gp; migracja backfill; 13 pytest + 3 Playwright GREEN
 - [x] F12 — Anti-farm: malejąca cena sprzedaży przy spam-sprzedaży tego samego type — [#472](https://github.com/szmidtpiotr/ai-gm/issues/472) — ✅ `anti_farm_service.py`: `get_anti_farm_multiplier` (decay po 3 sprzedażach, okno 24h, min 10%); `sell_item` hook + patch `meta_json` z `item_key`; 13 pytest + 3 Playwright GREEN
 - [x] F13 — Background expire wynajmu — sweep wygasłych tymczasowych bonusów — [#473](https://github.com/szmidtpiotr/ai-gm/issues/473) — ✅ commit ac3ca68: `rental_service.expire_rentals(conn, campaign_id, current_turn)`; hook w `turns.py`; 10 pytest + 2 Playwright GREEN
 - [x] F14 — Usunięcie martwego economy_service (generate_combat_loot / claim_loot) — [#474](https://github.com/szmidtpiotr/ai-gm/issues/474) — ✅ commit ac3ca68: ~210 linii martwego kodu TASK_22 usunięte; 6 pytest + 2 Playwright GREEN
