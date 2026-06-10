@@ -81,6 +81,7 @@ const _ROW_REGISTRY = {
       {name:'rarity',     label:'Rzadkość (1-5)', type:'number', min:1, max:5},
       {name:'is_active',  label:'Aktywny',      type:'checkbox'},
       {name:'description',label:'Opis',         type:'textarea'},
+      {name:'effect_json',label:'Efekty broni (on-equip)', type:'effect_json_builder'},
     ], reload: () => { _loaded.delete('weapons'); _loadWeapons(); } },
   'armor-table': { endpoint:'/api/admin/items', keyField:'key', fields:[
       {name:'label',          label:'Nazwa',     type:'text'},
@@ -91,6 +92,7 @@ const _ROW_REGISTRY = {
       {name:'rarity',         label:'Rzadkość (1-5)', type:'number', min:1, max:5},
       {name:'is_active',      label:'Aktywny',   type:'checkbox'},
       {name:'description',    label:'Opis',      type:'textarea'},
+      {name:'effect_json',    label:'Efekty zbroi (on-equip)', type:'effect_json_builder'},
     ], reload: () => { _loaded.delete('armor'); _loadArmor(); } },
   'items-table': { endpoint:'/api/admin/items', keyField:'key', fields:[
       {name:'label',      label:'Nazwa',     type:'text'},
@@ -100,6 +102,7 @@ const _ROW_REGISTRY = {
       {name:'rarity',     label:'Rzadkość (1-5)', type:'number', min:1, max:5},
       {name:'is_active',  label:'Aktywny',   type:'checkbox'},
       {name:'description',label:'Opis',      type:'textarea'},
+      {name:'effect_json',label:'Efekty przedmiotu (on-equip)', type:'effect_json_builder'},
     ], reload: () => { _loaded.delete('items'); _loadItems(); } },
   'consumables-table': { endpoint:'/api/admin/consumables', keyField:'key', fields:[
       {name:'label',       label:'Nazwa',         type:'text'},
@@ -134,12 +137,28 @@ function _wireRowActions(tableId) {
   });
 }
 
-function _openGenericEditModal(cfg, record) {
+async function _openGenericEditModal(cfg, record) {
   const key = record[cfg.keyField];
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
+  const hasEfxBuilder = cfg.fields.some(f => f.type === 'effect_json_builder');
+  if (hasEfxBuilder) await _loadConditionsCache();
+
+  const efxState = {}; // field.name → current effects[]
+
   const fieldsHtml = cfg.fields.map(f => {
     const v = record[f.name];
+    if (f.type === 'effect_json_builder') {
+      const existingEffects = (() => {
+        try {
+          const parsed = typeof v === 'string' ? JSON.parse(v) : (v || null);
+          return Array.isArray(parsed) ? parsed : (parsed?.effects || []);
+        } catch { return []; }
+      })();
+      efxState[f.name] = [...existingEffects];
+      return `<div class="form-row" style="grid-column:1/-1;margin-top:6px">
+        <label class="form-label" style="margin-bottom:4px">${_esc(f.label)}</label>
+        <div data-efx-field="${_esc(f.name)}">${_effectBuilderHtml(existingEffects)}</div>
+      </div>`;
+    }
     if (f.type === 'checkbox') {
       return `<div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="${f.name}" ${v?'checked':''}> ${_esc(f.label)}</label></div>`;
     }
@@ -151,7 +170,10 @@ function _openGenericEditModal(cfg, record) {
     const max  = f.max !== undefined ? ` max="${f.max}"` : '';
     return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><input class="form-input" name="${f.name}" type="${f.type}" value="${_esc(v??'')}"${step}${min}${max}></div>`;
   }).join('');
-  overlay.innerHTML = `<div class="modal-box" style="max-width:480px">
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:${hasEfxBuilder ? '560px' : '480px'}">
     <div class="modal-head"><span class="modal-title">Edytuj rekord</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
     <div class="modal-body" style="padding:12px 16px">
       <div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">Klucz: <code>${_esc(key)}</code></div>
@@ -163,9 +185,25 @@ function _openGenericEditModal(cfg, record) {
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Wire effect builders
+  for (const f of cfg.fields.filter(f => f.type === 'effect_json_builder')) {
+    const wrapper = overlay.querySelector(`[data-efx-field="${f.name}"]`);
+    const builder = wrapper?.querySelector('.effect-builder');
+    if (builder) _wireEffectBuilder(builder, efx => { efxState[f.name] = efx; });
+  }
+
   overlay.querySelector('#gen-save-btn').onclick = async () => {
     const payload = {};
     for (const f of cfg.fields) {
+      if (f.type === 'effect_json_builder') {
+        const effects = efxState[f.name] || [];
+        payload[f.name] = effects.length > 0
+          ? JSON.stringify({ schema_version: 1, effect_category: 'gear_bonus', effects })
+          : null;
+        continue;
+      }
       const el = overlay.querySelector(`[name="${f.name}"]`);
       if (!el) continue;
       if (f.type === 'checkbox') payload[f.name] = el.checked;
@@ -382,15 +420,44 @@ async function _loadConsumables() {
 
 // ── Effects Builder (F3 #463) ──────────────────────────────────────────────
 const _EFFECT_TYPES = [
-  { value: 'damage_bonus',       label: 'Bonus obrażeń',          fields: ['value'] },
-  { value: 'heal_on_hit',        label: 'Leczenie przy trafieniu', fields: ['value'] },
-  { value: 'ac_bonus',           label: 'Bonus AC',               fields: ['value'] },
-  { value: 'static_stat_modifier', label: 'Modyfikator statystyki', fields: ['stat', 'value'] },
-  { value: 'apply_condition',    label: 'Aplikuj kondycję',       fields: ['condition_key', 'duration_rounds'] },
-  { value: 'narrative_only',     label: 'Tylko narracja',         fields: [] },
+  {
+    value: 'damage_bonus', label: 'Bonus obrażeń', fields: ['value'],
+    tooltip: 'Stały bonus do obrażeń (liczba całkowita). Doliczany po rzucie kością, NIE podwaja się przy trafieniu krytycznym.\nNp. 2 = zawsze +2 obrażeń.',
+  },
+  {
+    value: 'heal_on_hit', label: 'Leczenie przy trafieniu', fields: ['value'],
+    tooltip: 'HP przywrócone atakującemu przy każdym trafieniu (liczba całkowita). Nie może przekroczyć max HP.\nNp. 3 = leczysz 3 HP za każde trafienie.',
+  },
+  {
+    value: 'ac_bonus', label: 'Bonus AC', fields: ['value'],
+    tooltip: 'Dodawany do obrony gracza (AC) jednorazowo na start walki (liczba całkowita). Obowiązuje przez całą walkę.\nNp. 2 = +2 AC.',
+  },
+  {
+    value: 'static_stat_modifier', label: 'Modyfikator statystyki', fields: ['stat', 'value'],
+    tooltip: 'Modyfikator statystyki aplikowany na start walki (liczba całkowita, może być ujemna).\nNp. +2 = bonus do statystyki, -1 = klątwa/osłabienie.',
+  },
+  {
+    value: 'apply_condition', label: 'Aplikuj kondycję', fields: ['condition_key', 'duration_rounds'],
+    tooltip: 'Aplikuje wybraną kondycję na wroga przy trafieniu. Nie nakłada duplikatów tej samej kondycji.',
+  },
+  { value: 'narrative_only', label: 'Tylko narracja', fields: [],
+    tooltip: 'Brak efektu mechanicznego — LLM może odczytać opis w note i narrować specjalne właściwości.' },
 ];
 
 const _STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+// Cache kondycji dla dropdownu apply_condition — ładowany raz przy otwarciu modalu
+let _conditionsCache = null;
+
+async function _loadConditionsCache() {
+  if (_conditionsCache !== null) return;
+  try {
+    const d = await apiFetch('/api/admin/conditions');
+    _conditionsCache = (d.items || []).map(c => ({ key: c.key, label: c.label || c.key }));
+  } catch {
+    _conditionsCache = [];
+  }
+}
 
 function _effectBuilderHtml(effects) {
   const rows = (effects || []).map((e, i) => _effectRowHtml(e, i)).join('');
@@ -415,14 +482,24 @@ function _effectRowHtml(e, i) {
 
 function _buildExtraFields(tdef, e) {
   return (tdef.fields || []).map(f => {
-    if (f === 'value') return `<input class="form-input effect-value" type="number" placeholder="Wartość" value="${e.value??''}" style="width:90px">`;
+    if (f === 'value') {
+      const tip = tdef.tooltip ? ` title="${_esc(tdef.tooltip)}"` : '';
+      return `<input class="form-input effect-value" type="number" placeholder="Wartość" value="${e.value??''}" style="width:90px"${tip}>`;
+    }
     if (f === 'stat') {
-      return `<select class="form-input effect-stat" style="width:80px">
+      return `<select class="form-input effect-stat" style="width:80px" title="${_esc(tdef.tooltip||'')}">
         ${_STATS.map(s => `<option${e.stat===s?' selected':''}>${s}</option>`).join('')}
       </select>`;
     }
-    if (f === 'condition_key') return `<input class="form-input effect-cond-key" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px">`;
-    if (f === 'duration_rounds') return `<input class="form-input effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px">`;
+    if (f === 'condition_key') {
+      const conds = _conditionsCache || [];
+      if (conds.length) {
+        const opts = conds.map(c => `<option value="${_esc(c.key)}"${e.condition_key===c.key?' selected':''}>${_esc(c.label)}</option>`).join('');
+        return `<select class="form-input effect-cond-key" style="width:160px" title="${_esc(tdef.tooltip||'')}"><option value="">— kondycja —</option>${opts}</select>`;
+      }
+      return `<input class="form-input effect-cond-key" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px" title="${_esc(tdef.tooltip||'')}">`;
+    }
+    if (f === 'duration_rounds') return `<input class="form-input effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px" title="Liczba rund trwania kondycji (0 = do końca walki)">`;
     return '';
   }).join('');
 }
@@ -459,8 +536,12 @@ function _wireEffectBuilder(container, onChange) {
         onChange(effects);
       });
     });
-    rowsEl.querySelectorAll('.effect-value,.effect-stat,.effect-cond-key,.effect-duration').forEach(inp => {
+    rowsEl.querySelectorAll('.effect-value,.effect-stat,.effect-duration').forEach(inp => {
       inp.addEventListener('input', () => onChange(_readEffects(container)));
+    });
+    rowsEl.querySelectorAll('.effect-cond-key').forEach(el => {
+      el.addEventListener('change', () => onChange(_readEffects(container)));
+      el.addEventListener('input', () => onChange(_readEffects(container)));
     });
   };
 
@@ -551,7 +632,8 @@ async function _loadAffixes() {
   } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
 }
 
-function _openAffixModal(existing) {
+async function _openAffixModal(existing) {
+  await _loadConditionsCache();
   const isEdit = !!existing;
   const effects = _parseEffectJson(existing?.effect_json);
   let currentEffects = effects;
