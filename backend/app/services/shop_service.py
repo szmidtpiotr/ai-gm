@@ -224,6 +224,26 @@ def _get_character_cha(conn: sqlite3.Connection, character_id: int) -> int:
         return 10
 
 
+def _cha_buy_multiplier(cha: int) -> float:
+    """F10 (#470): buy-price multiplier from CHA, symmetric to sell.
+
+    Formula: 1 - CHA_mod * 0.05, where CHA_mod = (CHA - 10) // 2.
+    High CHA → discount (<1.0), low CHA → markup (>1.0).
+    Clamped to a 50% floor so prices never drop below half base.
+    """
+    cha_mod = (int(cha) - 10) // 2
+    mult = 1.0 - cha_mod * 0.05
+    return round(max(0.5, min(2.0, mult)), 4)
+
+
+def _buy_price(base_price: int, cha: int) -> int:
+    """Apply CHA buy multiplier to a base price; priced items never round to 0."""
+    base = int(base_price or 0)
+    if base <= 0:
+        return base
+    return max(1, int(math.floor(base * _cha_buy_multiplier(cha))))
+
+
 def _cha_sell_ratio(cha: int) -> float:
     ratio = SELL_RATIO + (int(cha) - 10) * 0.02
     return round(max(0.10, min(0.70, ratio)), 4)
@@ -314,6 +334,7 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
                 continue
             if not _item_passes_filters(cat, char_level, location_key):
                 continue
+            cat["buy_price_gp"] = _buy_price(int(cat.get("value_gp") or 0), cha)
             items.append(cat)
         sell_items = _character_sellables(conn, character_id, ratio)
     return {
@@ -322,6 +343,7 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         "sell_items": sell_items,
         "character_gold": int(get_character_gold(character_id)),
         "sell_ratio": ratio,
+        "buy_multiplier": _cha_buy_multiplier(cha),
         "cha": cha,
         "char_level": char_level,
         "location_key": location_key,
@@ -347,9 +369,12 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         cat = _catalog_item(conn, item_type, item_key)
         if not cat:
             raise ValueError("price_or_catalog_missing")
-        price = int(cat["value_gp"] or 0)
-        if price <= 0:
+        base_price = int(cat["value_gp"] or 0)
+        if base_price <= 0:
             raise ValueError("price_or_catalog_missing")
+        # F10 (#470): CHA modifies actual buy price (discount/markup, symmetric to sell).
+        cha = _get_character_cha(conn, character_id)
+        price = _buy_price(base_price, cha)
 
     # Validate gold first for cleaner error mapping.
     cur_gold = int(get_character_gold(character_id))
@@ -374,6 +399,9 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
 
     return {
         "gold_gp": int(new_gold),
+        "paid_gp": int(price),
+        "cha": int(cha),
+        "buy_multiplier": _cha_buy_multiplier(cha),
         "item": {
             "type": cat["type"],
             "key": cat["key"],
