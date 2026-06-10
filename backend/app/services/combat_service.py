@@ -743,7 +743,10 @@ def _read_loot_pool_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
     return _parse_loot_pool_column(row["loot_pool"])
 
 
-def _preview_loot_from_roll_items(loot_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _preview_loot_from_roll_items(
+    loot_items: list[dict[str, Any]],
+    loot_tier: str | None = None,
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for raw in loot_items or []:
         if not isinstance(raw, dict):
@@ -769,6 +772,7 @@ def _preview_loot_from_roll_items(loot_items: list[dict[str, Any]]) -> list[dict
                 "quantity": qty,
                 "source": "loot",
                 "key": key,
+                "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
             }
         )
     return out
@@ -1618,6 +1622,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
                     "xp_award": xp_award_e,
                     "tier": str(er["tier"] or "standard"),
+                    "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
                     "zone": _default_zone_for_enemy(er["key"], er["label"]),
                     # Stored now for opposed checks in upcoming [S1b] formulas (T30).
                     "skills": _parse_enemy_skills(er["skills_json"]),
@@ -2153,8 +2158,9 @@ def resolve_attack(
                             )
 
                             loot_items = roll_loot(ek)
+                            _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
                             if loot_items:
-                                loot = _preview_loot_from_roll_items(loot_items)
+                                loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier)
                             else:
                                 loot = []
                             gold_drop = int(roll_gold_drop(ek) or 0)
@@ -2888,6 +2894,7 @@ def claim_post_combat_loot(
                 chosen_rows.append(entry)
 
         to_grant: list[dict[str, Any]] = []
+        loot_tier_for_grant: str | None = None
         for entry in chosen_rows:
             e = dict(entry or {})
             qty = max(1, int(e.get("quantity") or 1))
@@ -2896,13 +2903,18 @@ def claim_post_combat_loot(
             if not key:
                 continue
             if t == "weapon":
+                enemy_loot_tier = str(e.get("enemy_loot_tier") or "") or None
+                if enemy_loot_tier and not loot_tier_for_grant:
+                    loot_tier_for_grant = enemy_loot_tier
                 to_grant.append({"weapon_key": key, "quantity": qty})
             else:
                 to_grant.append({"item_key": key, "quantity": qty})
 
         from app.services.loot_service import grant_loot_to_character
 
-        claimed = grant_loot_to_character(character_id, to_grant, source="loot") if to_grant else []
+        claimed = grant_loot_to_character(
+            character_id, to_grant, source="loot", loot_tier=loot_tier_for_grant
+        ) if to_grant else []
 
         updates: list[str] = []
         params: list[Any] = []
