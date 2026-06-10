@@ -946,6 +946,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 |---|---|---|
 | F1 | Unified Effects System — przepisanie effect_json na typed objects (✅ #461 KOMPLETNE: `damage_bonus`+`heal_on_hit`+`ac_bonus`+`apply_condition`+`static_stat_modifier` — schema+engine+F1b+F1d; 18 testów GREEN) | C4 |
 | F2 | Affix System — game_config_affixes + affixes_json na inventory row (✅ #462 KOMPLETNE: tabela+silnik walki+GET /admin/affixes+`roll_weapon_affixes()` per loot_tier (poor/standard/rich/treasure); 10 testów GREEN) | F1 |
+| F2b | Enemy drop affixes — `loot_tier TEXT DEFAULT NULL` na `game_config_enemies`; wrogowie z ustawionym loot_tier mogą dawać afik-sowane bronie w zwykłej walce kampanii (✅ #484 KOMPLETNE: migracja+combatant dict+`_preview_loot_from_roll_items`+`claim_post_combat_loot`; 9 testów pytest GREEN) | F2 |
 | F3 | Admin buildery afiksów i efektów (✅ #463 KOMPLETNE: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy + Effects Builder dropdown) | F2 |
 | F4 | `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1) | — |
 | F5 | Włączenie + konfiguracja wskrzeszenia jako gold sink | — |
