@@ -159,7 +159,7 @@
       panel.innerHTML = '<div class="section active"><div class="adm-placeholder">Ładowanie…</div></div>';
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=11`);
+        const mod = await import(`./sections/${key}.js?v=13`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(panel);
           // Auto-init sortable tables already in DOM after init

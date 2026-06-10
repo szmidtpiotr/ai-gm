@@ -2411,10 +2411,10 @@ function _ejModalRenderEffectRow(idx, effectData) {
   ).join('');
   const typeDef = types[selectedType] || { fields: [] };
   const fieldHtml = typeDef.fields.map(f => _ejModalRenderField(f, flat[f.id])).join('');
-  return `<div class="ej-modal-row" data-idx="${idx}" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;padding:10px;background:#181818;border-radius:4px;border:1px solid #2a2a2a">
-    <label style="font-size:0.7rem;color:#888;display:flex;flex-direction:column;gap:2px">Typ efektu<select class="form-input ej-modal-type" style="max-width:220px" onchange="_ejModalTypeChange(this,${idx})">${typeOpts}</select></label>
-    <span class="ej-modal-fields" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${fieldHtml}</span>
-    <button type="button" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:4px 10px;cursor:pointer;font-size:0.9rem;flex-shrink:0;align-self:flex-end" onclick="_ejModalRemove(${idx})">×</button>
+  return `<div class="effect-row ej-modal-row" data-idx="${idx}" style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap">
+    <select class="form-input effect-type-sel ej-modal-type" style="min-width:170px" onchange="_ejModalTypeChange(this,${idx})">${typeOpts}</select>
+    <div class="effect-extra ej-modal-fields" style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">${fieldHtml}</div>
+    <button type="button" class="btn-icon danger" title="Usuń efekt" onclick="_ejModalRemove(${idx})">✕</button>
   </div>`;
 }
 
