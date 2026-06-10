@@ -156,19 +156,78 @@ def _weapon_effects_of_type(weapon_row: dict | None, effect_type: str) -> list[d
     ]
 
 
-def _weapon_flat_damage_bonus(weapon_row: dict | None) -> int:
-    """F1 (#461): sum flat `damage_bonus` effects from weapon effect_json.
+def _sum_damage_bonus(effect_source: dict | None) -> int:
+    """Sum flat `damage_bonus` values from one effect_json carrier (weapon or affix).
 
-    Reads typed Effect Objects: {"type":"damage_bonus","value":N}. Flat bonus
-    is gear-derived → added once (not multiplied by crit/surprise). Returns 0
-    when the weapon has no effect_json or no damage_bonus effects.
+    `effect_source` is any dict exposing an `effect_json` key. Returns 0 when
+    absent or malformed. Shared by weapon (F1 #461) and affix (F2 #462) paths.
     """
     total = 0
-    for effect in _weapon_effects_of_type(weapon_row, "damage_bonus"):
+    for effect in _weapon_effects_of_type(effect_source, "damage_bonus"):
         try:
             total += int(effect.get("value") or 0)
         except (TypeError, ValueError):
             continue
+    return total
+
+
+def _weapon_flat_damage_bonus(weapon_row: dict | None) -> int:
+    """F1 (#461): sum flat `damage_bonus` effects from weapon effect_json.
+
+    Flat bonus is gear-derived → added once (not multiplied by crit/surprise).
+    """
+    return _sum_damage_bonus(weapon_row)
+
+
+def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
+    """F2 (#462): sum `damage_bonus` from affixes on the equipped main-hand weapon.
+
+    Reads the per-instance `affixes_json` (list of affix keys) from the equipped
+    main_hand row in `character_inventory`, resolves each key in
+    `game_config_affixes`, and sums their typed `damage_bonus` Effect Objects via
+    the F1 engine. Returns 0 when there is no equipped weapon, no affixes, or the
+    affix table is absent.
+    """
+    if not character_id:
+        return 0
+    try:
+        inv = conn.execute(
+            """
+            SELECT affixes_json FROM character_inventory
+            WHERE character_id = ?
+              AND COALESCE(equipped, 0) = 1
+              AND LOWER(TRIM(COALESCE(slot, ''))) = 'main_hand'
+              AND weapon_key IS NOT NULL AND TRIM(weapon_key) != ''
+            ORDER BY id ASC LIMIT 1
+            """,
+            (int(character_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    if not inv:
+        return 0
+
+    raw = inv["affixes_json"] if "affixes_json" in inv.keys() else None
+    try:
+        affix_keys = json.loads(raw) if isinstance(raw, str) and raw.strip() else (raw or [])
+    except (json.JSONDecodeError, TypeError):
+        return 0
+    affix_keys = [str(k).strip() for k in affix_keys if str(k or "").strip()]
+    if not affix_keys:
+        return 0
+
+    placeholders = ",".join("?" for _ in affix_keys)
+    try:
+        rows = conn.execute(
+            f"SELECT effect_json FROM game_config_affixes WHERE key IN ({placeholders})",
+            tuple(affix_keys),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return 0
+
+    total = 0
+    for r in rows:
+        total += _sum_damage_bonus({"effect_json": r["effect_json"]})
     return total
 
 
@@ -1901,9 +1960,11 @@ def resolve_attack(
                 if _dmg_mult > 1:
                     dmg = dmg * _dmg_mult
                     out["damage_multiplier"] = _dmg_mult
-                # F1 (#461): flat damage_bonus from weapon effect_json (added once,
+                # F1 (#461) + F2 (#462): flat damage_bonus from weapon effect_json
+                # and from affixes on the equipped weapon instance (added once,
                 # post-multiplier — gear bonus is flat, not doubled on crit)
                 _flat_bonus = _weapon_flat_damage_bonus(wrow)
+                _flat_bonus += _inventory_affix_damage_bonus(conn, ch_id)
                 if _flat_bonus:
                     dmg += _flat_bonus
                     out["damage_bonus"] = _flat_bonus

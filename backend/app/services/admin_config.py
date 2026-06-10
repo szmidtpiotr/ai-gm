@@ -578,6 +578,24 @@ def update_xp_reward(
         conn.close()
 
 
+def list_affixes() -> list[dict]:
+    """F2 (#462): affix catalog (game_config_affixes) with typed Effect Objects."""
+    try:
+        rows = _fetch_all(
+            """
+            SELECT key, name, tier, allowed_item_types, effect_json, is_active,
+                   created_at, updated_at
+            FROM game_config_affixes
+            ORDER BY tier ASC, key ASC
+            """
+        )
+    except sqlite3.OperationalError:
+        return []
+    for row in rows:
+        row["is_active"] = bool(row.get("is_active"))
+    return rows
+
+
 def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
