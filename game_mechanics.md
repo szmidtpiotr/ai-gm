@@ -960,7 +960,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F13 | ✅ Background expire wynajmu (sweep) (#473 KOMPLETNE: `rental_service.expire_rentals()` + hook w turns.py) | — |
 | F14 | ✅ Usunięcie martwego economy_service kodu (#474 KOMPLETNE: generate_combat_loot/claim_loot/expire_loot_on_location_change usunięte) | — |
 | F15 | ✅ Balans walki (#475) — `expected_hp_loss_pct` formula; `bandit.attack_bonus` +3→+4; ≥60% HP drain at level 3 verified analytically; migration applied | balans |
-| F16 | Balans całości (ceny, dropy, sinki) — playtest | wszystko wyżej |
+| F16 | ✅ Balans całości (#476 KOMPLETNE: `expected_gold_per_session_block` formula; net gold 60-120g target per 10-session block; resurrection/sell/shop sinks calibrated; 9 testów pytest + 3 Playwright GREEN) | wszystko wyżej |
 | F17 | Hidden Trait system (LLM sugeruje z puli, trigger kontekstowy, LLM narruje reveal) | F1 |
 | F18 | Rosnące progi XP (konfigurowalne z Admin Panelu) | playtest |
 | F19 | Globalne stany NPC (śmierć NPC między kampaniami) | B2 |
