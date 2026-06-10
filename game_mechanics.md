@@ -946,7 +946,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 |---|---|---|
 | F1 | Unified Effects System — przepisanie effect_json na typed objects (✅ #461 KOMPLETNE: `damage_bonus`+`heal_on_hit`+`ac_bonus`+`apply_condition`+`static_stat_modifier` — schema+engine+F1b+F1d; 18 testów GREEN) | C4 |
 | F2 | Affix System — game_config_affixes + affixes_json na inventory row (🟡 #462: tabela+silnik walki affix damage_bonus+GET /admin/affixes; loot-roll afiksów w toku) | F1 |
-| F3 | Admin buildery afiksów i efektów | F2 |
+| F3 | Admin buildery afiksów i efektów (✅ #463 KOMPLETNE: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy + Effects Builder dropdown) | F2 |
 | F4 | `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1) | — |
 | F5 | Włączenie + konfiguracja wskrzeszenia jako gold sink | — |
 | F6 | Sink afiksów: NPC is_crafter, nałóż/reroll afiks (T1=150g, T2=500g, T3=1200g) | F2 |
