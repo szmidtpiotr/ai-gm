@@ -670,6 +670,27 @@ def _rget(row: sqlite3.Row, col: str, default: Any = None) -> Any:
         return default
 
 
+def _resolve_affixes(affix_keys: list, conn: sqlite3.Connection) -> list:
+    """Resolve affix key list → [{key, name, effects}] for display in item-detail modal."""
+    if not affix_keys:
+        return []
+    result = []
+    for key in affix_keys:
+        row = conn.execute(
+            "SELECT key, name, effect_json FROM game_config_affixes WHERE key = ?", (key,)
+        ).fetchone()
+        if not row:
+            result.append({"key": key, "name": key, "effects": []})
+            continue
+        try:
+            ej = json.loads(_rget(row, "effect_json") or "null")
+            effects = ej.get("effects", []) if isinstance(ej, dict) else (ej if isinstance(ej, list) else [])
+        except Exception:
+            effects = []
+        result.append({"key": key, "name": _rget(row, "name") or key, "effects": effects})
+    return result
+
+
 def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
     """D5 (#380) — full detail for one inventory entry, for the item-view modal.
 
@@ -694,12 +715,20 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
             "equipped": int(_rget(ci, "equipped", 0) or 0),
         }
 
+        # Parse affixes from inventory row (F2 #462 — only weapons can have affixes)
+        try:
+            raw_affixes = json.loads(_rget(ci, "affixes_json") or "[]")
+            affix_keys = raw_affixes if isinstance(raw_affixes, list) else []
+        except Exception:
+            affix_keys = []
+
         # Weapon
         if _rget(ci, "weapon_key"):
             wkey = ci["weapon_key"]
             w = conn.execute(
                 "SELECT * FROM game_config_weapons WHERE key = ?", (wkey,)
             ).fetchone()
+            affixes = _resolve_affixes(affix_keys, conn)
             if w:
                 return {
                     **base, "kind": "weapon", "item_type": "weapon",
@@ -713,10 +742,12 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "weapon_type": _rget(w, "weapon_type"),
                         "attack_bonus": int(_rget(w, "attack_bonus", 0) or 0),
                     },
+                    "affixes": affixes,
                 }
             return {
                 **base, "kind": "weapon", "item_type": "weapon",
                 "name": _rget(ci, "label") or wkey, "description": None, "weapon": {},
+                "affixes": affixes,
             }
 
         # Consumable

@@ -6009,6 +6009,30 @@ function _showItemDetailModal(d) {
             <span style="color:#eee;text-align:right">${escapeHtml(String(v))}</span>
          </div>`).join('');
 
+    const _EFFECT_LABELS = {
+        damage_bonus: v => `+${v} obrażeń`,
+        heal_on_hit: v => `Leczenie ${v} HP przy trafieniu`,
+        ac_bonus: v => `+${v} do AC`,
+        static_stat_modifier: (v, e) => `${e.stat || '?'} ${v > 0 ? '+' : ''}${v}`,
+        apply_condition: (v, e) => `Nakłada: ${e.condition_key || '?'}${e.duration_rounds ? ` (${e.duration_rounds}r)` : ''}`,
+        narrative_only: () => 'Efekt narracyjny',
+    };
+    const affixHtml = (d.affixes && d.affixes.length > 0)
+        ? `<div style="margin-top:12px;border-top:1px solid rgba(245,158,11,.15);padding-top:10px">
+            <div style="color:#f5a623;font-size:.75rem;font-weight:600;letter-spacing:.05em;margin-bottom:6px">AFIKSY</div>
+            ${d.affixes.map(a => {
+                const fx = (a.effects || []).map(e => {
+                    const fn = _EFFECT_LABELS[e.type];
+                    return fn ? fn(e.value, e) : e.type;
+                }).filter(Boolean).join(', ');
+                return `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+                    <span style="color:#f5c842;font-size:.85rem">${escapeHtml(a.name)}</span>
+                    ${fx ? `<span style="color:#aaa;font-size:.8rem;text-align:right">${escapeHtml(fx)}</span>` : ''}
+                </div>`;
+            }).join('')}
+           </div>`
+        : '';
+
     const overlay = document.createElement('div');
     overlay.id = 'item-view-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
@@ -6020,6 +6044,7 @@ function _showItemDetailModal(d) {
             </div>
             ${d.description ? `<div style="color:#bbb;font-size:.88rem;line-height:1.5;margin-bottom:12px">${escapeHtml(d.description)}</div>` : ''}
             <div>${statRows}</div>
+            ${affixHtml}
         </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     overlay.querySelector('#item-view-close').addEventListener('click', () => overlay.remove());
