@@ -954,7 +954,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F7 | Trwałość (durability): punktowa per cios, penalty przy 0, naprawa tier_rate×brak_pkt (✅ #467 KOMPLETNE: `durability_service.py` + combat 3 hooki + 2 endpointy; T1=20g T2=50g T3=100g/pt; 24 testów GREEN) | F1 |
 | F8 | Napady: encounter kradnący % złota (✅ #468 KOMPLETNE: `robbery_service.py` + turns.py hook + 2 seedy; default 20%; 18 testów GREEN) | D7 |
 | F9 | Dynamiczny asortyment sklepu (lokacja+poziom) (✅ #469 KOMPLETNE: `_get_character_level` + `_item_passes_filters`; `min_level`+`location_tags` migration na weapons/items/consumables; `location_key` query param; 12 testów GREEN) | — |
-| F10 | CHA na kupno (nie tylko sprzedaż) | — |
+| F10 | CHA na kupno (nie tylko sprzedaż) (✅ #470 KOMPLETNE: `_cha_buy_multiplier` = 1 - CHA_mod×0.05 klamp 0.5; `_buy_price`; `buy_price_gp` per item; `buy_item` pobiera zniżoną cenę → `paid_gp`; 11 testów GREEN) | — |
 | F11 | Unifikacja ceny → jeden price_gp | F2 |
 | F12 | Anti-farm: malejąca cena przy spam-sprzedaży | — |
 | F13 | Background expire wynajmu (sweep) | — |
@@ -3121,7 +3121,7 @@ grind loch / walka → złoto + przedmioty
 | F7 | ✅ Trwałość (#467, commit ad3a585) — spada per uderzenie OTRZYMANE; przy 0: penalty -50% AC/ataku (konfig. `durability_penalty_pct`); naprawa T1=20g T2=50g T3=100g/pt; hooki w combat_service; endpointy /repair-item + /repair-cost | egzemplarze |
 | F8 | ✅ Napady (#468, commit b7ff32e) — encounter_type='robbery'; `robbery_service.apply_robbery()` kradnie floor(gold * pct/100); turns.py hook; 2 seedy (trakt + miasto); domyślnie 20% | encountery |
 | F9 | ✅ Dynamiczny asortyment sklepu (#469) — `min_level`+`location_tags` na katalogach; `_item_passes_filters(cat, char_level, location_key)`; `location_key` query param w GET /shop; NULL tags = wszędzie | — |
-| F10 | CHA na kupno (nie tylko sprzedaż) | — |
+| F10 | ✅ CHA na kupno (#470) — `_cha_buy_multiplier(cha)`=1-CHA_mod×0.05 (klamp 0.5); `_buy_price(base, cha)`; `get_shop_inventory` zwraca `buy_price_gp` per item + `buy_multiplier`; `buy_item` pobiera zniżoną/podwyższoną cenę → `paid_gp` | — |
 | F11 | Unifikacja ceny → jeden `price_gp` + wycena egzemplarza z afiksami | unifikacja przedmiotów (CZĘŚĆ X) |
 | F12 | Anti-farm: malejąca cena przy spam-sprzedaży tego samego typu | — |
 | F13 | Background expire wynajmu (sweep, jak G1) | — |
