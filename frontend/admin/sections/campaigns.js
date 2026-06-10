@@ -1,5 +1,6 @@
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { initSortableTable } from '../shared/table.js';
 
 // ── Module helpers ─────────────────────────────────────────────────────────
 const _esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -80,6 +81,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       </tr>`).join('');
       const pg = document.querySelector('#section-campaigns .pagination span');
       if (pg) pg.textContent = `${items.length} kampanii`;
+      initSortableTable('campaigns-table');
       _renderCampCards();
       // Apply persisted view choice
       const saved = (() => { try { return localStorage.getItem('v3_camp_view'); } catch { return null; } })();

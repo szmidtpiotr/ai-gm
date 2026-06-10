@@ -5,6 +5,7 @@
  */
 import { apiFetch }  from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { initSortableTable } from '../shared/table.js';
 
 // ─── Module-local helpers ────────────────────────────────────────────────────
 function _esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -463,17 +464,18 @@ function _sectionHtml() { return `
       const tierBadge = t => ({common:'badge-green',uncommon:'badge-blue',rare:'badge-amber',epic:'badge-red',legendary:'badge-red'}[t]||'badge-slate');
       tbody.innerHTML = items.map(dg => `<tr>
         <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-        <td class="td-sticky td-mono">${_esc(dg.key)}</td>
-        <td class="td-name">${_esc(dg.label||dg.key)}</td>
-        <td class="td-muted">${dg.min_level?dg.min_level+'+':'—'}</td>
-        <td>${dg.tile_category_key ? `<span class="badge badge-blue" title="Tryb kafelkowy: ${_esc(dg.tile_category_key)}">🗺 ${_esc(dg.tile_category_key)}</span>` : `<span class="badge badge-slate" title="Tryb proceduralny">⚙ ${dg.rooms??'?'}p</span>`}</td>
-        <td class="td-mono editable" onclick="startEdit(this)">${dg.cooldown_hours?dg.cooldown_hours+'h':'—'}</td>
-        <td class="td-mono">${dg.active_runs ?? dg.active_runs_count ?? dg.runs_active ?? '—'}</td>
-        <td><span class="badge ${dg.is_active?'badge-green':'badge-slate'}">${dg.is_active?'● Aktywny':'○ Nieaktywny'}</span></td>
+        <td class="td-sticky td-mono" data-sort-val="${_esc(dg.key)}">${_esc(dg.key)}</td>
+        <td class="td-name" data-sort-val="${_esc(dg.label||dg.key)}">${_esc(dg.label||dg.key)}</td>
+        <td class="td-muted" data-sort-val="${dg.min_level??''}">${dg.min_level?dg.min_level+'+':'—'}</td>
+        <td data-sort-val="${_esc(dg.tile_category_key||'')}">${dg.tile_category_key ? `<span class="badge badge-blue" title="Tryb kafelkowy: ${_esc(dg.tile_category_key)}">🗺 ${_esc(dg.tile_category_key)}</span>` : `<span class="badge badge-slate" title="Tryb proceduralny">⚙ ${dg.rooms??'?'}p</span>`}</td>
+        <td class="td-mono editable" data-sort-val="${dg.cooldown_hours??''}" onclick="startEdit(this)">${dg.cooldown_hours?dg.cooldown_hours+'h':'—'}</td>
+        <td class="td-mono" data-sort-val="${dg.active_runs??dg.active_runs_count??dg.runs_active??''}">${dg.active_runs ?? dg.active_runs_count ?? dg.runs_active ?? '—'}</td>
+        <td data-sort-val="${dg.is_active?1:0}"><span class="badge ${dg.is_active?'badge-green':'badge-slate'}">${dg.is_active?'● Aktywny':'○ Nieaktywny'}</span></td>
         <td class="td-actions"><button class="btn-icon" title="Edytuj" onclick="openEditDungeonModal(${JSON.stringify(dg).replace(/"/g,'&quot;')})">✎</button> <button class="btn-icon danger" title="Usuń" onclick="deleteDungeon('${_esc(dg.key)}',this)">✕</button></td>
       </tr>`).join('');
       const pg = document.getElementById('dungeons-count');
       if (pg) pg.textContent = `${items.length} lochów`;
+      initSortableTable('dungeons-table');
     } catch(e) { tbody.innerHTML = _errRow(10, e.message); }
   }
 
