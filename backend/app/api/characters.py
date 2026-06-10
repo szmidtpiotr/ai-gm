@@ -2893,3 +2893,69 @@ def craft_upgrade_affix(
         raise HTTPException(status_code=500, detail=str(e)) from None
     finally:
         conn.close()
+
+
+# ─── Durability repair endpoint (#467 F7) ────────────────────────────────────
+
+class RepairItemRequest(BaseModel):
+    inventory_id: int
+    user_id: int | None = None
+
+
+@router.post("/characters/{character_id}/repair-item")
+def repair_item_endpoint(
+    character_id: int,
+    body: RepairItemRequest,
+    authorization: str | None = Header(None),
+):
+    """Repair an equipped item's durability. Costs gold per missing point (tier-based)."""
+    from app.services.durability_service import repair_item
+    authed_uid = resolve_authed_user_id(authorization, body.user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = repair_item(conn, character_id, body.inventory_id)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "repair_failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.get("/characters/{character_id}/inventory/{inventory_id}/repair-cost")
+def get_repair_cost_endpoint(
+    character_id: int,
+    inventory_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(None),
+):
+    """Preview repair cost for a specific inventory item."""
+    from app.services.durability_service import get_repair_cost
+    authed_uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = get_repair_cost(conn, inventory_id)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "no_durability"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
