@@ -130,7 +130,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 4 — Rozbudowa: Efekty, Afiksy, Ekonomia
 
-- [ ] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461)
+- [ ] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461) — 🟡 in-progress: `damage_bonus` typ end-to-end (schema + silnik walki `_weapon_flat_damage_bonus` + `load_weapon_row` effect_json). Pozostało: kolejne typy (ac_bonus, heal_on_hit…), F1b migracja, F1d DSL.
 - [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462)
 - [ ] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463)
 - [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)

@@ -136,6 +136,42 @@ def _clear_consumed_conditions(target: dict, consumed_keys: list[str]) -> None:
     ]
 
 
+def _weapon_effects_of_type(weapon_row: dict | None, effect_type: str) -> list[dict[str, Any]]:
+    """F1 (#461): return typed Effect Objects of a given `type` from weapon effect_json.
+
+    Shared extractor for gear combat effects (damage_bonus, ac_bonus, heal_on_hit, …).
+    Returns [] when the weapon has no effect_json or no matching effects.
+    """
+    raw = weapon_row.get("effect_json") if weapon_row else None
+    parsed = _decode_effect_json(raw)
+    if not parsed:
+        return []
+    effects = parsed.get("effects")
+    if not isinstance(effects, list):
+        return []
+    wanted = str(effect_type or "").strip().lower()
+    return [
+        e for e in effects
+        if isinstance(e, dict) and str(e.get("type") or "").strip().lower() == wanted
+    ]
+
+
+def _weapon_flat_damage_bonus(weapon_row: dict | None) -> int:
+    """F1 (#461): sum flat `damage_bonus` effects from weapon effect_json.
+
+    Reads typed Effect Objects: {"type":"damage_bonus","value":N}. Flat bonus
+    is gear-derived → added once (not multiplied by crit/surprise). Returns 0
+    when the weapon has no effect_json or no damage_bonus effects.
+    """
+    total = 0
+    for effect in _weapon_effects_of_type(weapon_row, "damage_bonus"):
+        try:
+            total += int(effect.get("value") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def _apply_weapon_effects(
     weapon_row: dict | None,
     sheet: dict,
@@ -1865,6 +1901,12 @@ def resolve_attack(
                 if _dmg_mult > 1:
                     dmg = dmg * _dmg_mult
                     out["damage_multiplier"] = _dmg_mult
+                # F1 (#461): flat damage_bonus from weapon effect_json (added once,
+                # post-multiplier — gear bonus is flat, not doubled on crit)
+                _flat_bonus = _weapon_flat_damage_bonus(wrow)
+                if _flat_bonus:
+                    dmg += _flat_bonus
+                    out["damage_bonus"] = _flat_bonus
                 out["damage"] = dmg
                 prev_hp = int(enemy.get("hp_current", 0) or 0)
                 next_hp = max(0, prev_hp - dmg)

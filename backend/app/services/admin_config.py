@@ -29,6 +29,8 @@ ALLOWED_EFFECT_JSON_TYPES = {
     "remove_condition",
     "block_action",
     "narrative_only",
+    # F1 (#461) — gear combat effects (Effect Object schema)
+    "damage_bonus",
 }
 ALLOWED_EFFECT_JSON_TICKS = {"start_turn", "each_round", "on_use"}
 ALLOWED_EFFECT_JSON_STATS = {"STR", "DEX", "CON", "INT", "WIS", "CHA"}
@@ -36,7 +38,7 @@ _EFFECT_JSON_TOP_LEVEL_KEYS = {"schema_version", "effect_category", "effects"}
 _EFFECT_JSON_EFFECT_KEYS = {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires"}
 _EFFECT_JSON_CATEGORY_TYPES = {
     "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
-    "gear_bonus": {"static_stat_modifier", "narrative_only"},
+    "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus"},
     "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
     "aura": {
         "periodic_save",
