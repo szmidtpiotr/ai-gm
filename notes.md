@@ -12,11 +12,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
-| F (Faza 4) | 14/21 | 67% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅) |
+| F (Faza 4) | 15/21 | 71% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **91/140** | **65%** |
+| **TOTAL** | **92/140** | **66%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -145,7 +145,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] F12 — Anti-farm: malejąca cena sprzedaży przy spam-sprzedaży tego samego type — [#472](https://github.com/szmidtpiotr/ai-gm/issues/472) — ✅ `anti_farm_service.py`: `get_anti_farm_multiplier` (decay po 3 sprzedażach, okno 24h, min 10%); `sell_item` hook + patch `meta_json` z `item_key`; 13 pytest + 3 Playwright GREEN
 - [x] F13 — Background expire wynajmu — sweep wygasłych tymczasowych bonusów — [#473](https://github.com/szmidtpiotr/ai-gm/issues/473) — ✅ commit ac3ca68: `rental_service.expire_rentals(conn, campaign_id, current_turn)`; hook w `turns.py`; 10 pytest + 2 Playwright GREEN
 - [x] F14 — Usunięcie martwego economy_service (generate_combat_loot / claim_loot) — [#474](https://github.com/szmidtpiotr/ai-gm/issues/474) — ✅ commit ac3ca68: ~210 linii martwego kodu TASK_22 usunięte; 6 pytest + 2 Playwright GREEN
-- [ ] F15 — Balans walki → mikstury potrzebne (playtest + tuning DC/damage) — [#475](https://github.com/szmidtpiotr/ai-gm/issues/475)
+- [x] F15 — Balans walki → mikstury potrzebne (playtest + tuning DC/damage) — [#475](https://github.com/szmidtpiotr/ai-gm/issues/475) — ✅ `expected_hp_loss_pct` formula; bandyta +3→+4 attack_bonus (próg 60% HP); migracja `_apply_f15_balance_tuning`; 6 pytest + 3 Playwright GREEN
 - [ ] F16 — Balans całości (ceny/dropy/sinki) — pełny playtest — [#476](https://github.com/szmidtpiotr/ai-gm/issues/476)
 - [ ] F17 — Hidden Trait system (LLM z puli, trigger kontekstowy, reveal narracyjny) — [#477](https://github.com/szmidtpiotr/ai-gm/issues/477)
 - [ ] F18 — Rosnące progi XP konfigurowalne z Admin Panelu — [#478](https://github.com/szmidtpiotr/ai-gm/issues/478)
