@@ -1,8 +1,10 @@
-"""E24 — Onboarding card triggers.
+"""E24 + E27 (#442) — Onboarding card triggers.
 
 check_onboarding_triggers(user_id, triggered_keys, conn) → list of card dicts
 for mechanic keys NOT yet seen by this user.
 Does NOT mark them as seen — frontend calls POST /api/users/{id}/seen-mechanics after showing.
+
+E27 (#442): adds "affixes" and "crafting" card definitions + trigger heuristics.
 """
 from __future__ import annotations
 import sqlite3
@@ -57,6 +59,24 @@ MECHANIC_CARDS: dict[str, dict] = {
             "Uważaj: w lochach śmierć jest permanentna."
         ),
     },
+    "affixes": {
+        "title": "Magiczne afiksy",
+        "content": (
+            "Ten przedmiot ma magiczne właściwości zwane afiksami! Afiksy to specjalne bonusy — "
+            "np. +3 do obrażeń, leczenie przy trafieniu, bonus do pancerza. "
+            "Możesz dodać lub przelosować afiksy u Rzemieślnika w mieście za złoto. "
+            "Im wyższy tier afiksu (T1→T3), tym potężniejszy efekt."
+        ),
+    },
+    "crafting": {
+        "title": "Rzemiosło i ulepszanie",
+        "content": (
+            "Możesz ulepszać swoje przedmioty u Rzemieślnika! Wybierz broń lub zbroję z ekwipunku, "
+            "a Rzemieślnik doda magiczny afiks za złoto. Możesz też przelosować afiks (ten sam tier, "
+            "nowy efekt) lub awansować afiks do wyższego tiera (T1→T2→T3) za wyższą cenę. "
+            "Crafting to najszybszy sposób na mocniejszy ekwipunek bez czekania na losy."
+        ),
+    },
 }
 
 
@@ -64,12 +84,13 @@ def inject_onboarding_to_out(out: dict, user_id: int, conn) -> dict:
     """Detect triggered mechanics from a turn out-dict and inject onboarding_cards in-place.
 
     Trigger heuristics:
-    - dice_roll   → out has skill_test_pending
+    - dice_roll    → out has skill_test_pending
     - combat_start → out has combat_state
-    - xp_gained   → result has xp_granted or xp_earned > 0
+    - xp_gained    → result has xp_granted or xp_earned > 0
     - gold_gained  → result has gold_drop or gold_earned > 0
     - damage_taken → result has damage > 0
     - death_save   → result.test == "death_save"
+    - affixes      → result.loot has item with non-empty affixes list (E27 #442)
     """
     triggered: List[str] = []
     if out.get("skill_test_pending"):
@@ -86,6 +107,13 @@ def inject_onboarding_to_out(out: dict, user_id: int, conn) -> dict:
             triggered.append("damage_taken")
         if result.get("test") == "death_save":
             triggered.append("death_save")
+        # E27 (#442): trigger affixes card when loot contains items with affixes
+        loot = result.get("loot")
+        if isinstance(loot, list):
+            for item in loot:
+                if isinstance(item, dict) and item.get("affixes"):
+                    triggered.append("affixes")
+                    break
     cards = check_onboarding_triggers(user_id=user_id, triggered_keys=triggered, conn=conn)
     out["onboarding_cards"] = cards
     return out
@@ -111,6 +139,34 @@ def check_onboarding_triggers(
 
     cards = []
     for key in triggered_keys:
+        if key not in already_seen and key in MECHANIC_CARDS:
+            cards.append({"mechanic_key": key, **MECHANIC_CARDS[key]})
+    return cards
+
+
+def get_unseen_cards_for_mechanics(
+    conn: sqlite3.Connection,
+    user_id: int,
+    mechanic_keys: List[str],
+) -> List[dict]:
+    """Return card dicts for mechanic_keys that user hasn't seen yet.
+
+    Used by craft endpoints to inject "crafting" onboarding on first use.
+    Does not modify DB — caller handles mark-seen.
+    """
+    if not mechanic_keys:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT mechanic_key FROM seen_mechanics WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        already_seen = {r["mechanic_key"] for r in rows}
+    except Exception:
+        already_seen = set()
+
+    cards = []
+    for key in mechanic_keys:
         if key not in already_seen and key in MECHANIC_CARDS:
             cards.append({"mechanic_key": key, **MECHANIC_CARDS[key]})
     return cards

@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ✅ KOMPLETNA (E1–E28, E27 deferred→Faza 4) 2026-06-09
+### FAZA 3 — Jakość + Treść ✅ KOMPLETNA (E1–E28 wszystkie ✅) 2026-06-10
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -933,7 +933,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | E24 | Backend trigger kart onboarding (first mechanic occurrence) ✅ #439 | E23, Faza 1+2 |
 | E25 | Karty onboarding UI (nieblokujące overlay, "Rozumiem") ✅ #440 | E24 |
 | E26 | Biblioteka kart (gracz może wrócić do przeczytanych) ✅ #441 | E25 |
-| E27 | Karty dla nowych mechanik (afiksy, crafting, MP) — dodać gdy systemy gotowe ⏳ Faza 4 | Faza 4 |
+| E27 | ✅ Karty dla nowych mechanik (#442 KOMPLETNE: MECHANIC_CARDS["affixes"+"crafting"] dodane; trigger afiksów w inject_onboarding_to_out gdy loot.affixes; get_unseen_cards_for_mechanics(); 12 testów pytest + 3 Playwright GREEN) | Faza 4 |
 | E28 | Tutorial kampania "Moja Pierwsza Przygoda" ✅ #443 | E25 |
 
 ---
