@@ -94,6 +94,7 @@
   <script type="module">
     import { apiFetch } from './shared/api.js';
     import { showToast } from './shared/toast.js';
+    import { initSortableTable } from './shared/table.js';
 
     // 14 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
@@ -161,6 +162,10 @@
         const mod = await import(`./sections/${key}.js?v=4`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(panel);
+          // Auto-init sortable tables in panel
+          panel.querySelectorAll('table.data-table').forEach(t => {
+            initSortableTable(t);
+          });
           return;
         }
         panel.innerHTML = placeholder(key);

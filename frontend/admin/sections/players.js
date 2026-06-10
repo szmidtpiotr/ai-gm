@@ -4,7 +4,6 @@
  */
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
-import { initSortableTable } from '../shared/table.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function _esc(s) {
@@ -146,7 +145,6 @@ async function _loadPlayers() {
     </tr>`).join('');
     const pg = document.querySelector('#section-players .pagination span');
     if (pg) pg.textContent = `${items.length} użytkowników`;
-    initSortableTable('players-table');
     // Lazy-load LLM mode badges
     items.forEach(u => _loadPlayerLlmBadge(u.id));
   } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
