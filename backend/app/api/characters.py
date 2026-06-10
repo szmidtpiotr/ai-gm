@@ -2786,3 +2786,110 @@ def get_character_spells_public(character_id: int):
     """Player-facing: return spell book for a character."""
     from app.services.spell_service import get_character_spells
     return {"spells": get_character_spells(character_id)}
+
+
+# ─── Crafter NPC endpoints (#466 F6) ─────────────────────────────────────────
+
+class CraftApplyAffixRequest(BaseModel):
+    inventory_id: int
+    tier: int = Field(..., ge=1, le=3)
+    user_id: int | None = None
+
+
+class CraftRerollAffixRequest(BaseModel):
+    inventory_id: int
+    affix_key: str
+    user_id: int | None = None
+
+
+class CraftUpgradeAffixRequest(BaseModel):
+    inventory_id: int
+    affix_key: str
+    user_id: int | None = None
+
+
+@router.post("/characters/{character_id}/craft/apply-affix")
+def craft_apply_affix(
+    character_id: int,
+    body: CraftApplyAffixRequest,
+    authorization: str | None = Header(None),
+):
+    """Apply a random affix of the chosen tier to an inventory item. Costs gold."""
+    from app.services.crafter_service import apply_affix
+    authed_uid = resolve_authed_user_id(authorization, body.user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = apply_affix(conn, character_id, body.inventory_id, body.tier)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "craft_failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/craft/reroll-affix")
+def craft_reroll_affix(
+    character_id: int,
+    body: CraftRerollAffixRequest,
+    authorization: str | None = Header(None),
+):
+    """Reroll an existing affix on an inventory item (same tier, new random key). Costs gold."""
+    from app.services.crafter_service import reroll_affix
+    authed_uid = resolve_authed_user_id(authorization, body.user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = reroll_affix(conn, character_id, body.inventory_id, body.affix_key)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "craft_failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/craft/upgrade-affix")
+def craft_upgrade_affix(
+    character_id: int,
+    body: CraftUpgradeAffixRequest,
+    authorization: str | None = Header(None),
+):
+    """Upgrade an affix to the next tier. Costs gold (T1→T2=350gp, T2→T3=700gp)."""
+    from app.services.crafter_service import upgrade_affix
+    authed_uid = resolve_authed_user_id(authorization, body.user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = upgrade_affix(conn, character_id, body.inventory_id, body.affix_key)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "craft_failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
