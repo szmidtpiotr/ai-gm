@@ -962,7 +962,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F15 | ✅ Balans walki (#475) — `expected_hp_loss_pct` formula; `bandit.attack_bonus` +3→+4; ≥60% HP drain at level 3 verified analytically; migration applied | balans |
 | F16 | ✅ Balans całości (#476 KOMPLETNE: `expected_gold_per_session_block` formula; net gold 60-120g target per 10-session block; resurrection/sell/shop sinks calibrated; 9 testów pytest + 3 Playwright GREEN) | wszystko wyżej |
 | F17 | ✅ Hidden Trait system (#477 KOMPLETNE: `hidden_trait_service.py` get_trait_pool/assign_trait/get_character_trait/reveal_trait; `game_config_hidden_traits` tabela + 5 seed traits; `GET/POST /api/admin/hidden-traits`; sheet_json.hidden_trait + hidden_trait_revealed; 12 testów pytest + 3 Playwright GREEN) | F1 |
-| F18 | Rosnące progi XP (konfigurowalne z Admin Panelu) | playtest |
+| F18 | ✅ Rosnące progi XP (#478 KOMPLETNE: `level_from_xp(xp, thresholds)` + `get_xp_level_thresholds(conn)` w xp_service.py; DEFAULT_XP_LEVEL_THRESHOLDS (L2=100..L10=2700 nieliniowe); resurrection_service + solo_death_service używają level_from_xp; migracja seed thresholds; 12 testów pytest + 3 Playwright GREEN) | playtest |
 | F19 | Globalne stany NPC (śmierć NPC między kampaniami) | B2 |
 | F20 | Mechaniczne efekty pory dnia (noc/świt bonusy, game_config) | B1 |
 | F21 | World State History UI dla admina (zakładka, diff między turami) | B5 |

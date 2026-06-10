@@ -2961,6 +2961,27 @@ def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _ensure_xp_level_thresholds(conn: sqlite3.Connection) -> None:
+    """F18 (#478): seed default non-linear XP thresholds into game_config_meta."""
+    import json as _json
+    default = {
+        "2": 100, "3": 250, "4": 450, "5": 700,
+        "6": 1000, "7": 1350, "8": 1750, "9": 2200, "10": 2700,
+    }
+    try:
+        existing = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'xp_level_thresholds' LIMIT 1"
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('xp_level_thresholds', ?)",
+                (_json.dumps(default),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
 def _ensure_hidden_traits_schema(conn: sqlite3.Connection) -> None:
     """F17 (#477): create game_config_hidden_traits table + seed starter traits."""
     try:
@@ -3090,6 +3111,7 @@ def run_admin_migrations() -> None:
         _ensure_shop_item_level_location_schema(conn)
         _ensure_price_gp_schema(conn)
         _apply_f15_balance_tuning(conn)
+        _ensure_xp_level_thresholds(conn)
         _ensure_hidden_traits_schema(conn)
     finally:
         conn.close()

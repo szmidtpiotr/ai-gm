@@ -47,6 +47,59 @@ DEFAULT_STAT_POINT_COSTS: dict[int, int] = {
 # game_mechanics.md: current 19+ = "Niedostępne" → ceiling at 19.
 DEFAULT_STAT_VALUE_CEILING = 19
 
+# F18 (#478): non-linear XP thresholds. Keys are level numbers (as strings),
+# values are cumulative lifetime XP needed to reach that level.
+DEFAULT_XP_LEVEL_THRESHOLDS: dict[str, int] = {
+    "2": 100,
+    "3": 250,
+    "4": 450,
+    "5": 700,
+    "6": 1000,
+    "7": 1350,
+    "8": 1750,
+    "9": 2200,
+    "10": 2700,
+}
+
+
+def get_xp_level_thresholds(conn: sqlite3.Connection) -> dict[str, int]:
+    """Load XP level thresholds from game_config_meta or return defaults."""
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'xp_level_thresholds' LIMIT 1"
+        ).fetchone()
+    except Exception:
+        return dict(DEFAULT_XP_LEVEL_THRESHOLDS)
+    if not row or not row[0]:
+        return dict(DEFAULT_XP_LEVEL_THRESHOLDS)
+    try:
+        raw = json.loads(row[0])
+        if isinstance(raw, dict) and raw:
+            return {str(k): int(v) for k, v in raw.items()}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    return dict(DEFAULT_XP_LEVEL_THRESHOLDS)
+
+
+def level_from_xp(lifetime_xp: int, thresholds: dict | None) -> int:
+    """Return character level based on lifetime XP and threshold dict.
+
+    thresholds keys are level strings ("2", "3", ...), values are cumulative XP.
+    Falls back to flat 100-XP-per-level when thresholds is None or empty.
+    Always returns at least 1 and caps at the highest defined level.
+    """
+    if not thresholds:
+        # Backward-compat: flat 100 XP per level (old formula: 1 + floor(xp/100))
+        return max(1, 1 + int(lifetime_xp) // 100)
+
+    level = 1
+    for level_str, required_xp in sorted(thresholds.items(), key=lambda x: int(x[0])):
+        if int(lifetime_xp) >= int(required_xp):
+            level = int(level_str)
+        else:
+            break
+    return level
+
 
 def _load_rank_costs(conn: sqlite3.Connection) -> dict[int, int]:
     row = conn.execute(
