@@ -110,7 +110,7 @@ def load_weapon_row(conn: sqlite3.Connection, key: str | None) -> dict[str, Any]
     try:
         row = conn.execute(
             """
-            SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m
+            SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m, effect_json
             FROM game_config_weapons
             WHERE key = ?
             """,
