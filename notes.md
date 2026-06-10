@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-10 (F1 #461 heal_on_hit+ac_bonus+F1b+F1d; F2 #462 affix combat)_
+_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE — damage_bonus+heal_on_hit+ac_bonus+apply_condition+static_stat_modifier+F1b+F1d; F2 #462 affix combat)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -130,7 +130,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 4 — Rozbudowa: Efekty, Afiksy, Ekonomia
 
-- [ ] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461) — 🟡 in-progress: `damage_bonus` + `heal_on_hit` + `ac_bonus` (schema) end-to-end; F1b backward compat ✅; F1d DSL (Smart Entry) ✅. Pozostało: `condition_apply`, engine `ac_bonus` (combat-start), więcej typów.
+- [x] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461) — ✅ KOMPLETNE: `damage_bonus` (F1a) + `heal_on_hit` (life-steal, on-hit) + `ac_bonus` (combat-start) + `apply_condition` (on-hit, de-dup) + `static_stat_modifier` (combat-start stats dict) + F1b backward compat + F1d DSL (Smart Entry prompt). 18/18 tests GREEN.
 - [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462) — 🟡 in-progress: tabela `game_config_affixes` (migracja + 3 starter afiksy), `affixes_json` już istnieje, silnik walki sumuje affix damage_bonus (`_inventory_affix_damage_bonus`), GET `/api/admin/affixes`. Pozostało: loot engine losuje afiksy per dungeon tier, admin builder (F3).
 - [ ] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463)
 - [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)

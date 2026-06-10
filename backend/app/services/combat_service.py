@@ -190,6 +190,78 @@ def _weapon_heal_on_hit(weapon_row: dict | None) -> int:
     return total
 
 
+def _weapon_ac_bonus(weapon_row: dict | None) -> int:
+    """F1 (#461): sum ac_bonus effects from weapon effect_json (applied at combat-start)."""
+    total = 0
+    for e in _weapon_effects_of_type(weapon_row, "ac_bonus"):
+        try:
+            total += int(e.get("value") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _weapon_stat_modifiers(weapon_row: dict | None) -> dict[str, int]:
+    """F1 (#461): collect static_stat_modifier effects from weapon effect_json.
+
+    Returns {STAT: bonus} dict. Applied to combatant stats at combat-start.
+    """
+    mods: dict[str, int] = {}
+    for e in _weapon_effects_of_type(weapon_row, "static_stat_modifier"):
+        stat = str(e.get("stat") or "").strip().upper()
+        if not stat:
+            continue
+        try:
+            val = int(e.get("value") or 0)
+        except (TypeError, ValueError):
+            continue
+        mods[stat] = mods.get(stat, 0) + val
+    return mods
+
+
+def _weapon_apply_conditions(
+    weapon_row: dict | None, enemy: dict, conn: Any
+) -> list[str]:
+    """F1 (#461): apply conditions from typed apply_condition Effects on weapon hit.
+
+    Reuses gear_bonus / apply_condition type. Looks up condition label/effect from
+    game_config_conditions if available; falls back to key as label. Skips duplicates.
+    Returns list of applied condition keys.
+    """
+    applied: list[str] = []
+    for e in _weapon_effects_of_type(weapon_row, "apply_condition"):
+        cond_key = str(e.get("condition_key") or "").strip()
+        if not cond_key:
+            continue
+        duration = int(e.get("duration_rounds") or 2)
+        existing = enemy.get("conditions")
+        if isinstance(existing, list) and any(c.get("key") == cond_key for c in existing):
+            continue
+        cond_label, cond_efx = cond_key, None
+        try:
+            crow = conn.execute(
+                "SELECT label, effect_json FROM game_config_conditions WHERE key = ?",
+                (cond_key,),
+            ).fetchone()
+            if crow:
+                cond_label = crow["label"] or cond_key
+                cond_efx = crow["effect_json"]
+        except Exception:
+            pass
+        if not isinstance(enemy.get("conditions"), list):
+            enemy["conditions"] = []
+        enemy["conditions"].append({
+            "key": cond_key,
+            "label": cond_label,
+            "effect_json": cond_efx,
+            "duration_rounds": duration,
+            "applied_at": "weapon_hit",
+            "runtime": {},
+        })
+        applied.append(cond_key)
+    return applied
+
+
 def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
     """F2 (#462): sum `damage_bonus` from affixes on the equipped main-hand weapon.
 
@@ -1465,6 +1537,16 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         dex_mod = _stat_mod(sheet, "DEX")
         init_player = roll_d20() + dex_mod
         ability_stats = _ability_stats_seven(sheet)
+        # F1 (#461): weapon Effect Objects applied at combat-start
+        _wrow_init = resolve_sheet_weapon(conn, sheet, int(character_id))
+        _wac = _weapon_ac_bonus(_wrow_init)
+        if _wac:
+            ac += _wac
+        _wmods = _weapon_stat_modifiers(_wrow_init)
+        if _wmods:
+            for _st, _delta in _wmods.items():
+                if _st in ability_stats:
+                    ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + _delta
 
         combatants: list[dict[str, Any]] = [
             {
@@ -2012,6 +2094,11 @@ def resolve_attack(
                     out["weapon_effect_narrative"] = _wfx["weapon_effect_narrative"]
                 if _wfx.get("conditions_applied"):
                     out["weapon_conditions_applied"] = _wfx["conditions_applied"]
+                # F1 (#461): typed apply_condition Effects (gear_bonus schema)
+                _f1_conds = _weapon_apply_conditions(wrow, enemy, conn)
+                if _f1_conds:
+                    _prev_conds = list(out.get("weapon_conditions_applied") or [])
+                    out["weapon_conditions_applied"] = _prev_conds + _f1_conds
                 # ─────────────────────────────────────────────────────────────
 
                 dead = int(enemy.get("hp_current", 0) or 0) <= 0
