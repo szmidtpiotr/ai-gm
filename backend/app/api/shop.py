@@ -37,18 +37,18 @@ def _map_shop_error(e: ValueError) -> HTTPException:
 
 
 @router.get("/shop/{npc_id}")
-def get_shop(npc_id: int, character_id: int = Query(...)):
+def get_shop(npc_id: int, character_id: int = Query(...), location_key: str | None = Query(None)):
     try:
-        data = shop_service.get_shop_inventory(npc_id=npc_id, character_id=character_id)
+        data = shop_service.get_shop_inventory(npc_id=npc_id, character_id=character_id, location_key=location_key)
         return {"ok": True, "data": data}
     except ValueError as e:
         raise _map_shop_error(e) from e
 
 
 @router.get("/shop/by-key/{npc_key}")
-def get_shop_by_key(npc_key: str, character_id: int = Query(...)):
+def get_shop_by_key(npc_key: str, character_id: int = Query(...), location_key: str | None = Query(None)):
     try:
-        data = shop_service.get_shop_inventory_by_key(npc_key=npc_key, character_id=character_id)
+        data = shop_service.get_shop_inventory_by_key(npc_key=npc_key, character_id=character_id, location_key=location_key)
         return {"ok": True, "data": data}
     except ValueError as e:
         raise _map_shop_error(e) from e

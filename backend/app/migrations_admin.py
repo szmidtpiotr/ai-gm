@@ -2905,6 +2905,23 @@ def _ensure_game_config_services(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_shop_item_level_location_schema(conn: sqlite3.Connection) -> None:
+    """F9 (#469): add min_level + location_tags to item catalog tables for dynamic shop filtering."""
+    for table in ("game_config_weapons", "game_config_items", "game_config_consumables"):
+        for col_sql in (
+            f"ALTER TABLE {table} ADD COLUMN min_level INTEGER DEFAULT 1",
+            f"ALTER TABLE {table} ADD COLUMN location_tags TEXT DEFAULT NULL",
+        ):
+            try:
+                conn.execute(col_sql)
+                conn.commit()
+            except Exception as e:
+                if "duplicate column" in str(e).lower():
+                    pass
+                else:
+                    raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2978,6 +2995,7 @@ def run_admin_migrations() -> None:
         _ensure_auth_ux_schema(conn)
         _ensure_game_config_services(conn)
         _ensure_submap_schema(conn)
+        _ensure_shop_item_level_location_schema(conn)
     finally:
         conn.close()
 

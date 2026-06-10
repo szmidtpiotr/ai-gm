@@ -18,6 +18,21 @@ from app.services.loot_service import (
 SELL_RATIO = 0.5
 
 
+def _get_character_level(conn: sqlite3.Connection, character_id: int) -> int:
+    """Return character level from sheet_json; defaults to 1."""
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1",
+            (int(character_id),),
+        ).fetchone()
+        if not row:
+            return 1
+        sheet = parse_character_sheet(row["sheet_json"] if isinstance(row, sqlite3.Row) else row[0])
+        return int(sheet.get("level", 1) or 1)
+    except Exception:
+        return 1
+
+
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(LOOT_DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -65,7 +80,8 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
     if t == "weapon":
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp
+            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp,
+                   COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_weapons
             WHERE key = ? AND COALESCE(is_active, 1) = 1
             """,
@@ -79,13 +95,16 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
             "label": row["label"] or row["key"],
             "description": row["description"] or "",
             "value_gp": int(row["price_gp"] or 0),
+            "min_level": int(row["min_level"] or 1),
+            "location_tags": row["location_tags"],
         }
 
     if t == "consumable":
         try:
             row = conn.execute(
                 """
-                SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type
+                SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type,
+                       COALESCE(min_level, 1) AS min_level, location_tags
                 FROM game_config_items
                 WHERE key = ? AND COALESCE(is_active, 1) = 1
                 LIMIT 1
@@ -101,10 +120,13 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
                 "label": row["label"] or row["key"],
                 "description": row["description"] or "",
                 "value_gp": int(row["price_gp"] or 0),
+                "min_level": int(row["min_level"] or 1),
+                "location_tags": row["location_tags"],
             }
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(base_price, 0) AS price_gp
+            SELECT key, label, description, COALESCE(base_price, 0) AS price_gp,
+                   COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_consumables
             WHERE key = ? AND COALESCE(is_active, 1) = 1
             """,
@@ -118,13 +140,16 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
             "label": row["label"] or row["key"],
             "description": row["description"] or "",
             "value_gp": int(row["price_gp"] or 0),
+            "min_level": int(row["min_level"] or 1),
+            "location_tags": row["location_tags"],
         }
 
     # item / armor / misc / quest (stored in game_config_items)
     try:
         row = conn.execute(
             """
-            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type
+            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type,
+                   COALESCE(min_level, 1) AS min_level, location_tags
             FROM game_config_items
             WHERE key = ? AND COALESCE(is_active, 1) = 1
             """,
@@ -143,12 +168,21 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
         item_type_from_row = ""
     if not row:
         return None
+    min_level_val = 1
+    location_tags_val = None
+    try:
+        min_level_val = int(row["min_level"] or 1)
+        location_tags_val = row["location_tags"]
+    except (IndexError, KeyError):
+        pass
     return {
         "type": (item_type_from_row or t or "item"),
         "key": row["key"],
         "label": row["label"] or row["key"],
         "description": row["description"] or "",
         "value_gp": int(row["price_gp"] or 0),
+        "min_level": min_level_val,
+        "location_tags": location_tags_val,
     }
 
 
@@ -245,17 +279,42 @@ def _character_sellables(
     return out
 
 
-def get_shop_inventory(npc_id: int, character_id: int) -> dict[str, Any]:
+def _item_passes_filters(cat: dict[str, Any], char_level: int, location_key: str | None) -> bool:
+    """Return True if item should be shown given character level and current location."""
+    min_level = int(cat.get("min_level") or 1)
+    if char_level < min_level:
+        return False
+    raw_tags = cat.get("location_tags")
+    if raw_tags is None:
+        # NULL location_tags = available everywhere
+        return True
+    try:
+        tags = json.loads(raw_tags) if isinstance(raw_tags, str) else list(raw_tags)
+    except Exception:
+        return True
+    if not tags:
+        return True
+    if location_key is None:
+        # No location provided → hide location-restricted items
+        return False
+    return str(location_key).strip().lower() in [str(t).strip().lower() for t in tags]
+
+
+def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None = None) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
         cha = _get_character_cha(conn, character_id)
+        char_level = _get_character_level(conn, character_id)
         ratio = _cha_sell_ratio(cha)
         entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
         items = []
         for e in entries:
             cat = _catalog_item(conn, e["type"], e["key"])
-            if cat and int(cat.get("value_gp") or 0) > 0:
-                items.append(cat)
+            if not cat or int(cat.get("value_gp") or 0) <= 0:
+                continue
+            if not _item_passes_filters(cat, char_level, location_key):
+                continue
+            items.append(cat)
         sell_items = _character_sellables(conn, character_id, ratio)
     return {
         "npc": {"id": int(npc["id"]), "key": npc["key"], "label": npc["label"]},
@@ -264,13 +323,15 @@ def get_shop_inventory(npc_id: int, character_id: int) -> dict[str, Any]:
         "character_gold": int(get_character_gold(character_id)),
         "sell_ratio": ratio,
         "cha": cha,
+        "char_level": char_level,
+        "location_key": location_key,
     }
 
 
-def get_shop_inventory_by_key(npc_key: str, character_id: int) -> dict[str, Any]:
+def get_shop_inventory_by_key(npc_key: str, character_id: int, location_key: str | None = None) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc_by_key(conn, npc_key)
-    return get_shop_inventory(int(npc["id"]), character_id)
+    return get_shop_inventory(int(npc["id"]), character_id, location_key=location_key)
 
 
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
