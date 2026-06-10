@@ -2961,6 +2961,29 @@ def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _ensure_time_of_day_effects(conn: sqlite3.Connection) -> None:
+    """F20 (#480): seed default time-of-day effects into game_config_meta."""
+    import json as _json
+    default = {
+        "dawn": {"initiative_bonus": 1},
+        "day": {},
+        "dusk": {"perception_dc_bonus": 1},
+        "night": {"perception_dc_bonus": 2, "stealth_bonus": 2},
+    }
+    try:
+        existing = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'time_of_day_effects' LIMIT 1"
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('time_of_day_effects', ?)",
+                (_json.dumps(default),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
 def _ensure_npc_is_dead_column(conn: sqlite3.Connection) -> None:
     """F19 (#479): add is_dead column to npcs table."""
     try:
@@ -3123,6 +3146,7 @@ def run_admin_migrations() -> None:
         _apply_f15_balance_tuning(conn)
         _ensure_npc_is_dead_column(conn)
         _ensure_xp_level_thresholds(conn)
+        _ensure_time_of_day_effects(conn)
         _ensure_hidden_traits_schema(conn)
     finally:
         conn.close()
