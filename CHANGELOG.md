@@ -4,6 +4,61 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.6 — 2026-06-10 — Lochy pełna treść, onboarding, Uczony zaklęcia, bugfixy
+
+### Added
+
+**Uczony — zaklęcia poza walką (#483)**
+- `POST /api/campaigns/{id}/cast-spell` — endpoint dla nieofensywnych zaklęć poza walką
+- `/czar [zaklęcie]` slash command z podpowiedziami (autocomplete z ikonami i kosztem many)
+- Przyciski „Rzuć / Lecz / Użyj" w zakładce Zaklęcia — atak zablokowany poza walką
+- Magiczne Światło (`magic_light`) — nowe zaklęcie narracyjne tier 1, koszt many 0; backfill do wszystkich istniejących Uczonych
+
+**System lochów — Faza 3 pełna treść (E15–E22)**
+- **E15** (#430) — Snapshot stanu świata (HP, EXP, gold, inventory, world_state) przy wejściu do lochu
+- **E16** (#431) — Przywróć snapshot + restart runu od pokoju 1 przy śmierci w lochu
+- **E17** (#432) — 5 tierów rzadkości łupu (Zwykły/szary → Legendarny/złoty), mapowanie difficulty→rarity; boss zawsze Epic+
+- **E18** (#433) — Trudność i cooldown lochu edytowalne w panelu admina (Admin → Lochy)
+- **E19** (#434) — Offline pipeline LLM Vision do generowania opisów kafelków lochu (Ollama + llava)
+- **E19b** (#459) — Generator promptów AI dla kafelków (`ai-create` endpoint), podgląd + zapis do DB
+- **E19c** (#460) — Redesign compositora kafelka: cienka ramka, płaskie markery drzwi, przycisk Generuj Opis
+- **E21** (#436) — Klik hexu lochu na mapie świata → bezpośrednie otwarcie pickera lochów (bez dialogu podróży)
+- **E22** (#437) — Wznowienie niedokończonego runu lochu: picker pokazuje „▶ Wznów ekspedycję" z numerem komnaty; **fix:** endpoint `active-run` pomijał wszystkie kampanie z powodu błędnego filtra `mode='dungeon'`
+
+**System onboardingu (E23–E28)**
+- **E23** (#438) — Tabela `seen_mechanics` per gracz + endpointy GET/POST mark-seen
+- **E24** (#439) — Backend triggery kart onboardingowych przy pierwszym wystąpieniu 6 mechanik (rzut, walka, obrażenia, XP, złoto, test śmierci)
+- **E25** (#440) — Nieblokujący overlay z kartą onboardingową; przycisk „Rozumiem" → mark-seen; karta wyświetla się tylko raz
+- **E26** (#441) — Kodeks: biblioteka przeczytanych kart mechanik otwierana z nagłówka gry (ikona ksiązki), nawigacja strzałkami
+- **E28** (#443) — Tutorial kampania „Moja Pierwsza Przygoda": modal dla nowego gracza z opcją Tak/Pomiń; `is_tutorial` flag w DB; kampania nie jest proponowana przy kolejnych kampaniach
+
+**Panel admina**
+- (#482) — Licznik oczekujących elementów (badge) na pozycji „Świat" w nawigacji; aktualizacja po zatwierdzeniu/odrzuceniu
+- (#482) — Kolumna „Data utworzenia" w zakładce Oczekujące dla wrogów, NPC, broni i przedmiotów
+- Sortowanie kolumn we wszystkich tabelach admina (klik nagłówka, ikona kierunku)
+
+**Inne**
+- **D3** (#378) — Kontekst pamięci NPC injektowany do LLM per tura; endpoint `GET /admin/campaigns/{id}/known-npcs`
+- **E5** (#420) — Blokada martwego bohatera: `hero_blocked` flag; `GET /campaigns` i `POST /turns` zwracają 423 gdy bohater dead
+- **E2** (#417) — Inline descriptions w kreatorze postaci zamiast duplikowanych tooltipów
+- Animacje rzutów kośćmi w kreatorze — wartości statystyk „kręcą się", ikony kości migają przy wejściu na krok
+
+### Fixed
+
+- **#437** — `GET /api/dungeons/active-run` nigdy nie pasował do żadnej kampanii (filtr `mode='dungeon'`, wszystkie kampanie mają `mode='solo'`)
+- **D10** (#385) — Reset motywu wizualnego przy wylogowaniu; selektor motywu w ekranie profilu gracza
+- **#408** — Plan GM: sceny wyświetlane jako `<details open>` z pełną treścią; bieżąca scena pokazuje hooki (NPC/lokacje/przedmioty)
+- **SB-2** (#456) — Synchronizacja `scene_enemies` i `player_conditions` do kolumn `world_state` w DB
+- **SB-3/SB-4** (#457) — Pominięcie skanowania słów kluczowych; ponowne wyświetlanie istniejącego `SKILL_TEST_PENDING`
+- **SB-5** (#458) — Auto-resolve skill testu gdy `committed_d20` jest już ustawiony
+- Naprawiono sortowanie gwiazdek rzadkości — `data-sort-val` z wartością numeryczną zamiast HTML
+- Inicjalizacja sortowania przez `MutationObserver` — wykrywa leniwie ładowane tabele
+- `sqlite3.Row` konwertowane do dict w funkcjach logowania (eliminacja `AttributeError`)
+- Montowanie `frontend/images/tiles/` do kontenera backendu (serwowanie wygenerowanych kafelków)
+- Usunięto wymaganie drzwi przy zapisie kafelka (blokada save/image deadlock)
+
+---
+
 ## v1.2.5 — 2026-06-09 — FADM strangler fig ukończony + E1–E14
 
 ### Added / Changed / Fixed
