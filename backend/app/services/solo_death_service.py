@@ -291,7 +291,12 @@ def _end_summary_payload(
     arch = str(sheet.get("archetype") or sheet.get("class") or "adventurer").strip()
     level = sheet.get("level")
     if level is None and sheet.get("xp_lifetime_earned") is not None:
-        level = max(1, min(10, int(sheet["xp_lifetime_earned"]) // 100 + 1))
+        from app.services.xp_service import get_xp_level_thresholds, level_from_xp
+        try:
+            thresholds = get_xp_level_thresholds(conn)
+        except Exception:
+            thresholds = None
+        level = max(1, min(10, level_from_xp(int(sheet["xp_lifetime_earned"]), thresholds)))
     xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
 
     # Pull ending title + summary from gm_plan_json for victory.

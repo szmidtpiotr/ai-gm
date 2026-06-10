@@ -371,9 +371,14 @@ def _apply_xp_revert(
     new_xp = max(0, old_xp - reverted_amount)
     sheet["xp"] = new_xp
 
-    # Recompute level — simple curve: level = 1 + floor(xp / 100)
+    # Recompute level using configurable thresholds (F18)
+    from app.services.xp_service import get_xp_level_thresholds, level_from_xp
     old_level = int(sheet.get("level") or 1)
-    new_level = max(1, 1 + (new_xp // 100))
+    try:
+        thresholds = get_xp_level_thresholds(conn)
+    except Exception:
+        thresholds = None
+    new_level = max(1, level_from_xp(new_xp, thresholds))
     level_dropped = max(0, old_level - new_level)
     sheet["level"] = new_level
 
