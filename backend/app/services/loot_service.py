@@ -89,6 +89,46 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
+# F2 (#462): affix rolling config per dungeon loot_tier
+# (max_affixes, max_affix_tier, per-slot_chances)
+_LOOT_TIER_AFFIX: dict[str, tuple[int, int, list[float]]] = {
+    "poor":     (0, 0, []),
+    "standard": (1, 1, [0.25]),
+    "rich":     (2, 2, [0.50, 0.20]),
+    "treasure": (3, 3, [0.70, 0.40, 0.15]),
+}
+
+
+def roll_weapon_affixes(loot_tier: str, conn: sqlite3.Connection) -> list[str]:
+    """F2 (#462): roll affix keys for a weapon drop based on dungeon loot_tier.
+
+    Returns a deduplicated list of affix key strings (may be empty).
+    Uses Python random so random.seed() controls results deterministically in tests.
+    """
+    cfg = _LOOT_TIER_AFFIX.get(str(loot_tier or "").strip().lower())
+    if not cfg or not cfg[2]:
+        return []
+    max_tier, _, chances = cfg
+    try:
+        rows = conn.execute(
+            "SELECT key FROM game_config_affixes WHERE tier <= ? AND is_active = 1",
+            (max_tier,),
+        ).fetchall()
+    except Exception:
+        return []
+    available = [r["key"] if hasattr(r, "keys") else r[0] for r in rows]
+    if not available:
+        return []
+    rolled: list[str] = []
+    for chance in chances:
+        if random.random() < chance:
+            candidates = [k for k in available if k not in rolled]
+            if not candidates:
+                break
+            rolled.append(random.choice(candidates))
+    return rolled
+
+
 def _roll_dice_value(expr: str) -> int:
     raw = str(expr or "").strip().lower()
     # Supports: "2d6", "d8", "2d6+4", "1d4-1"
@@ -397,10 +437,18 @@ def roll_gold_drop(enemy_key: str) -> int:
     return random.randint(gmin, gmax)
 
 
-def grant_loot_to_character(character_id: int, loot_items: list[dict], source: str = "loot") -> list[dict]:
+def grant_loot_to_character(
+    character_id: int,
+    loot_items: list[dict],
+    source: str = "loot",
+    loot_tier: str | None = None,
+) -> list[dict]:
     """
     Grant rolled loot to character inventory with catalog validation.
     Item/consumable stack by key; weapons are always inserted as separate rows.
+
+    F2 (#462): if loot_tier is provided, rolls affixes for each weapon row
+    and writes them to affixes_json.
     """
     cid = int(character_id)
     if not isinstance(loot_items, list):
@@ -423,13 +471,14 @@ def grant_loot_to_character(character_id: int, loot_items: list[dict], source: s
                 continue
             key, label, item_type = cat
             if item_type == "weapon":
+                affix_keys = roll_weapon_affixes(loot_tier, conn) if loot_tier else []
                 conn.execute(
                     """
                     INSERT INTO character_inventory
-                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json)
-                    VALUES (?, NULL, ?, NULL, ?, 0, NULL, ?, NULL)
+                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json, affixes_json)
+                    VALUES (?, NULL, ?, NULL, ?, 0, NULL, ?, NULL, ?)
                     """,
-                    (cid, key, qty, src),
+                    (cid, key, qty, src, json.dumps(affix_keys)),
                 )
             else:
                 # 8H: wszystkie wiersze z game_config_items (w tym consumable) stackują po item_key

@@ -418,6 +418,7 @@ def _build_dungeon_instance(dungeon: dict, hero_level: int) -> dict:
         "cooldown_hours": cooldown_hours,
         "chest_loot_table_key": dungeon.get("chest_loot_table_key") or "",
         "boss_loot_table_key": dungeon.get("boss_loot_table_key") or "",
+        "loot_tier": dungeon.get("loot_tier") or "standard",
         "loot_collected": [],
     }
 
@@ -617,13 +618,18 @@ def resolve_room(campaign_id: int, character_id: int, player_input: str | None =
         conn.close()
 
 
-def grant_dungeon_loot(character_id: int, campaign_id: int, loot_items: list[dict]) -> list[dict]:
-    """Grant loot items to character inventory."""
+def grant_dungeon_loot(
+    character_id: int,
+    campaign_id: int,
+    loot_items: list[dict],
+    loot_tier: str | None = None,
+) -> list[dict]:
+    """Grant loot items to character inventory. F2 (#462): passes loot_tier for affix rolling."""
     if not loot_items:
         return []
     try:
         from app.services.loot_service import grant_loot_to_character
-        return grant_loot_to_character(character_id, loot_items, source="dungeon")
+        return grant_loot_to_character(character_id, loot_items, source="dungeon", loot_tier=loot_tier)
     except Exception:
         return []
 
