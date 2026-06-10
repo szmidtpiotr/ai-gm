@@ -4191,6 +4191,32 @@ def create_turn(
         except Exception as _n_enc_err:
             logger.warning("n_turns_encounter_trigger_error", error=str(_n_enc_err))
 
+        # F8 (#468): resolve robbery encounter — steal gold, clear encounter, skip combat
+        try:
+            from app.services.robbery_service import is_robbery_encounter, apply_robbery as _apply_rob
+            _gs_rob = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_rob:
+                _sf_rob = json.loads(_gs_rob["session_flags"] or "{}")
+                _enc_rob = _sf_rob.get("active_encounter")
+                if is_robbery_encounter(_enc_rob):
+                    _rob_result = _apply_rob(conn, payload.character_id)
+                    _sf_rob.pop("active_encounter", None)
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                        (json.dumps(_sf_rob, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+                    if _rob_result.get("ok") and _rob_result.get("gold_stolen", 0) > 0:
+                        _rob_hint = _rob_result.get("narrative_hint", "")
+                        if _rob_hint:
+                            clean_assistant = (clean_assistant or "") + f"\n\n*{_rob_hint}*"
+                    logger.info("robbery_encounter_resolved", campaign_id=campaign_id,
+                                char_id=payload.character_id, result=_rob_result)
+        except Exception as _rob_err:
+            logger.warning("robbery_encounter_error", error=str(_rob_err))
+
         # Issue #135 — inject [COMBAT_START] when player declared attack but
         # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
         assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
