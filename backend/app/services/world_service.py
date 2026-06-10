@@ -789,7 +789,7 @@ def get_pending_items(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
             """SELECT key, label, item_type, description, value_gp, weight_kg, note,
-                      campaign_id, review_status, ai_generated
+                      campaign_id, review_status, ai_generated, created_at
                FROM game_config_items
                WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
@@ -804,7 +804,7 @@ def get_pending_weapons(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
             """SELECT key, label, weapon_type, damage_die, linked_stat, description,
-                      campaign_id, review_status, ai_generated
+                      campaign_id, review_status, ai_generated, created_at
                FROM game_config_weapons
                WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
@@ -833,7 +833,7 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, npc_type, personality_prompt, review_status
+            """SELECT key, label, npc_type, personality_prompt, review_status, created_at
                FROM npcs WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
@@ -845,7 +845,7 @@ def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, tier, hp_base, review_status
+            """SELECT key, label, tier, hp_base, review_status, created_at
                FROM game_config_enemies WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
