@@ -948,7 +948,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F2 | Affix System — game_config_affixes + affixes_json na inventory row (✅ #462 KOMPLETNE: tabela+silnik walki+GET /admin/affixes+`roll_weapon_affixes()` per loot_tier (poor/standard/rich/treasure); 10 testów GREEN) | F1 |
 | F2b | Enemy drop affixes — `loot_tier TEXT DEFAULT NULL` na `game_config_enemies`; wrogowie z ustawionym loot_tier mogą dawać afik-sowane bronie w zwykłej walce kampanii (✅ #484 KOMPLETNE: migracja+combatant dict+`_preview_loot_from_roll_items`+`claim_post_combat_loot`; 9 testów pytest GREEN) | F2 |
 | F3 | Admin buildery afiksów i efektów (✅ #463 KOMPLETNE: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy + Effects Builder dropdown) | F2 |
-| F4 | `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1) | — |
+| F4 | `[SPEND_GOLD:X]` tag z tabeli/configu (✅ #464 KOMPLETNE: `build_refusal_text()`+`apply_spend_gold_to_narrative()`; narracja odmowy; non-stream path; 8 seed rows; 10 testów GREEN) | — |
 | F5 | Włączenie + konfiguracja wskrzeszenia jako gold sink | — |
 | F6 | Sink afiksów: NPC is_crafter, nałóż/reroll afiks (T1=150g, T2=500g, T3=1200g) | F2 |
 | F7 | Trwałość (durability): punktowa per cios, penalty przy 0, naprawa tier_rate×brak_pkt | F1 |
@@ -3115,7 +3115,7 @@ grind loch / walka → złoto + przedmioty
 
 | # | Zadanie | Zależy od |
 |---|---------|-----------|
-| F4 | `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, nie z LLM | — |
+| F4 | ✅ `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, nie z LLM (#464, commit 100cbef) | — |
 | F5 | Włączyć + skonfigurować wskrzeszenie jako sink (gold_percent) | — |
 | F6 | Sink afiksów: NPC `is_crafter`, nałóż/reroll afiks. Koszty (skalibrowane do ~70-80g/sesja): T1=150g, T2=500g, T3=1200g dodanie; T1→T2=350g, T2→T3=700g upgrade. | afiksy (CZĘŚĆ X) |
 | F7 | Trwałość: punktowa (np. broń 200pkt), spada per uderzenie OTRZYMANE. Przy 0pkt: penalty bonusu (domyślnie -50%, konfigurowalne w admin). Naprawa: `tier_rate × brakujące_pkt` (T1=20g/pkt, T2=50g/pkt, T3=100g/pkt). Kolumny `durability_current`/`durability_max` w `character_inventory`, NULL dla consumables. | egzemplarze |
