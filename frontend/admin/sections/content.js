@@ -26,13 +26,17 @@ function _esc(s) {
 const _loading = cols => `<tr><td colspan="${cols}" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr>`;
 const _errRow  = (cols, msg) => `<tr><td colspan="${cols}" style="text-align:center;padding:28px;color:var(--red);font-size:0.8rem">Błąd: ${_esc(msg)}</td></tr>`;
 
-function _stars(rec) {
+function _starsNum(rec) {
   let n;
   if (rec && typeof rec === 'object') {
     n = rec.rarity != null ? rec.rarity : (rec.value_gp || 0);
     if (rec.rarity == null) n = n > 1000 ? 5 : n > 400 ? 4 : n > 150 ? 3 : n > 50 ? 2 : 1;
   } else { n = 1; }
-  n = Math.max(1, Math.min(5, Math.round(n)));
+  return Math.max(1, Math.min(5, Math.round(n)));
+}
+
+function _stars(rec) {
+  const n = _starsNum(rec);
   return `<span class="stars">${[1,2,3,4,5].map(i=>`<span class="star ${i<=n?'on':'off'}">★</span>`).join('')}</span>`;
 }
 
@@ -253,7 +257,7 @@ async function _loadWeapons() {
         <td class="detail-col">${yesNo(w.finesse)}</td>
         <td class="td-mono">${w.weight_kg!=null?w.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${w.value_gp!=null?w.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${w.rarity??0}">${_stars(w)}</td>
+        <td data-sort-val="${_starsNum(w)}">${_stars(w)}</td>
         <td class="detail-col">${w.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${w.is_locked?'🔒':''}</span></td>
         <td class="detail-col"><span style="font-size:0.72rem;color:var(--t3)">${w.template_id?'📖 #'+w.template_id:'—'}</span></td>
@@ -288,7 +292,7 @@ async function _loadArmor() {
         <td class="detail-col td-muted">${_esc(it.armor_coverage||'—')}</td>
         <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${it.rarity??0}">${_stars(it)}</td>
+        <td data-sort-val="${_starsNum(it)}">${_stars(it)}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
@@ -324,7 +328,7 @@ async function _loadItems() {
         <td class="detail-col td-mono" style="font-size:0.68rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(fxJson)}">${_esc(fxJson||'—')}</td>
         <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${it.rarity??0}">${_stars(it)}</td>
+        <td data-sort-val="${_starsNum(it)}">${_stars(it)}</td>
         <td class="detail-col td-muted" style="font-size:0.72rem">${_esc(it.created_by||'—')}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
@@ -361,7 +365,7 @@ async function _loadConsumables() {
         <td class="detail-col td-mono">${c.charges??'—'}</td>
         <td class="td-mono">—</td>
         <td class="td-mono">${c.base_price!=null?c.base_price+' sz':'—'}</td>
-        <td data-sort-val="${c.rarity??0}">${_stars(c)}</td>
+        <td data-sort-val="${_starsNum(c)}">${_stars(c)}</td>
         <td class="detail-col">${c.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${c.is_locked?'🔒':''}</span></td>
         <td class="td-actions">

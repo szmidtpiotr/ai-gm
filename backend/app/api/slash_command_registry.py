@@ -8,6 +8,7 @@ COMMAND_REGISTRY: dict[str, str] = {
     "/name <new name>": "Rename your character",
     "/history": "Show the last 10 turns of the session",
     "/atak": "Stan aktywnej walki (wrogowie, HP, czyja tura) albo informacja, że walka nie trwa",
+    "/czar [zaklęcie]": "Rzuć zaklęcie nieofensywne poza walką (leczące, obronne, narracyjne) — np. /czar mend_wounds",
     "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
     "/helpme [pytanie]": "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
     "/export": "Export the full session to a text file on the server (/data/exports/)",

@@ -1944,6 +1944,23 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('stone_skin',      'Kamienna Skóra',     4, 4, 'defense',     NULL,  NULL,  NULL,  NULL,       3, 'self',     0, 'Skóra twardnieje jak kamień.',                         '{\"mana_cost\":4,\"ac_bonus\":5,\"duration\":4}',                      '{\"mana_cost\":2,\"ac_bonus\":6,\"duration\":4}'),
         ('fireball',        'Kula Ognia',         5, 6, 'attack_aoe',  '3d6', NULL,  NULL,  NULL,       1, 'any',      1, 'Ognista eksplozja niszczy wszystkich wrogów.',         NULL,                                                                  NULL)
     """, "v2-spells-seed")
+
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, rank2_json, rank3_json)
+        VALUES
+            ('magic_light', 'Magiczne Światło', 1, 0, 'narrative', NULL, NULL, NULL, NULL, 0, 'self', 0,
+             'Uczony przywołuje unoszącą się kulę świetlną oświetlającą obszar w promieniu kilku metrów. Działa jak pochodnia — rozjaśnia ciemność, lecz nie ma wartości ofensywnej.',
+             NULL, NULL)
+    """, "v2-spells-magic-light")
+
+    # Grant magic_light to all existing Scholar characters (retroactive, all active states)
+    _exec("""
+        INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank)
+        SELECT c.id, 'magic_light', 1
+        FROM characters c
+        WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+    """, "v2-spells-magic-light-backfill-all")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Knowledge Book (tips shown during travel/rest) ───────────────────────

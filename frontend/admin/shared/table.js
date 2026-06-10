@@ -25,11 +25,20 @@ export function initSortableTable(tableOrId) {
   const ths = Array.from(thead.querySelectorAll('th'));
   if (!ths.length) return;
 
-  // Skip action columns (last th if it has no visible label or is "Akcje")
-  const actionColIdx = ths.findIndex(th => {
-    const txt = th.textContent?.trim().toLowerCase();
-    return txt === 'akcje' || txt === 'actions' || !txt;
-  });
+  // Find action column: search from RIGHT for explicit "Akcje"/"Actions" label,
+  // then fall back to rightmost unlabeled non-check column.
+  let actionColIdx = -1;
+  for (let i = ths.length - 1; i >= 0; i--) {
+    const txt = ths[i].textContent?.trim().toLowerCase();
+    if (txt === 'akcje' || txt === 'actions') { actionColIdx = i; break; }
+  }
+  if (actionColIdx < 0) {
+    for (let i = ths.length - 1; i >= 0; i--) {
+      if (!ths[i].classList.contains('col-check') && !ths[i].textContent?.trim()) {
+        actionColIdx = i; break;
+      }
+    }
+  }
 
   ths.forEach((th, colIdx) => {
     // Skip action/checkbox columns

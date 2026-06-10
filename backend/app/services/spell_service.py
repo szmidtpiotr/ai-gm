@@ -322,6 +322,83 @@ def upgrade_spell(character_id: int, spell_key: str) -> dict:
         conn.close()
 
 
+def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
+    """Cast a heal/defense/narrative spell outside active combat.
+
+    Deducts mana (if any), applies effect, records use for rank progression.
+    Raises ValueError on invalid state (wrong archetype, unknown spell, insufficient mana,
+    offensive spell type).
+    """
+    conn = _get_db()
+    try:
+        char_row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char_row:
+            raise ValueError("Postać nie istnieje")
+        sheet = json.loads(char_row["sheet_json"] or "{}")
+        if str(sheet.get("archetype") or "").strip().lower() != "scholar":
+            raise ValueError("Tylko Uczony może rzucać zaklęcia")
+        known = get_character_spell(character_id, spell_key)
+        if not known:
+            raise ValueError(f"Nie znasz zaklęcia: {spell_key}")
+        spell = get_spell(spell_key)
+        if not spell:
+            raise ValueError(f"Zaklęcie '{spell_key}' nie istnieje")
+        if spell["spell_type"] in ("attack", "attack_aoe", "effect"):
+            raise ValueError("Zaklęcia ofensywne i efektowe można rzucić tylko w walce — wymagają celu")
+        spell_stats = get_spell_stats_at_rank(spell, known["rank"])
+        mana_cost = int(spell_stats.get("mana_cost") or 0)
+        if mana_cost > 0:
+            ok, _ = check_and_deduct_mana(sheet, mana_cost)
+            if not ok:
+                raise ValueError(
+                    f"Za mało many: masz {int(sheet.get('current_mana', 0))}, potrzebujesz {mana_cost}"
+                )
+        result: dict[str, Any] = {
+            "spell_key": spell_key,
+            "label": spell.get("label", spell_key),
+            "spell_type": spell["spell_type"],
+            "mana_cost": mana_cost,
+            "current_mana": int(sheet.get("current_mana", 0)),
+        }
+        if spell["spell_type"] == "heal":
+            heal_result = resolve_mend_wounds(sheet, spell_stats)
+            result.update(heal_result)
+            result["message"] = (
+                f"Rzucasz {spell.get('label', spell_key)} — leczysz się za "
+                f"{heal_result['healed']} HP. Masz teraz "
+                f"{heal_result['hp_after']}/{int(sheet.get('max_hp', 0))} HP."
+            )
+        elif spell["spell_type"] == "defense":
+            conditions = list(sheet.get("conditions") or [])
+            if spell_key not in conditions:
+                conditions.append(spell_key)
+            sheet["conditions"] = conditions
+            result["outcome"] = "defense"
+            result["conditions"] = conditions
+            result["message"] = (
+                f"Rzucasz {spell.get('label', spell_key)}. Magiczna ochrona otacza cię."
+            )
+        elif spell["spell_type"] == "narrative":
+            result["outcome"] = "narrative"
+            desc = (spell.get("description") or "").rstrip(".")
+            result["message"] = f"Rzucasz {spell.get('label', spell_key)}. {desc}." if desc else f"Rzucasz {spell.get('label', spell_key)}."
+        else:
+            result["outcome"] = "ok"
+            result["message"] = f"Rzucasz {spell.get('label', spell_key)}."
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), character_id),
+        )
+        record_spell_use(character_id, spell_key, conn)
+        conn.commit()
+        return result
+    finally:
+        conn.close()
+
+
 def grant_starting_spells(
     character_id: int, conn: sqlite3.Connection | None = None
 ) -> None:
@@ -330,7 +407,7 @@ def grant_starting_spells(
     if managed:
         conn = _get_db()
     try:
-        for spell_key in ("magic_bolt", "mend_wounds"):
+        for spell_key in ("magic_bolt", "mend_wounds", "magic_light"):
             conn.execute(
                 "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
                 (character_id, spell_key),

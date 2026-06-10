@@ -4303,6 +4303,14 @@ body:has(#game-screen.screen--active) .sheet-panel {
 .spell-rank-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
 .spell-rank-pip.active { background: #818cf8; }
 .spell-card__desc { font-size: 0.75rem; color: var(--text-muted); margin: 0; line-height: 1.4; }
+.spell-card__actions { margin-top: 6px; }
+.spell-card__cast-btn { padding: 4px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 6px;
+  border: 1px solid #818cf8; background: rgba(129,140,248,0.12); color: #a5b4fc; cursor: pointer;
+  transition: background 0.15s, color 0.15s; }
+.spell-card__cast-btn:hover:not(:disabled) { background: rgba(129,140,248,0.25); color: #c7d2fe; }
+.spell-card__cast-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.spell-card__cast-btn--nomana { border-color: #6b7280; color: #6b7280; background: transparent; }
+.spell-card__cast-btn--combat-only { border-color: #4b5563; color: #4b5563; background: transparent; }
 
 /* Skills & Inventory Items */
 .skill-item,
