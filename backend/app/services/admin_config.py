@@ -766,7 +766,7 @@ def list_enemies() -> list[dict]:
         SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                tier, attacks_per_turn, damage_bonus, damage_type,
                xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
-               description, is_active, locked_at, created_at, updated_at
+               description, is_active, locked_at, created_at, updated_at, loot_tier
         FROM game_config_enemies
         ORDER BY key ASC
         """

@@ -2345,6 +2345,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE game_config_enemies ADD COLUMN fear_aura INTEGER NOT NULL DEFAULT 0", "v2-enemies-fear-aura")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN fear_dc INTEGER NOT NULL DEFAULT 12", "v2-enemies-fear-dc")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN skills_json TEXT NOT NULL DEFAULT '{}'", "v2-enemies-skills-json")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN loot_tier TEXT DEFAULT NULL", "v2-enemies-loot-tier")
 
     # ── ALTER TABLE: game_sessions ────────────────────────────────────────
 
