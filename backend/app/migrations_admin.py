@@ -2961,6 +2961,16 @@ def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _ensure_npc_is_dead_column(conn: sqlite3.Connection) -> None:
+    """F19 (#479): add is_dead column to npcs table."""
+    try:
+        conn.execute("ALTER TABLE npcs ADD COLUMN is_dead INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            pass  # ignore all errors (table may not exist yet in tests)
+
+
 def _ensure_xp_level_thresholds(conn: sqlite3.Connection) -> None:
     """F18 (#478): seed default non-linear XP thresholds into game_config_meta."""
     import json as _json
@@ -3111,6 +3121,7 @@ def run_admin_migrations() -> None:
         _ensure_shop_item_level_location_schema(conn)
         _ensure_price_gp_schema(conn)
         _apply_f15_balance_tuning(conn)
+        _ensure_npc_is_dead_column(conn)
         _ensure_xp_level_thresholds(conn)
         _ensure_hidden_traits_schema(conn)
     finally:

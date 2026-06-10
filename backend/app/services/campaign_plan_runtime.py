@@ -155,6 +155,7 @@ def _check_and_advance_act(plan: dict, conn: sqlite3.Connection) -> None:
 def mark_npc_dead(campaign_id: int, npc_key: str, conn: sqlite3.Connection) -> str:
     """
     Mark NPC as dead in campaign plan. Returns their deviation_consequence.
+    Also sets global is_dead=1 on the npcs table (F19).
     """
     plan = get_plan(campaign_id, conn)
     consequence = "ignore"
@@ -166,6 +167,14 @@ def mark_npc_dead(campaign_id: int, npc_key: str, conn: sqlite3.Connection) -> s
             break
 
     save_plan(campaign_id, plan, conn)
+
+    # F19: propagate death globally
+    try:
+        from app.services.npc_global_death_service import mark_npc_dead_global
+        mark_npc_dead_global(conn, npc_key)
+    except Exception:
+        pass
+
     return consequence
 
 
