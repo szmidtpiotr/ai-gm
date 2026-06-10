@@ -4099,6 +4099,15 @@ def create_turn(
         except Exception as _strip_err:
             logger.warning("narrative_tag_strip_error", error=str(_strip_err))
 
+        # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
+        try:
+            from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
+            _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
+            _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id)
+            clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
+        except Exception as _sg_ns_err:
+            logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
+
         log = create_turn_log(
             conn=conn,
             campaign_id=campaign_id,
@@ -5131,27 +5140,16 @@ def create_turn_stream(
                     clean_text = _repack_narrative(clean_text, _sqs(_narr_qs), _pjson_qs)
                 except Exception as _qse:
                     logger.warning("quest_suggest_parse_error", error=str(_qse))
-                # C12: parse [SPEND_GOLD:key] → deduct from character, strip tag
+                # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
                 try:
-                    from app.services.spend_gold_service import parse_spend_gold_tags as _psg, spend_gold_on_service as _sgs
-                    import re as _re_sg
+                    from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg
                     _sg_conn = get_db()
                     try:
                         _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
-                        _sg_tags = _psg(_sg_narr, _sg_conn)
-                        for _sg_key, _sg_cost in _sg_tags:
-                            _sg_ok, _sg_new = _sgs(_sg_conn, character_id_val, _sg_key)
-                            if _sg_ok:
-                                _sg_conn.commit()
-                                logger.info("spend_gold_applied", campaign_id=campaign_id_val,
-                                            service_key=_sg_key, cost=_sg_cost, new_gold=_sg_new)
-                            else:
-                                logger.info("spend_gold_insufficient_stream", campaign_id=campaign_id_val,
-                                            service_key=_sg_key, cost=_sg_cost)
+                        _sg_narr_clean = _apply_sg(_sg_narr, _sg_conn, character_id_val)
+                        _sg_conn.commit()
                     finally:
                         _sg_conn.close()
-                    # Strip [SPEND_GOLD:*] tags from narrative regardless of success
-                    _sg_narr_clean = _re_sg.sub(r'\[SPEND_GOLD:[^\]]+\]', '', _sg_narr).strip()
                     clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
                 except Exception as _sge:
                     logger.warning("spend_gold_parse_error", error=str(_sge))

@@ -1241,6 +1241,18 @@ ADMIN_SEEDS = [
     """
     UPDATE game_config_weapons SET two_handed = 0 WHERE weapon_slot != 'two_handed' AND two_handed = 1
     """,
+    # F4: seed game_config_services with basic NPC service prices
+    """
+    INSERT OR IGNORE INTO game_config_services (key, label, cost_gp, description, is_active) VALUES
+    ('inn_night',       'Gospoda: jedna noc',         5,   'Nocleg i posiłek w gospodzie — standardowy pokój', 1),
+    ('inn_night_fine',  'Gospoda: luksusowy pokój',   20,  'Nocleg w prywatnym pokoju z pościelą i śniadaniem', 1),
+    ('healer_light',    'Uzdrowiciel: lekkie rany',   10,  'Opatrzenie ran niegroźnych: skaleczenia, stłuczenia', 1),
+    ('healer_heavy',    'Uzdrowiciel: ciężkie rany',  50,  'Leczenie poważnych ran wymagające magii lub chirurgii', 1),
+    ('stable_night',    'Stajnia: jedna noc',         3,   'Nocleg i pasza dla konia lub wierzchowca', 1),
+    ('blacksmith_repair', 'Kowal: naprawa ekwipunku', 15,  'Naprawa uszkodzonej broni lub zbroi', 1),
+    ('messenger',       'Posłaniec: wiadomość',       8,   'Wysłanie wiadomości do pobliskiego miasta', 1),
+    ('guide_day',       'Przewodnik: jeden dzień',    12,  'Miejscowy przewodnik przez niebezpieczny teren', 1)
+    """
 ]
 
 

@@ -106,3 +106,80 @@ def spend_gold_on_service(
     logger.info("spend_gold_success", character_id=character_id,
                 service_key=service_key, cost=cost, new_gold=new_gold)
     return True, new_gold
+
+
+def build_refusal_text(
+    conn: sqlite3.Connection,
+    character_id: int,
+    service_key: str,
+) -> str:
+    """Return a Polish refusal string when character cannot afford service_key.
+
+    Empty string if service_key is unknown (nothing to refuse).
+    """
+    cost = _get_service_cost(conn, service_key)
+    if cost is None:
+        return ""
+
+    row = conn.execute(
+        "SELECT gold_gp FROM characters WHERE id = ? LIMIT 1",
+        (character_id,),
+    ).fetchone()
+    current = int(row["gold_gp"] or 0) if row else 0
+
+    return (
+        f"*(Nie masz wystarczająco złota — potrzebujesz {cost} zł, "
+        f"masz {current} zł. Transakcja nieudana.)*"
+    )
+
+
+def apply_spend_gold_to_narrative(
+    text: Optional[str],
+    conn: sqlite3.Connection,
+    character_id: int,
+) -> str:
+    """Process all [SPEND_GOLD:key] tags in text.
+
+    For each tag:
+    - If character can afford: deduct gold (caller must commit), replace tag with "".
+    - If insufficient: replace tag with Polish refusal text.
+    - Unknown key: strip tag silently.
+
+    Returns modified text. Does NOT commit the transaction.
+    """
+    if not text:
+        return text or ""
+
+    result = text
+    for m in _RE.finditer(text):
+        key = m.group(1).strip()
+        cost = _get_service_cost(conn, key)
+        tag_str = m.group(0)
+
+        if cost is None:
+            # Unknown service — strip silently
+            result = result.replace(tag_str, "", 1)
+            continue
+
+        row = conn.execute(
+            "SELECT gold_gp FROM characters WHERE id = ? LIMIT 1",
+            (character_id,),
+        ).fetchone()
+        current = int(row["gold_gp"] or 0) if row else 0
+
+        if current >= cost:
+            new_gold = current - cost
+            conn.execute(
+                "UPDATE characters SET gold_gp = ? WHERE id = ?",
+                (new_gold, character_id),
+            )
+            logger.info("spend_gold_applied", character_id=character_id,
+                        service_key=key, cost=cost, new_gold=new_gold)
+            result = result.replace(tag_str, "", 1)
+        else:
+            refusal = build_refusal_text(conn, character_id, key)
+            logger.info("spend_gold_insufficient", character_id=character_id,
+                        service_key=key, have=current, need=cost)
+            result = result.replace(tag_str, refusal, 1)
+
+    return result.strip()
