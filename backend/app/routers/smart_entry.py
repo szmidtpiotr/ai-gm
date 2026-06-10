@@ -588,14 +588,25 @@ ZASADY:
 - Nie pisz "zapisałem" ani "utworzyłem rekord" — tylko wypełniasz formularz
 - Jeśli admin zmienia konkretne pole, zaktualizuj tylko to pole i wróć cały current_draft
 
-POLE effect_json (MECHANIKA BOJOWA — tylko dla broni):
-Generuj jako JSON string gdy broń ma specjalne efekty. Dozwolone typy:
-  extra_damage: {"type":"extra_damage","dice":"1d6","damage_type":"fire|cold|poison|lightning|magic|physical"}
-  on_hit_save:  {"type":"on_hit_save","stat":"CON|STR|DEX|INT|WIS|CHA","dc":12,
-                  "on_fail":{"type":"extra_damage","dice":"1d4","damage_type":"poison"}
-                             lub {"type":"apply_condition","condition_key":"poisoned|burning|bleeding|stunned|blinded|frightened|cursed","duration_rounds":2}}
-Przykład ognistego miecza: {"effects":[{"type":"extra_damage","dice":"1d6","damage_type":"fire"}]}
-Przykład zatrutego sztyletu: {"effects":[{"type":"on_hit_save","stat":"CON","dc":12,"on_fail":{"type":"apply_condition","condition_key":"poisoned","duration_rounds":3}}]}
+POLE effect_json (MECHANIKA BOJOWA — bronie i przedmioty):
+Generuj jako JSON string używając formatu Effect Object (F1 schema). OBOWIĄZKOWO schema_version:1.
+Format: {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"TYP","value":N}]}
+
+Dostępne typy efektów (effect_category="gear_bonus"):
+  damage_bonus  — stały bonus do obrażeń po mnożniku (np. +3 na każdy atak)
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":3}]}
+  heal_on_hit   — leczenie atakującego przy trafieniu (kradzież życia, life-steal)
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"heal_on_hit","value":2}]}
+  ac_bonus      — bonus do Klasy Pancerza z broni/przedmiotu (np. parująca broni, tarcza-miecz)
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"ac_bonus","value":1}]}
+  static_stat_modifier — modyfikator statystyki; wymaga pola "stat"
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"STR","value":2}]}
+  narrative_only — efekt narracyjny bez mechaniki (opis dla GM)
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"narrative_only"}]}
+
+Można łączyć wiele typów w jednej tablicy effects[].
+Przykład miecza kradnącego życie i zadającego bonus obrażeń:
+  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":2},{"type":"heal_on_hit","value":1}]}
 Zostaw null jeśli broń nie ma efektów specjalnych.
 
 TABELA game_config_spells — zaklęcia Uczonego (NIE mają effect_json):

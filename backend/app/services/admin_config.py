@@ -31,6 +31,8 @@ ALLOWED_EFFECT_JSON_TYPES = {
     "narrative_only",
     # F1 (#461) — gear combat effects (Effect Object schema)
     "damage_bonus",
+    "heal_on_hit",
+    "ac_bonus",
 }
 ALLOWED_EFFECT_JSON_TICKS = {"start_turn", "each_round", "on_use"}
 ALLOWED_EFFECT_JSON_STATS = {"STR", "DEX", "CON", "INT", "WIS", "CHA"}
@@ -38,7 +40,7 @@ _EFFECT_JSON_TOP_LEVEL_KEYS = {"schema_version", "effect_category", "effects"}
 _EFFECT_JSON_EFFECT_KEYS = {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires"}
 _EFFECT_JSON_CATEGORY_TYPES = {
     "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
-    "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus"},
+    "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus", "heal_on_hit", "ac_bonus"},
     "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
     "aura": {
         "periodic_save",
@@ -244,6 +246,9 @@ def validate_effect_json_payload(payload: object) -> list[str]:
                 errors.append(f"{prefix} requires dc_key or numeric value for periodic_save")
         elif effect_type in {"block_action", "narrative_only"}:
             pass
+        elif effect_type in {"damage_bonus", "heal_on_hit", "ac_bonus"}:
+            if not isinstance(value, (int, float)):
+                errors.append(f"{prefix}.value must be a number for {effect_type}")
 
     return errors
 

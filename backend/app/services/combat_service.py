@@ -179,6 +179,17 @@ def _weapon_flat_damage_bonus(weapon_row: dict | None) -> int:
     return _sum_damage_bonus(weapon_row)
 
 
+def _weapon_heal_on_hit(weapon_row: dict | None) -> int:
+    """F1 (#461): sum `heal_on_hit` effects from weapon effect_json (life-steal)."""
+    total = 0
+    for e in _weapon_effects_of_type(weapon_row, "heal_on_hit"):
+        try:
+            total += int(e.get("value") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
     """F2 (#462): sum `damage_bonus` from affixes on the equipped main-hand weapon.
 
@@ -1973,6 +1984,15 @@ def resolve_attack(
                 next_hp = max(0, prev_hp - dmg)
                 enemy["hp_current"] = next_hp
                 out["target_hp_remaining"] = next_hp
+                # F1 (#461): heal_on_hit — restore attacker HP on successful hit (life-steal)
+                _heal = _weapon_heal_on_hit(wrow)
+                if _heal:
+                    _pc = _find_combatant(combatants, "player")
+                    if _pc is not None:
+                        _pc_max = int(_pc.get("hp_max", 0) or 0)
+                        _pc_cur = int(_pc.get("hp_current", 0) or 0)
+                        _pc["hp_current"] = min(_pc_max, _pc_cur + _heal) if _pc_max > 0 else _pc_cur + _heal
+                        out["heal_on_hit"] = _heal
                 # Stage 3 Z3: clear `zaskoczony` (or any consumed condition) after damage
                 if _surprise_fx.get("consumed_keys"):
                     _clear_consumed_conditions(enemy, _surprise_fx["consumed_keys"])
