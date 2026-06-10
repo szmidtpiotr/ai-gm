@@ -195,7 +195,10 @@ def advance_dungeon_room(req: DungeonEnterReq):
         try:
             boss_loot = roll_boss_loot(updated_run["dungeon_key"])
             if boss_loot:
-                granted = grant_dungeon_loot(req.character_id, req.campaign_id, boss_loot)
+                granted = grant_dungeon_loot(
+                    req.character_id, req.campaign_id, boss_loot,
+                    loot_tier=updated_run.get("loot_tier"),
+                )
                 updated_run.setdefault("loot_collected", []).extend(granted)
         except Exception:
             pass
@@ -247,7 +250,7 @@ class DungeonResolveReq(BaseModel):
 
 @router.post("/dungeons/resolve-room")
 def resolve_dungeon_room(req: DungeonResolveReq):
-    from app.services.dungeon_service import resolve_room, grant_dungeon_loot
+    from app.services.dungeon_service import resolve_room, grant_dungeon_loot, get_active_dungeon_run
 
     try:
         result = resolve_room(req.campaign_id, req.character_id, req.player_input)
@@ -256,7 +259,11 @@ def resolve_dungeon_room(req: DungeonResolveReq):
 
     # Grant any chest loot to inventory
     if result.get("loot"):
-        granted = grant_dungeon_loot(req.character_id, req.campaign_id, result["loot"])
+        run = get_active_dungeon_run(req.campaign_id)
+        granted = grant_dungeon_loot(
+            req.character_id, req.campaign_id, result["loot"],
+            loot_tier=(run or {}).get("loot_tier"),
+        )
         result["loot"] = granted
 
     return {"ok": True, **result}
