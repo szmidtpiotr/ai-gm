@@ -447,7 +447,16 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         base_price = int(cat["value_gp"] or 0)
         cha = _get_character_cha(conn, character_id)
         ratio = _cha_sell_ratio(cha)
-        earned = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
+        cha_sell_price = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
+
+        # F12 (#472): anti-farm decay for repeated sales of the same item_key
+        try:
+            from app.services.anti_farm_service import get_anti_farm_multiplier, apply_anti_farm
+            af_mult = get_anti_farm_multiplier(conn, character_id, item_key)
+            earned = apply_anti_farm(cha_sell_price, af_mult)
+        except Exception:
+            af_mult = 1.0
+            earned = cha_sell_price
 
         qty = int(row["quantity"] or 1)
         if qty > 1:
@@ -460,10 +469,24 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         conn.commit()
 
     new_gold = apply_character_gold_delta(character_id, earned, "shop_sell")
+    # Tag the most recent shop_sell log row with item_key for anti-farm tracking
+    try:
+        with _conn() as _c:
+            _c.execute(
+                """UPDATE character_gold_log SET meta_json = ?
+                   WHERE character_id = ? AND source = 'shop_sell'
+                     AND id = (SELECT MAX(id) FROM character_gold_log
+                               WHERE character_id = ? AND source = 'shop_sell')""",
+                (json.dumps({"item_key": item_key}), int(character_id), int(character_id)),
+            )
+            _c.commit()
+    except Exception:
+        pass
     return {
         "gold_gp": int(new_gold),
         "earned_gp": int(earned),
         "sell_ratio": ratio,
+        "anti_farm_multiplier": af_mult,
         "cha": int(cha),
         "sold_item": {
             "type": item_type,
