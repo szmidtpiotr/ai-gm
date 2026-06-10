@@ -568,6 +568,13 @@ async function _loadBestiaryPending() {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie, bronie i przedmioty zatwierdzone.</div></div>';
       return;
     }
+    const _formatDate = (iso) => {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('pl-PL', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      } catch { return '—'; }
+    };
     const _pn = (label, key) => `<div class="td-name">${_esc(label||key)}</div><div class="td-muted" style="font-size:0.7rem;margin-top:1px">${_esc(key)}</div>`;
     const mkNpcRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
@@ -575,6 +582,7 @@ async function _loadBestiaryPending() {
       <td><span class="badge badge-green">NPC</span></td>
       <td class="td-muted">${_esc(p.npc_type||p.role||'—')}</td>
       <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.backstory||'')}">${_esc((p.description||p.backstory||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditNpc(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('npc','${_esc(p.key)}','approve',this)">✓</button>
@@ -587,6 +595,7 @@ async function _loadBestiaryPending() {
       <td><span class="badge badge-red">Wróg</span></td>
       <td class="td-muted">${_esc(p.tier||'—')}</td>
       <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditEnemy(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('enemy','${_esc(p.key)}','approve',this)">✓</button>
@@ -599,6 +608,7 @@ async function _loadBestiaryPending() {
       <td><span class="badge badge-amber">Broń</span></td>
       <td class="td-muted">${_esc(p.weapon_type||p.damage_die||'—')}</td>
       <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','approve',this)">✓</button>
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','discard',this)">✕</button>
@@ -610,6 +620,7 @@ async function _loadBestiaryPending() {
       <td><span class="badge badge-blue">Przedmiot</span></td>
       <td class="td-muted">${_esc(p.item_type||'—')}</td>
       <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditItem(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('item','${_esc(p.key)}','approve',this)">✓</button>
@@ -623,6 +634,7 @@ async function _loadBestiaryPending() {
         <th><div class="th-inner">Typ</div></th>
         <th><div class="th-inner">Rola/Tier</div></th>
         <th><div class="th-inner">Opis</div></th>
+        <th><div class="th-inner">Data utworzenia</div></th>
         <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
       </tr></thead>
       <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow)].join('')}</tbody>
@@ -640,6 +652,9 @@ async function reviewEntityBestiary(entityType, key, action, btn) {
     _showToast(action === 'approve' ? 'Zatwierdzono.' : 'Odrzucono.', 'success');
     _loaded.delete('pending');
     await _loadBestiaryPending();
+    if (window.__adminShell && window.__adminShell._loadPendingCount) {
+      await window.__adminShell._loadPendingCount();
+    }
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
     btn.disabled = false; btn.textContent = action === 'approve' ? '✓ Zatwierdź' : '✕ Odrzuć';
@@ -693,6 +708,9 @@ async function savePendingNpc(key, btn) {
     btn.closest('.modal-overlay').remove();
     _loaded.delete('pending'); _loaded.delete('npcs');
     await _loadBestiaryPending();
+    if (window.__adminShell && window.__adminShell._loadPendingCount) {
+      await window.__adminShell._loadPendingCount();
+    }
     _showToast('Zatwierdzono NPC.', 'success');
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
@@ -757,6 +775,9 @@ async function savePendingEnemy(key, btn) {
     btn.closest('.modal-overlay').remove();
     _loaded.delete('pending'); _loaded.delete('enemies');
     await _loadBestiaryPending();
+    if (window.__adminShell && window.__adminShell._loadPendingCount) {
+      await window.__adminShell._loadPendingCount();
+    }
     _showToast('Zatwierdzono wroga.', 'success');
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
@@ -808,6 +829,9 @@ async function savePendingItem(key, btn) {
     btn.closest('.modal-overlay').remove();
     _loaded.delete('pending');
     await _loadBestiaryPending();
+    if (window.__adminShell && window.__adminShell._loadPendingCount) {
+      await window.__adminShell._loadPendingCount();
+    }
     _showToast('Zatwierdzono przedmiot.', 'success');
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
