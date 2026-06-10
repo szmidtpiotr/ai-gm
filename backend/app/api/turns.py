@@ -2906,6 +2906,17 @@ def create_turn(
         llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
 
+        # F13 (#473): expire rentals whose turn window has passed before processing this turn
+        try:
+            from app.services.rental_service import expire_rentals, get_current_turn as _get_cur_turn
+            _cur_turn = _get_cur_turn(conn, campaign_id)
+            if _cur_turn > 0:
+                _expired = expire_rentals(conn, campaign_id, _cur_turn)
+                if _expired:
+                    logger.info("rentals_expired", campaign_id=campaign_id, count=_expired)
+        except Exception as _rental_err:
+            logger.warning("rental_expire_error", error=str(_rental_err))
+
         # Special opening turn — trigger plan gen + return opening scene
         if text == "__AI_GM_OPEN":
             _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
