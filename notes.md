@@ -12,7 +12,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
-| F (Faza 4) | 3/21 | 14% (F1✅ F2✅ F3✅) |
+| F (Faza 4) | 4/21 | 19% (F1✅ F2✅ F2b✅ F3✅ F4✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
@@ -134,7 +134,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462) — ✅ commit 35b864b: `roll_weapon_affixes()` per loot_tier (poor=0, standard=1×T1, rich=2×T1-T2, treasure=3×T1-T3); `grant_loot_to_character` + `grant_dungeon_loot` przyjmują `loot_tier`; dungeon run instance zawiera `loot_tier`; 10 testów pytest + 3 Playwright GREEN.
 - [x] F2b — Enemy drop affixes — `loot_tier` na `game_config_enemies` → afiksy na broniach z dropów wrogów — [#484](https://github.com/szmidtpiotr/ai-gm/issues/484) — ✅ commit 2c7dfc1: migracja `loot_tier TEXT DEFAULT NULL`; combatant dict + `_preview_loot_from_roll_items` przechowuje `enemy_loot_tier`; `claim_post_combat_loot` przekazuje do `grant_loot_to_character`; backward compat (NULL = brak afiksów); 9 testów pytest + 3 Playwright GREEN.
 - [x] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463) — ✅ commit db7c638: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy w Zawartość + Effects Builder (dropdown typów); 8 testów pytest + 4 Playwright GREEN
-- [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)
+- [x] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464) — ✅ commit 100cbef: `build_refusal_text()` + `apply_spend_gold_to_narrative()`; narracja odmowy przy braku złota; non-stream path fixed (tagi leciały do gracza); 8 seed rows game_config_services; 10/10 pytest GREEN
 - [ ] F5 — Wskrzeszenie jako gold sink (włączenie + konfiguracja gold_percent) — [#465](https://github.com/szmidtpiotr/ai-gm/issues/465)
 - [ ] F6 — Sink afiksów: NPC is_crafter, nałóż/reroll (T1=150g, T2=500g, T3=1200g) — [#466](https://github.com/szmidtpiotr/ai-gm/issues/466)
 - [ ] F7 — Trwałość (durability): punktowa per cios, penalty przy 0, naprawa tier_rate — [#467](https://github.com/szmidtpiotr/ai-gm/issues/467)
