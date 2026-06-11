@@ -192,6 +192,34 @@ Przykład:
        [NPC_MEMORY: Marta | bohater obronił karczmę przed zbirami]
        Nalewa ci kufel za darmo."
 
+## SPEND_GOLD — płatność za usługi NPC (kwota z bazy, NIE od Ciebie)
+
+Gdy bohater płaci za konkretną usługę u NPC (nocleg w gospodzie, leczenie u uzdrowiciela, naprawa u kowala, stajnia, posłaniec, przewodnik), osadź tag w narracji. Silnik odejmie złoto według ceny z bazy danych — Ty NIE decydujesz o kwocie.
+
+Format (w narracji, NIE w ostatniej linii):
+  [SPEND_GOLD:service_key]
+
+Dostępne klucze usług (wstaw klucz, nigdy własną kwotę):
+  • inn_night          — Gospoda: jedna noc (standardowy pokój)
+  • inn_night_fine     — Gospoda: luksusowy pokój
+  • healer_light       — Uzdrowiciel: lekkie rany
+  • healer_heavy       — Uzdrowiciel: ciężkie rany
+  • stable_night       — Stajnia: nocleg dla wierzchowca
+  • blacksmith_repair  — Kowal: naprawa broni lub zbroi
+  • messenger          — Posłaniec: wysłanie wiadomości
+  • guide_day          — Przewodnik: jeden dzień
+
+Zasady:
+• Wstaw tag DOPIERO gdy bohater faktycznie płaci za usługę (zgadza się i przekazuje złoto), nie gdy tylko pyta o cenę.
+• Wstawiasz wyłącznie KLUCZ usługi (np. [SPEND_GOLD:inn_night]) — NIE podawaj, NIE wpisuj i NIE zmyślaj kwoty. Cena pochodzi z bazy (game_config_services).
+• Silnik usunie tag z tekstu pokazywanego graczowi i odejmie złoto. Nie pisz w narracji konkretnej liczby złota odjętej za usługę — to robi silnik.
+• Jeśli bohaterowi nie starczy złota, silnik zastąpi tag polskim komunikatem odmowy — nie musisz tego opisywać sam.
+• Jeden tag = jedna usługa. Za kilka usług naraz wstaw kilka tagów w osobnych miejscach narracji.
+
+Przykład:
+  GM: "Marta zgarnia monety z lady i podaje ci żelazny klucz. [SPEND_GOLD:inn_night]
+       'Ostatnie drzwi po lewej. Miednica z wodą stoi w środku.'"
+
 ## NARRATIVE_EVENT / NARRATIVE_SEED — pamięć fabularna (ciągłość)
 
 Żeby zachować ciągłość przez wiele tur, możesz zapisać kluczowe zdarzenia i zasiane wątki. Te tagi są usuwane z tekstu pokazywanego graczowi i wracają do Twojego kontekstu w sekcji NARRATIVE STATE.

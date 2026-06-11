@@ -4,6 +4,62 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.7 — 2026-06-11 — Affix system, economy F1-F21, effect builder, SPEND_GOLD, bugfixy
+
+### Added
+
+**Affix System F1-F2b (#461–#462, #484)**
+- F1: typowane Effect Objects w silniku walki (damage_bonus, heal_on_hit, ac_bonus, static_stat_modifier, apply_condition, narrative_only)
+- F2: loot engine losuje afiksy per dungeon tier przy dropach wrogów
+- F2b: loot_tier na game_config_enemies + roll afiksów dla dropów wrogów
+
+**Affix Builder F3 (#463)**
+- POST/PATCH/DELETE /api/admin/affixes — pełne CRUD
+- Zakładka Afiksy w Admin → Zawartość z Effects Builder (wizualny row-builder)
+
+**Effect JSON Builder (#485, #486)**
+- Wizualny row-builder effect_json w modalu edycji broni/zbroi/przedmiotów (Admin → Zawartość)
+- Inline builder w Forge → Szablony → modal entity (broń/przedmiot/mikstura)
+
+**Gracz widzi afiksy (#487)**
+- Modal szczegółów przedmiotu pokazuje sekcję AFIKSY (amber header) z nazwą + opisem efektu po polsku
+
+**Economy sinks F4-F16 (#464–#476)**
+- F4 SPEND_GOLD: tag w narracji → automatyczne odejmowanie złota za usługi NPC (gospoda, uzdrowiciel, kowal, stajnia…) + prompt systemowy + seed danych
+- F5: Wskrzeszenie jako gold sink
+- F6: crafter_service — apply/reroll/upgrade affiksu z API
+- F7: durability_service — zużycie, kara do ataku, naprawa + hooki combatu
+- F8: robbery_service — kradzież złota w spotkaniu + seed
+- F9: dynamiczny ekwipunek sklepu filtrowany po lokacji + poziomie gracza
+- F10: modyfikator CHA wpływa na ceny kupna (rabat/narzut)
+- F11: ujednolicenie price_gp + wycena afiksów
+- F12: anty-farmowa degresja cen sprzedaży + logowanie item_key
+- F13/F14: sweep wygasłych wynajmów + usunięcie martwego kodu
+- F15: balans walki — atak bandyty +3→+4
+- F16: model analityczny ekonomii + skalibrowane sinki
+
+**Advanced systems F17-F21 (#477–#481)**
+- F17: hidden trait system (pula, przypisanie, ujawnienie + admin API)
+- F18: nieliniowe progi XP konfigurowalne z Admina
+- F19: globalne stany śmierci NPC (is_dead + propagacja)
+- F20: mechaniczne efekty pory dnia (fazy + konfigurowalne bonusy)
+- F21: World State history diff — compute_snapshot_diff + endpoint /diff
+
+**Gracz — quest w kartcie postaci**
+- Cel questu + nagroda widoczne w panelu Karty Postaci
+- World State w adminie pokazuje aktywny quest
+
+### Fixed
+- #504: C10 QUEST_SUGGEST brakujący w ścieżce non-streaming + błędny import strip
+- #472: anti_farm_service — bug kierunku delty (< 0 → > 0)
+
+### Tests
+- Playwright specs: #464 SPEND_GOLD, #466 crafter, #467 durability, #468 robbery
+- pytest: test_issue464_spend_gold_prompt, run_llm_tag_compliance
+- UX audit player frontend 2026-06-10
+
+---
+
 ## v1.2.6 — 2026-06-10 — Lochy pełna treść, onboarding, Uczony zaklęcia, bugfixy
 
 ### Added
