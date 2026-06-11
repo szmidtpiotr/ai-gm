@@ -4622,3 +4622,64 @@ def admin_push_send_test(
         vibrate=req.vibrate,
     )
     return {"ok": True}
+
+
+# ── Game mode flags (System → Tryby gry) ─────────────────────────────────────
+
+_GAME_MODE_DEFAULTS = {
+    "ai_campaign_enabled":   True,
+    "prebuilt_enabled":      True,
+    "dungeon_enabled":       True,
+    "dungeon_tiles_enabled": True,
+    "multiplayer_enabled":   False,
+}
+_GAME_MODE_META_KEY = "game_mode_flags"
+
+
+@router.get("/admin/game-modes", dependencies=[Depends(require_admin_token)])
+def get_game_modes() -> dict:
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ?", (_GAME_MODE_META_KEY,)
+        ).fetchone()
+        flags = dict(_GAME_MODE_DEFAULTS)
+        if row:
+            try:
+                flags.update(json.loads(row["value"] or "{}"))
+            except Exception:
+                pass
+        return {"flags": flags}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/game-modes", dependencies=[Depends(require_admin_token)])
+def save_game_modes(payload: dict = Body(...)) -> dict:
+    allowed = set(_GAME_MODE_DEFAULTS.keys())
+    flags = {k: bool(v) for k, v in payload.items() if k in allowed}
+    if not flags:
+        raise HTTPException(status_code=400, detail="No valid flags provided")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ?", (_GAME_MODE_META_KEY,)
+        ).fetchone()
+        current = dict(_GAME_MODE_DEFAULTS)
+        if row:
+            try:
+                current.update(json.loads(row["value"] or "{}"))
+            except Exception:
+                pass
+        current.update(flags)
+        conn.execute(
+            "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (_GAME_MODE_META_KEY, json.dumps(current)),
+        )
+        conn.commit()
+        return {"ok": True, "flags": current}
+    finally:
+        conn.close()
