@@ -1755,7 +1755,7 @@ function _sectionHtml() {
               <button class="chip" onclick="filterLocationsType(this,'dzikość')">Dzikość</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow-y:auto">
             <table class="data-table" id="locations-table">
               <thead>
                 <tr>
