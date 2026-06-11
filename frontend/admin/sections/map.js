@@ -938,6 +938,10 @@ const _ROW_REGISTRY = {
   let _wbPaintType = 'forest';
   let _wbPaintMode = false;
   let _wbDrawingTp = null;
+  let _wbPainting = false;        // mid drag-stroke
+  let _wbStroke = null;           // Map<"q,r", priorHexCloneOrNull> for current stroke
+  let _wbUndoStack = [];          // [{kind:'paint'|'full', items:[{q,r,before}]}]
+  let _wbRenderRAF = null;
   let _wbZoom = 1.0;
   let _wbPan = { x: 400, y: 280 };
   let _wbDragStart = null;
@@ -1057,7 +1061,7 @@ const _ROW_REGISTRY = {
       _wbDrawingTp = null; return;
     }
     if (_wbPaintMode) {
-      await _wbPaint(q, r);
+      return;  // painting handled by drag (mousedown/move/up); avoids double-paint on click
     } else if (_wbHexes[_wbKey(q, r)]) {
       _wbSelected = {q, r}; _wbRender();
       const loc = _wbLocations[_wbKey(q, r)];
@@ -1133,31 +1137,141 @@ const _ROW_REGISTRY = {
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); btn.disabled = false; btn.textContent = '✕ Odrzuć'; }
   }
 
-  async function _wbPaint(q, r) {
+  function _wbRenderThrottled() {
+    if (_wbRenderRAF) return;
+    _wbRenderRAF = requestAnimationFrame(() => { _wbRenderRAF = null; _wbRender(); });
+  }
+
+  function _wbHexUnderPoint(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const poly = el && el.closest && el.closest('.whx,.whg');
+    if (!poly) return null;
+    return { q: parseInt(poly.dataset.q), r: parseInt(poly.dataset.r) };
+  }
+
+  // Paint one cell into the in-progress stroke (optimistic, local only).
+  function _wbPaintCell(q, r) {
+    if (!_wbPaintType || !_wbStroke) return;
+    const key = _wbKey(q, r);
+    if (_wbStroke.has(key)) return;                 // already painted this stroke
+    const prev = _wbHexes[key] || null;
+    if (prev && prev.hex_type === _wbPaintType) { _wbStroke.set(key, prev); return; }
+    _wbStroke.set(key, prev ? JSON.parse(JSON.stringify(prev)) : null);
+    const cfg = _wbHexTypes[_wbPaintType] || {};
+    const enc = cfg.encounter_base_chance != null ? cfg.encounter_base_chance
+              : (prev ? prev.encounter_chance : 0.15);
+    _wbHexes[key] = { ...(prev || { q, r, label: null, atmosphere: null, encounter_pool: [] }),
+                      q, r, hex_type: _wbPaintType, encounter_chance: enc };
+    _wbRenderThrottled();
+  }
+
+  // Persist the finished stroke in one bulk call; record an undo entry.
+  async function _wbCommitStroke() {
+    const stroke = _wbStroke; _wbStroke = null;
+    if (!stroke || stroke.size === 0) return;
+    const keys = [...stroke.keys()];
+    // drop no-op cells (painted same type they already were)
+    const changed = keys.filter(k => {
+      const before = stroke.get(k);
+      return !(before && before.hex_type === _wbHexes[k]?.hex_type);
+    });
+    if (!changed.length) return;
+    const items = changed.map(k => { const [q, r] = k.split(',').map(Number); return { q, r, before: stroke.get(k) }; });
+    const payload = changed.map(k => { const h = _wbHexes[k]; return { q: h.q, r: h.r, hex_type: h.hex_type, encounter_chance: h.encounter_chance }; });
     try {
-      const cfg = _wbHexTypes[_wbPaintType] || {};
-      const res = await apiFetch('/api/admin/world/hexes', {
-        method: 'POST', body: JSON.stringify({ q, r, hex_type: _wbPaintType, encounter_chance: cfg.encounter_base_chance || 0.15 })
-      });
-      _wbHexes[_wbKey(q, r)] = res.hex;
-      _wbSelected = {q, r}; _wbRender(); _wbRenderDetail(res.hex);
-      _showToast(`${cfg.label || _wbPaintType} dodany.`, 'success');
-    } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
+      const res = await apiFetch('/api/admin/world/hexes/bulk-paint', { method: 'POST', body: JSON.stringify({ hexes: payload }) });
+      for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
+      _wbPushUndo('paint', items);
+      _wbRender();
+      _showToast(`Pomalowano ${payload.length} ${payload.length === 1 ? 'hex' : 'heksów'}.`, 'success');
+    } catch(e) {
+      for (const it of items) { const k = _wbKey(it.q, it.r); if (it.before) _wbHexes[k] = it.before; else delete _wbHexes[k]; }
+      _wbRender();
+      _showToast(e.message || 'Błąd malowania', 'error');
+    }
+  }
+
+  // Single-hex paint (click on empty ghost in select mode, or programmatic).
+  async function _wbPaint(q, r) {
+    if (!_wbPaintType) { _showToast('Wybierz typ terenu z palety.', 'info'); return; }
+    _wbStroke = new Map();
+    _wbPaintCell(q, r);
+    await _wbCommitStroke();
+    const h = _wbHexes[_wbKey(q, r)];
+    if (h) { _wbSelected = { q, r }; _wbRenderDetail(h); }
+  }
+
+  function _wbPushUndo(kind, items) {
+    if (!items || !items.length) return;
+    _wbUndoStack.push({ kind, items });
+    if (_wbUndoStack.length > 50) _wbUndoStack.shift();
+    _wbUpdateUndoBtn();
+  }
+
+  function _wbUpdateUndoBtn() {
+    const b = document.getElementById('wb-undo');
+    if (!b) return;
+    b.disabled = _wbUndoStack.length === 0;
+    b.textContent = _wbUndoStack.length ? `↶ Cofnij (${_wbUndoStack.length})` : '↶ Cofnij';
+  }
+
+  // Recreate or update a hex so it fully matches `h` (used to undo delete/save).
+  async function _wbRestoreFull(h) {
+    const key = _wbKey(h.q, h.r);
+    const body = { hex_type: h.hex_type, label: h.label ?? null, atmosphere: h.atmosphere ?? null,
+                   encounter_chance: h.encounter_chance ?? 0.15, encounter_pool: h.encounter_pool || [] };
+    if (_wbHexes[key]) {
+      const res = await apiFetch(`/api/admin/world/hexes/${h.q}/${h.r}`, { method: 'PATCH', body: JSON.stringify(body) });
+      _wbHexes[key] = res.hex;
+    } else {
+      const res = await apiFetch('/api/admin/world/hexes', { method: 'POST', body: JSON.stringify({ q: h.q, r: h.r, ...body }) });
+      _wbHexes[key] = res.hex;
+    }
+  }
+
+  async function _wbUndo() {
+    const entry = _wbUndoStack.pop();
+    _wbUpdateUndoBtn();
+    if (!entry) { _showToast('Brak czego cofnąć.', 'info'); return; }
+    const restore = entry.items.filter(i => i.before);
+    const remove = entry.items.filter(i => !i.before);
+    try {
+      if (restore.length && entry.kind === 'paint') {
+        const payload = restore.map(i => ({ q: i.before.q, r: i.before.r, hex_type: i.before.hex_type, encounter_chance: i.before.encounter_chance ?? 0.15 }));
+        const res = await apiFetch('/api/admin/world/hexes/bulk-paint', { method: 'POST', body: JSON.stringify({ hexes: payload }) });
+        for (const h of (res.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
+      } else {
+        for (const i of restore) await _wbRestoreFull(i.before);
+      }
+      for (const i of remove) {
+        await apiFetch(`/api/admin/world/hexes/${i.q}/${i.r}`, { method: 'DELETE' }).catch(() => {});
+        delete _wbHexes[_wbKey(i.q, i.r)];
+      }
+      _wbSelected = null; _wbRender(); _wbClearDetail(); _wbUpdateUndoBtn();
+      _showToast('Cofnięto ostatnią edycję.', 'success');
+    } catch(e) {
+      _wbUndoStack.push(entry); _wbUpdateUndoBtn();
+      _showToast(e.message || 'Błąd cofania', 'error');
+    }
   }
 
   async function _wbDeleteHex(q, r) {
     if (!confirm(`Usunąć hex (${q},${r})?`)) return;
+    const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'DELETE' });
       delete _wbHexes[_wbKey(q, r)]; _wbSelected = null; _wbRender(); _wbClearDetail();
+      if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Hex usunięty.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
   }
 
   async function _wbSaveHex(q, r, updates) {
+    const before = _wbHexes[_wbKey(q, r)] ? JSON.parse(JSON.stringify(_wbHexes[_wbKey(q, r)])) : null;
     try {
       const res = await apiFetch(`/api/admin/world/hexes/${q}/${r}`, { method: 'PATCH', body: JSON.stringify(updates) });
       _wbHexes[_wbKey(q, r)] = res.hex; _wbRender(); _wbRenderDetail(res.hex);
+      if (before) _wbPushUndo('full', [{ q, r, before }]);
       _showToast('Zapisano.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
   }
@@ -1291,6 +1405,8 @@ const _ROW_REGISTRY = {
       mSelect.onclick = () => { _wbPaintMode = false; _wbRenderPalette(); _wbRender(); };
       mPaint.onclick = () => { _wbPaintMode = true; _wbRenderPalette(); _wbRender(); };
     }
+    const undoBtn = document.getElementById('wb-undo');
+    if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
   }
 
   function _wbCenter() {
@@ -1320,6 +1436,7 @@ const _ROW_REGISTRY = {
 
     _wbHexes = {}; _wbTeleports = []; _wbLocations = {}; _wbSelected = null;
     _wbZoom = 1; _wbPan = { x: 400, y: 280 }; _wbDrawingTp = null;
+    _wbUndoStack = []; _wbPainting = false; _wbStroke = null;
 
     try {
       const [m, t, lm] = await Promise.all([
@@ -1359,15 +1476,43 @@ const _ROW_REGISTRY = {
       _wbZoom = nz; _wbRender();
     }, { passive: false });
 
-    // Pan drag (alt+click or middle-click)
-    let _wbDs = null;
-    svg.addEventListener('mousedown', (e) => {
-      if (e.button === 1 || (e.button === 0 && e.altKey)) {
-        _wbDs = { x: e.clientX - _wbPan.x, y: e.clientY - _wbPan.y }; e.preventDefault();
-      }
-    });
-    window.addEventListener('mousemove', (e) => { if (_wbDs) { _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRender(); } });
-    window.addEventListener('mouseup', () => { _wbDs = null; });
+    // Pan drag (alt/middle) + paint drag (left button in paint mode). Wired once per svg.
+    if (!svg._wbDragWired) {
+      let _wbDs = null;
+      svg.addEventListener('mousedown', (e) => {
+        if (e.button === 1 || (e.button === 0 && e.altKey)) {
+          _wbDs = { x: e.clientX - _wbPan.x, y: e.clientY - _wbPan.y }; e.preventDefault();
+          return;
+        }
+        if (e.button === 0 && _wbPaintMode && _wbPaintType) {
+          const cell = _wbHexUnderPoint(e.clientX, e.clientY);
+          if (!cell) return;
+          e.preventDefault();
+          _wbPainting = true; _wbStroke = new Map();
+          _wbPaintCell(cell.q, cell.r);
+        }
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (_wbDs) { _wbPan = { x: e.clientX - _wbDs.x, y: e.clientY - _wbDs.y }; _wbRender(); return; }
+        if (_wbPainting) { const c = _wbHexUnderPoint(e.clientX, e.clientY); if (c) _wbPaintCell(c.q, c.r); }
+      });
+      window.addEventListener('mouseup', () => {
+        _wbDs = null;
+        if (_wbPainting) { _wbPainting = false; _wbCommitStroke(); }
+      });
+      // Ctrl/Cmd+Z → undo last edit (only while builder tab is visible, not while typing)
+      window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+          const root = document.getElementById('wb-root');
+          if (!root || !root.offsetParent) return;          // builder tab not visible
+          const tag = (document.activeElement?.tagName || '').toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+          e.preventDefault(); _wbUndo();
+        }
+      });
+      svg._wbDragWired = true;
+    }
+    _wbUpdateUndoBtn();
 
     // ResizeObserver for re-render on container resize
     if (typeof ResizeObserver !== 'undefined' && !svg._wbRO) {
@@ -1872,11 +2017,14 @@ function _sectionHtml() {
             <div class="wb-sidebar" id="wb-sidebar">
               <div style="display:flex;gap:3px;padding:6px 6px 2px">
                 <button id="wb-mode-select" class="btn btn-sm btn-primary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Zaznacz heks">⬡ Wybierz</button>
-                <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Maluj heksy">🖌 Maluj</button>
+                <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Maluj heksy (przeciągnij)">🖌 Maluj</button>
+              </div>
+              <div style="padding:2px 6px 2px">
+                <button id="wb-undo" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>
-              <div class="wb-hint" id="wb-hint">Wybierz typ, kliknij puste → maluj<br>Kliknij hex → edytuj<br>Alt+drag → przesuń<br>Scroll → zoom</div>
+              <div class="wb-hint" id="wb-hint">Maluj: wybierz typ + przeciągnij<br>Kliknij hex → edytuj<br>Ctrl+Z → cofnij<br>Alt+drag → przesuń · Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
             </div>

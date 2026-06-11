@@ -148,6 +148,65 @@ def create_hex(body: HexCreate, authorization: str | None = Header(default=None)
         conn.close()
 
 
+class HexBulkPaintItem(BaseModel):
+    q: int
+    r: int
+    hex_type: str
+    encounter_chance: float = 0.15
+
+
+class HexBulkPaint(BaseModel):
+    hexes: list[HexBulkPaintItem]
+
+
+@router.post("/hexes/bulk-paint")
+def bulk_paint_hexes(body: HexBulkPaint, authorization: str | None = Header(default=None)):
+    """Upsert many top-level hexes in one call — backs drag-painting on the map.
+
+    Each item sets hex_type + encounter_chance; an existing hex is updated
+    (label/atmosphere/encounter_pool preserved), a missing one is created.
+    """
+    _require_admin(authorization)
+    if not body.hexes:
+        return {"hexes": []}
+    conn = _get_db()
+    try:
+        coords: list[tuple[int, int]] = []
+        for it in body.hexes:
+            existing = conn.execute(
+                "SELECT id FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+                (it.q, it.r),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE world_hexes SET hex_type = ?, encounter_chance = ? WHERE id = ?",
+                    (it.hex_type, it.encounter_chance, existing["id"]),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO world_hexes
+                       (q, r, hex_type, encounter_chance, encounter_pool, created_by_gm)
+                       VALUES (?,?,?,?,'[]',0)""",
+                    (it.q, it.r, it.hex_type, it.encounter_chance),
+                )
+            coords.append((it.q, it.r))
+        conn.commit()
+
+        out = []
+        for q, r in coords:
+            row = conn.execute(
+                "SELECT * FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+                (q, r),
+            ).fetchone()
+            if row:
+                d = dict(row)
+                d["encounter_pool"] = json.loads(d.get("encounter_pool") or "[]")
+                out.append(d)
+        return {"hexes": out}
+    finally:
+        conn.close()
+
+
 @router.patch("/hexes/{q}/{r}")
 def update_hex(q: int, r: int, body: HexUpdate, authorization: str | None = Header(default=None)):
     """Update a hex's global layer."""
