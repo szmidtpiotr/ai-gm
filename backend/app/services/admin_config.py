@@ -524,6 +524,45 @@ def list_xp_awards() -> list[dict]:
         return []
 
 
+def update_xp_award(award_id: int, *, xp_amount: int | None, is_active: int | None) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT id, category, source_key, label, description, xp_amount,
+                   is_active, is_locked, locked_at, created_at, updated_at
+            FROM game_config_xp_awards WHERE id = ?
+            """,
+            (award_id,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        new_amount = int(xp_amount) if xp_amount is not None else int(current["xp_amount"] or 0)
+        if new_amount < 0:
+            raise ValueError("invalid_xp_amount")
+        new_active = int(is_active) if is_active is not None else int(current["is_active"] or 1)
+        conn.execute(
+            "UPDATE game_config_xp_awards SET xp_amount = ?, is_active = ?, updated_at = datetime('now') WHERE id = ?",
+            (new_amount, new_active, award_id),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT id, category, source_key, label, description, xp_amount,
+                   is_active, is_locked, locked_at, created_at, updated_at
+            FROM game_config_xp_awards WHERE id = ?
+            """,
+            (award_id,),
+        )
+        _audit(conn, "game_config_xp_awards", str(award_id), "UPDATE", current, new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
 def update_xp_reward(
     key: str,
     *,

@@ -86,6 +86,7 @@ from app.services.admin_config import (
     list_dc,
     list_xp_rewards,
     list_xp_awards,
+    update_xp_award,
     list_skills,
     list_stats,
     list_archetypes,
@@ -208,6 +209,11 @@ class XpRewardPatchReq(BaseModel):
     is_active: int | None = Field(default=None, description="0 wyłącza wpis w silniku")
     sort_order: int | None = None
     force: bool = False
+
+
+class XpAwardPatchReq(BaseModel):
+    xp_amount: int | None = None
+    is_active: int | None = None
 
 
 class AccountPatchReq(BaseModel):
@@ -1170,6 +1176,19 @@ def admin_xp_rewards(_: None = Depends(require_admin_token)):
 @router.get("/admin/xp-awards")
 def admin_xp_awards(_: None = Depends(require_admin_token)):
     return {"items": list_xp_awards()}
+
+
+@router.patch("/admin/xp-awards/{award_id}")
+def admin_patch_xp_award(
+    award_id: int, req: XpAwardPatchReq, _: None = Depends(require_admin_token)
+):
+    try:
+        item = update_xp_award(award_id, xp_amount=req.xp_amount, is_active=req.is_active)
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="XP award not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
 
 
 @router.patch("/admin/xp-rewards/{key}")

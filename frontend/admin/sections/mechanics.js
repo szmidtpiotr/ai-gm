@@ -223,14 +223,26 @@ async function _loadXpAwards(root) {
     const d = await apiFetch('/api/admin/xp-awards');
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak wpisów XP</td></tr>`; return; }
-    tbody.innerHTML = items.map(a => `<tr>
+    tbody.innerHTML = items.map(a => `<tr data-award-id="${a.id}">
       <td class="td-mono">${_esc(a.source_key||a.id)}</td>
       <td class="td-muted">${_esc(a.category||'—')}</td>
       <td class="td-name">${_esc(a.label||'—')}</td>
-      <td class="td-mono" style="text-align:right">${a.xp_amount??'—'}</td>
+      <td class="td-mono editable" data-patch="/api/admin/xp-awards/${a.id}" data-field="xp_amount" style="text-align:right">${a.xp_amount??'—'}</td>
       <td class="td-muted">${_esc((a.description||'').slice(0,80)||'—')}</td>
-      <td>${a.is_active ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>'}</td>
+      <td class="xp-active-toggle" data-award-id="${a.id}" data-active="${a.is_active?1:0}" style="cursor:pointer;text-align:center">${a.is_active ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>'}</td>
     </tr>`).join('');
+    root.querySelectorAll('#xp-awards-table .editable[data-patch]').forEach(td =>
+      td.addEventListener('click', () => _mechPatchEdit(td, td.dataset.patch, td.dataset.field)));
+    root.querySelectorAll('#xp-awards-table .xp-active-toggle').forEach(td => {
+      td.addEventListener('click', async () => {
+        const newVal = td.dataset.active === '1' ? 0 : 1;
+        try {
+          await apiFetch(`/api/admin/xp-awards/${td.dataset.awardId}`, { method:'PATCH', body: JSON.stringify({is_active: newVal}) });
+          td.dataset.active = String(newVal);
+          td.innerHTML = newVal ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>';
+        } catch(e) { showToast('Błąd: ' + e.message, 'error'); }
+      });
+    });
   } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
 }
 
