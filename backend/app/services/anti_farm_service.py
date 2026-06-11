@@ -26,7 +26,7 @@ def _recent_sell_count(conn: sqlite3.Connection, character_id: int, item_key: st
            WHERE character_id = ?
              AND source = 'shop_sell'
              AND wall_clock_at >= datetime('now', ?)
-             AND delta < 0
+             AND delta > 0
         """,
         (int(character_id), f"-{ANTI_FARM_WINDOW_HOURS} hours"),
     ).fetchall()
