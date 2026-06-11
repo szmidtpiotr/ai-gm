@@ -3,12 +3,38 @@ name: game-test-player
 description: >-
   Claude impersonates a player to reproduce or verify an issue end-to-end.
   Creates a dedicated campaign named "#NNN" on the Demo account (user_id=1),
-  plays 8-12 turns guided by the issue's acceptance criteria, then leaves
-  the session intact so the human can inspect it from the frontend.
+  plays 8-12 turns guided by the issue's acceptance criteria, posts a text
+  report + DB check as a GitHub comment, then leaves the session intact.
+  Text-only report — no screenshots. Use /game-test-player-screenshot for the
+  same test with screenshots embedded in the GitHub comment.
   Use when: the user types /game-test-player #NNN [optional hint].
 ---
 
 # game-test-player
+
+## ⛔ VERIFICATION CONTRACT — READ BEFORE ANYTHING ELSE
+
+**This skill tests from the player's perspective. The player has NO access to:**
+- Python scripts / direct service calls
+- SQLite / DB writes
+- Internal API calls that bypass the game flow
+
+**What counts as valid verification:**
+- The LLM narrative text contains the expected output (e.g., "Zapłaciłeś 5 złota", refusal message, HP changed)
+- The route or game state changed as seen through the turn response
+- The feature visibly triggered during a real turn (the turn's `narrative` field contains evidence)
+
+**What does NOT count as verification:**
+- Calling the service function directly in Python → does NOT prove the LLM flow works
+- Writing rows to `character_gold_log` manually → does NOT prove `shop/sell` endpoint works
+- Querying `resurrect-preview` API directly → does NOT prove the death screen shows the button
+- Checking DB columns exist → does NOT prove they are used correctly end-to-end
+
+**DB checks (Step 6) are SUPPLEMENTARY** — they confirm DB state AFTER real gameplay triggered the mechanic. They never substitute for actual turns.
+
+**If you cannot trigger the scenario through turns in 15 turns → verdict is NIEKONKLUZYWNY. Never fake it.**
+
+---
 
 ## Purpose
 
@@ -55,6 +81,20 @@ Read: title, body, acceptance criteria, comments. Understand:
 
 **Strategy**: Write out 8–12 player messages BEFORE playing.
 Think: "What would a real player say to organically reach the scenario?"
+
+**Map each acceptance criterion to a specific turn:**
+For every checkbox in the issue's acceptance criteria, identify which turn will trigger it and what the LLM response must contain to prove it works. Example:
+
+```
+Issue: SPEND_GOLD tag deducts gold from character
+Acceptance: "Wystarczające złoto → tag usunięty, złoto odliczone"
+
+Turn 1: __AI_GM_OPEN (auto)
+Turn 2: "Wchodzę do wioski i szukam gospody"
+Turn 3: "Pytam karczmarza o nocleg i cenę"   ← LLM should mention cost / [SPEND_GOLD:inn_night]
+Turn 4: "Płacę za nocleg i kładę się spać"   ← trigger: LLM response must NOT show the tag; gold must decrease
+Turn 5: DB check gold_gp → confirm decreased by expected amount
+```
 
 Example strategy for #378 (NPC memory):
 ```
@@ -122,9 +162,14 @@ python3 ../game-test/scripts/play_turn.py \
 
 **After each turn**:
 1. Read `narrative` in the result
-2. Adapt the next turn message based on what the LLM responded
-3. If `route` is `skill_test` → send the skill test result text to resolve it before continuing
-4. If `error` is set → check if the turn landed (`campaign_turns` count via DB check below) before retrying
+2. **Check: did this turn contain evidence of the tested mechanic?**
+   - Quote the exact fragment from narrative that proves/disproves the feature
+   - E.g. SPEND_GOLD: does narrative show cost/refusal? Does `gold_gp` in DB decrease?
+   - E.g. HP/combat: does HP badge in response change? Screenshot before vs after.
+   - E.g. shop price: does the listed price match `price_gp × multiplier`?
+3. Adapt the next turn message based on what the LLM responded
+4. If `route` is `skill_test` → send the skill test result text to resolve it before continuing
+5. If `error` is set → check if the turn landed (`campaign_turns` count via DB check below) before retrying
 
 **Pacing**: LLM calls take 15–90s. Do not send next turn until previous returns.
 
@@ -196,7 +241,12 @@ Print a structured report. **Do NOT delete the campaign.**
 ### Verdict
 **BUG WIDOCZNY** / **BUG NIE WIDOCZNY** / **NIEKONKLUZYWNY**
 
-[1-2 sentences of evidence, e.g.: "NPC Andrus pojawił się w turze 3 i 6. W turze 6 LLM nie wspomniał o naprawie wozu z tury 3. DB check: campaign_known_npcs pusta → NPC_MEMORY nie działa."]
+**Evidence from turns** (quote narrative fragment or show before/after state):
+> [paste exact text from LLM response that proves the mechanic fired — or did not fire]
+
+[1-2 sentences of interpretation: e.g. "Tura 4: karczmarz zażądał 5 gp, gold_gp w DB 8→3. Tag nie widoczny w narracji → SPEND_GOLD działa."]
+
+⚠️ If verdict is based only on DB/API checks without actual turns triggering the scenario → change to **NIEKONKLUZYWNY** and explain what turns were missing.
 
 ### Next steps
 [If NIEKONKLUZYWNY: what additional turns or different approach would help]
