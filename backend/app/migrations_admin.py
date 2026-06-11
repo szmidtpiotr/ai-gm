@@ -804,6 +804,61 @@ ADMIN_MIGRATIONS = [
     # Default 'main_hand' is the safest for legacy rows; backfill in ADMIN_SEEDS
     # then overrides based on label/range/weapon_type heuristics.
     "ALTER TABLE game_config_weapons ADD COLUMN weapon_slot TEXT DEFAULT 'main_hand'",
+    # S13/S14 (#501/#502) — Forge tables: adventure_ideas, adventure_hooks, campaign_templates.
+    # These tables are referenced by adventure_forge.py and encounter_seed_service.py
+    # but were never added to migrations. CREATE TABLE IF NOT EXISTS is idempotent.
+    """
+    CREATE TABLE IF NOT EXISTS adventure_ideas (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT NOT NULL,
+        premise         TEXT NOT NULL DEFAULT '',
+        tone            TEXT NOT NULL DEFAULT '[]',
+        themes          TEXT NOT NULL DEFAULT '[]',
+        difficulty      TEXT NOT NULL DEFAULT 'medium',
+        structured_data TEXT NOT NULL DEFAULT '{}',
+        status          TEXT NOT NULL DEFAULT 'draft',
+        created_by      TEXT NOT NULL DEFAULT 'admin',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS adventure_hooks (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        adventure_idea_id   INTEGER REFERENCES adventure_ideas(id) ON DELETE SET NULL,
+        hook_type           TEXT NOT NULL DEFAULT 'event',
+        title               TEXT NOT NULL,
+        description         TEXT NOT NULL DEFAULT '',
+        significance        TEXT NOT NULL DEFAULT 'minor',
+        draft_data          TEXT NOT NULL DEFAULT '{}',
+        status              TEXT NOT NULL DEFAULT 'pending',
+        promoted_record_id  INTEGER,
+        promoted_table      TEXT,
+        quality_rating      INTEGER,
+        times_used          INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS campaign_templates (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        title               TEXT NOT NULL,
+        description         TEXT NOT NULL DEFAULT '',
+        difficulty_rating   INTEGER NOT NULL DEFAULT 3,
+        atmosphere          TEXT,
+        gm_plan_json        TEXT NOT NULL DEFAULT '{}',
+        hook_ids            TEXT NOT NULL DEFAULT '[]',
+        status              TEXT NOT NULL DEFAULT 'draft',
+        play_count          INTEGER NOT NULL DEFAULT 0,
+        created_by          TEXT NOT NULL DEFAULT 'admin',
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        start_hex_q         INTEGER,
+        start_hex_r         INTEGER,
+        adventure_idea_id   INTEGER REFERENCES adventure_ideas(id) ON DELETE SET NULL,
+        required_npc_keys   TEXT NOT NULL DEFAULT '[]',
+        required_beats      TEXT NOT NULL DEFAULT '[]',
+        player_visible      INTEGER NOT NULL DEFAULT 1
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
