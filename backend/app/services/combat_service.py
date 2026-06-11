@@ -262,17 +262,14 @@ def _weapon_apply_conditions(
     return applied
 
 
-def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
-    """F2 (#462): sum `damage_bonus` from affixes on the equipped main-hand weapon.
+def _load_equipped_affix_rows(conn: Any, character_id: int | None) -> list[dict]:
+    """F2 (#462/#495): load effect_json rows for all affixes on the equipped main-hand weapon.
 
-    Reads the per-instance `affixes_json` (list of affix keys) from the equipped
-    main_hand row in `character_inventory`, resolves each key in
-    `game_config_affixes`, and sums their typed `damage_bonus` Effect Objects via
-    the F1 engine. Returns 0 when there is no equipped weapon, no affixes, or the
-    affix table is absent.
+    Returns list of dicts with `effect_json` key. Returns [] when no weapon is
+    equipped, no affixes set, or the affix table is absent.
     """
     if not character_id:
-        return 0
+        return []
     try:
         inv = conn.execute(
             """
@@ -286,18 +283,18 @@ def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
             (int(character_id),),
         ).fetchone()
     except sqlite3.OperationalError:
-        return 0
+        return []
     if not inv:
-        return 0
+        return []
 
     raw = inv["affixes_json"] if "affixes_json" in inv.keys() else None
     try:
         affix_keys = json.loads(raw) if isinstance(raw, str) and raw.strip() else (raw or [])
     except (json.JSONDecodeError, TypeError):
-        return 0
+        return []
     affix_keys = [str(k).strip() for k in affix_keys if str(k or "").strip()]
     if not affix_keys:
-        return 0
+        return []
 
     placeholders = ",".join("?" for _ in affix_keys)
     try:
@@ -306,12 +303,92 @@ def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
             tuple(affix_keys),
         ).fetchall()
     except sqlite3.OperationalError:
-        return 0
+        return []
+    return [{"effect_json": r["effect_json"]} for r in rows]
 
+
+def _inventory_affix_damage_bonus(conn: Any, character_id: int | None) -> int:
+    """F2 (#462): sum `damage_bonus` from affixes on the equipped main-hand weapon."""
+    return sum(_sum_damage_bonus(r) for r in _load_equipped_affix_rows(conn, character_id))
+
+
+def _inventory_affix_heal_on_hit(conn: Any, character_id: int | None) -> int:
+    """F2 (#495): sum `heal_on_hit` from affixes on the equipped main-hand weapon."""
     total = 0
-    for r in rows:
-        total += _sum_damage_bonus({"effect_json": r["effect_json"]})
+    for r in _load_equipped_affix_rows(conn, character_id):
+        for e in _weapon_effects_of_type(r, "heal_on_hit"):
+            try:
+                total += int(e.get("value") or 0)
+            except (TypeError, ValueError):
+                continue
     return total
+
+
+def _inventory_affix_ac_bonus(conn: Any, character_id: int | None) -> int:
+    """F2 (#495): sum `ac_bonus` from affixes on the equipped main-hand weapon."""
+    total = 0
+    for r in _load_equipped_affix_rows(conn, character_id):
+        for e in _weapon_effects_of_type(r, "ac_bonus"):
+            try:
+                total += int(e.get("value") or 0)
+            except (TypeError, ValueError):
+                continue
+    return total
+
+
+def _inventory_affix_stat_modifiers(conn: Any, character_id: int | None) -> dict[str, int]:
+    """F2 (#495): collect `static_stat_modifier` effects from affixes on the equipped weapon."""
+    mods: dict[str, int] = {}
+    for r in _load_equipped_affix_rows(conn, character_id):
+        for e in _weapon_effects_of_type(r, "static_stat_modifier"):
+            stat = str(e.get("stat") or "").strip().upper()
+            if not stat:
+                continue
+            try:
+                val = int(e.get("value") or 0)
+            except (TypeError, ValueError):
+                continue
+            mods[stat] = mods.get(stat, 0) + val
+    return mods
+
+
+def _inventory_affix_apply_conditions(
+    conn: Any, character_id: int | None, enemy: dict
+) -> list[str]:
+    """F2 (#495): apply `apply_condition` effects from affixes on the equipped weapon."""
+    applied: list[str] = []
+    for r in _load_equipped_affix_rows(conn, character_id):
+        for e in _weapon_effects_of_type(r, "apply_condition"):
+            cond_key = str(e.get("condition_key") or "").strip()
+            if not cond_key:
+                continue
+            duration = int(e.get("duration_rounds") or 2)
+            existing = enemy.get("conditions")
+            if isinstance(existing, list) and any(c.get("key") == cond_key for c in existing):
+                continue
+            cond_label, cond_efx = cond_key, None
+            try:
+                crow = conn.execute(
+                    "SELECT label, effect_json FROM game_config_conditions WHERE key = ?",
+                    (cond_key,),
+                ).fetchone()
+                if crow:
+                    cond_label = crow["label"] or cond_key
+                    cond_efx = crow["effect_json"]
+            except Exception:
+                pass
+            if not isinstance(enemy.get("conditions"), list):
+                enemy["conditions"] = []
+            enemy["conditions"].append({
+                "key": cond_key,
+                "label": cond_label,
+                "effect_json": cond_efx,
+                "duration_rounds": duration,
+                "applied_at": "affix_hit",
+                "runtime": {},
+            })
+            applied.append(cond_key)
+    return applied
 
 
 def _apply_weapon_effects(
@@ -1546,6 +1623,10 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         _wac = _weapon_ac_bonus(_wrow_init)
         if _wac:
             ac += _wac
+        # F2 (#495): affix ac_bonus on equipped weapon instance
+        _aac = _inventory_affix_ac_bonus(conn, int(character_id))
+        if _aac:
+            ac += _aac
         # F7 (#467): broken armor reduces AC at combat start
         try:
             from app.services.durability_service import get_ac_penalty_for_char as _dur_ac_pen_fn
@@ -1557,6 +1638,12 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         _wmods = _weapon_stat_modifiers(_wrow_init)
         if _wmods:
             for _st, _delta in _wmods.items():
+                if _st in ability_stats:
+                    ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + _delta
+        # F2 (#495): affix static_stat_modifier on equipped weapon instance
+        _amods = _inventory_affix_stat_modifiers(conn, int(character_id))
+        if _amods:
+            for _st, _delta in _amods.items():
                 if _st in ability_stats:
                     ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + _delta
 
@@ -2088,8 +2175,8 @@ def resolve_attack(
                 next_hp = max(0, prev_hp - dmg)
                 enemy["hp_current"] = next_hp
                 out["target_hp_remaining"] = next_hp
-                # F1 (#461): heal_on_hit — restore attacker HP on successful hit (life-steal)
-                _heal = _weapon_heal_on_hit(wrow)
+                # F1 (#461) + F2 (#495): heal_on_hit from weapon effect_json and affixes
+                _heal = _weapon_heal_on_hit(wrow) + _inventory_affix_heal_on_hit(conn, ch_id)
                 if _heal:
                     _pc = _find_combatant(combatants, "player")
                     if _pc is not None:
@@ -2121,6 +2208,11 @@ def resolve_attack(
                 if _f1_conds:
                     _prev_conds = list(out.get("weapon_conditions_applied") or [])
                     out["weapon_conditions_applied"] = _prev_conds + _f1_conds
+                # F2 (#495): apply_condition from affixes on equipped weapon instance
+                _a_conds = _inventory_affix_apply_conditions(conn, ch_id, enemy)
+                if _a_conds:
+                    _prev_conds = list(out.get("weapon_conditions_applied") or [])
+                    out["weapon_conditions_applied"] = _prev_conds + _a_conds
                 # ─────────────────────────────────────────────────────────────
 
                 dead = int(enemy.get("hp_current", 0) or 0) <= 0
