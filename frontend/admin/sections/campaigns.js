@@ -754,7 +754,7 @@ function filterTableGeneric(input, tableId, nameClass) {
               </div>
               <div>
                 <div style="font-weight:600;color:var(--t2);margin-bottom:4px">📋 Questy (${quests.length})</div>
-                ${quests.length ? quests.map(q=>`<div style="padding:2px 0;border-bottom:1px solid var(--border)">${_esc(typeof q==='string'?q:q.title||q.key||JSON.stringify(q))}</div>`).join('') : '<span style="color:var(--t3)">Brak</span>'}
+                ${quests.length ? quests.map(q=>{const t=typeof q==='string'?q:(q.title||q.key||'?');const obj=typeof q==='object'&&q.objective?q.objective:'';const rwd=typeof q==='object'&&q.reward?q.reward:'';return`<div style="padding:4px 0;border-bottom:1px solid var(--border)"><div style="font-weight:500">${_esc(t)}</div>${obj?`<div style="font-size:0.75rem;color:var(--t2);margin-top:1px">${_esc(obj)}</div>`:''}${rwd?`<div style="font-size:0.72rem;color:var(--t3)">Nagroda: ${_esc(rwd)}</div>`:''}</div>`;}).join('') : '<span style="color:var(--t3)">Brak</span>'}
               </div>
               <div>
                 <div style="font-weight:600;color:var(--t2);margin-bottom:4px">💊 Kondycje (${conds.length})</div>

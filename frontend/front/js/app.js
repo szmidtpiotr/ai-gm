@@ -3224,12 +3224,32 @@ function renderSuggestedActions(actions) {
 // C10: Render quest chips in the header quest bar
 function renderQuestBar(quests) {
     const bar = document.getElementById('quest-bar');
-    if (!bar) return;
-    if (!quests || !quests.length) { bar.hidden = true; return; }
-    bar.hidden = false;
-    bar.innerHTML = quests.map(q =>
-        `<span class="quest-chip" title="${escapeHtml(q.objective)} | ${escapeHtml(q.reward)}">📜 ${escapeHtml(q.title)}</span>`
-    ).join('');
+    if (bar) {
+        if (!quests || !quests.length) {
+            bar.hidden = true;
+        } else {
+            bar.hidden = false;
+            bar.innerHTML = quests.map(q =>
+                `<span class="quest-chip" title="${escapeHtml(q.objective||'')} | ${escapeHtml(q.reward||'')}">📜 ${escapeHtml(q.title)}</span>`
+            ).join('');
+        }
+    }
+    // Render full quest cards in sheet panel stats tab
+    const section = document.getElementById('sheet-quests-section');
+    const list = document.getElementById('sheet-quests-list');
+    if (section && list) {
+        if (!quests || !quests.length) {
+            section.style.display = 'none';
+        } else {
+            section.style.display = '';
+            list.innerHTML = quests.map(q => `
+                <div class="quest-card">
+                    <div class="quest-card__title">📜 ${escapeHtml(q.title)}</div>
+                    ${q.objective ? `<div class="quest-card__objective">${escapeHtml(q.objective)}</div>` : ''}
+                    ${q.reward ? `<div class="quest-card__reward">Nagroda: ${escapeHtml(q.reward)}</div>` : ''}
+                </div>`).join('');
+        }
+    }
 }
 
 // T33: Send a structured action (button click)
