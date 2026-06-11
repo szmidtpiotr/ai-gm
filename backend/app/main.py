@@ -303,6 +303,28 @@ RAW_MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_seen_mechanics_user ON seen_mechanics(user_id)",
     # E28 — tutorial campaign flag
     "ALTER TABLE campaigns ADD COLUMN is_tutorial INTEGER NOT NULL DEFAULT 0",
+    # F7 (#467) / S4 (#492) — durability_base on weapon config (per-weapon override over
+    # rarity-based DEFAULT_DURABILITY in durability_service.py; NULL = use rarity default).
+    # durability_max / durability_current on inventory rows track wear state at runtime.
+    "ALTER TABLE game_config_weapons ADD COLUMN durability_base INTEGER",
+    "ALTER TABLE character_inventory ADD COLUMN durability_max INTEGER",
+    "ALTER TABLE character_inventory ADD COLUMN durability_current INTEGER",
+    # S11 (#NNN) — hex world builder: missing columns added after initial schema creation
+    "ALTER TABLE world_hexes ADD COLUMN parent_hex_id INTEGER REFERENCES world_hexes(id)",
+    "ALTER TABLE world_hexes ADD COLUMN map_level INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE hex_type_config ADD COLUMN spawn_weight INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE hex_type_config ADD COLUMN has_submap INTEGER NOT NULL DEFAULT 0",
+    # game_locations hex placement columns (world builder overlay)
+    "ALTER TABLE game_locations ADD COLUMN world_hex_q INTEGER",
+    "ALTER TABLE game_locations ADD COLUMN world_hex_r INTEGER",
+    # S11 — seed spawn_weight for natural terrain (0 = hand-placed, not generated)
+    "UPDATE hex_type_config SET spawn_weight = 30 WHERE hex_type = 'plains'",
+    "UPDATE hex_type_config SET spawn_weight = 28 WHERE hex_type = 'forest'",
+    "UPDATE hex_type_config SET spawn_weight = 18 WHERE hex_type = 'hills'",
+    "UPDATE hex_type_config SET spawn_weight = 12 WHERE hex_type = 'mountains'",
+    "UPDATE hex_type_config SET spawn_weight =  7 WHERE hex_type = 'swamp'",
+    "UPDATE hex_type_config SET spawn_weight =  3 WHERE hex_type = 'ruins'",
+    "UPDATE hex_type_config SET spawn_weight =  2 WHERE hex_type = 'cave'",
 ]
 
 
