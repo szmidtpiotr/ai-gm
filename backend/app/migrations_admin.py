@@ -8,6 +8,92 @@ DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
 ADMIN_MIGRATIONS = [
+    # Bootstrap tables — originally SQLModel models, must exist before all other migrations
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        failed_login_count INTEGER NOT NULL DEFAULT 0,
+        lockout_until TEXT,
+        role TEXT NOT NULL DEFAULT 'player',
+        resurrection_enabled INTEGER NOT NULL DEFAULT 0,
+        resurrection_cost_mode TEXT NOT NULL DEFAULT 'admin_free',
+        resurrection_cost_value INTEGER NOT NULL DEFAULT 25,
+        resurrection_cost_cap_percent INTEGER NOT NULL DEFAULT 50,
+        resurrection_uses_remaining INTEGER,
+        email TEXT,
+        invited_by_user_id INTEGER REFERENCES users(id),
+        email_verified_at TEXT,
+        onboarded_at TEXT,
+        invite_weekly_limit INTEGER NOT NULL DEFAULT 3,
+        avatar_url TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        system_id TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        owner_user_id INTEGER NOT NULL,
+        language TEXT NOT NULL DEFAULT 'pl',
+        mode TEXT NOT NULL DEFAULT 'solo',
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        death_reason TEXT,
+        ended_at TEXT,
+        epitaph TEXT,
+        gm_plan_json TEXT NOT NULL DEFAULT '{}',
+        last_rollup_narrative_turn_count INTEGER,
+        is_tutorial INTEGER NOT NULL DEFAULT 0,
+        engine_private_json TEXT DEFAULT NULL,
+        FOREIGN KEY (owner_user_id) REFERENCES users(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS characters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        system_id TEXT NOT NULL,
+        sheet_json TEXT NOT NULL DEFAULT '{}',
+        location TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        gold_gp INTEGER NOT NULL DEFAULT 0,
+        backstory TEXT,
+        appearance TEXT,
+        personality TEXT,
+        motivation TEXT,
+        note TEXT,
+        gold INTEGER NOT NULL DEFAULT 0,
+        hero_status TEXT NOT NULL DEFAULT 'active',
+        visited_location_keys TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'idle',
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS campaign_turns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        character_id INTEGER,
+        user_text TEXT NOT NULL,
+        route TEXT NOT NULL DEFAULT 'narrative',
+        assistant_text TEXT,
+        turn_number INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+        FOREIGN KEY (character_id) REFERENCES characters(id)
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS user_llm_settings (
         user_id INTEGER PRIMARY KEY,
@@ -2226,10 +2312,12 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         logger.warning("v2_migration_skipped", label="v2-items-ac-bonus-data-migrate", error=str(e))
 
     _exec("ALTER TABLE game_config_archetypes ADD COLUMN hp_base INTEGER NOT NULL DEFAULT 10", "v2-archetypes-hp-base")
+    _exec("ALTER TABLE game_config_archetypes ADD COLUMN starting_stats_json TEXT", "v2-archetypes-starting-stats-json")
     try:
         conn.execute("UPDATE game_config_archetypes SET hp_base = 10 WHERE key = 'warrior' AND hp_base = 10")
         conn.execute("UPDATE game_config_archetypes SET hp_base = 6  WHERE key = 'scholar'")
         conn.execute("UPDATE game_config_archetypes SET hp_base = 8  WHERE key = 'ranger'")
+        conn.execute("UPDATE game_config_archetypes SET hp_base = 8  WHERE key = 'rogue'")
         conn.commit()
         logger.info("v2_migration_applied", label="v2-archetypes-hp-base-seed")
     except Exception as e:
@@ -3111,6 +3199,10 @@ def run_admin_migrations() -> None:
         _finalize_t25_effect_json_schema(conn)
         _finalize_phase_8h_loot_entries(conn)
 
+        # Must run before ADMIN_SEEDS — seeds reference tables these create
+        _run_v2_schema_migrations(conn)
+        _ensure_game_config_services(conn)
+
         for sql in ADMIN_SEEDS:
             try:
                 conn.execute(sql)
@@ -3135,11 +3227,9 @@ def run_admin_migrations() -> None:
         _ensure_enemy_loot_table_and_drop_chance(conn)
         _backfill_enemy_loot_tables(conn)
         _ensure_user_llm_settings_mode(conn)
-        _run_v2_schema_migrations(conn)
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
-        _ensure_game_config_services(conn)
         _ensure_submap_schema(conn)
         _ensure_shop_item_level_location_schema(conn)
         _ensure_price_gp_schema(conn)

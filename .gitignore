@@ -5,6 +5,9 @@
 data/*
 !data/.gitkeep
 !data/game_config_seed.sql
+!data/seeds/
+data/seeds/*
+!data/seeds/*.sql
 backups/*
 !backups/.gitkeep
 ollama/
