@@ -794,12 +794,12 @@ const _ROW_REGISTRY = {
   async function _loadTerrain() {
     const tbody = document.getElementById('terrain-tbody');
     if (!tbody) return;
-    tbody.innerHTML = _loading(8);
+    tbody.innerHTML = _loading(10);
     try {
       const rows = await apiFetch('/api/admin/world/hex-terrain-config');
       const items = Array.isArray(rows) ? rows : (rows.items || []);
       const totalW = items.reduce((s,r) => s+(r.spawn_weight||0), 0);
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak typów terenu</td></tr>`; return; }
+      if (!items.length) { tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--t3)">Brak typów terenu</td></tr>`; return; }
       tbody.innerHTML = items.map(r => {
         const pct = totalW > 0 && r.spawn_weight > 0 ? ((r.spawn_weight/totalW)*100).toFixed(1) : '0';
         return `<tr>
@@ -812,6 +812,14 @@ const _ROW_REGISTRY = {
               onchange="terrainPatch('${_esc(r.hex_type)}','spawn_weight',this.value,this)"
               onkeydown="if(event.key==='Enter')this.blur()" />
             <span style="font-size:0.7rem;color:var(--t3);margin-left:4px">${pct}%</span>
+          </td>
+          <td>
+            <select class="field-input" style="width:104px;padding:3px 6px;font-size:0.75rem"
+              onchange="terrainPatch('${_esc(r.hex_type)}','placement_mode',this.value,this)">
+              <option value="biome" ${(r.placement_mode||'biome')==='biome'?'selected':''}>biome</option>
+              <option value="scatter" ${r.placement_mode==='scatter'?'selected':''}>scatter</option>
+              <option value="path" ${r.placement_mode==='path'?'selected':''}>path</option>
+            </select>
           </td>
           <td>
             <input type="number" class="field-input" style="width:64px;padding:3px 6px;font-size:0.8rem"
@@ -833,15 +841,16 @@ const _ROW_REGISTRY = {
           <td class="td-actions"><button class="btn-icon" title="Edytuj" onclick="openTerrainFormModal(${JSON.stringify(r).replace(/"/g,'&quot;')})">✎</button></td>
         </tr>`;
       }).join('');
-    } catch(e) { tbody.innerHTML = _errRow(9, e.message); }
+    } catch(e) { tbody.innerHTML = _errRow(10, e.message); }
   }
 
   async function terrainPatch(key, field, rawValue, input) {
     let value;
-    if (field === 'encounter_pct') value = parseFloat(rawValue)/100;
+    if (field === 'placement_mode') value = rawValue;
+    else if (field === 'encounter_pct') value = parseFloat(rawValue)/100;
     else if (field === 'has_submap') value = parseInt(rawValue);
     else value = parseFloat(rawValue);
-    if (isNaN(value)) return;
+    if (typeof value === 'number' && isNaN(value)) return;
     const apiField = field === 'encounter_pct' ? 'encounter_base_chance' : field;
     try {
       await apiFetch(`/api/admin/world/hex-terrain-config/${key}`, { method: 'PATCH', body: JSON.stringify({ [apiField]: value }) });
@@ -868,6 +877,12 @@ const _ROW_REGISTRY = {
         <div class="form-row"><label>Waga spawnu</label><input id="tf-weight" class="field-input" type="number" min="0" max="999" value="${p.spawn_weight??10}" /></div>
         <div class="form-row"><label>Czas podróży (h)</label><input id="tf-hours" class="field-input" type="number" min="1" max="48" step="0.5" value="${p.travel_hours??4}" /></div>
         <div class="form-row"><label>Szansa na enc. (%)</label><input id="tf-enc" class="field-input" type="number" min="0" max="100" value="${Math.round((p.encounter_base_chance||0)*100)}" /></div>
+        <div class="form-row"><label>Tryb rozmieszczenia</label>
+          <select id="tf-placement" class="field-input">
+            <option value="biome" ${(p.placement_mode||'biome')==='biome'?'selected':''}>Biom (skupiska)</option>
+            <option value="scatter" ${p.placement_mode==='scatter'?'selected':''}>Rozproszony (pojedyncze)</option>
+            <option value="path" ${p.placement_mode==='path'?'selected':''}>Ścieżka (linie: rzeka/droga)</option>
+          </select></div>
         <div class="form-row"><label><input type="checkbox" id="tf-active" ${p.is_active!==false?'checked':''} /> Aktywny</label></div>
         <div class="form-row" style="grid-column:1/-1"><label>Opis</label><textarea id="tf-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
       </div>
@@ -892,6 +907,7 @@ const _ROW_REGISTRY = {
       spawn_weight: parseInt(g('tf-weight')?.value) || 0,
       travel_hours: parseFloat(g('tf-hours')?.value) || 4,
       encounter_base_chance: (parseInt(g('tf-enc')?.value)||0)/100,
+      placement_mode: g('tf-placement')?.value || 'biome',
       is_active: g('tf-active')?.checked ?? true,
     };
     btn.disabled = true; btn.textContent = '⏳';
@@ -1788,6 +1804,7 @@ function _sectionHtml() {
                   <th><div class="th-inner">Klucz</div></th>
                   <th><div class="th-inner">Etykieta</div></th>
                   <th><div class="th-inner">Waga spawnu</div></th>
+                  <th><div class="th-inner" title="biome=skupiska, scatter=rozproszone, path=linie">Tryb</div></th>
                   <th><div class="th-inner">Czas podróży (h)</div></th>
                   <th><div class="th-inner">Enc. %</div></th>
                   <th><div class="th-inner">Aktywny</div></th>

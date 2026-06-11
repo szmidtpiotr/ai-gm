@@ -319,6 +319,155 @@ def _generate_biome_map(
     return result
 
 
+# ── Placement-aware generation helpers (#507) ──────────────────────────────────
+
+# Axial hex directions (pointy-top), used for line drawing and path walks.
+_HEX_DIRS = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
+
+
+def _cube_round(x: float, y: float, z: float) -> tuple[int, int]:
+    """Round fractional cube coords to the nearest hex, return axial (q, r)."""
+    rx, ry, rz = round(x), round(y), round(z)
+    dx, dy, dz = abs(rx - x), abs(ry - y), abs(rz - z)
+    if dx > dy and dx > dz:
+        rx = -ry - rz
+    elif dy > dz:
+        ry = -rx - rz
+    else:
+        rz = -rx - ry
+    return int(rx), int(rz)
+
+
+def _hex_line(q1: int, r1: int, q2: int, r2: int) -> list[tuple[int, int]]:
+    """Hexes along the straight line between two hexes (inclusive of both ends)."""
+    n = int(_hex_dist(q1, r1, q2, r2))
+    if n == 0:
+        return [(q1, r1)]
+    x1, z1 = q1, r1
+    y1 = -x1 - z1
+    x2, z2 = q2, r2
+    y2 = -x2 - z2
+    out: list[tuple[int, int]] = []
+    for i in range(n + 1):
+        t = i / n
+        out.append(_cube_round(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, z1 + (z2 - z1) * t))
+    return out
+
+
+def _carve_river(
+    all_set: set[tuple[int, int]],
+    rng: random.Random,
+    start: tuple[int, int],
+    max_len: int,
+) -> list[tuple[int, int]]:
+    """Momentum random-walk from `start` toward the map edge.
+
+    Prefers continuing straight (weight 3) over a ±1 direction turn (weight 1),
+    producing a meandering line rather than a tight scribble. Stops when it
+    steps off the map (reaches the edge) or hits max_len.
+    """
+    path = [start]
+    cur = start
+    dir_idx = rng.randrange(6)
+    seen = {start}
+    for _ in range(max_len):
+        choices = [(dir_idx - 1) % 6, dir_idx, (dir_idx + 1) % 6]
+        dir_idx = rng.choices(choices, weights=[1, 3, 1], k=1)[0]
+        dq, dr = _HEX_DIRS[dir_idx]
+        nxt = (cur[0] + dq, cur[1] + dr)
+        if nxt not in all_set or nxt in seen:
+            break  # off the map edge, or would self-cross
+        cur = nxt
+        seen.add(cur)
+        path.append(cur)
+    return path
+
+
+def _scatter_features(
+    all_hexes: list[tuple[int, int]],
+    placements: list[tuple[str, int]],
+    occupied: set[tuple[int, int]],
+    rng: random.Random,
+) -> dict[tuple[int, int], str]:
+    """Place feature hexes as isolated points via rejection sampling.
+
+    placements — (hex_type, count) per scatter terrain.
+    occupied — hexes that must not be used (e.g. river hexes).
+    Enforces min spacing: >=3 hexes between same-type features, >=2 between any.
+    """
+    result: dict[tuple[int, int], str] = {}
+    candidates = [h for h in all_hexes if h not in occupied]
+    rng.shuffle(candidates)
+    placed_by_type: dict[str, list[tuple[int, int]]] = {}
+    for hex_type, count in placements:
+        placed_by_type.setdefault(hex_type, [])
+        added = 0
+        attempts = 0
+        cap = max(200, count * 40)
+        idx = 0
+        while added < count and attempts < cap and idx < len(candidates):
+            attempts += 1
+            cand = candidates[idx]
+            idx += 1
+            if cand in result:
+                continue
+            # >=2 from any feature already placed
+            if any(_hex_dist(*cand, *p) < 2 for p in result):
+                continue
+            # >=3 from same-type
+            if any(_hex_dist(*cand, *p) < 3 for p in placed_by_type[hex_type]):
+                continue
+            result[cand] = hex_type
+            placed_by_type[hex_type].append(cand)
+            added += 1
+        # restart scan from top for the next type so it can reuse skipped hexes
+    return result
+
+
+def _build_road_network(
+    nodes: list[tuple[int, int]],
+    blocked: set[tuple[int, int]],
+    rng: random.Random,
+) -> set[tuple[int, int]]:
+    """Connect every node (town/castle) into one network via a greedy MST.
+
+    Returns the set of intermediate hexes that should become roads. Node hexes
+    themselves are excluded (they keep their feature type); so are `blocked`
+    hexes (other scatter features) — roads route through but don't overwrite them.
+    Roads may cross rivers (treated as bridges).
+    """
+    if len(nodes) < 2:
+        return set()
+    connected = [nodes[0]]
+    remaining = nodes[1:]
+    road_hexes: set[tuple[int, int]] = set()
+    node_set = set(nodes)
+    while remaining:
+        best = None
+        best_d = float("inf")
+        for tgt in remaining:
+            for src in connected:
+                d = _hex_dist(*src, *tgt)
+                if d < best_d:
+                    best_d, best = d, (src, tgt)
+        src, tgt = best
+        for h in _hex_line(*src, *tgt):
+            if h not in node_set and h not in blocked:
+                road_hexes.add(h)
+        connected.append(tgt)
+        remaining.remove(tgt)
+    return road_hexes
+
+
+def _placement_mode(row: Any) -> str:
+    """Resolve a terrain row's placement_mode, defaulting NULL/unknown to 'biome'."""
+    try:
+        mode = row["placement_mode"]
+    except (KeyError, IndexError, TypeError):
+        mode = None
+    return mode if mode in ("biome", "scatter", "path") else "biome"
+
+
 class WorldGenRequest(BaseModel):
     seed: int = 42
     radius: int = 25
@@ -334,14 +483,34 @@ def generate_world(body: WorldGenRequest, authorization: str | None = Header(def
     conn = _get_db()
     try:
         terrain_rows = conn.execute(
-            "SELECT hex_type, spawn_weight, encounter_base_chance FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
+            "SELECT hex_type, spawn_weight, encounter_base_chance, placement_mode "
+            "FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
         ).fetchall()
         if not terrain_rows:
             raise HTTPException(status_code=400, detail="No terrain types with spawn_weight > 0 configured")
 
-        types = [r["hex_type"] for r in terrain_rows]
-        weights = [r["spawn_weight"] for r in terrain_rows]
         encounter_chances = {r["hex_type"]: r["encounter_base_chance"] for r in terrain_rows}
+        weight_by_type = {r["hex_type"]: r["spawn_weight"] for r in terrain_rows}
+
+        # Partition terrain types by how they should be placed (#507).
+        biome_types: list[str] = []
+        biome_weights: list[int] = []
+        scatter: list[tuple[str, int]] = []   # (hex_type, weight)
+        river_types: list[str] = []
+        road_types: list[str] = []
+        for r in terrain_rows:
+            mode = _placement_mode(r)
+            ht, w = r["hex_type"], r["spawn_weight"]
+            if mode == "scatter":
+                scatter.append((ht, w))
+            elif mode == "path":
+                (road_types if ht == "road" else river_types).append(ht)
+            else:
+                biome_types.append(ht)
+                biome_weights.append(w)
+
+        if not biome_types:
+            raise HTTPException(status_code=400, detail="No biome terrain types configured (placement_mode='biome')")
 
         rng = random.Random(body.seed)
 
@@ -352,9 +521,38 @@ def generate_world(body: WorldGenRequest, authorization: str | None = Header(def
             for r in range(-body.radius, body.radius + 1)
             if abs(q) + abs(r) + abs(q + r) <= 2 * body.radius
         ]
+        all_set = set(all_hexes)
+        total = len(all_hexes)
 
-        # Voronoi biome assignment — clustered, not per-hex random
-        biome_map = _generate_biome_map(all_hexes, types, weights, rng)
+        # 1) Base biome layer — Voronoi clustering over biome types only.
+        biome_map = _generate_biome_map(all_hexes, biome_types, biome_weights, rng)
+
+        # 2) Rivers — momentum walks toward the map edge, overwrite biome.
+        mountain_hexes = [h for h, t in biome_map.items() if t == "mountains"] or all_hexes
+        for river_type in river_types:
+            n_rivers = max(1, weight_by_type.get(river_type, 0) // 5)
+            for _ in range(n_rivers):
+                start = rng.choice(mountain_hexes)
+                for h in _carve_river(all_set, rng, start, max_len=body.radius * 3):
+                    biome_map[h] = river_type
+        river_set = {h for h, t in biome_map.items() if t in river_types}
+
+        # 3) Scatter features — isolated points, never on a river.
+        scatter_counts = [
+            (ht, max(1, round(w * total / 1200)))
+            for ht, w in scatter
+        ]
+        feature_map = _scatter_features(all_hexes, scatter_counts, river_set, rng)
+        for h, t in feature_map.items():
+            biome_map[h] = t
+
+        # 4) Road network — connect towns + castles via greedy MST.
+        if road_types:
+            road_type = road_types[0]
+            nodes = [h for h, t in feature_map.items() if t in ("town", "castle")]
+            blocked = set(feature_map.keys())  # don't overwrite other features
+            for h in _build_road_network(nodes, blocked, rng):
+                biome_map[h] = road_type
 
         hexes_created = 0
         counts: dict[str, int] = {}
@@ -445,6 +643,7 @@ class TerrainConfigCreate(BaseModel):
     has_submap: int = 0
     is_passable: int = 1
     is_active: int = 1
+    placement_mode: str = "biome"
 
 
 @router.post("/hex-terrain-config")
@@ -456,11 +655,11 @@ def create_terrain_config(body: TerrainConfigCreate, authorization: str | None =
         conn.execute(
             """INSERT INTO hex_type_config
                (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
-                spawn_weight, has_submap, is_passable, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                spawn_weight, has_submap, is_passable, is_active, placement_mode)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.hex_type, body.label, body.travel_hours, body.encounter_base_chance,
              body.map_color, body.map_icon, body.spawn_weight, body.has_submap,
-             body.is_passable, body.is_active),
+             body.is_passable, body.is_active, body.placement_mode),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM hex_type_config WHERE hex_type = ?", (body.hex_type,)).fetchone()
@@ -480,7 +679,8 @@ def patch_terrain_config(
     """Update terrain type fields."""
     _require_admin(authorization)
     allowed = {"label", "travel_hours", "encounter_base_chance", "map_color", "map_icon",
-               "spawn_weight", "has_submap", "is_passable", "is_active", "required_item"}
+               "spawn_weight", "has_submap", "is_passable", "is_active", "required_item",
+               "placement_mode"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")

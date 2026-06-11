@@ -2612,6 +2612,29 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('cave',      'Jaskinia',  1.0, 0.50, '#3a3a3a', '🕳️')
     """, "v2-hex-type-config-seed")
 
+    # #507 — placement_mode drives which generation algorithm a terrain uses.
+    # NULL is treated as 'biome' by the generator, so the column is nullable and
+    # only the known stock types are backfilled (admin-created terrains stay NULL/biome).
+    _exec("ALTER TABLE hex_type_config ADD COLUMN placement_mode TEXT", "v2-hex-placement-mode")
+    _exec("""
+        UPDATE hex_type_config SET placement_mode = 'scatter'
+        WHERE placement_mode IS NULL AND hex_type IN ('town','castle','cave','dungeon','ruins')
+    """, "v2-hex-placement-scatter")
+    _exec("""
+        UPDATE hex_type_config SET placement_mode = 'path'
+        WHERE placement_mode IS NULL AND hex_type IN ('river','road')
+    """, "v2-hex-placement-path")
+    _exec("""
+        UPDATE hex_type_config SET placement_mode = 'biome'
+        WHERE placement_mode IS NULL
+        AND hex_type IN ('plains','forest','hills','mountains','swamp')
+    """, "v2-hex-placement-biome")
+    # dungeon/castle were spawn_weight 0 (never generated) — give them a small presence.
+    _exec("UPDATE hex_type_config SET spawn_weight = 2 WHERE hex_type = 'dungeon' AND spawn_weight = 0",
+          "v2-hex-dungeon-weight")
+    _exec("UPDATE hex_type_config SET spawn_weight = 1 WHERE hex_type = 'castle' AND spawn_weight = 0",
+          "v2-hex-castle-weight")
+
     _exec("""
         CREATE TABLE IF NOT EXISTS hex_teleport_connections (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
