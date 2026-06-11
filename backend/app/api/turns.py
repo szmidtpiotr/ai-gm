@@ -4103,12 +4103,28 @@ def create_turn(
 
         # Strip GM-only directive tags from player-visible text after XP processing
         try:
-            from app.services.xp_sources import strip_narrative_tags as _strip_tags
+            from app.services.narrative_state_service import strip_narrative_tags as _strip_tags
             _narrative_part, _parsed_part = _extract_narrative_for_cues(clean_assistant)
             _stripped = _strip_tags(_narrative_part)
             clean_assistant = _repack_narrative(clean_assistant, _stripped, _parsed_part)
         except Exception as _strip_err:
             logger.warning("narrative_tag_strip_error", error=str(_strip_err))
+
+        # C10: parse QUEST_SUGGEST tags → active_quests, strip from narrative (non-streaming path)
+        try:
+            from app.services.quest_suggest_parser import parse_quest_suggest as _pqs_ns, strip_quest_suggest_tags as _sqs_ns
+            from app.services.world_state_service import get_world_state_flags as _gwsf_ns, set_world_state_flags as _swsf_ns
+            _narr_qs_ns, _pjson_qs_ns = _extract_narrative_for_cues(clean_assistant)
+            _new_quests_ns = _pqs_ns(_narr_qs_ns)
+            if _new_quests_ns:
+                _existing_ns = _gwsf_ns(campaign_id).get("active_quests", [])
+                _seen_ns = {q.get("title", "") for q in _existing_ns}
+                _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
+                if _to_add_ns:
+                    _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
+            clean_assistant = _repack_narrative(clean_assistant, _sqs_ns(_narr_qs_ns), _pjson_qs_ns)
+        except Exception as _qse_ns:
+            logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
 
         # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
         try:
@@ -5157,7 +5173,7 @@ def create_turn_stream(
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 # Strip GM-only directive tags before saving (XP already processed from full_raw)
                 try:
-                    from app.services.xp_sources import strip_narrative_tags as _strip_tags_s
+                    from app.services.narrative_state_service import strip_narrative_tags as _strip_tags_s
                     _narr_s, _pjson_s2 = _extract_narrative_for_cues(clean_text)
                     clean_text = _repack_narrative(clean_text, _strip_tags_s(_narr_s), _pjson_s2)
                 except Exception as _ste:
