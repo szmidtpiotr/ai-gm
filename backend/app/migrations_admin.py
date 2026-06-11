@@ -859,6 +859,45 @@ ADMIN_MIGRATIONS = [
         player_visible      INTEGER NOT NULL DEFAULT 1
     )
     """,
+    # #224 — dungeon tile card system: categories + tiles tables.
+    # Referenced by dungeon_tiles.py router; were never added to migrations.
+    """
+    CREATE TABLE IF NOT EXISTS dungeon_tile_categories (
+        key             TEXT PRIMARY KEY,
+        label           TEXT NOT NULL,
+        description     TEXT NOT NULL DEFAULT '',
+        style_modifier  TEXT NOT NULL DEFAULT '',
+        system_prompt   TEXT,
+        sort_order      INTEGER NOT NULL DEFAULT 0,
+        is_active       INTEGER NOT NULL DEFAULT 1
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS dungeon_tiles (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_key        TEXT NOT NULL REFERENCES dungeon_tile_categories(key) ON DELETE CASCADE,
+        label               TEXT NOT NULL,
+        image_url           TEXT,
+        image_url_raw       TEXT,
+        image_gen_prompt    TEXT,
+        doors_json          TEXT NOT NULL DEFAULT '[]',
+        door_overlays_json  TEXT NOT NULL DEFAULT '{}',
+        room_description    TEXT NOT NULL DEFAULT '',
+        enemies_json        TEXT NOT NULL DEFAULT '[]',
+        items_json          TEXT NOT NULL DEFAULT '[]',
+        active_states_json  TEXT NOT NULL DEFAULT '[]',
+        riddle_key          TEXT,
+        exit_conditions_json TEXT NOT NULL DEFAULT '[]',
+        is_boss_tile        INTEGER NOT NULL DEFAULT 0,
+        is_active           INTEGER NOT NULL DEFAULT 1,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_dungeon_tiles_category
+    ON dungeon_tiles(category_key, is_active)
+    """,
 ]
 
 ADMIN_SEEDS = [
