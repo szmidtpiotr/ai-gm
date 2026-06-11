@@ -226,6 +226,35 @@ body {
   cursor: default;
 }
 
+.quest-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.quest-card {
+  background: rgba(201,165,74,0.08);
+  border: 1px solid rgba(201,165,74,0.25);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.quest-card__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.quest-card__objective {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+.quest-card__reward {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
 .header__back,
 .header__action,
 .header__avatar {

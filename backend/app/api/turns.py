@@ -4331,8 +4331,9 @@ def create_turn(
 
         # B5: auto-save World State snapshot after each narrative turn
         try:
-            from app.services.world_state_service import auto_save_snapshot as _ws_snap
+            from app.services.world_state_service import auto_save_snapshot as _ws_snap, get_world_state_flags as _gwsf_out
             _ws_snap(campaign_id)
+            out["active_quests"] = _gwsf_out(campaign_id).get("active_quests", [])
         except Exception as _ws_err:
             logger.warning("world_state_snapshot_error", error=str(_ws_err))
 
