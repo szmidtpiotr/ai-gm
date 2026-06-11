@@ -213,11 +213,32 @@ async function _loadArchetypes(root) {
   } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
 }
 
+// ── XP Awards ─────────────────────────────────────────────────────────────────
+
+async function _loadXpAwards(root) {
+  const tbody = root.querySelector('#xp-awards-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _loading(6);
+  try {
+    const d = await apiFetch('/api/admin/xp-awards');
+    const items = d.items || [];
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak wpisów XP</td></tr>`; return; }
+    tbody.innerHTML = items.map(a => `<tr>
+      <td class="td-mono">${_esc(a.source_key||a.id)}</td>
+      <td class="td-muted">${_esc(a.category||'—')}</td>
+      <td class="td-name">${_esc(a.label||'—')}</td>
+      <td class="td-mono" style="text-align:right">${a.xp_amount??'—'}</td>
+      <td class="td-muted">${_esc((a.description||'').slice(0,80)||'—')}</td>
+      <td>${a.is_active ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>'}</td>
+    </tr>`).join('');
+  } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+}
+
 // ── Tab loader ────────────────────────────────────────────────────────────────
 
 function _loadTab(root, tab) {
   if (_mechLoaded.has(tab)) return Promise.resolve();
-  const fn = { stats:_loadStats, skills:_loadSkills, dc:_loadDC, conditions:_loadConditions, archetypes:_loadArchetypes }[tab];
+  const fn = { stats:_loadStats, skills:_loadSkills, dc:_loadDC, conditions:_loadConditions, archetypes:_loadArchetypes, xp:_loadXpAwards }[tab];
   if (!fn) return Promise.resolve();
   _mechLoaded.add(tab);
   return fn(root).catch(err => { _mechLoaded.delete(tab); console.warn('Mech tab failed:', tab, err.message); });
@@ -413,6 +434,7 @@ function _sectionHtml() {
         <button class="stab" data-mtab="dc">Poziomy DC</button>
         <button class="stab" data-mtab="conditions">Kondycje</button>
         <button class="stab" data-mtab="archetypes">Archetypy</button>
+        <button class="stab" data-mtab="xp">Nagrody XP</button>
       </div>
       <div id="mtab-stats" class="stab-panel active">
         <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Statystyki są zdefiniowane systemowo — możesz edytować nazwę i opis.</span></div>
@@ -470,6 +492,17 @@ function _sectionHtml() {
           <table class="data-table" id="archetypes-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th style="width:90px">HP bazowe</th><th style="width:100px">Złoto startowe</th><th>Opis</th><th style="width:80px">Zablokowany</th>
+            </tr></thead>
+            <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="mtab-xp" class="stab-panel" style="display:none">
+        <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Katalog zdarzeń przyznających XP (game_config_xp_awards). Tylko do odczytu.</span></div>
+        <div class="table-wrap">
+          <table class="data-table" id="xp-awards-table">
+            <thead><tr>
+              <th>Klucz</th><th style="width:110px">Kategoria</th><th>Nazwa</th><th style="width:80px;text-align:right">XP</th><th>Opis</th><th style="width:70px">Aktywny</th>
             </tr></thead>
             <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
           </table>

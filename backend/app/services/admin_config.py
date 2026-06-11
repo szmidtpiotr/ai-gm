@@ -509,6 +509,21 @@ def list_xp_rewards() -> list[dict]:
         return []
 
 
+def list_xp_awards() -> list[dict]:
+    """XP award events (game_config_xp_awards) — read-only catalog for admin view."""
+    try:
+        return _fetch_all(
+            """
+            SELECT id, category, source_key, label, description, xp_amount,
+                   is_active, is_locked, locked_at, created_at, updated_at
+            FROM game_config_xp_awards
+            ORDER BY category ASC, source_key ASC
+            """
+        )
+    except sqlite3.OperationalError:
+        return []
+
+
 def update_xp_reward(
     key: str,
     *,

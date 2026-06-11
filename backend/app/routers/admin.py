@@ -85,6 +85,7 @@ from app.services.admin_config import (
     list_weapons,
     list_dc,
     list_xp_rewards,
+    list_xp_awards,
     list_skills,
     list_stats,
     list_archetypes,
@@ -1164,6 +1165,11 @@ def admin_dc(_: None = Depends(require_admin_token)):
 @router.get("/admin/xp-rewards")
 def admin_xp_rewards(_: None = Depends(require_admin_token)):
     return {"items": list_xp_rewards()}
+
+
+@router.get("/admin/xp-awards")
+def admin_xp_awards(_: None = Depends(require_admin_token)):
+    return {"items": list_xp_awards()}
 
 
 @router.patch("/admin/xp-rewards/{key}")
