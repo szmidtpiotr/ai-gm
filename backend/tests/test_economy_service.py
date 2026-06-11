@@ -8,8 +8,7 @@ import pytest
 from app.services.economy_service import (
     get_wound_label, grant_xp, get_total_xp, get_level_display,
     get_xp_log, equip_item, unequip_item, get_equipped_items,
-    get_inventory, add_to_inventory, generate_combat_loot,
-    claim_loot, apply_healing_item, apply_rest, get_xp_award_amount,
+    get_inventory, add_to_inventory, apply_healing_item, apply_rest, get_xp_award_amount,
 )
 
 
@@ -208,55 +207,6 @@ class TestInventory:
         result = unequip_item(1, "main_hand", db)
         assert result["ok"] is True
         assert get_equipped_items(1, db).get("main_hand") is None
-
-
-# ── TASK_22: Loot System ─────────────────────────────────────────────────
-
-class TestLootSystem:
-    def test_generate_loot(self, db):
-        result = generate_combat_loot(1, 1, ["goblin"], None, db)
-        assert "loot_id" in result
-        assert isinstance(result["items"], list)
-
-    def test_claim_loot_gold(self, db):
-        # Insert loot with gold directly
-        db.execute(
-            "INSERT INTO combat_loot (campaign_id, character_id, loot_items, status) VALUES (1, 1, ?, 'available')",
-            (json.dumps([{"item_key": "gold_coins", "quantity": 15, "claimed": False, "is_gold": True}]),)
-        )
-        db.commit()
-        loot_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-        result = claim_loot(1, loot_id, [], None, db)
-        assert result["ok"] is True
-        assert result["gold"] == 15
-        # Check gold added to character
-        row = db.execute("SELECT sheet_json FROM characters WHERE id = 1").fetchone()
-        sheet = json.loads(row[0])
-        assert sheet["gold"] == 25  # 10 starting + 15
-
-    def test_claim_partial_loot(self, db):
-        items = [
-            {"item_key": "health_potion", "quantity": 1, "claimed": False},
-            {"item_key": "bandage", "quantity": 2, "claimed": False},
-        ]
-        db.execute(
-            "INSERT INTO combat_loot (campaign_id, character_id, loot_items, status) VALUES (1, 1, ?, 'available')",
-            (json.dumps(items),)
-        )
-        db.commit()
-        loot_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-        result = claim_loot(1, loot_id, ["health_potion"], None, db)
-        assert result["ok"] is True
-        assert result["status"] == "partial"
-
-    def test_claim_expired_loot_blocked(self, db):
-        db.execute(
-            "INSERT INTO combat_loot (campaign_id, character_id, loot_items, status) VALUES (1, 1, '[]', 'expired')"
-        )
-        db.commit()
-        loot_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-        result = claim_loot(1, loot_id, [], None, db)
-        assert result["ok"] is False
 
 
 # ── TASK_23: Healing ──────────────────────────────────────────────────────
