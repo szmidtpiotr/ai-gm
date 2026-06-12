@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-12 (U5 KOMPLETNE — centralny parser tagów LLM + llm_tag_errors; 15/15 pytest + 2/2 Playwright GREEN)_
+_Ostatnia aktualizacja: 2026-06-12 (U9b KOMPLETNE — KAMIEŃ MILOWY Blok 3; GRYWALNY Z ZASTRZEŻENIAMI; #534/#535/#536 zgłoszone; #536 naprawiony)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -13,11 +13,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **6/33** | **18% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **8/35** | **23% — PRZED Fazą 5 MP** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **102/173** | **59%** |
+| **TOTAL** | **103/173** | **60%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -158,7 +158,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5
 
-> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = numeracja. Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`.
+> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = sekcja "FAZA U — zależności i kolejność" w CZĘŚCI AH (NIE numeracja — U9b/U28–U32/U32b wchodzą przed Blokiem 4). Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`; wyjątki U4/U9b/U32b = czyste playtesty /game-smoke (bez TDD, bez nowego issue, raporty do #512/#513).
 
 ### Blok 1 — Dokument prawdy
 - [x] U1 — Sprzątanie game_mechanics.md (statusy, kolizje kodów D8–D13, wiszące refy F0/FINF-1) — [#509](https://github.com/szmidtpiotr/ai-gm/issues/509)
@@ -183,10 +183,19 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 3 — Pancerz na LLM (spójność narracja↔stan)
 - [x] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed — [#528](https://github.com/szmidtpiotr/ai-gm/issues/528)
-- [ ] U6 — Uogólniony wzorzec odmowy (korekta narracji przy każdym odrzuconym tagu)
-- [ ] U7 — SKILL_CHECK safety net (backend wymusza test przy ryzykownej akcji) + DC lock {8,12,16,20,24}
-- [ ] U8 — Beat fallback (objective_type na beatach) + Story Gravity L1/L2/L3 zdefiniowane i włączone
-- [ ] U9 — GM Plan hardening (retry + fallback plan, kampania startuje zawsze)
+- [x] U6 — Uogólniony wzorzec odmowy (korekta narracji przy każdym odrzuconym tagu) — [#530](https://github.com/szmidtpiotr/ai-gm/issues/530)
+- [x] U7 — SKILL_CHECK safety net (backend wymusza test przy ryzykownej akcji) + DC lock {8,12,16,20,24} — [#531](https://github.com/szmidtpiotr/ai-gm/issues/531)
+- [x] U8 — Beat fallback (objective_type na beatach) + Story Gravity L1/L2/L3 zdefiniowane i włączone — [#532](https://github.com/szmidtpiotr/ai-gm/issues/532)
+- [x] U9 — GM Plan hardening (retry + fallback plan, kampania startuje zawsze) — [#533](https://github.com/szmidtpiotr/ai-gm/issues/533)
+- [x] U9b — 🎮 KAMIEŃ MILOWY: /game-smoke × 2 tryby po Bloku 3 — GRYWALNY Z ZASTRZEŻENIAMI, zero P0. **Zaliczony WARUNKOWO** (kryterium "zero nowych P1" nie spełnione): #534/#535/#536 → hotfixy HF-5–HF-8 wymagane PRZED U28 (sekcja niżej). Raporty: [#512](https://github.com/szmidtpiotr/ai-gm/issues/512#issuecomment-4692425428), [#513](https://github.com/szmidtpiotr/ai-gm/issues/513#issuecomment-4692464871).
+
+### Hotfixy po U9b (poza licznikiem U; wykonać PRZED U28, w tej kolejności)
+- [x] HF-5 — [#536](https://github.com/szmidtpiotr/ai-gm/issues/536) COMMIT: fix XP hooks już w drzewie roboczym (turns.py: `strip_narrative_tags` importowany z `narrative_state_service` zamiast `xp_sources`) — zacommitować + pytest importu; bez commitu następny rebuild cofnie fix — 624f096
+- [ ] HF-6 — [#535](https://github.com/szmidtpiotr/ai-gm/issues/535) Gate ATTACK regex łapie negację ("nic nie atakuję" → gate_blocked) — word boundary + bypass "nie <czasownik>"; diagnoza i propozycja fixu w issue
+- [ ] HF-7 — [#534](https://github.com/szmidtpiotr/ai-gm/issues/534) Walidacja celu COMBAT_START: cel spoza scene_enemies/bazy wrogów albo przyjazny NPC (quest-giver) → odrzucenie tagu + korekta narracji (wzorzec U6) + wpis llm_tag_errors; pełna instrukcja w komentarzu issue
+- [ ] HF-8 — CP11: dodać `objective_type` do `key_beats` w szablonach kampanii (bez tego auto-complete beatów z U8 martwy w Gotowej; U32b mierzy checkpoint 11 — "fix przy U32b" za późno, U32b to playtest, nie naprawa)
+
+> Luki designu poza hotfixami: **CP8** (zakupy w narracji nie zdejmują złota) → decyzja przy Bloku 7 (U24–U26): rozszerzyć [SPEND_GOLD] na zakupy narracyjne albo sklep wyłącznie przez UI z odmową w narracji. **CP4** (NPC nie wywołany po imieniu) → P2, prawdopodobnie naprawi U29 (blok [ŚWIAT] z NPC z bazy).
 
 ### Blok 4 — Baza danych jako rdzeń
 - [ ] U10 — Effect schema lockdown (JSON Schema, jeden format DOT, enum statów, typ skip_turn, walidacja na każdym zapisie)
@@ -219,6 +228,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] U30 — Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard, sync mapy po turze)
 - [ ] U31 — Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z location_*_assignments; sub-lokacje
 - [ ] U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI (≥5 tur pille, ≥10 banner)
+- [ ] U32b — 🎮 KAMIEŃ MILOWY: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bez TDD, bez nowego issue — raporty do #512/#513, porównanie z runem U9b). Oczekiwane ✅: chk 2/3/4/9 (ruch hex, lokacje z bazy, NPC z przypisań, odpoczynek) → po potwierdzeniu zamknij #518/#522. Każde ❌ na chk 2/3/4 = defekt Bloku 9, naprawić PRZED Blokiem 4. Zaliczone = oba runy GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
 
 ### Blok 8 — Brama do MP (zawsze ostatnie)
 - [ ] U27 — docs/ACCEPTANCE_USABILITY.md + pełny re-playtest 3 trybów (w tym kryteria ruchu/lokacji z Bloku 9) → issue [GATE] Go/No-Go MP
