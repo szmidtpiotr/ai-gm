@@ -75,10 +75,12 @@ def _get_equipped_durable(conn, char_id: int):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def decrement_durability_on_hit(conn, char_id: int) -> None:
-    """Decrement durability by 1 for all equipped durable items. Floors at 0."""
+def decrement_weapon_durability_on_attack(conn, char_id: int) -> None:
+    """U2 (#510): Weapons lose 1 durability when the player lands a hit. Floors at 0."""
     rows = _get_equipped_durable(conn, char_id)
     for row in rows:
+        if row["weapon_key"] is None:
+            continue  # armor handled by decrement_armor_durability_on_hit
         cur = int(row["durability_current"] or 0)
         if cur > 0:
             conn.execute(
@@ -86,6 +88,26 @@ def decrement_durability_on_hit(conn, char_id: int) -> None:
                 (row["id"],),
             )
     conn.commit()
+
+
+def decrement_armor_durability_on_hit(conn, char_id: int) -> None:
+    """U2 (#510): Armor loses 1 durability when the player receives a hit. Floors at 0."""
+    rows = _get_equipped_durable(conn, char_id)
+    for row in rows:
+        if row["item_key"] is None:
+            continue  # weapons handled by decrement_weapon_durability_on_attack
+        cur = int(row["durability_current"] or 0)
+        if cur > 0:
+            conn.execute(
+                "UPDATE character_inventory SET durability_current = MAX(0, durability_current - 1) WHERE id = ?",
+                (row["id"],),
+            )
+    conn.commit()
+
+
+def decrement_durability_on_hit(conn, char_id: int) -> None:
+    """Deprecated (F7 #467) — use decrement_armor_durability_on_hit instead (U2 #510)."""
+    decrement_armor_durability_on_hit(conn, char_id)
 
 
 def get_ac_penalty_for_char(conn, char_id: int) -> int:

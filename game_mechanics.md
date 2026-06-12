@@ -12,7 +12,7 @@
 >
 > Kiedy pracujesz nad GitHub Issues, TDD, lub jakimkolwiek zadaniem implementacyjnym:
 >
-> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0, FAZA 1 (C1–C19) i FAZA 2 (D1–D14) ukończone; FAZA 3 w toku (E1–E14 ✅) — patrz sekcja WYKONANE na końcu pliku.**
+> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, U=Faza U (plan naprawczy, PRZED G), G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0, FAZA 1 (C1–C19) i FAZA 2 (D1–D14) ukończone; FAZA 3 w toku (E1–E14 ✅) — patrz sekcja WYKONANE na końcu pliku.**
 > 2. **Szukaj kontekstu decyzji projektowej** w sekcji tematycznej (CZĘŚĆ X = Afiksy, CZĘŚĆ AB = Walka/Rany, CZĘŚĆ AC = Multiplayer, CZĘŚĆ AF = Ekonomia, CZĘŚĆ AG = Infrastruktura, itd.).
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
@@ -35,6 +35,7 @@
 > | CZĘŚĆ AE | Admin Panel (audyt admin_panel_v3, strangler-fig migration) |
 > | CZĘŚĆ AF | Złoto i Ekonomia (sinki, crafting, durability) |
 > | CZĘŚĆ AG | Infrastruktura (.170=RTX3060, .16=GTX1660, workload rules) |
+> | **CZĘŚĆ AH** | **FAZA U — Plan naprawczy używalności (audyt 2026-06-11; wykonać PRZED Fazą 5 MP)** |
 > | CZĘŚĆ 10 | Zasady projektowe (5 reguł) |
 > | CZĘŚĆ 10b | Observability — odłożone do prod deployment |
 > | **WYKONANE** | **Fazy zakończone (FAZA -1 A1-A12, FAZA 0 B1-B7, FAZA 1 C1-C19) — na końcu pliku** |
@@ -44,7 +45,7 @@
 > ```
 > Effects (F1) → Afiksy (F2) → Crafting (F6) + Admin buildery
 > Rany (C4/10/11) → Walka MP (G7)
-> World State (F0) → ALL: Gate, MP, NPC pamięć, Narracja
+> World State (B1–B7) → ALL: Gate, MP, NPC pamięć, Narracja
 > Onboarding karty (FONB) → PO systemach które uczą
 > ```
 >
@@ -819,23 +820,28 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ### Status implementacji (CZĘŚĆ 6)
 
+> **Statusy zadań żyją WYŁĄCZNIE w notes.md.** Ta tabela to migawka historyczna — przed podjęciem decyzji sprawdź notes.md.
+
 | Element | Status |
 |---------|--------|
 | Onboarding cinematic (intro + wybór motywu) | ✅ działa (kosmetyka, nie mechanika) |
-| Warstwa 1: progresywne opisy w kreatorze | ❌ obecnie suche etykiety — do rozbudowy |
-| Warstwa 2: karty just-in-time + `seen_mechanics` | ❌ do zbudowania (rdzeń) |
-| Warstwa 3: kodeks player-facing (z knowledge book) | ❌ admin ma, gracz nie |
-| Warstwa 4: tutorial kampania domyślnie-ON/pomijalna | ❌ do zbudowania |
+| Warstwa 1: progresywne opisy w kreatorze | ✅ E2 — tooltips kreator ([#417]) |
+| Warstwa 2: karty just-in-time + `seen_mechanics` | ✅ E23–E25 ([#438],[#439],[#440]) |
+| Warstwa 3: kodeks player-facing (z knowledge book) | ✅ E26 ([#441]) |
+| Warstwa 4: tutorial kampania domyślnie-ON/pomijalna | ✅ E28 ([#443]) |
 
 ### Zadania implementacyjne
 
-| # | Zadanie | Priorytet |
-|---|---------|-----------|
-| E23 | `seen_mechanics` per gracz (tabela/pole) + endpoint mark-seen | 1 |
-| E24 | Karty just-in-time: rzut, walka, rana, PD, złoto, death save — trigger przy pierwszym wystąpieniu | 1 |
-| E25 | Warstwa 1: rozbudowa opisów kreatora (archetyp/staty/skille z mechanicznym sensem + przykłady) | 2 |
-| E26 | Kodeks player-facing (reuse knowledge book) — wysuwany panel pomocy | 2 |
-| E27 | Tutorial kampania "Moja Pierwsza Przygoda" domyślnie-ON + przycisk Pomiń + instrukcje LLM | 3 |
+> Aktualne kody i statusy w **notes.md** (sekcja FAZA 3, E1–E28). Poniżej oryginalna lista referencji.
+
+| # | Zadanie | Status |
+|---|---------|--------|
+| E23 | `seen_mechanics` per gracz (tabela/pole) + endpoint mark-seen | ✅ [#438] |
+| E24 | Karty just-in-time: rzut, walka, rana, PD, złoto, death save — trigger przy pierwszym wystąpieniu | ✅ [#439] |
+| E25 | UI kart onboardingu (nieblokujące overlay, "Rozumiem") | ✅ [#440] |
+| E26 | Biblioteka kart (kodeks player-facing, gracz może wrócić) | ✅ [#441] |
+| E27 | Karty dla nowych mechanik (afiksy, crafting, MP) | ✅ [#442] |
+| E28 | Tutorial kampania "Moja Pierwsza Przygoda" domyślnie-ON + przycisk Pomiń + instrukcje LLM | ✅ [#443] |
 
 ---
 
@@ -843,7 +849,8 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 > **Filozofia:** Każda faza musi być w pełni działająca zanim zaczniesz następną. Nie buduj dachu bez ścian. Lista obejmuje WSZYSTKIE rodziny zadań z całego dokumentu.
 
-> **Aktualizacja 2026-06-05:** Przepisano z pierwotnej listy (F0-F4) na pełną listę pokrywającą sekcje X, Y, Z, AA–AG + nowe rodziny zadań.
+> **Aktualizacja 2026-06-05:** Przepisano z pierwotnej listy (B-F) na pełną listę pokrywającą sekcje X, Y, Z, AA–AG + nowe rodziny zadań.
+> **Statusy zadań żyją WYŁĄCZNIE w notes.md.** Tabele poniżej to opis zakresu i zależności — nie tracker postępu.
 
 ---
 
@@ -969,9 +976,67 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
+### FAZA U — Plan naprawczy używalności (PRZED Fazą 5)
+
+> Wynik pełnego audytu specyfikacji + stanu gry (2026-06-11). Cel: trzy tryby solo (Nowa Kampania, Gotowa Kampania, Loch kafelkowy) w stanie używalności. **Pełne opisy zadań: CZĘŚĆ AH.** Multiplayer startuje dopiero po U27 (go/no-go).
+
+| Kod | Zadanie | Zależy od |
+|---|---|---|
+| U1 | Dokument prawdy — sprzątanie statusów/kolizji kodów/wiszących refów w game_mechanics.md | — |
+| U2 | Uzgodnienie spec↔implementacja ekonomii (reroll, durability, formuła craftingu, zegar anti-farm) | — |
+| U3 | Feature-flag Multiplayer w hubie kampanii ("Wkrótce") | — |
+| U4 | Smoke playtest 3 trybów — ground truth + lista defektów jako issues | U1 |
+| U5 | Centralny parser tagów LLM + polityka malformed output (retry, fallback, log błędów) | — |
+| U6 | Uogólniony wzorzec odmowy — korekta narracji przy KAŻDYM odrzuconym tagu | U5 |
+| U7 | SKILL_CHECK safety net — backend wymusza test przy ryzykownej akcji + DC lock do skali 8/12/16/20/24 | U5 |
+| U8 | Beat fallback — obiektywne warunki beatów + Story Gravity poziomy zdefiniowane i włączone | U5 |
+| U9 | GM Plan hardening — retry/fallback przy generacji planu na starcie kampanii | U5 |
+| U10 | Effect schema lockdown — jeden format, enum statów, walidacja JSON Schema na każdym zapisie | — |
+| U11 | Unifikacja przedmiotów — 3 tabele → `game_items` (etapami, sub-issues) | U10 |
+| U12 | `db_lint` — skrypt audytu integralności bazy + przycisk w admin Narzędzia | U10 |
+| U13 | Content pipeline — jedna ścieżka walidacji dla seed/admin/LLM + lint wszystkich seeds | U10, U12 |
+| U14 | Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP) | — |
+| U15 | Widoczne rany wroga w UI walki (tier + kara) | — |
+| U16 | Cost preview — ceny PRZED akcją (naprawa/reroll/wskrzeszenie/usługi) + komunikat anti-farm + pasek durability | U2 |
+| U17 | Celebracja dropu afiksowego + porównanie z założonym przedmiotem | — |
+| U18 | Dziennik gracza (questy + obietnice/seeds z Narrative State + kronika) | — |
+| U19 | Recap "Poprzednio w Twojej przygodzie…" po powrocie do kampanii | — |
+| U20 | Onboarding — poprawki triggerów kart (death saves przy <25% HP, karta XP z instrukcją odpoczynku, karty sinków) | — |
+| U21 | Lochy: semantyka snapshotu (wygrana = zużycie zostaje) + domknięcie exploitu porzucenia | — |
+| U22 | Lochy: reguły kafelków (boss, pre-roll drzwi, trap/riddle, fallback braku kafelka) | — |
+| U23 | Lochy: jedna skala trudności + capy skalowania wrogów per typ | — |
+| U24 | Napad: counterplay (ostrzeżenie + rzut, próg biedy, limit częstości) | — |
+| U25 | Pity timer dla afiksów (drop + reroll u craftera) | — |
+| U26 | Telemetria ekonomii — `economy_log` + widok w admin Overview | — |
+| U27 | Acceptance checklist 3 trybów + pełny re-playtest → go/no-go dla Multiplayera | wszystko (w tym U28–U32) |
+| U28 | Świat: placement engine — lokacje osadzane na hexach mechanicznie (terrain_tags, pula floating) | U4 |
+| U29 | Świat: blok [ŚWIAT] w kontekście LLM — fakty o hexie + kandydaci z bazy + zakaz wymyślania | U5, U28 |
+| U30 | Świat: ruch mechaniczny — POST /travel, klik mapy = podróż, intent MOVE przed LLM, anty-desync guard | U29 |
+| U31 | Świat: scena ładowana z bazy przy wejściu do lokacji (scene_npcs/enemies z assignments) | U30 |
+| U32 | Świat: travel pills z prawdziwych danych + eskalacja anty-stuck w UI | U30 |
+
+> **Kolejność wykonania:** Blok 9 (U28–U32) wchodzi po U5–U9, PRZED U10–U14 — to rdzeń gry. Szczegóły: CZĘŚĆ AH, sekcja "zależności i kolejność".
+
+---
+
+### Flow UI — zadania CZĘŚĆ AD (AD-1..AD-6, bez kolizji z FAZĄ 2)
+
+> Źródło: CZĘŚĆ AD audyt 2026-06-05. Przemianowane z D8–D13 (U1 2026-06-12), bo D8–D13 = zadania FAZY 2. Statusy: notes.md (sekcja FAZA U lub Zrobione dodatkowe).
+
+| Kod | Zadanie | Zależy od |
+|---|---|---|
+| AD-1 | Lobby MP: timeout / wskaźnik nieaktywnego hosta / auto-zamknięcie | MP (G) |
+| AD-2 | Onboarding cinematic: przycisk "Pomiń" + twardy timeout auto-advance (bezpieczeństwo przy awarii CSS) | — |
+| AD-3 | Loading-states: timeout + komunikat błędu + przycisk "Ponów" dla loadHeroes/loadCampaigns | — |
+| AD-4 | Kreator postaci: dialog potwierdzenia przy hard-back (ostrzeżenie o utracie draftu) | — |
+| AD-5 | Weryfikacja maila: limit resendów (✅ rate-limit 2min backend+frontend) + link wsparcia (❌ brak) | — |
+| AD-6 | idle vs aktywny bohater: ujednolicenie ścieżki lub jawny stan dla gracza | — |
+
+---
+
 ### FAZA 5 — Multiplayer
 
-> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo.
+> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo. **Start dopiero po U27 (FAZA U, go/no-go).**
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
@@ -1011,7 +1076,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 | Etap | Co portować | Kiedy |
 |---|---|---|
-| A10/S2 | Nowa skorupa + shared utils | Faza -1 |
+| A10/A11 | ✅ Nowa skorupa + shared utils — zrealizowane jako FADM-P0 [#402] | Faza -1 |
 | FADM-P0..P3 | ✅ Skorupa + overview/mechanics/content | 2026-06-08 |
 | FADM-P4..P7 | world/map/campaigns/dungeons — następna iteracja | z Fazą 2 |
 | FADM-P8 | ⏭ SKIPPED stałe — Forge zostaje w admin3 jako standalone tool | — |
@@ -1029,7 +1094,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 ```
 Effects (F1) → Afiksy (F2) → Crafting (F6) + Admin buildery (F3)
 Rany (C4/10/11) → Walka MP (G7)
-World State (F0) → MP integracja (G4) + NPC pamięć (D3) + Narracja (FNAR)
+World State (B1–B7) → MP integracja (G4) + NPC pamięć (D3) + Narracja (FNAR)
 Karty onboarding (E24) → po systemach które uczą
 ```
 
@@ -1039,60 +1104,9 @@ Karty onboarding (E24) → po systemach które uczą
 
 ---
 
-## CZĘŚĆ 8 — Podsumowanie priorytetów (Backlog)
+## CZĘŚĆ 8 — (usunięta)
 
-> Te zadania powinny być wpisane jako GitHub Issues i powiązane z TaskMaster.
-
-### Krytyczne (blokują grę)
-
-| # | Zadanie | Zależy od |
-|---|---------|-----------|
-| B2 | World State: rozbudowa session_flags | — |
-| B3 | Gate Mechaniki (middleware) | B2 |
-| C1 | Fix Bug 1: LLM sugeruje ruch | B3 |
-| C3 | Fix Bug 2: Gate dla walki | B3 |
-| C7 | XP Spend: spend_skill endpoint | — |
-| C8 | XP Spend: spend_stat endpoint | C7 |
-
-### Wysokie (core loop)
-
-| # | Zadanie | Zależy od |
-|---|---------|-----------|
-| B4 | Parser intencji gracza | B3 |
-| C2 | Walidacja ruchu przez mechanikę | C1 |
-| C10 | Quest system: QUEST_SUGGEST | B2 |
-| C11 | Quest system: mechanical tracking | C10 |
-| C9 | UI długiego odpoczynku (Ucz się) | C7+C8 |
-| C12 | SPEND_GOLD tag | — |
-| C13 | System prompt: tylko złoto GP | — |
-| E1 | Player HUD | — |
-| E2 | Kreator: wyjaśnienia w UI | — |
-| E3 | Ekran zakończenia kampanii | — |
-| E4 | Ekran śmierci | — |
-| E5 | Blokada kampanii martwego bohatera | — |
-
-### Średnie (polish + admin)
-
-| # | Zadanie | Zależy od |
-|---|---------|-----------|
-| B1 | World State snapshots tabela | B2 |
-| B5 | Auto-zapis snapshotu per tura | B1 |
-| D1 | Pending flow: przedmioty | B2 |
-| D2 | Pending flow: wrogowie | B2 |
-| D3 | NPC pamięć w World State | B2 |
-| D4 | Auto-screening admin queue | — |
-| E28 | Tutorial kampania | — |
-| F18 | Rosnące progi XP | — |
-| F21 | ✅ World State History UI — KOMPLETNE | B5 |
-
-### Niskie (rozbudowa / przyszłość)
-
-| # | Zadanie | Zależy od |
-|---|---------|-----------|
-| B6 | Admin UI: World State per tura | B5 |
-| F17 | Hidden trait system | — |
-| F19 | Globalne stany NPC | — |
-| F20 | Mechaniczne efekty pory dnia | — |
+> Sekcja usunięta 2026-06-12 (U1). Backlog priorytetów był nieaktualny i powielał notes.md. **Jedyne źródło statusów i kolejności zadań: `notes.md` w katalogu głównym repo.**
 
 ---
 
@@ -2357,7 +2371,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | Cooldown per character | ✅ Istnieje |
 | Skalowanie wrogów | ✅ Istnieje |
 | Snapshot stanu przy wejściu | ✅ `source="dungeon_enter"` w `world_state_snapshots` — HP, złoto, inventory |
-| Przywrócenie snapshotu przy śmierci/wyjściu | ❌ Brak |
+| Przywrócenie snapshotu przy śmierci/wyjściu | ✅ E16 [#431] — snapshot restore przy śmierci w lochu ⚠️ SPRZECZNOŚĆ — semantyka win/death/porzucenie rozwiązuje U21 |
 | Obrazki + opisy per tile | ⚠️ Tabela istnieje, zawartość mała |
 | LLM Vision workflow (obrazek → opis) | ✅ `scripts/vision_describe_tiles.py` na .170 (llava:7b + `needs_description` filter) |
 | Admin UI: tile manager (obrazki, drzwi, opis) | ⚠️ Częściowy |
@@ -2794,33 +2808,37 @@ KAMPANIE (hub) — 5 trybów: Nowa / Gotowa / Loch / Loch-kafelki / Multiplayer
 
 ### Status implementacji (CZĘŚĆ AD)
 
+> **Statusy zadań żyją WYŁĄCZNIE w notes.md.** Ta tabela to migawka historyczna.
+
 | Element | Status |
 |---------|--------|
 | Logowanie + rejestracja + weryfikacja + reset hasła | ✅ działa |
 | Onboarding (cinematic + motyw) | ✅ działa — D10 [#385] karty motywu + zapis |
 | Hub Bohaterowie (hero-first) | ✅ działa |
 | Profil (konto, LLM Connect, znajomi, usuń) | ✅ działa |
-| Kreator postaci 4-kroki (animacje kostki/skilli) | ✅ działa, ⚠️ hard-back gubi draft |
+| Kreator postaci 4-kroki (animacje kostki/skilli) | ✅ działa, ⚠️ hard-back gubi draft (→ AD-4) |
 | Hub Kampanie + 5 trybów | ✅ działa |
 | Tworzenie kampanii (Nowa/Gotowa/Multiplayer) | ✅ działa |
-| **Kolejność hero↔kampania spójna z hero-first** | ❌ podwójna ścieżka kreatora — do naprawy |
-| Zabezpieczenia przed zakleszczeniami (lobby/onboarding/mail/loading) | ❌ brak timeoutów/skipów |
-| Ochrona przed przypadkowym usunięciem (undo/potwierdzenie) | ❌ swipe-delete bez undo |
-| Globalny error boundary | ❌ brak |
+| **Kolejność hero↔kampania spójna z hero-first** | ✅ C14 [#368] — startCharacterWizard() tylko z Heroes screen |
+| Zabezpieczenia przed zakleszczeniami (lobby/onboarding/mail/loading) | ❌ otwarte → AD-1..AD-3 |
+| Ochrona przed przypadkowym usunięciem (undo/potwierdzenie) | ✅ C16 [#370] — delete confirmation modals |
+| Globalny error boundary | ✅ C15 [#369] — toast + ponów przy API failures |
 
 ### Zadania implementacyjne
 
-| # | Zadanie | Priorytet |
-|---|---------|-----------|
-| C14 | Hero-first: usunąć kreator z deep-flow kampanii; kreator tylko z ekranu Bohaterowie (fallback gdy brak bohatera) | 1 |
-| D8 | Lobby MP: timeout / wskaźnik nieaktywnego hosta / auto-zamknięcie | 1 |
-| D9 | Onboarding: przycisk "Pomiń" + auto-advance po timeout | 2 |
-| D10 | Loading-states: timeout + błąd + retry (hooks, templates, prebuilt) | 2 |
-| C15 | Globalny error boundary: toast + ponów dla loadHeroes/loadCampaigns | 2 |
-| C16 | Ochrona usuwania: undo-toast albo twarde potwierdzenie (bohater + kampania) | 2 |
-| D11 | Kreator: dialog potwierdzenia przy hard-back | 3 |
-| D12 | Weryfikacja maila: limit resendów + link wsparcia | 3 |
-| D13 | idle vs aktywny: ujednolicić ścieżkę lub pokazać stan jawnie | 3 |
+> Kody D8–D13 przemianowane na AD-1..AD-6 (U1 2026-06-12), żeby uniknąć kolizji z zadaniami FAZY 2 (D8=profil, D9=ekran kampanii, …). Aktualne statusy w notes.md → sekcja FAZA U / Zrobione dodatkowe.
+
+| # | Zadanie | Status |
+|---|---------|--------|
+| C14 | Hero-first: kreator tylko z ekranu Bohaterowie | ✅ [#368] |
+| C15 | Globalny error boundary: toast + ponów dla loadHeroes/loadCampaigns | ✅ [#369] |
+| C16 | Ochrona usuwania: twarde potwierdzenie (bohater + kampania) | ✅ [#370] |
+| AD-1 | Lobby MP: timeout / wskaźnik nieaktywnego hosta / auto-zamknięcie | ❌ open |
+| AD-2 | Onboarding cinematic: twardy "Pomiń" + auto-advance po timeout | ❌ open |
+| AD-3 | Loading-states: timeout + błąd + retry (loadHeroes/loadCampaigns) | ❌ open |
+| AD-4 | Kreator: dialog potwierdzenia przy hard-back | ❌ open |
+| AD-5 | Weryfikacja maila: limit resendów (✅) + link wsparcia (❌) | ⚠️ partial |
+| AD-6 | idle vs aktywny bohater: ujednolicić ścieżkę lub pokazać stan jawnie | ❌ open |
 
 ---
 
@@ -2973,7 +2991,8 @@ Edycja jednej funkcji = otwierasz jeden mały plik, nie monolit. To jest cel mod
 
 ### Realignment 2026-06-08 — start faktycznej przebudowy
 
-> **Decyzja (2026-06-08):** Praca nad sekcją D **wstrzymana**. Audyt wykazał że `admin_panel_v3/index.html` to nadal **monolit 19 447 linii / 1 MB / 14 sekcji inline**, a A10/A11 ("wydzielone utils") **nie istnieją jako pliki**. `frontend/admin/` nie istnieje. Zaczynamy faktyczny strangler-fig wg tego planu.
+> **Decyzja (2026-06-08):** Praca nad sekcją D **wstrzymana**. Audyt wykazał że `admin_panel_v3/index.html` to monolit, a A10/A11 ("wydzielone utils") nie istniały jako pliki — stąd start strangler-figa.
+> **A10/A11 ✅ ZREALIZOWANE jako FADM-P0 [#402] (2026-06-08):** `frontend/admin/` istnieje; shared utils (`api.js`, `toast.js`, `modal.js`, `table.js`, `form.js`) działają. Szczegóły implementacyjne: sekcja WYKONANE → A10/A11.
 
 > **Dlaczego teraz?** Każdy D-feature (D5/D6/D7) dorzucany do monolitu zwiększa dług portu. Im później start, tym większy port przy FADM-DONE. Wyrównujemy zanim sekcja D urośnie dalej.
 
@@ -2986,7 +3005,7 @@ Plan rozbity na konkretne issues (epic [#401](https://github.com/szmidtpiotr/ai-
 | FADM-P2 | #404 | mechanics ✅ 2026-06-08 (port 1:1; mechPatchEdit shared → pozostał w monolicie; usunięte z monolitu) |
 | FADM-P3 | #405 | content (+ D5 item VIEW) ✅ 2026-06-08 (6 tabów; D5 item VIEW modal; Smart Entry port; loot tab wyeksponowany; usunięte z monolitu) |
 | FADM-P4 | #406 | world (+ D7 encountery) ✅ 2026-06-08 (4 taby: NPC/Wrogowie/Łupy/Oczekujące; openLootEntriesModal port; image modals; usunięte z monolitu) |
-| FADM-P5 | #407 | map ✅ 2026-06-08 (5 tabów: budowniczy SVG/generuj/lokacje/teren/oczekujące; world builder + submapy + obrazy lokacji; −1758 z monolitu) |
+| FADM-P5 | #407 | map ✅ 2026-06-08 (5 tabów: budowniczy SVG/generuj/lokacje/teren/oczekujące; world builder + submapy + obrazy lokacji; −1758 z monolitu) · #507 placement modes 2026-06-11 · #508 drag-paint+undo 2026-06-11 |
 | FADM-P6 | #408 | campaigns ✅ 2026-06-08 (8-tabowy modal: overview/plan/turns/map/npcs/workshop/world/inspector; tabela+karty toggle; admin komendy; Warsztat; −958 z monolitu) |
 | FADM-P7 | #409 | dungeons ✅ 2026-06-08 (4 taby: lochy/zagadki/kafelki/kategorie; tile grid + image studio; stab-bar wiring; −1773 z monolitu) |
 | FADM-P8 | #410 | forge (+ D7 hook_type) |
@@ -3054,9 +3073,16 @@ grind loch / walka → złoto + przedmioty
 
 - NPC rzemieślnik (płatnerz / enchanter) z flagą `is_crafter=1` (analogicznie do `is_shop`).
 - Dwie operacje na posiadanym egzemplarzu:
-  - **Nałóż afiks** — dodaj losowy afiks z puli pasującej do typu/tieru na wolny slot. Koszt = f(tier).
-  - **Reroll afiksu** — wymień istniejący afiks na inny losowy z puli. Koszt wyższy niż nałożenie.
-- Koszt skaluje z tierem afiksu (wartość startowa, do playtestu): np. `base × tier²` — tier 1 tani, tier 5 drogi.
+  - **Nałóż afiks** — dodaj losowy afiks z puli pasującej do typu/tieru na wolny slot.
+  - **Reroll afiksu** — wymień istniejący afiks na inny losowy z puli. Koszt wyższy niż nałożenie (~1.3×).
+- **Tabela stałych kosztów (U2 #510, wartości startowe — Numbers Policy):**
+
+| Operacja | T1 | T2 | T3 |
+|---|---|---|---|
+| Nałóż afiks | 150g | 500g | 1200g |
+| Reroll afiksu | 200g | 650g | 1500g |
+| Upgrade T→T+1 | 350g | 700g | — |
+
 - Zużywa złoto z grindu, domyka pętlę z systemem afiksów (CZĘŚĆ X).
 
 > **Dlaczego losowy afiks, nie wybór?** Losowość napędza powtarzalny grind złota (reroll aż trafisz dobry afiks) — to silnik sinka. Wybór afiksu zabiłby powtarzalność.
@@ -3108,7 +3134,7 @@ grind loch / walka → złoto + przedmioty
 | Asortyment dynamiczny sklepu | ❌ sztywny |
 | CHA na kupno | ❌ brak |
 | Unifikacja `value_gp`/`base_price` | ❌ rozjazd (z CZĘŚCIĄ X) |
-| Anti-farm sprzedaży | ❌ brak |
+| Anti-farm sprzedaży | ✅ F12 (#472) — `anti_farm_service.py`; LIMIT=3/24h rzeczywistych; decay 10%/extra; min 10% |
 | Usunięcie martwego loot kodu | ❌ do zrobienia |
 
 ### Zadania implementacyjne
@@ -3117,13 +3143,13 @@ grind loch / walka → złoto + przedmioty
 |---|---------|-----------|
 | F4 | ✅ `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, nie z LLM (#464, commit 100cbef) | — |
 | F5 | ✅ Włączyć + skonfigurować wskrzeszenie jako sink (gold_percent) (#465, commit 34d0d8c) | — |
-| F6 | ✅ Sink afiksów: NPC `is_crafter`, nałóż/reroll afiks (#466, commit 55cfdc9) — `crafter_service.py` + 3 endpointy /craft/*; T1=150g T2=500g T3=1200g; reroll T1=100g T2=350g T3=700g; upgrade T1→T2=350g T2→T3=700g | afiksy (CZĘŚĆ X) |
-| F7 | ✅ Trwałość (#467, commit ad3a585) — spada per uderzenie OTRZYMANE; przy 0: penalty -50% AC/ataku (konfig. `durability_penalty_pct`); naprawa T1=20g T2=50g T3=100g/pt; hooki w combat_service; endpointy /repair-item + /repair-cost | egzemplarze |
+| F6 | ✅ Sink afiksów: NPC `is_crafter`, nałóż/reroll afiks (#466, commit 55cfdc9) — `crafter_service.py` + 3 endpointy /craft/*; T1=150g T2=500g T3=1200g; reroll T1=200g T2=650g T3=1500g (U2 #510 — reroll premium ≈1.3×); upgrade T1→T2=350g T2→T3=700g | afiksy (CZĘŚĆ X) |
+| F7 | ✅ Trwałość (#467, commit ad3a585 + U2 #510) — broń traci 1 pkt przy własnym udanym ataku (`decrement_weapon_durability_on_attack`); zbroja traci 1 pkt przy ciosie OTRZYMANYM (`decrement_armor_durability_on_hit`); przy 0: penalty -50% AC/ataku; naprawa T1=20g T2=50g T3=100g/pt | egzemplarze |
 | F8 | ✅ Napady (#468, commit b7ff32e) — encounter_type='robbery'; `robbery_service.apply_robbery()` kradnie floor(gold * pct/100); turns.py hook; 2 seedy (trakt + miasto); domyślnie 20% | encountery |
 | F9 | ✅ Dynamiczny asortyment sklepu (#469) — `min_level`+`location_tags` na katalogach; `_item_passes_filters(cat, char_level, location_key)`; `location_key` query param w GET /shop; NULL tags = wszędzie | — |
 | F10 | ✅ CHA na kupno (#470) — `_cha_buy_multiplier(cha)`=1-CHA_mod×0.05 (klamp 0.5); `_buy_price(base, cha)`; `get_shop_inventory` zwraca `buy_price_gp` per item + `buy_multiplier`; `buy_item` pobiera zniżoną/podwyższoną cenę → `paid_gp` | — |
 | F11 | ✅ Unifikacja ceny (#471) — `COALESCE(price_gp, value_gp/base_price)` in `_catalog_item`; `_affix_price_bonus(conn, keys)` T1/T2/T3 bonuses; migration backfills from legacy fields | unifikacja przedmiotów (CZĘŚĆ X) |
-| F12 | ✅ Anti-farm (#472) — `anti_farm_service.get_anti_farm_multiplier(conn, char_id, item_key)`; LIMIT=3 sprzedaże/24h; decay 10%/extra; min 10%; `sell_item` taguje gold_log row `meta_json={item_key}` | — |
+| F12 | ✅ Anti-farm (#472) — `anti_farm_service.get_anti_farm_multiplier(conn, char_id, item_key)`; LIMIT=3 sprzedaże/24h; decay 10%/extra; min 10%; `sell_item` taguje gold_log row `meta_json={item_key}` ⚠️ SPRZECZNOŚĆ — "24h" niezdefiniowane (czas realny vs in-game); rozwiązuje U2 | — |
 | F13 | ✅ Background expire wynajmu (#473) — `rental_service.expire_rentals(conn, campaign_id, current_turn)` marks status=expired, deletes inventory_id rows; hooked at start of each turn | — |
 | F14 | ✅ Dead code removed (#474) — `generate_combat_loot` / `claim_loot` / `expire_loot_on_location_change` removed from economy_service (~210 lines) | — |
 | F15 | ✅ Balans walki (#475 KOMPLETNE: `expected_hp_loss_pct` formula; bandyta attack_bonus +3→+4; próg ≥60% HP spełniony; migracja `_apply_f15_balance_tuning`; 6 testów GREEN) | balans walki |
@@ -3183,7 +3209,7 @@ grind loch / walka → złoto + przedmioty
 
 | # | Zadanie | Priorytet |
 |---|---------|-----------|
-| FINF-1 | Potwierdzić host/IP maszyny GPU (RTX 3060) — czy to .170/.16 czy osobny | — |
+| ~~FINF-1~~ | ~~Potwierdzić host/IP maszyny GPU (RTX 3060)~~ ✅ ZAMKNIĘTE — RTX3060=.170, GTX1660=.16 | — |
 | H3 | Pipeline generowania obrazków na GPU (kafelki, portrety) — endpoint/kolejka offline | wraz z lochami |
 | H4 | Lokalny Ollama dla masowego uzupełniania treści w adminie (tryb tworzenia) | wraz z content |
 | H5 | H2 jako opcja per-gracz (toggle), nie globalna | wraz z głosem |
@@ -3250,6 +3276,487 @@ Po każdej sesji gracz powinien móc wskazać co urosło w jego postaci. Nie "mo
 
 ### Zasada 5: Admin-asynchroniczny, nie Admin-nieobecny
 Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na admina żeby działać — ale świat rośnie dzięki adminowi.
+
+---
+
+## CZĘŚĆ AH — FAZA U: Plan Naprawczy Używalności
+
+> **Źródło:** Pełny audyt game_mechanics.md + stanu implementacji, 2026-06-11 (przegląd całego dokumentu pod kątem doświadczenia gracza).
+> **Cel:** Doprowadzić trzy tryby solo — **Nowa Kampania, Gotowa Kampania, Loch kafelkowy** — do stanu używalności. Multiplayer (Faza G) startuje DOPIERO po pozytywnym U27.
+> **Workflow:** Każde zadanie U = GitHub Issue (`[TASK] UNN — tytuł`) wdrażane skillem `/tdd`, weryfikowane `/game-test-player-screenshot` (lub ręcznie wg sekcji "Weryfikacja"). Kolejność wykonania = numeracja.
+>
+> **⚠️ ZAWĘŻENIE ZAKRESU (decyzja Piotra 2026-06-12):** FAZA U obejmuje TYLKO tryby **Nowa Kampania** i **Gotowa Kampania**. Lochy kafelkowe są rozsypane (brak wygenerowanych kafelków) i czekają na osobny redesign — **Blok 6 (U21–U23) ODŁOŻONY**, loch-fragmenty U4/U27 pominięte. Stare issues na GitHubie zamknięte 2026-06-12 — FAZA U startuje z czystym trackerem.
+
+### Filozofia kolejności (prostym językiem)
+
+1. **Porządkujemy mapę zanim ruszymy w drogę** (U1–U3): dokument projektowy kłamie w kilku miejscach — agenci czytający go dostają sprzeczny kontekst. Najtańsza naprawa o największym wpływie na wszystkie kolejne zadania.
+2. **Sprawdzamy jak gra NAPRAWDĘ działa** (U4): zamiast zgadywać, gramy. Wynik = lista faktycznych defektów.
+3. **Uszczelniamy szwy LLM↔mechanika** (U5–U9): największe ryzyko zaufania gracza — narracja mówi co innego niż stan gry.
+4. **Utwardzamy bazę danych** (U10–U14): rdzeń gry. Jeden format, jedna walidacja, jedna ścieżka wejścia treści.
+5. **Pokazujemy graczowi co mechanika robi** (U15–U20): mechanika bez feedbacku w UI dla gracza nie istnieje.
+6. **Dajemy lochom stawkę** (U21–U23), **bezpieczniki ekonomii** (U24–U26).
+7. **Brama do MP** (U27): obiektywna checklista zamiast "wydaje się że działa".
+
+---
+
+### BLOK 1 — Dokument prawdy (U1–U3)
+
+#### U1 — Sprzątanie game_mechanics.md (statusy, kolizje kodów, wiszące refy)
+
+**Cel (prostym językiem):** Ten plik jest głównym kontekstem dla każdego agenta. Dziś przeczy sam sobie w ~8 miejscach — agent może uznać zrobione za niezrobione (i odwrotnie). Po U1: `notes.md` jest JEDYNYM trackerem statusów, game_mechanics.md opisuje design.
+
+**Dla agenta:**
+1. Usuń CZĘŚĆ 8 (backlog priorytetów, ~linie 1042–1096) — w całości nieaktualna względem CZĘŚCI 7; zastąp jednym zdaniem odsyłającym do notes.md.
+2. CZĘŚĆ 6 (onboarding): tabela statusów ❌ → zaktualizuj wg notes.md (E23–E28 ✅).
+3. CZĘŚĆ AD: tabela statusów oznacza C14/C15/C16 jako ❌, FAZA 1 mówi ✅ — zaktualizuj wg notes.md.
+4. Kolizja kodów: zadania D8–D13 i D5 w CZĘŚCI AD znaczą co innego niż w FAZIE 2. Przemianuj zadania z CZĘŚCI AD na kody `AD-1..AD-6` i dodaj je do CZĘŚCI 7 jako otwarte (lobby timeout, skip onboardingu, loading states, idle/aktywny — sprawdź w kodzie co faktycznie wdrożone zanim oznaczysz).
+5. Wiszące refy: "World State (F0)" → "B1–B7"; FINF-1 w CZĘŚCI AG oznacz jako zamknięte; ujednolić historię A10/A11 (jedna wzmianka + odsyłacz).
+6. Dodaj na górze sekcji statusowych regułę: "Statusy zadań żyją WYŁĄCZNIE w notes.md".
+7. NIE rozwiązuj sprzeczności merytorycznych (snapshot lochu, skale trudności, durability) — to U2/U21/U23; w U1 tylko dopisz przy nich `> ⚠️ SPRZECZNOŚĆ — rozwiązuje UNN`.
+
+**Weryfikacja:** Przeczytaj zaktualizowane sekcje; grep `❌` w CZĘŚCI 6/AD nie zwraca nieaktualnych statusów; każdy kod zadania w pliku jest unikalny (skrypt/grep po `| [A-Z]+-?[0-9]+ |`). Bez testów pytest (zmiana dokumentacji).
+
+#### U2 — Uzgodnienie spec↔implementacja ekonomii
+
+> **Zasada projektowa:** Gdy spec i kod się różnią, decydujemy świadomie którą wersję przyjmujemy — i zapisujemy decyzję. Nigdy "kod sobie, dokument sobie".
+
+**Cel:** Cztery rozjazdy między decyzją projektową a wdrożeniem F6/F7. Gracz odczuje je jako niespójność; przyszły agent wdroży "wg specu" i cofnie działający kod.
+
+**Dla agenta — decyzje do wdrożenia:**
+1. **Reroll afiksu** — spec (CZĘŚĆ AF): "koszt wyższy niż nałożenie"; impl: reroll 100g < nałożenie 150g. **Decyzja: reroll = nałożenie × ~1.3** → T1=200g, T2=650g, T3=1500g (wartości startowe, Numbers Policy). Zmień stałe w `crafter_service.py`, zaktualizuj CZĘŚĆ AF.
+2. **Durability** — spec: "zużywa się z używaniem"; impl: per cios OTRZYMANY. **Decyzja: broń traci 1 pkt przy WŁASNYM ataku (trafionym), zbroja 1 pkt przy otrzymanym ciosie.** Zmień hooki w `combat_service.py`/`durability_service.py`.
+3. **Formuła craftingu** — spec "base × tier²" nie odpowiada stałym 150/500/1200. **Decyzja: spec przyjmuje stałe z impl** (usuń formułę z CZĘŚCI AF, wpisz tabelę stałych).
+4. **Zegar anti-farm "24h"** — niezdefiniowany. **Decyzja: czas RZECZYWISTY** (prostszy, odporny na manipulację odpoczynkami). Dopisz do CZĘŚCI AF i do `anti_farm_service.py` (komentarz + nazwa zmiennej), komunikat dla gracza robi U16.
+
+**Weryfikacja:** pytest dla nowych stałych/hooków (rozszerz istniejące testy F6/F7); ręcznie: w grze atakuj 3× — durability broni spada o 3, zbroi o liczbę otrzymanych ciosów; cennik craftera pokazuje reroll droższy od nałożenia.
+
+#### U3 — Feature-flag Multiplayer w hubie
+
+**Cel:** Hub kampanii (D9) pokazuje tryb Multiplayer, a mechaniki MP nie ma ("ZERO integracji" wg CZĘŚCI AC). Gracz klika → trafia na atrapę → traci zaufanie. Chowamy do czasu Fazy G.
+
+**Dla agenta:** Flaga `multiplayer_enabled` w game_config/admin game-modes (jest już mechanizm game_mode_flags — patrz commit f183d61). Default OFF. W hubie: kafelek MP w stanie "Wkrótce" (wyszarzony, bez nawigacji). Admin może włączyć do testów. Nie usuwaj kodu lobby.
+
+**Weryfikacja:** Playwright: hub renderuje kafelek MP jako disabled przy fladze OFF; klik nie nawiguje. Ręcznie: wejdź na DEV, sprawdź hub.
+
+---
+
+### BLOK 2 — Ground truth (U4)
+
+#### U4 — Smoke playtest trzech trybów
+
+**Cel:** Spec mówi co MA działać; sprawdzamy co DZIAŁA. Wynik to lista defektów z priorytetami — ona może przesunąć kolejność dalszych zadań.
+
+**Dla agenta:**
+1. Utwórz 2 issues: `[SMOKE] Nowa Kampania`, `[SMOKE] Gotowa Kampania`. (Loch kafelkowy odłożony do redesignu — patrz zawężenie zakresu na górze CZĘŚCI AH.)
+2. Każdy przetestuj `/game-test-player-screenshot #NNN` (15 tur). Scenariusz MUSI dotknąć: otwarcie → ruch po hexach → rozmowa z NPC → quest (przyjęcie+postęp) → walka pełna → loot → sklep (kupno+sprzedaż) → odpoczynek krótki i długi → wydanie XP → (Gotowa: czy beaty odpalają; Loch: wejście→pokoje→boss→wyjście→cooldown).
+3. Każdy defekt = osobne issue z labelem `smoke-defect` + priorytet: **P0** = blokuje przejście scenariusza, **P1** = psuje doświadczenie (zła narracja vs stan, brak feedbacku), **P2** = kosmetyka.
+4. **P0 naprawiamy NATYCHMIAST (przed kontynuacją FAZY U), P1 wpinamy w odpowiednie zadania U, P2 do backlogu.**
+
+**Weryfikacja:** 3 raporty ze screenshotami w issues; tabela defektów z priorytetami jako komentarz zbiorczy; decyzja Piotra które P1 wchodzą do FAZY U.
+
+---
+
+### BLOK 3 — Pancerz na LLM: spójność narracja↔stan (U5–U9)
+
+> **Zasada projektowa:** Gracz wybacza grze błąd mechaniczny; nie wybacza, gdy gra twierdzi że coś się stało, a to się nie stało. Każdy tag LLM przechodzi przez JEDEN parser, każde odrzucenie tagu zostawia ślad w narracji i w logu.
+> **Dlaczego?** Dziś każdy tag ma własny parser i własne (lub żadne) zachowanie przy błędzie. Odrzucony ITEM_CREATE = przedmiot istnieje w fikcji, nie istnieje w plecaku — dokładnie ten problem zaufania, który World State miał wyeliminować.
+> **Co odrzucono?** "Lepszy prompt" — zmniejsza częstość, nie eliminuje. Przy 1000 tur/mies. nawet 1% błędów = codzienny zgrzyt.
+
+#### U5 — Centralny parser tagów + polityka malformed output
+
+**Cel:** Jedno miejsce, które rozumie wszystkie tagi `[TAG:...]`, jeden schemat błędów, jeden log. Fundament dla U6–U9.
+
+**Dla agenta:**
+1. Nowy moduł `backend/app/services/llm_tag_parser.py`: rejestr tagów (nazwa → schema pól → handler). Przenieś TUTAJ parsowanie wszystkich istniejących tagów (QUEST_SUGGEST, SPEND_GOLD, GRANT_ITEM/ITEM_CREATE, SKILL_CHECK, NPC_MEMORY, NARRATIVE_EVENT/SEED, BEAT_COMPLETE/ARC_ADVANCE, zone/combat tagi) — bez zmiany ich zachowania (czysty refactor + testy charakteryzujące).
+2. Wynik parsowania per tag: `ok` / `invalid_schema` / `invalid_reference` (klucz nie istnieje w DB) / `rejected_by_gate`.
+3. Tabela `llm_tag_errors` (campaign_id, turn_number, tag_raw, error_type, ts) — INSERT przy każdym nie-`ok`. To nasza telemetria halucynacji (wyciągnięta z CZĘŚCI 10b, bo potrzebna TERAZ).
+4. Polityka malformed (tag ze złą składnią w streamie): tag wycinany z tekstu dla gracza (już się dzieje), logowany; NIE robimy retry całej tury (za drogie) — korektę narracji robi U6.
+5. Admin: licznik błędów tagów per kampania w Campaign Monitor (mała kolumna/badge).
+
+**Weryfikacja:** pytest: każdy istniejący tag parsuje się identycznie jak przed refactorem (testy charakteryzujące przechodzą bez zmian); sztuczny malformed tag → wiersz w `llm_tag_errors`, gracz nie widzi surowego tagu. Ręcznie: admin widzi licznik.
+
+#### U6 — Uogólniony wzorzec odmowy (korekta narracji)
+
+**Cel:** F4 zrobił to dla złota (`build_refusal_text`): brak złota → narracja mówi "nie stać cię". Uogólniamy na WSZYSTKIE tagi: jeśli mechanika odrzuca tag, gracz dostaje zdanie korygujące — fikcja i stan znów się zgadzają.
+
+**Dla agenta:**
+1. W `llm_tag_parser` (U5): każdy typ odrzucenia ma szablon korekty doklejany do narracji tury, np.:
+   - GRANT_ITEM/ITEM_CREATE odrzucony → "(Przedmiot okazuje się bezwartościowy/nie trafia do twojego plecaka.)" — krótkie, dyplomatyczne, konfigurowalne per tag w jednym miejscu.
+   - QUEST_SUGGEST odrzucony → brak wpisu w dzienniku + log (bez korekty w narracji — quest "narracyjny" może istnieć, po prostu bez XP; to zachowanie z CZĘŚCI 3).
+   - SKILL_CHECK z DC poza skalą → DC klampowany (U7), bez korekty.
+2. Następna tura: do kontekstu LLM dołącz informację `ostatnio odrzucone tagi: [...]` żeby LLM nie kontynuował nieistniejącego wątku (np. dalej opisywał ognisty miecz).
+3. Szablony po polsku, ton neutralny — gracz NIE powinien czuć "błędu systemu".
+
+**Weryfikacja:** pytest per typ odrzucenia (tekst korekty obecny w finalnej narracji); `/game-test-player`: sprowokuj LLM do wymyślenia przedmiotu ("daj mi legendarny miecz") → narracja sama prostuje, plecak czysty, `llm_tag_errors` ma wpis.
+
+#### U7 — SKILL_CHECK safety net + DC lock
+
+**Cel:** Po usunięciu `trigger_keywords` test umiejętności odbywa się TYLKO gdy LLM wyemituje tag. Gdy zapomni — gracz skrada się "za darmo" albo ginie bez rzutu, bez śladu. Przywracamy siatkę bezpieczeństwa po stronie mechaniki + blokujemy losowość DC.
+
+**Dla agenta:**
+1. **DC lock:** DC z tagu klampowany do najbliższej wartości z {8, 12, 16, 20, 24}. Log oryginału do `llm_tag_errors` (typ `dc_clamped`) gdy różnica > 0.
+2. **Safety net:** rozszerz parser intencji (B4) o klasyfikację kategorii ryzyka: skradanie, wspinaczka/skok, kradzież, kłamstwo/perswazja pod presją, rozbrajanie/manipulacja mechanizmem, akrobatyka. Listy słów kluczowych per kategoria w game_config (edytowalne z admina), z mapą kategoria → skill + domyślne DC (Medium 12).
+3. Flow: intencja ryzykowna wykryta PRZED LLM → przekaż LLM instrukcję "ta akcja wymaga testu X, wstaw [SKILL_CHECK]" → jeśli odpowiedź NIE zawiera tagu → backend sam wystawia test (route skill_test, DC z mapy) i loguje `skill_check_forced`.
+4. Nie blokuj fałszywych pozytywów twardo: jeśli LLM uzna akcję za trywialną i da [SKILL_CHECK: auto_success] (nowe pole), backend odpuszcza test — ale to LLM musi jawnie zadeklarować, nie przemilczeć.
+
+**Weryfikacja:** pytest: (a) DC 17 → 16; (b) intencja "skradam się obok strażnika" bez tagu od LLM → wymuszony test; (c) zwykła rozmowa nie triggeruje. `/game-test-player`: 3 ryzykowne akcje → 3 rzuty widoczne w UI; log `skill_check_forced` policzalny.
+
+#### U8 — Beat fallback + Story Gravity dokończone
+
+**Cel:** Postęp fabuły wisi dziś na tym, że LLM wyemituje BEAT_COMPLETE. Gdy zapomni — gracz wykonał zadanie, a gra tego "nie zauważyła". Dajemy beatom obiektywne warunki (jak questom) i kończymy Story Gravity.
+
+**Dla agenta:**
+1. `required_beats` w szablonach dostają opcjonalne pola `objective_type` + `objective_value` (enum jak w questach: kill_enemy/visit_location/talk_to_npc/find_item). Backend auto-kompletuje beat gdy warunek spełniony (reuse mechanizmu questów C11) — BEAT_COMPLETE od LLM staje się dodatkowym, nie jedynym, źródłem.
+2. Beaty bez objective (czysto narracyjne) zostają na LLM, ale: licznik "beat wisi N tur" widoczny w admin Campaign Monitor (Plan GM tab).
+3. Story Gravity: zdefiniuj poziomy w jednym miejscu: L1 (5 tur) = miękki hint w kontekście; L2 (10) = mocna instrukcja sceny; L3 (15) = forced scene. **Decyzja: L3 domyślnie ON dla Gotowych Kampanii** (gracz wybrał historię — chce ją przeżyć), **OFF dla Nowej Kampanii** (wolna eksploracja). Progi konfigurowalne w admin.
+4. Tury w lochu NIE liczą się do stagnacji beatu (gracz świadomie farmi).
+
+**Weryfikacja:** pytest: beat z objective_type=talk_to_npc kompletuje się po rozmowie bez tagu LLM; licznik stagnacji rośnie i resetuje. `/game-test-player-screenshot` na Gotowej Kampanii: wykonaj cel beatu ignorując sugestie → beat zaliczony w admin Plan GM.
+
+#### U9 — GM Plan hardening
+
+**Cel:** Generacja GM Planu przy "Nowa Kampania" to jeden call LLM. Malformed JSON = zepsute pierwsze wrażenie nowego gracza.
+
+**Dla agenta:**
+1. Walidacja struktury GM Planu po generacji (wymagane pola arc/scenes/hooks).
+2. Fail → 1 retry z komunikatem błędu w prompcie ("poprzednia odpowiedź nie była poprawnym JSON: ...").
+3. Drugi fail → fallback: minimalny plan startowy z szablonu (generic opening arc z game_config) + flaga `plan_degraded=true`; kampania STARTUJE zawsze. Admin widzi flagę w Campaign Monitor; plan można zregenerować z Warsztatu.
+4. Gracz przy degradacji nie widzi błędu — najwyżej prostszy start.
+
+**Weryfikacja:** pytest z mockiem LLM zwracającym śmieci → kampania powstaje z fallbackiem + flagą. Ręcznie: nowa kampania startuje < 30 s nawet przy wymuszonym błędzie (admin może symulować złym presetem).
+
+---
+
+### BLOK 4 — Baza danych jako rdzeń (U10–U14)
+
+> **Zasada projektowa:** Baza treści (przedmioty, bronie, wrogowie, NPC, zaklęcia, afiksy) jest sercem gry: silnik i LLM TYLKO z niej czytają. Jeden format efektów, jedna walidacja, jedna ścieżka wejścia — niezależnie czy treść wchodzi z seedów SQL, z admin UI, czy z LLM (pending).
+> **Dlaczego?** To największa obawa właściciela projektu i słusznie: dziś istnieją 3 formaty efektów i 3 tabele przedmiotów; każda ścieżka zapisu waliduje (lub nie) po swojemu. Bez tego fundamentu każda nowa treść to potencjalny bug.
+
+#### U10 — Effect schema lockdown
+
+**Cel:** Jeden, zamknięty format Effect Object. Wszystko co wchodzi do bazy przechodzi przez tę samą walidację — admin, LLM i seedy nie mogą zapisać śmiecia.
+
+**Dla agenta:**
+1. Plik `backend/app/schemas/effect_schema.json` (JSON Schema) — jedyne źródło prawdy formatu. Reguły domykające dzisiejsze dziury CZĘŚCI X:
+   - DOT: wyłącznie typ `damage_over_time` (pola: dice|value, duration_turns). Usuń alternatywę `damage`+trigger `per_turn`.
+   - Enum `stat` w `stat_mod`: 7 statystyk + `ac`, `attack_bonus`, `damage_bonus`, `initiative` — nic więcej.
+   - Nowy typ `skip_turn` (dla conditions typu Ogłuszony) — koniec modelowania stunów triggerem `on_equip`.
+   - `heal_hp`: dice i value łączne = `dice + value` (jak 2d6+4); zapisz semantykę w schemacie.
+2. Walidator `validate_effect_json()` wpięty we WSZYSTKIE ścieżki zapisu: admin save (content/affixes/conditions), smart_entry save, approve pending, crafter apply, import configu.
+3. Migracja-normalizator: przejedź istniejące `effect_json` we wszystkich tabelach, przepisz stare formaty na nowy, zrzuć raport rekordów nienormalizowalnych (do ręcznej decyzji, NIE kasuj).
+4. Zaktualizuj DSL dla LLM (prompt Smart Entry / ITEM_CREATE) do zamkniętego formatu.
+
+**Weryfikacja:** pytest: walidator odrzuca każdy stary format i przyjmuje nowy; migracja na kopii bazy DEV = 0 rekordów zgubionych (count before/after). Ręcznie: zapis przedmiotu z błędnym efektem w admin → czytelny komunikat błędu zamiast cichego zapisu.
+
+#### U11 — Unifikacja przedmiotów: 3 tabele → `game_items`
+
+**Cel:** weapons/items/consumables w jednej tabeli z polem `kind` — koniec z trzema schematami na jeden koncept "przedmiot". To NAJWIĘKSZE zadanie fazy — wdrażać jako 3 sub-issues, gra działa po każdym etapie.
+
+**Dla agenta (etapy = osobne issues U11a/b/c):**
+1. **U11a — schema + migracja + backfill:** tabela `game_items` (key, kind ENUM(weapon/armor/item/consumable), label, description, price_gp, effect_json wg U10, equip_slot, rarity, min_level, location_tags, created_by, approved, …). Migracja kopiuje 3 stare tabele → `game_items` (mapowanie kolumn udokumentowane w migracji). Stare tabele ZOSTAJĄ (read path bez zmian). FK `character_inventory`/loot_entries — przygotuj kolumny docelowe, nie przepinaj.
+2. **U11b — przełączenie odczytu:** serwisy (shop, loot, inventory, combat, crafter, durability) czytają z `game_items`. Stare tabele stają się read-only (trigger lub kod). Pełny regression pakiet inventory/shop/loot.
+3. **U11c — przełączenie zapisu + admin:** admin UI (content.js, smart_entry), pending approve i seedy piszą do `game_items`. Stare tabele oznaczone DEPRECATED, drop po 2 tygodniach stabilności (osobna decyzja Piotra).
+
+**Weryfikacja per etap:** U11a: SELECT count ze starych = count nowej per kind. U11b: `/game-test-player` pełny cykl sklep→kupno→ekwipunek→walka→loot→sprzedaż bez regresji. U11c: nowy przedmiot z admin UI ląduje w `game_items` i działa w grze.
+
+#### U12 — db_lint: audyt integralności bazy
+
+**Cel:** Skrypt który jednym poleceniem mówi, czy baza treści jest zdrowa. Uruchamiany ręcznie, przy deployach i z admin panelu.
+
+**Dla agenta:**
+1. `scripts/db_lint.py` (uruchamialny też w kontenerze): sprawdza (a) FK wiszące (loot_table_key bez tabeli, enemy bez loot table, spell bez configu…), (b) sieroty (rekordy nieużywane nigdzie — raport, nie błąd), (c) wymagane pola NULL, (d) effect_json niezgodny ze schematem U10, (e) duplikaty kluczy, (f) wartości poza zakresem (HP ≤ 0, ceny < 0, weight poza 1–100), (g) enum violations (kind, rarity, objective_type).
+2. Output: raport tekstowy + exit code (0 czysto / 1 warnings / 2 errors). Endpoint `GET /api/admin/db-lint` + przycisk w admin Narzędzia z renderem raportu.
+3. Wpięcie w `deploy_dev.sh` jako krok informacyjny (nie blokujący).
+
+**Weryfikacja:** pytest na spreparowanej bazie z każdym typem błędu → wykryty; przycisk w admin działa; czysta baza DEV = exit 0 (po naprawie znalezionych — wynik pierwszego biegu to lista zadań).
+
+#### U13 — Content pipeline: jedna ścieżka, lint seedów, dokumentacja
+
+**Cel:** Treść wchodzi do gry trzema drogami (seedy SQL `data/seeds/01–15`, admin UI, LLM pending). Wszystkie trzy mają gwarantować ten sam standard — i być opisane tak, żeby Piotr wiedział którą drogą co dodawać.
+
+**Dla agenta:**
+1. Skrypt importu seedów przepuszcza każdy rekord przez walidatory U10 + lint U12 (import czysty albo raport odrzutów).
+2. Przejedź WSZYSTKIE istniejące seedy 01–15 przez lint; napraw znalezione braki (FK, formaty efektów).
+3. `docs/CONTENT_PIPELINE.md` (prostym językiem, dla Piotra): które tabele = treść gry; trzy drogi wejścia i kiedy której użyć; jak działa pending/approve; jak dodać nowy przedmiot/wroga/NPC krok po kroku (admin UI); jak zrobić eksport/backup treści.
+4. `created_by='seed'` dla rekordów seedowych (reguła już ustalona — wyegzekwuj w plikach).
+
+**Weryfikacja:** lint na świeżo zaimportowanych seedach = 0 errors; dokument przeczytany i zatwierdzony przez Piotra ("rozumiem każdy krok").
+
+#### U14 — Pełny reset bohatera przy nowej kampanii
+
+**Cel:** C19 resetuje tylko HP — Uczony może zacząć nową kampanię z 0 many, bohater z aktywnym zatruciem. Drobiazg, psuje pierwsze 10 minut.
+
+**Dla agenta:** Przy przypisaniu bohatera do nowej kampanii: `hp_current=hp_max`, `current_mana=max_mana`, `conditions=[]`, wyczyść stany tymczasowe (rentale, sandbox flagi jeśli wiszą). NIE ruszaj XP/złota/ekwipunku/zaklęć.
+
+**Weryfikacja:** pytest (scholar z 0 many + poisoned → nowa kampania → mana full, conditions puste, złoto bez zmian); ręcznie przez UI.
+
+---
+
+### BLOK 5 — Widoczność mechanik (U15–U20)
+
+> **Zasada projektowa (rozszerzenie Zasady 3):** Mechanika niewidoczna w UI dla gracza NIE ISTNIEJE. Każdy sink, kara i bonus ma swój sygnał w interfejsie ZANIM uderzy.
+
+#### U15 — Widoczne rany wroga
+
+**Cel:** Symetria ran (C5) miała stworzyć taktykę "skup ogień na rannym" — ale gracz nie widzi stanu wroga, więc taktyka nie istnieje.
+
+**Dla agenta:**
+1. UI walki: przy każdym wrogu etykieta tieru rany (np. "Draśnięty / Ranny / Ciężko ranny") + kolor; w initiative chips kropka koloru tieru. Dane już są (hp wroga w combatants).
+2. **Decyzja:** etykieta pojawia się TYLKO gdy niesie informację mechaniczną. Tier 26–50% ("Ranny") ma dziś karę 0 — przypisz mu karę −1 (wartość startowa, Numbers Policy) ALBO usuń etykietę z tego progu. Preferowana opcja: kara −1 (spójna drabina kar).
+3. Tooltip/karta onboardingu (U20) tłumaczy: "ranni wrogowie walczą słabiej — i ty też".
+
+**Weryfikacja:** pytest progi→etykieta→kara; Playwright: po zbiciu wroga poniżej progu etykieta widoczna; `/game-test-player-screenshot` walka z 2 wrogami — screenshot pokazuje różne tiery.
+
+#### U16 — Cost preview + durability UI + komunikat anti-farm
+
+**Cel:** Gracz ma widzieć cenę PRZED akcją i stan zużycia ZANIM broń pęknie. Anti-farm ma się tłumaczyć, nie wyglądać jak bug.
+
+**Dla agenta:**
+1. **Durability:** w ekwipunku pasek/procent przy broni i zbroi; w walce ostrzeżenie przy ≤20% ("Twój miecz ledwo trzyma się rękojeści"); przy 0 jasny stan "Pęknięta (−50%)" na karcie przedmiotu.
+2. **Cost preview:** każda płatna akcja (naprawa, nałożenie/reroll afiksu, wskrzeszenie, usługi SPEND_GOLD typu nocleg) pokazuje koszt + saldo po transakcji w UI PRZED potwierdzeniem (endpointy kosztów już istnieją — repair-cost itd.; brakuje warstwy UI).
+3. **Anti-farm:** przy sprzedaży obniżonej — komunikat "Cena obniżona (nadpodaż): 12 gp → 8 gp. Handlarz kupił już 3 szt. w ciągu doby."
+4. Karty/teksty po polsku, ton diegetyczny (świat gry, nie "system").
+
+**Weryfikacja:** Playwright: repair pokazuje koszt przed kliknięciem; sprzedaż 4. sztuki pokazuje komunikat nadpodaży. `/game-test-player-screenshot`: screenshot ostrzeżenia durability w walce.
+
+#### U17 — Celebracja dropu afiksowego + porównanie
+
+**Cel:** Afiksowany drop to główna nagroda grindu — dziś wygląda jak każdy inny wiersz lootu. Nagroda której nie czuć, nie motywuje.
+
+**Dla agenta:**
+1. Karta dropu po walce/skrzyni: przedmiot z afiksem wyróżniony (kolor rarity, nazwa afiksu, krótki opis efektu).
+2. Porównanie: przy dropie broni/zbroi pokaż diff z aktualnie założonym (dmg/AC/efekty: strzałki ↑↓). Przycisk "Załóż" z poziomu karty dropu.
+3. Bez animacji-fajerwerków na start — wystarczy wyraźna karta (Numbers Policy: mierzymy czy gracze zakładają dropy).
+
+**Weryfikacja:** Playwright: drop z afiksem renderuje kartę z diff; `/game-test-player-screenshot` w lochu — screenshot karty dropu.
+
+#### U18 — Dziennik gracza
+
+**Cel:** Cała pamięć fabuły (questy, obietnice, wydarzenia) jest dziś tylko po stronie LLM/admina. Gracz nie ma jak sprawdzić "co obiecałem Marcie" — ani wychwycić, że LLM coś pomylił. Dziennik = zaufanie + motywacja.
+
+**Dla agenta:**
+1. Zakładka/panel "Dziennik" w UI gracza, 3 sekcje: **Zadania** (aktywne + ukończone, z celami), **Wątki** (narrative seeds/obietnice ze statusem — tylko te oznaczone `player_visible`), **Kronika** (najważniejsze wydarzenia: NARRATIVE_EVENT, ukończone beaty, śmierci NPC — odwrotna chronologia).
+2. Backend: endpoint `GET /api/campaigns/{id}/journal` składający dane z character_quests + Narrative State + eventów. Pole `player_visible` na seeds (default: true dla seeds pochodzących z akcji gracza, false dla sekretów GM Planu).
+3. Wpis kroniki ma numer tury — klik przewija/odsłania tę turę w historii czatu (jeśli prosty do zrobienia; inaczej sam numer).
+
+**Weryfikacja:** pytest endpointu (kompozycja, filtr player_visible); `/game-test-player`: po 10 turach z questem i obietnicą NPC dziennik zawiera oba wpisy; sekret z GM Planu NIE wycieka.
+
+#### U19 — Recap "Poprzednio w Twojej przygodzie…"
+
+**Cel:** Gracz-dorosły (target gry!) wraca po tygodniu i nie pamięta nic. MP ma catch-up (G11) — solo nie ma niczego. Najtańszy duży win retencji.
+
+**Dla agenta:**
+1. Trigger: wejście do kampanii, gdy od ostatniej tury minęło > 24h realnych.
+2. Karta recap przed pierwszą turą: chapter_summary (już istnieje z E6) + ostatnie 2 tury skrócone + aktywne questy z dziennika (U18). Bez nowego callu LLM jeśli chapter_summary świeże; jeśli starsze niż N tur — jeden call kompresujący.
+3. Przycisk "Gram dalej" zamyka kartę. Karta dostępna potem z menu ("Przypomnij mi").
+
+**Weryfikacja:** pytest triggera (mock czasu); ręcznie: zmień `created_at` ostatniej tury na -2 dni w DB DEV, wejdź do kampanii → recap się pokazuje.
+
+#### U20 — Onboarding: poprawki triggerów kart
+
+**Cel:** Karty just-in-time (E24/E25) działają, ale dwa triggery uczą ZA PÓŹNO, a nowe mechaniki F (durability, afiksy, napady) nie mają kart.
+
+**Dla agenta:**
+1. Karta death saves: trigger przy pierwszym spadku HP < 25% (zamiast przy pierwszym rzucie na śmierć). Treść: co się stanie przy 0 HP, jak działa drabina śmierci, że wskrzeszenie kosztuje.
+2. Karta XP: dopisz JAK wydać ("kliknij Odpocznij → Ucz się w bezpiecznej lokacji") — z nazwą przycisku 1:1 jak w UI.
+3. Nowe karty: durability (pierwszy spadek poniżej 50%), afiksy (pierwszy afiksowany drop), napady (pierwsze wejście na dziki hex ze złotem > 100 gp), crafter (pierwsza rozmowa z NPC is_crafter).
+4. Karta rzutu: ujednolić treść z faktycznym breakdownem w UI (d20 + stat + skill + proficiency — te same słowa co w roll card).
+
+**Weryfikacja:** pytest triggerów (seen_mechanics); `/game-test-player-screenshot`: nowa postać, zbij HP do <25% → karta widoczna na screenie; biblioteka kart zawiera nowe.
+
+---
+
+### BLOK 6 — Lochy: stawka i uczciwość (U21–U23)
+
+#### U21 — Semantyka snapshotu + exploit porzucenia
+
+> **Zasada projektowa:** Loch ma stawkę: zasoby zużyte w środku są zużyte naprawdę. Snapshot chroni przed UTRATĄ (śmierć nie zabiera ci postępu sprzed lochu) — nie przed KOSZTEM.
+> **Dlaczego?** Dziś diagram przywraca snapshot także przy wygranej: mikstury "wypite za darmo", walka w pokoju 3 nie znaczy nic dla pokoju 7 — zero zarządzania zasobami, zero napięcia.
+> **Co odrzucono?** Pełny hardcore (śmierć w lochu = permadeath) — sprzeczny z ideą lochu jako bezpiecznego farmingu między sesjami fabuły.
+
+**Dla agenta:**
+1. **Jedna definicja snapshotu** (zamiast trzech w dokumencie): `{hp, mana, conditions, inventory, gold}` — zapisywany przy wejściu.
+2. **Wygrana:** snapshot IGNOROWANY. Stan po lochu = stan faktyczny (zużyte mikstury zużyte, obrażenia zostają do wyleczenia, durability zużyta) + nagrody + cooldown startuje.
+3. **Śmierć:** pełny restore snapshotu, nagrody przepadają, cooldown startuje (bez kary dodatkowej — strata czasu wystarczy).
+4. **Porzucenie:** restore snapshotu, nagrody przepadają, cooldown = 50% normalnego. Modal potwierdzenia: "Opuścisz loch: stracisz zdobyte łupy (X gp, N przedmiotów). Wrócić będziesz mógł za Yh."
+5. Zaktualizuj CZĘŚĆ AA (diagram + tabelki) do tej semantyki.
+
+**Weryfikacja:** pytest 3 ścieżek (win/death/abandon) na inventory+gold+cooldown; `/game-test-player-screenshot`: run z wypiciem mikstury → po wygranej mikstury brak, loot jest.
+
+#### U22 — Reguły kafelków: boss, drzwi, trap/riddle, fallback
+
+**Cel:** Wybór drzwi ma coś znaczyć, boss ma przewidywalną regułę pojawienia się, pułapki i zagadki mają mechanikę (dziś są tylko nazwane).
+
+**Dla agenta:**
+1. **Boss:** pojawia się po przejściu `rooms` pokoi (pole z seeda lochu); pokój bossa zawsze ostatni; licznik "pokój X/Y" w UI runu.
+2. **Drzwi znaczą:** przy wejściu do pokoju backend pre-rolluje typ pomieszczenia za KAŻDYMI drzwiami (combat/treasure/trap/riddle/empty) i daje LLM hint do narracji ("zza północnych drzwi słychać zgrzyt metalu"). Wybór gracza = realna decyzja na podstawie poszlak.
+3. **Trap:** test (DEX lub WIS wg typu, DC wg trudności lochu ze skali 8–24); fail = obrażenia 1d4–1d8 wg trudności + ewentualna condition; NIGDY soft-lock.
+4. **Riddle:** max 3 próby (odpowiedź tekstowa oceniana przez LLM z tolerancją); po 3 failach pokój przechodzi w combat ALBO przejście kosztuje obrażenia — nigdy blokada runu.
+5. **Fallback:** brak kafelka pasującego do drzwi/typu → generyczny opis tekstowy bez obrazka (run nigdy nie staje na braku assetu); log braku do admin (lista kafelków do dorobienia).
+
+**Weryfikacja:** pytest pre-rollu i fallbacku; pełny run `/game-test-player-screenshot` z co najmniej 1 trapem i 1 riddle; sztucznie usuń kafelki danego typu → run dalej działa.
+
+#### U23 — Jedna skala trudności + capy skalowania wrogów
+
+**Cel:** Dwie sprzeczne tabele trudności lochów w dokumencie; skalowanie wrogów ×0.75–×2.0 bez capów per typ = goblin "rośnie" z graczem w nieskończoność i progresja nie smakuje.
+
+**Dla agenta:**
+1. Jedna skala trudności D1–D5 (przyjmij wersję z E17, usuń drugą tabelę z CZĘŚCI AA; mapowanie difficulty→rarity z E17 zostaje).
+2. Kolumna `max_scale` na `game_config_enemies` (default 1.5). Skalowanie enemy: `min(global_scale(level), max_scale)`. Sugerowane starty: trash (goblin/szczur) 1.3, standard 1.5, elite 1.8, boss 2.0 — w seedach.
+3. Efekt projektowy: gracz 10 lvl wraca do lochu D1 i czuje siłę (wrogowie scapowani nisko), a loch D4 dalej wyzwaniem. `min_level` lochu odzyskuje sens.
+4. db_lint (U12): warning gdy enemy bez `max_scale`.
+
+**Weryfikacja:** pytest skalowania z capem; ręcznie: postać L8 w lochu D1 — walki trywialne (HP wrogów w logu walki niskie), w D4 — nie.
+
+---
+
+### BLOK 7 — Ekonomia: bezpieczniki (U24–U26)
+
+#### U24 — Napad: counterplay i granice
+
+> **Zasada projektowa:** Kara bez możliwości reakcji to nie wyzwanie, to podatek. Każdy sink karzący ma: sygnał ostrzegawczy, akcję obronną i dolną granicę.
+
+**Dla agenta:**
+1. **Ostrzeżenie:** napad poprzedzony sygnałem w narracji turę wcześniej ("ktoś cię obserwuje…") + tag mechaniczny.
+2. **Obrona:** rzut (WIS percepcja lub DEX wg wariantu napadu, DC wg poziomu) — sukces = unikasz lub gonisz złodzieja (walka o odzyskanie); porażka = strata.
+3. **Granice:** napad NIE odpala się gdy złoto < 50 gp; max 1 napad / 24h realne / kampania; % kradzieży bez zmian (20% — wartość startowa).
+4. (Opcjonalnie, jeśli tanie przy okazji:) usługa "skrytka" u karczmarza — zdeponuj złoto za 2% — pierwszy krok pod bank; jeśli nie-tanie, osobne issue później.
+
+**Weryfikacja:** pytest progu biedy + limitu częstości + ścieżki obrony; `/game-test-player`: sprowokuj napad (dziki hex, dużo złota) → ostrzeżenie w turze poprzedzającej widoczne, rzut obronny się odbywa.
+
+#### U25 — Pity timer afiksów
+
+**Cel:** Czysty RNG przy niskiej przepustowości dropów (narracyjne RPG ≠ Diablo) = możliwe długie serie bez nagrody. Gwarancja dolna chroni motywację grindu.
+
+**Dla agenta:**
+1. **Drop:** licznik boss-killów bez dropu afiksowego per postać; po 3. boss-killu bez afiksu → następny drop broni gwarantowanie z afiksem T1+ (licznik reset). Wartości startowe, konfigurowalne w game_config.
+2. **Reroll u craftera:** po 3 rerollach tego samego przedmiotu bez zmiany tieru afiksu → 4. reroll gwarantuje inny afiks niż obecny. (Chroni przed "zapłaciłem 4× i mam to samo".)
+3. Liczniki w sheet_json lub osobnej tabelce — przeżywają restart.
+
+**Weryfikacja:** pytest deterministyczny (mock rng): 3 bossy bez afiksu → 4. drop ma afiks; 3 rerolle bez zmiany → 4. inny. Ręcznie w sandboxie admina.
+
+#### U26 — Telemetria ekonomii (economy_log)
+
+**Cel:** Bez danych każdy balans (F15/F16 i przyszłe) jest "na czuja". Minimalny log: skąd złoto przychodzi i dokąd wychodzi. To wyciągnięcie absolutnego minimum z odłożonej CZĘŚCI 10b.
+
+**Dla agenta:**
+1. Tabela `economy_log` (id, character_id, campaign_id, delta_gold, source ENUM(loot/sell/buy/service/robbery/resurrection/repair/craft/quest_reward/other), meta_json, created_at).
+2. Hook w KAŻDYM miejscu zmiany złota (centralna funkcja `change_gold(character_id, delta, source, meta)` — refactor istniejących rozproszonych UPDATE'ów na tę funkcję).
+3. Admin Overview: kafelek "Ekonomia 7 dni" — suma wpływów/wydatków per source (prosta tabelka, bez wykresów na start).
+4. db_lint: warning gdy saldo postaci ≠ suma delt (drift detection).
+
+**Weryfikacja:** pytest: każda ścieżka zmiany złota loguje wiersz; suma delt = saldo po sekwencji operacji; admin kafelek renderuje.
+
+---
+
+### BLOK 8 — Brama do Multiplayera (U27)
+
+#### U27 — Acceptance checklist + re-playtest → go/no-go
+
+**Cel:** Obiektywna odpowiedź na pytanie "czy gra jest używalna", zamiast wrażenia. Pozytywny wynik = start Fazy G (MP).
+
+**Dla agenta:**
+1. Plik `docs/ACCEPTANCE_USABILITY.md` — checklista per tryb. Minimum:
+   - **Wspólne:** nowa postać + onboarding bez pomocy zewnętrznej; 15 tur bez ani jednej sprzeczności narracja↔stan (weryfikacja po llm_tag_errors = 0 nieobsłużonych); pełny cykl walki; quest przyjęty i ukończony automatycznie; zakup+sprzedaż z poprawnymi cenami; odpoczynek + wydanie XP (każdy archetyp); śmierć → ekran śmierci → wskrzeszenie; recap po powrocie; dziennik zgodny ze stanem gry.
+   - **Świat i ruch (Blok 9):** min. 3 zmiany hexa w 15 turach — co najmniej 1 klikiem na mapie i 1 przez tekst; `current_hex` w World State = podświetlony hex na mapie po każdej turze; LLM użył ≥1 gotowej lokacji z bazy (key w logu); 0 duplikatów pending dla lokacji istniejących w bazie; wejście do lokacji ładuje NPC z bazy do sceny; log `travel_narrated_without_move` = 0.
+   - **Gotowa Kampania:** beaty odpalają się (min. 2 w 15 tur, w tym 1 przez fallback U8); Story Gravity L1 widoczne przy stagnacji.
+   - **Loch kafelkowy:** ⏸ ODŁOŻONE (zawężenie zakresu 2026-06-12) — kryteria wrócą po redesignie lochów: pełny run win/death/abandon z semantyką U21; trap + riddle przechodzalne; pity timer; cooldown.
+2. Wykonaj checklistę przez `/game-test-player-screenshot` (3 runy, po jednym na tryb, każdy archetyp użyty min. raz łącznie) + raport zbiorczy jako issue `[GATE] Go/No-Go MP`.
+3. Każdy fail = issue + naprawa + retest TEGO punktu. Wszystko zielone → Piotr podejmuje decyzję o starcie Fazy G.
+
+**Weryfikacja:** Raport zbiorczy ze screenshotami; decyzja go/no-go zapisana w issue i w notes.md.
+
+---
+
+### BLOK 9 — Świat: hex ↔ lokacje ↔ ruch (U28–U32)
+
+> **Zasada projektowa:** Świat jest grafem mechanicznym: hexy, lokacje na hexach, NPC w lokacjach. Mechanika rozstrzyga GDZIE gracz jest i CO tam zastaje — LLM dostaje fakty i narruje. LLM nigdy nie wybiera ani nie tworzy miejsca "w locie"; może najwyżej zgłosić propozycję, gdy mechanika potwierdzi, że nic pasującego nie istnieje.
+> **Dlaczego?** Audyt kodu (2026-06-11) wykazał, że obecny system jest LLM-driven: ruch istnieje tylko przez `[LOCATION_INTENT]` od LLM (łańcuch 4 kruchych ogniw: emisja tagu → fuzzy match 80% → lokacja ma hex → sync current_hex), klik na mapie to tylko podgląd, a LLM nie dostaje żadnych kandydatów z bazy lokacji (tylko `known_locations` = już odwiedzone) — więc wymyśla nowe zamiast używać przygotowanych. To odwrócenie Zasady #1 w najważniejszym podsystemie gry.
+> **Co odrzucono?** "Lepszy prompt nakazujący używać bazy" — LLM nie może użyć rekordów, których nie widzi; a gdy je zobaczy bez twardej walidacji, nadal będzie dryfował. Naprawa musi być mechaniczna.
+> **Kolejność wykonania:** Blok 9 wchodzi PO Bloku 3 (U5–U9 — korzysta z centralnego parsera i wzorca korekt), PRZED Blokiem 4. To rdzeń gry — ważniejszy niż widoczność i ekonomia.
+
+#### U28 — Placement engine: lokacje osadzane na hexach mechanicznie
+
+**Cel (prostym językiem):** Dziś lokacje "pływają" — admin ręcznie linkuje je do hexów, a lokacje tworzone przez LLM często nie mają hexa wcale. Po U28 to backend osadza lokacje na mapie wg reguł terenu — baza lokacji staje się tym, czym miała być: spiżarnią, z której świat się buduje.
+
+**Dla agenta:**
+1. Nowe kolumny na `game_locations`: `terrain_tags` (JSON, np. `["town","road","plains"]` — na jakich typach hexów lokacja może stanąć), `placement` (`placed`/`floating`). Migracja + backfill: lokacje już zlinkowane w `world_hexes.location_key` → `placed`; reszta → `floating` + raport.
+2. **Osadzanie przy odkryciu hexa:** gdy hex jest odkrywany/generowany, backend (nie LLM!) decyduje czy hex dostaje lokację: szansa wg `hex_type_config` (np. town=100%, road=40%, forest=15% — wartości startowe w configu), wybór z puli `approved + floating` lokacji pasujących `terrain_tags` (ważone, deterministyczne per seed kampanii). Przypisanie = `world_hexes.location_key` + `placement='placed'`. Lokacja osadzona raz jest osadzona NA STAŁE (świat wspólny, nie per kampania).
+3. **Narzędzie admina:** w sekcji Mapa — lista floating lokacji + "osadź na hexie" (klik hexa); odwrotnie: hex bez lokacji → "przypisz lokację" z listy pasujących terenem.
+4. db_lint (U12): warning per floating lokacja approved; error gdy `world_hexes.location_key` wskazuje nieistniejący klucz.
+5. NIE ruszaj tworzenia lokacji przez LLM (pending flow zostaje) — nowa zatwierdzona lokacja po prostu trafia do puli `floating` i czeka na osadzenie.
+
+**Weryfikacja:** pytest: odkrycie hexa town → lokacja z tagiem town przypisana; ta sama lokacja nie osadza się dwa razy; ręcznie: wygeneruj kawałek mapy w admin → hexy-miasta mają lokacje z bazy (sprawdź w admin Mapa).
+
+#### U29 — Blok [ŚWIAT] w kontekście LLM: kandydaci zamiast zgadywania
+
+**Cel:** LLM wymyśla lokacje, bo nie widzi bazy. Po U29 co turę dostaje komplet faktów o otoczeniu + kandydatów z bazy, gdy gracz czegoś szuka — i twardy zakaz wychodzenia poza nie.
+
+**Dla agenta:**
+1. Nowy budowniczy bloku `[ŚWIAT]` (rozszerzenie `location_context_injector.py`), per tura:
+   - aktualny hex: współrzędne, teren, label;
+   - lokacje NA hexie: key, label, **pełny opis entry**, sub-lokacje, NPC z `location_npc_assignments` (z rolą: sojusznik/quest giver/kupiec);
+   - sąsiednie hexy: kierunek, teren, znane POI (odkryte lokacje);
+   - **kandydaci na żądanie:** gdy intencja gracza szuka typu miejsca ("karczma", "kowal", "świątynia") — top 3 lokacje z bazy pasujące typem/tagiem, z odległością w hexach i kierunkiem ("Karczma Pod Trzema Krukami — 2 hexy na północ, przy trakcie"). Jeśli nic nie pasuje: jawny wpis `brak_dopasowania: true`.
+2. Instrukcja w system_prompt: wolno odwoływać się WYŁĄCZNIE do kluczy z bloku `[ŚWIAT]`; `[LOCATION_INTENT] action=create` dozwolone tylko gdy blok zawiera `brak_dopasowania: true` (nadal → pending). Tag z kluczem spoza bloku → odrzucony przez parser U5 + korekta narracji U6 + wpis w `llm_tag_errors`.
+3. Budżet tokenów bloku: cap ~400 tokenów (priorytet: lokacje na hexie > kandydaci > sąsiedzi).
+
+**Weryfikacja:** pytest builderów (hex z lokacją/bez, kandydaci, brak_dopasowania); `/game-test-player`: "szukam karczmy" w pobliżu osadzonej karczmy → LLM kieruje do istniejącej (key w odpowiedzi/logu), NIE tworzy nowej; licznik pending-duplikatów = 0 w 15 turach.
+
+#### U30 — Ruch jako akcja mechaniczna pierwszej klasy (klik mapy = podróż)
+
+**Cel:** Gracz tkwi na hexie, bo ruch wisi na łańcuchu tagów LLM, a mapa jest tylko obrazkiem. Po U30 są DWIE równoprawne drogi ruchu — klik na mapie i tekst — obie przechodzą przez ten sam mechaniczny endpoint. Target gry to dorosły z telefonem: klik musi działać.
+
+**Dla agenta:**
+1. **Endpoint** `POST /api/campaigns/{id}/travel` (body: `target_hex` LUB `target_location_key`): Gate sprawdza sąsiedztwo (lub `hex_teleport_connections`), liczy czas podróży z `hex_type_config.travel_hours`, rolluje encounter (mechanizm D7 już jest — trigger `hex_enter`), aktualizuje `current_hex` + `current_location_id` + zegar gry, zwraca wynik. NARRACJA PO FAKCIE: LLM dostaje "podróż wykonana: las→droga, 3h, zmierzch" i opisuje.
+2. **Frontend mapa:** klik sąsiedniego hexa → popup podróży (czas, teren, znane POI, ryzyko) → "Wyrusz" → endpoint. Klik dalszego hexa: pathfinding po odkrytych hexach albo komunikat "za daleko — podróżuj etapami" (wybierz prostsze). Zachowany 🔒 zatwierdzony popup podróży z CZĘŚCI 9.
+3. **Ruch z tekstu:** parser intencji (B4) rozpoznaje MOVE PRZED wywołaniem LLM; cel rozstrzygany deterministycznie: nazwa lokacji → match w bazie (znane + kandydaci U29) → hex; kierunek ("idę na północ") → sąsiad. Rozstrzygnięty ruch → ten sam endpoint → LLM narruje fakt. `[LOCATION_INTENT]` przestaje być źródłem ruchu — zostaje jako zgłoszenie tworzenia (U29.2).
+4. **Anty-desync guard:** heurystyka po stronie backendu — jeśli odpowiedź LLM opisuje podróż (markery językowe/tag), a mechanika ruchu NIE zaszła w tej turze → korekta narracji (wzorzec U6) + log `travel_narrated_without_move`. To bezpośrednio leczy "gracz wiecznie na tym samym hexie".
+5. Po każdej turze frontend synchronizuje highlight aktualnego hexa z World State (dziś bywa stale).
+
+**Weryfikacja:** pytest endpointu (sąsiedztwo, czas, encounter roll, odmowa nie-sąsiada); Playwright: klik hexa → popup → ruch → mapa podświetla nowy hex; `/game-test-player`: "idę na północ" zmienia `current_hex` w World State w TEJ SAMEJ turze; guard: wymuś narrację podróży bez ruchu → korekta obecna w tekście.
+
+#### U31 — Scena ładowana z bazy przy wejściu do lokacji
+
+**Cel:** NPC i wrogowie są przypisani do lokacji w bazie, ale World State (`scene_npcs`/`scene_enemies`) wypełnia się dopiero przy walce. Gate walki działa więc na pustych danych w zwykłych scenach, a LLM nie wie kogo "ma" w karczmie. Domykamy: wejście do lokacji = załadowanie sceny z bazy.
+
+**Dla agenta:**
+1. Mechaniczne `ENTER_LOCATION` (część `POST /travel` z U30 albo osobny krok): `scene_npcs` ← `location_npc_assignments` (aktywni), potencjalni wrogowie ← `location_enemy_assignments` (roll per `spawn_chance`, limit `max_count`) → `scene_enemies`. Wyjście z lokacji → wyczyść oba.
+2. Sub-lokacje: wejście do sub = podmiana sceny na przypisania sub-lokacji (parent w tle); powrót = restore.
+3. Gate walki (B3/C3) od teraz naprawdę ma co sprawdzać poza walką: "atakuję karczmarza" — Marta JEST w scene_npcs (walka z NPC = osobna decyzja projektowa, na razie blok z komunikatem), "atakuję goblina" w pustej karczmie → blok.
+4. LLM w bloku `[ŚWIAT]` (U29) widzi scene_npcs/scene_enemies — spójność kontekst↔Gate gwarantowana, bo to TEN SAM stan.
+
+**Weryfikacja:** pytest: enter/exit/sub-scena; `/game-test-player-screenshot`: wejście do karczmy → rozmowa z NPC z bazy (imię z `location_npc_assignments` w narracji); atak na nieistniejącego wroga → blok Gate.
+
+#### U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI
+
+**Cel:** STORY_STALE i TRAVEL_HINT to dziś prośby wstrzykiwane do promptu — proszą LLM, żeby zasugerował ruch. Po U30 mamy mechaniczny ruch, więc sugestie mogą być PRZYCISKAMI, a nie nadzieją.
+
+**Dla agenta:**
+1. `suggested_actions.py` rozbudowa: pille podróży budowane z realnych danych (sąsiedzi z POI, kandydaci U29, cele questów z lokalizacją): "→ Karczma Pod Trzema Krukami (2h)" — klik = `POST /travel` z U30.
+2. Eskalacja stagnacji w UI (nie tylko w prompcie): `turns_at_location ≥ 5` → pille podróży zawsze obecne i wyróżnione; `≥ 10` → delikatny banner "Świat czeka — może czas ruszyć w drogę?" z 2 kierunkami.
+3. STORY_STALE w prompcie zostaje (miękka warstwa), ale przestaje być jedynym mechanizmem.
+4. Pille questowe: jeśli aktywny quest ma `visit_location`, pill podróży do celu zawsze w zestawie.
+
+**Weryfikacja:** Playwright: po 5 turach bez ruchu pille podróży widoczne i klikalne (ruch faktycznie następuje); pytest budowniczego pilli (sąsiedzi/quest target/kandydaci).
+
+---
+
+### FAZA U — zależności i kolejność
+
+```
+Kolejność realna: U1→U2→U3 → U4 (smoke) → U5–U9 (pancerz LLM) → U28–U32 (BLOK 9: świat/ruch — rdzeń)
+                  → U10–U14 (baza) → U15–U20 / U21–U23 / U24–U26 (równolegle OK) → U27 (gate)
+
+U1 → U4 (playtest na uporządkowanym dokumencie)
+U2 → U16 (ceny w UI po uzgodnieniu stałych)
+U5 → U6, U7, U8, U9 oraz U29/U30 (parser tagów + wzorzec korekt)
+U28 → U29 → U30 → U31 → U32 (świat: placement → kontekst → ruch → scena → pille)
+U10 → U11, U12, U13 (schema przed unifikacją i lintem)
+U4 może przesunąć priorytety P1 do dowolnego bloku
+U27 ostatnie — wymaga wszystkiego (w tym U28–U32)
+Bloki 5/6/7 wewnętrznie niezależne — można równolegle, jeśli Piotr prowadzi 2 agentów
+```
 
 ---
 
@@ -3483,3 +3990,5 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 - #455 — SB-1: `GET /admin/campaigns/{id}/known-npcs` brakujący endpoint — zwraca NPC ze świata (odwiedzone lokacje) + NPC z pamięci narracyjnej (`campaign_known_npcs`), deduplikacja po label. ✅
 - #459 — E19b: Dungeon tile AI prompt generator — `POST /api/admin/dungeon-tiles/generate-image-prompt` (LLM → English FLUX prompt) + `POST /api/admin/dungeon-tiles/ai-create` (LLM → nowy kafelek z nazwą i promptem); UI: ✨ Generuj prompt AI w Image Studio + ✨ Generuj kafelek AI w toolbarze kategorii. Bugfix: `call_type` w 3 wywołaniach `generate_chat()`. ✅
 - #504 — C10 QUEST_SUGGEST: fix non-streaming path — `strip_narrative_tags` importowany z błędnego modułu (`xp_sources` zamiast `narrative_state_service`) + brakujący C10 block w non-streaming turns; aktywne questy teraz zapisywane i widoczne w World State tab; commit 5f16534. TDD 5/5 + Playwright 2/2. ✅
+- #507 — World builder: placement modes generacji mapy. Nowa kolumna `placement_mode` na `hex_type_config` (biome/scatter/path). Generator `generate_world()` dispatchuje po trybie: `biome`=Voronoi (plain/forest/hills/mountains/swamp), `scatter`=rejection sampling z min-spacing 3 hexów (town/castle/cave/dungeon/ruins), `path`=momentum random-walk (river) / greedy MST Prim'a łączący miasta+zamki (road). Spawn_weight dungeon→2, castle→1. Helpery: `_carve_river`, `_scatter_features`, `_build_road_network`, `_hex_line`, `_cube_round`. `placement_mode` edytowalny w admin UI (dropdown). Commit `9d4605e`. ✅
+- #508 — World builder: drag-painting hexów + undo. Tryb 🖌 Maluj: przeciągnięcie LPM maluje wiele hexów wybranym terenem (optimistyczny render przez rAF, bulk commit `POST /api/admin/world/hexes/bulk-paint` upsert na mouseup). Nowe hexe powstają, istniejące nadpisują typ+encounter_chance bez kasowania metadanych. Stos undo 50 kroków — jedno pociągnięcie = jeden krok (przywraca cały pociągnięcie atomowo); Ctrl/Cmd+Z + przycisk ↶ Cofnij z licznikiem. Undo obejmuje: malowanie, usunięcie hexa, zapis szczegółów. Listenery drag/keydown bindowane raz per svg. Commit `ace9b98`. ✅

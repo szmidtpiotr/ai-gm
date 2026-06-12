@@ -2141,6 +2141,12 @@ def resolve_attack(
             # ─────────────────────────────────────────────────────────────────
 
             if hit:
+                # U2 (#510): weapon wears down when player lands a hit
+                try:
+                    from app.services.durability_service import decrement_weapon_durability_on_attack as _decr_wpn
+                    _decr_wpn(conn, ch_id)
+                except Exception as _dur_err:
+                    logger.warning("weapon_durability_decrement_error", error=str(_dur_err))
                 wrow = weapon_row
                 die = "1d6"
                 stat = "STR"
@@ -2551,12 +2557,12 @@ def resolve_attack(
 
         dmg = 0
         if hit:
-            # F7 (#467): equipment durability decrements on each hit received
+            # U2 (#510): armor wears down on received hit (weapon decay is on player attack)
             try:
-                from app.services.durability_service import decrement_durability_on_hit as _decr_dur
-                _decr_dur(conn, ch_id)
+                from app.services.durability_service import decrement_armor_durability_on_hit as _decr_arm
+                _decr_arm(conn, ch_id)
             except Exception as _dur_err:
-                logger.warning("durability_decrement_error", error=str(_dur_err))
+                logger.warning("armor_durability_decrement_error", error=str(_dur_err))
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
             dmg = roll_damage_dice(expr, 0)
             out["damage"] = dmg

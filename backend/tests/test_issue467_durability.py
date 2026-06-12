@@ -136,10 +136,11 @@ def test_default_penalty_pct():
 
 # ─── decrement_durability_on_hit ──────────────────────────────────────────────
 
-def test_decrement_equipped_weapon_on_hit(db):
-    """Equipped weapon loses 1 durability on hit received."""
+def test_decrement_weapon_NOT_decremented_via_deprecated_fn(db):
+    """U2 (#510): weapon no longer decrements via decrement_durability_on_hit (armor-only path).
+    Weapons now only lose durability via decrement_weapon_durability_on_attack."""
     decrement_durability_on_hit(db, 1)
-    assert _get_dur(db, 1) == 79  # was 80
+    assert _get_dur(db, 1) == 80  # weapon stays at 80 — only armor changes
 
 
 def test_decrement_equipped_armor_on_hit(db):
@@ -168,13 +169,13 @@ def test_durability_floors_at_zero(db):
 
 
 def test_decrement_commits_changes(db):
-    """Decrement persists (verifiable after separate read)."""
+    """Decrement persists (verifiable after separate read) — armor inv_id=2."""
     decrement_durability_on_hit(db, 1)
-    # Re-read via fresh query
+    # Re-read via fresh query — armor (inv_id=2) should have decremented
     val = db.execute(
-        "SELECT durability_current FROM character_inventory WHERE id = 1"
+        "SELECT durability_current FROM character_inventory WHERE id = 2"
     ).fetchone()["durability_current"]
-    assert val == 79
+    assert val == 59  # was 60, armor decremented
 
 
 # ─── Penalty functions ────────────────────────────────────────────────────────

@@ -1,15 +1,15 @@
 """Crafter NPC service — affix economy: apply / reroll / upgrade.
 
-Gold costs:
-  Apply:   T1=150, T2=500, T3=1200
-  Reroll:  T1=100, T2=350, T3=700
+Gold costs (U2 #510 — reroll premium: ~1.3× apply cost):
+  Apply:   T1=150, T2=500,  T3=1200
+  Reroll:  T1=200, T2=650,  T3=1500
   Upgrade: T1→T2=350, T2→T3=700
 """
 import json
 import random
 
 APPLY_COSTS  = {1: 150, 2: 500, 3: 1200}
-REROLL_COSTS = {1: 100, 2: 350, 3: 700}
+REROLL_COSTS = {1: 200, 2: 650, 3: 1500}
 UPGRADE_COSTS = {1: 350, 2: 700}
 
 
