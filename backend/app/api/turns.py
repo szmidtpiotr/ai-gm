@@ -4135,12 +4135,12 @@ def create_turn(
             import re as _xs_re
             from app.services.xp_sources import (
                 process_narrative_xp_tags,
-                strip_narrative_tags,
                 grant_first_location_visit,
                 grant_first_npc_talk,
                 grant_session_start,
                 grant_beat_complete,
             )
+            from app.services.narrative_state_service import strip_narrative_tags
             _xp_char_id = int(payload.character_id)
             _xp_turn = conn.execute(
                 "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
