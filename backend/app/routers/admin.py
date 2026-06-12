@@ -3694,10 +3694,10 @@ def admin_get_campaign_known_npcs(campaign_id: int, _: None = Depends(require_ad
             placeholders = ",".join("?" * len(loc_keys))
             rows = conn.execute(
                 f"""SELECT n.key, n.label, n.npc_type, n.is_ally, n.description,
-                           GROUP_CONCAT(nl.location_key) AS location_keys
+                           GROUP_CONCAT(lna.location_key) AS location_keys
                     FROM npcs n
-                    JOIN npc_locations nl ON n.id = nl.npc_id
-                    WHERE nl.location_key IN ({placeholders})
+                    JOIN location_npc_assignments lna ON n.key = lna.npc_key
+                    WHERE lna.location_key IN ({placeholders}) AND lna.is_active = 1
                     GROUP BY n.id""",
                 loc_keys,
             ).fetchall()

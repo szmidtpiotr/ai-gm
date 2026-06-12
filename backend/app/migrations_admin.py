@@ -914,6 +914,27 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_llm_tag_errors_campaign
     ON llm_tag_errors(campaign_id)
     """,
+    # F13 (#516): character_rentals — rental expiry tracking (was missing from migrations)
+    """
+    CREATE TABLE IF NOT EXISTS character_rentals (
+        id INTEGER PRIMARY KEY,
+        character_id INTEGER NOT NULL,
+        campaign_id INTEGER,
+        npc_id INTEGER NOT NULL DEFAULT 1,
+        item_type TEXT NOT NULL DEFAULT 'misc',
+        item_key TEXT NOT NULL DEFAULT 'room',
+        label TEXT NOT NULL DEFAULT 'Wynajęta kwatera',
+        rental_fee_gp INTEGER NOT NULL DEFAULT 10,
+        total_paid_gp INTEGER NOT NULL DEFAULT 10,
+        duration_turns INTEGER NOT NULL DEFAULT 5,
+        rented_at_turn INTEGER NOT NULL DEFAULT 1,
+        expires_at_turn INTEGER NOT NULL,
+        inventory_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
