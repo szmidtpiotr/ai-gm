@@ -617,7 +617,9 @@ async function _loadBestiaryPending() {
     const mkItemRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
-      <td data-sort-val="Przedmiot"><span class="badge badge-blue">Przedmiot</span></td>
+      <td data-sort-val="${p.pending_category==='trivial'?'Drobiazg':'Przedmiot'}">${p.pending_category==='trivial'
+        ? '<span class="badge" style="background:rgba(120,120,120,0.18);color:var(--t3)" title="Heurystyka: wygląda na śmieć narracyjny (U6)">🍂 Drobiazg</span>'
+        : '<span class="badge badge-blue">Przedmiot</span>'}</td>
       <td class="td-muted" data-sort-val="${_esc(p.item_type||'')}">${_esc(p.item_type||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>

@@ -647,6 +647,14 @@ def create_campaign(req: CampaignCreateRequest):
             "UPDATE campaign_templates SET play_count = play_count + 1 WHERE id = ?",
             (req.template_id,),
         )
+        # U8 #532: store source_template_id to detect Gotowa Kampania for Story Gravity L3
+        try:
+            conn.execute(
+                "UPDATE campaigns SET source_template_id = ? WHERE id = ?",
+                (req.template_id, campaign_id),
+            )
+        except Exception:
+            pass  # column may not exist yet — migration will add it on next restart
         conn.commit()
         # E11 (#426) — pre-seed NarrativeState from the template's narrative_hooks.
         try:

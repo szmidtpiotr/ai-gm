@@ -789,14 +789,26 @@ def get_pending_items(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
             """SELECT key, label, item_type, description, value_gp, weight_kg, note,
-                      campaign_id, review_status, ai_generated, created_at
+                      campaign_id, review_status, ai_generated, created_at,
+                      pending_category
                FROM game_config_items
                WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
-        return []
+        # pending_category column may not exist yet (pre-migration) — retry without it
+        try:
+            rows = conn.execute(
+                """SELECT key, label, item_type, description, value_gp, weight_kg, note,
+                          campaign_id, review_status, ai_generated, created_at
+                   FROM game_config_items
+                   WHERE review_status = 'pending_review'
+                   ORDER BY rowid DESC LIMIT 100"""
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
 
 def get_pending_weapons(conn: sqlite3.Connection) -> list[dict]:

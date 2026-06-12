@@ -94,6 +94,7 @@ class StoryGravityPatchReq(BaseModel):
     turns_l2: int | None = Field(default=None, ge=1, le=200)
     turns_l3: int | None = Field(default=None, ge=1, le=200)
     l3_enabled: bool | None = None
+    l3_enabled_gotowa: bool | None = None  # U8: Gotowa Kampania L3 default
 
 
 @router.get("/settings/story-gravity")

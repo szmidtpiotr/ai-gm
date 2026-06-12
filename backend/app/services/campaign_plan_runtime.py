@@ -154,6 +154,62 @@ def _check_and_advance_act(plan: dict, conn: sqlite3.Connection) -> None:
             logger.info("act_advanced", new_act=plan["active_act"])
 
 
+# ── Beat auto-complete by objective (U8 #532) ─────────────────────────────
+
+_OBJECTIVE_TYPES = frozenset({"kill_enemy", "visit_location", "talk_to_npc", "find_item"})
+
+
+def auto_complete_beats_by_event(
+    campaign_id: int,
+    event_type: str,
+    target_name: str,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> bool:
+    """U8 — Auto-complete beats whose objective_type+objective_value matches the event.
+
+    Returns True if at least one beat was newly completed, False otherwise.
+    Beat without objective_type is ignored — still requires LLM [BEAT_COMPLETE] tag.
+    Uses _keyword_match from quest_checker (prefix-based Polish declension support).
+    """
+    if event_type not in _OBJECTIVE_TYPES or not target_name:
+        return False
+
+    from app.services.quest_checker import _keyword_match
+
+    plan = get_plan(campaign_id, conn)
+    if not plan:
+        return False
+
+    changed = False
+    for act in plan.get("acts", []):
+        for beat in act.get("key_beats", []):
+            if not isinstance(beat, dict):
+                continue
+            if beat.get("visited"):
+                continue
+            if beat.get("objective_type") != event_type:
+                continue
+            obj_value = beat.get("objective_value", "")
+            if obj_value and _keyword_match(obj_value, target_name):
+                beat["visited"] = True
+                beat["visited_at_turn"] = turn_number
+                changed = True
+                logger.info(
+                    "beat_auto_completed",
+                    campaign_id=campaign_id,
+                    beat_key=beat.get("beat_key"),
+                    event_type=event_type,
+                    target=target_name,
+                )
+
+    if changed:
+        _check_and_advance_act(plan, conn)
+        save_plan(campaign_id, plan, conn)
+
+    return changed
+
+
 # ── NPC alive tracking ────────────────────────────────────────────────────
 
 def mark_npc_dead(campaign_id: int, npc_key: str, conn: sqlite3.Connection) -> str:

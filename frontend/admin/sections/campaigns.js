@@ -69,7 +69,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       const statusBadge = s => ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[s] || `<span class="badge badge-slate">${_esc(s)}</span>`);
       tbody.innerHTML = items.map(c => `<tr>
         <td class="col-check"><input type="checkbox" class="camp-row-check" onchange="rowCheck('camp')"></td>
-        <td class="td-sticky" data-sort-val="${_esc(c.title)}"><div class="campaign-row-name">${_esc(c.title)}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
+        <td class="td-sticky" data-sort-val="${_esc(c.title)}"><div class="campaign-row-name">${_esc(c.title)}${c.plan_degraded ? ' <span title="GM Plan nie mógł być wygenerowany przez LLM; użyto planu zapasowego. Zregeneruj z Warsztatu." style="font-size:0.72rem;color:#f59e0b;cursor:help">⚠ Plan uproszczony</span>' : ''}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
         <td class="td-mono" data-sort-val="${_esc(c.char_name||'')}">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
         <td data-sort-val="${_esc(archMap[c.char_archetype]||c.char_archetype||'')}">${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
         <td class="td-mono" data-sort-val="${c.char_level??''}">${c.char_level??'—'}</td>
@@ -98,7 +98,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       const statusBadge = ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[c.status] || '<span class="badge badge-slate">—</span>');
       return `<div class="card" style="padding:14px;cursor:pointer" onclick="openCampaignModal(${c.id})">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px">
-          <div style="font-weight:600;color:var(--t1);font-size:0.94rem">${_esc(c.title)}</div>
+          <div style="font-weight:600;color:var(--t1);font-size:0.94rem">${_esc(c.title)}${c.plan_degraded ? ' <span title="GM Plan nie mógł być wygenerowany przez LLM; użyto planu zapasowego. Zregeneruj z Warsztatu." style="font-size:0.7rem;color:#f59e0b;cursor:help;display:block;margin-top:2px">⚠ Plan uproszczony</span>' : ''}</div>
           ${statusBadge}
         </div>
         <div style="display:flex;gap:8px;font-size:0.78rem;color:var(--t2);margin-bottom:10px">
@@ -519,11 +519,24 @@ function filterTableGeneric(input, tableId, nameClass) {
       try {
         const d = await apiFetch(`/api/admin/campaigns/${campId}/gm-plan`);
         const plan = typeof d.gm_plan_json === 'string' ? JSON.parse(d.gm_plan_json) : d.gm_plan_json;
+
+        // U8 #532: Story Gravity badge
+        const sg = d.story_gravity || {};
+        const gravityColors = {0:'var(--t3)',1:'#e6b800',2:'#e07a20',3:'#c0392b'};
+        const gravityLabels = {0:'',1:'🟡 Gravity L1',2:'🟠 Gravity L2',3:'🔴 Gravity L3'};
+        const gravityBadge = sg.level > 0
+          ? `<div style="margin-bottom:12px;padding:8px 12px;border-radius:var(--r);border:1px solid ${gravityColors[sg.level]};background:${gravityColors[sg.level]}22;display:flex;align-items:center;gap:10px">
+               <span style="font-weight:700;color:${gravityColors[sg.level]}">${gravityLabels[sg.level]}</span>
+               <span style="font-size:0.78rem;color:var(--t2)">${sg.turns_since_beat} tur bez zaliczonego beatu</span>
+               ${sg.hint ? `<span style="font-size:0.72rem;color:var(--t3);font-style:italic;margin-left:auto">${_esc(sg.hint)}</span>` : ''}
+             </div>`
+          : '';
+
         const arcs = plan?.arcs || {};
         const arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
-        if (!arcList.length) { panel.innerHTML = '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
+        if (!arcList.length) { panel.innerHTML = gravityBadge + '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
         const activeArcId = plan?.active_arc_id;
-        panel.innerHTML = arcList.map((arc, arcIdx) => {
+        panel.innerHTML = gravityBadge + arcList.map((arc, arcIdx) => {
           const isActive = arc.status === 'active' || arc.id === activeArcId;
           const currentScene = typeof arc.current_scene_ordinal === 'number' ? arc.current_scene_ordinal : null;
           const goals = arc.scene_goals || [];

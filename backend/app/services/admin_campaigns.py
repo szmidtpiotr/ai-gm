@@ -92,6 +92,13 @@ def get_campaign_gm_plan_admin(campaign_id: int) -> dict:
             raw_plan=raw_plan,
             limit=4,
         )
+        # U8 #532: Story Gravity state for admin Campaign Monitor Plan GM tab
+        story_gravity = {"level": 0, "turns_since_beat": 0, "hint": ""}
+        try:
+            from app.services.story_gravity_service import compute_story_gravity
+            story_gravity = compute_story_gravity(campaign_id, conn)
+        except Exception:
+            pass
         return {
             "campaign_id": int(row["id"]),
             "title": str(row["title"] or ""),
@@ -105,6 +112,7 @@ def get_campaign_gm_plan_admin(campaign_id: int) -> dict:
             "gm_plan_ready": bool(format_gm_plan_block(raw_plan).strip()),
             "characters_count": characters_count,
             "divergence": divergence,
+            "story_gravity": story_gravity,
         }
     finally:
         conn.close()

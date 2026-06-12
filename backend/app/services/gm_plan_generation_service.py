@@ -149,6 +149,28 @@ def arc_payload_from_flat_llm(llm_obj: dict[str, Any]) -> dict[str, Any]:
     return _llm_flat_to_w1_patch(llm_obj)["arcs"]["default"]
 
 
+def _build_fallback_plan() -> dict[str, Any]:
+    """Minimal GM plan used when all LLM generation attempts fail."""
+    return {
+        "schema_version": 2,
+        "arcs": {
+            "default": {
+                "id": "default",
+                "title": "Start przygody",
+                "status": "active",
+                "roadmap": "Bohater wyrusza w nieznane. Historia się dopiero zaczyna.",
+                "scene_goals": ["Zapoznaj się z okolicą", "Znajdź kogoś, kto może pomóc"],
+                "hooks": {
+                    "npcs": ["Tajemniczy nieznajomy"],
+                    "locations": ["Karczma", "Rynek"],
+                },
+            }
+        },
+        "active_arc_id": "default",
+        "engine_private": {},
+    }
+
+
 def generate_initial_gm_plan_with_retries(
     conn,
     *,
@@ -164,6 +186,7 @@ def generate_initial_gm_plan_with_retries(
 ) -> tuple[bool, str | None]:
     """
     Persists to campaigns.gm_plan_json on success. Returns (ok, error_message).
+    On complete failure writes a fallback plan and sets plan_degraded=1 — always returns (True, None).
     """
     user_content = (
         f"Tytuł kampanii: {campaign_title}\n"
@@ -172,15 +195,32 @@ def generate_initial_gm_plan_with_retries(
         f"{char_summary}\n\n"
         "Na tej podstawie wypełnij JSON planu MG (roadmap, cele sceny, haki, tytuł łuku)."
     )
-    messages = [
+    base_messages = [
         {"role": "system", "content": GM_PLAN_GENERATION_SYSTEM},
         {"role": "user", "content": user_content},
     ]
 
     last_err: str | None = None
+    last_raw: str = ""
     for attempt in range(1, max_attempts + 1):
+        # On retry: inject previous bad response + error context so LLM knows what went wrong
+        if attempt > 1 and last_raw:
+            messages = base_messages + [
+                {"role": "assistant", "content": last_raw},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Poprzednia odpowiedź nie była poprawnym JSON planu. Błąd: {last_err}. "
+                        "Spróbuj ponownie — zwróć WYŁĄCZNIE obiekt JSON bez żadnego tekstu przed ani po."
+                    ),
+                },
+            ]
+        else:
+            messages = base_messages
+
         try:
             raw = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
+            last_raw = raw
             parsed = extract_first_json_object(raw)
             if not parsed:
                 last_err = "LLM nie zwrócił poprawnego JSON planu"
@@ -192,20 +232,18 @@ def generate_initial_gm_plan_with_retries(
                 )
                 continue
             patch = _llm_flat_to_w1_patch(parsed)
-            base = normalize_gm_plan(None)
-            merged = merge_gm_plan_patch(base, patch)
+            empty_plan = normalize_gm_plan(None)
+            merged = merge_gm_plan_patch(empty_plan, patch)
             dumped = json.dumps(merged, ensure_ascii=False)
             if not gm_plan_is_ready(dumped):
                 last_err = "Wygenerowany plan jest zbyt pusty (brak roadmapy/celów/haków)"
+                last_raw = raw
                 logger.warning("gm_plan_generation_empty_plan", campaign_id=campaign_id, attempt=attempt)
                 continue
             conn.execute(
-                "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+                "UPDATE campaigns SET gm_plan_json = ?, plan_degraded = 0 WHERE id = ?",
                 (dumped, campaign_id),
             )
-            # Stage 9 follow-up: when the GM plan has a fresh LLM-generated
-            # title, swap out the generic "Przygoda <hero>" placeholder so the
-            # campaign chooser shows the atmospheric name instead.
             try:
                 _maybe_rename_campaign_from_plan(conn, campaign_id, merged)
             except Exception as e:
@@ -221,7 +259,24 @@ def generate_initial_gm_plan_with_retries(
                 attempt=attempt,
                 error=str(e),
             )
-    return False, last_err or "Nie udało się wygenerować planu MG"
+
+    # All attempts failed — use fallback plan so campaign always starts
+    fallback = _build_fallback_plan()
+    fallback_dumped = json.dumps(fallback, ensure_ascii=False)
+    try:
+        conn.execute(
+            "UPDATE campaigns SET gm_plan_json = ?, plan_degraded = 1 WHERE id = ?",
+            (fallback_dumped, campaign_id),
+        )
+        conn.commit()
+        logger.warning(
+            "gm_plan_generation_fallback_used",
+            campaign_id=campaign_id,
+            last_error=last_err,
+        )
+    except Exception as e:
+        logger.error("gm_plan_fallback_save_failed", campaign_id=campaign_id, error=str(e))
+    return True, None
 
 
 def retry_initial_gm_plan_for_campaign(

@@ -2335,7 +2335,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
         rows = conn.execute("""
             SELECT
                 c.id, c.title, c.status, c.created_at, c.ended_at,
-                c.gm_plan_json,
+                c.gm_plan_json, c.plan_degraded,
                 ga.username AS owner_username,
                 ch.id AS char_id, ch.name AS char_name, ch.location AS char_location,
                 ch.sheet_json,
@@ -2423,6 +2423,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
                 "last_turn_gm": last_turn_gm,
                 "last_turn_at": r["last_turn_at"],
                 "turn_count": r["turn_count"],
+                "plan_degraded": bool(r["plan_degraded"]),
             })
 
         return {"items": items}

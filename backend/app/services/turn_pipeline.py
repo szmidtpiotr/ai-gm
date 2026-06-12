@@ -176,8 +176,10 @@ def process_v2_turn(
     _update_turns_at_location(mechanic_result, session_flags, conn, campaign_id)
     _update_hex_world_state(mechanic_result, session_flags, conn, campaign_id)
 
-    # XS1: Beat complete XP
+    # XS1: Beat complete XP (LLM-emitted [BEAT_COMPLETE] tag)
     xp_delta = _process_beat_signals(mechanic_result, campaign_id, character_id, turn_number, conn)
+    # U8 #532: Beat auto-complete from objective conditions (kill/visit/talk/item)
+    _auto_complete_beats_by_mechanic(action_type, mechanic_result, context, campaign_id, turn_number, conn)
     # XS6: First NPC talk XP
     xp_delta += _process_npc_first_talk(action_type, params.get("npc_key") or params.get("target", ""),
                                          character_id, campaign_id, turn_number, conn)
@@ -649,6 +651,38 @@ def _process_beat_signals(
             if mark_beat_visited(campaign_id, beat_key, turn_number, conn):
                 xp += grant_beat_complete(conn, character_id, campaign_id, beat_key, turn_number)
     return xp
+
+
+def _auto_complete_beats_by_mechanic(
+    action_type: str, result: dict, context: dict,
+    campaign_id: int, turn_number: int, conn: sqlite3.Connection,
+) -> None:
+    """U8 #532 — Auto-complete beats whose objective_type matches the mechanic outcome."""
+    from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+
+    if action_type == "ATTACK" and result.get("target_dead"):
+        enemy = context.get("target_enemy") or {}
+        target = enemy.get("label") or result.get("target_key", "")
+        if target:
+            auto_complete_beats_by_event(campaign_id, "kill_enemy", target, turn_number, conn)
+
+    elif action_type == "MOVEMENT" and result.get("outcome") == "SUCCESS":
+        dest = context.get("destination_location") or {}
+        target = dest.get("label") or result.get("to_location_key", "")
+        if target:
+            auto_complete_beats_by_event(campaign_id, "visit_location", target, turn_number, conn)
+
+    elif action_type == "DIALOGUE":
+        npc = context.get("target_npc") or {}
+        target = npc.get("label") or npc.get("key", "")
+        if target:
+            auto_complete_beats_by_event(campaign_id, "talk_to_npc", target, turn_number, conn)
+
+    elif action_type in ("ITEM_USE", "EXAMINE"):
+        item = context.get("item_record") or {}
+        target = item.get("label") or item.get("key", "")
+        if target:
+            auto_complete_beats_by_event(campaign_id, "find_item", target, turn_number, conn)
 
 
 def _process_npc_first_talk(
