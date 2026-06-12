@@ -935,6 +935,24 @@ ADMIN_MIGRATIONS = [
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # BUG-03 (#529): campaign_known_npcs — NPC memory per campaign (was missing from migrations)
+    """
+    CREATE TABLE IF NOT EXISTS campaign_known_npcs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        npc_id INTEGER,
+        npc_name TEXT NOT NULL,
+        role TEXT,
+        first_met_location TEXT,
+        first_met_turn INTEGER,
+        notes TEXT,
+        relation_status TEXT NOT NULL DEFAULT 'neutral',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        purchase_count INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(campaign_id, npc_name)
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
