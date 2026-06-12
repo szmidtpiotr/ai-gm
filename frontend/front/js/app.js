@@ -1022,8 +1022,46 @@ async function selectHero(hero) {
 // ============================================================================
 // Campaigns
 // ============================================================================
+async function _syncAdvCardsFromModes() {
+    try {
+        const data = await apiRequest('GET', '/campaign-modes');
+        const modes = {};
+        (data.modes || []).forEach(m => { modes[m.key] = m; });
+
+        const nowaBtn = document.getElementById('new-campaign-btn');
+        if (nowaBtn && modes.nowa) {
+            const avail = modes.nowa.available;
+            nowaBtn.disabled = !avail;
+            nowaBtn.classList.toggle('adv-card--disabled', !avail);
+        }
+
+        const readyBtn = document.getElementById('ready-campaign-btn');
+        if (readyBtn && modes.gotowa) {
+            const avail = modes.gotowa.available;
+            readyBtn.disabled = !avail;
+            readyBtn.classList.toggle('adv-card--disabled', !avail);
+            const tag = readyBtn.querySelector('.adv-card__tag');
+            if (tag) tag.textContent = avail ? `${modes.gotowa.count || 0} scenariuszy` : 'Wkrótce';
+            if (!readyBtn.__wiredReady) {
+                readyBtn.__wiredReady = true;
+                readyBtn.addEventListener('click', () => { if (!readyBtn.disabled) _openReadyCampaignPicker(); });
+            }
+        }
+
+        const dungeonBtn = document.getElementById('dungeon-picker-btn');
+        if (dungeonBtn && modes.loch) {
+            const avail = modes.loch.available;
+            dungeonBtn.disabled = !avail;
+            dungeonBtn.classList.toggle('adv-card--disabled', !avail);
+        }
+    } catch(e) {
+        console.warn('[AdvCards] Could not sync game modes:', e);
+    }
+}
+
 async function loadCampaigns() {
     console.log('[Campaigns] Loading for user:', currentUser?.id);
+    _syncAdvCardsFromModes();
     // #400 — admin-only entry to the campaign spectator/resume browser.
     try {
         const adminBtn = document.getElementById('heroes-admin-btn');
@@ -1273,12 +1311,9 @@ async function selectCampaign(campaign) {
 
 function showNewCampaignScreen() {
     if (currentHero && currentHero.id) {
-        // D9 (#384) — show the 5-mode hub instead of creating directly.
-        _openCampaignModesHub();
+        handleNewCampaignWithHero();
         return;
     }
-    // No hero selected — send to heroes screen so the player picks one first.
-    // The old new-campaign wizard (character creation) must not appear if heroes exist.
     showToast('Najpierw wybierz bohatera, aby stworzyć nową kampanię.', 'info', 3000);
     loadHeroes().then(() => showScreen('heroes'));
 }
@@ -1309,9 +1344,14 @@ async function _openCampaignModesHub() {
     const cards = modes.map(m => {
         const dis = !m.available;
         const cnt = (m.count != null && m.count > 0) ? ` <span style="color:#888;font-size:.72rem">(${m.count})</span>` : '';
+        // U3: multiplayer shows "Wkrótce" badge instead of generic "— niedostępne"
+        const isMpDisabled = dis && m.key === 'multiplayer';
+        const disLabel = isMpDisabled
+            ? ` <span style="font-size:.68rem;color:#888;background:rgba(255,255,255,.07);padding:1px 7px;border-radius:10px;vertical-align:middle" data-mp-soon>Wkrótce</span>`
+            : (dis ? ' — niedostępne' : '');
         return `<button data-mode="${m.key}" ${dis ? 'disabled' : ''} style="text-align:left;background:${dis ? '#0a0a0f' : '#0e0e16'};border:1px solid ${dis ? 'rgba(255,255,255,.05)' : 'rgba(245,158,11,.25)'};border-radius:10px;padding:12px 14px;cursor:${dis ? 'not-allowed' : 'pointer'};opacity:${dis ? .5 : 1};width:100%">
-            <div style="font-weight:600;color:#eee">${escapeHtml(m.label)}${cnt}</div>
-            <div style="font-size:.76rem;color:#9aa;margin-top:3px">${escapeHtml(m.description || '')}${dis ? ' — niedostępne' : ''}</div>
+            <div style="font-weight:600;color:#eee">${escapeHtml(m.label)}${cnt}${isMpDisabled ? disLabel : ''}</div>
+            <div style="font-size:.76rem;color:#9aa;margin-top:3px">${escapeHtml(m.description || '')}${!isMpDisabled && dis ? ' — niedostępne' : ''}</div>
           </button>`;
     }).join('');
     overlay.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:460px;width:100%;padding:18px;display:flex;flex-direction:column;gap:10px;max-height:88vh;overflow-y:auto">

@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE; F2 #462 Affix loot roll KOMPLETNE; F2b #484 Enemy loot_tier drop affixes KOMPLETNE; F3 #463 Affix Builder KOMPLETNE)_
+_Ostatnia aktualizacja: 2026-06-12 (U3 #511 KOMPLETNE — feature-flag Multiplayer w hubie kampanii)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -13,10 +13,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| G (Faza 5 MP) | 0/15 | 0% |
+| **U (Plan naprawczy)** | **3/32** | **9% — PRZED Fazą 5 MP** |
+| G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **99/140** | **71%** |
+| **TOTAL** | **100/172** | **58%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -155,7 +156,65 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
+## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5
+
+> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = numeracja. Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`.
+
+### Blok 1 — Dokument prawdy
+- [x] U1 — Sprzątanie game_mechanics.md (statusy, kolizje kodów D8–D13, wiszące refy F0/FINF-1) — [#509](https://github.com/szmidtpiotr/ai-gm/issues/509)
+- [x] U2 — Uzgodnienie spec↔impl ekonomii (reroll droższy niż nałożenie, durability broń-przy-ataku/zbroja-przy-ciosie, stałe craftingu, anti-farm = 24h realne) — [#510](https://github.com/szmidtpiotr/ai-gm/issues/510)
+- [x] U3 — Feature-flag Multiplayer w hubie ("Wkrótce", default OFF) — [#511](https://github.com/szmidtpiotr/ai-gm/issues/511)
+
+### Blok 2 — Ground truth
+- [ ] U4 — Smoke playtest 3 trybów ([SMOKE] issues + defekty P0/P1/P2; P0 naprawiane natychmiast)
+
+### Blok 3 — Pancerz na LLM (spójność narracja↔stan)
+- [ ] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed
+- [ ] U6 — Uogólniony wzorzec odmowy (korekta narracji przy każdym odrzuconym tagu)
+- [ ] U7 — SKILL_CHECK safety net (backend wymusza test przy ryzykownej akcji) + DC lock {8,12,16,20,24}
+- [ ] U8 — Beat fallback (objective_type na beatach) + Story Gravity L1/L2/L3 zdefiniowane i włączone
+- [ ] U9 — GM Plan hardening (retry + fallback plan, kampania startuje zawsze)
+
+### Blok 4 — Baza danych jako rdzeń
+- [ ] U10 — Effect schema lockdown (JSON Schema, jeden format DOT, enum statów, typ skip_turn, walidacja na każdym zapisie)
+- [ ] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin)
+- [ ] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh)
+- [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
+- [ ] U14 — Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP)
+
+### Blok 5 — Widoczność mechanik
+- [ ] U15 — Widoczne rany wroga w walce (tier + kara; "Ranny" dostaje −1)
+- [ ] U16 — Cost preview (naprawa/reroll/wskrzeszenie/usługi) + pasek durability + komunikat anti-farm
+- [ ] U17 — Celebracja dropu afiksowego + porównanie z założonym
+- [ ] U18 — Dziennik gracza (Zadania / Wątki / Kronika; endpoint /journal; player_visible na seeds)
+- [ ] U19 — Recap "Poprzednio…" po >24h przerwy
+- [ ] U20 — Onboarding: death saves przy <25% HP, karta XP z instrukcją, karty durability/afiksy/napady/crafter
+
+### Blok 6 — Lochy: stawka — ⏸ ODŁOŻONE (decyzja 2026-06-12: lochy kafelkowe czekają na redesign; FAZA U = tylko Nowa Kampania + Gotowa Kampania)
+- [ ] U21 — ⏸ Semantyka snapshotu (wygrana = zużycie zostaje; śmierć = restore; porzucenie = restore + 50% cooldown + modal ostrzeżenia)
+- [ ] U22 — ⏸ Reguły kafelków (boss po `rooms` pokojach, pre-roll drzwi z hintami, trap/riddle bez soft-locków, fallback braku kafelka)
+- [ ] U23 — ⏸ Jedna skala trudności D1–D5 + max_scale per wróg (koniec rubber-bandingu)
+
+### Blok 7 — Ekonomia: bezpieczniki
+- [ ] U24 — Napad: ostrzeżenie + rzut obronny + próg biedy 50gp + max 1/24h
+- [ ] U25 — Pity timer afiksów (3 bossy bez dropu → gwarancja; 3 rerolle bez zmiany → inny afiks)
+- [ ] U26 — economy_log + centralna change_gold() + kafelek Ekonomia w admin Overview
+
+### Blok 9 — Świat: hex ↔ lokacje ↔ ruch (audyt kodu 2026-06-11; wykonywać PO Bloku 3, PRZED Blokiem 4 — rdzeń gry)
+- [ ] U28 — Placement engine: terrain_tags + placement na game_locations; backend osadza lokacje przy odkryciu hexa; narzędzie admina dla floating
+- [ ] U29 — Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy na żądanie; create tylko przy brak_dopasowania
+- [ ] U30 — Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard, sync mapy po turze)
+- [ ] U31 — Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z location_*_assignments; sub-lokacje
+- [ ] U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI (≥5 tur pille, ≥10 banner)
+
+### Blok 8 — Brama do MP (zawsze ostatnie)
+- [ ] U27 — docs/ACCEPTANCE_USABILITY.md + pełny re-playtest 3 trybów (w tym kryteria ruchu/lokacji z Bloku 9) → issue [GATE] Go/No-Go MP
+
+---
+
 ## FAZA 5 — Multiplayer
+
+> ⛔ Start dopiero po U27 (go/no-go).
 
 - [ ] G1 — Timer enforcement — background sweep co ~30s (domknij rundę po deadline)
 - [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie

@@ -1245,6 +1245,13 @@ def forge_generate_template_plan(
         from app.services.llm_service import get_effective_config
         llm_cfg = get_effective_config()
         model = llm_cfg.get("model", "")
+        if not model:
+            provider = llm_cfg.get("provider", "?")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Brak modelu w aktywnym presecie LLM (provider: {provider}). "
+                       "Przejdź Admin → System → Konta i uzupełnij pole 'Model' w aktywnym presecie.",
+            )
         config = {k: v for k, v in llm_cfg.items() if k != "model"}
 
         last_err = None
@@ -1302,15 +1309,18 @@ def list_published_templates():
             d = _template_to_dict(r)
             # Attach campaign-scoped items summary (key, label, entry_type, rarity, damage_die, effect_type, description)
             tid = r["id"]
-            weapons = conn.execute(
-                "SELECT key, label, 'weapon' AS entry_type, rarity, damage_die, NULL AS effect_type, description FROM game_config_weapons WHERE template_id = ?", (tid,)
-            ).fetchall()
-            cons = conn.execute(
-                "SELECT key, label, 'consumable' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_consumables WHERE template_id = ?", (tid,)
-            ).fetchall()
-            its = conn.execute(
-                "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ?", (tid,)
-            ).fetchall()
+            try:
+                weapons = conn.execute(
+                    "SELECT key, label, 'weapon' AS entry_type, rarity, damage_die, NULL AS effect_type, description FROM game_config_weapons WHERE template_id = ?", (tid,)
+                ).fetchall()
+                cons = conn.execute(
+                    "SELECT key, label, 'consumable' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_consumables WHERE template_id = ?", (tid,)
+                ).fetchall()
+                its = conn.execute(
+                    "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ?", (tid,)
+                ).fetchall()
+            except Exception:
+                weapons = cons = its = []
             db_items = [dict(x) for x in [*weapons, *cons, *its]]
             # Also include plan items from gm_plan_json.key_items not already in DB
             existing_keys = {it["key"] for it in db_items}
