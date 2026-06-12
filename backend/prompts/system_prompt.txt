@@ -285,6 +285,14 @@ Aby przemieścić się między różnymi makro-lokalizacjami — czas podróży 
 Przed każdą turą backend może przesłać Ci blok [LOCATION CONTEXT] jako osobną
 wiadomość systemową. Zawiera aktualną pozycję postaci i listę znanych lokacji.
 
+**ZASADA U29 — blok === ŚWIAT === (dodawany do każdego promptu narratora):**
+Gdy w prompcie jest blok `=== ŚWIAT ===`, odwołuj się WYŁĄCZNIE do kluczy lokacji
+z tego bloku (sekcja "Lokacje na tym hexie" i "Kandydaci z bazy").
+- Akcja `action: create` dozwolona TYLKO gdy blok zawiera `brak_dopasowania: true`.
+- Gdy blok zawiera kandydatów, kieruj postać do istniejącej lokacji z bazą —
+  użyj jej klucza w `action: move`, NIE twórz nowej.
+- Klucz lokacji to string w nawiasach kwadratowych: `[klucz_lokacji]`.
+
 Gdy OTRZYMASZ blok [LOCATION CONTEXT]:
 
 1. action: move — używaj WYŁĄCZNIE kluczy lokacji z listy known_locations.
@@ -293,8 +301,8 @@ Gdy OTRZYMASZ blok [LOCATION CONTEXT]:
    najpierw się tam dostać") i NIE emituj action: move.
 
 2. action: create — tylko gdy gracz faktycznie odkrywa NOWE miejsce poprzez
-   eksplorację lub narracyjne działanie. Nie twórz duplikatów lokacji
-   które już są na liście.
+   eksplorację lub narracyjne działanie ORAZ blok ŚWIAT zawiera brak_dopasowania: true.
+   Nie twórz duplikatów lokacji które już są na liście lub w kandydatach ŚWIAT.
 
 3. Deklaracje stanu gracza ("jestem na plaży", "wchodzę do lasu") to INTENCJA,
    nie fakt. Postać pozostaje w current_location dopóki GM narracyjnie

@@ -157,6 +157,25 @@ def _pick_encounter_enemy(hex_data: dict) -> str | None:
     return random.choice(pool)
 
 
+# ── Location → hex resolution (U30) ─────────────────────────────────────────
+
+def resolve_location_key_to_hex(
+    location_key: str,
+    conn: sqlite3.Connection,
+) -> tuple[int, int] | None:
+    """U30: Resolve a location_key → (q, r) via world_hexes.location_key.
+
+    Returns None when the location has no hex assignment yet.
+    """
+    if not location_key:
+        return None
+    row = conn.execute(
+        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+        (location_key,),
+    ).fetchone()
+    return (int(row["q"]), int(row["r"])) if row else None
+
+
 # ── Main travel resolver ──────────────────────────────────────────────────────
 
 def resolve_chain_travel(
@@ -608,30 +627,49 @@ def resolve_starting_hex(
 
     # Stage 2B-Schema S17: pair the hex with a canonical game_location (or create minimal one)
     loc_key: str | None = None
-    canonical_loc = _find_canonical_location_for_name(starting_location_name or "", conn)
-    if canonical_loc:
-        loc_key = canonical_loc["key"]
-        logger.info(
-            "s17_canonical_location_matched",
-            campaign_id=campaign_id,
-            loc_key=loc_key,
-            starting_name=starting_location_name,
-        )
-    else:
-        loc_key = f"start_{campaign_id}"
-        conn.execute(
-            """INSERT OR IGNORE INTO game_locations
-               (key, label, safe_for_rest, canonical, created_by, is_active,
-                approved, review_status, ai_generated, source_campaign_id)
-               VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
-            (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
-        )
-        logger.info(
-            "s17_start_location_created",
-            campaign_id=campaign_id,
-            loc_key=loc_key,
-            starting_name=starting_location_name,
-        )
+
+    # U28: try placement engine first (for new hexes only — existing hexes keep their location)
+    if is_new:
+        try:
+            from app.services.placement_engine import try_place_location_on_hex
+            placed_key = try_place_location_on_hex(conn, sq, sr, hex_type, campaign_seed=campaign_id)
+            if placed_key:
+                loc_key = placed_key
+                logger.info(
+                    "u28_placement_engine_placed",
+                    campaign_id=campaign_id,
+                    loc_key=loc_key,
+                    hex_type=hex_type,
+                    q=sq, r=sr,
+                )
+        except Exception as _pe:
+            logger.warning("u28_placement_engine_error", error=str(_pe))
+
+    if not loc_key:
+        canonical_loc = _find_canonical_location_for_name(starting_location_name or "", conn)
+        if canonical_loc:
+            loc_key = canonical_loc["key"]
+            logger.info(
+                "s17_canonical_location_matched",
+                campaign_id=campaign_id,
+                loc_key=loc_key,
+                starting_name=starting_location_name,
+            )
+        else:
+            loc_key = f"start_{campaign_id}"
+            conn.execute(
+                """INSERT OR IGNORE INTO game_locations
+                   (key, label, safe_for_rest, canonical, created_by, is_active,
+                    approved, review_status, ai_generated, source_campaign_id)
+                   VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
+                (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
+            )
+            logger.info(
+                "s17_start_location_created",
+                campaign_id=campaign_id,
+                loc_key=loc_key,
+                starting_name=starting_location_name,
+            )
 
     if is_new:
         conn.execute(

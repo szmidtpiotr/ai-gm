@@ -59,6 +59,16 @@ MECHANIC_CARDS: dict[str, dict] = {
             "Uważaj: w lochach śmierć jest permanentna."
         ),
     },
+    "world_map": {
+        "title": "Podróż po świecie",
+        "content": (
+            "Świat to mapa pól (heksów). Aby się przemieścić, masz dwie drogi: "
+            "1) otwórz mapę ikoną 🗺 (prawy górny róg) i kliknij sąsiednie pole, potem „Wyrusz”; "
+            "2) napisz w polu akcji, dokąd idziesz — np. „idę na północ”, „idę na wschód” "
+            "lub „idę do karczmy”. Kierunki: północ / południe / wschód / zachód. "
+            "Podróż zużywa czas gry i może wywołać spotkanie po drodze."
+        ),
+    },
     "affixes": {
         "title": "Magiczne afiksy",
         "content": (
@@ -86,6 +96,7 @@ def inject_onboarding_to_out(out: dict, user_id: int, conn) -> dict:
     Trigger heuristics:
     - dice_roll    → out has skill_test_pending
     - combat_start → out has combat_state
+    - world_map    → out has current_hex (campaign uses the hex world)
     - xp_gained    → result has xp_granted or xp_earned > 0
     - gold_gained  → result has gold_drop or gold_earned > 0
     - damage_taken → result has damage > 0
@@ -97,6 +108,9 @@ def inject_onboarding_to_out(out: dict, user_id: int, conn) -> dict:
         triggered.append("dice_roll")
     if out.get("combat_state") is not None:
         triggered.append("combat_start")
+    # world_map: campaign has a hex world → teach movement once, early
+    if out.get("current_hex") is not None:
+        triggered.append("world_map")
     result = out.get("result") or {}
     if isinstance(result, dict):
         if int(result.get("xp_granted") or result.get("xp_earned") or 0) > 0:

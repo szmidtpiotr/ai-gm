@@ -1,6 +1,10 @@
-"""Phase 8D — Injector kontekstu lokalizacji do system promptu GM."""
+"""Phase 8D — Injector kontekstu lokalizacji do system promptu GM.
+
+U29 — build_swiat_block(): blok === ŚWIAT === z danymi hex + lokacje z bazy + kandydaci.
+"""
 
 import json
+import re
 import sqlite3
 from typing import Optional
 
@@ -11,6 +15,227 @@ logger = get_logger(__name__)
 
 # Maks. lokacji w known_locations (bez kolumny campaign_id — graf od bieżącej pozycji)
 _KNOWN_LOCATION_CAP = 120
+
+# ── U29: Flat-top hex directions (q_delta, r_delta, direction_name) ──────────
+
+_HEX_DIRECTIONS = [
+    (1,  0,  "wschód"),
+    (-1, 0,  "zachód"),
+    (0,  1,  "południe"),
+    (0,  -1, "północ"),
+    (1,  -1, "północny-wschód"),
+    (-1, 1,  "południowy-zachód"),
+]
+
+# ── U29: Keyword → location_subtype mapping for candidate search ──────────────
+
+_INTENT_KEYWORDS: dict[str, list[str]] = {
+    "karczma":      ["tavern", "inn"],
+    "gospoda":      ["tavern", "inn"],
+    "tawerna":      ["tavern", "inn"],
+    "kowal":        ["smithy", "forge"],
+    "kuźnia":       ["smithy", "forge"],
+    "świątynia":    ["temple", "church"],
+    "kościół":      ["temple", "church"],
+    "kaplica":      ["temple", "church"],
+    "sklep":        ["shop", "market"],
+    "rynek":        ["market", "shop"],
+    "targowisko":   ["market", "shop"],
+    "strażnica":    ["watchtower", "guard_post"],
+    "wieża":        ["watchtower", "tower"],
+    "port":         ["harbor", "port"],
+    "stajnia":      ["stable"],
+    "gildia":       ["guild"],
+}
+
+# Cap bloku ~400 tokenów ≈ 1600 znaków
+_SWIAT_BLOCK_MAX_CHARS = 1600
+
+
+def _hex_distance(q1: int, r1: int, q2: int, r2: int) -> int:
+    return max(abs(q1 - q2), abs(r1 - r2), abs((q1 + r1) - (q2 + r2)))
+
+
+def _detect_location_intent(player_message: str) -> list[str]:
+    """Returns list of location_subtype strings matching keywords in player_message.
+
+    Uses stem matching (first N-1 chars of keyword) to handle Polish declension:
+    'karczma' stem 'karczm' matches 'karczmy', 'karczmie', etc.
+    """
+    if not player_message:
+        return []
+    msg_lower = player_message.lower()
+    subtypes: list[str] = []
+    for keyword, subs in _INTENT_KEYWORDS.items():
+        # Use stem = keyword minus last char for declension tolerance
+        stem = keyword[:-1] if len(keyword) > 3 else keyword
+        if stem in msg_lower:
+            subtypes.extend(subs)
+    return list(dict.fromkeys(subtypes))  # deduplicate, preserve order
+
+
+def _get_hex_row(conn: sqlite3.Connection, q: int, r: int) -> dict | None:
+    row = conn.execute(
+        "SELECT q, r, hex_type, label FROM world_hexes WHERE q=? AND r=? AND is_active=1",
+        (q, r),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _get_locations_on_hex(conn: sqlite3.Connection, q: int, r: int) -> list[dict]:
+    rows = conn.execute(
+        """SELECT key, label, description, location_subtype, biome
+           FROM game_locations
+           WHERE world_hex_q=? AND world_hex_r=? AND approved=1 AND is_active=1""",
+        (q, r),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _get_location_npcs(conn: sqlite3.Connection, location_key: str) -> list[dict]:
+    rows = conn.execute(
+        """SELECT npc_key, assignment_type
+           FROM location_npc_assignments
+           WHERE location_key=? AND is_active=1""",
+        (location_key,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _get_hex_neighbors(conn: sqlite3.Connection, q: int, r: int) -> list[dict]:
+    neighbors = []
+    for dq, dr, direction in _HEX_DIRECTIONS:
+        nq, nr = q + dq, r + dr
+        row = conn.execute(
+            "SELECT q, r, hex_type, label, location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1",
+            (nq, nr),
+        ).fetchone()
+        if row:
+            n = dict(row)
+            n["direction"] = direction
+            neighbors.append(n)
+    return neighbors
+
+
+def _find_location_candidates(
+    conn: sqlite3.Connection,
+    q: int,
+    r: int,
+    subtypes: list[str],
+    limit: int = 3,
+) -> list[dict]:
+    """Find top locations from DB matching subtypes, sorted by distance from (q,r).
+
+    Wariant 2 (decyzja 2026-06-12): floating (niezakotwiczone) lokacje liczą się
+    jako kandydaci — zostaną osadzone przy odkryciu pasującego hexa (U28).
+    Placed lokacje sortowane wg dystansu; floating lądują na końcu listy.
+    """
+    if not subtypes:
+        return []
+    placeholders = ",".join("?" * len(subtypes))
+    rows = conn.execute(
+        f"""SELECT key, label, location_subtype, biome, placement, world_hex_q, world_hex_r
+            FROM game_locations
+            WHERE location_subtype IN ({placeholders})
+              AND approved=1 AND is_active=1
+            LIMIT 30""",
+        subtypes,
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        c = dict(row)
+        if c.get("world_hex_q") is not None and c.get("world_hex_r") is not None:
+            c["distance"] = _hex_distance(q, r, int(c["world_hex_q"]), int(c["world_hex_r"]))
+            c["floating"] = False
+        else:
+            c["distance"] = 999
+            c["floating"] = True
+        candidates.append(c)
+    candidates.sort(key=lambda x: x["distance"])
+    return candidates[:limit]
+
+
+def build_swiat_block(
+    conn: sqlite3.Connection,
+    session_flags: dict,
+    player_message: str = "",
+) -> str | None:
+    """U29 — Builds the === ŚWIAT === block for the LLM narrator.
+
+    Returns None when there's no current_hex in session_flags (no hex context).
+    Returns the block string otherwise (always contains at minimum hex coordinates).
+
+    Token cap: ~400 tokens (~1600 chars). Priority: hex locations > candidates > neighbors.
+    """
+    current_hex = session_flags.get("current_hex") or {}
+    q = current_hex.get("q")
+    r = current_hex.get("r")
+    if q is None or r is None:
+        return None
+
+    q, r = int(q), int(r)
+
+    hex_row = _get_hex_row(conn, q, r)
+    hex_type = (hex_row or {}).get("hex_type", "nieznany")
+    hex_label = (hex_row or {}).get("label") or f"({q},{r})"
+
+    lines = ["=== ŚWIAT ===", f"Hex: q={q} r={r} | teren: {hex_type} | {hex_label}"]
+
+    # ── Lokacje na hexie (priorytet 1) ────────────────────────────────────────
+    locations = _get_locations_on_hex(conn, q, r)
+    if locations:
+        lines.append("Lokacje na tym hexie:")
+        for loc in locations:
+            loc_line = f"  [{loc['key']}] {loc['label']}"
+            subtype = loc.get("location_subtype") or ""
+            if subtype:
+                loc_line += f" ({subtype})"
+            lines.append(loc_line)
+            desc = (loc.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Opis: {desc[:120]}")
+            # NPCs
+            npcs = _get_location_npcs(conn, loc["key"])
+            if npcs:
+                npc_parts = [f"{n['npc_key']} [{n['assignment_type']}]" for n in npcs]
+                lines.append(f"    NPC: {', '.join(npc_parts)}")
+
+    # ── Kandydaci z bazy (priorytet 2 — gdy intencja gracza) ─────────────────
+    intent_subtypes = _detect_location_intent(player_message)
+    if intent_subtypes:
+        candidates = _find_location_candidates(conn, q, r, intent_subtypes)
+        if candidates:
+            lines.append("Kandydaci z bazy (pasują do intencji gracza):")
+            for cand in candidates:
+                dist = cand.get("distance", "?")
+                if cand.get("floating"):
+                    dist_txt = "pula nieosadzona — zostanie przypisana przy odkryciu hexa"
+                else:
+                    dist_txt = f"{dist} hex" if isinstance(dist, int) and dist < 999 else "nieznana odległość"
+                lines.append(f"  [{cand['key']}] {cand['label']} — {dist_txt}")
+        else:
+            lines.append("brak_dopasowania: true")
+
+    # ── Sąsiednie hexy (priorytet 3) ─────────────────────────────────────────
+    block_so_far = "\n".join(lines)
+    if len(block_so_far) < _SWIAT_BLOCK_MAX_CHARS - 200:
+        neighbors = _get_hex_neighbors(conn, q, r)
+        if neighbors:
+            neighbor_parts = []
+            for nb in neighbors:
+                nb_txt = f"{nb['direction']}: {nb.get('label') or '?'} [{nb.get('hex_type','?')}]"
+                if nb.get("location_key"):
+                    nb_txt += f" → {nb['location_key']}"
+                neighbor_parts.append(nb_txt)
+            lines.append("Sąsiedzi: " + " | ".join(neighbor_parts))
+
+    result = "\n".join(lines)
+
+    # Hard cap
+    if len(result) > _SWIAT_BLOCK_MAX_CHARS:
+        result = result[:_SWIAT_BLOCK_MAX_CHARS] + "\n[...blok ucięty — token cap]"
+
+    return result
 
 
 def get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int | str | None:

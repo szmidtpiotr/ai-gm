@@ -2197,6 +2197,8 @@ System łączy tagi: encounter odpala gdy WSZYSTKIE jego tagi pasują do aktualn
 
 ## CZĘŚĆ AA — Lochy (Dungeon Mode)
 
+> ⚠️ **REDESIGN 2026-06-12: obowiązuje CZĘŚĆ AJ (FAZA L — Lochy kafelkowe).** Niniejsza CZĘŚĆ pozostaje jako kontekst historyczny. Nadpisane w szczególności: nawigacja lazy-losowana przy drzwiach → pre-generowany rozgałęziony graf (AJ Decyzja 2); śmierć = restart lochu → śmierć kończy run z checkpointami po bossach (AJ Decyzja 6); skalowanie po poziomie bohatera → absolutna skala D1–D5 (AJ Decyzja 8); tryb proceduralny (legacy) → usunięty (AJ Decyzja 1). Nowość: tryb nieskończony (AJ Decyzja 7).
+
 > **Tryb:** Farmowanie. Szybkie rundy nastawione na walkę, zagadki i loot. Brak fabuły.
 > **Kluczowa zasada:** Loch to izolowany sandbox — śmierć w lochu NIE zabija postaci.
 
@@ -3702,6 +3704,8 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest: odkrycie hexa town → lokacja z tagiem town przypisana; ta sama lokacja nie osadza się dwa razy; ręcznie: wygeneruj kawałek mapy w admin → hexy-miasta mają lokacje z bazy (sprawdź w admin Mapa).
 
+> ✅ **Wdrożono 2026-06-12** — [#540](https://github.com/szmidtpiotr/ai-gm/issues/540). `placement_engine.py`, migracje `terrain_tags`/`placement`/`location_spawn_chance`, hook w `hex_travel_service.initialize_campaign_hex`, endpoint `/floating` + `/place`, zakładka admin Mapa → ⚓ Floating.
+
 #### U29 — Blok [ŚWIAT] w kontekście LLM: kandydaci zamiast zgadywania
 
 **Cel:** LLM wymyśla lokacje, bo nie widzi bazy. Po U29 co turę dostaje komplet faktów o otoczeniu + kandydatów z bazy, gdy gracz czegoś szuka — i twardy zakaz wychodzenia poza nie.
@@ -3717,7 +3721,11 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest builderów (hex z lokacją/bez, kandydaci, brak_dopasowania); `/game-test-player`: "szukam karczmy" w pobliżu osadzonej karczmy → LLM kieruje do istniejącej (key w odpowiedzi/logu), NIE tworzy nowej; licznik pending-duplikatów = 0 w 15 turach.
 
+> ✅ **ZREALIZOWANE** [#541](https://github.com/szmidtpiotr/ai-gm/issues/541) 2026-06-12: `build_swiat_block()` w `location_context_injector.py`; stem-matching intencji gracza (fleksja PL); cap 1600 znaków; `system_prompt.txt` ZASADA U29; 9/9 testów GREEN. Oczekuje weryfikacji manualnej (pending-duplikaty).
+
 #### U30 — Ruch jako akcja mechaniczna pierwszej klasy (klik mapy = podróż)
+
+> ✅ **ZREALIZOWANE** [#544](https://github.com/szmidtpiotr/ai-gm/issues/544) 2026-06-12: `POST /travel` endpoint (target_hex + target_location_key); fix #518 (`_update_hex_world_state` lookup via location_key gdy brak q/r); `detect_move_intent()` keyword fast-path; `_check_travel_desync()` anty-desync guard; `_build_done_extra_payload()` + current_hex w [DONE] SSE; app.js sync pin mapy. 9/9 testów GREEN. Oczekuje weryfikacji manualnej.
 
 **Cel:** Gracz tkwi na hexie, bo ruch wisi na łańcuchu tagów LLM, a mapa jest tylko obrazkiem. Po U30 są DWIE równoprawne drogi ruchu — klik na mapie i tekst — obie przechodzą przez ten sam mechaniczny endpoint. Target gry to dorosły z telefonem: klik musi działać.
 
@@ -3785,6 +3793,340 @@ U32b po U28–U32: ❌ na checkpointach 2/3/4 blokuje wejście w Blok 4 (defekt 
 U27 ostatnie — wymaga wszystkiego (w tym U28–U32)
 Bloki 5/6/7 wewnętrznie niezależne — można równolegle, jeśli Piotr prowadzi 2 agentów
 ```
+
+---
+
+## CZĘŚĆ AI — FAZA S: Skille i Stany (rozszerzenie mechaniki)
+
+> **Źródło:** `skills_conditions_design_doc.md` (korzeń repo — tabele 24 nowych skilli i 17 nowych kondycji z DC, sposobem testowania i efektami) + decyzje projektowe z sesji 2026-06-12.
+> **Cel:** Bogatsza rozgrywka — stopnie sukcesu zamiast binarnego zdał/nie zdał, testy przeciwne na prawdziwych statystykach przeciwnika, ~16 nowych skilli i ~13 nowych kondycji.
+> **Strategia:** NIE kodujemy per-skill ani per-kondycja. Kodujemy PRYMITYWY (typy efektów w effect_json + mechanizmy rzutu) — każdy raz, z testami raz. Skille i kondycje wchodzą potem jako DANE (seedy + wiersze w adminie), weryfikowane smoke'iem w Sandboxie.
+> **Kiedy:** po FAZIE U albo przeplatane z nią za zgodą Piotra. **Blok 3 wymaga ukończonego U10** (effect schema lockdown). Workflow jak FAZA U: issue `[TASK] SNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_s.md`, statusy w notes.md → FAZA S.
+
+### Decyzje projektowe (zatwierdzone przez Piotra 2026-06-12)
+
+**Decyzja 1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności.**
+
+> ⚠️ Modyfikacja zablokowanej mechaniki (`system_prompt.txt`) — zgoda Piotra 2026-06-12. Dotyczy WYŁĄCZNIE testów umiejętności (`resolve_skill_test`). Rzuty ataku w walce BEZ ZMIAN (nat 20 = podwójne obrażenia, nat 1 = komplikacja).
+
+| Wynik | Warunek | Skutek |
+|---|---|---|
+| Sukces krytyczny | nat 20 **lub** margines ≥ +5 | efekt wzmocniony (kolumna "Sukces krytyczny" z design doc) |
+| Sukces | margines 0…+4 | normalny efekt |
+| Porażka | margines −1…−4 | nie wyszło, bez katastrofy |
+| Porażka krytyczna | nat 1 **lub** margines ≤ −5 | komplikacja (kolumna "Krytyczna porażka" z design doc) |
+
+> **Dlaczego?** Nat-only crit to sztywne 5%/5% — inwestycja w skill zwiększa tylko szansę zdania, nie jakość wyniku. Z marginesem rank+stat realnie podnosi szansę na crit (progresję CZUĆ). Narrator dostaje 4 stany zamiast 2 — bogatsza narracja za darmo. Zwykła porażka przestaje być katastrofą — gracz chętniej próbuje skilli społecznych ("fail forward").
+> **Co odrzucono?** 5+ stopni (SL jak WFRP 4e) — za dużo dla narratora LLM, rozmywa się. Margines ±10 — przy DC 8–24 zbyt rzadki, crit z marginesu prawie nie występuje.
+> **Co się zepsuje, jeśli odwrócić?** Tabele efektów w design doc są napisane pod margines ("o 5+ poniżej DC") — bez niego połowa kolumn efektów nie ma mechanicznego nośnika.
+
+**Decyzja 2 — Staty aktorów: wrogowie i NPC dostają 7 statystyk (NADPISUJE decyzję z CZĘŚCI AB).**
+
+> ⚠️ CZĘŚĆ AB dokumentuje decyzję "model wroga uproszczony, NIE jak gracz — celowo" (2026-06-05). Niniejsza decyzja nadpisuje ją CZĘŚCIOWO (2026-06-12): **ścieżka walki zostaje uproszczona bez zmian** (`attack_bonus`, `ac_base`, `damage_die`), a pełne staty (`stats_json`) służą testom przeciwnym i interakcjom skillowym. Zadanie S2 dopisuje notkę o nadpisaniu do CZĘŚCI AB.
+
+> **Dlaczego?** Perswazja vs tępy osiłek i vs uczony liczy się dziś tak samo (sztywny fallback w `_resolve_opponent`). Z prawdziwymi statami gracz uczy się CZYTAĆ przeciwnika i wybierać wektor ataku (perswazja na osiłka WIS −2 = łatwo; zapasy na niego STR +3 = ciężko) — taktyczna głębia za darmo.
+> **Dlaczego nie łamie argumentu "admin wpisuje 4 liczby"?** Staty generuje archetyp (heurystyka po keywordach jak `_default_zone_for_enemy` + tabela archetypów). Admin nadal wpisuje 4 liczby; staty powstają same, można je nadpisać.
+> **Podwalina MP (CZĘŚĆ AC):** każdy uczestnik testu (gracz/NPC/wróg/drugi gracz) wystawia ten sam kształt `{stats, skills, conditions}` — `_resolve_opponent` pisany aktor-agnostycznie eliminuje refactor przy Fazie G.
+
+**Zasady projektowe FAZY S:**
+1. **Prymityw raz, kondycja danymi.** Jeśli implementacja kondycji wymaga `if condition_key == "..."` w silniku — to błąd projektowy; wydziel prymityw.
+2. **Mechanika decyduje, LLM narruje** (Zasady CZĘŚĆ 10 obowiązują w całości).
+3. **Numbers Policy:** wszystkie liczby z design doc (DC, kary, czasy trwania) to wartości STARTOWE — do tuningu po playteście S20.
+4. **Każdy nowy typ efektu aktualizuje 4 miejsca:** tabelę typów w CZĘŚCI X + builder F3 (dropdown w adminie) + DSL prompt F1d (Smart Entry) + schemat U10. Bez tego admin/LLM nie umieją go używać.
+
+### Kolizje z istniejącym planem (audyt 2026-06-12)
+
+| Kolizja | Rozstrzygnięcie |
+|---|---|
+| CZĘŚĆ AB: "model wroga uproszczony celowo" | Nadpisane Decyzją 2 (zakres: tylko testy przeciwne; walka bez zmian). S2 aktualizuje CZĘŚĆ AB. |
+| U10 — effect schema lockdown (Blok 4 FAZY U, niezrobione) | Blok 3 FAZY S (S8–S14) wchodzi PO U10 — nowe typy efektów rozszerzają zwalidowany schemat, nie dziki JSON. Bloki 1–2 FAZY S są od U10 niezależne. |
+| CZĘŚĆ X — tabela typów efektów; F3 builder; F1d DSL | Każdy prymityw z Bloku 3 ma w opisie obowiązek aktualizacji (Zasada 4). |
+| U7 — SKILL_CHECK safety net (keyword map kategorii ryzyka) | S5 rozszerza mapę kategorii o nowe skille (pickpocket, climb, swim, disguise...). |
+| U14 — pełny reset bohatera (conditions) | Nowe kondycje przechodzą przez ten sam reset — zero zmian, tylko świadomość. |
+| U26 — centralna `change_gold()` | S7 (gamble): jeśli U26 zrobione → użyj `change_gold()`; jeśli nie → wzorzec lokalny jak F4 i refactor przy U26. |
+| `skill_counters` (tabela istnieje, era U7) | S4/S5 rozszerzają istniejącą tabelę — NIE tworzyć nowej. |
+| `system_prompt.txt` — kontrakt mechaniki 🔒 | S1 i S5 modyfikują za zgodą z Decyzji 1; commit musi jawnie cytować zgodę. |
+
+### Poza zakresem FAZY S (świadomie odłożone)
+
+- **disease, broken_limb** — wymagają tików czasu świata poza walką (co 12h / 2 tygodnie); silnik liczy rundy. Osobny projekt "zegar świata" — dopisać do backlogu przy S20.
+- **Crafting mechaniczny (trade_craft, alchemy)** — osobny podsystem (materiały, narzędzia, przepisy). W FAZIE S wchodzą jako skille narracyjne (S5); mechanika craftingu = osobna faza.
+- **charmed/insane — pełne egzekwowanie** (zakaz atakowania źródła, GM prowadzi postać) — w S8 wchodzą wersje lite (kary + narracja); pełna wersja wymaga behavior-override również dla GRACZA, co jest decyzją UX na później.
+- **pickpocket/torture — skutki inwentarzowe NPC** — NPC nie mają inwentarzy; efekty narracyjne + ewentualne złoto przez GM.
+
+---
+
+### FAZA S — zależności i kolejność
+
+```
+Blok 1: S1 → S2 → S3 → S4          (fundament rzutu — margines, staty, opposed)
+Blok 2: S5 → S6, S7                 (skille: batch danych, potem hooki sklepu/hazardu)
+Blok 3: [WYMAGA U10] S8 → S9 → S10 → S11 → S12 → S13 → S14   (prymityw + kondycje parami)
+Blok 4: S15 → S16 → S17 → S18 → S19 (zaawansowane mechaniki bojowe; można PRZED Blokiem 3, ale S18 wymaga S8)
+S20 ostatnie — kamień milowy playtest (wymaga wszystkiego powyżej)
+S6 i S7 wewnętrznie niezależne — można równolegle
+```
+
+---
+
+### BLOK 1 — Fundament rzutu (S1–S4)
+
+#### S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności
+
+**Cel prostym językiem:** Dziś test umiejętności kończy się "zdał/nie zdał" (crit tylko przy nat 20/1). Po S1 wynik ma 4 stopnie zależne od tego, O ILE gracz pobił DC — lepszy bohater nie tylko częściej zdaje, ale częściej zdaje spektakularnie, a narracja to oddaje.
+
+**Dla agenta:**
+1. `backend/app/services/skill_service.py` → `resolve_skill_test()` (okolice linii 231–290): po policzeniu `player_total` vs `opponent_total` wyznacz margines i mapuj wg tabeli z Decyzji 1. Enum wyników już istnieje (CRITICAL_SUCCESS/SUCCESS/FAILURE/CRITICAL_FAILURE) — zmienia się WARUNEK przypisania, nie zestaw wartości (kompatybilność konsumentów).
+2. Nat 20/nat 1 zachowują absolutne pierwszeństwo (auto-sukces/auto-porażka niezależnie od marginesu).
+3. `build_skill_result_context()` (okolice 325–347): dołącz margines liczbowo + słowny opis stopnia do kontekstu narratora ("sukces z nawiązką +7" / "porażka o włos −2").
+4. `system_prompt.txt`: sekcja mechaniki testów — opisz 4 stopnie (zgoda z Decyzji 1, zacytuj w commit message). NIE ruszaj zasad walki.
+5. Frontend karta rzutu (`frontend/js/app.js`, render wyniku skill testu): pokaż margines ("Sukces +7"). Bump `?v=` jeśli zmieniasz shared module.
+6. Konsumenci wyniku: sprawdź `turn_pipeline.py` `intercept_skill_test_tag()` i wszystkie miejsca czytające outcome — czy żadne nie zakłada binarności.
+
+**Weryfikacja:** pytest: tabela przypadków (roll×DC → oczekiwany stopień; brzegi: margines dokładnie +5/−5, nat 20 z marginesem −3, nat 1 z marginesem +3). Ręcznie: `/game-test-player` — sprowokuj 2–3 testy skilli, karta rzutu pokazuje margines, narracja różnicuje stopnie.
+
+#### S2 — Staty wrogów: `stats_json` + archetypy + seed heurystyką
+
+**Cel prostym językiem:** Wróg dostaje 7 statystyk (STR…LCK) generowanych automatycznie z archetypu, żeby testy przeciwne (S4) miały się do czego odnosić. Admin nadal tworzy wroga 4 liczbami.
+
+**Dla agenta:**
+1. Migracja w `migrations_admin.py`: `ALTER TABLE game_config_enemies ADD COLUMN stats_json TEXT` (wzorzec idempotentny jak inne ALTER-y w pliku; tabela def. okolice linii 175).
+2. Tabela archetypów statów (stała w kodzie serwisu lub `game_config_meta` — wybierz spójnie z `_default_zone_for_enemy` w `combat_service.py`, która jest wzorcem keyword-heurystyki): osiłek/brute (STR 16, CON 14, INT 7, WIS 8), strzelec (DEX 15), mag/szaman (INT/WIS 14, STR 8), bestia (STR/DEX wg rozmiaru, INT 3), humanoid-default (wszystko 10). Klucz → archetyp po keywordach PL/EN w `key`/`label` (bandyta, wilk, łucznik, szkielet...).
+3. Backfill seed: migracja danych wypełnia `stats_json` istniejącym wrogom heurystyką; NULL = traktuj jak default 10 (zero ryzyka regresji).
+4. `combat_service.py` już czyta `enemy.get("stats")` z defaultem 10 (okolice 434, 561) — upewnij się, że combatant dict dostaje staty z nowej kolumny przy starcie walki.
+5. Admin: sekcja Świat → wrogowie — pole/edytor statów (prosty 7×input, jak edycja statów postaci). Smart Entry: schema endpoint sam podchwyci kolumnę — zweryfikuj, że LLM Kreator generuje sensowne staty (prompt schema-constrained).
+6. Dopisz do CZĘŚCI AB notkę: "Decyzja 'model uproszczony' nadpisana częściowo przez CZĘŚĆ AI Decyzję 2 (2026-06-12) — staty służą testom przeciwnym, walka bez zmian".
+
+**Weryfikacja:** pytest: heurystyka archetypów (tabela keyword→staty), backfill (wróg z key "bandyta_lucznik" dostaje DEX 15), NULL-fallback. Ręcznie: admin → Świat → wróg pokazuje staty; nowy wróg przez Kreator AI ma wypełnione staty.
+
+#### S3 — Staty NPC + lazy generation archetypu
+
+**Cel prostym językiem:** NPC z kampanii (karczmarz, strażnik) dostaje staty dopiero wtedy, gdy gracz pierwszy raz testuje coś PRZECIW niemu — generowane z archetypu i zapamiętane, żeby ten sam karczmarz zawsze miał te same staty.
+
+**Dla agenta:**
+1. Zbadaj najpierw stan tabel NPC: `campaign_known_npcs` (migracja okolice linii 940 — świeża, z #529), `npcs` (575), `location_npc_assignments` (2358). Kolumna `stats_json` na `campaign_known_npcs` (per-kampania — ten sam NPC może być inny w innej kampanii) + opcjonalnie na `npcs` jako template. Jeśli zastany stan przeczy temu opisowi — STOP, zapytaj Piotra.
+2. Lazy generation: helper `ensure_npc_stats(conn, campaign_id, npc_name) -> dict` — jeśli `stats_json` puste: przypisz archetyp heurystyką z S2 (reużyj tej samej tabeli archetypów!) po nazwie/opisie NPC, zapisz, zwróć. Wołane TYLKO ze ścieżki testu przeciwnego (S4) — zero kosztu dla NPC tła.
+3. Bezimienne cele ("przypadkowy przechodzień") nie dostają wpisu — fallback DC z `skill_counters` zostaje (design doc podaje DC zastępcze per skill).
+
+**Weryfikacja:** pytest: dwukrotny `ensure_npc_stats` dla tego samego NPC zwraca identyczne staty (persystencja); NPC "strażnik-osiłek" dostaje archetyp brute. Ręcznie: w grze targuj się 2× z tym samym kupcem — DB pokazuje jeden zapisany `stats_json`.
+
+#### S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie)
+
+**Cel prostym językiem:** "Przekonuję osiłka" liczy się teraz przeciw JEGO mądrości, a nie przeciw sztywnej liczbie. Każdy przeciwnik broni się swoimi statami — gracz uczy się wybierać słabe punkty.
+
+**Dla agenta:**
+1. `skill_service.py` → `_resolve_opponent()` (okolice 111–120; komentarz "use a fixed moderate modifier as fallback" = dokładnie to, co naprawiamy): sygnatura aktor-agnostyczna — przyjmuje sheet-like dict `{stats, skills?, conditions?}` dowolnego aktora. Rzut przeciwnika: `d20 + stat_mod(counter_key)` z prawdziwych statów.
+2. Rozwiązywanie aktora: cel testu z kontekstu tury (scene_enemies → staty z combatant/`game_config_enemies.stats_json`; scene_npcs/known_npcs → `ensure_npc_stats` z S3). Brak aktora/statów → fallback DC z `skill_counters` (bez zmian zachowania).
+3. `skill_counters`: uzupełnij wiersze `counter_type='opposed'` dla istniejących skilli, gdzie design ma test przeciwny (deception vs WIS/insight, intimidation vs WIS...). Tabela istnieje (migracja okolice 2315) — INSERT OR IGNORE.
+4. Kondycje przeciwnika modyfikują jego obronę (np. confused WIS −3 utrudnia mu opór) — reużyj `_combatant_stat_modifier` z `combat_service.py` (T29, okolice 542–587) lub wydziel wspólny helper; NIE duplikuj logiki fold-owania stat_mods.
+5. Wynik testu przeciwnego do narratora: obie strony rzutu jawnie ("twoje 17 vs jego 12") — `build_skill_result_context`.
+
+**Weryfikacja:** pytest: opposed vs aktor ze statami (WIS 8 łatwiej niż WIS 16), fallback DC bez aktora, kondycja celu zmienia wynik. Ręcznie: `/game-test-player` — perswazja na osiłku i na kapłanie, w logu rzutów widać różne modyfikatory przeciwnika.
+
+---
+
+### BLOK 2 — Skille: batch danych + hooki (S5–S7)
+
+#### S5 — Seed ~16 skilli kategorii A (czyste testy)
+
+**Cel prostym językiem:** Hurtowy zasiew wszystkich skilli, które są "czystym testem" — jeździectwo, pływanie, plotkowanie, teologia... Silnik już umie je obsłużyć; dodajemy dane i uczymy narratora ich używać.
+
+**Dla agenta:**
+1. Skille z design doc TABELA 1 (wszystkie POZA: dodge, shield_block, wrestling → Blok 4; haggling, gamble → S6/S7): riding, endurance, swim, climb, charm, gossip, bribe, trade_craft, language, theology, nature, alchemy, magic_sense, tracking, sailing, pickpocket, disguise, torture. Seed `INSERT OR IGNORE INTO game_config_skills` w `migrations_admin.py` (wzorzec: istniejący seed okolice 969–986) ORAZ w `data/seeds/01_core_mechanics.sql` (pipeline U13 — sprawdź konwencję).
+2. Skille dwustatowe — wybierz primary `linked_stat`: swim→STR, sailing→INT, torture→CHA, endurance→CON. Wariant drugiego statu zostaje narracyjny.
+3. `description` = skondensowana kolumna "Jak testować" + "Efekty" z design doc (to trafia do narratora przez `build_skill_result_context` — sprawdź, czy context zawiera description; jeśli nie, dodaj).
+4. `skill_counters` dla opposed z tabeli: charm vs WIS, bribe vs WIS, pickpocket vs WIS, disguise vs WIS, torture vs CON (primary) + default_dc z kolumny "Typowe DC" (środek widełek, klamp do {8,12,16,20,24} — DC lock U7).
+5. U7 keyword map: rozszerz kategorie ryzyka o nowe skille (kieszonkostwo, wspinaczka, pływanie, przebranie...) — listy słów kluczowych w game_config (edytowalne z admina, patrz U7 pkt 2).
+6. `system_prompt.txt` / katalog skilli dla LLM: katalog jest dynamiczny z DB (`config_service`) — zweryfikuj, że nowe skille faktycznie docierają do prompta; trade_craft/alchemy oznacz w description "efekt narracyjny (crafting mechaniczny: poza zakresem)".
+
+**Weryfikacja:** pytest: seed idempotentny, każdy nowy skill ma linked_stat z {STR,DEX,CON,INT,WIS,CHA}, countery wstawione. Ręcznie: admin → Mechanika → skille pokazuje ~35 wierszy; `/game-test-player` — "tropię ślady" wywołuje SKILL_TEST:tracking.
+
+#### S6 — Haggling: targowanie wpięte w ceny sklepu
+
+**Cel prostym językiem:** Targowanie przestaje być tekstem — udany test realnie obniża cenę w sklepie (raz na transakcję), krytyczna porażka może ją podnieść.
+
+**Dla agenta:**
+1. Seed skilla `haggling` (jak S5) + counter opposed vs CHA kupca (NPC staty z S3; kupiec bez NPC → DC 12/16).
+2. `shop_service.py`: jest już `_cha_buy_multiplier` (F10 — pasywny modyfikator CHA). Haggling = AKTYWNY test nakładający dodatkowy mnożnik na JEDNĄ transakcję: sukces −10–25%, crit −30–50%, porażka 0, crit-fail +10% i flaga "kupiec obrażony" (blokada ponownego targowania w tej lokacji do końca sceny — `session_flags`).
+3. Wynik testu → mnożnik trzymany w `session_flags` (np. `haggle_discount`), konsumowany przez najbliższe kupno/sprzedaż, potem czyszczony. Mnożniki stackują z F10 (CHA pasywne) — multiplikatywnie, klamp łączny min 0.4.
+4. UI sklepu: pokaż aktywny rabat przy cenie ("−20% po targowaniu") — wzorzec cost-preview z U16, jeśli U16 zrobione; jeśli nie — prosty badge.
+
+**Weryfikacja:** pytest: mnożnik po sukcesie/crit/fail, konsumpcja jednorazowa, klamp, blokada po obrazie. Ręcznie: w grze targuj się przed kupnem — cena w sklepie spada, druga transakcja już bez rabatu.
+
+#### S7 — Gamble: hazard z prawdziwą stawką złota
+
+**Cel prostym językiem:** Gra w kości w karczmie ma prawdziwą stawkę — gracz deklaruje złoto, test rozstrzyga, mechanika przelewa wygraną/przegraną. LLM nie dotyka liczb.
+
+**Dla agenta:**
+1. Seed skilla `gamble` (opposed vs CHA przeciwnika lub DC 12/20 wg design doc).
+2. Stawka deklarowana przez gracza, walidowana mechanicznie (≥1 gp, ≤ aktualne złoto — wzorzec walidacji jak [SPEND_GOLD] F4). Zasada C12/F4 obowiązuje: kwoty z mechaniki, NIE z LLM.
+3. Wypłata wg stopni S1: sukces +stawka, crit +2×stawka, porażka −stawka, crit-fail −stawka + flaga "oskarżenie o oszustwo" do narratora (kontekst następnej tury, jak `ostatnio odrzucone tagi` z U6).
+4. Zapis złota: jeśli U26 (centralna `change_gold` + economy_log) zrobione → użyj; jeśli nie → wzorzec lokalny jak F4 z TODO na U26.
+5. Anti-abuse: max 3 gry hazardowe na scenę/lokację (session_flags counter) — inaczej farma złota na spamie.
+
+**Weryfikacja:** pytest: przepływ złota per stopień, walidacja stawki ponad stan, limit 3/scenę. Ręcznie: `/game-test-player` — zagraj w kości w karczmie, złoto w HUD zmienia się zgodnie z wynikiem rzutu.
+
+---
+
+### BLOK 3 — Prymitywy efektów + kondycje parami (S8–S14) — WYMAGA U10
+
+> Wzorzec każdego zadania: nowy typ efektu w silniku (`combat_service._process_active_turn_T24` / `_combatant_stat_modifier`) + testy prymitywu + seed kondycji używających go + aktualizacja 4 miejsc z Zasady 4 (CZĘŚĆ X, F3 builder, F1d DSL, schemat U10).
+
+#### S8 — Batch kondycji z istniejących klocków + tag [APPLY_CONDITION]
+
+**Cel prostym językiem:** Kondycje, które silnik już umie złożyć z istniejących typów efektów (podpalenie, zmrożenie, dezorientacja...), wchodzą jako dane. Dodatkowo narrator dostaje tag do nakładania kondycji wprost z fabuły — z walidacją katalogu.
+
+**Dla agenta:**
+1. Seed kondycji składanych z ISTNIEJĄCYCH typów (dot, static_stat_modifier, attack_penalty, periodic_save, skip_turn): `on_fire` (dot 2d6 + STR/DEX −2 + periodic_save DEX 12 gasi), `frozen` (DEX −4 + periodic_save CON 14), `confused` (INT/WIS −3 + periodic_save WIS 14 — wersja lite, bez losowej tabeli zachowań → pełna w S18), `insane` (testy społeczne −5 — lite), `panicked` (CHA/WIS −4 — lite), `charmed` (WIS −3 + periodic_save WIS 16 — lite), `cursed` (−2 jako stat_mods — lite, zły omen → S11). Wiersze do `game_config_conditions` + `data/seeds/01_core_mechanics.sql` (wzorzec: istniejące seedy okolice linii 50–80).
+2. Nowy tag `[APPLY_CONDITION:key]` w centralnym parserze U5 (`llm_tag_parser.py`): walidacja klucza katalogiem (`invalid_reference` → llm_tag_errors + korekta U6), nakładanie przez istniejący `apply_condition_to_combatant` / ścieżkę sheet_json poza walką. Sekcja w `system_prompt.txt`: kiedy wolno (skutek fabularny: wpadłeś do ogniska → on_fire), kiedy NIE wolno (walka — tam decydują efekty broni).
+3. `context_injector.py` (`_build_character_state_block`, okolice 570–602): upewnij się, że nowe kondycje raportują label+description do narratora (description z katalogu, nie hard-coded jak `_FEAR_LABELS`).
+
+**Weryfikacja:** pytest: każda kondycja seed parsuje się schematem U10; APPLY_CONDITION ok/invalid_reference; on_fire tyka 2d6 (test integracyjny combat). Ręcznie: Sandbox → nałóż on_fire adminem → obrażenia co turę widoczne w logu walki.
+
+#### S9 — Prymityw: poziomy stackowania + kondycja `exhausted`
+
+**Cel prostym językiem:** Niektóre stany się piętrzą — pierwszy poziom wyczerpania spowalnia, drugi ścina z nóg. Silnik dostaje pojęcie "poziomu" kondycji z progami.
+
+**Dla agenta:**
+1. Nowy typ efektu `stacking_levels`: pola `max_level`, `per_level_effects` (lista zwykłych efektów aplikowanych ×poziom), `threshold_effects` ({poziom: efekt — np. 2: block_action}). Kolumna `stackable` istnieje (`game_config_conditions`) — semantyka: ponowne nałożenie stackable=1 podbija `level` w runtime kondycji zamiast duplikować wiersz.
+2. Silnik: `_process_active_turn_T24` + `_combatant_stat_modifier` rozumieją level; zdejmowanie poziomami (odpoczynek 1h = −1 level, pełny sen = wszystkie — hook w `rest_service.py`).
+3. Seed `exhausted`: STR/DEX/CON −3 per level, level 2 = omdlenie (block_action), zdejmowanie wg design doc.
+4. Aktualizacja 4 miejsc (Zasada 4).
+
+**Weryfikacja:** pytest: nałożenie 2× podbija level (nie duplikat), kary ×level, próg 2 = brak akcji, odpoczynek zdejmuje poziomami. Ręcznie: Sandbox — nałóż exhausted 2×, combatant traci turę.
+
+#### S10 — Prymityw: eskalujący DOT + kondycja `hemorrhage`
+
+**Cel prostym językiem:** Krwotok, który nieleczony narasta — co 3 tury obrażenia rosną o kość. Silnik dostaje DOT ze wzrostem w czasie.
+
+**Dla agenta:**
+1. Nowy typ `escalating_dot`: pola `dice` (start), `escalate_every_rounds`, `escalate_dice` (przyrost), stan w `runtime.effect_state` (licznik rund — wzorzec: istniejący `remaining_rounds`).
+2. Seed `hemorrhage`: 1d4/turę, +1d4 co 3 tury, zdjęcie: medicine DC 16 lub leczenie magiczne. Ścieżka "udany SKILL_TEST zdejmuje kondycję": sprawdź, czy istnieje; jeśli nie — dodaj generyczne pole `cures_condition` w pending state skill testu (deklaratywnie, przyda się S19 i przyszłym kondycjom).
+3. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: tick rośnie po 3 i 6 rundach; medicine-sukces zdejmuje; przeniesienie stanu między rundami. Ręcznie: Sandbox — hemorrhage na klonie, log pokazuje rosnące obrażenia.
+
+#### S11 — Prymityw: reroll (nadany i wymuszony) + `inspired` + `cursed` (pełny)
+
+**Cel prostym językiem:** Inspiracja pozwala raz przerzucić nieudany rzut; klątwa pozwala losowi raz zepsuć udany. Silnik dostaje pojęcie przerzutu.
+
+**Dla agenta:**
+1. Nowy typ `reroll`: pola `mode` (`player_keep_best` / `forced_keep_worst`), `uses` (licznik w runtime), `scope` (skill_test/attack/all). Player-keep-best: po nieudanym rzucie UI proponuje przerzut (przycisk na karcie rzutu), konsumuje use. Forced-keep-worst (zły omen): mechanika przerzuca udany test gracza automatycznie max 1×/scenę, narrator dostaje informację "zły omen".
+2. `inspired`: +2 CHA/WIS (istniejący stat_mod) + reroll player_keep_best uses=1, duration 3 tury, znika po użyciu.
+3. `cursed` (rozszerzenie wiersza lite z S8): −2 all + reroll forced_keep_worst.
+4. Aktualizacja 4 miejsc + UI przycisku przerzutu (frontend karta rzutu).
+
+**Weryfikacja:** pytest: keep-best/keep-worst, konsumpcja uses, wygaśnięcie kondycji po użyciu. Ręcznie: w grze z inspired nieudany test → przycisk "Przerzuć (Zainspirowany)" → nowy wynik.
+
+#### S12 — Prymityw: dodatkowa akcja + kondycja `hasted`
+
+**Cel prostym językiem:** Przyspieszenie daje dodatkową akcję ruchu w turze (zmiana strefy za darmo) i bonusy do refleksu; po zakończeniu — zmęczenie.
+
+**Dla agenta:**
+1. Nowy typ `extra_action`: pole `action_kind` (`move_only` na start — pełna dodatkowa akcja ataku to balansowy dynamit). W praktyce: `change_player_zone` nie woła `advance_turn()` gdy aktor ma extra_action niewykorzystaną w tej turze (flaga w runtime).
+2. Typ `on_expire_apply` (efekt przy wygaśnięciu kondycji): hasted → exhausted 1 level (wymaga S9). Generyczny — przyda się każdej kondycji "z ceną".
+3. Seed `hasted`: +2 DEX, extra_action move_only, duration k4+1 (kość w duration — sprawdź, czy schemat U10 dopuszcza; jeśli nie, stała 3), on_expire → exhausted.
+4. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: zmiana strefy bez utraty tury przy hasted, exhausted po wygaśnięciu. Ręcznie: Sandbox — hasted, zbliż się + atak w tej samej turze.
+
+#### S13 — Prymityw: trigger przy 0 HP + kondycja `blessed`
+
+**Cel prostym językiem:** Błogosławieństwo daje tarczę losu — raz na scenę, zamiast paść na 0 HP, test CON może zostawić bohatera na 1 HP.
+
+**Dla agenta:**
+1. Nowy typ `on_zero_hp_save`: pola `stat`, `dc_key`, `result` (`stay_at_1hp`), `uses` 1. Hook w ścieżce obrażeń sprowadzających HP do ≤0 (gracz: PRZED death-saves `solo_death_service`; wróg: przed śmiercią — dla symetrii, choć seed `blessed` celuje w gracza). Rzut wykonuje MECHANIKA automatycznie, wynik do narratora.
+2. Seed `blessed`: +2 do testów obronnych (periodic_save i obrona w opposed — sprawdź fold w `_combatant_stat_modifier`), on_zero_hp_save CON 12, duration: scena (mapuj na koniec walki/zmianę lokacji — najbliższy istniejący marker; udokumentuj wybór).
+3. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: cios sprowadzający do −2 HP przy blessed + udany save = 1 HP + zużycie; drugi raz w tej samej scenie już bez ratunku. Ręcznie: Sandbox — klon z blessed przeżywa dobicie na 1 HP.
+
+#### S14 — Prymityw: odporność na kondycje + kondycja `rage`
+
+**Cel prostym językiem:** Kontrolowana furia: bonus do obrażeń i siły, odporność na spowolnienie i osłabienie, a po wszystkim — zmęczenie.
+
+**Dla agenta:**
+1. Nowy typ `condition_immunity`: pole `immune_to` (lista kluczy). Przy nakładaniu kondycji sprawdź immunitety aktywnych kondycji celu (hook w `apply_condition_to_combatant` + ścieżki weapon-apply F1/F2); istniejące kondycje z listy: zdejmowane przy nałożeniu immunitetu (prostsze niż zawieszanie — udokumentuj).
+2. Seed `rage`: +3 obrażenia wręcz (damage_bonus istnieje z F1), +2 STR, immunity [slowed, weakened], duration k6+2 (lub stała — jak S12 pkt 3), on_expire → exhausted 1 (S9/S12), przerwanie przez stunned/confused (pole `broken_by` — mini-rozszerzenie: lista kluczy kondycji, których nałożenie zdejmuje tę kondycję).
+3. Zakończenie dobrowolne: poza zakresem UI w tym zadaniu — kondycję zdejmuje czas; przycisk gracza dopisz do backlogu S20.
+4. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: slowed nie wchodzi na cel z rage; nałożenie stunned zdejmuje rage; exhausted po wygaśnięciu. Ręcznie: Sandbox — rage + próba slowed = odporność w logu.
+
+---
+
+### BLOK 4 — Zaawansowane mechaniki bojowe (S15–S19)
+
+#### S15 — System reakcji + skill `dodge`
+
+**Cel prostym językiem:** Gdy wróg atakuje, gracz z wykupionym unikiem może raz na rundę spróbować całkiem uniknąć ciosu — zanim spadną obrażenia. Pierwsza mechanika "reakcji" w grze.
+
+**Dla agenta:**
+1. Framework reakcji w `combat_service.py`: po rzucie ataku wroga, PRZED aplikacją obrażeń — okno reakcji. Combatant ma `reaction_available: bool` resetowane co rundę. UX solo: PRE-DEKLARACJA ("Unikaj następnego ataku" — toggle w UI walki, jak przycisk strefy) zamiast modala przerywającego — enemy turns auto-procesują się po 750 ms, modal by to łamał. Pre-deklaracja = flaga w stanie walki konsumowana przy pierwszym ataku wroga.
+2. `dodge`: test DEX vs wynik ataku wroga (lub DC 12/16 wg siły ataku — design doc); sukces = atak mija (0 dmg), porażka = normalne obrażenia, crit-fail (margines ≤ −5, S1) = utrata reakcji w następnej rundzie.
+3. Seed skilla `dodge` do `game_config_skills`; wymaga rank ≥ 1, żeby toggle był aktywny (skill-gated feature).
+4. Wrogowie NIE dostają reakcji w tym zadaniu (symetria → backlog; najpierw balans po stronie gracza).
+
+**Weryfikacja:** pytest: pre-deklaracja konsumowana 1×/rundę, sukces zeruje dmg, brak skilla = brak reakcji. Ręcznie: Sandbox — toggle uniku, wróg trafia, log pokazuje test DEX i wynik.
+
+#### S16 — Reakcja: `shield_block`
+
+**Cel prostym językiem:** Bohater z tarczą może blokować — zamiast unikać, zmniejsza obrażenia o k6+STR, a przy świetnym wyniku odbija atak całkiem.
+
+**Dla agenta:**
+1. Reużyj frameworku S15 (druga reakcja w systemie — weryfikuje, że S15 jest generyczny). Warunek: tarcza założona (`character_inventory` — sprawdź, jak rozpoznawana jest tarcza: kategoria/slot; jeśli nie ma pojęcia tarczy w modelu ekwipunku — STOP, zapytaj Piotra o model).
+2. Test STR vs wynik ataku (min DC 12): sukces = dmg − (1d6 + STR_mod, min 0), margines ≥ +5 = pełne odparcie, crit-fail = tarcza traci durability ×3 (F7 istnieje).
+3. UI: drugi toggle obok uniku; jedna reakcja na rundę (dodge XOR block).
+4. Seed skilla `shield_block`.
+
+**Weryfikacja:** pytest: redukcja k6+STR, pełne odparcie przy +5, XOR z dodge, durability hit przy crit-fail. Ręcznie: Sandbox — klon z tarczą blokuje, obrażenia w logu zredukowane.
+
+#### S17 — Wrestling: gracz nakłada kondycje wrogom testem przeciwnym
+
+**Cel prostym językiem:** Zapasy — chwyt i obalenie. Pierwszy skill, którego SUKCES mechanicznie nakłada kondycję na wroga (dotąd kondycje nakładały tylko bronie/czary).
+
+**Dla agenta:**
+1. Seed skilla `wrestling` + counter opposed STR vs STR (staty wroga z S2). Wymaga zwarcia (zone engaged — gate jak melee).
+2. Nowa ścieżka "skill outcome → apply_condition na celu": sukces = `slowed` na wrogu, margines ≥ +5 = `stunned` 1 rundę, crit-fail = `slowed` na graczu (przewrócony). Reużyj `apply_condition_to_combatant`; GENERYCZNE pola (`on_success_condition`, `on_crit_condition`, `on_critfail_self_condition`) w skill_counters lub pending state — żeby przyszłe skille mogły to samo deklaratywnie (Zasada 1!).
+3. Akcja w walce: wrestling jako akcja bojowa (konsumuje turę) — wpięcie w composer walki obok ataku (przycisk gdy engaged).
+
+**Weryfikacja:** pytest: opposed STR vs STR, kondycja na celu po sukcesie/crit, self-condition przy crit-fail, gate strefy. Ręcznie: Sandbox — wrestling na wrogu, chip kondycji `slowed` pojawia się przy wrogu.
+
+#### S18 — Prymityw: wymuszenie zachowania + pełne `confused` / `berserk` / `panicked`
+
+**Cel prostym językiem:** Stany odbierające kontrolę: zdezorientowany działa losowo, berserk atakuje najbliższego (też sojusznika!), spanikowany ucieka. Najtrudniejszy prymityw — kondycja steruje turą.
+
+**Dla agenta:**
+1. Nowy typ `behavior_override`: pole `behavior` (`random_table_k4` / `attack_nearest` / `flee`). WRÓG z kondycją: hook w pętli tury wroga (`_process_active_turn_T24`) — zachowanie zastępuje normalne AI. GRACZ z kondycją: tura NIE jest przejmowana w całości (UX!) — banner "Zdezorientowany — k4 decyduje", mechanika rzuca k4 na początku tury gracza: "działa normalnie" = gracz gra; inny wynik = mechanika wykonuje akcję wymuszoną i opisuje ją narratorowi. Wymaga S8 (seedy lite już są — to zadanie PODNOSI ich effect_json o behavior_override).
+2. `confused`: k4 (1 stoi / 2 atakuje losowy cel / 3 zmiana strefy "ucieczka" / 4 normalnie). `berserk`: attack_nearest + +3 atak/obrażenia, −3 AC (stat_mods istnieją) + auto-koniec gdy brak wrogów. `panicked`: flee (zmiana strefy na ranged / próba ucieczki z walki) + WIS DC 14 na początku tury na zrzucenie.
+3. To zadanie dotyka rdzenia pętli walki — napisz testy charakteryzujące ISTNIEJĄCEGO zachowania tur wroga PRZED zmianą (wzorzec U5).
+4. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: każdy behavior wg tabeli, berserk bije najbliższego niezależnie od frakcji, panicked rzuca WIS co turę; testy charakteryzujące bez regresji. Ręcznie: Sandbox — berserk na wrogu w walce 2 wrogów, wróg atakuje drugiego wroga.
+
+#### S19 — Kondycja `hidden`: ukrycie i zasadzka
+
+**Cel prostym językiem:** Skuteczne skradanie daje stan "Ukryty": wrogowie nie mogą cię atakować, a pierwszy atak z ukrycia boli (+2k6) i wyprzedza.
+
+**Dla agenta:**
+1. Nowy typ `untargetable` (wrogowie pomijają aktora przy wyborze celu — hook w AI wyboru celu) + typ `ambush_bonus` (+2k6 do pierwszego ataku, konsumuje kondycję).
+2. Wejście: udany SKILL_TEST stealth → nałożenie hidden (odwrotność `cures_condition` z S10: pole `grants_condition_self`; albo tag [APPLY_CONDITION] z S8). Zejście: własny atak (po ambush_bonus), akcja nie-ruch (heurystyka hałasu), wykrycie (wróg: periodic_save WIS vs stealth gracza — odwrócony opposed).
+3. Integracja ze strefami: hidden NIE zmienia strefy — ortogonalne (ukryty w zwarciu możliwy: sztylet w plecy).
+4. Aktualizacja 4 miejsc.
+
+**Weryfikacja:** pytest: wróg nie wybiera hidden jako celu, +2k6 raz, atak zdejmuje. Ręcznie: Sandbox — stealth → chip hidden → atak z bonusem w logu → chip znika.
+
+#### S20 — 🎮 KAMIEŃ MILOWY: playtest FAZY S
+
+**Cel prostym językiem:** Sprawdzamy całość w realnej grze: margines w narracji, testy przeciwne na statach, nowe skille i kondycje w akcji. Werdykt + lista poprawek balansu.
+
+**Dla agenta:**
+1. Sandbox sweep: każda kondycja z FAZY S nałożona na klona → zachowanie zgodne z design doc (tabela checkpointów per kondycja).
+2. `/game-smoke nowa-kampania` + scenariusz celowany: targowanie, hazard, test przeciwny na 2 różnych NPC (osiłek vs uczony), prowokacja 2–3 nowych skilli, walka z dodge/wrestling.
+3. Defekty P0/P1/P2 jak U4b; raport do issue `[SMOKE] FAZA S` (utwórz). Tuning liczb (DC, kary, czasy trwania — Numbers Policy) = propozycje w raporcie, NIE zmiany w locie.
+4. Bez TDD, bez issue [TASK] — czysty playtest.
+
+**Weryfikacja:** Tabela checkpointów w issue; werdykt grywalności; decyzja Piotra o tuningu liczb.
 
 ---
 
@@ -4023,3 +4365,381 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 - #507 — World builder: placement modes generacji mapy. Nowa kolumna `placement_mode` na `hex_type_config` (biome/scatter/path). Generator `generate_world()` dispatchuje po trybie: `biome`=Voronoi (plain/forest/hills/mountains/swamp), `scatter`=rejection sampling z min-spacing 3 hexów (town/castle/cave/dungeon/ruins), `path`=momentum random-walk (river) / greedy MST Prim'a łączący miasta+zamki (road). Spawn_weight dungeon→2, castle→1. Helpery: `_carve_river`, `_scatter_features`, `_build_road_network`, `_hex_line`, `_cube_round`. `placement_mode` edytowalny w admin UI (dropdown). Commit `9d4605e`. ✅
 - #508 — World builder: drag-painting hexów + undo. Tryb 🖌 Maluj: przeciągnięcie LPM maluje wiele hexów wybranym terenem (optimistyczny render przez rAF, bulk commit `POST /api/admin/world/hexes/bulk-paint` upsert na mouseup). Nowe hexe powstają, istniejące nadpisują typ+encounter_chance bez kasowania metadanych. Stos undo 50 kroków — jedno pociągnięcie = jeden krok (przywraca cały pociągnięcie atomowo); Ctrl/Cmd+Z + przycisk ↶ Cofnij z licznikiem. Undo obejmuje: malowanie, usunięcie hexa, zapis szczegółów. Listenery drag/keydown bindowane raz per svg. Commit `ace9b98`. ✅
 - #534/#538 — HF-7: Walidacja celu COMBAT_START — `_validate_combat_start_target()` w `turns.py` sprawdza przed `initiate_combat()`: (1) scene_enemies → OK, (2) game_config_enemies catalog → OK, (3) campaign_known_npcs lub scene_npcs → REJECT `combat_target_friendly_npc`, (4) nieznany → REJECT `combat_target_unknown`. Przy odrzuceniu: wpis `llm_tag_errors` + korekta narracji dołączona do stored turn (wzorzec U6). TDD 8/8 + Playwright 2/2. ✅
+
+---
+
+## CZĘŚĆ AJ — FAZA L: Lochy kafelkowe (redesign)
+
+> **Cel:** Jeden tryb lochów — kafelkowy. Stary proceduralny tryb (losowe pokoje combat/riddle/trap/chest/rest) znika. Loch = rozgałęziony graf kafelków (obrazek + opis + drzwi N/S/E/W + zawartość) generowany w całości przy wejściu; gracz eksploruje wybierając drzwi; przycisk mapy w UI gracza przełącza się w widok mapy kafelkowej; po pokonaniu bossa można wyjść z łupem albo iść głębiej (tryb nieskończony z checkpointami).
+> **Stan zastany (audyt kodu 2026-06-12):** `dungeon_tile_service.py` ma `draw_tile_sequence()` (liniowa ścieżka), `resolve_tile_content()`, `enter_dungeon_tiles()` i `check_exit_conditions()` — ale NIC nie jest podpięte do API gracza (`api/dungeons.py` woła wyłącznie legacy `dungeon_service`). `game_dungeons` NIE ma kolumn `tile_category_key`/`tile_count`/`boss_tile_id` (modal admina je zbiera, PATCH ich nie zapisuje). DEV DB: 0 kafelków, 0 kategorii. Pipeline obrazków działa: FLUX na `192.168.1.170:8765`, endpointy w `routers/dungeon_tiles.py`, kompozytor `tile_compositor.py`, wzorzec batch `scripts/vision_describe_tiles.py`.
+> **Kiedy:** niezależnie od FAZY U i S, z jednym twardym wyjątkiem: **L5 wymaga ukończonego S2** (statbloki wrogów). Workflow jak FAZA U/S: issue `[TASK] LNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_l.md`, statusy w notes.md → FAZA L. Wyjątki bez TDD: L14–L17 (kontent/batch) i L19 (playtest).
+
+### Decyzje projektowe (zatwierdzone przez Piotra 2026-06-12, sesja "Fable Lochy Projekt")
+
+**Decyzja 1 — Tylko tryb kafelkowy.** Legacy proceduralny generator pokoi zostaje usunięty z kodu (L9). Tabele DB zostają (bez destrukcyjnych migracji), stare seedy lochów dezaktywowane do czasu re-autoringu kafelkowego.
+
+**Decyzja 2 — Układ lochu: rozgałęziony graf generowany w całości przy wejściu.**
+NADPISUJE opis nawigacji z CZĘŚCI AA ("backend losuje kafelek dopiero przy otwarciu drzwi"). Główna ścieżka długości `tile_count` z bossem na końcu + boczne odnogi (skrzynie/zagadki). Drzwi sąsiadów muszą do siebie pasować (N↔S, E↔W), siatka bez kolizji. Fog of war: gracz widzi odwiedzone kafelki + zarysy nieodwiedzonych za otwartymi drzwiami. Deterministyczny układ = łatwy resume i wspólna mapa dla przyszłego multiplayer.
+> **Dlaczego nie lazy-losowanie przy drzwiach?** Trudny resume, ryzyko ślepych zaułków bez dopasowania, każdy gracz MP widziałby inny świat. **Dlaczego nie liniowy korytarz (obecny kod)?** Wybór drzwi byłby pozorny, mapa bez decyzji.
+
+**Decyzja 3 — Narracja hybrydowa (tryb lekki).** Opis kafelka pochodzi z DB (`room_description`); LLM dostaje go i tylko KOLORYZUJE 1–2 zdaniami (wejście do pomieszczenia, klimat). Pełny LLM tylko w walce i przy zagadkach. Loch = szybkie rundy, nie opowieść.
+> **Konsekwencja twarda:** kafelki MUSZĄ mieć porządnie wypełnione opisy — to jedyne paliwo narratora. L16 (opisy) jest warunkiem grywalności, nie ozdobnikiem.
+
+**Decyzja 4 — Walka startuje deterministycznie.** Wejście na kafelek z wrogami = silnik startuje walkę (bez tagu COMBAT_START od LLM, bez punktów awarii znanych z HF-7). Wrogowie z `enemies_json` kafelka.
+
+**Decyzja 5 — Skrzynie i zagadki z rzutami, pułapki jako konsekwencja.**
+- Skrzynia: test DEX (DC 12 + tier lochu), max 3 próby; każda nieudana = 30% szansy uruchomienia pułapki; po 3 nieudanych skrzynia przepada w tym runie.
+- Zagadka: max 3 próby (2 podpowiedzi); porażka ostateczna = 30% szansy pułapki; zagadka na odnodze strzeże skrzyni — porażka = skrzynia przepada; zagadka na głównej trasie NIGDY nie blokuje przejścia (no soft-locks, dawne U22).
+- Pułapka = obrażenia/kondycja (efekt z `active_states_json` kafelka lub domyślny per tier), NIE osobny typ pokoju.
+
+**Decyzja 6 — Checkpointy + śmierć kończy run (NADPISUJE E16 #431 i diagram CZĘŚCI AA).**
+Checkpoint = stan zapisany przy wejściu (snapshot `dungeon_enter`) i PO KAŻDYM pokonanym bossie.
+- **Wygrana segmentu (boss):** checkpoint — wszystko zdobyte od poprzedniego checkpointu zapisane na stałe.
+- **Śmierć:** run SKOŃCZONY (bez restartu od kafelka 1). HP/gold/inventory/mana wracają do ostatniego checkpointu; XP zdobyte od ostatniego checkpointu przepada; cooldown startuje.
+- **Porzucenie w trakcie segmentu:** jak śmierć (restore do checkpointu), ale cooldown = 50% + modal ostrzegawczy (dawne U21).
+- **Wyjście na checkpoincie (po bossie):** pełna nagroda, cooldown startuje.
+
+**Decyzja 7 — Tryb nieskończony (endless) w każdym lochu.** Po pokonaniu bossa gracz wybiera: „Wyjdź z łupem" albo „Idź głębiej". Kolejny segment doklejany do grafu; działa w nieskończoność, aż gracz zginie lub wyjdzie. Skalowanie (wartości startowe, admin-konfigurowalne):
+- długość segmentu k = `tile_count + n × (numer_cyklu − 1)`; `n` = `endless_growth_n` w adminie, start **0** (stała długość);
+- wrogowie +1 poziom efektywny za cykl; powyżej poziomu 10 → +15% HP/obrażeń za cykl (mnożnik, bez poziomu);
+- rarity lootu bossa +1 co 2 cykle (cap: legendary).
+
+**Decyzja 8 — Trudność absolutna D1–D5 (koniec rubber-bandingu; dawne U23; WYMAGA S2).**
+Stare skalowanie ×0.75–×2.0 po poziomie bohatera (`_SCALE_TABLE` w `dungeon_service.py`) znika. Loch ma sztywny tier; gracz wybiera loch wg `min_level`. Po S2 wróg ma statblok jak postać — skala = poziom wroga:
+
+| Tier | Poziom wrogów | Boss | Sugerowany poziom gracza |
+|---|---|---|---|
+| D1 | 1–2 | 3 | 1–3 |
+| D2 | 3–4 | 5 | 3–5 |
+| D3 | 5–6 | 7 | 5–7 |
+| D4 | 7–8 | 9 | 7–9 |
+| D5 | 9–10 | 10 + mnożnik | 9–10 |
+
+Cap poziomu bohatera = 10 (tabela progów XP z F18, `xp_service.py`). Endless powyżej D5/lvl 10 → mnożniki z Decyzji 7.
+
+**Decyzja 9 — Powtórki kafelków dozwolone, bez rotacji.** Ten sam kafelek może wystąpić w grafie wielokrotnie (nie sąsiadująco); zawartość (wrogowie) re-rollowana per instancja na tym samym tierze trudności. Rotacja obrazków (N→E) — poza zakresem v1.
+
+**Decyzja 10 — Door hints pre-rollowane.** Przy wyborze drzwi gracz dostaje krótki hint z typu zawartości sąsiada („zza drzwi słychać zgrzyt kości") — losowany raz przy generacji grafu (dawne U22 „pre-roll").
+
+**Decyzja 11 — Boss losowy z boss-kafelków kategorii**; `boss_tile_id` w konfiguracji lochu = opcjonalny override admina.
+
+**Decyzja 12 — Loot skrzyń z loot table per loch** (`chest_loot_table_key` zostaje); `items_json` kafelka służy wyłącznie rzeczom fabularnym/specjalnym wpisanym autorsko. Rarity per tier: reuse `get_loot_rarity_for_difficulty()` (E17).
+
+**Decyzja 13 — Wejścia do lochu: oba.** (a) hex typu dungeon na mapie świata w kampanii (E21, zostaje), (b) ekran startowy — bohater `idle` → „Wyprawa do lochu" (aktualizacja D9: tryby „Loch" i „Loch-kafelki" scalają się w jeden „Loch"). Loch pozostaje kampanią-kontenerem (`session_flags.dungeon_run` + `previous_campaign_id`).
+
+**Decyzja 14 — Mapa kafelkowa w UI gracza.** W aktywnym `dungeon_run` przycisk mapy pokazuje mapę kafelków zamiast hex-mapy świata: odwiedzone kafelki jako obrazki na siatce (drzwi spasowane), marker pozycji, zarysy za otwartymi drzwiami. Klik na drzwi na mapie = ruch; równolegle przyciski kierunków pod composerem. Po wyjściu z lochu mapa wraca do hexów.
+
+**Decyzja 15 — Flaga dla graczy.** Lochy włączone dla graczy z możliwością wyłączenia w adminie — reuse `game_mode_flags.dungeon_enabled` (`/admin/game-modes`), default ON.
+
+**Decyzja 16 — Multiplayer: tylko kształt danych.** `dungeon_run` v2 trzyma pozycje jako `positions: {character_id: [col,row]}` (dziś jeden wpis) i wspólny graf per kampania. Zero implementacji MP w FAZIE L.
+
+**Decyzja 17 — Obrazki: jakość ponad szybkość, kompozytor zostaje.** Nowy prompt bazowy: bogate, narysowane wnętrza (meble, rekwizyty, detale do opisania przez Vision/LLM) zamiast „floor + kilka elementów". Czas generacji bez znaczenia (batch offline na .170). Wartości startowe: 768px, więcej kroków (test w pilocie). Workflow per kategoria: **pilot 5 obrazków → akceptacja Piotra → pełny batch kategorii → testy gry → następna kategoria**. Pilot: kategoria **krypta/katakumby** (pasuje do istniejących wrogów-nieumarłych).
+
+### Kolizje z istniejącym planem i kodem (audyt 2026-06-12)
+
+| Kolizja | Rozstrzygnięcie |
+|---|---|
+| U21–U23 (FAZA U Blok 6, ⏸ zawieszone) | Wchłonięte: U21→L7, U22→L4+L6 (hinty, no soft-locks, fallback), U23→L5. W notes.md Blok 6 dostaje adnotację „→ FAZA L". |
+| E16 (#431) — śmierć = restore + restart od pokoju 1 | NADPISANE Decyzją 6: śmierć kończy run (checkpoint). L7 przepisuje `handle_dungeon_death`. |
+| CZĘŚĆ AA — nawigacja lazy + diagram śmierci | NADPISANE Decyzjami 2 i 6. CZĘŚĆ AA dostaje banner odsyłający do CZĘŚCI AJ; opisy historyczne zostają jako kontekst. |
+| S2 (FAZA S) — statbloki wrogów | **Twarda zależność międzyfazowa: L5 wymaga S2.** Jeśli S2 nie jest [x] przy podejściu do L5 — STOP albo najpierw S2. |
+| U10 — effect schema lockdown | `active_states_json`/efekty pułapek w L6: jeśli U10 [x] — schemat U10; jeśli nie — istniejący format efektów + refactor przy U10 (wzorzec U26/S7). |
+| D9 — ekran kampanii, 5 trybów (Loch / Loch-kafelki osobno) | Scalone w jeden tryb „Loch" (L13b aktualizuje D9 i UI). |
+| E21 (#436) wejście z hexa, E22 (#437) resume | Zachowane — L8/L13 adaptują do grafu v2 i checkpointów. |
+| E17 — rarity per difficulty | Reuse `get_loot_rarity_for_difficulty()` w L8 (boss) i L6 (skrzynie). |
+| H5 (FAZA 6) — GPU pipeline tile→Vision→opis→DB | Realizowane wcześniej jako L16; H5 dostaje adnotację w notes.md. |
+| `game_mode_flags` — `dungeon_enabled`, `dungeon_tiles_enabled` już istnieją (`routers/admin.py` ~4646) | L10 reuse `dungeon_enabled`; `dungeon_tiles_enabled` staje się martwa po L9 (jeden tryb) — usunąć z defaults. |
+| `enter_dungeon_tiles()` buduje run liniowy (`tiles[]` + `current_index`) | L2 zastępuje kształtem grafowym v2; istniejące helpery (`resolve_tile_content`, `check_exit_conditions`, dopasowanie drzwi) reuse. |
+| Niezacommitowane zmiany robocze U28–U30 (hex travel, placement) w drzewie | FAZA L nie dotyka tych plików poza `app.js` (L11–L12) — przy implementacji sprawdzić aktualny stan `_wmap`. |
+
+### Poza zakresem FAZY L (świadomie odłożone)
+
+- **Multiplayer w lochach** — tylko kształt danych (Decyzja 16); mechanika party = FAZA 5.
+- **Rotacja kafelków** (zwielokrotnienie dopasowań drzwi) — backlog.
+- **Leaderboard / rekordy endless** — backlog (naturalne rozszerzenie po L8).
+- **Przedmioty dungeon-exclusive** (`source_exclusive` istnieje) — kontent na później, mechanika gotowa.
+- **Pełny podsystem pułapek** (wykrywanie, rozbrajanie skillem) — w v1 pułapka to prosty efekt-konsekwencja; rozbudowa po FAZIE S (skille thievery).
+
+---
+
+### FAZA L — zależności i kolejność
+
+```
+Blok 1: L1 → L2 → L3 → L4            (silnik grafu)
+Blok 2: L5 [WYMAGA S2], L6, L7 → L8  (mechaniki na kafelku; L5–L7 po L4, równolegle między sobą)
+Blok 3: L9                            (czystka legacy — dopiero gdy nowy flow działa end-to-end)
+Blok 4: L10 (niezależne, można od razu); L11 → L12 → L13, L13b (po L4)
+Blok 5: L14 → L15 → L16              (kontent; L14–L15 niezależne od kodu — można równolegle z Blokiem 1; L16 wymaga L14+L15, konfiguracja lochu wymaga L1)
+Blok 6: L18 (po L8+L12) → L19 (kamień milowy, po wszystkim poza L17) → L17 (kolejne kategorie, po L19)
+```
+
+### Numbers Policy FAZY L (wartości startowe — tuning po L19)
+
+| Parametr | Start | Gdzie |
+|---|---|---|
+| `tile_count` (długość segmentu, z bossem) | 6 | per loch, admin |
+| Szansa odnogi przy kafelku z wolnymi drzwiami | 30% | kod L2 |
+| Max odnóg / długość odnogi | 3 / 1–2 kafelki | kod L2 |
+| `endless_growth_n` | 0 | per loch, admin (L1) |
+| Skalowanie endless | +1 lvl wrogów/cykl; po lvl 10 +15% HP/dmg za cykl | kod L8 |
+| Rarity bossa w endless | +1 co 2 cykle (cap legendary) | kod L8 |
+| Skrzynia | DEX, DC 12 + tier, 3 próby, 30% pułapki za fail | kod L6 |
+| Zagadka | 3 próby, 2 podpowiedzi, 30% pułapki po porażce | kod L6 |
+| Porzucenie | 50% `cooldown_hours` | kod L7 |
+| Kafelki per kategoria | 20 (≈6× 2-drzwiowe, 8× 3-drzwiowe, 4× 4-drzwiowe, 2× boss) | kontent L14 |
+| Pilot obrazków / rozdzielczość / kroki | 5 szt. / 768px / 8 (test w pilocie) | L15 |
+
+---
+
+### BLOK 1 — Silnik grafu (L1–L4)
+
+#### L1 — Konfiguracja kafelkowa lochu w DB + admin
+
+**Cel prostym językiem:** Admin ustawia w lochu kategorię kafelków, długość segmentu, opcjonalnego bossa i parametr endless — i to się NAPRAWDĘ zapisuje (dziś modal zbiera pola, których baza nie ma).
+
+**Dla agenta:**
+1. Migracja w `migrations_admin.py` (wzorzec idempotentnych ALTER-ów): `game_dungeons` + `tile_category_key TEXT`, `tile_count INTEGER`, `boss_tile_id INTEGER`, `endless_growth_n INTEGER DEFAULT 0`.
+2. `routers/admin.py` — PATCH `/admin/dungeons/{key}`: dopisz nowe pola do allowed fields; POST create analogicznie.
+3. `frontend/admin/sections/dungeons.js` — modal: toggle „Tryb Kafelkowy" znika (jeden tryb); pola kategoria/tile_count/boss_tile_id/endless_growth_n zapisują się i wczytują przy edycji. Legacy pola (enemy_pool, rooms, room_types…) zostawić — usuwa je L9.
+4. `dungeon_tile_service._tile_count_for_difficulty()` już preferuje `tile_count` — bez zmian.
+
+**Weryfikacja:** pytest: PATCH zapisuje nowe kolumny, GET je zwraca. Ręcznie: admin → Lochy → edycja lochu → ustaw kategorię → odśwież → wartości są.
+
+#### L2 — Generator rozgałęzionego grafu + `dungeon_run` v2
+
+**Cel prostym językiem:** Przy wejściu do lochu losuje się cała mapa: główna ścieżka do bossa plus ślepe odnogi z nagrodami. Drzwi sąsiadów zawsze do siebie pasują, nic się nie nakłada na siatce.
+
+**Dla agenta:**
+1. `dungeon_tile_service.py`: nowa funkcja `draw_tile_graph(category_key, tile_count, boss_tile_id, growth_cycle=1)` obok/in-place `draw_tile_sequence`: główna ścieżka długości k (ostatni = boss-kafelek; losowy z `is_boss_tile=1` kategorii, override przez boss_tile_id), potem odnogi: dla każdego kafelka ścieżki z wolnymi drzwiami 30% szansy na odnogę 1–2 kafelków (max 3 odnogi), preferencyjnie zakończoną skrzynią/zagadką. Dopasowanie N↔S/E↔W i kolizje na siatce jak w `_try_build_path` (reuse helpery `_OPPOSITE`/`_OFFSET`).
+2. Powtórki: kafelek może wystąpić wielokrotnie, ale nie na sąsiednich polach; przy powtórce re-roll wrogów na tym samym tierze (Decyzja 9).
+3. Door hints: przy generacji każdemu przejściu przypisz hint tekstowy z typu zawartości celu (tabela hintów per typ: wrogowie/zagadka/skrzynia/boss/pusto) — zapisywany w grafie (Decyzja 10).
+4. Kształt `dungeon_run` v2 (zastępuje liniowy z `enter_dungeon_tiles`): `{system:"tiles", graph:{nodes:{node_id:{tile_id, position:[c,r], doors_open:{N:node_id|null,...}, door_hints:{N:"..."}, content:{...z resolve_tile_content}, visited, cleared}}, entry_node, boss_node}, positions:{character_id:[c,r]}, cycle:1, checkpoints:[...], completed, failed, ...}` — pozycje per postać (Decyzja 16).
+5. Determinizm: graf w całości w `session_flags` — resume czyta stan, nic nie dolosowuje.
+
+**Weryfikacja:** pytest: spójność grafu (każde przejście ma pasujące drzwi po obu stronach; brak kolizji pozycji; boss na końcu głównej ścieżki; odnogi ≤ limitów; powtórki nie sąsiadują), stabilność na małej puli kafelków (fallback do krótszej ścieżki jak w `draw_tile_sequence`).
+
+#### L3 — Wejście do lochu przez graf
+
+**Cel prostym językiem:** Wejście do lochu zawsze buduje graf kafelkowy. Loch bez skonfigurowanej kategorii uczciwie odmawia.
+
+**Dla agenta:**
+1. `api/dungeons.py` POST `/dungeons/{key}/enter` → woła przepisane `enter_dungeon_tiles()` (graf z L2) zamiast `dungeon_service.enter_dungeon()`. Brak `tile_category_key` → 409 z komunikatem PL („Loch nie ma skonfigurowanej kategorii kafelków").
+2. Snapshot wejścia (`world_state_snapshots`, source `dungeon_enter`) zostaje = checkpoint 0 (L7 doda checkpointy bossów).
+3. Cooldown check bez zmian (`check_cooldown`). `GET /campaigns/{id}/dungeon-run` zwraca v2.
+4. Narracja wejścia: opis kafelka startowego z DB + LLM koloryzuje 1–2 zdania (Decyzja 3) — wpięcie w `context_injector`/turn pipeline: w trybie lochu blok kontekstu [LOCH] z opisem kafelka, hintami drzwi i instrukcją „koloryzuj, nie wymyślaj".
+
+**Weryfikacja:** pytest: enter buduje graf v2, 409 bez kategorii, cooldown 423. Ręcznie: wejście z hex mapy → narracja zawiera opis kafelka startowego.
+
+#### L4 — Ruch przez drzwi
+
+**Cel prostym językiem:** Gracz po oczyszczeniu pokoju wybiera drzwi i przechodzi do sąsiedniego kafelka. Drzwi pilnują warunków (np. żywi wrogowie blokują wyjście), a przy wyborze widać hint.
+
+**Dla agenta:**
+1. Nowy endpoint `POST /api/dungeons/move {direction}` (zastępuje `advance-room`): walidacja — kierunek istnieje w `doors_open` bieżącego node'a; `check_exit_conditions()` (reuse — wrogowie nie pokonani = blokada z komunikatem PL); przejście aktualizuje `positions[character_id]`, `visited`, odkrywa zarys sąsiadów (fog).
+2. Wejście na kafelek z wrogami → deterministyczny start walki (Decyzja 4): bezpośrednie wywołanie `combat_service.initiate_combat()` z wrogami z `content.enemies` (po L5 — skalowanie tierem; do tego czasu stats bazowe).
+3. Response: nowy kafelek (opis, obraz, drzwi+hinty, zawartość niewalkowa), ewentualny stan walki, krótka narracja (DB + koloryzacja jak L3).
+4. Powrót na odwiedzony kafelek dozwolony (backtracking po odnogach) — bez ponownej walki na `cleared`.
+
+**Weryfikacja:** pytest: ruch w dozwolonym kierunku, blokada przy żywych wrogach, blokada nieistniejących drzwi, backtracking bez re-fightu, fog odkrywa sąsiadów. Ręcznie: przejście 3 kafelków na DEV.
+
+---
+
+### BLOK 2 — Mechaniki na kafelku (L5–L8)
+
+#### L5 — Walka: skala absolutna D1–D5 ⛔ WYMAGA S2
+
+**Cel prostym językiem:** Wrogowie w lochu mają poziom wynikający z tieru lochu, nie z poziomu gracza. Loch D2 jest zawsze tak samo trudny — to gracz dorasta do lochu.
+
+**Dla agenta:**
+1. Warunek wejścia: S2 [x] w notes.md (statbloki wrogów). Jeśli nie — STOP.
+2. Tabela tier→poziom wrogów/bossa z Decyzji 8 (stała w `dungeon_tile_service` lub `game_config_meta`). Skalowanie statblok→poziom: HP/atak/obrażenia wg formuł mechaniki (HP = baza archetypu + CON_mod × poziom — jak postać).
+3. Usuń użycie `_SCALE_TABLE`/`scale_enemy_stats` po poziomie BOHATERA w ścieżce kafelkowej (fizyczne usunięcie kodu = L9).
+4. Endless: mnożnik z Decyzji 7 aplikowany na wierzchu (cykl > 1).
+5. Re-roll wrogów przy powtórce kafelka (Decyzja 9): losuj z puli wrogów o tym samym tierze.
+
+**Weryfikacja:** pytest: tabela tier→poziom, mnożnik endless po lvl 10, re-roll na tym samym tierze. Sandbox: walka z wrogiem D3 jako bohater lvl 2 i lvl 8 — identyczne staty wroga.
+
+#### L6 — Zawartość niewalkowa: skrzynie, zagadki, pułapki, stany
+
+**Cel prostym językiem:** Skrzynię otwiera się rzutem na zręczność, zagadkę rozwiązuje z podpowiedziami, a nieudane próby mogą uruchomić pułapkę. Nic nigdy nie blokuje przejścia przez loch.
+
+**Dla agenta:**
+1. Skrzynia (Decyzja 5): test DEX DC 12+tier przez `resolve_skill_test`/dice service; 3 próby; fail → 30% pułapki; sukces → loot z `chest_loot_table_key` lochu (`roll_loot` + rarity z `get_loot_rarity_for_difficulty()`); po 3 porażkach skrzynia `locked_forever` w tym runie.
+2. Zagadka: reuse `game_config_riddles` + flow hintów z legacy `resolve_room` (3 próby, 2 hinty); porażka → 30% pułapki; skrzynia za zagadką przepada; główna trasa nigdy nie zablokowana (`check_exit_conditions` nie może zawierać warunku zagadkowego na ścieżce do bossa — walidacja w generatorze L2).
+3. Pułapka: efekt z `active_states_json` kafelka lub domyślny per tier (1d4+tier obrażeń / kondycja). Format efektu: schemat U10 jeśli [x], inaczej istniejący wzorzec effect_json + TODO refactor.
+4. Endpoint `POST /api/dungeons/resolve-tile {action, payload}` (zastępuje `resolve-room`): akcje `open_chest`, `answer_riddle {answer}`, `riddle_hint`, `rest`.
+5. Fallback braku kafelka/zawartości (dawne U22): brakujący wpis → kafelek „pusty korytarz" z opisem domyślnym, log warning.
+
+**Weryfikacja:** pytest: pełna macierz skrzyni (sukces/3×fail/pułapka), zagadka z hintami, soft-lock niemożliwy (generator odrzuca warunki blokujące na głównej trasie), fallback. Ręcznie: otwarcie skrzyni i zagadka na DEV.
+
+#### L7 — Checkpointy + semantyka śmierci i porzucenia
+
+**Cel prostym językiem:** Postęp zapisuje się przy wejściu i po każdym bossie. Śmierć kończy wyprawę — tracisz tylko to, co zdobyłeś od ostatniego checkpointu. Porzucenie w połowie kosztuje połowę cooldownu.
+
+**Dla agenta:**
+1. Checkpoint = snapshot stanu (HP/mana/gold/inventory/XP) + kopia stanu runu; checkpoint 0 = istniejący `dungeon_enter`; po każdym bossie nowy (source `dungeon_boss_checkpoint`, reuse mechanizmu `world_state_snapshots`).
+2. Śmierć (`handle_dungeon_death` — przepisać): run `failed=true`, restore HP/gold/inventory/mana do ostatniego checkpointu, **XP od checkpointu odjęte** (lifetime_xp — delta; uwaga na poziom: przelicz `level_from_xp`), cooldown startuje, powrót do `previous_campaign_id`/menu. ŻADNEGO restartu od kafelka 1 (nadpisuje E16).
+3. Porzucenie: `POST /dungeons/exit` w trakcie segmentu → restore jak śmierć + cooldown 50% (zaokrąglić w górę); na checkpoincie (boss pokonany, segment nie rozpoczęty) → pełna nagroda, cooldown 100%.
+4. Wygrana/„Wyjdź z łupem": stan bieżący zostaje, `complete_dungeon()` + cooldown.
+5. Resume (E22): niedokończony run → modal „kontynuuj/porzuć"; kontynuacja czyta graf v2 bez relosowania.
+
+**Weryfikacja:** pytest: macierz checkpoint/śmierć/porzucenie/wygrana (stan HP+gold+XP przed/po), cooldown 50% vs 100%, resume zachowuje graf. Ręcznie: zgiń w lochu na DEV — stan jak przy wejściu, XP cofnięte, cooldown widoczny.
+
+#### L8 — Boss, loot i tryb nieskończony
+
+**Cel prostym językiem:** Po pokonaniu bossa dostajesz gwarantowany loot i wybór: wyjść z nagrodami albo zejść głębiej, gdzie czeka dłuższy/trudniejszy segment z lepszym lootem.
+
+**Dla agenta:**
+1. Boss pokonany → `roll_boss_loot()` (rarity wg tieru + bonus endless z Decyzji 7) → checkpoint (L7) → response z wyborem `{exit | go_deeper}`.
+2. `go_deeper`: generuj kolejny segment grafu (`draw_tile_graph` z `growth_cycle+1`, długość `tile_count + n×(cykl−1)`) doklejony za drzwiami boss-kafelka (pozycje kontynuują siatkę), `cycle+=1`, wrogowie skalowani wg L5+mnożnik.
+3. `exit`: `complete_dungeon()` + cooldown + powrót.
+4. `endless_growth_n` czytane z konfiguracji lochu (L1).
+
+**Weryfikacja:** pytest: pętla 3 cykli (długości segmentów wg n=0 i n=2, skalowanie wrogów, rarity bossa +1 co 2 cykle), checkpoint po każdym bossie, exit w cyklu 2 zachowuje zdobycze cykli 1–2. Ręcznie: pokonaj bossa → modal wyboru → „Idź głębiej" → nowy segment na mapie.
+
+---
+
+### BLOK 3 — Czystka legacy (L9)
+
+#### L9 — Usunięcie starego trybu proceduralnego
+
+**Cel prostym językiem:** Stary generator losowych pokoi znika z kodu — zostaje wyłącznie system kafelkowy. Baza danych nietknięta poza dezaktywacją starych lochów.
+
+**Dla agenta:**
+1. Warunek: L1–L8 działają end-to-end (L19 może być po — ale flow ręcznie zweryfikowany).
+2. `dungeon_service.py`: usuń `generate_dungeon_instance`, `_build_dungeon_instance`, `_SCALE_TABLE`/`scale_enemy_stats` (ścieżka po poziomie bohatera), legacy `advance_room`/`resolve_room`/losowanie typów pokoi z `room_types_json`. Zostają: cooldowny, `complete_dungeon`, helpery snapshotów używane przez L7.
+3. `api/dungeons.py`: usuń/przekieruj `advance-room` i `resolve-room` (410 lub usunięcie — frontend po L12 ich nie woła).
+4. Admin (`sections/dungeons.js` + `routers/admin.py`): usuń legacy pola formularza (enemy_pool, boss_enemy, rooms, loot_tier, room_types_json, room_loot_chance, riddle_source) z UI; kolumny w DB zostają (bez destrukcyjnej migracji). `dungeon_tiles_enabled` znika z `_GAME_MODE_DEFAULTS` (jeden tryb).
+5. Stare seedy (`goblin_warren`, `rat_tunnels`, `crypt_of_bones`): `is_active=0` (re-autoring kafelkowy później, kontent L17+).
+6. Testy: usuń/przepisz testy legacy (`test_issue43X_dungeon*` dotyczące proceduralnego generatora i E16-restartu); zaktualizuj CZĘŚĆ AA (status table) i CHANGELOG.
+
+**Weryfikacja:** pytest pakietu lochów przechodzi bez legacy; grep `generate_dungeon_instance|room_types_json` w backend/app → 0 trafień poza migracjami; admin nie pokazuje legacy pól; wejście do każdego aktywnego lochu działa.
+
+---
+
+### BLOK 4 — UI gracza (L10–L13b)
+
+#### L10 — Flaga lochów dla graczy
+
+**Cel prostym językiem:** Przełącznik w adminie włącza/wyłącza lochy dla graczy. Domyślnie włączone.
+
+**Dla agenta:**
+1. Reuse `game_mode_flags.dungeon_enabled` (`routers/admin.py` ~4646, `/admin/game-modes` GET/PATCH) — default ON.
+2. Egzekwowanie: `POST /dungeons/{key}/enter` → 403 gdy flaga OFF; UI gracza chowa wejścia (hex dungeon picker E21, przycisk ekranu start L13b) gdy OFF (flaga w istniejącym configu bootstrapu frontu).
+3. Admin: toggle w sekcji System (jeśli `/admin/#system` nie ma UI dla game-modes — dodaj prostą sekcję przełączników).
+
+**Weryfikacja:** pytest: 403 przy OFF. Ręcznie: wyłącz w adminie → wejścia znikają u gracza; włącz → wracają.
+
+#### L11 — Mapa kafelkowa (przełączenie przycisku mapy)
+
+**Cel prostym językiem:** W lochu przycisk mapy pokazuje plan podziemi: odwiedzone pomieszczenia jako obrazki ułożone drzwiami do siebie, Twoja pozycja zaznaczona, a za otwartymi drzwiami widać zarysy nieodkrytych pokoi.
+
+**Dla agenta:**
+1. `frontend/front/js/app.js`: w widoku mapy (okolice `_wmap`, ~8968–9200; sprawdź aktualny stan po U28–U30!) — gdy kampania ma aktywny `dungeon_run`, renderuj mapę kafelkową zamiast hex SVG; po wyjściu z lochu powrót do hexów.
+2. Render: siatka z `graph.nodes` — odwiedzone kafelki jako `<image>` (`image_url`, 768px skalowane), pozycje z `position`; marker pozycji gracza; otwarte przejścia jako łączniki; nieodwiedzone sąsiady = zarys (prostokąt ze znakiem „?" + hint po najechaniu). Fog: tylko `visited` + zarysy (Decyzja 14).
+3. Dane: `GET /campaigns/{id}/dungeon-run` (v2 z L3) — bez nowego endpointu.
+4. Zoom/pan: reuse wzorców `_wmap` (transformacje już są).
+
+**Weryfikacja:** Playwright: wejście do lochu → otwarcie mapy → widoczny kafelek startowy + zarysy; po ruchu mapa rośnie. Ręcznie na DEV + telefon (responsywność).
+
+#### L12 — Wybór drzwi w UI + obraz kafelka w scenie
+
+**Cel prostym językiem:** Po oczyszczeniu pokoju pod oknem czatu pojawiają się przyciski kierunków z podpowiedziami, a obrazek pomieszczenia widać w scenie. Można też kliknąć drzwi na mapie.
+
+**Dla agenta:**
+1. Przyciski kierunków (⬆⬇⬅➡ tylko dostępne wyjścia + hint w tooltip/podpisie) pod composerem — wzorzec przycisku „Zbliż się" z walki (T34); stan: ukryte gdy wrogowie żywi/walka trwa.
+2. Klik drzwi/zarysu na mapie kafelkowej (L11) → ten sam `POST /dungeons/move`.
+3. Obraz bieżącego kafelka w scenie (panel/karta nad czatem — spójnie z istniejącym UI tła sceny).
+4. Akcje niewalkowe: przyciski „Otwórz skrzynię" / „Odpowiedz na zagadkę" / „Poproś o podpowiedź" → `POST /dungeons/resolve-tile` (L6); odpowiedź zagadki przez pole czatu (input przechwycony w trybie zagadki).
+5. Bump `?v=` przy zmianach shared modułów.
+
+**Weryfikacja:** Playwright: pełny cykl kafelka (walka → przyciski się pojawiają → ruch → nowy obraz). Ręcznie: hinty widoczne, przyciski znikają w walce.
+
+#### L13 — Modale: śmierć, porzucenie, resume, wybór po bossie
+
+**Cel prostym językiem:** Jasne komunikaty w kluczowych momentach: co tracisz przy śmierci, ile cooldownu kosztuje porzucenie, kontynuacja niedokończonej wyprawy i wybór „wyjdź albo idź głębiej" po bossie.
+
+**Dla agenta:**
+1. Modal śmierci: „Wyprawa skończona — stan przywrócony do [wejścia/ostatniego bossa], XP od checkpointu utracone, cooldown X h".
+2. Modal porzucenia (przed `exit` w trakcie segmentu): ostrzeżenie o restore + 50% cooldownu (dawne U21).
+3. Modal resume (E22, adaptacja): „Niedokończony loch — kontynuuj / porzuć".
+4. Modal po bossie: loot + wybór „Wyjdź z łupem" / „Idź głębiej (poziom cyklu N+1)" → L8.
+
+**Weryfikacja:** Playwright: każdy modal wywołany i działający. Ręcznie na DEV.
+
+#### L13b — Wejście z ekranu startowego (scalenie D9)
+
+**Cel prostym językiem:** Bohater bez kampanii może ruszyć do lochu prosto z ekranu startowego. Znika podwójny tryb „Loch / Loch-kafelki" — jest jeden „Loch".
+
+**Dla agenta:**
+1. Ekran wyboru przygody (D9): jeden kafel „Wyprawa do lochu" (bohater `idle`) → picker lochów (lista z `GET /dungeons` + cooldowny) → `enter` tworzy kampanię-kontener (istniejący mechanizm `previous_campaign_id=null`).
+2. Aktualizacja opisu D9 w game_mechanics (CZĘŚĆ z D9) — adnotacja o scaleniu.
+3. Respektuje flagę L10.
+
+**Weryfikacja:** Ręcznie: bohater idle → ekran start → loch → graf się generuje; powrót po wyjściu na ekran start.
+
+---
+
+### BLOK 5 — Kontent: kategoria krypta + obrazki (L14–L17; bez TDD — kontent/skrypty z weryfikacją Piotra)
+
+#### L14 — Kategoria „krypta" + 20 definicji kafelków
+
+**Cel prostym językiem:** Powstaje pierwsza paczka kafelków: krypta/katakumby — 20 pomieszczeń z różnymi układami drzwi, wrogami-nieumarłymi, zagadkami i skrzyniami.
+
+**Dla agenta:**
+1. Seed `dungeon_tile_categories`: key `krypta`, label, `style_modifier` (klimat: kamienne katakumby, sarkofagi, kości, mrok, świece), `system_prompt` (dla generatora opisów PL). `created_by='seed'`.
+2. ~20 definicji kafelków przez `POST /admin/dungeon-tiles/ai-create` (LLM: label + `image_gen_prompt`) wg miksu z Numbers Policy (6× 2-drzwiowe, 8× 3-drzwiowe, 4× 4-drzwiowe, 2× boss); ręczna korekta `doors_json`.
+3. Zawartość: wrogowie-nieumarli z istniejącego katalogu (`enemies_json` — szkielety itd.), 3–4 kafelki z `riddle_key` (sprawdź pulę `game_config_riddles`, dosiej tematyczne), 3–4 ze skrzynią, 1–2 rest.
+4. Bez obrazków na tym etapie (L15) — definicje + zawartość.
+
+**Weryfikacja:** Admin → Lochy → Kafelki: 20 kart kategorii krypta, mix drzwi zgodny z tabelą, `preview-path` buduje ścieżkę bez błędów.
+
+#### L15 — Nowy prompt bazowy + batch obrazków (pilot → pełny batch)
+
+**Cel prostym językiem:** Obrazki kafelków generują się na komputerze .170 paczkami: najpierw 5 na próbę, po akceptacji reszta. Nowy styl: bogate, narysowane wnętrza pełne detali.
+
+**Dla agenta:**
+1. Przepisz `BASE_PROMPT` w `routers/dungeon_tiles.py`: bogate wnętrza (meble, rekwizyty, szczegóły architektury — rzeczy, które Vision/LLM potem opisze), wciąż top-down/board-game/painted, wciąż BEZ ścian i drzwi na obrazku (kompozytor je dokłada — Decyzja 17). Wartości startowe: 768×768, steps 8 (konfigurowalne przez `game_config_visual`).
+2. Skrypt `scripts/generate_tiles_batch.py` (wzorzec `vision_describe_tiles.py`: admin API + bearer, retry, progress): flagi `--category`, `--limit`, `--force`, `--dry-run`; woła `POST /admin/dungeon-tiles/{id}/generate-image`; pomija kafelki z obrazkiem (bez `--force`).
+3. **Pilot: `--category krypta --limit 5` → STOP → akceptacja Piotra (jakość/styl/detale) → dopiero pełny batch.** Iteracja promptu w pilocie dozwolona.
+4. Sprawdź wydajność .170 przy 768px/8 steps (FLUX.1-schnell); jeśli jakość niewystarczająca — eskalacja steps/model po stronie ComfyUI (decyzja z Piotrem).
+
+**Weryfikacja:** 5 obrazków pilota w admin → Kafelki; po akceptacji 20/20 z obrazkami; kompozytor poprawnie nakłada drzwi (recomposite działa).
+
+#### L16 — Opisy PL kafelków + loch pilotażowy
+
+**Cel prostym językiem:** Każdy kafelek dostaje porządny polski opis pomieszczenia (paliwo dla narratora — Decyzja 3), a w grze pojawia się pierwszy prawdziwy loch kafelkowy.
+
+**Dla agenta:**
+1. Opisy: `POST /admin/dungeon-tiles/{id}/generate-description` batchem (lub `scripts/vision_describe_tiles.py` z llava na .170 — wybierz lepszą jakość po próbce 3 szt.); opis MUSI zgadzać się z obrazkiem i wymieniać detale (Decyzja 3).
+2. Przegląd: Piotr przegląda/koryguje opisy w admin → Kafelki (filtr `needs_description` istnieje).
+3. Loch pilotażowy: rekord `game_dungeons` key `krypta_probna` (kategoria `krypta`, tile_count 6, D2, `chest_loot_table_key` istniejący lub nowy, `endless_growth_n` 0, `created_by='seed'`) + hex dungeon na mapie świata wskazujący na niego. Wymaga L1.
+4. Realizuje H5 z FAZY 6 (adnotacja w notes.md).
+
+**Weryfikacja:** 20/20 kafelków z opisem zaakceptowanym; loch `krypta_probna` widoczny w pickerze i wchodzalny (po L3).
+
+#### L17 — Kolejne kategorie ⛔ PO L19
+
+**Cel prostym językiem:** Po potwierdzeniu, że krypta gra dobrze, ten sam proces produkuje kolejne klimaty: goblińskie tunele, ruiny twierdzy itd.
+
+**Dla agenta:** Powtórz L14→L15→L16 per kategoria (osobne issue per kategoria). Re-autoring starych lochów (goblin_warren → kategoria jaskinie itd.) — reaktywacja seedów z `tile_category_key`. Kolejność kategorii ustala Piotr po L19.
+
+**Weryfikacja:** jak L14–L16 per kategoria.
+
+---
+
+### BLOK 6 — Weryfikacja (L18–L19)
+
+#### L18 — Playwright: regresja lochu end-to-end
+
+**Cel prostym językiem:** Automatyczny test przechodzi cały loch jak gracz: wejście, walka, drzwi, zagadka, skrzynia, boss, wybór po bossie, wyjście — i sprawdza mapę kafelkową.
+
+**Dla agenta:** Spec w `ai_test_agent/playwright/ux/regression/` (konwencja `issue_NNN_lX_*.spec.js`, auto-listowany w admin Test Runner): pełny flow na lochu `krypta_probna` + asercje mapy (liczba widocznych kafelków rośnie po ruchu) + modale L13. Środowisko: kampania testowa wg `reset_test_env` (pamięć: model gpt-4.1-mini).
+
+**Weryfikacja:** spec zielony na DEV 2× z rzędu.
+
+#### L19 — 🎮 KAMIEŃ MILOWY: playtest lochu
+
+**Cel prostym językiem:** Pełna wyprawa zagrana jak przez gracza — od ekranu startu, przez 2 cykle endless, po śmierć/wyjście — z raportem co działa, a co nie.
+
+**Dla agenta:** Bez TDD, bez issue [TASK] — raport do issue `[SMOKE] FAZA L`. Scenariusz: wejście z ekranu start (L13b) + wejście z hexa (E21), pełny segment, boss, „idź głębiej", drugi boss, śmierć w cyklu 3 (weryfikacja checkpointu: XP/gold/HP), porzucenie w osobnym runie (50% cooldown), mapa i przyciski na telefonie. Defekty → issues P0/P1/P2. Zaliczone = GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.

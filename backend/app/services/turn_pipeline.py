@@ -23,7 +23,7 @@ import structlog
 
 from app.services.intent_parser import (
     parse_intent, parse_structured_action, is_structured_action,
-    generate_clarification_suggestions
+    generate_clarification_suggestions, ParsedIntent
 )
 from app.services.world_state_machine import WorldStateMachine, build_session_flags
 from app.services.mechanic_resolver import resolve as mechanic_resolve
@@ -45,6 +45,106 @@ from app.services.skill_service import (
 logger = structlog.get_logger()
 
 DB_PATH = "/data/ai_gm.db"
+
+import re as _re_tp
+
+# ── U30: Keyword fast-path for MOVE intent ────────────────────────────────────
+
+_DIRECTION_KEYWORDS: dict[str, tuple[int, int]] = {
+    # Polish with diacritics → axial hex offset (flat-top, standard orientation)
+    "północ": (0, -1), "północny": (0, -1), "north": (0, -1),
+    "południe": (0, 1), "południowy": (0, 1), "south": (0, 1),
+    "północny-wschód": (1, -1), "północny wschód": (1, -1), "northeast": (1, -1),
+    "północny-zachód": (-1, 0), "północny zachód": (-1, 0), "northwest": (-1, 0),
+    "południowy-wschód": (1, 0), "południowy wschód": (1, 0), "southeast": (1, 0),
+    "południowy-zachód": (-1, 1), "południowy zachód": (-1, 1), "southwest": (-1, 1),
+    "wschód": (1, 0), "wschodni": (1, 0), "east": (1, 0),
+    "zachód": (-1, 1), "zachodni": (-1, 1), "west": (-1, 1),
+    # ASCII transliterations (user may type without Polish diacritics)
+    "polnoc": (0, -1), "polnocny": (0, -1),
+    "poludnie": (0, 1), "poludniowy": (0, 1),
+    "polnocny-wschod": (1, -1), "polnocny wschod": (1, -1),
+    "polnocny-zachod": (-1, 0), "polnocny zachod": (-1, 0),
+    "poludniowy-wschod": (1, 0), "poludniowy wschod": (1, 0),
+    "poludniowy-zachod": (-1, 1), "poludniowy zachod": (-1, 1),
+    "wschod": (1, 0), "zachod": (-1, 1),
+}
+
+_MOVE_VERB_PATTERN = _re_tp.compile(
+    r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam|podroz?uj[eę]|podróżuj[eę]|"
+    r"jad[eę]|biegne|biegnę|zmierzam|ruszam|wchodz[eę]|wchodze|"
+    r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy)\b",
+    _re_tp.IGNORECASE | _re_tp.UNICODE,
+)
+
+_TRAVEL_NARRATIVE_MARKERS = _re_tp.compile(
+    r"\b(wyruszasz?|podróżuj[ea]sz?|wyruszasz?|przemierzasz?|idziesz|wędrujesz?|"
+    r"zmierzasz?|docierasz?|przybywa[sj]|wkraczasz?|opuszczasz?|opuszc[za]sz?|"
+    r"przybywasz?|zbliżasz?|oddalasz?)\b",
+    _re_tp.IGNORECASE | _re_tp.UNICODE,
+)
+
+
+def detect_move_intent(
+    player_message: str,
+    current_hex: dict | None,
+    neighbors: dict | None = None,
+) -> dict | None:
+    """U30 keyword fast-path: detect directional MOVE intent WITHOUT LLM call.
+
+    Returns None when the message doesn't look like directional movement.
+    Returns {"action_type": "MOVEMENT", "params": {...}} on match.
+    neighbors: {"north": (q,r), ...} — caller provides reachable neighbors.
+    """
+    text = player_message.strip().lower()
+
+    # Must contain a movement verb
+    if not _MOVE_VERB_PATTERN.search(text):
+        return None
+
+    # Look for cardinal direction keywords
+    current_q = int((current_hex or {}).get("q", 0))
+    current_r = int((current_hex or {}).get("r", 0))
+
+    for direction_name, (dq, dr) in _DIRECTION_KEYWORDS.items():
+        if direction_name in text:
+            dest_q = current_q + dq
+            dest_r = current_r + dr
+            return {
+                "action_type": "MOVEMENT",
+                "params": {
+                    "direction": direction_name,
+                    "destination_q": dest_q,
+                    "destination_r": dest_r,
+                },
+            }
+
+    return None
+
+
+# ── U30: Anty-desync guard ────────────────────────────────────────────────────
+
+def _check_travel_desync(
+    narrative: str,
+    action_type: str,
+    campaign_id: int,
+) -> bool:
+    """U30: Detect when LLM narrates travel but no MOVEMENT mechanic fired.
+
+    Logs 'travel_narrated_without_move' warning and returns True when desync detected.
+    Returns False when clean (MOVEMENT did happen, or no travel language in narrative).
+    """
+    if action_type == "MOVEMENT":
+        return False
+    if not _TRAVEL_NARRATIVE_MARKERS.search(narrative or ""):
+        return False
+    logger.warning(
+        "travel_narrated_without_move",
+        campaign_id=campaign_id,
+        action_type=action_type,
+        snippet=(narrative or "")[:120],
+    )
+    return True
 
 
 # ── Main pipeline function ─────────────────────────────────────────────────
@@ -75,6 +175,9 @@ def process_v2_turn(
     # ── Step 1: Parse input ────────────────────────────────────────────────
     if is_structured_action(user_input):
         parsed = parse_structured_action(user_input)
+    elif _move := detect_move_intent(user_input, session_flags.get("current_hex")):
+        # U30 keyword fast-path: directional text → MOVEMENT without LLM call
+        parsed = ParsedIntent(action_type=_move["action_type"], params=_move["params"], raw_tag="")
     else:
         loc_info = get_current_location_info(conn, campaign_id)
         location_key = (session_flags.get("current_location_key") or
@@ -210,6 +313,7 @@ def process_v2_turn(
         action_type=action_type,
         character_id=character_id,
         campaign_id=campaign_id,
+        player_message=user_input,
     )
 
     # ── Step 8: LLM Narrator ──────────────────────────────────────────────
@@ -604,6 +708,17 @@ def _update_hex_world_state(
         return
     dest_q = mechanic_result.get("destination_q")
     dest_r = mechanic_result.get("destination_r")
+    # U30 fix #518: text movement provides to_location_key but not q/r — resolve via world_hexes
+    if dest_q is None or dest_r is None:
+        to_loc_key = mechanic_result.get("to_location_key")
+        if to_loc_key:
+            from app.services.hex_travel_service import resolve_location_key_to_hex
+            coords = resolve_location_key_to_hex(to_loc_key, conn)
+            if coords:
+                dest_q, dest_r = coords
+                logger.info("u30_hex_resolved_from_location_key",
+                            location_key=to_loc_key, q=dest_q, r=dest_r,
+                            campaign_id=campaign_id)
     if dest_q is None or dest_r is None:
         return
     session_flags["current_hex"] = {"q": int(dest_q), "r": int(dest_r)}

@@ -888,3 +888,60 @@ async def delete_connection(body: ConnectionDelete, _: None = Depends(require_ad
         return {"ok": True}
     finally:
         conn.close()
+
+
+# ── U28 — Placement engine endpoints ─────────────────────────────────────────
+
+@router.get("/api/admin/locations/floating")
+async def get_floating_locations(_: None = Depends(require_admin_token)):
+    """U28: Lista approved lokacji w stanie floating (niezakotwiczonych na hexach)."""
+    from app.services.placement_engine import get_floating_locations as _get_floating
+    conn = _get_db_connection()
+    try:
+        return _get_floating(conn)
+    finally:
+        conn.close()
+
+
+class PlaceLocationBody(BaseModel):
+    q: int
+    r: int
+
+
+@router.post("/api/admin/locations/{location_key}/place")
+async def place_location_on_hex(
+    location_key: str,
+    body: PlaceLocationBody,
+    _: None = Depends(require_admin_token),
+):
+    """U28: Ręczne osadzenie floating lokacji na wskazanym hexie."""
+    conn = _get_db_connection()
+    try:
+        loc = conn.execute(
+            "SELECT key, placement FROM game_locations WHERE key=? AND is_active=1",
+            (location_key,),
+        ).fetchone()
+        if not loc:
+            raise HTTPException(status_code=404, detail="Location not found")
+        if loc["placement"] == "placed":
+            raise HTTPException(status_code=409, detail="Location already placed on a hex")
+        hex_row = conn.execute(
+            "SELECT q, r, location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1",
+            (body.q, body.r),
+        ).fetchone()
+        if not hex_row:
+            raise HTTPException(status_code=404, detail="Hex not found")
+        if hex_row["location_key"]:
+            raise HTTPException(status_code=409, detail="Hex already has a location assigned")
+        conn.execute(
+            "UPDATE world_hexes SET location_key=? WHERE q=? AND r=? AND is_active=1",
+            (location_key, body.q, body.r),
+        )
+        conn.execute(
+            "UPDATE game_locations SET placement='placed', world_hex_q=?, world_hex_r=? WHERE key=?",
+            (body.q, body.r, location_key),
+        )
+        conn.commit()
+        return {"ok": True, "key": location_key, "q": body.q, "r": body.r}
+    finally:
+        conn.close()

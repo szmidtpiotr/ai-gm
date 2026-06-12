@@ -5143,9 +5143,86 @@ def create_turn_stream(
             roll_result_data=roll_result_data,
         )
 
+        # U30: directional-move fast-path — execute travel mechanically BEFORE the LLM
+        # call. Without this, "idę na północ" only produces narrative and the map pin
+        # never moves (#518/#544). Location-name moves still go through location_intent.
+        u30_travel_executed = False
+        try:
+            from app.services.turn_pipeline import detect_move_intent as _u30_detect
+            _gs_mv = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            _mv_flags = json.loads((_gs_mv["session_flags"] if _gs_mv else None) or "{}")
+            _mv_cur = _mv_flags.get("current_hex") or {"q": 0, "r": 0}
+            _mv = _u30_detect(text, _mv_cur)
+            if _mv:
+                from app.services.hex_travel_service import resolve_chain_travel as _u30_travel
+                _dq = int(_mv["params"]["destination_q"])
+                _dr = int(_mv["params"]["destination_r"])
+                _sheet_mv = json.loads(character["sheet_json"] or "{}")
+                _tr = _u30_travel(
+                    campaign_id=campaign_id, character_id=payload.character_id,
+                    from_hex=(int(_mv_cur["q"]), int(_mv_cur["r"])), to_hex=(_dq, _dr),
+                    character_sheet=_sheet_mv, conn=conn,
+                )
+                if _tr.get("ok"):
+                    u30_travel_executed = True
+                    try:
+                        from app.services.clock_service import advance_clock as _u30_clock
+                        _th = float(_tr.get("total_hours") or 0.0)
+                        if _th > 0:
+                            _u30_clock(campaign_id, _th, "travel", conn=conn)
+                            conn.commit()
+                    except Exception as _u30_clk_err:
+                        logger.warning("u30_clock_advance_failed", error=str(_u30_clk_err))
+                    _arr = _tr.get("arrived_hex") or {}
+                    _hex_info = _tr.get("hex_data") or {}
+                    _enc = _tr.get("encounter")
+                    _fact = (
+                        f"\n[SYSTEM: Podróż wykonana mechanicznie: gracz przemieścił się na hex "
+                        f"({_arr.get('q')},{_arr.get('r')}), teren: {_hex_info.get('hex_type', 'nieznany')}, "
+                        f"czas podróży: {_tr.get('total_hours', 0)}h."
+                    )
+                    if _enc:
+                        _fact += (
+                            f" Podróż przerwana spotkaniem: {_enc.get('enemy_key')} — "
+                            "opisz nadejście zagrożenia."
+                        )
+                    _fact += (
+                        " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
+                        "ruch już rozstrzygnięty mechanicznie.]"
+                    )
+                else:
+                    _fact = (
+                        f"\n[SYSTEM: Gracz próbuje podróżować w kierunku "
+                        f"'{_mv['params'].get('direction')}', ale mechanika odmówiła: "
+                        f"{_tr.get('error', 'nieprzejezdny teren')}. Opisz przeszkodę narracyjnie. "
+                        "NIE opisuj dotarcia do celu.]"
+                    )
+                _first_mv = messages[0] if messages else None
+                if isinstance(_first_mv, dict) and _first_mv.get("role") == "system":
+                    _first_mv["content"] = f"{_first_mv.get('content', '').rstrip()}{_fact}"
+                else:
+                    messages.insert(0, {"role": "system", "content": _fact.strip()})
+                logger.info(
+                    "u30_directional_travel_stream",
+                    campaign_id=campaign_id,
+                    direction=_mv["params"].get("direction"),
+                    travel_ok=_tr.get("ok"),
+                    arrived=_tr.get("arrived_hex"),
+                    hours=_tr.get("total_hours"),
+                )
+        except Exception as _u30_err:
+            logger.warning("u30_directional_fastpath_error", error=str(_u30_err), campaign_id=campaign_id)
+
         location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
             conn, campaign_id, text, messages
         )
+        if u30_travel_executed:
+            # Travel already resolved mechanically — don't let the LLM's location_intent
+            # post-hook re-route or overwrite current_hex this turn.
+            location_skip_post_location_hook = True
 
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
@@ -5887,6 +5964,19 @@ def create_turn_stream(
             except Exception as _ws_err_s:
                 logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
 
+            # U30: include current_hex so frontend can sync map pin after each turn.
+            # Computed BEFORE onboarding so the world_map card can trigger on it.
+            try:
+                _u30_conn = sqlite3.connect(DB_PATH)
+                _u30_conn.row_factory = sqlite3.Row
+                try:
+                    _u30_extra = _build_done_extra_payload(campaign_id_val, _u30_conn)
+                    done_payload.update(_u30_extra)
+                finally:
+                    _u30_conn.close()
+            except Exception:
+                pass
+
             # E25: inject onboarding cards into stream DONE payload
             try:
                 from app.services.onboarding_service import inject_onboarding_to_out as _ob_inj_s
@@ -5894,6 +5984,7 @@ def create_turn_stream(
                     "result": {},
                     "skill_test_pending": done_payload.get("skill_test_pending"),
                     "combat_state": new_combat,
+                    "current_hex": done_payload.get("current_hex"),
                 }
                 _ob_inj_s(_ob_dict, user_id=int(character["user_id"]), conn=sqlite3.connect(DB_PATH))
                 done_payload["onboarding_cards"] = _ob_dict.get("onboarding_cards", [])
@@ -5904,6 +5995,10 @@ def create_turn_stream(
             _u6s_na = locals().get("_u6s_live_correction")
             if _u6s_na:
                 done_payload["narrative_append"] = _u6s_na
+
+            # (legacy U30 block removed — current_hex now computed above before onboarding)
+            if False:
+                pass
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
@@ -6481,6 +6576,108 @@ class HexTravelPayload(BaseModel):
     character_id: int
     destination_q: int
     destination_r: int
+
+
+# ── U30: Unified travel endpoint ──────────────────────────────────────────────
+
+class TravelPayload(BaseModel):
+    character_id: int
+    target_hex: dict | None = None           # {"q": int, "r": int}
+    target_location_key: str | None = None   # resolved → hex via world_hexes.location_key
+
+
+@router.post("/campaigns/{campaign_id}/travel")
+def player_travel(campaign_id: int, payload: TravelPayload):
+    """U30: Unified travel endpoint — accepts target_hex OR target_location_key."""
+    import json as _j, sqlite3 as _sq
+    from app.services.hex_travel_service import resolve_chain_travel, resolve_location_key_to_hex
+
+    character_id = payload.character_id
+
+    DB_PATH = "/data/ai_gm.db"
+    conn = _sq.connect(DB_PATH)
+    conn.row_factory = _sq.Row
+    try:
+        char = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
+            (character_id, campaign_id),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not found")
+        sheet = _j.loads(char["sheet_json"] or "{}")
+
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
+        ch = flags.get("current_hex")
+        origin_exists = conn.execute(
+            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
+        ).fetchone()
+
+        # Resolve destination
+        if payload.target_hex:
+            dest_q = int(payload.target_hex.get("q", 0))
+            dest_r = int(payload.target_hex.get("r", 0))
+        elif payload.target_location_key:
+            coords = resolve_location_key_to_hex(payload.target_location_key, conn)
+            if coords is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Location '{payload.target_location_key}' not placed on any hex yet."
+                )
+            dest_q, dest_r = coords
+        else:
+            raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
+
+        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0, 0) if origin_exists else (dest_q, dest_r))
+
+        result = resolve_chain_travel(
+            campaign_id=campaign_id, character_id=character_id,
+            from_hex=from_hex, to_hex=(dest_q, dest_r),
+            character_sheet=sheet, conn=conn,
+        )
+
+        try:
+            from app.services.clock_service import advance_clock as _advance_clock
+            travel_hours = float(result.get("total_hours") or 0.0)
+            if travel_hours > 0:
+                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
+                conn.commit()
+                result["clock"] = clock_state
+        except Exception as _clk_err:
+            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
+
+        hex_row = conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+            (dest_q, dest_r),
+        ).fetchone()
+        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
+
+        return result
+    finally:
+        conn.close()
+
+
+# ── U30: Helper to expose current_hex in [DONE] SSE payload ──────────────────
+
+def _build_done_extra_payload(campaign_id: int, conn) -> dict:
+    """U30: Return current_hex from session_flags for inclusion in [DONE] SSE metadata."""
+    import json as _j
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if row:
+            flags = _j.loads(row["session_flags"] or "{}")
+            current_hex = flags.get("current_hex")
+            if current_hex:
+                return {"current_hex": current_hex}
+    except Exception:
+        pass
+    return {}
 
 
 @router.get("/campaigns/{campaign_id}/clock")

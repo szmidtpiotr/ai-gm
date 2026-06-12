@@ -183,7 +183,7 @@ const _ROW_REGISTRY = {
 // ── Tab dispatcher + hexmap generate ───────────────────────────────────────────
   function _loadMapTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats }[tab];
+    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats, floating:_loadFloating }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
@@ -325,6 +325,66 @@ const _ROW_REGISTRY = {
       _wireRowActions('locations-table');
     } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
   }
+
+  // U28 — Floating lokacje
+  async function _loadFloating() {
+    const tbody = document.querySelector('#floating-locations-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = _loading(6);
+    try {
+      const items = await apiFetch('/api/admin/locations/floating');
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3)">Brak floating lokacji — wszystkie zakotwiczone ✓</td></tr>';
+        return;
+      }
+      tbody.innerHTML = items.map(loc => `
+        <tr data-key="${_esc(loc.key)}">
+          <td><code style="font-size:0.75rem">${_esc(loc.key)}</code></td>
+          <td>${_esc(loc.label || '—')}</td>
+          <td>${_esc(loc.location_subtype || loc.location_type || '—')}</td>
+          <td>${(loc.terrain_tags||[]).map(t => `<span class="chip on" style="font-size:0.7rem;padding:2px 6px">${_esc(t)}</span>`).join(' ')}</td>
+          <td>${_esc(loc.biome || '—')}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="openPlaceModal('${_esc(loc.key)}')">⚓ Osadź</button>
+          </td>
+        </tr>`).join('');
+    } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+  }
+
+  window.openPlaceModal = function(locKey) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:400px">
+      <div class="modal-head"><span>⚓ Osadź lokację na hexie</span><button id="pm-x">✕</button></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:0.82rem;color:var(--t2)">Lokacja: <code>${_esc(locKey)}</code></div>
+        <label style="font-size:0.8rem;font-weight:600">Współrzędna Q (kolumna)</label>
+        <input id="pm-q" type="number" class="field-input" placeholder="np. 2" value="0">
+        <label style="font-size:0.8rem;font-weight:600">Współrzędna R (wiersz)</label>
+        <input id="pm-r" type="number" class="field-input" placeholder="np. 3" value="0">
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="pm-cancel">Anuluj</button>
+        <button class="btn btn-primary" id="pm-save">⚓ Osadź</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#pm-x').onclick = () => overlay.remove();
+    overlay.querySelector('#pm-cancel').onclick = () => overlay.remove();
+    overlay.querySelector('#pm-save').onclick = async () => {
+      const q = parseInt(overlay.querySelector('#pm-q').value, 10);
+      const r = parseInt(overlay.querySelector('#pm-r').value, 10);
+      try {
+        await apiFetch(`/api/admin/locations/${encodeURIComponent(locKey)}/place`, {
+          method: 'POST', body: JSON.stringify({q, r}),
+        });
+        _showToast(`Lokacja ${locKey} osadzona na (${q},${r})`, 'success');
+        overlay.remove();
+        _worldLoaded.delete('floating');
+        _loadFloating();
+      } catch(e) { _showToast(e.message || 'Błąd osadzania', 'error'); }
+    };
+  };
 
   async function openLocNpcModal(locKey) {
     const overlay = document.createElement('div');
@@ -1898,6 +1958,7 @@ function _sectionHtml() {
           <button class="stab active" data-mtap="builder">Mapa</button>
           <button class="stab" data-mtap="generate">🌍 Generuj świat</button>
           <button class="stab" data-mtap="locations">Lokacje</button>
+          <button class="stab" data-mtap="floating">⚓ Floating</button>
           <button class="stab" data-mtap="terrain">Teren</button>
           <button class="stab" data-mtap="review">Do zatwierdzenia</button>
         </div>
@@ -1933,6 +1994,28 @@ function _sectionHtml() {
             </table>
           </div>
           <button class="add-row-btn">＋ Dodaj lokację</button>
+        </div>
+
+        <!-- U28: Floating Lokacje -->
+        <div class="stab-panel" id="wtab-floating">
+          <div class="toolbar">
+            <span style="color:var(--t3);font-size:0.82rem">Lokacje niezakotwiczone na hexach (floating). Osadź ręcznie podając współrzędne hexa (q, r).</span>
+          </div>
+          <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow-y:auto">
+            <table class="data-table" id="floating-locations-table">
+              <thead>
+                <tr>
+                  <th>Klucz</th>
+                  <th>Nazwa</th>
+                  <th>Typ</th>
+                  <th>Tagi terenu</th>
+                  <th>Biom</th>
+                  <th>Akcja</th>
+                </tr>
+              </thead>
+              <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3)">Ładowanie…</td></tr></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- Teren -->

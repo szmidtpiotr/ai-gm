@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-12 (HF-6 DONE — gate negation fix #535; 15/15 GREEN)_
+_Ostatnia aktualizacja: 2026-06-12 (dodano FAZĘ S — Skille i Stany, 20 zadań; opisy w game_mechanics.md CZĘŚĆ AI)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -13,11 +13,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **8/35** | **23% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **9/35** | **26% — PRZED Fazą 5 MP** |
+| **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **103/173** | **60%** |
+| **TOTAL** | **103/193** | **53%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -212,10 +213,10 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] U19 — Recap "Poprzednio…" po >24h przerwy
 - [ ] U20 — Onboarding: death saves przy <25% HP, karta XP z instrukcją, karty durability/afiksy/napady/crafter
 
-### Blok 6 — Lochy: stawka — ⏸ ODŁOŻONE (decyzja 2026-06-12: lochy kafelkowe czekają na redesign; FAZA U = tylko Nowa Kampania + Gotowa Kampania)
-- [ ] U21 — ⏸ Semantyka snapshotu (wygrana = zużycie zostaje; śmierć = restore; porzucenie = restore + 50% cooldown + modal ostrzeżenia)
-- [ ] U22 — ⏸ Reguły kafelków (boss po `rooms` pokojach, pre-roll drzwi z hintami, trap/riddle bez soft-locków, fallback braku kafelka)
-- [ ] U23 — ⏸ Jedna skala trudności D1–D5 + max_scale per wróg (koniec rubber-bandingu)
+### Blok 6 — Lochy: stawka — ❌ WCHŁONIĘTE PRZEZ FAZĘ L (redesign 2026-06-12; nie wykonywać jako U)
+- [ ] ~~U21~~ → FAZA L: L7 (semantyka checkpointów; UWAGA: śmierć=koniec runu zamiast restartu — zmiana względem pierwotnego U21)
+- [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
+- [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
 
 ### Blok 7 — Ekonomia: bezpieczniki
 - [ ] U24 — Napad: ostrzeżenie + rzut obronny + próg biedy 50gp + max 1/24h
@@ -223,15 +224,93 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] U26 — economy_log + centralna change_gold() + kafelek Ekonomia w admin Overview
 
 ### Blok 9 — Świat: hex ↔ lokacje ↔ ruch (audyt kodu 2026-06-11; wykonywać PO Bloku 3, PRZED Blokiem 4 — rdzeń gry)
-- [ ] U28 — Placement engine: terrain_tags + placement na game_locations; backend osadza lokacje przy odkryciu hexa; narzędzie admina dla floating
-- [ ] U29 — Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy na żądanie; create tylko przy brak_dopasowania
-- [ ] U30 — Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard, sync mapy po turze)
+- [x] U28 — Placement engine: terrain_tags + placement na game_locations; backend osadza lokacje przy odkryciu hexa; narzędzie admina dla floating — [#540](https://github.com/szmidtpiotr/ai-gm/issues/540)
+- [x] U29 — Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy na żądanie; create tylko przy brak_dopasowania — [#541](https://github.com/szmidtpiotr/ai-gm/issues/541)
+- [x] U30 — Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard, sync mapy po turze) — [#544](https://github.com/szmidtpiotr/ai-gm/issues/544)
 - [ ] U31 — Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z location_*_assignments; sub-lokacje
 - [ ] U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI (≥5 tur pille, ≥10 banner)
 - [ ] U32b — 🎮 KAMIEŃ MILOWY: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bez TDD, bez nowego issue — raporty do #512/#513, porównanie z runem U9b). Oczekiwane ✅: chk 2/3/4/9 (ruch hex, lokacje z bazy, NPC z przypisań, odpoczynek) → po potwierdzeniu zamknij #518/#522. Każde ❌ na chk 2/3/4 = defekt Bloku 9, naprawić PRZED Blokiem 4. Zaliczone = oba runy GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
 
 ### Blok 8 — Brama do MP (zawsze ostatnie)
 - [ ] U27 — docs/ACCEPTANCE_USABILITY.md + pełny re-playtest 3 trybów (w tym kryteria ruchu/lokacji z Bloku 9) → issue [GATE] Go/No-Go MP
+
+---
+
+## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — po/przeplatane z FAZĄ U
+
+> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AI. Źródło danych: `skills_conditions_design_doc.md` (korzeń repo). Kolejność = sekcja "FAZA S — zależności i kolejność" w CZĘŚCI AI (S1→S4 → S5→S7 → [U10!] S8→S14 → S15→S19 → S20). Każde zadanie = GitHub Issue `[TASK] SNN — tytuł` wdrażane `/tdd`; wyjątek S20 = czysty playtest (bez TDD, raport do issue [SMOKE] FAZA S). Prompt startowy: `prompt_s.md`.
+
+### Blok 1 — Fundament rzutu
+- [ ] S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności (zmiana zablokowanej mechaniki — zgoda 2026-06-12)
+- [ ] S2 — Staty wrogów: stats_json + archetypy + seed heurystyką (nadpisuje decyzję CZĘŚĆ AB)
+- [ ] S3 — Staty NPC + lazy generation archetypu
+- [ ] S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie; podwalina MP)
+
+### Blok 2 — Skille: batch danych + hooki
+- [ ] S5 — Seed ~16 skilli kategorii A (czyste testy) + countery + keyword map U7
+- [ ] S6 — Haggling: targowanie wpięte w ceny sklepu
+- [ ] S7 — Gamble: hazard z prawdziwą stawką złota
+
+### Blok 3 — Prymitywy efektów + kondycje parami — ⛔ WYMAGA U10
+- [ ] S8 — Batch kondycji z istniejących klocków (on_fire, frozen, lite: confused/insane/panicked/charmed/cursed) + tag [APPLY_CONDITION]
+- [ ] S9 — Prymityw stacking_levels + kondycja exhausted
+- [ ] S10 — Prymityw escalating_dot + kondycja hemorrhage
+- [ ] S11 — Prymityw reroll + inspired + cursed (pełny)
+- [ ] S12 — Prymityw extra_action + on_expire_apply + kondycja hasted
+- [ ] S13 — Prymityw on_zero_hp_save + kondycja blessed
+- [ ] S14 — Prymityw condition_immunity + kondycja rage
+
+### Blok 4 — Zaawansowane mechaniki bojowe (można PRZED Blokiem 3; S18 wymaga S8)
+- [ ] S15 — System reakcji (pre-deklaracja) + skill dodge
+- [ ] S16 — Reakcja shield_block
+- [ ] S17 — Wrestling: skill nakłada kondycje wrogom (opposed STR vs STR)
+- [ ] S18 — Prymityw behavior_override + pełne confused/berserk/panicked
+- [ ] S19 — Kondycja hidden: untargetable + ambush_bonus
+
+### Kamień milowy
+- [ ] S20 — 🎮 Playtest FAZY S (Sandbox sweep + /game-smoke; raport do [SMOKE] FAZA S; bez TDD)
+
+> Poza zakresem FAZY S (zapisane w CZĘŚCI AI): disease/broken_limb (zegar świata), crafting mechaniczny (trade_craft/alchemy = narracyjne), pełne charmed/insane, skutki inwentarzowe pickpocket/torture.
+
+---
+
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — niezależna od U/S; wyjątek: L5 wymaga S2
+
+> Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
+
+### Blok 1 — Silnik grafu
+- [ ] L1 — Konfiguracja kafelkowa lochu w DB + admin (tile_category_key, tile_count, boss_tile_id, endless_growth_n — dziś modal zbiera, baza nie zapisuje)
+- [ ] L2 — Generator rozgałęzionego grafu + dungeon_run v2 (odnogi, fog, door hints, powtórki z re-rollem, positions per postać — podwalina MP)
+- [ ] L3 — Wejście przez graf: /enter → tylko kafelki; 409 bez kategorii; blok [LOCH] w kontekście narratora (hybryda: opis z DB + koloryzacja LLM)
+- [ ] L4 — Ruch przez drzwi: POST /dungeons/move + exit_conditions + deterministyczny start walki + backtracking
+
+### Blok 2 — Mechaniki na kafelku
+- [ ] L5 — Walka: absolutna skala D1–D5 (koniec rubber-bandingu; dawne U23) — ⛔ WYMAGA S2
+- [ ] L6 — Skrzynie (rzut DEX, 3 próby, 30% pułapki), zagadki (3 próby + hinty), pułapki jako efekty, no soft-locks (dawne U22)
+- [ ] L7 — Checkpointy + śmierć kończy run + porzucenie 50% cooldown (dawne U21; NADPISUJE E16-restart)
+- [ ] L8 — Boss, loot, tryb nieskończony ("Wyjdź z łupem / Idź głębiej", segmenty +n, skalowanie cykli)
+
+### Blok 3 — Czystka legacy
+- [ ] L9 — Usunięcie trybu proceduralnego (kod + admin UI + testy legacy; seedy starych lochów is_active=0; DB bez destrukcji)
+
+### Blok 4 — UI gracza
+- [ ] L10 — Flaga dungeon_enabled dla graczy (admin toggle, default ON; egzekwowana w API i UI)
+- [ ] L11 — Mapa kafelkowa: przycisk mapy w lochu pokazuje graf (odwiedzone obrazki + zarysy za drzwiami + marker pozycji)
+- [ ] L12 — Wybór drzwi: przyciski kierunków pod composerem + klik na mapie + obraz kafelka w scenie + akcje skrzynia/zagadka
+- [ ] L13 — Modale: śmierć / porzucenie / resume / wybór po bossie
+- [ ] L13b — Wejście z ekranu startowego (bohater idle; scalenie trybów D9 w jeden "Loch")
+
+### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
+- [ ] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie)
+- [ ] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5 obrazków → akceptacja Piotra → pełny batch
+- [ ] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5)
+- [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
+
+### Blok 6 — Weryfikacja
+- [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
+- [ ] L19 — 🎮 KAMIEŃ MILOWY: playtest lochu (2 cykle endless, śmierć z checkpointem, porzucenie, mobile; raport do [SMOKE] FAZA L; bez TDD)
+
+> Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).
 
 ---
 
@@ -263,7 +342,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] H2 — Text-to-speech — per single player opt-in (F5TTS na hoście .16)
 - [ ] H3 — Konfiguracja image gen pipeline na .170 (FLUX.1-schnell + ComfyUI)
 - [ ] H4 — Konfiguracja Ollama na .170 dla offline content gen (admin AI Kreator)
-- [ ] H5 — GPU pipeline: tile → LLM Vision → opis → DB (dungeon tiles offline)
+- [ ] ~~H5~~ — GPU pipeline: tile → LLM Vision → opis → DB → REALIZOWANE JAKO L16 (FAZA L, 2026-06-12)
 
 ---
 

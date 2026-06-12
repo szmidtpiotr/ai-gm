@@ -109,6 +109,7 @@ class ContextInjector:
         action_type: str,
         character_id: int,
         campaign_id: int,
+        player_message: str = "",
     ) -> str:
         """
         Build the complete narrator prompt string.
@@ -119,6 +120,7 @@ class ContextInjector:
             action_type: The action that was resolved (e.g. "ATTACK", "DIALOGUE")
             character_id: Active character
             campaign_id: Active campaign
+            player_message: Raw player input (used by U29 for candidate search in ŚWIAT block)
 
         Returns:
             Complete prompt string to pass to LLM narrator.
@@ -143,7 +145,7 @@ class ContextInjector:
         blocks = [
             continuity_block,
             self._build_narrative_state_block(session_flags),
-            self._build_world_block(location, ingame_hours),
+            self._build_world_block(session_flags, ingame_hours, player_message),
             self._build_stale_block(session_flags),
             self._build_entities_block(npcs, combat_roster),
             self._build_mechanic_block(action_type, mechanic_result),
@@ -298,7 +300,29 @@ class ContextInjector:
             logger.warning("narrative_state_block_failed", error=str(e))
             return ""
 
-    def _build_world_block(self, location: dict | None, ingame_hours: int) -> str:
+    def _build_world_block(
+        self,
+        session_flags: dict,
+        ingame_hours: int,
+        player_message: str = "",
+    ) -> str:
+        """U29 — build rich ŚWIAT block from hex data + DB candidates.
+
+        Falls back to simple location-only block when no hex in session_flags.
+        """
+        try:
+            from app.services.location_context_injector import build_swiat_block
+            swiat = build_swiat_block(self.conn, session_flags, player_message)
+            if swiat:
+                swiat += f"\nPora: {_time_of_day(ingame_hours)}"
+                return swiat
+        except Exception as e:
+            logger.warning("build_swiat_block_failed", error=str(e))
+
+        # Fallback: simple format when no hex context (pre-U29 behavior)
+        session_flags = session_flags or {}
+        location_key = session_flags.get("current_location_key") or ""
+        location = self._get_location(location_key)
         lines = ["=== ŚWIAT ==="]
         if location:
             lines.append(f"Lokacja: {location.get('label', '?')}")
@@ -310,7 +334,6 @@ class ContextInjector:
                 lines.append(f"Opis: {desc}")
             else:
                 logger.debug("context_injector_no_description", location=location.get("key"))
-            # Atmosphere from rules JSON if present
             rules = {}
             try:
                 rules = json.loads(location.get("rules") or "{}")
@@ -321,7 +344,6 @@ class ContextInjector:
                 lines.append(f"Atmosfera: {atmosphere}")
         else:
             lines.append("Lokacja: nieznana")
-
         lines.append(f"Pora: {_time_of_day(ingame_hours)}")
         return "\n".join(lines)
 

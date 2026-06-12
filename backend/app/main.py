@@ -325,6 +325,24 @@ RAW_MIGRATIONS = [
     "UPDATE hex_type_config SET spawn_weight =  7 WHERE hex_type = 'swamp'",
     "UPDATE hex_type_config SET spawn_weight =  3 WHERE hex_type = 'ruins'",
     "UPDATE hex_type_config SET spawn_weight =  2 WHERE hex_type = 'cave'",
+    # U28 — Placement engine: terrain_tags + placement na game_locations, location_spawn_chance na hex_type_config
+    "ALTER TABLE game_locations ADD COLUMN terrain_tags TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE game_locations ADD COLUMN placement TEXT NOT NULL DEFAULT 'floating'",
+    "ALTER TABLE hex_type_config ADD COLUMN location_spawn_chance REAL NOT NULL DEFAULT 0.15",
+    # U28 — backfill placement='placed' dla lokacji już linkowanych przez world_hexes
+    "UPDATE game_locations SET placement='placed'"
+    " WHERE key IN (SELECT location_key FROM world_hexes WHERE location_key IS NOT NULL AND is_active=1)",
+    # U28 — location_spawn_chance per hex_type (wartości startowe — kalibracja po U32b)
+    "UPDATE hex_type_config SET location_spawn_chance=1.0 WHERE hex_type IN ('town','castle')",
+    "UPDATE hex_type_config SET location_spawn_chance=0.8 WHERE hex_type='dungeon'",
+    "UPDATE hex_type_config SET location_spawn_chance=0.6 WHERE hex_type='ruins'",
+    "UPDATE hex_type_config SET location_spawn_chance=0.4 WHERE hex_type='road'",
+    "UPDATE hex_type_config SET location_spawn_chance=0.3 WHERE hex_type='cave'",
+    "UPDATE hex_type_config SET location_spawn_chance=0.15 WHERE hex_type IN ('plains','forest')",
+    "UPDATE hex_type_config SET location_spawn_chance=0.1 WHERE hex_type IN ('hills','swamp')",
+    "UPDATE hex_type_config SET location_spawn_chance=0.05 WHERE hex_type='mountains'",
+    "UPDATE hex_type_config SET location_spawn_chance=0.0"
+    " WHERE hex_type IN ('water','river','coast','desert','tundra','volcanic')",
 ]
 
 
@@ -367,6 +385,71 @@ def run_app_sql_migrations():
         conn.close()
 
 
+def _backfill_terrain_tags():
+    """U28 — Uzupełnia terrain_tags na lokacjach bez tagów na podstawie biome/location_subtype/map_icon."""
+    import json as _json
+
+    SUBTYPE_TAGS = {
+        "town": ["town", "plains"],
+        "city": ["town", "plains"],
+        "village": ["town", "plains"],
+        "castle": ["castle", "hills"],
+        "fort": ["castle", "hills"],
+        "dungeon": ["dungeon", "cave", "ruins"],
+        "ruins": ["ruins", "plains", "hills"],
+        "cave": ["cave", "mountains", "hills"],
+        "temple": ["ruins", "plains"],
+        "camp": ["plains", "forest"],
+        "tavern": ["town", "plains"],
+    }
+    ICON_TAGS = {
+        "town": ["town", "plains"],
+        "castle": ["castle", "hills"],
+        "dungeon": ["dungeon", "cave"],
+        "ruins": ["ruins", "plains"],
+        "cave": ["cave", "mountains"],
+    }
+    BIOME_EXTRA = {
+        "forest": "forest",
+        "mountains": "mountains",
+        "swamp": "swamp",
+        "desert": "desert",
+        "tundra": "tundra",
+    }
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT key, location_subtype, biome, map_icon FROM game_locations"
+            " WHERE terrain_tags='[]' OR terrain_tags IS NULL"
+        ).fetchall()
+        for row in rows:
+            subtype = (row["location_subtype"] or "").lower()
+            biome = (row["biome"] or "").lower()
+            icon = (row["map_icon"] or "").lower()
+
+            tags = SUBTYPE_TAGS.get(subtype) or ICON_TAGS.get(icon)
+            if not tags:
+                tags = ["plains"]  # fallback
+
+            extra = BIOME_EXTRA.get(biome)
+            if extra and extra not in tags:
+                tags = tags + [extra]
+
+            conn.execute(
+                "UPDATE game_locations SET terrain_tags=? WHERE key=?",
+                (_json.dumps(tags), row["key"]),
+            )
+        conn.commit()
+        logger.info("u28_terrain_tags_backfill", updated=len(rows))
+    except Exception as exc:
+        logger.warning("u28_terrain_tags_backfill_error", error=str(exc))
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -384,6 +467,11 @@ async def lifespan(app: FastAPI):
         try:
             from app.services.encounter_seed_service import seed_generic_encounters
             seed_generic_encounters()
+        except Exception:
+            pass
+        # U28 — backfill terrain_tags for locations that have none yet (idempotent).
+        try:
+            _backfill_terrain_tags()
         except Exception:
             pass
     yield

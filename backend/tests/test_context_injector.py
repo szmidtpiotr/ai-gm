@@ -109,35 +109,32 @@ class TestTimeOfDay:
 # ── World Block ───────────────────────────────────────────────────────────
 
 class TestWorldBlock:
+    # U29: _build_world_block now takes session_flags dict (not location dict)
+    # Fallback path (no current_hex) reads location via current_location_key.
+
     def test_has_location_name(self, inj):
-        loc = inj._get_location("loc_tavern")
-        block = inj._build_world_block(loc, 9)
+        block = inj._build_world_block({"current_location_key": "loc_tavern"}, 9)
         assert "Karczma Pod Krzyżem" in block
 
     def test_has_description(self, inj):
-        loc = inj._get_location("loc_tavern")
-        block = inj._build_world_block(loc, 9)
+        block = inj._build_world_block({"current_location_key": "loc_tavern"}, 9)
         assert "niskim stropem" in block
 
     def test_has_atmosphere_from_rules(self, inj):
-        loc = inj._get_location("loc_tavern")
-        block = inj._build_world_block(loc, 9)
+        block = inj._build_world_block({"current_location_key": "loc_tavern"}, 9)
         assert "piwa" in block
 
     def test_no_description_omits_opis_line(self, inj):
-        loc = inj._get_location("loc_dungeon")
-        assert loc is not None
-        assert not (loc.get("description") or "").strip()  # confirm description is empty/null
-        block = inj._build_world_block(loc, 22)
+        block = inj._build_world_block({"current_location_key": "loc_dungeon"}, 22)
         assert "Opis:" not in block
 
     def test_time_of_day(self, inj):
-        loc = inj._get_location("loc_tavern")
-        block = inj._build_world_block(loc, 22)
+        block = inj._build_world_block({"current_location_key": "loc_tavern"}, 22)
         assert "zmierzch" in block or "noc" in block
 
     def test_none_location_graceful(self, inj):
-        block = inj._build_world_block(None, 9)
+        # Empty flags → no location → "nieznana"
+        block = inj._build_world_block({}, 9)
         assert "nieznana" in block
 
 

@@ -3494,6 +3494,18 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.clock)              renderClock(meta.clock);
             if (meta.onboarding_cards)   result.onboarding_cards   = meta.onboarding_cards;
             if (meta.narrative_append)   result.narrative_append   = meta.narrative_append;
+            // U30: sync map pin after each narrative turn (text movement updates current_hex).
+            // If the hex changed AND the panel is open, re-fetch the map so the newly
+            // discovered destination hex (not in the stale client cache) renders live —
+            // otherwise the pin would have no tile until a full page reload.
+            if (meta.current_hex) {
+                const prev = _wmap.currentHex;
+                const changed = !prev || prev.q !== meta.current_hex.q || prev.r !== meta.current_hex.r;
+                _wmap.currentHex = meta.current_hex;
+                if (changed && _wmap.panel && !_wmap.panel.hasAttribute('hidden')) {
+                    _wmRefresh(false).catch(() => _wmRender());
+                }
+            }
             return;
         }
 
@@ -9080,10 +9092,9 @@ async function _wmExecuteTravel() {
   // Dispatch hex travel to turn pipeline
   if (!currentCampaignId || !characterData?.id) return;
   try {
-    const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/hex-travel`, {
+    const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/travel`, {
       character_id: characterData.id,
-      destination_q: t.q,
-      destination_r: t.r,
+      target_hex: { q: t.q, r: t.r },
     });
 
     // T2/T5 — backend advances clock during hex-travel and returns the new
@@ -9173,21 +9184,18 @@ async function _wmExecuteTravel() {
   }
 }
 
-async function _wmOpen() {
-  if (!currentCampaignId || !characterData?.id) {
-    showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
-  }
-  _wmap.panel.removeAttribute('hidden');
-  _wmap.panel.style.transform = 'translateX(0)';
+// Re-fetch world map data from server. recenter=true centers on discovered hexes
+// (used on open); recenter=false keeps current pan (used for live in-place refresh
+// after a turn moved the player, so newly-discovered hexes appear without page reload).
+async function _wmRefresh(recenter = false) {
+  if (!currentCampaignId || !characterData?.id) return;
+  const data = await apiRequest('GET', `/campaigns/${currentCampaignId}/world-map?character_id=${characterData.id}`);
+  _wmap.hexes = data.hexes || [];
+  _wmap.teleports = data.teleport_connections || [];
+  _wmap.currentHex = data.current_hex;
+  _wmap.hexTypes = data.hex_types || {};
 
-  try {
-    const data = await apiRequest('GET', `/campaigns/${currentCampaignId}/world-map?character_id=${characterData.id}`);
-    _wmap.hexes = data.hexes || [];
-    _wmap.teleports = data.teleport_connections || [];
-    _wmap.currentHex = data.current_hex;
-    _wmap.hexTypes = data.hex_types || {};
-
-    // Center on discovered hexes
+  if (recenter) {
     const disc = _wmap.hexes.filter(h => h.status === 'discovered');
     if (disc.length) {
       const pixels = disc.map(h => _wmHexToPixel(h.q, h.r));
@@ -9196,7 +9204,19 @@ async function _wmOpen() {
       const rect = _wmap.svg.getBoundingClientRect();
       _wmap.pan = { x: (rect.width||360)/2 - cx*_wmap.zoom, y: (rect.height||500)/2 - cy*_wmap.zoom };
     }
-    _wmRender();
+  }
+  _wmRender();
+}
+
+async function _wmOpen() {
+  if (!currentCampaignId || !characterData?.id) {
+    showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
+  }
+  _wmap.panel.removeAttribute('hidden');
+  _wmap.panel.style.transform = 'translateX(0)';
+
+  try {
+    await _wmRefresh(true);
   } catch (err) {
     showToast(err.message || 'Błąd ładowania mapy', 'error');
   }
