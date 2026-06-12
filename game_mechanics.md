@@ -985,7 +985,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | U1 | Dokument prawdy — sprzątanie statusów/kolizji kodów/wiszących refów w game_mechanics.md | — |
 | U2 | Uzgodnienie spec↔implementacja ekonomii (reroll, durability, formuła craftingu, zegar anti-farm) | — |
 | U3 | Feature-flag Multiplayer w hubie kampanii ("Wkrótce") | — |
-| U4 | Smoke playtest 3 trybów — ground truth + lista defektów jako issues | U1 |
+| U4 ✅ | Smoke playtest trybów (Nowa Kampania #512, Gotowa Kampania #513) — 9/9 GREEN, brak P0 | U1 |
 | U5 | Centralny parser tagów LLM + polityka malformed output (retry, fallback, log błędów) | — |
 | U6 | Uogólniony wzorzec odmowy — korekta narracji przy KAŻDYM odrzuconym tagu | U5 |
 | U7 | SKILL_CHECK safety net — backend wymusza test przy ryzykownej akcji + DC lock do skali 8/12/16/20/24 | U5 |

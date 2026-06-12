@@ -13,11 +13,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **3/32** | **9% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **4/32** | **12% — PRZED Fazą 5 MP** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **100/172** | **58%** |
+| **TOTAL** | **101/172** | **59%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -166,7 +166,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] U3 — Feature-flag Multiplayer w hubie ("Wkrótce", default OFF) — [#511](https://github.com/szmidtpiotr/ai-gm/issues/511)
 
 ### Blok 2 — Ground truth
-- [ ] U4 — Smoke playtest 3 trybów ([SMOKE] issues + defekty P0/P1/P2; P0 naprawiane natychmiast)
+- [x] U4 — Smoke playtest trybów ([SMOKE] issues #512 #513 + defekty P0/P1/P2; 9/9 testów GREEN, brak P0) — [#512](https://github.com/szmidtpiotr/ai-gm/issues/512) [#513](https://github.com/szmidtpiotr/ai-gm/issues/513)
 
 ### Blok 3 — Pancerz na LLM (spójność narracja↔stan)
 - [ ] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed
