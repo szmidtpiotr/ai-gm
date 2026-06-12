@@ -55,6 +55,10 @@ TAG_REGISTRY: dict[str, re.Pattern] = {
         r'\[SKILL_CHECK:\s*([^:\]]+?)\s*:\s*(\d+|OPPOSED:\d+)\s*\]',
         re.IGNORECASE,
     ),
+    "SKILL_CHECK_AUTO_SUCCESS": re.compile(
+        r'\[SKILL_CHECK:\s*auto_success\s*\]',
+        re.IGNORECASE,
+    ),
     "TRAP": re.compile(
         r'\[TRAP:\s*([^:\]]+?)\s*:\s*(\d+)\s*:\s*([^:\]]+?)\s*:\s*([^\]]+?)\s*\]',
         re.IGNORECASE,
@@ -193,3 +197,184 @@ def get_tag_error_count(conn: sqlite3.Connection, campaign_id: int) -> int:
         return int(row[0]) if row else 0
     except Exception:
         return 0
+
+
+# ── Rejection corrections (U6) ────────────────────────────────────────────────
+# Templates appended to turn narration when a tag/event is rejected by the engine.
+# None = no narration correction (quest exists narratively without XP; skill DC clamped in U7).
+import json as _json
+
+REJECTION_CORRECTIONS: dict[str, "str | None"] = {
+    # Decision 2026-06-12 (Piotr): pending items DO reach the inventory (D1 flow kept),
+    # so the correction must not claim otherwise — neutral "looks worthless" wording.
+    "GRANT_ITEM":  "*(Przedmiot wygląda na bezwartościowy — zwykły drobiazg.)*",
+    "ITEM_CREATE": "*(Przedmiot wygląda na bezwartościowy — zwykły drobiazg.)*",
+    "QUEST_SUGGEST": None,
+    "SKILL_CHECK": None,  # DC clamped in U7, no narration correction
+    "COMBAT_START": None,  # handled by combat guard
+}
+
+
+def get_rejection_correction(tag_type: str) -> "str | None":
+    """Return Polish correction text for rejected tag, or None if no correction needed."""
+    return REJECTION_CORRECTIONS.get(tag_type.upper())
+
+
+def save_rejected_tags(conn: sqlite3.Connection, campaign_id: int, tags: list) -> None:
+    """Store rejected tag names in session_flags.last_rejected_tags for next-turn LLM context."""
+    if not tags:
+        return
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if row is None:
+            return
+        sf = _json.loads(row["session_flags"] or "{}")
+        sf["last_rejected_tags"] = list(tags)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (_json.dumps(sf, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+    except Exception as exc:
+        logger.warning("save_rejected_tags_failed", exc=str(exc))
+
+
+def get_last_rejected_tags(conn: sqlite3.Connection, campaign_id: int) -> list:
+    """Return list of rejected tag names from previous turn (for LLM context injection)."""
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        sf = _json.loads(row["session_flags"] or "{}")
+        return list(sf.get("last_rejected_tags", []))
+    except Exception:
+        return []
+
+
+def clear_rejected_tags(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """Clear last_rejected_tags from session_flags (call at start of new successful turn)."""
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if row is None:
+            return
+        sf = _json.loads(row["session_flags"] or "{}")
+        sf.pop("last_rejected_tags", None)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (_json.dumps(sf, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+    except Exception as exc:
+        logger.warning("clear_rejected_tags_failed", exc=str(exc))
+
+
+# ── U7: DC lock + SKILL_CHECK parser + safety net ────────────────────────────
+
+_DC_SCALE = [8, 12, 16, 20, 24]
+
+# Matches [SKILL_CHECK: auto_success] (checked before the key:dc variant)
+_SKILL_CHECK_AUTO_RE = re.compile(r'\[SKILL_CHECK:\s*auto_success\s*\]', re.IGNORECASE)
+# Matches [SKILL_CHECK: key: dc]
+_SKILL_CHECK_RE = re.compile(
+    r'\[SKILL_CHECK:\s*([^:\]]+?)\s*:\s*(\d+)\s*\]', re.IGNORECASE
+)
+# Presence check — is any [SKILL_CHECK...] in the LLM response?
+_SKILL_CHECK_ANY_RE = re.compile(r'\[SKILL_CHECK:', re.IGNORECASE)
+
+
+def clamp_dc_to_scale(dc: int) -> tuple:
+    """Clamp dc to nearest value in _DC_SCALE. Returns (clamped_dc, was_clamped)."""
+    nearest = min(_DC_SCALE, key=lambda v: (abs(v - dc), v))
+    return (nearest, nearest != dc)
+
+
+def parse_skill_check_tag(
+    tag_text: str,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    turn_number: int,
+) -> "dict | None":
+    """Parse a [SKILL_CHECK:...] tag string. Returns dict or None if no match.
+
+    Returns:
+        {"auto_success": True}  — for [SKILL_CHECK: auto_success]
+        {"skill_key": str, "dc": int, "clamped": bool}  — for [SKILL_CHECK: key: dc]
+        None  — if tag_text doesn't match any pattern
+    """
+    if _SKILL_CHECK_AUTO_RE.search(tag_text):
+        return {"auto_success": True}
+
+    m = _SKILL_CHECK_RE.search(tag_text)
+    if not m:
+        return None
+
+    skill_key = m.group(1).strip()
+    raw_dc = int(m.group(2))
+    clamped_dc, was_clamped = clamp_dc_to_scale(raw_dc)
+
+    if was_clamped:
+        log_tag_error(
+            conn=conn,
+            campaign_id=campaign_id,
+            turn_number=turn_number,
+            tag_raw=tag_text[:200],
+            error_type="dc_clamped",
+        )
+        logger.info(
+            "skill_check_dc_clamped",
+            campaign_id=campaign_id,
+            original_dc=raw_dc,
+            clamped_dc=clamped_dc,
+            skill=skill_key,
+        )
+
+    return {"skill_key": skill_key, "dc": clamped_dc, "clamped": was_clamped}
+
+
+def skill_check_safety_net(
+    llm_response: str,
+    risky_intent: "dict | None",
+    existing_pending: "dict | None",
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> "dict | None":
+    """Post-LLM safety net: if risky intent detected and LLM omitted [SKILL_CHECK] → force test.
+
+    Returns pending_skill_test dict if test should be forced, None otherwise.
+    """
+    if not risky_intent:
+        return None
+    if existing_pending:
+        return None
+    if _SKILL_CHECK_ANY_RE.search(llm_response or ""):
+        return None
+
+    skill_key = risky_intent["skill_key"]
+    dc = risky_intent["default_dc"]
+    category = risky_intent["category_key"]
+
+    log_tag_error(
+        conn=conn,
+        campaign_id=campaign_id,
+        turn_number=0,
+        tag_raw=f"skill_check_forced|category={category}|skill={skill_key}|dc={dc}",
+        error_type="skill_check_forced",
+    )
+    logger.info(
+        "skill_check_forced",
+        campaign_id=campaign_id,
+        skill=skill_key,
+        category=category,
+        dc=dc,
+    )
+
+    return {"skill_key": skill_key, "dc": dc, "source": "safety_net", "category": category}

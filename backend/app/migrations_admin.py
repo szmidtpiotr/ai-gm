@@ -3254,6 +3254,17 @@ def _ensure_npc_is_dead_column(conn: sqlite3.Connection) -> None:
             pass  # ignore all errors (table may not exist yet in tests)
 
 
+def _ensure_pending_category_column(conn: sqlite3.Connection) -> None:
+    """U6 (#530): pending_category on game_config_items — visual triage for admin
+    review queue (trivial junk vs standard items granted narratively by the GM)."""
+    try:
+        conn.execute("ALTER TABLE game_config_items ADD COLUMN pending_category TEXT DEFAULT NULL")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            pass  # ignore all errors (table may not exist yet in tests)
+
+
 def _ensure_xp_level_thresholds(conn: sqlite3.Connection) -> None:
     """F18 (#478): seed default non-linear XP thresholds into game_config_meta."""
     import json as _json
@@ -3326,6 +3337,71 @@ def _ensure_hidden_traits_schema(conn: sqlite3.Connection) -> None:
         except Exception:
             pass
     conn.commit()
+
+
+def _ensure_skill_risk_categories(conn: sqlite3.Connection) -> None:
+    """U7 (#531): create game_config_skill_risk_categories table + seed 6 categories."""
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS game_config_skill_risk_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_key TEXT NOT NULL UNIQUE,
+                skill_key TEXT NOT NULL,
+                default_dc INTEGER NOT NULL DEFAULT 12,
+                keywords TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        conn.commit()
+    except Exception:
+        pass
+
+    seeds = [
+        ("stealth", "stealth", 12,
+         "skrad,przekrad,niepostrzeżenie,kryję,chowam,ukrywam,przemykam,cichaczem"),
+        ("climb_jump", "athletics", 12,
+         "wspinam,wspinaczka,skaczę,skok,przeskakuję,gramolę,drapię się,wchodzę na"),
+        ("theft", "lockpick", 12,
+         "kradnę,ukraść,podkradam,kieszeni,zabieram,grasuje,kraść"),
+        ("persuasion_pressure", "persuasion", 12,
+         "kłamię,blefuję,przekonuję,zastraszam,szantażuję,przesłuchuję,wymuszam"),
+        ("disarm", "lockpick", 16,
+         "rozbrajam,unieszkodliwiam,manipuluję mechanizmem,wyważam zamek,otwieramy zamek"),
+        ("acrobatics", "athletics", 12,
+         "akrobatyka,unik,uchylam,przewrót,balansując,równowaga"),
+    ]
+    for cat_key, skill_key, default_dc, keywords in seeds:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_skill_risk_categories "
+                "(category_key, skill_key, default_dc, keywords) VALUES (?,?,?,?)",
+                (cat_key, skill_key, default_dc, keywords),
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
+def _ensure_campaign_source_template(conn: sqlite3.Connection) -> None:
+    """U8 (#532): add source_template_id to campaigns to detect Gotowa Kampania for Story Gravity L3."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaigns ADD COLUMN source_template_id INTEGER DEFAULT NULL"
+        )
+        conn.commit()
+    except Exception:
+        pass  # already exists
+
+
+def _ensure_campaign_plan_degraded(conn: sqlite3.Connection) -> None:
+    """U9 (#533): flag set when LLM plan generation fails and fallback plan is used."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaigns ADD COLUMN plan_degraded INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception:
+        pass  # already exists
 
 
 def run_admin_migrations() -> None:
@@ -3407,9 +3483,13 @@ def run_admin_migrations() -> None:
         _ensure_price_gp_schema(conn)
         _apply_f15_balance_tuning(conn)
         _ensure_npc_is_dead_column(conn)
+        _ensure_pending_category_column(conn)
         _ensure_xp_level_thresholds(conn)
         _ensure_time_of_day_effects(conn)
         _ensure_hidden_traits_schema(conn)
+        _ensure_skill_risk_categories(conn)
+        _ensure_campaign_source_template(conn)
+        _ensure_campaign_plan_degraded(conn)
     finally:
         conn.close()
 

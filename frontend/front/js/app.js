@@ -3493,6 +3493,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.active_quests)      result.active_quests      = meta.active_quests;
             if (meta.clock)              renderClock(meta.clock);
             if (meta.onboarding_cards)   result.onboarding_cards   = meta.onboarding_cards;
+            if (meta.narrative_append)   result.narrative_append   = meta.narrative_append;
             return;
         }
 
@@ -3564,7 +3565,11 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
 
     // Finalize streaming bubble — apply full GM formatting
     if (streamBubble && contentEl && rawTokens) {
-        const { narrative: gmContent } = parseGmFull(rawTokens);
+        let { narrative: gmContent } = parseGmFull(rawTokens);
+        // U6 (#530): server-side correction computed after stream (e.g. rejected grant_item)
+        if (result.narrative_append) {
+            gmContent = (gmContent || '').replace(/\s+$/, '') + '\n\n' + result.narrative_append;
+        }
         streamBubble.classList.remove('chat-bubble--streaming');
         // Replace textContent with formatted HTML + meta footer
         const name    = 'MG — Mistrz Gry';

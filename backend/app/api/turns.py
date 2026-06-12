@@ -1825,6 +1825,27 @@ def _grant_narrative_weapon(
         return None
 
 
+# U6 (#530): visual triage helper — common junk-word stems mark a pending item
+# as 'trivial' so the admin can skim past leaves/stones/twigs in the review queue.
+# Stems (prefix match) so Polish inflection is covered (piasek/piasku/piaskiem).
+# False positives are harmless (badge only, item still reviewable).
+_TRIVIAL_ITEM_STEMS = (
+    "kamie", "kamyk", "kamycz", "gałąz", "gałęz", "patyk",
+    "liść", "liści", "listek", "listk", "piasek", "piask", "piach",
+    "pył", "kurz", "szmat", "sznur", "odłam", "okruch", "okrusz",
+    "drzazg", "traw", "słom", "sian", "błot", "glin", "skorup",
+    "muszl", "piór", "desk", "drewienk", "węgiel", "węgl",
+    "popiół", "popiol", "śmieć", "śmieci", "gruz", "żwir",
+    "korek", "kork", "szyszk", "żołądź", "żołędz", "chwast",
+)
+
+
+def _is_trivial_item_label(label: str) -> bool:
+    """True when the label looks like worthless junk (see _TRIVIAL_ITEM_STEMS)."""
+    words = re.findall(r"[a-ząćęłńóśźż]+", str(label or "").lower())
+    return any(w.startswith(stem) for w in words for stem in _TRIVIAL_ITEM_STEMS)
+
+
 def _grant_pending_item(
     conn: sqlite3.Connection,
     *,
@@ -1849,13 +1870,24 @@ def _grant_pending_item(
     slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")
     key = f"narrative_item_{slug}_{campaign_id}_{int(_time.time()) % 100000}"
     desc = description or f"Narracyjny przedmiot: {label}"
+    pending_category = "trivial" if _is_trivial_item_label(label) else "standard"
 
     try:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_items)").fetchall()}
         has_campaign_col = "campaign_id" in cols
         has_review_col = "review_status" in cols
+        has_category_col = "pending_category" in cols
 
-        if has_campaign_col and has_review_col:
+        if has_campaign_col and has_review_col and has_category_col:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_items
+                   (key, label, item_type, description, value_gp,
+                    ai_generated, approved, campaign_id, review_status, is_active,
+                    pending_category)
+                   VALUES (?, ?, 'misc', ?, 0, 1, 0, ?, 'pending_review', 1, ?)""",
+                (key, label, desc, int(campaign_id), pending_category),
+            )
+        elif has_campaign_col and has_review_col:
             conn.execute(
                 """INSERT OR IGNORE INTO game_config_items
                    (key, label, item_type, description, value_gp,
@@ -3792,6 +3824,15 @@ def create_turn(
                 logger.warning("gate_check_error", error=str(_gate_err))
                 # Gate errors must never break the game — fall through to LLM
 
+        # ── U7: detect risky intent before LLM ───────────────────────────────
+        _risky_intent_match = None
+        if not roll_request:
+            try:
+                from app.services.game_engine import _detect_risky_intent as _u7_detect
+                _risky_intent_match = _u7_detect(conn, narrative_text)
+            except Exception as _ri_err:
+                logger.warning("risky_intent_detect_error", error=str(_ri_err))
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -3882,6 +3923,50 @@ def create_turn(
                     conn.commit()
         except Exception as _se:
             logger.warning("skill_tag_intercept_error: %s", str(_se))
+
+        # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
+        if _risky_intent_match and not _skill_pending_narrator:
+            try:
+                from app.services.llm_tag_parser import skill_check_safety_net as _u7_sn
+                from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                import uuid as _uuid_u7
+                _gs_u7 = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                _existing_pending_u7 = None
+                if _gs_u7:
+                    _existing_pending_u7 = json.loads(_gs_u7["session_flags"] or "{}").get("pending_skill_test")
+                _forced = _u7_sn(
+                    llm_response=assistant_text,
+                    risky_intent=_risky_intent_match,
+                    existing_pending=_existing_pending_u7,
+                    conn=conn,
+                    campaign_id=campaign_id,
+                )
+                if _forced:
+                    _char_sh_u7 = json.loads(character["sheet_json"] or "{}")
+                    _skill_key_u7 = _forced["skill_key"]
+                    _pending_u7 = {
+                        "skill_test_id": f"st-{_uuid_u7.uuid4().hex[:8]}",
+                        "skill_key": _skill_key_u7,
+                        "skill_label": _skill_label(_skill_key_u7),
+                        "counter": _get_counter(conn, _skill_key_u7),
+                        "modifier_breakdown": calc_skill_modifier_info(_char_sh_u7, _skill_key_u7),
+                        "dc": _forced["dc"],
+                        "source": "safety_net",
+                    }
+                    if _gs_u7:
+                        _sf_u7 = json.loads(_gs_u7["session_flags"] or "{}")
+                        _sf_u7 = _commit_pending_skill_test(_pending_u7, _sf_u7)
+                        conn.execute(
+                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                            (json.dumps(_sf_u7, ensure_ascii=False), campaign_id),
+                        )
+                        conn.commit()
+                    _skill_pending_narrator = _pending_u7
+            except Exception as _u7_err:
+                logger.warning("u7_safety_net_error", error=str(_u7_err))
 
         from app.services import combat_service as _cs
 
@@ -4138,6 +4223,45 @@ def create_turn(
             clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
         except Exception as _sg_ns_err:
             logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
+
+        # U6 (#530): pre-check grant_item_labels — items going to pending get narration correction
+        try:
+            from app.services.llm_tag_parser import (
+                get_rejection_correction as _u6_corr,
+                log_tag_error as _u6_lte,
+                save_rejected_tags as _u6_srt,
+                clear_rejected_tags as _u6_crt,
+                find_unknown_tags as _u6_fut,
+            )
+            _u6_turn_n = conn.execute(
+                "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                (campaign_id,),
+            ).fetchone()[0]
+            _u6_rejected: list = []
+            # Decision 2026-06-12 (Piotr): pending-item flow is ACCEPTED behaviour
+            # (item reaches inventory, admin reviews later) — NOT a tag error.
+            # No llm_tag_errors entry, no last_rejected_tags signal to the LLM.
+            # Narration correction only for trivial junk (a quest key must stay uncorrected).
+            for _u6_gil in grant_item_labels:
+                _u6_resolved = _resolve_grant_catalog_item(conn, _u6_gil)
+                if not _u6_resolved and not _is_weapon_label(_u6_gil) \
+                        and _is_trivial_item_label(_u6_gil):
+                    _u6_fix = _u6_corr("GRANT_ITEM")
+                    if _u6_fix:
+                        # Append correction inside the narrative field (not the raw JSON wrapper)
+                        _u6_narr, _u6_pjson = _extract_narrative_for_cues(clean_assistant)
+                        _u6_narr_fixed = _u6_narr.rstrip() + "\n\n" + _u6_fix
+                        clean_assistant = _repack_narrative(clean_assistant, _u6_narr_fixed, _u6_pjson)
+            for _u6_utag in _u6_fut(clean_assistant):
+                _u6_lte(conn, campaign_id, _u6_turn_n, _u6_utag, "unknown_tag")
+                _u6_rejected.append(f"unknown:{_u6_utag}")
+            conn.commit()
+            if _u6_rejected:
+                _u6_srt(conn, campaign_id, _u6_rejected)
+            else:
+                _u6_crt(conn, campaign_id)
+        except Exception as _u6_err:
+            logger.warning("u6_rejection_correction_error", error=str(_u6_err))
 
         log = create_turn_log(
             conn=conn,
@@ -5321,6 +5445,50 @@ def create_turn_stream(
                     except Exception as _sks_err:
                         logger.warning("stream_skill_test_intercept_error", error=str(_sks_err))
                     # ──────────────────────────────────────────────────────────────
+                    # U6 (#530): detect items going to pending → correction + log
+                    try:
+                        from app.services.llm_tag_parser import (
+                            get_rejection_correction as _u6s_corr,
+                            log_tag_error as _u6s_lte,
+                            save_rejected_tags as _u6s_srt,
+                            clear_rejected_tags as _u6s_crt,
+                            find_unknown_tags as _u6s_fut,
+                        )
+                        _u6s_turn_n = stream_log["turn_number"] if stream_log else 0
+                        _u6s_rejected: list = []
+                        _u6s_correction_parts: list = []
+                        # Decision 2026-06-12 (Piotr): pending-item flow is ACCEPTED behaviour
+                        # — no llm_tag_errors entry, no rejected-tags signal to the LLM.
+                        # Narration correction only for trivial junk.
+                        for _u6s_gil in grant_item_labels:
+                            _u6s_resolved = _resolve_grant_catalog_item(save_conn, _u6s_gil)
+                            if not _u6s_resolved and not _is_weapon_label(_u6s_gil) \
+                                    and _is_trivial_item_label(_u6s_gil):
+                                _u6s_fix = _u6s_corr("GRANT_ITEM")
+                                if _u6s_fix:
+                                    _u6s_correction_parts.append(_u6s_fix)
+                        for _u6s_utag in _u6s_fut(clean_text):
+                            _u6s_lte(save_conn, campaign_id_val, _u6s_turn_n, _u6s_utag, "unknown_tag")
+                            _u6s_rejected.append(f"unknown:{_u6s_utag}")
+                        if _u6s_correction_parts and stream_log:
+                            # Append correction inside the narrative field (not the raw JSON wrapper)
+                            _u6s_narr, _u6s_pjson = _extract_narrative_for_cues(persisted_assistant_text)
+                            _u6s_narr_fixed = _u6s_narr.rstrip() + "\n\n" + "\n\n".join(_u6s_correction_parts)
+                            _u6s_new_text = _repack_narrative(persisted_assistant_text, _u6s_narr_fixed, _u6s_pjson)
+                            save_conn.execute(
+                                "UPDATE campaign_turns SET assistant_text = ? WHERE id = ?",
+                                (_u6s_new_text, stream_log["id"]),
+                            )
+                            # Expose for live-stream DONE payload (text already streamed without it)
+                            _u6s_live_correction = "\n\n".join(_u6s_correction_parts)
+                        save_conn.commit()
+                        if _u6s_rejected:
+                            _u6s_srt(save_conn, campaign_id_val, _u6s_rejected)
+                        else:
+                            _u6s_crt(save_conn, campaign_id_val)
+                    except Exception as _u6s_err:
+                        logger.warning("u6_stream_rejection_correction_error", error=str(_u6s_err))
+                    # ──────────────────────────────────────────────────────────────
                     for _gil in grant_item_labels:
                         _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
@@ -5616,6 +5784,11 @@ def create_turn_stream(
                 done_payload["onboarding_cards"] = _ob_dict.get("onboarding_cards", [])
             except Exception:
                 done_payload.setdefault("onboarding_cards", [])
+
+            # U6 (#530): correction text computed after stream — frontend appends to bubble
+            _u6s_na = locals().get("_u6s_live_correction")
+            if _u6s_na:
+                done_payload["narrative_append"] = _u6s_na
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 

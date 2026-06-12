@@ -128,6 +128,47 @@ _SKILL_VERB_HINT = _re_skill.compile(
     _re_skill.IGNORECASE,
 )
 
+import unicodedata as _unicodedata
+
+
+def _normalize_risk_text(text: str) -> str:
+    """Lowercase + strip accents for keyword matching."""
+    nfkd = _unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not _unicodedata.combining(c))
+
+
+def _detect_risky_intent(conn, user_text: str) -> "dict | None":
+    """Check user_text against game_config_skill_risk_categories keywords.
+
+    Returns {"category_key", "skill_key", "default_dc"} or None.
+    Table is seeded by U7 migration; graceful fallback if table missing.
+    """
+    if not user_text or not conn:
+        return None
+    try:
+        rows = conn.execute(
+            "SELECT category_key, skill_key, default_dc, keywords "
+            "FROM game_config_skill_risk_categories WHERE enabled=1"
+        ).fetchall()
+    except Exception:
+        return None
+
+    normalized = _normalize_risk_text(user_text)
+    for row in rows:
+        raw_kws = (row["keywords"] if hasattr(row, "__getitem__") else row[3]) or ""
+        skill_key = row["skill_key"] if hasattr(row, "__getitem__") else row[1]
+        default_dc = row["default_dc"] if hasattr(row, "__getitem__") else row[2]
+        category_key = row["category_key"] if hasattr(row, "__getitem__") else row[0]
+        for kw in raw_kws.split(","):
+            kw = _normalize_risk_text(kw.strip())
+            if kw and kw in normalized:
+                return {
+                    "category_key": category_key,
+                    "skill_key": skill_key,
+                    "default_dc": int(default_dc),
+                }
+    return None
+
 
 def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -> str | None:
     """
@@ -619,6 +660,19 @@ def build_narrative_messages(
         _st_block = _skill_test_tag_instruction(conn, int(campaign["id"]), user_text)
         if _st_block:
             messages.append({"role": "system", "content": _st_block})
+
+    # U6 (#530): inject rejected tags from previous turn so LLM doesn't continue non-existent thread
+    if has_db_conn and messages:
+        try:
+            from app.services.llm_tag_parser import get_last_rejected_tags as _u6_glrt
+            _u6_rejected = _u6_glrt(conn, int(campaign["id"]))
+            if _u6_rejected:
+                first = messages[0]
+                if isinstance(first, dict) and first.get("role") == "system":
+                    _u6_block = "[Odrzucone tagi z poprzedniej tury: " + ", ".join(_u6_rejected) + "]"
+                    first["content"] = f"{first.get('content', '').rstrip()}\n\n{_u6_block}"
+        except Exception:
+            pass
 
     if not roll_result_data or not messages:
         return messages
