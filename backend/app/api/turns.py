@@ -4114,6 +4114,7 @@ def create_turn(
         try:
             from app.services.quest_suggest_parser import parse_quest_suggest as _pqs_ns, strip_quest_suggest_tags as _sqs_ns
             from app.services.world_state_service import get_world_state_flags as _gwsf_ns, set_world_state_flags as _swsf_ns
+            from app.services.quest_persist_service import persist_quest_to_character_quests as _pqdb_ns
             _narr_qs_ns, _pjson_qs_ns = _extract_narrative_for_cues(clean_assistant)
             _new_quests_ns = _pqs_ns(_narr_qs_ns)
             if _new_quests_ns:
@@ -4122,6 +4123,9 @@ def create_turn(
                 _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
                 if _to_add_ns:
                     _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
+                    # HF-2: persist to character_quests for /quest command and stats
+                    for _q_ns in _to_add_ns:
+                        _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns)
             clean_assistant = _repack_narrative(clean_assistant, _sqs_ns(_narr_qs_ns), _pjson_qs_ns)
         except Exception as _qse_ns:
             logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
@@ -5023,6 +5027,7 @@ def create_turn_stream(
                 try:
                     from app.services.quest_checker import check_kill_quest as _ckq, parse_reward as _preward
                     from app.services.world_state_service import get_world_state_flags as _gwsf_cq, set_world_state_flags as _swsf_cq
+                    from app.services.quest_persist_service import complete_quest_in_character_quests as _cqdb
                     _cq_quests = _gwsf_cq(campaign_id_val).get("active_quests", [])
                     _ek_name = (combat_ended_pre_payload or {}).get("enemy_name", "")
                     if _ek_name and _cq_quests:
@@ -5039,6 +5044,8 @@ def create_turn_stream(
                                     if _rwd["gold"] > 0:
                                         apply_grant_gold_to_character(_rwd_conn, character_id=character_id_val, amount=_rwd["gold"], source="quest_reward", campaign_id=campaign_id_val)
                                     logger.info("quest_completed_kill", campaign_id=campaign_id_val, title=_cq_item["title"])
+                                    # HF-2: update character_quests to completed
+                                    _cqdb(_rwd_conn, character_id=character_id_val, campaign_id=campaign_id_val, title=_cq_item["title"])
                                 _rwd_conn.commit()
                             finally:
                                 _rwd_conn.close()
@@ -5183,6 +5190,7 @@ def create_turn_stream(
                 try:
                     from app.services.quest_suggest_parser import parse_quest_suggest as _pqs, strip_quest_suggest_tags as _sqs
                     from app.services.world_state_service import get_world_state_flags as _gwsf, set_world_state_flags as _swsf
+                    from app.services.quest_persist_service import persist_quest_to_character_quests as _pqdb
                     _narr_qs, _pjson_qs = _extract_narrative_for_cues(clean_text)
                     _new_quests = _pqs(_narr_qs)
                     if _new_quests:
@@ -5191,6 +5199,13 @@ def create_turn_stream(
                         _to_add = [q for q in _new_quests if q["title"] not in _seen_titles]
                         if _to_add:
                             _swsf(campaign_id_val, active_quests=_existing + _to_add)
+                            # HF-2: persist to character_quests for /quest command and stats
+                            _qs_conn = get_db()
+                            try:
+                                for _q in _to_add:
+                                    _pqdb(_qs_conn, character_id=character_id_val, campaign_id=campaign_id_val, quest=_q)
+                            finally:
+                                _qs_conn.close()
                     clean_text = _repack_narrative(clean_text, _sqs(_narr_qs), _pjson_qs)
                 except Exception as _qse:
                     logger.warning("quest_suggest_parse_error", error=str(_qse))

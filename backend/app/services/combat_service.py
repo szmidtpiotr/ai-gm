@@ -2422,6 +2422,11 @@ def resolve_attack(
                                 conn.commit()
                         except Exception:
                             pass
+                        # HF-1 (#523): clear scene_enemies after victory — bypass end_combat() path
+                        try:
+                            set_world_state_flags(campaign_id, scene_enemies=[])
+                        except Exception:
+                            pass
                         out["combat_state"] = load_combat_snapshot(campaign_id)
                         return out
             else:
@@ -2798,6 +2803,11 @@ def _advance_turn_impl(campaign_id: int) -> str:
         if _all_enemies_dead(combatants):
             _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason="victory")
             conn.commit()
+            # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
+            try:
+                set_world_state_flags(campaign_id, scene_enemies=[])
+            except Exception:
+                pass
             return "ended"
 
         living: list[str] = []
@@ -2812,6 +2822,11 @@ def _advance_turn_impl(campaign_id: int) -> str:
         if len(living) <= 1:
             _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason="victory")
             conn.commit()
+            # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
+            try:
+                set_world_state_flags(campaign_id, scene_enemies=[])
+            except Exception:
+                pass
             return "ended"
 
         cur = row["current_turn"]

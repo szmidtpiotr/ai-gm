@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-12 (U3 #511 KOMPLETNE — feature-flag Multiplayer w hubie kampanii)_
+_Ostatnia aktualizacja: 2026-06-12 (HF-2 #524 KOMPLETNE — quest persistence character_quests fix; HF-1 #523 KOMPLETNE — scene_enemies P0 softlock fix; U4b KOMPLETNE — game-smoke 2×15 tur)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -13,11 +13,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **4/32** | **12% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **5/33** | **15% — PRZED Fazą 5 MP** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **101/172** | **59%** |
+| **TOTAL** | **102/173** | **59%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -166,7 +166,17 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] U3 — Feature-flag Multiplayer w hubie ("Wkrótce", default OFF) — [#511](https://github.com/szmidtpiotr/ai-gm/issues/511)
 
 ### Blok 2 — Ground truth
-- [x] U4 — Smoke playtest trybów ([SMOKE] issues #512 #513 + defekty P0/P1/P2; 9/9 testów GREEN, brak P0) — [#512](https://github.com/szmidtpiotr/ai-gm/issues/512) [#513](https://github.com/szmidtpiotr/ai-gm/issues/513)
+- [x] U4 — Smoke specs Playwright ([SMOKE] issues #512 #513; 9/9 GREEN — pokrywają TYLKO: login, utworzenie kampanii, 1 turę E2E) — [#512](https://github.com/szmidtpiotr/ai-gm/issues/512) [#513](https://github.com/szmidtpiotr/ai-gm/issues/513)
+- [x] U4b — Playtest LLM 15 tur × 2 tryby skillem /game-smoke (ruch po hexach, NPC, quest, walka, sklep, odpoczynek+XP, beaty w Gotowej) — defekty P0/P1/P2; werdykt "brak P0" z U4 NIE jest jeszcze potwierdzony — [#512](https://github.com/szmidtpiotr/ai-gm/issues/512) [#513](https://github.com/szmidtpiotr/ai-gm/issues/513) **OBA NIEGRYWALNY — P0: #515 (scene_enemies), P1: #518 #519 #520 #521 #522**
+
+### Hotfixy po U4b (poza licznikiem U; wykonać PRZED U5, w tej kolejności)
+- [x] HF-1 — #515 P0: scene_enemies nie czyszczone po resolve_attack → softlock po każdej walce (regresja względem #456: end_combat czyści, ale ścieżka "ostatni wróg pada w resolve_attack" nie woła clear) — [#523](https://github.com/szmidtpiotr/ai-gm/issues/523)
+- [x] HF-2 — #521 P1: questy zapisują się tylko do session_flags.active_quests, brak persystencji do character_quests (łamie C10/C11; bez tego auto-complete questów i dziennik U18 nie mają na czym stać) — [#524](https://github.com/szmidtpiotr/ai-gm/issues/524)
+- [ ] HF-3 — NOWE ISSUE do założenia: Gotowa Kampania startuje z GM Planem 0 scen (checkpoint 11 N/D w U4b) — szablon nie zasiewa planu (regresja E7/E11?); bez scen beaty NIGDY nie odpalą = sedno trybu martwe. P1.
+- [ ] HF-4 — po HF-1: ponowny `/game-smoke nowa-kampania` (run z U4b był z poprzedniej sesji, bez pełnej tabeli checkpointów)
+
+> **Mapowanie pozostałych P1 — NIE hotfixować, naprawiają je zadania U (naprawa dwa razy = praca wyrzucona):**
+> #518 (current_hex wiecznie {0,0}) → **U30** · #520 (narracja walki bez [COMBAT_START]) → **U5/U6** (guard) · #522 (LLM tworzy AI-lokacje zamiast bazy) → **U28/U29**. Dodaj te numery do opisów zadań przy ich realizacji i zamknij issues przy ich odbiorze.
 
 ### Blok 3 — Pancerz na LLM (spójność narracja↔stan)
 - [ ] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed
