@@ -77,9 +77,13 @@ def get_plan(campaign_id: int, conn: sqlite3.Connection) -> dict:
     if not row or not row[0]:
         return {}
     try:
-        return json.loads(row[0])
+        plan = json.loads(row[0])
     except (json.JSONDecodeError, TypeError):
         return {}
+    # Template plans store beats under "arcs" (list); V2 runtime reads "acts" (list).
+    if isinstance(plan.get("arcs"), list) and not plan.get("acts"):
+        plan["acts"] = plan["arcs"]
+    return plan
 
 
 def save_plan(campaign_id: int, plan: dict, conn: sqlite3.Connection) -> None:

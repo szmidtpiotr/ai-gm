@@ -95,13 +95,36 @@ def normalize_gm_plan(raw: str | None) -> dict[str, Any]:
     if ver < GM_PLAN_SCHEMA_VERSION:
         arcs = out.get("arcs")
         if not isinstance(arcs, dict) or not arcs:
-            legacy_slice = {k: out[k] for k in _LEGACY_TOP_KEYS if k in out}
-            if legacy_slice:
-                out["arcs"] = {"default": _ensure_arc_shape("default", legacy_slice)}
-                out["active_arc_id"] = "default"
+            if isinstance(arcs, list) and arcs:
+                # Template format: arcs is a list of {id, key_beats, status} dicts.
+                # Convert to W1 dict keyed by arc.id; derive scene_goals from key_beats labels.
+                arcs_dict: dict[str, Any] = {}
+                active_id_from_list: str | None = None
+                for i, arc in enumerate(arcs):
+                    if not isinstance(arc, dict):
+                        continue
+                    arc_id = str(arc.get("id", f"arc_{i}"))
+                    arc_copy = dict(arc)
+                    if "key_beats" in arc_copy and "scene_goals" not in arc_copy:
+                        arc_copy["scene_goals"] = [
+                            b.get("label") or b.get("beat_key", "")
+                            for b in arc_copy.get("key_beats", [])
+                            if isinstance(b, dict) and (b.get("label") or b.get("beat_key"))
+                        ]
+                    arcs_dict[arc_id] = arc_copy
+                    if arc.get("status") == "active" and active_id_from_list is None:
+                        active_id_from_list = arc_id
+                out["arcs"] = arcs_dict
+                if not out.get("active_arc_id") and active_id_from_list:
+                    out["active_arc_id"] = active_id_from_list
             else:
-                out["arcs"] = {}
-                out["active_arc_id"] = None
+                legacy_slice = {k: out[k] for k in _LEGACY_TOP_KEYS if k in out}
+                if legacy_slice:
+                    out["arcs"] = {"default": _ensure_arc_shape("default", legacy_slice)}
+                    out["active_arc_id"] = "default"
+                else:
+                    out["arcs"] = {}
+                    out["active_arc_id"] = None
         else:
             fixed: dict[str, Any] = {}
             for aid, node in arcs.items():

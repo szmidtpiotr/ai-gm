@@ -20,6 +20,46 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _migrate_template_plan_to_w1(raw: str | None) -> str:
+    """Migrate template gm_plan_json from list-arcs format to W1 dict-arcs + acts list.
+
+    Templates store: {"arcs": [{"id": "...", "key_beats": [...], "status": "active"}]}
+    W1 engine expects: {"arcs": {"arc_id": {"scene_goals": [...], ...}}}
+    V2 runtime expects: {"acts": [{"id": "...", "key_beats": [...]}]}
+    """
+    try:
+        plan = json.loads(raw or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return "{}"
+    arcs = plan.get("arcs")
+    if not isinstance(arcs, list) or not arcs:
+        return raw or "{}"
+    # Populate "acts" for V2 runtime beat tracking
+    if not plan.get("acts"):
+        plan["acts"] = arcs
+    # Convert arcs list → W1 dict keyed by arc.id
+    arcs_dict: dict = {}
+    active_id: str | None = None
+    for i, arc in enumerate(arcs):
+        if not isinstance(arc, dict):
+            continue
+        arc_id = str(arc.get("id", f"arc_{i}"))
+        arc_copy = dict(arc)
+        if "key_beats" in arc_copy and "scene_goals" not in arc_copy:
+            arc_copy["scene_goals"] = [
+                b.get("label") or b.get("beat_key", "")
+                for b in arc_copy.get("key_beats", [])
+                if isinstance(b, dict) and (b.get("label") or b.get("beat_key"))
+            ]
+        arcs_dict[arc_id] = arc_copy
+        if arc.get("status") == "active" and active_id is None:
+            active_id = arc_id
+    plan["arcs"] = arcs_dict
+    if not plan.get("active_arc_id") and active_id:
+        plan["active_arc_id"] = active_id
+    return json.dumps(plan, ensure_ascii=False)
+
+
 @router.get("/campaign-modes")
 def get_campaign_modes():
     """D9 (#384) — 5 trybów huba kampanii (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer)
@@ -579,7 +619,7 @@ def create_campaign(req: CampaignCreateRequest):
         if not tpl:
             conn.close()
             raise HTTPException(status_code=404, detail="Published template not found")
-        tpl_plan = tpl["gm_plan_json"] or "{}"
+        tpl_plan = _migrate_template_plan_to_w1(tpl["gm_plan_json"] or "{}")
 
     cur.execute(
         """
