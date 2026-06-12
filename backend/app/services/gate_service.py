@@ -115,12 +115,19 @@ def validate_action(
 
 # ── Keyword stub classifier ───────────────────────────────────────────────────
 
+# Negation bypass: "nie <attack_verb>" → do NOT classify as ATTACK.
+# Catches: "nie atakuję", "nie walczę", "nie strzelam", "nic nie atakuję", etc.
+_NEGATION_ATTACK_PATTERN = re.compile(
+    r"\bnie\s+(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|walczę|walcz)",
+    re.IGNORECASE,
+)
+
 # (Polish keyword → action_type). F0-4 replaces this with a full LLM parser.
 _KEYWORD_MAP: list[tuple[re.Pattern, str]] = [
     # ATTACK — must come before FLEE to catch "walka"
-    # Note: Polish inflections end in "ę"/"ę"/"am" — avoid \b after stems with Unicode tails
+    # Note: Polish inflections end in "ę"/"am" — avoid \b after Unicode tails
     (re.compile(
-        r"(atakuj[ęe]?|uderz[ae][jm]?|strzelam|rzucam zaklęcie|spell|cast|\batak\b|walczę|walcz)",
+        r"(atakuj[ęe]?|uderz[ae][jm]?|\buderz\b|strzelam|rzucam zaklęcie|spell|cast|\batak\b|walczę|walcz)",
         re.IGNORECASE
     ), "ATTACK"),
     # FLEE
@@ -159,5 +166,8 @@ def classify_intent_stub(player_input: str) -> dict:
     text = (player_input or "").strip()
     for pattern, action_type in _KEYWORD_MAP:
         if pattern.search(text):
+            # Skip ATTACK when preceded by negation ("nie atakuję", "nic nie strzelam", etc.)
+            if action_type == "ATTACK" and _NEGATION_ATTACK_PATTERN.search(text):
+                continue
             return {"action_type": action_type}
     return {"action_type": "UNKNOWN"}

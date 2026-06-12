@@ -991,6 +991,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | U7 | SKILL_CHECK safety net — backend wymusza test przy ryzykownej akcji + DC lock do skali 8/12/16/20/24 | U5 |
 | U8 | Beat fallback — obiektywne warunki beatów + Story Gravity poziomy zdefiniowane i włączone | U5 |
 | U9 | GM Plan hardening — retry/fallback przy generacji planu na starcie kampanii | U5 |
+| U9b | 🎮 Kamień milowy: /game-smoke × 2 tryby po Bloku 3 (bramka przed Blokiem 9) | U5–U9 |
 | U10 | Effect schema lockdown — jeden format, enum statów, walidacja JSON Schema na każdym zapisie | — |
 | U11 | Unifikacja przedmiotów — 3 tabele → `game_items` (etapami, sub-issues) | U10 |
 | U12 | `db_lint` — skrypt audytu integralności bazy + przycisk w admin Narzędzia | U10 |
@@ -1014,6 +1015,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | U30 | Świat: ruch mechaniczny — POST /travel, klik mapy = podróż, intent MOVE przed LLM, anty-desync guard | U29 |
 | U31 | Świat: scena ładowana z bazy przy wejściu do lokacji (scene_npcs/enemies z assignments) | U30 |
 | U32 | Świat: travel pills z prawdziwych danych + eskalacja anty-stuck w UI | U30 |
+| U32b | 🎮 Kamień milowy: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bramka przed Blokiem 4) | U28–U32 |
 
 > **Kolejność wykonania:** Blok 9 (U28–U32) wchodzi po U5–U9, PRZED U10–U14 — to rdzeń gry. Szczegóły: CZĘŚĆ AH, sekcja "zależności i kolejność".
 
@@ -3356,7 +3358,7 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 ---
 
-### BLOK 3 — Pancerz na LLM: spójność narracja↔stan (U5–U9)
+### BLOK 3 — Pancerz na LLM: spójność narracja↔stan (U5–U9 + U9b)
 
 > **Zasada projektowa:** Gracz wybacza grze błąd mechaniczny; nie wybacza, gdy gra twierdzi że coś się stało, a to się nie stało. Każdy tag LLM przechodzi przez JEDEN parser, każde odrzucenie tagu zostawia ślad w narracji i w logu.
 > **Dlaczego?** Dziś każdy tag ma własny parser i własne (lub żadne) zachowanie przy błędzie. Odrzucony ITEM_CREATE = przedmiot istnieje w fikcji, nie istnieje w plecaku — dokładnie ten problem zaufania, który World State miał wyeliminować.
@@ -3424,6 +3426,18 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 4. Gracz przy degradacji nie widzi błędu — najwyżej prostszy start.
 
 **Weryfikacja:** pytest z mockiem LLM zwracającym śmieci → kampania powstaje z fallbackiem + flagą. Ręcznie: nowa kampania startuje < 30 s nawet przy wymuszonym błędzie (admin może symulować złym presetem).
+
+---
+
+#### U9b — 🎮 Kamień milowy: /game-smoke po Bloku 3
+
+**Cel:** Sprawdzić w prawdziwej grze, czy "pancerz na LLM" (U5–U9) działa: korekty odrzuconych tagów, beat fallback, gwarantowany start Gotowej. Bramka — bez niej nie wiadomo, czy Blok 9 budujemy na solidnym gruncie.
+
+**Dla agenta:** Czysty playtest — BEZ cyklu TDD i BEZ nowego issue [TASK]. Przed startem upewnij się, że kod U5–U9 jest zacommitowany i backend przebudowany (`--build`) na .61. Wykonaj `/game-smoke nowa-kampania`, potem `/game-smoke gotowa-kampania`. Raporty jako komentarze do #512 i #513 (jak U4b/HF-4); porównaj tabelę checkpointów z runem HF-4 (#512-run2).
+- Oczekiwane ✅: checkpoint 11 (beat — U8), 12 (spójność narracja↔stan — U5/U6), start Gotowej z planem (U9), brak `rental_expire_error` w logach (#516), narracja walki bez [COMBAT_START] korygowana (#520 — jeśli potwierdzone, #520 do zamknięcia przez Piotra).
+- Oczekiwane ❌ (znane, NIE zgłaszaj duplikatów): checkpoint 2 (ruch hex — #518→U30), 3 (lokacje z bazy — #522→U28/U29), ewentualnie 9 (odpoczynek w AI-lokacji z safe_for_rest=0 — pochodna #522).
+
+**Weryfikacja:** Zaliczone gdy oba runy ukończone i zero NOWYCH P0/P1 spoza #518/#522. Werdykt "GRYWALNY Z ZASTRZEŻENIAMI" = sukces tego etapu. Nowy P0 → hotfix PRZED Blokiem 9. Odhacz w notes.md z linkami do komentarzy-raportów.
 
 ---
 
@@ -3668,7 +3682,7 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 ---
 
-### BLOK 9 — Świat: hex ↔ lokacje ↔ ruch (U28–U32)
+### BLOK 9 — Świat: hex ↔ lokacje ↔ ruch (U28–U32 + U32b)
 
 > **Zasada projektowa:** Świat jest grafem mechanicznym: hexy, lokacje na hexach, NPC w lokacjach. Mechanika rozstrzyga GDZIE gracz jest i CO tam zastaje — LLM dostaje fakty i narruje. LLM nigdy nie wybiera ani nie tworzy miejsca "w locie"; może najwyżej zgłosić propozycję, gdy mechanika potwierdzi, że nic pasującego nie istnieje.
 > **Dlaczego?** Audyt kodu (2026-06-11) wykazał, że obecny system jest LLM-driven: ruch istnieje tylko przez `[LOCATION_INTENT]` od LLM (łańcuch 4 kruchych ogniw: emisja tagu → fuzzy match 80% → lokacja ma hex → sync current_hex), klik na mapie to tylko podgląd, a LLM nie dostaje żadnych kandydatów z bazy lokacji (tylko `known_locations` = już odwiedzone) — więc wymyśla nowe zamiast używać przygotowanych. To odwrócenie Zasady #1 w najważniejszym podsystemie gry.
@@ -3742,10 +3756,22 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 ---
 
+#### U32b — 🎮 Kamień milowy: /game-smoke po Bloku 9 (pierwszy kandydat na GRYWALNY)
+
+**Cel:** Blok 9 naprawia rdzeń gry — ruch po mapie i prawdziwe lokacje. Ten playtest odpowiada, czy gra po raz pierwszy jest w pełni GRYWALNA w obu trybach.
+
+**Dla agenta:** Czysty playtest — BEZ cyklu TDD i BEZ nowego issue [TASK]. Przed startem: kod U28–U32 zacommitowany, backend przebudowany na .61. `/game-smoke nowa-kampania` + `/game-smoke gotowa-kampania`, raporty do #512/#513, porównanie z runem U9b.
+- Oczekiwane ✅ (nowe vs U9b): checkpoint 2 (current_hex zmienia się — U30), 3 (lokacje ai_generated=0 — U28/U29), 4 (NPC z location_npc_assignments — U31), 9 (odpoczynek w lokacji z bazy). Po potwierdzeniu #518 i #522 do zamknięcia przez Piotra.
+
+**Weryfikacja:** Zaliczone gdy oba runy GRYWALNY (lub Z ZASTRZEŻENIAMI wyłącznie przez P2). Każde ❌ na checkpointach 2/3/4 = defekt Bloku 9 — naprawić PRZED wejściem w Blok 4. Odhacz w notes.md z linkami.
+
+---
+
 ### FAZA U — zależności i kolejność
 
 ```
-Kolejność realna: U1→U2→U3 → U4 (smoke) → U5–U9 (pancerz LLM) → U28–U32 (BLOK 9: świat/ruch — rdzeń)
+Kolejność realna: U1→U2→U3 → U4 (smoke) → U5–U9 (pancerz LLM) → U9b (🎮 smoke-bramka)
+                  → U28–U32 (BLOK 9: świat/ruch — rdzeń) → U32b (🎮 smoke-bramka, kandydat GRYWALNY)
                   → U10–U14 (baza) → U15–U20 / U21–U23 / U24–U26 (równolegle OK) → U27 (gate)
 
 U1 → U4 (playtest na uporządkowanym dokumencie)
@@ -3754,6 +3780,8 @@ U5 → U6, U7, U8, U9 oraz U29/U30 (parser tagów + wzorzec korekt)
 U28 → U29 → U30 → U31 → U32 (świat: placement → kontekst → ruch → scena → pille)
 U10 → U11, U12, U13 (schema przed unifikacją i lintem)
 U4 może przesunąć priorytety P1 do dowolnego bloku
+U9b po U5–U9: nowy P0 z U9b blokuje wejście w Blok 9 (hotfix najpierw)
+U32b po U28–U32: ❌ na checkpointach 2/3/4 blokuje wejście w Blok 4 (defekt Bloku 9 najpierw)
 U27 ostatnie — wymaga wszystkiego (w tym U28–U32)
 Bloki 5/6/7 wewnętrznie niezależne — można równolegle, jeśli Piotr prowadzi 2 agentów
 ```
@@ -3994,3 +4022,4 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 - #529 — Admin modal kampanii: zakładka "Znani NPC" niewidoczna (stale cache) + endpoint `known-npcs` używał deprecated `npc_locations` (JOIN po npc_id) zamiast V2 `location_npc_assignments` (JOIN po npc_key); fix: bump ?v=18→19 w admin/index.html + podmiana JOIN; diagnostyka: npc_locations=35 wierszy, location_npc_assignments=0 (dane do migracji przy U31); commit 7cb70e1. TDD 4/4 + Playwright 1/1. ✅
 - #507 — World builder: placement modes generacji mapy. Nowa kolumna `placement_mode` na `hex_type_config` (biome/scatter/path). Generator `generate_world()` dispatchuje po trybie: `biome`=Voronoi (plain/forest/hills/mountains/swamp), `scatter`=rejection sampling z min-spacing 3 hexów (town/castle/cave/dungeon/ruins), `path`=momentum random-walk (river) / greedy MST Prim'a łączący miasta+zamki (road). Spawn_weight dungeon→2, castle→1. Helpery: `_carve_river`, `_scatter_features`, `_build_road_network`, `_hex_line`, `_cube_round`. `placement_mode` edytowalny w admin UI (dropdown). Commit `9d4605e`. ✅
 - #508 — World builder: drag-painting hexów + undo. Tryb 🖌 Maluj: przeciągnięcie LPM maluje wiele hexów wybranym terenem (optimistyczny render przez rAF, bulk commit `POST /api/admin/world/hexes/bulk-paint` upsert na mouseup). Nowe hexe powstają, istniejące nadpisują typ+encounter_chance bez kasowania metadanych. Stos undo 50 kroków — jedno pociągnięcie = jeden krok (przywraca cały pociągnięcie atomowo); Ctrl/Cmd+Z + przycisk ↶ Cofnij z licznikiem. Undo obejmuje: malowanie, usunięcie hexa, zapis szczegółów. Listenery drag/keydown bindowane raz per svg. Commit `ace9b98`. ✅
+- #534/#538 — HF-7: Walidacja celu COMBAT_START — `_validate_combat_start_target()` w `turns.py` sprawdza przed `initiate_combat()`: (1) scene_enemies → OK, (2) game_config_enemies catalog → OK, (3) campaign_known_npcs lub scene_npcs → REJECT `combat_target_friendly_npc`, (4) nieznany → REJECT `combat_target_unknown`. Przy odrzuceniu: wpis `llm_tag_errors` + korekta narracji dołączona do stored turn (wzorzec U6). TDD 8/8 + Playwright 2/2. ✅

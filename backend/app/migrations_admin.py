@@ -3404,6 +3404,79 @@ def _ensure_campaign_plan_degraded(conn: sqlite3.Connection) -> None:
         pass  # already exists
 
 
+# HF-8 beat objective_type mapping: beat_key → objective_type
+_BEAT_OBJECTIVE_MAP: dict[str, str] = {
+    # Pierwsze Kroki
+    "first_combat": "kill_enemy",
+    "first_merchant": "talk_to_npc",
+    "first_exploration": "visit_location",
+    # Przeklęte Ziemie
+    "discover_curse": "visit_location",
+    "seek_origin": "talk_to_npc",
+    "confront_evil": "kill_enemy",
+    "lift_curse": "visit_location",
+    # Cień Licza (lich_awakens = pure narrative, no objective_type)
+    "seek_allies": "talk_to_npc",
+    "locate_phylactery": "visit_location",
+    "destroy_phylactery": "kill_enemy",
+    "final_battle": "kill_enemy",
+}
+
+
+def _patch_campaign_template_beat_objectives(conn: sqlite3.Connection) -> None:
+    """HF-8 (#539): add objective_type to key_beats in seed campaign templates.
+
+    Without objective_type, the U8 auto_complete_beats_by_event() ignores the beats,
+    making checkpoint 11 (beat completion) dead in Gotowa Kampania mode.
+    Idempotent: skips beats that already have objective_type.
+    """
+    import json as _json
+
+    try:
+        rows = conn.execute(
+            "SELECT id, gm_plan_json FROM campaign_templates WHERE created_by = 'seed'"
+        ).fetchall()
+    except Exception:
+        return  # table may not exist in test environments
+
+    changed_ids = []
+    for row in rows:
+        template_id = row[0] if not isinstance(row, sqlite3.Row) else row["id"]
+        raw = row[1] if not isinstance(row, sqlite3.Row) else row["gm_plan_json"]
+        if not raw:
+            continue
+        try:
+            plan = _json.loads(raw)
+        except (ValueError, TypeError):
+            continue
+
+        modified = False
+        for arc in plan.get("arcs", []):
+            if not isinstance(arc, dict):
+                continue
+            for beat in arc.get("key_beats", []):
+                if not isinstance(beat, dict):
+                    continue
+                beat_key = beat.get("beat_key", "")
+                if "objective_type" in beat:
+                    continue  # already patched
+                obj_type = _BEAT_OBJECTIVE_MAP.get(beat_key)
+                if obj_type:
+                    beat["objective_type"] = obj_type
+                    modified = True
+
+        if modified:
+            conn.execute(
+                "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
+                (_json.dumps(plan, ensure_ascii=False), template_id),
+            )
+            changed_ids.append(template_id)
+
+    if changed_ids:
+        conn.commit()
+        logger.info("hf8_template_beats_patched", template_ids=changed_ids)
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3490,6 +3563,7 @@ def run_admin_migrations() -> None:
         _ensure_skill_risk_categories(conn)
         _ensure_campaign_source_template(conn)
         _ensure_campaign_plan_degraded(conn)
+        _patch_campaign_template_beat_objectives(conn)
     finally:
         conn.close()
 

@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-12 (U9b KOMPLETNE — KAMIEŃ MILOWY Blok 3; GRYWALNY Z ZASTRZEŻENIAMI; #534/#535/#536 zgłoszone; #536 naprawiony)_
+_Ostatnia aktualizacja: 2026-06-12 (HF-6 DONE — gate negation fix #535; 15/15 GREEN)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -191,9 +191,9 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Hotfixy po U9b (poza licznikiem U; wykonać PRZED U28, w tej kolejności)
 - [x] HF-5 — [#536](https://github.com/szmidtpiotr/ai-gm/issues/536) COMMIT: fix XP hooks już w drzewie roboczym (turns.py: `strip_narrative_tags` importowany z `narrative_state_service` zamiast `xp_sources`) — zacommitować + pytest importu; bez commitu następny rebuild cofnie fix — 624f096
-- [ ] HF-6 — [#535](https://github.com/szmidtpiotr/ai-gm/issues/535) Gate ATTACK regex łapie negację ("nic nie atakuję" → gate_blocked) — word boundary + bypass "nie <czasownik>"; diagnoza i propozycja fixu w issue
-- [ ] HF-7 — [#534](https://github.com/szmidtpiotr/ai-gm/issues/534) Walidacja celu COMBAT_START: cel spoza scene_enemies/bazy wrogów albo przyjazny NPC (quest-giver) → odrzucenie tagu + korekta narracji (wzorzec U6) + wpis llm_tag_errors; pełna instrukcja w komentarzu issue
-- [ ] HF-8 — CP11: dodać `objective_type` do `key_beats` w szablonach kampanii (bez tego auto-complete beatów z U8 martwy w Gotowej; U32b mierzy checkpoint 11 — "fix przy U32b" za późno, U32b to playtest, nie naprawa)
+- [x] HF-6 — [#535](https://github.com/szmidtpiotr/ai-gm/issues/535) Gate ATTACK regex łapie negację ("nic nie atakuję" → gate_blocked) — word boundary + bypass "nie <czasownik>"; `_NEGATION_ATTACK_PATTERN` + `\buderz\b` dodane; 15/15 testów GREEN
+- [x] HF-7 — [#534](https://github.com/szmidtpiotr/ai-gm/issues/534) Walidacja celu COMBAT_START: cel spoza scene_enemies/bazy wrogów albo przyjazny NPC (quest-giver) → odrzucenie tagu + korekta narracji (wzorzec U6) + wpis llm_tag_errors — [#538](https://github.com/szmidtpiotr/ai-gm/issues/538) 8/8 testów GREEN
+- [x] HF-8 — CP11: dodać `objective_type` do `key_beats` w szablonach kampanii (bez tego auto-complete beatów z U8 martwy w Gotowej; U32b mierzy checkpoint 11 — "fix przy U32b" za późno, U32b to playtest, nie naprawa) — [#539](https://github.com/szmidtpiotr/ai-gm/issues/539)
 
 > Luki designu poza hotfixami: **CP8** (zakupy w narracji nie zdejmują złota) → decyzja przy Bloku 7 (U24–U26): rozszerzyć [SPEND_GOLD] na zakupy narracyjne albo sklep wyłącznie przez UI z odmową w narracji. **CP4** (NPC nie wywołany po imieniu) → P2, prawdopodobnie naprawi U29 (blok [ŚWIAT] z NPC z bazy).
 

@@ -620,9 +620,80 @@ def _process_location_intent(
     return assistant_response
 
 
+def _validate_combat_start_target(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    enemy_key: str,
+) -> tuple:
+    """HF-7 (#534): Validate that enemy_key is a legitimate combat target.
+
+    Returns (is_valid, rejection_reason).
+    rejection_reason: '' | 'combat_target_friendly_npc' | 'combat_target_unknown'
+    """
+    import json as _vj
+    key_lower = enemy_key.lower()
+
+    # 1. scene_enemies column in game_sessions
+    try:
+        se_row = conn.execute(
+            "SELECT scene_enemies FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if se_row and se_row["scene_enemies"]:
+            scene_enemies = _vj.loads(se_row["scene_enemies"] or "[]")
+            for e in scene_enemies:
+                if (e.get("key") or "").lower() == key_lower:
+                    return (True, "")
+                if (e.get("name") or "").lower() == key_lower:
+                    return (True, "")
+    except Exception:
+        pass
+
+    # 2. game_config_enemies catalog
+    try:
+        er = conn.execute(
+            "SELECT key FROM game_config_enemies WHERE LOWER(key) = ? LIMIT 1",
+            (key_lower,),
+        ).fetchone()
+        if er:
+            return (True, "")
+    except Exception:
+        pass
+
+    # 3. scene_npcs column in game_sessions
+    try:
+        sn_row = conn.execute(
+            "SELECT scene_npcs FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if sn_row and sn_row["scene_npcs"]:
+            scene_npcs = _vj.loads(sn_row["scene_npcs"] or "[]")
+            for npc in scene_npcs:
+                if (npc.get("key") or "").lower() == key_lower:
+                    return (False, "combat_target_friendly_npc")
+                if (npc.get("name") or npc.get("label") or "").lower() == key_lower:
+                    return (False, "combat_target_friendly_npc")
+    except Exception:
+        pass
+
+    # 4. campaign_known_npcs table
+    try:
+        npc_row = conn.execute(
+            "SELECT id FROM campaign_known_npcs WHERE campaign_id = ? AND LOWER(npc_name) = ? LIMIT 1",
+            (campaign_id, key_lower),
+        ).fetchone()
+        if npc_row:
+            return (False, "combat_target_friendly_npc")
+    except Exception:
+        pass
+
+    return (False, "combat_target_unknown")
+
+
 def _maybe_start_combat_from_gm_tag(
-    campaign_id: int, character_id: int, assistant_text: str
-) -> dict | None:
+    campaign_id: int, character_id: int, assistant_text: str,
+    turn_log_id: "int | None" = None, turn_number: int = 0,
+) -> "dict | None":
     """Parse [COMBAT_START:...] from GM text and initiate combat if allowed."""
     match = COMBAT_START_RE.search(assistant_text or "")
     if not match:
@@ -642,6 +713,44 @@ def _maybe_start_combat_from_gm_tag(
     if existing:
         logger.info("combat_gm_tag_skip_already_active", campaign_id=campaign_id)
         return None
+
+    # HF-7 (#534): validate targets before initiating combat
+    try:
+        import json as _hfj
+        with sqlite3.connect(DB_PATH) as _hfconn:
+            _hfconn.row_factory = sqlite3.Row
+            from app.services.llm_tag_parser import log_tag_error as _hf_lte
+            for _ek in enemy_keys:
+                _valid, _reason = _validate_combat_start_target(_hfconn, campaign_id, _ek)
+                if not _valid:
+                    _hf_lte(_hfconn, campaign_id, turn_number, match.group(0), _reason)
+                    logger.warning(
+                        "combat_gm_tag_rejected_hf7",
+                        campaign_id=campaign_id,
+                        enemy_key=_ek,
+                        reason=_reason,
+                    )
+                    # Append U6-style correction to stored turn narration
+                    if turn_log_id:
+                        _target_name = _ek.replace("_", " ").title()
+                        if _reason == "combat_target_friendly_npc":
+                            _corr = f"*({_target_name} cofa się o krok, ale nie sięga po broń — to nie wróg.)*"
+                        else:
+                            _corr = "*(Cel ataku okazuje się nieosiągalny — walka nie wybucha.)*"
+                        _turn_row = _hfconn.execute(
+                            "SELECT assistant_text FROM campaign_turns WHERE id = ?",
+                            (turn_log_id,),
+                        ).fetchone()
+                        if _turn_row:
+                            _new_text = (_turn_row["assistant_text"] or "").rstrip() + "\n\n" + _corr
+                            _hfconn.execute(
+                                "UPDATE campaign_turns SET assistant_text = ? WHERE id = ?",
+                                (_new_text, turn_log_id),
+                            )
+                            _hfconn.commit()
+                    return None
+    except Exception as _hf_err:
+        logger.warning("combat_gm_tag_validation_error", error=str(_hf_err))
 
     try:
         combat_state = cs.initiate_combat(campaign_id, character_id, enemy_keys)
@@ -4377,7 +4486,9 @@ def create_turn(
         assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
 
         new_combat = _maybe_start_combat_from_gm_tag(
-            campaign_id, payload.character_id, assistant_text
+            campaign_id, payload.character_id, assistant_text,
+            turn_log_id=log.get("id") if log else None,
+            turn_number=log.get("turn_number", 0) if log else 0,
         )
         combat_extra = None
         if combat_was_active and not new_combat:
@@ -5134,7 +5245,9 @@ def create_turn_stream(
                     # Issue #135 — inject [COMBAT_START] when player attacked but LLM omitted it.
                     clean_text = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, clean_text)
                     new_combat = _maybe_start_combat_from_gm_tag(
-                        campaign_id_val, character_id_val, clean_text
+                        campaign_id_val, character_id_val, clean_text,
+                        turn_log_id=stream_log.get("id") if stream_log else None,
+                        turn_number=stream_log.get("turn_number", 0) if stream_log else 0,
                     )
                     if combat_was_active and not new_combat:
                         combat_extra = _maybe_advance_combat_after_player_narrative(
@@ -5626,7 +5739,9 @@ def create_turn_stream(
                     # Issue #135 — fallback inject for streaming narrative path too.
                     full_raw = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, full_raw)
                     new_combat = _maybe_start_combat_from_gm_tag(
-                        campaign_id_val, character_id_val, full_raw
+                        campaign_id_val, character_id_val, full_raw,
+                        turn_log_id=stream_log.get("id") if stream_log else None,
+                        turn_number=stream_log.get("turn_number", 0) if stream_log else 0,
                     )
                     if combat_was_active and not new_combat:
                         combat_extra = _maybe_advance_combat_after_player_narrative(

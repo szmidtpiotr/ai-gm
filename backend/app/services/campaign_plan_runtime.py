@@ -190,18 +190,21 @@ def auto_complete_beats_by_event(
                 continue
             if beat.get("objective_type") != event_type:
                 continue
-            obj_value = beat.get("objective_value", "")
-            if obj_value and _keyword_match(obj_value, target_name):
-                beat["visited"] = True
-                beat["visited_at_turn"] = turn_number
-                changed = True
-                logger.info(
-                    "beat_auto_completed",
-                    campaign_id=campaign_id,
-                    beat_key=beat.get("beat_key"),
-                    event_type=event_type,
-                    target=target_name,
-                )
+            obj_value = beat.get("objective_value") or ""
+            # Empty/missing objective_value = wildcard: any target of the right type matches.
+            # Non-empty: must match via keyword (Polish declension supported).
+            if obj_value and not _keyword_match(obj_value, target_name):
+                continue
+            beat["visited"] = True
+            beat["visited_at_turn"] = turn_number
+            changed = True
+            logger.info(
+                "beat_auto_completed",
+                campaign_id=campaign_id,
+                beat_key=beat.get("beat_key"),
+                event_type=event_type,
+                target=target_name,
+            )
 
     if changed:
         _check_and_advance_act(plan, conn)
