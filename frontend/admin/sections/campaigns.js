@@ -472,6 +472,7 @@ function filterTableGeneric(input, tableId, nameClass) {
               <div class="info-row"><span class="info-key">Lokacja</span><span class="info-val">${_esc(c.char_location||'—')}</span></div>
               <div class="info-row"><span class="info-key">Tury</span><span class="info-val mono">${c.turn_count??'—'}</span></div>
               <div class="info-row"><span class="info-key">Gracz</span><span class="info-val">${_esc(c.owner_username||'—')}</span></div>
+              <div class="info-row" id="tag-err-row-${campId}"><span class="info-key">Błędy tagów</span><span class="info-val td-muted">…</span></div>
             </div>
             <div>
               <div style="margin-bottom:8px">${_hp(c.char_current_hp, c.char_max_hp)}</div>
@@ -500,6 +501,16 @@ function filterTableGeneric(input, tableId, nameClass) {
             </div>
             <div id="camp-cmd-result-${campId}" style="font-size:0.75rem;margin-top:6px;min-height:18px;font-family:monospace"></div>
           </div>` : ''}`;
+        // U5 (#528): async-fetch tag error count badge
+        apiFetch(`/api/admin/campaigns/${campId}/tag-error-count`).then(ter => {
+          const row = document.getElementById(`tag-err-row-${campId}`);
+          if (!row) return;
+          const cnt = ter.tag_error_count ?? 0;
+          const badge = cnt > 0
+            ? `<span class="badge badge-amber" title="Błędy tagów LLM w tej kampanii">${cnt}</span>`
+            : `<span class="td-muted">0</span>`;
+          row.querySelector('.info-val').innerHTML = badge;
+        }).catch(() => {});
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
     }
 

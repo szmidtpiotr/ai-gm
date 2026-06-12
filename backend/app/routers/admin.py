@@ -3737,6 +3737,19 @@ def admin_get_campaign_known_npcs(campaign_id: int, _: None = Depends(require_ad
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/tag-error-count")
+def admin_get_tag_error_count(campaign_id: int, _: None = Depends(require_admin_token)):
+    """U5 (#528): Return LLM tag error count for a campaign (for Campaign Monitor badge)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.services.llm_tag_parser import get_tag_error_count
+        count = get_tag_error_count(conn, campaign_id)
+        return {"campaign_id": campaign_id, "tag_error_count": count}
+    finally:
+        conn.close()
+
+
 # ── Admin: Riddle Bank ────────────────────────────────────────────────────────
 
 class RiddleReq(BaseModel):

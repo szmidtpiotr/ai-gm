@@ -898,6 +898,22 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_dungeon_tiles_category
     ON dungeon_tiles(category_key, is_active)
     """,
+    # U5 (#528): LLM tag error telemetry — one row per malformed/rejected tag
+    """
+    CREATE TABLE IF NOT EXISTS llm_tag_errors (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        turn_number INTEGER NOT NULL DEFAULT 0,
+        tag_raw     TEXT    NOT NULL DEFAULT '',
+        error_type  TEXT    NOT NULL DEFAULT 'unknown',
+        ts          TEXT    NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_llm_tag_errors_campaign
+    ON llm_tag_errors(campaign_id)
+    """,
 ]
 
 ADMIN_SEEDS = [

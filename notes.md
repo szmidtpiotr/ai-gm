@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-12 (HF-2 #524 KOMPLETNE — quest persistence character_quests fix; HF-1 #523 KOMPLETNE — scene_enemies P0 softlock fix; U4b KOMPLETNE — game-smoke 2×15 tur)_
+_Ostatnia aktualizacja: 2026-06-12 (U5 KOMPLETNE — centralny parser tagów LLM + llm_tag_errors; 15/15 pytest + 2/2 Playwright GREEN)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -13,7 +13,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **5/33** | **15% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **6/33** | **18% — PRZED Fazą 5 MP** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
@@ -172,14 +172,17 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 ### Hotfixy po U4b (poza licznikiem U; wykonać PRZED U5, w tej kolejności)
 - [x] HF-1 — #515 P0: scene_enemies nie czyszczone po resolve_attack → softlock po każdej walce (regresja względem #456: end_combat czyści, ale ścieżka "ostatni wróg pada w resolve_attack" nie woła clear) — [#523](https://github.com/szmidtpiotr/ai-gm/issues/523)
 - [x] HF-2 — #521 P1: questy zapisują się tylko do session_flags.active_quests, brak persystencji do character_quests (łamie C10/C11; bez tego auto-complete questów i dziennik U18 nie mają na czym stać) — [#524](https://github.com/szmidtpiotr/ai-gm/issues/524)
-- [ ] HF-3 — NOWE ISSUE do założenia: Gotowa Kampania startuje z GM Planem 0 scen (checkpoint 11 N/D w U4b) — szablon nie zasiewa planu (regresja E7/E11?); bez scen beaty NIGDY nie odpalą = sedno trybu martwe. P1.
-- [ ] HF-4 — po HF-1: ponowny `/game-smoke nowa-kampania` (run z U4b był z poprzedniej sesji, bez pełnej tabeli checkpointów)
+- [x] HF-3 — Gotowa Kampania startuje z GM Planem 0 scen (szablon nie zasiewa planu) — normalize_gm_plan list→dict, get_plan arcs→acts, _migrate_template_plan_to_w1 przy starcie — [#525](https://github.com/szmidtpiotr/ai-gm/issues/525)
+- [x] HF-4 — po HF-1: ponowny `/game-smoke nowa-kampania` (run z U4b był z poprzedniej sesji, bez pełnej tabeli checkpointów) — [#512-run2](https://github.com/szmidtpiotr/ai-gm/issues/512#issuecomment-4690454578) — Werdykt: GRYWALNY Z ZASTRZEŻENIAMI; P0=0, P1=#518/#522 (znane→U30/U28-29), P2=#526 (character_rentals brak migracji); HF-1 ✅ potwierdzone
+
+### Bugi standalone (poza licznikiem U; wykonać jako przerywnik między zadaniami U albo razem ze wskazanym zadaniem)
+- [ ] [#529](https://github.com/szmidtpiotr/ai-gm/issues/529) — Admin: zakładka "Znani NPC" niewidoczna w modalu kampanii (bump ?v=18→19 w admin/index.html) + endpoint known-npcs czyta deprecated `npc_locations` zamiast `location_npc_assignments`. Część 2 najlepiej razem z **U31** (ten sam kierunek migracji danych). Diagnoza w issue — kompletna, agent nie musi szukać od zera.
 
 > **Mapowanie pozostałych P1 — NIE hotfixować, naprawiają je zadania U (naprawa dwa razy = praca wyrzucona):**
 > #518 (current_hex wiecznie {0,0}) → **U30** · #520 (narracja walki bez [COMBAT_START]) → **U5/U6** (guard) · #522 (LLM tworzy AI-lokacje zamiast bazy) → **U28/U29**. Dodaj te numery do opisów zadań przy ich realizacji i zamknij issues przy ich odbiorze.
 
 ### Blok 3 — Pancerz na LLM (spójność narracja↔stan)
-- [ ] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed
+- [x] U5 — Centralny parser tagów + tabela llm_tag_errors + polityka malformed — [#528](https://github.com/szmidtpiotr/ai-gm/issues/528)
 - [ ] U6 — Uogólniony wzorzec odmowy (korekta narracji przy każdym odrzuconym tagu)
 - [ ] U7 — SKILL_CHECK safety net (backend wymusza test przy ryzykownej akcji) + DC lock {8,12,16,20,24}
 - [ ] U8 — Beat fallback (objective_type na beatach) + Story Gravity L1/L2/L3 zdefiniowane i włączone
