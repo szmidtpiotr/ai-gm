@@ -528,7 +528,18 @@ function handleLogout() {
 
 function handleSessionExpired() {
     showToast('Sesja wygasła — zaloguj się ponownie.', 'error', 5000);
-    handleLogout();
+    // Clear auth credentials but KEEP aigm_hero_id / aigm_campaign_id so
+    // tryRestoreSession() can resume the game after re-login.
+    authToken = null;
+    currentUser = null;
+    currentHero = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('aigm_access_token');
+    localStorage.removeItem('aigm_refresh_token');
+    _selectedTheme = 'dark_fantasy';
+    document.body.dataset.theme = '';
+    showScreen('login');
 }
 
 // ── Registration ──────────────────────────────────────────────────────────
@@ -8878,7 +8889,9 @@ async function init() {
         if (elements.heroesWelcome) elements.heroesWelcome.textContent = `Witaj, ${displayName}`;
         if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
         await loadHeroes();
+        if (!authToken) return; // handleSessionExpired fired during loadHeroes
         if (await tryRestoreSession()) return;
+        if (!authToken) return; // handleSessionExpired fired during tryRestoreSession
         showScreen('heroes');
     } else {
         showScreen('login');
@@ -8963,8 +8976,8 @@ async function showChangelog() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadBgSettings();
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadBgSettings(); // await so login/heroes screen gets the correct background
     loadAppVersion();
     init();
 });
