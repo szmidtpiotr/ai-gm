@@ -155,21 +155,24 @@
       if (!PORTED.has(key)) { document.getElementById('panel').innerHTML = placeholder(key); return; }
       localStorage.setItem(LAST_KEY, key);
       setActive(key);
-      const panel = document.getElementById('panel');
-      panel.innerHTML = '<div class="section active"><div class="adm-placeholder">Ładowanie…</div></div>';
+      const panelRoot = document.getElementById('panel');
+      panelRoot.innerHTML = '';
+      const section = document.createElement('div');
+      section.className = 'section active';
+      panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
         const mod = await import(`./sections/${key}.js?v=18`);
         if (mod && typeof mod.init === 'function') {
-          await mod.init(panel);
+          await mod.init(section);
           // Auto-init sortable tables already in DOM after init
-          panel.querySelectorAll('table.data-table').forEach(t => initSortableTable(t));
+          section.querySelectorAll('table.data-table').forEach(t => initSortableTable(t));
           return;
         }
-        panel.innerHTML = placeholder(key);
+        panelRoot.innerHTML = placeholder(key);
       } catch (e) {
         // Ported, ale błąd importu → widoczny placeholder (nie cichy redirect, by nie maskować buga).
-        panel.innerHTML = placeholder(key);
+        panelRoot.innerHTML = placeholder(key);
       }
     }
 
