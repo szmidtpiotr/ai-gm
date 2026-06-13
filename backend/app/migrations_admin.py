@@ -953,6 +953,35 @@ ADMIN_MIGRATIONS = [
         UNIQUE(campaign_id, npc_name)
     )
     """,
+    # U11a (#556): unified item table — all kinds in one place
+    """
+    CREATE TABLE IF NOT EXISTS game_items (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        key         TEXT    UNIQUE NOT NULL,
+        kind        TEXT    NOT NULL CHECK(kind IN ('weapon','armor','item','consumable')),
+        label       TEXT    NOT NULL DEFAULT '',
+        description TEXT    DEFAULT '',
+        price_gp    REAL    DEFAULT 0,
+        effect_json TEXT    DEFAULT NULL,
+        equip_slot  TEXT    DEFAULT NULL,
+        rarity      INTEGER DEFAULT 1,
+        min_level   INTEGER DEFAULT 1,
+        location_tags TEXT  DEFAULT '[]',
+        created_by  TEXT    DEFAULT 'seed',
+        approved    INTEGER DEFAULT 1,
+        is_active   INTEGER DEFAULT 1,
+        weapon_data TEXT    DEFAULT '{}',
+        item_data   TEXT    DEFAULT '{}',
+        weight_kg   REAL    DEFAULT 0,
+        note        TEXT    DEFAULT NULL,
+        locked_at   TEXT    DEFAULT NULL,
+        created_at  TEXT    DEFAULT (datetime('now')),
+        updated_at  TEXT    DEFAULT (datetime('now'))
+    )
+    """,
+    # U11a (#556): FK target columns — NULL until U11c switches write path
+    "ALTER TABLE character_inventory ADD COLUMN game_item_key TEXT",
+    "ALTER TABLE game_config_loot_entries ADD COLUMN game_item_key TEXT",
 ]
 
 ADMIN_SEEDS = [
@@ -3502,6 +3531,154 @@ def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
         logger.warning("u31_npc_locations_migration_failed", error=str(exc))
 
 
+def _backfill_game_items(conn: sqlite3.Connection) -> None:
+    """U11a (#556): Backfill game_items from 3 legacy item tables.
+
+    Strategy:
+    - game_config_weapons → kind='weapon' (weapon_data packs weapon-specific cols)
+    - game_config_items WHERE item_type IN ('armor','shield') → kind='armor'
+    - game_config_items WHERE item_type NOT IN ('armor','shield','consumable') → kind='item'
+    - game_config_items WHERE item_type='consumable' → SKIPPED (canonical source is game_config_consumables)
+    - game_config_consumables → kind='consumable'
+
+    Idempotent: INSERT OR IGNORE on UNIQUE(key).
+    """
+    import json as _json
+
+    # Check if already populated
+    existing = conn.execute("SELECT COUNT(*) FROM game_items").fetchone()[0]
+    if existing > 0:
+        return
+
+    try:
+        # Weapons (no created_by column in game_config_weapons — use 'seed' default)
+        weapons = conn.execute(
+            """SELECT key, label, description, value_gp, effect_json, rarity, min_level,
+                      location_tags, approved, is_active, weight_kg, note,
+                      locked_at, created_at, updated_at,
+                      damage_die, weapon_type, linked_stat, allowed_classes, two_handed,
+                      finesse, range_m, targeting, aoe_radius_m, magic_school, weapon_slot
+               FROM game_config_weapons"""
+        ).fetchall()
+        for w in weapons:
+            weapon_data = _json.dumps({
+                "damage_die": w["damage_die"],
+                "weapon_type": w["weapon_type"],
+                "linked_stat": w["linked_stat"],
+                "allowed_classes": w["allowed_classes"],
+                "two_handed": w["two_handed"],
+                "finesse": w["finesse"],
+                "range_m": w["range_m"],
+                "targeting": w["targeting"],
+                "aoe_radius_m": w["aoe_radius_m"],
+                "magic_school": w["magic_school"],
+                "weapon_slot": w["weapon_slot"] or "main_hand",
+            })
+            conn.execute(
+                """INSERT OR IGNORE INTO game_items
+                   (key, kind, label, description, price_gp, effect_json, equip_slot,
+                    rarity, min_level, location_tags, created_by, approved, is_active,
+                    weapon_data, weight_kg, note, locked_at, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    w["key"], "weapon", w["label"] or "", w["description"] or "",
+                    float(w["value_gp"] or 0), w["effect_json"],
+                    "main_hand",
+                    int(w["rarity"] or 1), int(w["min_level"] or 1),
+                    w["location_tags"] or "[]",
+                    "seed", int(w["approved"] or 1),
+                    int(w["is_active"] or 1), weapon_data,
+                    float(w["weight_kg"] or 0), w["note"],
+                    w["locked_at"], w["created_at"], w["updated_at"],
+                ),
+            )
+
+        # Items (armor + non-consumable; no created_by column — use 'seed' default)
+        items = conn.execute(
+            """SELECT key, label, description, value_gp, effect_json, rarity, min_level,
+                      location_tags, approved, is_active, weight_kg, note,
+                      locked_at, created_at, updated_at,
+                      item_type, ac_bonus, armor_coverage, allowed_classes,
+                      charges, effect_type, effect_dice, effect_bonus, effect_target
+               FROM game_config_items
+               WHERE item_type NOT IN ('consumable')"""
+        ).fetchall()
+        for it in items:
+            kind = "armor" if it["item_type"] in ("armor", "shield") else "item"
+            equip_slot = "armor" if kind == "armor" else None
+            item_data = _json.dumps({
+                "item_type": it["item_type"],
+                "ac_bonus": it["ac_bonus"],
+                "armor_coverage": it["armor_coverage"],
+                "allowed_classes": it["allowed_classes"],
+                "charges": it["charges"],
+                "effect_type": it["effect_type"],
+                "effect_dice": it["effect_dice"],
+                "effect_bonus": it["effect_bonus"],
+                "effect_target": it["effect_target"],
+            })
+            conn.execute(
+                """INSERT OR IGNORE INTO game_items
+                   (key, kind, label, description, price_gp, effect_json, equip_slot,
+                    rarity, min_level, location_tags, created_by, approved, is_active,
+                    item_data, weight_kg, note, locked_at, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    it["key"], kind, it["label"] or "", it["description"] or "",
+                    float(it["value_gp"] or 0), it["effect_json"],
+                    equip_slot,
+                    int(it["rarity"] or 1), int(it["min_level"] or 1),
+                    it["location_tags"] or "[]",
+                    "seed", int(it["approved"] or 1),
+                    int(it["is_active"] or 1), item_data,
+                    float(it["weight_kg"] or 0), it["note"],
+                    it["locked_at"], it["created_at"], it["updated_at"],
+                ),
+            )
+
+        # Consumables (canonical source — skip item table duplicates; no created_by column)
+        consumables = conn.execute(
+            """SELECT key, label, description, base_price, rarity, min_level,
+                      location_tags, approved, is_active, weight_kg, note,
+                      locked_at, created_at, updated_at,
+                      effect_type, effect_dice, effect_bonus, effect_target, charges
+               FROM game_config_consumables"""
+        ).fetchall()
+        for c in consumables:
+            item_data = _json.dumps({
+                "effect_type": c["effect_type"],
+                "effect_dice": c["effect_dice"],
+                "effect_bonus": c["effect_bonus"],
+                "effect_target": c["effect_target"],
+                "charges": c["charges"],
+            })
+            conn.execute(
+                """INSERT OR IGNORE INTO game_items
+                   (key, kind, label, description, price_gp, equip_slot,
+                    rarity, min_level, location_tags, created_by, approved, is_active,
+                    item_data, weight_kg, note, locked_at, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    c["key"], "consumable", c["label"] or "", c["description"] or "",
+                    float(c["base_price"] or 0), None,
+                    int(c["rarity"] or 1), int(c["min_level"] or 1),
+                    c["location_tags"] or "[]",
+                    "seed", int(c["approved"] or 1), int(c["is_active"] or 1),
+                    item_data,
+                    float(c["weight_kg"] or 0), c["note"],
+                    c["locked_at"], c["created_at"], c["updated_at"],
+                ),
+            )
+
+        conn.commit()
+        total = conn.execute("SELECT COUNT(*) FROM game_items").fetchone()[0]
+        logger.info("u11a_game_items_backfill_done", total=total)
+
+    except Exception as exc:
+        logger.error("u11a_game_items_backfill_failed", error=str(exc))
+        raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3590,7 +3767,8 @@ def run_admin_migrations() -> None:
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
         _migrate_npc_locations_to_assignments(conn)
+        _backfill_game_items(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.4")
+    logger.info("admin_migration_complete", phase="12.5")
