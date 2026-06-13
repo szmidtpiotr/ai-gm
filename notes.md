@@ -13,7 +13,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **12/35** | **34% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **13/35** | **37% — PRZED Fazą 5 MP** |
 | **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
@@ -209,7 +209,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
   - [x] U11a — CREATE TABLE game_items + backfill (140 rek.: 27 weapon + 26 armor + 59 item + 28 consumable) + FK columns (game_item_key NULL w char_inventory + loot_entries). Stare tabele niezmienione. — [#556](https://github.com/szmidtpiotr/ai-gm/issues/556) **needs-testing**
   - [x] U11b — przełączenie odczytu: serwisy czytają z game_items; stare tabele read-only — [#557](https://github.com/szmidtpiotr/ai-gm/issues/557) **needs-testing**
   - [x] U11c — dual-write: create/update/delete weapon+item, smart_entry, approve_entity, forge, import katalogu piszą też do game_items (re-read legacy → upsert; jedno mapowanie = backfill U11a). Stare tabele DEPRECATED (drop po 2 tyg., decyzja Piotra). 9/9 pytest GREEN + live verify create/edit/delete. **UWAGA: 18 testów shop/loot/inventory czerwone z PRE-ISTNIEJĄCYCH luk fixture'ów U11b (`no such table: game_items` / `no such column gi.armor_coverage` w izolowanych DB testów) — nie regresja U11c, należą do #557.** — [#558](https://github.com/szmidtpiotr/ai-gm/issues/558) **needs-testing**
-- [ ] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh)
+- [x] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh) — [#559](https://github.com/szmidtpiotr/ai-gm/issues/559) **needs-testing**
 - [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
 - [ ] U14 — Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP)
 

@@ -3798,7 +3798,7 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja per etap:** U11a: SELECT count ze starych = count nowej per kind. U11b: `/game-test-player` pełny cykl sklep→kupno→ekwipunek→walka→loot→sprzedaż bez regresji. U11c: nowy przedmiot z admin UI ląduje w `game_items` i działa w grze.
 
-#### U12 — db_lint: audyt integralności bazy
+#### ✅ U12 — db_lint: audyt integralności bazy **[#559, 2026-06-13]**
 
 **Cel:** Skrypt który jednym poleceniem mówi, czy baza treści jest zdrowa. Uruchamiany ręcznie, przy deployach i z admin panelu.
 
