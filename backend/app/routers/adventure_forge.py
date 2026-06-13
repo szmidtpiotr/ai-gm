@@ -296,6 +296,15 @@ def _ensure_unique_key(conn: sqlite3.Connection, table: str, base_key: str) -> s
         i += 1
 
 
+def _u11c_sync(conn: sqlite3.Connection, table: str, key: str) -> None:
+    """U11c dual-write: re-read legacy row → upsert game_items. Non-fatal."""
+    try:
+        from app.services.game_items_service import sync_from_legacy
+        sync_from_legacy(conn, table, key)
+    except Exception:
+        pass
+
+
 def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]:
     """Insert hook draft_data into the appropriate game config table.
     Returns (table_name, new_record_id)."""
@@ -332,6 +341,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
              now, now),
         )
+        _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
     elif htype == "item":
@@ -350,6 +360,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
              now, now),
         )
+        _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
     elif htype == "consumable":
@@ -370,6 +381,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              d.get("effect_target", "self"),
              now, now),
         )
+        _u11c_sync(conn, table, key)
         return table, cur.lastrowid
 
     elif htype == "enemy":

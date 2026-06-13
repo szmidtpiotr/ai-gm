@@ -1261,6 +1261,9 @@ def create_weapon(
             new_row["two_handed"] = bool(new_row.get("two_handed"))
             new_row["finesse"] = bool(new_row.get("finesse"))
         _audit(conn, "game_config_weapons", safe_key, "CREATE", None, new_row)
+        # U11c dual-write: re-read legacy row → upsert game_items
+        from app.services.game_items_service import sync_from_legacy
+        sync_from_legacy(conn, "game_config_weapons", safe_key)
         conn.commit()
         return new_row or {}
     finally:
@@ -1414,6 +1417,9 @@ def update_weapon(
             new_row["two_handed"] = bool(new_row.get("two_handed"))
             new_row["finesse"] = bool(new_row.get("finesse"))
         _audit(conn, "game_config_weapons", safe_key, "UPDATE", old_for_audit, new_row)
+        # U11c dual-write: re-read legacy row → upsert game_items
+        from app.services.game_items_service import sync_from_legacy
+        sync_from_legacy(conn, "game_config_weapons", safe_key)
         conn.commit()
         return new_row or {}
     finally:
@@ -1478,6 +1484,9 @@ def delete_weapon(key: str, *, force: bool) -> None:
         except (json.JSONDecodeError, TypeError):
             current["allowed_classes"] = [s.strip() for s in str(raw_ac).split(",") if s.strip()]
         _audit(conn, "game_config_weapons", safe_key, "DELETE", current, None)
+        # U11c dual-write: remove from game_items
+        from app.services.game_items_service import delete_from_game_items
+        delete_from_game_items(conn, safe_key)
         conn.commit()
     finally:
         conn.close()
@@ -2066,6 +2075,9 @@ def create_item(
             except Exception:
                 new_row["allowed_classes"] = []
         _audit(conn, "game_config_items", safe_key, "CREATE", None, new_row)
+        # U11c dual-write: re-read legacy row → upsert game_items
+        from app.services.game_items_service import sync_from_legacy
+        sync_from_legacy(conn, "game_config_items", safe_key)
         conn.commit()
         return new_row or {}
     finally:
@@ -2216,6 +2228,9 @@ def update_item(
             except Exception:
                 new_row["allowed_classes"] = []
         _audit(conn, "game_config_items", safe_key, "UPDATE", dict(current), new_row)
+        # U11c dual-write: re-read legacy row → upsert game_items
+        from app.services.game_items_service import sync_from_legacy
+        sync_from_legacy(conn, "game_config_items", safe_key)
         conn.commit()
         return new_row or {}
     finally:
@@ -2251,6 +2266,9 @@ def delete_item(key: str, *, force: bool) -> None:
         conn.execute("DELETE FROM game_config_items WHERE key = ?", (safe_key,))
         cur_dict = _normalize_item_row(dict(current))
         _audit(conn, "game_config_items", safe_key, "DELETE", cur_dict, None)
+        # U11c dual-write: remove from game_items
+        from app.services.game_items_service import delete_from_game_items
+        delete_from_game_items(conn, safe_key)
         conn.commit()
     finally:
         conn.close()
@@ -2378,6 +2396,9 @@ def update_consumable(
                     "UPDATE game_config_items SET key = ? WHERE key = ? AND item_type = 'consumable'",
                     (nk, safe_key),
                 )
+                # U11c dual-write: drop old game_items key (new one re-synced by update_item below)
+                from app.services.game_items_service import delete_from_game_items
+                delete_from_game_items(conn, safe_key)
                 safe_key = nk
                 conn.commit()
 
@@ -2436,6 +2457,9 @@ def delete_consumable(key: str, *, force: bool) -> None:
         conn.execute("DELETE FROM game_config_items WHERE key = ? AND item_type = 'consumable'", (safe_key,))
         cur_dict = _consumable_row_as_legacy_dict(dict(current))
         _audit(conn, "game_config_items", safe_key, "DELETE", cur_dict, None)
+        # U11c dual-write: remove from game_items
+        from app.services.game_items_service import delete_from_game_items
+        delete_from_game_items(conn, safe_key)
         conn.commit()
     finally:
         conn.close()

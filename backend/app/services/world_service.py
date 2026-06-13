@@ -883,11 +883,24 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
             conn.execute(
                 "UPDATE game_config_weapons SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
             )
+            # U11c dual-write: re-read legacy row → upsert game_items (creates row if AI-generated
+            # weapon was never backfilled; carries approved=1 just set above).
+            try:
+                from app.services.game_items_service import sync_from_legacy
+                sync_from_legacy(conn, "game_config_weapons", key)
+            except Exception:
+                pass
         if entity_type == "item":
             # D1 (#376) — approve globally: catalog filters by COALESCE(approved, 1) = 1
             conn.execute(
                 "UPDATE game_config_items SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
             )
+            # U11c dual-write: re-read legacy row → upsert game_items
+            try:
+                from app.services.game_items_service import sync_from_legacy
+                sync_from_legacy(conn, "game_config_items", key)
+            except Exception:
+                pass
         if entity_type == "location":
             # Location validator + injectors filter by COALESCE(approved, 1) = 1, so flipping
             # review_status alone leaves the row invisible. Promote to globally visible.

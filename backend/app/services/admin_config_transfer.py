@@ -565,6 +565,12 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                 )
 
         _set_config_version(conn, incoming_version)
+        # U11c dual-write: rebuild game_items from the freshly imported legacy tables.
+        try:
+            from app.services.game_items_service import reconcile_all
+            reconcile_all(conn)
+        except Exception:
+            pass
         _audit(
             conn,
             "IMPORT",

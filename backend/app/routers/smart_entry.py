@@ -549,6 +549,12 @@ def _db_insert(table: str, record: dict) -> str:
             f"INSERT INTO {table} ({cols}) VALUES ({placeholders})",
             list(record.values()),
         )
+        # U11c dual-write: re-read legacy row → upsert game_items (item-kind tables only)
+        try:
+            from app.services.game_items_service import sync_from_legacy
+            sync_from_legacy(conn, table, record.get("key", ""))
+        except Exception:
+            pass
         conn.commit()
         return record["key"]
     finally:
@@ -563,6 +569,12 @@ def _db_update_field(table: str, key: str, field: str, value: Any) -> None:
             f"UPDATE {table} SET {field} = ? WHERE key = ?",
             (value, key),
         )
+        # U11c dual-write: re-read legacy row → upsert game_items (item-kind tables only)
+        try:
+            from app.services.game_items_service import sync_from_legacy
+            sync_from_legacy(conn, table, key)
+        except Exception:
+            pass
         conn.commit()
     finally:
         conn.close()
