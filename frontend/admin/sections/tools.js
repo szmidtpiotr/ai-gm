@@ -77,6 +77,7 @@ function _wireStabBar() {
         if (tab === 'mcp')       _loadToolsMcp().catch(e =>      { _toolsTabLoaded.delete(tab); console.warn('tools mcp tab', e.message); });
         if (tab === 'images')    _loadImgGallery().catch(e =>    { _toolsTabLoaded.delete(tab); console.warn('tools images tab', e.message); });
         if (tab === 'playwright') _loadToolsPlaywright().catch(e => { _toolsTabLoaded.delete(tab); console.warn('tools playwright tab', e.message); });
+        if (tab === 'dblint')    _loadToolsDbLint().catch(e =>     { _toolsTabLoaded.delete(tab); console.warn('tools dblint tab', e.message); });
       }
     });
   });
@@ -1148,6 +1149,40 @@ function _imgPickAsRef(filename, url) {
   showToast('Ustawiono referencję: ' + filename, 'success');
 }
 
+// ── DB Lint ────────────────────────────────────────────────────────────────────
+
+async function _loadToolsDbLint() {
+  const runBtn = document.getElementById('dblint-run');
+  if (!runBtn) return;
+  runBtn.addEventListener('click', async () => {
+    const spinner = document.getElementById('dblint-spinner');
+    const output = document.getElementById('dblint-output');
+    const statusEl = document.getElementById('dblint-status');
+    runBtn.disabled = true;
+    if (spinner) spinner.style.display = '';
+    if (output) { output.style.display = 'none'; output.textContent = ''; }
+    try {
+      const result = await apiFetch('/api/admin/db-lint');
+      const errors = result.errors || [];
+      const warnings = result.warnings || [];
+      const exitCode = result.exit_code ?? 0;
+      const statusMap = { 0: '✅ CLEAN', 1: '⚠️ WARNINGS', 2: '❌ ERRORS' };
+      if (statusEl) statusEl.textContent = statusMap[exitCode] ?? `exit ${exitCode}`;
+      const lines = [];
+      if (errors.length) { lines.push(`ERRORS (${errors.length}):`); errors.forEach(e => lines.push(`  ${e}`)); }
+      if (warnings.length) { lines.push(`WARNINGS (${warnings.length}):`); warnings.forEach(w => lines.push(`  ${w}`)); }
+      if (!errors.length && !warnings.length) lines.push('  ✅ Baza wygląda zdrowo — brak problemów.');
+      if (output) { output.textContent = lines.join('\n'); output.style.display = ''; }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '⚠️ Błąd';
+      if (output) { output.textContent = `Błąd: ${e.message}`; output.style.display = ''; }
+    } finally {
+      runBtn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  });
+}
+
 async function _loadImgGallery() {
   const grid = document.getElementById('img-gallery-grid');
   const count = document.getElementById('img-gallery-count');
@@ -1347,6 +1382,7 @@ export async function init(panel) {
       <button class="stab" data-toolstab="mcp">⬡ MCP</button>
       <button class="stab" data-toolstab="images">🖼 Obrazy</button>
       <button class="stab" data-toolstab="playwright">🎭 Playwright</button>
+      <button class="stab" data-toolstab="dblint">🔍 DB Lint</button>
     </div>
 
     <!-- Test Runner panel -->
@@ -1518,6 +1554,29 @@ export async function init(panel) {
               <button class="btn btn-sm btn-secondary" onclick="rstCopyReport()">📋 Kopiuj</button>
             </div>
             <div id="rst-log" style="padding:12px;font-size:0.72rem;color:var(--t2);max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:2px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DB Lint panel -->
+    <div class="stab-panel" id="toolstab-dblint" style="display:none">
+      <div style="margin-top:12px;max-width:760px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔍 DB Lint — Audyt integralności bazy</span>
+            <span class="card-count" id="dblint-status">—</span>
+          </div>
+          <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:0.8rem;color:var(--t2);line-height:1.5">
+              Sprawdza wiszące FK, brakujące pola, wartości poza zakresem, enum violations i effect_json.
+              Exit code: <code>0</code>=czysto, <code>1</code>=warnings, <code>2</code>=errors.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-secondary btn-sm" id="dblint-run">▶ Uruchom audyt</button>
+              <span id="dblint-spinner" style="display:none;color:var(--t3);font-size:0.8rem">Ładowanie…</span>
+            </div>
+            <pre id="dblint-output" style="background:var(--bg2);padding:14px;border-radius:6px;font-size:0.75rem;color:var(--t2);white-space:pre-wrap;word-break:break-word;min-height:60px;display:none"></pre>
           </div>
         </div>
       </div>

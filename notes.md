@@ -13,7 +13,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **11/35** | **31% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **12/35** | **34% — PRZED Fazą 5 MP** |
 | **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
@@ -203,12 +203,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 > Luki designu poza hotfixami: **CP8** (zakupy w narracji nie zdejmują złota) → decyzja przy Bloku 7 (U24–U26): rozszerzyć [SPEND_GOLD] na zakupy narracyjne albo sklep wyłącznie przez UI z odmową w narracji. **CP4** (NPC nie wywołany po imieniu) → P2, prawdopodobnie naprawi U29 (blok [ŚWIAT] z NPC z bazy).
 
-### Blok 4 — Baza danych jako rdzeń (1/5)
+### Blok 4 — Baza danych jako rdzeń (2/5)
 - [x] U10 — Effect schema lockdown — **decyzja C (hybryda, 2026-06-13):** zachowano nazwy typów z kodu (periodic_save/static_stat_modifier/block_action), bo walidator już istniał i działał + FAZA S na nim bazuje; dodano `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy, LCK + cele pochodne (ac/attack_bonus/damage_bonus/initiative), audyt `scripts/effect_json_audit.py` (169==169, 0 strat; 23 legacy do ręcznej decyzji → U11/FAZA S). — [#554](https://github.com/szmidtpiotr/ai-gm/issues/554)
-- [ ] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin) — [#555](https://github.com/szmidtpiotr/ai-gm/issues/555)
+- [x] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin) — [#555](https://github.com/szmidtpiotr/ai-gm/issues/555) **needs-testing**
   - [x] U11a — CREATE TABLE game_items + backfill (140 rek.: 27 weapon + 26 armor + 59 item + 28 consumable) + FK columns (game_item_key NULL w char_inventory + loot_entries). Stare tabele niezmienione. — [#556](https://github.com/szmidtpiotr/ai-gm/issues/556) **needs-testing**
   - [x] U11b — przełączenie odczytu: serwisy czytają z game_items; stare tabele read-only — [#557](https://github.com/szmidtpiotr/ai-gm/issues/557) **needs-testing**
-  - [ ] U11c — przełączenie zapisu + admin UI; stare tabele DEPRECATED
+  - [x] U11c — dual-write: create/update/delete weapon+item, smart_entry, approve_entity, forge, import katalogu piszą też do game_items (re-read legacy → upsert; jedno mapowanie = backfill U11a). Stare tabele DEPRECATED (drop po 2 tyg., decyzja Piotra). 9/9 pytest GREEN + live verify create/edit/delete. **UWAGA: 18 testów shop/loot/inventory czerwone z PRE-ISTNIEJĄCYCH luk fixture'ów U11b (`no such table: game_items` / `no such column gi.armor_coverage` w izolowanych DB testów) — nie regresja U11c, należą do #557.** — [#558](https://github.com/szmidtpiotr/ai-gm/issues/558) **needs-testing**
 - [ ] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh)
 - [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
 - [ ] U14 — Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP)

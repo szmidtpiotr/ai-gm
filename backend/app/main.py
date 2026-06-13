@@ -80,6 +80,7 @@ from app.routers.world_state_history import router as world_state_history_router
 from app.routers.push_notifications import router as push_notifications_router
 from app.routers.seen_mechanics import router as seen_mechanics_router
 from app.routers.game_mechanics import router as game_mechanics_router
+from app.routers.db_lint import router as db_lint_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -573,6 +574,7 @@ app.include_router(seen_mechanics_router, prefix="/api")
 app.include_router(multiplayer_router, prefix="/api")
 app.include_router(party_chat_router, prefix="/api")
 app.include_router(game_mechanics_router)
+app.include_router(db_lint_router)
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")

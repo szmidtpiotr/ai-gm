@@ -14,7 +14,10 @@ git pull origin develop
 echo "🐳 [2/3] Restart kontenerów dev..."
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
 
-echo "⏳ [3/3] Healthcheck dev (max 60s)..."
+echo "🔍 [3/4] DB Lint — audyt integralności (informacyjny, nie blokujący)..."
+docker compose -f docker-compose.dev.yml exec -T backend python scripts/db_lint.py || true
+
+echo "⏳ [4/4] Healthcheck dev (max 60s)..."
 for i in $(seq 1 12); do
   if curl -sf http://localhost:8100/api/healthz > /dev/null; then
     echo "✅ Dev deployment zakończony!"
