@@ -4,6 +4,36 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.3.0 — 2026-06-13 — FAZA U: pancerz LLM, system hexów świata, effect schema lockdown
+
+### Added
+
+**Blok 9 — Świat: hex ↔ lokacje ↔ ruch (U28–U32, #540, #541, #544, #546, #548)**
+- Placement engine: backend osadza lokacje z bazy przy odkryciu hexa (terrain_tags + placement)
+- Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy
+- Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard)
+- Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z przypisań; travel pills z prawdziwych danych
+
+**Blok 3 — Pancerz na LLM: spójność narracja↔stan (U5–U9, #528, #530–#533)**
+- Centralny parser tagów LLM + tabela llm_tag_errors (telemetria halucynacji)
+- Uogólniony wzorzec odmowy (korekta narracji przy odrzuconym tagu) + SKILL_CHECK safety net + DC lock {8,12,16,20,24}
+- Beat fallback (objective_type) + GM Plan hardening (retry + fallback, kampania startuje zawsze)
+
+**U10 — Effect schema lockdown (#554)**
+- backend/app/schemas/effect_schema.json jako pojedyncze źródło prawdy formatu effect_json
+- Dodano LCK (7. statystyka) + cele pochodne (ac/attack_bonus/damage_bonus/initiative)
+- scripts/effect_json_audit.py — audyt integralności (read-only, raport rekordów do ręcznej decyzji)
+
+### Fixed
+
+- Hotfixy FAZY U: scene_enemies clear po walce, quest persistence do character_quests (#523, #524)
+- HF-3: Gotowa Kampania startuje z poprawnym GM Planem (#525)
+- HF-5/6/7/8: XP hooks import, gate negation, COMBAT_START target validation, beat objective_type (#535, #536, #538, #539)
+- character_rentals + campaign_known_npcs migracje; known-npcs V2 table (#516, #529)
+- Session expiry czyści kontekst bohatera/kampanii; init nie nadpisuje loginu; fix race tła
+
+---
+
 ## v1.2.7 — 2026-06-11 — Affix system, economy F1-F21, effect builder, SPEND_GOLD, bugfixy
 
 ### Added
