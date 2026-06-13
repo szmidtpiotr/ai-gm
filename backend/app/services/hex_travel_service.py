@@ -346,8 +346,76 @@ def resolve_chain_travel(
             flags["current_hex"] = {"q": arrived_hex[0], "r": arrived_hex[1]}
             # Also update location context for narrator if arrived hex has a linked location
             arrived_data = hexes.get(arrived_hex, {})
-            if arrived_data.get("location_key"):
-                flags["current_location_key"] = arrived_data["location_key"]
+            _hex_location_key = arrived_data.get("location_key")
+
+            # #549: Replace ai_generated legacy locations with DB-seeded ones on arrival
+            if _hex_location_key:
+                _ai_check = conn.execute(
+                    "SELECT ai_generated FROM game_locations"
+                    " WHERE key = ? AND COALESCE(is_active,1)=1 LIMIT 1",
+                    (_hex_location_key,),
+                ).fetchone()
+                if _ai_check and _ai_check["ai_generated"] == 1:
+                    _aq, _ar = arrived_hex[0], arrived_hex[1]
+                    _hex_type = arrived_data.get("hex_type", "plains")
+                    conn.execute(
+                        "UPDATE world_hexes SET location_key = NULL"
+                        " WHERE q = ? AND r = ? AND is_active = 1",
+                        (_aq, _ar),
+                    )
+                    try:
+                        from app.services.placement_engine import try_place_location_on_hex
+                        _hex_location_key = try_place_location_on_hex(
+                            conn, _aq, _ar, _hex_type, campaign_seed=campaign_id
+                        )
+                    except Exception:
+                        _hex_location_key = None
+
+            # Try placement engine for hexes that have no DB-seeded location
+            if not _hex_location_key and arrived_hex != from_hex:
+                _aq, _ar = arrived_hex[0], arrived_hex[1]
+                _hex_type = arrived_data.get("hex_type", "plains")
+                try:
+                    from app.services.placement_engine import try_place_location_on_hex
+                    _hex_location_key = try_place_location_on_hex(
+                        conn, _aq, _ar, _hex_type, campaign_seed=campaign_id
+                    )
+                except Exception:
+                    _hex_location_key = None
+
+            if _hex_location_key:
+                flags["current_location_key"] = _hex_location_key
+                _loc_row = conn.execute(
+                    "SELECT id FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1",
+                    (_hex_location_key,),
+                ).fetchone()
+                if _loc_row:
+                    conn.execute(
+                        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
+                        (int(_loc_row["id"]), campaign_id),
+                    )
+                # HF-11 (#553): visit_location beat auto-complete on mechanical arrival
+                # (same dead-code root cause as talk_to_npc — process_v2_turn unreachable).
+                if arrived_hex != from_hex:
+                    try:
+                        from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+                        _tn_loc = conn.execute(
+                            "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns"
+                            " WHERE campaign_id = ?",
+                            (campaign_id,),
+                        ).fetchone()[0]
+                        auto_complete_beats_by_event(
+                            campaign_id, "visit_location", _hex_location_key, _tn_loc, conn
+                        )
+                    except Exception:
+                        pass
+            elif arrived_hex != from_hex:
+                # Arrived at a hex with no linked location — clear stale location context
+                flags.pop("current_location_key", None)
+                conn.execute(
+                    "UPDATE game_sessions SET current_location_id = NULL WHERE campaign_id = ?",
+                    (campaign_id,),
+                )
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                 (json.dumps(flags, ensure_ascii=False), campaign_id),

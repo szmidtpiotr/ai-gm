@@ -3477,6 +3477,31 @@ def _patch_campaign_template_beat_objectives(conn: sqlite3.Connection) -> None:
         logger.info("hf8_template_beats_patched", template_ids=changed_ids)
 
 
+def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
+    """U31 (#546): Backfill location_npc_assignments from legacy npc_locations table.
+
+    npc_locations (npc_id → FK) was the original NPC placement table. U28 introduced
+    location_npc_assignments (npc_key → TEXT) as the V2 standard. This migration
+    copies all rows from npc_locations → location_npc_assignments so enter_location_scene()
+    has real data on existing deployments.
+    Idempotent: INSERT OR IGNORE on UNIQUE(location_key, npc_key).
+    """
+    try:
+        result = conn.execute(
+            """INSERT OR IGNORE INTO location_npc_assignments (location_key, npc_key, is_active)
+               SELECT nl.location_key, n.key, 1
+               FROM npc_locations nl
+               JOIN npcs n ON n.id = nl.npc_id
+               WHERE COALESCE(n.is_active, 1) = 1""",
+        )
+        count = result.rowcount
+        if count > 0:
+            conn.commit()
+            logger.info("u31_npc_locations_migrated", rows_inserted=count)
+    except Exception as exc:
+        logger.warning("u31_npc_locations_migration_failed", error=str(exc))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3564,7 +3589,8 @@ def run_admin_migrations() -> None:
         _ensure_campaign_source_template(conn)
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
+        _migrate_npc_locations_to_assignments(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.3")
+    logger.info("admin_migration_complete", phase="12.4")

@@ -5,8 +5,10 @@ Provides get/save for world_state_snapshots (B1) and get/set helpers for the
 - B3 (Gate Mechanic reads latest snapshot + flags)
 - B5 (auto-save per turn)
 - B6 (admin viewer)
+- U31 (scene load from DB on location entry)
 """
 import json
+import random
 import sqlite3
 from typing import Any
 
@@ -90,6 +92,93 @@ def set_world_state_flags(campaign_id: int, **kwargs) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+# ── U31: Scene load from DB on location entry ──────────────────────────────────
+
+def enter_location_scene(campaign_id: int, location_key: str) -> dict:
+    """U31: Load scene_npcs/scene_enemies from DB assignments when entering a location.
+
+    Queries location_npc_assignments and location_enemy_assignments for the given
+    location_key. Each enemy assignment is rolled independently against spawn_chance;
+    max_count slots each get their own roll.
+    Returns {"npcs_loaded": N, "enemies_spawned": M, "location_key": str}.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        npc_rows = conn.execute(
+            """SELECT n.key, n.label AS name
+               FROM location_npc_assignments lna
+               JOIN npcs n ON n.key = lna.npc_key
+               WHERE lna.location_key = ? AND lna.is_active = 1
+                 AND COALESCE(n.is_active, 1) = 1
+               ORDER BY n.key""",
+            (location_key,),
+        ).fetchall()
+        scene_npcs = [{"key": r["key"], "name": r["name"]} for r in npc_rows]
+
+        enemy_rows = conn.execute(
+            """SELECT lea.enemy_key, lea.spawn_chance, lea.max_count,
+                      COALESCE(gce.label, lea.enemy_key) AS name
+               FROM location_enemy_assignments lea
+               LEFT JOIN game_config_enemies gce ON gce.key = lea.enemy_key
+               WHERE lea.location_key = ? AND lea.is_active = 1""",
+            (location_key,),
+        ).fetchall()
+
+        scene_enemies: list[dict] = []
+        for row in enemy_rows:
+            for _ in range(int(row["max_count"])):
+                if random.random() < float(row["spawn_chance"]):
+                    scene_enemies.append({"key": row["enemy_key"], "name": row["name"]})
+    finally:
+        conn.close()
+
+    set_world_state_flags(campaign_id, scene_npcs=scene_npcs, scene_enemies=scene_enemies)
+    return {
+        "npcs_loaded": len(scene_npcs),
+        "enemies_spawned": len(scene_enemies),
+        "location_key": location_key,
+    }
+
+
+def exit_location_scene(campaign_id: int) -> None:
+    """U31: Clear scene_npcs and scene_enemies when leaving a location."""
+    set_world_state_flags(campaign_id, scene_npcs=[], scene_enemies=[])
+
+
+def enter_sublocation_scene(campaign_id: int, sublocation_key: str) -> dict:
+    """U31: Swap scene to sub-location assignments; save parent location key to flags.
+
+    Reads parent_key from game_locations for the sublocation, saves it to
+    session_flags.parent_location_key, then loads sub-location's assignments.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        sub_row = conn.execute(
+            "SELECT parent_key FROM game_locations WHERE key = ? LIMIT 1",
+            (sublocation_key,),
+        ).fetchone()
+        parent_key = sub_row["parent_key"] if sub_row and sub_row["parent_key"] else None
+
+        if parent_key:
+            gs = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+            flags["parent_location_key"] = parent_key
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                (json.dumps(flags, ensure_ascii=False), campaign_id),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+    return enter_location_scene(campaign_id, sublocation_key)
 
 
 def get_latest_snapshot(campaign_id: int) -> dict | None:

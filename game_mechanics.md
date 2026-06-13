@@ -1014,7 +1014,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | U29 | Świat: blok [ŚWIAT] w kontekście LLM — fakty o hexie + kandydaci z bazy + zakaz wymyślania | U5, U28 |
 | U30 | Świat: ruch mechaniczny — POST /travel, klik mapy = podróż, intent MOVE przed LLM, anty-desync guard | U29 |
 | U31 | Świat: scena ładowana z bazy przy wejściu do lokacji (scene_npcs/enemies z assignments) | U30 |
-| U32 | Świat: travel pills z prawdziwych danych + eskalacja anty-stuck w UI | U30 |
+| U32 | Świat: travel pills z prawdziwych danych + eskalacja anty-stuck w UI | U30 | ✅ #548 |
 | U32b | 🎮 Kamień milowy: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bramka przed Blokiem 4) | U28–U32 |
 
 > **Kolejność wykonania:** Blok 9 (U28–U32) wchodzi po U5–U9, PRZED U10–U14 — to rdzeń gry. Szczegóły: CZĘŚĆ AH, sekcja "zależności i kolejność".
@@ -1038,25 +1038,30 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ### FAZA 5 — Multiplayer
 
-> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo. **Start dopiero po U27 (FAZA U, go/no-go).**
+> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo. **Start dopiero po U27 (FAZA U, go/no-go) ORAZ po wdrożeniu FAZY L (lochy) — ostatnia faza gameplay w kolejce (decyzja 2026-06-12).** Pełne opisy i decyzje: CZĘŚĆ AC.
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
 | G1 | Timer enforcement — background sweep co ~30s w main.py (domknij rundę po deadline) | — |
-| G2 | Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie | G1 |
-| G3 | Vote-to-kick + auto-kick 2-os (host potwierdza) + zaproszenie zastępstwa | G2 |
+| G2 | Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie; 3 ostrzeżenia → propozycja vote-kick | G1 |
+| G3 | Vote-to-kick ręczny (większość pozostałych; host niewyrzucalny; 2-os = host sam) + zastępstwo w trakcie | G2 |
 | G4 | World State integracja MP (jeden żeton drużyny, współdzielony stan) | B1 |
 | G5 | Conflict resolution: inicjatywa jako kolejność; feedback "Cel już martwy/zabrany"; reużywa turn_order | G4 |
 | G6 | Ruch drużyny: głosowanie hex (wszyscy głosują, host bez veta); remis = brak ruchu | G4 |
-| G7 | Walka MP — reuse silnika turowego solo (ludzie w turn_order, sekwencyjnie) | Faza 1 walka |
-| G8 | Auto-roll kości przez kod w rundzie MP (zamiana roll_cues na realne rzuty) | G4 |
+| G7 | Walka MP — reuse silnika turowego solo (ludzie w turn_order, sekwencyjnie); timeout = obrona | Faza 1 walka, G16 |
+| G8 | Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami | G4 |
 | G9 | Timer walki skrócony (2 min) + push "Twoja kolej" per tura | G7 |
 | G10 | Loot per-gracz z filtrem klasy + złoto dzielone równo | Faza 1 loot, F2 |
 | G11 | Catch-up po powrocie (narracje pominiętych rund + sprasowane podsumowanie) | G2 |
 | G12 | Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny | G4 |
 | G13 | Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów | — |
+| G16 | Wybór postaci przy zaproszeniu + bohater w wielu kampaniach (rozwój wspólny / stan per kampania) | — |
+| G17 | Powalenie zamiast śmierci + kara wipe 10/20/30% wg poziomu (próg 50 zł, 50% HP, bezpieczny hex) | G7 |
+| G18 | Streszczenia piętrowe rund MP (warstwy 0/1/2 w DB) | — |
+| G19 | Widzowie: rola bez postaci, treści publiczne, podpowiedzi za podwójną zgodą (host + mute gracza) | — |
+| G20 | Eksport-książka: Bielik 11B / Ollama na .170, offline (działa też dla solo) | G18, H4 |
 | G14 | Handel między graczami (later) | — |
-| G15 | Skalowanie trudność/loot wg liczby graczy (playtest) | playtest |
+| G15 | Skalowanie trudność/loot wg liczby graczy + strojenie kar wipe (playtest) | playtest |
 
 ---
 
@@ -2551,6 +2556,7 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 ## CZĘŚĆ AC — Tryb Multiplayer (gra wieloosobowa)
 
 > **Sesja:** 2026-06-05 — projekt docelowy + audyt istniejącego kodu.
+> **Sesja:** 2026-06-12 — druga sesja projektowa: bohater w dwóch trybach, powalenie zamiast śmierci, rzuty dwustopniowe, streszczenia piętrowe, widzowie, eksport-książka, doprecyzowanie vote-kick. **Kolejność: FAZA G rusza na samym końcu kolejki gameplay — po pozytywnym U27 ORAZ po wdrożeniu FAZY L (lochy kafelkowe).**
 > **Stan kodu:** Plumbing (lobby, zaproszenia, czat, rundy, host-handoff) gotowy w ~70-80%. Integracja z mechaniką gry = 0%. Ta sekcja definiuje stan docelowy.
 
 Multiplayer to ta sama gra co solo, w której **2 do 4 osób gra wspólnie jedną przygodę**, opowiadaną przez LLM. Gracze mają osobnych bohaterów, ale dzielą jeden świat, jedną historię i jedno miejsce na mapie.
@@ -2696,6 +2702,160 @@ Gracze mogą szeptać w czacie gry (`/whisper @gracz`) — wiadomość prywatna,
 - **Host-handoff** (host wychodzi → następny zaakceptowany gracz zostaje hostem) — już zaimplementowane, z jednorazowym `host_note`.
 - **Zastępstwo:** po wyrzuceniu gracza host może zaprosić nowego na jego miejsce.
 
+### Bohater w dwóch trybach naraz (solo + MP równolegle)
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> Przy akceptacji zaproszenia gracz wybiera, którym bohaterem wchodzi do gry. Od tej chwili bohater gra w kampanii multiplayer, a jego kampania solo **toczy się dalej niezależnie** — obie przygody dzieją się asynchronicznie, obok siebie. Co jest wspólne, a co osobne:
+>
+> | Warstwa | Zakres | Wspólna? |
+> |---|---|---|
+> | **Rozwój** | poziom, XP, statystyki, umiejętności, złoto, ekwipunek | ✅ wspólna — łup z MP wzbogaca bohatera "globalnie" |
+> | **Stan** | HP, mana, kondycje, pozycja na mapie | ❌ osobna per kampania — ranny w solo ≠ ranny w MP |
+
+> **Dlaczego?**
+> Gracz nie może być zmuszony do porzucenia swojej solowej przygody, żeby zagrać ze znajomymi. Wspólny rozwój sprawia, że granie w obu trybach się opłaca (każda nagroda liczy się "naprawdę"). Osobny stan jest konieczny, bo to dwie różne historie: bohater pobity w solowej jaskini nie może nagle leżeć ranny w środku narady drużyny w MP.
+
+> **Co odrzucono i dlaczego?**
+> - **Kopia bohatera (snapshot) na czas MP** — nagrody z MP nie trafiałyby do "prawdziwego" bohatera, a gracz miałby dwie mylące wersje tej samej postaci. Odrzucone.
+> - **Pełne współdzielenie stanu (jedno HP w obu trybach)** — przygody dzieją się w różnych miejscach fabularnie; wspólne HP tworzyłoby absurdy narracyjne i pozwalałoby "leczyć się" w jednym trybie przed walką w drugim. Odrzucone.
+
+> **Co się zepsuje, jeśli odwrócić tę decyzję?**
+> Model danych: dziś bohater ma jedno pole `campaign_id` i jeden stan. Ta decyzja wymaga członkostwa bohatera w wielu kampaniach jednocześnie + stanu (HP/kondycje/pozycja) trzymanego per kampania, nie per bohater. To fundament zadania G16 — bez niego żadna mechanika MP nie ruszy.
+
+### Powalenie zamiast śmierci — MP nigdy nie zabija bohatera
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> W multiplayer nie ma permanentnej śmierci bohatera. HP spada do 0 → bohater **pada nieprzytomny (powalony)**, nie umiera. Permanentna śmierć zostaje wyłącznie w solo.
+
+> **Dlaczego?**
+> Bohater jest wspólny dla solo i MP (decyzja wyżej), a śmierć to zdarzenie dotykające warstwy rozwoju — nie da się "umrzeć tylko w jednym trybie". Gdyby MP mogło zabić, cudza decyzja w drużynie kasowałaby komuś postać z jego prywatnej, solowej kampanii. To najprostsza droga do utraty gracza na zawsze.
+
+**Jak działa powalenie w walce:**
+
+```
+HP bohatera = 0
+  │
+  ▼
+Bohater POWALONY — leży, nie działa, wrogowie go ignorują
+  │
+  ├─ Towarzysz w swojej turze: akcja "ocuć" / mikstura / czar
+  │     → bohater wstaje z ~25% HP
+  │
+  └─ Drużyna wygrywa walkę
+        → wszyscy powaleni wstają automatycznie z minimalnym HP
+```
+
+**Porażka całej drużyny (wipe) — kara skalowana poziomem (wariant B, zatwierdzony 2026-06-12):**
+
+| Średni poziom drużyny | Utrata złota (każdy gracz) |
+|---|---|
+| 1–3 | 10% |
+| 4–7 | 20% |
+| 8+ | 30% |
+
+Stałe dopełniacze, niezależne od progu:
+- **Ochrona nowicjuszy:** gracz mający mniej niż 50 złota nie traci nic.
+- **Przebudzenie z 50% HP** w ostatnim bezpiecznym hexie (odkrytym, bez aktywnego wroga). AI opisuje porażkę fabularnie ("obrabowali was, ktoś wyciągnął was z pobojowiska").
+- **Nigdy nie przepadają:** przedmioty, XP, poziomy. Kara dotyka wyłącznie złota i stanu po przebudzeniu.
+- Opcja do playtestu: kondycja "Wyczerpanie" (−1 do rzutów do następnego odpoczynku).
+
+> **Dlaczego procent rośnie z poziomem (B), a nie płaski (A)?**
+> Płaski procent przestaje boleć bogatą, wysokopoziomową drużynę — porażka staje się drobną opłatą. Progi 10/20/30% utrzymują stałą dotkliwość przez całą grę. Wariant C (procent od rangi wroga, np. boss = więcej) odłożony — można dołożyć później jako mnożnik.
+
+> **Dlaczego przebudzenie z 50% HP, a nie pełnym?**
+> Wipe nie może działać jak darmowy nocleg z leczeniem — inaczej drużynie opłacałoby się "umrzeć" zamiast odpoczywać. Polityka liczb: 10/20/30%, próg 50 złota i 50% HP to wartości startowe do strojenia w playtestach (G15).
+
+### Rzuty w rundzie narracyjnej — dwa przebiegi (LLM planuje → kod rzuca → LLM narruje)
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> W rundzie MP test umiejętności rozstrzyga się w jednym obiegu: LLM najpierw planuje, jakie testy są potrzebne dla czyich akcji → **kod natychmiast rzuca kości** (pełna formuła solo: d20 + modyfikatory vs DC) → LLM dostaje wyniki i pisze narrację z już uwzględnionymi sukcesami i porażkami. Gracz widzi swoje rzuty w narracji, np. "🎲 Zwinność: 14 vs DC 12 ✓".
+
+> **Dlaczego nie pętla z klikaniem jak w solo?**
+> W solo gracz klika kość i czeka tylko na siebie. W MP pętla "narracja → 4 graczy klika rzuty → druga narracja" podwajałaby czas rundy — w grze asynchronicznej oznacza to godziny dodatkowego czekania. Auto-roll trzyma zasadę "jedna runda = jedno czekanie". Dziś `roll_cues` to martwe sugestie — LLM sam wymyśla, czy się udało; po tej zmianie mechanika jest realna (zadanie G8, doprecyzowane).
+
+### Streszczenia piętrowe — pamięć kampanii MP
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> Historia kampanii MP jest kompaktowana warstwowo i trzymana w bazie:
+>
+> | Warstwa | Zawartość | Kiedy powstaje |
+> |---|---|---|
+> | 0 | ostatnie 2–3 rundy pełnym tekstem | zawsze świeże |
+> | 1 | każda starsza runda → krótkie streszczenie (kto co zrobił, co się zmieniło) | po zamknięciu rundy |
+> | 2 | co ~10 rund streszczenia warstwy 1 zgniatane w jeden "rozdział" | cyklicznie |
+>
+> LLM przy każdej narracji dostaje: rozdziały (2) + streszczenia ostatnich rund (1) + świeże rundy (0).
+
+> **Dlaczego?**
+> Narracja MP chodzi na płatnej chmurze (CZĘŚĆ AG), a każda runda wysyła historię kampanii. Bez kompaktowania koszt i rozmiar kontekstu rosną bez końca — kampania na setki rund staje się nieopłacalna. Z warstwami kontekst (i koszt) zostaje płaski. Solo ma już podobny mechanizm streszczeń — przenosimy wzorzec. To także paliwo dla eksportu-książki (niżej).
+
+### Widzowie (tryb obserwatora)
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> Widz to rola bez postaci, dołączająca przez ten sam system zaproszeń. Widz widzi **wyłącznie treści publiczne**: narrację i publiczne akcje/czat graczy. Nie widzi szeptów, prywatnych notatek graczy ani rozmów wewnętrznych. Podpowiedzi od widza do gracza idą przez `/whisper` — i podlegają **dwóm poziomom zgody**:
+>
+> 1. **Host** przy kampanii ustawia: `brak widzów` / `mogą oglądać` / `mogą oglądać i podpowiadać`.
+> 2. **Każdy gracz** w swoim panelu może wyciszyć/zablokować podpowiedzi od konkretnego widza — niezależnie od ustawienia hosta.
+>
+> LLM nigdy nie widzi podpowiedzi widzów (ta sama gwarancja kodowa co whisper graczy).
+
+> **Dlaczego dwa poziomy zgody?**
+> Podpowiadający widz to miecz obosieczny: "duch opiekun" przy grze ze znajomymi, ale też irytujący "kierowca z tylnego siedzenia". Host decyduje o charakterze kampanii, gracz o własnym ekranie. Bonus produkcyjny: tryb widza = gotowe narzędzie do oglądania playtestów na żywo bez zakłócania gry.
+
+### Eksport-książka (powieść z kampanii)
+
+> **Zasada projektowa (zatwierdzona 2026-06-12):**
+> Historia kampanii (streszczenia piętrowe + pełne teksty rund) może zostać przepisana na **powieść fabularną z dialogami** — rozdział po rozdziale, w stałym stylu. Robi to **lokalny model na .170** (RTX 3060): Bielik 11B przez Ollama (najlepsza polszczyzna literacka w tym rozmiarze; zapasowo Gemma 3 12B / Qwen 3 14B). Zadanie offline'owe, nocne — szybkość bez znaczenia (zgodnie z CZĘŚĆ AG: wolny offline = OK).
+
+> **Dlaczego lokalnie, nie na chmurze?**
+> Przepisanie setek rund przez płatne API kosztuje realne pieniądze, a nikt na wynik nie czeka — idealny profil dla wolnego lokalnego GPU. Funkcja działa też dla kampanii solo (potrzebuje tylko historii z bazy), więc można ją prototypować niezależnie od reszty MP — od razu po postawieniu Ollamy (H4). Prototyp wyciągnięty przed FAZĘ G: issue #547, prowadzi Piotr.
+
+**Wejście — pełen pakiet danych (zatwierdzone 2026-06-12):**
+
+Sama treść tur to szkielet; książka dostaje też kontekst świata:
+
+| Źródło | Po co w książce |
+|---|---|
+| Tury (narracje + wpisy graczy) | kręgosłup fabuły — kolejność zdarzeń |
+| Karty postaci (imię, archetyp, wygląd, rozwój poziomów) | spójny portret bohatera; awans = moment rozwoju postaci |
+| Plan GM (cele scen, łuki fabularne) | model wie, "o czym" była przygoda — pisze z intencją, nie tylko relacjonuje |
+| NPC (imiona, role, nastawienie) | postacie drugoplanowe nie zmieniają imion między rozdziałami |
+| Lokacje/hexy odwiedzone (opisy) | scenografia rozdziałów |
+| Questy (cel, przebieg, wynik) | klamry fabularne — co się zaczęło, co domknęło |
+| Logi walk (kto walczył, rany, powalenia, krytyki) | materiał dramatyczny |
+| Kamienie milowe ekwipunku | znaczące znaleziska mają swoją historię |
+
+Do treści NIE wchodzą surowe liczby mechaniki (DC, rzuty, XP, kwoty złota) — książka nie może czytać się jak log. Mechanika tłumaczy się na fikcję: nat 20 → popisowy wyczyn, niskie HP → "ledwo trzymał się na nogach".
+
+**Słowa graczy 1:1 (zatwierdzone 2026-06-12):**
+
+- Wpis będący **wypowiedzią postaci** → dialog zachowany wiernie: te same słowa i szyk, poprawione tylko oczywiste literówki. To moment "hej, to moje zdanie!" — gracz ma rozpoznać swoje słowa.
+- Wpis będący **komendą** ("atakuję goblina") → LLM przerabia na prozę akcji, może dopisać postaci kwestię dialogową.
+- Skrypt taguje wpisy w materiale rozdziału: `[GRACZ-CYTAT]` vs `[GRACZ-AKCJA]`; prompt każe cytaty wmontować dosłownie.
+
+**Licencja dwuwarstwowa — ile LLM wolno dobudować (zatwierdzone 2026-06-12):**
+
+> **Fakty zamknięte** (nie wolno zmienić ani zaprzeczyć): co się wydarzyło i w jakiej kolejności; kto przeżył/zginął/został powalony; co znaleziono; dokąd poszli; wyniki questów; tożsamość i rola NPC; dosłowne cytaty graczy.
+>
+> **Tkanka łączna** (pełna swoboda): opisy miejsc i pogody, myśli i emocje bohaterów, przejścia między scenami, drobne tło bez wpływu na fabułę (gwar karczmy, bezimienny strażnik), rozwinięcie scen, które w grze były jednym zdaniem.
+
+> **Dlaczego nie "twardy zakaz wymyślania"?**
+> Kronika 1:1 bez dobudowy jest sucha — gra zapisuje zdarzenia, nie literaturę. Ale model 11B bez twardych granic halucynuje fabułę. Kompromis: skrypt buduje dla każdego rozdziału **listę faktów zamkniętych deterministycznie z danych** (nie prosimy modelu, żeby sam pilnował prawdy) + streszczenie "co było dotąd" dla ciągłości. Prompt: fakty nienaruszalne, resztę ubierz literacko. Weryfikacja pilota = sprawdzenie rozdziałów przeciw liście faktów.
+
+Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieść** (domyślna, jak wyżej) / **swobodna adaptacja** (wolno przestawiać sceny dla dramaturgii).
+
+### Moderacja po starcie — vote-kick (doprecyzowanie 2026-06-12)
+
+> **Zasada projektowa (zatwierdzona 2026-06-12, zastępuje szkic z 2026-06-05):**
+> - Każdy gracz może w dowolnym momencie wywołać głosowanie nad wyrzuceniem konkretnego gracza. Głosowanie przechodzi **większością pozostałych graczy** (wyrzucany nie głosuje). Niezależnie od tego, po 3 kolejnych `[BRAK AKCJI]` system sam proponuje głosowanie (mechanizm z G2).
+> - **Hosta nie da się wyrzucić** — host może najwyżej sam odejść (host-handoff już działa).
+> - **Drużyna 2-osobowa** (host + 1 gracz): głosowanie nie ma sensu — **host wyrzuca jednostronnie**.
+> - Wyrzucony: bohater wraca do `idle`, zachowuje XP/złoto/ekwipunek (G13).
+> - **Uzupełnienie składu w trakcie kampanii:** host zaprasza nowego gracza, ten wybiera bohatera, LLM generuje narrację dołączenia — mechanizm wejścia w trakcie gry już działa w prototypie.
+
+> **Dlaczego większość pozostałych, a nie "2+ głosy + host"?**
+> Prosta, czytelna reguła działająca w każdym składzie 3–4 os.; host nie jest sędzią konfliktów między graczami (sam może być stroną). Wyjątek 2-osobowy istnieje, bo kworum tam nie ma.
+
 ### Status implementacji (CZĘŚĆ AC)
 
 | Element | Status |
@@ -2716,29 +2876,40 @@ Gracze mogą szeptać w czacie gry (`/whisper @gracz`) — wiadomość prywatna,
 | Drużyna jako jeden żeton + catch-up po powrocie | ⚠️ historia jest, jeden-żeton/catch-up do zbudowania |
 | Konflikt współdzielonego World State | ❌ do zaprojektowania |
 | Loot per-gracz klasowy + złoto dzielone | ❌ do zbudowania |
+| Wybór postaci przy zaproszeniu + bohater w dwóch trybach (rozwój wspólny / stan per kampania) | ❌ do zbudowania (G16 — fundament modelu danych) |
+| Powalenie / ocucenie / kara za wipe (10/20/30%) | ❌ do zbudowania |
+| Streszczenia piętrowe rund MP | ❌ do zbudowania |
+| Widzowie (rola, widoczność publiczna, podpowiedzi za podwójną zgodą) | ❌ do zbudowania |
+| Eksport-książka (Bielik na .170, offline) | ❌ do zbudowania (działa też dla solo; wymaga H4) |
+| Vote-to-kick ręczny (większość pozostałych; 2-os = host sam) | ❌ do zbudowania |
 | Handel między graczami | 📝 notatka na przyszłość |
 | Skalowanie mniej-graczy=lepszy-loot | 📝 notatka, brak formuły |
 
 ### Zadania implementacyjne
 
-> **Faza:** Multiplayer to duży blok zależny od Fazy 0 (World State) i Fazy 1 (rdzeń mechaniki). Realny dopiero po nich. Oznaczone jako Faza MP.
+> **Faza:** Multiplayer to duży blok zależny od Fazy 0 (World State) i Fazy 1 (rdzeń mechaniki). **Start: po pozytywnym U27 ORAZ po wdrożeniu FAZY L — ostatnia faza gameplay w kolejce (decyzja 2026-06-12).** Oznaczone jako Faza MP.
 
 | # | Zadanie | Zależy od |
 |---|---------|-----------|
 | G1 | Egzekucja timera — background sweep w `main.py` (domknij rundę po deadline, push) | — |
-| G2 | Absencja: token `[BRAK AKCJI]`, narracja pasywna, licznik kolejnych ostrzeżeń + reset | G1 |
-| G3 | Vote-to-kick + auto-kick 2-os (host potwierdza) + zaproszenie zastępstwa | G2 |
+| G2 | Absencja: token `[BRAK AKCJI]`, narracja pasywna, licznik kolejnych ostrzeżeń + reset; po 3 ostrzeżeniach system proponuje vote-kick | G1 |
+| G3 | Vote-to-kick ręczny: większość pozostałych graczy (wyrzucany bez głosu), host niewyrzucalny, 2-os = host wyrzuca sam; zaproszenie zastępstwa w trakcie kampanii (narracja dołączenia już działa) | G2 |
 | G4 | Integracja World State z rundą MP (jeden żeton drużyny, współdzielony stan) | Faza 0 |
 | G5 | Conflict resolution World State: gracze składają akcje jednocześnie (okno czasowe), backend przetwarza wg inicjatywy (wyższa init = pierwsza). Gracz z niższą init dostaje feedback gdy stan świata się zmienił ("Cel już martwy", "Przedmiot już zabrany"). Reużywa `turn_order` z combat_service. | G4 |
-| G7 | Walka w MP — reuse silnika turowego solo, ludzie w `turn_order`, sekwencyjnie | Faza 1 (walka) |
-| G8 | Auto-roll kości przez kod w rundzie (zamiana `roll_cues` na realne rzuty) | G4 |
+| G7 | Walka w MP — reuse silnika turowego solo, ludzie w `turn_order`, sekwencyjnie; brak reakcji w 2 min = akcja domyślna (obrona) | Faza 1 (walka), G16 |
+| G8 | Rzuty dwustopniowe w rundzie: LLM planuje testy → kod rzuca (formuła solo) → LLM narruje z wynikami; gracz widzi "🎲 Zwinność: 14 vs DC 12 ✓" | G4 |
 | G9 | Timer walki skrócony (2 min) + push "Twoja kolej" per tura | G7 |
 | G10 | Loot per-gracz z filtrem klasy + złoto dzielone równo | Faza 1 (loot), afiksy |
 | G11 | Catch-up po powrocie (narracje pominiętych rund + sprasowane podsumowanie) | G2 |
 | G12 | Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny | G4 |
 | G13 | Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów | — |
+| G16 | Wybór postaci przy akceptacji zaproszenia + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/umiejętności/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych | — |
+| G17 | Powalenie zamiast śmierci: ocucenie (~25% HP), auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny, próg 50 złota, przebudzenie 50% HP w bezpiecznym hexie | G7 |
+| G18 | Streszczenia piętrowe rund MP (warstwy 0/1/2 w DB; kontekst narracji = rozdziały + streszczenia + świeże rundy) | — |
+| G19 | Widzowie: rola bez postaci, widoczność tylko publiczna, podpowiedzi `/whisper` za podwójną zgodą (ustawienie hosta + mute per gracz), zero dostępu LLM | — |
+| G20 | Eksport-książka: nowelizacja kampanii rozdział-po-rozdziale lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — można prototypować przed resztą FAZY G | G18, H4 |
 | G14 (later) | Handel między graczami | — |
-| G15 (later) | Skalowanie trudność/loot wg liczby graczy | playtest |
+| G15 (later) | Skalowanie trudność/loot wg liczby graczy; strojenie kar wipe (10/20/30%, próg 50 zł, 50% HP) | playtest |
 
 ---
 
@@ -3448,7 +3619,9 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 > **Zasada projektowa:** Baza treści (przedmioty, bronie, wrogowie, NPC, zaklęcia, afiksy) jest sercem gry: silnik i LLM TYLKO z niej czytają. Jeden format efektów, jedna walidacja, jedna ścieżka wejścia — niezależnie czy treść wchodzi z seedów SQL, z admin UI, czy z LLM (pending).
 > **Dlaczego?** To największa obawa właściciela projektu i słusznie: dziś istnieją 3 formaty efektów i 3 tabele przedmiotów; każda ścieżka zapisu waliduje (lub nie) po swojemu. Bez tego fundamentu każda nowa treść to potencjalny bug.
 
-#### U10 — Effect schema lockdown
+#### U10 — Effect schema lockdown ✅ ([#554](https://github.com/szmidtpiotr/ai-gm/issues/554), 2026-06-13)
+
+> ⚠️ **DECYZJA C (hybryda, Piotr 2026-06-13) — wdrożona.** Opis poniżej prescribował nazwy typów `damage_over_time`/`stat_mod`/`skip_turn` i osobny plik JSON Schema. W kodzie istniał już przetestowany walidator `validate_effect_json_payload` (admin_config.py) z INNYM słownictwem i na nim opiera się FAZA S Blok 3 — dlatego **NIE zmieniono nazw typów**. Mapa nazw: `damage_over_time`→`periodic_save`, `stat_mod`→`static_stat_modifier`, `skip_turn`→`block_action`, `heal_hp` = jedno pole `value` (liczba LUB kość). Wdrożono realne luki: (1) `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy (walidator czyta enumy stąd), (2) dodano **LCK** (7. statystyka) + cele pochodne `ac`/`attack_bonus`/`damage_bonus`/`initiative`, (3) audyt `scripts/effect_json_audit.py` (read-only, 169==169 rekordów, 23 legacy zgłoszone do ręcznej decyzji — runtime czyta je osobną ścieżką `stat_mods`/`damage_per_turn`, unifikacja = U11/FAZA S), (4) DSL Smart Entry zaktualizowany. Punkty oryginalnego opisu o nowych nazwach typów = **odrzucone decyzją C**.
 
 **Cel:** Jeden, zamknięty format Effect Object. Wszystko co wchodzi do bazy przechodzi przez tę samą walidację — admin, LLM i seedy nie mogą zapisać śmiecia.
 

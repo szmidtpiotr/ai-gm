@@ -51,6 +51,28 @@ _INTENT_KEYWORDS: dict[str, list[str]] = {
 # Cap bloku ~400 tokenów ≈ 1600 znaków
 _SWIAT_BLOCK_MAX_CHARS = 1600
 
+# Fallback atmosphere per terrain type — used when world_hexes.atmosphere IS NULL.
+# Gives LLM concrete sensory cues so narration matches terrain.
+_TERRAIN_ATMOSPHERE: dict[str, str] = {
+    "forest":    "Gęsty las. Skrzypią drzewa, śpiewają ptaki, mech wygłusza kroki.",
+    "plains":    "Otwarta równina. Wiatr gnie trawy, horyzont daleki, niebo szerokie.",
+    "hills":     "Pagórkowaty teren. Ostre trawy, wiatr na wzniesieniach, daleki widok.",
+    "mountains": "Skaliste zbocze. Cienkie powietrze, ostre głazy, zimny wiatr z przełęczy.",
+    "river":     "Kręty brzeg rzeki. Szum nurtu, mokre kamienie, mgła nad wodą, zapach mułu i trzcin.",
+    "water":     "Brzeg wielkiej wody. Spokojna tafla, szum fal, zapach ryb i wilgoci.",
+    "swamp":     "Bagniste trzęsawisko. Chlupot pod butami, mgła, smród gnijącej roślinności.",
+    "desert":    "Pustynia lub pustać. Żar, pył, brak cienia, wiatr niosący piasek.",
+    "ruins":     "Rozsypane ruiny. Pył, powykrzywiane kamienie, cisza przerywana szelestem gruzu.",
+    "dungeon":   "Mroczne podziemia. Wilgoć, kapanie wody, odgłosy z głębin.",
+    "road":      "Ubita droga. Koleje wozów, kamienne znaki milowe, kurz pod butami.",
+    "town":      "Osada. Dym z kominów, szczek psów w oddali, głosy i zapach gotowanego jedzenia.",
+    "castle":    "Kamienny zamek lub forteca. Chłód murów, echo kroków, straże na blanach.",
+    "cave":      "Jaskinia. Kompletna ciemność bez pochodni, kapanie wody, zaciszna cisza.",
+    "tundra":    "Mroźna tundra. Wiatr tnie po twarzy, niska roślinność, śnieg w zagłębieniach.",
+    "coast":     "Wybrzeże. Krzyk mew, fale rozbijające się o brzeg, słony wiatr.",
+    "volcanic":  "Teren wulkaniczny. Czarna skała, zapach siarki, gorące powietrze drży nad ziemią.",
+}
+
 
 def _hex_distance(q1: int, r1: int, q2: int, r2: int) -> int:
     return max(abs(q1 - q2), abs(r1 - r2), abs((q1 + r1) - (q2 + r2)))
@@ -76,7 +98,7 @@ def _detect_location_intent(player_message: str) -> list[str]:
 
 def _get_hex_row(conn: sqlite3.Connection, q: int, r: int) -> dict | None:
     row = conn.execute(
-        "SELECT q, r, hex_type, label FROM world_hexes WHERE q=? AND r=? AND is_active=1",
+        "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE q=? AND r=? AND is_active=1",
         (q, r),
     ).fetchone()
     return dict(row) if row else None
@@ -178,8 +200,15 @@ def build_swiat_block(
     hex_row = _get_hex_row(conn, q, r)
     hex_type = (hex_row or {}).get("hex_type", "nieznany")
     hex_label = (hex_row or {}).get("label") or f"({q},{r})"
+    # Use DB atmosphere if set, fall back to built-in terrain description
+    hex_atmosphere = (
+        ((hex_row or {}).get("atmosphere") or "").strip()
+        or _TERRAIN_ATMOSPHERE.get(hex_type, "")
+    )
 
     lines = ["=== ŚWIAT ===", f"Hex: q={q} r={r} | teren: {hex_type} | {hex_label}"]
+    if hex_atmosphere:
+        lines.append(f"Atmosfera terenu: {hex_atmosphere}")
 
     # ── Lokacje na hexie (priorytet 1) ────────────────────────────────────────
     locations = _get_locations_on_hex(conn, q, r)

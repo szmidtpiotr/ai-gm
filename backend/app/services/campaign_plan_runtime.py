@@ -213,6 +213,78 @@ def auto_complete_beats_by_event(
     return changed
 
 
+# ── HF-11 (#553): talk_to_npc auto-complete in the LIVE narrative tor ──────
+#
+# The original DIALOGUE hook (#550) lived in turn_pipeline._auto_complete_beats_by_mechanic,
+# but process_v2_turn is never called by the live narrative tor (game_engine.run_narrative_turn
+# → api/turns.py). So talk_to_npc beats only completed via the LLM [BEAT_COMPLETE] tag.
+# This helper detects NPC engagement directly from the real signals available in the live tor.
+
+# Polish diacritics → ASCII so free-text "sołtysem" matches scene NPC key "soltys_brzezino".
+_PL_DIAC = str.maketrans(
+    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
+    "acelnoszzACELNOSZZ",
+)
+
+
+def _strip_pl(s: str) -> str:
+    return (s or "").translate(_PL_DIAC).lower()
+
+
+def auto_complete_talk_to_npc(
+    campaign_id: int,
+    player_text: str | None,
+    location_key: str | None,
+    dialogue_npc_key: str | None,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> bool:
+    """HF-11 — complete talk_to_npc beats from live-tor NPC engagement signals.
+
+    Detects the engaged NPC from, in priority order:
+      1. Button DIALOGUE — `dialogue_npc_key` already carries the exact scene NPC key.
+      2. Free text — a scene NPC key/role token (diacritic-normalized) appears in the
+         player's message (e.g. "rozmawiam z sołtysem" → soltys_brzezino).
+    Then fires auto_complete_beats_by_event('talk_to_npc', engaged_key). Wildcard beats
+    (empty objective_value) complete on any engagement; named beats still require a match.
+    Returns True if at least one beat was newly completed.
+    """
+    engaged: str | None = None
+
+    if dialogue_npc_key:
+        engaged = dialogue_npc_key.strip() or None
+
+    if not engaged and player_text and location_key:
+        norm_text = _strip_pl(player_text)
+        try:
+            rows = conn.execute(
+                "SELECT npc_key FROM location_npc_assignments"
+                " WHERE location_key = ? AND COALESCE(is_active, 1) = 1",
+                (location_key,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+        for r in rows:
+            key = r["npc_key"] if isinstance(r, sqlite3.Row) else r[0]
+            if not key:
+                continue
+            # Role tokens from the key: 'soltys_brzezino' → ['soltys', 'brzezino'].
+            # A token of length ≥4 appearing in the normalized player text = engagement.
+            for tok in _strip_pl(key).split("_"):
+                if len(tok) >= 4 and tok in norm_text:
+                    engaged = key
+                    break
+            if engaged:
+                break
+
+    if not engaged:
+        return False
+
+    return auto_complete_beats_by_event(
+        campaign_id, "talk_to_npc", engaged, turn_number, conn
+    )
+
+
 # ── NPC alive tracking ────────────────────────────────────────────────────
 
 def mark_npc_dead(campaign_id: int, npc_key: str, conn: sqlite3.Connection) -> str:

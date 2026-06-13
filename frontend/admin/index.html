@@ -96,7 +96,7 @@
     import { showToast } from './shared/toast.js';
     import { initSortableTable } from './shared/table.js?v=2';
 
-    // 14 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
+    // 15 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
       { key: 'overview',   label: 'Przegląd',   ico: '▦' },
       { key: 'players',    label: 'Gracze',     ico: '◉' },
@@ -105,6 +105,7 @@
       { key: 'world',      label: 'Świat',      ico: '⊕' },
       { key: 'map',        label: 'Mapa',       ico: '🗺' },
       { key: 'mechanics',  label: 'Mechanika',  ico: '⚙' },
+      { key: 'game-mechanics', label: 'Zasady Gry', ico: '📖' },
       { key: 'dungeons',   label: 'Lochy',      ico: '⛓' },
       { key: 'forge',      label: 'Kuźnia',     ico: '⚒' },
       { key: 'invites',    label: 'Zaproszenia',ico: '✉' },
@@ -135,9 +136,9 @@
       if (title) title.textContent = LABELS[key] || 'Panel';
     }
 
-    // FADM-P15: wszystkie 14 sekcji sportowane do modularnego admin/. admin3 wycofany
+    // FADM-P15: wszystkie 15 sekcji sportowane do modularnego admin/. admin3 wycofany
     // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
-    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge']);
+    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics']);
 
     function placeholder(key) {
       return `<div class="section active"><div class="adm-placeholder">

@@ -13,12 +13,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **9/35** | **26% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **10/35** | **29% — PRZED Fazą 5 MP** |
 | **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **103/193** | **53%** |
+| **TOTAL** | **104/193** | **54%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -196,10 +196,15 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] HF-7 — [#534](https://github.com/szmidtpiotr/ai-gm/issues/534) Walidacja celu COMBAT_START: cel spoza scene_enemies/bazy wrogów albo przyjazny NPC (quest-giver) → odrzucenie tagu + korekta narracji (wzorzec U6) + wpis llm_tag_errors — [#538](https://github.com/szmidtpiotr/ai-gm/issues/538) 8/8 testów GREEN
 - [x] HF-8 — CP11: dodać `objective_type` do `key_beats` w szablonach kampanii (bez tego auto-complete beatów z U8 martwy w Gotowej; U32b mierzy checkpoint 11 — "fix przy U32b" za późno, U32b to playtest, nie naprawa) — [#539](https://github.com/szmidtpiotr/ai-gm/issues/539)
 
+### Hotfixy po U32b (defekty wykryte w runach milestone; PRZED Blokiem 4)
+- [x] HF-9 — [#551](https://github.com/szmidtpiotr/ai-gm/issues/551) #549 CP3: legacy `ai_generated=1` na hexie nie zastępowana lokacją z bazy — `resolve_chain_travel` czyści location_key gdy ai_generated=1, uruchamia placement engine; 3/3 testów GREEN
+- [x] HF-10 — [#552](https://github.com/szmidtpiotr/ai-gm/issues/552) #550 CP11 part 1: kill_enemy beat nie kompletuje przez /combat/resolve-attack (bypass turn_pipeline) — hook `auto_complete_beats_by_event` w `combat_service.resolve_attack` przy dead=True; 5/5 testów GREEN
+- [x] HF-11 — [#553](https://github.com/szmidtpiotr/ai-gm/issues/553) #550 CP11 part 2: talk_to_npc/visit_location beat auto-complete w martwym kodzie (`process_v2_turn` nigdy nie wołany w żywym torze) — `auto_complete_talk_to_npc` (button DIALOGUE + free-text scene-NPC match, normalizacja PL diakrytyków) wpięta w oba tory turns.py + `visit_location` w hex_travel; 5/5 testów GREEN, potwierdzone live (kampania 64)
+
 > Luki designu poza hotfixami: **CP8** (zakupy w narracji nie zdejmują złota) → decyzja przy Bloku 7 (U24–U26): rozszerzyć [SPEND_GOLD] na zakupy narracyjne albo sklep wyłącznie przez UI z odmową w narracji. **CP4** (NPC nie wywołany po imieniu) → P2, prawdopodobnie naprawi U29 (blok [ŚWIAT] z NPC z bazy).
 
-### Blok 4 — Baza danych jako rdzeń
-- [ ] U10 — Effect schema lockdown (JSON Schema, jeden format DOT, enum statów, typ skip_turn, walidacja na każdym zapisie)
+### Blok 4 — Baza danych jako rdzeń (1/5)
+- [x] U10 — Effect schema lockdown — **decyzja C (hybryda, 2026-06-13):** zachowano nazwy typów z kodu (periodic_save/static_stat_modifier/block_action), bo walidator już istniał i działał + FAZA S na nim bazuje; dodano `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy, LCK + cele pochodne (ac/attack_bonus/damage_bonus/initiative), audyt `scripts/effect_json_audit.py` (169==169, 0 strat; 23 legacy do ręcznej decyzji → U11/FAZA S). — [#554](https://github.com/szmidtpiotr/ai-gm/issues/554)
 - [ ] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin)
 - [ ] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh)
 - [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
@@ -227,9 +232,14 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] U28 — Placement engine: terrain_tags + placement na game_locations; backend osadza lokacje przy odkryciu hexa; narzędzie admina dla floating — [#540](https://github.com/szmidtpiotr/ai-gm/issues/540)
 - [x] U29 — Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy na żądanie; create tylko przy brak_dopasowania — [#541](https://github.com/szmidtpiotr/ai-gm/issues/541)
 - [x] U30 — Ruch mechaniczny: POST /travel (klik mapy = podróż, intent MOVE rozstrzygany przed LLM, anty-desync guard, sync mapy po turze) — [#544](https://github.com/szmidtpiotr/ai-gm/issues/544)
-- [ ] U31 — Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z location_*_assignments; sub-lokacje
-- [ ] U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI (≥5 tur pille, ≥10 banner)
-- [ ] U32b — 🎮 KAMIEŃ MILOWY: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bez TDD, bez nowego issue — raporty do #512/#513, porównanie z runem U9b). Oczekiwane ✅: chk 2/3/4/9 (ruch hex, lokacje z bazy, NPC z przypisań, odpoczynek) → po potwierdzeniu zamknij #518/#522. Każde ❌ na chk 2/3/4 = defekt Bloku 9, naprawić PRZED Blokiem 4. Zaliczone = oba runy GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
+- [x] U31 — Scena z bazy: ENTER_LOCATION ładuje scene_npcs/scene_enemies z location_*_assignments; sub-lokacje — [#546](https://github.com/szmidtpiotr/ai-gm/issues/546)
+- [x] U32 — Travel pills z prawdziwych danych + eskalacja anty-stuck w UI (≥5 tur pille, ≥10 banner) — [#548](https://github.com/szmidtpiotr/ai-gm/issues/548)
+- [x] U32b — 🎮 KAMIEŃ MILOWY: /game-smoke × 2 tryby po Bloku 9 — pierwszy kandydat na GRYWALNY (bez TDD, bez nowego issue — raporty do #512/#513, porównanie z runem U9b). Oczekiwane ✅: chk 2/3/4/9 (ruch hex, lokacje z bazy, NPC z przypisań, odpoczynek). Każde ❌ na chk 2/3/4 = defekt Bloku 9, naprawić PRZED Blokiem 4. Zaliczone = oba runy GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
+  - **WYNIK 2026-06-13: ZALICZONY** — oba runy GRYWALNY Z ZASTRZEŻENIAMI (wyłącznie P2) po hotfixach HF-9/10/11. Historia:
+    - [#549](https://github.com/szmidtpiotr/ai-gm/issues/549) P1 CP3 → **HF-9 [#551]** FIXED: legacy `wschodnia_wioska` (ai_generated=1) czyszczona, placement engine osadza lokację z bazy (ai_generated=0). Potwierdzone oba runy.
+    - [#550](https://github.com/szmidtpiotr/ai-gm/issues/550) P1 CP11 → split: kill_enemy via /combat/resolve-attack **HF-10 [#552]** FIXED (combat_service hook); talk_to_npc/DIALOGUE → fix był w martwym kodzie (`process_v2_turn` nigdy nie wołany) → **HF-11 [#553]** FIXED: `auto_complete_talk_to_npc` w żywym torze (button DIALOGUE + free-text scene-NPC match) + `visit_location` w hex_travel. Potwierdzone live (kampania 64: first_combat ✅ + first_merchant ✅).
+    - CP2 ✅, CP4 ✅ (gotowa), CP5/6/7/10 ✅; raport nowa-kampania → #512, gotowa-kampania → #513
+    - Pozostałe P2 (nie blokują): REST intent nie triggerowany przy "odpoczywam" (nowa-kamp CP9); narracja "goblin"→"szlam"; desync current_location_id vs hex (start_64 vs brzezino, wątek U31-pochodny)
 
 ### Blok 8 — Brama do MP (zawsze ostatnie)
 - [ ] U27 — docs/ACCEPTANCE_USABILITY.md + pełny re-playtest 3 trybów (w tym kryteria ruchu/lokacji z Bloku 9) → issue [GATE] Go/No-Go MP
@@ -314,25 +324,30 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA 5 — Multiplayer
+## FAZA 5 — Multiplayer (sesja projektowa 2026-06-12 — decyzje w game_mechanics.md CZĘŚĆ AC)
 
-> ⛔ Start dopiero po U27 (go/no-go).
+> ⛔ Start dopiero po U27 (go/no-go) **ORAZ po wdrożeniu FAZY L (lochy)** — ostatnia faza gameplay w kolejce (decyzja 2026-06-12). Pełne opisy zadań + decyzje projektowe: `game_mechanics.md` CZĘŚĆ AC. Wyjątek: G20 (eksport-książka) można prototypować wcześniej — wymaga tylko H4 (Ollama na .170) i historii kampanii, działa też dla solo.
 
+- [ ] G16 — Wybór postaci przy zaproszeniu + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych
 - [ ] G1 — Timer enforcement — background sweep co ~30s (domknij rundę po deadline)
-- [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie
-- [ ] G3 — Vote-to-kick + auto-kick 2-os + zaproszenie zastępstwa
+- [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie; 3 ostrzeżenia → propozycja vote-kick
+- [ ] G3 — Vote-to-kick ręczny (większość pozostałych graczy; host niewyrzucalny; 2-os = host wyrzuca sam) + zastępstwo w trakcie kampanii
 - [ ] G4 — World State integracja MP (jeden żeton drużyny, współdzielony stan)
 - [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
 - [ ] G6 — Ruch drużyny: głosowanie hex (wszyscy głosują, host bez veta)
-- [ ] G7 — Walka MP — reuse silnika turowego solo
-- [ ] G8 — Auto-roll kości przez kod w rundzie MP
+- [ ] G7 — Walka MP — reuse silnika turowego solo; brak reakcji w 2 min = akcja domyślna (obrona)
+- [ ] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓")
 - [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
+- [ ] G17 — Powalenie zamiast śmierci: ocucenie ~25% HP, auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny (próg 50 zł, przebudzenie 50% HP w bezpiecznym hexie; nigdy przedmioty/XP)
 - [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
+- [ ] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB)
 - [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
 - [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
 - [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
-- [ ] G14 — Handel między graczami
-- [ ] G15 — Skalowanie trudności/loot wg liczby graczy (playtest)
+- [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
+- [ ] G20 — Eksport-książka: nowelizacja kampanii lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — prototyp wyciągnięty przed FAZĘ G, prowadzi Piotr — [#547](https://github.com/szmidtpiotr/ai-gm/issues/547)
+- [ ] G14 — Handel między graczami (later)
+- [ ] G15 — Skalowanie trudności/loot wg liczby graczy + strojenie kar wipe (playtest)
 
 ---
 

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Mechanics Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #fff;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        .sidebar h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+
+        .toc {
+            list-style: none;
+        }
+
+        .toc-item {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.6;
+            list-style: none;
+        }
+
+        .toc-section {
+            margin: 8px 0;
+        }
+
+        .toc-toggle {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+            color: #666;
+            font-weight: bold;
+            user-select: none;
+            transition: transform 0.2s;
+        }
+
+        .toc-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .toc-h1 {
+            font-weight: 700;
+            color: #222;
+            margin: 12px 0 8px 0;
+            padding: 6px 8px;
+            border-left: 3px solid #2196F3;
+            padding-left: 10px;
+        }
+
+        .toc-h2 {
+            color: #444;
+            cursor: pointer;
+            padding: 4px 8px 4px 20px;
+            border-radius: 3px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+
+        .toc-h2:hover {
+            background: #f0f0f0;
+        }
+
+        .toc-h3 {
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 2px 8px 2px 40px;
+            border-radius: 3px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        .toc-h3:hover {
+            background: #f8f8f8;
+        }
+
+        .toc-h4 {
+            color: #888;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 1px 6px 1px 60px;
+            border-radius: 2px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        .toc-h4:hover {
+            background: #fafafa;
+        }
+
+        .toc-children {
+            margin-left: 0;
+            list-style: none;
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .toc-children.hidden {
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .toc-item.active {
+            background: #e8f4ff;
+            border-left: 3px solid #2196F3;
+            margin-left: -8px;
+            padding-left: 5px;
+        }
+
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+            background: #fff;
+        }
+
+        .content {
+            max-width: 900px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin: 40px 0 20px;
+            color: #222;
+            border-bottom: 3px solid #2196F3;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 22px;
+            margin: 35px 0 15px;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 8px;
+            scroll-margin-top: 60px;
+        }
+
+        h3 {
+            font-size: 18px;
+            margin: 25px 0 12px;
+            color: #444;
+            scroll-margin-top: 60px;
+        }
+
+        p {
+            margin: 12px 0;
+            line-height: 1.7;
+            color: #444;
+        }
+
+        blockquote {
+            border-left: 4px solid #2196F3;
+            background: #f0f8ff;
+            padding: 12px 16px;
+            margin: 16px 0;
+            border-radius: 2px;
+            font-style: italic;
+            color: #333;
+        }
+
+        blockquote strong {
+            font-style: normal;
+            color: #1976D2;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #222;
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Monaco", "Courier New", monospace;
+            font-size: 12px;
+            color: #c7254e;
+        }
+
+        pre {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px 16px;
+            overflow-x: auto;
+            margin: 12px 0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: #333;
+        }
+
+        ul, ol {
+            margin: 12px 0 12px 20px;
+            line-height: 1.8;
+        }
+
+        li {
+            margin: 6px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .error {
+            background: #ffebee;
+            border: 1px solid #ef5350;
+            color: #c62828;
+            padding: 16px;
+            border-radius: 4px;
+            margin: 20px;
+        }
+
+        .toc-item-highlight {
+            animation: highlight 0.6s ease-out;
+        }
+
+        @keyframes highlight {
+            0% { background: #fff59d; }
+            100% { background: transparent; }
+        }
+
+        hr {
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 40px 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2196F3;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: background 0.3s;
+        }
+
+        .back-to-top:hover {
+            background: #1976D2;
+        }
+
+        .back-to-top.show {
+            display: flex;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 240px;
+                padding: 15px;
+            }
+
+            .main {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #ddd;
+            }
+
+            .main {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            h2 {
+                font-size: 16px;
+            }
+
+            h3 {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Nawigacja</h2>
+        <input type="text" class="search-box" id="searchInput" placeholder="Szukaj nagłówków...">
+        <ul class="toc" id="toc"></ul>
+    </div>
+
+    <div class="main">
+        <div class="loading" id="loadingMsg">Ładowanie game_mechanics.md...</div>
+        <div class="content" id="content"></div>
+    </div>
+
+    <div class="back-to-top" id="backToTop">↑</div>
+
+    <script>
+        const contentDiv = document.getElementById('content');
+        const tocDiv = document.getElementById('toc');
+        const loadingMsg = document.getElementById('loadingMsg');
+        const searchInput = document.getElementById('searchInput');
+        const backToTop = document.getElementById('backToTop');
+
+        let fullContent = '';
+        let tocEntries = [];
+
+        // Fetch and parse markdown
+        async function loadMarkdown() {
+            try {
+                const response = await fetch('game_mechanics.md');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const markdown = await response.text();
+                fullContent = markdown;
+                parseMarkdown(markdown);
+                loadingMsg.style.display = 'none';
+            } catch (error) {
+                loadingMsg.innerHTML = `<div class="error">Błąd ładowania pliku: ${error.message}</div>`;
+            }
+        }
+
+        function parseMarkdown(markdown) {
+            const lines = markdown.split('\n');
+            let html = '';
+            let currentH1 = '';
+
+            lines.forEach((line, idx) => {
+                const h1Match = line.match(/^# (.+)$/);
+                const h2Match = line.match(/^## (.+)$/);
+                const h3Match = line.match(/^### (.+)$/);
+
+                if (h1Match) {
+                    currentH1 = h1Match[1];
+                    const id = slugify(currentH1);
+                    html += `<h1 id="${id}">${escapeHtml(currentH1)}</h1>`;
+                    tocEntries.push({ level: 1, text: currentH1, id });
+                } else if (h2Match) {
+                    const text = h2Match[1];
+                    const id = slugify(text);
+                    html += `<h2 id="${id}">${escapeHtml(text)}</h2>`;
+                    tocEntries.push({ level: 2, text, id, parent: currentH1 });
+                } else if (h3Match) {
+                    const text = h3Match[1];
+                    const id = slugify(text);
+                    html += `<h3 id="${id}">${escapeHtml(text)}</h3>`;
+                    tocEntries.push({ level: 3, text, id, parent: currentH1 });
+                } else if (line.match(/^>/)) {
+                    html += processBlockquote(line);
+                } else if (line.match(/^\|/) && line.includes('|')) {
+                    html += `<div style="overflow-x: auto;">${line}</div>`;
+                } else if (line.match(/^---/)) {
+                    html += '<hr>';
+                } else if (line.trim()) {
+                    html += `<p>${escapeHtml(line)}</p>`;
+                }
+            });
+
+            contentDiv.innerHTML = html;
+            buildToc();
+        }
+
+        function processBlockquote(line) {
+            const text = line.replace(/^>\s*/, '').trim();
+            return `<blockquote>${escapeHtml(text)}</blockquote>`;
+        }
+
+        function slugify(text) {
+            return text
+                .toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .substring(0, 50);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function buildToc() {
+            tocDiv.innerHTML = '';
+
+            tocEntries.forEach(entry => {
+                const li = document.createElement('li');
+                li.className = `toc-item toc-h${entry.level}`;
+                li.textContent = entry.text;
+                li.dataset.id = entry.id;
+
+                li.addEventListener('click', () => {
+                    const element = document.getElementById(entry.id);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth' });
+                        li.classList.add('active');
+                        setTimeout(() => li.classList.remove('active'), 1000);
+                    }
+                });
+
+                tocDiv.appendChild(li);
+            });
+
+            updateActiveToc();
+        }
+
+        function updateActiveToc() {
+            const items = document.querySelectorAll('.toc-item');
+            const headings = document.querySelectorAll('h1, h2, h3');
+
+            window.addEventListener('scroll', () => {
+                let current = '';
+                headings.forEach(heading => {
+                    if (heading.offsetTop <= window.scrollY + 100) {
+                        current = heading.id;
+                    }
+                });
+
+                items.forEach(item => {
+                    item.classList.toggle('toc-item-highlight', item.dataset.id === current);
+                });
+            });
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.toc-item');
+
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+
+        window.addEventListener('scroll', () => {
+            backToTop.classList.toggle('show', window.scrollY > 300);
+        });
+
+        backToTop.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        loadMarkdown();
+    </script>
+</body>
+</html>

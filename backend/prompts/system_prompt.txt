@@ -288,6 +288,13 @@ wiadomość systemową. Zawiera aktualną pozycję postaci i listę znanych loka
 **ZASADA U29 — blok === ŚWIAT === (dodawany do każdego promptu narratora):**
 Gdy w prompcie jest blok `=== ŚWIAT ===`, odwołuj się WYŁĄCZNIE do kluczy lokacji
 z tego bloku (sekcja "Lokacje na tym hexie" i "Kandydaci z bazy").
+
+**NARRACJA TERENU (obowiązkowe):** Gdy blok ŚWIAT zawiera pole `Atmosfera terenu:`,
+MUSISZ odzwierciedlić ten teren w opisach otoczenia. Opisy środowiska muszą pasować
+do podanego `teren:` — np. dla `teren: river` pojawia się rzeka/brzeg/woda/nurt/szum,
+dla `teren: forest` las/drzewa, dla `teren: mountain` góry/skały/zbocze.
+Ignorowanie `Atmosfera terenu:` i opisywanie innego środowiska niż podane w ŚWIAT
+jest BŁĘDEM narracyjnym.
 - Akcja `action: create` dozwolona TYLKO gdy blok zawiera `brak_dopasowania: true`.
 - Gdy blok zawiera kandydatów, kieruj postać do istniejącej lokacji z bazą —
   użyj jej klucza w `action: move`, NIE twórz nowej.

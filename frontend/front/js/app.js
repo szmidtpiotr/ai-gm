@@ -3259,7 +3259,9 @@ function renderSuggestedActions(actions) {
     container.style.display = 'flex';
     actions.forEach((a, i) => {
         const btn = document.createElement('button');
-        btn.className = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        let cls = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        if (a.type === 'travel') cls += ' suggested-action-btn--travel';
+        btn.className = cls;
         btn.style.setProperty('--i', i);
         btn.textContent = (a.icon ? a.icon + ' ' : '') + a.label;
         if (!a.enabled) {
@@ -3270,6 +3272,22 @@ function renderSuggestedActions(actions) {
         }
         container.appendChild(btn);
     });
+}
+
+// U32: Show/hide anti-stuck travel banner (level 0=hidden, 1=pills only, 2=banner)
+let _travelEscalationLevel = 0;
+function renderTravelEscalation(level) {
+    _travelEscalationLevel = level || 0;
+    const banner = document.getElementById('travel-stuck-banner');
+    if (!banner) return;
+    if (_travelEscalationLevel >= 2) {
+        banner.innerHTML = `
+          <span class="travel-stuck-banner__text">🗺 Świat czeka — może czas ruszyć w drogę?</span>
+          <button type="button" class="travel-stuck-banner__dismiss" title="Zamknij" onclick="this.closest('#travel-stuck-banner').hidden=true">✕</button>`;
+        banner.hidden = false;
+    } else {
+        banner.hidden = true;
+    }
 }
 
 // C10: Render quest chips in the header quest bar
@@ -3322,7 +3340,77 @@ async function sendStructuredAction(actionStr, displayLabel) {
         return;
     }
 
+    // U32: TRAVEL:q:r — mechanical hex travel from pill button (POST /travel, same as map click)
+    if (actionStr.startsWith('TRAVEL:')) {
+        const parts = actionStr.split(':');
+        if (parts.length === 3) {
+            const tq = parseInt(parts[1], 10);
+            const tr = parseInt(parts[2], 10);
+            if (!isNaN(tq) && !isNaN(tr)) {
+                await _executeTravelFromPill(tq, tr, displayLabel);
+                return;
+            }
+        }
+    }
+
     await sendTurn(actionStr, 'structured', displayLabel);
+}
+
+// U32: Execute hex travel from a travel pill button (mirrors _wmExecuteTravel but no map modal)
+async function _executeTravelFromPill(q, r, label) {
+    if (!currentCampaignId || !characterData?.id) return;
+    renderSuggestedActions([]);
+    renderTravelEscalation(0);
+    try {
+        const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/travel`, {
+            character_id: characterData.id,
+            target_hex: { q, r },
+        });
+
+        if (response.clock) renderClock(response.clock);
+
+        const hours = response.total_hours || 0;
+        const arrivedData = response.hex_data || {};
+        const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || '';
+        const rawLabel = label && !label.match(/^[→📜]\s*\([-\d]+,[-\d]+\)$/) ? label.replace(/^[→📜\s]+/, '').replace(/\s*\(\d+h\)$/, '').trim() : null;
+        const destLabel = rawLabel || arrivedData.label || null;
+
+        const cinTip = (response.onboarding_cards || []).find(c => c.mechanic_key === 'world_map') || null;
+        await _showTravelCinematic({
+            hexType: arrivedData.hex_type,
+            destLabel: destLabel || hexTypeName || null,
+            atmo: arrivedData.atmosphere,
+            tip: cinTip,
+        });
+
+        let prose;
+        if (hours > 0) {
+            const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+            const hWord = hours === 1 ? 'godzinę' : (hours < 5 ? 'godziny' : 'godzin');
+            prose = destLabel
+                ? `Dotarłeś do <strong>${escapeHtml(destLabel)}</strong>. Droga zajęła ${hStr} ${hWord}.`
+                : `Dotarłeś do celu. Droga zajęła ${hStr} ${hWord}.`;
+        } else {
+            prose = `Przenosisz się${destLabel ? ` do ${escapeHtml(destLabel)}` : ''}.`;
+        }
+        appendMessage({ role: 'assistant', content: prose, created_at: new Date() });
+        scrollToBottom();
+
+        const enc = response.encounter;
+        if (enc && enc.enemy_key) {
+            appendMessage({
+                role: 'system',
+                content: `⚔️ Napotkałeś wroga na szlaku: <strong>${escapeHtml(enc.enemy_label || enc.enemy_key)}</strong>!`,
+                created_at: new Date(),
+            });
+        }
+
+        // Refresh character + map
+        await refreshCharacterData();
+        if (typeof updateWorldMap === 'function') updateWorldMap();
+    } catch (e) {
+        showToast(`Błąd podróży: ${e.message || e}`, 'error');
+    }
 }
 
 // Stage 2B R4: client-side handler for the "Rozbij obóz" suggested action.
@@ -3424,6 +3512,7 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         _suggestedActions = result.suggested_actions || _suggestedActions || [];
         renderSuggestedActions(_suggestedActions);
+        renderTravelEscalation(result.travel_escalation_level || 0);
         if (result.active_quests) renderQuestBar(result.active_quests);
 
         await refreshCharacterData();
@@ -3498,10 +3587,11 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
 
         if (payload.startsWith('[DONE]')) {
             const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
-            if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
-            if (meta.current_location)   result.current_location   = meta.current_location;
-            if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
-            if (meta.active_quests)      result.active_quests      = meta.active_quests;
+            if (meta.skill_test_pending)       result.skill_test_pending       = meta.skill_test_pending;
+            if (meta.current_location)         result.current_location         = meta.current_location;
+            if (meta.suggested_actions)        result.suggested_actions        = meta.suggested_actions;
+            if (meta.active_quests)            result.active_quests            = meta.active_quests;
+            if (meta.travel_escalation_level != null) result.travel_escalation_level = meta.travel_escalation_level;
             if (meta.clock)              renderClock(meta.clock);
             if (meta.onboarding_cards)   result.onboarding_cards   = meta.onboarding_cards;
             if (meta.narrative_append)   result.narrative_append   = meta.narrative_append;
@@ -3855,6 +3945,7 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             _suggestedActions = response.suggested_actions;
             renderSuggestedActions(_suggestedActions);
         }
+        renderTravelEscalation(response.travel_escalation_level || 0);
         if (response.active_quests) renderQuestBar(response.active_quests);
     } catch (err) {
         popupEl?.remove();
@@ -9096,6 +9187,75 @@ function _wmOnHexClick(e) {
   confirm.removeAttribute('hidden');
 }
 
+const _TERRAIN_THEMES = {
+  plains:    { g: 'linear-gradient(160deg,#3A2200 0%,#6B4400 35%,#9A6A18 65%,#5A3800 100%)', icon: '🌾' },
+  forest:    { g: 'linear-gradient(160deg,#050E05 0%,#0F250F 35%,#1E421E 65%,#102010 100%)', icon: '🌲' },
+  hills:     { g: 'linear-gradient(160deg,#1A1604 0%,#3A3210 35%,#5C5220 65%,#2E2808 100%)', icon: '⛰️' },
+  mountains: { g: 'linear-gradient(160deg,#0A0E16 0%,#14202E 35%,#1E3044 65%,#0E1A28 100%)', icon: '🏔️' },
+  swamp:     { g: 'linear-gradient(160deg,#060E06 0%,#0E2010 35%,#183A18 65%,#0A1A0C 100%)', icon: '🌿' },
+  ruins:     { g: 'linear-gradient(160deg,#160806 0%,#2E1008 35%,#4A2214 65%,#2A1008 100%)', icon: '🏚️' },
+  dungeon:   { g: 'linear-gradient(160deg,#050508 0%,#0C0C14 35%,#14141E 65%,#080812 100%)', icon: '🕯️' },
+  road:      { g: 'linear-gradient(160deg,#180E04 0%,#2E1E08 35%,#4A3214 65%,#2A1C08 100%)', icon: '🛤️' },
+  town:      { g: 'linear-gradient(160deg,#200A04 0%,#401808 35%,#6A3018 65%,#401808 100%)', icon: '🏘️' },
+  castle:    { g: 'linear-gradient(160deg,#060610 0%,#10101C 35%,#1A1A2C 65%,#0C0C18 100%)', icon: '🏰' },
+  cave:      { g: 'linear-gradient(160deg,#040404 0%,#0A0A0A 35%,#121210 65%,#060604 100%)', icon: '🪨' },
+  river:     { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🌊' },
+  water:     { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🏞️' },
+  desert:    { g: 'linear-gradient(160deg,#2A1A04 0%,#4E3408 35%,#7A5618 65%,#3E2A08 100%)', icon: '🏜️' },
+  tundra:    { g: 'linear-gradient(160deg,#0E1418 0%,#1E2A30 35%,#34464E 65%,#16242A 100%)', icon: '❄️' },
+  coast:     { g: 'linear-gradient(160deg,#06121C 0%,#0E2434 35%,#1C3A50 65%,#0A1E30 100%)', icon: '🌅' },
+  volcanic:  { g: 'linear-gradient(160deg,#140404 0%,#2E0A06 35%,#52160A 65%,#280806 100%)', icon: '🌋' },
+};
+const _TERRAIN_DEFAULT = { g: 'linear-gradient(160deg,#0A0810 0%,#16141E 50%,#201C2A 100%)', icon: '🗺️' };
+let _travelCinematicTimer = null;
+
+function _showTravelCinematic({ hexType, destLabel, atmo, tip }) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('travel-cinematic');
+    if (!overlay) { resolve(); return; }
+
+    const theme = _TERRAIN_THEMES[hexType] || _TERRAIN_DEFAULT;
+    document.getElementById('travel-cin-bg').style.background = theme.g;
+    document.getElementById('travel-cin-icon').textContent = theme.icon;
+    document.getElementById('travel-cin-title').textContent = destLabel || 'Nieznane miejsce';
+
+    const atmoEl = document.getElementById('travel-cin-atmo');
+    atmoEl.textContent = atmo || '';
+    atmoEl.style.display = atmo ? '' : 'none';
+
+    const tipEl = document.getElementById('travel-cin-tip');
+    if (tip) {
+      document.getElementById('travel-cin-tip-title').textContent = tip.title || '';
+      document.getElementById('travel-cin-tip-body').textContent = tip.content || tip.body || '';
+      tipEl.removeAttribute('hidden');
+    } else {
+      tipEl.setAttribute('hidden', '');
+    }
+
+    overlay.removeAttribute('hidden');
+    requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('travel-cin--visible')));
+
+    const bar = document.getElementById('travel-cin-bar');
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      bar.style.transition = 'width 15s linear';
+      bar.style.width = '100%';
+    }));
+
+    const done = () => {
+      clearTimeout(_travelCinematicTimer);
+      overlay.removeEventListener('click', done);
+      overlay.classList.remove('travel-cin--visible');
+      setTimeout(() => { overlay.setAttribute('hidden', ''); resolve(); }, 500);
+    };
+
+    _travelCinematicTimer = setTimeout(done, 15000);
+    // 400ms grace so lingering map-tap doesn't instantly dismiss
+    setTimeout(() => overlay.addEventListener('click', done, { once: true }), 400);
+  });
+}
+
 async function _wmExecuteTravel() {
   const t = _wmap.pendingTravel;
   if (!t) return;
@@ -9125,14 +9285,17 @@ async function _wmExecuteTravel() {
     const rawLabel = t.label && !t.label.match(/^\([-\d]+,[-\d]+\)$/) ? t.label : null;
     const destLabel = rawLabel || arrivedData.label || null;
 
-    // Travel animation: brief walking indicator then message
-    const travelAnim = document.createElement('div');
-    travelAnim.className = 'chat-bubble chat-bubble--system';
-    travelAnim.innerHTML = `<div class="chat-bubble__content" style="display:flex;align-items:center;gap:8px"><span style="animation:pulse 0.8s infinite">🚶</span> <em>Podróżujesz…</em></div>`;
-    elements.chatMessages.appendChild(travelAnim);
-    scrollToBottom();
-    await new Promise(r => setTimeout(r, 900));
-    travelAnim.remove();
+    // Wait for map slide-out (280ms), then show full-screen travel cinematic
+    await new Promise(r => setTimeout(r, 350));
+    // Pass onboarding tip if backend returned one (world_map card first travel)
+    const cinTip = (response.onboarding_cards || []).find(c => c.mechanic_key === 'world_map') || null;
+    await _showTravelCinematic({
+      hexType: arrivedData.hex_type,
+      // Hex labels are usually empty — fall back to terrain name (Las/Rzeka/…)
+      destLabel: destLabel || hexTypeName || null,
+      atmo: arrivedData.atmosphere,
+      tip: cinTip,
+    });
 
     // Arrival message
     let prose;

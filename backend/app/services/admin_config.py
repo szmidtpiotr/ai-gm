@@ -1,9 +1,24 @@
 import json
 import re
 import sqlite3
+from pathlib import Path
 
 
 DB_PATH = "/data/ai_gm.db"
+
+# U10 — effect_schema.json = pojedyncze źródło prawdy formatu effect_json.
+# Walidator wczytuje enumy stąd; literały poniżej to fallback gdy plik brak.
+_EFFECT_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "effect_schema.json"
+
+
+def _load_effect_schema() -> dict:
+    try:
+        return json.loads(_EFFECT_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+_EFFECT_SCHEMA = _load_effect_schema()
 KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 DAMAGE_DIE_RE = re.compile(r"^\d*d\d+$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
@@ -14,13 +29,14 @@ ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
 ALLOWED_TIERS = {"weak", "standard", "elite", "boss"}
 ALLOWED_EFFECT_TYPES = {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"}
 ALLOWED_EFFECT_TARGETS = {"self", "ally", "any"}
-ALLOWED_EFFECT_JSON_CATEGORIES = {
+# Enumy effect_json — wczytane z effect_schema.json (single source); fallback gdy plik brak.
+ALLOWED_EFFECT_JSON_CATEGORIES = set(_EFFECT_SCHEMA.get("categories") or {
     "character_condition",
     "gear_bonus",
     "consumable_immediate",
     "aura",
-}
-ALLOWED_EFFECT_JSON_TYPES = {
+})
+ALLOWED_EFFECT_JSON_TYPES = set(_EFFECT_SCHEMA.get("effect_types") or {
     "periodic_save",
     "static_stat_modifier",
     "heal_hp",
@@ -33,23 +49,31 @@ ALLOWED_EFFECT_JSON_TYPES = {
     "damage_bonus",
     "heal_on_hit",
     "ac_bonus",
+})
+ALLOWED_EFFECT_JSON_TICKS = set(_EFFECT_SCHEMA.get("ticks") or {"start_turn", "each_round", "on_use"})
+# 7 statystyk (U10: LCK dodane — kontrakt 7 stat z CLAUDE.md). Porównanie po upper().
+ALLOWED_EFFECT_JSON_STATS = set(_EFFECT_SCHEMA.get("stats") or {"STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"})
+# U10 — cele pochodne dla static_stat_modifier (ac/attack_bonus/damage_bonus/initiative). Porównanie po lower().
+ALLOWED_EFFECT_JSON_STAT_TARGETS = {
+    str(s).strip().lower() for s in (_EFFECT_SCHEMA.get("stat_targets") or
+    {"ac", "attack_bonus", "damage_bonus", "initiative"})
 }
-ALLOWED_EFFECT_JSON_TICKS = {"start_turn", "each_round", "on_use"}
-ALLOWED_EFFECT_JSON_STATS = {"STR", "DEX", "CON", "INT", "WIS", "CHA"}
-_EFFECT_JSON_TOP_LEVEL_KEYS = {"schema_version", "effect_category", "effects"}
-_EFFECT_JSON_EFFECT_KEYS = {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires", "duration_rounds"}
+_EFFECT_JSON_TOP_LEVEL_KEYS = set(_EFFECT_SCHEMA.get("top_level_keys") or {"schema_version", "effect_category", "effects"})
+_EFFECT_JSON_EFFECT_KEYS = set(_EFFECT_SCHEMA.get("effect_keys") or {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires", "duration_rounds"})
 _EFFECT_JSON_CATEGORY_TYPES = {
-    "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
-    "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus", "heal_on_hit", "ac_bonus", "apply_condition"},
-    "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
-    "aura": {
-        "periodic_save",
-        "static_stat_modifier",
-        "apply_condition",
-        "remove_condition",
-        "block_action",
-        "narrative_only",
-    },
+    cat: set(types) for cat, types in (_EFFECT_SCHEMA.get("category_types") or {
+        "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
+        "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus", "heal_on_hit", "ac_bonus", "apply_condition"},
+        "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
+        "aura": {
+            "periodic_save",
+            "static_stat_modifier",
+            "apply_condition",
+            "remove_condition",
+            "block_action",
+            "narrative_only",
+        },
+    }).items()
 }
 
 
@@ -198,9 +222,11 @@ def validate_effect_json_payload(payload: object) -> list[str]:
 
         stat = effect.get("stat")
         if stat is not None:
-            stat_norm = str(stat).strip().upper()
-            if stat_norm not in ALLOWED_EFFECT_JSON_STATS:
-                errors.append(f"{prefix}.stat must be one of: {', '.join(sorted(ALLOWED_EFFECT_JSON_STATS))}")
+            raw_stat = str(stat).strip()
+            # Bazowe statystyki porównujemy po upper(), cele pochodne po lower().
+            if raw_stat.upper() not in ALLOWED_EFFECT_JSON_STATS and raw_stat.lower() not in ALLOWED_EFFECT_JSON_STAT_TARGETS:
+                allowed = sorted(ALLOWED_EFFECT_JSON_STATS) + sorted(ALLOWED_EFFECT_JSON_STAT_TARGETS)
+                errors.append(f"{prefix}.stat must be one of: {', '.join(allowed)}")
 
         tick = effect.get("tick")
         if tick is not None:

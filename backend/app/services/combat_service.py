@@ -2339,6 +2339,21 @@ def resolve_attack(
                             )
                     out["loot"] = loot
                     loot_pool_accum.extend(loot)
+                    # #550: Auto-complete kill_enemy beats — resolve_attack bypasses turn_pipeline
+                    try:
+                        from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+                        _enemy_label = str(enemy.get("name") or enemy.get("enemy_key") or ek or "")
+                        if _enemy_label:
+                            _tn_beat = conn.execute(
+                                "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns"
+                                " WHERE campaign_id = ?",
+                                (campaign_id,),
+                            ).fetchone()[0]
+                            auto_complete_beats_by_event(
+                                campaign_id, "kill_enemy", _enemy_label, _tn_beat, conn
+                            )
+                    except Exception:
+                        pass
                     cid_death = int(row["id"])
                     death_tn = _next_combat_log_sequence(conn, cid_death)
                     ename = str(enemy.get("name") or card_name or "Wróg")

@@ -1,0 +1,29 @@
+{
+  "$comment": "U10 — Effect schema lockdown. POJEDYNCZE ŹRÓDŁO PRAWDY formatu effect_json. Decyzja Piotra 2026-06-13: wariant C (hybryda) — zachowujemy nazwy typów z działającego kodu (periodic_save/static_stat_modifier/block_action), NIE przyjmujemy nazw ze specu (damage_over_time/stat_mod/skip_turn). Mapa: damage_over_time->periodic_save, stat_mod->static_stat_modifier, skip_turn->block_action. Walidator admin_config.validate_effect_json_payload wczytuje enumy z tego pliku. Zmiana tu = zmiana kontraktu w całej grze.",
+  "schema_version": 1,
+  "top_level_keys": ["schema_version", "effect_category", "effects"],
+  "effect_keys": ["type", "condition_key", "dc_key", "stat", "value", "tick", "expires", "duration_rounds"],
+  "categories": ["character_condition", "gear_bonus", "consumable_immediate", "aura"],
+  "effect_types": [
+    "periodic_save",
+    "static_stat_modifier",
+    "heal_hp",
+    "restore_mana",
+    "apply_condition",
+    "remove_condition",
+    "block_action",
+    "narrative_only",
+    "damage_bonus",
+    "heal_on_hit",
+    "ac_bonus"
+  ],
+  "ticks": ["start_turn", "each_round", "on_use"],
+  "stats": ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"],
+  "stat_targets": ["ac", "attack_bonus", "damage_bonus", "initiative"],
+  "category_types": {
+    "character_condition": ["periodic_save", "static_stat_modifier", "block_action", "narrative_only"],
+    "gear_bonus": ["static_stat_modifier", "narrative_only", "damage_bonus", "heal_on_hit", "ac_bonus", "apply_condition"],
+    "consumable_immediate": ["heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"],
+    "aura": ["periodic_save", "static_stat_modifier", "apply_condition", "remove_condition", "block_action", "narrative_only"]
+  }
+}

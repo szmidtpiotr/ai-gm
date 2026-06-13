@@ -600,7 +600,9 @@ Dostępne typy efektów (effect_category="gear_bonus"):
   ac_bonus      — bonus do Klasy Pancerza z broni/przedmiotu (np. parująca broni, tarcza-miecz)
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"ac_bonus","value":1}]}
   static_stat_modifier — modyfikator statystyki; wymaga pola "stat"
+                  Dozwolone "stat": 7 statystyk STR|DEX|CON|INT|WIS|CHA|LCK ORAZ cele pochodne ac|attack_bonus|damage_bonus|initiative
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"STR","value":2}]}
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"LCK","value":1}]}
   narrative_only — efekt narracyjny bez mechaniki (opis dla GM)
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"narrative_only"}]}
 

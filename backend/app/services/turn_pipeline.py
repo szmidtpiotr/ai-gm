@@ -789,7 +789,9 @@ def _auto_complete_beats_by_mechanic(
 
     elif action_type == "DIALOGUE":
         npc = context.get("target_npc") or {}
-        target = npc.get("label") or npc.get("key", "")
+        # #550: fall back to result npc fields when context NPC lookup failed (key mismatch)
+        target = (npc.get("label") or npc.get("key") or
+                  result.get("npc_name") or result.get("npc_key") or "")
         if target:
             auto_complete_beats_by_event(campaign_id, "talk_to_npc", target, turn_number, conn)
 

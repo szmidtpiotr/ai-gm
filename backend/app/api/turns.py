@@ -4290,6 +4290,18 @@ def create_turn(
                 _xp_total += grant_first_location_visit(
                     conn, _xp_char_id, campaign_id, _loc_r5["key"], _xp_turn
                 )
+            # HF-11 (#553): talk_to_npc beat auto-complete in the live narrative tor
+            # (process_v2_turn's DIALOGUE hook is never reached). Detect NPC engagement
+            # from the button DIALOGUE key or a free-text scene-NPC keyword match.
+            try:
+                from app.services.campaign_plan_runtime import auto_complete_talk_to_npc
+                _dlg_key = _dlg_m.group(1).strip() if _dlg_m else None
+                _loc_key_for_beat = _loc_r5["key"] if _loc_r5 else None
+                auto_complete_talk_to_npc(
+                    campaign_id, text, _loc_key_for_beat, _dlg_key, _xp_turn, conn
+                )
+            except Exception as _b11_err:
+                logger.warning("talk_beat_autocomplete_error", error=str(_b11_err))
             if _xp_total:
                 conn.commit()
         except Exception as _xs_err:
@@ -4543,6 +4555,10 @@ def create_turn(
         except Exception as _sa_err:
             logger.warning("suggested_actions_build_error", error=str(_sa_err))
 
+        # U32: travel escalation level (0=none, 1=highlight pills, 2=banner)
+        _turns_stale = int(_sf_for_sa.get("turns_at_location", 0) or 0)
+        _travel_escalation_level = 2 if _turns_stale >= 10 else (1 if _turns_stale >= 5 else 0)
+
         out: dict = {
             "id": log["id"],
             "campaign_id": log["campaign_id"],
@@ -4553,6 +4569,7 @@ def create_turn(
             "prose": clean_assistant,
             "turn_id": turn_id,
             "suggested_actions": _suggested_actions,
+            "travel_escalation_level": _travel_escalation_level,
         }
         if _skill_pending_narrator:
             out["skill_test_pending"] = _skill_pending_narrator
@@ -5760,6 +5777,17 @@ def create_turn_stream(
                             _xp_total2 += grant_first_location_visit(
                                 save_conn, _xp_char_id2, campaign_id_val, _loc_r52["key"], _xp_turn2
                             )
+                        # HF-11 (#553): talk_to_npc beat auto-complete (streaming tor)
+                        try:
+                            from app.services.campaign_plan_runtime import auto_complete_talk_to_npc
+                            _dlg_key2 = _dlg_m2.group(1).strip() if _dlg_m2 else None
+                            _loc_key_for_beat2 = _loc_r52["key"] if _loc_r52 else None
+                            auto_complete_talk_to_npc(
+                                campaign_id_val, user_text_val, _loc_key_for_beat2,
+                                _dlg_key2, _xp_turn2, save_conn
+                            )
+                        except Exception as _b11_err2:
+                            logger.warning("talk_beat_autocomplete_stream_error", error=str(_b11_err2))
                         if _xp_total2:
                             save_conn.commit()
                     except Exception as _xs_err2:
@@ -5926,6 +5954,9 @@ def create_turn_stream(
                         session_flags=_sf_sa,
                         llm_suggested=_llm_sa_s,
                     )
+                    # U32: travel escalation level in streaming response
+                    _turns_stale_s = int(_sf_sa.get("turns_at_location", 0) or 0)
+                    done_payload["travel_escalation_level"] = 2 if _turns_stale_s >= 10 else (1 if _turns_stale_s >= 5 else 0)
                 finally:
                     _sa_conn.close()
             except Exception:
@@ -6374,6 +6405,7 @@ def resolve_skill_test_endpoint(
             logger.warning("world_state_snapshot_skilltest_error", error=str(_ws_err_st))
 
         _sa_after: list[dict] = []
+        _travel_esc_st = 0
         try:
             _sf_st: dict = {}
             _sf_st_row = conn.execute(
@@ -6389,6 +6421,8 @@ def resolve_skill_test_endpoint(
                 game_state=_sf_st.get("state", "NARRATIVE"),
                 session_flags=_sf_st,
             )
+            _turns_stale_st = int(_sf_st.get("turns_at_location", 0) or 0)
+            _travel_esc_st = 2 if _turns_stale_st >= 10 else (1 if _turns_stale_st >= 5 else 0)
         except Exception:
             pass
 
@@ -6397,6 +6431,7 @@ def resolve_skill_test_endpoint(
             "skill_test_result": result,
             "turn_number": turn_number,
             "suggested_actions": _sa_after,
+            "travel_escalation_level": _travel_esc_st,
             "state": {
                 "character_hp": char_sheet.get("current_hp"),
                 "character_max_hp": char_sheet.get("max_hp"),
@@ -6654,6 +6689,55 @@ def player_travel(campaign_id: int, payload: TravelPayload):
             (dest_q, dest_r),
         ).fetchone()
         result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
+
+        # U31: exit old scene, load new scene if destination hex has a location
+        try:
+            from app.services.world_state_service import enter_location_scene, exit_location_scene
+            exit_location_scene(campaign_id)
+            dest_location_key = result.get("hex_data", {}).get("location_key")
+            if dest_location_key:
+                scene_result = enter_location_scene(campaign_id, dest_location_key)
+                result["scene_loaded"] = scene_result
+        except Exception as _scene_err:
+            logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
+
+        # Record map travel as a narrative turn — without this the LLM conversation
+        # history has no trace of the move and the narrator keeps describing the
+        # previous location/terrain.
+        if result.get("ok"):
+            try:
+                _hd = result.get("hex_data") or {}
+                _arr = result.get("arrived_hex") or {}
+                _terrain = _hd.get("hex_type") or "nieznany"
+                _tcfg = conn.execute(
+                    "SELECT label FROM hex_type_config WHERE hex_type = ?", (_terrain,)
+                ).fetchone()
+                _terrain_pl = (_tcfg["label"] if _tcfg else None) or _terrain
+                _place = _hd.get("label") or ""
+                _hours = result.get("total_hours") or 0
+                _narr = f"Podróżujesz przez świat i docierasz do nowego miejsca. Teren: {_terrain_pl}."
+                if _place:
+                    _narr += f" Miejsce: {_place}."
+                if _hours:
+                    _narr += f" Droga zajęła {_hours} h."
+                _tn_row = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number),0)+1 AS n FROM campaign_turns WHERE campaign_id = ?",
+                    (campaign_id,),
+                ).fetchone()
+                conn.execute(
+                    "INSERT INTO campaign_turns (campaign_id, character_id, user_text, route, assistant_text, turn_number) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (
+                        campaign_id, character_id,
+                        "[Podróż mapą — przemieszczam się na nowy teren]",
+                        "narrative",
+                        _j.dumps({"narrative": _narr}, ensure_ascii=False),
+                        int(_tn_row["n"]),
+                    ),
+                )
+                conn.commit()
+            except Exception as _trec_err:
+                logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
 
         return result
     finally:

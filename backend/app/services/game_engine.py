@@ -526,6 +526,37 @@ def build_narrative_messages(
         _inject_location_llm_context(conn, int(campaign["id"]), messages)
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
         _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
+
+        # U29 fix: inject === ŚWIAT === block (hex terrain + locations) into the
+        # streaming/narrative path. Inserted as a SEPARATE system message just before
+        # the final user message — appended to the 40k-char head system prompt it gets
+        # buried and 8 turns of story continuity win over it.
+        if messages:
+            try:
+                _sw_row = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id = ? "
+                    "ORDER BY created_at DESC, id DESC LIMIT 1",
+                    (int(campaign["id"]),),
+                ).fetchone()
+                _sw_flags = json.loads((_sw_row["session_flags"] if _sw_row else None) or "{}")
+                from app.services.location_context_injector import build_swiat_block
+                _swiat = build_swiat_block(conn, _sw_flags, user_text)
+                if _swiat:
+                    _swiat_msg = {
+                        "role": "system",
+                        "content": (
+                            f"{_swiat}\n\n"
+                            "POWYŻSZY BLOK ŚWIAT TO AKTUALNA POZYCJA BOHATERA — nadrzędny "
+                            "wobec wcześniejszych tur. Jeśli teren różni się od miejsca "
+                            "opisywanego w poprzednich turach, bohater PRZEMIEŚCIŁ SIĘ: "
+                            "opisuj OBECNY teren (zgodnie z `teren:` i `Atmosfera terenu:`), "
+                            "nie kontynuuj scenerii ze starych tur."
+                        ),
+                    }
+                    _ins_at = len(messages) - 1 if messages[-1].get("role") == "user" else len(messages)
+                    messages.insert(_ins_at, _swiat_msg)
+            except Exception as _sw_err:
+                logger.warning("swiat_block_inject_failed", error=str(_sw_err))
         if character and messages:
             from app.services.inventory_context_service import build_inventory_block
             inv_block = build_inventory_block(conn, int(character["id"]))
