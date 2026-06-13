@@ -72,122 +72,99 @@ def _load_shop_npc_by_key(conn: sqlite3.Connection, npc_key: str) -> sqlite3.Row
 
 
 def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> dict[str, Any] | None:
+    """U11b (#557): czyta z game_items zamiast starych tabel.
+
+    item_type ('weapon'/'consumable'/'item'/'armor') używany jako hint — szukamy po kluczu.
+    """
     t = str(item_type or "").strip().lower()
     k = str(item_key or "").strip()
     if not k:
         return None
 
-    if t == "weapon":
-        row = conn.execute(
-            """
-            SELECT key, label, description,
-                   COALESCE(price_gp, value_gp, 0) AS effective_price,
-                   COALESCE(min_level, 1) AS min_level, location_tags
-            FROM game_config_weapons
-            WHERE key = ? AND COALESCE(is_active, 1) = 1
-            """,
-            (k,),
-        ).fetchone()
-        if not row:
-            return None
-        return {
-            "type": "weapon",
-            "key": row["key"],
-            "label": row["label"] or row["key"],
-            "description": row["description"] or "",
-            "value_gp": int(row["effective_price"] or 0),
-            "min_level": int(row["min_level"] or 1),
-            "location_tags": row["location_tags"],
-        }
-
-    if t == "consumable":
-        try:
-            row = conn.execute(
-                """
-                SELECT key, label, description,
-                       COALESCE(price_gp, value_gp, 0) AS effective_price, item_type,
-                       COALESCE(min_level, 1) AS min_level, location_tags
-                FROM game_config_items
-                WHERE key = ? AND COALESCE(is_active, 1) = 1
-                LIMIT 1
-                """,
-                (k,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            row = None
-        if row and str(row["item_type"] or "").strip().lower() == "consumable":
-            return {
-                "type": "consumable",
-                "key": row["key"],
-                "label": row["label"] or row["key"],
-                "description": row["description"] or "",
-                "value_gp": int(row["effective_price"] or 0),
-                "min_level": int(row["min_level"] or 1),
-                "location_tags": row["location_tags"],
-            }
-        row = conn.execute(
-            """
-            SELECT key, label, description,
-                   COALESCE(price_gp, base_price, 0) AS effective_price,
-                   COALESCE(min_level, 1) AS min_level, location_tags
-            FROM game_config_consumables
-            WHERE key = ? AND COALESCE(is_active, 1) = 1
-            """,
-            (k,),
-        ).fetchone()
-        if not row:
-            return None
-        return {
-            "type": "consumable",
-            "key": row["key"],
-            "label": row["label"] or row["key"],
-            "description": row["description"] or "",
-            "value_gp": int(row["effective_price"] or 0),
-            "min_level": int(row["min_level"] or 1),
-            "location_tags": row["location_tags"],
-        }
-
-    # item / armor / misc / quest (stored in game_config_items)
-    try:
-        row = conn.execute(
-            """
-            SELECT key, label, description,
-                   COALESCE(price_gp, value_gp, 0) AS effective_price, item_type,
-                   COALESCE(min_level, 1) AS min_level, location_tags
-            FROM game_config_items
-            WHERE key = ? AND COALESCE(is_active, 1) = 1
-            """,
-            (k,),
-        ).fetchone()
-        item_type_from_row = str(row["item_type"] or "").strip().lower() if row else ""
-    except sqlite3.OperationalError:
-        row = conn.execute(
-            """
-            SELECT key, label, description, COALESCE(price_gp, value_gp, 0) AS effective_price
-            FROM game_config_items
-            WHERE key = ? AND COALESCE(is_active, 1) = 1
-            """,
-            (k,),
-        ).fetchone()
-        item_type_from_row = ""
-    if not row:
-        return None
-    min_level_val = 1
-    location_tags_val = None
-    try:
-        min_level_val = int(row["min_level"] or 1)
-        location_tags_val = row["location_tags"]
-    except (IndexError, KeyError):
-        pass
-    return {
-        "type": (item_type_from_row or t or "item"),
-        "key": row["key"],
-        "label": row["label"] or row["key"],
-        "description": row["description"] or "",
-        "value_gp": int(row["effective_price"] or 0),
-        "min_level": min_level_val,
-        "location_tags": location_tags_val,
+    # Mapowanie item_type → kind w game_items
+    _KIND_MAP = {
+        "weapon": "weapon",
+        "consumable": "consumable",
+        "armor": "armor",
+        "item": "item",
     }
+    kind_hint = _KIND_MAP.get(t)
+
+    row = conn.execute(
+        """
+        SELECT key, label, description,
+               COALESCE(price_gp, 0) AS effective_price,
+               COALESCE(min_level, 1) AS min_level,
+               location_tags, kind,
+               json_extract(item_data, '$.item_type') AS item_type_raw
+        FROM game_items
+        WHERE key = ? AND is_active = 1
+        """,
+        (k,),
+    ).fetchone()
+
+    if row:
+        kind = str(row["kind"] or t or "item")
+        item_type_raw = str(row["item_type_raw"] or kind or "item")
+        resolved_type = kind if kind in ("weapon", "consumable", "armor") else (item_type_raw or t or "item")
+        return {
+            "type": resolved_type,
+            "key": row["key"],
+            "label": row["label"] or row["key"],
+            "description": row["description"] or "",
+            "value_gp": int(row["effective_price"] or 0),
+            "min_level": int(row["min_level"] or 1),
+            "location_tags": row["location_tags"],
+        }
+
+    # Fallback: stara tabela (dla itemów stworzonych przez LLM/admin nie backfillowanych — U11c naprawi)
+    if t == "weapon":
+        old = conn.execute(
+            """SELECT key, label, description, COALESCE(price_gp, value_gp, 0) AS effective_price,
+                      COALESCE(min_level, 1) AS min_level, location_tags
+               FROM game_config_weapons WHERE key = ? AND COALESCE(is_active, 1) = 1""",
+            (k,),
+        ).fetchone()
+        if old:
+            return {
+                "type": "weapon", "key": old["key"], "label": old["label"] or old["key"],
+                "description": old["description"] or "",
+                "value_gp": int(old["effective_price"] or 0),
+                "min_level": int(old["min_level"] or 1), "location_tags": old["location_tags"],
+            }
+    if t == "consumable":
+        old = conn.execute(
+            """SELECT key, label, description, COALESCE(price_gp, base_price, 0) AS effective_price,
+                      COALESCE(min_level, 1) AS min_level, location_tags
+               FROM game_config_consumables WHERE key = ? AND COALESCE(is_active, 1) = 1""",
+            (k,),
+        ).fetchone()
+        if old:
+            return {
+                "type": "consumable", "key": old["key"], "label": old["label"] or old["key"],
+                "description": old["description"] or "",
+                "value_gp": int(old["effective_price"] or 0),
+                "min_level": int(old["min_level"] or 1), "location_tags": old["location_tags"],
+            }
+    try:
+        old = conn.execute(
+            """SELECT key, label, description, COALESCE(price_gp, value_gp, 0) AS effective_price,
+                      item_type, COALESCE(min_level, 1) AS min_level, location_tags
+               FROM game_config_items WHERE key = ? AND COALESCE(is_active, 1) = 1""",
+            (k,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        old = None
+    if old:
+        item_type_from_row = str(old["item_type"] or "").strip().lower()
+        return {
+            "type": item_type_from_row or t or "item", "key": old["key"],
+            "label": old["label"] or old["key"],
+            "description": old["description"] or "",
+            "value_gp": int(old["effective_price"] or 0),
+            "min_level": int(old["min_level"] or 1), "location_tags": old["location_tags"],
+        }
+    return None
 
 
 def _parse_shop_inventory(raw_json: str) -> list[dict[str, str]]:

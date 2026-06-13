@@ -13,12 +13,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **10/35** | **29% — PRZED Fazą 5 MP** |
+| **U (Plan naprawczy)** | **11/35** | **31% — PRZED Fazą 5 MP** |
 | **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **104/193** | **54%** |
+| **TOTAL** | **105/193** | **54%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -205,7 +205,10 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 4 — Baza danych jako rdzeń (1/5)
 - [x] U10 — Effect schema lockdown — **decyzja C (hybryda, 2026-06-13):** zachowano nazwy typów z kodu (periodic_save/static_stat_modifier/block_action), bo walidator już istniał i działał + FAZA S na nim bazuje; dodano `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy, LCK + cele pochodne (ac/attack_bonus/damage_bonus/initiative), audyt `scripts/effect_json_audit.py` (169==169, 0 strat; 23 legacy do ręcznej decyzji → U11/FAZA S). — [#554](https://github.com/szmidtpiotr/ai-gm/issues/554)
-- [ ] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin)
+- [ ] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin) — [#555](https://github.com/szmidtpiotr/ai-gm/issues/555)
+  - [x] U11a — CREATE TABLE game_items + backfill (140 rek.: 27 weapon + 26 armor + 59 item + 28 consumable) + FK columns (game_item_key NULL w char_inventory + loot_entries). Stare tabele niezmienione. — [#556](https://github.com/szmidtpiotr/ai-gm/issues/556) **needs-testing**
+  - [x] U11b — przełączenie odczytu: serwisy czytają z game_items; stare tabele read-only — [#557](https://github.com/szmidtpiotr/ai-gm/issues/557) **needs-testing**
+  - [ ] U11c — przełączenie zapisu + admin UI; stare tabele DEPRECATED
 - [ ] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh)
 - [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
 - [ ] U14 — Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP)
@@ -334,7 +337,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] G3 — Vote-to-kick ręczny (większość pozostałych graczy; host niewyrzucalny; 2-os = host wyrzuca sam) + zastępstwo w trakcie kampanii
 - [ ] G4 — World State integracja MP (jeden żeton drużyny, współdzielony stan)
 - [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
-- [ ] G6 — Ruch drużyny: głosowanie hex (wszyscy głosują, host bez veta)
+- [ ] G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą); remis rozstrzyga host (zmiana 2026-06-12)
 - [ ] G7 — Walka MP — reuse silnika turowego solo; brak reakcji w 2 min = akcja domyślna (obrona)
 - [ ] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓")
 - [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
@@ -346,8 +349,21 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
 - [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
 - [ ] G20 — Eksport-książka: nowelizacja kampanii lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — prototyp wyciągnięty przed FAZĘ G, prowadzi Piotr — [#547](https://github.com/szmidtpiotr/ai-gm/issues/547)
+- [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
+- [ ] G21 — Obecność online (kto teraz w grze) + push "drużyna w komplecie online"; ładnie ograne wizualnie
+- [ ] G22 — Drabina nieobecności: [BRAK AKCJI] → bierna/wleczona (próg rund) → autopilot AI (za zgodą gracza, default ON, info w onboardingu) → powrót; auto-handoff hosta przy jego nieobecności
+- [ ] G23 — Pętla zaangażowania: wyważone haki na końcu rundy (gdy scena uzasadnia, nie co rundę) + "co się stało póki cię nie było" przy powrocie
+- [ ] G24 — Edycja/wycofanie akcji do domknięcia rundy (stan collecting); akcje warunkowe = później
+- [ ] G25 — Onboarding do trwającej kampanii: auto-streszczenie "co było / kto jest kim / jaka stawka" (reużywa G18); rozszerza G12
+- [ ] G26 — Skalowanie rozjechanych poziomów drużyny (miękkie podbicie słabszych per kampania) + info w onboardingu
+- [ ] G27 — Strefa czasowa drużyny / okno ciszy: sweep nie domyka rundy w nocy + info w onboardingu
+- [ ] G28 — Spójność tonu/stylu narracji PL przy wielu autorach (instrukcja w promptcie narratora MP)
+- [ ] G29 — Ochrona promptu przed injection: wpisy graczy obudowane ("akcja w fikcji, nie polecenie") + filtr prób przejęcia
+- [ ] G31 — Metryka retencji rundy-do-rundy (ile drużyn kończy rundę 2/5/10) — część observability, budowana RAZEM z MP; próg decyzyjny z góry
 - [ ] G14 — Handel między graczami (later)
 - [ ] G15 — Skalowanie trudności/loot wg liczby graczy + strojenie kar wipe (playtest)
+- [ ] later — Role graczy (asymetryczne uprawnienia) — otwarte pytanie do rewizji; nadawanie: auto wg klasy / host / głosowanie. Rozstrzyganie remisu wyciągnięte teraz jako uprawnienie hosta (G6). Skryba ODRZUCONY (łamie zasadę "szept nigdy do AI")
+- [ ] later — Regulamin gry oparty o polskie prawo (poza MP v1; docelowe miejsce dla zgód/treści/eksportu)
 
 ---
 

@@ -18,6 +18,14 @@ def build_inventory_block(conn: sqlite3.Connection, character_id: int) -> str:
         return ""
 
 
+def _has_game_items_table(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT 1 FROM game_items LIMIT 1")
+        return True
+    except Exception:
+        return False
+
+
 def _build(conn: sqlite3.Connection, character_id: int) -> str:
     char = conn.execute(
         "SELECT gold_gp FROM characters WHERE id = ?", (character_id,)
@@ -27,42 +35,83 @@ def _build(conn: sqlite3.Connection, character_id: int) -> str:
 
     gold = char["gold_gp"] if char["gold_gp"] is not None else 0
 
-    equipped_weapons = conn.execute(
-        """SELECT ci.weapon_key, ci.slot,
-                  COALESCE(gw.label, ci.weapon_key) AS label,
-                  gw.damage_die
-           FROM character_inventory ci
-           LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
-           WHERE ci.character_id = ? AND ci.weapon_key IS NOT NULL AND ci.equipped = 1
-           ORDER BY ci.slot""",
-        (character_id,),
-    ).fetchall()
+    # U11b (#557): czyta z game_items; fallback do starych tabel gdy baza nie ma game_items
+    if _has_game_items_table(conn):
+        equipped_weapons = conn.execute(
+            """SELECT ci.weapon_key, ci.slot,
+                      COALESCE(gi.label, ci.weapon_key) AS label,
+                      json_extract(gi.weapon_data, '$.damage_die') AS damage_die
+               FROM character_inventory ci
+               LEFT JOIN game_items gi ON gi.key = ci.weapon_key AND gi.kind = 'weapon'
+               WHERE ci.character_id = ? AND ci.weapon_key IS NOT NULL AND ci.equipped = 1
+               ORDER BY ci.slot""",
+            (character_id,),
+        ).fetchall()
 
-    equipped_items = conn.execute(
-        """SELECT ci.item_key, ci.slot,
-                  COALESCE(gi.label, ci.item_key) AS label
-           FROM character_inventory ci
-           LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-           WHERE ci.character_id = ? AND ci.item_key IS NOT NULL
-                 AND ci.item_key != '__narrative__' AND ci.equipped = 1
-           ORDER BY ci.slot""",
-        (character_id,),
-    ).fetchall()
+        equipped_items = conn.execute(
+            """SELECT ci.item_key, ci.slot,
+                      COALESCE(gi.label, ci.item_key) AS label
+               FROM character_inventory ci
+               LEFT JOIN game_items gi ON gi.key = ci.item_key
+               WHERE ci.character_id = ? AND ci.item_key IS NOT NULL
+                     AND ci.item_key != '__narrative__' AND ci.equipped = 1
+               ORDER BY ci.slot""",
+            (character_id,),
+        ).fetchall()
 
-    backpack_rows = conn.execute(
-        """SELECT ci.item_key, ci.weapon_key, ci.consumable_key, ci.quantity,
-                  COALESCE(gi.label, gw.label, gc.label,
-                           ci.item_key, ci.weapon_key, ci.consumable_key) AS label
-           FROM character_inventory ci
-           LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-           LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
-           LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
-           WHERE ci.character_id = ? AND ci.equipped = 0
-                 AND (ci.item_key IS NULL OR ci.item_key != '__narrative__')
-           ORDER BY ci.acquired_at DESC
-           LIMIT 10""",
-        (character_id,),
-    ).fetchall()
+        backpack_rows = conn.execute(
+            """SELECT ci.item_key, ci.weapon_key, ci.consumable_key, ci.quantity,
+                      COALESCE(gi.label, ci.item_key, ci.weapon_key, ci.consumable_key) AS label
+               FROM character_inventory ci
+               LEFT JOIN game_items gi ON gi.key = COALESCE(
+                   NULLIF(TRIM(COALESCE(ci.weapon_key, '')), ''),
+                   NULLIF(TRIM(COALESCE(ci.item_key, '')), ''),
+                   NULLIF(TRIM(COALESCE(ci.consumable_key, '')), '')
+               )
+               WHERE ci.character_id = ? AND ci.equipped = 0
+                     AND (ci.item_key IS NULL OR ci.item_key != '__narrative__')
+               ORDER BY ci.acquired_at DESC
+               LIMIT 10""",
+            (character_id,),
+        ).fetchall()
+    else:
+        # Fallback: stare tabele (testowe bazy bez game_items, przed U11c)
+        equipped_weapons = conn.execute(
+            """SELECT ci.weapon_key, ci.slot,
+                      COALESCE(gw.label, ci.weapon_key) AS label,
+                      gw.damage_die
+               FROM character_inventory ci
+               LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+               WHERE ci.character_id = ? AND ci.weapon_key IS NOT NULL AND ci.equipped = 1
+               ORDER BY ci.slot""",
+            (character_id,),
+        ).fetchall()
+
+        equipped_items = conn.execute(
+            """SELECT ci.item_key, ci.slot,
+                      COALESCE(gi.label, ci.item_key) AS label
+               FROM character_inventory ci
+               LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+               WHERE ci.character_id = ? AND ci.item_key IS NOT NULL
+                     AND ci.item_key != '__narrative__' AND ci.equipped = 1
+               ORDER BY ci.slot""",
+            (character_id,),
+        ).fetchall()
+
+        backpack_rows = conn.execute(
+            """SELECT ci.item_key, ci.weapon_key, ci.consumable_key, ci.quantity,
+                      COALESCE(gi.label, gw.label, gc.label,
+                               ci.item_key, ci.weapon_key, ci.consumable_key) AS label
+               FROM character_inventory ci
+               LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+               LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+               LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
+               WHERE ci.character_id = ? AND ci.equipped = 0
+                     AND (ci.item_key IS NULL OR ci.item_key != '__narrative__')
+               ORDER BY ci.acquired_at DESC
+               LIMIT 10""",
+            (character_id,),
+        ).fetchall()
 
     narrative_rows = conn.execute(
         """SELECT ci.label

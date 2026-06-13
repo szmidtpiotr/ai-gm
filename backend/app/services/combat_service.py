@@ -1023,27 +1023,61 @@ def get_item_catalog_for_prompt(conn: sqlite3.Connection) -> str:
     Plain-text [ITEM CATALOG] for system prompt injection (8H-4).
     Active + approved items only; skips narrative (campaign-specific).
     """
+    # U11b (#557): czyta z game_items; fallback do game_config_items dla testowych baz
     max_chars = 2000
     try:
         rows = conn.execute(
             """
-            SELECT key, label, item_type, value_gp,
-                   effect_json, charges, ac_bonus, description
-            FROM game_config_items
+            SELECT key, label, kind,
+                   price_gp AS value_gp,
+                   effect_json,
+                   json_extract(item_data, '$.item_type')    AS item_type,
+                   json_extract(item_data, '$.ac_bonus')     AS ac_bonus,
+                   json_extract(item_data, '$.charges')      AS charges,
+                   json_extract(item_data, '$.effect_type')  AS effect_type,
+                   json_extract(item_data, '$.effect_dice')  AS effect_dice,
+                   json_extract(item_data, '$.effect_bonus') AS effect_bonus,
+                   json_extract(item_data, '$.effect_target') AS effect_target,
+                   description
+            FROM game_items
             WHERE is_active = 1 AND COALESCE(approved, 1) = 1
-              AND item_type != 'narrative'
-            ORDER BY item_type ASC, key ASC
+              AND kind != 'weapon'
+            ORDER BY kind ASC, key ASC
             LIMIT 60
             """
         ).fetchall()
     except sqlite3.OperationalError:
-        return ""
+        # Fallback: stara tabela (testowe bazy bez game_items, przed U11c)
+        try:
+            rows = conn.execute(
+                """
+                SELECT key, label, item_type,
+                       COALESCE(value_gp, 0) AS value_gp,
+                       NULL AS effect_json, charges, ac_bonus, description,
+                       item_type AS kind,
+                       effect_type, effect_dice,
+                       COALESCE(effect_bonus, 0) AS effect_bonus,
+                       effect_target
+                FROM game_config_items
+                WHERE is_active = 1 AND COALESCE(approved, 1) = 1
+                  AND item_type != 'narrative'
+                ORDER BY item_type ASC, key ASC
+                LIMIT 60
+                """
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return ""
     if not rows:
         return ""
     lines: list[str] = ["[ITEM CATALOG]"]
     current_type: str | None = None
     for r in rows:
-        t = str(r["item_type"] or "misc").strip().lower() or "misc"
+        # Resolve display type: kind dla armor/consumable, item_type dla pozostałych
+        kind = str(r["kind"] or "item").strip().lower()
+        item_type_raw = str(r["item_type"] or "").strip().lower()
+        t = kind if kind in ("armor", "consumable") else (item_type_raw or kind or "misc")
+        if t == "narrative":
+            continue
         if t != current_type:
             current_type = t
             lines.append(f"  [{t.upper()}]")
@@ -1051,15 +1085,17 @@ def get_item_catalog_for_prompt(conn: sqlite3.Connection) -> str:
         label = str(r["label"] or key)
         parts: list[str] = [f"    - {key}: {label}"]
 
-        if t == "armor" and r["ac_bonus"] is not None and int(r["ac_bonus"] or 0) > 0:
-            parts.append(f"(AC +{int(r['ac_bonus'])})")
+        if t == "armor":
+            ac_b = r["ac_bonus"]
+            if ac_b is not None and int(ac_b or 0) > 0:
+                parts.append(f"(AC +{int(ac_b)})")
 
         if t == "consumable":
             legacy = legacy_effect_fields_from_json(r["effect_json"]) or {}
-            eff = str(legacy.get("effect_type") or "misc")
-            dice = str(legacy.get("effect_dice") or "").strip()
-            bonus = int(legacy.get("effect_bonus") or 0)
-            target = str(legacy.get("effect_target") or "self")
+            eff = str(legacy.get("effect_type") or r["effect_type"] or "misc")
+            dice = str(legacy.get("effect_dice") or r["effect_dice"] or "").strip()
+            bonus = int(legacy.get("effect_bonus") or r["effect_bonus"] or 0)
+            target = str(legacy.get("effect_target") or r["effect_target"] or "self")
             effect_str = eff
             if dice:
                 effect_str += f" {dice}"

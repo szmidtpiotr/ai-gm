@@ -49,35 +49,111 @@ _CONSUMABLE_EFFECT_SIGNAL = frozenset(
 _SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only"}
 
 
+_LEGACY_JOINS = """
+            FROM character_inventory ci
+            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+            LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+                OR (ci.weapon_key LIKE 'weapon_%' AND gw.key = SUBSTR(ci.weapon_key, 8))
+            LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
+                OR (ci.consumable_key LIKE 'consumable_%' AND gc.key = SUBSTR(ci.consumable_key, 12))
+            LEFT JOIN game_config_consumables gc_item ON gc_item.key = ci.item_key
+                AND ci.weapon_key IS NULL AND (ci.consumable_key IS NULL OR ci.consumable_key = '')
+            WHERE ci.character_id = ?
+            ORDER BY ci.id ASC"""
+
+_LEGACY_COLS_COMMON = """SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
+                   ci.item_key, ci.weapon_key, ci.consumable_key,
+                   NULL AS narrative_label, ci.meta_json AS ci_meta_json,
+                   gi.label AS item_label, gi.item_type AS item_kind,
+                   NULL AS gi_armor_coverage, NULL AS gi_effect_json,"""
+
+
+def _inventory_rows_sql_legacy() -> str:
+    """Fallback do starych tabel — zawiera effect_type/dice gdy game_config_items je ma."""
+    return (
+        _LEGACY_COLS_COMMON
+        + """ gi.effect_type AS gi_effect_type, gi.effect_dice AS gi_effect_dice,
+                   gw.label AS weapon_label,
+                   NULL AS gw_weapon_slot,
+                   gc.label AS consumable_label,
+                   gc_item.key AS consumable_catalog_item_key,
+                   gc_item.label AS consumable_by_item_key_label"""
+        + _LEGACY_JOINS
+    )
+
+
+def _inventory_rows_sql_legacy_minimal() -> str:
+    """Ultra-minimal fallback — baza bez kolumn effect_type/effect_dice w game_config_items."""
+    return (
+        _LEGACY_COLS_COMMON
+        + """ NULL AS gi_effect_type, NULL AS gi_effect_dice,
+                   gw.label AS weapon_label,
+                   NULL AS gw_weapon_slot,
+                   gc.label AS consumable_label,
+                   gc_item.key AS consumable_catalog_item_key,
+                   gc_item.label AS consumable_by_item_key_label"""
+        + _LEGACY_JOINS
+    )
+
+
 def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effect_dice_col_sql: str) -> str:
-    """Select unified inventory rows; new schema uses effect_json, old schema may still use effect_*."""
+    """U11b (#557): czyta z game_items zamiast 3 starych tabel.
+
+    Join po kluczu COALESCE(weapon_key, item_key, consumable_key) obsługuje:
+    - prefix 'weapon_*' (legacy inventory) via CASE
+    - overlap I∩C (items przechowywane jako item_key, ale kind=consumable w game_items)
+    """
+    # Wywołujący przekazuje wyrażenia SQL, które historycznie referencjonowały gi.* / gw.*
+    # Dla game_items: effect_json jest kolumną top-level; item_type/effect_type/effect_dice
+    # są w item_data JSON. Podmieniamy referencje na json_extract.
+    _remap = {
+        "gi.effect_json AS gi_effect_json": "gi.effect_json AS gi_effect_json",
+        "gi.effect_type AS gi_effect_type": "json_extract(gi.item_data, '$.effect_type') AS gi_effect_type",
+        "gi.effect_dice AS gi_effect_dice": "json_extract(gi.item_data, '$.effect_dice') AS gi_effect_dice",
+        "NULL AS gi_effect_json": "NULL AS gi_effect_json",
+        "NULL AS gi_effect_type": "NULL AS gi_effect_type",
+        "NULL AS gi_effect_dice": "NULL AS gi_effect_dice",
+    }
+    col_effect_json = _remap.get(effect_json_col_sql, effect_json_col_sql)
+    col_effect_type = _remap.get(effect_type_col_sql, effect_type_col_sql)
+    col_effect_dice = _remap.get(effect_dice_col_sql, effect_dice_col_sql)
+
     return f"""
             SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
                    ci.item_key, ci.weapon_key, ci.consumable_key,
                    ci.label AS narrative_label, ci.meta_json AS ci_meta_json,
-                   gi.label AS item_label, gi.item_type AS item_kind,
-                   gi.armor_coverage AS gi_armor_coverage,
-                   {effect_json_col_sql}, {effect_type_col_sql}, {effect_dice_col_sql},
-                   gw.label AS weapon_label,
-                   gw.weapon_slot AS gw_weapon_slot,
-                   gc.label AS consumable_label,
-                   gc_item.key AS consumable_catalog_item_key,
-                   gc_item.label AS consumable_by_item_key_label
+                   CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+                        THEN gi.label ELSE NULL END AS item_label,
+                   CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+                        THEN json_extract(gi.item_data, '$.item_type')
+                        ELSE NULL END AS item_kind,
+                   CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+                        THEN json_extract(gi.item_data, '$.armor_coverage')
+                        ELSE NULL END AS gi_armor_coverage,
+                   {col_effect_json}, {col_effect_type}, {col_effect_dice},
+                   CASE WHEN ci.weapon_key IS NOT NULL THEN gi.label ELSE NULL END AS weapon_label,
+                   CASE WHEN ci.weapon_key IS NOT NULL
+                        THEN json_extract(gi.weapon_data, '$.weapon_slot')
+                        ELSE NULL END AS gw_weapon_slot,
+                   CASE WHEN ci.consumable_key IS NOT NULL THEN gi.label ELSE NULL END AS consumable_label,
+                   CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+                             AND gi.kind = 'consumable'
+                        THEN gi.key ELSE NULL END AS consumable_catalog_item_key,
+                   CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+                             AND gi.kind = 'consumable'
+                        THEN gi.label ELSE NULL END AS consumable_by_item_key_label
             FROM character_inventory ci
-            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-            LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
-                OR (
-                    ci.weapon_key LIKE 'weapon_%'
-                    AND gw.key = SUBSTR(ci.weapon_key, 8)
-                )
-            LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
-                OR (
-                    ci.consumable_key LIKE 'consumable_%'
-                    AND gc.key = SUBSTR(ci.consumable_key, 12)
-                )
-            LEFT JOIN game_config_consumables gc_item ON gc_item.key = ci.item_key
-                AND ci.weapon_key IS NULL
-                AND (ci.consumable_key IS NULL OR ci.consumable_key = '')
+            LEFT JOIN game_items gi ON gi.key = COALESCE(
+                NULLIF(TRIM(COALESCE(
+                    CASE WHEN ci.weapon_key LIKE 'weapon_%' THEN SUBSTR(ci.weapon_key, 8)
+                         ELSE ci.weapon_key END,
+                    '')), ''),
+                NULLIF(TRIM(COALESCE(ci.item_key, '')), ''),
+                NULLIF(TRIM(COALESCE(
+                    CASE WHEN ci.consumable_key LIKE 'consumable_%' THEN SUBSTR(ci.consumable_key, 12)
+                         ELSE ci.consumable_key END,
+                    '')), '')
+            )
             WHERE ci.character_id = ?
             ORDER BY ci.id ASC
             """
@@ -287,48 +363,67 @@ def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _catalog_entry(conn: sqlite3.Connection, loot: dict[str, Any]) -> tuple[str, str, str] | None:
-    if loot.get("item_key"):
-        key = str(loot["item_key"]).strip()
-        try:
-            row = conn.execute(
-                """
-                SELECT key, label, item_type FROM game_config_items
-                WHERE key = ? AND is_active = 1 AND COALESCE(approved, 1) = 1
-                """,
-                (key,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            row = conn.execute(
-                """
-                SELECT key, label, item_type FROM game_config_items
-                WHERE key = ? AND is_active = 1
-                """,
-                (key,),
-            ).fetchone()
-        if not row:
-            return None
-        item_type = str(row["item_type"] or "item").strip().lower() or "item"
-        return str(row["key"]), str(row["label"] or row["key"]), item_type
+    """U11b (#557): czyta z game_items zamiast starych tabel.
 
-    if loot.get("weapon_key"):
-        key = str(loot["weapon_key"]).strip()
+    Priorytety klucza: weapon_key > item_key > consumable_key (XOR w loot_entries).
+    Szuka po kluczu bez ograniczenia kind — obsługuje overlap I∩C (health_potion_small etc).
+    """
+    raw_key = (
+        loot.get("weapon_key")
+        or loot.get("item_key")
+        or loot.get("consumable_key")
+        or ""
+    )
+    key = str(raw_key).strip()
+    if not key:
+        return None
+
+    try:
         row = conn.execute(
+            "SELECT key, label, kind FROM game_items WHERE key = ? AND is_active = 1 LIMIT 1",
+            (key,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+
+    if row:
+        kind = str(row["kind"] or "item")
+        label = str(row["label"] or row["key"])
+        # Mapuj kind → item_type (loot service rozróżnia weapon/consumable/inne)
+        if kind == "weapon":
+            return str(row["key"]), label, "weapon"
+        if kind == "consumable":
+            return str(row["key"]), label, "consumable"
+        return str(row["key"]), label, kind  # armor / item
+
+    # Fallback: stare tabele (dla LLM-created items przed U11c)
+    if loot.get("weapon_key"):
+        old = conn.execute(
             "SELECT key, label FROM game_config_weapons WHERE key = ? AND is_active = 1",
             (key,),
         ).fetchone()
-        if not row:
-            return None
-        return str(row["key"]), str(row["label"] or row["key"]), "weapon"
+        if old:
+            return str(old["key"]), str(old["label"] or old["key"]), "weapon"
 
     if loot.get("consumable_key"):
-        key = str(loot["consumable_key"]).strip()
-        row = conn.execute(
+        old = conn.execute(
             "SELECT key, label FROM game_config_consumables WHERE key = ? AND is_active = 1",
             (key,),
         ).fetchone()
-        if not row:
-            return None
-        return str(row["key"]), str(row["label"] or row["key"]), "consumable"
+        if old:
+            return str(old["key"]), str(old["label"] or old["key"]), "consumable"
+
+    if loot.get("item_key"):
+        try:
+            old = conn.execute(
+                "SELECT key, label, item_type FROM game_config_items WHERE key = ? AND is_active = 1",
+                (key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            old = None
+        if old:
+            item_type = str(old["item_type"] or "item").strip().lower() or "item"
+            return str(old["key"]), str(old["label"] or old["key"]), item_type
 
     return None
 
@@ -540,6 +635,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
         ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
         if not ch:
             raise ValueError("character not found")
+        # U11b (#557): game_items ma effect_json top-level i json_extract dla effect_type/dice
         try:
             rows = conn.execute(
                 _inventory_rows_sql(
@@ -550,24 +646,11 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 (cid,),
             ).fetchall()
         except sqlite3.OperationalError:
+            # Fallback: testowe bazy bez game_items. Próbuj z effect_type/dice, potem bez.
             try:
-                rows = conn.execute(
-                    _inventory_rows_sql(
-                        "NULL AS gi_effect_json",
-                        "gi.effect_type AS gi_effect_type",
-                        "gi.effect_dice AS gi_effect_dice",
-                    ),
-                    (cid,),
-                ).fetchall()
+                rows = conn.execute(_inventory_rows_sql_legacy(), (cid,)).fetchall()
             except sqlite3.OperationalError:
-                rows = conn.execute(
-                    _inventory_rows_sql(
-                        "NULL AS gi_effect_json",
-                        "NULL AS gi_effect_type",
-                        "NULL AS gi_effect_dice",
-                    ),
-                    (cid,),
-                ).fetchall()
+                rows = conn.execute(_inventory_rows_sql_legacy_minimal(), (cid,)).fetchall()
 
     out: list[dict] = []
     for r in rows:

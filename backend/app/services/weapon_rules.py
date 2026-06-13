@@ -107,21 +107,28 @@ def _normalize_weapon_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
 def load_weapon_row(conn: sqlite3.Connection, key: str | None) -> dict[str, Any] | None:
     if not key:
         return None
+    from app.services.game_items_service import get_weapon_row
+    row = get_weapon_row(conn, key)
+    if row:
+        return _normalize_weapon_row(row)
+    # Fallback: stara tabela (dla broni stworzonych przez LLM jeszcze nie backfillowanych — U11c naprawi)
     try:
-        row = conn.execute(
-            """
-            SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m, effect_json
-            FROM game_config_weapons
-            WHERE key = ?
-            """,
+        old = conn.execute(
+            "SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m, effect_json FROM game_config_weapons WHERE key = ?",
             (key,),
         ).fetchone()
     except sqlite3.OperationalError:
-        row = conn.execute(
-            "SELECT key, label, damage_die, linked_stat FROM game_config_weapons WHERE key = ?",
-            (key,),
-        ).fetchone()
-    return _normalize_weapon_row(row)
+        try:
+            old = conn.execute(
+                "SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m FROM game_config_weapons WHERE key = ?",
+                (key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            old = conn.execute(
+                "SELECT key, label, damage_die, linked_stat FROM game_config_weapons WHERE key = ?",
+                (key,),
+            ).fetchone()
+    return _normalize_weapon_row(old)
 
 
 def default_weapon_row(conn: sqlite3.Connection) -> dict[str, Any] | None:
@@ -130,8 +137,13 @@ def default_weapon_row(conn: sqlite3.Connection) -> dict[str, Any] | None:
     Prefers a catalog row keyed 'unarmed' (so admins can balance the die / linked_stat).
     Falls back to a hardcoded d3 STR melee strike if no row exists.
     """
+    from app.services.game_items_service import get_weapon_row
+    row = get_weapon_row(conn, "unarmed")
+    if row:
+        return _normalize_weapon_row(row)
+    # Fallback: stara tabela lub hardcoded
     try:
-        row = conn.execute(
+        old = conn.execute(
             """
             SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m
             FROM game_config_weapons
@@ -140,11 +152,11 @@ def default_weapon_row(conn: sqlite3.Connection) -> dict[str, Any] | None:
             """
         ).fetchone()
     except sqlite3.OperationalError:
-        row = conn.execute(
+        old = conn.execute(
             "SELECT key, label, damage_die, linked_stat FROM game_config_weapons WHERE key = 'unarmed' LIMIT 1"
         ).fetchone()
-    if row:
-        return _normalize_weapon_row(row)
+    if old:
+        return _normalize_weapon_row(old)
     # Hardcoded last-ditch fallback (kept tiny so it's clearly worse than any real weapon).
     return _normalize_weapon_row({
         "key": "unarmed",

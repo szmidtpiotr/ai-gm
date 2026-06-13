@@ -37,7 +37,19 @@ def _get_penalty_pct(conn) -> int:
 
 
 def _get_rarity(conn, inv_row) -> int:
-    """Resolve rarity from weapon or item config table."""
+    """U11b (#557): czyta rarity z game_items; fallback do starych tabel dla testowych baz."""
+    try:
+        key = inv_row["weapon_key"] or inv_row["item_key"]
+        if key:
+            r = conn.execute(
+                "SELECT rarity FROM game_items WHERE key = ? AND is_active = 1",
+                (str(key),),
+            ).fetchone()
+            if r:
+                return int(r["rarity"] or 1)
+    except Exception:
+        pass
+    # Fallback: stare tabele (testowe bazy lub pending LLM items przed U11c)
     try:
         if inv_row["weapon_key"]:
             r = conn.execute(
@@ -123,11 +135,20 @@ def get_ac_penalty_for_char(conn, char_id: int) -> int:
         if cur > 0 or mx == 0:
             continue
         try:
+            # U11b (#557): czyta ac_bonus z game_items (item_data JSON)
             item = conn.execute(
-                "SELECT ac_bonus FROM game_config_items WHERE key = ?",
+                "SELECT json_extract(item_data, '$.ac_bonus') AS ac_bonus FROM game_items WHERE key = ? AND is_active = 1",
                 (row["item_key"],),
             ).fetchone()
-            ac_b = int(item["ac_bonus"] or 2) if item else 2
+            if item and item["ac_bonus"] is not None:
+                ac_b = int(item["ac_bonus"] or 2)
+            else:
+                # Fallback: stara tabela (testowe bazy lub pending items przed U11c)
+                old = conn.execute(
+                    "SELECT ac_bonus FROM game_config_items WHERE key = ?",
+                    (row["item_key"],),
+                ).fetchone()
+                ac_b = int(old["ac_bonus"] or 2) if old else 2
         except Exception:
             ac_b = 2
         penalty -= max(1, math.floor(ac_b * pct / 100))
