@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 
@@ -8,6 +9,62 @@ DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
 ADMIN_MIGRATIONS = [
+    # Admin-surface tables whose CREATE was never migrated (only existed in
+    # e2e_bootstrap.sql or not at all) → caused 500s on /admin/bug-reports,
+    # /admin/push/subscriptions, /admin/voice/hosts, /admin/ui-texts.
+    """
+    CREATE TABLE IF NOT EXISTS bug_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        campaign_id INTEGER,
+        observation TEXT NOT NULL DEFAULT '',
+        reproduction TEXT,
+        report_type TEXT NOT NULL DEFAULT 'bug',
+        context_json TEXT,
+        github_issue_url TEXT,
+        github_issue_number INTEGER,
+        github_status TEXT DEFAULT 'pending',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, endpoint)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS voice_hosts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL DEFAULT '',
+        base_url TEXT NOT NULL UNIQUE,
+        kind TEXT NOT NULL DEFAULT 'cpu',
+        is_active INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ui_texts (
+        key TEXT PRIMARY KEY,
+        screen TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        original_text TEXT NOT NULL DEFAULT '',
+        custom_text TEXT,
+        font_family TEXT,
+        font_size TEXT,
+        font_weight TEXT,
+        color TEXT,
+        text_transform TEXT,
+        letter_spacing TEXT,
+        extra_css TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
     # Bootstrap tables — originally SQLModel models, must exist before all other migrations
     """
     CREATE TABLE IF NOT EXISTS users (
@@ -181,6 +238,7 @@ ADMIN_MIGRATIONS = [
         dex_modifier INTEGER NOT NULL DEFAULT 0,
         damage_die TEXT NOT NULL,
         skills_json TEXT,
+        stats_json TEXT,
         description TEXT,
         is_active INTEGER NOT NULL DEFAULT 1,
         locked_at TEXT,
@@ -399,6 +457,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_enemies ADD COLUMN dex_modifier INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_enemies ADD COLUMN conditions_immune TEXT",
     "ALTER TABLE game_config_enemies ADD COLUMN skills_json TEXT",
+    "ALTER TABLE game_config_enemies ADD COLUMN stats_json TEXT",
     "ALTER TABLE game_config_enemies ADD COLUMN loot_table_key TEXT REFERENCES game_config_loot_tables(key) ON DELETE SET NULL",
     "ALTER TABLE game_config_enemies ADD COLUMN note TEXT",
     "ALTER TABLE game_config_items ADD COLUMN proficiency_classes TEXT NOT NULL DEFAULT '[]'",
@@ -960,6 +1019,9 @@ ADMIN_MIGRATIONS = [
         UNIQUE(campaign_id, npc_name)
     )
     """,
+    # S3 (#583): NPC ability stats — lazy-generated per campaign + optional global template.
+    "ALTER TABLE campaign_known_npcs ADD COLUMN stats_json TEXT",
+    "ALTER TABLE npcs ADD COLUMN stats_json TEXT",
     # U11a (#556): unified item table — all kinds in one place
     """
     CREATE TABLE IF NOT EXISTS game_items (
@@ -1019,7 +1081,26 @@ ADMIN_SEEDS = [
     ('lockpick', 'Otwieranie zamków', 'DEX', 5, 14, 'Otwieranie zamków bez klucza — wytrychem, improwizowanym narzędziem lub gołymi rękami.'),
     ('acrobatics', 'Akrobatyka', 'DEX', 5, 15, 'Zwinność i równowaga w ruchu — przewroty, balansowanie na krawędzi, łapanie się w upadku.'),
     ('insight', 'Wnikliwość', 'WIS', 5, 16, 'Czytanie intencji i emocji rozmówcy — wykrywanie kłamstwa, oceny czyichś motywów.'),
-    ('deception', 'Oszustwo', 'CHA', 5, 17, 'Wprowadzanie w błąd słowem lub gestem — kłamanie, blefowanie, granie roli.')
+    ('deception', 'Oszustwo', 'CHA', 5, 17, 'Wprowadzanie w błąd słowem lub gestem — kłamanie, blefowanie, granie roli.'),
+    ('riding', 'Jeździectwo', 'DEX', 5, 18, 'Wsiadanie i kontrola wierzchowca, ryzykowne manewry konne (galop przez tłum, skok). Sukces — manewr czysty; porażka — utrata akcji ruchu; krytyczna — wypadnięcie z siodła, obrażenia + ogłuszenie.'),
+    ('endurance', 'Wytrzymałość', 'CON', 5, 19, 'Długotrwały wysiłek fizyczny (marsz, praca, walka na głodzie) i obrona przed kondycjami fizycznymi. Porażka — kondycja wyczerpania; krytyczna — 2 poziomy i przymus postoju.'),
+    ('swim', 'Pływanie', 'STR', 5, 20, 'Pływanie wpław, walka z prądem, tonięcie (STR; długie przeprawy w ciężkim ekwipunku — narracyjnie CON). Porażka — utrata postępów; krytyczna — postać zaczyna tonąć.'),
+    ('climb', 'Wspinaczka', 'STR', 5, 21, 'Wspinaczka na ściany, klify i maszty; DC zależy od powierzchni, lina je obniża. Porażka — brak postępu; krytyczna — upadek i obrażenia.'),
+    ('charm', 'Czar osobisty', 'CHA', 5, 22, 'Zjednanie kogoś i dobre wrażenie (test przeciw WIS celu). Sukces — NPC przychylny; krytyczny — sojusznik na scenę; krytyczna porażka — podejrzliwość.'),
+    ('gossip', 'Plotkowanie', 'CHA', 5, 23, 'Zbieranie i rozsiewanie plotek wśród miejscowych. Sukces — jedna przydatna informacja; krytyczny — dwie lub sekret; krytyczna porażka — błędna plotka albo zdemaskowanie.'),
+    ('bribe', 'Przekupstwo', 'CHA', 5, 24, 'Oferta pieniędzy lub dóbr za przysługę (test przeciw WIS celu, wymaga zadeklarowania kwoty). Sukces — łapówka przyjęta; krytyczna porażka — odmowa i zgłoszenie próby.'),
+    ('trade_craft', 'Rzemiosło', 'INT', 5, 25, 'Wyrób i naprawa przedmiotów. Sukces — przedmiot gotowy; krytyczna porażka — utrata materiałów lub narzędzi. Efekt narracyjny (crafting mechaniczny: poza zakresem).'),
+    ('language', 'Języki obce', 'INT', 5, 26, 'Rozumienie obcej mowy lub tekstu. Sukces — sens uchwycony; krytyczna porażka — błędna interpretacja przeciwna do prawdy.'),
+    ('theology', 'Teologia', 'WIS', 5, 27, 'Wiedza o religiach, kultach, rytuałach i klątwach. Sukces — poprawna identyfikacja; krytyczny — ukryty szczegół; krytyczna porażka — obraza bóstwa lub kapłanów.'),
+    ('nature', 'Wiedza o naturze', 'WIS', 5, 28, 'Rozpoznawanie roślin, zwierząt, pogody, naturalnych trucizn i terenu. Sukces — identyfikacja i właściwości; krytyczna porażka — błędne rozpoznanie (trujący grzyb).'),
+    ('alchemy', 'Alchemia', 'INT', 5, 29, 'Warzenie mikstur, trucizn i kwasów. Sukces — substancja gotowa; krytyczna porażka — wybuch lub zatrucie twórcy. Efekt narracyjny (crafting mechaniczny: poza zakresem).'),
+    ('magic_sense', 'Wyczucie magii', 'WIS', 5, 30, 'Wyczuwanie obecności zaklęć, artefaktów, klątw i portali. Sukces — źródło i kierunek; krytyczny — szkoła i cel; krytyczna porażka — fałszywe wrażenie.'),
+    ('tracking', 'Tropienie', 'WIS', 5, 31, 'Śledzenie śladów ludzi i zwierząt w terenie. Sukces — ślad odnaleziony; krytyczny — liczebność, czas i kondycja grupy; krytyczna porażka — błędny trop.'),
+    ('sailing', 'Żeglarstwo', 'INT', 5, 32, 'Sterowanie łodzią, nawigacja i żagle (INT nawigacja; manewry w sztormie — narracyjnie DEX). Sukces — kurs utrzymany; krytyczna porażka — uszkodzenie statku lub utrata kursu.'),
+    ('pickpocket', 'Kieszonkostwo', 'DEX', 5, 33, 'Kradzież z kieszeni niezauważona (test przeciw WIS ofiary). Sukces — łup zdobyty; krytyczna porażka — złapanie na gorącym uczynku.'),
+    ('disguise', 'Przebranie', 'CHA', 5, 34, 'Udawanie kogoś innego strojem i zachowaniem (przy podejrzeniu test przeciw WIS). Sukces — nierozpoznany; krytyczna porażka — natychmiastowe zdemaskowanie.'),
+    ('torture', 'Przesłuchanie', 'CHA', 5, 35, 'Wydobywanie informacji groźbą i presją (CHA psychologiczne, przeciw CON jeńca; brutalny wariant STR narracyjnie). Sukces — jeniec mówi; krytyczna porażka — jeniec milknie lub umiera, informacje bezużyteczne.'),
+    ('haggling', 'Targowanie', 'CHA', 5, 36, 'Negocjowanie ceny towaru lub usługi (test przeciw CHA kupca; raz na transakcję). Sukces — cena obniżona o 10–25%; krytyczny — o 30–50% lub bonus od sprzedawcy; krytyczna porażka — sprzedawca obrażony, cena rośnie i dalsze targowanie u niego niemożliwe. Wynik nakłada jednorazowy rabat na najbliższe kupno/sprzedaż.')
     """,
     # Translate any pre-existing English labels to Polish (idempotent — only
     # rewrites rows still holding the English defaults so admin renames are kept).
@@ -2011,6 +2092,38 @@ def _backfill_enemy_loot_tables(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_backfill_enemy_loot_tables_failed", error=str(e))
 
 
+def _backfill_enemy_stats_json(conn: sqlite3.Connection) -> None:
+    """S2 (#582) — seed stats_json for enemies that don't have one yet.
+
+    Derives 7 ability stats from the archetype heuristic (key/label keywords).
+    Rows left untouched if stats_json already present. NULL stays NULL-safe — combat
+    reads default every missing stat to 10, so this is purely additive (zero regression).
+    """
+    try:
+        from app.services.actor_stats import stats_for_actor
+
+        rows = conn.execute(
+            """
+            SELECT key, label FROM game_config_enemies
+            WHERE stats_json IS NULL OR stats_json = '' OR stats_json = '{}'
+            """
+        ).fetchall()
+        if not rows:
+            return
+        for row in rows:
+            ek = row[0]
+            label = row[1] or ek
+            stats = stats_for_actor(ek, label)
+            conn.execute(
+                "UPDATE game_config_enemies SET stats_json = ? WHERE key = ?",
+                (json.dumps(stats, ensure_ascii=False), ek),
+            )
+        conn.commit()
+        logger.info("admin_migration_backfill_enemy_stats_json", count=len(rows))
+    except Exception as e:
+        logger.warning("admin_migration_backfill_enemy_stats_json_failed", error=str(e))
+
+
 def _ensure_user_llm_settings_mode(conn: sqlite3.Connection) -> None:
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_llm_settings'"
@@ -2369,7 +2482,30 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('athletics',    'dc',      NULL,         12),
         ('arcana',       'dc',      NULL,         14),
         ('medicine',     'dc',      NULL,         12),
-        ('lore',         'dc',      NULL,         14)
+        ('lore',         'dc',      NULL,         14),
+        -- S5 (#585): nowe skille kategorii A. opposed = test przeciw statowi celu;
+        -- default_dc = środek widełek "Typowe DC" z design doc, klamp do DC lock {8,12,16,20,24}.
+        ('charm',        'opposed', 'WIS',        12),
+        ('bribe',        'opposed', 'WIS',        16),
+        ('pickpocket',   'opposed', 'WIS',        16),
+        ('disguise',     'opposed', 'WIS',        16),
+        ('torture',      'opposed', 'CON',        16),
+        ('riding',       'dc',      NULL,         12),
+        ('endurance',    'dc',      NULL,         16),
+        ('swim',         'dc',      NULL,         12),
+        ('climb',        'dc',      NULL,         12),
+        ('gossip',       'dc',      NULL,         12),
+        ('trade_craft',  'dc',      NULL,         12),
+        ('language',     'dc',      NULL,         12),
+        ('theology',     'dc',      NULL,         12),
+        ('nature',       'dc',      NULL,         12),
+        ('alchemy',      'dc',      NULL,         16),
+        ('magic_sense',  'dc',      NULL,         16),
+        ('tracking',     'dc',      NULL,         12),
+        ('sailing',      'dc',      NULL,         12),
+        -- S6 (#586): targowanie — test przeciw CHA kupca (NPC staty z S3);
+        -- kupiec bez statów → fallback default_dc=12 (DC lock {8,12,16,20,24}).
+        ('haggling',     'opposed', 'CHA',        12)
     """, "v2-skill-counters-seed")
 
     _exec("""
@@ -3405,6 +3541,22 @@ def _ensure_skill_risk_categories(conn: sqlite3.Connection) -> None:
          "rozbrajam,unieszkodliwiam,manipuluję mechanizmem,wyważam zamek,otwieramy zamek"),
         ("acrobatics", "athletics", 12,
          "akrobatyka,unik,uchylam,przewrót,balansując,równowaga"),
+        # S5 (#585): safety-net dla nowych skilli fizycznych/społecznych ryzykownych —
+        # gdy narrator zapomni o tagu SKILL_TEST, słowa kluczowe wymuszają rzut.
+        ("swimming", "swim", 12,
+         "płynę,pływam,przepływam,nurkuję,wpław,brnę przez wodę,tonę"),
+        ("mounted", "riding", 12,
+         "wsiadam na konia,dosiadam,wierzchowca,galopem,konno,jadę konno,cwałuję"),
+        ("pickpocketing", "pickpocket", 16,
+         "kieszonkost,podkradam z kieszeni,wyciągam sakiewkę,opróżniam kieszenie,zwędzić sakiewkę"),
+        ("disguise", "disguise", 16,
+         "przebieram się,przebranie,udaję kogoś,podszywam się,charakteryzuję,zmieniam wygląd"),
+        ("tracking", "tracking", 12,
+         "tropię,śledzę ślady,podążam za śladami,czytam tropy,wytropić,szukam śladów"),
+        ("sailing", "sailing", 12,
+         "steruję łodzią,rozkładam żagiel,nawiguję,płynę statkiem,trzymam ster,wychodzę z burzy"),
+        ("bribery", "bribe", 16,
+         "przekupuję,wręczam łapówkę,daję w łapę,opłacam strażnika,łapówka,sypię złotem"),
     ]
     for cat_key, skill_key, default_dc, keywords in seeds:
         try:
@@ -3810,6 +3962,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
         _backfill_enemy_loot_tables(conn)
+        _backfill_enemy_stats_json(conn)
         _ensure_user_llm_settings_mode(conn)
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
