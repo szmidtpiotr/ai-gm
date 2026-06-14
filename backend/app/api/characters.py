@@ -22,6 +22,7 @@ from app.services.campaign_plan_service import generate_v2_campaign_plan
 from app.services.turn_pipeline import generate_opening_scene as generate_v2_opening_scene
 from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
 from app.services.llm_service import generate_chat
+from app.services.admin_config import list_skills
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 from app.services.location_intent_parser import parse as parse_location_intent
@@ -457,6 +458,19 @@ def _normalize_stat_override_key(raw: str) -> str | None:
     return _STAT_OVERRIDE_ALIASES.get(kl)
 
 
+def _creation_allowed_skill_keys() -> frozenset[str]:
+    """FAZA S (#617) — keys a character may carry at creation. The rolled
+    starting set stays archetype-weighted (CREATION_SKILL_POOL), but swaps may
+    target ANY skill in the live game_config_skills catalog so the new skill
+    engine (gamble/haggling/lockpick/…) is reachable in the wizard. Falls back
+    to the legacy pool if the catalog can't be read."""
+    try:
+        keys = {str(s.get("key")).strip() for s in list_skills() if s.get("key")}
+    except Exception:  # pragma: no cover - defensive: bad DB read
+        keys = set()
+    return frozenset(keys | set(CREATION_SKILL_POOL))
+
+
 def _validate_creation_skills_after_swap(
     skills_orig: dict[str, int],
     skills_after: dict[str, int],
@@ -471,13 +485,14 @@ def _validate_creation_skills_after_swap(
     if not rolled:
         return 0
 
+    allowed = _creation_allowed_skill_keys()
     sc = slot_current or {}
     seen_targets: set[str] = set()
     mapping: dict[str, str] = {}
     for r in rolled:
         raw = sc.get(r, r)
         ck = str(raw).strip()
-        if ck not in CREATION_SKILL_POOL:
+        if ck not in allowed:
             raise HTTPException(
                 status_code=400,
                 detail=f"skill_slot_current: unknown skill {ck!r} for rolled slot {r!r}.",
@@ -493,15 +508,16 @@ def _validate_creation_skills_after_swap(
         seen_targets.add(ck)
         mapping[r] = ck
 
-    for k in CREATION_SKILL_POOL:
-        v = int(skills_after.get(k, 0) or 0)
+    # Catalog-agnostic: any non-target skill carrying a non-zero rank is invalid,
+    # whether it is a legacy pool key or a new FAZA S skill.
+    for k, raw_v in skills_after.items():
         if k in seen_targets:
             continue
-        if v != 0:
+        if int(raw_v or 0) != 0:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Skill {k!r} has rank {v} but is not the target of any rolled creation slot. "
+                    f"Skill {k!r} has rank {int(raw_v or 0)} but is not the target of any rolled creation slot. "
                     "After swaps, only slot targets may be non-zero (plus keys with rank 0 everywhere else)."
                 ),
             )
@@ -531,13 +547,14 @@ def _coerce_creation_skills_payload(
     base = {k: int(sheet_skills.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
     if incoming is None:
         return base
+    allowed = _creation_allowed_skill_keys()
     out = dict(base)
     for raw_k, raw_v in incoming.items():
         k = str(raw_k).strip()
-        if k not in CREATION_SKILL_POOL:
+        if k not in allowed:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown skill key {k!r}. Allowed keys are the creation skill pool.",
+                detail=f"Unknown skill key {k!r}. Allowed keys are the live skill catalog.",
             )
         try:
             v = int(raw_v)

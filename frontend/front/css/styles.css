@@ -6380,23 +6380,23 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   animation-delay: calc(var(--wiz-i, 0) * 52ms);
 }
 
-.wizard-stat-val.wiz-rolling {
+.wizard-stat-val.wiz-val-rolling {
   animation: wiz-val-rolling 0.07s ease-in-out infinite;
   color: rgba(201,165,74,0.6);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-.wizard-stat-val.wiz-landed {
+.wizard-stat-val.wiz-val-landed {
   animation: wiz-val-land 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-.wizard-skill-rank.wiz-rolling {
+.wizard-skill-rank.wiz-rank-rolling {
   color: rgba(201,165,74,0.75);
   letter-spacing: 0.04em;
 }
 
-.wizard-skill-rank.wiz-landed {
+.wizard-skill-rank.wiz-rank-landed {
   animation: wiz-rank-land 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
 }
 

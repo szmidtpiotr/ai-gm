@@ -1631,9 +1631,27 @@ async function _loadCreatorHelp() {
     if (_creatorHelp) return _creatorHelp;
     try {
         const r = await fetch('/api/mechanics/creator-help');
-        if (r.ok) _creatorHelp = await r.json();
+        if (r.ok) {
+            _creatorHelp = await r.json();
+            _mergeSkillCatalog();
+        }
     } catch (_e) { /* fall back to local hints */ }
     return _creatorHelp;
+}
+// FAZA S (#617) — the wizard's hardcoded ALL_SKILL_ROWS only listed the 16 legacy
+// creation skills, so the new skill engine (gamble/haggling/lockpick/…) could never
+// be picked at creation. Merge the full game_config_skills catalog (already returned
+// by /creator-help) into the swap pool so new skills become selectable.
+function _mergeSkillCatalog() {
+    const cat = _creatorHelp?.skills;
+    if (!Array.isArray(cat)) return;
+    const have = new Set(ALL_SKILL_ROWS.map(r => r.key));
+    for (const s of cat) {
+        if (!s?.key || have.has(s.key)) continue;
+        ALL_SKILL_ROWS.push({ key: s.key, label: s.label || s.key, stat: s.stat || '?', hint: s.description || '' });
+        have.add(s.key);
+    }
+    ALL_SKILL_ROWS.sort((a, b) => a.key.localeCompare(b.key));
 }
 function _statExample(key) {
     return (_creatorHelp?.stats || []).find(s => s.key === key)?.example || '';
