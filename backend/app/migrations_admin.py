@@ -3938,6 +3938,114 @@ def _seed_onboarding_cards_into_knowledge(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _refresh_knowledge_content(conn: sqlite3.Connection) -> None:
+    """#594 audit: fix stale/corrupt knowledge_book entries, dedupe, add gaps.
+
+    Idempotent — UPDATEs set fixed canonical text, DELETEs remove redundant rows,
+    INSERT OR IGNORE adds new reference entries. Safe to run every startup.
+    Runs AFTER seeds so it always wins over re-seeded legacy text.
+    """
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(knowledge_book)").fetchall()}
+    except sqlite3.Error:
+        return
+    has_flags = "show_in_knowledge" in cols
+
+    # 1. Corrected / refreshed bodies (keyed UPDATEs)
+    updates = {
+        "dice_roll": ("Rzut kością",
+            "Twoje akcje rozstrzygane są rzutem: k20 + Mod. statystyki + Ranga umiejętności + "
+            "Biegłość (te same składniki widzisz na karcie rzutu). Wynik porównywany jest z "
+            "trudnością (DC): 8 łatwe, 12 średnie, 16 trudne, 20 ekstremalne. Naturalna 20 = "
+            "automatyczny sukces z podwójnymi obrażeniami. Naturalna 1 = porażka z komplikacją."),
+        "mech_death": ("Śmierć i rzuty na śmierć",
+            "Gdy HP spadnie do 0, bohater nie ginie od razu — pada i co turę rzuca na śmierć "
+            "(k20 vs rosnące DC: 10, potem 13, 16, 19 za kolejne upadki w tej samej walce). "
+            "Trzy porażki = śmierć. Naturalna 1 liczy się jako dwie porażki, naturalna 20 to "
+            "sukces. Drabina resetuje się po walce. Śmierć kończy kampanię; w lochach jest "
+            "natychmiastowa i ostateczna. Jeśli admin włączył wskrzeszenie — można wrócić za złoto/XP."),
+        "death_save": ("Na krawędzi śmierci",
+            "Gdy HP spadną poniżej 25%, jesteś o krok od upadku. Przy 0 HP bohater pada i co turę "
+            "rzuca na śmierć (k20 vs rosnące DC 10→13→16→19; trzy porażki = śmierć, Nat 1 = dwie "
+            "porażki, Nat 20 = sukces). Lecz się zawczasu — miksturą, czarem lub wycofaniem z "
+            "walki. W lochach śmierć jest natychmiastowa i permanentna."),
+        "nat20_nat1": ("Szczęście i pech w kościach",
+            "Naturalna 20 na k20 to zawsze sukces — krytyk z podwójnymi obrażeniami lub "
+            "spektakularny wyczyn. Naturalna 1 to zawsze porażka — fumble z komplikacją fabularną. "
+            "Żaden modyfikator tego nie zmienia."),
+        "durability": ("Zużycie i naprawa ekwipunku",
+            "Broń i zbroja zużywają się z użyciem — broń przy twoim trafionym ataku, zbroja przy "
+            "otrzymanym ciosie. Pasek trwałości w ekwipunku pokazuje stan; przy zerze sprzęt traci "
+            "skuteczność (kara). Naprawisz go u rzemieślnika za złoto (koszt rośnie z tierem przedmiotu)."),
+        "affixes": ("Magiczne afiksy",
+            "Niektóre przedmioty mają magiczne właściwości — afiksy — np. +obrażenia, leczenie przy "
+            "trafieniu, bonus do pancerza. Im wyższy tier afiksu, tym silniejszy efekt. Afiksy można "
+            "nakładać i przelosowywać u rzemieślnika za złoto. Lepsza broń z afiksami potrafi odwrócić "
+            "losy walki."),
+        "raids": ("Napady na szlaku",
+            "Na dzikim terenie, z dala od bezpiecznych osad, z sakiewką pełną złota (>100 gp) grożą ci "
+            "napady — bandyci próbują ukraść część złota. Dostajesz turę ostrzeżenia, potem rzut obronny "
+            "(k20 + DEX/WIS vs DC wg poziomu): sukces = bez straty, porażka = −20% złota. Limit jeden "
+            "napad na 24h, brak poniżej 50 gp."),
+        "crafter": ("Rzemieślnik",
+            "Rzemieślnicy (kowale, płatnerze) ulepszają twój sprzęt: nakładają magiczne afiksy, "
+            "przelosowują je i awansują do wyższego tieru, a także naprawiają trwałość. Każda usługa "
+            "kosztuje złoto rosnące z tierem. Szukaj ich w większych osadach."),
+    }
+    for key, (title, body) in updates.items():
+        try:
+            conn.execute(
+                "UPDATE knowledge_book SET title = ?, body = ? WHERE tip_key = ?",
+                (title, body, key),
+            )
+        except sqlite3.Error:
+            continue
+
+    # 2. Remove duplicate entries (keep nat20_nat1 + combat_conditions)
+    for dup in ("combat_crits", "conditions_stat_mods"):
+        try:
+            conn.execute("DELETE FROM knowledge_book WHERE tip_key = ?", (dup,))
+        except sqlite3.Error:
+            pass
+
+    # 3. New reference entries (knowledge-only)
+    new_entries = [
+        ("affix_pity", "mechanics", "Gwarancja afiksu (pity)",
+            "Gra pilnuje, żeby pech nie trwał wiecznie. Jeśli pokonasz trzech bossów z rzędu bez "
+            "afiksowego łupu, kolejny boss gwarantuje przedmiot z afiksem (min. tier 1). Podobnie "
+            "przy przelosowaniu afiksu u rzemieślnika: jeśli trzy próby nie zmienią afiksu, czwarta "
+            "gwarantuje inny.", 95),
+        ("rest_mechanics", "mechanics", "Odpoczynek",
+            "Dwa rodzaje odpoczynku w bezpiecznej lokacji. Krótki: leczy 1k6 + Mod. CON HP, "
+            "maksymalnie dwa razy między długimi, kosztuje 1h. Długi: pełne HP i mana, kasuje rzuty "
+            "na śmierć, odnawia krótkie odpoczynki i pozwala wydać zebrane PD (★ Długi → 📖 Ucz się); "
+            "kosztuje 8h.", 96),
+        ("shop_pricing", "mechanics", "Sklep i ceny",
+            "Asortyment kupca zależy od lokacji i twojego poziomu — większe osady mają lepszy towar. "
+            "Charyzma (CHA) wpływa na ceny: wysoka CHA obniża zakupy i podnosi utarg ze sprzedaży. "
+            "Uwaga na spam-sprzedaż tego samego typu przedmiotu — cena skupu spada (anti-farm) i wraca "
+            "po czasie.", 97),
+    ]
+    for key, cat, title, body, order in new_entries:
+        try:
+            if has_flags:
+                conn.execute(
+                    "INSERT OR IGNORE INTO knowledge_book "
+                    "(tip_key, category, title, body, is_active, sort_order, kind, "
+                    " show_in_onboarding, show_in_knowledge) VALUES (?,?,?,?,1,?,'knowledge_tip',0,1)",
+                    (key, cat, title, body, order),
+                )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO knowledge_book "
+                    "(tip_key, category, title, body, is_active, sort_order) VALUES (?,?,?,?,1,?)",
+                    (key, cat, title, body, order),
+                )
+        except sqlite3.Error:
+            continue
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4029,6 +4137,7 @@ def run_admin_migrations() -> None:
         _patch_campaign_template_beat_objectives(conn)
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
+        _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
     finally:
         conn.close()
 
