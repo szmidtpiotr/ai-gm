@@ -1242,6 +1242,19 @@ Każdy przedmiot/broń/konsumable/stan ma listę efektów: `effects: [Effect, Ef
 | `enable_action` | Odblokuje możliwość | value (klucz akcji) |
 | `skill_bonus` | Bonus do umiejętności | stat, value |
 | `damage_per_turn` | Obrażenia co turę (DOT) | value, duration |
+| `dot` | DOT po kości (np. on_fire 2d6/turę) — S8 (#603) | value (kość lub liczba), tick, damage_type |
+| `stacking_levels` | Kondycja z poziomami (np. exhausted) — S9 (#604) | max_level, per_level_effects, threshold_effects |
+| `escalating_dot` | DOT narastający w czasie (np. hemorrhage 1d4/turę, +1d4 co 3 tury) — S10 (#605) | value (kość startowa), escalate_every_rounds, escalate_dice, tick |
+| `reroll` | Przerzut testu umiejętności (np. inspired/cursed) — S11 (#606) | mode (player_keep_best/forced_keep_worst), uses, scope (skill_test/attack/all) |
+| `extra_action` | Dodatkowa akcja w turze (np. hasted — darmowa zmiana strefy) — S12 (#607) | action_kind (move_only) |
+| `on_expire_apply` | Przy wygaśnięciu kondycji nakłada inną (np. hasted → exhausted) — S12 (#607) | condition_key, value (poziom) |
+| `on_zero_hp_save` | Rzut ratunkowy gdy HP spadłoby do ≤0 (np. blessed CON DC 12 → 1 HP zamiast nieprzytomności) — S13 (#608) | stat, dc_key lub value (DC), result (stay_at_1hp), uses |
+| `condition_immunity` | Odporność na kondycje (np. rage immune na slowed/weakened); nałożenie kondycji z `immune_to` zdejmuje też już aktywne wpisy z listy — S14 (#609) | immune_to (lista kluczy kondycji) |
+| `behavior_override` | Kondycja steruje turą aktora (np. confused/berserk/panicked) — S18 (#613) | behavior (`random_table_k4` = k4 stoi/atak losowego celu/ucieczka/normalnie; `attack_nearest` = atak najbliższego niezależnie od frakcji; `flee` = ucieczka/zmiana strefy) |
+| `untargetable` | Aktor pomijany przy wyborze celu — wróg nie może go zaatakować (np. hidden) — S19 (#614) | (brak pól; wróg zamiast ataku robi rzut WIS vs top-level `detect_dc`) |
+| `ambush_bonus` | Pierwszy atak z ukrycia dolicza +Nk6 obrażeń RAZ jako oddzielny add po mnożniku (nie podwajany na cricie) i zdejmuje kondycję (np. hidden 2k6) — S19 (#614) | value (kość, np. `2d6`, lub liczba) |
+
+> **Uwaga (U10 lockdown):** ta tabela jest konceptualnym przeglądem. Wiążącym źródłem prawdy nazw typów jest `backend/app/schemas/effect_schema.json` (hybryda — nazwy z działającego kodu: `periodic_save`/`static_stat_modifier`/`block_action`). Kondycja może też nieść top-level blok `cure: {skill, dc}` (S10) — deklaratywne „udany SKILL_TEST tym skillem zdejmuje kondycję", DC z zamka {8,12,16,20,24}. **Top-level `broken_by: [klucz, ...]` (S14)** — nałożenie którejkolwiek z tych kondycji na nosiciela natychmiast zdejmuje tę kondycję (np. rage broken_by [stunned, confused]); generyczna bramka `apply_condition_gate` w `combat_service.py` (immunitet + broken_by + czyszczenie immune_to) działa we wszystkich ścieżkach nakładania kondycji. Derived stat target `save` (S13) = +2 do rzutów obronnych (periodic_save i on_zero_hp_save), np. blessed; `damage_bonus` jako stat_target kondycji (S14) dolicza płaski bonus do obrażeń gracza (np. rage +3); fold w `_combatant_stat_modifier`. **Top-level `granted_by: {skill, dc}` (S19)** — ODWROTNOŚĆ `cure`: udany SKILL_TEST tym skillem NAKŁADA kondycję na gracza (np. hidden granted_by stealth DC 14); helper `skill_service._match_grantable_condition` + pole pending `grants_condition_self` + `combat_service.add_condition_to_character` (sheet + combatant gracza); dc = int ≥ 1 (próg pośredni jak 14 dozwolony — design doc FAZY S). **Top-level `detect_dc` (S19)** — DC rzutu WIS wroga przy aktywnym poszukiwaniu ukrytego gracza (untargetable); sukces zdejmuje hidden.
 
 **Tabela trigger (kiedy efekt działa):**
 
@@ -3774,6 +3787,10 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 #### U10 — Effect schema lockdown ✅ ([#554](https://github.com/szmidtpiotr/ai-gm/issues/554), 2026-06-13)
 
 > ⚠️ **DECYZJA C (hybryda, Piotr 2026-06-13) — wdrożona.** Opis poniżej prescribował nazwy typów `damage_over_time`/`stat_mod`/`skip_turn` i osobny plik JSON Schema. W kodzie istniał już przetestowany walidator `validate_effect_json_payload` (admin_config.py) z INNYM słownictwem i na nim opiera się FAZA S Blok 3 — dlatego **NIE zmieniono nazw typów**. Mapa nazw: `damage_over_time`→`periodic_save`, `stat_mod`→`static_stat_modifier`, `skip_turn`→`block_action`, `heal_hp` = jedno pole `value` (liczba LUB kość). Wdrożono realne luki: (1) `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy (walidator czyta enumy stąd), (2) dodano **LCK** (7. statystyka) + cele pochodne `ac`/`attack_bonus`/`damage_bonus`/`initiative`, (3) audyt `scripts/effect_json_audit.py` (read-only, 169==169 rekordów, 23 legacy zgłoszone do ręcznej decyzji — runtime czyta je osobną ścieżką `stat_mods`/`damage_per_turn`, unifikacja = U11/FAZA S), (4) DSL Smart Entry zaktualizowany. Punkty oryginalnego opisu o nowych nazwach typów = **odrzucone decyzją C**.
+>
+> 🔁 **Rozszerzenie S8 (#603, 2026-06-14) — nowy typ `dot`.** FAZA S Blok 3 dodała schema-zgodny typ efektu **`dot`** (damage-over-time po kości: `value` = liczba lub dice np. `2d6`, `tick`, opcjonalny `damage_type`) + klucz efektu `damage_type` — bo opis S8 zakładał, że `dot` już istnieje jako klocek, a w zablokowanym schemacie U10 go nie było (jedyną ścieżką był legacy `damage_per_turn` poza schematem). Zaktualizowano komplet 4 miejsc (Zasada 4): `effect_schema.json` (enum + category_types.character_condition), walidator `admin_config`, builder F3 (`forge.js`), DSL/system_prompt. Przy okazji `_combatant_stat_modifier` czyta teraz schema-zgodny `static_stat_modifier` z `effects[]` (dotąd tylko legacy `stat_mods`) — kary statów z kondycji U10 wreszcie działają w silniku.
+
+> 🔁 **Rozszerzenie S9 (#604, 2026-06-14) — nowy typ `stacking_levels`.** FAZA S Blok 3 dodała typ efektu **`stacking_levels`** (kondycja z poziomami): pola `max_level` (sufit), `per_level_effects` (lista efektów skalowanych ×poziom — w S9 `static_stat_modifier`), `threshold_effects` (`{poziom: efekt}` — w S9 `block_action` na progu) + 3 nowe klucze efektu. Runtime poziom w `condition.runtime.level`; semantyka kolumny `stackable=1` = ponowne nałożenie podbija poziom zamiast duplikować. Komplet 4 miejsc (Zasada 4): `effect_schema.json`, walidator `admin_config` (+`_validate_stacking_sub_effect`), builder F3 `forge.js`, `system_prompt.txt`. Zdejmowanie poziomami data-driven (`reduce_stacking_conditions` w `rest_service`). Użyty przez `exhausted`; przyszłe `hasted`/`rage` (S12/S14) dorzucą `on_expire → exhausted`.
 
 **Cel:** Jeden, zamknięty format Effect Object. Wszystko co wchodzi do bazy przechodzi przez tę samą walidację — admin, LLM i seedy nie mogą zapisać śmiecia.
 
@@ -4312,7 +4329,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: mnożnik po sukcesie/crit/fail, konsumpcja jednorazowa, klamp, blokada po obrazie. Ręcznie: w grze targuj się przed kupnem — cena w sklepie spada, druga transakcja już bez rabatu.
 
-#### S7 — Gamble: hazard z prawdziwą stawką złota
+#### S7 — Gamble: hazard z prawdziwą stawką złota ✅ ZROBIONE [#601]
+
+> **Wdrożone (2026-06-14):** skill `gamble` (CHA, sort_order 37) + `skill_counters` opposed vs CHA przeciwnika (fallback `default_dc=12` amatorzy / DC 20 zawodowcy narracyjnie) zaseedowane w `migrations_admin.py` (INSERT OR IGNORE). Nowy czysty serwis `gamble_service.py`: `validate_stake` (int, ≥1 gp, ≤ aktualne złoto — wzorzec [SPEND_GOLD] F4), `payout_delta` (stopień S1 → netto: sukces +stawka, krytyk +2×, porażka −stawka, krytporażka −stawka), `gamble_count`/`can_gamble`/`record_gamble` (limit 3/scenę w `session_flags`, **reset automatyczny przy zmianie lokacji** przez porównanie `gamble_scene_loc`), `apply_gamble_outcome` (netto + licznik + flaga `gamble_cheat_accused` przy krytycznej porażce), `consume_cheat_accusation` (jednorazowy sygnał). Tag `[GAMBLE:<stawka>:DC:<n>]` / `[GAMBLE:<stawka>:OPPOSED:CHA:<npc>]` rozpoznawany w `skill_service.intercept_skill_test_tag` (prymityw raz — jedno wejście, wszystkie tory turny pokryte): walidacja stawki vs `characters.gold_gp` + limit scen PRZED utworzeniem testu; niepoprawna stawka/limit → tag zdjęty, brak karty rzutu (narracja zostaje); pending dostaje sub-dict `gamble:{stake}`. Hook resolve w `turns.py` (wzorzec haggling S6): `skill_key=="gamble"` → `apply_gamble_outcome` + `change_gold(source="gamble")` (U26) + iniekcja `[HAZARD]` do narratora (wygrana/przegrana bez liczb; krytporażka = oskarżenie o oszustwo). `economy_service`: nowy kubełek raportu `gamble` w `_SOURCE_BUCKETS`+`ECONOMY_SOURCE_BUCKETS`+`categorize_source` (kafelek Ekonomia U26). `system_prompt.txt`: sekcja HAZARD (kiedy emitować `[GAMBLE:...]`, stawkę podaje gracz, kwoty rozstrzyga mechanika). **Bez nowego typu efektu** (skill, nie efekt bojowy — CZĘŚĆ X bez zmian, jak S6). 19/19 pytest + 1/1 Playwright GREEN; live e2e (kamp. 76, hero 2): nat20 → +20 zł (2×stawka 10), log `gamble +20`, narrator opisał wygraną bez liczb, licznik=1. Liczby = wartości startowe (Numbers Policy).
 
 **Cel prostym językiem:** Gra w kości w karczmie ma prawdziwą stawkę — gracz deklaruje złoto, test rozstrzyga, mechanika przelewa wygraną/przegraną. LLM nie dotyka liczb.
 
@@ -4331,7 +4350,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 > Wzorzec każdego zadania: nowy typ efektu w silniku (`combat_service._process_active_turn_T24` / `_combatant_stat_modifier`) + testy prymitywu + seed kondycji używających go + aktualizacja 4 miejsc z Zasady 4 (CZĘŚĆ X, F3 builder, F1d DSL, schemat U10).
 
-#### S8 — Batch kondycji z istniejących klocków + tag [APPLY_CONDITION]
+#### S8 — Batch kondycji z istniejących klocków + tag [APPLY_CONDITION] ✅ ZROBIONE [#603]
+
+> **Wdrożone (2026-06-14):** 7 kondycji (on_fire/frozen/confused/insane/panicked/charmed/cursed) zaseedowanych do `game_config_conditions` + `data/seeds/01_core_mechanics.sql` z prymitywów. **Decyzja A (Piotr 2026-06-14):** dodano schema-zgodny typ efektu `dot` do U10 (opis S8 błędnie zakładał, że `dot` już istnieje — jedyną ścieżką był legacy `damage_per_turn` poza schematem). Zasada 4: zaktualizowano `effect_schema.json`+walidator+`forge.js`+`system_prompt.txt`. `_combatant_stat_modifier` czyta teraz `effects[static_stat_modifier]` (kary statów kondycji U10 wreszcie działają; naprawia martwe `poisoned`). `apply_condition_to_combatant` dokleja `effect_json` z katalogu (tag staje się MECHANICZNY, nie kosmetyczny) + odrzuca nieznany klucz jako `invalid_reference` → `llm_tag_errors` + korekta U6 (oba tory turns.py). `context_injector` podaje narratorowi label+opis z katalogu. Wersje lite (confused/insane/panicked/charmed/cursed) = same kary+rzut; pełne behavior_override→S18, zły omen→S11. 19/19 pytest (z real-engine dot tick) + 2/2 Playwright GREEN; 7 seedów VALID wobec U10 na DEV. Liczby = startowe (Numbers Policy).
 
 **Cel prostym językiem:** Kondycje, które silnik już umie złożyć z istniejących typów efektów (podpalenie, zmrożenie, dezorientacja...), wchodzą jako dane. Dodatkowo narrator dostaje tag do nakładania kondycji wprost z fabuły — z walidacją katalogu.
 
@@ -4342,7 +4363,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: każda kondycja seed parsuje się schematem U10; APPLY_CONDITION ok/invalid_reference; on_fire tyka 2d6 (test integracyjny combat). Ręcznie: Sandbox → nałóż on_fire adminem → obrażenia co turę widoczne w logu walki.
 
-#### S9 — Prymityw: poziomy stackowania + kondycja `exhausted`
+#### S9 — Prymityw: poziomy stackowania + kondycja `exhausted` ✅ ZROBIONE [#604]
+
+> **Wdrożone (2026-06-14):** nowy schema-zgodny typ efektu `stacking_levels` (klucze `max_level`/`per_level_effects`/`threshold_effects`) dodany do U10 — kondycja zyskuje **poziom** w `runtime.level` (domyślnie 1). Silnik (`combat_service`): `_combatant_stat_modifier` skaluje kary `per_level_effects` ×poziom (prymityw raz, BEZ duplikacji fold-owania); `evaluate_current_turn_conditions` odpala `threshold_effects` przy `level ≥ próg` (exhausted poziom 2 → `block_action` = omdlenie/utrata tury); `apply_condition_to_combatant` przy `stackable=1` podbija `runtime.level` (klamp `max_level`) zamiast duplikować wiersz (`reason=level_bumped`/`level_capped`), niestackowalne → `already_present` jak dotąd. Runtime poziomu zachowany w mirrorze sheet gracza (inaczej kara ×poziom ginie przy synchronizacji combatant→sheet). Zdejmowanie poziomami przez nową, data-driven funkcję `combat_service.reduce_stacking_conditions(remove_all)` wpiętą w `rest_service`: krótki odpoczynek (1h) = −1 poziom (znika przy 0), długi sen = wszystkie. `loot_service` (apply_condition z eliksiru) też bumpuje poziom zamiast duplikować. Seed `exhausted` (stackable=1, max_level 2, STR/DEX/CON −3/poziom, próg 2 = block_action) w `migrations_admin.py` + `data/seeds/01_core_mechanics.sql`. **Zasada 4 (4 miejsca):** `effect_schema.json` (enum + category_types.character_condition + 3 nowe effect_keys), walidator `admin_config.validate_effect_json_payload` (+ `_validate_stacking_sub_effect`), builder F3 `forge.js` (typ rozpoznawany; per_level/threshold autorowane przez seed/JSON), `system_prompt.txt` ([APPLY_CONDITION] — exhausted jako stan stackowalny, kiedy WOLNO). **Walka i rzuty ataku (nat 20/nat 1) bez zmian.** 18/18 pytest (real-engine) + 1/1 Playwright GREEN; live na DEV: seed waliduje U10 (0 błędów), STR −3 (lvl1)/−6 (lvl2), max_level 2, short rest −1. Liczby = wartości startowe (Numbers Policy → tuning po S20). `hasted on_expire → exhausted` (S12) i `rage on_expire → exhausted` (S14) użyją tego prymitywu.
 
 **Cel prostym językiem:** Niektóre stany się piętrzą — pierwszy poziom wyczerpania spowalnia, drugi ścina z nóg. Silnik dostaje pojęcie "poziomu" kondycji z progami.
 
@@ -4354,7 +4377,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: nałożenie 2× podbija level (nie duplikat), kary ×level, próg 2 = brak akcji, odpoczynek zdejmuje poziomami. Ręcznie: Sandbox — nałóż exhausted 2×, combatant traci turę.
 
-#### S10 — Prymityw: eskalujący DOT + kondycja `hemorrhage`
+#### S10 — Prymityw: eskalujący DOT + kondycja `hemorrhage` ✅ ZROBIONE [#605]
+
+> **Wdrożone (2026-06-14):** nowy, schema-zgodny typ efektu `escalating_dot` (pola `value`=kość startowa, `escalate_every_rounds`, `escalate_dice`=przyrost, `tick`, `damage_type`) dodany do U10. Silnik (`combat_service`): helper `_escalating_dot_damage(effect, ticks)` (poziom = `ticks // escalate_every_rounds`; obrażenia = rzut bazowej + poziom × rzut przyrostu); tick w `_process_active_turn_T24` trzyma licznik `ticks` w `runtime.effect_state` (przeżywa między rundami, dedup po markerze jak `dot`). Seed `hemorrhage` (1d4/turę, +1d4 co 3 tury) w `migrations_admin.py` + `data/seeds/01_core_mechanics.sql`. **Deklaratywna ścieżka cure** (nie istniała — dodana wg design doc, „przyda się S19"): top-level klucz `cure: {skill, dc}` w effect_json kondycji (rejestrowany w `effect_schema.json` + walidowany; DC z zamka {8,12,16,20,24}); `skill_service._match_curable_condition` dokleja `cures_condition` do pending skill-testu gdy gracz ma kondycję leczoną tym skillem i **narzuca DC z katalogu** (mechanika decyduje, nie LLM); hook resolve w `turns.py` woła `combat_service.remove_condition_from_character` (sheet + aktywny combatant) przy sukcesie. Leczenie magiczne = istniejący `remove_condition` z mikstury/zaklęcia. **Zasada 4 (4 miejsca):** `effect_schema.json` (enum + category_types + effect_keys + top-level `cure`), walidator `admin_config.validate_effect_json_payload` (gałąź `escalating_dot` + walidacja `cure`), builder F3 `forge.js` (typ rozpoznawany w obu builderach), `system_prompt.txt` ([APPLY_CONDITION:hemorrhage] + leczenie medicine). **Rzuty ataku (nat 20/nat 1, podwójne obrażenia) NIETYKALNE.** 18/18 pytest (z silnikiem walki: krzywa eskalacji 1,1,1,2,2,2,3 po 7 rundach) + 1/1 Playwright GREEN; seed waliduje U10 na DEV. Liczby = wartości startowe (Numbers Policy → tuning po S20). **Decyzja implementacyjna:** `escalating_dot` reużywa klucza `value` dla kości startowej (spójnie z `dot`/`heal_hp`), zamiast osobnego `dice` z opisu „Dla agenta" — nazwy pól to latitude agenta, kontrakt zamknięty w schemacie.
 
 **Cel prostym językiem:** Krwotok, który nieleczony narasta — co 3 tury obrażenia rosną o kość. Silnik dostaje DOT ze wzrostem w czasie.
 
@@ -4365,7 +4390,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: tick rośnie po 3 i 6 rundach; medicine-sukces zdejmuje; przeniesienie stanu między rundami. Ręcznie: Sandbox — hemorrhage na klonie, log pokazuje rosnące obrażenia.
 
-#### S11 — Prymityw: reroll (nadany i wymuszony) + `inspired` + `cursed` (pełny)
+#### S11 — Prymityw: reroll (nadany i wymuszony) + `inspired` + `cursed` (pełny) ✅ ZROBIONE [#606]
+
+> **Wdrożone (2026-06-14):** nowy, schema-zgodny typ efektu `reroll` (pola `mode`=player_keep_best/forced_keep_worst, `uses`, `scope`=skill_test/attack/all) dodany do U10. Nowy czysty serwis `reroll_service.py` (prymityw raz, kondycja danymi — zero `if condition_key==...`): `keep_better`/`keep_worse`, `extract_reroll_effects` (ekstrakcja z aktywnych kondycji po effect_json), budżet „zły omen" 1×/scenę w `session_flags` + reset przy zmianie lokacji, `player_reroll_offer`/`consume_player_reroll` (runtime `reroll_used` na kondycji; inspired znika po wykorzystaniu). `skill_service.resolve_skill_test` dostał opcjonalny `session_flags` (backward-compat) + wydzielony `_derive_outcome`: **forced_keep_worst** psuje UDANY test (drugi serwerowy d20, gorszy zachowany, omen_applied, budżet konsumowany); **player_keep_best** wystawia `reroll_available` przy nieudanym teście. Nowy endpoint `POST /campaigns/{id}/skill-test/reroll` (nowy serwerowy d20, keep-best, zużycie inspired, narracja). Frontend: przycisk „🎲 Przerzuć (Zainspirowany)" na karcie rzutu (`app.js`, bump `?v=606`). Narrator dostaje `[ZŁY OMEN]` / `[PRZERZUT]`. Seed `inspired` (INSERT OR IGNORE) + UPDATE rozszerzający wersję lite `cursed` z S8 (oba walidują U10 na DEV). **Zasada 4 (4 miejsca):** `effect_schema.json` (typ + mode/uses/scope + category_types) + walidator `admin_config` + builder F3 `forge.js` + `system_prompt.txt`. **Rzuty ataku w walce (nat 20/nat 1, podwójne obrażenia) NIETYKALNE** — margines/przerzut dotyczą wyłącznie testów umiejętności. 26/26 pytest + 2/2 Playwright GREEN; live e2e na realnych seedach (cursed: 18→2 omen + budżet 1/scenę; inspired: oferta + konsumpcja). Liczby = wartości startowe (Numbers Policy → tuning po S20). **Rozbieżność świadoma:** design doc mówi „zły omen raz na turę", CZĘŚĆ AI S11 = „1×/scenę" (autorytet zadania); oba startowe.
 
 **Cel prostym językiem:** Inspiracja pozwala raz przerzucić nieudany rzut; klątwa pozwala losowi raz zepsuć udany. Silnik dostaje pojęcie przerzutu.
 
@@ -4379,6 +4406,8 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 #### S12 — Prymityw: dodatkowa akcja + kondycja `hasted`
 
+> **Wdrożone (2026-06-14, #607):** dwa nowe, schema-zgodne typy efektu dodane do U10. **`extra_action`** (pole `action_kind`=move_only): `change_player_zone` honoruje aktywną, niewykorzystaną w turze dodatkową akcję — pierwsza zmiana strefy jest DARMOWA (nie woła `advance_turn`), druga w tej samej turze zużywa turę; flaga `extra_action_used_marker` (runda+aktor) resetuje się sama w kolejnej rundzie. **`on_expire_apply`** (pola `condition_key`+`value`=poziom): `evaluate_current_turn_conditions` przy wygaśnięciu kondycji nakłada wskazaną kondycję na tego samego aktora (generyczne — każda kondycja „z ceną"). Seed `hasted` (DEX +2, extra_action move_only, on_expire→exhausted 1, **duration stała 3 rundy** — schemat U10 nie dopuszcza kości w duration, design doc k4+1; stała ≈ średnia; niestackowalna). Nowy `apply_condition_to_player` (buff celowany w gracza — tag [APPLY_CONDITION] celuje wyłącznie we wrogów) + endpoint Sandbox `POST /admin/sandbox/apply-condition` + przycisk „🧪 Nałóż kondycję" (reuse dla S13/S14). **Zasada 4 (4 miejsca):** `effect_schema.json` (typy+klucz action_kind+action_kinds+category_types) + walidator `admin_config` + builder F3 `forge.js` + `system_prompt.txt` [APPLY_CONDITION] (hasted). **Rzuty ataku w walce (nat 20/nat 1) NIETYKALNE** — zadanie nie dotyka resolve_attack. 12/12 pytest (real-engine) + 1/1 Playwright GREEN; live na DEV (sandbox kampania 77): hasted→zmiana strefy #1 `extra_action_used=true` tura zostaje, #2 zużywa turę → wróg. Liczby = wartości startowe (Numbers Policy → tuning po S20). **Świadoma rozbieżność design doc↔impl: inicjatywa +2 i −2 atak z dodatkowej akcji pominięte (extra_action=move_only, brak dodatkowego ataku); ew. tuning po S20.**
+
 **Cel prostym językiem:** Przyspieszenie daje dodatkową akcję ruchu w turze (zmiana strefy za darmo) i bonusy do refleksu; po zakończeniu — zmęczenie.
 
 **Dla agenta:**
@@ -4389,7 +4418,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: zmiana strefy bez utraty tury przy hasted, exhausted po wygaśnięciu. Ręcznie: Sandbox — hasted, zbliż się + atak w tej samej turze.
 
-#### S13 — Prymityw: trigger przy 0 HP + kondycja `blessed`
+#### S13 — Prymityw: trigger przy 0 HP + kondycja `blessed` ✅ ZROBIONE [#608]
+
+> **Wdrożone (2026-06-14):** nowy, schema-zgodny typ efektu `on_zero_hp_save` (pola `stat`, DC z `dc_key`/`value`, `result=stay_at_1hp`, `uses`) dodany do U10. Helper `combat_service._on_zero_hp_save` (data-driven, żaden `if key=="blessed"`): gdy cios sprowadziłby HP do ≤0, pierwsza aktywna kondycja z tym efektem i pozostałym budżetem `uses` rzuca `d20 + stat_mod + save` vs DC — sukces zostawia 1 HP, dekrementuje budżet w runtime. Hook w `resolve_attack` (ścieżka obrażeń wroga, `sheet=None` → czyta kondycje combatanta) PRZED `player_incapacitated`/`end_combat`. Nowy derived stat target `save` (+2 defensywny) folded w `_combatant_stat_modifier` na ścieżkach `periodic_save` i `on_zero_hp_save`. Seed `blessed` (CON DC 12, uses 1, +2 save, brak `expires` → trwa do końca walki/sceny, niekumulowalna) w `migrations_admin.py` + `01_core_mechanics.sql`. **Zasada 4 (4 miejsca):** `effect_schema.json` (typ + `result` key + `save` stat_target + `save_results` enum + category_types) + walidator `admin_config` (gałąź `on_zero_hp_save`) + builder F3 `forge.js` (oba buildery + allowed_types + defs) + CZĘŚĆ X tabela typów + narrator `system_prompt.txt` ([APPLY_CONDITION:blessed]). F1d DSL N/A (Smart Entry nie generuje kondycji). **Rzuty ataku w walce (nat 20/nat 1, podwójne obrażenia) NIETYKALNE** — hook tylko w momencie HP≤0. 13/13 pytest (z 3 testami real-engine resolve_attack: przeżycie na 1 HP, drugi cios → nieprzytomność, brak blessed → nieprzytomność) + 1/1 Playwright GREEN; blessed waliduje U10 na DEV (0 błędów). Liczby = wartości startowe (Numbers Policy → tuning po S20). **Świadoma rozbieżność:** +2 do obrony w opposed (S4, `skill_service`) odłożone — fold pokrywa rzuty obronne w walce (periodic_save + on_zero_hp_save); opposed-defense +2 = ewentualny follow-up.
 
 **Cel prostym językiem:** Błogosławieństwo daje tarczę losu — raz na scenę, zamiast paść na 0 HP, test CON może zostawić bohatera na 1 HP.
 
@@ -4400,7 +4431,7 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: cios sprowadzający do −2 HP przy blessed + udany save = 1 HP + zużycie; drugi raz w tej samej scenie już bez ratunku. Ręcznie: Sandbox — klon z blessed przeżywa dobicie na 1 HP.
 
-#### S14 — Prymityw: odporność na kondycje + kondycja `rage`
+#### S14 — Prymityw: odporność na kondycje + kondycja `rage` ✅ ZROBIONE [#609]
 
 **Cel prostym językiem:** Kontrolowana furia: bonus do obrażeń i siły, odporność na spowolnienie i osłabienie, a po wszystkim — zmęczenie.
 
@@ -4418,6 +4449,8 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 #### S15 — System reakcji + skill `dodge`
 
+> ✅ **Wdrożone (#610)** — framework reakcji `reaction_declared` na combatancie gracza (konsumowany przy 1. trafieniu/rundę), test DEX vs wynik ataku wroga przez silnik S1 (`_derive_outcome`) PRZED obrażeniami; sukces = 0 dmg, krytyczna porażka (margines ≤ −5) = `reaction_locked_round` (utrata reakcji w nast. rundzie); skill `dodge` (DEX) rank ≥ 1 wymagany; endpoint `POST /combat/declare-reaction` (toggle, bez zużycia tury); toggle w Sandbox + UI walki gracza. Bez nowego typu efektu (dodge = skill, stan reakcji = transient combat state) → CZĘŚĆ X / Zasada 4 bez zmian. Rzuty ataku wroga nietknięte.
+
 **Cel prostym językiem:** Gdy wróg atakuje, gracz z wykupionym unikiem może raz na rundę spróbować całkiem uniknąć ciosu — zanim spadną obrażenia. Pierwsza mechanika "reakcji" w grze.
 
 **Dla agenta:**
@@ -4430,6 +4463,8 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 #### S16 — Reakcja: `shield_block`
 
+> ✅ **Wdrożone (#611)** — druga reakcja w grze; reużywa frameworku reakcji S15 (#610), potwierdzając jego generyczność. Helper `_player_has_shield_equipped(conn, char_id)` (gate: założona — `equipped=1` — broń z `game_config_weapons`, której `key` zawiera `shield` lub `label` zawiera `tarcz` → catches `shield`/`wooden_shield`/`tower_shield` + przyszłe) zwraca `(has_shield, inventory_id)`. Helper `_try_shield_block_reaction` (data-driven, żaden `if key==...`): test STR (`d20 + STR_mod + skill_rank + proficiency`) przez silnik S1 (`_derive_outcome`) przeciw `DC = max(attack_roll, 12)` — **sukces** (margines ≥ 0) redukuje obrażenia o `1d6 + STR_mod` (min 0); **margines ≥ +5 / CRITICAL_SUCCESS** = pełne odparcie (0 dmg); **porażka** = pełne obrażenia; **CRITICAL_FAILURE** = pełne obrażenia + tarcza traci durability ×3 (F7, `UPDATE character_inventory`). Wpięcie w `resolve_attack` (ścieżka obrażeń wroga) **XOR z dodge** — `reaction_declared` trzyma jedną wartość, więc tylko jedna reakcja/rundę. `declare_player_reaction` przyjmuje `shield_block` z gate'em tarczy (400 jeśli brak). Osobny wpis logu `event_type='reaction'` → Sandbox/UI walki pokazuje test STR, redukcję i wynik. Seed skilla `shield_block` (STR, sort_order 39) w `migrations_admin.py`. Frontend: toggle „🛡 Blok" w UI walki gracza (`app.js`, bump `?v=611`) + Sandbox (`sandbox.js?v=13`). **Bez nowego typu efektu** (shield_block = skill, stan reakcji = transient combat state, jak S15) → CZĘŚĆ X tabela typów / Zasada 4 BEZ ZMIAN. **Rzuty ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE** — reakcja działa wyłącznie na obrażenia po trafieniu; margines dotyczy testu bloku (sam jest testem umiejętności). 16/16 pytest (w tym 4 real-engine `resolve_attack`: redukcja, crit-fail durability −3, gate braku tarczy, atak wroga nietknięty) + 3/3 Playwright GREEN. Liczby = wartości startowe (Numbers Policy → tuning po S20). **Świadoma decyzja:** tarcza rozpoznawana po `key`/`label` (nie po `weapon_slot='off_hand_only'`, bo to dzieli z fokusami maga typu `cursed_grimoire`).
+
 **Cel prostym językiem:** Bohater z tarczą może blokować — zamiast unikać, zmniejsza obrażenia o k6+STR, a przy świetnym wyniku odbija atak całkiem.
 
 **Dla agenta:**
@@ -4440,7 +4475,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: redukcja k6+STR, pełne odparcie przy +5, XOR z dodge, durability hit przy crit-fail. Ręcznie: Sandbox — klon z tarczą blokuje, obrażenia w logu zredukowane.
 
-#### S17 — Wrestling: gracz nakłada kondycje wrogom testem przeciwnym
+#### S17 — Wrestling: gracz nakłada kondycje wrogom testem przeciwnym ✅ ZROBIONE [#612]
+
+> **Wdrożone (2026-06-14):** zapasy jako AKCJA BOJOWA (`combat_service.resolve_wrestling`) — pierwszy skill, którego SUKCES mechanicznie nakłada kondycję na wroga. Gate: tura gracza + ZWARCIE (gracz i cel `engaged`); cel poza zwarciem → `{ok:False, blocked:True, block_reason:'out_of_range'}` BEZ konsumpcji tury (wzorzec melee). Silnik rzuca obie strony testu przeciwnego STR vs STR (`d20 + STR_mod` [+ rank + proficiency gracza]); stopień liczy S1 (`_derive_outcome`). **Generyczny prymityw `_apply_skill_outcome_conditions(campaign_id, mapping, outcome, target_ref)`** — mapowanie wynik→kondycja jest DANYMI ze `skill_counters` (3 nowe kolumny `on_success_condition`/`on_crit_condition`/`on_critfail_self_condition`); ZERO `if skill_key==...` / `if condition_key==...` (Zasada 1 — przyszłe skille nakładające kondycje wynikiem dodają tylko wiersze). Stopnie: sukces→cel `slowed`, margines≥+5→cel `stunned` 1 rundę, krytyczna porażka→gracz sam `slowed` (przewrócony). Reuse `apply_condition_to_combatant` (cel) i `apply_condition_to_player` (self). Skill `wrestling` (STR, sort_order 40) + `skill_counters` opposed STR vs STR (fallback DC 12) w `migrations_admin.py`. Akcja: endpoint `POST /campaigns/{id}/combat/wrestling` (konsumuje turę), przycisk „💪 Zapasy" w composerze walki (widoczny w zwarciu; `app.js?v=612`) + log card, oraz w Sandboxie (`sandbox.js?v=14`). **BEZ nowego typu efektu** (wrestling = skill + reuse istniejących kondycji `slowed`/`stunned`) → CZĘŚĆ X tabela typów / Zasada 4 BEZ ZMIAN. **Rzuty ataku w walce (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE** — wrestling to test umiejętności; margines dotyczy wyłącznie jego. 13/13 pytest (real-engine: slowed/stunned/self-slowed/gate/turn/log) + 2/2 Playwright GREEN; live e2e na DEV (sandbox kamp. 77): Łotrzyk vs Starzec → SUCCESS, slowed nałożony (`reason: applied`), tura zużyta. Liczby = wartości startowe (Numbers Policy → tuning po S20).
 
 **Cel prostym językiem:** Zapasy — chwyt i obalenie. Pierwszy skill, którego SUKCES mechanicznie nakłada kondycję na wroga (dotąd kondycje nakładały tylko bronie/czary).
 
@@ -4451,7 +4488,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: opposed STR vs STR, kondycja na celu po sukcesie/crit, self-condition przy crit-fail, gate strefy. Ręcznie: Sandbox — wrestling na wrogu, chip kondycji `slowed` pojawia się przy wrogu.
 
-#### S18 — Prymityw: wymuszenie zachowania + pełne `confused` / `berserk` / `panicked`
+#### S18 — Prymityw: wymuszenie zachowania + pełne `confused` / `berserk` / `panicked` ✅ ZROBIONE [#613]
+
+> **Wdrożone (2026-06-14):** nowy typ efektu `behavior_override` (pole `behavior`: `random_table_k4` / `attack_nearest` / `flee`) dodany do U10 (`effect_schema.json` + walidator). `evaluate_current_turn_conditions` wyznacza `forced_behavior` aktora bieżącej tury generycznie (zero `if condition_key==`); k4 rzucany RAZ/turę i persystowany w runtime, by `resolve_attack` odczytał tę samą decyzję. ENEMY: enemy branch `resolve_attack` wykonuje stand/flee/attack — **nowa ścieżka obrażeń wróg→wróg** (berserk atakuje najbliższego niezależnie od frakcji + obsługa śmierci celu-wroga). PLAYER: banner z wynikiem k4/ucieczki w torze walki (tura NIE przejęta w całości — UX). Seedy: `confused` podniesiony o random_table_k4, `panicked` o flee+periodic_save WIS 14, `berserk` NOWA (attack_nearest, +3 atak/+3 obrażenia foldowane generycznie w atak wroga przez `_combatant_stat_modifier`, -3 AC, WIS DC 14, 6 rund). Przy okazji naprawiono ukryty bug `_block` UnboundLocalError z S16 (atak wroga przy pudle). Zasada 4 w 4 miejscach (schema+walidator / forge.js / system_prompt.txt / CZĘŚĆ X). Sandbox: apply-condition przyjmuje `enemy_ref` (test kondycji na wrogu). Rzuty ataku gracza (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE. 17/17 pytest real-engine + 1/1 Playwright. Liczby = wartości startowe (Numbers Policy → tuning po S20).
 
 **Cel prostym językiem:** Stany odbierające kontrolę: zdezorientowany działa losowo, berserk atakuje najbliższego (też sojusznika!), spanikowany ucieka. Najtrudniejszy prymityw — kondycja steruje turą.
 
@@ -4463,7 +4502,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: każdy behavior wg tabeli, berserk bije najbliższego niezależnie od frakcji, panicked rzuca WIS co turę; testy charakteryzujące bez regresji. Ręcznie: Sandbox — berserk na wrogu w walce 2 wrogów, wróg atakuje drugiego wroga.
 
-#### S19 — Kondycja `hidden`: ukrycie i zasadzka
+#### S19 — Kondycja `hidden`: ukrycie i zasadzka ✅ ZROBIONE [#614]
+
+> **Wdrożone (2026-06-14):** dwa nowe, schema-zgodne typy efektów dodane do U10: `untargetable` (aktor z aktywną kondycją niosącą ten efekt jest pomijany przy wyborze celu — wróg zamiast ataku robi rzut WIS vs top-level `detect_dc`) + `ambush_bonus` (pole `value`=kość, np. 2d6; pierwszy atak z ukrycia dolicza tę kość RAZ jako **oddzielny add PO mnożniku** — nie podwajany na nat20 — i zdejmuje kondycję). Dwa nowe top-level klucze: `granted_by: {skill, dc}` (**ODWROTNOŚĆ `cure` z S10** — udany SKILL_TEST tym skillem NAKŁADA kondycję; dc=int≥1, próg 14 dozwolony) i `detect_dc` (int). Silnik (`combat_service`): helpery `_combatant_is_untargetable` / `_actor_detect_dc` / `_hidden_conditions` / `_roll_ambush_bonus` / `_remove_combatant_conditions` (wszystkie data-driven, zero `if condition_key=="hidden"`); w `resolve_attack` ścieżka wroga sprawdza untargetable PRZED atakiem → rzut WIS detekcji (sukces zdejmuje hidden), ścieżka gracza dolicza zasadzkę w bloku obrażeń i zdejmuje hidden (też przy pudle — atak demaskuje). Wejście: `skill_service._match_grantable_condition` (mirror `_match_curable_condition`) dokleja `grants_condition_self` do pending skill-testu + narzuca DC z katalogu; hook resolve w `turns.py` woła nowy `combat_service.add_condition_to_character` (sheet + combatant gracza). Seed `hidden` (untargetable + ambush_bonus 2d6, granted_by stealth DC 14, detect_dc 14) w `migrations_admin.py` + `01_core_mechanics.sql`. **Zasada 4 (5 miejsc):** `effect_schema.json` (typy + top-level granted_by/detect_dc + category_types) + walidator `admin_config` (gałęzie untargetable/ambush_bonus + granted_by/detect_dc) + builder F3 `forge.js` (oba buildery) + CZĘŚĆ X tabela typów + narrator `system_prompt.txt` (hidden = nadawany przez `[SKILL_TEST:stealth:DC:14]`, nie tagiem). Sandbox: dropdown kondycji data-driven — `hidden` pojawia się z seeda (bez zmian JS). **Rzuty ataku w walce (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE** — zasadzka to oddzielny add po mnożniku; margines dotyczy testu `stealth`. 19/19 pytest (real-engine resolve_attack: untargetable, detekcja nat20, +2k6 raz, brak bonusu 2. ataku, zasadzka nie podwajana na cricie) + 1/1 Playwright GREEN; live e2e DEV (sandbox kamp. 77): wróg nie trafia ukrytego gracza (10→10, WIS save 5<14), zasadzka +7 (2k6) zdejmuje hidden. Liczby = wartości startowe (Numbers Policy → tuning po S20). **Decyzja:** `granted_by.dc` NIE zamknięte do skali {8,12,16,20,24} (jak `cure`) — design doc FAZY S używa progu 14 (jak periodic_save WIS 14 w S18).
 
 **Cel prostym językiem:** Skuteczne skradanie daje stan "Ukryty": wrogowie nie mogą cię atakować, a pierwszy atak z ukrycia boli (+2k6) i wyprzedza.
 
@@ -4475,7 +4516,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: wróg nie wybiera hidden jako celu, +2k6 raz, atak zdejmuje. Ręcznie: Sandbox — stealth → chip hidden → atak z bonusem w logu → chip znika.
 
-#### S20 — 🎮 KAMIEŃ MILOWY: playtest FAZY S
+#### S20 — 🎮 KAMIEŃ MILOWY: playtest FAZY S ✅ ZROBIONE [#615]
+
+> **Wykonane (2026-06-14):** Arm 1 — Sandbox sweep na produkcyjnym `combat_service` (kampania `[SANDBOX]`): 15/15 kondycji FAZY S (on_fire, frozen, exhausted×2poz., hemorrhage z eskalacją, cursed, inspired, hasted, blessed, rage, hidden, confused/panicked/berserk wrogów, charmed/insane lite) zgodne z design doc — wszystkie prymitywy potwierdzone. Arm 2 — scenariusz LLM (kampania 78, bohater 2, 7 realnych tur): nowy skill `tracking` (S5) odpala się przez safety-net U7 ✅; hazard `[GAMBLE]` (S7) **nie** wyemitowany w swobodnej grze → złoto bez ruchu (P2 [#616]); opposed/intimidation rozwiązane generycznie; targowanie (S6) nieosiągalne organicznie przez blokery nawigacji świata #518/#522 (NIE FAZA S). **Werdykt: GRYWALNE Z ZASTRZEŻENIAMI** — silnik zdrowy (15/15 + live e2e każdego zadania), dług = dyscyplina emisji tagów przez LLM (prompt tuning, #616). 0×P0, 0×P1, 1×P2. Liczby pozostają startowe (Numbers Policy — decyzja o tuningu należy do Piotra). Bez zmiany designu → CZĘŚĆ X / Zasada 4 bez zmian. **Backlog „zegar świata" (disease/broken_limb) potwierdzony jako osobny projekt.**
 
 **Cel prostym językiem:** Sprawdzamy całość w realnej grze: margines w narracji, testy przeciwne na statach, nowe skille i kondycje w akcji. Werdykt + lista poprawek balansu.
 
@@ -5104,3 +5147,21 @@ Blok 6: L18 (po L8+L12) → L19 (kamień milowy, po wszystkim poza L17) → L17 
 **Cel prostym językiem:** Pełna wyprawa zagrana jak przez gracza — od ekranu startu, przez 2 cykle endless, po śmierć/wyjście — z raportem co działa, a co nie.
 
 **Dla agenta:** Bez TDD, bez issue [TASK] — raport do issue `[SMOKE] FAZA L`. Scenariusz: wejście z ekranu start (L13b) + wejście z hexa (E21), pełny segment, boss, „idź głębiej", drugi boss, śmierć w cyklu 3 (weryfikacja checkpointu: XP/gold/HP), porzucenie w osobnym runie (50% cooldown), mapa i przyciski na telefonie. Defekty → issues P0/P1/P2. Zaliczone = GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
+
+---
+
+## Poprawki admin/UI — 2026-06-14 (#587–#593)
+
+Batch standalone (panel admina + Web Push), wdrożone metodą /tdd (pogrupowane po wspólnych plikach):
+
+| Issue | Obszar | Co naprawiono | Testy |
+|---|---|---|---|
+| #589 | Mapa | Globalna generacja świata: HEX/romb → pełny KWADRAT (`_world_hex_coords`, usunięty cube-constraint) | 2/2 pytest + Playwright |
+| #590 | Mapa | Podgląd/edycja wpisów „Do zatwierdzenia"/„Floating" przed decyzją (modal + PATCH `/locations/{key}/edit`) | 4/4 pytest + Playwright |
+| #588 | Tabele admin | Kampanie multi-select naprawione (rowCheck/toggleAll → `shared/selection.js`) | Playwright |
+| #591 | Tabele admin | Resize kolumn (persist localStorage) + filtr per-kolumna (`enhanceTable` w `shared/table.js`) | Playwright |
+| #587 | Przegląd | Zakładka Zdarzenia: dodane endpointy `/analytics/events` + `/analytics/llm` + tabele `game_events`/`llm_call_log` | 4/4 pytest + 2/2 Playwright |
+| #592 | Wiedza | +4 wpisy mechanik FAZY U (durability/raids/affix pity/economy telemetry) | 3/3 pytest + Playwright |
+| #593 | Web Push | Pełny stack: `pywebpush` + VAPID env + frontend SW register/subscribe + przycisk w Ustawieniach | 5/5 pytest + 3/3 Playwright |
+
+Status: wszystkie **review/needs-testing** — czekają na weryfikację wizualną Piotra na DEV. Szczegóły w `notes.md` → „Zrobione dodatkowe".

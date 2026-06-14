@@ -38,6 +38,10 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - GITHUB_PAT=${GITHUB_PAT:-}
       - GITHUB_REPO=${GITHUB_REPO:-szmidtpiotr/ai-gm}
+      # #593 — Web Push VAPID keys (values in .env on host, gitignored)
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL:-mailto:admin@studio-colorbox.com}
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm_dev.db}

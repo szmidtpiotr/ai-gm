@@ -14,11 +14,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
 | **U (Plan naprawczy)** | **30/35** | **86% — PRZED Fazą 5 MP (U21–U23 odłożone do FAZY L; otwarte: U26, U27)** |
-| **S (Skille i Stany)** | **6/20** | **30% — ▶ W TOKU (S1–S6 ✅); następne S7 (gamble); Blok 3 wymaga U10 ✅** |
+| **S (Skille i Stany)** | **18/20** | **90% — ▶ W TOKU (S1–S18 ✅, Blok 4 prawie gotowy); następne S19 (kondycja hidden: untargetable + ambush)** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **105/193** | **54%** |
+| **TOTAL** | **114/193** | **59%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -268,7 +268,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — ▶ NASTĘPNA W KOLEJCE (po #578, przed CAŁĄ FAZĄ L; decyzja 2026-06-13)
+## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — ✅ UKOŃCZONA (S1–S20, 2026-06-14; werdykt playtestu: GRYWALNE Z ZASTRZEŻENIAMI [#615], dług promptu [#616]) → następna: CAŁA FAZA L
 
 > Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AI. Źródło danych: `skills_conditions_design_doc.md` (korzeń repo). Kolejność = sekcja "FAZA S — zależności i kolejność" w CZĘŚCI AI (S1→S4 → S5→S7 → [U10!] S8→S14 → S15→S19 → S20). Każde zadanie = GitHub Issue `[TASK] SNN — tytuł` wdrażane `/tdd`; wyjątek S20 = czysty playtest (bez TDD, raport do issue [SMOKE] FAZA S). Prompt startowy: `prompt_s.md`.
 
@@ -281,26 +281,26 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 ### Blok 2 — Skille: batch danych + hooki
 - [x] S5 — Seed ~16 skilli kategorii A (czyste testy) + countery + keyword map U7 — [#585](https://github.com/szmidtpiotr/ai-gm/issues/585) (18 skilli, 18 counterów opposed/dc, 7 kategorii ryzyka U7; katalog LLM 35 skilli)
 - [x] S6 — Haggling: targowanie wpięte w ceny sklepu — [#586](https://github.com/szmidtpiotr/ai-gm/issues/586)
-- [ ] S7 — Gamble: hazard z prawdziwą stawką złota
+- [x] S7 — Gamble: hazard z prawdziwą stawką złota — [#601](https://github.com/szmidtpiotr/ai-gm/issues/601)
 
 ### Blok 3 — Prymitywy efektów + kondycje parami — ⛔ WYMAGA U10
-- [ ] S8 — Batch kondycji z istniejących klocków (on_fire, frozen, lite: confused/insane/panicked/charmed/cursed) + tag [APPLY_CONDITION]
-- [ ] S9 — Prymityw stacking_levels + kondycja exhausted
-- [ ] S10 — Prymityw escalating_dot + kondycja hemorrhage
-- [ ] S11 — Prymityw reroll + inspired + cursed (pełny)
-- [ ] S12 — Prymityw extra_action + on_expire_apply + kondycja hasted
-- [ ] S13 — Prymityw on_zero_hp_save + kondycja blessed
-- [ ] S14 — Prymityw condition_immunity + kondycja rage
+- [x] S8 — Batch kondycji z istniejących klocków (on_fire, frozen, lite: confused/insane/panicked/charmed/cursed) + tag [APPLY_CONDITION] — [#603] (nowy prymityw `dot` dodany do U10 — decyzja A; `_combatant_stat_modifier` czyta teraz schema-zgodny `static_stat_modifier`; tag dokleja effect_json + invalid_reference)
+- [x] S9 — Prymityw stacking_levels + kondycja exhausted — [#604](https://github.com/szmidtpiotr/ai-gm/issues/604)
+- [x] S10 — Prymityw escalating_dot + kondycja hemorrhage — [#605](https://github.com/szmidtpiotr/ai-gm/issues/605)
+- [x] S11 — Prymityw reroll + inspired + cursed (pełny) — [#606](https://github.com/szmidtpiotr/ai-gm/issues/606) (typ efektu `reroll`: player_keep_best/forced_keep_worst; inspired = CHA/WIS +2 + przerzut keep-best; cursed pełny = zły omen 1×/scenę keep-worst; nowy serwis `reroll_service.py` + endpoint `POST /skill-test/reroll` + przycisk „Przerzuć (Zainspirowany)"; Zasada 4 w 4 miejscach; rzuty walki nietknięte)
+- [x] S12 — Prymityw extra_action + on_expire_apply + kondycja hasted — [#607](https://github.com/szmidtpiotr/ai-gm/issues/607) (typy `extra_action`/`on_expire_apply` w U10; hasted=DEX+2+darmowa zmiana strefy+exhausted po 3 rundach; `apply_condition_to_player` + przycisk Sandbox; Zasada 4 w 4 miejscach; rzuty walki nietknięte)
+- [x] S13 — Prymityw on_zero_hp_save + kondycja blessed — [#608](https://github.com/szmidtpiotr/ai-gm/issues/608) (typ efektu `on_zero_hp_save` w U10: stat+DC+result=stay_at_1hp+uses; blessed=CON DC 12 raz/scenę zostawia 1 HP zamiast nieprzytomności + derived stat `save` +2 defensywny fold w periodic_save; hook w resolve_attack przy HP≤0; Zasada 4 w schema+forge×2+CZĘŚĆ X+prompt; rzuty ataku nietknięte; 13/13 pytest z real-engine + 1/1 Playwright)
+- [x] S14 — Prymityw condition_immunity + kondycja rage — [#609](https://github.com/szmidtpiotr/ai-gm/issues/609) (typ efektu `condition_immunity` immune_to[...] + top-level klucz `broken_by`[...]; generyczna bramka `apply_condition_gate` we wszystkich ścieżkach nakładania kondycji; rage=STR+2/damage_bonus+3/immune[slowed,weakened]/broken_by[stunned,confused]/on_expire→exhausted/6 rund; Zasada 4 w schema+validator+forge+CZĘŚĆ X+prompt; rzuty walki nietknięte; 13/13 pytest real-engine + 1/1 Playwright)
 
 ### Blok 4 — Zaawansowane mechaniki bojowe (można PRZED Blokiem 3; S18 wymaga S8)
-- [ ] S15 — System reakcji (pre-deklaracja) + skill dodge
-- [ ] S16 — Reakcja shield_block
-- [ ] S17 — Wrestling: skill nakłada kondycje wrogom (opposed STR vs STR)
-- [ ] S18 — Prymityw behavior_override + pełne confused/berserk/panicked
-- [ ] S19 — Kondycja hidden: untargetable + ambush_bonus
+- [x] S15 — System reakcji (pre-deklaracja) + skill dodge — [#610](https://github.com/szmidtpiotr/ai-gm/issues/610) (pierwsza reakcja w grze: flaga `reaction_declared` konsumowana przy 1. trafieniu/rundę; test DEX vs wynik ataku wroga PRZED obrażeniami; sukces=0 dmg, krytyczna porażka=lockout 1 rundy; skill-gated rank≥1; rzuty ataku wroga nietknięte; toggle w Sandbox + UI walki)
+- [x] S16 — Reakcja shield_block — [#611](https://github.com/szmidtpiotr/ai-gm/issues/611) (druga reakcja w grze, reużywa frameworku S15; tarcza = założona broń z key `shield`/label `tarcz`; test STR vs atak DC≥12 — sukces redukuje dmg o 1k6+STR, margines≥+5 pełne odparcie, crit-fail tarcza −3 durability; XOR z unikiem; skill `shield_block` STR; bez nowego typu efektu → Zasada 4/CZĘŚĆ X bez zmian; 16/16 pytest real-engine + 3/3 Playwright; rzuty ataku wroga nietknięte)
+- [x] S17 — Wrestling: skill nakłada kondycje wrogom (opposed STR vs STR) — [#612](https://github.com/szmidtpiotr/ai-gm/issues/612) (pierwszy skill, którego SUKCES mechanicznie nakłada kondycję na wroga; akcja bojowa gate engaged, konsumuje turę; generyczny prymityw `_apply_skill_outcome_conditions` + 3 kolumny skill_counters `on_success/on_crit/on_critfail_self_condition` — Zasada 1, zero `if skill_key==`; sukces→slowed, margines≥+5→stunned, crit-fail→gracz slowed; reuse apply_condition_to_combatant/_to_player; BEZ nowego typu efektu → CZĘŚĆ X/Zasada 4 bez zmian; rzuty ataku nietknięte; 13/13 pytest real-engine + 2/2 Playwright; live e2e na DEV)
+- [x] S18 — Prymityw behavior_override + pełne confused/berserk/panicked — [#613](https://github.com/szmidtpiotr/ai-gm/issues/613) (nowy typ efektu `behavior_override`: random_table_k4/attack_nearest/flee; confused podniesiony do k4, panicked do flee, berserk NOWA kondycja; wróg z berserk atakuje najbliższego niezależnie od frakcji — nowa ścieżka obrażeń wróg→wróg w resolve_attack; +3 atak/+3 obrażenia/-3 AC foldowane generycznie; player-side banner k4 bez przejęcia tury; przy okazji naprawiono ukryty bug `_block` UnboundLocalError z S16 przy pudle wroga; Zasada 4 w 4 miejscach; rzuty ataku nietknięte; 17/17 pytest real-engine + 1/1 Playwright)
+- [x] S19 — Kondycja hidden: untargetable + ambush_bonus — [#614](https://github.com/szmidtpiotr/ai-gm/issues/614) (dwa nowe typy efektów `untargetable` (wróg pomija ukrytego) + `ambush_bonus` (+2k6 pierwszy atak, oddzielny add po mnożniku, zdejmuje kondycję); top-level `granted_by:{skill,dc}` = ODWROTNOŚĆ cure (stealth DC 14 nakłada hidden) + `detect_dc` (wróg WIS save przy poszukiwaniu); helpery `_combatant_is_untargetable`/`_roll_ambush_bonus`/`add_condition_to_character` + `skill_service._match_grantable_condition`; Zasada 4 w 5 miejscach; rzuty ataku nietknięte; 19/19 pytest real-engine + 1/1 Playwright; live e2e DEV sandbox 77: wróg nie trafia ukrytego 10→10, zasadzka +7 zdejmuje hidden)
 
 ### Kamień milowy
-- [ ] S20 — 🎮 Playtest FAZY S (Sandbox sweep + /game-smoke; raport do [SMOKE] FAZA S; bez TDD)
+- [x] S20 — 🎮 Playtest FAZY S (Sandbox sweep + /game-smoke; raport do [SMOKE] FAZA S; bez TDD) — [#615](https://github.com/szmidtpiotr/ai-gm/issues/615) (Sandbox sweep 15/15 kondycji PASS vs design doc; Arm 2 LLM: werdykt GRYWALNE Z ZASTRZEŻENIAMI — 0×P0, 0×P1, 1×P2 [#616] pod-emisja tagów GAMBLE/haggling/APPLY_CONDITION w swobodnej grze; mechanika silnika zdrowa, dług = dyscyplina promptu; liczby = startowe, tuning należy do Piotra)
 
 > Poza zakresem FAZY S (zapisane w CZĘŚCI AI): disease/broken_limb (zegar świata), crafting mechaniczny (trade_craft/alchemy = narracyjne), pełne charmed/insane, skutki inwentarzowe pickpocket/torture.
 
@@ -458,6 +458,13 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#580](https://github.com/szmidtpiotr/ai-gm/issues/580) — zegar `ingame_hours`: write-through kolumny w `clock_service` (koniec rozjazdu kolumna↔flaga) + backfill 22 wierszy DEV. 2/2 pytest + 1/1 Playwright. **review/needs-testing**
 - [x] [#579](https://github.com/szmidtpiotr/ai-gm/issues/579) — puste sklepy wiejskie: domyślny stock wg roli (`_default_stock_for_npc`) gdy `shop_inventory_json` pusty; wpięte w display + buy. 3/3 pytest + 1/1 Playwright. **review/needs-testing**
 - [x] [#573](https://github.com/szmidtpiotr/ai-gm/issues/573) — część 1: `game_item_key` zapisywany przy grancie + backfill 26/26 wierszy DEV. 4/4 pytest + 1/1 Playwright. Część 2 (pełny read-switch na game_items + drop legacy) → osobne zadanie **U11d**. **review/needs-testing**
+- [x] [#589](https://github.com/szmidtpiotr/ai-gm/issues/589) — Mapa: globalna generacja świata dawała HEX/romb; nowy helper `_world_hex_coords()` (pełny kwadrat, usunięty cube-constraint) w `hex_world.py`. 2/2 pytest + Playwright. **review/needs-testing** _(grupa #589+#590)_
+- [x] [#590](https://github.com/szmidtpiotr/ai-gm/issues/590) — Mapa: podgląd/edycja wpisów „Do zatwierdzenia"/„Floating" — modal `openLocDetailModal` + enrich floating SELECT + `update_location_fields()` + PATCH `/locations/{key}/edit`. 4/4 pytest + Playwright. **review/needs-testing** _(grupa #589+#590)_
+- [x] [#588](https://github.com/szmidtpiotr/ai-gm/issues/588) — Kampanie multi-select martwy (rowCheck/toggleAll undefined); wydzielone do `shared/selection.js`, wpięte w campaigns.js. Playwright GREEN. **review/needs-testing** _(grupa #588+#591)_
+- [x] [#591](https://github.com/szmidtpiotr/ai-gm/issues/591) — Tabele admin: resize kolumn (persist localStorage) + filtr per-kolumna; `enableColumnResize`/`enableColumnFilters`/`enhanceTable` w `shared/table.js`, wiring centralny w index.html. Playwright GREEN. **review/needs-testing** _(grupa #588+#591)_
+- [x] [#587](https://github.com/szmidtpiotr/ai-gm/issues/587) — Przegląd→Zdarzenia: brakujące endpointy analytics; dodane `get_events`/`get_llm` + routy + tabele `game_events`/`llm_call_log` (migracja). 4/4 pytest + 2/2 Playwright. **review/needs-testing**
+- [x] [#592](https://github.com/szmidtpiotr/ai-gm/issues/592) — Wiedza: +4 wpisy mechanik FAZY U (durability/raids/affix pity/economy telemetry); `FAZA_U_KNOWLEDGE_TIPS` + seed w migrations_admin. 3/3 pytest + Playwright. **review/needs-testing**
+- [x] [#593](https://github.com/szmidtpiotr/ai-gm/issues/593) — Web Push pełny stack: `pywebpush` w requirements, VAPID env z .env, frontend SW register + `enablePushNotifications` + przycisk w Ustawieniach. 5/5 pytest + 3/3 Playwright; `/vapid-public-key`→200. E2E na prawdziwym urządzeniu **review/needs-testing**
 - [verify] [#568](https://github.com/szmidtpiotr/ai-gm/issues/568) — brak lootu po zwycięstwie: **zweryfikowane jako RNG, nie bug** (24/30 dropów itemów + złoto w teście empirycznym). Rekomendacja: zamknąć.
 - [stale-fixed → do zamknięcia po weryfikacji wizualnej] #566 (sendCombatNarration→stream), #518/#520/#522/#534/#535/#549/#553 (U30/U5-6/U28-29/HF-6/7/9/11) — kod naprawiony, czekają na wizualną weryfikację Piotra.
 - [x] [#594](https://github.com/szmidtpiotr/ai-gm/issues/594) — unifikacja onboarding + knowledge_book: niezależne flagi `show_in_onboarding` + `show_in_knowledge` (jeden wpis może być widoczny w OBU miejscach), seed MECHANIC_CARDS→DB z obiema flagami, `onboarding_service._card_content()` czyta z DB (gate show_in_onboarding) z fallbackiem do dict, `/knowledge-tips` filtruje show_in_knowledge, admin Wiedza: 2 checkboxy + 2 badge. 3/3 pytest + 37 onboarding regresja + 1/1 Playwright. **review/needs-testing**
