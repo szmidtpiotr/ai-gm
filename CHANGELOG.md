@@ -24,6 +24,7 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 - **U24 — Counterplay napadu** (#574): tura ostrzeżenia → rzut obronny d20+stat vs DC wg poziomu; próg biedy 50gp; limit 1/24h
 
 ### Fixed
+- **Crash startu PROD (U11a)**: backfill `game_items` robił `int(rarity)`, ale legacy tabele PROD trzymają rzadkości słownie (common/rare/uncommon) → ValueError → startup abort → deploy fail. Dodano `_as_int()` + `_normalize_legacy_rarities()` (słowo→int w tabelach źródłowych przed backfillem; domyka też runtime loot/durability)
 - **U12 — db_lint zahartowany** (#559→#560): dodana autoryzacja endpointu (była dziura), 4 brakujące checki, CLI w obrazie backendu
 - Weryfikacja Bloku 4 (B4V): sklep zdejmuje/dolicza złoto z saldem, trwałość spada po walce, loot trafia do ekwipunku z `game_items`
 - Issues #566–#569, #573, #578–#581 (combat roll block, generic enemy label, loot RNG, combat dice modal, `game_item_key`, text/move desync, shop default stock, clock sync, success margin)
