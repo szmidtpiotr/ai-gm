@@ -338,7 +338,7 @@ async function _loadToolsKnowledge() {
     host.innerHTML = addBtn + `<div class="card"><div class="card-header"><span class="card-title">Księga Wiedzy</span><span class="card-count">${items.length}</span></div>
       <div class="table-wrap"><table class="data-table" id="tools-knowledge-table"><thead><tr>
         <th><div class="th-inner">Klucz</div></th>
-        <th><div class="th-inner">Rodzaj</div></th>
+        <th><div class="th-inner">Widoczne w</div></th>
         <th class="td-sticky"><div class="th-inner">Tytuł</div></th>
         <th><div class="th-inner">Kategoria</div></th>
         <th><div class="th-inner">Kolejność</div></th>
@@ -346,7 +346,7 @@ async function _loadToolsKnowledge() {
         <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
       </tr></thead><tbody>${items.map(k => `<tr>
         <td class="td-mono" style="font-size:0.72rem">${_esc(k.tip_key)}</td>
-        <td>${(k.kind==='onboarding_card')?'<span class="badge badge-purple">onboarding</span>':'<span class="badge badge-slate">wiedza</span>'}</td>
+        <td>${k.show_in_onboarding?'<span class="badge badge-purple">onboarding</span> ':''}${k.show_in_knowledge?'<span class="badge badge-slate">wiedza</span>':''}${(!k.show_in_onboarding&&!k.show_in_knowledge)?'<span class="badge badge-slate">—</span>':''}</td>
         <td class="td-sticky td-name">${_esc(k.title)}</td>
         <td class="td-muted">${_esc(k.category||'—')}</td>
         <td class="td-mono">${k.sort_order??0}</td>
@@ -380,11 +380,11 @@ function openKnowledgeModal(prefillOrNull) {
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       ${isEdit ? '' : `<div class="form-row"><label>Klucz *</label><input id="kn-key" class="field-input form-mono" placeholder="np. combat_basics" /></div>`}
       <div class="form-row"><label>Tytuł *</label><input id="kn-title" class="field-input" value="${_esc(p.title||'')}" /></div>
-      <div class="form-row"><label>Rodzaj</label>
-        <select id="kn-kind" class="field-input">
-          <option value="knowledge_tip"${p.kind!=='onboarding_card'?' selected':''}>Wiedza (gracz: Księga)</option>
-          <option value="onboarding_card"${p.kind==='onboarding_card'?' selected':''}>Karta onboardingu (popup mechaniki)</option>
-        </select>
+      <div class="form-row"><label>Widoczne w</label>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:normal"><input type="checkbox" id="kn-show-onb" ${p.show_in_onboarding?'checked':''} /> Onboarding (popup mechaniki)</label>
+          <label style="font-weight:normal"><input type="checkbox" id="kn-show-kno" ${p.show_in_knowledge!==0?'checked':''} /> Wiedza gracza (Księga)</label>
+        </div>
       </div>
       <div class="form-row"><label>Kategoria</label>
         <select id="kn-cat" class="field-input">${CATS.map(c=>`<option value="${c}"${p.category===c?' selected':''}>${c}</option>`).join('')}</select>
@@ -407,7 +407,7 @@ async function saveKnowledge(existingKey, btn) {
   if (!title) { showToast('Wypełnij tytuł.', 'error'); return; }
   const key = existingKey || g('kn-key')?.value?.trim();
   if (!key) { showToast('Wypełnij klucz.', 'error'); return; }
-  const body = { tip_key: key, title, body: g('kn-body')?.value?.trim()||'', category: g('kn-cat')?.value||'general', kind: g('kn-kind')?.value||'knowledge_tip', sort_order: parseInt(g('kn-order')?.value)||0, is_active: g('kn-active')?.checked??true };
+  const body = { tip_key: key, title, body: g('kn-body')?.value?.trim()||'', category: g('kn-cat')?.value||'general', show_in_onboarding: g('kn-show-onb')?.checked??false, show_in_knowledge: g('kn-show-kno')?.checked??true, sort_order: parseInt(g('kn-order')?.value)||0, is_active: g('kn-active')?.checked??true };
   btn.disabled = true; btn.textContent = '⏳';
   try {
     if (existingKey) await apiFetch(`/api/admin/knowledge-book/${key}`, { method: 'PATCH', body: JSON.stringify(body) });

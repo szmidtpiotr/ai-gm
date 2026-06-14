@@ -3487,13 +3487,14 @@ def admin_create_knowledge_tip(req: dict = Body(...), _: None = Depends(require_
         raise HTTPException(status_code=400, detail="tip_key, title, body are required")
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     try:
-        kind = (req.get("kind") or "knowledge_tip").strip()
-        if kind not in ("knowledge_tip", "onboarding_card"):
-            kind = "knowledge_tip"
+        show_onb = 1 if req.get("show_in_onboarding") else 0
+        # default: visible in the player Knowledge book unless explicitly disabled
+        show_kno = 0 if req.get("show_in_knowledge") is False else 1
+        kind = "onboarding_card" if show_onb else "knowledge_tip"  # label only
         conn.execute(
-            "INSERT INTO knowledge_book (tip_key, category, title, body, is_active, sort_order, kind) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO knowledge_book (tip_key, category, title, body, is_active, sort_order, kind, show_in_onboarding, show_in_knowledge) VALUES (?,?,?,?,?,?,?,?,?)",
             (tip_key, req.get("category") or "general", title, body,
-             1 if req.get("is_active", 1) else 0, int(req.get("sort_order") or 0), kind),
+             1 if req.get("is_active", 1) else 0, int(req.get("sort_order") or 0), kind, show_onb, show_kno),
         )
         conn.commit()
         return {"ok": True, "tip_key": tip_key}
@@ -3507,8 +3508,13 @@ def admin_create_knowledge_tip(req: dict = Body(...), _: None = Depends(require_
 def admin_update_knowledge_tip(
     tip_key: str, req: dict = Body(...), _: None = Depends(require_admin_token)
 ):
-    allowed = {"category", "title", "body", "is_active", "sort_order", "kind"}
+    allowed = {"category", "title", "body", "is_active", "sort_order", "kind",
+               "show_in_onboarding", "show_in_knowledge"}
     updates = {k: v for k, v in req.items() if k in allowed}
+    # normalize booleans → 0/1 for the flag columns
+    for flag in ("show_in_onboarding", "show_in_knowledge"):
+        if flag in updates:
+            updates[flag] = 1 if updates[flag] else 0
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)

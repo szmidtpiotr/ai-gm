@@ -20,8 +20,11 @@ def list_knowledge_tips():
             if opt in cols:
                 base.append(opt)
         where = "is_active = 1"
-        # #594: only player knowledge tips — exclude onboarding_card rows
-        if "kind" in cols:
+        # #594 (rev): entries flagged for the player Knowledge book (an entry may
+        # also be an onboarding card — the two surfaces are independent).
+        if "show_in_knowledge" in cols:
+            where += " AND show_in_knowledge = 1"
+        elif "kind" in cols:
             where += " AND kind = 'knowledge_tip'"
         rows = conn.execute(
             f"SELECT {', '.join(base)} FROM knowledge_book WHERE {where} "

@@ -2434,6 +2434,19 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("""
         ALTER TABLE knowledge_book ADD COLUMN kind TEXT NOT NULL DEFAULT 'knowledge_tip'
     """, "v2-knowledge-book-kind")
+    # #594 (rev) — independent visibility: one entry can appear in BOTH the
+    # onboarding popups and the player Knowledge book. `kind` stays as a label.
+    _exec("""
+        ALTER TABLE knowledge_book ADD COLUMN show_in_onboarding INTEGER NOT NULL DEFAULT 0
+    """, "v2-knowledge-book-show-onboarding")
+    _exec("""
+        ALTER TABLE knowledge_book ADD COLUMN show_in_knowledge INTEGER NOT NULL DEFAULT 1
+    """, "v2-knowledge-book-show-knowledge")
+    # Backfill flags from the legacy kind: onboarding cards become visible in both.
+    _exec("""
+        UPDATE knowledge_book SET show_in_onboarding = 1, show_in_knowledge = 1
+        WHERE kind = 'onboarding_card'
+    """, "v2-knowledge-book-flag-backfill")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Task 41: Dungeon Runs ─────────────────────────────────────────────────
@@ -3915,8 +3928,9 @@ def _seed_onboarding_cards_into_knowledge(conn: sqlite3.Connection) -> None:
         try:
             conn.execute(
                 "INSERT OR IGNORE INTO knowledge_book "
-                "(tip_key, category, title, body, is_active, sort_order, kind) "
-                "VALUES (?, 'onboarding', ?, ?, 1, ?, 'onboarding_card')",
+                "(tip_key, category, title, body, is_active, sort_order, kind, "
+                " show_in_onboarding, show_in_knowledge) "
+                "VALUES (?, 'onboarding', ?, ?, 1, ?, 'onboarding_card', 1, 1)",
                 (key, card.get("title", ""), card.get("content", ""), idx),
             )
         except sqlite3.Error:

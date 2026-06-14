@@ -307,9 +307,11 @@ def _card_content(key: str, conn: sqlite3.Connection | None = None) -> dict | No
     """
     if conn is not None:
         try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(knowledge_book)").fetchall()}
+            gate = "show_in_onboarding = 1" if "show_in_onboarding" in cols else "kind = 'onboarding_card'"
             row = conn.execute(
-                "SELECT title, body FROM knowledge_book "
-                "WHERE kind = 'onboarding_card' AND tip_key = ? AND is_active = 1",
+                f"SELECT title, body FROM knowledge_book "
+                f"WHERE tip_key = ? AND is_active = 1 AND {gate}",
                 (key,),
             ).fetchone()
             if row:
