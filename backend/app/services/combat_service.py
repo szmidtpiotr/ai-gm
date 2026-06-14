@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
+from app.services.actor_stats import parse_stats_json
 from app.services.effect_json_migration import legacy_effect_fields_from_json
 from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
 from app.services.weapon_rules import (
@@ -250,6 +251,10 @@ def _weapon_apply_conditions(
             pass
         if not isinstance(enemy.get("conditions"), list):
             enemy["conditions"] = []
+        # S14 (#609): bramka immunitetu/broken_by przy nakładaniu kondycji bronią (F1).
+        allowed, _gr = apply_condition_gate(enemy["conditions"], cond_key, cond_efx)
+        if not allowed:
+            continue
         enemy["conditions"].append({
             "key": cond_key,
             "label": cond_label,
@@ -379,6 +384,10 @@ def _inventory_affix_apply_conditions(
                 pass
             if not isinstance(enemy.get("conditions"), list):
                 enemy["conditions"] = []
+            # S14 (#609): bramka immunitetu/broken_by przy nakładaniu kondycji afiksem (F2).
+            allowed, _gr = apply_condition_gate(enemy["conditions"], cond_key, cond_efx)
+            if not allowed:
+                continue
             enemy["conditions"].append({
                 "key": cond_key,
                 "label": cond_label,
@@ -518,6 +527,79 @@ def _condition_effects(condition: dict[str, Any]) -> list[dict[str, Any]]:
     return [entry for entry in effects if isinstance(entry, dict)]
 
 
+# ─── S19 (#614): hidden — untargetable + ambush_bonus. Prymitywy raz, kondycja danymi. ──
+
+def _actor_conditions(combatant: dict[str, Any], sheet: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    if isinstance(sheet, dict):
+        return _sheet_conditions(sheet)
+    return [c for c in (combatant.get("conditions") or []) if isinstance(c, dict)]
+
+
+def _combatant_is_untargetable(combatant: dict[str, Any], *, sheet: dict[str, Any] | None = None) -> bool:
+    """True, gdy aktor ma aktywną kondycję niosącą efekt `untargetable` (np. hidden).
+    Data-driven — żaden ``if condition_key == "hidden"``."""
+    for cond in _actor_conditions(combatant, sheet):
+        for eff in _condition_effects(cond):
+            if str(eff.get("type") or "").strip().lower() == "untargetable":
+                return True
+    return False
+
+
+def _actor_detect_dc(combatant: dict[str, Any], *, sheet: dict[str, Any] | None = None, default: int = 14) -> int:
+    """DC rzutu WIS wroga przy poszukiwaniu — top-level `detect_dc` pierwszej kondycji untargetable."""
+    for cond in _actor_conditions(combatant, sheet):
+        parsed = _decode_effect_json(cond.get("effect_json"))
+        if not parsed:
+            continue
+        if any(str(e.get("type") or "").strip().lower() == "untargetable" for e in _condition_effects(cond)):
+            try:
+                dc = int(parsed.get("detect_dc"))
+                if dc >= 1:
+                    return dc
+            except (TypeError, ValueError):
+                pass
+    return default
+
+
+def _hidden_conditions(combatant: dict[str, Any], *, sheet: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Kondycje aktora niosące `untargetable` lub `ambush_bonus` (definicja stanu ukrycia)."""
+    out: list[dict[str, Any]] = []
+    for cond in _actor_conditions(combatant, sheet):
+        if any(str(e.get("type") or "").strip().lower() in ("untargetable", "ambush_bonus")
+               for e in _condition_effects(cond)):
+            out.append(cond)
+    return out
+
+
+def _roll_ambush_bonus(conditions: list[dict[str, Any]]) -> int:
+    """Suma rzutów `ambush_bonus` (value = kość, np. 2d6) z podanych kondycji. RAZ na atak."""
+    total = 0
+    for cond in conditions:
+        for eff in _condition_effects(cond):
+            if str(eff.get("type") or "").strip().lower() != "ambush_bonus":
+                continue
+            val = eff.get("value")
+            if isinstance(val, str) and val.strip():
+                total += int(roll_damage_dice(val.strip().lower(), 0))
+            else:
+                try:
+                    total += int(val or 0)
+                except (TypeError, ValueError):
+                    pass
+    return total
+
+
+def _remove_combatant_conditions(combatant: dict[str, Any], conditions: list[dict[str, Any]]) -> None:
+    """Zdejmij wskazane (po tożsamości obiektu lub kluczu) kondycje z combatanta in-memory."""
+    keys = {str(c.get("key") or "").strip().lower() for c in conditions if isinstance(c, dict)}
+    if not keys:
+        return
+    combatant["conditions"] = [
+        c for c in (combatant.get("conditions") or [])
+        if not (isinstance(c, dict) and str(c.get("key") or "").strip().lower() in keys)
+    ]
+
+
 def _condition_effect_state(condition: dict[str, Any], effect_idx: int) -> dict[str, Any]:
     runtime = condition.get("runtime")
     if not isinstance(runtime, dict):
@@ -537,6 +619,142 @@ def _condition_effect_state(condition: dict[str, Any], effect_idx: int) -> dict[
 
 def _condition_turn_marker(round_n: int, actor_id: str) -> str:
     return f"{int(round_n)}:{str(actor_id or '').strip()}"
+
+
+# ─── S9 (#604): poziomy stackowania (stacking_levels) — prymityw raz, kondycja danymi ──
+
+def _condition_level(condition: dict[str, Any]) -> int:
+    """Runtime poziom kondycji stackowalnej (domyślnie 1)."""
+    runtime = condition.get("runtime")
+    if isinstance(runtime, dict):
+        try:
+            return max(1, int(runtime.get("level", 1) or 1))
+        except (TypeError, ValueError):
+            return 1
+    return 1
+
+
+def _set_condition_level(condition: dict[str, Any], level: int) -> None:
+    runtime = condition.get("runtime")
+    if not isinstance(runtime, dict):
+        runtime = {}
+        condition["runtime"] = runtime
+    runtime["level"] = max(1, int(level))
+
+
+def _stacking_levels_effects(condition: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        e for e in _condition_effects(condition)
+        if str(e.get("type") or "").strip().lower() == "stacking_levels"
+    ]
+
+
+def _condition_max_level(condition: dict[str, Any]) -> int:
+    cap = 1
+    for eff in _stacking_levels_effects(condition):
+        try:
+            cap = max(cap, int(eff.get("max_level") or 1))
+        except (TypeError, ValueError):
+            pass
+    return cap
+
+
+# ─── S12 (#607): prymitywy extra_action + on_expire_apply — prymityw raz, kondycja danymi ──
+
+def _duration_rounds_from_effects(effects: list[dict[str, Any]]) -> int | None:
+    """Czas trwania kondycji wyprowadzony z effect.expires='duration_rounds:N'
+    (pierwszy taki efekt). Używane przy nakładaniu kondycji-buffa (np. hasted 3 rundy)."""
+    for ef in effects:
+        if not isinstance(ef, dict):
+            continue
+        dur = _condition_duration_rounds(str(ef.get("expires") or ""))
+        if dur is not None:
+            return dur
+    return None
+
+
+def _actor_extra_action_kind(combatant: dict[str, Any]) -> str | None:
+    """Zwraca action_kind pierwszej aktywnej, danymi opisanej `extra_action`
+    (np. hasted → 'move_only'), albo None gdy aktor nie ma dodatkowej akcji."""
+    for cond in (combatant.get("conditions") or []):
+        if not isinstance(cond, dict):
+            continue
+        for ef in _condition_effects(cond):
+            if str(ef.get("type") or "").strip().lower() == "extra_action":
+                return str(ef.get("action_kind") or "move_only").strip().lower() or "move_only"
+    return None
+
+
+def _build_condition_entry(
+    conn: sqlite3.Connection, condition_key: str, *, applied_at: str, level: int = 1,
+) -> dict[str, Any] | None:
+    """Zbuduj wpis kondycji z katalogu (effect_json/label/stackable + duration z expires).
+
+    Wspólny budowniczy dla apply_condition_to_player i on_expire_apply — prymityw raz,
+    żaden ``if condition_key == ...``. Zwraca None gdy kondycji nie ma w katalogu (invalid_reference).
+    """
+    key_lo = str(condition_key or "").strip().lower()
+    if not key_lo:
+        return None
+    try:
+        r = conn.execute(
+            "SELECT * FROM game_config_conditions WHERE key = ? AND is_active = 1",
+            (key_lo,),
+        ).fetchone()
+    except Exception:
+        r = None
+    if not r:
+        return None
+    cols = r.keys()
+    label = str(r["label"]) if "label" in cols and r["label"] else key_lo.title()
+    effect_json = r["effect_json"] if "effect_json" in cols else None
+    stackable = False
+    if "stackable" in cols:
+        try:
+            stackable = bool(int(r["stackable"] or 0))
+        except (TypeError, ValueError):
+            stackable = False
+    entry: dict[str, Any] = {
+        "key": key_lo,
+        "label": label,
+        "effect_json": effect_json,
+        "applied_at": applied_at,
+        "runtime": {"level": max(1, int(level))} if stackable else {},
+    }
+    dur = _duration_rounds_from_effects(_condition_effects(entry))
+    if dur is not None:
+        entry["duration_rounds"] = dur
+    return entry
+
+
+def reduce_stacking_conditions(
+    conditions: list[dict[str, Any]], *, remove_all: bool,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Zdejmuje poziomy kondycji stackowalnych (np. exhausted) przy odpoczynku.
+
+    - `remove_all=False` (krótki odpoczynek 1h): −1 poziom; kondycja znika przy 0.
+    - `remove_all=True`  (długi sen): kondycja stackowalna usuwana w całości.
+
+    Kondycje bez efektu `stacking_levels` zostają nietknięte. Data-driven — żadnego
+    `if key == "exhausted"` (Zasada projektowa FAZY S).
+    """
+    out: list[dict[str, Any]] = []
+    changed = False
+    for cond in conditions:
+        if not isinstance(cond, dict) or not _stacking_levels_effects(cond):
+            out.append(cond)
+            continue
+        if remove_all:
+            changed = True
+            continue
+        new_level = _condition_level(cond) - 1
+        if new_level <= 0:
+            changed = True
+            continue
+        _set_condition_level(cond, new_level)
+        changed = True
+        out.append(cond)
+    return out, changed
 
 
 def _combatant_stat_modifier(
@@ -583,8 +801,365 @@ def _combatant_stat_modifier(
                 base += int(sm[stat_key])
             except (TypeError, ValueError):
                 pass
+        # S8 (#603): schema-zgodny static_stat_modifier (effects[]) — prymityw raz.
+        # Dotąd silnik czytał TYLKO legacy `stat_mods`; seedy U10 (effects[]) były martwe.
+        eff = parsed.get("effects")
+        if isinstance(eff, list):
+            for ef in eff:
+                if not isinstance(ef, dict):
+                    continue
+                if str(ef.get("type") or "").strip().lower() != "static_stat_modifier":
+                    continue
+                if str(ef.get("stat") or "").strip().upper() != stat_key:
+                    continue
+                try:
+                    base += int(ef.get("value") or 0)
+                except (TypeError, ValueError):
+                    pass
+            # S9 (#604): stacking_levels — kary per_level_effects skalowane ×poziom.
+            for ef in eff:
+                if not isinstance(ef, dict):
+                    continue
+                if str(ef.get("type") or "").strip().lower() != "stacking_levels":
+                    continue
+                level = _condition_level(cond)
+                for ple in (ef.get("per_level_effects") or []):
+                    if not isinstance(ple, dict):
+                        continue
+                    if str(ple.get("type") or "").strip().lower() != "static_stat_modifier":
+                        continue
+                    if str(ple.get("stat") or "").strip().upper() != stat_key:
+                        continue
+                    try:
+                        base += int(ple.get("value") or 0) * level
+                    except (TypeError, ValueError):
+                        pass
 
     return base
+
+
+# ─── S13 (#608): on_zero_hp_save — rzut ratunkowy przy 0 HP (np. blessed). Prymityw raz, kondycja danymi.
+
+def _on_zero_hp_save(
+    combatant: dict[str, Any], *, sheet: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Gdy obrażenia sprowadziłyby HP aktora do ≤0: pierwsza aktywna kondycja z efektem
+    `on_zero_hp_save` i pozostałym budżetem `uses` wykonuje rzut d20 + stat_mod(stat) + save
+    vs DC. Sukces → zwraca {saved:True, hp:1, ...} i dekrementuje budżet w runtime kondycji.
+    Porażka → {saved:False, ...} (próba zużyta). Brak takiej kondycji / brak budżetu → None
+    (silnik idzie normalną ścieżką nieprzytomności). Data-driven — żaden ``if key == "blessed"``.
+    """
+    conditions = (
+        _sheet_conditions(sheet) if isinstance(sheet, dict)
+        else [c for c in (combatant.get("conditions") or []) if isinstance(c, dict)]
+    )
+    for cond in conditions:
+        for eff in _condition_effects(cond):
+            if str(eff.get("type") or "").strip().lower() != "on_zero_hp_save":
+                continue
+            try:
+                budget = int(eff.get("uses")) if eff.get("uses") is not None else 1
+            except (TypeError, ValueError):
+                budget = 1
+            runtime = cond.get("runtime")
+            if not isinstance(runtime, dict):
+                runtime = {}
+                cond["runtime"] = runtime
+            used = int(runtime.get("on_zero_hp_save_used", 0) or 0)
+            if used >= max(1, budget):
+                return None  # budżet wyczerpany (np. drugi śmiertelny cios w tej samej scenie)
+            stat_key = str(eff.get("stat") or "CON").strip().upper() or "CON"
+            dc = int(resolve_dc_for_roll(eff.get("dc_key") or eff.get("value")) or 0)
+            raw = int(roll_d20())
+            mod = _combatant_stat_modifier(combatant, sheet=sheet, stat=stat_key)
+            # +2 defensywny (derived stat 'save', np. blessed) dolicza się do rzutu ratunkowego.
+            mod += _combatant_stat_modifier(combatant, sheet=sheet, stat="save")
+            total = raw + mod
+            success = raw == 20 or (raw != 1 and total >= dc)
+            runtime["on_zero_hp_save_used"] = used + 1  # próba (rzut) zużywa budżet sceny
+            result = str(eff.get("result") or "stay_at_1hp").strip().lower()
+            out: dict[str, Any] = {
+                "saved": bool(success),
+                "condition_key": str(cond.get("key") or "").strip().lower(),
+                "condition_label": str(cond.get("label") or "").strip(),
+                "stat": stat_key, "raw": raw, "total": total, "dc": dc,
+            }
+            if success and result == "stay_at_1hp":
+                out["hp"] = 1
+            return out
+    return None
+
+
+# ─── S15 (#610): system reakcji + skill `dodge`. Okno reakcji PRZED aplikacją obrażeń.
+
+def _try_dodge_reaction(
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    attack_roll: int,
+    round_n: int,
+) -> dict[str, Any] | None:
+    """Okno reakcji uniku — wywoływane gdy cios wroga TRAFIŁ, PRZED aplikacją obrażeń.
+
+    Pre-deklaracja (``p['reaction_declared'] == 'dodge'``) konsumowana przy pierwszym
+    trafieniu w rundzie (raz/rundę). Skill-gated: ``dodge`` rank ≥ 1 (skill żyje na sheet,
+    kondycje na combatancie). Test DEX (d20 + DEX_mod + skill_rank + proficiency) przeciwko
+    WYNIKOWI ATAKU wroga (``attack_roll`` jako DC). Stopień liczony silnikiem S1
+    (``_derive_outcome``):
+      • sukces (margines ≥ 0)        → ``dodged=True`` (atak mija)
+      • porażka (margines < 0)        → ``dodged=False``
+      • krytyczna porażka (≤ −5)      → ``reaction_locked_round = round_n + 1``
+
+    Zwraca ``None`` (silnik idzie normalną ścieżką obrażeń), gdy: brak deklaracji / brak
+    skilla. Gdy reakcja zablokowana w tej rundzie — zwraca dict ``available=False``.
+
+    Rzut ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTY — to osobny rzut;
+    margines dotyczy wyłącznie testu uniku (sam jest testem umiejętności).
+    """
+    if str(p.get("reaction_declared") or "") != "dodge":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("dodge", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Lockout po wcześniejszej krytycznej porażce — deklaracja i tak skonsumowana.
+    if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        p.pop("reaction_declared", None)
+        return {"reaction": "dodge", "available": False, "locked": True, "dodged": False}
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku).
+    p.pop("reaction_declared", None)
+    dex_mod = _combatant_stat_modifier(p, sheet=None, stat="DEX")  # kondycje (np. hasted) na combatancie
+    proficiency = 2 if skill_rank >= 3 else 0
+    mod_total = int(dex_mod) + skill_rank + proficiency
+    d20 = roll_d20()
+    from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
+    outcome = _derive_outcome(d20, mod_total, int(attack_roll))
+    dodged = bool(outcome["success"])
+    locked_next = outcome["outcome"] == "CRITICAL_FAILURE"
+    if locked_next:
+        p["reaction_locked_round"] = int(round_n) + 1
+    return {
+        "reaction": "dodge",
+        "available": True,
+        "dodged": dodged,
+        "d20": int(d20),
+        "dodge_total": int(outcome["player_total"]),
+        "attack_roll": int(attack_roll),
+        "margin": int(outcome["margin"]),
+        "outcome": outcome["outcome"],
+        "locked_next_round": locked_next,
+        "dex_mod": int(dex_mod),
+        "skill_rank": skill_rank,
+    }
+
+
+# ─── S16 (#611): reakcja `shield_block` — druga reakcja w systemie (reużywa frameworku S15).
+
+def _player_has_shield_equipped(conn: Any, char_id: int | None) -> tuple[bool, int | None]:
+    """Czy gracz ma ZAŁOŻONĄ tarczę? Tarcza = założona (`equipped=1`) broń z
+    ``game_config_weapons``, której ``key`` zawiera ``shield`` lub ``label`` zawiera
+    ``tarcz`` (catches shield/wooden_shield/tower_shield + przyszłe). Zwraca
+    ``(has_shield, inventory_id)`` — ``inventory_id`` służy do hitu durability przy crit-fail.
+    """
+    if not char_id:
+        return False, None
+    try:
+        row = conn.execute(
+            """
+            SELECT ci.id AS inv_id
+            FROM character_inventory ci
+            JOIN game_config_weapons w ON w.key = ci.weapon_key
+            WHERE ci.character_id = ?
+              AND COALESCE(ci.equipped, 0) = 1
+              AND ci.weapon_key IS NOT NULL AND TRIM(ci.weapon_key) != ''
+              AND (LOWER(w.key) LIKE '%shield%' OR LOWER(w.label) LIKE '%tarcz%')
+            LIMIT 1
+            """,
+            (int(char_id),),
+        ).fetchone()
+    except Exception as err:  # tabela ekwipunku/broni może nie istnieć w skrajnych setupach
+        logger.warning("shield_equipped_lookup_error", error=str(err))
+        return False, None
+    if not row:
+        return False, None
+    try:
+        return True, int(row["inv_id"])
+    except (TypeError, KeyError, IndexError):
+        return True, int(row[0])
+
+
+def _try_shield_block_reaction(
+    conn: Any,
+    char_id: int | None,
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    attack_roll: int,
+    round_n: int,
+    dmg: int,
+) -> dict[str, Any] | None:
+    """Okno reakcji bloku — wołane gdy cios wroga TRAFIŁ, PRZED aplikacją obrażeń.
+
+    Pre-deklaracja (``p['reaction_declared'] == 'shield_block'``) konsumowana przy
+    pierwszym trafieniu w rundzie (raz/rundę — XOR z dodge, bo flaga trzyma jedną wartość).
+    Skill-gated: ``shield_block`` rank ≥ 1 (skill na sheet) + założona tarcza (gate).
+    Test STR (d20 + STR_mod + skill_rank + proficiency) przeciw DC = ``max(attack_roll, 12)``,
+    stopień liczony silnikiem S1 (``_derive_outcome``):
+      • sukces (margines ≥ 0)              → obrażenia − (1d6 + STR_mod, min 0)
+      • sukces o ≥ +5 / CRITICAL_SUCCESS   → pełne odparcie (0 obrażeń)
+      • porażka (margines < 0)             → pełne obrażenia
+      • CRITICAL_FAILURE (margines ≤ −5)   → pełne obrażenia + tarcza traci durability ×3
+
+    Zwraca ``None`` (silnik idzie normalną ścieżką), gdy brak deklaracji / brak skilla.
+    Brak tarczy mimo deklaracji → dict ``available=False`` (gate, obrażenia bez zmian).
+
+    Rzut ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTY — to osobny rzut;
+    margines dotyczy wyłącznie testu bloku (sam jest testem umiejętności).
+    """
+    if str(p.get("reaction_declared") or "") != "shield_block":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("shield_block", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku/gate'u).
+    p.pop("reaction_declared", None)
+    has_shield, inv_id = _player_has_shield_equipped(conn, char_id)
+    if not has_shield:
+        return {"reaction": "shield_block", "available": False, "reason": "no_shield",
+                "damage_before": int(dmg), "damage_after": int(dmg)}
+    str_mod = _combatant_stat_modifier(p, sheet=None, stat="STR")  # kondycje (np. rage) na combatancie
+    proficiency = 2 if skill_rank >= 3 else 0
+    mod_total = int(str_mod) + skill_rank + proficiency
+    dc = max(int(attack_roll), 12)
+    d20 = roll_d20()
+    from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
+    outcome = _derive_outcome(d20, mod_total, dc)
+    success = bool(outcome["success"])
+    margin = int(outcome["margin"])
+    oc = str(outcome["outcome"])
+    full_block = success and (margin >= 5 or oc == "CRITICAL_SUCCESS")
+    durability_hit = False
+    if full_block:
+        reduction = int(dmg)
+        damage_after = 0
+    elif success:
+        reduction = max(0, roll_damage_dice("1d6", 0) + int(str_mod))
+        damage_after = max(0, int(dmg) - reduction)
+    else:
+        reduction = 0
+        damage_after = int(dmg)
+        if oc == "CRITICAL_FAILURE" and inv_id is not None:
+            try:
+                conn.execute(
+                    "UPDATE character_inventory SET durability_current = MAX(0, durability_current - 3) "
+                    "WHERE id = ? AND durability_max IS NOT NULL",
+                    (int(inv_id),),
+                )
+                durability_hit = True
+            except Exception as err:
+                logger.warning("shield_durability_hit_error", error=str(err))
+    return {
+        "reaction": "shield_block",
+        "available": True,
+        "d20": int(d20),
+        "block_total": int(outcome["player_total"]),
+        "attack_roll": int(attack_roll),
+        "dc": int(dc),
+        "margin": margin,
+        "outcome": oc,
+        "str_mod": int(str_mod),
+        "skill_rank": skill_rank,
+        "reduction": int(reduction),
+        "damage_before": int(dmg),
+        "damage_after": int(damage_after),
+        "full_block": bool(full_block),
+        "durability_hit": bool(durability_hit),
+    }
+
+
+# ─── S14 (#609): condition_immunity + broken_by — odporność na kondycje. Prymityw raz, kondycja danymi.
+
+def _condition_immunity_keys(conditions: list[dict[str, Any]]) -> set[str]:
+    """Klucze kondycji, na które aktor jest aktualnie ODPORNY — suma `immune_to` ze wszystkich
+    aktywnych efektów `condition_immunity`. Data-driven, żaden ``if key == 'rage'``."""
+    out: set[str] = set()
+    for cond in conditions:
+        if not isinstance(cond, dict):
+            continue
+        for eff in _condition_effects(cond):
+            if str(eff.get("type") or "").strip().lower() != "condition_immunity":
+                continue
+            for k in (eff.get("immune_to") or []):
+                kk = str(k).strip().lower()
+                if kk:
+                    out.add(kk)
+    return out
+
+
+def _condition_broken_by(cond: dict[str, Any]) -> set[str]:
+    """Klucze kondycji, których nałożenie zdejmuje `cond` (top-level `broken_by` w effect_json)."""
+    parsed = _decode_effect_json(cond.get("effect_json"))
+    bb = parsed.get("broken_by") if isinstance(parsed, dict) else None
+    if not isinstance(bb, list):
+        return set()
+    return {str(k).strip().lower() for k in bb if str(k or "").strip()}
+
+
+def _effect_json_immune_to(effect_json: Any) -> set[str]:
+    """`immune_to` nowej kondycji (z jej effect_json) — kondycje, które jej nałożenie czyści."""
+    parsed = _decode_effect_json(effect_json)
+    out: set[str] = set()
+    if not isinstance(parsed, dict):
+        return out
+    for eff in (parsed.get("effects") or []):
+        if isinstance(eff, dict) and str(eff.get("type") or "").strip().lower() == "condition_immunity":
+            for k in (eff.get("immune_to") or []):
+                kk = str(k).strip().lower()
+                if kk:
+                    out.add(kk)
+    return out
+
+
+def apply_condition_gate(
+    conditions: list[dict[str, Any]], new_key: str, new_effect_json: Any,
+) -> tuple[bool, str | None]:
+    """S14 — generyczna bramka nakładania kondycji. MUTUJE `conditions` w miejscu.
+    Wołać PRZED dopisaniem nowej kondycji do listy.
+
+    1. Immunitet: jeśli aktor ma aktywną kondycję dającą odporność na `new_key` → (False, 'immune');
+       nowej kondycji NIE dopisujemy, lista bez zmian.
+    2. broken_by: aktywne kondycje, których `broken_by` zawiera `new_key`, są usuwane
+       (np. nałożenie stunned/confused zdejmuje rage).
+    3. immune_to nowej kondycji: aktywne kondycje pasujące do jej `immune_to` są usuwane
+       (np. założenie rage czyści aktywne slowed/weakened).
+
+    Zwraca (allowed, reason). reason='immune' przy bloku, inaczej None. Prymityw raz —
+    żaden ``if new_key == ...``; wszystkie ścieżki nakładania kondycji wołają tę bramkę.
+    """
+    new_lo = str(new_key or "").strip().lower()
+    if new_lo in _condition_immunity_keys(conditions):
+        return False, "immune"
+    new_immune = _effect_json_immune_to(new_effect_json)
+    kept: list[dict[str, Any]] = []
+    for cond in conditions:
+        if not isinstance(cond, dict):
+            kept.append(cond)
+            continue
+        ckey = str(cond.get("key") or "").strip().lower()
+        if new_lo in _condition_broken_by(cond):
+            continue  # broken_by — nałożenie new_key zdejmuje tę kondycję
+        if ckey in new_immune:
+            continue  # nowa kondycja (immune_to) czyści tę
+        kept.append(cond)
+    conditions[:] = kept
+    return True, None
 
 
 def _condition_duration_rounds(expires: str) -> int | None:
@@ -625,6 +1200,99 @@ def roll_damage_dice(expr: str, mod: int = 0) -> int:
     sides = int(m.group(2))
     total = sum(random.randint(1, sides) for _ in range(max(1, n)))
     return max(0, total + mod)
+
+
+# ─── S18 (#613): behavior_override — kondycja steruje turą aktora. Prymityw raz. ──
+
+_K4_ACTION = {1: "stand", 2: "attack_random", 3: "flee", 4: "normal"}
+
+
+def _roll_k4() -> int:
+    """Rzut k4 dla behavior=random_table_k4 (confused). Osobna funkcja → testowalna (patch)."""
+    return random.randint(1, 4)
+
+
+def _behavior_override_effect(cond: dict[str, Any]) -> dict[str, Any] | None:
+    for ef in _condition_effects(cond):
+        if str(ef.get("type") or "").strip().lower() == "behavior_override":
+            return ef
+    return None
+
+
+def _resolve_forced_behavior(
+    actor: dict[str, Any], actor_id: str, round_n: int, *, roll: bool,
+) -> dict[str, Any] | None:
+    """Wymuszone zachowanie aktora z PIERWSZEJ aktywnej kondycji niosącej `behavior_override`.
+
+    Prymityw raz, kondycja danymi — żaden ``if condition_key == ...``.
+    - ``roll=True`` (evaluate_current_turn_conditions): dla random_table_k4 rzuca k4 RAZ na turę
+      i PERSYSTUJE decyzję w runtime kondycji (dedup po markerze rundy+aktora). attack_nearest/flee
+      są deterministyczne.
+    - ``roll=False`` (resolve_attack enemy branch): czyta zapisaną decyzję bez ponownego rzutu,
+      żeby wykonanie zgadzało się z tym, co wyznaczyło evaluate w tej samej turze.
+
+    Zwraca ``{actor_id, condition_key, condition_label, behavior, action, k4}`` albo None.
+    """
+    marker = _condition_turn_marker(round_n, actor_id)
+    conditions = [c for c in (actor.get("conditions") or []) if isinstance(c, dict)]
+    for idx, cond in enumerate(conditions):
+        ef = _behavior_override_effect(cond)
+        if not ef:
+            continue
+        behavior = str(ef.get("behavior") or "").strip().lower()
+        if behavior not in _BEHAVIOR_KINDS:
+            continue
+        if behavior == "random_table_k4":
+            state = _condition_effect_state(cond, f"behavior_{idx}")
+            if str(state.get("last_turn_marker") or "") == marker and state.get("action"):
+                action, k4 = str(state["action"]), state.get("k4")
+            elif roll:
+                k4 = int(_roll_k4())
+                action = _K4_ACTION.get(k4, "normal")
+                state["last_turn_marker"] = marker
+                state["action"] = action
+                state["k4"] = k4
+            else:
+                continue  # decyzja jeszcze nie wyznaczona (evaluate nie wołane) → pomiń
+        else:
+            action = "attack_nearest" if behavior == "attack_nearest" else "flee"
+            k4 = None
+        return {
+            "actor_id": actor_id,
+            "condition_key": str(cond.get("key") or ""),
+            "condition_label": str(cond.get("label") or cond.get("key") or ""),
+            "behavior": behavior,
+            "action": action,
+            "k4": k4,
+        }
+    return None
+
+
+_BEHAVIOR_KINDS = {"random_table_k4", "attack_nearest", "flee"}
+
+
+# ─── S10 (#605): escalating_dot — DOT narastający w czasie (np. hemorrhage) ─────
+
+def _escalating_dot_damage(effect: dict[str, Any], ticks: int) -> int:
+    """Obrażenia escalating_dot na danym tyknięciu.
+
+    Poziom eskalacji = ``ticks // escalate_every_rounds``. Obrażenia tury =
+    rzut kości bazowej (``value``) + (poziom × rzut kości przyrostu ``escalate_dice``).
+    Prymityw raz, kondycja danymi — żadnego ``if condition_key == ...`` (Zasada 1 FAZY S).
+    """
+    base = effect.get("value")
+    base_dmg = int(base) if isinstance(base, (int, float)) else roll_damage_dice(str(base or "1d4"))
+    try:
+        every = int(effect.get("escalate_every_rounds") or 3)
+    except (TypeError, ValueError):
+        every = 3
+    every = max(1, every)
+    level = max(0, int(ticks)) // every
+    inc_expr = str(effect.get("escalate_dice") or "").strip()
+    total = base_dmg
+    for _ in range(level):
+        total += roll_damage_dice(inc_expr) if inc_expr else 0
+    return max(0, total)
 
 
 def _enemy_slug(key: str, index: int) -> str:
@@ -713,6 +1381,7 @@ def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, dex_modifier,
                skills_json,
+               stats_json,
                tier,
                loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award
         FROM game_config_enemies
@@ -953,22 +1622,91 @@ def apply_condition_to_combatant(
     conds = matched.get("conditions") or []
     if not isinstance(conds, list):
         conds = []
-    if any(isinstance(c, dict) and str(c.get("key", "")).lower() == condition_key.lower() for c in conds):
-        return {"ok": True, "matched": matched.get("enemy_key"), "reason": "already_present"}
-    # Look up label from config (best-effort)
+    # S8 (#603): kondycja MUSI istnieć w katalogu — inaczej invalid_reference (U6/llm_tag_errors).
+    # Dociągamy też effect_json, żeby tag-applied kondycja była MECHANICZNA (dot/stat_mods/periodic_save
+    # tykają w T24), a nie tylko kosmetyczną etykietą. S9 (#604): + flaga stackable.
     label = condition_key.title()
+    effect_json = None
+    stackable = False
+    found = False
     try:
         with _conn() as _c2:
+            # SELECT * → odporne na bazy testowe bez kolumny `stackable` (kolumna istnieje na DEV od U10).
             r = _c2.execute(
-                "SELECT label FROM game_config_conditions WHERE key = ? AND is_active = 1",
+                "SELECT * FROM game_config_conditions WHERE key = ? AND is_active = 1",
                 (condition_key,),
             ).fetchone()
-            if r and r["label"]:
-                label = str(r["label"])
+            if r:
+                found = True
+                cols = r.keys()
+                label = str(r["label"]) if "label" in cols and r["label"] else label
+                effect_json = r["effect_json"] if "effect_json" in cols else None
+                if "stackable" in cols:
+                    try:
+                        stackable = bool(int(r["stackable"] or 0))
+                    except (TypeError, ValueError):
+                        stackable = False
     except Exception:
         pass
-    conds.append({"key": condition_key.lower(), "label": label, "runtime": {}})
+    if not found:
+        return {"ok": False, "matched": matched.get("enemy_key"), "reason": "invalid_reference"}
+
+    # S14 (#609): bramka immunitetu/broken_by PRZED dopisaniem — odporność blokuje (nic nie zmienia),
+    # broken_by/immune_to czyści aktywne kondycje. Bramka mutuje `conds` w miejscu.
+    _pre_gate_len = len(conds)
+    allowed, gate_reason = apply_condition_gate(conds, condition_key, effect_json)
     matched["conditions"] = conds
+    if not allowed:
+        return {"ok": True, "matched": matched.get("enemy_key"), "reason": gate_reason}
+    _gate_changed = len(conds) != _pre_gate_len
+
+    existing = next(
+        (c for c in conds if isinstance(c, dict) and str(c.get("key", "")).lower() == condition_key.lower()),
+        None,
+    )
+    if existing is not None:
+        # S9 (#604): stackable=1 → podbij runtime.level (klamp max_level) zamiast duplikować.
+        # S14: jeśli bramka coś zdjęła (broken_by/immune_to), trzeba zapisać mimo already_present.
+        if not stackable and not _gate_changed:
+            return {"ok": True, "matched": matched.get("enemy_key"), "reason": "already_present"}
+        if not stackable:
+            reason = "already_present"
+            matched["conditions"] = conds
+            try:
+                with _conn() as conn:
+                    _save_combat_row(
+                        conn, campaign_id,
+                        character_id=int(snap.get("character_id") or 0),
+                        round_n=int(snap.get("round") or 1),
+                        turn_order=list(snap.get("turn_order") or []),
+                        current_turn=str(snap.get("current_turn") or ""),
+                        combatants=list(combatants),
+                        status=str(snap.get("status") or "active"),
+                        ended_reason=snap.get("ended_reason"),
+                        location_tag=snap.get("location_tag"),
+                    )
+                    conn.commit()
+            except Exception as e:
+                return {"ok": False, "matched": matched.get("enemy_key"), "reason": f"persist_error:{e}"}
+            return {"ok": True, "matched": matched.get("enemy_key"), "reason": reason}
+        cap = _condition_max_level(existing)
+        new_level = min(cap, _condition_level(existing) + 1)
+        _set_condition_level(existing, new_level)
+        matched["conditions"] = conds
+        if new_level == _condition_level(existing) and new_level == cap:
+            reason = "level_capped"
+        else:
+            reason = "level_bumped"
+    else:
+        conds.append({
+            "key": condition_key.lower(),
+            "label": label,
+            "effect_json": effect_json,
+            "applied_at": "apply_condition_tag",
+            "runtime": {"level": 1} if stackable else {},
+        })
+        matched["conditions"] = conds
+        reason = "applied"
     # Persist
     try:
         with _conn() as conn:
@@ -986,7 +1724,243 @@ def apply_condition_to_combatant(
             conn.commit()
     except Exception as e:
         return {"ok": False, "matched": matched.get("enemy_key"), "reason": f"persist_error:{e}"}
-    return {"ok": True, "matched": matched.get("enemy_key"), "reason": "applied"}
+    return {"ok": True, "matched": matched.get("enemy_key"), "reason": reason}
+
+
+def apply_condition_to_player(campaign_id: int, condition_key: str) -> dict[str, Any]:
+    """S12 (#607): nałóż kondycję z katalogu na combatanta GRACZA w aktywnej walce.
+
+    Buff (np. hasted) jest celowany w gracza — tag [APPLY_CONDITION] (apply_condition_to_combatant)
+    celuje wyłącznie we wrogów, więc to osobna, jawnie gracz-celująca ścieżka (Sandbox, mikstury).
+    Czas trwania pochodzi z effect.expires (duration_rounds:N), poziom z runtime. Data-driven —
+    żadnego ``if condition_key == ...``.
+
+    Zwraca ``{ok, reason}``. reason: applied / level_bumped / level_capped / invalid_reference /
+    no_active_combat / player_not_found.
+    """
+    if not condition_key:
+        return {"ok": False, "reason": "missing_args"}
+    snap = get_active_combat(campaign_id)
+    if not snap:
+        return {"ok": False, "reason": "no_active_combat"}
+    combatants = snap.get("combatants") or []
+    player = next((c for c in combatants if isinstance(c, dict) and c.get("type") == "player"), None)
+    if not player:
+        return {"ok": False, "reason": "player_not_found"}
+    conds = player.get("conditions")
+    if not isinstance(conds, list):
+        conds = []
+
+    with _conn() as conn:
+        entry = _build_condition_entry(conn, condition_key, applied_at="apply_condition_player")
+        if entry is None:
+            return {"ok": False, "reason": "invalid_reference"}
+        key_lo = str(condition_key).strip().lower()
+        # S14 (#609): bramka immunitetu/broken_by PRZED dopisaniem (np. rage immune na slowed;
+        # stunned/confused zdejmuje rage; rage czyści aktywne slowed/weakened). Mutuje `conds`.
+        allowed, gate_reason = apply_condition_gate(conds, key_lo, entry.get("effect_json"))
+        player["conditions"] = conds
+        if not allowed:
+            _save_combat_row(
+                conn, campaign_id,
+                character_id=int(snap.get("character_id") or 0),
+                round_n=int(snap.get("round") or 1),
+                turn_order=list(snap.get("turn_order") or []),
+                current_turn=str(snap.get("current_turn") or ""),
+                combatants=list(combatants),
+                status=str(snap.get("status") or "active"),
+                ended_reason=snap.get("ended_reason"),
+                location_tag=snap.get("location_tag"),
+            )
+            conn.commit()
+            return {"ok": True, "reason": gate_reason}
+        existing = next(
+            (c for c in conds if isinstance(c, dict) and str(c.get("key") or "").strip().lower() == key_lo),
+            None,
+        )
+        if existing is not None:
+            # Stackowalna (runtime obecne) → podbij poziom (klamp), inaczej już aktywna.
+            if not isinstance(entry.get("runtime"), dict) or "level" not in entry["runtime"]:
+                reason = "already_present"
+            else:
+                cap = _condition_max_level(existing)
+                before = _condition_level(existing)
+                _set_condition_level(existing, min(cap, before + 1))
+                reason = "level_capped" if _condition_level(existing) == cap and before == cap else "level_bumped"
+        else:
+            conds.append(entry)
+            player["conditions"] = conds
+            reason = "applied"
+        _save_combat_row(
+            conn, campaign_id,
+            character_id=int(snap.get("character_id") or 0),
+            round_n=int(snap.get("round") or 1),
+            turn_order=list(snap.get("turn_order") or []),
+            current_turn=str(snap.get("current_turn") or ""),
+            combatants=list(combatants),
+            status=str(snap.get("status") or "active"),
+            ended_reason=snap.get("ended_reason"),
+            location_tag=snap.get("location_tag"),
+        )
+        conn.commit()
+    return {"ok": True, "reason": reason}
+
+
+def remove_condition_from_character(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+    condition_key: str,
+) -> int:
+    """S10 (#605): zdejmij kondycję z postaci (sheet_json.conditions) i — jeśli trwa
+    walka — z combatanta gracza. Deklaratywne (klucz danymi), żadnego ``if key==...``.
+
+    Zwraca liczbę usuniętych wystąpień (sheet + combat). 0 = nie było czego zdjąć.
+    """
+    key_lo = str(condition_key or "").strip().lower()
+    if not key_lo or not character_id:
+        return 0
+    removed = 0
+
+    # 1) sheet_json.conditions (źródło prawdy poza walką)
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1", (int(character_id),)
+        ).fetchone()
+        if row:
+            raw = row[0] if not hasattr(row, "keys") else row["sheet_json"]
+            sheet = json.loads(raw or "{}")
+            if isinstance(sheet, dict):
+                conds = [c for c in (sheet.get("conditions") or []) if isinstance(c, dict)]
+                kept = [c for c in conds if str(c.get("key") or "").strip().lower() != key_lo]
+                if len(kept) != len(conds):
+                    removed += len(conds) - len(kept)
+                    sheet["conditions"] = kept
+                    conn.execute(
+                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                        (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+                    )
+    except Exception:
+        pass
+
+    # 2) aktywny combatant gracza (jeśli walka trwa) — combat state w COMBAT_DB_PATH
+    try:
+        snap = get_active_combat(int(campaign_id)) if campaign_id else None
+    except Exception:
+        snap = None
+    if snap:
+        combatants = snap.get("combatants") or []
+        changed = False
+        for c in combatants:
+            if not isinstance(c, dict) or c.get("type") != "player":
+                continue
+            conds = [x for x in (c.get("conditions") or []) if isinstance(x, dict)]
+            kept = [x for x in conds if str(x.get("key") or "").strip().lower() != key_lo]
+            if len(kept) != len(conds):
+                removed += len(conds) - len(kept)
+                c["conditions"] = kept
+                changed = True
+        if changed:
+            try:
+                with _conn() as cc:
+                    _save_combat_row(
+                        cc, int(campaign_id),
+                        character_id=int(snap.get("character_id") or 0),
+                        round_n=int(snap.get("round") or 1),
+                        turn_order=list(snap.get("turn_order") or []),
+                        current_turn=str(snap.get("current_turn") or ""),
+                        combatants=list(combatants),
+                        status=str(snap.get("status") or "active"),
+                        ended_reason=snap.get("ended_reason"),
+                        location_tag=snap.get("location_tag"),
+                    )
+                    cc.commit()
+            except Exception:
+                pass
+
+    return removed
+
+
+def add_condition_to_character(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+    condition_key: str,
+) -> int:
+    """S19 (#614): ODWROTNOŚĆ remove_condition_from_character — nałóż kondycję na postać
+    (sheet_json.conditions) i — jeśli trwa walka — na combatanta gracza. Deklaratywne
+    (klucz danymi, np. udany SKILL_TEST stealth → hidden), żadnego ``if key==...``.
+
+    Zwraca liczbę nałożonych wystąpień (sheet + combat). 0 = nie nałożono (brak w katalogu / już aktywna).
+    """
+    key_lo = str(condition_key or "").strip().lower()
+    if not key_lo or not character_id:
+        return 0
+    # Katalog czytamy osobnym połączeniem (Row factory gwarantowane) — passed conn bywa tuple-owy.
+    with _conn() as _cat:
+        entry = _build_condition_entry(_cat, key_lo, applied_at="skill_test_grant")
+    if entry is None:
+        return 0
+    added = 0
+
+    # 1) aktywny combatant gracza (jeśli walka trwa) — robione PRZED zapisem sheet, żeby nie
+    #    trzymać niezatwierdzonego writu na `conn` podczas osobnego writu combatu (uniknięcie locka).
+    try:
+        snap = get_active_combat(int(campaign_id)) if campaign_id else None
+    except Exception:
+        snap = None
+    if snap:
+        combatants = snap.get("combatants") or []
+        changed = False
+        for c in combatants:
+            if not isinstance(c, dict) or c.get("type") != "player":
+                continue
+            conds = [x for x in (c.get("conditions") or []) if isinstance(x, dict)]
+            if not any(str(x.get("key") or "").strip().lower() == key_lo for x in conds):
+                conds.append(dict(entry))
+                c["conditions"] = conds
+                changed = True
+                added += 1
+        if changed:
+            try:
+                with _conn() as cc:
+                    _save_combat_row(
+                        cc, int(campaign_id),
+                        character_id=int(snap.get("character_id") or 0),
+                        round_n=int(snap.get("round") or 1),
+                        turn_order=list(snap.get("turn_order") or []),
+                        current_turn=str(snap.get("current_turn") or ""),
+                        combatants=list(combatants),
+                        status=str(snap.get("status") or "active"),
+                        ended_reason=snap.get("ended_reason"),
+                        location_tag=snap.get("location_tag"),
+                    )
+                    cc.commit()
+            except Exception:
+                pass
+
+    # 2) sheet_json.conditions (źródło prawdy poza walką) — na końcu, na passed conn.
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1", (int(character_id),)
+        ).fetchone()
+        if row:
+            raw = row[0] if not hasattr(row, "keys") else row["sheet_json"]
+            sheet = json.loads(raw or "{}")
+            if isinstance(sheet, dict):
+                conds = [c for c in (sheet.get("conditions") or []) if isinstance(c, dict)]
+                if not any(str(c.get("key") or "").strip().lower() == key_lo for c in conds):
+                    conds.append(dict(entry))
+                    sheet["conditions"] = conds
+                    conn.execute(
+                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                        (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+                    )
+                    added += 1
+    except Exception:
+        pass
+
+    return added
 
 
 def get_enemy_catalog_for_prompt(conn: sqlite3.Connection) -> str:
@@ -1288,6 +2262,8 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
         conditions_changed = False
         runtime_changed = False
         next_conditions: list[dict[str, Any]] = []
+        # S12 (#607): kondycje do nałożenia, gdy bieżąca wygasa (on_expire_apply, np. hasted→exhausted).
+        pending_on_expire: list[tuple[str, int]] = []
         marker = _condition_turn_marker(round_n, actor_id)
 
         for condition in conditions:
@@ -1311,6 +2287,9 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
 
                 stat_key = str(effect.get("stat") or "").strip().upper() or None
                 modifier = _combatant_stat_modifier(actor, sheet=sheet, stat=stat_key)
+                # S13 (#608): +2 defensywny (derived stat 'save', np. blessed) dolicza się do
+                # rzutów obronnych (periodic_save). Data-driven — żaden if key == "blessed".
+                modifier += _combatant_stat_modifier(actor, sheet=sheet, stat="save")
                 raw_roll = int(roll_d20())
                 dc_value = resolve_dc_for_roll(effect.get("dc_key") or effect.get("value"))
                 dc_final = int(dc_value or 0)
@@ -1380,6 +2359,18 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                         conditions_changed = True
 
             if remove_condition:
+                # S12 (#607): kondycja wygasła → zbierz on_expire_apply (np. hasted → exhausted 1).
+                for ef in effects:
+                    if str(ef.get("type") or "").strip().lower() != "on_expire_apply":
+                        continue
+                    tgt = str(ef.get("condition_key") or "").strip().lower()
+                    if not tgt:
+                        continue
+                    try:
+                        lvl = int(ef.get("value") or 1)
+                    except (TypeError, ValueError):
+                        lvl = 1
+                    pending_on_expire.append((tgt, max(1, lvl)))
                 continue
 
             for effect in effects:
@@ -1394,6 +2385,87 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                         "condition_label": label,
                     }
                 )
+
+            # S9 (#604): stacking_levels — progi (threshold_effects) odpalają się,
+            # gdy runtime poziom kondycji ≥ próg (np. exhausted poziom 2 → omdlenie).
+            for effect in effects:
+                if str(effect.get("type") or "").strip().lower() != "stacking_levels":
+                    continue
+                level = _condition_level(condition)
+                thresholds = effect.get("threshold_effects")
+                if not isinstance(thresholds, dict):
+                    continue
+                for thr_key, thr_eff in thresholds.items():
+                    try:
+                        thr = int(thr_key)
+                    except (TypeError, ValueError):
+                        continue
+                    if level < thr or not isinstance(thr_eff, dict):
+                        continue
+                    if str(thr_eff.get("type") or "").strip().lower() == "block_action":
+                        blocked = True
+                        events.append({
+                            "type": "block_action",
+                            "condition_key": key,
+                            "condition_label": label,
+                        })
+
+            # S8 (#603): `dot` — damage-over-time po kości (np. on_fire 2d6/turę).
+            # Schema-zgodny prymityw; tyka raz na turę aktora (dedup po markerze).
+            for effect_idx, effect in enumerate(effects):
+                if str(effect.get("type") or "").strip().lower() != "dot":
+                    continue
+                tick = str(effect.get("tick") or "start_turn").strip().lower()
+                if tick not in {"start_turn", "each_round"}:
+                    continue
+                dstate = _condition_effect_state(condition, f"dot_{effect_idx}")
+                if str(dstate.get("last_turn_marker") or "") == marker:
+                    continue
+                dstate["last_turn_marker"] = marker
+                runtime_changed = True
+                raw_val = effect.get("value")
+                dmg = int(raw_val) if isinstance(raw_val, (int, float)) else roll_damage_dice(str(raw_val or "1d4"))
+                if dmg > 0:
+                    prev_hp = int(actor.get("hp_current", 0) or 0)
+                    actor["hp_current"] = max(0, prev_hp - dmg)
+                    events.append({
+                        "type": "condition_damage",
+                        "condition_key": key,
+                        "condition_label": label,
+                        "damage": dmg,
+                        "damage_type": str(effect.get("damage_type") or "physical"),
+                        "hp_after": int(actor.get("hp_current", 0)),
+                    })
+                    conditions_changed = True
+
+            # S10 (#605): `escalating_dot` — DOT narastający w czasie (hemorrhage 1d4/turę,
+            # +1d4 co 3 tury). Licznik tyknięć w effect_state przeżywa między rundami.
+            for effect_idx, effect in enumerate(effects):
+                if str(effect.get("type") or "").strip().lower() != "escalating_dot":
+                    continue
+                tick = str(effect.get("tick") or "start_turn").strip().lower()
+                if tick not in {"start_turn", "each_round"}:
+                    continue
+                estate = _condition_effect_state(condition, f"edot_{effect_idx}")
+                if str(estate.get("last_turn_marker") or "") == marker:
+                    continue
+                estate["last_turn_marker"] = marker
+                ticks_done = int(estate.get("ticks", 0) or 0)
+                dmg = _escalating_dot_damage(effect, ticks_done)
+                estate["ticks"] = ticks_done + 1
+                runtime_changed = True
+                if dmg > 0:
+                    prev_hp = int(actor.get("hp_current", 0) or 0)
+                    actor["hp_current"] = max(0, prev_hp - dmg)
+                    events.append({
+                        "type": "condition_damage",
+                        "condition_key": key,
+                        "condition_label": label,
+                        "damage": dmg,
+                        "damage_type": str(effect.get("damage_type") or "physical"),
+                        "hp_after": int(actor.get("hp_current", 0)),
+                    })
+                    conditions_changed = True
 
             # Legacy condition format: skip_turn and damage_per_turn
             # (game_config_conditions uses {"skip_turn":true,"damage_per_turn":N,...})
@@ -1432,8 +2504,37 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
 
             next_conditions.append(condition)
 
+        # S12 (#607): nałóż kondycje z on_expire_apply wygasłych kondycji (np. hasted → exhausted 1).
+        for tgt_key, tgt_level in pending_on_expire:
+            existing = next(
+                (c for c in next_conditions if str(c.get("key") or "").strip().lower() == tgt_key),
+                None,
+            )
+            if existing is not None:
+                cap = _condition_max_level(existing)
+                _set_condition_level(existing, min(cap, _condition_level(existing) + tgt_level))
+                conditions_changed = True
+                events.append({"type": "condition_applied", "condition_key": tgt_key,
+                               "condition_label": existing.get("label"), "reason": "on_expire"})
+                continue
+            entry = _build_condition_entry(conn, tgt_key, applied_at="on_expire", level=tgt_level)
+            if entry is None:
+                continue
+            next_conditions.append(entry)
+            conditions_changed = True
+            events.append({"type": "condition_applied", "condition_key": tgt_key,
+                           "condition_label": entry.get("label"), "reason": "on_expire"})
+
+        # S18 (#613): wymuszone zachowanie aktora bieżącej tury (behavior_override).
+        # Liczone z kondycji, które PRZEŻYŁY tę turę (po ewentualnym save_success/expire) — udany
+        # rzut WIS „otrzeźwia" i znosi wymuszenie. roll=True → k4 (confused) wyznaczone RAZ na turę
+        # i zapisane w runtime, żeby resolve_attack odczytał tę samą decyzję.
+        actor["conditions"] = next_conditions
+        forced_behavior = _resolve_forced_behavior(actor, actor_id, round_n, roll=True)
+        if forced_behavior is not None and forced_behavior.get("behavior") == "random_table_k4":
+            runtime_changed = True  # k4 zapisane w runtime → wymuś persist
+
         if conditions_changed or runtime_changed:
-            actor["conditions"] = next_conditions
             _persist_combatants(conn, row, combatants)
 
         if conditions_changed and actor_type == "player" and isinstance(sheet, dict):
@@ -1446,6 +2547,9 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                         "effect_json": condition.get("effect_json"),
                         "source_item_key": condition.get("source_item_key"),
                         "applied_at": condition.get("applied_at"),
+                        # S9 (#604): zachowaj runtime (poziom stackowania) — inaczej kara
+                        # ×poziom ginie przy synchronizacji combatant → sheet gracza.
+                        "runtime": condition.get("runtime") if isinstance(condition.get("runtime"), dict) else {},
                     }
                 )
             sheet["conditions"] = stripped_conditions
@@ -1505,11 +2609,31 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
         elif event_type == "block_action":
             message_lines.append(f"{event['condition_label']}: nie możesz wykonać akcji w tej turze.")
 
+    # S18 (#613): banner dla gracza — tura NIE jest przejmowana w całości (UX).
+    if forced_behavior is not None and actor_type == "player":
+        _banner = {
+            "stand": "stoisz otępiały — nie możesz działać w tej turze.",
+            "attack_random": "atakujesz na oślep losowy cel.",
+            "flee": "instynkt każe ci się cofnąć.",
+            "normal": "na chwilę odzyskujesz jasność — działaj normalnie.",
+        }
+        if forced_behavior.get("behavior") == "random_table_k4":
+            message_lines.append(
+                f"{forced_behavior.get('condition_label') or 'Zdezorientowany'} (k4="
+                f"{forced_behavior.get('k4')}): "
+                f"{_banner.get(forced_behavior.get('action'), 'los decyduje o twoim ruchu.')}"
+            )
+        elif forced_behavior.get("action") == "flee":
+            message_lines.append(
+                f"{forced_behavior.get('condition_label') or 'Spanikowany'}: musisz uciekać od zagrożenia."
+            )
+
     return {
         "blocked": bool(blocked),
         "actor_id": actor_id,
         "actor_type": actor_type,
         "events": events,
+        "forced_behavior": forced_behavior,
         "message": "\n".join(message_lines).strip(),
         "combat_state": combat_state,
     }
@@ -1767,6 +2891,9 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "zone": _default_zone_for_enemy(er["key"], er["label"]),
                     # Stored now for opposed checks in upcoming [S1b] formulas (T30).
                     "skills": _parse_enemy_skills(er["skills_json"]),
+                    # S2 (#582): 7 ability stats for opposed skill checks (S4). NULL/missing
+                    # → every stat defaults to 10 (parse_stats_json), zero combat regression.
+                    "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
                 }
             )
             turn_slots.append((slug, init_e, idx))
@@ -1871,6 +2998,31 @@ def _all_enemies_dead(combatants: list[dict]) -> bool:
         if int(c.get("hp_current", 0) or 0) > 0:
             return False
     return True
+
+
+def _choose_behavior_target(
+    combatants: list[dict], attacker: dict, action: str,
+) -> dict[str, Any] | None:
+    """S18 (#613): wybór celu dla wymuszonego ataku (attack_nearest/attack_random).
+
+    Kandydaci = WSZYSTKIE żywe inne combatanty (gracz I wrogowie) — berserk/confused bije
+    niezależnie od frakcji. attack_nearest: preferuj cel w tej samej strefie (zwarcie/dystans);
+    przy braku — pierwszy z brzegu. attack_random: losowy spośród kandydatów. Zwraca dict albo None.
+    """
+    aid = str(attacker.get("id") or "")
+    candidates = [
+        c for c in combatants
+        if isinstance(c, dict) and str(c.get("id") or "") != aid
+        and int(c.get("hp_current", 0) or 0) > 0
+    ]
+    if not candidates:
+        return None
+    if action == "attack_random":
+        return random.choice(candidates)
+    # attack_nearest — preferuj tę samą strefę co atakujący.
+    a_zone = str(attacker.get("zone") or ZONE_ENGAGED)
+    same_zone = [c for c in candidates if str(c.get("zone") or ZONE_ENGAGED) == a_zone]
+    return (same_zone or candidates)[0]
 
 
 def compute_player_attack_dodge_outcome(
@@ -2219,9 +3371,25 @@ def resolve_attack(
                 # post-multiplier — gear bonus is flat, not doubled on crit)
                 _flat_bonus = _weapon_flat_damage_bonus(wrow)
                 _flat_bonus += _inventory_affix_damage_bonus(conn, ch_id)
+                # S14 (#609): kondycje gracza z stat_target `damage_bonus` (np. rage +3) doliczają
+                # płaski bonus do obrażeń (post-mnożnik, jak gear — nie podwajany na cricie).
+                _pc_for_dmg = _find_combatant(combatants, "player")
+                if _pc_for_dmg is not None:
+                    _flat_bonus += _combatant_stat_modifier(_pc_for_dmg, sheet=None, stat="damage_bonus")
                 if _flat_bonus:
                     dmg += _flat_bonus
                     out["damage_bonus"] = _flat_bonus
+                # S19 (#614): zasadzka — pierwszy atak z ukrycia (ambush_bonus) dolicza +Nk6 RAZ
+                # jako oddzielny add PO mnożniku (jak gear — nie podwajany na cricie/nat20). Rzut
+                # ataku gracza (nat 20/nat 1) NIETKNIĘTY. Atak zdejmuje hidden (demaskuje).
+                if _pc_for_dmg is not None:
+                    _hidden = _hidden_conditions(_pc_for_dmg)
+                    if _hidden:
+                        _ambush = _roll_ambush_bonus(_hidden)
+                        if _ambush:
+                            dmg += _ambush
+                            out["ambush_bonus"] = _ambush
+                        _remove_combatant_conditions(_pc_for_dmg, _hidden)
                 out["damage"] = dmg
                 prev_hp = int(enemy.get("hp_current", 0) or 0)
                 next_hp = max(0, prev_hp - dmg)
@@ -2506,6 +3674,12 @@ def resolve_attack(
                 out["enemy_dead"] = False
                 out["loot"] = []
                 out["gold_drop"] = 0
+                # S19 (#614): nawet nieudany atak demaskuje — zdejmij hidden (brak bonusu na pudle).
+                _pc_miss = _find_combatant(combatants, "player")
+                if _pc_miss is not None:
+                    _hidden_miss = _hidden_conditions(_pc_miss)
+                    if _hidden_miss:
+                        _remove_combatant_conditions(_pc_miss, _hidden_miss)
 
             # ── Spell Miscast (Nat 1 on spell attack) ─────────────────────────
             if _is_spell and player_nat1:
@@ -2560,9 +3734,125 @@ def resolve_attack(
         if not enemy or enemy.get("type") != "enemy":
             raise ValueError("current turn is not a valid enemy")
 
+        # ── S18 (#613): behavior_override — kondycja steruje turą wroga (confused/berserk/panicked).
+        # evaluate_current_turn_conditions (wołane na początku resolve_attack) już rzuciło k4 i
+        # zapisało decyzję; tu ją tylko ODCZYTUJEMY (roll=False) i wykonujemy. Zastępuje normalne AI.
+        _ensure_zones(combatants)
+        _fb = _resolve_forced_behavior(enemy, str(cur), int(row["round"] or 1), roll=False)
+        if _fb is not None:
+            _action = str(_fb.get("action") or "")
+            out["forced_behavior"] = _fb
+            out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+            cid_b = int(row["id"])
+
+            def _log_behavior(extra: dict) -> None:
+                payload = {"behavior": _fb.get("behavior"), "action": _action,
+                           "condition": _fb.get("condition_key"), "enemy_name": out["enemy_name"]}
+                payload.update(extra)
+                log_combat_turn(
+                    conn, combat_id=cid_b, campaign_id=campaign_id,
+                    turn_number=_next_combat_log_sequence(conn, cid_b), actor="enemy",
+                    event_type="behavior", roll_value=extra.get("attack_roll"),
+                    damage=extra.get("damage"), hp_after=int(enemy.get("hp_current", 0) or 0),
+                    target_id=extra.get("target_id") or str(cur),
+                    target_name=extra.get("target_name") or out["enemy_name"], hit=extra.get("hit"),
+                    narrative=json.dumps(payload, ensure_ascii=False),
+                )
+
+            if _action == "stand":
+                out["hit"] = False
+                out["damage"] = 0
+                _log_behavior({"target_id": str(cur)})
+                _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+                conn.commit()
+                out["combat_state"] = load_combat_snapshot(campaign_id)
+                return out
+
+            if _action == "flee":
+                old_zone = str(enemy.get("zone") or ZONE_ENGAGED)
+                enemy["zone"] = ZONE_RANGED
+                out["hit"] = False
+                out["damage"] = 0
+                out["zone_change"] = {"actor_id": str(cur), "from": old_zone, "to": ZONE_RANGED, "fled": True}
+                _log_behavior({"target_id": str(cur), "from": old_zone, "to": ZONE_RANGED})
+                _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+                conn.commit()
+                out["combat_state"] = load_combat_snapshot(campaign_id)
+                return out
+
+            if _action in ("attack_nearest", "attack_random"):
+                target = _choose_behavior_target(combatants, enemy, _action)
+                # Cel = gracz (lub brak celu) → normalna ścieżka ataku na gracza (przelot niżej).
+                if target is not None and str(target.get("id") or "") != "player":
+                    raw_b = roll_d20()
+                    atk_b = (int(enemy.get("attack_bonus") or 0)
+                             + _combatant_stat_modifier(enemy, sheet=None, stat="attack_bonus"))
+                    wp_b = wound_penalty(int(enemy.get("hp_current", 0) or 0), int(enemy.get("hp_max", 0) or 0))
+                    attack_roll_b = raw_b + atk_b + wp_b
+                    tgt_ac = (int(target.get("defense", 10) or 10)
+                              + _combatant_stat_modifier(target, sheet=None, stat="ac"))
+                    hit_b = attack_roll_b >= tgt_ac
+                    dmg_b = 0
+                    if hit_b:
+                        dmg_b = roll_damage_dice((enemy.get("damage_dice") or "1d6").strip().lower(),
+                                                 _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+                        target["hp_current"] = max(0, int(target.get("hp_current", 0) or 0) - dmg_b)
+                    out["hit"] = bool(hit_b)
+                    out["damage"] = int(dmg_b)
+                    out["attack_roll"] = int(attack_roll_b)
+                    out["raw_d20"] = int(raw_b)
+                    out["target_id"] = str(target.get("id"))
+                    out["target_name"] = str(target.get("name") or target.get("id"))
+                    out["target_hp_remaining"] = int(target.get("hp_current", 0) or 0)
+                    out["target_incapacitated"] = int(target.get("hp_current", 0) or 0) <= 0
+                    _log_behavior({"target_id": str(target.get("id")),
+                                   "target_name": out["target_name"], "attack_roll": int(attack_roll_b),
+                                   "damage": int(dmg_b), "hit": bool(hit_b)})
+                    _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+                    conn.commit()
+                    out["combat_state"] = load_combat_snapshot(campaign_id)
+                    return out
+            # _action == "normal" (k4=4) lub cel=gracz → przelot do normalnej ścieżki ataku na gracza.
+
         # ── Zone AI: melee enemy in different zone charges instead of attacking ──
         _ensure_zones(combatants)
         player_c = _find_combatant(combatants, "player") or {}
+
+        # ── S19 (#614): gracz z kondycją hidden jest UNTARGETABLE — wróg nie może go zaatakować.
+        # Zamiast ataku próbuje wykryć: rzut WIS (staty wroga z S2) vs detect_dc (z effect_json hidden).
+        # Sukces = zdejmuje hidden (gracz wykryty); porażka = gracz pozostaje ukryty. Tura zużyta.
+        # Data-driven — żaden ``if condition_key == "hidden"``. Rzut ataku wroga nietknięty.
+        if _combatant_is_untargetable(player_c):
+            detect_dc = _actor_detect_dc(player_c)
+            raw_det = roll_d20()
+            wis_mod = _combatant_stat_modifier(enemy, sheet=None, stat="WIS")
+            det_total = raw_det + wis_mod
+            detected = raw_det == 20 or (raw_det != 1 and det_total >= detect_dc)
+            out["hit"] = False
+            out["damage"] = 0
+            out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+            out["detection"] = {
+                "dc": int(detect_dc), "roll": int(raw_det), "wis_mod": int(wis_mod),
+                "total": int(det_total), "detected": bool(detected),
+            }
+            if detected:
+                _remove_combatant_conditions(player_c, _hidden_conditions(player_c))
+                out["detection"]["revealed"] = True
+            cid_d = int(row["id"])
+            log_combat_turn(
+                conn, combat_id=cid_d, campaign_id=campaign_id,
+                turn_number=_next_combat_log_sequence(conn, cid_d), actor="enemy",
+                event_type="detection", roll_value=int(raw_det), damage=None,
+                hp_after=int(enemy.get("hp_current", 0) or 0), target_id="player",
+                target_name=out["enemy_name"], hit=None,
+                narrative=json.dumps(out["detection"], ensure_ascii=False),
+            )
+            _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+            conn.commit()
+            advance_turn(campaign_id)
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
+
         p_zone_e = str(player_c.get("zone") or ZONE_ENGAGED)
         e_zone = str(enemy.get("zone") or ZONE_ENGAGED)
         _prefers_ranged = _default_zone_for_enemy(
@@ -2603,7 +3893,9 @@ def resolve_attack(
             return out
 
         raw = roll_d20()
-        atk_b = int(enemy.get("attack_bonus") or 0)
+        # S18 (#613): kondycje wroga z static_stat_modifier attack_bonus (np. berserk +3) foldują
+        # się generycznie w atak. Zero regresji — żaden istniejący wróg nie ma tego modyfikatora.
+        atk_b = int(enemy.get("attack_bonus") or 0) + _combatant_stat_modifier(enemy, sheet=None, stat="attack_bonus")
         wp = wound_penalty(
             int(enemy.get("hp_current", 0) or 0),
             int(enemy.get("hp_max", 0) or 0),
@@ -2632,6 +3924,8 @@ def resolve_attack(
         )
 
         dmg = 0
+        _dodge = None
+        _block = None  # S18 (#613): init przed `if hit` — log reakcji (S16) czyta _block też przy pudle
         if hit:
             # U2 (#510): armor wears down on received hit (weapon decay is on player attack)
             try:
@@ -2640,10 +3934,39 @@ def resolve_attack(
             except Exception as _dur_err:
                 logger.warning("armor_durability_decrement_error", error=str(_dur_err))
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
-            dmg = roll_damage_dice(expr, 0)
+            # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
+            dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+            # S15 (#610): okno reakcji — unik PRZED aplikacją obrażeń. Rzut ataku wroga już
+            # rozliczony (nat 20/nat 1 nietknięte); reakcja działa tylko na obrażenia po trafieniu.
+            _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
+            if _dodge is not None:
+                out["reaction"] = _dodge
+                if _dodge.get("dodged"):
+                    dmg = 0
+            else:
+                # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
+                # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
+                # nietknięty. Crit-fail bije durability tarczy (hook czyta character_inventory).
+                _block = _try_shield_block_reaction(
+                    conn, ch_id, p, sheet, attack_roll, int(row["round"] or 1), dmg)
+                if _block is not None:
+                    out["reaction"] = _block
+                    if _block.get("available"):
+                        dmg = int(_block.get("damage_after", dmg))
             out["damage"] = dmg
             prev = int(p.get("hp_current", 0) or 0)
             next_hp = max(0, prev - dmg)
+            # S13 (#608): jeśli cios sprowadziłby HP do ≤0, kondycja z efektem on_zero_hp_save
+            # (np. blessed CON DC 12) może wykonać rzut ratunkowy i zostawić 1 HP zamiast
+            # nieprzytomności. Rzut ataku/obrażenia wroga BEZ ZMIAN — hook tylko w momencie HP≤0.
+            if next_hp <= 0:
+                # Kondycje gracza w walce żyją na combatancie (`p`), nie na sheet → sheet=None,
+                # by helper czytał p.conditions (blessed) i p.stats.
+                save_res = _on_zero_hp_save(p, sheet=None)
+                if save_res is not None:
+                    out["on_zero_hp_save"] = save_res
+                    if save_res.get("saved") and save_res.get("hp"):
+                        next_hp = int(save_res["hp"])
             p["hp_current"] = next_hp
             sheet["current_hp"] = next_hp
             out["player_hp_remaining"] = next_hp
@@ -2684,6 +4007,72 @@ def resolve_attack(
             ),
         )
 
+        # S15 (#610): osobny wpis reakcji uniku — Sandbox/UI pokazuje test DEX i wynik.
+        if _dodge is not None and _dodge.get("available"):
+            tn_r = _next_combat_log_sequence(conn, cid)
+            log_combat_turn(
+                conn,
+                combat_id=cid,
+                campaign_id=campaign_id,
+                turn_number=tn_r,
+                actor="player",
+                event_type="reaction",
+                roll_value=int(_dodge.get("dodge_total") or 0),
+                damage=None,
+                hp_after=int(p.get("hp_current", 0) or 0),
+                target_id="player",
+                target_name=str(p.get("name") or "Bohater"),
+                hit=bool(_dodge.get("dodged")),
+                narrative=json.dumps(
+                    {
+                        "reaction": "dodge",
+                        "d20": _dodge.get("d20"),
+                        "dodge_total": _dodge.get("dodge_total"),
+                        "attack_roll": _dodge.get("attack_roll"),
+                        "margin": _dodge.get("margin"),
+                        "outcome": _dodge.get("outcome"),
+                        "dodged": _dodge.get("dodged"),
+                        "locked_next_round": _dodge.get("locked_next_round"),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
+        # S16 (#611): osobny wpis reakcji bloku — Sandbox/UI pokazuje test STR, redukcję i wynik.
+        if _block is not None and _block.get("available"):
+            tn_b = _next_combat_log_sequence(conn, cid)
+            log_combat_turn(
+                conn,
+                combat_id=cid,
+                campaign_id=campaign_id,
+                turn_number=tn_b,
+                actor="player",
+                event_type="reaction",
+                roll_value=int(_block.get("block_total") or 0),
+                damage=int(_block.get("damage_after") or 0),
+                hp_after=int(p.get("hp_current", 0) or 0),
+                target_id="player",
+                target_name=str(p.get("name") or "Bohater"),
+                hit=bool(_block.get("full_block") or (_block.get("reduction") or 0) > 0),
+                narrative=json.dumps(
+                    {
+                        "reaction": "shield_block",
+                        "d20": _block.get("d20"),
+                        "block_total": _block.get("block_total"),
+                        "attack_roll": _block.get("attack_roll"),
+                        "dc": _block.get("dc"),
+                        "margin": _block.get("margin"),
+                        "outcome": _block.get("outcome"),
+                        "reduction": _block.get("reduction"),
+                        "damage_before": _block.get("damage_before"),
+                        "damage_after": _block.get("damage_after"),
+                        "full_block": _block.get("full_block"),
+                        "durability_hit": _block.get("durability_hit"),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
         _persist_combatants(conn, row, combatants)
         conn.commit()
         out["combat_state"] = load_combat_snapshot(campaign_id)
@@ -2714,6 +4103,59 @@ def resolve_enemy_attack(
     return resolve_attack(campaign_id, 0, attacker="enemy", raw_d20=None)
 
 
+def declare_player_reaction(campaign_id: int, reaction_type: str = "dodge") -> dict[str, Any]:
+    """S15 (#610) — pre-deklaracja reakcji (toggle). NIE zużywa tury.
+
+    UX solo: zamiast modala przerywającego auto-procesowane tury wroga, gracz z góry
+    deklaruje „Unikaj następnego ataku". Flaga ``reaction_declared`` żyje na combatancie
+    gracza i jest konsumowana przy pierwszym trafieniu wroga (patrz ``_try_dodge_reaction``).
+    Ponowne wywołanie tego samego typu = anulowanie (toggle off). Wymaga tury gracza oraz
+    odpowiedniego skilla rank ≥ 1 (skill-gated feature)."""
+    rt = str(reaction_type or "dodge").strip().lower()
+    if rt not in {"dodge", "shield_block"}:
+        raise ValueError(f"unknown reaction_type: {rt}")
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("reaction can only be declared on player's turn")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+        ch_id = int(row["character_id"])
+        ch = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (ch_id,)).fetchone()
+        sheet = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+        try:
+            skill_rank = int((sheet.get("skills") or {}).get(rt, 0) or 0)
+        except (TypeError, ValueError):
+            skill_rank = 0
+        if skill_rank < 1:
+            raise ValueError(f"skill '{rt}' rank >= 1 required to declare this reaction")
+        # S16 (#611): blok tarczą wymaga ZAŁOŻONEJ tarczy (gate ekwipunku).
+        if rt == "shield_block":
+            has_shield, _ = _player_has_shield_equipped(conn, ch_id)
+            if not has_shield:
+                raise ValueError("shield_block requires an equipped shield")
+        if str(p.get("reaction_declared") or "") == rt:
+            p.pop("reaction_declared", None)
+            declared = None
+        else:
+            p["reaction_declared"] = rt
+            declared = rt
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+    return {
+        "ok": True,
+        "reaction_declared": declared,
+        "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
 def change_player_zone(campaign_id: int) -> dict[str, Any]:
     """T34 — Player zone-change action. Toggles engaged ↔ ranged and consumes the turn.
 
@@ -2737,6 +4179,18 @@ def change_player_zone(campaign_id: int) -> dict[str, Any]:
         new = _opposite_zone(old)
         p["zone"] = new
 
+        # S12 (#607): jeśli gracz ma aktywną, niewykorzystaną w tej turze `extra_action`
+        # (np. hasted → move_only), zmiana strefy jest DARMOWA — nie zużywa tury. Drugą
+        # zmianę w tej samej turze już rozliczamy normalnie (advance_turn). Marker = runda+aktor
+        # → flaga resetuje się sama, gdy gracz znów dostanie turę w kolejnej rundzie.
+        round_n = int(row["round"] or 1)
+        marker = _condition_turn_marker(round_n, "player")
+        free_action = False
+        if _actor_extra_action_kind(p) in {"move_only"}:
+            if str(p.get("extra_action_used_marker") or "") != marker:
+                p["extra_action_used_marker"] = marker
+                free_action = True
+
         cid = int(row["id"])
         tn = _next_combat_log_sequence(conn, cid)
         log_combat_turn(
@@ -2757,11 +4211,199 @@ def change_player_zone(campaign_id: int) -> dict[str, Any]:
         _persist_combatants(conn, row, combatants)
         conn.commit()
 
-    advance_turn(campaign_id)
+    if not free_action:
+        advance_turn(campaign_id)
     return {
         "ok": True,
         "from": old,
         "to": new,
+        "extra_action_used": free_action,
+        "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
+# ─── S17 (#612): Wrestling — akcja bojowa, opposed STR vs STR, wynik → kondycja.
+
+def _apply_skill_outcome_conditions(
+    campaign_id: int,
+    mapping: dict[str, Any],
+    outcome: str,
+    target_ref: str | None,
+) -> list[dict[str, Any]]:
+    """Stopień testu (S1) → kondycja nakładana na CEL lub na GRACZA — w pełni DANYMI.
+
+    ``mapping`` = ``{on_success_condition, on_crit_condition, on_critfail_self_condition}``.
+    Prymityw raz (Zasada 1 FAZY S): ZERO ``if skill_key == ...`` / ``if condition_key == ...``
+    — wrestling (i przyszłe skille nakładające kondycje wynikiem) podają mapping jako dane.
+    Reużywa istniejących ścieżek: cel → ``apply_condition_to_combatant``; gracz (samo-
+    przewrócenie przy krytycznej porażce) → ``apply_condition_to_player``. Sukces krytyczny
+    woła ``on_crit_condition`` (mocniejsza), z fallbackiem na ``on_success_condition``."""
+    oc = str(outcome or "").strip().upper()
+    applied: list[dict[str, Any]] = []
+    if oc == "CRITICAL_SUCCESS":
+        key = mapping.get("on_crit_condition") or mapping.get("on_success_condition")
+        if key and target_ref:
+            applied.append({"who": "target", "condition": key,
+                            "result": apply_condition_to_combatant(campaign_id, target_ref, key)})
+    elif oc == "SUCCESS":
+        key = mapping.get("on_success_condition")
+        if key and target_ref:
+            applied.append({"who": "target", "condition": key,
+                            "result": apply_condition_to_combatant(campaign_id, target_ref, key)})
+    elif oc == "CRITICAL_FAILURE":
+        key = mapping.get("on_critfail_self_condition")
+        if key:
+            applied.append({"who": "self", "condition": key,
+                            "result": apply_condition_to_player(campaign_id, key)})
+    # FAILURE → nic (cel zachowuje swobodę ruchów)
+    return applied
+
+
+def _load_skill_outcome_mapping(conn: Any, skill_key: str) -> dict[str, Any]:
+    """Wczytaj generyczne pola wynik→kondycja ze ``skill_counters`` (S17, data-driven).
+
+    Brak kolumn (stary schemat) lub rekordu → mapping bez kondycji (bezpieczny no-op).
+    Przyszłe skille deklaratywnie dodają wiersze — bez dotykania silnika."""
+    try:
+        r = conn.execute(
+            "SELECT counter_key, on_success_condition, on_crit_condition, on_critfail_self_condition "
+            "FROM skill_counters WHERE player_skill_key = ? LIMIT 1",
+            (skill_key,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return {"counter_key": "STR"}
+    if not r:
+        return {"counter_key": "STR"}
+    return {
+        "counter_key": str(r[0] or "STR").upper(),
+        "on_success_condition": r[1],
+        "on_crit_condition": r[2],
+        "on_critfail_self_condition": r[3],
+    }
+
+
+def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[str, Any]:
+    """S17 (#612) — Zapasy: akcja bojowa. Test przeciwny STR vs STR; wynik nakłada kondycję.
+
+    Gate: tura gracza + ZWARCIE (gracz i cel w strefie ``engaged``). Cel poza zwarciem →
+    ``{ok:False, blocked:True, block_reason:'out_of_range'}`` BEZ konsumpcji tury (wzorzec
+    melee out_of_range). Silnik rzuca obie strony (``d20 + STR_mod`` [+ rank + proficiency
+    gracza]); stopień liczy S1 (``_derive_outcome``). Mapowanie wynik→kondycja jest DANYMI
+    ze ``skill_counters`` (Zasada 1). Sukces → kondycja na wrogu; krytyk → mocniejsza;
+    krytyczna porażka → kondycja na graczu. Konsumuje turę (``advance_turn``).
+
+    RZUTY ATAKU W WALCE (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE — wrestling to test
+    umiejętności; margines dotyczy wyłącznie jego."""
+    ref_lo = str(target_ref or "").strip().lower()
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("wrestling only on player's turn")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+
+        # Rozwiąż cel: po referencji (key/name contains) albo pierwszy żywy wróg w zwarciu.
+        target = None
+        for c in combatants:
+            if not isinstance(c, dict) or c.get("type") != "enemy":
+                continue
+            if int(c.get("hp_current", 0) or 0) <= 0:
+                continue
+            if ref_lo:
+                ek = str(c.get("enemy_key", "")).lower()
+                nm = str(c.get("name", "")).lower()
+                if ref_lo == ek or ref_lo == nm or ref_lo in ek or ref_lo in nm:
+                    target = c
+                    break
+            elif str(c.get("zone") or ZONE_ENGAGED) == ZONE_ENGAGED:
+                target = c
+                break
+        if target is None and not ref_lo:
+            target = next((c for c in combatants if isinstance(c, dict)
+                           and c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0), None)
+        if target is None:
+            raise ValueError("no living enemy target")
+
+        # Gate zwarcia — gracz i cel muszą być engaged. Blok bez konsumpcji tury.
+        if str(p.get("zone") or ZONE_ENGAGED) != ZONE_ENGAGED or \
+           str(target.get("zone") or ZONE_ENGAGED) != ZONE_ENGAGED:
+            return {"ok": False, "blocked": True, "block_reason": "out_of_range",
+                    "target": str(target.get("name") or target.get("enemy_key") or ""),
+                    "combat_state": load_combat_snapshot(campaign_id)}
+
+        # Skill rank gracza z sheet (proficiency +2 od rank ≥ 3 — spójnie z testami umiejętności).
+        ch = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (int(row["character_id"]),)
+        ).fetchone()
+        sheet = json.loads(ch["sheet_json"] or "{}") if ch and ch["sheet_json"] else {}
+        try:
+            skill_rank = int((sheet.get("skills") or {}).get("wrestling", 0) or 0)
+        except (TypeError, ValueError):
+            skill_rank = 0
+        proficiency = 2 if skill_rank >= 3 else 0
+
+        mapping = _load_skill_outcome_mapping(conn, "wrestling")
+        stat = str(mapping.get("counter_key") or "STR").upper()
+
+        # Test przeciwny: obie strony rzucają (kondycje fold-ują się w stat_mod).
+        player_mod = _combatant_stat_modifier(p, sheet=None, stat=stat) + skill_rank + proficiency
+        enemy_mod = _combatant_stat_modifier(target, sheet=None, stat=stat)
+        player_d20 = roll_d20()
+        enemy_d20 = roll_d20()
+        opponent_total = enemy_d20 + enemy_mod
+        from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
+        derived = _derive_outcome(player_d20, player_mod, opponent_total)
+
+        target_key = str(target.get("enemy_key") or target.get("name") or target.get("id"))
+        target_name = str(target.get("name") or target.get("enemy_key") or "Wróg")
+
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn,
+            combat_id=cid,
+            campaign_id=campaign_id,
+            turn_number=tn,
+            actor="player",
+            event_type="wrestling",
+            roll_value=int(derived["player_total"]),
+            damage=None,
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id=str(target.get("id")),
+            target_name=target_name,
+            hit=bool(derived["success"]),
+            narrative=json.dumps({
+                "outcome": derived["outcome"], "margin": derived["margin"],
+                "player_roll": player_d20, "player_total": derived["player_total"],
+                "enemy_roll": enemy_d20, "enemy_total": opponent_total, "stat": stat,
+            }, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    # Nakładanie kondycji PO zamknięciu conn (apply_* otwierają własne połączenia).
+    applied = _apply_skill_outcome_conditions(campaign_id, mapping, derived["outcome"], target_key)
+    advance_turn(campaign_id)
+    return {
+        "ok": True,
+        "outcome": derived["outcome"],
+        "margin": derived["margin"],
+        "success": derived["success"],
+        "player_roll": player_d20,
+        "player_total": derived["player_total"],
+        "enemy_roll": enemy_d20,
+        "enemy_total": opponent_total,
+        "stat": stat,
+        "target": target_name,
+        "applied": applied,
         "combat_state": load_combat_snapshot(campaign_id),
     }
 

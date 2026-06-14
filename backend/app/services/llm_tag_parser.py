@@ -212,6 +212,8 @@ REJECTION_CORRECTIONS: dict[str, "str | None"] = {
     "QUEST_SUGGEST": None,
     "SKILL_CHECK": None,  # DC clamped in U7, no narration correction
     "COMBAT_START": None,  # correction injected by _maybe_start_combat_from_gm_tag (HF-7)
+    # S8 (#603): klucz kondycji spoza katalogu game_config_conditions → tag odrzucony.
+    "APPLY_CONDITION": "*(Nic trwałego się nie dzieje.)*",
 }
 
 

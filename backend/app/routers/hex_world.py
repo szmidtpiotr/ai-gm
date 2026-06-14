@@ -527,9 +527,29 @@ def _placement_mode(row: Any) -> str:
     return mode if mode in ("biome", "scatter", "path") else "biome"
 
 
+def _world_hex_coords(radius: int) -> list[tuple[int, int]]:
+    """Rectangular hex grid for the global world map (#589).
+
+    The renderer places a flat-top hex at y ∝ (q/2 + r). A plain axial square
+    [-R,R]² therefore draws as a RHOMBUS (each column q shifted vertically by q/2).
+    To get a visual RECTANGLE we shear the per-column r-range by -floor(q/2) so the
+    vertical band (q/2 + r) is identical for every column. Still (2R+1)² hexes.
+    """
+    coords: list[tuple[int, int]] = []
+    for q in range(-radius, radius + 1):
+        shift = -(q // 2)  # compensate the q/2 vertical shear
+        for r in range(-radius + shift, radius + shift + 1):
+            coords.append((q, r))
+    return coords
+
+
 class WorldGenRequest(BaseModel):
     seed: int = 42
     radius: int = 25
+    # #589 — regenerate = replace. Without clearing, INSERT OR IGNORE leaves the
+    # PREVIOUS world's hexes in place (e.g. an old diamond) so the new rectangle
+    # never fully shows. Default True wipes top-level hexes first.
+    clear_existing: bool = True
 
 
 @router.post("/generate")
@@ -573,13 +593,8 @@ def generate_world(body: WorldGenRequest, authorization: str | None = Header(def
 
         rng = random.Random(body.seed)
 
-        # Build all hex coordinates (axial grid)
-        all_hexes = [
-            (q, r)
-            for q in range(-body.radius, body.radius + 1)
-            for r in range(-body.radius, body.radius + 1)
-            if abs(q) + abs(r) + abs(q + r) <= 2 * body.radius
-        ]
+        # Build all hex coordinates (full square grid — #589)
+        all_hexes = _world_hex_coords(body.radius)
         all_set = set(all_hexes)
         total = len(all_hexes)
 
@@ -612,6 +627,13 @@ def generate_world(body: WorldGenRequest, authorization: str | None = Header(def
             blocked = set(feature_map.keys())  # don't overwrite other features
             for h in _build_road_network(nodes, blocked, rng):
                 biome_map[h] = road_type
+
+        # #589 — replace the previous top-level world so the new shape is exact
+        # (old hexes outside the new set would otherwise remain and distort the map).
+        if body.clear_existing:
+            conn.execute(
+                "DELETE FROM world_hexes WHERE map_level = 0 AND parent_hex_id IS NULL"
+            )
 
         hexes_created = 0
         counts: dict[str, int] = {}

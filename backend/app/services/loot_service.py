@@ -1449,9 +1449,20 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                 if not cond_row:
                     raise ValueError("condition_not_found")
                 stackable = bool(int(cond_row["stackable"] or 0)) if "stackable" in cond_row.keys() else False
-                already_has = any(str(c.get("key") or "").strip().lower() == condition_key for c in conditions)
-                if already_has and not stackable:
-                    results.append({"type": "apply_condition", "condition_key": condition_key, "applied": False, "reason": "already_present"})
+                existing_cond = next(
+                    (c for c in conditions if str(c.get("key") or "").strip().lower() == condition_key),
+                    None,
+                )
+                if existing_cond is not None:
+                    if not stackable:
+                        results.append({"type": "apply_condition", "condition_key": condition_key, "applied": False, "reason": "already_present"})
+                        continue
+                    # S9 (#604): stackable → podbij runtime.level (klamp max_level) zamiast duplikować.
+                    from app.services.combat_service import _condition_level, _set_condition_level, _condition_max_level
+                    cap = _condition_max_level(existing_cond)
+                    _set_condition_level(existing_cond, min(cap, _condition_level(existing_cond) + 1))
+                    sheet["conditions"] = conditions
+                    results.append({"type": "apply_condition", "condition_key": condition_key, "applied": True, "reason": "level_bumped"})
                     continue
                 conditions.append(
                     {
@@ -1460,6 +1471,7 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                         "effect_json": cond_row["effect_json"],
                         "source_item_key": catalog_key,
                         "applied_at": "inventory_use",
+                        "runtime": {"level": 1} if stackable else {},
                     }
                 )
                 sheet["conditions"] = conditions

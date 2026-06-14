@@ -183,6 +183,13 @@ def perform_long_rest(
     sheet["short_rests_used"] = 0
     sheet["death_saves_failed"] = 0
 
+    # S9 (#604): pełny sen zdejmuje WSZYSTKIE poziomy kondycji stackowalnych (exhausted).
+    conds = sheet.get("conditions")
+    if isinstance(conds, list) and conds:
+        from app.services.combat_service import reduce_stacking_conditions
+        new_conds, _ = reduce_stacking_conditions(conds, remove_all=True)
+        sheet["conditions"] = new_conds
+
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
@@ -260,6 +267,13 @@ def perform_short_rest(
 
     sheet["current_hp"] = new_hp
     sheet["short_rests_used"] = used + 1
+
+    # S9 (#604): krótki odpoczynek (1h) zdejmuje 1 poziom kondycji stackowalnych (exhausted).
+    conds = sheet.get("conditions")
+    if isinstance(conds, list) and conds:
+        from app.services.combat_service import reduce_stacking_conditions
+        new_conds, _ = reduce_stacking_conditions(conds, remove_all=False)
+        sheet["conditions"] = new_conds
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",

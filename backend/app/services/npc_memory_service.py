@@ -34,6 +34,79 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+def _has_stats(raw: Any) -> bool:
+    """True if a stored stats_json holds an actual stat block (not NULL/empty/'{}')."""
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return False
+    return isinstance(parsed, dict) and len(parsed) > 0
+
+
+def ensure_npc_stats(
+    conn: sqlite3.Connection, campaign_id: int, npc_name: str
+) -> dict[str, int] | None:
+    """Lazily resolve + persist the 7 ability stats of a campaign NPC (FAZA S, S3).
+
+    Called ONLY from the opposed-skill-test path (S4) — background NPCs never pay for
+    stats. Resolution order:
+      1. campaign_known_npcs.stats_json already set → parse and return (stability:
+         the same innkeeper always rolls with the same stats, per campaign).
+      2. else npcs.stats_json template (global, admin-authored) → use it.
+      3. else derive from archetype via actor_stats.stats_for_actor (same keyword
+         heuristic enemies use in S2 — the archetype table is NOT forked here).
+    The resolved block is written back to campaign_known_npcs (row upserted by name),
+    so step 1 hits on every later call.
+
+    Nameless targets ("a random passer-by") get no row and return None — the caller
+    falls back to a fixed DC from skill_counters (handled in S4).
+    """
+    name = (npc_name or "").strip()
+    if not name:
+        return None
+
+    from app.services.actor_stats import parse_stats_json, stats_for_actor
+
+    existing = conn.execute(
+        "SELECT id, stats_json FROM campaign_known_npcs WHERE campaign_id = ? AND npc_name = ?",
+        (campaign_id, name),
+    ).fetchone()
+
+    if existing and _has_stats(existing["stats_json"]):
+        return parse_stats_json(existing["stats_json"])
+
+    # Derive: template wins over archetype.
+    template_id = _lookup_catalog_npc_id(conn, name)
+    stats: dict[str, int] | None = None
+    if template_id is not None:
+        trow = conn.execute(
+            "SELECT stats_json FROM npcs WHERE id = ?", (template_id,)
+        ).fetchone()
+        if trow and _has_stats(trow["stats_json"]):
+            stats = parse_stats_json(trow["stats_json"])
+    if stats is None:
+        stats = stats_for_actor(name)
+
+    stored = json.dumps(stats, ensure_ascii=False)
+    if existing:
+        conn.execute(
+            "UPDATE campaign_known_npcs SET stats_json = ?, updated_at = datetime('now') WHERE id = ?",
+            (stored, existing["id"]),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO campaign_known_npcs (campaign_id, npc_id, npc_name, stats_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (campaign_id, template_id, name, stored),
+        )
+    conn.commit()
+    return stats
+
+
 def _lookup_catalog_npc_id(conn: sqlite3.Connection, name: str) -> int | None:
     """Best-effort catalog match by exact label, falling back to key prefix."""
     row = conn.execute(

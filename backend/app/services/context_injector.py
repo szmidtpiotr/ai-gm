@@ -615,7 +615,10 @@ class ContextInjector:
             if ctype in _FEAR_LABELS:
                 fear_label = _FEAR_LABELS[ctype]
             else:
-                other_conditions.append(ctype)
+                # S8 (#603): preferuj label+opis z katalogu; fallback do surowego klucza.
+                label = cond.get("catalog_label") or ctype
+                desc = cond.get("catalog_description")
+                other_conditions.append(f"{label} — {desc}" if desc else label)
 
         lines.append(f"Aktywne stany: {', '.join(other_conditions) if other_conditions else 'brak'}")
         if fear_label:
@@ -688,7 +691,24 @@ class ContextInjector:
             ).fetchall()
         except Exception:
             return []
-        return [dict(r) for r in rows]
+        conds = [dict(r) for r in rows]
+        # S8 (#603): wzbogać o label+description z katalogu game_config_conditions
+        # (narrator dostaje opis stanu z bazy, nie hard-coded jak _FEAR_LABELS).
+        try:
+            catalog = {
+                str(r["key"]): (r["label"], r["description"])
+                for r in self.conn.execute(
+                    "SELECT key, label, description FROM game_config_conditions WHERE is_active = 1"
+                ).fetchall()
+            }
+        except Exception:
+            catalog = {}
+        for c in conds:
+            meta = catalog.get(str(c.get("condition_type") or ""))
+            if meta:
+                c["catalog_label"] = meta[0]
+                c["catalog_description"] = meta[1]
+        return conds
 
     def _get_campaign_tone(self, campaign_id: int) -> str:
         row = self.conn.execute(

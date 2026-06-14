@@ -184,12 +184,13 @@ _SOURCE_BUCKETS = {
     "starter_gold": "starter_gold",
     "admin_cheat_add": "admin_cheat",
     "admin_cheat": "admin_cheat",
+    "gamble": "gamble",
 }
 
-# Allowed canonical buckets (spec U26 ENUM, extended with starter/admin/other).
+# Allowed canonical buckets (spec U26 ENUM, extended with starter/admin/gamble/other).
 ECONOMY_SOURCE_BUCKETS = (
     "loot", "sell", "buy", "service", "robbery", "resurrection",
-    "repair", "craft", "quest_reward", "starter_gold", "admin_cheat", "other",
+    "repair", "craft", "quest_reward", "starter_gold", "admin_cheat", "gamble", "other",
 )
 
 
@@ -220,6 +221,8 @@ def categorize_source(source: str | None) -> str:
         return "quest_reward"
     if s.startswith("service") or s.startswith("spend_gold"):
         return "service"
+    if s.startswith("gamble"):
+        return "gamble"
     return "other"
 
 

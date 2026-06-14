@@ -902,9 +902,17 @@ def _maybe_handle_blocked_player_combat_turn(
 
     turn_effects = cs.evaluate_current_turn_conditions(campaign_id)
     condition_blocked = bool(turn_effects.get("blocked"))
+    # S18 (#613): kondycja sterująca turą gracza (confused/panicked behavior_override). Tura NIE jest
+    # przejmowana w całości (UX) — pokazujemy banner z wynikiem k4/ucieczki; gracz wciąż gra przez UI walki.
+    fb = turn_effects.get("forced_behavior")
+    fb_banner = ""
+    if isinstance(fb, dict) and str(fb.get("actor_id") or "") == "player":
+        fb_banner = str(turn_effects.get("message") or "").strip()
     if not condition_blocked:
         # BUG-186: narrative must not process during active combat even when no condition blocks
         assistant_text = "Walka trwa! Użyj interfejsu walki, by wykonać akcję bojową."
+        if fb_banner:
+            assistant_text = f"{fb_banner}\n{assistant_text}"
     else:
         assistant_text = str(
             turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
@@ -4130,15 +4138,35 @@ def create_turn(
         # Stage 3 Z4 — [APPLY_CONDITION:zaskoczony:enemy_key] from stealth-success narration
         try:
             from app.services.combat_service import apply_condition_to_combatant
+            from app.services.llm_tag_parser import (
+                get_rejection_correction as _ac_corr,
+                log_tag_error as _ac_lte,
+            )
+            _ac_invalid = False
             for _ac in APPLY_CONDITION_RE.finditer(clean_assistant):
                 _cond_key = _ac.group(1).strip()
                 _enemy_ref = _ac.group(2).strip()
                 _ac_res = apply_condition_to_combatant(campaign_id, _enemy_ref, _cond_key)
                 logger.info("apply_condition_tag", campaign_id=campaign_id,
                             condition=_cond_key, enemy_ref=_enemy_ref, result=_ac_res)
+                # S8 (#603): nieznany klucz kondycji → invalid_reference (U5/U6)
+                if isinstance(_ac_res, dict) and _ac_res.get("reason") == "invalid_reference":
+                    _ac_invalid = True
+                    _ac_tn = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    _ac_lte(conn, campaign_id, _ac_tn, _ac.group(0), "invalid_reference")
+            clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
+            if _ac_invalid:
+                _ac_fix = _ac_corr("APPLY_CONDITION")
+                if _ac_fix:
+                    _ac_narr, _ac_pjson = _extract_narrative_for_cues(clean_assistant)
+                    clean_assistant = _repack_narrative(
+                        clean_assistant, _ac_narr.rstrip() + "\n\n" + _ac_fix, _ac_pjson)
         except Exception as _ac_err:
             logger.warning("apply_condition_tag_error", error=str(_ac_err))
-        clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
+            clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
         (
@@ -5534,6 +5562,7 @@ def create_turn_stream(
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
                 # Stage 3 Z4 — apply + strip [APPLY_CONDITION:condition_key:enemy_key]
+                _ac_invalid_s = False
                 try:
                     from app.services.combat_service import apply_condition_to_combatant
                     for _ac in APPLY_CONDITION_RE.finditer(clean_text):
@@ -5542,10 +5571,31 @@ def create_turn_stream(
                         )
                         logger.info("apply_condition_tag_stream", campaign_id=campaign_id_val,
                                     condition=_ac.group(1), enemy_ref=_ac.group(2), result=_ac_res)
+                        if isinstance(_ac_res, dict) and _ac_res.get("reason") == "invalid_reference":
+                            _ac_invalid_s = True
                 except Exception as _ace:
                     logger.warning("apply_condition_tag_stream_error", error=str(_ace))
                 clean_text = APPLY_CONDITION_RE.sub("", clean_text).rstrip()
                 fb = get_db()
+                # S8 (#603): invalid_reference → llm_tag_errors + korekta U6 (streaming)
+                if _ac_invalid_s:
+                    try:
+                        from app.services.llm_tag_parser import (
+                            get_rejection_correction as _acs_corr,
+                            log_tag_error as _acs_lte,
+                        )
+                        _acs_tn = fb.execute(
+                            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                            (campaign_id_val,),
+                        ).fetchone()[0]
+                        _acs_lte(fb, campaign_id_val, _acs_tn, "[APPLY_CONDITION]", "invalid_reference")
+                        _acs_fix = _acs_corr("APPLY_CONDITION")
+                        if _acs_fix:
+                            _acs_narr, _acs_pjson = _extract_narrative_for_cues(clean_text)
+                            clean_text = _repack_narrative(
+                                clean_text, _acs_narr.rstrip() + "\n\n" + _acs_fix, _acs_pjson)
+                    except Exception as _acse:
+                        logger.warning("apply_condition_invalid_stream_error", error=str(_acse))
                 try:
                     clean_text = maybe_append_open_shop_fallback(
                         fb, campaign_id_val, user_text_val, clean_text
@@ -6266,18 +6316,38 @@ def resolve_skill_test_endpoint(
                 client_claimed=int(payload.d20_roll),
             )
 
-        # Resolve using the committed roll
+        # Resolve using the committed roll. S11 (#606): pass session_flags so a `cursed`
+        # "zły omen" can force-reroll a favourable result (budget mutated into the dict
+        # we persist below), and an `inspired` failure advertises reroll_available.
         result = resolve_skill_test(
             d20_roll=committed,
             pending=pending,
             conn=conn,
             campaign_id=campaign_id,
             character_id=payload.character_id,
+            session_flags=session_flags,
         )
 
         # Clear pending state
         session_flags.pop("pending_skill_test", None)
         session_flags["state"] = "NARRATIVE"
+
+        # S11 (#606): nieudany test z aktywnym `inspired` → stash kontekstu pod przerzut
+        # gracza (keep-best). Endpoint /skill-test/reroll rzuca nowy serwerowy d20.
+        if result.get("reroll_available"):
+            session_flags["pending_reroll"] = {
+                "skill_test_id": pending.get("skill_test_id"),
+                "skill_key": result.get("skill_key"),
+                "skill_label": result.get("skill_label"),
+                "modifier": int(result.get("modifier", 0) or 0),
+                "opponent_total": int(result.get("opponent_total", 0) or 0),
+                "opponent_roll": result.get("opponent_roll"),
+                "original_d20": int(result.get("d20_roll", 0) or 0),
+                "condition_key": (result.get("reroll_available") or {}).get("condition_key"),
+                "character_id": int(payload.character_id),
+            }
+        else:
+            session_flags.pop("pending_reroll", None)
 
         # Stage 3 Z4 — stealth success → server-side zaskoczony
         # If active combat exists, apply zaskoczony to all alive enemies.
@@ -6305,6 +6375,78 @@ def resolve_skill_test_endpoint(
             except Exception as _sa_err:
                 logger.warning("stealth_zaskoczony_error", error=str(_sa_err))
 
+        # S6 (#586) — haggling → jednorazowy rabat na najbliższą transakcję w sklepie.
+        # Mechanika decyduje (stopień testu → mnożnik), LLM tylko narruje (CZĘŚĆ 10).
+        if str(pending.get("skill_key", "")).lower() == "haggling":
+            try:
+                from app.services.haggle_service import apply_haggle_outcome
+                _hg = apply_haggle_outcome(session_flags, result.get("outcome", "FAILURE"))
+                logger.info("haggle_outcome_applied", campaign_id=campaign_id,
+                            discount=_hg.get("discount"), blocked=_hg.get("blocked"))
+            except Exception as _hg_err:
+                logger.warning("haggle_outcome_error", error=str(_hg_err))
+
+        # S7 (#601) — gamble → przepływ złota wg stopnia testu (S1). Stawka z pending
+        # (zwalidowana przy intercepcie), złoto przez change_gold (U26). LLM narruje,
+        # mechanika liczy (CZĘŚĆ 10). Krytyczna porażka → oskarżenie o oszustwo.
+        _gamble_summary = None
+        if str(pending.get("skill_key", "")).lower() == "gamble":
+            try:
+                from app.services import gamble_service as _gbl
+                from app.services.economy_service import change_gold as _chg
+                _stake = int((pending.get("gamble") or {}).get("stake", 0) or 0)
+                _loc_key = ""
+                try:
+                    _loc = get_current_location_info(conn, campaign_id)
+                    _loc_key = str((_loc or {}).get("key") or "")
+                except Exception:
+                    _loc_key = ""
+                _gamble_summary = _gbl.apply_gamble_outcome(
+                    session_flags, result.get("outcome", "FAILURE"), _stake, _loc_key
+                )
+                _delta = int(_gamble_summary.get("delta", 0) or 0)
+                if _delta:
+                    _chg(conn, payload.character_id, _delta, "gamble",
+                         campaign_id=campaign_id,
+                         meta={"stake": _stake, "outcome": result.get("outcome")},
+                         allow_negative=False)
+                logger.info("gamble_outcome_applied", campaign_id=campaign_id,
+                            stake=_stake, delta=_delta,
+                            cheat=_gamble_summary.get("cheat_accused"))
+            except Exception as _gbl_err:
+                logger.warning("gamble_outcome_error", error=str(_gbl_err))
+
+        # S10 (#605) — deklaratywna ścieżka cure: udany SKILL_TEST oznaczony
+        # cures_condition (z katalogu, np. medicine→hemorrhage) zdejmuje kondycję
+        # z postaci. Mechanika decyduje (CZĘŚĆ 10); żadnego if skill_key == "medicine".
+        _cured_condition = None
+        _cure_key = str(pending.get("cures_condition") or "").strip().lower()
+        if _cure_key and result.get("success") and not result.get("nat1"):
+            try:
+                from app.services.combat_service import remove_condition_from_character
+                _n = remove_condition_from_character(conn, payload.character_id, campaign_id, _cure_key)
+                if _n > 0:
+                    _cured_condition = _cure_key
+                logger.info("skill_test_cured_condition", campaign_id=campaign_id,
+                            condition=_cure_key, removed=_n)
+            except Exception as _cure_err:
+                logger.warning("skill_test_cure_error", error=str(_cure_err))
+
+        # S19 (#614) — deklaratywna ścieżka grant: udany SKILL_TEST oznaczony grants_condition_self
+        # (z katalogu, np. stealth→hidden) NAKŁADA kondycję na postać. ODWROTNOŚĆ cure. Żaden if skill_key==.
+        _granted_condition = None
+        _grant_key = str(pending.get("grants_condition_self") or "").strip().lower()
+        if _grant_key and result.get("success") and not result.get("nat1"):
+            try:
+                from app.services.combat_service import add_condition_to_character
+                _gn = add_condition_to_character(conn, payload.character_id, campaign_id, _grant_key)
+                if _gn > 0:
+                    _granted_condition = _grant_key
+                logger.info("skill_test_granted_condition", campaign_id=campaign_id,
+                            condition=_grant_key, added=_gn)
+            except Exception as _grant_err:
+                logger.warning("skill_test_grant_error", error=str(_grant_err))
+
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
             (_json.dumps(session_flags, ensure_ascii=False), campaign_id),
@@ -6317,6 +6459,23 @@ def resolve_skill_test_endpoint(
             nat_instruction = "To był wyjątkowy sukces — pokaż coś nieoczekiwanego i korzystnego."
         elif result.get("nat1"):
             nat_instruction = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
+
+        # S7 (#601): gamble result feeds the narrator the gold flow (mechanika
+        # already moved the gold via change_gold). Crit-fail → cheating accusation.
+        if _gamble_summary is not None:
+            _stake_g = int(_gamble_summary.get("stake", 0) or 0)
+            _delta_g = int(_gamble_summary.get("delta", 0) or 0)
+            if _delta_g > 0:
+                skill_ctx += f"\n[HAZARD] Gracz wygrał {_delta_g} zł (stawka {_stake_g} zł). Opisz triumf przy stole — BEZ podawania liczb."
+            else:
+                skill_ctx += f"\n[HAZARD] Gracz przegrał {abs(_delta_g)} zł (stawka {_stake_g} zł). Opisz przegraną — BEZ podawania liczb."
+            if _gamble_summary.get("cheat_accused"):
+                skill_ctx += "\n[HAZARD] Padło oskarżenie o oszustwo — inni gracze/karczmarz patrzą na bohatera podejrzliwie; wprowadź to napięcie do narracji."
+
+        # S11 (#606) — zły omen klątwy: udany test przerzucony na gorszy. Narrator dostaje
+        # sygnał, by oddać złowrogi traf losu (BEZ podawania liczb/kości).
+        if result.get("omen_applied"):
+            skill_ctx += "\n[ZŁY OMEN] Klątwa zadziałała — w chwili sukcesu los obrócił się przeciw bohaterowi i wynik zmienił się na niekorzyść. Opisz złowrogi traf (cień klątwy), BEZ podawania liczb."
 
         # Inject in-game clock context so narrator matches actual time of day (#240)
         clock_hint = ""
@@ -6515,6 +6674,160 @@ def resolve_skill_test_endpoint(
             "turn_number": turn_number,
             "suggested_actions": _sa_after,
             "travel_escalation_level": _travel_esc_st,
+            "state": {
+                "character_hp": char_sheet.get("current_hp"),
+                "character_max_hp": char_sheet.get("max_hp"),
+                "current_location": current_loc.get("key") if current_loc else None,
+            },
+        }
+    finally:
+        conn.close()
+
+
+class SkillTestRerollPayload(BaseModel):
+    character_id: int
+    skill_test_id: str
+
+
+@router.post("/campaigns/{campaign_id}/skill-test/reroll")
+def reroll_skill_test_endpoint(
+    campaign_id: int,
+    payload: SkillTestRerollPayload,
+):
+    """S11 (#606) — przerzut gracza (inspired, ``player_keep_best``).
+
+    Po nieudanym teście z aktywnym ``inspired`` UI proponuje przerzut. Tu mechanika
+    rzuca NOWY serwerowy d20, składa LEPSZY z dwóch (oryginał vs nowy), zużywa przerzut
+    (zdejmuje inspired) i narruje wynik. Model committed-d20 zachowany — klient nie podaje
+    rzutu, więc nie da się go nadużyć."""
+    import json as _json
+    import random as _random
+    from app.services.skill_service import _derive_outcome, build_skill_result_context
+    from app.services import reroll_service as _rr
+    from app.services.llm_service import generate_chat as _gen_chat
+    from app.services.world_service import process_create_tags as _proc_tags, get_current_location_info
+
+    conn = get_db()
+    try:
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
+        character = get_character_or_404(conn, campaign_id, payload.character_id)
+        llm_config = get_user_llm_settings_full(character["user_id"])
+
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            raise HTTPException(status_code=404, detail="No active game session")
+        session_flags = _json.loads(gs["session_flags"] or "{}")
+
+        pr = session_flags.get("pending_reroll")
+        if not pr:
+            raise HTTPException(status_code=409, detail="No reroll available in this session")
+        if pr.get("skill_test_id") != payload.skill_test_id:
+            raise HTTPException(status_code=409, detail="skill_test_id mismatch — wrong reroll?")
+
+        # Konsumuj przerzut (zdejmuje inspired gdy uses wyczerpane). Brak kondycji → 409.
+        consumed = _rr.consume_player_reroll(conn, int(payload.character_id), campaign_id)
+        if not consumed:
+            session_flags.pop("pending_reroll", None)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                (_json.dumps(session_flags, ensure_ascii=False), campaign_id),
+            )
+            conn.commit()
+            raise HTTPException(status_code=409, detail="Reroll condition no longer active")
+
+        modifier = int(pr.get("modifier", 0) or 0)
+        opponent_total = int(pr.get("opponent_total", 0) or 0)
+        original_d20 = int(pr.get("original_d20", 0) or 0)
+        new_d20 = _random.randint(1, 20)
+        kept_d20 = _rr.keep_better(original_d20, new_d20)
+        derived = _derive_outcome(kept_d20, modifier, opponent_total)
+
+        result = {
+            "skill_key": pr.get("skill_key"),
+            "skill_label": pr.get("skill_label", pr.get("skill_key")),
+            "d20_roll": derived["d20_roll"],
+            "modifier": modifier,
+            "player_total": derived["player_total"],
+            "opponent_total": opponent_total,
+            "opponent_roll": pr.get("opponent_roll"),
+            "margin": derived["margin"],
+            "outcome": derived["outcome"],
+            "nat20": derived["nat20"],
+            "nat1": derived["nat1"],
+            "success": derived["success"],
+            "rerolled": True,
+            "reroll_from_d20": original_d20,
+            "reroll_new_d20": new_d20,
+            "reroll_condition": consumed,
+        }
+
+        session_flags.pop("pending_reroll", None)
+        session_flags["state"] = "NARRATIVE"
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (_json.dumps(session_flags, ensure_ascii=False), campaign_id),
+        )
+
+        skill_ctx = build_skill_result_context(result)
+        skill_ctx += (
+            "\n[PRZERZUT] Bohater wykorzystał przypływ inspiracji i przerzucił rzut — opisz "
+            "ten drugi, pewniejszy wysiłek i jego wynik. BEZ podawania liczb i kości."
+        )
+        location_hint = ""
+        try:
+            _loc = get_current_location_info(conn, campaign_id)
+            if _loc:
+                location_hint = f"[LOKACJA] Bohater znajduje się w: {_loc['label']}. Narracja MUSI być osadzona w tej lokacji. "
+        except Exception:
+            pass
+
+        narrator_prompt = (
+            f"{skill_ctx}\n\n{location_hint}"
+            f"Napisz narrację wyniku przerzuconego testu umiejętności po polsku. "
+            f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
+            f"ZAKAZANE: tagi [SKILL_TEST], [TRAP], roll_cue ani żadne znaczniki mechaniczne."
+        )
+        try:
+            prose_raw = _gen_chat(messages=[{"role": "user", "content": narrator_prompt}], llm_config=llm_config) or ""
+        except Exception as e:
+            logger.warning("skill_reroll_narrator_error", error=str(e))
+            prose_raw = ""
+        if not prose_raw.strip():
+            _lbl = result.get("skill_label") or "Test"
+            prose_raw = f"{_lbl} — {'sukces' if result.get('success') else 'niepowodzenie'} po przerzucie."
+
+        prose, _ = _proc_tags(prose_raw, conn, campaign_id)
+
+        turn_number = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        _outcome = "Sukces" if result.get("success") else "Porażka"
+        _persisted_roll = (
+            f"[Przerzut: {result.get('skill_label')} — {kept_d20} (z {original_d20}/{new_d20}) "
+            f"+{modifier} = {derived['player_total']} — {_outcome}]"
+        )
+        conn.execute(
+            """INSERT INTO campaign_turns
+               (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at)
+               VALUES (?,?,?,?,?,?,datetime('now'))""",
+            (campaign_id, payload.character_id, turn_number, _persisted_roll, prose, "skill_reroll"),
+        )
+        conn.commit()
+
+        char_state_row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (payload.character_id,)
+        ).fetchone()
+        char_sheet = _json.loads((char_state_row[0] if char_state_row else None) or "{}")
+        current_loc = get_current_location_info(conn, campaign_id)
+
+        return {
+            "prose": prose,
+            "skill_test_result": result,
+            "turn_number": turn_number,
             "state": {
                 "character_hp": char_sheet.get("current_hp"),
                 "character_max_hp": char_sheet.get("max_hp"),

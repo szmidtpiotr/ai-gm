@@ -116,6 +116,29 @@ def post_zone_change(campaign_id: int):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/campaigns/{campaign_id}/combat/wrestling")
+def post_wrestling(campaign_id: int, body: dict | None = None):
+    """S17 — Zapasy: akcja bojowa, test przeciwny STR vs STR. Sukces nakłada kondycję na
+    wroga (slowed), krytyk → stunned, krytyczna porażka → gracz sam slowed. Wymaga zwarcia
+    (engaged) — cel poza zwarciem zwraca blocked bez konsumpcji tury. Konsumuje turę."""
+    target_ref = str((body or {}).get("target_ref") or "").strip() or None
+    try:
+        return combat.resolve_wrestling(campaign_id, target_ref=target_ref)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/campaigns/{campaign_id}/combat/declare-reaction")
+def post_declare_reaction(campaign_id: int, body: dict | None = None):
+    """S15 — Player pre-declares a combat reaction (e.g. dodge) toggle. Does NOT consume the turn.
+    Requires the player's turn and the matching skill rank >= 1 (skill-gated)."""
+    rt = str((body or {}).get("reaction_type") or "dodge").strip().lower()
+    try:
+        return combat.declare_player_reaction(campaign_id, rt)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/campaigns/{campaign_id}/combat/enemy-turn")
 def post_enemy_turn(campaign_id: int):
     try:

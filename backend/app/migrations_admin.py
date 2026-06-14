@@ -8,7 +8,89 @@ from app.core.logging import get_logger
 DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
+# #592 — FAZA U mechanics documented in the admin Knowledge book (Narzędzia → Wiedza).
+# These describe systems shipped in FAZA U so admins have an in-panel reference.
+FAZA_U_KNOWLEDGE_TIPS = [
+    {
+        "tip_key": "durability",
+        "category": "equipment",
+        "title": "Trwałość przedmiotów (U16)",
+        "body": (
+            "Broń i pancerz zużywają się podczas walki — każde użycie obniża trwałość. "
+            "Gdy trwałość spadnie do zera, przedmiot traci swoje bonusy do czasu naprawy "
+            "u kowala lub rzemieślnika. Naprawa kosztuje złoto proporcjonalnie do tieru "
+            "przedmiotu. Mechanika zmusza graczy do dbania o sprzęt i planowania wizyt w mieście."
+        ),
+        "sort_order": 100,
+    },
+    {
+        "tip_key": "robbery_raids",
+        "category": "world",
+        "title": "Napady i rabunki (U24)",
+        "body": (
+            "Podczas podróży i odpoczynku w niebezpiecznych regionach bohater może zostać "
+            "napadnięty. Rabusie próbują odebrać złoto lub łup — gracz może walczyć, przekupić "
+            "się lub uciec. Szansa napadu rośnie wraz z niebezpieczeństwem heksa i ilością "
+            "noszonego złota. To balansuje ekonomię i nagradza ostrożne przechowywanie bogactwa."
+        ),
+        "sort_order": 110,
+    },
+    {
+        "tip_key": "affix_pity_timer",
+        "category": "loot",
+        "title": "Licznik litości afiksów (U25)",
+        "body": (
+            "System łupów ma „pity timer” — licznik gwarantujący rzadki afiks po określonej "
+            "liczbie zdobytych przedmiotów bez trafienia. Im dłuższa seria bez rzadkiego dropu, "
+            "tym wyższa szansa na kolejny. Zapobiega frustracji pechowych serii i wygładza "
+            "krzywą nagród dla gracza, który długo nie widział nic wartościowego."
+        ),
+        "sort_order": 120,
+    },
+    {
+        "tip_key": "economy_telemetry",
+        "category": "economy",
+        "title": "Telemetria ekonomii i złota (U26)",
+        "body": (
+            "Przepływ złota jest mierzony: ile gracz zarabia (łup, sprzedaż, nagrody) i wydaje "
+            "(zakupy, naprawy, przekupstwa) jest rejestrowane na potrzeby balansu. Dane pozwalają "
+            "admin-owi wykryć inflację lub niedobór złota i dostroić ceny sklepów oraz wartości "
+            "dropów. To narzędzie diagnostyczne — nie wpływa bezpośrednio na rozgrywkę gracza."
+        ),
+        "sort_order": 130,
+    },
+]
+
 ADMIN_MIGRATIONS = [
+    # #587 — telemetry tables for Overview → Zdarzenia (events feed + LLM usage).
+    # event_logger.write_game_event/write_llm_log wrote here best-effort but the
+    # tables were never created → silent drops + 404/500 on /analytics/events|llm.
+    """
+    CREATE TABLE IF NOT EXISTS game_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'info',
+        campaign_id INTEGER,
+        character_id INTEGER,
+        user_id INTEGER,
+        event_data TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS llm_call_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER,
+        call_type TEXT,
+        model TEXT,
+        prompt_tokens INTEGER DEFAULT 0,
+        completion_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER,
+        cache_hit INTEGER DEFAULT 0,
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
     # Admin-surface tables whose CREATE was never migrated (only existed in
     # e2e_bootstrap.sql or not at all) → caused 500s on /admin/bug-reports,
     # /admin/push/subscriptions, /admin/voice/hosts, /admin/ui-texts.
@@ -1100,7 +1182,11 @@ ADMIN_SEEDS = [
     ('pickpocket', 'Kieszonkostwo', 'DEX', 5, 33, 'Kradzież z kieszeni niezauważona (test przeciw WIS ofiary). Sukces — łup zdobyty; krytyczna porażka — złapanie na gorącym uczynku.'),
     ('disguise', 'Przebranie', 'CHA', 5, 34, 'Udawanie kogoś innego strojem i zachowaniem (przy podejrzeniu test przeciw WIS). Sukces — nierozpoznany; krytyczna porażka — natychmiastowe zdemaskowanie.'),
     ('torture', 'Przesłuchanie', 'CHA', 5, 35, 'Wydobywanie informacji groźbą i presją (CHA psychologiczne, przeciw CON jeńca; brutalny wariant STR narracyjnie). Sukces — jeniec mówi; krytyczna porażka — jeniec milknie lub umiera, informacje bezużyteczne.'),
-    ('haggling', 'Targowanie', 'CHA', 5, 36, 'Negocjowanie ceny towaru lub usługi (test przeciw CHA kupca; raz na transakcję). Sukces — cena obniżona o 10–25%; krytyczny — o 30–50% lub bonus od sprzedawcy; krytyczna porażka — sprzedawca obrażony, cena rośnie i dalsze targowanie u niego niemożliwe. Wynik nakłada jednorazowy rabat na najbliższe kupno/sprzedaż.')
+    ('haggling', 'Targowanie', 'CHA', 5, 36, 'Negocjowanie ceny towaru lub usługi (test przeciw CHA kupca; raz na transakcję). Sukces — cena obniżona o 10–25%; krytyczny — o 30–50% lub bonus od sprzedawcy; krytyczna porażka — sprzedawca obrażony, cena rośnie i dalsze targowanie u niego niemożliwe. Wynik nakłada jednorazowy rabat na najbliższe kupno/sprzedaż.'),
+    ('gamble', 'Gra w kości', 'CHA', 5, 37, 'Gra w kości, karty lub inny hazard o złoto (test CHA przeciw CHA najsilniejszego gracza przy stole; DC 12 amatorzy, DC 20 zawodowcy). Stawkę deklaruje gracz, kwoty rozstrzyga mechanika. Sukces — wygrywa stawkę; krytyczny — podwójną stawkę; porażka — traci stawkę; krytyczna porażka — traci stawkę i pada na niego oskarżenie o oszustwo. Maks. kilka gier na scenę.'),
+    ('dodge', 'Unik', 'DEX', 5, 38, 'Reakcja bojowa (S15): po zadeklarowaniu uniku, gdy wróg trafia, postać wykonuje test DEX przeciw wynikowi ataku wroga PRZED obrażeniami. Raz na rundę. Sukces — atak mija (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1, by aktywować przełącznik w walce.'),
+    ('shield_block', 'Blok Tarczą', 'STR', 5, 39, 'Reakcja bojowa (S16): postać z założoną tarczą może zadeklarować blok; gdy wróg trafia, wykonuje test STR przeciw wynikowi ataku wroga (DC min. 12) PRZED obrażeniami. Raz na rundę (XOR z unikiem). Sukces — obrażenia zmniejszone o 1k6 + bonus STR; sukces o ≥ +5 — atak całkowicie odparty; porażka — pełne obrażenia; krytyczna porażka — tarcza traci wytrzymałość. Wymaga rank ≥ 1 i założonej tarczy.'),
+    ('wrestling', 'Zapasy', 'STR', 5, 40, 'Akcja bojowa (S17): chwyt i obalenie wroga w zwarciu — test przeciwny STR vs STR celu. Sukces — cel schwytany/przewrócony (kondycja slowed); sukces krytyczny (margines ≥ +5) — cel unieruchomiony (stunned 1 rundę); porażka — bez efektu; krytyczna porażka — napastnik sam przewrócony (slowed). Wymaga zwarcia (engaged); konsumuje turę.')
     """,
     # Translate any pre-existing English labels to Polish (idempotent — only
     # rewrites rows still holding the English defaults so admin renames are kept).
@@ -1252,6 +1338,122 @@ ADMIN_SEEDS = [
     (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
     VALUES
     ('zaskoczony', 'Zaskoczony', '{"schema_version":1,"effect_category":"character_condition","grants_attacker_bonus":{"atk_bonus":2,"first_hit_doubled":true},"clear_on":"damage_taken"}', 'Cel zaskoczony — atakujący zyskuje +2 do rzutu i podwaja obrażenia pierwszego trafienia. Znika po otrzymaniu obrażeń.', 1, 0, 'on_damage', NULL, datetime('now'), datetime('now'))
+    """,
+    # ── S8 (#603) — batch kondycji FAZY S złożonych z prymitywów (dot/static_stat_modifier/
+    #    periodic_save). Liczby = wartości startowe z skills_conditions_design_doc.md (Numbers Policy,
+    #    tuning po S20). Wersje lite (confused/insane/panicked/charmed/cursed) = same kary + rzut;
+    #    pełne behavior_override/zły omen → S18/S11. Zero `if condition_key==...` w silniku (Zasada 1).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('on_fire', 'Podpalony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"dot","value":"2d6","damage_type":"fire","tick":"start_turn"},{"type":"static_stat_modifier","stat":"STR","value":-2},{"type":"static_stat_modifier","stat":"DEX","value":-2},{"type":"periodic_save","stat":"DEX","value":12,"tick":"start_turn","expires":"save_success"}]}', 'Postać płonie — 2k6 obrażeń od ognia na początku tury, STR i DEX -2. Udany rzut DEX DC 12 (tarzanie/woda) gasi ogień.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('frozen', 'Zmrożony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"DEX","value":-4},{"type":"periodic_save","stat":"CON","value":14,"tick":"start_turn","expires":"save_success"}]}', 'Postać pokryta lodem — DEX -4, ruch spowolniony. Udany rzut CON DC 14 (rozgrzewanie) lub kontakt z ciepłem zdejmuje stan.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('confused', 'Zdezorientowany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"INT","value":-3},{"type":"static_stat_modifier","stat":"WIS","value":-3},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}', 'Postać nie rozumie otoczenia — INT i WIS -3. Udany rzut WIS DC 14 (zebranie myśli) kończy stan. Wersja lite: bez losowej tabeli zachowań (pełna w S18).', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('insane', 'Obłąkany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"CHA","value":-5}]}', 'Postać straciła kontakt z rzeczywistością — testy społeczne -5. Wersja lite: bez pełnego prowadzenia postaci przez MG.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('panicked', 'Spanikowany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"CHA","value":-4},{"type":"static_stat_modifier","stat":"WIS","value":-4}]}', 'Postać ogarnięta paniką — CHA i WIS -4. Wersja lite: bez wymuszonej ucieczki (pełna w S18).', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('charmed', 'Zaczarowany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"WIS","value":-3},{"type":"periodic_save","stat":"WIS","value":16,"tick":"start_turn","expires":"save_success"}]}', 'Postać oczarowana — WIS -3 wobec oceny działań źródła. Udany rzut WIS DC 16 zrywa czar. Wersja lite: bez twardego zakazu ataku źródła.', 1, 0, NULL, NULL, datetime('now'), datetime('now')),
+    ('cursed', 'Przeklęty', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2},{"type":"static_stat_modifier","stat":"DEX","value":-2},{"type":"static_stat_modifier","stat":"CON","value":-2},{"type":"static_stat_modifier","stat":"INT","value":-2},{"type":"static_stat_modifier","stat":"WIS","value":-2},{"type":"static_stat_modifier","stat":"CHA","value":-2}]}', 'Postać nosi klątwę — -2 do wszystkich testów. Wersja lite: zły omen (wymuszony reroll) dochodzi w S11. Zdjęcie: rytuał theology/arcana.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S9 (#604) FAZA S — prymityw stacking_levels + kondycja exhausted (stackable=1).
+    # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('exhausted', 'Wyczerpany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":2,"per_level_effects":[{"type":"static_stat_modifier","stat":"STR","value":-3},{"type":"static_stat_modifier","stat":"DEX","value":-3},{"type":"static_stat_modifier","stat":"CON","value":-3}],"threshold_effects":{"2":{"type":"block_action"}}}]}', 'Postać skrajnie zmęczona — STR/DEX/CON -3 na poziom (poziom 2 = -6 i omdlenie/utrata tury). Ponowne nałożenie podbija poziom (max 2). Zdjęcie: 1h odpoczynku = -1 poziom, pełny sen = wszystkie, mikstura/zaklęcie regeneracji natychmiast.', 1, 1, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
+    # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
+    # Top-level `cure` = deklaratywne zdjęcie kondycji udanym SKILL_TEST:medicine (DC z zamka).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('hemorrhage', 'Krwotok', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"escalating_dot","value":"1d4","escalate_every_rounds":3,"escalate_dice":"1d4","damage_type":"physical","tick":"start_turn"}],"cure":{"skill":"medicine","dc":16}}', 'Krwotok — 1k4 obrażeń na początku tury, +1k4 co 3 tury bez leczenia (narastający). Zdjęcie: test medicine DC 16 (bandaże/narzędzia) lub leczenie magiczne (remove_condition).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S11 (#606) FAZA S — prymityw `reroll` + kondycja `inspired` (player_keep_best).
+    # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('inspired', 'Zainspirowany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"CHA","value":2},{"type":"static_stat_modifier","stat":"WIS","value":2},{"type":"reroll","mode":"player_keep_best","uses":1,"scope":"skill_test"}]}', 'Postać działa pewniej — CHA i WIS +2. Raz może przerzucić nieudany test umiejętności i zachować lepszy wynik. Znika po wykorzystaniu przerzutu lub po 3 turach.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S11 (#606) — rozszerzenie wersji lite `cursed` z S8: dochodzi efekt reroll forced_keep_worst
+    # ("zły omen" — wymuszony przerzut udanego testu na gorszy, 1×/scenę). UPDATE bo INSERT OR IGNORE
+    # nie nadpisze istniejącego wiersza. Stałe −2 do wszystkich statów zachowane.
+    """
+    UPDATE game_config_conditions
+    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2},{"type":"static_stat_modifier","stat":"DEX","value":-2},{"type":"static_stat_modifier","stat":"CON","value":-2},{"type":"static_stat_modifier","stat":"INT","value":-2},{"type":"static_stat_modifier","stat":"WIS","value":-2},{"type":"static_stat_modifier","stat":"CHA","value":-2},{"type":"reroll","mode":"forced_keep_worst","scope":"skill_test"}]}',
+        description = 'Postać nosi klątwę — -2 do wszystkich testów. Zły omen: raz na scenę los przerzuca udany test na gorszy wynik. Zdjęcie: rytuał theology/arcana.',
+        updated_at = datetime('now')
+    WHERE key = 'cursed'
+      AND effect_json NOT LIKE '%forced_keep_worst%'
+    """,
+    # S12 (#607) FAZA S — prymitywy `extra_action` + `on_expire_apply` + kondycja `hasted`.
+    # Liczby = wartości startowe (Numbers Policy → tuning po S20). duration: design doc k4+1,
+    # schemat U10 bez kości w duration → stała 3 rundy.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('hasted', 'Przyśpieszony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"DEX","value":2},{"type":"extra_action","action_kind":"move_only","expires":"duration_rounds:3"},{"type":"on_expire_apply","condition_key":"exhausted","value":1}]}', 'Postać przyśpieszona — DEX +2 i dodatkowa akcja ruchu (zmiana strefy bez utraty tury). Trwa 3 rundy; po wygaśnięciu postać dostaje 1 poziom wyczerpania (exhausted). Niestackowalna.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S13 (#608) FAZA S — prymityw `on_zero_hp_save` + kondycja `blessed`. Liczby = wartości
+    # startowe (Numbers Policy → tuning po S20). +2 defensywny przez derived stat 'save'.
+    # Brak `expires` → kondycja trwa do końca walki/sceny (design doc: "1 scena/spotkanie";
+    # mapowane na najbliższy istniejący marker — zniknięcie combatanta po końcu walki).
+    # uses=1 → raz na scenę, bo świeży wpis kondycji żyje jedno spotkanie. Niestackowalna.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('blessed', 'Pobłogosławiony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"save","value":2},{"type":"on_zero_hp_save","stat":"CON","value":12,"result":"stay_at_1hp","uses":1}]}', 'Postać pod opieką bóstwa — +2 do testów obronnych i przeciw kondycjom negatywnym. Raz na scenę, gdy cios miałby ją powalić, silnik rzuca CON DC 12 i przy sukcesie zostawia 1 HP zamiast nieprzytomności. Trwa do końca walki/sceny. Niekumulowalna.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S14 (#609) FAZA S — prymityw `condition_immunity` + klucz `broken_by` + kondycja `rage`.
+    # Liczby = wartości startowe (Numbers Policy → tuning po S20). immune_to[slowed,weakened] =
+    # odporność; broken_by[stunned,confused] = nałożenie przerywa furię; on_expire→exhausted 1 =
+    # koszt; duration: design doc k6+2 → stała 6 (schemat U10 bez kości w duration; wzorzec S12).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('rage', 'Furia', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":2},{"type":"static_stat_modifier","stat":"damage_bonus","value":3},{"type":"condition_immunity","immune_to":["slowed","weakened"],"expires":"duration_rounds:6"},{"type":"on_expire_apply","condition_key":"exhausted","value":1}],"broken_by":["stunned","confused"]}', 'Kontrolowana furia bojowa — +2 SIŁY, +3 obrażeń wręcz, odporność na spowolnienie i osłabienie. Trwa 6 rund; ogłuszenie lub dezorientacja natychmiast ją przerywają. Po wygaśnięciu postać dostaje 1 poziom wyczerpania (exhausted). Niekumulowalna.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S18 (#613) FAZA S — prymityw `behavior_override` + pełne confused/berserk/panicked.
+    # Liczby = wartości startowe (Numbers Policy → tuning po S20). UPDATE bo INSERT OR IGNORE nie
+    # nadpisze istniejących lite-wierszy confused/panicked z S8; berserk = nowy wiersz.
+    """
+    UPDATE game_config_conditions
+    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"INT","value":-3},{"type":"static_stat_modifier","stat":"WIS","value":-3},{"type":"behavior_override","behavior":"random_table_k4"},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}',
+        description = 'Postać nie rozumie otoczenia — INT i WIS -3. Na początku tury k4: 1 stoi / 2 atak losowego celu / 3 ucieczka / 4 normalnie. Udany rzut WIS DC 14 (zebranie myśli) kończy stan.',
+        updated_at = datetime('now')
+    WHERE key = 'confused'
+      AND effect_json NOT LIKE '%behavior_override%'
+    """,
+    """
+    UPDATE game_config_conditions
+    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"CHA","value":-4},{"type":"static_stat_modifier","stat":"WIS","value":-4},{"type":"behavior_override","behavior":"flee"},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}',
+        description = 'Postać ogarnięta paniką — CHA i WIS -4. Wymuszona ucieczka (zmiana strefy na dystans). Udany rzut WIS DC 14 na początku tury przezwycięża panikę.',
+        updated_at = datetime('now')
+    WHERE key = 'panicked'
+      AND effect_json NOT LIKE '%behavior_override%'
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('berserk', 'Berserk', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"behavior_override","behavior":"attack_nearest","expires":"duration_rounds:6"},{"type":"static_stat_modifier","stat":"attack_bonus","value":3},{"type":"static_stat_modifier","stat":"damage_bonus","value":3},{"type":"static_stat_modifier","stat":"ac","value":-3},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}', 'Niekontrolowany szał bojowy — postać atakuje najbliższy cel NIEZALEŻNIE od frakcji (też sojuszników). +3 do ataków i obrażeń, -3 AC. Na początku tury rzut WIS DC 14 odzyskuje kontrolę. Trwa do 6 rund lub brak wrogów w zasięgu. Różni się od kontrolowanej furii (rage).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # S19 (#614) FAZA S — prymitywy `untargetable` + `ambush_bonus` + kondycja `hidden`.
+    # Liczby = wartości startowe (Numbers Policy → tuning po S20). granted_by = ODWROTNOŚĆ cure
+    # (udany SKILL_TEST stealth DC 14 nakłada hidden); detect_dc = WIS save wroga przy poszukiwaniu.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('hidden', 'Ukryty', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"untargetable"},{"type":"ambush_bonus","value":"2d6"}],"granted_by":{"skill":"stealth","dc":14},"detect_dc":14}', 'Postać skutecznie się ukryła — wrogowie nie mogą jej atakować, dopóki jej nie wykryją. Pierwszy atak z ukrycia zadaje +2k6 obrażeń (zasadzka) i zdejmuje ukrycie. Wejście: udany test skradania (stealth DC 14). Zejście: własny atak (demaskuje) lub wykrycie (wróg WIS DC 14 przy aktywnym poszukiwaniu). Nie zmienia strefy — możliwa zasadzka również w zwarciu.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
     """,
     """
     UPDATE game_config_stats
@@ -2447,6 +2649,16 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         UPDATE knowledge_book SET show_in_onboarding = 1, show_in_knowledge = 1
         WHERE kind = 'onboarding_card'
     """, "v2-knowledge-book-flag-backfill")
+    # #592 — seed FAZA U mechanic docs (durability, raids, affix pity, economy telemetry).
+    for _tip in FAZA_U_KNOWLEDGE_TIPS:
+        def _q(s):
+            return str(s).replace("'", "''")
+        _exec(
+            "INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) "
+            f"VALUES ('{_q(_tip['tip_key'])}', '{_q(_tip['category'])}', "
+            f"'{_q(_tip['title'])}', '{_q(_tip['body'])}', {int(_tip['sort_order'])})",
+            f"v2-knowledge-faza-u-{_tip['tip_key']}",
+        )
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Task 41: Dungeon Runs ─────────────────────────────────────────────────
@@ -2523,8 +2735,29 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('sailing',      'dc',      NULL,         12),
         -- S6 (#586): targowanie — test przeciw CHA kupca (NPC staty z S3);
         -- kupiec bez statów → fallback default_dc=12 (DC lock {8,12,16,20,24}).
-        ('haggling',     'opposed', 'CHA',        12)
+        ('haggling',     'opposed', 'CHA',        12),
+        -- S7 (#601): hazard — test przeciw CHA przeciwnika (staty z S3); brak
+        -- przeciwnika → fallback default_dc=12 (amatorzy; DC 20 zawodowcy narracyjnie).
+        ('gamble',       'opposed', 'CHA',        12)
     """, "v2-skill-counters-seed")
+
+    # S17 (#612): generyczne pola wynik→kondycja (skill outcome → apply_condition).
+    # Deklaratywne (Zasada 1 FAZY S) — silnik czyta mapping z danych, ZERO if skill_key==...
+    # Przyszłe skille nakładające kondycje wynikiem dodają tu wiersze, bez dotykania kodu.
+    _exec("ALTER TABLE skill_counters ADD COLUMN on_success_condition TEXT",
+          "v2-skill-counters-on-success-col")
+    _exec("ALTER TABLE skill_counters ADD COLUMN on_crit_condition TEXT",
+          "v2-skill-counters-on-crit-col")
+    _exec("ALTER TABLE skill_counters ADD COLUMN on_critfail_self_condition TEXT",
+          "v2-skill-counters-on-critfail-self-col")
+    # Wrestling (S17): opposed STR vs STR; fallback default_dc=12 (słaby cel) — DC lock {8,12,16,20,24}.
+    # Sukces → cel slowed; krytyk → cel stunned; krytyczna porażka → gracz sam slowed (przewrócony).
+    _exec("""
+        INSERT OR IGNORE INTO skill_counters
+          (player_skill_key, counter_type, counter_key, default_dc,
+           on_success_condition, on_crit_condition, on_critfail_self_condition)
+        VALUES ('wrestling', 'opposed', 'STR', 12, 'slowed', 'stunned', 'slowed')
+    """, "v2-skill-counters-wrestling-seed")
 
     _exec("""
         CREATE TABLE IF NOT EXISTS location_connections (

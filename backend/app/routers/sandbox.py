@@ -370,6 +370,30 @@ def advance_turn_endpoint(payload: dict = Body(...)) -> dict[str, Any]:
     return {"ok": True, "current_turn": new_turn, "combat_state": combat.load_combat_snapshot(cid)}
 
 
+@router.post("/apply-condition")
+def apply_condition(payload: dict = Body(...)) -> dict[str, Any]:
+    """S12 (#607): nałóż kondycję z katalogu na bohatera w aktywnej walce sandboxa.
+
+    Pozwala adminowi przetestować buffy gracza (hasted/blessed/rage…) bez narracji.
+    Body: `{campaign_id, condition_key, enemy_ref?}`. Bez `enemy_ref` → gracz
+    (`apply_condition_to_player`). Z `enemy_ref` → wróg (`apply_condition_to_combatant`) —
+    S18 (#613): test behavior_override na wrogu (berserk/confused/panicked w Sandboxie).
+    """
+    cid = int(payload.get("campaign_id") or 0)
+    condition_key = str(payload.get("condition_key") or "").strip()
+    enemy_ref = str(payload.get("enemy_ref") or "").strip()
+    if not cid or not condition_key:
+        raise HTTPException(status_code=400, detail="campaign_id and condition_key required")
+    if enemy_ref:
+        res = combat.apply_condition_to_combatant(cid, enemy_ref, condition_key)
+    else:
+        res = combat.apply_condition_to_player(cid, condition_key)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("reason") or "apply_failed")
+    return {"ok": True, "reason": res.get("reason"), "target": enemy_ref or "player",
+            "combat_state": combat.load_combat_snapshot(cid)}
+
+
 @router.post("/end-combat")
 def end_combat(payload: dict = Body(...)) -> dict[str, Any]:
     """Force-end the active combat for this sandbox campaign. Body: `{campaign_id, reason?}`."""

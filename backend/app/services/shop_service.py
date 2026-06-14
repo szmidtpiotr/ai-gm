@@ -14,8 +14,67 @@ from app.services.loot_service import (
     get_character_gold,
     grant_loot_to_character,
 )
+from app.services import haggle_service
 
 SELL_RATIO = 0.5
+
+
+def _campaign_id_for_character(conn: sqlite3.Connection, character_id: int) -> int | None:
+    """S6: bohater wie, w jakiej kampanii gra → tam żyją session_flags z rabatem."""
+    try:
+        row = conn.execute(
+            "SELECT campaign_id FROM characters WHERE id = ? LIMIT 1",
+            (int(character_id),),
+        ).fetchone()
+        if row and row[0] is not None:
+            return int(row[0])
+    except sqlite3.OperationalError:
+        pass
+    return None
+
+
+def _load_session_flags(conn: sqlite3.Connection, campaign_id: int) -> dict:
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if row and row[0]:
+            return json.loads(row[0])
+    except (sqlite3.OperationalError, ValueError, TypeError):
+        pass
+    return {}
+
+
+def _save_session_flags(conn: sqlite3.Connection, campaign_id: int, flags: dict) -> None:
+    try:
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(flags, ensure_ascii=False), int(campaign_id)),
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
+def _peek_haggle_for_character(conn: sqlite3.Connection, character_id: int) -> float:
+    """Podgląd rabatu z targowania BEZ konsumpcji (dla wyświetlanych cen)."""
+    cid = _campaign_id_for_character(conn, character_id)
+    if cid is None:
+        return 0.0
+    return haggle_service.peek_haggle_discount(_load_session_flags(conn, cid))
+
+
+def _consume_haggle_for_character(conn: sqlite3.Connection, character_id: int) -> float:
+    """Pobierz rabat z targowania i wyczyść go (jednorazowy — ta transakcja)."""
+    cid = _campaign_id_for_character(conn, character_id)
+    if cid is None:
+        return 0.0
+    flags = _load_session_flags(conn, cid)
+    discount = haggle_service.consume_haggle_discount(flags)
+    if discount:
+        _save_session_flags(conn, cid, flags)
+    return discount
 
 
 def _get_character_level(conn: sqlite3.Connection, character_id: int) -> int:
@@ -382,7 +441,11 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         npc = _load_shop_npc(conn, npc_id)
         cha = _get_character_cha(conn, character_id)
         char_level = _get_character_level(conn, character_id)
-        ratio = _cha_sell_ratio(cha)
+        # S6 (#586): podgląd jednorazowego rabatu z targowania (bez konsumpcji).
+        haggle_discount = _peek_haggle_for_character(conn, character_id)
+        cha_buy_mult = _cha_buy_multiplier(cha)
+        eff_buy_mult = haggle_service.effective_buy_multiplier(cha_buy_mult, haggle_discount)
+        ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         entries = _effective_shop_entries(conn, npc)
         items = []
         for e in entries:
@@ -391,7 +454,8 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
                 continue
             if not _item_passes_filters(cat, char_level, location_key):
                 continue
-            cat["buy_price_gp"] = _buy_price(int(cat.get("value_gp") or 0), cha)
+            base = int(cat.get("value_gp") or 0)
+            cat["buy_price_gp"] = max(1, int(math.floor(base * eff_buy_mult))) if base > 0 else base
             items.append(cat)
         sell_items = _character_sellables(conn, character_id, ratio)
     return {
@@ -400,10 +464,12 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         "sell_items": sell_items,
         "character_gold": int(get_character_gold(character_id)),
         "sell_ratio": ratio,
-        "buy_multiplier": _cha_buy_multiplier(cha),
+        "buy_multiplier": eff_buy_mult,
         "cha": cha,
         "char_level": char_level,
         "location_key": location_key,
+        # S6: ujemny rabat (crit-fail) = narzut; UI renderuje badge przy cenie.
+        "haggle_discount": round(haggle_discount, 4),
     }
 
 
@@ -430,8 +496,11 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         if base_price <= 0:
             raise ValueError("price_or_catalog_missing")
         # F10 (#470): CHA modifies actual buy price (discount/markup, symmetric to sell).
+        # S6 (#586): jednorazowy rabat z targowania stackuje multiplikatywnie z CHA.
         cha = _get_character_cha(conn, character_id)
-        price = _buy_price(base_price, cha)
+        haggle_discount = _consume_haggle_for_character(conn, character_id)
+        eff_buy_mult = haggle_service.effective_buy_multiplier(_cha_buy_multiplier(cha), haggle_discount)
+        price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.
     cur_gold = int(get_character_gold(character_id))
@@ -458,7 +527,8 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         "gold_gp": int(new_gold),
         "paid_gp": int(price),
         "cha": int(cha),
-        "buy_multiplier": _cha_buy_multiplier(cha),
+        "buy_multiplier": eff_buy_mult,
+        "haggle_discount": round(haggle_discount, 4),
         "item": {
             "type": cat["type"],
             "key": cat["key"],
@@ -503,7 +573,9 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
 
         base_price = int(cat["value_gp"] or 0)
         cha = _get_character_cha(conn, character_id)
-        ratio = _cha_sell_ratio(cha)
+        # S6 (#586): jednorazowy rabat z targowania podnosi cenę sprzedaży.
+        haggle_discount = _consume_haggle_for_character(conn, character_id)
+        ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         cha_sell_price = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
 
         # F12 (#472): anti-farm decay for repeated sales of the same item_key
@@ -552,6 +624,7 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         "anti_farm_multiplier": af_mult,
         "recent_sell_count": int(recent_sell_count),
         "oversupply": bool(af_mult < 1.0),
+        "haggle_discount": round(haggle_discount, 4),
         "cha": int(cha),
         "sold_item": {
             "type": item_type,

@@ -951,6 +951,18 @@ def smart_entry_save(
                 detail="Pod-lokacja wymaga parent_key (klucza lokacji nadrzędnej).",
             )
 
+    # S2 (#582): new enemy via Kreator AI gets archetype-derived 7 stats when the
+    # admin didn't supply stats_json — mirrors admin_config.create_enemy. NULL would
+    # otherwise default to 10; this gives the enemy a meaningful stat profile up front.
+    if table == "game_config_enemies" and not target_key:
+        if not record.get("stats_json"):
+            from app.services.actor_stats import stats_for_actor
+
+            record["stats_json"] = json.dumps(
+                stats_for_actor(record.get("key", ""), record.get("label")),
+                ensure_ascii=False,
+            )
+
     if target_key:
         # UPDATE existing record (skip immutable provenance fields)
         immutable = {"created_by"} if table == "game_locations" else set()

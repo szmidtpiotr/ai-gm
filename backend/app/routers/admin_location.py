@@ -903,6 +903,33 @@ async def get_floating_locations(_: None = Depends(require_admin_token)):
         conn.close()
 
 
+class EditLocationBody(BaseModel):
+    fields: dict
+
+
+@router.patch("/api/admin/locations/{location_key}/edit")
+async def edit_location_fields(
+    location_key: str,
+    body: EditLocationBody,
+    _: None = Depends(require_admin_token),
+):
+    """#590: edit a pending/floating location's descriptive fields before approve/place."""
+    from app.services.world_service import update_location_fields
+    conn = _get_db_connection()
+    try:
+        exists = conn.execute(
+            "SELECT key FROM game_locations WHERE key=? AND is_active=1", (location_key,)
+        ).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Location not found")
+        ok = update_location_fields(conn, location_key, body.fields or {})
+        if not ok:
+            raise HTTPException(status_code=400, detail="No editable fields provided")
+        return {"ok": True, "key": location_key}
+    finally:
+        conn.close()
+
+
 class PlaceLocationBody(BaseModel):
     q: int
     r: int

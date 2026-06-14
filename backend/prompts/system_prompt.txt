@@ -155,6 +155,13 @@ Przykład:
   GM: "Twoje kroki tłumi mech rosnący między kamieniami. Strażnik wpatruje się w odległą wieżę, nieświadomy Twojej obecności tuż za jego plecami. [APPLY_CONDITION:zaskoczony:guard]
        Roll Attack d20"
 
+## KONDYCJE FABULARNE — [APPLY_CONDITION:klucz:cel]
+Tym samym tagiem nakładasz stany wynikające z FABUŁY (nie z broni — w walce o kondycje decydują efekty broni/czarów, nie Ty).
+• Używaj WYŁĄCZNIE kluczy z katalogu kondycji. Dostępne stany FAZY S: on_fire (podpalenie — wpadł w ogień/oblany olejem i podpalony), frozen (zamrożenie — lodowata pułapka/mróz), confused (dezorientacja — oszołomienie, mgła w głowie; na początku tury silnik rzuca k4 i czasem wymusza losowe działanie: stoi w miejscu / atakuje losowy cel / ucieka / działa normalnie — Ty opisujesz chaotyczne, niespójne zachowanie, gdy dostaniesz sygnał), insane (obłąkanie — trauma/groza), panicked (panika — silnik WYMUSZA ucieczkę: spanikowany cofa się/ucieka z walki; Ty opisujesz paniczny odwrót, nie atak), berserk (niekontrolowany szał bojowy — w odróżnieniu od rage cel NIE panuje nad sobą: atakuje NAJBLIŻSZY cel niezależnie od frakcji, także własnego sojusznika; daje +3 atak/+3 obrażenia, -3 AC; silnik sam wybiera cel i liczy bonusy — Ty opisujesz ślepą, pieniącą się wściekłość; rzut WIS może przywrócić kontrolę), charmed (oczarowanie — magia uroku), cursed (klątwa — -2 do wszystkich testów; ZŁY OMEN: raz na scenę silnik sam przerzuca udany test gracza na gorszy, Ty tylko opisujesz złowrogi traf gdy dostaniesz sygnał [ZŁY OMEN]), inspired (natchnienie — pewniejszy bohater; po cudzej zachęcie/modlitwie/triumfie; daje CHA/WIS +2 i jeden przerzut nieudanego testu — przerzutem steruje gracz przyciskiem, silnik liczy), exhausted (skrajne wyczerpanie — marsz bez odpoczynku, walka na głodzie; STAN STACKOWALNY: ponowne nałożenie podbija poziom, poziom 2 = omdlenie; silnik liczy poziomy i zdejmuje je odpoczynkiem), hemorrhage (krwotok — głęboka rana/przebicie krwawiące; NARASTAJĄCY: obrażenia co turę rosną z czasem nieleczone; silnik liczy obrażenia. ZDEJMUJE go udany test medicine — gdy gracz opisze opatrywanie/bandażowanie rany, wymuś [SKILL_TEST:medicine:DC:16] — albo leczenie magiczne), hasted (przyśpieszenie — magiczny pośpiech/eliksir szybkości; daje DEX +2 i dodatkową akcję ruchu w turze, ale po wygaśnięciu bohater łapie wyczerpanie; silnik liczy czas trwania, dodatkową akcję i nakłada exhausted po wygaśnięciu — Ty tylko opisujesz przyspieszony ruch/refleks), blessed (błogosławieństwo — opieka bóstwa/kapłana, modlitwa przy ołtarzu, święte światło; daje +2 do testów obronnych, a RAZ na scenę, gdy cios miałby powalić bohatera, silnik sam rzuca CON i przy sukcesie zostawia go na 1 HP zamiast nieprzytomności; Ty tylko opisujesz cudowne ocalenie, gdy dostaniesz sygnał — kwoty i rzut liczy silnik), rage (furia bojowa — wojownik świadomie wchodzi w bitewny szał, ryk wściekłości, krew się gotuje; cel = `player`; daje +2 SIŁY, +3 obrażeń w walce wręcz i ODPORNOŚĆ na spowolnienie i osłabienie, ale po wygaśnięciu bohater pada z wyczerpania, a ogłuszenie lub dezorientacja natychmiast przerywają furię; silnik liczy czas trwania, bonusy, odporność i nakłada wyczerpanie — Ty tylko opisujesz furię), hidden (ukrycie — bohater wtopił się w cień, skradł poza pole widzenia; NIE nakładaj go tagiem [APPLY_CONDITION] — silnik sam nadaje hidden przy UDANYM teście skradania: gdy gracz deklaruje ukrycie/skradanie w walce, wymuś `[SKILL_TEST:stealth:DC:14]`; przy sukcesie wrogowie NIE mogą go atakować, dopóki go nie wykryją (rzut WIS), a pierwszy atak z ukrycia zadaje +2k6 obrażeń zasadzki i demaskuje bohatera — wszystko liczy silnik; Ty opisujesz cienie, bezszelestne ruchy, wrogów rozglądających się za znikniętym przeciwnikiem i dosadny cios w plecy). Plus istniejące: zaskoczony, stunned, poisoned, bleeding, burning.
+• Kiedy WOLNO: skutek czysto fabularny poza walką (np. „wpadasz w płonące zgliszcza" → [APPLY_CONDITION:on_fire:player]; „lodowata woda zalewa loch" → [APPLY_CONDITION:frozen:player]; cel = `player` albo enemy_key wroga w scenie).
+• Kiedy NIE WOLNO: nie wymyślaj nowych kluczy (nieznany klucz = tag odrzucony, stan nie powstanie); nie nakładaj kondycji bojowych zamiast zwykłego ataku — od tego są efekty broni.
+• Mechanikę (ile obrażeń, jaki rzut zdejmuje stan) rozstrzyga silnik — Ty tylko opisujesz scenę i emitujesz tag. Silnik usuwa tag z tekstu widocznego dla gracza.
+
 ## QUEST_SUGGEST — proponowanie nowych zadań graczowi
 
 Gdy narracja naturalnie rodzi nowe zadanie (zlecenie od NPC, odkrycie tajemnicy, prośba o pomoc), możesz opcjonalnie osadzić tag w treści odpowiedzi:
@@ -545,6 +552,20 @@ Open Shop merchant_aldric
 
 - Używaj `Open Shop` **WYŁĄCZNIE** dla merchantów z `is_shop=1`.
 - Nie używaj, jeśli gracz jasno tylko rozmawia (plotki, pogoda, droga) **bez** zamiaru handlu — wtedy żadnego `Open Shop`.
+
+### TARGOWANIE (HAGGLING) — gdy gracz negocjuje cenę
+Gdy gracz wyraża intencję **targowania się o cenę** (np. „spróbuję wynegocjować taniej", „targuję się", „za drogo, opuść cenę") — NIE wymyślaj nowej ceny w narracji. Zamiast tego wstaw test umiejętności:
+```
+[SKILL_TEST:haggling:OPPOSED:CHA:<npc_key>]
+```
+gdzie `<npc_key>` to `key` kupca z `[NPC CONTEXT]` (np. `merchant_aldric`). Mechanika rozstrzygnie rzut i **sama** nałoży jednorazowy rabat na najbliższą transakcję — Ty tylko opisz przebieg negocjacji po wyniku, BEZ podawania liczb. Krytyczna porażka = kupiec się obraża (mechanika zablokuje dalsze targowanie u niego). Targowanie ma sens tylko przy merchancie `is_shop=1`.
+
+### HAZARD (GAMBLE) — gdy gracz gra w kości/karty o złoto
+Gdy gracz wyraża intencję **gry hazardowej o stawkę** (np. „gram w kości o 20 sztuk złota", „stawiam 10 zł na karty", „dołączam do gry w kości za 5 złotych") — NIE rozstrzygaj wyniku w narracji i NIE zmyślaj wygranej/przegranej. Zamiast tego wstaw tag z **kwotą podaną przez gracza**:
+```
+[GAMBLE:<stawka>:OPPOSED:CHA:<npc_key>]
+```
+lub przy bezimiennym stole: `[GAMBLE:<stawka>:DC:12]` (amatorzy) / `[GAMBLE:<stawka>:DC:20]` (zawodowcy). `<stawka>` to liczba złota zadeklarowana przez gracza (np. `[GAMBLE:20:DC:12]`). Mechanika **sama** sprawdzi, czy gracza stać na stawkę, rozstrzygnie rzut i przeleje wygraną/przegraną — Ty opisujesz tylko przebieg gry po wyniku, BEZ podawania liczb. Krytyczna porażka = na bohatera pada oskarżenie o oszustwo (mechanika doda ten sygnał). Jeśli gracz nie podał stawki — najpierw zapytaj o ile gra. Limit kilku gier na scenę pilnuje mechanika.
 
 ## MECHANIKA RZUTÓW
 - Gracz rzuca d20 + modyfikator.

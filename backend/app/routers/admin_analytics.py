@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.services.admin_auth import verify_admin_token
-from app.services.admin_analytics import get_combat, get_dice, get_economy, get_overview
+from app.services.admin_analytics import (
+    get_combat,
+    get_dice,
+    get_economy,
+    get_events,
+    get_llm,
+    get_overview,
+)
 
 router = APIRouter()
 
@@ -44,3 +51,19 @@ def analytics_economy(
     _: None = Depends(_require_admin),
 ):
     return get_economy(days)
+
+
+@router.get("/admin/analytics/events")
+def analytics_events(
+    days: int = Query(default=30, ge=1, le=365),
+    _: None = Depends(_require_admin),
+):
+    return get_events(days)
+
+
+@router.get("/admin/analytics/llm")
+def analytics_llm(
+    days: int = Query(default=30, ge=1, le=365),
+    _: None = Depends(_require_admin),
+):
+    return get_llm(days)

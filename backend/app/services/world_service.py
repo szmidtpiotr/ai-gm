@@ -842,6 +842,27 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
+def update_location_fields(conn: sqlite3.Connection, key: str, fields: dict) -> bool:
+    """#590: edit a location's descriptive fields before approving/placing.
+
+    Only whitelisted columns are writable — `key`, `approved`, `review_status`,
+    `placement` and any unknown keys are ignored (prevents accidental state changes
+    and SQL injection via column names).
+    """
+    editable = {
+        "label", "description", "location_type", "location_subtype",
+        "biome", "tier", "parent_key", "terrain_tags", "safe_for_rest",
+    }
+    sets = {k: v for k, v in (fields or {}).items() if k in editable}
+    if not sets:
+        return False
+    assigns = ", ".join(f"{col} = ?" for col in sets)
+    params = list(sets.values()) + [key]
+    conn.execute(f"UPDATE game_locations SET {assigns} WHERE key = ?", params)
+    conn.commit()
+    return True
+
+
 def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(

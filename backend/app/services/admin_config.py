@@ -3,6 +3,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from app.services.actor_stats import stats_for_actor, validate_stats_json
+
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -52,20 +54,39 @@ ALLOWED_EFFECT_JSON_TYPES = set(_EFFECT_SCHEMA.get("effect_types") or {
     "damage_bonus",
     "heal_on_hit",
     "ac_bonus",
+    # S8 (#603) — damage-over-time prymityw (on_fire 2d6/turę itd.)
+    "dot",
+    # S9 (#604) / S10 (#605) — kondycje z poziomami / narastający DOT
+    "stacking_levels",
+    "escalating_dot",
+    # S11–S13 (#606–#608) — przerzut / dodatkowa akcja / on_expire / rzut ratunkowy przy 0 HP
+    "reroll",
+    "extra_action",
+    "on_expire_apply",
+    "on_zero_hp_save",
 })
 ALLOWED_EFFECT_JSON_TICKS = set(_EFFECT_SCHEMA.get("ticks") or {"start_turn", "each_round", "on_use"})
+# S11 (#606) — tryby i zakresy efektu `reroll` (single source: effect_schema.json).
+ALLOWED_REROLL_MODES = set(_EFFECT_SCHEMA.get("reroll_modes") or {"player_keep_best", "forced_keep_worst"})
+ALLOWED_REROLL_SCOPES = set(_EFFECT_SCHEMA.get("reroll_scopes") or {"skill_test", "attack", "all"})
+# S12 (#607) — rodzaje dodatkowej akcji efektu `extra_action` (single source: effect_schema.json).
+ALLOWED_ACTION_KINDS = set(_EFFECT_SCHEMA.get("action_kinds") or {"move_only"})
+# S13 (#608) — dozwolone skutki efektu `on_zero_hp_save` (single source: effect_schema.json).
+ALLOWED_SAVE_RESULTS = set(_EFFECT_SCHEMA.get("save_results") or {"stay_at_1hp"})
+# S18 (#613) — dozwolone zachowania efektu `behavior_override` (single source: effect_schema.json).
+ALLOWED_BEHAVIORS = set(_EFFECT_SCHEMA.get("behaviors") or {"random_table_k4", "attack_nearest", "flee"})
 # 7 statystyk (U10: LCK dodane — kontrakt 7 stat z CLAUDE.md). Porównanie po upper().
 ALLOWED_EFFECT_JSON_STATS = set(_EFFECT_SCHEMA.get("stats") or {"STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"})
 # U10 — cele pochodne dla static_stat_modifier (ac/attack_bonus/damage_bonus/initiative). Porównanie po lower().
 ALLOWED_EFFECT_JSON_STAT_TARGETS = {
     str(s).strip().lower() for s in (_EFFECT_SCHEMA.get("stat_targets") or
-    {"ac", "attack_bonus", "damage_bonus", "initiative"})
+    {"ac", "attack_bonus", "damage_bonus", "initiative", "save"})
 }
-_EFFECT_JSON_TOP_LEVEL_KEYS = set(_EFFECT_SCHEMA.get("top_level_keys") or {"schema_version", "effect_category", "effects"})
-_EFFECT_JSON_EFFECT_KEYS = set(_EFFECT_SCHEMA.get("effect_keys") or {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires", "duration_rounds"})
+_EFFECT_JSON_TOP_LEVEL_KEYS = set(_EFFECT_SCHEMA.get("top_level_keys") or {"schema_version", "effect_category", "effects", "cure"})
+_EFFECT_JSON_EFFECT_KEYS = set(_EFFECT_SCHEMA.get("effect_keys") or {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires", "duration_rounds", "damage_type", "result"})
 _EFFECT_JSON_CATEGORY_TYPES = {
     cat: set(types) for cat, types in (_EFFECT_SCHEMA.get("category_types") or {
-        "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
+        "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only", "dot", "stacking_levels", "escalating_dot", "reroll", "extra_action", "on_expire_apply", "on_zero_hp_save", "condition_immunity", "behavior_override"},
         "gear_bonus": {"static_stat_modifier", "narrative_only", "damage_bonus", "heal_on_hit", "ac_bonus", "apply_condition"},
         "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
         "aura": {
@@ -273,13 +294,228 @@ def validate_effect_json_payload(payload: object) -> list[str]:
                 errors.append(f"{prefix}.expires is required for periodic_save")
             if dc_key is None and not isinstance(value, (int, float)):
                 errors.append(f"{prefix} requires dc_key or numeric value for periodic_save")
+        elif effect_type == "dot":
+            # S8 (#603) — damage-over-time: value = liczba lub dice ("2d6"); tick wymagany.
+            if not isinstance(value, (int, float, str)):
+                errors.append(f"{prefix}.value must be a number or dice string for dot")
+            elif isinstance(value, str):
+                dice = value.strip().lower()
+                if not dice or not DAMAGE_DIE_RE.fullmatch(dice):
+                    errors.append(f"{prefix}.value must be a number or dice string like 2d6 for dot")
+            if tick is None:
+                errors.append(f"{prefix}.tick is required for dot")
+            damage_type = effect.get("damage_type")
+            if damage_type is not None and str(damage_type).strip().lower() not in ALLOWED_DAMAGE_TYPES:
+                errors.append(f"{prefix}.damage_type must be one of: {', '.join(sorted(ALLOWED_DAMAGE_TYPES))}")
+        elif effect_type == "escalating_dot":
+            # S10 (#605) — DOT narastający w czasie (np. hemorrhage 1d4/turę, +1d4 co 3 tury).
+            # value = kość startowa (liczba lub dice), escalate_every_rounds = int ≥ 1,
+            # escalate_dice = dice przyrostu, tick wymagany.
+            if not isinstance(value, (int, float, str)):
+                errors.append(f"{prefix}.value must be a number or dice string for escalating_dot")
+            elif isinstance(value, str):
+                dice = value.strip().lower()
+                if not dice or not DAMAGE_DIE_RE.fullmatch(dice):
+                    errors.append(f"{prefix}.value must be a number or dice string like 1d4 for escalating_dot")
+            every = effect.get("escalate_every_rounds")
+            if not isinstance(every, int) or isinstance(every, bool) or every < 1:
+                errors.append(f"{prefix}.escalate_every_rounds must be an integer >= 1 for escalating_dot")
+            esc_dice = effect.get("escalate_dice")
+            if not isinstance(esc_dice, str) or not DAMAGE_DIE_RE.fullmatch(str(esc_dice).strip().lower()):
+                errors.append(f"{prefix}.escalate_dice must be a dice string like 1d4 for escalating_dot")
+            if tick is None:
+                errors.append(f"{prefix}.tick is required for escalating_dot")
+            damage_type = effect.get("damage_type")
+            if damage_type is not None and str(damage_type).strip().lower() not in ALLOWED_DAMAGE_TYPES:
+                errors.append(f"{prefix}.damage_type must be one of: {', '.join(sorted(ALLOWED_DAMAGE_TYPES))}")
+        elif effect_type == "stacking_levels":
+            # S9 (#604) — kondycja z poziomami (np. exhausted): max_level + per_level_effects
+            # (skalowane ×poziom) + opcjonalne threshold_effects {poziom: efekt}.
+            max_level = effect.get("max_level")
+            if not isinstance(max_level, int) or isinstance(max_level, bool) or max_level < 1:
+                errors.append(f"{prefix}.max_level must be an integer >= 1 for stacking_levels")
+            ple = effect.get("per_level_effects")
+            if not isinstance(ple, list) or len(ple) < 1:
+                errors.append(f"{prefix}.per_level_effects must be a non-empty array for stacking_levels")
+            else:
+                for j, sub in enumerate(ple):
+                    errors.extend(_validate_stacking_sub_effect(sub, f"{prefix}.per_level_effects[{j}]"))
+            thr = effect.get("threshold_effects")
+            if thr is not None:
+                if not isinstance(thr, dict):
+                    errors.append(f"{prefix}.threshold_effects must be an object {{level: effect}}")
+                else:
+                    for lvl_key, sub in thr.items():
+                        if not str(lvl_key).isdigit() or int(lvl_key) < 1:
+                            errors.append(f"{prefix}.threshold_effects keys must be positive integers")
+                        errors.extend(_validate_stacking_sub_effect(sub, f"{prefix}.threshold_effects[{lvl_key}]"))
+        elif effect_type == "reroll":
+            # S11 (#606) — przerzut testu: mode (player_keep_best/forced_keep_worst) wymagany,
+            # scope (skill_test/attack/all) opcjonalny (domyślnie skill_test), uses ≥ 0 opcjonalne.
+            mode = effect.get("mode")
+            if str(mode or "").strip().lower() not in ALLOWED_REROLL_MODES:
+                errors.append(
+                    f"{prefix}.mode must be one of: " + ", ".join(sorted(ALLOWED_REROLL_MODES))
+                    + " for reroll"
+                )
+            scope = effect.get("scope")
+            if scope is not None and str(scope).strip().lower() not in ALLOWED_REROLL_SCOPES:
+                errors.append(
+                    f"{prefix}.scope must be one of: " + ", ".join(sorted(ALLOWED_REROLL_SCOPES))
+                    + " for reroll"
+                )
+            uses = effect.get("uses")
+            if uses is not None and (not isinstance(uses, int) or isinstance(uses, bool) or uses < 0):
+                errors.append(f"{prefix}.uses must be an integer >= 0 for reroll")
+        elif effect_type == "extra_action":
+            # S12 (#607) — dodatkowa akcja w turze (np. hasted): action_kind opcjonalny
+            # (domyślnie move_only — jedyny dozwolony na start; pełna akcja ataku odłożona).
+            action_kind = effect.get("action_kind")
+            if action_kind is not None and str(action_kind).strip().lower() not in ALLOWED_ACTION_KINDS:
+                errors.append(
+                    f"{prefix}.action_kind must be one of: " + ", ".join(sorted(ALLOWED_ACTION_KINDS))
+                    + " for extra_action"
+                )
+        elif effect_type == "on_expire_apply":
+            # S12 (#607) — przy wygaśnięciu kondycji nakłada inną (np. hasted→exhausted):
+            # condition_key wymagany, value = poziom (opcjonalny int ≥ 1, domyślnie 1).
+            if not condition_key or not str(condition_key).strip():
+                errors.append(f"{prefix}.condition_key is required for on_expire_apply")
+            if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 1):
+                errors.append(f"{prefix}.value must be an integer >= 1 for on_expire_apply")
+        elif effect_type == "on_zero_hp_save":
+            # S13 (#608) — rzut ratunkowy gdy HP spadłoby do ≤0 (np. blessed CON DC 12 → 1 HP):
+            # stat wymagany, DC z dc_key lub numerycznego value, result z enuma save_results,
+            # uses opcjonalny int ≥ 1 (domyślnie 1).
+            if stat is None:
+                errors.append(f"{prefix}.stat is required for on_zero_hp_save")
+            if dc_key is None and not isinstance(value, (int, float)):
+                errors.append(f"{prefix} requires dc_key or numeric value (DC) for on_zero_hp_save")
+            result = effect.get("result")
+            if result is not None and str(result).strip().lower() not in ALLOWED_SAVE_RESULTS:
+                errors.append(
+                    f"{prefix}.result must be one of: " + ", ".join(sorted(ALLOWED_SAVE_RESULTS))
+                    + " for on_zero_hp_save"
+                )
+            uses = effect.get("uses")
+            if uses is not None and (not isinstance(uses, int) or isinstance(uses, bool) or uses < 1):
+                errors.append(f"{prefix}.uses must be an integer >= 1 for on_zero_hp_save")
+        elif effect_type == "condition_immunity":
+            # S14 (#609) — odporność na kondycje: immune_to = niepusta lista kluczy kondycji
+            # (lowercase_snake_case). Aktor z aktywną kondycją niosącą ten efekt nie przyjmuje
+            # kondycji z listy; nałożenie kondycji z immune_to zdejmuje już aktywne wpisy z listy.
+            immune_to = effect.get("immune_to")
+            if not isinstance(immune_to, list) or len(immune_to) < 1:
+                errors.append(f"{prefix}.immune_to must be a non-empty array of condition keys for condition_immunity")
+            else:
+                for k in immune_to:
+                    if not isinstance(k, str) or not KEY_RE.fullmatch(k.strip().lower()):
+                        errors.append(f"{prefix}.immune_to entries must be lowercase_snake_case condition keys")
+        elif effect_type == "behavior_override":
+            # S18 (#613) — kondycja steruje turą aktora: behavior z enuma (random_table_k4 =
+            # k4 1 stoi/2 atak losowego celu/3 ucieczka/4 normalnie; attack_nearest = atak
+            # najbliższego niezależnie od frakcji; flee = ucieczka/zmiana strefy).
+            behavior = effect.get("behavior")
+            if str(behavior or "").strip().lower() not in ALLOWED_BEHAVIORS:
+                errors.append(
+                    f"{prefix}.behavior must be one of: " + ", ".join(sorted(ALLOWED_BEHAVIORS))
+                    + " for behavior_override"
+                )
+        elif effect_type == "untargetable":
+            # S19 (#614) — aktor pomijany przy wyborze celu (np. hidden). Bez dodatkowych pól.
+            pass
+        elif effect_type == "ambush_bonus":
+            # S19 (#614) — +Nk6 do pierwszego ataku z ukrycia (value = kość lub liczba), konsumuje kondycję.
+            if not isinstance(value, (int, float, str)) or isinstance(value, bool):
+                errors.append(f"{prefix}.value must be a number or dice string for ambush_bonus")
+            elif isinstance(value, str):
+                dice = value.strip().lower()
+                if not dice or not DAMAGE_DIE_RE.fullmatch(dice):
+                    errors.append(f"{prefix}.value must be a number or dice string like 2d6 for ambush_bonus")
         elif effect_type in {"block_action", "narrative_only"}:
             pass
         elif effect_type in {"damage_bonus", "heal_on_hit", "ac_bonus"}:
             if not isinstance(value, (int, float)):
                 errors.append(f"{prefix}.value must be a number for {effect_type}")
 
+    # S10 (#605) — opcjonalny top-level `cure: {skill, dc}` na kondycji: deklaratywne
+    # "udany SKILL_TEST tym skillem zdejmuje kondycję" (DC z zamka {8,12,16,20,24}).
+    cure = payload.get("cure")
+    if cure is not None:
+        if not isinstance(cure, dict):
+            errors.append("cure must be an object {skill, dc}")
+        else:
+            extra_cure = sorted(set(cure.keys()) - {"skill", "dc"})
+            if extra_cure:
+                errors.append(f"cure has unknown keys: {', '.join(extra_cure)}")
+            cure_skill = cure.get("skill")
+            if not isinstance(cure_skill, str) or not KEY_RE.fullmatch(cure_skill.strip().lower()):
+                errors.append("cure.skill must be a lowercase_snake_case skill key")
+            cure_dc = cure.get("dc")
+            if cure_dc not in {8, 12, 16, 20, 24}:
+                errors.append("cure.dc must be one of the locked DC values: 8, 12, 16, 20, 24")
+
+    # S14 (#609) — opcjonalny top-level `broken_by: [klucz, ...]` na kondycji: nałożenie
+    # którejkolwiek z tych kondycji na nosiciela natychmiast zdejmuje tę kondycję
+    # (np. rage broken_by [stunned, confused]).
+    broken_by = payload.get("broken_by")
+    if broken_by is not None:
+        if not isinstance(broken_by, list) or len(broken_by) < 1:
+            errors.append("broken_by must be a non-empty array of condition keys")
+        else:
+            for k in broken_by:
+                if not isinstance(k, str) or not KEY_RE.fullmatch(k.strip().lower()):
+                    errors.append("broken_by entries must be lowercase_snake_case condition keys")
+
+    # S19 (#614) — opcjonalny top-level `granted_by: {skill, dc}` na kondycji: ODWROTNOŚĆ `cure`.
+    # Udany SKILL_TEST tym skillem NAKŁADA kondycję (np. hidden granted_by stealth DC 14).
+    # DC z zamka {8,12,16,20,24} — mechanika decyduje, nie LLM.
+    granted_by = payload.get("granted_by")
+    if granted_by is not None:
+        if not isinstance(granted_by, dict):
+            errors.append("granted_by must be an object {skill, dc}")
+        else:
+            extra_gb = sorted(set(granted_by.keys()) - {"skill", "dc"})
+            if extra_gb:
+                errors.append(f"granted_by has unknown keys: {', '.join(extra_gb)}")
+            gb_skill = granted_by.get("skill")
+            if not isinstance(gb_skill, str) or not KEY_RE.fullmatch(gb_skill.strip().lower()):
+                errors.append("granted_by.skill must be a lowercase_snake_case skill key")
+            gb_dc = granted_by.get("dc")
+            # DC progu skradania — int ≥ 1. NIE jest zamknięte do skali {8,12,16,20,24}: design doc
+            # FAZY S używa progów pośrednich (np. stealth/save DC 14, jak periodic_save w S18).
+            if not isinstance(gb_dc, int) or isinstance(gb_dc, bool) or gb_dc < 1:
+                errors.append("granted_by.dc must be an integer >= 1")
+
+    # S19 (#614) — opcjonalny top-level `detect_dc`: DC rzutu WIS wroga przy aktywnym poszukiwaniu
+    # ukrytego gracza (untargetable). Liczba całkowita ≥ 1.
+    detect_dc = payload.get("detect_dc")
+    if detect_dc is not None and (not isinstance(detect_dc, int) or isinstance(detect_dc, bool) or detect_dc < 1):
+        errors.append("detect_dc must be an integer >= 1")
+
     return errors
+
+
+def _validate_stacking_sub_effect(sub: object, prefix: str) -> list[str]:
+    """S9 (#604) — minimalna walidacja efektu zagnieżdżonego w stacking_levels.
+    Wspierane: static_stat_modifier (per_level) i block_action (threshold)."""
+    errs: list[str] = []
+    if not isinstance(sub, dict):
+        return [f"{prefix} must be an object"]
+    sub_type = str(sub.get("type") or "").strip().lower()
+    if sub_type == "static_stat_modifier":
+        if sub.get("stat") is None:
+            errs.append(f"{prefix}.stat is required for static_stat_modifier")
+        elif str(sub.get("stat")).strip().upper() not in ALLOWED_EFFECT_JSON_STATS \
+                and str(sub.get("stat")).strip().lower() not in ALLOWED_EFFECT_JSON_STAT_TARGETS:
+            errs.append(f"{prefix}.stat is not a valid stat")
+        if not isinstance(sub.get("value"), (int, float)) or isinstance(sub.get("value"), bool):
+            errs.append(f"{prefix}.value must be a number for static_stat_modifier")
+    elif sub_type in {"block_action", "narrative_only"}:
+        pass
+    else:
+        errs.append(f"{prefix}.type must be static_stat_modifier, block_action or narrative_only")
+    return errs
 
 
 def normalize_effect_json_value(effect_json: object) -> str:
@@ -848,7 +1084,7 @@ def list_enemies() -> list[dict]:
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                tier, attacks_per_turn, damage_bonus, damage_type,
-               xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
+               xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                description, is_active, locked_at, created_at, updated_at, loot_tier
         FROM game_config_enemies
         ORDER BY key ASC
@@ -864,6 +1100,11 @@ def list_enemies() -> list[dict]:
             row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
         except Exception:
             row["skills_json"] = {}
+        try:
+            parsed_st = json.loads(row.get("stats_json") or "{}")
+            row["stats_json"] = parsed_st if isinstance(parsed_st, dict) else {}
+        except Exception:
+            row["stats_json"] = {}
         if row.get("drop_chance") is None:
             row["drop_chance"] = 1.0
         else:
@@ -1516,6 +1757,7 @@ def create_enemy(
     note: str | None = None,
     dex_modifier: int = 0,
     skills_json: dict[str, int] | None = None,
+    stats_json: dict[str, int] | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_drop = _validate_drop_chance(drop_chance)
@@ -1534,6 +1776,12 @@ def create_enemy(
     safe_damage_type = _validate_damage_type(damage_type)
     ci_json = _validate_conditions_immune(conditions_immune if conditions_immune is not None else [])
     safe_skills_json = _validate_enemy_skills_json(skills_json)
+    # S2: admin may pass explicit stats; otherwise derive 7 stats from the archetype
+    # heuristic (key/label keywords). Admin still creates an enemy with 4 numbers.
+    if stats_json is not None:
+        safe_stats_json = validate_stats_json(stats_json)
+    else:
+        safe_stats_json = json.dumps(stats_for_actor(safe_key, label), ensure_ascii=False)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1561,9 +1809,9 @@ def create_enemy(
             INSERT INTO game_config_enemies (
                 key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                 tier, attacks_per_turn, damage_bonus, damage_type,
-                xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
+                xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                 description, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1580,6 +1828,7 @@ def create_enemy(
                 xp_award,
                 ci_json,
                 safe_skills_json,
+                safe_stats_json,
                 loot_table_key,
                 safe_drop,
                 note,
@@ -1592,7 +1841,7 @@ def create_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1608,6 +1857,11 @@ def create_enemy(
                 new_row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
             except Exception:
                 new_row["skills_json"] = {}
+            try:
+                parsed_st = json.loads(new_row.get("stats_json") or "{}")
+                new_row["stats_json"] = parsed_st if isinstance(parsed_st, dict) else {}
+            except Exception:
+                new_row["stats_json"] = {}
             if new_row.get("drop_chance") is not None:
                 new_row["drop_chance"] = float(new_row["drop_chance"])
         _audit(conn, "game_config_enemies", safe_key, "CREATE", None, new_row)
@@ -1639,6 +1893,7 @@ def update_enemy(
     drop_chance: float | None = None,
     dex_modifier: int | None = None,
     skills_json: dict[str, int] | None = None,
+    stats_json: dict[str, int] | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1649,7 +1904,7 @@ def update_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1693,6 +1948,11 @@ def update_enemy(
             if skills_json is not None
             else (current.get("skills_json") or "{}")
         )
+        final_stats = (
+            validate_stats_json(stats_json)
+            if stats_json is not None
+            else (current.get("stats_json") or "{}")
+        )
         final_loot = current.get("loot_table_key")
         if loot_table_key is not None:
             if loot_table_key == "":
@@ -1712,7 +1972,7 @@ def update_enemy(
             UPDATE game_config_enemies
             SET label = ?, hp_base = ?, ac_base = ?, attack_bonus = ?, dex_modifier = ?, damage_die = ?,
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
-                xp_award = ?, conditions_immune = ?, skills_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
+                xp_award = ?, conditions_immune = ?, skills_json = ?, stats_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
                 description = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1730,6 +1990,7 @@ def update_enemy(
                 final_xp,
                 final_ci,
                 final_skills,
+                final_stats,
                 final_loot,
                 final_drop,
                 final_note,
@@ -1743,7 +2004,7 @@ def update_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1759,6 +2020,11 @@ def update_enemy(
                 new_row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
             except Exception:
                 new_row["skills_json"] = {}
+            try:
+                parsed_st = json.loads(new_row.get("stats_json") or "{}")
+                new_row["stats_json"] = parsed_st if isinstance(parsed_st, dict) else {}
+            except Exception:
+                new_row["stats_json"] = {}
             if new_row.get("drop_chance") is not None:
                 new_row["drop_chance"] = float(new_row["drop_chance"])
         cur_audit = dict(current)
@@ -1771,6 +2037,11 @@ def update_enemy(
             cur_audit["skills_json"] = parsed_cur_sk if isinstance(parsed_cur_sk, dict) else {}
         except Exception:
             cur_audit["skills_json"] = {}
+        try:
+            parsed_cur_st = json.loads(cur_audit.get("stats_json") or "{}")
+            cur_audit["stats_json"] = parsed_cur_st if isinstance(parsed_cur_st, dict) else {}
+        except Exception:
+            cur_audit["stats_json"] = {}
         _audit(conn, "game_config_enemies", safe_key, "UPDATE", cur_audit, new_row)
         conn.commit()
         return new_row or {}

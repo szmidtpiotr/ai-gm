@@ -221,6 +221,85 @@ def get_combat(days: int) -> dict:
         conn.close()
 
 
+# ── Events feed (#587) ──────────────────────────────────────────────────────
+
+def get_events(days: int, limit: int = 100, conn: sqlite3.Connection | None = None) -> dict:
+    """Recent structured game events (combat, level-up, quest…) for the Zdarzenia tab.
+
+    Reads game_events (written best-effort by event_logger.write_game_event). Missing
+    table or empty → {"events": []}, never raises.
+    """
+    since = _date_from(days)
+    _own = conn is None
+    c = conn or _conn()
+    try:
+        rows = c.execute(
+            """SELECT event_type, severity, campaign_id, character_id, user_id,
+                      event_data, created_at
+               FROM game_events
+               WHERE date(created_at) >= ?
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?""",
+            (since, limit),
+        ).fetchall()
+        return {"events": [dict(r) for r in rows]}
+    except sqlite3.OperationalError:
+        return {"events": []}
+    finally:
+        if _own:
+            c.close()
+
+
+# ── LLM usage (#587) ────────────────────────────────────────────────────────
+
+def get_llm(days: int, conn: sqlite3.Connection | None = None) -> dict:
+    """LLM call telemetry: aggregate by call_type + slowest calls.
+
+    Reads llm_call_log (written best-effort by event_logger.write_llm_log). Missing
+    table or empty → empty lists, never raises.
+    """
+    since = _date_from(days)
+    _own = conn is None
+    c = conn or _conn()
+    try:
+        by_type = c.execute(
+            """SELECT call_type,
+                      COUNT(*) AS n,
+                      AVG(latency_ms) AS avg_ms,
+                      SUM(cache_hit) AS cache_hits
+               FROM llm_call_log
+               WHERE date(created_at) >= ?
+               GROUP BY call_type
+               ORDER BY n DESC""",
+            (since,),
+        ).fetchall()
+        slowest = c.execute(
+            """SELECT call_type, model, latency_ms, created_at, error
+               FROM llm_call_log
+               WHERE date(created_at) >= ?
+               ORDER BY latency_ms DESC
+               LIMIT 10""",
+            (since,),
+        ).fetchall()
+        return {
+            "by_type": [
+                {
+                    "call_type": r["call_type"],
+                    "n": r["n"],
+                    "avg_ms": round(r["avg_ms"], 1) if r["avg_ms"] is not None else None,
+                    "cache_hits": r["cache_hits"] or 0,
+                }
+                for r in by_type
+            ],
+            "slowest": [dict(r) for r in slowest],
+        }
+    except sqlite3.OperationalError:
+        return {"by_type": [], "slowest": []}
+    finally:
+        if _own:
+            c.close()
+
+
 # ── Economy ───────────────────────────────────────────────────────────────────
 
 def get_economy(days: int) -> dict:
