@@ -1761,13 +1761,13 @@ function _renderStep1(c) {
                         <span class="archetype-icon">⚔️</span>
                         <span class="archetype-title">Wojownik</span>
                         <span class="archetype-desc">Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy, mistrz broni wręcz.</span>
-                        <span class="archetype-bonus">+2 STR · +1 KON · HP: 12</span>
+                        <span class="archetype-bonus">+2 STR · +1 KON · HP: 10</span>
                     </button>
                     <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue">
                         <span class="archetype-icon">🏹</span>
                         <span class="archetype-title">Łotrzyk</span>
                         <span class="archetype-desc">Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.</span>
-                        <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 8</span>
+                        <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 10</span>
                     </button>
                     <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar">
                         <span class="archetype-icon">📜</span>
@@ -1790,7 +1790,7 @@ function _renderStep1(c) {
 // Step 2 — Stat redistribution (pool model matching original frontend)
 let _step2FirstRender = false;
 function _wizardCalcHP(archetype, con, level = 1) {
-    const base = archetype === 'warrior' ? 12 : archetype === 'rogue' ? 8 : archetype === 'scholar' ? 6 : 8;
+    const base = archetype === 'warrior' ? 10 : archetype === 'rogue' ? 10 : archetype === 'scholar' ? 6 : 8;
     const mod = Math.floor((con - 10) / 2);
     return Math.max(1, base + mod * level);
 }

@@ -76,7 +76,7 @@ class TestFinalizeHelpers:
         assert built["stat_modifiers"]["DEX"] == _stat_modifier(dex)
         assert built["defense"]["base"] == 10 + built["stat_modifiers"]["DEX"]
         con_mod = built["stat_modifiers"]["CON"]
-        assert built["max_hp"] == 12 + con_mod
+        assert built["max_hp"] == 10 + con_mod  # warrior base 10 + CON_mod × level(1)
 
     def test_build_sheet_preserves_death_save_failures(self):
         sheet = {

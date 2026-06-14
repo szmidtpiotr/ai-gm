@@ -119,7 +119,7 @@ max_mana = 0
 **New behaviour:**
 
 ```python
-ARCHETYPE_BASE_HP = {"warrior": 10, "scholar": 6}
+ARCHETYPE_BASE_HP = {"warrior": 10, "rogue": 10, "scholar": 6}
 ARCHETYPE_BASE_MANA = {"warrior": 0, "scholar": 8}
 
 def stat_modifier(stat: int) -> int:

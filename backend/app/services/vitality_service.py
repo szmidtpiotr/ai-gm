@@ -21,8 +21,9 @@ from __future__ import annotations
 
 ARCHETYPE_BASE_HP: dict[str, int] = {
     "warrior": 10,
+    "rogue":   10,   # explicit (was missing → fell through to .get default 10)
     "scholar": 6,
-    "ranger":  8,   # future archetype — forward-compatible
+    "ranger":  8,    # future archetype — forward-compatible
 }
 
 ARCHETYPE_BASE_MANA: dict[str, int] = {
