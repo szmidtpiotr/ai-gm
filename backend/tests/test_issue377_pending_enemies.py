@@ -33,6 +33,7 @@ def _schema(conn: sqlite3.Connection) -> None:
           drop_chance REAL NOT NULL DEFAULT 1.0,
           dex_modifier INTEGER NOT NULL DEFAULT 0,
           skills_json TEXT,
+          stats_json TEXT,
           review_status TEXT NOT NULL DEFAULT 'permanent'
         );
         INSERT INTO game_config_enemies

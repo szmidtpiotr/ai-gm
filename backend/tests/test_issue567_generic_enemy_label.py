@@ -20,6 +20,7 @@ def _conn_with_enemy(label: str, key: str) -> sqlite3.Connection:
         """CREATE TABLE game_config_enemies (
             key TEXT PRIMARY KEY, label TEXT, hp_base INT, ac_base INT,
             attack_bonus INT, damage_die TEXT, dex_modifier INT, skills_json TEXT,
+            stats_json TEXT,
             tier TEXT, loot_table_key TEXT, drop_chance REAL, xp_award INT
         )"""
     )

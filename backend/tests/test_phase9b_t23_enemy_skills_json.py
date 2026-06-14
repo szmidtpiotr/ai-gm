@@ -42,6 +42,7 @@ def _seed_db(path: str) -> None:
                 xp_award INTEGER NOT NULL DEFAULT 0,
                 conditions_immune TEXT,
                 skills_json TEXT,
+                stats_json TEXT,
                 loot_table_key TEXT,
                 drop_chance REAL NOT NULL DEFAULT 1.0,
                 note TEXT,
