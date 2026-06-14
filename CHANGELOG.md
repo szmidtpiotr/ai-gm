@@ -4,6 +4,22 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.3.1 — 2026-06-14 — FAZA U: batch usability (U13–U25) + poprawki + suite regresyjny
+
+### Added
+- Journal (dziennik), eksport książki (Bielik), affix pity timer
+- db_lint + seed lint (audyt integralności bazy), content pipeline (CONTENT_PIPELINE.md)
+- Suite regresyjny: testy pytest + Playwright dla #547, #560–#581 i zadań U12–U25
+
+### Changed
+- Tuning combat / economy / loot / shop / clock / durability / onboarding / robbery
+- Wound tiers, podgląd kosztu (cost preview), reset bohatera (U14)
+
+### Fixed
+- Issues #547, #560–#581 (m.in. combat roll block, generic enemy label, loot RNG, clock sync, text/move desync, shop default stock, success margin)
+
+---
+
 ## v1.3.0 — 2026-06-13 — FAZA U: pancerz LLM, system hexów świata, effect schema lockdown
 
 ### Added
