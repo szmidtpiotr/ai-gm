@@ -131,6 +131,12 @@ const elements = {
     combatZoneEngaged: document.getElementById('combat-zone-engaged'),
     btnCombatMove: document.getElementById('combat-move-btn'),
     combatMoveLabel: document.getElementById('combat-move-label'),
+    btnCombatDodge: document.getElementById('combat-dodge-btn'),
+    combatDodgeLabel: document.getElementById('combat-dodge-label'),
+    btnCombatBlock: document.getElementById('combat-block-btn'),
+    combatBlockLabel: document.getElementById('combat-block-label'),
+    btnCombatWrestle: document.getElementById('combat-wrestle-btn'),
+    combatWrestleLabel: document.getElementById('combat-wrestle-label'),
     combatMsg: document.getElementById('combat-msg'),
     combatComposer: document.getElementById('combat-composer'),
     btnCombatAttack: document.getElementById('combat-attack-btn'),
@@ -3963,6 +3969,11 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             });
         }
 
+        // S11 (#606) — inspired: nieudany test → przycisk przerzutu (keep-best).
+        if (sr.reroll_available && !sr.rerolled) {
+            _renderInspiredRerollButton(skillTestId, sr.reroll_available);
+        }
+
         // Update HP if trap dealt damage
         await refreshCharacterData();
         await pollCombatState();
@@ -3986,6 +3997,51 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         showToast(err.message || 'Błąd rozwiązania testu', 'error');
         if (elements.btnSend) elements.btnSend.disabled = false;
     }
+}
+
+// ── S11 (#606) — przerzut "Zainspirowany" (player_keep_best) ───────────────────
+
+function _renderInspiredRerollButton(skillTestId, offer) {
+    const label = offer?.label || 'Zainspirowany';
+    const wrap = document.createElement('div');
+    wrap.className = 'message system inspired-reroll-offer';
+    wrap.style.cssText = 'text-align:center;margin:8px 0;';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary';
+    btn.textContent = `🎲 Przerzuć (${label})`;
+    btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+            const resp = await apiRequest('POST', `/campaigns/${currentCampaignId}/skill-test/reroll`, {
+                character_id: characterData.id,
+                skill_test_id: skillTestId,
+            });
+            wrap.remove();
+            const sr = resp.skill_test_result || {};
+            const margin = (typeof sr.margin === 'number') ? sr.margin : (sr.player_total - sr.opponent_total);
+            const marginStr = (margin >= 0 ? '+' : '') + margin;
+            let outcome;
+            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Sukces krytyczny ${marginStr}`;
+            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Porażka krytyczna ${marginStr}`;
+            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}`;
+            else outcome = ` — Porażka ${marginStr}`;
+            const skillName = sr.skill_label || sr.skill_key || 'Test';
+            appendMessage({ role: 'user', content: `🎲 ↻ ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`, created_at: new Date() });
+            if (sr.nat20) triggerCritFlash('crit'); else if (sr.nat1) triggerCritFlash('fumble');
+            if (resp.prose) {
+                const { narrative: gmContent } = parseGmFull(resp.prose);
+                appendMessage({ role: 'assistant', content: gmContent, created_at: new Date(), turn_number: resp.turn_number });
+            }
+            await refreshCharacterData();
+            await pollCombatState();
+            scrollToBottom();
+        } catch (err) {
+            btn.disabled = false;
+            showToast(err.message || 'Błąd przerzutu', 'error');
+        }
+    };
+    wrap.appendChild(btn);
+    elements.chatMessages.appendChild(wrap);
 }
 
 // ── UI state recovery ─────────────────────────────────────────────────────────
@@ -4725,10 +4781,47 @@ function renderCombatUI(cs) {
         }
     }
 
+    // ── S15 (#610): dodge reaction toggle — only visible for heroes with dodge rank ≥ 1 ──
+    if (elements.btnCombatDodge) {
+        const dodgeRank = Number((characterData?.sheet_json?.skills || {}).dodge || 0);
+        const hasDodge = dodgeRank >= 1;
+        elements.btnCombatDodge.hidden = !hasDodge;
+        if (hasDodge) {
+            const declared = String(player?.reaction_declared || '') === 'dodge';
+            elements.btnCombatDodge.classList.toggle('is-active', declared);
+            if (elements.combatDodgeLabel) elements.combatDodgeLabel.textContent = declared ? 'Unik ✓' : 'Unik';
+        }
+    }
+
+    // ── S16 (#611): shield_block toggle — visible for heroes with shield_block rank ≥ 1.
+    // Gate tarczy egzekwuje backend (400 jeśli brak założonej tarczy); UI pokazuje przycisk,
+    // a handler raportuje komunikat błędu. XOR z unikiem (jedna reakcja/rundę).
+    if (elements.btnCombatBlock) {
+        const blockRank = Number((characterData?.sheet_json?.skills || {}).shield_block || 0);
+        const hasBlock = blockRank >= 1;
+        elements.btnCombatBlock.hidden = !hasBlock;
+        if (hasBlock) {
+            const declared = String(player?.reaction_declared || '') === 'shield_block';
+            elements.btnCombatBlock.classList.toggle('is-active', declared);
+            if (elements.combatBlockLabel) elements.combatBlockLabel.textContent = declared ? 'Blok ✓' : 'Blok';
+        }
+    }
+
+    // ── S17 (#612): zapasy — akcja bojowa widoczna, gdy gracz w zwarciu i jest wróg w zwarciu.
+    // Skill 'wrestling' nie jest wymagany (każdy w zwarciu może spróbować; rank dodaje bonus).
+    if (elements.btnCombatWrestle) {
+        const enemyEngaged = enemies.some(e => String(e.zone || 'engaged') === 'engaged');
+        const canWrestle = playerZone === 'engaged' && enemyEngaged;
+        elements.btnCombatWrestle.hidden = !canWrestle;
+    }
+
     const canAct = isPlayerTurn && !combatBusy;
     elements.btnCombatAttack.disabled = !canAct;
     elements.btnCombatFlee.disabled = !canAct;
     if (elements.btnCombatMove) elements.btnCombatMove.disabled = !canAct;
+    if (elements.btnCombatDodge) elements.btnCombatDodge.disabled = !canAct;
+    if (elements.btnCombatBlock) elements.btnCombatBlock.disabled = !canAct;
+    if (elements.btnCombatWrestle) elements.btnCombatWrestle.disabled = !canAct;
     window.clog?.event('combat_buttons_state', { attack_disabled: !canAct, is_player_turn: isPlayerTurn, busy: combatBusy, zone: playerZone });
 }
 
@@ -4744,7 +4837,7 @@ async function fetchAndAppendNewCombatTurns() {
         const newRows = rows
             .filter(row => {
                 const et = String(row?.event_type || '');
-                return row && (et === 'attack' || et === 'death' || et === 'zone_change') &&
+                return row && (et === 'attack' || et === 'death' || et === 'zone_change' || et === 'reaction' || et === 'wrestling') &&
                     Number(row.id) > lastRenderedCombatTurnId;
             })
             .sort((a, b) => {
@@ -4766,6 +4859,53 @@ function appendCombatTurnCard(row) {
     const evt = String(row.event_type || '');
     const actor = String(row.actor || '');
     let html = '';
+
+    if (evt === 'reaction') {
+        // S15 (#610) unik / S16 (#611) blok tarczą — wynik testu reakcji przeciw atakowi wroga.
+        let meta = {};
+        try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        let txt;
+        if (String(meta.reaction || '') === 'shield_block') {
+            if (meta.full_block === true) {
+                txt = `🛡 Blok pełny — atak całkowicie odparty (test ${meta.block_total ?? '?'} vs ${meta.dc ?? '?'})`;
+            } else if (Number(meta.reduction || 0) > 0) {
+                txt = `🛡 Blok — obrażenia zmniejszone o ${meta.reduction} (test ${meta.block_total ?? '?'} vs ${meta.dc ?? '?'})`;
+            } else {
+                txt = `🛡 Blok nieudany (test ${meta.block_total ?? '?'} vs ${meta.dc ?? '?'})${meta.durability_hit ? ' — tarcza uszkodzona' : ''}`;
+            }
+        } else {
+            const dodged = meta.dodged === true;
+            txt = dodged
+                ? `🛡 Unik udany — atak mija (test ${meta.dodge_total ?? '?'} vs ${meta.attack_roll ?? '?'})`
+                : `🛡 Unik nieudany (test ${meta.dodge_total ?? '?'} vs ${meta.attack_roll ?? '?'})${meta.locked_next_round ? ' — brak reakcji w nast. rundzie' : ''}`;
+        }
+        html = `<div class="cturn cturn--reaction"><span class="cturn__icon">🛡️</span><span class="cturn__text">${escapeHtml(txt)}</span></div>`;
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble chat-bubble--cturn-player';
+        bubble.innerHTML = html;
+        elements.chatMessages.appendChild(bubble);
+        return;
+    }
+
+    if (evt === 'wrestling') {
+        // S17 (#612) zapasy — test STR vs STR; stopień wyniku nakłada kondycję.
+        let meta = {};
+        try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        const oc = String(meta.outcome || '');
+        const rolls = `(twój ${meta.player_total ?? '?'} vs ${meta.enemy_total ?? '?'})`;
+        const labels = {
+            CRITICAL_SUCCESS: `💪 Chwyt mistrzowski — cel unieruchomiony ${rolls}`,
+            SUCCESS: `💪 Chwyt udany — cel spowolniony ${rolls}`,
+            FAILURE: `💪 Chwyt nieudany ${rolls}`,
+            CRITICAL_FAILURE: `💪 Chwyt fatalny — sam przewrócony ${rolls}`
+        };
+        const txt = labels[oc] || `💪 Zapasy ${rolls}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble chat-bubble--cturn-player';
+        bubble.innerHTML = `<div class="cturn cturn--wrestling"><span class="cturn__icon">💪</span><span class="cturn__text">${escapeHtml(txt)}</span></div>`;
+        elements.chatMessages.appendChild(bubble);
+        return;
+    }
 
     if (evt === 'zone_change') {
         let meta = {};
@@ -5073,6 +5213,109 @@ async function handleCombatMove() {
     } catch (e) {
         setCombatMsg(`Błąd ruchu: ${e.message || e}`, true);
         window.clog?.error('combat_move_exception', { message: String(e?.message || e) });
+    } finally {
+        combatBusy = false;
+        if (lastCombatState) renderCombatUI(lastCombatState);
+    }
+}
+
+async function handleCombatDodge() {
+    // S15 (#610): pre-deklaracja uniku — toggle, NIE zużywa tury. Konsumowana przy pierwszym
+    // trafieniu wroga w tej rundzie. Wymaga skilla dodge rank ≥ 1 (inaczej backend → 400).
+    if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) return;
+    if (lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Unik deklarujesz w swojej turze.', true);
+        return;
+    }
+    combatBusy = true;
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/declare-reaction`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reaction_type: 'dodge' })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+        const cs = data.combat_state;
+        if (cs) { lastCombatState = cs; }
+        setCombatMsg(data.reaction_declared
+            ? 'Unik gotowy — następny cios spróbujesz odbić.'
+            : 'Unik anulowany.');
+    } catch (e) {
+        setCombatMsg(`Unik niedostępny: ${e.message || e}`, true);
+    } finally {
+        combatBusy = false;
+        if (lastCombatState) renderCombatUI(lastCombatState);
+    }
+}
+
+async function handleCombatBlock() {
+    // S16 (#611): pre-deklaracja bloku tarczą — toggle, NIE zużywa tury. Konsumowana przy
+    // pierwszym trafieniu wroga. Wymaga skilla shield_block rank ≥ 1 + założonej tarczy
+    // (backend → 400). XOR z unikiem (jedna reakcja/rundę).
+    if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) return;
+    if (lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Blok deklarujesz w swojej turze.', true);
+        return;
+    }
+    combatBusy = true;
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/declare-reaction`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reaction_type: 'shield_block' })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+        const cs = data.combat_state;
+        if (cs) { lastCombatState = cs; }
+        setCombatMsg(data.reaction_declared
+            ? 'Blok gotowy — następny cios spróbujesz odbić tarczą.'
+            : 'Blok anulowany.');
+    } catch (e) {
+        setCombatMsg(`Blok niedostępny: ${e.message || e}`, true);
+    } finally {
+        combatBusy = false;
+        if (lastCombatState) renderCombatUI(lastCombatState);
+    }
+}
+
+async function handleCombatWrestle() {
+    // S17 (#612): zapasy — akcja bojowa (test STR vs STR). Wymaga zwarcia (backend → blocked
+    // bez konsumpcji tury, gdy cel poza zwarciem). Sukces nakłada kondycję na wroga, krytyk
+    // mocniejszą, krytyczna porażka przewraca gracza. Konsumuje turę.
+    if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) return;
+    if (lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Zapasy wykonujesz w swojej turze.', true);
+        return;
+    }
+    combatBusy = true;
+    elements.btnCombatAttack.disabled = true;
+    if (elements.btnCombatWrestle) elements.btnCombatWrestle.disabled = true;
+    setCombatMsg('Próba chwytu…');
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/wrestling`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+        const cs = data.combat_state;
+        if (data.blocked) {
+            setCombatMsg('Cel poza zwarciem — najpierw się zbliż.', true);
+        } else {
+            const map = {
+                CRITICAL_SUCCESS: `💪 Chwyt mistrzowski — ${data.target} unieruchomiony!`,
+                SUCCESS: `💪 Chwyt udany — ${data.target} schwytany (spowolniony).`,
+                FAILURE: `💪 Chwyt nieudany — ${data.target} się wyrywa.`,
+                CRITICAL_FAILURE: '💪 Chwyt fatalny — sam się przewracasz!'
+            };
+            appendMessage({ role: 'system', content: map[data.outcome] || '💪 Zapasy.', created_at: new Date() });
+        }
+        if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+        if (cs && cs.current_turn !== 'player' && cs.status === 'active') {
+            await pollCombatState();
+        }
+    } catch (e) {
+        setCombatMsg(`Zapasy niedostępne: ${e.message || e}`, true);
     } finally {
         combatBusy = false;
         if (lastCombatState) renderCombatUI(lastCombatState);
@@ -6513,6 +6756,12 @@ async function openShopModal(npcKey) {
     } catch (_e) { /* ignore */ }
     if (!data) { showToast('Handlarz nie ma teraz nic na sprzedaż', 'error'); return; }
 
+    // S6 (#586): badge rabatu/narzutu z targowania (haggle_discount > 0 = taniej).
+    const _hg = Number(data.haggle_discount) || 0;
+    const haggleBadge = _hg
+        ? `<div style="margin:6px 18px 0;padding:5px 10px;border-radius:8px;font-size:.82rem;font-weight:600;${_hg > 0 ? 'background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.35)' : 'background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.35)'}">${_hg > 0 ? '🤝 −' + Math.round(_hg * 100) + '% po targowaniu (jednorazowo)' : '😠 +' + Math.round(-_hg * 100) + '% — kupiec urażony'}</div>`
+        : '';
+
     const overlay = document.createElement('div');
     overlay.id = 'shop-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
@@ -6525,6 +6774,7 @@ async function openShopModal(npcKey) {
             <div style="padding:0 18px;display:flex;align-items:center;gap:8px;color:#f5c842;font-size:.9rem">
                 <span>Twoje złoto:</span><strong id="shop-gold">${data.character_gold}</strong><span>zł</span>
             </div>
+            ${haggleBadge}
             <div style="display:flex;gap:6px;padding:10px 18px 0">
                 <button id="shop-tab-buy" class="shop-tab shop-tab--active" data-tab="buy">Kup</button>
                 <button id="shop-tab-sell" class="shop-tab" data-tab="sell">Sprzedaj</button>
@@ -9106,6 +9356,9 @@ function initEventListeners() {
     elements.btnCombatAttack?.addEventListener('click', handleCombatAttack);
     elements.btnCombatFlee?.addEventListener('click', handleCombatFlee);
     elements.btnCombatMove?.addEventListener('click', handleCombatMove);
+    elements.btnCombatDodge?.addEventListener('click', handleCombatDodge);
+    elements.btnCombatBlock?.addEventListener('click', handleCombatBlock);
+    elements.btnCombatWrestle?.addEventListener('click', handleCombatWrestle);
     document.getElementById('combat-spell-btn')?.addEventListener('click', openSpellPicker);
     document.getElementById('spell-picker-close')?.addEventListener('click', closeSpellPicker);
     document.getElementById('spell-picker-overlay')?.addEventListener('click', e => {
@@ -10887,4 +11140,124 @@ function showDeleteHeroModal(heroName) {
     cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
     overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
   });
+}
+
+// ── #593 — Web Push: service worker + subscription flow ─────────────────────
+function _urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+}
+
+function _setPushStatus(msg) {
+    const el = document.getElementById('push-status');
+    if (el) el.textContent = msg || '';
+}
+
+async function _registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+        return await navigator.serviceWorker.register('/sw.js');
+    } catch (e) {
+        console.warn('[push] SW register failed', e);
+        return null;
+    }
+}
+
+async function enablePushNotifications() {
+    const btn = document.getElementById('enable-push-btn');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        _setPushStatus('Twoja przeglądarka nie obsługuje powiadomień push.');
+        return;
+    }
+
+    // CRITICAL (#593): requestPermission() MUST run synchronously inside the click
+    // gesture — BEFORE any `await`. An await first consumes the user-activation and
+    // many browsers (esp. mobile Safari/Chrome) then silently suppress the prompt.
+    let permPromise;
+    if (Notification.permission === 'granted') {
+        permPromise = Promise.resolve('granted');
+    } else if (Notification.permission === 'denied') {
+        _setPushStatus(
+            '⛔ Powiadomienia są ZABLOKOWANE dla tej strony — przeglądarka nie pokaże już pytania. ' +
+            'Odblokuj ręcznie: Desktop → kliknij 🔒/⚙ obok adresu → „Powiadomienia" → Zezwól (lub Resetuj), odśwież. ' +
+            'Android Chrome → ⋮ → „Informacje o stronie"/🔒 → Uprawnienia → Powiadomienia → Zezwól, odśwież. Potem kliknij ponownie.'
+        );
+        return;
+    } else {
+        permPromise = Notification.requestPermission();  // fires prompt now, in-gesture
+    }
+
+    if (btn) btn.disabled = true;
+    try {
+        const perm = await permPromise;
+        if (perm !== 'granted') {
+            _setPushStatus('Nie udzielono zgody na powiadomienia.');
+            return;
+        }
+        // VAPID public key from backend
+        const vapid = await apiRequest('GET', '/push/vapid-public-key').catch(() => null);
+        if (!vapid || !vapid.publicKey) {
+            _setPushStatus('Zgoda udzielona, ale serwer nie ma kluczy VAPID (push nieskonfigurowany).');
+            return;
+        }
+        // register SW + subscribe
+        const reg = await _registerServiceWorker();
+        if (!reg) { _setPushStatus('Nie udało się zarejestrować service workera.'); return; }
+        await navigator.serviceWorker.ready;
+        // A subscription created with a DIFFERENT applicationServerKey (e.g. an old/
+        // broken VAPID key from a previous attempt) makes subscribe() throw
+        // InvalidStateError. Drop any stale subscription first so the current key applies.
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) { try { await existing.unsubscribe(); } catch (e) { /* ignore */ } }
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _urlBase64ToUint8Array(vapid.publicKey),
+        });
+        // persist subscription on backend
+        const json = sub.toJSON();
+        await apiRequest('POST', '/users/push-subscription', {
+            endpoint: json.endpoint,
+            keys: json.keys,
+        });
+        _setPushStatus('✓ Powiadomienia włączone na tym urządzeniu.');
+        if (btn) btn.textContent = 'Powiadomienia włączone ✓';
+        // Immediate local proof so the user sees a real notification right away.
+        try { await reg.showNotification('AI-GM', { body: '🔔 Powiadomienia włączone — będziesz dostawać info o swojej turze.', icon: '/front/icon-192.png' }); } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('[push] enable failed', e);
+        _setPushStatus('Błąd włączania powiadomień: ' + (e.message || e));
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function initWebPush() {
+    const btn = document.getElementById('enable-push-btn');
+    if (btn && !btn._wired) {
+        btn._wired = true;
+        btn.addEventListener('click', enablePushNotifications);
+    }
+    // Pre-register the SW on load (non-gesture, allowed) so it's ready when the
+    // user clicks — keeps the in-gesture path short.
+    if ('serviceWorker' in navigator) {
+        _registerServiceWorker();
+    }
+    // Reflect existing permission state in the label.
+    if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+            _setPushStatus('Powiadomienia są dozwolone w przeglądarce.');
+        } else if (Notification.permission === 'denied') {
+            _setPushStatus('Powiadomienia zablokowane — odblokuj w ustawieniach strony.');
+        }
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWebPush);
+} else {
+    initWebPush();
 }

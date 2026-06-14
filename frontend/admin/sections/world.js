@@ -302,6 +302,13 @@ function openEnemyFormModal(prefillOrNull) {
         <div class="form-field form-full"><label class="form-label">Opis</label><textarea id="ef-desc" class="form-textarea" rows="2">${_esc(p.description||'')}</textarea></div>
         <div class="form-field form-full"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="ef-note" class="form-textarea" rows="2">${_esc(p.note||'')}</textarea></div>
         <div class="form-field form-full">
+          <label class="form-label">Statystyki (testy przeciwne — S4)</label>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+            ${['STR','DEX','CON','INT','WIS','CHA','LCK'].map(s=>`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:0.65rem;color:var(--t3);text-align:center">${s}</span><input id="ef-st-${s}" class="form-input mono" type="number" style="text-align:center;padding:4px" value="${(p.stats_json&&p.stats_json[s]!=null)?p.stats_json[s]:''}" placeholder="10" /></div>`).join('')}
+          </div>
+          <span style="font-size:0.7rem;color:var(--t3);margin-top:4px">Puste = wygenerowane z archetypu (po słowach kluczowych w kluczu/nazwie). Walka bez zmian — staty służą testom umiejętności.</span>
+        </div>
+        <div class="form-field form-full">
           <label class="form-label">Obraz</label>
           <div style="display:flex;gap:12px;align-items:center">
             <div style="width:64px;height:80px;border-radius:6px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--canvas)">
@@ -346,6 +353,15 @@ async function saveEnemyForm(existingKey, btn) {
     note: g('ef-note')?.value?.trim() || null,
     is_active: g('ef-active')?.checked ?? true,
   };
+  // S2 (#582): collect 7 stats. All-empty on create → omit so backend derives from
+  // archetype; any filled → send (backend stores given keys, missing read as 10).
+  const STAT_KEYS = ['STR','DEX','CON','INT','WIS','CHA','LCK'];
+  const stats = {};
+  STAT_KEYS.forEach(s => {
+    const v = g('ef-st-'+s)?.value;
+    if (v !== '' && v != null && !isNaN(parseInt(v))) stats[s] = parseInt(v);
+  });
+  if (Object.keys(stats).length) body.stats_json = stats;
   btn.disabled = true; btn.textContent = '⏳';
   try {
     if (existingKey) {

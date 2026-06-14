@@ -99,6 +99,12 @@ function layout() {
             <button class="combat-btn combat-btn--attack" id="sbx-attack-btn">⚔ Atak</button>
             <button class="combat-btn combat-btn--spell" id="sbx-spell-btn" hidden>✨ Czar</button>
             <button class="combat-btn combat-btn--move" id="sbx-move-btn">→ Zbliż się</button>
+            <!-- S15 (#610): pre-deklaracja reakcji uniku — toggle, nie zużywa tury -->
+            <button class="combat-btn combat-btn--dodge" id="sbx-dodge-btn" title="Unikaj następnego ataku (wymaga skilla dodge rank ≥ 1)">🛡 Unik</button>
+            <!-- S16 (#611): pre-deklaracja bloku tarczą — toggle, XOR z unikiem -->
+            <button class="combat-btn combat-btn--block" id="sbx-block-btn" title="Blokuj następny atak tarczą (wymaga skilla shield_block rank ≥ 1 + założonej tarczy)">🛡 Blok</button>
+            <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
+            <button class="combat-btn combat-btn--wrestle" id="sbx-wrestle-btn" title="Zapasy: chwyt/obalenie wroga w zwarciu (test STR vs STR). Sukces → slowed, krytyk → stunned, krytyczna porażka → ty slowed.">💪 Zapasy</button>
           </div>
           <div class="sandbox-spell-picker" id="sbx-spell-picker" hidden>
             <div class="sandbox-spell-header">
@@ -113,6 +119,11 @@ function layout() {
           </div>
           <div class="sandbox-meta-actions sandbox-meta-actions--hero" id="sbx-hero-actions" hidden>
             <button id="sbx-reset-btn">↻ Pełne HP/Mana</button>
+            <!-- S12 (#607): nałóż kondycję z katalogu na bohatera (test buffów: hasted/blessed/rage…) -->
+            <!-- S18 (#613): cel = gracz albo wróg (test behavior_override: berserk/confused/panicked) -->
+            <select id="sbx-cond-select" title="Kondycja z katalogu"></select>
+            <select id="sbx-cond-target" title="Cel kondycji"><option value="">Gracz</option></select>
+            <button id="sbx-cond-btn">🧪 Nałóż kondycję</button>
           </div>
         </section>
 
@@ -132,12 +143,20 @@ function layout() {
 // ── Lookups ────────────────────────────────────────────────────────────────
 async function refreshLookups(panel) {
   try {
-    const [hRes, eRes] = await Promise.all([
+    const [hRes, eRes, cRes] = await Promise.all([
       adminFetch("/api/admin/sandbox/heroes"),
       adminFetch("/api/admin/sandbox/enemies"),
+      adminFetch("/api/admin/conditions").catch(() => null),  // S12: katalog kondycji do nakładania
     ]);
     state.heroes = hRes?.heroes || [];
     state.enemies = eRes?.enemies || [];
+    state.conditions = (cRes?.conditions || cRes?.items || cRes || []).filter?.((c) => c && c.key) || [];
+    const sel = panel.querySelector("#sbx-cond-select");
+    if (sel && state.conditions.length) {
+      sel.innerHTML = state.conditions
+        .map((c) => `<option value="${esc(c.key)}">${esc(c.label || c.key)}</option>`)
+        .join("");
+    }
   } catch (e) {
     showToast("Błąd ładowania: " + (e.message || "?"), "error");
   }
@@ -232,8 +251,12 @@ function bind(panel) {
   panel.querySelector("#sbx-spell-btn")?.addEventListener("click", () => toggleSpellPicker(panel, true));
   panel.querySelector("#sbx-spell-close")?.addEventListener("click", () => toggleSpellPicker(panel, false));
   panel.querySelector("#sbx-move-btn")?.addEventListener("click", () => doZoneChange(panel));
+  panel.querySelector("#sbx-dodge-btn")?.addEventListener("click", () => doDeclareDodge(panel));
+  panel.querySelector("#sbx-block-btn")?.addEventListener("click", () => doDeclareBlock(panel));
+  panel.querySelector("#sbx-wrestle-btn")?.addEventListener("click", () => doWrestle(panel));
   panel.querySelector("#sbx-enemy-btn")?.addEventListener("click", () => doEnemyTurn(panel, /*manual*/ true));
   panel.querySelector("#sbx-reset-btn")?.addEventListener("click", () => doResetHero(panel));
+  panel.querySelector("#sbx-cond-btn")?.addEventListener("click", () => doApplyCondition(panel));
   panel.querySelector("#sbx-end-btn")?.addEventListener("click", () => doEndCombat(panel));
   panel.querySelector("#sbx-copy-btn")?.addEventListener("click", () => doCopyReport(panel));
 }
@@ -538,6 +561,34 @@ function renderEventCard(row) {
         <div class="sbx-evt-detail">d20 <b>${rawD20}</b>${bonus} = <b>${total}</b>${ac} → ${verdict}</div>
       </div>`;
   }
+  if (evt === "reaction") {
+    if (String(meta.reaction || "") === "shield_block") {
+      // S16 (#611): test bloku tarczą (STR) przeciw wynikowi ataku wroga.
+      let verdict;
+      if (meta.full_block === true) {
+        verdict = `<span class="sbx-evt-hit">✅ BLOK PEŁNY — atak odparty</span>`;
+      } else if (Number(meta.reduction || 0) > 0) {
+        verdict = `<span class="sbx-evt-hit">🛡 obrażenia −${meta.reduction} (${meta.damage_before}→${meta.damage_after})</span>`;
+      } else {
+        verdict = `<span class="sbx-evt-miss">❌ nieudany${meta.durability_hit ? " · tarcza uszkodzona (−3)" : ""}</span>`;
+      }
+      return `
+      <div class="sbx-evt sbx-evt--reaction">
+        <div class="sbx-evt-head">🛡️ <b>Blok tarczą</b> (STR)</div>
+        <div class="sbx-evt-detail">test <b>${meta.block_total != null ? meta.block_total : rv}</b> vs DC <b>${meta.dc != null ? meta.dc : "?"}</b> (atak ${meta.attack_roll != null ? meta.attack_roll : "?"}) → ${verdict}</div>
+      </div>`;
+    }
+    // S15 (#610): test uniku przeciw wynikowi ataku wroga.
+    const dodged = meta.dodged === true || hit === true;
+    const verdict = dodged
+      ? `<span class="sbx-evt-hit">✅ UNIK — atak mija</span>`
+      : `<span class="sbx-evt-miss">❌ nieudany${meta.locked_next_round ? " · utrata reakcji w nast. rundzie" : ""}</span>`;
+    return `
+      <div class="sbx-evt sbx-evt--reaction">
+        <div class="sbx-evt-head">🛡️ <b>Unik</b> (DEX)</div>
+        <div class="sbx-evt-detail">test <b>${meta.dodge_total != null ? meta.dodge_total : rv}</b> vs atak <b>${meta.attack_roll != null ? meta.attack_roll : "?"}</b> → ${verdict}</div>
+      </div>`;
+  }
   // Fallback for any unhandled event_type
   return `<div class="sbx-evt sbx-evt--sys sbx-evt--quiet"><span>·</span> ${esc(evt)} ${esc(row.narrative || "")}</div>`;
 }
@@ -596,7 +647,7 @@ async function doZoneChange(panel) {
   try {
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/zone-change`, { method: "POST" });
     state.combatState = res.combat_state;
-    logMsg(panel, `[Zone] ${res.from} → ${res.to}`);
+    logMsg(panel, `[Zone] ${res.from} → ${res.to}${res.extra_action_used ? " (darmowa akcja — przyśpieszenie, tura niezużyta)" : ""}`);
     await refreshRollEvents(panel);
   } catch (e) {
     logMsg(panel, "Zone error: " + (e.message || "?"));
@@ -604,6 +655,103 @@ async function doZoneChange(panel) {
     state.busy = false;
     renderCombat(panel);
     maybeAutoEnemyTurn(panel);
+  }
+}
+
+async function doDeclareDodge(panel) {
+  // S15 (#610): pre-deklaracja uniku — toggle, NIE zużywa tury. Konsumowana przy pierwszym
+  // trafieniu wroga w tej rundzie. Wymaga skilla dodge rank ≥ 1 (inaczej 400).
+  state.busy = true;
+  try {
+    const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/declare-reaction`, {
+      method: "POST",
+      body: JSON.stringify({ reaction_type: "dodge" }),
+    });
+    state.combatState = res.combat_state || state.combatState;
+    logMsg(panel, res.reaction_declared
+      ? "[Reakcja] Unik zadeklarowany — przy pierwszym trafieniu wroga test DEX vs atak."
+      : "[Reakcja] Unik anulowany.");
+  } catch (e) {
+    logMsg(panel, "Dodge error: " + (e.message || "?"));
+    showToast("Unik niedostępny: " + (e.message || "?") + " (potrzebny skill „dodge" rank ≥ 1)", "error");
+  } finally {
+    state.busy = false;
+    renderCombat(panel);
+  }
+}
+
+async function doDeclareBlock(panel) {
+  // S16 (#611): pre-deklaracja bloku tarczą — toggle, NIE zużywa tury. XOR z unikiem.
+  // Konsumowana przy pierwszym trafieniu wroga. Wymaga skilla shield_block rank ≥ 1
+  // + założonej tarczy (inaczej backend → 400).
+  state.busy = true;
+  try {
+    const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/declare-reaction`, {
+      method: "POST",
+      body: JSON.stringify({ reaction_type: "shield_block" }),
+    });
+    state.combatState = res.combat_state || state.combatState;
+    logMsg(panel, res.reaction_declared
+      ? "[Reakcja] Blok zadeklarowany — przy pierwszym trafieniu wroga test STR vs atak."
+      : "[Reakcja] Blok anulowany.");
+  } catch (e) {
+    logMsg(panel, "Block error: " + (e.message || "?"));
+    showToast("Blok niedostępny: " + (e.message || "?") + " (potrzebny skill „shield_block" rank ≥ 1 + tarcza)", "error");
+  } finally {
+    state.busy = false;
+    renderCombat(panel);
+  }
+}
+
+async function doWrestle(panel) {
+  // S17 (#612): zapasy — akcja bojowa, test przeciwny STR vs STR. Wymaga zwarcia (engaged):
+  // cel poza zwarciem → blocked bez konsumpcji tury. Sukces nakłada slowed na wroga, krytyk
+  // stunned, krytyczna porażka slowed na bohaterze. Konsumuje turę (auto-procesuje turę wroga).
+  state.busy = true;
+  try {
+    const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/wrestling`, {
+      method: "POST", body: JSON.stringify({}),
+    });
+    state.combatState = res.combat_state || state.combatState;
+    if (res.blocked) {
+      logMsg(panel, "[Zapasy] Cel poza zwarciem — najpierw zbliż się (tura niezużyta).");
+    } else {
+      const applied = (res.applied || []).map((a) => `${a.who}:${a.condition}`).join(", ") || "brak";
+      logMsg(panel, `[Zapasy] ${res.outcome} (twój ${res.player_total} vs ${res.enemy_total}, margines ${res.margin}) → kondycje: ${applied}`);
+    }
+    await refreshRollEvents(panel);
+  } catch (e) {
+    logMsg(panel, "Wrestle error: " + (e.message || "?"));
+    showToast("Zapasy niedostępne: " + (e.message || "?"), "error");
+  } finally {
+    state.busy = false;
+    renderCombat(panel);
+    if (!state.combatState?.blocked) maybeAutoEnemyTurn(panel);
+  }
+}
+
+async function doApplyCondition(panel) {
+  // S12 (#607): nałóż wybraną kondycję z katalogu na bohatera (test buffów hasted/blessed/rage…).
+  // S18 (#613): opcjonalny cel = wróg (test behavior_override berserk/confused/panicked).
+  const key = panel.querySelector("#sbx-cond-select")?.value;
+  if (!key) { showToast("Wybierz kondycję", "error"); return; }
+  const enemyRef = panel.querySelector("#sbx-cond-target")?.value || "";
+  state.busy = true;
+  try {
+    const res = await adminFetch("/api/admin/sandbox/apply-condition", {
+      method: "POST",
+      body: JSON.stringify({ campaign_id: state.campaignId, condition_key: key, enemy_ref: enemyRef }),
+    });
+    state.combatState = res.combat_state || state.combatState;
+    logMsg(panel, `[Kondycja] nałożono „${key}" na ${enemyRef || "bohatera"} (${res.reason || "applied"})`);
+    await refreshCombatState(panel);
+    await refreshCharacterSheet(panel);
+  } catch (e) {
+    logMsg(panel, "Apply-condition error: " + (e.message || "?"));
+    showToast("Błąd nakładania kondycji: " + (e.message || "?"), "error");
+  } finally {
+    state.busy = false;
+    renderCombat(panel);
   }
 }
 
@@ -774,6 +922,18 @@ function renderCombat(panel) {
   const enemies = cmb.filter((c) => c.type === "enemy");
   const order = Array.isArray(cs.turn_order) ? cs.turn_order : [];
   const cur = String(cs.current_turn || "");
+
+  // S18 (#613): odśwież cele kondycji (gracz + żywi wrogowie) — test behavior_override na wrogu.
+  const tgtSel = panel.querySelector("#sbx-cond-target");
+  if (tgtSel) {
+    const prev = tgtSel.value;
+    const enemyOpts = enemies
+      .filter((e) => Number(e.hp_current || 0) > 0 && (e.enemy_key || e.name))
+      .map((e) => `<option value="${esc(e.enemy_key || e.name)}">${esc(e.name || e.enemy_key)}</option>`)
+      .join("");
+    tgtSel.innerHTML = `<option value="">Gracz</option>${enemyOpts}`;
+    if (prev && Array.from(tgtSel.options).some((o) => o.value === prev)) tgtSel.value = prev;
+  }
   const playerTurn = cur === "player";
 
   const renderRow = (c) => {
@@ -814,6 +974,14 @@ function renderCombat(panel) {
   if (moveBtn) {
     moveBtn.textContent = player.zone === "engaged" ? "← Cofnij się" : "→ Zbliż się";
     moveBtn.disabled = !playerTurn || state.busy;
+  }
+  const dodgeBtn = panel.querySelector("#sbx-dodge-btn");
+  if (dodgeBtn) {
+    // S15 (#610): deklaruje się na turze gracza; podświetlony, gdy unik aktywny.
+    const declared = String(player.reaction_declared || "") === "dodge";
+    dodgeBtn.disabled = !playerTurn || state.busy;
+    dodgeBtn.classList.toggle("is-active", declared);
+    dodgeBtn.textContent = declared ? "🛡 Unik ✓" : "🛡 Unik";
   }
   const atkBtn = panel.querySelector("#sbx-attack-btn");
   if (atkBtn) atkBtn.disabled = !playerTurn || state.busy;

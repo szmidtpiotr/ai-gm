@@ -801,6 +801,27 @@
         </svg>
         <span id="combat-move-label">Zbliż się</span>
       </button>
+      <!-- S15 (#610): pre-deklaracja reakcji uniku (toggle, nie zużywa tury; wymaga skilla dodge) -->
+      <button type="button" class="combat-btn combat-btn--dodge" id="combat-dodge-btn" data-clog="combat_dodge_button" hidden>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span id="combat-dodge-label">Unik</span>
+      </button>
+      <button type="button" class="combat-btn combat-btn--block" id="combat-block-btn" data-clog="combat_block_button" hidden>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+        <span id="combat-block-label">Blok</span>
+      </button>
+      <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
+      <button type="button" class="combat-btn combat-btn--wrestle" id="combat-wrestle-btn" data-clog="combat_wrestle_button" hidden>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 14l4-4 4 4 4-4 4 4"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/>
+        </svg>
+        <span id="combat-wrestle-label">Zapasy</span>
+      </button>
       <button type="button" class="combat-btn combat-btn--flee" id="combat-flee-btn" data-clog="combat_flee_button">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M13 19l9-7-9-7v14z"/>
@@ -1023,6 +1044,22 @@
       </div>
 
       <div class="settings-panel__content">
+
+        <!-- #593 — Web Push notifications -->
+        <section class="settings-group settings-group--foldable" id="settings-group-push">
+          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-push">
+            <span class="settings-group__icon">🔔</span>
+            <h3 class="settings-group__title">Powiadomienia push</h3>
+            <span class="settings-group__chevron">›</span>
+          </header>
+          <div class="settings-fold" id="settings-fold-push" hidden>
+            <div class="settings-control">
+              <p class="settings-label" style="line-height:1.4">Otrzymuj powiadomienia o swojej turze nawet gdy karta jest w tle.</p>
+              <button type="button" class="btn btn-primary" id="enable-push-btn" style="margin-top:8px">Włącz powiadomienia</button>
+              <p id="push-status" style="margin-top:8px;font-size:0.8rem;color:var(--t3)"></p>
+            </div>
+          </div>
+        </section>
 
         <!-- Appearance Section -->
         <section class="settings-group settings-group--foldable" id="settings-group-font">
@@ -1696,7 +1733,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=s1-margin-2026-06-14"></script>
+  <script src="./js/app.js?v=612-s17-wrestling-2026-06-14"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

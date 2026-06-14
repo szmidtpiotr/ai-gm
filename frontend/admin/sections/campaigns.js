@@ -1,5 +1,6 @@
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { rowCheck, toggleAll } from '../shared/selection.js';  // #588
 
 // ── Module helpers ─────────────────────────────────────────────────────────
 const _esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1088,6 +1089,8 @@ function _sectionHtml() {
 export async function init(panel) {
   panel.innerHTML = _sectionHtml();
   Object.assign(window, {
+    rowCheck,      // #588 — multi-select helpers (shared)
+    toggleAll,     // #588
     filterTableGeneric,
     filterCampaigns,
     _setCampView,

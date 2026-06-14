@@ -9,6 +9,9 @@ import { showToast } from '../shared/toast.js';
 // ── State ──────────────────────────────────────────────────────────────────────
 // Monolit używał _worldLoaded jako cache zakładek mapy — zachowane 1:1 (lokalne dla modułu).
 const _worldLoaded = new Set();
+// #590 — cache full records of pending/floating locations so the detail/edit
+// modal can render every field without an extra round-trip.
+const _locDetailReg = {};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function _esc(s) {
@@ -337,6 +340,7 @@ const _ROW_REGISTRY = {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3)">Brak floating lokacji — wszystkie zakotwiczone ✓</td></tr>';
         return;
       }
+      items.forEach(loc => { _locDetailReg[loc.key] = loc; });  // #590
       tbody.innerHTML = items.map(loc => `
         <tr data-key="${_esc(loc.key)}">
           <td><code style="font-size:0.75rem">${_esc(loc.key)}</code></td>
@@ -344,7 +348,8 @@ const _ROW_REGISTRY = {
           <td>${_esc(loc.location_subtype || loc.location_type || '—')}</td>
           <td>${(loc.terrain_tags||[]).map(t => `<span class="chip on" style="font-size:0.7rem;padding:2px 6px">${_esc(t)}</span>`).join(' ')}</td>
           <td>${_esc(loc.biome || '—')}</td>
-          <td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm" onclick="openLocDetailModal('${_esc(loc.key)}','floating')">👁 Podgląd</button>
             <button class="btn btn-sm btn-secondary" onclick="openPlaceModal('${_esc(loc.key)}')">⚓ Osadź</button>
           </td>
         </tr>`).join('');
@@ -383,6 +388,67 @@ const _ROW_REGISTRY = {
         _worldLoaded.delete('floating');
         _loadFloating();
       } catch(e) { _showToast(e.message || 'Błąd osadzania', 'error'); }
+    };
+  };
+
+  // #590 — podgląd/edycja pełnych pól wpisu (pending lub floating) przed decyzją
+  window.openLocDetailModal = function(locKey, source) {
+    const loc = _locDetailReg[locKey] || { key: locKey };
+    const tagsStr = Array.isArray(loc.terrain_tags) ? loc.terrain_tags.join(', ') : (loc.terrain_tags || '');
+    const fld = (label, id, val, type) => `
+      <label style="font-size:0.78rem;font-weight:600;color:var(--t2)">${label}</label>
+      <input id="${id}" type="${type||'text'}" class="field-input" value="${_esc(val==null?'':String(val))}">`;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
+      <div class="modal-head"><span>👁 Lokacja: ${_esc(loc.label || locKey)}</span><button id="ld-x">✕</button></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto">
+        <div style="font-size:0.78rem;color:var(--t3)">Klucz: <code>${_esc(locKey)}</code>
+          ${loc.ai_generated ? '<span class="chip on" style="margin-left:8px;font-size:0.7rem">AI</span>' : ''}
+          <span class="chip" style="margin-left:6px;font-size:0.7rem">${source}</span></div>
+        ${fld('Nazwa', 'ld-label', loc.label)}
+        <label style="font-size:0.78rem;font-weight:600;color:var(--t2)">Opis</label>
+        <textarea id="ld-description" class="field-input" rows="4">${_esc(loc.description||'')}</textarea>
+        ${fld('Typ', 'ld-location_type', loc.location_type)}
+        ${fld('Podtyp', 'ld-location_subtype', loc.location_subtype)}
+        ${fld('Biom', 'ld-biome', loc.biome)}
+        ${fld('Tier', 'ld-tier', loc.tier, 'number')}
+        ${fld('Rodzic (parent_key)', 'ld-parent_key', loc.parent_key)}
+        ${fld('Tagi terenu (po przecinku)', 'ld-terrain_tags', tagsStr)}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="ld-cancel">Zamknij</button>
+        <button class="btn btn-primary" id="ld-save">💾 Zapisz zmiany</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#ld-x').onclick = close;
+    overlay.querySelector('#ld-cancel').onclick = close;
+    overlay.querySelector('#ld-save').onclick = async () => {
+      const v = id => overlay.querySelector(id).value.trim();
+      const tierRaw = v('#ld-tier');
+      const tags = v('#ld-terrain_tags');
+      const fields = {
+        label: v('#ld-label'),
+        description: v('#ld-description'),
+        location_type: v('#ld-location_type'),
+        location_subtype: v('#ld-location_subtype'),
+        biome: v('#ld-biome'),
+        parent_key: v('#ld-parent_key'),
+        tier: tierRaw === '' ? null : parseInt(tierRaw, 10),
+        terrain_tags: JSON.stringify(tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : []),
+      };
+      try {
+        await apiFetch(`/api/admin/locations/${encodeURIComponent(locKey)}/edit`, {
+          method: 'PATCH', body: JSON.stringify({ fields }),
+        });
+        _showToast('Zmiany zapisane', 'success');
+        close();
+        // odśwież listę źródłową
+        if (source === 'floating') { _worldLoaded.delete('floating'); _loadFloating(); }
+        else { _worldLoaded.delete('review'); _loadPendingLocations(); }
+      } catch(e) { _showToast(e.message || 'Błąd zapisu', 'error'); }
     };
   };
 
@@ -508,6 +574,7 @@ const _ROW_REGISTRY = {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie wpisy zatwierdzone.</div></div>';
         return;
       }
+      locs.forEach(p => { _locDetailReg[p.key] = p; });  // #590
       const mkLocRow = p => {
         const hasCoords = p.world_hex_q != null && p.world_hex_r != null;
         const coordCell = hasCoords
@@ -521,6 +588,7 @@ const _ROW_REGISTRY = {
         ${coordCell}
         <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc((p.description||'').slice(0,70))}</td>
         <td class="td-actions" style="white-space:nowrap">
+          <button class="btn btn-sm" style="font-size:0.72rem" onclick="openLocDetailModal('${_esc(p.key)}','pending')">👁 Podgląd</button>
           <button class="btn btn-sm btn-primary" style="font-size:0.72rem" onclick="reviewEntity('location','${_esc(p.key)}','approve',this)">✓ Zatwierdź</button>
           <button class="btn btn-sm" style="font-size:0.72rem;background:var(--amber,#f59e0b);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer" onclick="approveKanon('location','${_esc(p.key)}',this)">★ Kanon</button>
           <button class="btn btn-sm btn-danger" style="font-size:0.72rem" onclick="reviewEntity('location','${_esc(p.key)}','discard',this)">✕</button>
@@ -2137,6 +2205,7 @@ export async function init(panel) {
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
+    openLocDetailModal,
   });
 
   // Wire tab switching (data-mtap)

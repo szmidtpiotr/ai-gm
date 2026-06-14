@@ -49,7 +49,7 @@ const EFFECT_JSON_SCHEMA = {
     },
     character_condition: {
       label: 'Stan postaci',
-      allowed_types: ['periodic_save', 'static_stat_modifier', 'block_action']
+      allowed_types: ['periodic_save', 'static_stat_modifier', 'block_action', 'dot', 'stacking_levels', 'escalating_dot', 'reroll', 'extra_action', 'on_expire_apply', 'on_zero_hp_save', 'condition_immunity', 'behavior_override', 'untargetable', 'ambush_bonus']
     },
     aura: {
       label: 'Aura',
@@ -95,6 +95,90 @@ const EFFECT_JSON_SCHEMA = {
         { id: 'tick', label: 'Tick', type: 'select', options: ['start_turn','each_round'] },
         { id: 'expires', label: 'Rundy (0=stały)', type: 'number' }
       ]
+    },
+    // S8 (#603): damage-over-time po kości (np. on_fire 2d6/turę).
+    dot: {
+      label: 'Obrażenia co turę (DOT)',
+      fields: [
+        { id: 'value', label: 'Obrażenia', type: 'text', placeholder: 'np. 2d6 lub 7' },
+        { id: 'damage_type', label: 'Typ obrażeń', type: 'select', options: ['physical','magic','fire','poison','misc'] },
+        { id: 'tick', label: 'Tick', type: 'select', options: ['start_turn','each_round'] }
+      ]
+    },
+    // S9 (#604): kondycja z poziomami (np. exhausted). per_level_effects/threshold_effects
+    // to struktury zagnieżdżone — autorowane przez seed/Smart Entry/JSON, nie płaskie pole.
+    stacking_levels: {
+      label: 'Poziomy stackowania (np. wyczerpanie)',
+      fields: [
+        { id: 'max_level', label: 'Maks. poziom', type: 'number', placeholder: '2' }
+      ]
+    },
+    // S10 (#605): narastajacy DOT (np. hemorrhage 1d4/ture, +1d4 co 3 tury).
+    escalating_dot: {
+      label: 'Narastajacy DOT (np. krwotok)',
+      fields: [
+        { id: 'value', label: 'Kosc startowa', type: 'text', placeholder: 'np. 1d4' },
+        { id: 'escalate_every_rounds', label: 'Co ile tur rosnie', type: 'number', placeholder: '3' },
+        { id: 'escalate_dice', label: 'Przyrost (kosc)', type: 'text', placeholder: 'np. 1d4' },
+        { id: 'damage_type', label: 'Typ obrazen', type: 'select', options: ['physical','magic','fire','poison','misc'] },
+        { id: 'tick', label: 'Tick', type: 'select', options: ['start_turn','each_round'] }
+      ]
+    },
+    // S12 (#607): dodatkowa akcja w turze (np. hasted — darmowa zmiana strefy).
+    extra_action: {
+      label: 'Dodatkowa akcja (np. przyśpieszenie)',
+      fields: [
+        { id: 'action_kind', label: 'Rodzaj akcji', type: 'select', options: ['move_only'] },
+        { id: 'expires', label: 'Wygasa', type: 'text', placeholder: 'duration_rounds:3' }
+      ]
+    },
+    // S12 (#607): przy wygaśnięciu kondycji nałóż inną (np. hasted → exhausted).
+    on_expire_apply: {
+      label: 'Po wygaśnięciu nałóż stan (np. wyczerpanie)',
+      fields: [
+        { id: 'condition_key', label: 'Stan do nałożenia', type: 'text', placeholder: 'np. exhausted' },
+        { id: 'value', label: 'Poziom', type: 'number', placeholder: '1' }
+      ]
+    },
+    // S13 (#608): rzut ratunkowy przy 0 HP (np. blessed CON DC 12 → 1 HP zamiast nieprzytomności).
+    on_zero_hp_save: {
+      label: 'Rzut ratunkowy przy 0 HP (np. błogosławieństwo)',
+      fields: [
+        { id: 'stat', label: 'Statystyka rzutu', type: 'select', options: ['STR','DEX','CON','INT','WIS','CHA'] },
+        { id: 'value', label: 'DC', type: 'number', placeholder: '12' },
+        { id: 'result', label: 'Skutek', type: 'select', options: ['stay_at_1hp'] },
+        { id: 'uses', label: 'Użycia (na scenę)', type: 'number', placeholder: '1' }
+      ]
+    },
+    // S14 (#609): odporność na kondycje (np. rage immune na slowed/weakened). immune_to =
+    // lista kluczy kondycji (po przecinku). broken_by (top-level) autorowane przez seed/JSON.
+    condition_immunity: {
+      label: 'Odporność na kondycje (np. furia)',
+      fields: [
+        { id: 'immune_to', label: 'Odporność na (klucze po przecinku)', type: 'text', placeholder: 'slowed, weakened' },
+        { id: 'expires', label: 'Wygasa', type: 'text', placeholder: 'duration_rounds:6' }
+      ]
+    },
+    // S18 (#613): kondycja steruje turą aktora (confused/berserk/panicked). behavior:
+    // random_table_k4 (k4: stoi/atak losowy/ucieczka/normalnie) / attack_nearest (atak
+    // najbliższego niezależnie od frakcji) / flee (ucieczka, zmiana strefy).
+    behavior_override: {
+      label: 'Wymuszone zachowanie (np. szał, dezorientacja)',
+      fields: [
+        { id: 'behavior', label: 'Zachowanie', type: 'select', options: ['random_table_k4','attack_nearest','flee'] },
+        { id: 'expires', label: 'Wygasa', type: 'text', placeholder: 'duration_rounds:6' }
+      ]
+    },
+    // S19 (#614): hidden — untargetable (wróg pomija ukrytego) + ambush_bonus (+Nk6 pierwszy atak).
+    untargetable: {
+      label: 'Nietykalny (ukrycie — wróg pomija cel)',
+      fields: []
+    },
+    ambush_bonus: {
+      label: 'Zasadzka (+Nk6 pierwszy atak z ukrycia)',
+      fields: [
+        { id: 'value', label: 'Kość zasadzki', type: 'text', placeholder: '2d6' }
+      ]
     }
   }
 };
@@ -136,7 +220,7 @@ const _EJ_WEAPON_TYPES = {
 
 const _EJ_STANDARD_CATS = {
   gear_bonus:          { label: 'Bonus wyposażenia (pasywny)',   allowed_types: ['static_stat_modifier','skill_modifier','narrative_only'] },
-  character_condition: { label: 'Stan postaci',                  allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','block_action','heal_hp','restore_mana','narrative_only'] },
+  character_condition: { label: 'Stan postaci',                  allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','block_action','heal_hp','restore_mana','narrative_only','dot','stacking_levels','escalating_dot','reroll','extra_action','on_expire_apply','on_zero_hp_save','behavior_override','untargetable','ambush_bonus'] },
   consumable_immediate:{ label: 'Efekt jednorazowy (eliksir)',   allowed_types: ['heal_hp','restore_mana','apply_condition','remove_condition','skill_modifier','narrative_only'] },
   aura:                { label: 'Aura',                          allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','apply_condition','remove_condition','block_action','narrative_only'] }
 };
@@ -173,6 +257,51 @@ const _EJ_STANDARD_TYPES = {
   ]},
   narrative_only: { label: 'Tylko narracyjny', fields: [
     { id: 'value', label: 'Opis', type: 'text', placeholder: 'Opis efektu narracyjnego' }
+  ]},
+  // S9 (#604): poziomy stackowania (np. exhausted); per_level/threshold = seed/JSON.
+  stacking_levels: { label: 'Poziomy stackowania', fields: [
+    { id: 'max_level', label: 'Maks. poziom', type: 'number', placeholder: '2' }
+  ]},
+  // S10 (#605): narastajacy DOT (np. hemorrhage).
+  escalating_dot: { label: 'Narastajacy DOT (np. krwotok)', fields: [
+    { id: 'value',                label: 'Kosc startowa',     type: 'text',   placeholder: '1d4' },
+    { id: 'escalate_every_rounds',label: 'Co ile tur rosnie', type: 'number', placeholder: '3'   },
+    { id: 'escalate_dice',        label: 'Przyrost (kosc)',   type: 'text',   placeholder: '1d4' },
+    { id: 'damage_type',          label: 'Typ obrazen',       type: 'select', options: ['physical','magic','fire','poison','misc'] },
+    { id: 'tick',                 label: 'Tick',              type: 'select', options: ['start_turn','each_round'] }
+  ]},
+  // S11 (#606): przerzut testu (np. inspired/cursed). mode wymagany, uses/scope opcjonalne.
+  reroll: { label: 'Przerzut testu (np. natchnienie/klatwa)', fields: [
+    { id: 'mode',  label: 'Tryb',   type: 'select', options: ['player_keep_best','forced_keep_worst'] },
+    { id: 'uses',  label: 'Uzycia', type: 'number', placeholder: '1' },
+    { id: 'scope', label: 'Zakres', type: 'select', options: ['skill_test','attack','all'] }
+  ]},
+  // S12 (#607): dodatkowa akcja w turze (np. hasted — darmowa zmiana strefy).
+  extra_action: { label: 'Dodatkowa akcja (np. przyspieszenie)', fields: [
+    { id: 'action_kind', label: 'Rodzaj akcji', type: 'select', options: ['move_only'] },
+    { id: 'expires',     label: 'Wygasa',       type: 'text',   placeholder: 'duration_rounds:3' }
+  ]},
+  // S12 (#607): po wygasnieciu kondycji nalozy inna (np. hasted -> exhausted).
+  on_expire_apply: { label: 'Po wygasnieciu naloz stan (np. wyczerpanie)', fields: [
+    { id: 'condition_key', label: 'Stan do nalozenia', type: 'condition_select' },
+    { id: 'value',         label: 'Poziom',            type: 'number', placeholder: '1' }
+  ]},
+  // S13 (#608): rzut ratunkowy przy 0 HP (np. blessed CON DC 12 -> 1 HP).
+  on_zero_hp_save: { label: 'Rzut ratunkowy przy 0 HP (np. blogoslawienstwo)', fields: [
+    { id: 'stat',   label: 'Statystyka', type: 'select', options: ['STR','DEX','CON','INT','WIS','CHA'] },
+    { id: 'value',  label: 'DC',         type: 'number', placeholder: '12' },
+    { id: 'result', label: 'Skutek',     type: 'select', options: ['stay_at_1hp'] },
+    { id: 'uses',   label: 'Uzycia',     type: 'number', placeholder: '1' }
+  ]},
+  // S18 (#613): kondycja steruje turą aktora (confused/berserk/panicked).
+  behavior_override: { label: 'Wymuszone zachowanie (szal/dezorientacja/panika)', fields: [
+    { id: 'behavior', label: 'Zachowanie', type: 'select', options: ['random_table_k4','attack_nearest','flee'] },
+    { id: 'expires',  label: 'Wygasa',     type: 'text',   placeholder: 'duration_rounds:6' }
+  ]},
+  // S19 (#614): hidden — untargetable (wrog pomija ukrytego) + ambush_bonus (+Nk6 pierwszy atak).
+  untargetable: { label: 'Nietykalny (ukrycie — wrog pomija cel)', fields: [] },
+  ambush_bonus: { label: 'Zasadzka (+Nk6 pierwszy atak z ukrycia)', fields: [
+    { id: 'value', label: 'Kosc zasadzki', type: 'text', placeholder: '2d6' }
   ]}
 };
 

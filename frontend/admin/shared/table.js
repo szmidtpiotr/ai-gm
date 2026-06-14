@@ -126,6 +126,163 @@ export function initSortableTable(tableOrId) {
   });
 }
 
+function _resolveTable(tableOrId) {
+  return typeof tableOrId === 'string' ? document.getElementById(tableOrId) : tableOrId;
+}
+
+function _storageKey(table, suffix) {
+  return `aigm-tbl-${table.id || 'unnamed'}-${suffix}`;
+}
+
+/**
+ * #591 — resizable columns with localStorage persistence.
+ * Adds a drag-grip to the right edge of every <th>; widths persist per table id.
+ * Idempotent.
+ */
+export function enableColumnResize(tableOrId) {
+  const table = _resolveTable(tableOrId);
+  if (!table || table._resizeWired) return;
+  const ths = Array.from(table.querySelectorAll('thead tr:first-child th'));
+  if (!ths.length) return;
+  table._resizeWired = true;
+
+  const key = _storageKey(table, 'colw');
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch { saved = {}; }
+
+  ths.forEach((th, i) => {
+    if (saved[i]) th.style.width = saved[i];
+    if (getComputedStyle(th).position === 'static') th.style.position = 'relative';
+    const grip = document.createElement('span');
+    grip.className = 'col-resize-grip';
+    grip.style.cssText = 'position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;user-select:none;z-index:2';
+    grip.addEventListener('click', e => e.stopPropagation());  // never trigger sort
+    grip.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const startX = e.pageX;
+      const startW = th.offsetWidth;
+      const onMove = ev => { th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px'; };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        saved[i] = th.style.width;
+        try { localStorage.setItem(key, JSON.stringify(saved)); } catch { /* quota */ }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    th.appendChild(grip);
+  });
+}
+
+/**
+ * #591 — per-column value filter. Injects a filter row of <select> dropdowns under
+ * the header; each dropdown lists the distinct values present in that column. Picking
+ * a value hides rows whose cell in that column doesn't equal it. Multiple column
+ * dropdowns combine with AND. Idempotent.
+ */
+export function enableColumnFilters(tableOrId) {
+  const table = _resolveTable(tableOrId);
+  if (!table || table._filterWired) return;
+  const thead = table.querySelector('thead');
+  const headRow = thead?.querySelector('tr');
+  const tbody = table.querySelector('tbody');
+  if (!headRow || !tbody) return;
+  table._filterWired = true;
+
+  const ths = Array.from(headRow.querySelectorAll('th'));
+  const filterRow = document.createElement('tr');
+  filterRow.className = 'col-filter-row';
+  ths.forEach((th, colIdx) => {
+    const cell = document.createElement('th');
+    cell.style.padding = '2px 4px';
+    // Mirror visibility classes so the filter cell hides/shows in lockstep with its
+    // column (e.g. `detail-col` toggled by "Szczegóły"). Without this the filter row
+    // keeps all cells visible while the header/body hide some → dropdowns shift under
+    // the wrong columns (#591).
+    if (th.classList.contains('detail-col')) cell.classList.add('detail-col');
+    if (th.classList.contains('td-sticky')) cell.classList.add('td-sticky');
+    const label = (th.querySelector('.th-inner') || th).textContent?.trim().toLowerCase() || '';
+    const skip = th.classList.contains('col-check') || label === 'akcje' || label === 'actions' || !label;
+    if (!skip) {
+      const select = document.createElement('select');
+      select.className = 'col-filter-select';
+      select.dataset.colIdx = String(colIdx);
+      select.style.cssText = 'width:100%;font-size:0.7rem;padding:2px 4px;box-sizing:border-box';
+      const opt0 = document.createElement('option');
+      opt0.value = '';
+      opt0.textContent = '(wszystkie)';
+      select.appendChild(opt0);
+      // Rows are often loaded async AFTER enhanceTable runs, so the column values
+      // aren't known yet. Repopulate distinct values every time the dropdown opens.
+      const repopulate = () => _populateFilterSelect(table, select, colIdx);
+      select.addEventListener('mousedown', repopulate);
+      select.addEventListener('focus', repopulate);
+      select.addEventListener('click', e => e.stopPropagation());
+      select.addEventListener('change', () => _applyColFilters(table));
+      repopulate();  // initial attempt (works when data already present)
+      cell.appendChild(select);
+    }
+    filterRow.appendChild(cell);
+  });
+  thead.appendChild(filterRow);
+}
+
+function _populateFilterSelect(table, select, colIdx) {
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  const seen = new Set();
+  tbody.querySelectorAll('tr').forEach(row => {
+    if (row.classList.contains('col-filter-row')) return;
+    const txt = (row.querySelectorAll('td')[colIdx]?.textContent || '').trim();
+    if (txt) seen.add(txt);
+  });
+  const values = Array.from(seen).sort((a, b) => a.localeCompare(b, 'pl', { sensitivity: 'base' }));
+  const current = select.value;
+  // Rebuild options preserving the current selection.
+  select.innerHTML = '';
+  const opt0 = document.createElement('option');
+  opt0.value = '';
+  opt0.textContent = '(wszystkie)';
+  select.appendChild(opt0);
+  values.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = v.length > 40 ? v.slice(0, 40) + '…' : v;
+    select.appendChild(o);
+  });
+  if (current && values.includes(current)) select.value = current;
+}
+
+function _applyColFilters(table) {
+  const filterRow = table.querySelector('thead .col-filter-row');
+  const tbody = table.querySelector('tbody');
+  if (!filterRow || !tbody) return;
+  const selects = Array.from(filterRow.querySelectorAll('th')).map(th => th.querySelector('select'));
+  Array.from(tbody.querySelectorAll('tr')).forEach(row => {
+    const cells = row.querySelectorAll('td');
+    let show = true;
+    selects.forEach((sel, i) => {
+      if (!sel || !sel.value) return;
+      const txt = (cells[i]?.textContent || '').trim();
+      if (txt !== sel.value) show = false;
+    });
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+/**
+ * #591 — wire all table enhancements at once: sort + resize + per-column filter.
+ * Drop-in replacement for initSortableTable() at section-mount/observer time.
+ */
+export function enhanceTable(tableOrId) {
+  const table = _resolveTable(tableOrId);
+  if (!table) return;
+  initSortableTable(table);
+  enableColumnResize(table);
+  enableColumnFilters(table);
+}
+
 // Render prostej tabeli: columns = [{key,label,render?}], rows = [obj].
 export function renderTable(columns, rows, { empty = 'Brak danych' } = {}) {
   if (!rows || !rows.length) {
