@@ -2525,6 +2525,8 @@ Gracz widzi w tooltipie kary które backend stosuje przy innych progach. **Trzeb
 
 **Dlaczego tak:** admin tworzy wroga wpisując 4 liczby (HP, AC, atak, kość obrażeń) — wróg gotowy. Gdyby wróg miał 7 statów + skille, tworzenie = koszmar. Asymetria jest **zaletą projektową**, nie błędem. Symetria ran nie zmienia tego — wound_penalty liczy się z HP%, którego wróg już używa.
 
+> **⚠️ NADPISANE CZĘŚCIOWO przez CZĘŚĆ AI Decyzję 2 (2026-06-12, S2 [#582]):** wrogowie dostali jednak `stats_json` (7 statów STR…LCK). **Ścieżka walki BEZ ZMIAN** — atak nadal `d20 + attack_bonus`, obrona nadal `ac_base`; tabela wyżej w kolumnach Atak/Obrona/HP pozostaje aktualna. Nowe staty służą **wyłącznie testom przeciwnym** (perswazja vs WIS, zapasy vs STR — S4) i interakcjom skillowym. Argument "admin wpisuje 4 liczby" stoi: staty generuje archetyp heurystyką po keywordach (`backend/app/services/actor_stats.py`), admin może je nadpisać. NULL/brak = każdy stat liczony jako 10 (zero regresji).
+
 ### Efekty broni (`on_hit_save`) — działa, czeka na Unified Effects
 
 Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, plus ofiara robi rzut obronny (save) — jak nie zda, łapie warunek (np. Płonący → obrażenia co turę). Już działa (`weapon_rules.py`). To dokładnie fundament pod afiksy "ognisty miecz" (patrz CZĘŚĆ X — System Afiksów). Po redesignie Effect Objects ten mechanizm staje się jednym z triggerów (`on_hit`).
@@ -4232,7 +4234,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: tabela przypadków (roll×DC → oczekiwany stopień; brzegi: margines dokładnie +5/−5, nat 20 z marginesem −3, nat 1 z marginesem +3). Ręcznie: `/game-test-player` — sprowokuj 2–3 testy skilli, karta rzutu pokazuje margines, narracja różnicuje stopnie.
 
-#### S2 — Staty wrogów: `stats_json` + archetypy + seed heurystyką
+#### S2 — Staty wrogów: `stats_json` + archetypy + seed heurystyką ✅ ZROBIONE [#582]
+
+> **Wdrożone (2026-06-14):** kolumna `game_config_enemies.stats_json` + archetyp heurystyką w `backend/app/services/actor_stats.py` (brute/skirmisher/caster/beast/humanoid; PL+EN keywordy; rola bojowa bije generyczne — `bandyta_lucznik`→DEX 15). Backfill migracja (52 wrogów). Combat combatant dostaje `stats` (NULL→10, zero regresji). Admin Świat→wróg: edytor 7 statów. Smart Entry: nowy wróg dostaje staty z archetypu. **Walka bez zmian.** S3 (NPC) reużywa `actor_stats`.
 
 **Cel prostym językiem:** Wróg dostaje 7 statystyk (STR…LCK) generowanych automatycznie z archetypu, żeby testy przeciwne (S4) miały się do czego odnosić. Admin nadal tworzy wroga 4 liczbami.
 
@@ -4246,7 +4250,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: heurystyka archetypów (tabela keyword→staty), backfill (wróg z key "bandyta_lucznik" dostaje DEX 15), NULL-fallback. Ręcznie: admin → Świat → wróg pokazuje staty; nowy wróg przez Kreator AI ma wypełnione staty.
 
-#### S3 — Staty NPC + lazy generation archetypu
+#### S3 — Staty NPC + lazy generation archetypu ✅ ZROBIONE [#583]
+
+> **Wdrożone (2026-06-14):** kolumna `campaign_known_npcs.stats_json` (per-kampania) + `npcs.stats_json` (template globalny) — migracje w `migrations_admin.py`. Helper `ensure_npc_stats(conn, campaign_id, npc_name)` w `npc_memory_service.py`: kolejność rozwiązania = zapisane staty kampanii → template `npcs` → archetyp z `actor_stats.stats_for_actor` (ta sama heurystyka co S2, BEZ forka). Zapis zwrotny → stabilność (ten sam NPC = te same staty). Cel bezimienny → `None` (fallback DC po stronie S4). **Helper wystawia dane + persystencję; wpięcie w żywy tor testów robi S4.**
 
 **Cel prostym językiem:** NPC z kampanii (karczmarz, strażnik) dostaje staty dopiero wtedy, gdy gracz pierwszy raz testuje coś PRZECIW niemu — generowane z archetypu i zapamiętane, żeby ten sam karczmarz zawsze miał te same staty.
 
@@ -4257,7 +4263,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: dwukrotny `ensure_npc_stats` dla tego samego NPC zwraca identyczne staty (persystencja); NPC "strażnik-osiłek" dostaje archetyp brute. Ręcznie: w grze targuj się 2× z tym samym kupcem — DB pokazuje jeden zapisany `stats_json`.
 
-#### S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie)
+#### S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie) ✅ ZROBIONE [#584]
+
+> **Wdrożone (2026-06-14):** `skill_service._resolve_opponent` aktor-agnostyczny — przeciwnik rzuca `d20 + stat_mod(counter_key)` ze swoich PRAWDZIWYCH statów (sztywny `+2` usunięty). `counter_key` może być statem (`WIS`) lub skillem (`insight`→linked_stat). Kondycje celu modyfikują obronę przez reużycie `combat_service._combatant_stat_modifier` (BEZ duplikacji fold-owania stat_mods — Zasada 1). `resolve_opponent_actor` rozwiązuje cel ze sceny: żywy combatant (staty+kondycje) → `game_config_enemies.stats_json` → `ensure_npc_stats` (S3). Tag OPPOSED przyjmuje opcjonalny cel `[SKILL_TEST:persuasion:OPPOSED:WIS:karczmarz]`; bez nazwy → heurystyka pojedynczego aktora. Brak aktora → fallback DC ze `skill_counters` (zachowanie bez zmian). Obie strony rzutu jawne dla narratora. `skill_counters` miało już wiersze `opposed` (persuasion/WIS, deception/insight, intimidation/WIS, insight/deception, stealth/perception) — bez migracji. **Aktor-agnostyczny kształt `{stats, conditions}` = podwalina MP (FAZA G).**
 
 **Cel prostym językiem:** "Przekonuję osiłka" liczy się teraz przeciw JEGO mądrości, a nie przeciw sztywnej liczbie. Każdy przeciwnik broni się swoimi statami — gracz uczy się wybierać słabe punkty.
 
@@ -4274,7 +4282,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 ### BLOK 2 — Skille: batch danych + hooki (S5–S7)
 
-#### S5 — Seed ~16 skilli kategorii A (czyste testy)
+#### S5 — Seed ~16 skilli kategorii A (czyste testy) ✅ ZROBIONE [#585]
+
+> **Wdrożone (2026-06-14):** 18 skilli kategorii A zaseedowanych do `game_config_skills` (INSERT OR IGNORE, `migrations_admin.py`): riding/endurance/swim/climb/charm/gossip/bribe/trade_craft/language/theology/nature/alchemy/magic_sense/tracking/sailing/pickpocket/disguise/torture. `linked_stat` primary wg decyzji (swim→STR, sailing→INT, torture→CHA); drugi stat narracyjny. `description` = skondensowane "Jak testować"+"Efekty" z design doc → dociera do LLM przez `config_service._load_from_db()` (katalog 35 skilli). `skill_counters` rozszerzone o 18 wierszy: opposed (charm/WIS, bribe/WIS, pickpocket/WIS, disguise/WIS, torture/CON) + dc (`default_dc` = środek widełek "Typowe DC" klamp do DC lock {8,12,16,20,24}, remis w dół = pro-gracz). U7 `game_config_skill_risk_categories` +7 kategorii (swim/riding/pickpocket/disguise/tracking/sailing/bribe) — safety-net rozpoznaje nowe akcje, gdy narrator zapomni tagu. trade_craft/alchemy oznaczone "efekt narracyjny (crafting mechaniczny: poza zakresem)". **Bez migracji schematu — kolumny `description`/`trigger_keywords` istniały; `game_config_skills` seedowane tylko w `migrations_admin.py` (NIE w `01_core_mechanics.sql` — konwencja zastana).**
 
 **Cel prostym językiem:** Hurtowy zasiew wszystkich skilli, które są "czystym testem" — jeździectwo, pływanie, plotkowanie, teologia... Silnik już umie je obsłużyć; dodajemy dane i uczymy narratora ich używać.
 
@@ -4288,7 +4298,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: seed idempotentny, każdy nowy skill ma linked_stat z {STR,DEX,CON,INT,WIS,CHA}, countery wstawione. Ręcznie: admin → Mechanika → skille pokazuje ~35 wierszy; `/game-test-player` — "tropię ślady" wywołuje SKILL_TEST:tracking.
 
-#### S6 — Haggling: targowanie wpięte w ceny sklepu
+#### S6 — Haggling: targowanie wpięte w ceny sklepu ✅ ZROBIONE [#586]
+
+> **Wdrożone (2026-06-14):** skill `haggling` (CHA) + `skill_counters` opposed vs CHA kupca (fallback `default_dc=12`) zaseedowane w `migrations_admin.py`. Nowy czysty serwis `haggle_service.py`: `discount_for_outcome` (stopień S1 → przewaga gracza: CRIT_SUCCESS −40%, SUCCESS −15%, FAILURE 0, CRIT_FAILURE +10% = narzut), `apply_haggle_outcome` (zapis do `session_flags`; crit-fail ustawia `haggle_blocked`), `peek/consume_haggle_discount` (jednorazowy), `effective_buy_multiplier`/`effective_sell_ratio` (stackowanie multiplikatywne z modyfikatorem CHA F10 + klamp kupna ≥0.4, sprzedaży 0.10–0.95). Hook po teście w `turns.py` (wzorzec stealth→zaskoczony). `shop_service`: `get_shop_inventory` podgląda rabat i pokazuje w cenach + polu `haggle_discount`; `buy_item`/`sell_item` konsumują rabat raz (campaign_id z `characters.campaign_id`). `skill_service.intercept_skill_test_tag`: przy `haggle_blocked` test haggling nie powstaje. `system_prompt.txt`: instrukcja emisji `[SKILL_TEST:haggling:OPPOSED:CHA:<npc_key>]`. Frontend: badge „🤝 −X% po targowaniu" / „😠 +X% kupiec urażony" w oknie sklepu. **Bez nowego typu efektu** (skill, nie efekt bojowy — CZĘŚĆ X bez zmian). 10/10 pytest + 1/1 Playwright GREEN; live integ.: Short Sword 14→12 gp po sukcesie, konsumpcja jednorazowa (12→14), crit-fail = blokada. Liczby = wartości startowe (Numbers Policy).
 
 **Cel prostym językiem:** Targowanie przestaje być tekstem — udany test realnie obniża cenę w sklepie (raz na transakcję), krytyczna porażka może ją podnieść.
 
@@ -4712,6 +4724,8 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 - #507 — World builder: placement modes generacji mapy. Nowa kolumna `placement_mode` na `hex_type_config` (biome/scatter/path). Generator `generate_world()` dispatchuje po trybie: `biome`=Voronoi (plain/forest/hills/mountains/swamp), `scatter`=rejection sampling z min-spacing 3 hexów (town/castle/cave/dungeon/ruins), `path`=momentum random-walk (river) / greedy MST Prim'a łączący miasta+zamki (road). Spawn_weight dungeon→2, castle→1. Helpery: `_carve_river`, `_scatter_features`, `_build_road_network`, `_hex_line`, `_cube_round`. `placement_mode` edytowalny w admin UI (dropdown). Commit `9d4605e`. ✅
 - #508 — World builder: drag-painting hexów + undo. Tryb 🖌 Maluj: przeciągnięcie LPM maluje wiele hexów wybranym terenem (optimistyczny render przez rAF, bulk commit `POST /api/admin/world/hexes/bulk-paint` upsert na mouseup). Nowe hexe powstają, istniejące nadpisują typ+encounter_chance bez kasowania metadanych. Stos undo 50 kroków — jedno pociągnięcie = jeden krok (przywraca cały pociągnięcie atomowo); Ctrl/Cmd+Z + przycisk ↶ Cofnij z licznikiem. Undo obejmuje: malowanie, usunięcie hexa, zapis szczegółów. Listenery drag/keydown bindowane raz per svg. Commit `ace9b98`. ✅
 - #534/#538 — HF-7: Walidacja celu COMBAT_START — `_validate_combat_start_target()` w `turns.py` sprawdza przed `initiate_combat()`: (1) scene_enemies → OK, (2) game_config_enemies catalog → OK, (3) campaign_known_npcs lub scene_npcs → REJECT `combat_target_friendly_npc`, (4) nieznany → REJECT `combat_target_unknown`. Przy odrzuceniu: wpis `llm_tag_errors` + korekta narracji dołączona do stored turn (wzorzec U6). TDD 8/8 + Playwright 2/2. ✅
+- #594 — Unifikacja onboarding + Wiedza: jedna tabela `knowledge_book` z kolumną `kind` ('onboarding_card'|'knowledge_tip'). MECHANIC_CARDS seedowane do DB (12 kart), `onboarding_service._card_content()` czyta treść z DB z fallbackiem do hardcoded dict (zero regresji triggerów). `/api/knowledge-tips` filtruje `kind='knowledge_tip'` (karty onboardingu nie wyciekają). Admin Wiedza: kolumna Rodzaj + selektor przy edycji/dodawaniu. `seen_mechanics` bez zmian. TDD 3/3 + 37 onboarding regresja + Playwright 1/1. ✅
+- #587–#593 — batch admin-panel: fix 500 (tabele `bug_reports`/`user_push_subscriptions`/`voice_hosts`/`ui_texts` + klucz LLM w overview, commit 68d2484); reszta zgłoszona jako issue (Zdarzenia analytics, multi-select kampanii, mapa hex→kwadrat, edycja pending/floating, resize/filtr tabel, wpisy Wiedzy FAZY U, pełny Web Push). ✅ (fix 500)
 
 ---
 

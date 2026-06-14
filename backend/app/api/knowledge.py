@@ -14,16 +14,18 @@ def list_knowledge_tips():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(knowledge_book)").fetchall()}
+        base = ["tip_key", "category", "title", "body", "sort_order"]
+        for opt in ("icon", "related_command"):
+            if opt in cols:
+                base.append(opt)
+        where = "is_active = 1"
+        # #594: only player knowledge tips — exclude onboarding_card rows
+        if "kind" in cols:
+            where += " AND kind = 'knowledge_tip'"
         rows = conn.execute(
-            "SELECT tip_key, category, title, body, icon, related_command, sort_order "
-            "FROM knowledge_book WHERE is_active = 1 ORDER BY sort_order, tip_key"
-        ).fetchall()
-        return {"tips": [dict(r) for r in rows]}
-    except Exception:
-        # icon/related_command columns may not exist yet on first request before migration
-        rows = conn.execute(
-            "SELECT tip_key, category, title, body, sort_order "
-            "FROM knowledge_book WHERE is_active = 1 ORDER BY sort_order, tip_key"
+            f"SELECT {', '.join(base)} FROM knowledge_book WHERE {where} "
+            "ORDER BY sort_order, tip_key"
         ).fetchall()
         return {"tips": [dict(r) for r in rows]}
     finally:

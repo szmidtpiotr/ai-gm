@@ -2429,6 +2429,11 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
          'Po oczyszczeniu lochu wrogowie odradzają się po pewnym czasie — każde miejsce ma swój rytm. Wróć gdy minie czas odnowienia i zmierz się z nim ponownie, silniejszy niż poprzednio.',
          70)
     """, "v2-dungeon-tip")
+    # #594 — unify onboarding cards + knowledge tips into knowledge_book via `kind`.
+    # Existing rows default to 'knowledge_tip'; onboarding cards seeded below.
+    _exec("""
+        ALTER TABLE knowledge_book ADD COLUMN kind TEXT NOT NULL DEFAULT 'knowledge_tip'
+    """, "v2-knowledge-book-kind")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Task 41: Dungeon Runs ─────────────────────────────────────────────────
@@ -3892,6 +3897,33 @@ def _backfill_game_items(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _seed_onboarding_cards_into_knowledge(conn: sqlite3.Connection) -> None:
+    """#594: seed MECHANIC_CARDS into knowledge_book as kind='onboarding_card'.
+
+    Idempotent (INSERT OR IGNORE on tip_key). Source of truth for content moves
+    to the DB row; onboarding_service falls back to the dict if a row is missing.
+    Skips silently if the `kind` column isn't present yet (migration not applied).
+    """
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(knowledge_book)").fetchall()}
+        if "kind" not in cols:
+            return
+        from app.services.onboarding_service import MECHANIC_CARDS
+    except Exception:
+        return
+    for idx, (key, card) in enumerate(MECHANIC_CARDS.items()):
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO knowledge_book "
+                "(tip_key, category, title, body, is_active, sort_order, kind) "
+                "VALUES (?, 'onboarding', ?, ?, 1, ?, 'onboarding_card')",
+                (key, card.get("title", ""), card.get("content", ""), idx),
+            )
+        except sqlite3.Error:
+            continue
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3938,6 +3970,7 @@ def run_admin_migrations() -> None:
         # Must run before ADMIN_SEEDS — seeds reference tables these create
         _run_v2_schema_migrations(conn)
         _ensure_game_config_services(conn)
+        _seed_onboarding_cards_into_knowledge(conn)  # #594
 
         for sql in ADMIN_SEEDS:
             try:

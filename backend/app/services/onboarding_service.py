@@ -300,6 +300,25 @@ def inject_onboarding_to_out(out: dict, user_id: int, conn, character=None) -> d
     return out
 
 
+def _card_content(key: str, conn: sqlite3.Connection | None = None) -> dict | None:
+    """#594: card {title, content} from knowledge_book (kind='onboarding_card'),
+    falling back to the hardcoded MECHANIC_CARDS when the DB row is missing or the
+    `kind` column hasn't been migrated yet. Keeps onboarding working pre-migration.
+    """
+    if conn is not None:
+        try:
+            row = conn.execute(
+                "SELECT title, body FROM knowledge_book "
+                "WHERE kind = 'onboarding_card' AND tip_key = ? AND is_active = 1",
+                (key,),
+            ).fetchone()
+            if row:
+                return {"title": row["title"], "content": row["body"]}
+        except Exception:
+            pass
+    return MECHANIC_CARDS.get(key)
+
+
 def check_onboarding_triggers(
     user_id: int,
     triggered_keys: List[str],
@@ -320,8 +339,11 @@ def check_onboarding_triggers(
 
     cards = []
     for key in triggered_keys:
-        if key not in already_seen and key in MECHANIC_CARDS:
-            cards.append({"mechanic_key": key, **MECHANIC_CARDS[key]})
+        if key in already_seen:
+            continue
+        content = _card_content(key, conn)
+        if content:
+            cards.append({"mechanic_key": key, **content})
     return cards
 
 
@@ -348,6 +370,9 @@ def get_unseen_cards_for_mechanics(
 
     cards = []
     for key in mechanic_keys:
-        if key not in already_seen and key in MECHANIC_CARDS:
-            cards.append({"mechanic_key": key, **MECHANIC_CARDS[key]})
+        if key in already_seen:
+            continue
+        content = _card_content(key, conn)
+        if content:
+            cards.append({"mechanic_key": key, **content})
     return cards

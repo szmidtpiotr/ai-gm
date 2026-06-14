@@ -14,7 +14,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
 | **U (Plan naprawczy)** | **30/35** | **86% — PRZED Fazą 5 MP (U21–U23 odłożone do FAZY L; otwarte: U26, U27)** |
-| **S (Skille i Stany)** | **0/20** | **0% — ▶ NASTĘPNA (po #578); Blok 3 wymaga U10 ✅** |
+| **S (Skille i Stany)** | **6/20** | **30% — ▶ W TOKU (S1–S6 ✅); następne S7 (gamble); Blok 3 wymaga U10 ✅** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
@@ -274,13 +274,13 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 1 — Fundament rzutu
 - [x] S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności (zmiana zablokowanej mechaniki — zgoda 2026-06-12) — [#581](https://github.com/szmidtpiotr/ai-gm/issues/581)
-- [ ] S2 — Staty wrogów: stats_json + archetypy + seed heurystyką (nadpisuje decyzję CZĘŚĆ AB)
-- [ ] S3 — Staty NPC + lazy generation archetypu
-- [ ] S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie; podwalina MP)
+- [x] S2 — Staty wrogów: stats_json + archetypy + seed heurystyką (nadpisuje decyzję CZĘŚĆ AB) — [#582](https://github.com/szmidtpiotr/ai-gm/issues/582)
+- [x] S3 — Staty NPC + lazy generation archetypu — [#583](https://github.com/szmidtpiotr/ai-gm/issues/583)
+- [x] S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie; podwalina MP) — [#584](https://github.com/szmidtpiotr/ai-gm/issues/584)
 
 ### Blok 2 — Skille: batch danych + hooki
-- [ ] S5 — Seed ~16 skilli kategorii A (czyste testy) + countery + keyword map U7
-- [ ] S6 — Haggling: targowanie wpięte w ceny sklepu
+- [x] S5 — Seed ~16 skilli kategorii A (czyste testy) + countery + keyword map U7 — [#585](https://github.com/szmidtpiotr/ai-gm/issues/585) (18 skilli, 18 counterów opposed/dc, 7 kategorii ryzyka U7; katalog LLM 35 skilli)
+- [x] S6 — Haggling: targowanie wpięte w ceny sklepu — [#586](https://github.com/szmidtpiotr/ai-gm/issues/586)
 - [ ] S7 — Gamble: hazard z prawdziwą stawką złota
 
 ### Blok 3 — Prymitywy efektów + kondycje parami — ⛔ WYMAGA U10
@@ -460,3 +460,5 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#573](https://github.com/szmidtpiotr/ai-gm/issues/573) — część 1: `game_item_key` zapisywany przy grancie + backfill 26/26 wierszy DEV. 4/4 pytest + 1/1 Playwright. Część 2 (pełny read-switch na game_items + drop legacy) → osobne zadanie **U11d**. **review/needs-testing**
 - [verify] [#568](https://github.com/szmidtpiotr/ai-gm/issues/568) — brak lootu po zwycięstwie: **zweryfikowane jako RNG, nie bug** (24/30 dropów itemów + złoto w teście empirycznym). Rekomendacja: zamknąć.
 - [stale-fixed → do zamknięcia po weryfikacji wizualnej] #566 (sendCombatNarration→stream), #518/#520/#522/#534/#535/#549/#553 (U30/U5-6/U28-29/HF-6/7/9/11) — kod naprawiony, czekają na wizualną weryfikację Piotra.
+- [x] [#594](https://github.com/szmidtpiotr/ai-gm/issues/594) — unifikacja onboarding + knowledge_book: kolumna `kind` ('onboarding_card'|'knowledge_tip'), seed MECHANIC_CARDS→DB, `onboarding_service._card_content()` czyta z DB z fallbackiem do dict, `/knowledge-tips` filtruje kind, admin Wiedza pokazuje/ustawia rodzaj. 3/3 pytest + 37 onboarding regresja + 1/1 Playwright. **review/needs-testing**
+- [x] [#587–#593] zgłoszone z batcha admin-panel (#587 Zdarzenia analytics, #588 multi-select kampanii, #589 mapa hex→kwadrat, #590 edycja pending/floating, #591 resize/filtr tabel, #592 wpisy Wiedzy FAZY U, #593 pełny stack Web Push) + fix 500 (commit 68d2484): tabele bug_reports/user_push_subscriptions/voice_hosts/ui_texts + klucz LLM w overview.
