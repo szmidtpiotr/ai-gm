@@ -4,19 +4,29 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
-## v1.3.1 — 2026-06-14 — FAZA U: batch usability (U13–U25) + poprawki + suite regresyjny
+## v1.3.1 — 2026-06-14 — FAZA U: Blok 4 ekonomia/UX + unifikacja przedmiotów + usability (U11–U26)
 
 ### Added
-- Journal (dziennik), eksport książki (Bielik), affix pity timer
-- db_lint + seed lint (audyt integralności bazy), content pipeline (CONTENT_PIPELINE.md)
-- Suite regresyjny: testy pytest + Playwright dla #547, #560–#581 i zadań U12–U25
+- **U11 — Unifikacja przedmiotów → `game_items`** (#555/556/557/558): jedna tabela zamiast 3 (weapons/armor/items/consumables); migracja + backfill 140 rekordów; przełączenie odczytu serwisów; dual-write (create/update/delete, smart_entry, approve, forge, import katalogu)
+- **U13 — Content pipeline** (#561): `seed_lint_service` (świeża baza → schemat → seedy 01–15 → lint U12+U10); CLI host+kontener; krok w `deploy_dev.sh`; `docs/CONTENT_PIPELINE.md`
+- **U16 — Cost preview + ekrany gracza** (#564): modal sklepu (kup/sprzedaj, saldo po, nadpodaż), pasek trwałości w ekwipunku/karcie/slotach, ostrzeżenie ≤20% w HUD walki, naprawa + kuźnia afiksów z podglądem kosztu; **aktywacja uśpionej trwałości #467** (inicjalizacja durability przy zdobyciu sprzętu + backfill)
+- **U17 — Celebracja dropu afiksowego** (#565): karta po claimie dla broni/zbroi specjalnej — kolor rzadkości, afiksy, diff statów vs założony, przycisk Załóż
+- **U18 — Dziennik gracza** (#570): Zadania / Wątki / Kronika; `journal_service` (questy + narrative_state + ukończone beaty, filtr sekretów GM)
+- **U19 — Recap "Poprzednio…"** (#571): karta po >24h przerwy (summary + 2 ostatnie tury + aktywne questy), bez nowego calla LLM
+- **U25 — Pity timer afiksów** (#575): 3 bossy bez afiksu → gwarancja T1+; 3 rerolle bez zmiany → inny afiks (liczniki w `affix_pity`, przeżywają restart)
+- **U26 — Telemetria ekonomii** (#576): centralna `change_gold()` (mutacja + log atomowo) we wszystkich torach (shop/spend_gold/crafter/robbery/durability); kafelek "Ekonomia 7 dni" w admin Overview; `db_lint` gold-drift check
+- Eksport książki kampanii (Bielik, #547); suite regresyjny pytest + Playwright dla #547, #560–#581 i zadań U12–U25
 
 ### Changed
-- Tuning combat / economy / loot / shop / clock / durability / onboarding / robbery
-- Wound tiers, podgląd kosztu (cost preview), reset bohatera (U14)
+- **U14 — Pełny reset bohatera** przy nowej kampanii (#562): conditions, rentale active→expired, pop flag sandbox; XP/złoto/ekwipunek/zaklęcia nietknięte
+- **U15 — Widoczne rany wroga** (#563): etykieta tieru + kropka koloru na chipach inicjatywy; jedno źródło `WOUND_TIERS` w `wound_utils.py`
+- **U20 — Onboarding** (#572): retarget karty death_save na pierwszy spadek HP<25%; 3 nowe karty (durability / napady / crafter); flaga `npcs.is_crafter`
+- **U24 — Counterplay napadu** (#574): tura ostrzeżenia → rzut obronny d20+stat vs DC wg poziomu; próg biedy 50gp; limit 1/24h
 
 ### Fixed
-- Issues #547, #560–#581 (m.in. combat roll block, generic enemy label, loot RNG, clock sync, text/move desync, shop default stock, success margin)
+- **U12 — db_lint zahartowany** (#559→#560): dodana autoryzacja endpointu (była dziura), 4 brakujące checki, CLI w obrazie backendu
+- Weryfikacja Bloku 4 (B4V): sklep zdejmuje/dolicza złoto z saldem, trwałość spada po walce, loot trafia do ekwipunku z `game_items`
+- Issues #566–#569, #573, #578–#581 (combat roll block, generic enemy label, loot RNG, combat dice modal, `game_item_key`, text/move desync, shop default stock, clock sync, success margin)
 
 ---
 
