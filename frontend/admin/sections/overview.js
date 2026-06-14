@@ -69,6 +69,12 @@ function _sectionHtml() {
           <div id="ov-audit-feed"><div style="color:var(--t3);padding:14px;text-align:center;font-size:0.82rem">Ładowanie…</div></div>
         </div>
       </div>
+
+      <!-- U26 (#576): telemetria przepływu złota per źródło (z change_gold log) -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-header"><span class="card-title">💰 Ekonomia 7 dni</span><span class="card-count" id="ov-econ-net">—</span></div>
+        <div id="ov-econ-tile" style="padding:14px"><div style="color:var(--t3);text-align:center;font-size:0.82rem">Ładowanie…</div></div>
+      </div>
     </div>
 
     <div class="stab-panel" id="anatab-overview" style="margin-top:14px">
@@ -146,6 +152,41 @@ export async function init(panel) {
             const time = a.performed_at ? new Date(a.performed_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
             return `<div class="feed-row"><div class="feed-icon ${cls}">${icon}</div><div class="feed-text">${esc(a.operation || '')} <strong>${esc(a.row_key || '')}</strong> <span style="color:var(--t3)">w ${esc(a.table_name || '')}</span></div><div class="feed-time">${esc(time)}</div></div>`;
           }).join('');
+        }
+      }
+
+      // U26 (#576): kafelek Ekonomia 7 dni — wpływy/wydatki per źródło.
+      const econHost = document.getElementById('ov-econ-tile');
+      const econNet = document.getElementById('ov-econ-net');
+      const econ = d.economy_7d || { rows: [], total_income: 0, total_expense: 0, net: 0 };
+      const SRC_LABELS = {
+        loot: 'Łupy', sell: 'Sprzedaż', buy: 'Zakupy', service: 'Usługi',
+        robbery: 'Napady', resurrection: 'Wskrzeszenia', repair: 'Naprawy',
+        craft: 'Kucie', quest_reward: 'Nagrody za questy', starter_gold: 'Złoto startowe',
+        admin_cheat: 'Admin', other: 'Inne',
+      };
+      if (econNet) econNet.textContent = `bilans ${econ.net >= 0 ? '+' : ''}${econ.net} zł`;
+      if (econHost) {
+        const rows = econ.rows || [];
+        if (!rows.length) {
+          econHost.innerHTML = '<div style="color:var(--t3);text-align:center;font-size:0.82rem">Brak ruchów złota w ostatnich 7 dniach.</div>';
+        } else {
+          econHost.innerHTML = `<table class="data-table" style="font-size:0.82rem">
+            <thead><tr><th>Źródło</th><th style="text-align:right">Wpływy</th><th style="text-align:right">Wydatki</th><th style="text-align:right">Bilans</th><th style="text-align:right">Liczba</th></tr></thead>
+            <tbody>${rows.map(r => `<tr>
+              <td>${esc(SRC_LABELS[r.source] || r.source)}</td>
+              <td style="text-align:right;color:var(--green,#16a34a)">${r.income ? '+' + r.income : '—'}</td>
+              <td style="text-align:right;color:var(--red,#ef4444)">${r.expense ? '-' + r.expense : '—'}</td>
+              <td style="text-align:right">${r.net >= 0 ? '+' : ''}${r.net}</td>
+              <td style="text-align:right;color:var(--t3)">${r.count}</td>
+            </tr>`).join('')}
+            <tr style="font-weight:600;border-top:2px solid var(--border)">
+              <td>Razem</td>
+              <td style="text-align:right;color:var(--green,#16a34a)">+${econ.total_income}</td>
+              <td style="text-align:right;color:var(--red,#ef4444)">-${econ.total_expense}</td>
+              <td style="text-align:right">${econ.net >= 0 ? '+' : ''}${econ.net}</td>
+              <td></td>
+            </tr></tbody></table>`;
         }
       }
     } catch (e) {

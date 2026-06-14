@@ -251,13 +251,22 @@ def resolve_skill_test(
     # Opponent side
     opponent_total, opponent_roll = _resolve_opponent(conn, counter, campaign_id)
 
+    # S1 (#581) — Margines sukcesu: 4 stopnie wg tego, O ILE rzut pobił próg.
+    # Decyzja 1 (Piotr 2026-06-12), dotyczy WYŁĄCZNIE testów umiejętności.
+    margin = player_total - opponent_total
+
     success = nat20 or (not nat1 and player_total >= opponent_total)
 
+    # Nat 20 / nat 1 mają ABSOLUTNE pierwszeństwo nad marginesem.
     if nat20:
         outcome = "CRITICAL_SUCCESS"
     elif nat1:
         outcome = "CRITICAL_FAILURE"
-    elif success:
+    elif margin >= 5:
+        outcome = "CRITICAL_SUCCESS"
+    elif margin <= -5:
+        outcome = "CRITICAL_FAILURE"
+    elif margin >= 0:
         outcome = "SUCCESS"
     else:
         outcome = "FAILURE"
@@ -270,6 +279,7 @@ def resolve_skill_test(
         "player_total": player_total,
         "opponent_total": opponent_total,
         "opponent_roll": opponent_roll,
+        "margin": margin,
         "outcome": outcome,
         "nat20": nat20,
         "nat1": nat1,
@@ -331,11 +341,24 @@ def build_skill_result_context(result: dict) -> str:
         "CRITICAL_FAILURE": "Krytyczne niepowodzenie!",
     }.get(result["outcome"], result["outcome"])
 
+    margin = int(result.get("margin", result.get("player_total", 0) - result.get("opponent_total", 0)))
+    margin_str = f"+{margin}" if margin >= 0 else str(margin)
+    # Słowny opis stopnia — narrator ma 4 stany zamiast 2 (S1 #581).
+    if margin >= 5:
+        margin_word = "z dużą nawiązką"
+    elif margin >= 0:
+        margin_word = "z zapasem" if margin >= 2 else "na styk"
+    elif margin >= -4:
+        margin_word = "o włos"
+    else:
+        margin_word = "wyraźnie poniżej progu"
+
     lines = [
         f"[WYNIK TESTU UMIEJĘTNOŚCI]",
         f"Umiejętność: {result['skill_label']}",
         f"Rzut gracza: {result['d20_roll']} + {result['modifier']} = {result['player_total']}",
         f"Próg: {result['opponent_total']}" + (f" (przeciwnik rzucił {result['opponent_roll']})" if result.get('opponent_roll') else ""),
+        f"Margines: {margin_str} ({margin_word})",
         f"Wynik: {outcome_label}",
     ]
     if result.get("nat20"):

@@ -50,6 +50,17 @@ def get_inventory_item_detail(character_id: int, inventory_id: int):
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+@router.get("/inventory/{character_id}/{inventory_id}/drop-comparison")
+def get_inventory_drop_comparison(character_id: int, inventory_id: int):
+    """U17 (#565) — celebration data for a weapon/armor drop: rarity, affixes, stat
+    diff vs the equipped item, suggested slot. Returns data=None for non-gear."""
+    try:
+        data = loot_service.build_drop_comparison(character_id, inventory_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
 @router.post("/inventory/{character_id}/equip")
 def post_inventory_equip(character_id: int, body: EquipRequest):
     try:

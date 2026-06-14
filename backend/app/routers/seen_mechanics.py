@@ -17,6 +17,8 @@ VALID_MECHANIC_KEYS = {
     "xp_gained", "gold_gained", "death_save",
     # future keys from E27
     "affixes", "crafting", "multiplayer",
+    # U20 (#572)
+    "durability", "raids", "crafter",
 }
 
 

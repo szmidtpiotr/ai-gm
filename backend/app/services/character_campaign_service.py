@@ -7,10 +7,14 @@ def maybe_reset_hp_for_new_campaign(
     character_id: int,
     campaign_id: int,
 ) -> bool:
-    """C19: Reset hp_current to max_hp when entering a fresh campaign (0 turns played).
+    """U14 (rozszerza C19): pełny reset bohatera przy wejściu do świeżej kampanii (0 tur).
 
-    Resuming an existing campaign leaves HP unchanged.
-    Returns True if reset was performed, False otherwise.
+    Resetuje stan bojowy/tymczasowy: HP, mana, conditions (sheet + tabela
+    character_conditions), aktywne rentale, wisząca flaga sandbox. NIE rusza
+    XP / złota / ekwipunku / zaklęć.
+
+    Wznowienie istniejącej kampanii (>0 tur) zostawia stan bez zmian.
+    Zwraca True jeśli reset wykonano, False w przeciwnym razie.
     """
     turn_count_row = conn.execute(
         "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ?", (campaign_id,)
@@ -29,19 +33,41 @@ def maybe_reset_hp_for_new_campaign(
     except Exception:
         return False
 
+    # HP + mana — odnowienie do max (jeśli zdefiniowane)
     max_hp = int(sheet.get("max_hp") or 0)
-    if max_hp <= 0:
-        return False
+    if max_hp > 0:
+        sheet["current_hp"] = max_hp
 
-    sheet["current_hp"] = max_hp
-
-    # Scholar also gets mana restored on fresh campaign start
     max_mana = int(sheet.get("max_mana") or 0)
     if max_mana > 0:
         sheet["current_mana"] = max_mana
+
+    # Conditions — czyste przy starcie nowej kampanii (sheet + tabela)
+    sheet["conditions"] = []
+    # Wisząca flaga sandbox (np. po imporcie/kopii) nie ma prawa być na żywym bohaterze
+    sheet.pop("__sandbox_clone__", None)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
+
+    # Tabela kondycji — usuń wszystkie wiersze bohatera (jeśli tabela istnieje)
+    try:
+        conn.execute(
+            "DELETE FROM character_conditions WHERE character_id = ?", (character_id,)
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # Aktywne rentale → wygaszone (stan tymczasowy nie przechodzi do nowej kampanii)
+    try:
+        conn.execute(
+            "UPDATE character_rentals SET status = 'expired' "
+            "WHERE character_id = ? AND status = 'active'",
+            (character_id,),
+        )
+    except sqlite3.OperationalError:
+        pass
+
     return True

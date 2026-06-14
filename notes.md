@@ -13,14 +13,24 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
-| **U (Plan naprawczy)** | **13/35** | **37% — PRZED Fazą 5 MP** |
-| **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
+| **U (Plan naprawczy)** | **30/35** | **86% — PRZED Fazą 5 MP (U21–U23 odłożone do FAZY L; otwarte: U26, U27)** |
+| **S (Skille i Stany)** | **0/20** | **0% — ▶ NASTĘPNA (po #578); Blok 3 wymaga U10 ✅** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
 | **TOTAL** | **105/193** | **54%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
+
+> ## 🧭 KOLEJNOŚĆ FAZ (decyzja Piotra 2026-06-13) — co implementować dalej
+> FAZA U gameplay gotowa, bramka U27 = **NO-GO dla MP**. Kolejność do MP:
+> ```
+> 1. #578  — fix tekstowego ruchu (bloker NO-GO z U27)        → prompt_hf.md
+> 2. FAZA S — CAŁA (S1→S20)                                    → prompt_s.md
+> 3. FAZA L — CAŁA (L1→L19)                                    → prompt_l.md
+> 4. FAZA 5 — Multiplayer (dopiero teraz)                      → prompt MP (TBD)
+> ```
+> **Zasada:** całe S przed całym L (decyzja: zero ryzyka przeróbek — mechanika walki w pełni gotowa przed treścią/balansem lochów). Znosi to dawną notkę "L niezależne od S" i twardą zależność L5↔S2 (S i tak całe przed L). **NASTĘPNE ZADANIE: #578** — wklej `prompt_hf.md`. Po #578 → `prompt_s.md` (S1).
 
 ---
 
@@ -203,33 +213,41 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 > Luki designu poza hotfixami: **CP8** (zakupy w narracji nie zdejmują złota) → decyzja przy Bloku 7 (U24–U26): rozszerzyć [SPEND_GOLD] na zakupy narracyjne albo sklep wyłącznie przez UI z odmową w narracji. **CP4** (NPC nie wywołany po imieniu) → P2, prawdopodobnie naprawi U29 (blok [ŚWIAT] z NPC z bazy).
 
-### Blok 4 — Baza danych jako rdzeń (2/5)
+### Blok 4 — Baza danych jako rdzeń (5/5)
 - [x] U10 — Effect schema lockdown — **decyzja C (hybryda, 2026-06-13):** zachowano nazwy typów z kodu (periodic_save/static_stat_modifier/block_action), bo walidator już istniał i działał + FAZA S na nim bazuje; dodano `backend/app/schemas/effect_schema.json` jako pojedyncze źródło prawdy, LCK + cele pochodne (ac/attack_bonus/damage_bonus/initiative), audyt `scripts/effect_json_audit.py` (169==169, 0 strat; 23 legacy do ręcznej decyzji → U11/FAZA S). — [#554](https://github.com/szmidtpiotr/ai-gm/issues/554)
 - [x] U11 — Unifikacja przedmiotów 3 tabele → game_items (sub-issues U11a schema+backfill / U11b odczyt / U11c zapis+admin) — [#555](https://github.com/szmidtpiotr/ai-gm/issues/555) **needs-testing**
   - [x] U11a — CREATE TABLE game_items + backfill (140 rek.: 27 weapon + 26 armor + 59 item + 28 consumable) + FK columns (game_item_key NULL w char_inventory + loot_entries). Stare tabele niezmienione. — [#556](https://github.com/szmidtpiotr/ai-gm/issues/556) **needs-testing**
   - [x] U11b — przełączenie odczytu: serwisy czytają z game_items; stare tabele read-only — [#557](https://github.com/szmidtpiotr/ai-gm/issues/557) **needs-testing**
   - [x] U11c — dual-write: create/update/delete weapon+item, smart_entry, approve_entity, forge, import katalogu piszą też do game_items (re-read legacy → upsert; jedno mapowanie = backfill U11a). Stare tabele DEPRECATED (drop po 2 tyg., decyzja Piotra). 9/9 pytest GREEN + live verify create/edit/delete. **UWAGA: 18 testów shop/loot/inventory czerwone z PRE-ISTNIEJĄCYCH luk fixture'ów U11b (`no such table: game_items` / `no such column gi.armor_coverage` w izolowanych DB testów) — nie regresja U11c, należą do #557.** — [#558](https://github.com/szmidtpiotr/ai-gm/issues/558) **needs-testing**
-- [x] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh) — [#559](https://github.com/szmidtpiotr/ai-gm/issues/559) **needs-testing**
-- [ ] U13 — Content pipeline (lint seedów 01–15, walidacja na imporcie, docs/CONTENT_PIPELINE.md)
-- [ ] U14 — Pełny reset bohatera przy nowej kampanii (mana + conditions, nie tylko HP)
+- [x] U12 — db_lint (skrypt + endpoint + przycisk w admin Narzędzia + krok w deploy_dev.sh) — [#559](https://github.com/szmidtpiotr/ai-gm/issues/559) (pierwotnie, zamknięte) → **dokończone + zahartowane** [#560](https://github.com/szmidtpiotr/ai-gm/issues/560) **needs-testing**. #559 zostawiło 3 luki: endpoint BEZ autoryzacji (dziura bezp.), brak 4 checków ze specu (dup-key/loot-weight/rarity/weight_kg), CLI poza obrazem backendu (deploy step nie działał). #560 naprawia wszystkie 3. 9/9 pytest + 2/2 Playwright GREEN; CLI w kontenerze exit 1 (10 realnych warningów effect_json = lista zadań dla treści, zgodnie ze specem).
+- [x] U13 — Content pipeline (seed_lint_service: świeża baza ← schemat → seedy 01–15 → run_lint U12 + walidatory U10; CLI twin host+kontener; krok w deploy_dev.sh; docs/CONTENT_PIPELINE.md) — seedy 01–15 CLEAN exit 0. **Naprawiono format efektów:** `DAMAGE_DIE_RE` w admin_config rozszerzony o modyfikator `+N`/`-N` (`2d4+2`) zgodnie z runtime rollerem — 8 warningów effect_json mikstur znikło. created_by='seed' egzekwowane (check [SEED_OWNER]). 9/9 pytest + 2/2 Playwright GREEN — [#561](https://github.com/szmidtpiotr/ai-gm/issues/561) **needs-testing**
+- [x] U14 — Pełny reset bohatera przy nowej kampanii (mana już była; dorzucone conditions sheet+tabela, rentale active→expired, pop flagi sandbox; XP/złoto/ekwipunek/zaklęcia nietknięte; guard wznowienia zachowany) — [#562](https://github.com/szmidtpiotr/ai-gm/issues/562) **needs-testing**
 
-### Blok 5 — Widoczność mechanik
-- [ ] U15 — Widoczne rany wroga w walce (tier + kara; "Ranny" dostaje −1)
-- [ ] U16 — Cost preview (naprawa/reroll/wskrzeszenie/usługi) + pasek durability + komunikat anti-farm
-- [ ] U17 — Celebracja dropu afiksowego + porównanie z założonym
-- [ ] U18 — Dziennik gracza (Zadania / Wątki / Kronika; endpoint /journal; player_visible na seeds)
-- [ ] U19 — Recap "Poprzednio…" po >24h przerwy
-- [ ] U20 — Onboarding: death saves przy <25% HP, karta XP z instrukcją, karty durability/afiksy/napady/crafter
+### Blok 5 — Widoczność mechanik (6/6)
+- [x] U15 — Widoczne rany wroga w walce: etykieta tieru + kropka koloru na chipach inicjatywy; jedno źródło prawdy `WOUND_TIERS` (label+kolor+kara) w `wound_utils.py`, derywacja w economy_service + endpoint /config/wound-thresholds + frontend. **Premisa specu ("Ranny" 26–50% ma karę 0) była nieaktualna — drabina kar 0/−1/−2/−4 już istniała; decyzja Piotra: ujednolicić progi + UI, kary bez zmian.** — [#563](https://github.com/szmidtpiotr/ai-gm/issues/563) **needs-testing**
+- [x] U16 — Cost preview + pasek durability + komunikat anti-farm. **Decyzja Piotra (2026-06-13): rozszerzone o pełne ekrany gracza** — sklep `[OPEN_SHOP]` był parsowany ale nigdy renderowany; brak UI naprawy/kuźni; trwałość nie wystawiana w endpointach. U16 zbudowało: modal sklepu (kup/sprzedaj z ceną+saldem po, komunikat nadpodaży), pasek trwałości w ekwipunku+karcie+slotach, ostrzeżenie ≤20% w HUD walki, naprawę i kuźnię afiksów z cost-preview w karcie przedmiotu. Backend: durability w /inventory(+detail), sell_item +oversupply, GET affix-costs. **Domknięte w U16:** (1) dodano migrację `affixes_json` do main.py (żywa baza DEV jej nie miała mimo #462) → apply/reroll afiksów persystuje; (2) naprawiono brak nagłówka auth w fetch cost-preview (repair-cost/affix-costs/gold → 401, karty cicho znikały) → `apiRequest()`; (3) **aktywowano uśpioną trwałość #467** (zgoda Piotra 2026-06-13): durability nigdy nie była inicjalizowana przy zdobyciu broni/zbroi (NULL = nieśledzona), więc pasek U16 nie miał czego pokazać i sprzęt nigdy się nie zużywał — `grant_loot_to_character` ustawia teraz durability_current=max (durability_base z configu albo wg rzadkości 100/150/200) + `backfill_missing_durability()` (10 wierszy na DEV). Mechanika #467 (zużycie w walce, kara −50% przy 0) działała już wcześniej, była tylko martwa bez inicjalizacji. 11/11 pytest GREEN; potwierdzone: nowy bohater ma Short Sword 100/100 z paskiem w karcie. — [#564](https://github.com/szmidtpiotr/ai-gm/issues/564) **needs-testing**
+- [x] U17 — Celebracja dropu afiksowego + porównanie z założonym — karta po claimie dla broni/zbroi specjalnej (afiks LUB rarity≥2): kolor rzadkości + afiksy z opisem + diff statów vs założony (↑/↓/=, „brak porównania" bez ekwipunku) + przycisk Załóż. Diff liczy backend (`compare_item_metrics`). Endpoint `GET /inventory/{cid}/{inv_id}/drop-comparison`. 17/17 pytest + 3/3 Playwright GREEN; karta potwierdzona zrzutem. Weryfikacja „w lochu" pominięta (Blok 6 poza zakresem). — [#565](https://github.com/szmidtpiotr/ai-gm/issues/565) **needs-testing**
+- [x] U18 — Dziennik gracza (Zadania / Wątki / Kronika; endpoint `GET /api/campaigns/{id}/journal`; `player_visible` na seeds — domyślnie true dla seedów z akcji gracza, false dla sekretów GM Planu). Backend `journal_service.build_journal` komponuje character_quests + narrative_state seeds/events + ukończone beaty (odwrotna chronologia, numer tury). Frontend: panel Dziennik rozszerzony o 3 sekcje. 7/7 pytest + 2/2 Playwright GREEN; endpoint potwierdzony na żywej kampanii 64 (4 questy + beaty + filtr sekretów). Render sekcji potwierdzony w DOM; pełny zrzut in-game zablokowany przez 502 LLM na wejściu do kampanii (osobny problem infra DEV). — [#570](https://github.com/szmidtpiotr/ai-gm/issues/570) **needs-testing**
+- [x] U19 — Recap "Poprzednio w Twojej przygodzie…" po >24h przerwy: endpoint `GET /campaigns/{id}/recap` (read-only, backend decyduje o triggerze >24h z `campaign_turns.created_at`), `build_recap()` komponuje zapisane summary gracza + 2 ostatnie tury (czyszczone z JSON/tagów) + aktywne questy; karta auto na wejściu + „Przypomnij mi" w dzienniku; **bez nowego callu LLM**. 6/6 pytest + 2/2 Playwright GREEN; karta potwierdzona zrzutem (kampania 64, last turn −2d → should_show). — [#571](https://github.com/szmidtpiotr/ai-gm/issues/571) **needs-testing**
+- [x] U20 — Onboarding: poprawki triggerów kart. Retarget karty death_save na **pierwszy spadek HP<25%** (zamiast 1. rzutu na śmierć; czyta świeże HP z sheet w injectorze). Karta XP dopisana o instrukcję wydania PD (Odpoczynek→★ Długi→📖 Ucz się), karta rzutu ujednolicona o „Biegłość". **3 nowe karty:** durability (<50% trwałości założonego sprzętu), raids/napady (dziki hex + złoto>100), crafter (rozmowa z NPC `is_crafter`). **Decyzja Piotra (2026-06-13):** crafter via nowa kolumna `npcs.is_crafter` + migracja oznaczająca kowali (9 NPC na DEV) — żywa baza nie miała tej flagi ani flow rozmowy z rzemieślnikiem (kucie idzie z karty przedmiotu U16). Injector dostaje `character` (3 tory turns.py) + sygnał `npc_dialogue`. 13/13 pytest + 1/1 Playwright GREEN; live: HP 1/10 → payload `onboarding_cards:['death_save']` w torze streamingowym. — [#572](https://github.com/szmidtpiotr/ai-gm/issues/572) **needs-testing**
 
 ### Blok 6 — Lochy: stawka — ❌ WCHŁONIĘTE PRZEZ FAZĘ L (redesign 2026-06-12; nie wykonywać jako U)
 - [ ] ~~U21~~ → FAZA L: L7 (semantyka checkpointów; UWAGA: śmierć=koniec runu zamiast restartu — zmiana względem pierwotnego U21)
 - [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
 - [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
 
+### 🎯 Weryfikacja Bloku 4 (celowana; po U20, PRZED U24; poza licznikiem U)
+- [x] B4V — `/game-test-player-screenshot` jednego scenariusza sklep+trwałość+przedmiot na koncie Demo. **Po co:** od U32b minął cały Blok 4 (unifikacja 3 tabel→game_items, dual-write, aktywacja trwałości #467, nowy sklep z U16) BEZ playtestu — najcięższy zestaw zmian FAZY U; żółta flaga = 18 czerwonych testów shop/loot/inventory z U11c (#557/#558). Tańsze niż pełny dwutrybowy smoke; pełny smoke i tak będzie w U27. **Bez TDD, bez nowego feature-issue** — defekty → osobne issues `[BUG] B4V — ...` (bug + needs-testing). Prompt: `prompt_b4v.md`. Zaliczone = sklep zdejmuje/dolicza złoto z saldem po, pasek trwałości widoczny i spada po walce, przedmiot z lootu trafia do ekwipunku z game_items. Każdy ❌ w tych trzech = defekt Bloku 4 do naprawy PRZED U27.
+  - **WYNIK 2026-06-13: BLOK 4 OK (grywalny)** — kampania B4V (id 73), bohater [TEST] Wojownik (id 2), DEV. Wszystkie 3 mechaniki ✅ dla gracza:
+    - **SKLEP ✅** — zakup shortsword 200→186 gp (paid 14 = buy_price_gp), sprzedaż bandaża 186→187 gp (earned 1); saldo w UI = 187 zł. Uwaga doc: złoto siedzi w kolumnie `characters.gold_gp`, NIE w `sheet_json.$.gold` (zalecane SQL w promptcie zwróciłoby NULL).
+    - **TRWAŁOŚĆ ✅** — założona broń 88→87→86→85 przez 3 ataki (−1/trafienie); pasek trwałości renderowany w ekwipunku.
+    - **PRZEDMIOT z game_items ✅ funkcjonalnie** — kupiony shortsword (inv 77) trafia do ekwipunku, resoluje się z katalogu `game_items` po kluczu (label „Short Sword", durability). **Z zastrzeżeniem P2 → [#573](https://github.com/szmidtpiotr/ai-gm/issues/573):** kolumna `game_item_key` nigdy nie zapisywana (0/25 wierszy w całej bazie); loot_service/shop_service wciąż czytają z legacy `game_config_*`; `thug` ma puste `loot_table_key` (brak dropu). Nie blokuje gracza (dual-write sync), ale do uprzątnięcia przed single-source game_items — prawdopodobne źródło 18 czerwonych testów #557/#558.
+  - **Werdykt:** Blok 4 zaliczony, jeden defekt P2 (#573) niewidoczny dla gracza. → wracaj do prompt.md → U24. P2 nie blokuje U27.
+
 ### Blok 7 — Ekonomia: bezpieczniki
-- [ ] U24 — Napad: ostrzeżenie + rzut obronny + próg biedy 50gp + max 1/24h
-- [ ] U25 — Pity timer afiksów (3 bossy bez dropu → gwarancja; 3 rerolle bez zmiany → inny afiks)
-- [ ] U26 — economy_log + centralna change_gold() + kafelek Ekonomia w admin Overview
+- [x] U24 — Napad: ostrzeżenie + rzut obronny + próg biedy 50gp + max 1/24h — [#574](https://github.com/szmidtpiotr/ai-gm/issues/574) **needs-testing**. Counterplay na istniejącym robbery_service (F8/#468): tura ostrzeżenia (złoto nietknięte) → tura rzutu obronnego d20+stat (DEX bandyci / WIS kieszonkowiec) vs DC wg poziomu z zamka {8,12,16,20,24}; sukces=brak straty, porażka=−20%; próg biedy 50gp + limit 1/24h realne/kampania w iniekcji encountera. Live na kampanii 73 (hero 2, 187gp): ostrzeżenie→robbery_state=warned (gold 187) → rzut DEX+2≥DC8 sukces (gold 187, encounter wyczyszczony, last_robbery_at ustawiony, gate rate_limited_24h aktywny). 14/14 pytest + 3/3 Playwright GREEN.
+- [x] U25 — Pity timer afiksów (3 bossy bez afiksu → gwarancja T1+; 3 rerolle bez zmiany → inny afiks). Liczniki w tabeli `affix_pity` (per postać `boss_drop`, per przedmiot `reroll:<inv>`) — przeżywają restart. Boss wykrywany po `enemy.tier='boss'` → flaga `active_combat.boss_defeated` → `claim_post_combat_loot`. `roll_weapon_affixes(force_min_one)` gwarantuje afiks niezależnie od loot_tier; reroll wyklucza obecny klucz przy 4. próbie. Progi 3/3 = wartości startowe (Numbers Policy). 13/13 pytest + 3/3 Playwright GREEN; live e2e na DEV (3 dry boss kills → drop `["sharp"]` → reset). — [#575](https://github.com/szmidtpiotr/ai-gm/issues/575) **needs-testing**
+- [x] U26 — Telemetria ekonomii: centralna `change_gold()` + kafelek Ekonomia w admin Overview — [#576](https://github.com/szmidtpiotr/ai-gm/issues/576) **needs-testing**. **Decyzja (2026-06-13): reuse istniejącej `character_gold_log` (Stage 11, #64) zamiast nowej `economy_log`** — dodano kolumnę `campaign_id` (migracja+backfill), zbudowano `change_gold(conn, cid, delta, source, *, campaign_id, meta, allow_negative)` (mutacja gold_gp + journal atomowo, conn-owned, bez commitu). Refactor na nią: shop (buy/sell via `apply_character_gold_delta`), spend_gold (service — wcześniej BEZ logu = źródło driftu), crafter (repair/craft), robbery, durability. `categorize_source()` mapuje surowe nazwy na kubełki ENUM (loot/sell/buy/service/robbery/resurrection/repair/craft/quest_reward/starter_gold/admin_cheat/other) tylko do raportu (stored source bez zmian — anti_farm zależy od `shop_sell`). Kafelek "Ekonomia 7 dni" w admin Overview (`economy_7d` w `/api/admin/overview`). db_lint `_check_gold_drift` (saldo≠suma delt → warning). 13/13 pytest + 3/3 Playwright GREEN; live e2e: change_gold path + agregacja + GOLD_DRIFT potwierdzone na DEV.
 
 ### Blok 9 — Świat: hex ↔ lokacje ↔ ruch (audyt kodu 2026-06-11; wykonywać PO Bloku 3, PRZED Blokiem 4 — rdzeń gry)
 - [x] U28 — Placement engine: terrain_tags + placement na game_locations; backend osadza lokacje przy odkryciu hexa; narzędzie admina dla floating — [#540](https://github.com/szmidtpiotr/ai-gm/issues/540)
@@ -245,16 +263,17 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
     - Pozostałe P2 (nie blokują): REST intent nie triggerowany przy "odpoczywam" (nowa-kamp CP9); narracja "goblin"→"szlam"; desync current_location_id vs hex (start_64 vs brzezino, wątek U31-pochodny)
 
 ### Blok 8 — Brama do MP (zawsze ostatnie)
-- [ ] U27 — docs/ACCEPTANCE_USABILITY.md + pełny re-playtest 3 trybów (w tym kryteria ruchu/lokacji z Bloku 9) → issue [GATE] Go/No-Go MP
+- [x] U27 — `docs/ACCEPTANCE_USABILITY.md` (checklista A/B/C, loch ⏸) + re-playtest 2 trybów (`/game-smoke`) → [GATE] [#577](https://github.com/szmidtpiotr/ai-gm/issues/577) **needs-testing**. **Wynik bramki:** Nowa=GRYWALNY Z ZASTRZEŻENIAMI (P1 #578 ruch tekstowy, P2 #579 kowal pusty / #580 zegar 2 źródła), Gotowa=GRYWALNY (2 beaty auto-complete, GM Plan z szablonu). Wszystkie kryteria A/B/C ✅ poza **B1/B6** (tekstowy ruch + guard anty-desync → #578). **Decyzja Piotra 2026-06-13: NO-GO — Multiplayer wstrzymany, #578 naprawione.** Raporty: [#512](https://github.com/szmidtpiotr/ai-gm/issues/512#issuecomment-4699444206), [#513](https://github.com/szmidtpiotr/ai-gm/issues/513#issuecomment-4699444975).
+  - [x] **#578 NAPRAWIONE** (review, needs-testing) — root cause: U30 directional fast-path był tylko w `create_turn_stream` (UI gracza), nie w JSON `create_turn` (smoke) → fałszywy fail B1; guard `travel_narrated_without_move` (U30.4) nigdzie w żywym torze → fałszywe B6. Fix: wspólny helper `execute_directional_travel` w obu handlerach + `guard_travel_desync` wpięty w oba tory (`turn_pipeline.py`). 7/7 pytest + 1/1 Playwright GREEN; live: JSON `{0,1}→{0,0}`, streaming `{1,0}→{0,1}`. **Po fixie B1 ✅ (oba endpointy), B6 ✅ (guard wpięty).** MP nadal wstrzymany (decyzja Piotra; FAZA S + FAZA L też wymagane przed FAZĄ G). P2 #579/#580 otwarte (nie blokują).
 
 ---
 
-## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — po/przeplatane z FAZĄ U
+## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — ▶ NASTĘPNA W KOLEJCE (po #578, przed CAŁĄ FAZĄ L; decyzja 2026-06-13)
 
 > Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AI. Źródło danych: `skills_conditions_design_doc.md` (korzeń repo). Kolejność = sekcja "FAZA S — zależności i kolejność" w CZĘŚCI AI (S1→S4 → S5→S7 → [U10!] S8→S14 → S15→S19 → S20). Każde zadanie = GitHub Issue `[TASK] SNN — tytuł` wdrażane `/tdd`; wyjątek S20 = czysty playtest (bez TDD, raport do issue [SMOKE] FAZA S). Prompt startowy: `prompt_s.md`.
 
 ### Blok 1 — Fundament rzutu
-- [ ] S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności (zmiana zablokowanej mechaniki — zgoda 2026-06-12)
+- [x] S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności (zmiana zablokowanej mechaniki — zgoda 2026-06-12) — [#581](https://github.com/szmidtpiotr/ai-gm/issues/581)
 - [ ] S2 — Staty wrogów: stats_json + archetypy + seed heurystyką (nadpisuje decyzję CZĘŚĆ AB)
 - [ ] S3 — Staty NPC + lazy generation archetypu
 - [ ] S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie; podwalina MP)
@@ -287,7 +306,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — niezależna od U/S; wyjątek: L5 wymaga S2
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — ⏸ PO CAŁEJ FAZIE S (decyzja 2026-06-13: całe S przed L; dawna zależność L5↔S2 bezprzedmiotowa, bo S w całości wcześniej)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
@@ -348,7 +367,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
 - [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
 - [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
-- [ ] G20 — Eksport-książka: nowelizacja kampanii lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — prototyp wyciągnięty przed FAZĘ G, prowadzi Piotr — [#547](https://github.com/szmidtpiotr/ai-gm/issues/547)
+- [x] G20 — Eksport-książka: nowelizacja kampanii lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — **prototyp CLI gotowy** (`book_export_service.py`, pilot 3 rozdz. z kamp. #546); UI/modal odłożone do FAZY G — [#547](https://github.com/szmidtpiotr/ai-gm/issues/547)
 - [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
 - [ ] G21 — Obecność online (kto teraz w grze) + push "drużyna w komplecie online"; ładnie ograne wizualnie
 - [ ] G22 — Drabina nieobecności: [BRAK AKCJI] → bierna/wleczona (próg rund) → autopilot AI (za zgodą gracza, default ON, info w onboardingu) → powrót; auto-handoff hosta przy jego nieobecności
@@ -415,6 +434,10 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#355](https://github.com/szmidtpiotr/ai-gm/issues/355) — C1 STORY_STALE nie działał w streaming path + escalation (10+ silniej, 15+ kritycznie) — commit 3eb0c2c
 - [x] [#391](https://github.com/szmidtpiotr/ai-gm/issues/391) — C1 TRAVEL_HINT pills: sugestie odkrytych lokacji obok STORY_STALE (TDD, 4/4 GREEN) — commit 69044c0 — Playwright regression GREEN z prawdziwym LLM (OpenAI)
 - [x] [#392](https://github.com/szmidtpiotr/ai-gm/issues/392) — LLM narrative death bez HP check: [RESTRICT] blok w system_prompt (TDD, 3/3 GREEN) — commit 1806324 — Playwright regression GREEN z prawdziwym LLM (OpenAI)
+- [x] [#566](https://github.com/szmidtpiotr/ai-gm/issues/566) — Walka: narracja ataku blokowana „Walka trwa!" + brak karty rzutu. Root cause: `sendCombatNarration` POST-ował pakiet `__AI_GM_COMBAT_ROLL_V1__` na zwykły `/turns`, który blokuje bezwarunkowo (strumieniowy ma gwardię `current_turn=='player'` + emituje [GM_ROLL]). Fix: repoint na `_sendTurnStream` + guard COMBAT_ROLL w `_maybe_handle_blocked_player_combat_turn`. 2/2 pytest + 1/1 Playwright GREEN. **needs-testing**
+- [x] [#567](https://github.com/szmidtpiotr/ai-gm/issues/567) — Walka: generyczny „Wróg" (key='enemy') wybierany bo słowo „wróg" pasowało do etykiety placeholdera w `_resolve_enemy_key_from_context`. Fix: pomijanie generycznych placeholderów (`_GENERIC_ENEMY_KEYS/_LABELS`) + polska nazwa fallbacku „Napastnik" w `_create_pending_combat_enemy`. 3/3 pytest + 1/1 Playwright GREEN. **needs-testing**
+- [x] [#568](https://github.com/szmidtpiotr/ai-gm/issues/568) — Walka: „brak lootu po zwycięstwie" — **WERDYKT: RNG, nie bug**. `roll_loot` rzuca każdy wpis niezależnie wg wagi (loot_enemy: 50/40/15%) → P(nic)≈25%. Ścieżka grant niezmieniona. Uwaga: `drop_chance=0.8` na wrogu nieużywana w roll_loot (do ew. decyzji projektowej). 3/3 pytest + 1/1 Playwright GREEN (dowody). **needs-testing**
+- [x] [#569](https://github.com/szmidtpiotr/ai-gm/issues/569) — Walka: widoczny modal rzutu k20 (3D) przy ataku (parytet z testami umiejętności). `playCombatDiceRoll` reużywa dice-overlay + DICE.dice_box, odsprzężona od resolveSkillTest; wpięta w `handleCombatAttack` po wylosowaniu d20. 1/1 Playwright GREEN. **needs-testing**
 - [x] [#395](https://github.com/szmidtpiotr/ai-gm/issues/395) — Aktywny preset LLM jako jedyne źródło prawdy: spójna tożsamość endpointu (provider+base_url+model z jednego źródła), leniwa hydratacja presetu w świeżych procesach, `LLMConfigError` zamiast cichego fallbacku do Ollama/gemma (TDD, 8/8 GREEN) — commit 526cfdd — zweryfikowane, zamknięte
 - [ ] #C-acc — Acceptance harness C1–C19 (pytest 13/13 + Playwright LLM-play) — `scripts/acceptance_c_series.sh`, `docs/ACCEPTANCE_C_SERIES.md` — commit 687f7ed; RED backlog: C9 (modal Ucz się), C10/C11 (questy)
 - [x] [#396](https://github.com/szmidtpiotr/ai-gm/issues/396) — Admin3 Narzędzia→Playwright odpala wszystkie suity ux (regression/acceptance/admin3); test-agent skan rekursywny + run po ścieżce/grupie; nowy admin3 smoke 16/16 GREEN — commit 6058f90 (TDD 7/7 GREEN)
@@ -430,3 +453,10 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#485](https://github.com/szmidtpiotr/ai-gm/issues/485) — Effect JSON Builder UI w sekcji Zawartość (Broń/Zbroja/Przedmioty): builder efektów identyczny jak w Afiksach; 15 testów TDD weryfikujących wszystkie 6 typów F1 + Playwright 3/3 GREEN — commit (po budowaniu)
 - [x] [#504](https://github.com/szmidtpiotr/ai-gm/issues/504) — C10 QUEST_SUGGEST: fix non-streaming path — błędny import (`xp_sources` → `narrative_state_service`) + brakujący C10 block w non-streaming turns; aktywne questy teraz zapisywane i widoczne w World State; testy 5/5 GREEN + Playwright 2/2 GREEN — commit 5f16534
 - [x] [#516](https://github.com/szmidtpiotr/ai-gm/issues/516) — SMOKE P1: brak tabeli character_rentals — dodano CREATE TABLE do ADMIN_MIGRATIONS (F13 migracja była tylko w teście, nie w bazie) — commit 7cb70e1
+- [x] [#578](https://github.com/szmidtpiotr/ai-gm/issues/578) — U30 hardening: ruch tekstowy na torze JSON `/turns` (parytet ze streamingiem) + guard `travel_narrated_without_move` wpięty w żywy tor (wspólny helper `execute_directional_travel`/`guard_travel_desync`). 7/7 pytest + 1/1 Playwright. **review/needs-testing**
+- [x] [#567](https://github.com/szmidtpiotr/ai-gm/issues/567) — generyczny placeholder „Wróg" → „Napastnik" (guard etykiet w `_roll_card_enemy_identity` + relabel seed). 3/3 pytest + 1/1 Playwright. **review/needs-testing**
+- [x] [#580](https://github.com/szmidtpiotr/ai-gm/issues/580) — zegar `ingame_hours`: write-through kolumny w `clock_service` (koniec rozjazdu kolumna↔flaga) + backfill 22 wierszy DEV. 2/2 pytest + 1/1 Playwright. **review/needs-testing**
+- [x] [#579](https://github.com/szmidtpiotr/ai-gm/issues/579) — puste sklepy wiejskie: domyślny stock wg roli (`_default_stock_for_npc`) gdy `shop_inventory_json` pusty; wpięte w display + buy. 3/3 pytest + 1/1 Playwright. **review/needs-testing**
+- [x] [#573](https://github.com/szmidtpiotr/ai-gm/issues/573) — część 1: `game_item_key` zapisywany przy grancie + backfill 26/26 wierszy DEV. 4/4 pytest + 1/1 Playwright. Część 2 (pełny read-switch na game_items + drop legacy) → osobne zadanie **U11d**. **review/needs-testing**
+- [verify] [#568](https://github.com/szmidtpiotr/ai-gm/issues/568) — brak lootu po zwycięstwie: **zweryfikowane jako RNG, nie bug** (24/30 dropów itemów + złoto w teście empirycznym). Rekomendacja: zamknąć.
+- [stale-fixed → do zamknięcia po weryfikacji wizualnej] #566 (sendCombatNarration→stream), #518/#520/#522/#534/#535/#549/#553 (U30/U5-6/U28-29/HF-6/7/9/11) — kod naprawiony, czekają na wizualną weryfikację Piotra.

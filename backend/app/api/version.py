@@ -3,7 +3,12 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-from app.services.wound_utils import WOUND_CRITICAL_PCT, WOUND_HEALTHY_PCT, WOUND_MODERATE_PCT
+from app.services.wound_utils import (
+    WOUND_CRITICAL_PCT,
+    WOUND_HEALTHY_PCT,
+    WOUND_MODERATE_PCT,
+    WOUND_TIERS,
+)
 
 router = APIRouter()
 
@@ -34,9 +39,14 @@ async def get_changelog():
 
 @router.get("/config/wound-thresholds")
 async def get_wound_thresholds():
-    """C6 — canonical wound penalty thresholds shared by backend and frontend."""
+    """C6/U15 — canonical wound tiers shared by backend and frontend.
+
+    `tiers` is the single source of truth (label + color + penalty + threshold);
+    the flat *_pct keys are kept for back-compat with older frontend code.
+    """
     return {
         "healthy_pct": WOUND_HEALTHY_PCT,
         "moderate_pct": WOUND_MODERATE_PCT,
         "critical_pct": WOUND_CRITICAL_PCT,
+        "tiers": WOUND_TIERS,
     }

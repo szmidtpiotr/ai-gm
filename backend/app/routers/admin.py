@@ -2964,6 +2964,13 @@ def admin_overview(_: None = Depends(require_admin_token)):
             for r in turn_rows
         ]
 
+        # U26 (#576): economy telemetry — gold income/expense per source (7d).
+        try:
+            from app.services.economy_service import get_economy_7d
+            economy_7d = get_economy_7d(conn, days=7)
+        except Exception:
+            economy_7d = {"days": 7, "rows": [], "total_income": 0, "total_expense": 0, "net": 0}
+
         return {
             "users_total": users_total,
             "campaigns_active": campaigns_active,
@@ -2973,6 +2980,7 @@ def admin_overview(_: None = Depends(require_admin_token)):
             "llm_preset_name": llm_preset_name,
             "recent_audit": recent_audit,
             "recent_turns": recent_turns,
+            "economy_7d": economy_7d,
         }
     finally:
         conn.close()

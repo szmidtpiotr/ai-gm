@@ -17,6 +17,11 @@ docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
 echo "🔍 [3/4] DB Lint — audyt integralności (informacyjny, nie blokujący)..."
 docker compose -f docker-compose.dev.yml exec -T backend python scripts/db_lint.py || true
 
+echo "🌱 [3b/4] Seed Lint (U13) — walidacja seedów 01–15 (informacyjny, nie blokujący)..."
+docker compose -f docker-compose.dev.yml cp data/seeds backend:/tmp/seeds 2>/dev/null \
+  || docker cp data/seeds ai-gm-dev-backend-1:/tmp/seeds 2>/dev/null || true
+docker compose -f docker-compose.dev.yml exec -T backend python scripts/lint_seeds.py --seeds-dir /tmp/seeds || true
+
 echo "⏳ [4/4] Healthcheck dev (max 60s)..."
 for i in $(seq 1 12); do
   if curl -sf http://localhost:8100/api/healthz > /dev/null; then

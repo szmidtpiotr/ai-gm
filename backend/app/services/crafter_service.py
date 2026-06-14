@@ -50,11 +50,9 @@ def _get_char_gold(conn, char_id: int) -> int:
 
 
 def _deduct_gold(conn, char_id: int, amount: int, source: str, meta: dict | None = None) -> None:
-    conn.execute("UPDATE characters SET gold_gp = gold_gp - ? WHERE id = ?", (amount, char_id))
-    conn.execute(
-        "INSERT INTO character_gold_log (character_id, delta, source, meta_json) VALUES (?, ?, ?, ?)",
-        (char_id, -amount, source, json.dumps(meta or {})),
-    )
+    # U26: mutate + journal through the central chokepoint.
+    from app.services.economy_service import change_gold
+    change_gold(conn, char_id, -amount, source, meta=meta)
     conn.commit()
 
 
@@ -74,6 +72,40 @@ def _save_affixes(conn, inv_id: int, affixes: list[str]) -> None:
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
+
+def get_affix_costs(conn, char_id: int, inv_id: int) -> dict:
+    """U16 (#564) — read-only cost preview for the affix forge. Deducts NO gold.
+
+    Zwraca koszty nałożenia (apply per tier) + dla każdego afiksu już na przedmiocie
+    koszt rerollu i ulepszenia, plus aktualne złoto bohatera — żeby UI pokazało
+    cenę i saldo PO transakcji PRZED kliknięciem.
+    """
+    item_type = _get_item_type(conn, inv_id)
+    if not item_type:
+        return {"ok": False, "reason": "item_not_found"}
+    gold = _get_char_gold(conn, char_id)
+    try:
+        current = _get_current_affixes(conn, inv_id)
+    except Exception:
+        # Bazy bez kolumny affixes_json (luka migracji #462) → podgląd kosztów nadal działa.
+        current = []
+    affix_rows = []
+    for ak in current:
+        tier = _get_affix_tier(conn, ak)
+        affix_rows.append({
+            "affix_key": ak,
+            "tier": tier,
+            "reroll_cost": REROLL_COSTS.get(tier) if tier else None,
+            "upgrade_cost": UPGRADE_COSTS.get(tier) if tier else None,
+        })
+    return {
+        "ok": True,
+        "item_type": item_type,
+        "gold": gold,
+        "apply_costs": APPLY_COSTS,
+        "current_affixes": affix_rows,
+    }
+
 
 def apply_affix(conn, char_id: int, inv_id: int, tier: int) -> dict:
     """Add a random affix of the given tier to the item. Deducts gold."""
@@ -126,12 +158,23 @@ def reroll_affix(conn, char_id: int, inv_id: int, affix_key: str) -> dict:
     if not pool:
         return {"ok": False, "reason": "no_affixes_available"}
 
+    # U25 (#575): reroll pity — after REROLL_PITY_THRESHOLD rerolls of this item
+    # without the affix actually changing, the next reroll is forced to a different key.
+    from app.services import affix_pity_service
+    if affix_pity_service.reroll_guaranteed_different(conn, char_id, inv_id):
+        different = [k for k in pool if k != affix_key]
+        if different:
+            pool = different
+
     new_key = random.choice(pool)
 
     idx = affixes.index(affix_key)
     affixes[idx] = new_key
     _save_affixes(conn, inv_id, affixes)
     _deduct_gold(conn, char_id, cost, "craft_reroll_affix", {"inv_id": inv_id, "old_key": affix_key, "new_key": new_key})
+
+    # Track whether the key actually changed so the pity counter resets on a real change.
+    affix_pity_service.record_reroll(conn, char_id, inv_id, changed=(new_key != affix_key))
 
     return {"ok": True, "affix_key": new_key, "cost": cost}
 

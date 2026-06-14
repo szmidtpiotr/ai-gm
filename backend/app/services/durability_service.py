@@ -24,6 +24,33 @@ DEFAULT_PENALTY_PCT = 50
 WEAPON_ATTACK_BASE = 4  # base weapon contribution used for broken-weapon penalty
 
 
+def durability_view(durability_current, durability_max) -> dict | None:
+    """U16 (#564) — read-only presentation block for an inventory item.
+
+    Pure helper: zamienia surowe kolumny durability_current/max na blok dla UI
+    (pasek/% + flaga 'Pęknięta'). Mechanika trwałości BEZ zmian — to tylko
+    warstwa pokazywania (Zasady 1-5: mechanika decyduje, UI/LLM tylko relacjonuje).
+
+    Zwraca None gdy przedmiot nie ma trwałości (max NULL/0 → mikstury, questowe).
+    """
+    if durability_max is None:
+        return None
+    try:
+        mx = int(durability_max or 0)
+    except (TypeError, ValueError):
+        return None
+    if mx <= 0:
+        return None
+    cur = max(0, int(durability_current or 0))
+    return {
+        "current": cur,
+        "max": mx,
+        "pct": round(100.0 * cur / mx, 1),
+        "broken": cur <= 0,
+        "penalty_pct": DEFAULT_PENALTY_PCT,
+    }
+
+
 def _get_penalty_pct(conn) -> int:
     try:
         row = conn.execute(
@@ -216,10 +243,11 @@ def repair_item(conn, char_id: int, inv_id: int) -> dict:
         if gold < cost:
             return {"ok": False, "reason": "insufficient_gold", "have": gold, "need": cost}
 
-        conn.execute("UPDATE characters SET gold_gp = gold_gp - ? WHERE id = ?", (cost, char_id))
-        conn.execute(
-            "INSERT INTO character_gold_log (character_id, delta, source, meta_json) VALUES (?, ?, ?, ?)",
-            (char_id, -cost, "repair_durability", json.dumps({"inv_id": inv_id, "cost": cost})),
+        # U26: mutate + journal through the central chokepoint (caller commits below).
+        from app.services.economy_service import change_gold
+        change_gold(
+            conn, char_id, -cost, "repair_durability",
+            meta={"inv_id": inv_id, "cost": cost},
         )
 
     conn.execute(

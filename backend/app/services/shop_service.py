@@ -42,7 +42,7 @@ def _conn() -> sqlite3.Connection:
 def _load_shop_npc(conn: sqlite3.Connection, npc_id: int) -> sqlite3.Row:
     row = conn.execute(
         """
-        SELECT id, key, label, npc_type, is_shop, is_active, shop_inventory_json
+        SELECT id, key, label, npc_type, is_shop, is_active, is_crafter, shop_inventory_json
         FROM npcs
         WHERE id = ?
         """,
@@ -58,7 +58,7 @@ def _load_shop_npc(conn: sqlite3.Connection, npc_id: int) -> sqlite3.Row:
 def _load_shop_npc_by_key(conn: sqlite3.Connection, npc_key: str) -> sqlite3.Row:
     row = conn.execute(
         """
-        SELECT id, key, label, npc_type, is_shop, is_active, shop_inventory_json
+        SELECT id, key, label, npc_type, is_shop, is_active, is_crafter, shop_inventory_json
         FROM npcs
         WHERE key = ?
         """,
@@ -325,13 +325,65 @@ def _item_passes_filters(cat: dict[str, Any], char_level: int, location_key: str
     return str(location_key).strip().lower() in [str(t).strip().lower() for t in tags]
 
 
+# #579: village shops are mostly seeded with an empty shop_inventory_json, so smiths/
+# healers/merchants showed nothing to buy. When a shop has no explicit stock, fall back
+# to a role-appropriate default drawn from the live catalog (game_items). Admins keep full
+# control by setting shop_inventory_json explicitly (that always wins).
+_HEALER_KEYWORDS = (
+    "uzdrowiciel", "zielarka", "aptek", "chirurg", "medyk", "znachor",
+    "apothecary", "healer", "herbalist", "alchem",
+)
+
+
+def _pick_catalog_keys(conn: sqlite3.Connection, kind: str, limit: int) -> list[str]:
+    """Cheapest `limit` active catalog keys of a given kind (deterministic order)."""
+    rows = conn.execute(
+        "SELECT key FROM game_items "
+        "WHERE kind = ? AND is_active = 1 AND COALESCE(price_gp, 0) > 0 "
+        "ORDER BY price_gp ASC, key ASC LIMIT ?",
+        (kind, int(limit)),
+    ).fetchall()
+    return [(r["key"] if isinstance(r, sqlite3.Row) else r[0]) for r in rows]
+
+
+def _default_stock_for_npc(conn: sqlite3.Connection, npc: sqlite3.Row) -> list[dict[str, str]]:
+    """Role-based default shop stock when an NPC has no explicit shop_inventory_json."""
+    key = str(npc["key"] or "").lower()
+    label = str(npc["label"] or "").lower()
+    is_crafter = "is_crafter" in npc.keys() and int(npc["is_crafter"] or 0) == 1
+    is_healer = any(w in key or w in label for w in _HEALER_KEYWORDS)
+
+    entries: list[dict[str, str]] = []
+    if is_crafter:  # smith — basic weapons + armor
+        entries += [{"type": "weapon", "key": k} for k in _pick_catalog_keys(conn, "weapon", 4)]
+        entries += [{"type": "armor", "key": k} for k in _pick_catalog_keys(conn, "armor", 3)]
+    elif is_healer:  # apothecary/herbalist — consumables
+        entries += [{"type": "consumable", "key": k} for k in _pick_catalog_keys(conn, "consumable", 6)]
+    else:  # general merchant — a bit of everything
+        entries += [{"type": "consumable", "key": k} for k in _pick_catalog_keys(conn, "consumable", 3)]
+        entries += [{"type": "item", "key": k} for k in _pick_catalog_keys(conn, "item", 3)]
+        entries += [{"type": "weapon", "key": k} for k in _pick_catalog_keys(conn, "weapon", 1)]
+    return entries
+
+
+def _effective_shop_entries(conn: sqlite3.Connection, npc: sqlite3.Row) -> list[dict[str, str]]:
+    """Explicit shop_inventory_json wins; empty → role-based default stock (#579)."""
+    entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
+    if entries:
+        return entries
+    try:
+        return _default_stock_for_npc(conn, npc)
+    except Exception:  # default stock must never break a shop
+        return []
+
+
 def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None = None) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
         cha = _get_character_cha(conn, character_id)
         char_level = _get_character_level(conn, character_id)
         ratio = _cha_sell_ratio(cha)
-        entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
+        entries = _effective_shop_entries(conn, npc)
         items = []
         for e in entries:
             cat = _catalog_item(conn, e["type"], e["key"])
@@ -364,7 +416,7 @@ def get_shop_inventory_by_key(npc_key: str, character_id: int, location_key: str
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
-        entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
+        entries = _effective_shop_entries(conn, npc)
         allowed = any(
             e["type"] == str(item_type).strip().lower() and e["key"] == str(item_key).strip()
             for e in entries
@@ -455,10 +507,15 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         cha_sell_price = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
 
         # F12 (#472): anti-farm decay for repeated sales of the same item_key
+        # U16 (#564): także liczba sprzedaży w oknie + flaga oversupply dla komunikatu gracza
+        recent_sell_count = 0
         try:
-            from app.services.anti_farm_service import get_anti_farm_multiplier, apply_anti_farm
+            from app.services.anti_farm_service import (
+                get_anti_farm_multiplier, apply_anti_farm, _recent_sell_count,
+            )
             af_mult = get_anti_farm_multiplier(conn, character_id, item_key)
             earned = apply_anti_farm(cha_sell_price, af_mult)
+            recent_sell_count = _recent_sell_count(conn, character_id, item_key)
         except Exception:
             af_mult = 1.0
             earned = cha_sell_price
@@ -490,8 +547,11 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     return {
         "gold_gp": int(new_gold),
         "earned_gp": int(earned),
+        "base_sell_gp": int(cha_sell_price),
         "sell_ratio": ratio,
         "anti_farm_multiplier": af_mult,
+        "recent_sell_count": int(recent_sell_count),
+        "oversupply": bool(af_mult < 1.0),
         "cha": int(cha),
         "sold_item": {
             "type": item_type,

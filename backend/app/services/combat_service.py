@@ -736,7 +736,12 @@ def _create_pending_combat_enemy(
     INSERT OR IGNORE: if the key already exists (race / known enemy) the existing
     row is left untouched. Returns the fetched enemy row, or None on failure.
     """
-    name = enemy_key.replace("_", " ").title()
+    # #567: generic/unknown fallback gets a neutral Polish name, not "Unknown Attacker"
+    # or the literal "Wróg" placeholder. A real key (e.g. goblin_szaman) keeps its title.
+    if enemy_key.strip().lower() in ("unknown_attacker", "enemy", "przeciwnik"):
+        name = "Napastnik"
+    else:
+        name = enemy_key.replace("_", " ").title()
     try:
         # Standard-tier defaults — same baseline as world_service._get_or_create_enemy.
         conn.execute(
@@ -773,9 +778,14 @@ def _roll_card_enemy_identity(
     ek = str(enemy.get("enemy_key") or "").strip()
     nm = str(enemy.get("name") or "").strip()
 
+    # #567: generic placeholder labels never reach the player as the literal "Wróg".
+    _GENERIC_LABELS = {"wróg", "wrog", "enemy", "przeciwnik", "unknown attacker", "unknown_attacker"}
+
     def from_row(r: sqlite3.Row) -> tuple[str, str]:
         k = str(r["key"])
         lab = str(r["label"] or r["key"] or "").strip() or k
+        if lab.lower() in _GENERIC_LABELS:
+            lab = "Napastnik"
         return k, lab
 
     candidates: list[str] = []
@@ -2300,6 +2310,16 @@ def resolve_attack(
                 if dead:
                     enemy["dead"] = True
                     ek = str(enemy.get("enemy_key") or "")
+                    # U25 (#575): flag boss kills so post-combat loot claim can drive
+                    # the affix pity timer (guaranteed affix after a dry streak).
+                    if str(enemy.get("tier") or "").strip().lower() == "boss":
+                        try:
+                            conn.execute(
+                                "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
+                                (campaign_id,),
+                            )
+                        except sqlite3.OperationalError:
+                            pass
                     if ek and ch_id:
                         try:
                             from app.services.loot_service import (
@@ -3097,11 +3117,29 @@ def claim_post_combat_loot(
             else:
                 to_grant.append({"item_key": key, "quantity": qty})
 
-        from app.services.loot_service import grant_loot_to_character
+        from app.services.loot_service import grant_loot_to_character, build_drop_comparison
+
+        # U25 (#575): was a boss defeated this combat? Drives the affix pity timer.
+        boss_killed = bool(row["boss_defeated"]) if "boss_defeated" in row.keys() else False
 
         claimed = grant_loot_to_character(
-            character_id, to_grant, source="loot", loot_tier=loot_tier_for_grant
-        ) if to_grant else []
+            character_id, to_grant, source="loot", loot_tier=loot_tier_for_grant,
+            is_boss_kill=boss_killed,
+        ) if (to_grant or boss_killed) else []
+
+        # U17 (#565): attach a drop-comparison block to each claimed weapon/armor so the
+        # player UI can celebrate affixed/rare drops and show a diff vs the equipped item.
+        for entry in claimed:
+            inv_id = entry.get("inventory_id")
+            if inv_id is None:
+                continue
+            try:
+                comparison = build_drop_comparison(character_id, int(inv_id))
+                if comparison:
+                    entry["comparison"] = comparison
+            except Exception:
+                # Celebration is best-effort cosmetics — never block a loot claim on it.
+                pass
 
         updates: list[str] = []
         params: list[Any] = []

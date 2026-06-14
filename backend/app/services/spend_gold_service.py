@@ -98,10 +98,10 @@ def spend_gold_on_service(
                     service_key=service_key, have=current, need=cost)
         return False, None
 
-    new_gold = current - cost
-    conn.execute(
-        "UPDATE characters SET gold_gp = ? WHERE id = ?",
-        (new_gold, character_id),
+    # U26: mutate + journal through the central chokepoint (caller owns commit).
+    from app.services.economy_service import change_gold
+    new_gold = change_gold(
+        conn, character_id, -cost, "service", meta={"service_key": service_key},
     )
     logger.info("spend_gold_success", character_id=character_id,
                 service_key=service_key, cost=cost, new_gold=new_gold)
@@ -168,10 +168,10 @@ def apply_spend_gold_to_narrative(
         current = int(row["gold_gp"] or 0) if row else 0
 
         if current >= cost:
-            new_gold = current - cost
-            conn.execute(
-                "UPDATE characters SET gold_gp = ? WHERE id = ?",
-                (new_gold, character_id),
+            # U26: mutate + journal through the central chokepoint.
+            from app.services.economy_service import change_gold
+            new_gold = change_gold(
+                conn, character_id, -cost, "service", meta={"service_key": key},
             )
             logger.info("spend_gold_applied", character_id=character_id,
                         service_key=key, cost=cost, new_gold=new_gold)

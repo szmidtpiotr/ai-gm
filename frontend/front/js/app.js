@@ -5,12 +5,24 @@
 
 const API_BASE = '/api';
 
-// C6 — wound thresholds loaded from backend at startup; fallback to wound_utils.py values
-let _woundThresholds = { healthy_pct: 75, moderate_pct: 50, critical_pct: 25 };
+// C6/U15 — wound tiers loaded from backend at startup (single source of truth);
+// fallback mirrors wound_utils.WOUND_TIERS. `tiers` carries label+color+penalty.
+const _WOUND_TIERS_FALLBACK = [
+    { min_pct: 75, tier: 'healthy',    label: null,                 color: '#4caf50', penalty: 0 },
+    { min_pct: 50, tier: 'minor',      label: 'Ranny',              color: '#ffc107', penalty: -1 },
+    { min_pct: 25, tier: 'moderate',   label: 'Ciężko Ranny',       color: '#ff9800', penalty: -2 },
+    { min_pct: 10, tier: 'serious',    label: 'Poważnie Ranny',     color: '#f44336', penalty: -4 },
+    { min_pct: -1, tier: 'near_death', label: 'Na Skraju Śmierci',  color: '#7f0000', penalty: -4 },
+];
+let _woundThresholds = { healthy_pct: 75, moderate_pct: 50, critical_pct: 25, tiers: _WOUND_TIERS_FALLBACK };
 (async () => {
     try {
         const r = await fetch('/api/config/wound-thresholds');
-        if (r.ok) _woundThresholds = await r.json();
+        if (r.ok) {
+            const data = await r.json();
+            if (!Array.isArray(data.tiers)) data.tiers = _WOUND_TIERS_FALLBACK;
+            _woundThresholds = data;
+        }
     } catch (_) {}
 })();
 
@@ -131,6 +143,7 @@ const elements = {
     journalEmpty: document.getElementById('journal-empty'),
     journalLoading: document.getElementById('journal-loading'),
     journalBanner: document.getElementById('journal-banner'),
+    journalSections: document.getElementById('journal-sections'),
     btnJournalRegen: document.getElementById('journal-regen-btn'),
 
     // Overlay
@@ -149,6 +162,9 @@ const elements = {
     combatLootList: document.getElementById('combat-loot-list'),
     combatLootClaimBtn: document.getElementById('combat-loot-claim-btn'),
     combatLootSkipBtn: document.getElementById('combat-loot-skip-btn'),
+    dropCelebrationOverlay: document.getElementById('drop-celebration-overlay'),
+    dropCelebrationList: document.getElementById('drop-celebration-list'),
+    dropCelebrationCloseBtn: document.getElementById('drop-celebration-close-btn'),
 
     // Header HP bar
     headerHpBarFill: document.getElementById('header-hp-bar-fill'),
@@ -2413,6 +2429,9 @@ async function enterGame(campaign) {
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
     startCombatPolling();
 
+    // U19 (#571) — recap card after a >24h gap (backend decides should_show).
+    maybeShowRecap(campaign.id);
+
     // E1 (#416) — load active quests into the quest bar on campaign entry / resume.
     // Without this, the bar stays hidden until after the first turn of the session.
     try {
@@ -3516,8 +3535,14 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         if (result.active_quests) renderQuestBar(result.active_quests);
 
         await refreshCharacterData();
+        await refreshEquippedDurability();  // U16: świeży stan trwałości dla HUD walki
         await pollCombatState();
         updateInputPlaceholder();
+
+        // U16 (#564): NPC-handlarz w narracji → otwórz interaktywny sklep
+        if (result.open_shop && result.open_shop.npc_key) {
+            openShopModal(result.open_shop.npc_key);
+        }
 
         // E25: show onboarding cards for first-time mechanic triggers
         if (result.onboarding_cards && result.onboarding_cards.length > 0) {
@@ -3909,7 +3934,16 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         let rollBubbleEl = null;
         if (sr.skill_label || sr.skill_key) {
             const skillName = sr.skill_label || sr.skill_key || 'Test';
-            const outcome = sr.nat20 ? ' — Naturalny 20!' : sr.nat1 ? ' — Naturalny 1' : sr.success ? ' — Sukces' : ' — Porażka';
+            // S1 (#581) — 4 stopnie wg marginesu; nat 20/1 mają pierwszeństwo.
+            const margin = (typeof sr.margin === 'number')
+                ? sr.margin
+                : (sr.player_total - sr.opponent_total);
+            const marginStr = (margin >= 0 ? '+' : '') + margin;
+            let outcome;
+            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Sukces krytyczny ${marginStr}`;
+            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Porażka krytyczna ${marginStr}`;
+            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}`;
+            else outcome = ` — Porażka ${marginStr}`;
             const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
             appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
             // Keep reference to roll bubble so we can scroll to it (not the very bottom)
@@ -4253,17 +4287,113 @@ function showLootPopup(loot, gold) {
                 .map(x => Number(x.getAttribute('data-loot-idx')));
             if (picks.length > 0 && characterData?.id) {
                 try {
-                    await fetch(`/api/campaigns/${currentCampaignId}/combat/loot/claim`, {
+                    const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/loot/claim`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ character_id: characterData.id, selected_indexes: picks })
                     });
+                    // U17 (#565): celebrate affixed/rare drops with a highlighted card + diff vs equipped.
+                    const data = await r.json().catch(() => ({}));
+                    const specials = (data?.claimed || [])
+                        .map(c => c?.comparison)
+                        .filter(c => c && c.is_special);
+                    if (specials.length > 0) await showDropCelebration(specials);
                 } catch (_e) {}
             }
             resolve(picks);
         };
         elements.combatLootClaimBtn.onclick = claim;
         elements.combatLootSkipBtn.onclick = () => { el.hidden = true; resolve([]); };
+    });
+}
+
+// U17 (#565): affix effect → short human label for the celebration card.
+function _affixEffectLabel(eff) {
+    const t = String(eff?.type || '').toLowerCase();
+    const v = Number(eff?.value ?? 0);
+    const sign = v >= 0 ? '+' : '';
+    if (t === 'damage_bonus') return `${sign}${v} obrażeń`;
+    if (t === 'ac_bonus') return `${sign}${v} pancerza`;
+    if (t === 'heal_on_hit') return `${sign}${v} leczenia przy trafieniu`;
+    if (t === 'attack_bonus') return `${sign}${v} do trafienia`;
+    return t ? `${t} ${sign}${v}` : '';
+}
+
+// U17 (#565): one diff row (↑/↓/= or "brak porównania" when nothing equipped).
+function _dropDiffRow(label, value) {
+    if (value === null || value === undefined) {
+        return `<div class="drop-diff drop-diff--none"><span>${escapeHtml(label)}</span><span>— brak porównania</span></div>`;
+    }
+    const num = Number(value);
+    const cls = num > 0 ? 'drop-diff--up' : (num < 0 ? 'drop-diff--down' : 'drop-diff--same');
+    const arrow = num > 0 ? '↑' : (num < 0 ? '↓' : '=');
+    const shown = num > 0 ? `+${num}` : `${num}`;
+    return `<div class="drop-diff ${cls}"><span>${escapeHtml(label)}</span><span>${arrow} ${shown}</span></div>`;
+}
+
+function showDropCelebration(specials) {
+    return new Promise(resolve => {
+        const el = elements.dropCelebrationOverlay;
+        if (!el || !Array.isArray(specials) || specials.length === 0) { resolve(); return; }
+        const cards = specials.map(c => {
+            const rarity = String(c?.rarity_label || 'common');
+            const name = String(c?.name || c?.item_type || 'Przedmiot');
+            const affixHtml = (c?.affixes || []).map(a => {
+                const fx = (a?.effects || []).map(_affixEffectLabel).filter(Boolean).join(', ');
+                return `<li class="drop-affix"><strong>${escapeHtml(String(a?.name || ''))}</strong>${fx ? ` — ${escapeHtml(fx)}` : ''}</li>`;
+            }).join('');
+            const diff = c?.diff || {};
+            let diffHtml = '';
+            if (c?.item_type === 'weapon') {
+                diffHtml += _dropDiffRow('Obrażenia', diff.damage);
+                if ('attack_bonus' in diff) diffHtml += _dropDiffRow('Do trafienia', diff.attack_bonus);
+            } else if (c?.item_type === 'armor') {
+                diffHtml += _dropDiffRow('Pancerz', diff.ac);
+            }
+            const canEquip = c?.suggested_slot && c?.inventory_id != null;
+            const equipBtn = canEquip
+                ? `<button type="button" class="combat-end-btn drop-equip-btn" data-drop-equip data-inv="${c.inventory_id}" data-slot="${escapeHtml(String(c.suggested_slot))}">Załóż</button>`
+                : '';
+            return `
+                <div class="drop-card drop-card--${escapeHtml(rarity)}">
+                    <div class="drop-card__head">
+                        <span class="drop-card__icon">${c?.item_type === 'armor' ? '🛡️' : '⚔️'}</span>
+                        <span class="drop-card__name">${escapeHtml(name)}</span>
+                        <span class="drop-rarity drop-rarity--${escapeHtml(rarity)}">${escapeHtml(rarity)}</span>
+                    </div>
+                    ${affixHtml ? `<ul class="drop-affix-list">${affixHtml}</ul>` : ''}
+                    <div class="drop-diff-block">${diffHtml}</div>
+                    ${equipBtn}
+                </div>`;
+        }).join('');
+        elements.dropCelebrationList.innerHTML = cards;
+        el.hidden = false;
+
+        // Załóż buttons — reuse the existing equip endpoint.
+        el.querySelectorAll('[data-drop-equip]').forEach(btn => {
+            btn.onclick = async () => {
+                btn.disabled = true;
+                const inv = Number(btn.getAttribute('data-inv'));
+                const slot = btn.getAttribute('data-slot');
+                try {
+                    const r = await fetch(`/api/inventory/${characterData.id}/equip`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ inventory_id: inv, slot })
+                    });
+                    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'błąd ekwipowania');
+                    btn.textContent = '✓ Założono';
+                    showToast('Przedmiot założony.', 'info');
+                    await refreshCharacterData();
+                } catch (err) {
+                    btn.disabled = false;
+                    showToast(err?.message || 'Nie udało się założyć', 'error');
+                }
+            };
+        });
+
+        const close = () => { el.hidden = true; resolve(); };
+        elements.dropCelebrationCloseBtn.onclick = close;
     });
 }
 
@@ -4445,13 +4575,21 @@ function _renderInitiativeTrack(cs) {
             return `${meta?.glyph || '•'} ${label}`;
         }).filter(Boolean).join(' · ');
         const _condTitleSuffix = _badgeNames ? ' · ' + _badgeNames : '';
+        // U15 — visible wound tier on each combatant chip (colour dot + label).
+        // Lets the player read "focus the wounded enemy"; hidden while > 75% HP.
+        const _wound = downed ? null : getWoundLabel(hpCur, hpMax);
+        const _woundHTML = _wound
+            ? `<div class="init-chip__wound init-chip__wound--${_wound.tier}" title="${escapeHtml(_wound.label)}"><span class="init-chip__wound-dot" style="background:${_wound.color}"></span><span class="init-chip__wound-label" style="color:${_wound.color}">${escapeHtml(_wound.label)}</span></div>`
+            : '';
+        const _woundTitleSuffix = _wound ? ' · ' + _wound.label : '';
         return `
-            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}${_condTitleSuffix}">
+            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}${_woundTitleSuffix}${_condTitleSuffix}">
                 <div class="init-chip__zone" aria-label="${zoneLabel}">${zoneGlyph}</div>
                 ${_badges ? `<div class="init-chip__cond-row">${_badges}</div>` : ''}
                 <div class="init-chip__portrait">${portrait}</div>
                 <div class="init-chip__name">${escapeHtml(name)}</div>
                 <div class="init-chip__ini">${ini}</div>
+                ${_woundHTML}
                 <div class="init-chip__hp"><div class="init-chip__hp-fill init-chip__hp-fill--${tier}" style="width: ${pct}%"></div></div>
             </div>`;
     }).join('');
@@ -4506,6 +4644,13 @@ function renderCombatUI(cs) {
         if (isPlayer) {
             const hpPct = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
             const woundHTML = renderWoundLabelHTML(hpCur, hpMax);
+            const wpn = _equippedDurability.weapon;
+            let duraWarn = '';
+            if (wpn && wpn.broken) {
+                duraWarn = `<div class="combat-dura-warn combat-dura-warn--broken">⚔ Twój oręż pęknięty — ciosy słabsze (−${wpn.penalty_pct}%)</div>`;
+            } else if (wpn && Number(wpn.pct) <= 20) {
+                duraWarn = `<div class="combat-dura-warn">⚔ Twój oręż ledwo trzyma się rękojeści (${wpn.pct}%)</div>`;
+            }
             return `
                 <div class="combat-combatant combat-combatant--player">
                     <div class="combat-combatant__icon">🛡️</div>
@@ -4522,6 +4667,7 @@ function renderCombatUI(cs) {
                             <div class="combat-enemy__bar-fill combat-player__bar-fill--${hpPct}" style="width: ${pct}%"></div>
                         </div>
                         ${woundHTML}
+                        ${duraWarn}
                     </div>
                 </div>`;
         }
@@ -4696,6 +4842,87 @@ function pickEnemyTarget(cs) {
     return living[0] || null;
 }
 
+// #569: visible 3D dice modal for combat rolls. Reuses the skill-test dice-overlay +
+// DICE.dice_box, but decoupled from skill-test resolution (no resolveSkillTest, no
+// "back to campaigns" skip button). Lands on the pre-rolled d20. Returns a Promise that
+// resolves when the modal closes (auto ~1.6s or on click) so combat can continue.
+function playCombatDiceRoll(forcedD20, label) {
+    return new Promise((resolve) => {
+        const overlay     = document.getElementById('dice-overlay');
+        const container   = document.getElementById('dice-container');
+        const skillCard   = document.getElementById('dice-skill-card');
+        const skipBtn     = document.getElementById('dice-skip-btn');
+        const resultCard  = document.getElementById('dice-result-card');
+        const resultSkill = document.getElementById('dice-result-skill');
+        const resultIntent= document.getElementById('dice-result-intent');
+        const resultNum   = document.getElementById('dice-result-num');
+        const resultTot   = document.getElementById('dice-result-total');
+        const resultVerd  = document.getElementById('dice-result-verdict');
+        if (!overlay || !container || !resultCard || !resultNum) { resolve(); return; }
+
+        const d20 = Math.max(1, Math.min(20, parseInt(forcedD20, 10) || 1));
+
+        if (resultSkill)  resultSkill.textContent  = String(label || 'Atak').toUpperCase();
+        if (resultIntent) resultIntent.hidden = true;
+        resultNum.textContent  = ''; resultNum.className  = '';
+        if (resultTot)  resultTot.textContent  = 'k20';
+        resultVerd.textContent = ''; resultVerd.className = '';
+        resultCard.hidden = true;
+        if (skillCard) skillCard.hidden = true;
+        if (skipBtn)   skipBtn.style.display = 'none';   // combat roll ≠ skill-test: no "back to campaigns"
+        overlay.hidden = false;
+
+        let _done = false;
+        const finish = () => {
+            if (_done) return;
+            _done = true;
+            overlay.removeEventListener('click', finish);
+            overlay.hidden = true;
+            if (skillCard) skillCard.hidden = false;
+            if (skipBtn)   skipBtn.style.display = '';
+            resolve();
+        };
+
+        const showResult = (rolled) => {
+            resultNum.textContent = rolled;
+            resultNum.className   = rolled === 20 ? 'nat20' : rolled === 1 ? 'nat1' : '';
+            if (rolled === 20)      { resultVerd.textContent = '✦ Naturalny 20!'; resultVerd.className = 'nat20'; }
+            else if (rolled === 1)  { resultVerd.textContent = '✧ Naturalny 1';   resultVerd.className = 'nat1'; }
+            resultCard.hidden = false;
+            setTimeout(finish, 1600);
+            overlay.addEventListener('click', finish, { once: true });
+        };
+
+        requestAnimationFrame(() => {
+            // Fallback: brief number spin when the 3D dice library failed to load.
+            if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
+                resultCard.hidden = false;
+                let ticks = 0;
+                const iv = setInterval(() => {
+                    resultNum.textContent = Math.ceil(Math.random() * 20);
+                    if (++ticks >= 10) { clearInterval(iv); showResult(d20); }
+                }, 60);
+                return;
+            }
+            try {
+                if (!_diceBox) {
+                    _diceBox = new DICE.dice_box(container);
+                } else {
+                    _diceBox.clear();
+                    _diceBox.reinit(container);
+                }
+                _diceBox.setDice('1d20');
+            } catch (_e) {
+                showResult(d20);
+                return;
+            }
+            _diceBox.start_throw(() => [d20], (notation) => {
+                setTimeout(() => showResult(notation.result[0]), 400);
+            });
+        });
+    });
+}
+
 async function handleCombatAttack() {
     window.clog?.event('combat_attack_invoked', { campaign_id: currentCampaignId, busy: combatBusy, current_turn: lastCombatState?.current_turn ?? null });
     if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) {
@@ -4720,6 +4947,10 @@ async function handleCombatAttack() {
         if (!diceResp.ok) throw new Error(`Kość: HTTP ${diceResp.status}`);
         const diceData = await diceResp.json();
         const d20 = Number(diceData.total ?? 0);
+
+        // #569: visible 3D dice modal (parity with skill-test rolls). Lands on the
+        // already-rolled d20, then resolves so combat continues.
+        await playCombatDiceRoll(d20, 'Atak');
 
         const target = pickEnemyTarget(lastCombatState);
         const body = { raw_d20: d20, attacker: 'player' };
@@ -4901,23 +5132,12 @@ async function sendCombatNarration(dbLine) {
     if (!currentCampaignId || !characterData?.id) return;
     const typingIndicator = showTypingIndicator();
     try {
-        const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
-            text: dbLine,
-            character_id: characterData.id
-        });
-        typingIndicator.remove();
-        let gmText = null;
-        if (response.result) {
-            gmText = typeof response.result === 'string' ? response.result : (response.result.message || response.result.narrative);
-        }
-        gmText = gmText || response.assistant_text || response.gm_response || response.content;
-        if (gmText) {
-            const { narrative: gmContent, ...gmMeta } = parseGmFull(gmText);
-            if (gmContent && gmContent.trim()) {
-                appendMessage({ role: 'assistant', content: gmContent, created_at: response.created_at || new Date(), debugMeta: gmMeta });
-                scrollToBottom();
-            }
-        }
+        // #566: combat-roll narration MUST go through the streaming endpoint. It renders
+        // the [GM_ROLL] dice card and skips the "Walka trwa!" block — the non-streaming
+        // /turns path mis-blocks this payload the moment the attack passes the turn to the
+        // enemy (it lacks the streaming path's current_turn=='player' guard). Using the
+        // shared stream reader also keeps GM colour + combat-ended handling consistent.
+        await _sendTurnStream(dbLine, 'combat_roll', typingIndicator);
     } catch (e) {
         typingIndicator.remove();
         console.error('[Combat] narration error:', e);
@@ -5906,10 +6126,17 @@ async function renderInventoryTab(character) {
     const occupied = { head: false, torso: false, l_arm: false, r_arm: false,
                        l_leg: false, r_leg: false, main_hand: false, off_hand: false };
 
+    // U16: odśwież cache trwałości założonej broni/zbroi (dla ostrzeżenia w HUD walki).
+    const _eqDura = { weapon: null, armor: null };
     for (const item of items) {
         if (Number(item.equipped) === 1 && item.slot) {
             equipped[item.slot] = item;
             occupied[item.slot] = true;
+            if (item.durability) {
+                const t = String(item.item_type || '').toLowerCase();
+                if (t === 'weapon' && !_eqDura.weapon) _eqDura.weapon = { ...item.durability, label: item.label };
+                if (t === 'armor' && !_eqDura.armor) _eqDura.armor = { ...item.durability, label: item.label };
+            }
             // Full-coverage armor: stamp the limb slots as locked.
             for (const cs of (item.covered_slots || [])) {
                 if (cs !== item.slot) {
@@ -5923,6 +6150,7 @@ async function renderInventoryTab(character) {
             backpack.push(item);
         }
     }
+    _equippedDurability = _eqDura;
 
     // Stage 5 E7: gather body-part wound conditions from sheet.
     const woundSet = _collectWoundSet();
@@ -6053,7 +6281,8 @@ function _renderAnatomySlot(def, item, lockingAnchor, woundSet) {
 
     let body, action;
     if (item) {
-        body = `<div class="anatomy-slot__name">${escapeHtml(item.label || item.key || '?')}</div>`;
+        const slotDura = item.durability ? _durabilityBarHTML(item.durability, { compact: true }) : '';
+        body = `<div class="anatomy-slot__name">${escapeHtml(item.label || item.key || '?')}</div>${slotDura}`;
         action = `<button type="button" class="anatomy-slot__unequip" data-action="unequip" data-inventory-id="${item.id}" title="Zdejmij">✕</button>`;
     } else if (isLockedByFull) {
         const lockKind = (lockingAnchor?.item_type || '').toLowerCase() === 'weapon'
@@ -6089,6 +6318,42 @@ function _renderAnatomySlot(def, item, lockingAnchor, woundSet) {
         </div>`;
 }
 
+// U16 (#564) — pasek trwałości. d = {current,max,pct,broken,penalty_pct} albo null.
+// Tylko pokazuje stan z mechaniki (Zasady 1-5) — nic nie zmienia.
+function _durabilityBarHTML(d, opts = {}) {
+    if (!d) return '';
+    const pct = Math.max(0, Math.min(100, Number(d.pct) || 0));
+    const tier = d.broken ? 'broken' : (pct <= 20 ? 'low' : (pct <= 50 ? 'mid' : 'high'));
+    const label = d.broken
+        ? `Pęknięta (−${d.penalty_pct}%)`
+        : `Trwałość ${d.current}/${d.max}`;
+    return `
+        <div class="dura ${opts.compact ? 'dura--compact' : ''}" title="${escapeHtml(label)}">
+            <div class="dura__bar"><div class="dura__fill dura__fill--${tier}" style="width:${pct}%"></div></div>
+            ${opts.compact ? '' : `<div class="dura__label dura__label--${tier}">${escapeHtml(label)}</div>`}
+        </div>`;
+}
+
+// U16 — cache trwałości założonej broni/zbroi, żeby HUD walki mógł ostrzec przy ≤20%
+// bez dodatkowego zapytania na każdy render. Odświeżane przy renderze ekwipunku i po turze.
+let _equippedDurability = { weapon: null, armor: null };
+
+async function refreshEquippedDurability() {
+    if (!characterData?.id) return;
+    try {
+        const resp = await fetch(`/api/inventory/${characterData.id}`).then(r => r.json());
+        if (!resp?.ok || !Array.isArray(resp.data)) return;
+        const next = { weapon: null, armor: null };
+        for (const it of resp.data) {
+            if (Number(it.equipped) !== 1 || !it.durability) continue;
+            const t = String(it.item_type || '').toLowerCase();
+            if (t === 'weapon' && !next.weapon) next.weapon = { ...it.durability, label: it.label };
+            if (t === 'armor' && !next.armor) next.armor = { ...it.durability, label: it.label };
+        }
+        _equippedDurability = next;
+    } catch (_e) { /* best effort */ }
+}
+
 function _renderBackpackRow(item, occupied) {
     const kind = _invIconKind(item);
     const t = String(item.item_type || '').toLowerCase();
@@ -6104,11 +6369,13 @@ function _renderBackpackRow(item, occupied) {
         action = `<button type="button" class="inv-equip-btn inv-equip-btn--use" data-action="use" data-inventory-id="${item.id}">Użyj</button>`;
     }
 
+    const dura = (item.durability && (canEquip)) ? _durabilityBarHTML(item.durability, { compact: true }) : '';
     return `
         <div class="inv-row" data-inventory-id="${item.id}">
             <div class="inv-row__icon">${INV_ICONS[kind]}</div>
             <div class="inv-row__info">
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
+                ${dura}
             </div>
             ${action}
         </div>`;
@@ -6223,11 +6490,224 @@ function _showItemDetailModal(d) {
             </div>
             ${d.description ? `<div style="color:#bbb;font-size:.88rem;line-height:1.5;margin-bottom:12px">${escapeHtml(d.description)}</div>` : ''}
             <div>${statRows}</div>
+            ${d.durability ? `<div style="margin-top:12px">${_durabilityBarHTML(d.durability)}</div>` : ''}
             ${affixHtml}
+            <div id="item-actions" style="margin-top:14px"></div>
         </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     overlay.querySelector('#item-view-close').addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
+    // U16 (#564): cost-preview dla naprawy + kuźni afiksów — dociągamy ceny async.
+    _populateItemActions(d, overlay);
+}
+
+// U16 (#564) — okno sklepu (kup/sprzedaj) + cost-preview + komunikat anti-farm.
+async function openShopModal(npcKey) {
+    if (!characterData?.id) return;
+    document.getElementById('shop-modal')?.remove();
+    let data = null;
+    try {
+        const r = await fetch(`/api/shop/by-key/${encodeURIComponent(npcKey)}?character_id=${characterData.id}`);
+        const j = await r.json();
+        if (j?.ok) data = j.data;
+    } catch (_e) { /* ignore */ }
+    if (!data) { showToast('Handlarz nie ma teraz nic na sprzedaż', 'error'); return; }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'shop-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    overlay.innerHTML = `
+        <div style="background:#14141c;border:1px solid rgba(245,158,11,.3);border-radius:12px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.6)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 18px 8px">
+                <div style="font-size:1.05rem;font-weight:700;color:#f5deb3">🏪 ${escapeHtml(data.npc?.label || 'Handlarz')}</div>
+                <button id="shop-close" style="background:none;border:none;color:#999;font-size:1.3rem;cursor:pointer;line-height:1">✕</button>
+            </div>
+            <div style="padding:0 18px;display:flex;align-items:center;gap:8px;color:#f5c842;font-size:.9rem">
+                <span>Twoje złoto:</span><strong id="shop-gold">${data.character_gold}</strong><span>zł</span>
+            </div>
+            <div style="display:flex;gap:6px;padding:10px 18px 0">
+                <button id="shop-tab-buy" class="shop-tab shop-tab--active" data-tab="buy">Kup</button>
+                <button id="shop-tab-sell" class="shop-tab" data-tab="sell">Sprzedaj</button>
+            </div>
+            <div id="shop-body" style="overflow-y:auto;padding:12px 18px 18px;flex:1"></div>
+        </div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#shop-close').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+
+    let _gold = Number(data.character_gold) || 0;
+    const goldEl = overlay.querySelector('#shop-gold');
+    const bodyEl = overlay.querySelector('#shop-body');
+    const setGold = (g) => { _gold = g; if (goldEl) goldEl.textContent = g; };
+
+    const renderBuy = () => {
+        const items = data.items || [];
+        bodyEl.innerHTML = items.length ? items.map((it, i) => {
+            const price = Number(it.buy_price_gp ?? it.value_gp ?? 0);
+            const after = _gold - price;
+            const afford = after >= 0;
+            return `<div class="shop-row">
+                <div class="shop-row__info">
+                    <div class="shop-row__name">${escapeHtml(it.label || it.key)}</div>
+                    <div class="shop-row__preview">${price} zł → zostanie ${after} zł</div>
+                </div>
+                <button class="shop-buy-btn" data-i="${i}" ${afford ? '' : 'disabled'}>${afford ? 'Kup' : 'Za mało'}</button>
+            </div>`;
+        }).join('') : '<div class="inv-empty">Handlarz nie ma nic na sprzedaż</div>';
+        bodyEl.querySelectorAll('.shop-buy-btn').forEach(b => b.addEventListener('click', async () => {
+            const it = items[Number(b.dataset.i)];
+            b.disabled = true;
+            try {
+                const r = await fetch(`/api/shop/${data.npc.id}/buy`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ character_id: characterData.id, item_type: it.type, item_key: it.key }),
+                });
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.detail || 'Nie udało się kupić');
+                setGold(j.data.gold_gp);
+                showToast(`Kupiono: ${it.label} za ${j.data.paid_gp} zł`, 'success');
+                renderBuy();
+            } catch (e) { showToast(e.message || 'Błąd zakupu', 'error'); b.disabled = false; }
+        }));
+    };
+
+    const renderSell = () => {
+        const items = data.sell_items || [];
+        bodyEl.innerHTML = items.length ? items.map((it, i) => {
+            const price = Number(it.sell_price_gp ?? 0);
+            const after = _gold + price;
+            const qty = it.quantity > 1 ? ` ×${it.quantity}` : '';
+            return `<div class="shop-row">
+                <div class="shop-row__info">
+                    <div class="shop-row__name">${escapeHtml(it.label || it.key)}${qty}</div>
+                    <div class="shop-row__preview">+${price} zł → razem ${after} zł</div>
+                </div>
+                <button class="shop-sell-btn" data-i="${i}" ${price > 0 ? '' : 'disabled'}>${price > 0 ? 'Sprzedaj' : '—'}</button>
+            </div>`;
+        }).join('') : '<div class="inv-empty">Nie masz nic do sprzedania</div>';
+        bodyEl.querySelectorAll('.shop-sell-btn').forEach(b => b.addEventListener('click', async () => {
+            const it = items[Number(b.dataset.i)];
+            b.disabled = true;
+            try {
+                const r = await fetch(`/api/shop/${data.npc.id}/sell`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ character_id: characterData.id, inventory_id: it.inventory_id }),
+                });
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.detail || 'Nie udało się sprzedać');
+                const d = j.data;
+                setGold(d.gold_gp);
+                if (d.oversupply) {
+                    showToast(`Cena obniżona (nadpodaż): ${d.base_sell_gp} zł → ${d.earned_gp} zł. Handlarz kupił już ${d.recent_sell_count} szt. w ciągu doby.`, 'warning');
+                } else {
+                    showToast(`Sprzedano: ${it.label} za ${d.earned_gp} zł`, 'success');
+                }
+                // odśwież listę sprzedaży z serwera (ilości się zmieniły)
+                try {
+                    const rr = await fetch(`/api/shop/by-key/${encodeURIComponent(npcKey)}?character_id=${characterData.id}`);
+                    const jj = await rr.json();
+                    if (jj?.ok) { data.sell_items = jj.data.sell_items; data.items = jj.data.items; }
+                } catch (_e) { /* keep old */ }
+                renderSell();
+            } catch (e) { showToast(e.message || 'Błąd sprzedaży', 'error'); b.disabled = false; }
+        }));
+    };
+
+    const tabBuy = overlay.querySelector('#shop-tab-buy');
+    const tabSell = overlay.querySelector('#shop-tab-sell');
+    tabBuy.addEventListener('click', () => { tabBuy.classList.add('shop-tab--active'); tabSell.classList.remove('shop-tab--active'); renderBuy(); });
+    tabSell.addEventListener('click', () => { tabSell.classList.add('shop-tab--active'); tabBuy.classList.remove('shop-tab--active'); renderSell(); });
+    renderBuy();
+}
+
+// U16 (#564) — dociąga ceny naprawy i kuźni afiksów; wstawia karty akcji z podglądem kosztu.
+async function _populateItemActions(d, overlay) {
+    const host = overlay.querySelector('#item-actions');
+    if (!host || !characterData?.id) return;
+    const cid = characterData.id;
+    const isGear = d.item_type === 'weapon' || d.item_type === 'armor';
+    if (!isGear) return;
+
+    let gold = 0;
+    try {
+        const g = await apiRequest('GET', `/characters/${cid}/gold`);
+        if (g?.ok && g.data?.gold_gp != null) gold = g.data.gold_gp;
+        else if (g?.gold_gp != null) gold = g.gold_gp;
+    } catch (_e) { /* ignore */ }
+
+    const cards = [];
+
+    // ── Naprawa ──
+    if (d.durability && (d.durability.broken || Number(d.durability.pct) < 100)) {
+        try {
+            const r = await apiRequest('GET', `/characters/${cid}/inventory/${d.id}/repair-cost`);
+            if (r && r.ok && Number(r.cost) > 0) {
+                const after = gold - r.cost;
+                const afford = after >= 0;
+                cards.push(`
+                    <div class="item-action-card">
+                        <div class="item-action-card__title">🔧 Naprawa</div>
+                        <div class="item-action-card__preview">Koszt ${r.cost} zł → zostanie ${after} zł (${r.missing_pts} pkt)</div>
+                        <button class="item-action-btn" data-act="repair" ${afford ? '' : 'disabled'}>${afford ? 'Napraw' : 'Za mało złota'}</button>
+                    </div>`);
+            }
+        } catch (_e) { /* skip */ }
+    }
+
+    // ── Kuźnia afiksów ──
+    try {
+        const a = await apiRequest('GET', `/characters/${cid}/inventory/${d.id}/affix-costs`);
+        if (a && a.ok) {
+            const apply = a.apply_costs || {};
+            const applyBtns = Object.keys(apply).map(tier => {
+                const cost = apply[tier]; const after = gold - cost; const afford = after >= 0;
+                return `<button class="item-action-btn item-action-btn--sm" data-act="apply" data-tier="${tier}" data-cost="${cost}" ${afford ? '' : 'disabled'}>T${tier}: ${cost} zł → ${after}</button>`;
+            }).join('');
+            const existing = (a.current_affixes || []).map(af => {
+                const rr = af.reroll_cost != null ? `<button class="item-action-btn item-action-btn--sm" data-act="reroll" data-affix="${escapeHtml(af.affix_key)}" data-cost="${af.reroll_cost}" ${gold >= af.reroll_cost ? '' : 'disabled'}>Reroll ${af.reroll_cost} zł → ${gold - af.reroll_cost}</button>` : '';
+                const up = af.upgrade_cost != null ? `<button class="item-action-btn item-action-btn--sm" data-act="upgrade" data-affix="${escapeHtml(af.affix_key)}" data-cost="${af.upgrade_cost}" ${gold >= af.upgrade_cost ? '' : 'disabled'}>Ulepsz ${af.upgrade_cost} zł → ${gold - af.upgrade_cost}</button>` : '';
+                return (rr || up) ? `<div class="item-action-card__row"><span class="item-action-card__affix">${escapeHtml(af.affix_key)}</span>${rr}${up}</div>` : '';
+            }).join('');
+            cards.push(`
+                <div class="item-action-card">
+                    <div class="item-action-card__title">⚒ Kuźnia afiksów</div>
+                    <div class="item-action-card__preview">Nałóż nowy afiks:</div>
+                    <div class="item-action-card__btns">${applyBtns}</div>
+                    ${existing}
+                </div>`);
+        }
+    } catch (_e) { /* skip */ }
+
+    host.innerHTML = cards.join('');
+
+    const refreshAfter = async () => {
+        overlay.remove();
+        renderInventoryTab(characterData);
+        try {
+            const rr = await apiRequest('GET', `/inventory/${cid}/${d.id}/detail`);
+            if (rr?.ok && rr.data) _showItemDetailModal(rr.data);
+        } catch (_e) { /* ignore */ }
+    };
+
+    host.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
+        const act = btn.dataset.act;
+        btn.disabled = true;
+        try {
+            let body, url;
+            if (act === 'repair') {
+                url = `/characters/${cid}/repair-item`; body = { inventory_id: d.id };
+            } else if (act === 'apply') {
+                url = `/characters/${cid}/craft/apply-affix`; body = { inventory_id: d.id, tier: Number(btn.dataset.tier) };
+            } else if (act === 'reroll') {
+                url = `/characters/${cid}/craft/reroll-affix`; body = { inventory_id: d.id, affix_key: btn.dataset.affix };
+            } else if (act === 'upgrade') {
+                url = `/characters/${cid}/craft/upgrade-affix`; body = { inventory_id: d.id, affix_key: btn.dataset.affix };
+            }
+            await apiRequest('POST', url, body);
+            showToast(act === 'repair' ? 'Naprawiono!' : 'Gotowe!', 'success');
+            await refreshAfter();
+        } catch (e) { showToast(e.message || 'Błąd', 'error'); btn.disabled = false; }
+    }));
 }
 
 // ── #400 — Admin spectator + resume ──────────────────────────────────────────
@@ -6492,6 +6972,106 @@ function closeJournal() {
     }
 }
 
+// ── U19 (#571) — Recap "Poprzednio w Twojej przygodzie…" ────────────────────
+// Card shown automatically on campaign entry after a >24h real gap (backend
+// decides should_show). Read-only: it surfaces the saved summary + last turns +
+// active quests, never calls the LLM.
+
+let _recapShownForCampaign = null;  // avoid re-nagging within one session
+
+async function fetchRecap(cid) {
+    try {
+        const r = await fetch(`/api/campaigns/${cid}/recap`, {
+            headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+        });
+        if (!r.ok) return null;
+        return await r.json();
+    } catch (_e) {
+        return null;
+    }
+}
+
+function renderRecapCard(data) {
+    const gapEl = document.getElementById('recap-gap');
+    const bodyEl = document.getElementById('recap-body');
+    if (!gapEl || !bodyEl) return;
+
+    const hrs = data.hours_since_last;
+    if (hrs != null) {
+        const days = Math.floor(hrs / 24);
+        gapEl.textContent = days >= 1
+            ? `Wróciłeś po ${days} ${days === 1 ? 'dniu' : 'dniach'} przerwy.`
+            : 'Wróciłeś po dłuższej przerwie.';
+    } else {
+        gapEl.textContent = '';
+    }
+
+    const parts = [];
+    if (data.summary) {
+        parts.push(`<div class="recap-section">
+            <h3 class="recap-section__title">Streszczenie</h3>
+            <p class="recap-summary">${escapeHtml(data.summary)}</p>
+        </div>`);
+    }
+    if (Array.isArray(data.recent_turns) && data.recent_turns.length) {
+        const turns = data.recent_turns.slice().reverse().map(t => {
+            const p = t.player ? `<p class="recap-turn__player">🗣 ${escapeHtml(t.player)}</p>` : '';
+            const g = t.gm ? `<p class="recap-turn__gm">${escapeHtml(t.gm)}</p>` : '';
+            return `<div class="recap-turn"><span class="recap-turn__num">Tura ${t.turn_number}</span>${p}${g}</div>`;
+        }).join('');
+        parts.push(`<div class="recap-section">
+            <h3 class="recap-section__title">Ostatnio wydarzyło się</h3>
+            ${turns}
+        </div>`);
+    }
+    if (Array.isArray(data.active_quests) && data.active_quests.length) {
+        const quests = data.active_quests.map(q =>
+            `<li class="recap-quest"><strong>${escapeHtml(q.title || 'Zadanie')}</strong>${q.narrative ? ` — ${escapeHtml(q.narrative)}` : ''}</li>`
+        ).join('');
+        parts.push(`<div class="recap-section">
+            <h3 class="recap-section__title">Aktywne zadania</h3>
+            <ul class="recap-quests">${quests}</ul>
+        </div>`);
+    }
+    if (!parts.length) {
+        parts.push('<p class="recap-empty">Brak zapisanych wspomnień — po prostu graj dalej.</p>');
+    }
+    bodyEl.innerHTML = parts.join('');
+}
+
+function showRecapCard(data) {
+    renderRecapCard(data);
+    const ov = document.getElementById('recap-overlay');
+    if (ov) ov.hidden = false;
+}
+
+function closeRecapCard() {
+    const ov = document.getElementById('recap-overlay');
+    if (ov) ov.hidden = true;
+}
+
+// Auto-trigger on entry: show only when backend says should_show and not yet
+// shown for this campaign in this session.
+async function maybeShowRecap(cid) {
+    if (!cid || _recapShownForCampaign === cid) return;
+    const data = await fetchRecap(cid);
+    if (data && data.should_show) {
+        _recapShownForCampaign = cid;
+        showRecapCard(data);
+    }
+}
+
+// Manual "Przypomnij mi" from the journal panel — always shows, even ≤24h.
+async function openRecapManually() {
+    const cid = currentCampaignId;
+    if (!cid) return;
+    const data = await fetchRecap(cid);
+    if (data) {
+        if (typeof closeJournal === 'function') closeJournal();
+        showRecapCard(data);
+    }
+}
+
 async function loadJournalContent(forceRegenerate) {
     const { journalBody, journalEmpty, journalLoading, journalBanner } = elements;
     const cid = currentCampaignId;
@@ -6503,6 +7083,10 @@ async function loadJournalContent(forceRegenerate) {
         showJournalEmpty();
         return;
     }
+
+    // U18 (#570): structured sections (Zadania / Wątki / Kronika) — read-only,
+    // independent of the LLM recap below. Loaded in parallel, never blocks recap.
+    loadJournalSections(cid);
 
     journalLoading.style.display = 'flex';
     journalBody.style.display = 'none';
@@ -6606,25 +7190,95 @@ function showJournalText(text) {
     elements.journalEmpty.style.display = 'none';
 }
 
-// Wound label — mirrors backend get_wound_label() in economy_service.py.
-// Returns { label, tier, color } or null when HP > 75% (no label).
-// Tiers map to CSS classes so styling is decoupled from numbers.
+// ── U18 (#570): Dziennik gracza — structured sections ───────────────────────
+async function loadJournalSections(cid) {
+    const host = elements.journalSections;
+    if (!host) return;
+    try {
+        const r = await fetch(`/api/campaigns/${cid}/journal`, {
+            headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+        });
+        if (!r.ok) { host.style.display = 'none'; return; }
+        const data = await r.json().catch(() => null);
+        if (!data) { host.style.display = 'none'; return; }
+        renderJournalSections(data);
+    } catch (e) {
+        console.warn('[Journal] sections load failed', e);
+        host.style.display = 'none';
+    }
+}
+
+function renderJournalSections(data) {
+    const host = elements.journalSections;
+    if (!host) return;
+    const quests = Array.isArray(data.quests) ? data.quests : [];
+    const threads = Array.isArray(data.threads) ? data.threads : [];
+    const chronicle = Array.isArray(data.chronicle) ? data.chronicle : [];
+
+    if (!quests.length && !threads.length && !chronicle.length) {
+        host.style.display = 'none';
+        return;
+    }
+
+    const parts = [];
+
+    // Zadania
+    if (quests.length) {
+        const items = quests.map(q => {
+            const done = q.status === 'completed';
+            const cls = done ? 'journal-quest journal-quest--done' : 'journal-quest';
+            const mark = done ? '✓' : '◔';
+            const narr = q.narrative ? `<div class="journal-quest__narr">${escapeHtml(q.narrative)}</div>` : '';
+            return `<li class="${cls}"><span class="journal-quest__mark">${mark}</span><div><div class="journal-quest__title">${escapeHtml(q.title || '')}</div>${narr}</div></li>`;
+        }).join('');
+        parts.push(`<section class="journal-section"><h3 class="journal-section__title">📜 Zadania</h3><ul class="journal-list">${items}</ul></section>`);
+    }
+
+    // Wątki
+    if (threads.length) {
+        const items = threads.map(t => {
+            const turn = t.turn ? `<span class="journal-thread__turn">tura ${t.turn}</span>` : '';
+            return `<li class="journal-thread"><span class="journal-thread__hint">${escapeHtml(t.hint || '')}</span>${turn}</li>`;
+        }).join('');
+        parts.push(`<section class="journal-section"><h3 class="journal-section__title">🧵 Wątki</h3><ul class="journal-list">${items}</ul></section>`);
+    }
+
+    // Kronika
+    if (chronicle.length) {
+        const items = chronicle.map(e => {
+            const icon = e.type === 'beat' ? '⭐' : '•';
+            const turn = e.turn ? `<span class="journal-chron__turn">tura ${e.turn}</span>` : '';
+            return `<li class="journal-chron"><span class="journal-chron__icon">${icon}</span><span class="journal-chron__text">${escapeHtml(e.text || '')}</span>${turn}</li>`;
+        }).join('');
+        parts.push(`<section class="journal-section"><h3 class="journal-section__title">📖 Kronika</h3><ul class="journal-list">${items}</ul></section>`);
+    }
+
+    host.innerHTML = parts.join('');
+    host.style.display = 'block';
+}
+
+// Wound label — U15: derives from the single source of truth (WOUND_TIERS,
+// served by /config/wound-thresholds; fallback _WOUND_TIERS_FALLBACK). So the
+// player-facing label, its colour and the mechanical penalty never drift apart.
+// Returns { label, tier, color } or null when HP > 75% (healthy, no label).
 function getWoundLabel(currentHp, maxHp) {
     const hp = Math.max(0, Number(currentHp) || 0);
     const max = Math.max(1, Number(maxHp) || 1);
     const pct = (hp / max) * 100;
-    if (pct >= 76) return null;
-    if (pct >= 51) return { label: 'Ranny',             tier: 'minor',    color: '#ffc107' };
-    if (pct >= 26) return { label: 'Ciężko Ranny',      tier: 'impaired', color: '#ff9800' };
-    if (pct >= 11) return { label: 'Poważnie Ranny',    tier: 'desperate',color: '#f44336' };
-    return            { label: 'Na Skraju Śmierci', tier: 'near_death',color: '#7f0000' };
+    const tiers = Array.isArray(_woundThresholds.tiers) ? _woundThresholds.tiers : _WOUND_TIERS_FALLBACK;
+    let row = tiers.find(t => pct > t.min_pct) || tiers[tiers.length - 1];
+    if (!row || !row.label) return null;
+    return { label: row.label, tier: row.tier, color: row.color };
 }
 
 // Render markup for a wound label, or empty string when above threshold.
+// Colour is taken inline from the tier (authoritative) so it stays correct even
+// for tier keys without a dedicated CSS class; the tier class still drives the
+// near_death animation hook.
 function renderWoundLabelHTML(currentHp, maxHp) {
     const w = getWoundLabel(currentHp, maxHp);
     if (!w) return '';
-    return `<div class="wound-label wound-label--${w.tier}" aria-label="${w.label}"><span class="wound-label__orn">❦</span><span class="wound-label__text">${w.label}</span><span class="wound-label__orn">❦</span></div>`;
+    return `<div class="wound-label wound-label--${w.tier}" style="color:${w.color}" aria-label="${w.label}"><span class="wound-label__orn">❦</span><span class="wound-label__text">${w.label}</span><span class="wound-label__orn">❦</span></div>`;
 }
 
 function escapeHtml(s) {
@@ -8491,6 +9145,10 @@ function initEventListeners() {
 
     // Journal regen
     elements.btnJournalRegen?.addEventListener('click', () => loadJournalContent(true));
+
+    // U19 (#571) — recap card controls
+    document.getElementById('recap-continue-btn')?.addEventListener('click', closeRecapCard);
+    document.getElementById('journal-recap-btn')?.addEventListener('click', openRecapManually);
 
     // Go to campaigns from settings
     elements.btnGoToCampaigns?.addEventListener('click', handleGoToCampaigns);

@@ -291,12 +291,19 @@ ADMIN_MIGRATIONS = [
         character_id INTEGER NOT NULL,
         delta INTEGER NOT NULL,
         source TEXT NOT NULL DEFAULT 'unknown',
+        campaign_id INTEGER,
         meta_json TEXT,
         game_clock_day INTEGER,
         wall_clock_at TEXT NOT NULL DEFAULT (datetime('now')),
         reverted_at TEXT
     )
     """,
+    # U26 (#576) — campaign_id on the gold journal so economy telemetry can
+    # scope by campaign without a clock lookup. ALTER for DBs created before
+    # U26 (fails harmlessly if the column already exists); backfill from the
+    # character's current campaign.
+    "ALTER TABLE character_gold_log ADD COLUMN campaign_id INTEGER",
+    "UPDATE character_gold_log SET campaign_id = (SELECT c.campaign_id FROM characters c WHERE c.id = character_gold_log.character_id) WHERE campaign_id IS NULL",
     """
     CREATE INDEX IF NOT EXISTS idx_character_gold_log_char_day
     ON character_gold_log(character_id, game_clock_day DESC)

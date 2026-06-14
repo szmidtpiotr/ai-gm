@@ -29,6 +29,8 @@ except Exception:
 
 _VALID_KINDS = {"weapon", "armor", "item", "consumable"}
 _VALID_REVIEW_STATUS = {"permanent", "pending", "approved", "rejected"}
+_RARITY_MIN, _RARITY_MAX = 1, 5          # game_items.rarity dozwolony zakres (U12 numbers policy)
+_LOOT_WEIGHT_MIN, _LOOT_WEIGHT_MAX = 1, 100  # loot_entries.weight = % drop chance
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -109,7 +111,64 @@ def _check_value_range(conn: sqlite3.Connection) -> list[str]:
         ).fetchall()
         for key, price in rows:
             warns.append(f"[RANGE] {table} '{key}': {price_col}={price} < 0")
+    # weight_kg < 0 (waga przedmiotu nie może być ujemna)
+    for table in ("game_config_weapons", "game_items"):
+        if not _table_exists(conn, table) or not _col_exists(conn, table, "weight_kg"):
+            continue
+        rows = conn.execute(
+            f"SELECT key, weight_kg FROM {table} WHERE weight_kg < 0"
+        ).fetchall()
+        for key, w in rows:
+            warns.append(f"[RANGE] {table} '{key}': weight_kg={w} < 0")
     return warns
+
+
+def _check_loot_weight(conn: sqlite3.Connection) -> list[str]:
+    """(f) loot_entries.weight musi mieścić się w 1..100 (= % szansy na drop)."""
+    warns: list[str] = []
+    if not _table_exists(conn, "game_config_loot_entries"):
+        return warns
+    if not _col_exists(conn, "game_config_loot_entries", "weight"):
+        return warns
+    rows = conn.execute(
+        f"SELECT id, loot_table_key, weight FROM game_config_loot_entries "
+        f"WHERE weight < {_LOOT_WEIGHT_MIN} OR weight > {_LOOT_WEIGHT_MAX}"
+    ).fetchall()
+    for rid, ltk, w in rows:
+        warns.append(
+            f"[RANGE] game_config_loot_entries id={rid} (tabela '{ltk}'): "
+            f"weight={w} poza zakresem {_LOOT_WEIGHT_MIN}-{_LOOT_WEIGHT_MAX}"
+        )
+    return warns
+
+
+def _check_rarity(conn: sqlite3.Connection) -> list[str]:
+    """(g) game_items.rarity musi mieścić się w 1..5."""
+    warns: list[str] = []
+    if not _table_exists(conn, "game_items") or not _col_exists(conn, "game_items", "rarity"):
+        return warns
+    rows = conn.execute(
+        f"SELECT key, rarity FROM game_items "
+        f"WHERE rarity IS NOT NULL AND (rarity < {_RARITY_MIN} OR rarity > {_RARITY_MAX})"
+    ).fetchall()
+    for key, r in rows:
+        warns.append(
+            f"[ENUM] game_items '{key}': rarity={r} poza zakresem {_RARITY_MIN}-{_RARITY_MAX}"
+        )
+    return warns
+
+
+def _check_duplicate_keys(conn: sqlite3.Connection) -> list[str]:
+    """(e) Duplikat 'key' w game_items (rdzeń ujednoliconego katalogu — klucz musi być unikalny)."""
+    errs: list[str] = []
+    if not _table_exists(conn, "game_items"):
+        return errs
+    rows = conn.execute(
+        "SELECT key, COUNT(*) AS n FROM game_items GROUP BY key HAVING n > 1"
+    ).fetchall()
+    for key, n in rows:
+        errs.append(f"[DUP] game_items: klucz '{key}' występuje {n}× (musi być unikalny)")
+    return errs
 
 
 def _check_enum_violations(conn: sqlite3.Connection) -> list[str]:
@@ -173,6 +232,37 @@ def _check_orphans(conn: sqlite3.Connection) -> list[str]:
     return warns
 
 
+def _check_gold_drift(conn: sqlite3.Connection) -> list[str]:
+    """(g) U26: drift między saldem postaci a sumą delt w character_gold_log.
+
+    Każda zmiana złota powinna iść przez change_gold() → wiersz w logu. Jeśli
+    saldo ≠ suma delt, ktoś zmienił gold_gp z pominięciem journalingu (albo
+    saldo startowe nie zostało zalogowane). Tylko warning — telemetria, nie
+    integralność krytyczna.
+    """
+    warns: list[str] = []
+    if not _table_exists(conn, "characters") or not _table_exists(conn, "character_gold_log"):
+        return warns
+    rows = conn.execute(
+        """
+        SELECT c.id AS cid, COALESCE(c.gold_gp, 0) AS bal,
+               COALESCE((SELECT SUM(delta) FROM character_gold_log g
+                         WHERE g.character_id = c.id
+                           AND COALESCE(g.reverted_at, '') = ''), 0) AS sum_delta
+        FROM characters c
+        """
+    ).fetchall()
+    for r in rows:
+        bal = int(r["bal"] or 0)
+        s = int(r["sum_delta"] or 0)
+        if bal != s:
+            warns.append(
+                f"[GOLD_DRIFT] character_id={r['cid']}: saldo={bal} ≠ suma_delt={s} "
+                f"(rozjazd {bal - s}) — zmiana złota poza change_gold()?"
+            )
+    return warns
+
+
 # ── public API ────────────────────────────────────────────────────────────────
 
 def run_lint(db_path: str | None = None) -> dict:
@@ -190,10 +280,14 @@ def run_lint(db_path: str | None = None) -> dict:
     try:
         errors += _check_dangling_fk(conn)
         errors += _check_null_required(conn)
-        errors += _check_value_range(conn)
-        errors += _check_enum_violations(conn)
+        errors += _check_duplicate_keys(conn)
+        warnings += _check_value_range(conn)
+        warnings += _check_loot_weight(conn)
+        warnings += _check_rarity(conn)
+        warnings += _check_enum_violations(conn)
         warnings += _check_effect_json(conn)
         warnings += _check_orphans(conn)
+        warnings += _check_gold_drift(conn)
     finally:
         conn.close()
 

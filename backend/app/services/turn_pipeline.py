@@ -147,6 +147,123 @@ def _check_travel_desync(
     return True
 
 
+# ── U30 (#578): shared live-tor helpers ───────────────────────────────────────
+# Both the JSON handler (create_turn) and the streaming handler (create_turn_stream)
+# resolve directional MOVE intents through ONE helper so "idę na północ" moves the hex
+# on both endpoints, and run ONE guard that records narration↔state desync.
+
+def execute_directional_travel(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+    character_sheet: dict,
+    player_text: str,
+) -> dict:
+    """U30 directional fast-path — resolve a free-text MOVE intent mechanically BEFORE the LLM.
+
+    Reads the current hex from `game_sessions.session_flags`, detects a directional MOVE
+    intent (`detect_move_intent`), and on match calls `resolve_chain_travel`. On success the
+    game clock is advanced. Returns:
+      {"executed": bool, "system_fact": str|None, "intent": dict|None}
+    `system_fact` is a [SYSTEM: …] line to inject into the narrator prompt so the LLM narrates
+    the resolved move (or the refusal). `executed` is True only when the hex actually changed.
+    """
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+    cur = flags.get("current_hex") or {"q": 0, "r": 0}
+
+    mv = detect_move_intent(player_text, cur)
+    if not mv:
+        return {"executed": False, "system_fact": None, "intent": None}
+
+    from app.services.hex_travel_service import resolve_chain_travel
+
+    dq = int(mv["params"]["destination_q"])
+    dr = int(mv["params"]["destination_r"])
+    tr = resolve_chain_travel(
+        campaign_id=campaign_id,
+        character_id=character_id,
+        from_hex=(int(cur["q"]), int(cur["r"])),
+        to_hex=(dq, dr),
+        character_sheet=character_sheet,
+        conn=conn,
+    )
+
+    if tr.get("ok"):
+        try:
+            from app.services.clock_service import advance_clock
+            hours = float(tr.get("total_hours") or 0.0)
+            if hours > 0:
+                advance_clock(campaign_id, hours, "travel", conn=conn)
+                conn.commit()
+        except Exception as clk_err:  # clock must never break a turn
+            logger.warning("u30_clock_advance_failed", error=str(clk_err))
+
+        arr = tr.get("arrived_hex") or {}
+        hex_info = tr.get("hex_data") or {}
+        enc = tr.get("encounter")
+        fact = (
+            f"\n[SYSTEM: Podróż wykonana mechanicznie: gracz przemieścił się na hex "
+            f"({arr.get('q')},{arr.get('r')}), teren: {hex_info.get('hex_type', 'nieznany')}, "
+            f"czas podróży: {tr.get('total_hours', 0)}h."
+        )
+        if enc:
+            fact += (
+                f" Podróż przerwana spotkaniem: {enc.get('enemy_key')} — "
+                "opisz nadejście zagrożenia."
+            )
+        fact += (
+            " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
+            "ruch już rozstrzygnięty mechanicznie.]"
+        )
+        return {"executed": True, "system_fact": fact, "intent": mv}
+
+    fact = (
+        f"\n[SYSTEM: Gracz próbuje podróżować w kierunku "
+        f"'{mv['params'].get('direction')}', ale mechanika odmówiła: "
+        f"{tr.get('error', 'nieprzejezdny teren')}. Opisz przeszkodę narracyjnie. "
+        "NIE opisuj dotarcia do celu.]"
+    )
+    return {"executed": False, "system_fact": fact, "intent": mv}
+
+
+def guard_travel_desync(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    narrative: str,
+    move_executed: bool,
+    turn_number: int = 0,
+) -> bool:
+    """U30.4 anti-desync guard, wired into the live tor (#578).
+
+    When the narrator claims travel (`_TRAVEL_NARRATIVE_MARKERS`) but no mechanical move
+    happened this turn, record `travel_narrated_without_move` in `llm_tag_errors` so the
+    desync is measurable (gate criterion B6) and visible. Returns True when a desync is
+    flagged. Never raises.
+    """
+    if move_executed:
+        return False
+    if not _TRAVEL_NARRATIVE_MARKERS.search(narrative or ""):
+        return False
+    logger.warning(
+        "travel_narrated_without_move",
+        campaign_id=campaign_id,
+        snippet=(narrative or "")[:120],
+    )
+    try:
+        from app.services.llm_tag_parser import log_tag_error
+        log_tag_error(
+            conn, campaign_id, turn_number, (narrative or "")[:120],
+            "travel_narrated_without_move",
+        )
+    except Exception as log_err:  # logging must not crash a turn
+        logger.warning("travel_desync_log_failed", error=str(log_err))
+    return True
+
+
 # ── Main pipeline function ─────────────────────────────────────────────────
 
 def process_v2_turn(

@@ -762,3 +762,34 @@ def get_campaign_debug_state(
         "c1_debug": c1_debug,
         "narrative_state": narrative_state,
     }
+
+
+@router.get("/robbery-preview", tags=["debug"])
+def robbery_preview(level: int = Query(1, ge=1, le=20)):
+    """U24 (#574) — read-only podgląd mechaniki napadu (counterplay).
+
+    Deterministyczny kontrakt dla Playwright: DC obrony wg poziomu z zamka
+    {8,12,16,20,24} + stałe granic (próg biedy, limit 24h, % kradzieży).
+    Nie zmienia żadnego stanu. Mechanika decyduje — narrację robi LLM.
+    """
+    from app.services import robbery_service as _rs
+
+    dc_lock = sorted(set(_rs._DC_LOCK))
+    dc_by_level = {str(lvl): _rs.robbery_defense_dc(lvl) for lvl in range(1, 16)}
+    return {
+        "ok": True,
+        "requested_level": level,
+        "defense_dc": _rs.robbery_defense_dc(level),
+        "dc_lock": dc_lock,
+        "dc_by_level": dc_by_level,
+        "poverty_threshold_gp": _rs.POVERTY_THRESHOLD_GP,
+        "rate_limit_hours": _rs.RATE_LIMIT_HOURS,
+        "gold_percent": _rs.get_robbery_config(_open_conn()).get("gold_percent"),
+        "default_defense_stat": _rs.DEFAULT_DEFENSE_STAT,
+    }
+
+
+def _open_conn():
+    c = sqlite3.connect(DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c

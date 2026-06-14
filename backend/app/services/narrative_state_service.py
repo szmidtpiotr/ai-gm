@@ -73,10 +73,17 @@ def apply_narrative_tags(
     events: Any = (),
     seeds: Any = (),
     turn: int = 0,
+    player_visible: bool = True,
     max_events: int = MAX_EVENTS,
     max_seeds: int = MAX_SEEDS,
 ) -> dict[str, Any]:
-    """Accumulate parsed events/seeds into a NarrativeState (dedup by key, capped)."""
+    """Accumulate parsed events/seeds into a NarrativeState (dedup by key, capped).
+
+    U18 (#570): seeds carry a `player_visible` flag. Seeds planted by player
+    actions (LLM [NARRATIVE_SEED] during a turn) default to True and surface in
+    the player's journal; GM-plan secrets pass player_visible=False so they stay
+    hidden from the player.
+    """
     st = dict(state or empty_narrative_state())
     st.setdefault("events", [])
     st.setdefault("seeds", [])
@@ -94,7 +101,8 @@ def apply_narrative_tags(
     for key, hint in seeds:
         if key and key not in seed_keys:
             st["seeds"].append(
-                {"key": key, "hint": hint, "status": "active", "planted_turn": int(turn)}
+                {"key": key, "hint": hint, "status": "active",
+                 "planted_turn": int(turn), "player_visible": bool(player_visible)}
             )
             seed_keys.add(key)
     st["seeds"] = st["seeds"][-max_seeds:]
@@ -127,7 +135,10 @@ def seed_narrative_state_from_plan(campaign_id: int, plan: dict, conn) -> bool:
         flags = _json.loads((row[0] if not hasattr(row, "keys") else row["session_flags"]) or "{}")
     except Exception:
         flags = {}
-    flags["narrative_state"] = apply_narrative_tags(flags.get("narrative_state"), seeds=seeds, turn=0)
+    # U18 (#570): GM-plan hooks are GM secrets — hidden from the player journal.
+    flags["narrative_state"] = apply_narrative_tags(
+        flags.get("narrative_state"), seeds=seeds, turn=0, player_visible=False
+    )
     conn.execute(
         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
         (_json.dumps(flags, ensure_ascii=False), campaign_id),

@@ -200,6 +200,11 @@ def maybe_inject_encounter(
         #    template fallback (step 6) when no hook candidate fires.
         random.shuffle(candidates)
         for prob, enc, hook_id in candidates:
+            # U24 (#574) — gate robbery encounters: poverty threshold + 24h limit.
+            # Napad nie pojawia się (nawet ostrzeżenie) gdy złoto < 50 gp lub
+            # był już napad w tej kampanii w ciągu 24h realnych.
+            if _is_robbery(enc) and not _robbery_allowed(conn, campaign_id, sf):
+                continue
             if random.random() <= prob * dwell:
                 enc = ensure_encounter_enemies_in_db(conn, enc)
                 sf["active_encounter"] = enc
@@ -255,6 +260,40 @@ def maybe_inject_encounter(
     except Exception as exc:
         logger.warning("maybe_inject_encounter_error", error=str(exc), campaign_id=campaign_id)
         return False
+
+
+def _is_robbery(enc: dict) -> bool:
+    """U24 — czy kandydat to napad (robbery)."""
+    try:
+        from app.services.robbery_service import is_robbery_encounter
+        return is_robbery_encounter(enc)
+    except Exception:
+        return False
+
+
+def _active_char_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int | None:
+    """ID aktywnego bohatera kampanii (do bramek napadu U24)."""
+    try:
+        row = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1 "
+            "ORDER BY id DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        return int(row["id"]) if row else None
+    except Exception:
+        return None
+
+
+def _robbery_allowed(conn: sqlite3.Connection, campaign_id: int, session_flags: dict) -> bool:
+    """U24 (#574) — bramka iniekcji napadu: próg biedy + limit 24h."""
+    try:
+        from app.services.robbery_service import can_trigger_robbery
+        char_id = _active_char_id_for_campaign(conn, campaign_id)
+        if char_id is None:
+            return False
+        return bool(can_trigger_robbery(conn, campaign_id, char_id, session_flags).get("allowed"))
+    except Exception:
+        return True
 
 
 def encounter_matches(enc: dict, *, trigger: str, hex_type: str | None, hero_level: int) -> bool:

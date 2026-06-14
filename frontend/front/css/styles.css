@@ -4472,6 +4472,42 @@ body:has(#game-screen.screen--active) .sheet-panel {
 }
 
 /* Parchment body */
+/* U18 (#570): Dziennik gracza — structured sections (Zadania / Wątki / Kronika) */
+.journal-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+.journal-section {
+  background: rgba(201,165,74,0.05);
+  border: 1px solid rgba(201,165,74,0.2);
+  border-radius: 8px;
+  padding: var(--space-md) var(--space-lg);
+}
+.journal-section__title {
+  margin: 0 0 var(--space-sm);
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: #c9a54a;
+}
+.journal-list { list-style: none; margin: 0; padding: 0; }
+.journal-list li { padding: 6px 0; border-top: 1px solid rgba(201,165,74,0.12); }
+.journal-list li:first-child { border-top: none; }
+.journal-quest { display: flex; gap: 8px; align-items: flex-start; }
+.journal-quest__mark { color: #c9a54a; flex: 0 0 auto; }
+.journal-quest__title { font-weight: 600; color: var(--text-primary); }
+.journal-quest__narr { font-size: 0.85rem; color: var(--text-secondary); opacity: 0.85; }
+.journal-quest--done .journal-quest__title { text-decoration: line-through; opacity: 0.6; }
+.journal-quest--done .journal-quest__mark { color: #6fae6f; }
+.journal-thread, .journal-chron { display: flex; gap: 8px; align-items: baseline; }
+.journal-thread__hint, .journal-chron__text { flex: 1; color: var(--text-secondary); }
+.journal-thread__turn, .journal-chron__turn {
+  flex: 0 0 auto; font-size: 0.72rem; opacity: 0.55; color: #c9a54a;
+}
+.journal-chron__icon { flex: 0 0 auto; color: #c9a54a; }
+
 .journal-body {
   background: rgba(201,165,74,0.05);
   border: 1px solid rgba(201,165,74,0.2);
@@ -5493,6 +5529,35 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .init-chip__hp-fill--mid { background: linear-gradient(90deg, #d49b30, #e8c155); }
 .init-chip__hp-fill--low { background: linear-gradient(90deg, #b03030, #d45050); }
 
+/* U15 — wound tier on chip: colour dot + short label */
+.init-chip__wound {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 3px;
+  max-width: 100%;
+}
+.init-chip__wound-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+.init-chip__wound-label {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.init-chip__wound--near_death .init-chip__wound-dot {
+  animation: cond-pulse-bleed 1.1s ease-in-out infinite;
+}
+
 /* Player vs enemy border tint */
 .init-chip--player { border-color: rgba(120, 180, 100, 0.45); }
 .init-chip--enemy  { border-color: rgba(200, 80, 80, 0.45); }
@@ -5748,6 +5813,69 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   margin-bottom: var(--space-md);
 }
 
+/* U19 (#571) — Recap "Poprzednio…" card */
+.recap-inner {
+  max-width: 480px;
+  text-align: left;
+}
+.recap-gap {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  margin-bottom: var(--space-lg);
+}
+.recap-body {
+  max-height: 55vh;
+  overflow-y: auto;
+  margin-bottom: var(--space-lg);
+}
+.recap-section { margin-bottom: var(--space-lg); }
+.recap-section__title {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent, #c9a14a);
+  margin-bottom: var(--space-sm);
+}
+.recap-summary {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.recap-turn {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border);
+}
+.recap-turn:last-child { border-bottom: none; }
+.recap-turn__num {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.recap-turn__player {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 2px 0;
+}
+.recap-turn__gm {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  margin: 2px 0;
+}
+.recap-quests { list-style: none; padding: 0; margin: 0; }
+.recap-quest {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  padding: 4px 0;
+}
+.recap-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .combat-end-title {
   font-size: var(--font-size-xl);
   margin-bottom: var(--space-lg);
@@ -5795,6 +5923,75 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: var(--text-muted);
   font-size: var(--font-size-sm);
 }
+
+/* U17 (#565): Drop celebration — highlighted card for affixed/rare drops + diff vs equipped */
+.drop-celebration-inner { max-width: 460px; }
+
+.drop-celebration-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: var(--space-md) 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.drop-card {
+  border: 2px solid var(--rarity-color, #9aa);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-md);
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 14px -4px var(--rarity-color, #9aa);
+  text-align: left;
+}
+/* rarity color map (starting palette — Numbers Policy) */
+.drop-card--common { --rarity-color: #9aa3ad; }
+.drop-card--rare   { --rarity-color: #4a90d9; }
+.drop-card--epic   { --rarity-color: #b061d6; }
+
+.drop-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.drop-card__icon { font-size: 1.3em; }
+.drop-card__name { font-weight: 700; flex: 1; }
+
+.drop-rarity {
+  font-size: var(--font-size-xs, 0.72rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--rarity-color, #9aa);
+}
+
+.drop-affix-list {
+  list-style: none;
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+}
+.drop-affix {
+  font-size: var(--font-size-sm);
+  color: #d8c98a;
+  padding: 2px 0;
+}
+
+.drop-diff-block { display: flex; flex-direction: column; gap: 3px; margin-bottom: var(--space-sm); }
+.drop-diff {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.drop-diff--up   { color: #5cc46a; }
+.drop-diff--down { color: #d9584a; }
+.drop-diff--same { color: var(--text-muted); }
+.drop-diff--none { color: var(--text-muted); font-style: italic; }
+
+.drop-equip-btn { width: 100%; margin-top: 2px; }
 
 .combat-end-btn {
   width: 100%;
@@ -8987,3 +9184,64 @@ body[data-theme="classic"] {
   margin-top: var(--space-md);
 }
 .onboarding-card__nav .btn { flex: 1; font-size: 0.82rem; }
+
+/* ── U16 (#564) — durability bar + cost preview + shop modal ─────────────── */
+.dura { margin-top: 4px; }
+.dura__bar {
+  height: 5px; border-radius: 3px; background: rgba(255,255,255,.10);
+  overflow: hidden;
+}
+.dura--compact .dura__bar { height: 3px; }
+.dura__fill { height: 100%; border-radius: 3px; transition: width .25s ease; }
+.dura__fill--high   { background: #4caf50; }
+.dura__fill--mid    { background: #f5c842; }
+.dura__fill--low    { background: #ff8c42; }
+.dura__fill--broken { background: #e05252; }
+.dura__label { font-size: .72rem; margin-top: 2px; color: #9aa; }
+.dura__label--low    { color: #ff8c42; }
+.dura__label--broken { color: #e05252; font-weight: 600; }
+
+.combat-dura-warn {
+  margin-top: 6px; font-size: .76rem; color: #ff8c42;
+  background: rgba(255,140,66,.10); border: 1px solid rgba(255,140,66,.25);
+  border-radius: 6px; padding: 4px 8px;
+}
+.combat-dura-warn--broken { color: #e05252; background: rgba(224,82,82,.12); border-color: rgba(224,82,82,.3); }
+
+/* Shop modal */
+.shop-tab {
+  flex: 1; background: #0e0e16; border: 1px solid rgba(255,255,255,.12);
+  color: #aaa; border-radius: 8px 8px 0 0; padding: 8px; cursor: pointer; font-size: .9rem;
+}
+.shop-tab--active { color: #f5deb3; border-bottom-color: transparent; background: #1a1a26; }
+.shop-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid rgba(255,255,255,.08); border-radius: 8px;
+  padding: 8px 10px; margin-bottom: 8px; background: #0e0e16;
+}
+.shop-row__info { flex: 1; min-width: 0; }
+.shop-row__name { color: #eee; font-size: .9rem; }
+.shop-row__preview { color: #f5c842; font-size: .76rem; margin-top: 2px; }
+.shop-buy-btn, .shop-sell-btn {
+  background: #22301a; border: 1px solid rgba(160,255,120,.3); color: #dfd;
+  border-radius: 7px; padding: 6px 12px; cursor: pointer; font-size: .82rem; white-space: nowrap;
+}
+.shop-sell-btn { background: #2a2418; border-color: rgba(245,200,66,.3); color: #f5deb3; }
+.shop-buy-btn:disabled, .shop-sell-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Item-detail action cards (repair / affix forge) */
+.item-action-card {
+  border: 1px solid rgba(245,158,11,.18); border-radius: 9px;
+  padding: 10px 12px; margin-bottom: 8px; background: rgba(245,158,11,.04);
+}
+.item-action-card__title { color: #f5deb3; font-size: .85rem; font-weight: 600; margin-bottom: 4px; }
+.item-action-card__preview { color: #f5c842; font-size: .76rem; margin-bottom: 6px; }
+.item-action-card__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.item-action-card__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.item-action-card__affix { color: #f5c842; font-size: .78rem; }
+.item-action-btn {
+  background: #22301a; border: 1px solid rgba(160,255,120,.3); color: #dfd;
+  border-radius: 7px; padding: 6px 12px; cursor: pointer; font-size: .82rem;
+}
+.item-action-btn--sm { padding: 4px 8px; font-size: .72rem; background: #2a2418; border-color: rgba(245,200,66,.3); color: #f5deb3; }
+.item-action-btn:disabled { opacity: .4; cursor: not-allowed; }

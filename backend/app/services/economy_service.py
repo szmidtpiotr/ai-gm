@@ -21,28 +21,19 @@ logger = structlog.get_logger()
 
 DB_PATH = "/data/ai_gm.db"
 
-# ── Wound Labels (TASK_24) ─────────────────────────────────────────────────
-
-WOUND_LABELS = [
-    (76,  None,       "#4caf50", None),        # Healthy — no label
-    (51,  "Ranny",    "#ffc107", "minor_pain"),
-    (26,  "Ciężko Ranny", "#ff9800", "impaired"),
-    (11,  "Poważnie Ranny", "#f44336", "desperate"),
-    (1,   "Na Skraju Śmierci", "#7f0000", "near_death"),
-]
+# ── Wound Labels (TASK_24 → U15) ───────────────────────────────────────────
+# U15: labels now derive from the single source of truth in wound_utils.WOUND_TIERS
+# so a tier's label and its mechanical roll penalty can never drift apart.
+from app.services.wound_utils import wound_tier
 
 
 def get_wound_label(current_hp: int, max_hp: int) -> dict:
     """
     Returns wound label info for a given HP pair.
+    Delegates to wound_utils.wound_tier() (single source of truth).
     """
-    if max_hp <= 0:
-        return {"label": None, "color": "#4caf50", "pct": 0}
-    pct = (current_hp / max_hp) * 100
-    for threshold, label, color, cue in WOUND_LABELS:
-        if pct >= threshold:
-            return {"label": label, "color": color, "pct": round(pct, 1), "cue": cue}
-    return {"label": "Na Skraju Śmierci", "color": "#7f0000", "pct": 0, "cue": "near_death"}
+    t = wound_tier(current_hp, max_hp)
+    return {"label": t["label"], "color": t["color"], "pct": t["pct"], "cue": t["cue"]}
 
 
 # ── XP System (TASK_25V2 + TASK_26) ───────────────────────────────────────
@@ -139,17 +130,188 @@ def journal_gold_delta(
     payload = dict(meta or {})
     if set_absolute is not None:
         payload["set_absolute"] = int(set_absolute)
+    meta_str = json.dumps(payload, ensure_ascii=False) if payload else None
     try:
+        # U26: campaign_id is now a first-class column (migration adds it).
         conn.execute(
             """
             INSERT INTO character_gold_log
-                (character_id, delta, source, game_clock_day, meta_json)
-            VALUES (?, ?, ?, ?, ?)
+                (character_id, delta, source, campaign_id, game_clock_day, meta_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (character_id, int(delta), source, game_day, json.dumps(payload, ensure_ascii=False) if payload else None),
+            (character_id, int(delta), source, campaign_id, game_day, meta_str),
         )
-    except sqlite3.OperationalError as e:
-        logger.warning("gold_log_insert_failed", error=str(e))
+    except sqlite3.OperationalError:
+        # Pre-U26 schema without campaign_id column — fall back gracefully.
+        try:
+            conn.execute(
+                """
+                INSERT INTO character_gold_log
+                    (character_id, delta, source, game_clock_day, meta_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (character_id, int(delta), source, game_day, meta_str),
+            )
+        except sqlite3.OperationalError as e:
+            logger.warning("gold_log_insert_failed", error=str(e))
+
+
+# ── U26: central gold mutation chokepoint + telemetry ─────────────────────
+
+
+# Map raw source strings (scattered across services) → canonical ENUM buckets
+# for the admin economy tile. Stored source strings stay unchanged (anti-farm
+# and resurrection windows depend on them); categorize only for reporting.
+_SOURCE_BUCKETS = {
+    "loot": "loot",
+    "gold_drop": "loot",
+    "shop_sell": "sell",
+    "sell": "sell",
+    "shop_purchase": "buy",
+    "shop_purchase_refund": "buy",
+    "buy": "buy",
+    "service": "service",
+    "spend_gold": "service",
+    "robbery": "robbery",
+    "resurrection_gold": "resurrection",
+    "resurrection": "resurrection",
+    "repair_durability": "repair",
+    "repair": "repair",
+    "craft": "craft",
+    "crafter_repair": "repair",
+    "crafter_affix": "craft",
+    "quest_reward": "quest_reward",
+    "starter_gold": "starter_gold",
+    "admin_cheat_add": "admin_cheat",
+    "admin_cheat": "admin_cheat",
+}
+
+# Allowed canonical buckets (spec U26 ENUM, extended with starter/admin/other).
+ECONOMY_SOURCE_BUCKETS = (
+    "loot", "sell", "buy", "service", "robbery", "resurrection",
+    "repair", "craft", "quest_reward", "starter_gold", "admin_cheat", "other",
+)
+
+
+def categorize_source(source: str | None) -> str:
+    """Map a raw gold-log source string to a canonical reporting bucket.
+
+    Falls back to prefix heuristics, then 'other'. Read-side only — stored
+    source strings are never rewritten.
+    """
+    s = (source or "").strip().lower()
+    if s in _SOURCE_BUCKETS:
+        return _SOURCE_BUCKETS[s]
+    if s.startswith("shop_purchase") or s.startswith("buy"):
+        return "buy"
+    if s.startswith("shop_sell") or s.startswith("sell"):
+        return "sell"
+    if s.startswith("repair"):
+        return "repair"
+    if s.startswith("craft"):
+        return "craft"
+    if s.startswith("resurrection"):
+        return "resurrection"
+    if s.startswith("admin_cheat"):
+        return "admin_cheat"
+    if s.startswith("starter"):
+        return "starter_gold"
+    if s.startswith("quest"):
+        return "quest_reward"
+    if s.startswith("service") or s.startswith("spend_gold"):
+        return "service"
+    return "other"
+
+
+def change_gold(
+    conn: sqlite3.Connection,
+    character_id: int,
+    delta: int,
+    source: str,
+    *,
+    campaign_id: int | None = None,
+    meta: dict | None = None,
+    allow_negative: bool = False,
+) -> int:
+    """U26 — single chokepoint for every gold mutation.
+
+    Atomically adjusts `characters.gold_gp` by signed `delta` AND journals the
+    change to `character_gold_log` (via journal_gold_delta). Operates on the
+    caller-owned `conn` and does NOT commit — the caller owns the transaction.
+
+    Returns the new balance. Raises ValueError if the character is missing or
+    the result would go below 0 (unless `allow_negative=True`). A zero delta is
+    a no-op that returns the current balance without writing a log row.
+    """
+    cid = int(character_id)
+    d = int(delta)
+    row = conn.execute(
+        "SELECT gold_gp FROM characters WHERE id = ?", (cid,)
+    ).fetchone()
+    if not row:
+        raise ValueError("character not found")
+    cur = int(row["gold_gp"] or 0)
+    if d == 0:
+        return cur
+    new_g = cur + d
+    if new_g < 0 and not allow_negative:
+        raise ValueError("gold_gp would be negative")
+    conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
+    # Resolve campaign for the journal: explicit arg wins, else fall back to the
+    # character's own campaign_id (column may be absent in minimal test fixtures).
+    cid_for_clock = campaign_id
+    if cid_for_clock is None:
+        try:
+            cr = conn.execute(
+                "SELECT campaign_id FROM characters WHERE id = ?", (cid,)
+            ).fetchone()
+            cid_for_clock = cr["campaign_id"] if cr else None
+        except sqlite3.OperationalError:
+            cid_for_clock = None
+    journal_gold_delta(conn, cid, d, source, campaign_id=cid_for_clock, meta=meta)
+    return new_g
+
+
+def get_economy_7d(conn: sqlite3.Connection, days: int = 7) -> dict:
+    """U26 — admin telemetry: gold income/expense per source bucket over a window.
+
+    Reads character_gold_log within the last `days` (wall_clock_at), groups by
+    the canonical bucket from categorize_source(). Income = sum of positive
+    deltas, expense = sum of |negative deltas|.
+    """
+    rows = conn.execute(
+        """
+        SELECT source, delta FROM character_gold_log
+        WHERE wall_clock_at >= datetime('now', ?)
+          AND COALESCE(reverted_at, '') = ''
+        """,
+        (f"-{int(days)} days",),
+    ).fetchall()
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        b = categorize_source(r["source"])
+        slot = buckets.setdefault(b, {"source": b, "income": 0, "expense": 0, "count": 0})
+        d = int(r["delta"] or 0)
+        if d >= 0:
+            slot["income"] += d
+        else:
+            slot["expense"] += -d
+        slot["count"] += 1
+    out_rows = []
+    total_income = total_expense = 0
+    for b in sorted(buckets, key=lambda k: -(buckets[k]["income"] + buckets[k]["expense"])):
+        slot = buckets[b]
+        slot["net"] = slot["income"] - slot["expense"]
+        out_rows.append(slot)
+        total_income += slot["income"]
+        total_expense += slot["expense"]
+    return {
+        "days": int(days),
+        "rows": out_rows,
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "net": total_income - total_expense,
+    }
 
 
 def get_xp_log(

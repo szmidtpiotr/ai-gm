@@ -2895,6 +2895,36 @@ def craft_upgrade_affix(
         conn.close()
 
 
+@router.get("/characters/{character_id}/inventory/{inventory_id}/affix-costs")
+def get_affix_costs_endpoint(
+    character_id: int,
+    inventory_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(None),
+):
+    """U16 (#564) — read-only podgląd kosztów kuźni afiksów dla danego przedmiotu."""
+    from app.services.crafter_service import get_affix_costs
+    authed_uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute("SELECT id, user_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        result = get_affix_costs(conn, character_id, inventory_id)
+        if not result["ok"]:
+            raise HTTPException(status_code=422, detail=result.get("reason", "item_not_found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
 # ─── Durability repair endpoint (#467 F7) ────────────────────────────────────
 
 class RepairItemRequest(BaseModel):

@@ -20,7 +20,10 @@ def _load_effect_schema() -> dict:
 
 _EFFECT_SCHEMA = _load_effect_schema()
 KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
-DAMAGE_DIE_RE = re.compile(r"^\d*d\d+$")
+# Akceptuje "d8", "2d6" oraz dice z modyfikatorem "2d4+2" / "1d4-1" — zgodnie z
+# runtime rollerem (loot_service._roll_dice_value). U13 (#561): walidator U10 nie
+# może odrzucać formatu, który silnik już obsługuje i którym seedują się mikstury.
+DAMAGE_DIE_RE = re.compile(r"^\d*d\d+([+-]\d+)?$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
 ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative"}
 ALLOWED_WEAPON_TYPES = {"melee", "ranged", "spell"}

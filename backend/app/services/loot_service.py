@@ -175,16 +175,7 @@ _LOOT_TIER_AFFIX: dict[str, tuple[int, int, list[float]]] = {
 }
 
 
-def roll_weapon_affixes(loot_tier: str, conn: sqlite3.Connection) -> list[str]:
-    """F2 (#462): roll affix keys for a weapon drop based on dungeon loot_tier.
-
-    Returns a deduplicated list of affix key strings (may be empty).
-    Uses Python random so random.seed() controls results deterministically in tests.
-    """
-    cfg = _LOOT_TIER_AFFIX.get(str(loot_tier or "").strip().lower())
-    if not cfg or not cfg[2]:
-        return []
-    max_tier, _, chances = cfg
+def _affixes_for_max_tier(conn: sqlite3.Connection, max_tier: int) -> list[str]:
     try:
         rows = conn.execute(
             "SELECT key FROM game_config_affixes WHERE tier <= ? AND is_active = 1",
@@ -192,16 +183,41 @@ def roll_weapon_affixes(loot_tier: str, conn: sqlite3.Connection) -> list[str]:
         ).fetchall()
     except Exception:
         return []
-    available = [r["key"] if hasattr(r, "keys") else r[0] for r in rows]
-    if not available:
-        return []
+    return [r["key"] if hasattr(r, "keys") else r[0] for r in rows]
+
+
+def roll_weapon_affixes(
+    loot_tier: str | None,
+    conn: sqlite3.Connection,
+    force_min_one: bool = False,
+) -> list[str]:
+    """F2 (#462): roll affix keys for a weapon drop based on dungeon loot_tier.
+
+    Returns a deduplicated list of affix key strings (may be empty).
+    Uses Python random so random.seed() controls results deterministically in tests.
+
+    U25 (#575): force_min_one=True guarantees at least one affix of tier
+    GUARANTEED_AFFIX_TIER even when loot_tier yields none (pity timer for boss drops).
+    """
+    cfg = _LOOT_TIER_AFFIX.get(str(loot_tier or "").strip().lower())
     rolled: list[str] = []
-    for chance in chances:
-        if random.random() < chance:
-            candidates = [k for k in available if k not in rolled]
-            if not candidates:
-                break
-            rolled.append(random.choice(candidates))
+    if cfg and cfg[2]:
+        max_tier, _, chances = cfg
+        available = _affixes_for_max_tier(conn, max_tier)
+        if available:
+            for chance in chances:
+                if random.random() < chance:
+                    candidates = [k for k in available if k not in rolled]
+                    if not candidates:
+                        break
+                    rolled.append(random.choice(candidates))
+
+    if force_min_one and not rolled:
+        from app.services.affix_pity_service import GUARANTEED_AFFIX_TIER
+        guaranteed_pool = _affixes_for_max_tier(conn, GUARANTEED_AFFIX_TIER)
+        if guaranteed_pool:
+            rolled.append(random.choice(guaranteed_pool))
+
     return rolled
 
 
@@ -532,11 +548,75 @@ def roll_gold_drop(enemy_key: str) -> int:
     return random.randint(gmin, gmax)
 
 
+def _starter_durability(conn: sqlite3.Connection, key: str, item_type: str) -> int | None:
+    """U16/#467 — initial durability for a weapon/armor when it enters inventory.
+
+    Activates the (previously dormant) durability mechanic: every granted weapon/armor
+    starts at full durability so it can wear down in combat and be repaired. Value =
+    per-item `durability_base` from config when set, else rarity-based DEFAULT_DURABILITY
+    (1→100, 2→150, 3→200). Returns None for non-gear (consumables/quest items stay untracked).
+    """
+    if item_type not in ("weapon", "armor"):
+        return None
+    from app.services.durability_service import DEFAULT_DURABILITY
+    rarity = 1
+    base: int | None = None
+    try:
+        r = conn.execute(
+            "SELECT rarity, weapon_data FROM game_items WHERE key = ? AND is_active = 1",
+            (str(key),),
+        ).fetchone()
+        if r:
+            rarity = int(_rget(r, "rarity") or 1)
+            wd_raw = _rget(r, "weapon_data")
+            if item_type == "weapon" and wd_raw:
+                try:
+                    wd = json.loads(wd_raw or "{}")
+                    if wd.get("durability_base"):
+                        base = int(wd["durability_base"])
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    if base is None and item_type == "weapon":
+        try:
+            r2 = conn.execute(
+                "SELECT durability_base, rarity FROM game_config_weapons WHERE key = ?",
+                (str(key),),
+            ).fetchone()
+            if r2:
+                if _rget(r2, "durability_base"):
+                    base = int(r2["durability_base"])
+                rarity = int(_rget(r2, "rarity") or rarity)
+        except Exception:
+            pass
+    if base is None:
+        base = DEFAULT_DURABILITY.get(max(1, min(3, rarity)), 100)
+    return base
+
+
+def _resolve_game_item_key(conn: sqlite3.Connection, key: str) -> str | None:
+    """#573: map a catalog key to the unified game_items key (same namespace after the
+    U11a backfill). Returns the key when it exists in game_items, else None."""
+    k = str(key or "").strip()
+    if not k:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM game_items WHERE key = ? AND COALESCE(is_active, 1) = 1 LIMIT 1",
+            (k,),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    return k if row else None
+
+
 def grant_loot_to_character(
     character_id: int,
     loot_items: list[dict],
     source: str = "loot",
     loot_tier: str | None = None,
+    is_boss_kill: bool = False,
 ) -> list[dict]:
     """
     Grant rolled loot to character inventory with catalog validation.
@@ -544,6 +624,10 @@ def grant_loot_to_character(
 
     F2 (#462): if loot_tier is provided, rolls affixes for each weapon row
     and writes them to affixes_json.
+
+    U25 (#575): when is_boss_kill=True, applies the affix pity timer — after
+    BOSS_DROP_PITY_THRESHOLD boss kills without an affixed weapon, the next weapon
+    drop is guaranteed an affix; a boss kill that yields no affix bumps the counter.
     """
     cid = int(character_id)
     if not isinstance(loot_items, list):
@@ -556,6 +640,13 @@ def grant_loot_to_character(
         if not ch:
             raise ValueError("character not found")
 
+        # U25 (#575): boss-drop pity — decide once whether this kill forces an affix.
+        force_affix = False
+        weapon_got_affix = False
+        if is_boss_kill:
+            from app.services import affix_pity_service
+            force_affix = affix_pity_service.boss_drop_guaranteed(conn, cid)
+
         for raw in loot_items:
             if not isinstance(raw, dict):
                 continue
@@ -565,16 +656,37 @@ def grant_loot_to_character(
                 logger.warning("loot_catalog_key_missing", character_id=cid, loot_item=raw)
                 continue
             key, label, item_type = cat
+            dur = _starter_durability(conn, key, item_type)
+            new_inventory_id: int | None = None
+            _gik_row_id: int | None = None
             if item_type == "weapon":
-                affix_keys = roll_weapon_affixes(loot_tier, conn) if loot_tier else []
-                conn.execute(
+                if loot_tier or force_affix:
+                    affix_keys = roll_weapon_affixes(loot_tier, conn, force_min_one=force_affix)
+                else:
+                    affix_keys = []
+                if affix_keys:
+                    weapon_got_affix = True
+                    force_affix = False  # guarantee consumed by the first weapon
+                cur = conn.execute(
                     """
                     INSERT INTO character_inventory
-                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json, affixes_json)
-                    VALUES (?, NULL, ?, NULL, ?, 0, NULL, ?, NULL, ?)
+                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json, affixes_json, durability_current, durability_max)
+                    VALUES (?, NULL, ?, NULL, ?, 0, NULL, ?, NULL, ?, ?, ?)
                     """,
-                    (cid, key, qty, src, json.dumps(affix_keys)),
+                    (cid, key, qty, src, json.dumps(affix_keys), dur, dur),
                 )
+                new_inventory_id = cur.lastrowid
+            elif item_type == "armor":
+                # Armor is durable equipment — separate row (no stacking) so durability is per-piece.
+                cur = conn.execute(
+                    """
+                    INSERT INTO character_inventory
+                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json, durability_current, durability_max)
+                    VALUES (?, ?, NULL, NULL, ?, 0, NULL, ?, NULL, ?, ?)
+                    """,
+                    (cid, key, qty, src, dur, dur),
+                )
+                new_inventory_id = cur.lastrowid
             else:
                 # 8H: wszystkie wiersze z game_config_items (w tym consumable) stackują po item_key
                 existing = conn.execute(
@@ -590,8 +702,9 @@ def grant_loot_to_character(
                         "UPDATE character_inventory SET quantity = ? WHERE id = ?",
                         (int(existing["quantity"] or 0) + qty, int(existing["id"])),
                     )
+                    _gik_row_id = int(existing["id"])
                 else:
-                    conn.execute(
+                    cur = conn.execute(
                         """
                         INSERT INTO character_inventory
                         (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json)
@@ -599,11 +712,72 @@ def grant_loot_to_character(
                         """,
                         (cid, key, qty, src),
                     )
+                    _gik_row_id = cur.lastrowid
 
-            granted.append({"label": label, "item_type": item_type, "quantity": qty, "source": src, "key": key})
+            # #573: populate the unified FK so inventory points at game_items going forward.
+            # (separate from new_inventory_id, which stays weapon/armor-only for the U17 drop card)
+            _row_id = new_inventory_id if new_inventory_id is not None else _gik_row_id
+            gik = _resolve_game_item_key(conn, key)
+            if _row_id is not None and gik:
+                conn.execute(
+                    "UPDATE character_inventory SET game_item_key = ? "
+                    "WHERE id = ? AND game_item_key IS NULL",
+                    (gik, int(_row_id)),
+                )
+
+            entry = {"label": label, "item_type": item_type, "quantity": qty, "source": src, "key": key}
+            # U17 (#565): weapon/armor rows expose their new inventory_id so callers
+            # (post-combat loot claim) can build a drop-comparison celebration card.
+            if new_inventory_id is not None:
+                entry["inventory_id"] = int(new_inventory_id)
+            granted.append(entry)
+
+        # U25 (#575): record the boss kill outcome — reset on affix, bump on miss
+        # (including a boss kill that dropped no weapon at all).
+        if is_boss_kill:
+            from app.services import affix_pity_service
+            affix_pity_service.record_boss_drop(conn, cid, got_affix=weapon_got_affix)
 
         conn.commit()
     return granted
+
+
+def backfill_missing_durability() -> int:
+    """U16/#467 — one-time data fix: give existing weapons/armor that were granted
+    before durability init their full durability. Touches only rows with NULL
+    durability_max so it is idempotent. Returns the number of rows updated.
+    """
+    updated = 0
+    with _conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, weapon_key, item_key FROM character_inventory
+            WHERE durability_max IS NULL
+              AND (weapon_key IS NOT NULL OR item_key IS NOT NULL)
+            """,
+        ).fetchall()
+        for r in rows:
+            if r["weapon_key"]:
+                key, item_type = r["weapon_key"], "weapon"
+            elif r["item_key"] and r["item_key"] != "__narrative__":
+                # Only real armor gets durability; other items stay untracked.
+                it = conn.execute(
+                    "SELECT kind FROM game_items WHERE key = ? AND is_active = 1", (r["item_key"],)
+                ).fetchone()
+                if not it or str(_rget(it, "kind") or "").lower() != "armor":
+                    continue
+                key, item_type = r["item_key"], "armor"
+            else:
+                continue
+            dur = _starter_durability(conn, key, item_type)
+            if dur:
+                conn.execute(
+                    "UPDATE character_inventory SET durability_current = ?, durability_max = ? WHERE id = ?",
+                    (dur, dur, int(r["id"])),
+                )
+                updated += 1
+        conn.commit()
+    return updated
 
 
 def preview_loot_items(loot_items: list[dict], source: str = "loot") -> list[dict]:
@@ -651,6 +825,19 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 rows = conn.execute(_inventory_rows_sql_legacy(), (cid,)).fetchall()
             except sqlite3.OperationalError:
                 rows = conn.execute(_inventory_rows_sql_legacy_minimal(), (cid,)).fetchall()
+        # U16 (#564): trwałość per wiersz — osobne zapytanie, żeby nie ruszać kruchego
+        # builder'a SQL powyżej. Bazy testowe bez kolumn → pusty słownik (brak trwałości).
+        durability_by_id: dict[int, tuple] = {}
+        try:
+            for d in conn.execute(
+                "SELECT id, durability_current, durability_max FROM character_inventory WHERE character_id = ?",
+                (cid,),
+            ).fetchall():
+                durability_by_id[int(d["id"])] = (d["durability_current"], d["durability_max"])
+        except sqlite3.OperationalError:
+            durability_by_id = {}
+
+    from app.services.durability_service import durability_view
 
     out: list[dict] = []
     for r in rows:
@@ -726,6 +913,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
         # Two-handed weapon: anchor at main_hand but also lock off_hand visually.
         if item_type == "weapon" and int(r["equipped"] or 0) == 1 and wslot == "two_handed":
             covered_slots = ["main_hand", "off_hand"]
+        dur_cur, dur_max = durability_by_id.get(int(r["id"]), (None, None))
         out.append(
             {
                 "id": int(r["id"]),
@@ -741,6 +929,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "armor_coverage": coverage,
                 "weapon_slot": wslot,
                 "covered_slots": covered_slots,
+                "durability": durability_view(dur_cur, dur_max),
             }
         )
     return out
@@ -792,6 +981,8 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
         ).fetchone()
         if not ci:
             raise ValueError("inventory item not found")
+        from app.services.durability_service import durability_view
+        _dur = durability_view(_rget(ci, "durability_current"), _rget(ci, "durability_max"))
         base = {
             "id": iid,
             "quantity": int(_rget(ci, "quantity", 1) or 1),
@@ -826,11 +1017,13 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "attack_bonus": int(_rget(w, "attack_bonus", 0) or 0),
                     },
                     "affixes": affixes,
+                    "durability": _dur,
                 }
             return {
                 **base, "kind": "weapon", "item_type": "weapon",
                 "name": _rget(ci, "label") or wkey, "description": None, "weapon": {},
                 "affixes": affixes,
+                "durability": _dur,
             }
 
         # Consumable
@@ -874,6 +1067,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "ac_bonus": int(_rget(it, "ac_bonus", 0) or 0),
                         "coverage": _rget(it, "armor_coverage"),
                     }
+                    detail["durability"] = _dur
                 if _rget(it, "effect_type"):
                     detail["consumable"] = {
                         "effect_type": _rget(it, "effect_type"),
@@ -895,6 +1089,203 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
             "description": meta.get("description"),
             "is_narrative": True,
         }
+
+
+# ─── U17 (#565): celebracja dropu afiksowego + porównanie z założonym ─────────
+# Mechanika LICZY porównanie dropu z aktualnym sprzętem; LLM tylko narruje (Zasada 1-5).
+
+_RARITY_LABELS = {1: "common", 2: "rare", 3: "epic"}
+
+_ARMOR_COVERAGE_TO_SUGGESTED_SLOT = {
+    "head": "head",
+    "torso": "torso",
+    "full": "torso",
+    "limb_arm": "l_arm",
+    "limb_leg": "l_leg",
+}
+
+
+def dice_average(dice_str: Any) -> float:
+    """Deterministyczna średnia rzutu typu '1d8+2' (BEZ losowania) — do porównania broni.
+
+    Średnia kości k = (sides+1)/2; '2d6+2' → 2*3.5 + 2 = 9.0. Zwraca 0.0 przy złym zapisie.
+    Osobno od mechanic_resolver.parse_dice (tamten faktycznie losuje wynik ataku).
+    """
+    try:
+        s = str(dice_str or "").strip().lower()
+        if not s:
+            return 0.0
+        bonus = 0
+        if "+" in s:
+            s, b = s.split("+", 1)
+            bonus = int(b.strip())
+        elif "-" in s and "d" in s:
+            i = s.rindex("-")
+            bonus = -int(s[i + 1:])
+            s = s[:i]
+        s = s.strip()
+        if "d" in s:
+            count_str, sides_str = s.split("d", 1)
+            count = int(count_str or 1)
+            sides = int(sides_str)
+            return round(count * (sides + 1) / 2.0 + bonus, 2)
+        return float(int(s) + bonus)
+    except Exception:
+        return 0.0
+
+
+def _affix_stat_bonus(detail: dict, effect_type: str) -> int:
+    """Suma płaskich wartości danego typu efektu (damage_bonus/ac_bonus) ze wszystkich afiksów."""
+    total = 0
+    for affix in (detail.get("affixes") or []):
+        for eff in (affix.get("effects") or []):
+            if isinstance(eff, dict) and str(eff.get("type") or "").strip().lower() == effect_type:
+                try:
+                    total += int(eff.get("value") or 0)
+                except (TypeError, ValueError):
+                    continue
+    return total
+
+
+def item_combat_metrics(detail: dict | None) -> dict:
+    """Redukuje blok item-detail do liczb porównywalnych: broń {damage, attack_bonus}, zbroja {ac}.
+
+    Uwzględnia bonusy z afiksów (damage_bonus do broni, ac_bonus do zbroi).
+    """
+    if not detail:
+        return {}
+    it = str(detail.get("item_type") or detail.get("kind") or "").strip().lower()
+    if it == "weapon":
+        w = detail.get("weapon") or {}
+        dmg = dice_average(w.get("damage_die")) + _affix_stat_bonus(detail, "damage_bonus")
+        return {
+            "item_type": "weapon",
+            "damage": round(dmg, 1),
+            "attack_bonus": int(w.get("attack_bonus") or 0),
+        }
+    if it == "armor":
+        a = detail.get("armor") or {}
+        ac = int(a.get("ac_bonus") or 0) + _affix_stat_bonus(detail, "ac_bonus")
+        return {"item_type": "armor", "ac": ac}
+    return {"item_type": it}
+
+
+def compare_item_metrics(new_detail: dict | None, equipped_detail: dict | None) -> dict:
+    """Podpisany diff dropu vs aktualnie założony przedmiot (dodatni = lepszy drop).
+
+    Bez założonego przedmiotu → diff wartości None (frontend pokaże 'brak porównania').
+    """
+    new_m = item_combat_metrics(new_detail)
+    eq_m = item_combat_metrics(equipped_detail) if equipped_detail else {}
+    diff: dict[str, Any] = {}
+    for k in ("damage", "attack_bonus", "ac"):
+        if k in new_m:
+            if equipped_detail:
+                diff[k] = round((new_m.get(k) or 0) - (eq_m.get(k) or 0), 1)
+            else:
+                diff[k] = None
+    return {"new": new_m, "equipped": (eq_m or None), "diff": diff}
+
+
+def suggested_slot_for_item(detail: dict | None) -> str | None:
+    """Slot na który gracz najpewniej chce założyć drop (broń→main_hand, zbroja wg coverage)."""
+    if not detail:
+        return None
+    it = str(detail.get("item_type") or detail.get("kind") or "").strip().lower()
+    if it == "weapon":
+        return "main_hand"
+    if it == "armor":
+        cov = str((detail.get("armor") or {}).get("coverage") or "").strip().lower()
+        return _ARMOR_COVERAGE_TO_SUGGESTED_SLOT.get(cov, "torso")
+    return None
+
+
+def rarity_label(rarity: Any) -> str:
+    """1→common, 2→rare, 3→epic (domyślnie common)."""
+    try:
+        return _RARITY_LABELS.get(int(rarity or 1), "common")
+    except (TypeError, ValueError):
+        return "common"
+
+
+def is_special_drop(rarity: Any, affixes: list | None) -> bool:
+    """Czy drop zasługuje na kartę celebracji: ma afiks LUB rarity >= 2 (rare+)."""
+    if affixes:
+        return True
+    try:
+        return int(rarity or 1) >= 2
+    except (TypeError, ValueError):
+        return False
+
+
+def _inventory_item_rarity(conn: sqlite3.Connection, character_id: int, inventory_id: int) -> int:
+    """Rzadkość dropu z katalogu game_items (po kluczu broni/przedmiotu z wiersza inwentarza)."""
+    r = conn.execute(
+        "SELECT weapon_key, item_key FROM character_inventory WHERE id = ? AND character_id = ?",
+        (int(inventory_id), int(character_id)),
+    ).fetchone()
+    if not r:
+        return 1
+    key = _rget(r, "weapon_key") or _rget(r, "item_key")
+    if not key:
+        return 1
+    try:
+        g = conn.execute(
+            "SELECT rarity FROM game_items WHERE key = ? AND is_active = 1 LIMIT 1",
+            (str(key),),
+        ).fetchone()
+        if g and _rget(g, "rarity") is not None:
+            return int(_rget(g, "rarity") or 1)
+    except sqlite3.OperationalError:
+        pass
+    return 1
+
+
+def _equipped_detail_for_slot(conn: sqlite3.Connection, character_id: int, slot: str | None) -> dict | None:
+    """Detal przedmiotu aktualnie założonego na danym slocie (albo None)."""
+    if not slot:
+        return None
+    row = conn.execute(
+        "SELECT id FROM character_inventory WHERE character_id = ? AND equipped = 1 AND slot = ? LIMIT 1",
+        (int(character_id), str(slot)),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        return get_inventory_item_detail(character_id, int(_rget(row, "id")))
+    except ValueError:
+        return None
+
+
+def build_drop_comparison(character_id: int, inventory_id: int) -> dict | None:
+    """U17 (#565) — dane karty celebracji dla świeżo zdobytej broni/zbroi:
+    rzadkość, afiksy, podpisany diff statów vs przedmiot założony na docelowym slocie,
+    sugerowany slot do założenia. Zwraca None dla nie-sprzętu (mikstury/questowe).
+    """
+    new_detail = get_inventory_item_detail(character_id, inventory_id)
+    it = str(new_detail.get("item_type") or "").strip().lower()
+    if it not in ("weapon", "armor"):
+        return None
+    slot = suggested_slot_for_item(new_detail)
+    affixes = new_detail.get("affixes") or []
+    with _conn() as conn:
+        rarity = _inventory_item_rarity(conn, character_id, inventory_id)
+        equipped_detail = _equipped_detail_for_slot(conn, character_id, slot)
+    cmp = compare_item_metrics(new_detail, equipped_detail)
+    return {
+        "inventory_id": int(inventory_id),
+        "name": new_detail.get("name"),
+        "item_type": it,
+        "rarity": int(rarity),
+        "rarity_label": rarity_label(rarity),
+        "is_special": is_special_drop(rarity, affixes),
+        "suggested_slot": slot,
+        "affixes": [
+            {"name": a.get("name"), "effects": a.get("effects") or []}
+            for a in affixes
+        ],
+        **cmp,
+    }
 
 
 def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
@@ -1369,25 +1760,15 @@ def apply_character_gold_delta(
         raise ValueError("delta must be non-zero")
     cid = int(character_id)
     d = int(delta)
+    # U26: delegate to the central change_gold() chokepoint (mutate + journal
+    # atomically). This wrapper keeps its self-contained API: opens its own
+    # connection and commits.
+    from app.services.economy_service import change_gold
     with _conn() as conn:
-        row = conn.execute("SELECT gold_gp, campaign_id FROM characters WHERE id = ?", (cid,)).fetchone()
-        if not row:
-            raise ValueError("character not found")
-        cur = int(row["gold_gp"] or 0)
-        new_g = cur + d
-        if new_g < 0:
-            raise ValueError("gold_gp would be negative")
-        conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
-        # Resolve campaign for clock lookup (fall back to character's own campaign_id)
-        cid_for_clock = campaign_id if campaign_id is not None else row["campaign_id"]
-        try:
-            from app.services.economy_service import journal_gold_delta
-            journal_gold_delta(
-                conn, cid, d, reason or "unknown",
-                campaign_id=cid_for_clock,
-            )
-        except Exception as _e:
-            pass  # journaling must never block the gold mutation
+        new_g = change_gold(
+            conn, cid, d, reason or "unknown", campaign_id=campaign_id,
+        )
+        conn.commit()
     return new_g
 
 

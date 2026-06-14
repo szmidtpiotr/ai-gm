@@ -69,6 +69,7 @@ GENERIC_ENCOUNTERS = [
         "trigger_types": ["hex_enter", "n_turns"],
         "level_min": 1, "level_max": 10, "trigger_probability": 0.12,
         "encounter_type": "robbery",
+        "defense_stat": "DEX",  # U24 — uniki/ucieczka przed bandytami na trakcie
         "enemies": [],
     },
     {
@@ -79,6 +80,7 @@ GENERIC_ENCOUNTERS = [
         "trigger_types": ["n_turns"],
         "level_min": 1, "level_max": 8, "trigger_probability": 0.10,
         "encounter_type": "robbery",
+        "defense_stat": "WIS",  # U24 — percepcja by zauważyć sięgającą rękę
         "enemies": [],
     },
 ]

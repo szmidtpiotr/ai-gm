@@ -762,6 +762,7 @@ def run_narrative_turn(
     llm_config: dict[str, str] | None = None,
     roll_result_message: str | None = None,
     roll_result_data: dict | None = None,
+    extra_system: str | None = None,
 ) -> dict:
     messages = build_narrative_messages(
         conn=conn,
@@ -771,5 +772,13 @@ def run_narrative_turn(
         roll_result_message=roll_result_message,
         roll_result_data=roll_result_data,
     )
+    # U30 (#578): inject a mechanically-resolved fact (e.g. directional travel already
+    # executed) into the system prompt so the narrator describes the fact, not invents one.
+    if extra_system:
+        first = messages[0] if messages else None
+        if isinstance(first, dict) and first.get("role") == "system":
+            first["content"] = f"{first.get('content', '').rstrip()}{extra_system}"
+        else:
+            messages.insert(0, {"role": "system", "content": extra_system.strip()})
     reply = generate_chat(messages=messages, model=model, llm_config=llm_config)
     return {"message": reply}

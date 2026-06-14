@@ -177,9 +177,15 @@ def advance_clock(
             flags["ingame_hours"] = new_hours
             flags["clock_history"] = history
 
+        # #580: keep the legacy `ingame_hours` column in sync with the authoritative
+        # session_flags value, so direct column readers never see a stale time-of-day.
         conn.execute(
-            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-            (json.dumps(flags, ensure_ascii=False), row["id"]),
+            "UPDATE game_sessions SET session_flags = ?, ingame_hours = ? WHERE id = ?",
+            (
+                json.dumps(flags, ensure_ascii=False),
+                int(flags.get("ingame_hours", START_HOUR_DEFAULT)),
+                row["id"],
+            ),
         )
         if managed:
             conn.commit()

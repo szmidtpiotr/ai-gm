@@ -582,6 +582,45 @@ def get_campaign_quests(campaign_id: int):
     return {"active_quests": flags.get("active_quests", [])}
 
 
+@router.get("/campaigns/{campaign_id}/journal")
+def get_campaign_journal(campaign_id: int):
+    """U18 (#570) — Player journal: Zadania / Wątki / Kronika.
+
+    Read-only composition of character_quests + narrative_state seeds/events +
+    completed beats. GM-plan secret seeds (player_visible=False) are filtered out.
+    """
+    from app.services.journal_service import build_journal
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        return build_journal(campaign_id, conn)
+    finally:
+        conn.close()
+
+
+@router.get("/campaigns/{campaign_id}/recap")
+def get_campaign_recap(campaign_id: int):
+    """U19 (#571) — "Poprzednio w Twojej przygodzie…" recap.
+
+    Read-only. The >24h trigger (`should_show`) is decided by the backend from
+    campaign_turns.created_at; the card reuses the saved player summary + last
+    turns + active quests and never calls the LLM (Zasady 1–5).
+    """
+    from app.services.journal_service import build_recap
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        return build_recap(campaign_id, conn)
+    finally:
+        conn.close()
+
+
 @router.get("/campaigns/{campaign_id}/end-summary")
 def get_campaign_end_summary(campaign_id: int):
     """Stage 9 P5+P6 — unified summary for both death AND victory screens.

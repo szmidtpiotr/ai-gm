@@ -1006,9 +1006,9 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | U21 | Lochy: semantyka snapshotu (wygrana = zużycie zostaje) + domknięcie exploitu porzucenia | — |
 | U22 | Lochy: reguły kafelków (boss, pre-roll drzwi, trap/riddle, fallback braku kafelka) | — |
 | U23 | Lochy: jedna skala trudności + capy skalowania wrogów per typ | — |
-| U24 | Napad: counterplay (ostrzeżenie + rzut, próg biedy, limit częstości) | — |
-| U25 | Pity timer dla afiksów (drop + reroll u craftera) | — |
-| U26 | Telemetria ekonomii — `economy_log` + widok w admin Overview | — |
+| U24 | Napad: counterplay (ostrzeżenie + rzut, próg biedy, limit częstości) | — | ✅ #574 |
+| U25 | Pity timer dla afiksów (drop + reroll u craftera) | — | ✅ #575 |
+| U26 | Telemetria ekonomii — centralna `change_gold()` (reuse `character_gold_log`) + widok w admin Overview | — | ✅ #576 |
 | U27 | Acceptance checklist 3 trybów + pełny re-playtest → go/no-go dla Multiplayera | wszystko (w tym U28–U32) |
 | U28 | Świat: placement engine — lokacje osadzane na hexach mechanicznie (terrain_tags, pula floating) | U4 |
 | U29 | Świat: blok [ŚWIAT] w kontekście LLM — fakty o hexie + kandydaci z bazy + zakaz wymyślania | U5, U28 |
@@ -1038,7 +1038,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ### FAZA 5 — Multiplayer
 
-> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo. **Start dopiero po U27 (FAZA U, go/no-go) ORAZ po wdrożeniu FAZY L (lochy) — ostatnia faza gameplay w kolejce (decyzja 2026-06-12).** Pełne opisy i decyzje: CZĘŚĆ AC.
+> Po solidnym solo. MP zależy od WSZYSTKICH systemów solo. **Kolejność do MP (decyzja Piotra 2026-06-13): #578 → CAŁA FAZA S → CAŁA FAZA L → dopiero MP.** U27 = NO-GO (już wykonane). Pełne opisy i decyzje: CZĘŚĆ AC.
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
@@ -2892,7 +2892,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | Powalenie / ocucenie / kara za wipe (10/20/30%) | ❌ do zbudowania |
 | Streszczenia piętrowe rund MP | ❌ do zbudowania |
 | Widzowie (rola, widoczność publiczna, podpowiedzi za podwójną zgodą) | ❌ do zbudowania |
-| Eksport-książka (Bielik na .170, offline) | ❌ do zbudowania (działa też dla solo; wymaga H4) |
+| Eksport-książka (Bielik na .170, offline) | 🟡 prototyp CLI gotowy (#547): `book_export_service.py`, Bielik 11B na .170, pilot 3 rozdz. OK; UI/modal w FAZIE G |
 | Vote-to-kick ręczny (większość pozostałych; 2-os = host sam) | ❌ do zbudowania |
 | Handel między graczami | 📝 notatka na przyszłość |
 | Skalowanie mniej-graczy=lepszy-loot | 📝 notatka, brak formuły |
@@ -3809,9 +3809,13 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest na spreparowanej bazie z każdym typem błędu → wykryty; przycisk w admin działa; czysta baza DEV = exit 0 (po naprawie znalezionych — wynik pierwszego biegu to lista zadań).
 
-#### U13 — Content pipeline: jedna ścieżka, lint seedów, dokumentacja
+#### ✅ U13 — Content pipeline: jedna ścieżka, lint seedów, dokumentacja **[#561, 2026-06-13]**
 
 **Cel:** Treść wchodzi do gry trzema drogami (seedy SQL `data/seeds/01–15`, admin UI, LLM pending). Wszystkie trzy mają gwarantować ten sam standard — i być opisane tak, żeby Piotr wiedział którą drogą co dodawać.
+
+> **Zrealizowane:** `seed_lint_service.lint_seeds()` buduje świeżą bazę ze schematu żywej DB, aplikuje seedy 01–15 w kolejności (błędny SQL → `rejected`, nie wywala biegu), puszcza `run_lint` (U12) + walidatory `effect_json` (U10). CLI twin host (`scripts/lint_seeds.py`) + kontener (`backend/scripts/lint_seeds.py`), krok w `deploy_dev.sh`. Dokumentacja `docs/CONTENT_PIPELINE.md`. Seedy 01–15 = CLEAN (exit 0).
+>
+> **Zmiana designu (format efektów):** `DAMAGE_DIE_RE` w `admin_config.py` rozszerzony z `^\d*d\d+$` na `^\d*d\d+([+-]\d+)?$` — walidator U10 akceptuje teraz dice z modyfikatorem (`2d4+2`, `1d4-1`), zgodnie z runtime rollerem `loot_service._roll_dice_value`, którym seedują się mikstury. To wyrównanie walidacji do silnika (nie zmiana balansu — wartości leczenia mikstur były i są te same), zlikwidowało 8 fałszywych warningów effect_json. `created_by='seed'` egzekwowane w lincie (warning `[SEED_OWNER]` dla seedowego rekordu z innym właścicielem).
 
 **Dla agenta:**
 1. Skrypt importu seedów przepuszcza każdy rekord przez walidatory U10 + lint U12 (import czysty albo raport odrzutów).
@@ -3821,7 +3825,7 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** lint na świeżo zaimportowanych seedach = 0 errors; dokument przeczytany i zatwierdzony przez Piotra ("rozumiem każdy krok").
 
-#### U14 — Pełny reset bohatera przy nowej kampanii
+#### ✅ U14 — Pełny reset bohatera przy nowej kampanii **[#562, 2026-06-13]**
 
 **Cel:** C19 resetuje tylko HP — Uczony może zacząć nową kampanię z 0 many, bohater z aktywnym zatruciem. Drobiazg, psuje pierwsze 10 minut.
 
@@ -3829,13 +3833,15 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest (scholar z 0 many + poisoned → nowa kampania → mana full, conditions puste, złoto bez zmian); ręcznie przez UI.
 
+> **Wdrożone (#562):** rozszerzono `maybe_reset_hp_for_new_campaign()` (mana była już dorzucona wcześniej): `conditions=[]` w sheet + `DELETE FROM character_conditions`, aktywne `character_rentals`→`expired`, pop `__sandbox_clone__`. Guard świeżej kampanii (0 tur) z C19 zachowany; ops na tabelach owinięte try/except (odporność na izolowane DB testów). 7+7 pytest GREEN, 2/2 Playwright.
+
 ---
 
 ### BLOK 5 — Widoczność mechanik (U15–U20)
 
 > **Zasada projektowa (rozszerzenie Zasady 3):** Mechanika niewidoczna w UI dla gracza NIE ISTNIEJE. Każdy sink, kara i bonus ma swój sygnał w interfejsie ZANIM uderzy.
 
-#### U15 — Widoczne rany wroga
+#### U15 — Widoczne rany wroga ✅ ([#563](https://github.com/szmidtpiotr/ai-gm/issues/563), 2026-06-13)
 
 **Cel:** Symetria ran (C5) miała stworzyć taktykę "skup ogień na rannym" — ale gracz nie widzi stanu wroga, więc taktyka nie istnieje.
 
@@ -3846,7 +3852,11 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest progi→etykieta→kara; Playwright: po zbiciu wroga poniżej progu etykieta widoczna; `/game-test-player-screenshot` walka z 2 wrogami — screenshot pokazuje różne tiery.
 
-#### U16 — Cost preview + durability UI + komunikat anti-farm
+> **⚠️ KOREKTA premisy (2026-06-13, decyzja Piotra — wariant „Ujednolicić progi + UI"):** punkt 2 zakładał, że tier 26–50% „Ranny" ma karę 0 do uzupełnienia. To było NIEAKTUALNE — drabina kar w `wound_utils.py` już istniała i była kompletna: `>75%`→0, `50–75%`→−1, `25–50%`→−2, `≤25%`→−4. Dodatkowo etykieta „Ranny" to 51–75% (nie 26–50%). Zamiast zmieniać kary wykonano: **(1)** scalono dwa rozjechane źródła progów (kary `wound_utils` 75/50/25 vs etykiety `economy_service`/`app.js` 76/51/26/11) w JEDNO źródło prawdy `WOUND_TIERS` (próg+label+kolor+cue+kara) — label i kara nie mogą się już rozjechać; **(2)** dodano etykietę tieru + kropkę koloru na chipach inicjatywy walki (wcześniej tylko pasek HP). Endpoint `/config/wound-thresholds` zwraca pełną tabelę tierów; frontend single-source'uje z backendu. **Kary 0/−1/−2/−4 bez zmian (refaktor, nie rebalans).** `context_injector._WOUND_LABELS` (proza dla narratora LLM, 7 kubełków, bez kary) świadomie poza zakresem — to inna oś (flavor), nie dryf label↔kara.
+
+#### U16 — Cost preview + durability UI + komunikat anti-farm — ✅ ZROBIONE (#564)
+
+> **Decyzja Piotra (2026-06-13) — zakres rozszerzony:** audyt kodu wykazał, że premisa „endpointy są, brakuje tylko warstwy UI" była tylko częściowo prawdziwa. Backend miał endpointy (shop buy/sell, repair-cost, resurrect-preview, anti-farm), ale w UI gracza **nie istniały same ekrany**: `[OPEN_SHOP]` był parsowany lecz nigdy renderowany, nie było przycisku naprawy ani kuźni afiksów, trwałość nie była wystawiana w endpointach ekwipunku. U16 zbudowało te ekrany i nałożyło na nie cost-preview. **Wykryta luka domknięta w U16:** żywa baza DEV nie miała kolumny `character_inventory.affixes_json` (z #462) — dodano migrację `ALTER TABLE character_inventory ADD COLUMN affixes_json TEXT` do `RAW_MIGRATIONS` w `main.py`, więc apply/reroll/upgrade afiksów teraz persystuje. **Druga naprawa:** karty cost-preview (repair-cost / affix-costs / gold pod `/characters/{id}/`) używały bare `fetch()` bez nagłówka auth → 401 → karty cicho znikały; przełączone na `apiRequest()` (Bearer token). **Trzecia naprawa (zgoda Piotra 2026-06-13) — aktywacja trwałości #467:** durability nigdy nie była inicjalizowana przy zdobyciu broni/zbroi (NULL = nieśledzona), więc mechanika #467 była martwa, a pasek U16 nie miał czego pokazać. `grant_loot_to_character` ustawia teraz `durability_current=durability_max` (durability_base z configu albo rzadkość → 100/150/200) dla broni i zbroi; `backfill_missing_durability()` domyka istniejący sprzęt. Od teraz sprzęt zużywa się w walce i może pęknąć — to celowe włączenie zaprojektowanej, lecz uśpionej mechaniki, nie zmiana jej zasad.
 
 **Cel:** Gracz ma widzieć cenę PRZED akcją i stan zużycia ZANIM broń pęknie. Anti-farm ma się tłumaczyć, nie wyglądać jak bug.
 
@@ -3858,7 +3868,9 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** Playwright: repair pokazuje koszt przed kliknięciem; sprzedaż 4. sztuki pokazuje komunikat nadpodaży. `/game-test-player-screenshot`: screenshot ostrzeżenia durability w walce.
 
-#### U17 — Celebracja dropu afiksowego + porównanie
+#### U17 — Celebracja dropu afiksowego + porównanie — ✅ ZROBIONE (#565)
+
+> ✅ Karta celebracji po claimie łupu dla broni/zbroi „specjalnej" (afiks LUB rarity≥2): kolor rzadkości, afiksy z opisem efektu, diff statów vs założony (↑/↓/=, „brak porównania" gdy nic nie założone), przycisk „Załóż". Diff liczy backend (`loot_service.compare_item_metrics` — Zasada 1-5). Endpoint pomocniczy `GET /api/inventory/{cid}/{inv_id}/drop-comparison`. Weryfikacja w lochu pominięta (Blok 6 poza zakresem) — kontrakt sprawdzony na zwykłym dropie wroga + Playwright + zrzut karty.
 
 **Cel:** Afiksowany drop to główna nagroda grindu — dziś wygląda jak każdy inny wiersz lootu. Nagroda której nie czuć, nie motywuje.
 
@@ -3869,7 +3881,9 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** Playwright: drop z afiksem renderuje kartę z diff; `/game-test-player-screenshot` w lochu — screenshot karty dropu.
 
-#### U18 — Dziennik gracza
+#### U18 — Dziennik gracza ✅ ([#570](https://github.com/szmidtpiotr/ai-gm/issues/570), 2026-06-13)
+
+> **Zrobione:** endpoint `GET /api/campaigns/{id}/journal` (read-only) komponuje 3 sekcje — Zadania (`character_quests`), Wątki (`narrative_state.seeds` filtrowane `player_visible`), Kronika (`narrative_state.events` + ukończone beaty z `gm_plan_json`, odwrotna chronologia z numerem tury). Pole `player_visible` na seedach: domyślnie `true` dla seedów z akcji gracza, `false` dla sekretów GM Planu (`seed_narrative_state_from_plan`). Frontend: panel „Dziennik podróżnika" rozszerzony o sekcje strukturalne nad recapem LLM. Zgodne z Zasadami 1–5: dziennik tylko CZYTA stan mechaniki. 7/7 pytest + 2/2 Playwright.
 
 **Cel:** Cała pamięć fabuły (questy, obietnice, wydarzenia) jest dziś tylko po stronie LLM/admina. Gracz nie ma jak sprawdzić "co obiecałem Marcie" — ani wychwycić, że LLM coś pomylił. Dziennik = zaufanie + motywacja.
 
@@ -3880,7 +3894,9 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest endpointu (kompozycja, filtr player_visible); `/game-test-player`: po 10 turach z questem i obietnicą NPC dziennik zawiera oba wpisy; sekret z GM Planu NIE wycieka.
 
-#### U19 — Recap "Poprzednio w Twojej przygodzie…"
+#### U19 — Recap "Poprzednio w Twojej przygodzie…" ✅ ([#571](https://github.com/szmidtpiotr/ai-gm/issues/571), 2026-06-13)
+
+> **Zrobione:** endpoint `GET /api/campaigns/{id}/recap` (read-only). **Trigger jest mechaniką** — backend liczy lukę czasową z `campaign_turns.created_at` (julianday w SQL) i zwraca `should_show=true` tylko gdy kampania ma ≥1 turę i ostatnia tura jest starsza niż `RECAP_THRESHOLD_HOURS=24`. `build_recap()` reużywa istniejącego stanu: ostatnie zapisane podsumowanie gracza (`campaign_ai_summaries`, audience=player), 2 ostatnie tury (`RECAP_RECENT_TURNS=2`, czyszczone z koperty JSON `{"narrative":…}` i tagów) oraz aktywne questy. **Zero nowych callów LLM** → karta nie może rozjechać się ze stanem gry (Zasady 1–5). Frontend: karta auto na wejściu do kampanii (`maybeShowRecap` w `enterGame`), przycisk „Gram dalej" zamyka, „Przypomnij mi" w dzienniku otwiera ponownie (też ≤24h). 6/6 pytest + 2/2 Playwright. Decyzja: spec wspominał „chapter_summary z E6", ale dla aktywnej kampanii żywym odpowiednikiem jest bieżące podsumowanie gracza — recap pokazuje zapis bez wymuszania generacji.
 
 **Cel:** Gracz-dorosły (target gry!) wraca po tygodniu i nie pamięta nic. MP ma catch-up (G11) — solo nie ma niczego. Najtańszy duży win retencji.
 
@@ -3891,7 +3907,9 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest triggera (mock czasu); ręcznie: zmień `created_at` ostatniej tury na -2 dni w DB DEV, wejdź do kampanii → recap się pokazuje.
 
-#### U20 — Onboarding: poprawki triggerów kart
+#### U20 — Onboarding: poprawki triggerów kart — ✅ ZROBIONE ([#572](https://github.com/szmidtpiotr/ai-gm/issues/572))
+
+> **Zrobione (2026-06-13):** retarget karty `death_save` na pierwszy spadek HP<25% (injector czyta świeże HP z `characters.sheet_json`, nie z tury startowej); karta XP dopisana o instrukcję wydania PD z etykietami 1:1 z UI (Odpoczynek → ★ Długi → 📖 Ucz się); karta rzutu ujednolicona o „Biegłość" (proficiency). **3 nowe karty:** `durability` (<50% trwałości założonego sprzętu), `raids` (dziki hex + złoto>100, `_is_safe_for_character`=False), `crafter` (rozmowa z NPC `is_crafter`). **Decyzja Piotra:** crafter zrealizowany przez nową kolumnę `npcs.is_crafter` + migracja oznaczająca kowali (`kowal_*`/blacksmith) — żywa baza nie miała flagi ani flow rozmowy z rzemieślnikiem (kucie/naprawa idzie z karty przedmiotu, U16). Injector dostaje `character` w 3 torach turns.py (skill_test/narrative/stream) + sygnał `npc_dialogue`. Zgodne z Zasadami 1–5 (karty tylko czytają stan). 13/13 pytest + 1/1 Playwright GREEN; live: HP 1/10 → `onboarding_cards:['death_save']`.
 
 **Cel:** Karty just-in-time (E24/E25) działają, ale dwa triggery uczą ZA PÓŹNO, a nowe mechaniki F (durability, afiksy, napady) nie mają kart.
 
@@ -3986,6 +4004,8 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 
 **Weryfikacja:** pytest: każda ścieżka zmiany złota loguje wiersz; suma delt = saldo po sekwencji operacji; admin kafelek renderuje.
 
+> ✅ **Wdrożono 2026-06-13** — [#576](https://github.com/szmidtpiotr/ai-gm/issues/576). **Decyzja projektowa: reuse istniejącej `character_gold_log` (Stage 11, #64) zamiast nowej tabeli `economy_log`** — ta sama rola (journal delt złota), zero duplikatu/synchronizacji. Dodano kolumnę `campaign_id` (migracja+backfill). `economy_service.change_gold(conn, cid, delta, source, *, campaign_id, meta, allow_negative)` to teraz jedyny chokepoint: mutuje `characters.gold_gp` ORAZ journaluje, w transakcji właściciela (bez commitu). Refactor na nią: `apply_character_gold_delta` (shop buy/sell + loot drops), `spend_gold_service` (usługi — wcześniej zmieniały złoto BEZ logu = realne źródło driftu), `crafter_service`, `robbery_service`, `durability_service`. `categorize_source()` mapuje surowe nazwy źródeł na kubełki ENUM (loot/sell/buy/service/robbery/resurrection/repair/craft/quest_reward/starter_gold/admin_cheat/other) **tylko po stronie odczytu** — zapisany `source` zostaje bez zmian (anti_farm/resurrection zależą od konkretnych stringów). `get_economy_7d()` agreguje wpływy/wydatki per kubełek → kafelek "Ekonomia 7 dni" w `/api/admin/overview` + render w `frontend/admin/sections/overview.js`. `db_lint_service._check_gold_drift` zgłasza warning gdy saldo ≠ suma delt. Resurrection journaluje już w tym samym torze z jawnym dniem — pozostawione bez zmian (nie jest źródłem driftu).
+
 ---
 
 ### BLOK 8 — Brama do Multiplayera (U27)
@@ -4004,6 +4024,8 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 3. Każdy fail = issue + naprawa + retest TEGO punktu. Wszystko zielone → Piotr podejmuje decyzję o starcie Fazy G.
 
 **Weryfikacja:** Raport zbiorczy ze screenshotami; decyzja go/no-go zapisana w issue i w notes.md.
+
+> ✅ **WYKONANO 2026-06-13** — [#577](https://github.com/szmidtpiotr/ai-gm/issues/577). `docs/ACCEPTANCE_USABILITY.md` (checklista A wspólne / B świat-ruch / C gotowa; loch ⏸ poza zakresem). Re-playtest 2 trybów przez `/game-smoke` (narzędzie milowych bramek, zamiast `/game-test-player-screenshot` — pyta o grywalność per tryb/15 tur/archetyp): Nowa (camp 74, warrior) = GRYWALNY Z ZASTRZEŻENIAMI, Gotowa (camp 75, scholar, szablon 1) = GRYWALNY. Wszystkie kryteria ✅ poza **B1/B6** (tekstowy ruch kierunkowy nie przesuwa hexa + guard anty-desync nie odpala → P1 #578); P2: #579 (kowal pusty), #580 (zegar w 2 źródłach). **Rekomendacja CONDITIONAL/NO-GO do naprawy #578; decyzja go/no-go o starcie Fazy G — Piotr.** Status: notes.md.
 
 ---
 
@@ -4049,6 +4071,8 @@ Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na adm
 #### U30 — Ruch jako akcja mechaniczna pierwszej klasy (klik mapy = podróż)
 
 > ✅ **ZREALIZOWANE** [#544](https://github.com/szmidtpiotr/ai-gm/issues/544) 2026-06-12: `POST /travel` endpoint (target_hex + target_location_key); fix #518 (`_update_hex_world_state` lookup via location_key gdy brak q/r); `detect_move_intent()` keyword fast-path; `_check_travel_desync()` anty-desync guard; `_build_done_extra_payload()` + current_hex w [DONE] SSE; app.js sync pin mapy. 9/9 testów GREEN. Oczekuje weryfikacji manualnej.
+>
+> 🔧 **HARDENING [#578](https://github.com/szmidtpiotr/ai-gm/issues/578) 2026-06-13 (wykryte w bramce U27):** fast-path U30 był tylko w torze streamingowym (`create_turn_stream`), nie w JSON (`create_turn`); guard `_check_travel_desync` żył wyłącznie w martwym `process_v2_turn`. Naprawa: wspólny helper `execute_directional_travel` (ruch mechaniczny przed LLM, fakt do promptu przez `run_narrative_turn(extra_system=...)`) wpięty w OBA handlery + `guard_travel_desync` (loguje `travel_narrated_without_move` do `llm_tag_errors`) w obu torach. Ruch tekstem działa teraz na obu endpointach. 7/7 pytest + 1/1 Playwright GREEN.
 
 **Cel:** Gracz tkwi na hexie, bo ruch wisi na łańcuchu tagów LLM, a mapa jest tylko obrazkiem. Po U30 są DWIE równoprawne drogi ruchu — klik na mapie i tekst — obie przechodzą przez ten sam mechaniczny endpoint. Target gry to dorosły z telefonem: klik musi działać.
 
@@ -4124,7 +4148,7 @@ Bloki 5/6/7 wewnętrznie niezależne — można równolegle, jeśli Piotr prowad
 > **Źródło:** `skills_conditions_design_doc.md` (korzeń repo — tabele 24 nowych skilli i 17 nowych kondycji z DC, sposobem testowania i efektami) + decyzje projektowe z sesji 2026-06-12.
 > **Cel:** Bogatsza rozgrywka — stopnie sukcesu zamiast binarnego zdał/nie zdał, testy przeciwne na prawdziwych statystykach przeciwnika, ~16 nowych skilli i ~13 nowych kondycji.
 > **Strategia:** NIE kodujemy per-skill ani per-kondycja. Kodujemy PRYMITYWY (typy efektów w effect_json + mechanizmy rzutu) — każdy raz, z testami raz. Skille i kondycje wchodzą potem jako DANE (seedy + wiersze w adminie), weryfikowane smoke'iem w Sandboxie.
-> **Kiedy:** po FAZIE U albo przeplatane z nią za zgodą Piotra. **Blok 3 wymaga ukończonego U10** (effect schema lockdown). Workflow jak FAZA U: issue `[TASK] SNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_s.md`, statusy w notes.md → FAZA S.
+> **Kiedy:** ▶ **NASTĘPNA faza gameplay** (decyzja Piotra 2026-06-13: #578 → CAŁA FAZA S → CAŁA FAZA L → MP). **Blok 3 wymaga ukończonego U10** ✅ (effect schema lockdown gotowe). Workflow jak FAZA U: issue `[TASK] SNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_s.md`, statusy w notes.md → FAZA S.
 
 ### Decyzje projektowe (zatwierdzone przez Piotra 2026-06-12)
 
@@ -4194,7 +4218,7 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 ### BLOK 1 — Fundament rzutu (S1–S4)
 
-#### S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności
+#### S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności ✅ ZROBIONE [#581]
 
 **Cel prostym językiem:** Dziś test umiejętności kończy się "zdał/nie zdał" (crit tylko przy nat 20/1). Po S1 wynik ma 4 stopnie zależne od tego, O ILE gracz pobił DC — lepszy bohater nie tylko częściej zdaje, ale częściej zdaje spektakularnie, a narracja to oddaje.
 
@@ -4695,7 +4719,7 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 > **Cel:** Jeden tryb lochów — kafelkowy. Stary proceduralny tryb (losowe pokoje combat/riddle/trap/chest/rest) znika. Loch = rozgałęziony graf kafelków (obrazek + opis + drzwi N/S/E/W + zawartość) generowany w całości przy wejściu; gracz eksploruje wybierając drzwi; przycisk mapy w UI gracza przełącza się w widok mapy kafelkowej; po pokonaniu bossa można wyjść z łupem albo iść głębiej (tryb nieskończony z checkpointami).
 > **Stan zastany (audyt kodu 2026-06-12):** `dungeon_tile_service.py` ma `draw_tile_sequence()` (liniowa ścieżka), `resolve_tile_content()`, `enter_dungeon_tiles()` i `check_exit_conditions()` — ale NIC nie jest podpięte do API gracza (`api/dungeons.py` woła wyłącznie legacy `dungeon_service`). `game_dungeons` NIE ma kolumn `tile_category_key`/`tile_count`/`boss_tile_id` (modal admina je zbiera, PATCH ich nie zapisuje). DEV DB: 0 kafelków, 0 kategorii. Pipeline obrazków działa: FLUX na `192.168.1.170:8765`, endpointy w `routers/dungeon_tiles.py`, kompozytor `tile_compositor.py`, wzorzec batch `scripts/vision_describe_tiles.py`.
-> **Kiedy:** niezależnie od FAZY U i S, z jednym twardym wyjątkiem: **L5 wymaga ukończonego S2** (statbloki wrogów). Workflow jak FAZA U/S: issue `[TASK] LNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_l.md`, statusy w notes.md → FAZA L. Wyjątki bez TDD: L14–L17 (kontent/batch) i L19 (playtest).
+> **Kiedy:** **PO CAŁEJ FAZIE S** (decyzja Piotra 2026-06-13: całe S → całe L → MP; zero ryzyka przeróbek — pełna mechanika walki przed treścią/balansem lochów). Dawna zależność "L5 wymaga S2" staje się bezprzedmiotowa, bo cała FAZA S (w tym S2) kończy się przed startem L. Workflow jak FAZA U/S: issue `[TASK] LNN — tytuł` wdrażane `/tdd`, prompt startowy `prompt_l.md`, statusy w notes.md → FAZA L. Wyjątki bez TDD: L14–L17 (kontent/batch) i L19 (playtest).
 
 ### Decyzje projektowe (zatwierdzone przez Piotra 2026-06-12, sesja "Fable Lochy Projekt")
 
@@ -4765,7 +4789,7 @@ Cap poziomu bohatera = 10 (tabela progów XP z F18, `xp_service.py`). Endless po
 | U21–U23 (FAZA U Blok 6, ⏸ zawieszone) | Wchłonięte: U21→L7, U22→L4+L6 (hinty, no soft-locks, fallback), U23→L5. W notes.md Blok 6 dostaje adnotację „→ FAZA L". |
 | E16 (#431) — śmierć = restore + restart od pokoju 1 | NADPISANE Decyzją 6: śmierć kończy run (checkpoint). L7 przepisuje `handle_dungeon_death`. |
 | CZĘŚĆ AA — nawigacja lazy + diagram śmierci | NADPISANE Decyzjami 2 i 6. CZĘŚĆ AA dostaje banner odsyłający do CZĘŚCI AJ; opisy historyczne zostają jako kontekst. |
-| S2 (FAZA S) — statbloki wrogów | **Twarda zależność międzyfazowa: L5 wymaga S2.** Jeśli S2 nie jest [x] przy podejściu do L5 — STOP albo najpierw S2. |
+| S2 (FAZA S) — statbloki wrogów | ~~Twarda zależność: L5 wymaga S2~~ → **bezprzedmiotowe od 2026-06-13**: cała FAZA S kończy się przed startem FAZY L, więc S2 zawsze [x] przy L5. |
 | U10 — effect schema lockdown | `active_states_json`/efekty pułapek w L6: jeśli U10 [x] — schemat U10; jeśli nie — istniejący format efektów + refactor przy U10 (wzorzec U26/S7). |
 | D9 — ekran kampanii, 5 trybów (Loch / Loch-kafelki osobno) | Scalone w jeden tryb „Loch" (L13b aktualizuje D9 i UI). |
 | E21 (#436) wejście z hexa, E22 (#437) resume | Zachowane — L8/L13 adaptują do grafu v2 i checkpointów. |

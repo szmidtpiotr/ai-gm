@@ -165,6 +165,20 @@ RAW_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_character_xp_grants_character
     ON character_xp_grants(character_id, created_at DESC)
     """,
+    # U25 (#575): affix pity timers — counters survive restart.
+    # scope='boss_drop' (per character) | 'reroll:<inventory_id>' (per item).
+    """
+    CREATE TABLE IF NOT EXISTS affix_pity (
+        character_id INTEGER NOT NULL,
+        scope TEXT NOT NULL,
+        counter INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (character_id, scope)
+    )
+    """,
+    # U25 (#575): flag set when a boss tier enemy dies, read by post-combat loot
+    # claim so the affix pity timer knows the kill was a boss.
+    "ALTER TABLE active_combat ADD COLUMN boss_defeated INTEGER NOT NULL DEFAULT 0",
     """
     CREATE TABLE IF NOT EXISTS campaign_ai_summaries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,6 +263,13 @@ RAW_MIGRATIONS = [
     "ALTER TABLE npcs ADD COLUMN is_ally INTEGER NOT NULL DEFAULT 0",
     "UPDATE npcs SET is_shop = 1        WHERE npc_type = 'merchant'    AND is_shop = 0",
     "UPDATE npcs SET is_quest_giver = 1 WHERE npc_type = 'quest_giver' AND is_quest_giver = 0",
+    # U20 (#572): crafter flag — onboarding card on first encounter with a crafter NPC
+    "ALTER TABLE npcs ADD COLUMN is_crafter INTEGER NOT NULL DEFAULT 0",
+    "UPDATE npcs SET is_crafter = 1 WHERE is_crafter = 0 AND ("
+    "LOWER(key) LIKE '%kowal%' OR LOWER(key) LIKE '%blacksmith%' OR LOWER(key) LIKE '%smith%' "
+    "OR LOWER(key) LIKE '%platner%' OR LOWER(key) LIKE '%rzemie%' OR LOWER(key) LIKE '%craft%' "
+    "OR LOWER(label) LIKE '%kowal%' OR LOWER(label) LIKE '%płatnerz%' OR LOWER(label) LIKE '%platnerz%' "
+    "OR LOWER(label) LIKE '%rzemie%' OR LOWER(label) LIKE '%blacksmith%' OR LOWER(label) LIKE '%crafter%')",
     "UPDATE npcs SET is_ally = 1        WHERE npc_type = 'ally'        AND is_ally = 0",
 
     "ALTER TABLE game_config_weapons     ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
@@ -311,6 +332,10 @@ RAW_MIGRATIONS = [
     "ALTER TABLE game_config_weapons ADD COLUMN durability_base INTEGER",
     "ALTER TABLE character_inventory ADD COLUMN durability_max INTEGER",
     "ALTER TABLE character_inventory ADD COLUMN durability_current INTEGER",
+    # F2 (#462) / U16 (#564) — per-inventory affix list (JSON array of affix keys).
+    # Created in test schemas only; never migrated onto the live DB. U16 surfaces the
+    # affix forge UI to players, so apply/reroll/upgrade need this column to persist.
+    "ALTER TABLE character_inventory ADD COLUMN affixes_json TEXT",
     # S11 (#NNN) — hex world builder: missing columns added after initial schema creation
     "ALTER TABLE world_hexes ADD COLUMN parent_hex_id INTEGER REFERENCES world_hexes(id)",
     "ALTER TABLE world_hexes ADD COLUMN map_level INTEGER NOT NULL DEFAULT 0",
@@ -345,6 +370,14 @@ RAW_MIGRATIONS = [
     "UPDATE hex_type_config SET location_spawn_chance=0.05 WHERE hex_type='mountains'",
     "UPDATE hex_type_config SET location_spawn_chance=0.0"
     " WHERE hex_type IN ('water','river','coast','desert','tundra','volcanic')",
+    # #567: generic fallback enemy must not show the literal placeholder "Wróg".
+    "UPDATE game_config_enemies SET label='Napastnik'"
+    " WHERE key='enemy' AND lower(label) IN ('wróg','wrog','enemy','przeciwnik')",
+    # #573: backfill the unified game_items FK on existing inventory rows (game_items.key
+    # shares the legacy key namespace after the U11a backfill). Idempotent.
+    "UPDATE character_inventory SET game_item_key = COALESCE(weapon_key, item_key, consumable_key)"
+    " WHERE game_item_key IS NULL"
+    " AND COALESCE(weapon_key, item_key, consumable_key) IN (SELECT key FROM game_items)",
 ]
 
 
