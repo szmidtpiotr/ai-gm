@@ -287,6 +287,46 @@ GAMBLE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# #616: deterministyczne wykrycie intencji hazardu ze stawką w tekście gracza.
+# Pre-LLM most intent→tag — bez tego bramka U7 / skaner skilli zżerają turę
+# generycznym testem i mechanika stawki (S7) nigdy nie rusza złotem. Czysta funkcja
+# (bez DB/silnika): rozpoznaje sens hazardowy + kwotę; resztę (walidacja, limit,
+# wypłata) robi istniejący tor [GAMBLE] (prymityw raz).
+_GAMBLE_INTENT_RE = re.compile(
+    r"\b(ko[śs]ci(?:[ąa]mi|e|)|ko[śs][ćc]mi|hazard\w*|zak[łl]ad\w*|obstaw\w*|ruletk\w*|karty\b|w\s+karty)\b",
+    re.IGNORECASE,
+)
+# Kwota: liczba przy słowie „złoto/sztuk/monet/gp" LUB tuż po czasowniku stawki.
+_GAMBLE_STAKE_GOLD_RE = re.compile(
+    r"(\d+)\s*(?:szt\w*\s*)?(?:z[łl]ot\w*|gp|monet\w*|sztuk\w*)",
+    re.IGNORECASE,
+)
+_GAMBLE_STAKE_VERB_RE = re.compile(
+    r"(?:stawia\w*|stawk\w*|obstaw\w*|zak[łl]ad\w*|gra\w*\s+o|gram\s+o)\D{0,12}(\d+)",
+    re.IGNORECASE,
+)
+
+
+def detect_gamble_intent(text: Optional[str]) -> Optional[int]:
+    """Zwróć zadeklarowaną stawkę (int gp), jeśli tekst gracza to hazard z kwotą.
+
+    Wymaga JEDNOCZEŚNIE sensu hazardowego (kości/hazard/zakład/obstaw/karty/ruletka)
+    ORAZ liczbowej stawki przy złocie lub po czasowniku stawki. Brak któregokolwiek
+    → ``None`` (mechanika nie zgaduje stawki — wtedy LLM po prostu narruje). Czysta,
+    deterministyczna; faktyczną walidację/limit/wypłatę robi tor [GAMBLE] (S7)."""
+    if not text:
+        return None
+    if not _GAMBLE_INTENT_RE.search(text):
+        return None
+    m = _GAMBLE_STAKE_GOLD_RE.search(text) or _GAMBLE_STAKE_VERB_RE.search(text)
+    if not m:
+        return None
+    try:
+        stake = int(m.group(1))
+    except (TypeError, ValueError):
+        return None
+    return stake if stake >= 1 else None
+
 
 def _match_curable_condition(
     conn: sqlite3.Connection,

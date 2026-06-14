@@ -3837,6 +3837,60 @@ def create_turn(
 
         if not _kw_scan_already_pending and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
+                # ── #616: deterministyczny tor hazardu (przed skanerem skilli/U7) ──
+                # Gracz deklaruje stawkę ("stawiam 10 złota, gram w kości") → syntetyzuj
+                # [GAMBLE:<stawka>:DC:<n>] i przepuść przez istniejący tor S7 ZANIM bramka
+                # U7 / skaner skilli zżre turę generycznym testem (root cause #616). Mechanika
+                # decyduje: walidacja stawki, limit gier na scenę i wypłata zostają w S7.
+                from app.services.skill_service import detect_gamble_intent as _dgi_616
+                _stake_616 = _dgi_616(text)
+                if _stake_616 is not None:
+                    _active_combat_g = conn.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if not _active_combat_g:
+                        from app.services.skill_service import (
+                            intercept_skill_test_tag as _istt_616,
+                            _get_counter as _gc_616,
+                        )
+                        _gdc_616 = int(_gc_616(conn, "gamble").get("dc", 12) or 12)
+                        _synth_616 = f"[GAMBLE:{_stake_616}:DC:{_gdc_616}]"
+                        _, _g_pending_616 = _istt_616(_synth_616, conn, campaign_id, payload.character_id)
+                        if _g_pending_616:
+                            _gs_row_g = conn.execute(
+                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id,),
+                            ).fetchone()
+                            if _gs_row_g:
+                                _sf_g = json.loads(_gs_row_g["session_flags"] or "{}")
+                                _sf_g = _commit_pending_skill_test(_g_pending_616, _sf_g)
+                                conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                    (json.dumps(_sf_g, ensure_ascii=False), campaign_id),
+                                )
+                                conn.commit()
+                            logger.info("gamble_intent_routed", stake=_stake_616, dc=_gdc_616)
+                            _log_g = create_turn_log(
+                                conn=conn,
+                                campaign_id=campaign_id,
+                                character_id=payload.character_id,
+                                user_text=text,
+                                assistant_text=None,
+                                route="skill_test_keyword",
+                            )
+                            conn.commit()
+                            return _with_turn_trace({
+                                "id": _log_g["id"],
+                                "campaign_id": _log_g["campaign_id"],
+                                "turn_number": _log_g["turn_number"],
+                                "created_at": _log_g["created_at"],
+                                "skill_test_pending": _g_pending_616,
+                                "prose": None,
+                                "route": "skill_test_keyword",
+                            }, turn_id)
+                        # _g_pending_616 is None → stawka niepoprawna lub limit gier
+                        # wyczerpany: NIE blokuj tury, spadnij do narracji (LLM narruje odmowę).
                 _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
                 # weapon-modifier stats used during real combat resolution, not
