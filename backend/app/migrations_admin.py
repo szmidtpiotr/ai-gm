@@ -3538,6 +3538,54 @@ def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
         logger.warning("u31_npc_locations_migration_failed", error=str(exc))
 
 
+_RARITY_WORD_TO_INT = {
+    "common": 1, "uncommon": 2, "rare": 3, "epic": 4, "legendary": 5,
+    "poor": 1, "standard": 1, "rich": 2, "treasure": 3,
+}
+
+
+def _as_int(val, default: int = 1) -> int:
+    """Coerce a possibly-text/None DB value to int.
+
+    Legacy PROD rows store rarity as words ('common') while DEV uses ints (1).
+    Falls back to ``default`` for unknown/blank values instead of crashing the
+    migration (and thus app startup).
+    """
+    if val is None or val == "":
+        return default
+    if isinstance(val, int):
+        return val
+    s = str(val).strip().lower()
+    if s in _RARITY_WORD_TO_INT:
+        return _RARITY_WORD_TO_INT[s]
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return default
+
+
+def _normalize_legacy_rarities(conn: sqlite3.Connection) -> None:
+    """Rewrite word rarities ('common') to ints in legacy source tables.
+
+    Runs before the game_items backfill. Idempotent — numeric values are left
+    untouched; only rows whose rarity matches a known word are updated. Safe to
+    run on DEV (no word rows → no-ops) and PROD (legacy word rows → ints).
+    """
+    for table in ("game_config_weapons", "game_config_items", "game_config_consumables"):
+        try:
+            cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if "rarity" not in cols:
+                continue
+            for word, num in _RARITY_WORD_TO_INT.items():
+                conn.execute(
+                    f"UPDATE {table} SET rarity = ? WHERE LOWER(TRIM(rarity)) = ?",
+                    (num, word),
+                )
+        except sqlite3.Error:
+            # Table may not exist in some envs — backfill SELECTs guard the rest.
+            continue
+
+
 def _backfill_game_items(conn: sqlite3.Connection) -> None:
     """U11a (#556): Backfill game_items from 3 legacy item tables.
 
@@ -3551,6 +3599,12 @@ def _backfill_game_items(conn: sqlite3.Connection) -> None:
     Idempotent: INSERT OR IGNORE on UNIQUE(key).
     """
     import json as _json
+
+    # Normalize legacy text rarities → int across all source tables FIRST.
+    # Legacy PROD rows store rarity as words ('common'/'rare'); DEV uses ints.
+    # Without this, int() casts here AND in runtime read paths (loot/durability)
+    # crash on those rows. Idempotent: only touches non-numeric values.
+    _normalize_legacy_rarities(conn)
 
     # Check if already populated
     existing = conn.execute("SELECT COUNT(*) FROM game_items").fetchone()[0]
@@ -3591,7 +3645,7 @@ def _backfill_game_items(conn: sqlite3.Connection) -> None:
                     w["key"], "weapon", w["label"] or "", w["description"] or "",
                     float(w["value_gp"] or 0), w["effect_json"],
                     "main_hand",
-                    int(w["rarity"] or 1), int(w["min_level"] or 1),
+                    _as_int(w["rarity"], 1), _as_int(w["min_level"], 1),
                     w["location_tags"] or "[]",
                     "seed", int(w["approved"] or 1),
                     int(w["is_active"] or 1), weapon_data,
@@ -3634,7 +3688,7 @@ def _backfill_game_items(conn: sqlite3.Connection) -> None:
                     it["key"], kind, it["label"] or "", it["description"] or "",
                     float(it["value_gp"] or 0), it["effect_json"],
                     equip_slot,
-                    int(it["rarity"] or 1), int(it["min_level"] or 1),
+                    _as_int(it["rarity"], 1), _as_int(it["min_level"], 1),
                     it["location_tags"] or "[]",
                     "seed", int(it["approved"] or 1),
                     int(it["is_active"] or 1), item_data,
@@ -3668,7 +3722,7 @@ def _backfill_game_items(conn: sqlite3.Connection) -> None:
                 (
                     c["key"], "consumable", c["label"] or "", c["description"] or "",
                     float(c["base_price"] or 0), None,
-                    int(c["rarity"] or 1), int(c["min_level"] or 1),
+                    _as_int(c["rarity"], 1), _as_int(c["min_level"], 1),
                     c["location_tags"] or "[]",
                     "seed", int(c["approved"] or 1), int(c["is_active"] or 1),
                     item_data,
