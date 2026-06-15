@@ -195,13 +195,22 @@ def resolve_spell_nat20_secondary(enemy: dict, dmg: int) -> dict:
 
 # ── Spell-specific resolution ─────────────────────────────────────────────────
 
-def roll_damage_dice(expr: str, mod: int = 0) -> int:
+def roll_dice_detailed(expr: str) -> dict:
+    """#661: roll NdM, return per-die rolls + notation for dice visualization."""
     m = re.match(r"^(\d*)d(\d+)$", (expr or "1d4").strip().lower())
     if not m:
-        return max(0, mod)
-    n = int(m.group(1) or 1)
+        return {"die": (expr or "1d4"), "rolls": [], "sides": 0, "n": 0}
+    n = max(1, int(m.group(1) or 1))
     sides = int(m.group(2))
-    return max(0, sum(random.randint(1, sides) for _ in range(max(1, n))) + mod)
+    rolls = [random.randint(1, sides) for _ in range(n)]
+    return {"die": f"{n}d{sides}", "rolls": rolls, "sides": sides, "n": n}
+
+
+def roll_damage_dice(expr: str, mod: int = 0) -> int:
+    d = roll_dice_detailed(expr)
+    if not d["rolls"]:
+        return max(0, mod)
+    return max(0, sum(d["rolls"]) + mod)
 
 
 def resolve_mend_wounds(sheet: dict, spell_stats: dict) -> dict:
@@ -209,12 +218,17 @@ def resolve_mend_wounds(sheet: dict, spell_stats: dict) -> dict:
     from app.services.vitality_service import stat_modifier
     int_mod = stat_modifier(int((sheet.get("stats") or {}).get("INT", 10)))
     heal_die = spell_stats.get("heal_die") or "2d6"
-    healed = roll_damage_dice(heal_die, int_mod)
+    detail = roll_dice_detailed(heal_die)
+    healed = max(0, sum(detail["rolls"]) + int_mod) if detail["rolls"] else max(0, int_mod)
     cur_hp = int(sheet.get("current_hp") or 0)
     max_hp = int(sheet.get("max_hp") or cur_hp)
     new_hp = min(max_hp, cur_hp + healed)
     sheet["current_hp"] = new_hp
-    return {"healed": healed, "hp_after": new_hp, "outcome": "heal"}
+    return {
+        "healed": healed, "hp_after": new_hp, "outcome": "heal",
+        "heal_die": detail["die"] or heal_die, "heal_rolls": detail["rolls"],
+        "heal_modifier": int_mod,
+    }
 
 
 # ── Arcane Points ─────────────────────────────────────────────────────────────

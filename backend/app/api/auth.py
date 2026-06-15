@@ -291,11 +291,29 @@ def get_me(authorization: str | None = Header(default=None)):
     """
     from app.core.jwt_auth import require_current_user
     payload = require_current_user(authorization)
+    uid = int(payload.get("sub") or 0)
+    # #668: is_tester z DB (świeże) — JWT go nie niesie, a localStorage bywa nieaktualny.
+    # Dzięki temu FAB raportu bugów odzyskuje stan po samym odświeżeniu (bez re-loginu).
+    is_tester = 0
+    try:
+        conn = sqlite3.connect(_AUTH_DB)
+        conn.row_factory = sqlite3.Row
+        try:
+            r = conn.execute(
+                "SELECT COALESCE(is_tester, 0) AS is_tester FROM users WHERE id = ? LIMIT 1", (uid,)
+            ).fetchone()
+            if r:
+                is_tester = int(r["is_tester"] or 0)
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        is_tester = 0
     return {
-        "user_id": int(payload.get("sub") or 0),
+        "user_id": uid,
         "username": payload.get("username") or "",
         "role": payload.get("role") or "player",
         "is_admin": int(payload.get("is_admin") or 0),
+        "is_tester": is_tester,
     }
 
 

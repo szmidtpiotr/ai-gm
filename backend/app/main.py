@@ -378,6 +378,9 @@ RAW_MIGRATIONS = [
     "UPDATE character_inventory SET game_item_key = COALESCE(weapon_key, item_key, consumable_key)"
     " WHERE game_item_key IS NULL"
     " AND COALESCE(weapon_key, item_key, consumable_key) IN (SELECT key FROM game_items)",
+    # #668: kolumna is_tester istniała na PROD, ale brak jej na DEV (auth miał fallback) —
+    # przez to gating FAB raportu bugów był zawsze false i ikona znikała. Parytet DEV↔PROD.
+    "ALTER TABLE users ADD COLUMN is_tester INTEGER NOT NULL DEFAULT 0",
 ]
 
 

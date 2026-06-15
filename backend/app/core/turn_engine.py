@@ -49,8 +49,9 @@ def _user_text_for_llm_context(raw: str | None) -> str:
             outcome = "Zaklęcie chybia (cel uniknął)"
         return (
             f"Bohater rzuca zaklęcie „{spell_label}” na {target}. {outcome}. "
-            "Opisz to jako akt MAGII — gesty, sploty energii, runy, żywioł zaklęcia — "
-            "a NIE jako cios bronią fizyczną (bohater NIE atakuje laską ani mieczem)."
+            "Opisz to jako akt MAGII (a NIE cios bronią fizyczną — bohater NIE atakuje "
+            "laską ani mieczem) w MAKSYMALNIE 2-3 krótkich, dynamicznych zdaniach: "
+            "sam splot zaklęcia i jego skutek, bez rozwlekłych opisów otoczenia i dygresji."
         )
     summary = (d.get("summary_line") or "").strip()
     intent = (d.get("intent") or "").strip()

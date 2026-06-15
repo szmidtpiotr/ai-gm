@@ -44,8 +44,11 @@ echo "Tryb     : $( [ "$LIST_ONLY" = 1 ] && echo LIST || echo RUN )"
 echo
 
 # Extract the FAZA section from notes.md: from "## FAZA <PREFIX>" to next "## ".
+# NOTE: anchor "FAZA <p>" right after "## " (no ".*"). A greedy ".*FAZA L" used to
+# also match a TRAILING mention like "... następna: CAŁA FAZA L" in another phase's
+# header (e.g. FAZA S line), locking onto the wrong section and reporting 0 tasks.
 SECTION=$(awk -v p="$PREFIX" '
-  $0 ~ "^## .*FAZA "p"( |—|-|$)" {f=1; next}
+  $0 ~ "^## FAZA "p"( |—|-|$)" {f=1; next}
   /^## / && f {exit}
   f {print}
 ' "$NOTES")
@@ -157,13 +160,26 @@ EOF
 )
 
   cd "$ROOT" || { echo "MASS_STATUS_RUN: ERROR cd" ; break; }
-  claude -p \
-    --name "$sess_name" \
-    --session-id "$uuid" \
-    --add-dir "$ROOT" \
-    --dangerously-skip-permissions \
-    --output-format text \
-    "$child_prompt" > "$child_log" 2>&1
+  # setsid + </dev/null: child runs in its own process group so a SIGHUP to the
+  #   launching (parent) Claude session — e.g. when Piotr resumes/closes it — does
+  #   NOT reap the child mid-startup (the bug that left "TASK B-N" staged-but-idle).
+  # env -u CLAUDE*: strip the inherited Claude Code context so the child boots as a
+  #   clean top-level session instead of a stalled nested sub-agent.
+  # setsid waits for the child to exit, so sequential semantics + rc are preserved.
+  setsid env \
+      -u CLAUDECODE \
+      -u CLAUDE_CODE_ENTRYPOINT \
+      -u CLAUDE_CODE_SESSION_ID \
+      -u CLAUDE_CODE_CHILD_SESSION \
+      -u CLAUDE_CODE_EXECPATH \
+      -u AI_AGENT \
+    claude -p \
+      --name "$sess_name" \
+      --session-id "$uuid" \
+      --add-dir "$ROOT" \
+      --dangerously-skip-permissions \
+      --output-format text \
+      "$child_prompt" </dev/null > "$child_log" 2>&1
   rc=$?
 
   status=$(grep -oE 'MASS_STATUS: (DONE|GATE|ERROR)[^\n]*' "$child_log" | tail -1)

@@ -52,9 +52,12 @@ source of truth for `[ ]`/`[x]` status).
    ```
    If the user passed `--list`, stop here.
 3. **Launch the real run in the background** (children take many minutes each;
-   never foreground — it would blow the Bash timeout). Run from the project root:
+   never foreground — it would blow the Bash timeout). Run from the project root,
+   wrapped in `setsid … </dev/null` so the run survives a SIGHUP when Piotr
+   resumes/closes the launching session (without it the orchestrator + its current
+   child get reaped, leaving a `TASK <PREFIX>-N` session staged-but-idle):
    ```bash
-   bash .claude/skills/mass-implement/scripts/orchestrate.sh <promptfile> [range]
+   setsid bash .claude/skills/mass-implement/scripts/orchestrate.sh <promptfile> [range] </dev/null
    ```
    Use `run_in_background: true`. Tell Piotr: sessions will appear in the panel as
    `TASK <PREFIX>-N` as they start; he can watch live and reopen any one later.

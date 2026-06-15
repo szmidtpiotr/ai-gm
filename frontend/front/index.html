@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=634-sf5-ephemeral-2026-06-15">
+  <link rel="stylesheet" href="./css/styles.css?v=668-665-662-2026-06-15">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -676,6 +676,9 @@
         <div class="header-hp-bar">
           <div class="header-hp-bar__fill" id="header-hp-bar-fill" style="width:100%"></div>
         </div>
+        <div class="header-mana-bar" id="header-mana-bar" hidden>
+          <div class="header-mana-bar__fill" id="header-mana-bar-fill" style="width:100%"></div>
+        </div>
         <div id="quest-bar" class="quest-bar" hidden></div>
       </div>
       <button type="button" class="header__action" id="open-map-btn" title="Mapa świata">
@@ -720,21 +723,28 @@
 
     <!-- Combat Banner (hidden when no combat) -->
     <div id="combat-banner" class="combat-banner" hidden>
-      <div class="initiative-track" id="initiative-track" aria-label="Kolejność tur">
-        <!-- Initiative chips inserted here -->
-      </div>
+      <!-- #660: initiative-track usunięty — duplikował strefy i podbijał wysokość modala.
+           Aktywną turę pokazuje teraz podświetlenie uczestnika w strefach (combat-combatant--active). -->
+      <div class="initiative-track" id="initiative-track" aria-label="Kolejność tur" hidden></div>
       <div class="combat-banner__top">
         <span class="combat-banner__round" id="combat-round">Runda 1</span>
         <span class="combat-banner__turn" id="combat-turn-label">Twoja tura</span>
       </div>
-      <div class="combat-zones" id="combat-zones">
-        <div class="combat-zone combat-zone--ranged" data-zone="ranged">
-          <div class="combat-zone__label">DYSTANS</div>
-          <div class="combat-zone__list" id="combat-zone-ranged"></div>
-        </div>
-        <div class="combat-zone combat-zone--engaged" data-zone="engaged">
-          <div class="combat-zone__label">ZWARCIE</div>
-          <div class="combat-zone__list" id="combat-zone-engaged"></div>
+      <!-- #667: gracz jako stały punkt odniesienia (TY) POZA kolumnami — kolumny
+           pokazują tylko wrogów względem ciebie (zwarcie = blisko / dystans = daleko),
+           więc wspólna kolumna nie sugeruje już, że gracz stoi ramię w ramię z wrogiem. -->
+      <div class="combat-arena" id="combat-arena">
+        <div class="combat-you" id="combat-you"></div>
+        <div class="combat-axis-hint" aria-hidden="true">⟵ bliżej ciebie · dalej od ciebie ⟶</div>
+        <div class="combat-zones" id="combat-zones">
+          <div class="combat-zone combat-zone--engaged" data-zone="engaged">
+            <div class="combat-zone__label">W zwarciu z tobą</div>
+            <div class="combat-zone__list" id="combat-zone-engaged"></div>
+          </div>
+          <div class="combat-zone combat-zone--ranged" data-zone="ranged">
+            <div class="combat-zone__label">Na dystans</div>
+            <div class="combat-zone__list" id="combat-zone-ranged"></div>
+          </div>
         </div>
       </div>
       <div class="combat-banner__enemies" id="combat-enemies" hidden>
@@ -1705,8 +1715,7 @@
   <button id="dev-inspector-toggle" type="button" class="debug-drawer-toggle" title="DEV Inspector (admin only)" aria-label="Otwórz DEV Inspector" hidden>🔍</button>
 
   <!-- Tester bug-report FAB — visible for is_tester=1 users in game screen -->
-  <button id="bug-report-fab" type="button" title="Zgłoś błąd" aria-label="Zgłoś błąd" hidden
-    style="position:fixed;bottom:155px;right:16px;z-index:900;width:42px;height:42px;border-radius:50%;background:#1a1a2e;border:1px solid #c0392b;color:#e74c3c;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:background .15s">🐛</button>
+  <button id="bug-report-fab" class="bug-fab" type="button" title="Zgłoś błąd" aria-label="Zgłoś błąd" hidden>🐛</button>
 
   <!-- Tester bug-report modal -->
   <div id="bug-report-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.7);align-items:center;justify-content:center">
@@ -1807,7 +1816,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=657-b10-shield-absorption-2026-06-15"></script>
+  <script src="./js/app.js?v=668-fab-tester-2026-06-15"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

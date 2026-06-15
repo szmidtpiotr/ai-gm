@@ -102,6 +102,7 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
             attacker=body.attacker,
             raw_d20=body.raw_d20,
             spell_key=body.spell_key,
+            target_id=body.target_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

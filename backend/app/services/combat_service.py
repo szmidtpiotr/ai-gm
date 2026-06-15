@@ -1206,16 +1206,29 @@ def _ability_stats_seven(sheet: dict) -> dict[str, int]:
     return out
 
 
-def roll_damage_dice(expr: str, mod: int = 0) -> int:
-    """Roll NdM + mod; expr like '1d8', 'd6', '2d6'."""
+def roll_dice_detailed(expr: str) -> dict[str, Any]:
+    """Roll NdM, return per-die rolls + normalized notation.
+
+    #661: dice-visualization needs the individual die results (not just the sum)
+    so the frontend can animate the right number/type of dice landing on them.
+    expr like '1d8', 'd6', '2d6'. Returns {die, rolls, sides, n}; rolls=[] if unparseable.
+    """
     raw = (expr or "1d4").strip().lower()
     m = re.match(r"^(\d*)d(\d+)$", raw)
     if not m:
-        return max(0, mod)
-    n = int(m.group(1) or 1)
+        return {"die": raw, "rolls": [], "sides": 0, "n": 0}
+    n = max(1, int(m.group(1) or 1))
     sides = int(m.group(2))
-    total = sum(random.randint(1, sides) for _ in range(max(1, n)))
-    return max(0, total + mod)
+    rolls = [random.randint(1, sides) for _ in range(n)]
+    return {"die": f"{n}d{sides}", "rolls": rolls, "sides": sides, "n": n}
+
+
+def roll_damage_dice(expr: str, mod: int = 0) -> int:
+    """Roll NdM + mod; expr like '1d8', 'd6', '2d6'."""
+    d = roll_dice_detailed(expr)
+    if not d["rolls"]:
+        return max(0, mod)
+    return max(0, sum(d["rolls"]) + mod)
 
 
 # ─── S18 (#613): behavior_override — kondycja steruje turą aktora. Prymityw raz. ──
@@ -1863,6 +1876,454 @@ def _resolve_defense_spell_in_combat(
     )
     _persist_combatants(conn, row, combatants)
     conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def _resolve_heal_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    spell_row, out: dict[str, Any],
+) -> dict[str, Any]:
+    """B13 (#663): czar LECZĄCY (minor_heal) w aktywnej walce.
+
+    Leczy gracza (nie atakuje wroga):
+      • odejmij PEŁNĄ manę; za mało → blocked
+      • roll heal_die + INT_mod → +HP gracza (cap max_hp)
+      • aktualizuje sheet_json + combatant hp_current
+      • log spell_heal, advance turn
+    """
+    from app.services import spell_service
+
+    spell_k = str(spell_row["key"])
+    label = str(spell_row["label"] or spell_k)
+    mana_cost = int(spell_row["mana_cost"] or 0)
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_heal"
+    out["spell_type"] = "heal"
+    out["damage"] = 0
+
+    if mana_cost > 0:
+        _mana_ok, _ = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+
+    heal_die_row = conn.execute(
+        "SELECT heal_die FROM game_config_spells WHERE key = ? AND is_active = 1",
+        (spell_k,),
+    ).fetchone()
+    spell_stats = {"heal_die": (heal_die_row["heal_die"] if heal_die_row else None) or "1d6"}
+    heal_result = spell_service.resolve_mend_wounds(sheet, spell_stats)
+
+    p = _find_combatant(combatants, "player")
+    if p:
+        p["hp_current"] = int(sheet.get("current_hp") or p.get("hp_current", 0))
+
+    conn.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+    )
+
+    out["hit"] = True
+    out["healed"] = heal_result["healed"]
+    out["heal_amount"] = heal_result["healed"]
+    out["heal_die"] = heal_result.get("heal_die")
+    out["heal_rolls"] = heal_result.get("heal_rolls")
+    out["heal_modifier"] = heal_result.get("heal_modifier")
+    out["hp_after"] = heal_result["hp_after"]
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+    out["message"] = (
+        f"Rzucasz {label} — leczysz {heal_result['healed']} HP "
+        f"(masz teraz {heal_result['hp_after']} HP)."
+    )
+
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn,
+        combat_id=cid,
+        campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor="player",
+        event_type="spell_heal",
+        roll_value=None,
+        damage=0,
+        hp_after=int(heal_result["hp_after"]),
+        target_id="player",
+        target_name=str(p.get("name") if p else "Bohater"),
+        hit=True,
+        narrative=json.dumps(
+            {"spell_key": spell_k, "spell_label": label,
+             "healed": heal_result["healed"], "hp_after": heal_result["hp_after"],
+             "mana_cost": mana_cost},
+            ensure_ascii=False,
+        ),
+    )
+    _persist_combatants(conn, row, combatants)
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def _resolve_aoe_spell_in_combat(
+    conn: Any, row: Any, campaign_id: int, ch_id: int, sheet: dict,
+    combatants: list[dict], enemy: dict, target_id: Any, spell_row: Any,
+    raw_d20: int | None, out: dict[str, Any], loot_pool_accum: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """B11 (#659): czar AoE (attack_aoe) — multi-target attack.
+
+    1 rzut d20 vs cel główny (honoruje #595 target_id).
+    Trafienie → kość damage każdemu żywemu wrogowi:
+      • aoe=1 (area): wszyscy żywi wrogowie
+      • aoe=0 (chain): maks 3 cele (primary + 2 kolejnych)
+    Loot/XP/death log per wróg (reuse ścieżki kill z resolve_attack).
+    """
+    from app.services import spell_service
+
+    spell_k = str(spell_row["key"])
+    label = str(spell_row["label"] or spell_k)
+    mana_cost = int(spell_row["mana_cost"] or 0)
+    damage_die = str(spell_row["damage_die"] or "1d6")
+    # `aoe` w osobnym fetchu (dispatch nie selektuje jej, by nie wywracać izolowanych
+    # fikstur bez tej kolumny). 1=obszar (wszyscy), 0=łańcuch (maks 3).
+    _aoe_r = conn.execute(
+        "SELECT aoe FROM game_config_spells WHERE key = ? AND is_active = 1",
+        (spell_k,),
+    ).fetchone()
+    is_area = bool(int((_aoe_r["aoe"] if _aoe_r else 0) or 0))
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_attack"
+    out["spell_type"] = "attack_aoe"
+    out["target_id"] = target_id
+    out["target_name"] = str(enemy.get("name") or "")
+    out["enemy_key"] = str(enemy.get("enemy_key") or "")
+
+    # 1. Mana check (pełna cena z góry)
+    if mana_cost > 0:
+        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        out["mana_spent"] = mana_cost
+        out["mana_after"] = _new_mana
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+
+    player_raw = int(raw_d20) if raw_d20 is not None else None
+    player_nat1 = player_raw == 1
+    player_nat20 = player_raw == 20
+    out["player_raw_d20"] = player_raw
+    out["player_nat1"] = player_nat1
+    out["player_nat20"] = player_nat20
+
+    # 2. Nat 1 → miscast (pełna mana stracona)
+    if player_nat1:
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        out["miscast"] = _miscast
+        out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
+        out["hit"] = False
+        out["damage"] = 0
+        out["aoe_hits"] = []
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+        _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+        conn.commit()
+        cid = int(row["id"])
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor="player", event_type="spell_aoe",
+            roll_value=player_raw, damage=0,
+            hp_after=int(enemy.get("hp_current", 0) or 0),
+            target_id=target_id, target_name=str(enemy.get("name") or ""),
+            hit=False,
+            narrative=json.dumps({"spell_key": spell_k, "outcome": "miscast"}, ensure_ascii=False),
+        )
+        conn.commit()
+        out["current_mana"] = int(sheet.get("current_mana", 0))
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+        return out
+
+    # 3. Attack roll vs primary target (INT-based spell, honoruje #595 target_id)
+    _spell_weapon = {
+        "key": spell_k, "label": label, "weapon_type": "spell",
+        "damage_die": damage_die, "mana_cost": mana_cost,
+        "linked_stat": "INT", "attack_bonus": 0, "damage_bonus": 0,
+    }
+    attack_roll = resolve_attack_roll_for_weapon(sheet, raw_roll=player_raw, weapon_row=_spell_weapon)
+    attack_total = int(attack_roll["total"])
+    out["attack_roll"] = attack_roll
+    out["attack_total"] = attack_total
+
+    raw_dodge = roll_d20()
+    dex_mod = int(enemy.get("dex_modifier") or 0)
+    dodged, hit, dodge_total = compute_player_attack_dodge_outcome(
+        attack_total, raw_dodge, dex_mod, player_raw,
+    )
+    out["hit"] = hit
+    out["dodged"] = dodged
+    out["dodge_roll"] = {
+        "raw": raw_dodge, "modifier": dex_mod, "total": dodge_total,
+        "dodged": dodged, "player_roll": attack_total,
+        "verdict": "hit" if player_nat20 else ("dodged" if dodged else "hit"),
+    }
+
+    if not hit:
+        out["damage"] = 0
+        out["aoe_hits"] = []
+        out["target_hp_remaining"] = int(enemy.get("hp_current", 0) or 0)
+        out["enemy_dead"] = False
+        cid = int(row["id"])
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor="player", event_type="spell_aoe",
+            roll_value=player_raw, damage=0,
+            hp_after=int(enemy.get("hp_current", 0) or 0),
+            target_id=target_id, target_name=str(enemy.get("name") or ""),
+            hit=False,
+            narrative=json.dumps({"spell_key": spell_k, "outcome": "miss"}, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+        conn.commit()
+        out["current_mana"] = int(sheet.get("current_mana", 0))
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+        return out
+
+    # 4. HIT — wyznacz cele (helper _aoe_target_ids: area=wszyscy, chain=maks 3).
+    # Cel główny (#595 target_id) zawsze pierwszy → potem reszta w kolejności living.
+    living_ids = [
+        str(c.get("id") or "") for c in combatants
+        if c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0
+    ]
+    ordered_ids = [str(target_id)] + [i for i in living_ids if i != str(target_id)]
+    chosen_ids = _aoe_target_ids(ordered_ids, aoe_flag=1 if is_area else 0)
+    targets = [t for t in (_find_combatant(combatants, i) for i in chosen_ids) if t is not None]
+
+    # 5. Rzuć damage na każdy cel (osobna kość, ten sam die, INT mod)
+    int_mod = _stat_mod(sheet, "INT")
+    aoe_hits: list[dict[str, Any]] = []
+    primary_damage = 0
+    _xp_total = 0
+
+    for tgt in targets:
+        # #661: detailed roll → expose primary target's dice for damage animation
+        _aoe_detail = roll_dice_detailed(damage_die)
+        dmg = max(0, sum(_aoe_detail["rolls"]) + int_mod) if _aoe_detail["rolls"] else max(0, int_mod)
+        if player_nat20:
+            dmg *= 2
+        prev_hp = int(tgt.get("hp_current", 0) or 0)
+        next_hp = max(0, prev_hp - dmg)
+        tgt["hp_current"] = next_hp
+        dead = next_hp <= 0
+        if dead:
+            tgt["dead"] = True
+
+        tgt_id = str(tgt.get("id") or "")
+        tgt_name = str(tgt.get("name") or tgt.get("enemy_key") or "Wróg")
+        hit_info: dict[str, Any] = {
+            "target_id": tgt_id,
+            "target_name": tgt_name,
+            "damage": dmg,
+            "hp_remaining": next_hp,
+            "dead": dead,
+            "gold_drop": 0,
+            "loot": [],
+        }
+        aoe_hits.append(hit_info)
+
+        if tgt is enemy:   # cel główny → standardowe klucze out{}
+            primary_damage = dmg
+            out["damage"] = dmg
+            out["damage_die"] = _aoe_detail["die"] or damage_die
+            out["damage_rolls"] = _aoe_detail["rolls"]
+            out["damage_modifier"] = int_mod
+            out["target_hp_remaining"] = next_hp
+            out["enemy_dead"] = dead
+
+        if dead:
+            ek = str(tgt.get("enemy_key") or "")
+            # U25 (#575): flaga boss kill (pity timer afiksów)
+            if str(tgt.get("tier") or "").strip().lower() == "boss":
+                try:
+                    conn.execute(
+                        "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
+                        (campaign_id,),
+                    )
+                except Exception:
+                    pass
+            # Loot + złoto
+            if ek and ch_id:
+                try:
+                    from app.services.loot_service import (
+                        apply_character_gold_delta, roll_gold_drop, roll_loot,
+                    )
+                    _loot_tier = str(tgt.get("loot_tier") or "") or None
+                    loot_items = roll_loot(ek)
+                    tgt_loot = (
+                        _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier)
+                        if loot_items else []
+                    )
+                    gold = int(roll_gold_drop(ek) or 0)
+                    if gold > 0:
+                        apply_character_gold_delta(ch_id, gold, reason="combat_loot")
+                    hit_info["gold_drop"] = gold
+                    hit_info["loot"] = tgt_loot
+                    loot_pool_accum.extend(tgt_loot)
+                except Exception as _loot_e:
+                    logger.warning("aoe_loot_error", error=str(_loot_e), enemy_key=ek)
+            # XP
+            try:
+                from app.services import xp_service
+                raw_award = int(tgt.get("xp_award") or 0)
+                xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
+                    conn, catalog_xp_award=raw_award,
+                    tier=str(tgt.get("tier") or "") or None,
+                )
+                if xpa > 0 and ch_id:
+                    xp_service.grant_character_xp(
+                        conn, ch_id, xpa, reason="enemy_defeat",
+                        meta={"enemy_key": ek, "xp_source": xp_src},
+                    )
+                hit_info["xp_granted"] = xpa
+                _xp_total += int(xpa or 0)
+            except Exception:
+                pass
+            # Beat completion (#550)
+            try:
+                from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+                _beat_label = str(tgt.get("name") or tgt.get("enemy_key") or "")
+                if _beat_label:
+                    _tn_beat = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id = ?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    auto_complete_beats_by_event(campaign_id, "kill_enemy", _beat_label, _tn_beat, conn)
+            except Exception:
+                pass
+            # Death log
+            cid_d = int(row["id"])
+            log_combat_turn(
+                conn, combat_id=cid_d, campaign_id=campaign_id,
+                turn_number=_next_combat_log_sequence(conn, cid_d),
+                actor=tgt_id, event_type="death", roll_value=None,
+                damage=dmg, hp_after=next_hp,
+                target_id=tgt_id, target_name=tgt_name, hit=None,
+                narrative=f"{tgt_name} pada — wróg nie żyje.",
+            )
+
+    out["aoe_hits"] = aoe_hits
+    out["aoe_targets"] = len(aoe_hits)
+    if _xp_total > 0:
+        out["xp_granted"] = _xp_total
+
+    # Progresja rangi czaru
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    # Główny log zdarzenia AoE
+    cid = int(row["id"])
+    log_combat_turn(
+        conn, combat_id=cid, campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor="player", event_type="spell_aoe",
+        roll_value=player_raw, damage=primary_damage,
+        hp_after=int(enemy.get("hp_current", 0) or 0),
+        target_id=target_id, target_name=str(enemy.get("name") or ""),
+        hit=True,
+        narrative=json.dumps(
+            {"spell_key": spell_k, "spell_label": label,
+             "targets": len(aoe_hits), "nat20": player_nat20, "aoe": is_area},
+            ensure_ascii=False,
+        ),
+    )
+
+    # Wygrana / kontynuacja
+    if _all_enemies_dead(combatants):
+        _persist_combatants_and_maybe_end(
+            conn, row, combatants,
+            status="ended", ended_reason="victory",
+            loot_pool=loot_pool_accum,
+        )
+        conn.commit()
+        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory")
+        # Oznacz hex cleared
+        try:
+            gs_hex = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if gs_hex:
+                _sf_hex = json.loads(gs_hex["session_flags"] or "{}")
+                ch_hex = _sf_hex.get("current_hex")
+                if ch_hex:
+                    conn.execute(
+                        """INSERT INTO campaign_hex_data
+                           (campaign_id, hex_q, hex_r, discovered)
+                           VALUES (?,?,?,1)
+                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET
+                             encounter_cleared = 1, discovered = 1""",
+                        (campaign_id, int(ch_hex["q"]), int(ch_hex["r"])),
+                    )
+                    conn.commit()
+        except Exception:
+            pass
+        # XS13: outnumbered XP (3+ wrogów)
+        try:
+            _enemy_count = sum(1 for c in combatants if c.get("type") == "enemy")
+            if _enemy_count >= 3:
+                from app.services.xp_sources import grant_outnumbered_victory
+                _tn13 = _next_combat_log_sequence(conn, cid)
+                grant_outnumbered_victory(conn, int(ch_id), int(campaign_id), _enemy_count, _tn13)
+                conn.commit()
+        except Exception:
+            pass
+        # HF-1 (#523): wyczyść scene_enemies po zwycięstwie
+        try:
+            set_world_state_flags(campaign_id, scene_enemies=[])
+        except Exception:
+            pass
+    else:
+        _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+        conn.commit()
+
+    out["current_mana"] = int(sheet.get("current_mana", 0))
     out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
 
@@ -3291,6 +3752,49 @@ def _living_enemy_ids(combatants: list[dict]) -> list[str]:
     return out
 
 
+def _select_player_target(
+    combatants: list[dict],
+    order: list[str],
+    living: list[str],
+    p_zone: str,
+    is_melee: bool,
+    requested_target_id: str | None = None,
+) -> tuple[str | None, str | None]:
+    """#595: wybór celu ataku gracza w walce z wieloma wrogami.
+
+    Zwraca ``(target_id, block_reason)``. ``block_reason='out_of_range'`` gdy melee nie
+    sięga żadnego dopuszczalnego celu (cel w innej strefie). Honoruje ``requested_target_id``
+    gdy to ŻYWY wróg w bieżącej walce; nieprawidłowy/martwy cel → fallback do starego
+    auto-wyboru (pierwszy żywy w turn_order). Melee dalej bramkowane strefą; dystans/czar
+    celuje dowolną strefę.
+    """
+    chosen = (
+        str(requested_target_id)
+        if requested_target_id is not None and str(requested_target_id) in living
+        else None
+    )
+    if is_melee:
+        if chosen:
+            c = _find_combatant(combatants, chosen)
+            if c and str(c.get("zone") or ZONE_ENGAGED) == p_zone:
+                return chosen, None
+            return None, "out_of_range"
+        for tid in order:
+            if tid not in living:
+                continue
+            c = _find_combatant(combatants, tid)
+            if c and str(c.get("zone") or ZONE_ENGAGED) == p_zone:
+                return tid, None
+        return None, "out_of_range"
+    # Dystans / czar — dowolna strefa.
+    if chosen:
+        return chosen, None
+    for tid in order:
+        if tid in living:
+            return tid, None
+    return (living[0] if living else None), None
+
+
 def _all_enemies_dead(combatants: list[dict]) -> bool:
     for c in combatants:
         if c.get("type") != "enemy":
@@ -3298,6 +3802,22 @@ def _all_enemies_dead(combatants: list[dict]) -> bool:
         if int(c.get("hp_current", 0) or 0) > 0:
             return False
     return True
+
+
+# B11 (#659): łańcuchowe AoE (chain_lightning) skacze przez do 3 wrogów; obszar (aoe=1)
+# trafia wszystkich. Wartość startowa limitu łańcucha = 3 (Numbers Policy — tuning po B13).
+_AOE_CHAIN_MAX_TARGETS = 3
+
+
+def _aoe_target_ids(living: list[str], *, aoe_flag: int) -> list[str]:
+    """B11 (#659): które żywe cele obejmuje czar AoE.
+
+    ``aoe_flag=1`` (obszar — burning_arc/fireball) → wszyscy żywi wrogowie.
+    ``aoe_flag=0`` (łańcuch — chain_lightning „skacze przez do 3") → maks
+    ``_AOE_CHAIN_MAX_TARGETS`` celów w kolejności ``living`` (turn_order)."""
+    if int(aoe_flag or 0) == 1:
+        return list(living)
+    return list(living)[:_AOE_CHAIN_MAX_TARGETS]
 
 
 def _choose_behavior_target(
@@ -3382,6 +3902,7 @@ def resolve_attack(
     attacker: str = "player",
     raw_d20: int | None = None,
     spell_key: str | None = None,
+    target_id: str | None = None,
 ) -> dict[str, Any]:
     """
     attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
@@ -3443,29 +3964,19 @@ def resolve_attack(
             _melee = _resolved_weapon_for_zone == "melee"
 
             order = json.loads(row["turn_order"] or "[]")
-            target_id = None
-            if _melee:
-                for tid in order:
-                    if tid not in living:
-                        continue
-                    c = _find_combatant(combatants, tid)
-                    if c and str(c.get("zone") or ZONE_ENGAGED) == p_zone:
-                        target_id = tid
-                        break
-                if not target_id:
-                    out["hit"] = False
-                    out["blocked"] = True
-                    out["block_reason"] = "out_of_range"
-                    out["message"] = "Cele są poza zasięgiem walki wręcz. Zbliż się lub użyj broni dystansowej."
-                    out["combat_state"] = _row_to_combat_dict(row)
-                    return out
-            else:
-                for tid in order:
-                    if tid in living:
-                        target_id = tid
-                        break
-                if not target_id:
-                    target_id = living[0]
+            # #595: honoruj cel wskazany przez gracza (target_id) gdy to żywy wróg; melee
+            # dalej bramkowane strefą (out_of_range). Helper utrzymuje stare auto-wybieranie
+            # gdy brak/zły cel.
+            target_id, _block_reason = _select_player_target(
+                combatants, order, living, p_zone, _melee, requested_target_id=target_id,
+            )
+            if _block_reason == "out_of_range":
+                out["hit"] = False
+                out["blocked"] = True
+                out["block_reason"] = "out_of_range"
+                out["message"] = "Cele są poza zasięgiem walki wręcz. Zbliż się lub użyj broni dystansowej."
+                out["combat_state"] = _row_to_combat_dict(row)
+                return out
 
             enemy = _find_combatant(combatants, target_id)
             if not enemy:
@@ -3515,6 +4026,35 @@ def resolve_attack(
                     return _resolve_defense_spell_in_combat(
                         conn, row, campaign_id, ch_id, sheet, combatants, _def_row, out,
                     )
+
+            # ── B11 (#659): czar AoE (attack_aoe) — multi-target ──────────────
+            # Wykrywamy PRZED ścieżką ST ataku: czar AoE uderza w WSZYSTKICH żywych
+            # wrogów (aoe=1) lub maks 3 (aoe=0, chain). Reużywa tego samego d20.
+            if spell_key:
+                # Detekcja BEZ kolumny `aoe` — izolowane fikstury testowe mogą jej
+                # nie mieć (real schema zawsze ma). Handler dociąga `aoe` osobno.
+                _aoe_row = conn.execute(
+                    "SELECT key, label, spell_type, mana_cost, damage_die, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _aoe_row and str(_aoe_row["spell_type"] or "").strip().lower() == "attack_aoe":
+                    return _resolve_aoe_spell_in_combat(
+                        conn, row, campaign_id, ch_id, sheet, combatants,
+                        enemy, target_id, _aoe_row, raw_d20, out, loot_pool_accum,
+                    )
+            # ── B13 (#663): czar LECZĄCY (heal) — self-heal w walce ──────────
+            if spell_key:
+                _heal_row = conn.execute(
+                    "SELECT key, label, spell_type, mana_cost, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _heal_row and str(_heal_row["spell_type"] or "").strip().lower() == "heal":
+                    return _resolve_heal_spell_in_combat(
+                        conn, row, campaign_id, ch_id, sheet, combatants, _heal_row, out,
+                    )
+            # ─────────────────────────────────────────────────────────────────
 
             card_key, card_name = _roll_card_enemy_identity(conn, enemy, str(target_id))
             old_ek = str(enemy.get("enemy_key") or "").strip().lower()
@@ -3729,7 +4269,14 @@ def resolve_attack(
                         or "STR"
                     ).upper()
                 mod = _stat_mod(sheet, stat)
-                dmg = roll_damage_dice(die, mod)
+                # #661: roll detailed so the response carries the individual die
+                # results (damage_rolls) for the frontend NdX damage animation.
+                _dmg_detail = roll_dice_detailed(die)
+                dmg = max(0, sum(_dmg_detail["rolls"]) + mod) if _dmg_detail["rolls"] else max(0, mod)
+                out["damage_die"] = _dmg_detail["die"] or die
+                out["damage_rolls"] = _dmg_detail["rolls"]
+                out["damage_stat"] = stat
+                out["damage_modifier"] = mod
                 # Stage 3 Z2/Z6: ×2 on crit, ×2 on surprise → ×4 if both
                 _dmg_mult = 1
                 if player_nat20:

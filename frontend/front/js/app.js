@@ -129,6 +129,7 @@ const elements = {
     initiativeTrack: document.getElementById('initiative-track'),
     combatZoneRanged: document.getElementById('combat-zone-ranged'),
     combatZoneEngaged: document.getElementById('combat-zone-engaged'),
+    combatYou: document.getElementById('combat-you'),
     btnCombatMove: document.getElementById('combat-move-btn'),
     combatMoveLabel: document.getElementById('combat-move-label'),
     btnCombatDodge: document.getElementById('combat-dodge-btn'),
@@ -179,6 +180,8 @@ const elements = {
 
     // Header HP bar
     headerHpBarFill: document.getElementById('header-hp-bar-fill'),
+    headerManaBar: document.getElementById('header-mana-bar'),
+    headerManaBarFill: document.getElementById('header-mana-bar-fill'),
 
     // Admin Settings
     adminSettingsSection: document.getElementById('admin-settings-section'),
@@ -3423,7 +3426,7 @@ async function _executeTravelFromPill(q, r, label) {
         const rawLabel = label && !label.match(/^[→📜]\s*\([-\d]+,[-\d]+\)$/) ? label.replace(/^[→📜\s]+/, '').replace(/\s*\(\d+h\)$/, '').trim() : null;
         const destLabel = rawLabel || arrivedData.label || null;
 
-        const cinTip = (response.onboarding_cards || []).find(c => c.mechanic_key === 'world_map') || null;
+        const cinTip = await _pickTravelTip(response);  // #665
         await _showTravelCinematic({
             hexType: arrivedData.hex_type,
             destLabel: destLabel || hexTypeName || null,
@@ -3479,7 +3482,7 @@ async function handleBuildCamp() {
             renderSuggestedActions(_suggestedActions);
             return;
         }
-        const clockStr = data?.current_clock ? ` Zegar: ${data.current_clock}.` : '';
+        const clockStr = data?.current_clock?.display ? ` Zegar: ${data.current_clock.display}.` : '';
         appendMessage({
             role: 'system',
             content: `🔥 Rozbijasz tymczasowy obóz. Możesz tu teraz odpocząć, ale ogień przyciągnie uwagę.${clockStr}`,
@@ -4134,9 +4137,17 @@ async function refreshCharacterData() {
     }
 }
 
+// #664: shared sheet extractor — parses sheet_json when it's a JSON string
+// (so /campaigns/{id}/characters string payloads don't fall through to fallbacks).
+function getSheet(characterData) {
+    let sheet = characterData?.sheet_json || characterData;
+    if (typeof sheet === 'string') { try { sheet = JSON.parse(sheet); } catch { sheet = {}; } }
+    return sheet || {};
+}
+
 function updateHeaderStats() {
     if (!characterData) return;
-    const sheet = characterData.sheet_json || characterData;
+    const sheet = getSheet(characterData);
     const level = sheet.level || characterData.level || 1;
     const hp = sheet.current_hp ?? characterData.hp ?? 29;
     const maxHp = sheet.max_hp ?? characterData.max_hp ?? 29;
@@ -4147,6 +4158,16 @@ function updateHeaderStats() {
         elements.headerHpBarFill.style.width = `${pct}%`;
         elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--low', pct <= _woundThresholds.moderate_pct && pct > _woundThresholds.critical_pct);
         elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--critical', pct <= _woundThresholds.critical_pct);
+    }
+
+    // #664: mana bar in header — visible only for casters (max_mana > 0)
+    const mana = sheet.current_mana ?? 0;
+    const maxMana = sheet.max_mana ?? 0;
+    if (elements.headerManaBar) {
+        elements.headerManaBar.hidden = !(maxMana > 0);
+        if (elements.headerManaBarFill && maxMana > 0) {
+            elements.headerManaBarFill.style.width = `${Math.max(0, Math.min(100, (mana / maxMana) * 100))}%`;
+        }
     }
 }
 
@@ -4929,6 +4950,14 @@ function _renderInitiativeTrack(cs) {
     const track = elements.initiativeTrack;
     if (!track) return;
 
+    // #660: górny pasek inicjatywy wyłączony (duplikował strefy). Aktywną turę
+    // pokazuje podświetlenie wiersza w strefach. Tracking _initLastCurrentTurn /
+    // _initActedThisRound zostawiony niżej dla zgodności, ale chipów nie renderujemy.
+    track.hidden = true;
+    track.innerHTML = '';
+    return;
+
+    // eslint-disable-next-line no-unreachable
     const combatants = Array.isArray(cs.combatants) ? cs.combatants : [];
     const order = Array.isArray(cs.turn_order) ? cs.turn_order : [];
     const round = Number(cs.round || 1);
@@ -5145,6 +5174,15 @@ function renderCombatUI(cs) {
     const enemies = combatants.filter(c => c && c.type === 'enemy');
     const isPlayerTurn = cs.current_turn === 'player';
 
+    // #595: jeśli wybrany cel zginął — PRZERZUĆ focus na następnego żywego wroga
+    // (kolejność inicjatywy), zamiast czyścić. Dzięki temu 🎯 widocznie przeskakuje
+    // na kolejnego, a atak nie idzie w pustkę (gracz nie traci celowania po zabiciu).
+    if (selectedTargetId != null) {
+        const stillAlive = enemies.some(e => String(e.id) === String(selectedTargetId) && Number(e.hp_current ?? 0) > 0);
+        if (!stillAlive) selectedTargetId = _nextLivingEnemyId(enemies, cs.turn_order, selectedTargetId);
+    }
+    _bindTargetPicker();
+
     _renderInitiativeTrack(cs);
     renderPlayerStatusBar(player);  // SF4 (#632): trwała warstwa aktywnych kondycji nad kompozerem
 
@@ -5164,7 +5202,9 @@ function renderCombatUI(cs) {
         : null;
     _showEnemyTurnOverlay(!isPlayerTurn && cs.status !== 'ended', _actingEnemy?.name);
 
-    const combatantRow = (c, isPlayer) => {
+    const combatantRow = (c, isPlayer, isActive = false) => {
+        const activeCls = isActive ? ' combat-combatant--active' : '';
+        const activeArrow = isActive ? '<span class="combat-combatant__active-arrow" aria-hidden="true">▶</span>' : '';
         const hpCur = Math.max(0, Number(c.hp_current ?? 0));
         const hpMax = Math.max(1, Number(c.hp_max ?? hpCur ?? 1));
         const pct = Math.max(0, Math.min(100, Math.round((hpCur / hpMax) * 100)));
@@ -5182,14 +5222,20 @@ function renderCombatUI(cs) {
             } else if (wpn && Number(wpn.pct) <= 20) {
                 duraWarn = `<div class="combat-dura-warn">⚔ Twój oręż ledwo trzyma się rękojeści (${wpn.pct}%)</div>`;
             }
+            // #667: stan strefy gracza — wiąże z przyciskiem Zbliż się / Cofnij się.
+            const _pz = String(c.zone || 'engaged');
+            const _pzHint = _pz === 'ranged' ? '🏹 jesteś na dystansie' : '🗡 jesteś w zwarciu';
             return `
-                <div class="combat-combatant combat-combatant--player">
+                <div class="combat-combatant combat-combatant--player${activeCls}">
+                    ${activeArrow}
                     <div class="combat-combatant__icon">🛡️</div>
                     <div class="combat-combatant__body">
                         <div class="combat-combatant__name">
+                            <span class="combat-you__tag">TY</span>
                             <span class="combat-combatant__name-text">${escapeHtml(c.name || 'Bohater')}</span>
                             <span class="combat-combatant__meta">${ini}</span>
                         </div>
+                        <div class="combat-you__zone">${_pzHint}</div>
                         <div class="combat-combatant__hp-row">
                             <span>HP</span>
                             <span>${hpCur} / ${hpMax}${def}${_absorb > 0 ? ` · 🛡 ${_absorb}` : ''}</span>
@@ -5210,12 +5256,30 @@ function renderCombatUI(cs) {
         const _rowSurpriseBadge = _rowSurprised
             ? `<span class="combat-combatant__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</span>`
             : '';
+        // #595: żywy wróg jest klikalnym celem; podświetl aktualnie wybrany + znacznik 🎯.
+        const _isTarget = !dead && selectedTargetId != null && String(c.id) === String(selectedTargetId);
+        const _targetable = !dead ? 'combat-combatant--targetable' : '';
+        const _targetSel = _isTarget ? 'combat-combatant--target-selected' : '';
+        const _targetAttr = !dead ? ` data-target-id="${escapeHtml(String(c.id))}" role="button" tabindex="0" title="Kliknij, aby celować w tego wroga"` : '';
+        const _targetBadge = _isTarget ? `<span class="combat-combatant__target-badge" title="Wybrany cel">🎯</span>` : '';
+        // #667: jawny znacznik strefy na żetonie (redundancja z kolumną) — czytelne
+        // bez polegania na pozycji w kolumnie.
+        const _ez = String(c.zone || 'engaged');
+        const _ezGlyph = _ez === 'ranged' ? '🏹' : '🗡';
+        const _ezTitle = _ez === 'ranged' ? 'Na dystans — daleko od ciebie' : 'W zwarciu — blisko ciebie';
+        const _ezBadge = !dead ? `<span class="combat-combatant__zone" title="${_ezTitle}">${_ezGlyph}</span>` : '';
+        // #660: po usunięciu chipów — rana + kondycje muszą żyć na wierszu, żeby nic nie zniknęło.
+        const _enWound = !dead ? renderWoundLabelHTML(hpCur, hpMax) : '';
+        const _enConds = !dead ? _renderConditionBadges(_rowConds) : '';
         return `
-            <div class="combat-combatant combat-combatant--enemy ${dead ? 'combat-enemy--dead' : ''}">
+            <div class="combat-combatant combat-combatant--enemy${activeCls} ${dead ? 'combat-enemy--dead' : ''} ${_targetable} ${_targetSel}"${_targetAttr}>
+                ${activeArrow}
                 <div class="combat-combatant__icon">${dead ? '💀' : '⚔️'}</div>
                 <div class="combat-combatant__body">
                     <div class="combat-combatant__name">
+                        ${_ezBadge}
                         <span class="combat-combatant__name-text ${dead ? 'combat-enemy--dead' : ''}">${escapeHtml(name)}</span>
+                        ${_targetBadge}
                         ${_rowSurpriseBadge}
                         <span class="combat-combatant__meta">${ini}</span>
                     </div>
@@ -5226,21 +5290,24 @@ function renderCombatUI(cs) {
                     <div class="combat-enemy__bar">
                         <div class="combat-enemy__bar-fill combat-enemy__bar-fill--${tier}" style="width: ${pct}%"></div>
                     </div>
+                    ${_enWound}
+                    ${_enConds ? `<div class="combat-combatant__cond-row">${_enConds}</div>` : ''}
                 </div>
             </div>`;
     };
 
-    // ── Render combatants into zone columns (T34) ──
+    // ── Render combatants (T34 / #667) ──
+    // Gracz to STAŁY punkt odniesienia poza kolumnami; kolumny = TYLKO wrogowie
+    // względem gracza (engaged = blisko / ranged = daleko).
     const playerZone = String(player?.zone || 'engaged');
     const renderTo = (el, list) => { if (el) el.innerHTML = list.join(''); };
+    if (elements.combatYou) elements.combatYou.innerHTML = player ? combatantRow(player, true, isPlayerTurn) : '';
     const rangedItems = [];
     const engagedItems = [];
-    if (player) {
-        (playerZone === 'ranged' ? rangedItems : engagedItems).push(combatantRow(player, true));
-    }
     enemies.forEach(e => {
         const z = String(e.zone || 'engaged');
-        (z === 'ranged' ? rangedItems : engagedItems).push(combatantRow(e, false));
+        const _enemyActive = !isPlayerTurn && String(e.id ?? e.combatant_id ?? '') === _currentTurnId;
+        (z === 'ranged' ? rangedItems : engagedItems).push(combatantRow(e, false, _enemyActive));
     });
     renderTo(elements.combatZoneRanged, rangedItems);
     renderTo(elements.combatZoneEngaged, engagedItems);
@@ -5474,10 +5541,65 @@ function appendCombatTurnCard(row) {
     elements.chatMessages.appendChild(bubble);
 }
 
+// #595: cel wybrany ręcznie przez gracza (klik w wiersz wroga). null = auto-wybór
+// (pierwszy żywy w inicjatywie). Po śmierci celu — przeskok na następnego żywego.
+let selectedTargetId = null;
+
+// #595: następny ŻYWY wróg po zabitym `deadId` (kolejność inicjatywy, z zawijaniem).
+// Zwraca id następnego żywego za pozycją deadId; gdy brak za nim — pierwszy żywy
+// przed nim; gdy deadId spoza turn_order — pierwszy żywy w ogóle; null gdy brak żywych.
+function _nextLivingEnemyId(enemies, turnOrder, deadId) {
+    const livingIds = new Set(
+        (Array.isArray(enemies) ? enemies : [])
+            .filter(e => e && Number(e.hp_current ?? 0) > 0)
+            .map(e => String(e.id)),
+    );
+    if (!livingIds.size) return null;
+    const ord = Array.isArray(turnOrder) ? turnOrder.map(String) : [];
+    const pos = ord.indexOf(String(deadId));
+    if (pos >= 0) {
+        for (let i = pos + 1; i < ord.length; i++) if (livingIds.has(ord[i])) return ord[i];
+        for (let i = 0; i < pos; i++) if (livingIds.has(ord[i])) return ord[i];
+    }
+    for (const id of ord) if (livingIds.has(id)) return id;
+    return [...livingIds][0];
+}
+if (typeof window !== 'undefined') window._nextLivingEnemyId = _nextLivingEnemyId;
+let _targetPickerBound = false;
+
+// #595: delegacja kliknięć na kolumnach stref — klik/Enter w wiersz wroga ustawia cel.
+// Bindowane raz; reaguje na data-target-id wstrzyknięty w combatantRow.
+function _bindTargetPicker() {
+    if (_targetPickerBound) return;
+    const handler = (ev) => {
+        const row = ev.target.closest?.('.combat-combatant--targetable');
+        if (!row) return;
+        const tid = row.dataset.targetId;
+        if (!tid) return;
+        // toggle: ponowny klik w ten sam cel wraca do auto-wyboru.
+        selectedTargetId = (String(selectedTargetId) === String(tid)) ? null : String(tid);
+        window.clog?.event('combat_target_selected', { target_id: selectedTargetId });
+        if (lastCombatState) renderCombatUI(lastCombatState);
+    };
+    [elements.combatZoneRanged, elements.combatZoneEngaged].forEach(el => {
+        if (!el) return;
+        el.addEventListener('click', handler);
+        el.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handler(ev); }
+        });
+    });
+    _targetPickerBound = true;
+}
+
 function pickEnemyTarget(cs) {
     const combatants = Array.isArray(cs?.combatants) ? cs.combatants : [];
     const living = combatants.filter(c => c && c.type === 'enemy' && Number(c.hp_current ?? 0) > 0);
     if (!living.length) return null;
+    // #595: jeśli gracz kliknął cel i ten cel wciąż żyje — honoruj wybór.
+    if (selectedTargetId != null) {
+        const chosen = living.find(e => String(e.id) === String(selectedTargetId));
+        if (chosen) return chosen;
+    }
     const order = Array.isArray(cs.turn_order) ? cs.turn_order : [];
     const livingSet = new Set(living.map(e => String(e.id)));
     for (const tid of order) {
@@ -5488,11 +5610,43 @@ function pickEnemyTarget(cs) {
     return living[0] || null;
 }
 
-// #569: visible 3D dice modal for combat rolls. Reuses the skill-test dice-overlay +
-// DICE.dice_box, but decoupled from skill-test resolution (no resolveSkillTest, no
-// "back to campaigns" skip button). Lands on the pre-rolled d20. Returns a Promise that
-// resolves when the modal closes (auto ~1.6s or on click) so combat can continue.
-function playCombatDiceRoll(forcedD20, label, breakdown = null) {
+// #661: build the second-stage (damage / heal) animation descriptor from a
+// resolve-attack response. Returns null when there is nothing to roll (miss,
+// effect/defense spell, no damage notation). The backend now carries the raw
+// per-die results (damage_rolls / heal_rolls) so the 3D box lands on them.
+function buildDamageStage(data) {
+    if (!data) return null;
+    // Heal spell (mend_wounds 2d6 etc.) — show heal dice.
+    if (data.spell_type === 'heal' && data.heal_die) {
+        const rolls = Array.isArray(data.heal_rolls) ? data.heal_rolls : null;
+        const total = Number(data.heal_amount ?? data.healed ?? 0);
+        if (total > 0 || (rolls && rolls.length)) {
+            return { notation: data.heal_die, rolls, total, modifier: Number(data.heal_modifier ?? 0), label: 'Leczenie', kind: 'heal' };
+        }
+        return null;
+    }
+    // Attacking weapon/spell (single + AoE primary) — only on a hit with damage.
+    if (data.hit && data.damage_die && Number(data.damage ?? 0) > 0) {
+        const rolls = Array.isArray(data.damage_rolls) ? data.damage_rolls : null;
+        return {
+            notation: data.damage_die,
+            rolls,
+            total: Number(data.damage ?? 0),
+            modifier: Number(data.damage_modifier ?? 0),
+            multiplier: Number(data.damage_multiplier ?? 1),
+            label: 'Obrażenia',
+            kind: 'damage',
+        };
+    }
+    return null;
+}
+
+// #569 / #661: visible 3D dice modal for combat rolls. Reuses the skill-test
+// dice-overlay + DICE.dice_box. Stage 1 = the d20 attack (lands on pre-rolled
+// forcedD20). Stage 2 (optional, `damageStage`) = the NdX damage/heal roll,
+// landing on the backend's per-die results. Returns a Promise that resolves when
+// the modal closes (auto-dwell or on click) so combat can continue.
+function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = null) {
     return new Promise((resolve) => {
         const overlay     = document.getElementById('dice-overlay');
         const container   = document.getElementById('dice-container');
@@ -5508,41 +5662,111 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null) {
 
         const d20 = Math.max(1, Math.min(20, parseInt(forcedD20, 10) || 1));
 
-        if (resultSkill)  resultSkill.textContent  = String(label || 'Atak').toUpperCase();
-        if (resultIntent) resultIntent.hidden = true;
-        resultNum.textContent  = ''; resultNum.className  = '';
-        if (resultTot)  resultTot.textContent  = 'k20';
-        resultVerd.textContent = ''; resultVerd.className = '';
+        // #669: wyczyść scenę 3D + kartę wyniku PRZED pokazaniem overlay, inaczej
+        // przez ≥1 klatkę widać „ducha" poprzedniego rzutu (osiadłą kostkę / stary wynik).
+        if (_diceBox && typeof _diceBox.clear === 'function') { try { _diceBox.clear(); } catch (_e) {} }
         resultCard.hidden = true;
+        resultNum.textContent = ''; resultNum.className = '';
+        if (resultVerd) { resultVerd.textContent = ''; resultVerd.className = ''; }
+        if (resultTot)  resultTot.textContent = '';
+
+        if (resultIntent) resultIntent.hidden = true;
         if (skillCard) skillCard.hidden = true;
         if (skipBtn)   skipBtn.style.display = 'none';   // combat roll ≠ skill-test: no "back to campaigns"
         overlay.hidden = false;
 
         let _done = false;
-        const finish = () => {
+        let _clickHandler = null;
+        const cleanup = () => {
             if (_done) return;
             _done = true;
-            overlay.removeEventListener('click', finish);
+            if (_clickHandler) overlay.removeEventListener('click', _clickHandler);
+            _clickHandler = null;
             overlay.hidden = true;
+            // #669: sprzątnij osiadłą kostkę przy zamknięciu, by nie została na poprzednim wyniku.
+            if (_diceBox && typeof _diceBox.clear === 'function') { try { _diceBox.clear(); } catch (_e) {} }
             if (skillCard) skillCard.hidden = false;
             if (skipBtn)   skipBtn.style.display = '';
             resolve();
         };
 
-        const showResult = (rolled) => {
+        // Arm a timed advance with click-to-skip; the first of timer/click wins.
+        const armAdvance = (delay, advance) => {
+            let fired = false;
+            const go = () => {
+                if (fired) return; fired = true;
+                if (_clickHandler) overlay.removeEventListener('click', _clickHandler);
+                _clickHandler = null;
+                advance();
+            };
+            _clickHandler = go;
+            overlay.addEventListener('click', go);
+            setTimeout(go, delay);
+        };
+
+        // Throw `notation` and land on `forced` (array of per-die results, or null
+        // to let the lib roll freely). Calls onComplete after the dice settle.
+        const throwDice = (notation, forced, onComplete) => {
+            requestAnimationFrame(() => {
+                if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
+                    onComplete(); return;
+                }
+                try {
+                    if (!_diceBox) { _diceBox = new DICE.dice_box(container); }
+                    else { _diceBox.clear(); _diceBox.reinit(container); }
+                    _diceBox.setDice(notation);
+                } catch (_e) { onComplete(); return; }
+                _diceBox.start_throw(() => forced, () => setTimeout(onComplete, 400));
+            });
+        };
+
+        // ── Stage 2: damage / heal ──────────────────────────────────────────
+        const runDamageStage = () => {
+            const ds = damageStage;
+            const forced = (Array.isArray(ds.rolls) && ds.rolls.length) ? ds.rolls : null;
+            resultCard.hidden = true;
+            resultNum.textContent = ''; resultNum.className = '';
+            resultVerd.textContent = ''; resultVerd.className = '';
+            if (resultSkill) resultSkill.textContent = String(ds.label || 'Obrażenia').toUpperCase();
+            const showDmg = () => {
+                const sum = forced ? forced.reduce((a, b) => a + b, 0) : (ds.total || 0);
+                const total = (ds.total != null) ? ds.total : sum;
+                resultNum.textContent = total;
+                resultNum.className = ds.kind === 'heal' ? 'heal' : '';
+                if (resultTot) {
+                    const unit = ds.kind === 'heal' ? 'HP' : 'obrażeń';
+                    let line = forced ? `🎲 ${forced.join(' + ')}` : `🎲 ${ds.notation}`;
+                    if (ds.modifier) line += ` ${ds.modifier > 0 ? '+' : '−'} ${Math.abs(ds.modifier)}`;
+                    if (ds.multiplier && ds.multiplier > 1) line += ` ×${ds.multiplier}`;
+                    resultTot.innerHTML = `${line}  =  <strong>${total}</strong> ${unit}`;
+                }
+                resultCard.hidden = false;
+                armAdvance(1600, cleanup);  // wartość startowa — druga animacja wydłuża turę
+            };
+            throwDice(ds.notation, forced, showDmg);
+        };
+
+        const afterAttack = () => {
+            if (damageStage && damageStage.notation) runDamageStage();
+            else cleanup();
+        };
+
+        // ── Stage 1: d20 attack ─────────────────────────────────────────────
+        const showAttack = (rolled) => {
+            if (resultSkill) resultSkill.textContent = String(label || 'Atak').toUpperCase();
             resultNum.textContent = rolled;
             resultNum.className   = rolled === 20 ? 'nat20' : rolled === 1 ? 'nat1' : '';
             if (rolled === 20)      { resultVerd.textContent = '✦ Krytyczny sukces!'; resultVerd.className = 'nat20'; }
             else if (rolled === 1)  { resultVerd.textContent = '✧ Krytyczna porażka';  resultVerd.className = 'nat1'; }
+            else                    { resultVerd.textContent = ''; resultVerd.className = ''; }
             // SF8 (#637) — rozbicie rzutu w oknie kości (parytet z testem umiejętności).
             let dwell = 1600;
             if (breakdown && Array.isArray(breakdown.parts) && breakdown.parts.length && resultTot) {
                 resultTot.innerHTML = `🎲 ${rolled} ${sf8BreakdownHtml(breakdown.parts)}  =  <strong>${breakdown.total}</strong>`;
                 dwell = 2800; // dłużej widoczne — gracz ma przeczytać składniki (wartość startowa)
-            }
+            } else if (resultTot) { resultTot.textContent = 'k20'; }
             resultCard.hidden = false;
-            setTimeout(finish, dwell);
-            overlay.addEventListener('click', finish, { once: true });
+            armAdvance(dwell, afterAttack);
         };
 
         requestAnimationFrame(() => {
@@ -5552,25 +5776,11 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null) {
                 let ticks = 0;
                 const iv = setInterval(() => {
                     resultNum.textContent = Math.ceil(Math.random() * 20);
-                    if (++ticks >= 10) { clearInterval(iv); showResult(d20); }
+                    if (++ticks >= 10) { clearInterval(iv); showAttack(d20); }
                 }, 60);
                 return;
             }
-            try {
-                if (!_diceBox) {
-                    _diceBox = new DICE.dice_box(container);
-                } else {
-                    _diceBox.clear();
-                    _diceBox.reinit(container);
-                }
-                _diceBox.setDice('1d20');
-            } catch (_e) {
-                showResult(d20);
-                return;
-            }
-            _diceBox.start_throw(() => [d20], (notation) => {
-                setTimeout(() => showResult(notation.result[0]), 400);
-            });
+            throwDice('1d20', [d20], () => showAttack(d20));
         });
     });
 }
@@ -5627,7 +5837,8 @@ async function handleCombatAttack() {
 
         // #569: visible 3D dice modal (parity with skill-test rolls). Lands on the
         // already-rolled d20; SF8 — pokazuje rozbicie składników na karcie wyniku.
-        await playCombatDiceRoll(d20, 'Atak', _bdParts ? { parts: _bdParts, total: _bdTotal } : null);
+        // #661: po trafieniu druga animacja — rzut kośćmi obrażeń (NdX).
+        await playCombatDiceRoll(d20, 'Atak', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data));
 
         await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (e) {
@@ -5714,6 +5925,49 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
             spell_defense: true, absorb,
         };
         await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadD)}`);
+        await refreshCharacterData();
+        return;
+    }
+    // B11 (#659): czar AoE (attack_aoe) — jeden rzut, obrażenia wielu wrogom.
+    if (data.spell_type === 'attack_aoe') {
+        const aoeHits = Array.isArray(data.aoe_hits) ? data.aoe_hits : [];
+        const killed = aoeHits.filter(h => h.dead).length;
+        if (data.miscast || data.player_nat1) {
+            setCombatMsg('Czar wymyka się spod kontroli!', true);
+            triggerCritFlash('fumble');
+        } else if (!hit || !aoeHits.length) {
+            setCombatMsg('Pudło — czar nie dosięga celów.');
+        } else {
+            const killNote = killed ? ` (${killed} pada)` : '';
+            setCombatMsg(`💥 ${data.weapon_label || 'AoE'} — ${aoeHits.length} cele trafione${killNote}!`);
+            if (data.player_nat20) triggerCritFlash('crit');
+        }
+        // Loot/złoto z zabitych wrogów (zsumowane ze wszystkich trafień AoE)
+        const aoeLoot = [];
+        let aoeGold = 0;
+        for (const h of aoeHits) {
+            if (h.dead) {
+                if (Array.isArray(h.loot)) aoeLoot.push(...h.loot);
+                aoeGold += Math.max(0, Number(h.gold_drop || 0));
+            }
+        }
+        if (aoeLoot.length || aoeGold) { pendingLoot = aoeLoot; pendingGold = aoeGold; }
+        const csA = data.combat_state || null;
+        if (csA) { lastCombatState = csA; renderCombatUI(csA); }
+        await fetchAndAppendNewCombatTurns();
+        const payloadA = {
+            kind: 'player_attack',
+            character_name: characterData?.name || 'Bohater',
+            d20, modifiers: [], total: d20,
+            hit: !!hit, damage: Number(data.damage || 0),
+            target_name: targetName, enemy_key: enemyKey || '',
+            attack_mode: 'spell',
+            spell_label: data.weapon_label || 'zaklęcie',
+            spell_aoe: true,
+            aoe_targets: aoeHits.length,
+            aoe_killed: killed,
+        };
+        await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadA)}`);
         await refreshCharacterData();
         return;
     }
@@ -6068,8 +6322,7 @@ function handleSheetTabClick(e) {
 function populateCharacterSheet(character) {
     if (!character) return;
 
-    let sheet = character.sheet_json || character;
-    if (typeof sheet === 'string') { try { sheet = JSON.parse(sheet); } catch { sheet = {}; } }
+    let sheet = getSheet(character);  // #664: shared parser (removes drift vs updateHeaderStats)
     elements.sheetCharacterName.textContent = character.name || 'Bohater';
 
     // Stage 4 S1: location badge in sheet header
@@ -8334,9 +8587,21 @@ function _refreshDebugToggleVisibility() {
 
 // ── Tester bug-report FAB + modal ────────────────────────────────────────────
 
-function _refreshBugReportFab() {
+async function _refreshBugReportFab() {
     const fab = document.getElementById('bug-report-fab');
     if (!fab) return;
+    // #668: odśwież is_tester z serwera (localStorage/JWT bywają nieaktualne po nadaniu flagi).
+    // Lazy, raz na wejście do gry; błąd sieci → użyj tego co w currentUser.
+    if (currentUser && currentUser._testerChecked !== true) {
+        try {
+            const me = await apiRequest('GET', '/auth/me');
+            if (me && me.is_tester != null) {
+                currentUser.is_tester = me.is_tester;
+                try { localStorage.setItem('user', JSON.stringify(currentUser)); } catch {}
+            }
+            currentUser._testerChecked = true;
+        } catch { /* offline / brak endpointu — degrade do bieżącego stanu */ }
+    }
     const isTester = currentUser?.is_tester === 1 || currentUser?.is_tester === true;
     const onGameScreen = document.getElementById('game-screen')?.classList.contains('active') ||
                          document.querySelector('.screen.active')?.id === 'game-screen';
@@ -10763,6 +11028,33 @@ const _TERRAIN_THEMES = {
 const _TERRAIN_DEFAULT = { g: 'linear-gradient(160deg,#0A0810 0%,#16141E 50%,#201C2A 100%)', icon: '🗺️' };
 let _travelCinematicTimer = null;
 
+// #665: tip karty podróży. Priorytet: onboarding world_map (pierwsza podróż).
+// Inaczej losowa odkryta karta Wiedzy/Kodeksu (cache na sesję, bez powtórki pod rząd).
+let _codexTipsCache = null;
+let _lastTravelTipKey = null;
+async function _pickTravelTip(response) {
+  const onboard = (response?.onboarding_cards || []).find(c => c.mechanic_key === 'world_map');
+  if (onboard) return onboard;
+  if (!currentUser?.id) return null;
+  if (_codexTipsCache === null) {
+    try {
+      const data = await apiRequest('GET', `/users/${currentUser.id}/mechanic-cards`);
+      _codexTipsCache = Array.isArray(data?.cards) ? data.cards : [];
+    } catch { _codexTipsCache = []; }
+  }
+  const cards = _codexTipsCache;
+  if (!cards.length) return null;
+  const keyOf = c => String(c.mechanic_key || c.title || '');
+  if (cards.length === 1) { _lastTravelTipKey = keyOf(cards[0]); return cards[0]; }
+  let pick = cards[0];
+  for (let i = 0; i < 8; i++) {
+    pick = cards[Math.floor(Math.random() * cards.length)];
+    if (keyOf(pick) !== _lastTravelTipKey) break;
+  }
+  _lastTravelTipKey = keyOf(pick);
+  return pick;
+}
+
 function _showTravelCinematic({ hexType, destLabel, atmo, tip }) {
   return new Promise(resolve => {
     const overlay = document.getElementById('travel-cinematic');
@@ -10841,8 +11133,8 @@ async function _wmExecuteTravel() {
 
     // Wait for map slide-out (280ms), then show full-screen travel cinematic
     await new Promise(r => setTimeout(r, 350));
-    // Pass onboarding tip if backend returned one (world_map card first travel)
-    const cinTip = (response.onboarding_cards || []).find(c => c.mechanic_key === 'world_map') || null;
+    // #665: onboarding world_map (pierwsza podróż) lub losowa karta Kodeksu
+    const cinTip = await _pickTravelTip(response);
     await _showTravelCinematic({
       hexType: arrivedData.hex_type,
       // Hex labels are usually empty — fall back to terrain name (Las/Rzeka/…)
@@ -11138,7 +11430,8 @@ async function handleCombatSpellAttack(spellKey) {
             ? sf8AttackBreakdown(_atk, { surprise: data.surprise_atk_bonus, durability: data.durability_attack_penalty })
             : null;
         const _bdTotal = Number(data.attack_total ?? _atk.total ?? d20);
-        await playCombatDiceRoll(d20, 'Czar', _bdParts ? { parts: _bdParts, total: _bdTotal } : null);
+        // #661: czar atakujący → animacja obrażeń; heal → animacja leczenia (NdX).
+        await playCombatDiceRoll(d20, 'Czar', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data));
 
         await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (err) {
