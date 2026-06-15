@@ -5777,6 +5777,170 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: var(--gold);
 }
 
+/* SF1 (#619): „Akcja ▾" — neutralny rdzeń (złoto), filar otwierający bottom sheet */
+.combat-btn--action {
+  background: linear-gradient(180deg, #2a2230 0%, #1a1420 100%);
+  border-color: var(--gold, #c9a54a);
+  color: var(--gold, #c9a54a);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(201, 165, 74, 0.18);
+}
+.combat-btn--action:hover:not(:disabled) {
+  background: linear-gradient(180deg, #362b3e 0%, #221a2a 100%);
+  box-shadow: 0 4px 12px rgba(201, 165, 74, 0.3);
+}
+
+/* SF1 (#619): bottom sheet z pozostałymi akcjami walki (wysuw od dołu, kciukowy) */
+.combat-action-sheet[hidden] { display: none; }
+.combat-action-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.combat-action-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  animation: combatSheetFade 0.2s ease-out;
+}
+.combat-action-sheet__panel {
+  position: relative;
+  background: linear-gradient(180deg, rgba(28, 20, 26, 0.99) 0%, rgba(18, 12, 16, 0.99) 100%);
+  border-top: 1px solid rgba(201, 165, 74, 0.4);
+  border-radius: 18px 18px 0 0;
+  padding: var(--space-sm) var(--space-lg);
+  padding-bottom: calc(var(--space-lg) + var(--safe-bottom));
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+  animation: combatSheetSlideUp 0.22s ease-out;  /* SF1 wartość startowa */
+}
+@keyframes combatSheetSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes combatSheetFade { from { opacity: 0; } to { opacity: 1; } }
+.combat-action-sheet__handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(201, 165, 74, 0.4);
+  margin: 6px auto var(--space-sm);
+}
+.combat-action-sheet__title {
+  font-family: 'Cinzel', Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.85rem;
+  color: var(--gold, #c9a54a);
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
+.combat-action-sheet__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+/* Pozycje arkusza = pełna szerokość, wyrównane do lewej, min. 48px (kciuk) */
+.combat-action-sheet__list .combat-btn {
+  flex: none;
+  width: 100%;
+  justify-content: flex-start;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 1rem;
+  min-height: 48px;
+}
+.combat-action-sheet__list .combat-btn span {
+  text-overflow: clip;
+  display: inline;
+}
+/* W arkuszu atrybut hidden faktycznie chowa pozycję (override .combat-btn{display:flex}) */
+.combat-action-sheet__list .combat-btn[hidden] { display: none; }
+
+/* ── SF2 (#620): zawartość pozycji arkusza — koszt, opis, powód wyszarzenia ── */
+.combat-action-sheet__list .combat-btn {
+  align-items: flex-start;
+}
+.combat-action-sheet__list .combat-btn .combat-btn__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: stretch;
+  text-align: left;
+}
+.combat-action-sheet__list .combat-btn .combat-btn__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+}
+.combat-action-sheet__list .combat-btn .combat-btn__label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Znacznik kosztu: ⏳ akcja zużywa turę (złoto) vs ↺ reakcja za darmo (zieleń) */
+.combat-action-sheet__list .combat-btn .combat-btn__cost {
+  flex-shrink: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.combat-btn__cost--action {
+  color: var(--gold, #c9a54a);
+  border-color: rgba(201, 165, 74, 0.5);
+  background: rgba(201, 165, 74, 0.12);
+}
+.combat-btn__cost--reaction {
+  color: var(--success, #5fae6a);
+  border-color: rgba(95, 174, 106, 0.5);
+  background: rgba(95, 174, 106, 0.12);
+}
+.combat-action-sheet__list .combat-btn .combat-btn__desc {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted, #9a8f80);
+  opacity: 0.9;
+  white-space: normal;
+}
+/* Powód wyszarzenia — popielaty, pojawia się tylko gdy pozycja niedostępna (JS zdejmuje [hidden]) */
+.combat-action-sheet__list .combat-btn .combat-btn__reason {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted, #9a8f80);
+  white-space: normal;
+}
+.combat-action-sheet__list .combat-btn .combat-btn__reason[hidden] { display: none; }
+.combat-action-sheet__list .combat-btn .combat-btn__reason::before { content: "⚠ "; }
+/* Niedostępna pozycja = wyszarzona (disabled daje opacity:0.5 + cursor not-allowed); powód czytelny */
+.combat-action-sheet__list .combat-btn.is-unavailable .combat-btn__reason { color: #c98a6a; }
+/* Sheet zawsze pokazuje tekst, nawet na bardzo wąskich ekranach (override globalnego @media span{display:none}) */
+@media (max-width: 359px) {
+  .combat-action-sheet__list .combat-btn .combat-btn__body { display: flex; }
+  .combat-action-sheet__list .combat-btn .combat-btn__head,
+  .combat-action-sheet__list .combat-btn .combat-btn__label,
+  .combat-action-sheet__list .combat-btn .combat-btn__cost,
+  .combat-action-sheet__list .combat-btn .combat-btn__desc { display: block; }
+  .combat-action-sheet__list .combat-btn .combat-btn__head { display: flex; }
+  .combat-action-sheet__list .combat-btn .combat-btn__reason:not([hidden]) { display: block; }
+}
+
 /* Hide normal composer when combat composer shown */
 .composer.composer--hidden {
   display: none;

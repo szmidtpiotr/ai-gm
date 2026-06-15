@@ -141,6 +141,11 @@ const elements = {
     combatComposer: document.getElementById('combat-composer'),
     btnCombatAttack: document.getElementById('combat-attack-btn'),
     btnCombatFlee: document.getElementById('combat-flee-btn'),
+    // SF1 (#619): pasek 3-filarowy + bottom sheet z pozostałymi akcjami
+    btnCombatAction: document.getElementById('combat-action-btn'),
+    combatActionSheet: document.getElementById('combat-action-sheet'),
+    combatActionSheetBackdrop: document.getElementById('combat-action-sheet-backdrop'),
+    combatActionSheetList: document.getElementById('combat-action-sheet-list'),
 
     // Journal Panel
     journalPanel: document.getElementById('journal-panel'),
@@ -4482,6 +4487,7 @@ function showCombatUI() {
     const parsedSheet = typeof sheet === 'string' ? JSON.parse(sheet) : sheet;
     const spellBtn = document.getElementById('combat-spell-btn');
     if (spellBtn) spellBtn.style.display = parsedSheet.archetype === 'scholar' ? '' : 'none';
+    refreshCombatShieldFlag();  // SF2 (#620): status tarczy dla gatingu „Blok"
     updateInputPlaceholder();
 }
 
@@ -4493,6 +4499,7 @@ function hideCombatUI() {
     pendingGold = 0;
     elements.combatBanner.hidden = true;
     elements.combatComposer.hidden = true;
+    closeCombatSheet();  // SF1 (#619): zamknij arkusz akcji na koniec walki
     elements.composer?.classList.remove('composer--hidden');
     if (elements.initiativeTrack) elements.initiativeTrack.innerHTML = '';
     _showEnemyTurnOverlay(false);  // C2: clear overlay on combat end
@@ -4501,6 +4508,21 @@ function hideCombatUI() {
     _initLastCurrentTurn = null;
     setCombatMsg('');
     updateInputPlaceholder();
+}
+
+// SF1 (#619): bottom sheet z pozostałymi akcjami walki (otwierany przyciskiem „Akcja").
+function openCombatSheet() {
+    if (!elements.combatActionSheet) return;
+    if (elements.btnCombatAction?.disabled) return;  // nie tura gracza → nie otwieraj
+    elements.combatActionSheet.hidden = false;
+    elements.combatActionSheet.classList.add('is-open');
+    window.clog?.event('combat_sheet_open', {});
+}
+
+function closeCombatSheet() {
+    if (!elements.combatActionSheet) return;
+    elements.combatActionSheet.classList.remove('is-open');
+    elements.combatActionSheet.hidden = true;
 }
 
 function setCombatMsg(text, isError) {
@@ -4677,6 +4699,40 @@ function _renderInitiativeTrack(cs) {
     }
 }
 
+// SF2 (#620): status założonej tarczy (slot off_hand). Czytany z inventory; odświeżany na starcie
+// walki (refreshCombatShieldFlag) i przy ładowaniu arkusza postaci. Steruje wyszarzeniem „Blok".
+let _equippedShield = false;
+
+// SF2 (#620): ustaw stan dostępności pozycji arkusza — wyszarzona + powód zamiast znikania.
+// available=false → klasa is-unavailable + widoczny powód; available=true → powód ukryty.
+function setSheetAvail(btn, available, reason) {
+    if (!btn) return;
+    btn.classList.toggle('is-unavailable', !available);
+    const r = btn.querySelector('.combat-btn__reason');
+    if (r) {
+        if (available || !reason) {
+            r.hidden = true;
+        } else {
+            r.textContent = reason;
+            r.hidden = false;
+        }
+    }
+}
+
+// SF2 (#620): odśwież status tarczy na starcie walki (inventory nie zawsze załadowane wcześniej).
+async function refreshCombatShieldFlag() {
+    if (!characterData?.id) return;
+    try {
+        const resp = await fetch(`/api/inventory/${characterData.id}`).then(r => r.json());
+        const items = Array.isArray(resp?.data) ? resp.data : [];
+        _equippedShield = items.some(it =>
+            Number(it.equipped) === 1 && String(it.slot) === 'off_hand' &&
+            (String(it.item_type || '').toLowerCase() === 'armor' ||
+             /shield|tarcz/.test(String(it.item_key || it.label || '').toLowerCase())));
+        if (lastCombatState) renderCombatUI(lastCombatState);
+    } catch { /* brak danych → zostaw poprzedni stan */ }
+}
+
 function renderCombatUI(cs) {
     // Stage 7 C1 — warm the condition meta cache so chip tooltips have descriptions.
     // First call hits the network; subsequent calls are cached (5-min TTL).
@@ -4799,47 +4855,62 @@ function renderCombatUI(cs) {
         }
     }
 
+    // SF2 (#620): pomocnicze dane dostępności — wszystko CZYTANE ze stanu, nic nie liczone.
+    const _csheet = (() => { const s = characterData?.sheet_json || characterData || {}; return typeof s === 'string' ? JSON.parse(s) : s; })();
+    const _skills = _csheet.skills || {};
+    const _curMana = Number(_csheet.current_mana ?? 0);
+    const _enemyEngaged = enemies.some(e => String(e.zone || 'engaged') === 'engaged');
+
     // ── S15 (#610): dodge reaction toggle — only visible for heroes with dodge rank ≥ 1 ──
     if (elements.btnCombatDodge) {
-        const dodgeRank = Number((characterData?.sheet_json?.skills || {}).dodge || 0);
-        const hasDodge = dodgeRank >= 1;
+        const hasDodge = Number(_skills.dodge || 0) >= 1;
         elements.btnCombatDodge.hidden = !hasDodge;
         if (hasDodge) {
             const declared = String(player?.reaction_declared || '') === 'dodge';
             elements.btnCombatDodge.classList.toggle('is-active', declared);
             if (elements.combatDodgeLabel) elements.combatDodgeLabel.textContent = declared ? 'Unik ✓' : 'Unik';
         }
+        setSheetAvail(elements.btnCombatDodge, true, '');  // reakcja zawsze dostępna w turze
     }
 
     // ── S16 (#611): shield_block toggle — visible for heroes with shield_block rank ≥ 1.
-    // Gate tarczy egzekwuje backend (400 jeśli brak założonej tarczy); UI pokazuje przycisk,
-    // a handler raportuje komunikat błędu. XOR z unikiem (jedna reakcja/rundę).
+    // SF2 (#620): zamiast chować bez tarczy — pokaż wyszarzone z powodem „Brak tarczy".
     if (elements.btnCombatBlock) {
-        const blockRank = Number((characterData?.sheet_json?.skills || {}).shield_block || 0);
-        const hasBlock = blockRank >= 1;
+        const hasBlock = Number(_skills.shield_block || 0) >= 1;
         elements.btnCombatBlock.hidden = !hasBlock;
         if (hasBlock) {
             const declared = String(player?.reaction_declared || '') === 'shield_block';
             elements.btnCombatBlock.classList.toggle('is-active', declared);
             if (elements.combatBlockLabel) elements.combatBlockLabel.textContent = declared ? 'Blok ✓' : 'Blok';
         }
+        setSheetAvail(elements.btnCombatBlock, _equippedShield, 'Brak tarczy');
     }
 
-    // ── S17 (#612): zapasy — akcja bojowa widoczna, gdy gracz w zwarciu i jest wróg w zwarciu.
-    // Skill 'wrestling' nie jest wymagany (każdy w zwarciu może spróbować; rank dodaje bonus).
+    // ── S17 (#612): zapasy — akcja bojowa. SF2 (#620): zawsze widoczna; w dystansie / bez wroga
+    // w zwarciu — wyszarzona z powodem „Wymaga zwarcia" (gracz uczy się zasady).
+    const _canWrestle = playerZone === 'engaged' && _enemyEngaged;
     if (elements.btnCombatWrestle) {
-        const enemyEngaged = enemies.some(e => String(e.zone || 'engaged') === 'engaged');
-        const canWrestle = playerZone === 'engaged' && enemyEngaged;
-        elements.btnCombatWrestle.hidden = !canWrestle;
+        elements.btnCombatWrestle.hidden = false;
+        setSheetAvail(elements.btnCombatWrestle, _canWrestle, 'Wymaga zwarcia');
     }
 
+    // ── SF2 (#620): zaklęcie — wyszarzone „Za mało many" gdy poniżej najtańszego czaru (próg startowy 2). ──
+    const _spellBtn = document.getElementById('combat-spell-btn');
+    const _spellHasMana = _curMana >= 2;
+    setSheetAvail(_spellBtn, _spellHasMana, 'Za mało many');
+
+    // Bramka turowa: pozycja klikalna tylko gdy tura gracza ORAZ dostępna (SF2).
     const canAct = isPlayerTurn && !combatBusy;
+    const gate = (btn, available) => { if (btn) btn.disabled = !canAct || !available; };
     elements.btnCombatAttack.disabled = !canAct;
     elements.btnCombatFlee.disabled = !canAct;
-    if (elements.btnCombatMove) elements.btnCombatMove.disabled = !canAct;
-    if (elements.btnCombatDodge) elements.btnCombatDodge.disabled = !canAct;
-    if (elements.btnCombatBlock) elements.btnCombatBlock.disabled = !canAct;
-    if (elements.btnCombatWrestle) elements.btnCombatWrestle.disabled = !canAct;
+    if (elements.btnCombatAction) elements.btnCombatAction.disabled = !canAct;  // SF1 (#619)
+    if (!canAct) closeCombatSheet();  // SF1 (#619): poza turą gracza arkusz nie wisi otwarty
+    gate(elements.btnCombatMove, true);
+    gate(elements.btnCombatDodge, true);
+    gate(elements.btnCombatBlock, _equippedShield);
+    gate(elements.btnCombatWrestle, _canWrestle);
+    gate(_spellBtn, _spellHasMana);
     window.clog?.event('combat_buttons_state', { attack_disabled: !canAct, is_player_turn: isPlayerTurn, busy: combatBusy, zone: playerZone });
 }
 
@@ -6389,6 +6460,7 @@ async function renderInventoryTab(character) {
 
     // U16: odśwież cache trwałości założonej broni/zbroi (dla ostrzeżenia w HUD walki).
     const _eqDura = { weapon: null, armor: null };
+    let _foundShield = false;  // SF2 (#620): status tarczy dla gatingu „Blok"
     for (const item of items) {
         if (Number(item.equipped) === 1 && item.slot) {
             equipped[item.slot] = item;
@@ -6397,6 +6469,11 @@ async function renderInventoryTab(character) {
                 const t = String(item.item_type || '').toLowerCase();
                 if (t === 'weapon' && !_eqDura.weapon) _eqDura.weapon = { ...item.durability, label: item.label };
                 if (t === 'armor' && !_eqDura.armor) _eqDura.armor = { ...item.durability, label: item.label };
+            }
+            if (String(item.slot) === 'off_hand' &&
+                (String(item.item_type || '').toLowerCase() === 'armor' ||
+                 /shield|tarcz/.test(String(item.item_key || item.label || '').toLowerCase()))) {
+                _foundShield = true;
             }
             // Full-coverage armor: stamp the limb slots as locked.
             for (const cs of (item.covered_slots || [])) {
@@ -6412,6 +6489,8 @@ async function renderInventoryTab(character) {
         }
     }
     _equippedDurability = _eqDura;
+    _equippedShield = _foundShield;  // SF2 (#620)
+    if (combatActive && lastCombatState) renderCombatUI(lastCombatState);  // odśwież gating „Blok" po zmianie ekwipunku
 
     // Stage 5 E7: gather body-part wound conditions from sheet.
     const woundSet = _collectWoundSet();
@@ -9378,6 +9457,17 @@ function initEventListeners() {
     elements.btnCombatBlock?.addEventListener('click', handleCombatBlock);
     elements.btnCombatWrestle?.addEventListener('click', handleCombatWrestle);
     document.getElementById('combat-spell-btn')?.addEventListener('click', openSpellPicker);
+    // SF1 (#619): pasek „Akcja" otwiera bottom sheet; tło/Esc/wybór pozycji zamyka.
+    elements.btnCombatAction?.addEventListener('click', openCombatSheet);
+    elements.combatActionSheetBackdrop?.addEventListener('click', closeCombatSheet);
+    elements.combatActionSheetList?.addEventListener('click', (e) => {
+        // klik w pozycję arkusza (nie w wyszarzony/disabled przycisk) → wykonaj handler i zamknij
+        const btn = e.target.closest('.combat-btn');
+        if (btn && !btn.disabled) closeCombatSheet();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && elements.combatActionSheet && !elements.combatActionSheet.hidden) closeCombatSheet();
+    });
     document.getElementById('spell-picker-close')?.addEventListener('click', closeSpellPicker);
     document.getElementById('spell-picker-overlay')?.addEventListener('click', e => {
         if (e.target === document.getElementById('spell-picker-overlay')) closeSpellPicker();

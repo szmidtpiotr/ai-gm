@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=617-wizard-rolls-2026-06-14">
+  <link rel="stylesheet" href="./css/styles.css?v=620-sf2-sheet-content-2026-06-15">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -779,6 +779,7 @@
     </footer>
 
     <!-- Combat composer (replaces normal composer during combat) -->
+    <!-- SF1 (#619): zwinięte do 3 filarów — [Atak] · [Akcja ▾] · [Ucieczka]. Reszta akcji w arkuszu poniżej. -->
     <footer id="combat-composer" class="combat-composer" hidden>
       <button type="button" class="combat-btn combat-btn--attack" id="combat-attack-btn" data-clog="combat_attack_button">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -789,38 +790,12 @@
         </svg>
         <span>Atak</span>
       </button>
-      <button type="button" class="combat-btn combat-btn--spell" id="combat-spell-btn" style="display:none" data-clog="combat_spell_button">
+      <button type="button" class="combat-btn combat-btn--action" id="combat-action-btn" data-clog="combat_action_button" aria-haspopup="dialog">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          <line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="14" x2="20" y2="14"/>
+          <polyline points="9 19 12 22 15 19"/>
         </svg>
-        <span>Zaklęcie</span>
-      </button>
-      <button type="button" class="combat-btn combat-btn--move" id="combat-move-btn" data-clog="combat_move_button">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="combat-move-icon">
-          <path d="M5 12h14M13 6l6 6-6 6"/>
-        </svg>
-        <span id="combat-move-label">Zbliż się</span>
-      </button>
-      <!-- S15 (#610): pre-deklaracja reakcji uniku (toggle, nie zużywa tury; wymaga skilla dodge) -->
-      <button type="button" class="combat-btn combat-btn--dodge" id="combat-dodge-btn" data-clog="combat_dodge_button" hidden>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        <span id="combat-dodge-label">Unik</span>
-      </button>
-      <button type="button" class="combat-btn combat-btn--block" id="combat-block-btn" data-clog="combat_block_button" hidden>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="M9 12l2 2 4-4"/>
-        </svg>
-        <span id="combat-block-label">Blok</span>
-      </button>
-      <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
-      <button type="button" class="combat-btn combat-btn--wrestle" id="combat-wrestle-btn" data-clog="combat_wrestle_button" hidden>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 14l4-4 4 4 4-4 4 4"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/>
-        </svg>
-        <span id="combat-wrestle-label">Zapasy</span>
+        <span>Akcja</span>
       </button>
       <button type="button" class="combat-btn combat-btn--flee" id="combat-flee-btn" data-clog="combat_flee_button">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -830,6 +805,86 @@
         <span>Ucieczka</span>
       </button>
     </footer>
+
+    <!-- SF1 (#619): bottom sheet z pozostałymi akcjami walki (te same id/handlery, inne miejsce) -->
+    <div id="combat-action-sheet" class="combat-action-sheet" hidden>
+      <div class="combat-action-sheet__backdrop" id="combat-action-sheet-backdrop"></div>
+      <div class="combat-action-sheet__panel" role="dialog" aria-label="Akcje walki">
+        <div class="combat-action-sheet__handle"></div>
+        <div class="combat-action-sheet__title">Akcja</div>
+        <div class="combat-action-sheet__list" id="combat-action-sheet-list">
+          <!-- SF2 (#620): każda pozycja = ikona + nazwa + znacznik kosztu (⏳ akcja / ↺ reakcja) + opis + powód wyszarzenia -->
+          <button type="button" class="combat-btn combat-btn--spell" id="combat-spell-btn" style="display:none" data-clog="combat_spell_button">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label">Zaklęcie</span>
+                <span class="combat-btn__cost combat-btn__cost--action">⏳ tura</span>
+              </span>
+              <span class="combat-btn__desc">Rzuć zaklęcie z puli many</span>
+              <span class="combat-btn__reason" hidden>Za mało many</span>
+            </span>
+          </button>
+          <button type="button" class="combat-btn combat-btn--move" id="combat-move-btn" data-clog="combat_move_button">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="combat-move-icon">
+              <path d="M5 12h14M13 6l6 6-6 6"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label" id="combat-move-label">Zbliż się</span>
+                <span class="combat-btn__cost combat-btn__cost--action">⏳ tura</span>
+              </span>
+              <span class="combat-btn__desc">Zmień strefę — dystans / zwarcie</span>
+              <span class="combat-btn__reason" hidden></span>
+            </span>
+          </button>
+          <!-- S15 (#610): pre-deklaracja reakcji uniku (toggle, nie zużywa tury; wymaga skilla dodge) -->
+          <button type="button" class="combat-btn combat-btn--dodge" id="combat-dodge-btn" data-clog="combat_dodge_button" hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label" id="combat-dodge-label">Unik</span>
+                <span class="combat-btn__cost combat-btn__cost--reaction">↺ reakcja</span>
+              </span>
+              <span class="combat-btn__desc">Uzbrój unik na cios wroga — za darmo</span>
+              <span class="combat-btn__reason" hidden></span>
+            </span>
+          </button>
+          <button type="button" class="combat-btn combat-btn--block" id="combat-block-btn" data-clog="combat_block_button" hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label" id="combat-block-label">Blok</span>
+                <span class="combat-btn__cost combat-btn__cost--reaction">↺ reakcja</span>
+              </span>
+              <span class="combat-btn__desc">Uzbrój blok tarczą — za darmo</span>
+              <span class="combat-btn__reason" hidden>Brak tarczy</span>
+            </span>
+          </button>
+          <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
+          <button type="button" class="combat-btn combat-btn--wrestle" id="combat-wrestle-btn" data-clog="combat_wrestle_button">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 14l4-4 4 4 4-4 4 4"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="6" r="2"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label" id="combat-wrestle-label">Zapasy</span>
+                <span class="combat-btn__cost combat-btn__cost--action">⏳ tura</span>
+              </span>
+              <span class="combat-btn__desc">Chwyt — test siły w zwarciu</span>
+              <span class="combat-btn__reason" hidden>Wymaga zwarcia</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Spell Picker (Scholar combat) -->
     <div id="spell-picker-overlay" class="spell-picker-overlay" hidden>
@@ -1733,7 +1788,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=618-hp-base-2026-06-14"></script>
+  <script src="./js/app.js?v=620-sf2-sheet-content-2026-06-15"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
