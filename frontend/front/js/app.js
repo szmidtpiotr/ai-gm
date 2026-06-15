@@ -4163,6 +4163,8 @@ let combatActive = false;
 let combatBusy = false;
 let lastCombatState = null;
 let enemyTurnInFlight = false;
+let reactionPending = false;   // SF10 (#633): okno reakcji otwarte — wstrzymuje pętlę tury wroga
+let _reactionTimer = null;     // SF10: handle odliczania 8 s (auto-take)
 let pendingLoot = null;
 let pendingGold = 0;
 
@@ -4213,7 +4215,8 @@ async function pollCombatState() {
         }
 
         // Auto-trigger enemy turn when it's not the player's turn
-        if (cs.current_turn !== 'player' && !enemyTurnInFlight && !combatBusy) {
+        // SF10 (#633): nie odpalaj kolejnej tury wroga, gdy otwarte jest okno reakcji.
+        if (cs.current_turn !== 'player' && !enemyTurnInFlight && !combatBusy && !reactionPending) {
             await handleEnemyTurn();
         }
     } catch (e) {
@@ -4250,7 +4253,7 @@ function _showEnemyTurnOverlay(show, enemyName) {
 }
 
 async function handleEnemyTurn() {
-    if (enemyTurnInFlight || !currentCampaignId) return;
+    if (enemyTurnInFlight || reactionPending || !currentCampaignId) return;
     enemyTurnInFlight = true;
     setCombatMsg('Tura wroga...');
     // Show the overlay eagerly — `renderCombatUI` will keep it on until the next
@@ -4273,6 +4276,13 @@ async function handleEnemyTurn() {
             renderCombatUI(cs);
         }
         await fetchAndAppendNewCombatTurns();
+        // SF10 (#633): wróg trafił i gracz ma reakcję → OKNO REAKCJI zamiast obrażeń.
+        // Pokaż modal (bez liczby obrażeń); rozliczenie w resolveReaction().
+        if (data.reaction_window) {
+            _showEnemyTurnOverlay(false);
+            showReactionModal(data);
+            return;   // turę wstrzymano (backend nie zaawansował) — czekamy na wybór
+        }
         if (data.hit) {
             setCombatMsg(`Wróg trafia za ${data.damage ?? '?'} obrażeń!`, true);
         } else {
@@ -4286,6 +4296,88 @@ async function handleEnemyTurn() {
         window.clog?.warn('enemy_turn_exception', { message: String(e?.message || e) });
     } finally {
         enemyTurnInFlight = false;
+    }
+}
+
+// SF10 (#633): reaktywne okno uniku/bloku. Modal pokazuje TYLKO dostępne opcje, BEZ
+// liczby obrażeń (decyzja Piotra — wybór pozostaje zakładem). Timeout 8 s → auto „take".
+function showReactionModal(data) {
+    reactionPending = true;
+    const opts = Array.isArray(data.reaction_options) ? data.reaction_options : [];
+    const enemyName = data.enemy_name || 'Wróg';
+    const existing = document.getElementById('reaction-modal');
+    if (existing) existing.remove();
+
+    const btn = (choice, label, glyph, cls) =>
+        `<button class="reaction-btn ${cls}" data-choice="${choice}">
+           <span class="reaction-btn__glyph">${glyph}</span><span>${label}</span>
+         </button>`;
+    let buttons = btn('take', 'Przyjmij cios', '🛡️✗', 'reaction-btn--take');
+    if (opts.includes('dodge')) buttons += btn('dodge', 'Unik (Zręczność)', '🤸', 'reaction-btn--dodge');
+    if (opts.includes('shield_block')) buttons += btn('block', 'Blok (tarcza)', '🛡️', 'reaction-btn--block');
+
+    const modal = document.createElement('div');
+    modal.id = 'reaction-modal';
+    modal.className = 'reaction-modal-overlay';
+    modal.innerHTML = `
+      <div class="reaction-modal">
+        <div class="reaction-modal__title">⚔️ ${escapeHtml(enemyName)} trafia!</div>
+        <div class="reaction-modal__sub">Jak reagujesz?</div>
+        <div class="reaction-modal__btns">${buttons}</div>
+        <div class="reaction-modal__timer"><span id="reaction-countdown">8</span> s — brak wyboru = przyjmujesz cios</div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll('.reaction-btn').forEach(b => {
+        b.addEventListener('click', () => resolveReaction(b.getAttribute('data-choice')));
+    });
+
+    // Odliczanie 8 s → auto „take"
+    let left = 8;
+    const cd = modal.querySelector('#reaction-countdown');
+    if (_reactionTimer) clearInterval(_reactionTimer);
+    _reactionTimer = setInterval(() => {
+        left -= 1;
+        if (cd) cd.textContent = String(Math.max(0, left));
+        if (left <= 0) {
+            clearInterval(_reactionTimer);
+            _reactionTimer = null;
+            resolveReaction('take');
+        }
+    }, 1000);
+}
+
+async function resolveReaction(choice) {
+    if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+    const modal = document.getElementById('reaction-modal');
+    if (modal) modal.querySelectorAll('.reaction-btn').forEach(b => { b.disabled = true; });
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/resolve-reaction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ choice: choice || 'take' })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (modal) modal.remove();
+        reactionPending = false;
+        if (!r.ok) { setCombatMsg('Błąd reakcji.', true); return; }
+        const cs = data.combat_state;
+        if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+        await fetchAndAppendNewCombatTurns();
+        const react = data.reaction || {};
+        if (choice === 'dodge' && react.dodged) {
+            setCombatMsg('Unik! Cios mija — 0 obrażeń.');
+        } else if ((choice === 'block') && (react.full_block || (react.reduction || 0) > 0)) {
+            setCombatMsg(`Blok! Obrażenia: ${data.damage ?? 0}.`, (data.damage || 0) > 0);
+        } else {
+            setCombatMsg(`Wróg trafia za ${data.damage ?? 0} obrażeń!`, true);
+        }
+        await refreshCharacterData();
+        if (cs && cs.status === 'ended') { await handleCombatEnded(cs); }
+    } catch (e) {
+        reactionPending = false;
+        if (modal) modal.remove();
+        window.clog?.warn('resolve_reaction_exception', { message: String(e?.message || e) });
     }
 }
 
@@ -4501,6 +4593,8 @@ function hideCombatUI() {
     elements.combatComposer.hidden = true;
     closeCombatSheet();  // SF1 (#619): zamknij arkusz akcji na koniec walki
     elements.composer?.classList.remove('composer--hidden');
+    const _statusBar = document.getElementById('combat-player-status');  // SF4 (#632): schowaj pasek statusu
+    if (_statusBar) { _statusBar.hidden = true; _statusBar.innerHTML = ''; }
     if (elements.initiativeTrack) elements.initiativeTrack.innerHTML = '';
     _showEnemyTurnOverlay(false);  // C2: clear overlay on combat end
     _initActedThisRound = new Set();
@@ -4699,6 +4793,67 @@ function _renderInitiativeTrack(cs) {
     }
 }
 
+// ─── SF4 (#632): pasek statusu gracza — trwała warstwa aktywnych kondycji nad kompozerem ───
+// Glif z COND_BADGE_MAP, nazwa z katalogu (CONDITION_META_CACHE) → snapshot `label` → key.
+// Poziom „N/M" tylko dla kondycji stackowalnych (effect_json.stacking_levels.max_level > 1).
+// Front NIC nie liczy — poziom i etykiety pochodzą ze snapshotu / katalogu (S9 luka: poziom widoczny).
+function _sfConditionMaxLevel(cond) {
+    let efx = cond?.effect_json;
+    if (typeof efx === 'string') {
+        try { efx = JSON.parse(efx); } catch { efx = null; }
+    }
+    const effects = Array.isArray(efx?.effects) ? efx.effects
+        : (Array.isArray(cond?.effects) ? cond.effects : []);
+    let max = 1;
+    for (const e of effects) {
+        if (e && String(e.type || '').toLowerCase() === 'stacking_levels') {
+            const m = parseInt(e.max_level, 10);
+            if (Number.isFinite(m) && m > max) max = m;
+        }
+    }
+    return max;
+}
+
+function _sfConditionLevel(cond) {
+    const lvl = parseInt(cond?.runtime?.level, 10);
+    return Number.isFinite(lvl) && lvl >= 1 ? lvl : 1;
+}
+
+function renderPlayerStatusBar(player) {
+    const bar = document.getElementById('combat-player-status');
+    if (!bar) return;
+    const conds = Array.isArray(player?.conditions) ? player.conditions : [];
+    if (!conds.length) {
+        bar.hidden = true;
+        bar.innerHTML = '';
+        return;
+    }
+    const meta = CONDITION_META_CACHE.byKey || {};
+    const chips = conds.map(c => {
+        const key = String(c?.key || c?.label || '').trim().toLowerCase();
+        if (!key) return '';
+        const badge = COND_BADGE_MAP[key] || { glyph: '•', variant: 'generic' };
+        const labelPL = meta[key]?.label || c?.label || badge.label || key;
+        const desc = meta[key]?.description || '';
+        const tip = desc ? `${labelPL} — ${desc}` : labelPL;
+        const maxLvl = _sfConditionMaxLevel(c);
+        let levelHTML = '';
+        if (maxLvl > 1) {
+            const lvl = Math.min(_sfConditionLevel(c), maxLvl);
+            levelHTML = `<span class="combat-status-chip__level">${lvl}/${maxLvl}</span>`;
+        }
+        return `<span class="combat-status-chip combat-status-chip--${badge.variant}" title="${escapeHtml(tip)}">`
+            + `<span class="combat-status-chip__glyph" aria-hidden="true">${badge.glyph}</span>`
+            + `<span class="combat-status-chip__label">${escapeHtml(labelPL)}</span>`
+            + levelHTML
+            + `</span>`;
+    }).filter(Boolean).join('');
+    bar.innerHTML = chips;
+    bar.hidden = !chips;
+}
+// Kontrakt SF4 (test Playwright #632): render czyta player.conditions[] z dowolnego snapshotu.
+window.__sfRenderPlayerStatusBar = renderPlayerStatusBar;
+
 // SF2 (#620): status założonej tarczy (slot off_hand). Czytany z inventory; odświeżany na starcie
 // walki (refreshCombatShieldFlag) i przy ładowaniu arkusza postaci. Steruje wyszarzeniem „Blok".
 let _equippedShield = false;
@@ -4718,6 +4873,20 @@ function setSheetAvail(btn, available, reason) {
         }
     }
 }
+
+// SF3 (#631): reakcja (Unik/Blok) jako toggle „uzbrojony" — wizualnie różny od akcji zużywającej turę.
+// CZYTA stan z combat snapshot (player.reaction_declared); nic nie liczy. `declared` == true →
+// poświata (.is-armed) + linijka „uzbrojony" + etykieta „✓". Po rozładowaniu (snapshot bez
+// reaction_declared) gaśnie. Wystawiony na window dla testu kontraktu Playwright (#631).
+function renderReactionToggle(btn, labelEl, declared, baseLabel) {
+    if (!btn) return;
+    btn.classList.toggle('is-active', !!declared);
+    btn.classList.toggle('is-armed', !!declared);
+    if (labelEl) labelEl.textContent = declared ? `${baseLabel} ✓` : baseLabel;
+    const armed = btn.querySelector('.combat-btn__armed');
+    if (armed) armed.hidden = !declared;
+}
+window.__sfRenderReactionToggle = renderReactionToggle;
 
 // SF2 (#620): odśwież status tarczy na starcie walki (inventory nie zawsze załadowane wcześniej).
 async function refreshCombatShieldFlag() {
@@ -4747,6 +4916,7 @@ function renderCombatUI(cs) {
     const isPlayerTurn = cs.current_turn === 'player';
 
     _renderInitiativeTrack(cs);
+    renderPlayerStatusBar(player);  // SF4 (#632): trwała warstwa aktywnych kondycji nad kompozerem
 
     window.clog?.event('combat_render', {
         round, current_turn: String(cs.current_turn ?? 'null'), is_player_turn: isPlayerTurn, enemy_count: enemies.length,
@@ -4861,30 +5031,11 @@ function renderCombatUI(cs) {
     const _curMana = Number(_csheet.current_mana ?? 0);
     const _enemyEngaged = enemies.some(e => String(e.zone || 'engaged') === 'engaged');
 
-    // ── S15 (#610): dodge reaction toggle — only visible for heroes with dodge rank ≥ 1 ──
-    if (elements.btnCombatDodge) {
-        const hasDodge = Number(_skills.dodge || 0) >= 1;
-        elements.btnCombatDodge.hidden = !hasDodge;
-        if (hasDodge) {
-            const declared = String(player?.reaction_declared || '') === 'dodge';
-            elements.btnCombatDodge.classList.toggle('is-active', declared);
-            if (elements.combatDodgeLabel) elements.combatDodgeLabel.textContent = declared ? 'Unik ✓' : 'Unik';
-        }
-        setSheetAvail(elements.btnCombatDodge, true, '');  // reakcja zawsze dostępna w turze
-    }
-
-    // ── S16 (#611): shield_block toggle — visible for heroes with shield_block rank ≥ 1.
-    // SF2 (#620): zamiast chować bez tarczy — pokaż wyszarzone z powodem „Brak tarczy".
-    if (elements.btnCombatBlock) {
-        const hasBlock = Number(_skills.shield_block || 0) >= 1;
-        elements.btnCombatBlock.hidden = !hasBlock;
-        if (hasBlock) {
-            const declared = String(player?.reaction_declared || '') === 'shield_block';
-            elements.btnCombatBlock.classList.toggle('is-active', declared);
-            if (elements.combatBlockLabel) elements.combatBlockLabel.textContent = declared ? 'Blok ✓' : 'Blok';
-        }
-        setSheetAvail(elements.btnCombatBlock, _equippedShield, 'Brak tarczy');
-    }
+    // ── SF10 (#633): pre-deklaracja zastąpiona modelem REAKTYWNYM. Toggle „uzbrojony"
+    // (S15/S16) usunięty — unik/blok wybiera się w modalu przy trafieniu wroga
+    // (patrz showReactionModal). Przyciski paska reakcji pozostają ukryte.
+    if (elements.btnCombatDodge) elements.btnCombatDodge.hidden = true;
+    if (elements.btnCombatBlock) elements.btnCombatBlock.hidden = true;
 
     // ── S17 (#612): zapasy — akcja bojowa. SF2 (#620): zawsze widoczna; w dystansie / bez wroga
     // w zwarciu — wyszarzona z powodem „Wymaga zwarcia" (gracz uczy się zasady).

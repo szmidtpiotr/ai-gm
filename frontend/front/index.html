@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=620-sf2-sheet-content-2026-06-15">
+  <link rel="stylesheet" href="./css/styles.css?v=631-sf3-reaction-toggle-2026-06-15">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -778,6 +778,10 @@
       <div class="composer__voice-status" id="voice-status" hidden></div>
     </footer>
 
+    <!-- SF4 (#632): pasek statusu gracza — trwała warstwa aktywnych kondycji nad kompozerem.
+         Glif + nazwa PL + (dla stackowalnych) poziom „N/M". Czytany z combat snapshot (player.conditions[]). -->
+    <div id="combat-player-status" class="combat-player-status" hidden role="status" aria-label="Aktywne kondycje bohatera"></div>
+
     <!-- Combat composer (replaces normal composer during combat) -->
     <!-- SF1 (#619): zwinięte do 3 filarów — [Atak] · [Akcja ▾] · [Ucieczka]. Reszta akcji w arkuszu poniżej. -->
     <footer id="combat-composer" class="combat-composer" hidden>
@@ -852,6 +856,8 @@
               </span>
               <span class="combat-btn__desc">Uzbrój unik na cios wroga — za darmo</span>
               <span class="combat-btn__reason" hidden></span>
+              <!-- SF3 (#631): stan „uzbrojony" — odsłaniany gdy reaction_declared == 'dodge' -->
+              <span class="combat-btn__armed" hidden>⚡ uzbrojony do następnego ataku</span>
             </span>
           </button>
           <button type="button" class="combat-btn combat-btn--block" id="combat-block-btn" data-clog="combat_block_button" hidden>
@@ -866,6 +872,8 @@
               </span>
               <span class="combat-btn__desc">Uzbrój blok tarczą — za darmo</span>
               <span class="combat-btn__reason" hidden>Brak tarczy</span>
+              <!-- SF3 (#631): stan „uzbrojony" — odsłaniany gdy reaction_declared == 'shield_block' -->
+              <span class="combat-btn__armed" hidden>⚡ uzbrojony do następnego ataku</span>
             </span>
           </button>
           <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
@@ -1788,7 +1796,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=620-sf2-sheet-content-2026-06-15"></script>
+  <script src="./js/app.js?v=633-sf10-reactive-reaction-2026-06-15"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

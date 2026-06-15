@@ -4453,6 +4453,7 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 #### S15 — System reakcji + skill `dodge`
 
+> ⚠️ **REDESIGN 2026-06-15 → SF10:** model PRE-DEKLARACJI (toggle „uzbrojony") zastąpiony REAKTYWNYM (modal przy trafieniu, wybór Przyjmij/Unik/Blok, timeout 8 s). Mechanika testu DEX vs trafienie bez zmian — zmienia się KIEDY gracz wybiera. Poniższy opis = stan pierwotny (#610), zachowany jako historia.
 > ✅ **Wdrożone (#610)** — framework reakcji `reaction_declared` na combatancie gracza (konsumowany przy 1. trafieniu/rundę), test DEX vs wynik ataku wroga przez silnik S1 (`_derive_outcome`) PRZED obrażeniami; sukces = 0 dmg, krytyczna porażka (margines ≤ −5) = `reaction_locked_round` (utrata reakcji w nast. rundzie); skill `dodge` (DEX) rank ≥ 1 wymagany; endpoint `POST /combat/declare-reaction` (toggle, bez zużycia tury); toggle w Sandbox + UI walki gracza. Bez nowego typu efektu (dodge = skill, stan reakcji = transient combat state) → CZĘŚĆ X / Zasada 4 bez zmian. Rzuty ataku wroga nietknięte.
 
 **Cel prostym językiem:** Gdy wróg atakuje, gracz z wykupionym unikiem może raz na rundę spróbować całkiem uniknąć ciosu — zanim spadną obrażenia. Pierwsza mechanika "reakcji" w grze.
@@ -4573,12 +4574,13 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 **Dla agenta:** Logika dostępności czyta z combat snapshot (zone, equipped shield, mana, skill ranks) — dane już są w stanie walki/sheetcie. Powód = statyczny tekst per warunek. NIE licz mechaniki, tylko czytaj stan.
 **Weryfikacja:** Playwright: bez tarczy „Blok" wyszarzony z powodem „brak tarczy"; w dystansie „Zapasy" wyszarzone „wymaga zwarcia". Reakcje mają `↺`, akcje `⏳`.
 
-#### SF3 — Reakcje jako toggle „uzbrojony" (odróżnienie od akcji)
+#### SF3 — Reakcje jako toggle „uzbrojony" (odróżnienie od akcji) ✅ (#631) ⚠️ ZASTĄPIONE przez SF10
+> **Decyzja Piotra 2026-06-15:** model pre-deklaracji (toggle) zastąpiony modelem REAKTYWNYM (modal przy trafieniu). Toggle z #631 zostaje usunięty w SF10. Wpis zachowany jako historia.
 **Cel:** Unik/Blok wizualnie różne od akcji zużywających turę: przełącznik z poświatą + etykieta „uzbrojony do następnego ataku"; po zużyciu/rozładowaniu gaśnie.
 **Dla agenta:** Reużyj istniejącego `reaction_declared` z combat snapshot (S15/S16) — render stanu toggla z niego. `app.js` render reakcji w arkuszu/na pasku statusu.
 **Weryfikacja:** Playwright: klik „Unik" → stan „uzbrojony"; po ataku wroga (event reakcji) stan gaśnie; log pokazuje wynik (jest już z S15).
 
-#### SF4 — Pasek statusu gracza (trwała warstwa kondycji)
+#### SF4 — Pasek statusu gracza (trwała warstwa kondycji) ✅ (#632)
 **Cel:** Nad kompozerem pasek aktywnych kondycji GRACZA z ikoną + 1-słownym skutkiem „teraz" (Płonie −2/2k6, Wyczerpany 2/2, Ukryty, Pobłogosławiony, Krwawi). Reużywa katalogu `/api/mechanics/conditions` (label+opis) + combat snapshot (poziom stackowania).
 **Dla agenta:** `app.js` — nowy render z `player.conditions[]` (snapshot ma `key/label/effect_json/runtime.level`). Poziom pokaż przy stackowalnych („Wyczerpany 2/2"). To wypełnia lukę „S9 poziom niewidoczny".
 **Weryfikacja:** Sandbox/Playwright: nałóż exhausted 2× → pasek pokazuje „Wyczerpany 2/2"; on_fire → „Płonie".
@@ -4630,7 +4632,32 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** (a) Admin: System → Wskrzeszenie → wybierz tryb, zaznacz „Włącz", Zapisz → przeładuj zakładkę → stan utrzymany (DB `enabled:true`, mode = wybrany). (b) Gracz Demo (uses=6) ginie → ekran śmierci pokazuje działający „✦ Wskrześ bohatera". (c) Po wyłączeniu globalnym → gracz widzi właściwy komunikat / brak klikalnego przycisku. `/game-test-player-screenshot` stanu on. Uwaga: stan globalny włączony ręcznie przez API 2026-06-15 — przy teście „off" najpierw go wyłącz.
 
-**Weryfikacja całości (kamień SF):** `/game-screen` na szerokości telefonu — pasek 3-przyciskowy czytelny, arkusz działa, pasek statusu i komunikaty pojawiają się w Sandbox sweep kondycji, karta rzutu rozbija wynik po źródłach, wskrzeszenie działa po włączeniu w adminie. Werdykt czytelności od Piotra.
+#### SF10 — Reaktywny modal uniku/bloku (zastępuje pre-deklarację S15/S16 + toggle SF3) ✅ (#633)
+
+> ✅ **Wdrożone (#633, 2026-06-15):** model reaktywny działa. Backend: `_reaction_options` + okno w `resolve_attack` (enemy → `pending_reaction`, pauza, brak natychmiastowych obrażeń) + `resolve_reaction(choice)` (reuse `_try_dodge`/`_try_shield_block`) + `POST /combat/resolve-reaction` (z advance_turn po rozliczeniu; enemy-turn wstrzymuje advance przy oknie) + ukrycie `pending_reaction.damage` w snapshocie. Frontend: modal bez liczby obrażeń + timer 8 s → auto-take + pauza pętli (`reactionPending`) + usunięcie toggle „uzbrojony" (`?v=633`). 6/6 SF10 pytest + 46 regresji (#610/#611/#613 — integracyjne zaktualizowane do flow dwukrokowego) + 2/2 Playwright. Rzut ataku wroga (nat20/nat1) nietknięty.
+
+**Cel prostym językiem:** Gdy wróg trafi, gracz NIE ma już z góry „uzbrojonego" uniku. Zamiast tego — w chwili ciosu, PRZED obrażeniami — wyskakuje wybór: **Przyjmujesz / Unik / Blok**. Wybór odpala klasyczny rzut kostką (unik=DEX, blok=STR). Bez liczby obrażeń na modalu (decyzja zostaje zakładem). 1 reakcja na rundę. To redesign zatwierdzony przez Piotra 2026-06-15 (model reaktywny zamiast pre-deklaracji).
+
+**Decyzje Piotra (2026-06-15):**
+1. Model REAKTYWNY zastępuje pre-deklarację — toggle z SF3 (#631) usuwamy.
+2. Modal pokazuje opcje BEZ obrażeń (zachowanie zakładu — patrz CZĘŚĆ AB / dyskusja).
+3. Timeout 8 s bez wyboru → domyślnie „Przyjmij" (pętla nie wisi; zgodne z MP/G7 „brak reakcji = obrona").
+4. 1 reakcja/rundę — tylko PIERWSZY cios w rundzie daje modal; kolejne tej rundy nalicza się normalnie.
+
+**Dla agenta:**
+1. **Backend (`combat_service.py`) — sedno:** zmień ścieżkę ataku wroga (`resolve_attack` / enemy-turn) tak, by przy trafieniu i dostępnej reakcji (skill dodge/shield_block spełniony, reakcja niezużyta w rundzie) NIE naliczać od razu obrażeń, lecz ustawić stan `pending_reaction` w stanie walki (combatant/`active_combat`) i zwrócić sygnał „reaction_window" zamiast finalnych obrażeń. Auto-pętla tury wroga (frontend 750 ms) PAUZUJE, dopóki jest `pending_reaction`.
+2. **Rozstrzygnięcie:** nowy/rozszerzony endpoint `POST /combat/resolve-reaction {choice: take|dodge|block}` — odpala test (reuse `_try_dodge_reaction`/`_try_shield_block_reaction`, silnik S1), nalicza wynikowe obrażenia, czyści `pending_reaction`, oznacza reakcję zużytą w tej rundzie, wznawia pętlę. `take` = pełne obrażenia bez rzutu.
+3. **Timeout:** jeśli gracz nie wybierze w 8 s — frontend wysyła `choice: take` (albo backend ma fallback przy następnym pollu). Domyślna ścieżka = przyjmij.
+4. **Gating opcji:** modal pokazuje tylko dostępne: Przyjmij zawsze; Unik gdy `dodge`≥1; Blok gdy `shield_block`≥1 + tarcza założona (reuse `_player_has_shield_equipped`).
+5. **Usuń toggle SF3:** wywal UI „uzbrojony" (`app.js`, render reakcji) + endpoint `declare-reaction`/`reaction_declared` jeśli nieużywany gdzie indziej (sprawdź!). Stan reakcji przechodzi z „pre-deklarowany" na „pending po trafieniu".
+6. **Frontend modal:** w chwili `reaction_window` pokaż modal (bez liczby obrażeń) z dostępnymi przyciskami + odliczanie 8 s; po wyborze/timeout wyślij `resolve-reaction`. Bump `?v=`.
+7. **MP-kompatybilność:** stan `pending_reaction` per combatant — nie blokuj modelu danych pod przyszłe MP (G7 timeout 2 min tam, 8 s solo).
+
+**Czego NIE ruszać:** rzuty ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE — reakcja działa wyłącznie na obrażenia po trafieniu. Mechanika testu uniku/bloku (DEX/STR vs trafienie, redukcja `1d6+STR`, pełne odparcie przy +5) bez zmian — zmienia się tylko KIEDY gracz wybiera.
+
+**Weryfikacja:** pytest: trafienie z dostępną reakcją → `pending_reaction` ustawione, obrażenia NIE naliczone; `resolve-reaction take` → pełne obrażenia; `dodge` sukces → 0 dmg; tylko 1 modal/rundę; brak skilla → brak modalu (auto-take). Ręcznie/Playwright: Sandbox + walka gracza — wróg trafia → modal bez liczby → wybór → rzut w logu; timeout 8 s → przyjmij. Sprawdź, że toggle „uzbrojony" zniknął.
+
+**Weryfikacja całości (kamień SF):** `/game-screen` na szerokości telefonu — pasek 3-przyciskowy czytelny, arkusz działa, pasek statusu i komunikaty pojawiają się w Sandbox sweep kondycji, karta rzutu rozbija wynik po źródłach, wskrzeszenie działa po włączeniu w adminie, modal reaktywny uniku/bloku działa z timeoutem. Werdykt czytelności od Piotra.
 
 ---
 

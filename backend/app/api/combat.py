@@ -139,12 +139,43 @@ def post_declare_reaction(campaign_id: int, body: dict | None = None):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/campaigns/{campaign_id}/combat/resolve-reaction")
+def post_resolve_reaction(campaign_id: int, body: dict | None = None):
+    """SF10 (#633) — rozlicza okno reakcji otwarte przez trafienie wroga.
+
+    Body: ``{"choice": "take"|"dodge"|"block"}``. Brak choice → "take" (domyślne,
+    tym samym wysyła frontend po timeout 8 s). Wymaga aktywnego `pending_reaction`.
+    Po rozliczeniu ZAAWANSOWUJE turę (advance_turn) — turę wstrzymano przy oknie."""
+    choice = str((body or {}).get("choice") or "take").strip().lower()
+    try:
+        res = combat.resolve_reaction(campaign_id, choice)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    snap = combat.load_combat_snapshot(campaign_id)
+    if snap and snap.get("status") == "active":
+        try:
+            res["advance_turn"] = combat.advance_turn(campaign_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    else:
+        res["advance_turn"] = "ended"
+    res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+    return res
+
+
 @router.post("/campaigns/{campaign_id}/combat/enemy-turn")
 def post_enemy_turn(campaign_id: int):
     try:
         res = combat.resolve_attack(campaign_id, 0, attacker="enemy")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # SF10 (#633): okno reakcji wstrzymuje turę — NIE zaawansowuj, dopóki gracz nie
+    # rozliczy reakcji (resolve-reaction zrobi advance_turn). Zwróć stan z otwartym oknem.
+    if res.get("reaction_window"):
+        res["advance_turn"] = "awaiting_reaction"
+        res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+        return res
 
     snap = combat.load_combat_snapshot(campaign_id)
     if snap and snap.get("status") == "active":

@@ -5665,6 +5665,66 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 
 /* Combat composer */
+/* SF4 (#632): pasek statusu gracza — trwała warstwa aktywnych kondycji nad kompozerem.
+   Tokeny dark-fantasy, bez nowej palety. Informacyjny (nieklikalny) → niższy niż przyciski akcji. */
+.combat-player-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg) 0;
+  flex-shrink: 0;
+}
+
+.combat-player-status[hidden] {
+  display: none;
+}
+
+.combat-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 165, 74, 0.35);
+  background: rgba(201, 165, 74, 0.08);
+  color: var(--text-secondary, #cfc6b5);
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.combat-status-chip__glyph {
+  font-size: 0.95rem;
+}
+
+.combat-status-chip__label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.combat-status-chip__level {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  .combat-player-status {
+    padding: var(--space-sm) var(--space-sm) 0;
+    gap: 5px;
+  }
+  .combat-status-chip {
+    font-size: 0.72rem;
+    min-height: 26px;
+    padding: 2px 7px;
+  }
+}
+
 .combat-composer {
   display: flex;
   gap: var(--space-md);
@@ -5930,6 +5990,31 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .combat-action-sheet__list .combat-btn .combat-btn__reason::before { content: "⚠ "; }
 /* Niedostępna pozycja = wyszarzona (disabled daje opacity:0.5 + cursor not-allowed); powód czytelny */
 .combat-action-sheet__list .combat-btn.is-unavailable .combat-btn__reason { color: #c98a6a; }
+
+/* ── SF3 (#631): reakcja „uzbrojona" — toggle wizualnie różny od akcji zużywającej turę ── */
+/* Poświata + ramka akcentowa (złoto): gracz widzi, że unik/blok czeka na cios wroga. */
+.combat-action-sheet__list .combat-btn.is-armed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 12px var(--accent-glow);
+  background: var(--accent-glow);
+}
+/* Uzbrojony znacznik kosztu mocniej świeci (z neutralnej zieleni → akcent). */
+.combat-action-sheet__list .combat-btn.is-armed .combat-btn__cost--reaction {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(201, 165, 74, 0.18);
+}
+/* Linijka „⚡ uzbrojony do następnego ataku" — odsłaniana przez JS gdy reaction_declared. */
+.combat-action-sheet__list .combat-btn .combat-btn__armed {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--accent);
+  white-space: normal;
+}
+.combat-action-sheet__list .combat-btn .combat-btn__armed[hidden] { display: none; }
 /* Sheet zawsze pokazuje tekst, nawet na bardzo wąskich ekranach (override globalnego @media span{display:none}) */
 @media (max-width: 359px) {
   .combat-action-sheet__list .combat-btn .combat-btn__body { display: flex; }
@@ -5939,6 +6024,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   .combat-action-sheet__list .combat-btn .combat-btn__desc { display: block; }
   .combat-action-sheet__list .combat-btn .combat-btn__head { display: flex; }
   .combat-action-sheet__list .combat-btn .combat-btn__reason:not([hidden]) { display: block; }
+  .combat-action-sheet__list .combat-btn .combat-btn__armed:not([hidden]) { display: block; }
 }
 
 /* Hide normal composer when combat composer shown */
@@ -9409,3 +9495,41 @@ body[data-theme="classic"] {
 }
 .item-action-btn--sm { padding: 4px 8px; font-size: .72rem; background: #2a2418; border-color: rgba(245,200,66,.3); color: #f5deb3; }
 .item-action-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── SF10 (#633): reaktywny modal uniku/bloku ───────────────────────────── */
+.reaction-modal-overlay {
+  position: fixed; inset: 0; z-index: 10050;
+  background: rgba(8, 9, 8, 0.72); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: reactionFade 0.12s ease-out;
+}
+@keyframes reactionFade { from { opacity: 0; } to { opacity: 1; } }
+.reaction-modal {
+  width: 100%; max-width: 420px;
+  background: var(--bg-primary, #0a0908);
+  border: 1px solid var(--accent, #c9a54a);
+  border-radius: 14px; padding: 22px 20px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6), 0 0 24px var(--accent-glow, rgba(201,165,74,0.15));
+  text-align: center;
+}
+.reaction-modal__title {
+  font-size: 1.15rem; font-weight: 700; color: var(--danger, #c0392b);
+  margin-bottom: 4px;
+}
+.reaction-modal__sub { font-size: 0.9rem; opacity: 0.75; margin-bottom: 16px; }
+.reaction-modal__btns { display: flex; flex-direction: column; gap: 10px; }
+.reaction-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 48px; padding: 10px 16px; border-radius: 10px;
+  border: 1px solid var(--accent-dark, #a8893d);
+  background: rgba(201,165,74,0.06); color: var(--text-primary, #ece6d8);
+  font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.12s;
+}
+.reaction-btn:hover:not(:disabled) { background: var(--accent-glow, rgba(201,165,74,0.15)); border-color: var(--accent, #c9a54a); }
+.reaction-btn:disabled { opacity: 0.5; cursor: default; }
+.reaction-btn__glyph { font-size: 1.2rem; }
+.reaction-btn--take { border-color: #6b6b6b; }
+.reaction-btn--dodge { border-color: var(--accent, #c9a54a); }
+.reaction-btn--block { border-color: #4a7ba8; }
+.reaction-modal__timer { margin-top: 14px; font-size: 0.78rem; opacity: 0.6; }
+.reaction-modal__timer #reaction-countdown { color: var(--accent, #c9a54a); font-weight: 700; }

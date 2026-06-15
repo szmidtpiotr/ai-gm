@@ -160,29 +160,34 @@ def _combat_db(tmp_path, *, declared, skill_rank, locked_round=0, attack_bonus=1
     return db
 
 
+# ⚠️ SF10 (#633): model PRE-DEKLARACJI zastąpiony REAKTYWNYM. Trafienie z dostępnym
+# skillem otwiera OKNO reakcji (resolve_attack → reaction_window); rozliczenie w
+# resolve_reaction(choice). Poniższe testy integracyjne zaktualizowane do dwukrokowego flow.
+
 def test_resolve_attack_dodge_negates_damage(tmp_path, monkeypatch):
-    """Realny silnik: zadeklarowany unik + udany test → 0 obrażeń, HP bez zmian."""
+    """SF10: trafienie → okno reakcji → resolve_reaction('dodge') udany → 0 obrażeń."""
     # słaby atak (attack_bonus 0 → attack_roll = 18); unik 18+rank2 = 20 ≥ 18 → atak mija
-    db = _combat_db(tmp_path, declared="dodge", skill_rank=2, attack_bonus=0)
+    db = _combat_db(tmp_path, declared=None, skill_rank=2, attack_bonus=0)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)   # wróg trafia (raw 18) + unik zdany
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out["hit"] is True
+        win = combat_service.resolve_attack(1, 0, attacker="enemy")
+        assert win["hit"] is True and win.get("reaction_window") is True
+        out = combat_service.resolve_reaction(1, "dodge")
     assert out.get("reaction", {}).get("dodged") is True
     assert out["damage"] == 0
     assert out["player_hp_remaining"] == 20          # bez obrażeń
 
 
-def test_resolve_attack_no_declaration_normal_damage(tmp_path, monkeypatch):
-    """Backward compat: bez pre-deklaracji cios zadaje normalne obrażenia (brak reakcji)."""
+def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
+    """SF10: okno reakcji → resolve_reaction('take') → pełne obrażenia."""
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out["hit"] is True
-    assert "reaction" not in out
+        win = combat_service.resolve_attack(1, 0, attacker="enemy")
+        assert win.get("reaction_window") is True
+        out = combat_service.resolve_reaction(1, "take")
     assert out["damage"] == 7
     assert out["player_hp_remaining"] == 13
 

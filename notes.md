@@ -313,14 +313,15 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 - [x] SF1 — Pasek 3 filary [Atak]·[Akcja ▾]·[Ucieczka] + bottom sheet (reszta przycisków → arkusz, te same handlery) [#619]
 - [x] SF2 — Zawartość arkusza: znacznik kosztu (⏳ tura / ↺ reakcja) + dostępność + powód wyszarzenia (zwarcie/tarcza/mana/strefa) [#620]
-- [ ] SF3 — Reakcje (Unik/Blok) jako toggle „uzbrojony", wizualnie różne od akcji zużywających turę (z `reaction_declared`)
-- [ ] SF4 — Pasek statusu gracza: trwałe kondycje z ikoną + skutkiem + poziomem (np. „Wyczerpany 2/2") — wypełnia lukę S9
+- [x] SF3 — Reakcje (Unik/Blok) jako toggle „uzbrojony" [#631] ⚠️ ZASTĄPIONE przez SF10 (decyzja 2026-06-15: model reaktywny zamiast pre-deklaracji)
+- [x] SF4 — Pasek statusu gracza: trwałe kondycje z ikoną + skutkiem + poziomem (np. „Wyczerpany 2/2") — wypełnia lukę S9 [#632]
 - [ ] SF5 — Ulotne komunikaty zdarzeń: confused/berserk k4, zły omen (S11), darmowa akcja hasted (S12), odporność zablokowała stan (S14)
 - [ ] SF6 — Karta rzutu: stawka hazardu „Ryzykujesz X zł" (S7/#616) + słowny stopień marginesu
 - [ ] SF7 — Ikony 8 kondycji w COND_BADGE_MAP (on_fire/exhausted/hidden/rage/blessed/hasted/hemorrhage/inspired)
 - [ ] SF8 — Karta rzutu: rozbicie wyniku po NAZWANYM źródle ("12 +1 Zręczność +2 Pobłogosławiony −1 Wyczerpany = 14") — domyka obawę Piotra "skąd ten bonus/kara w rzucie". ⚠️ Wyjątek od reguły SF: dokłada `breakdown[]` do payloadu rzutu (wystawia policzone składniki z etykietą, NIE zmienia liczenia)
 - [ ] SF9 — 🐛 BUG: wskrzeszenie nie da się włączyć w adminie + mylący komunikat u gracza. **Diagnoza PEWNA (2026-06-15, test API):** backend OK (curl PATCH utrwala). GŁÓWNA przyczyna: select „Tryb" w System→Wskrzeszenie (`system.js:154`) ma FIKCYJNE opcje (fixed/percent_of_xp/unlimited), backend zna inne (`VALID_MODES`: xp_revert/gold_percent/gold_recent_days/item_loss/admin_free) → zapis leci ze złym mode → 422 → cały PATCH (z `enabled`) odrzucony → „mimo kliknięcia nie zapisuje". Fix: (1) ✅ HOTFIX 2026-06-15 — poprawiono opcje selecta na 5 prawdziwych trybów + opis (system.js, ?v=31→32; zapis configu znów działa); (2) [ ] front gracza: rozróżnić `preview.reason` w komunikacie; (3) [ ] nie pokazywać klikalnego przycisku gdy `!enabled`. ⚠️ Czysto frontend (admin+gracz). Uwaga: globalny stan włączony ręcznie API 2026-06-15. Pozostaje (2)+(3) do FAZY SF.
-- [ ] SF — 🎮 Kamień: `/game-screen` na szerokości telefonu + Sandbox sweep feedbacku + karta rzutu z rozbiciem + wskrzeszenie po włączeniu w adminie; werdykt czytelności Piotra (bez TDD)
+- [x] SF10 — Reaktywny modal uniku/bloku (ZASTĘPUJE pre-deklarację S15/S16 + toggle SF3) [#633] **needs-testing** — okno reakcji przy trafieniu (pending_reaction, pauza), modal Przyjmij/Unik/Blok bez liczby obrażeń, timeout 8 s=take, 1/rundę, toggle usunięty. 6/6 pytest + 46 regresji + 2/2 Playwright GREEN; deployed DEV. Rzut ataku wroga nietknięty.
+- [ ] SF — 🎮 Kamień: `/game-screen` na szerokości telefonu + Sandbox sweep feedbacku + karta rzutu z rozbiciem + wskrzeszenie po włączeniu w adminie + reaktywny modal uniku/bloku; werdykt czytelności Piotra (bez TDD)
 
 ---
 

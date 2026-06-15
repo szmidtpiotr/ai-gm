@@ -1537,6 +1537,13 @@ def _preview_loot_from_roll_items(
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
     _combatants = json.loads(row["combatants"] or "[]")
     _ensure_zones(_combatants)  # backfill zone for pre-T34 combats; harmless if all set
+    # SF10 (#633): ukryj liczbę obrażeń pending_reaction przed frontendem (wybór = zakład).
+    # Zostaw flagę okna + opcje, usuń `damage` z migawki.
+    for _c in _combatants:
+        _pr = _c.get("pending_reaction")
+        if isinstance(_pr, dict) and "damage" in _pr:
+            _pr = {k: v for k, v in _pr.items() if k != "damage"}
+            _c["pending_reaction"] = _pr
     d: dict[str, Any] = {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
@@ -3065,6 +3072,34 @@ def compute_player_attack_dodge_outcome(
     return dodged, (not dodged), dodge_total
 
 
+def _reaction_options(conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int) -> list[str]:
+    """SF10 (#633) — które reakcje są DOSTĘPNE dla gracza w tej chwili (model reaktywny).
+
+    Zwraca listę opcji do okna reakcji: ``dodge`` (skill dodge ≥ 1), ``shield_block``
+    (skill shield_block ≥ 1 + tarcza założona). Pusta lista = brak okna (obrażenia
+    naliczane od razu). Respektuje 1 reakcję/rundę (``reaction_used_round``) i lockout
+    po krytycznej porażce uniku (``reaction_locked_round``)."""
+    if int(p.get("reaction_used_round") or 0) == int(round_n):
+        return []
+    if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        return []
+    skills = sheet.get("skills") or {}
+    opts: list[str] = []
+    try:
+        if int(skills.get("dodge", 0) or 0) >= 1:
+            opts.append("dodge")
+    except (TypeError, ValueError):
+        pass
+    try:
+        if int(skills.get("shield_block", 0) or 0) >= 1:
+            has_shield, _ = _player_has_shield_equipped(conn, ch_id)
+            if has_shield:
+                opts.append("shield_block")
+    except (TypeError, ValueError):
+        pass
+    return opts
+
+
 def resolve_attack(
     campaign_id: int,
     roll_result: int | None,
@@ -3953,6 +3988,43 @@ def resolve_attack(
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
             # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
             dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+            # SF10 (#633): MODEL REAKTYWNY. Gdy gracz ma dostępną reakcję (skill/tarcza,
+            # niezużytą w rundzie), NIE naliczamy obrażeń — otwieramy OKNO REAKCJI: zapisujemy
+            # `pending_reaction` na combatancie i PAUZUJEMY (frontend pokaże modal Przyjmij/
+            # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
+            # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
+            _round_now = int(row["round"] or 1)
+            _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
+            if _opts and not p.get("pending_reaction"):
+                p["pending_reaction"] = {
+                    "damage": int(dmg),
+                    "attack_roll": int(attack_roll),
+                    "round": _round_now,
+                    "options": _opts,
+                    "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
+                }
+                cid = int(row["id"])
+                tn = _next_combat_log_sequence(conn, cid)
+                log_combat_turn(
+                    conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
+                    actor="enemy", event_type="attack", roll_value=int(attack_roll),
+                    damage=0, hp_after=int(p.get("hp_current", 0) or 0),
+                    target_id="player", target_name=str(p.get("name") or "Gracz"),
+                    hit=True,
+                    narrative=json.dumps({
+                        "raw_d20": int(raw), "attack_roll": int(attack_roll),
+                        "target_ac": int(pac), "reaction_window": True, "options": _opts,
+                        "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
+                    }, ensure_ascii=False),
+                )
+                _persist_combatants(conn, row, combatants)
+                conn.commit()
+                out["hit"] = True
+                out["reaction_window"] = True
+                out["reaction_options"] = _opts
+                out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg")
+                out["combat_state"] = load_combat_snapshot(campaign_id)
+                return out
             # S15 (#610): okno reakcji — unik PRZED aplikacją obrażeń. Rzut ataku wroga już
             # rozliczony (nat 20/nat 1 nietknięte); reakcja działa tylko na obrażenia po trafieniu.
             _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
@@ -4095,6 +4167,132 @@ def resolve_attack(
         out["combat_state"] = load_combat_snapshot(campaign_id)
 
     if attacker == "enemy" and out.get("player_incapacitated"):
+        end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
+        out["defeated_by"] = out.get("enemy_name")
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
+    """SF10 (#633) — rozlicza okno reakcji otwarte przez `resolve_attack` (enemy hit).
+
+    ``choice``:
+      • take  → pełne obrażenia z `pending_reaction` (bez rzutu),
+      • dodge → test DEX vs trafienie (reuse `_try_dodge_reaction`); sukces = 0 dmg,
+      • block / shield_block → test STR (reuse `_try_shield_block_reaction`); redukcja/odparcie.
+
+    Czyści `pending_reaction`, oznacza reakcję zużytą w rundzie (`reaction_used_round`),
+    nalicza wynikowe obrażenia (z `on_zero_hp_save`), wznawia walkę. Timeout po stronie
+    frontendu wysyła `take`. RZUT ATAKU WROGA NIETKNIĘTY — działamy tylko na obrażenia."""
+    ch = str(choice or "take").strip().lower()
+    if ch == "block":
+        ch = "shield_block"
+    if ch not in {"take", "dodge", "shield_block"}:
+        raise ValueError(f"unknown reaction choice: {choice}")
+
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+        pending = p.get("pending_reaction")
+        if not pending:
+            raise ValueError("no pending reaction")
+
+        ch_id = int(row["character_id"])
+        character = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE id = ?", (ch_id,)
+        ).fetchone()
+        if not character:
+            raise ValueError("character missing")
+        sheet = parse_character_sheet(character["sheet_json"])
+
+        attack_roll = int(pending.get("attack_roll") or 0)
+        round_n = int(pending.get("round") or row["round"] or 1)
+        dmg = int(pending.get("damage") or 0)
+        out: dict[str, Any] = {"attacker": "enemy", "hit": True, "reaction_resolved": True,
+                               "enemy_name": str(pending.get("enemy_name") or "Wróg")}
+        _dodge = None
+        _block = None
+
+        if ch == "dodge":
+            p["reaction_declared"] = "dodge"
+            _dodge = _try_dodge_reaction(p, sheet, attack_roll, round_n)
+            if _dodge is not None:
+                out["reaction"] = _dodge
+                if _dodge.get("dodged"):
+                    dmg = 0
+        elif ch == "shield_block":
+            p["reaction_declared"] = "shield_block"
+            _block = _try_shield_block_reaction(conn, ch_id, p, sheet, attack_roll, round_n, dmg)
+            if _block is not None:
+                out["reaction"] = _block
+                if _block.get("available"):
+                    dmg = int(_block.get("damage_after", dmg))
+        # ch == "take": dmg bez zmian
+
+        # zużycie reakcji w rundzie + zamknięcie okna
+        p.pop("pending_reaction", None)
+        p.pop("reaction_declared", None)
+        p["reaction_used_round"] = round_n
+
+        out["damage"] = dmg
+        prev = int(p.get("hp_current", 0) or 0)
+        next_hp = max(0, prev - dmg)
+        if next_hp <= 0:
+            save_res = _on_zero_hp_save(p, sheet=None)
+            if save_res is not None:
+                out["on_zero_hp_save"] = save_res
+                if save_res.get("saved") and save_res.get("hp"):
+                    next_hp = int(save_res["hp"])
+        p["hp_current"] = next_hp
+        sheet["current_hp"] = next_hp
+        out["player_hp_remaining"] = next_hp
+        incap = next_hp <= 0
+        out["player_incapacitated"] = incap
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), ch_id),
+        )
+
+        cid = int(row["id"])
+        # log reakcji (unik/blok) — Sandbox/UI pokazuje test i wynik
+        _react = _dodge if _dodge is not None else _block
+        if _react is not None and _react.get("available"):
+            tn_r = _next_combat_log_sequence(conn, cid)
+            log_combat_turn(
+                conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn_r,
+                actor="player", event_type="reaction",
+                roll_value=int(_react.get("dodge_total") or _react.get("block_total") or 0),
+                damage=int(out.get("damage") or 0), hp_after=next_hp,
+                target_id="player", target_name=str(p.get("name") or "Bohater"),
+                hit=bool(_react.get("dodged") or _react.get("full_block") or (_react.get("reduction") or 0) > 0),
+                narrative=json.dumps({**_react, "choice": ch}, ensure_ascii=False),
+            )
+        else:
+            # take — log decyzji „przyjmuję cios"
+            tn_r = _next_combat_log_sequence(conn, cid)
+            log_combat_turn(
+                conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn_r,
+                actor="player", event_type="reaction", roll_value=0,
+                damage=int(out.get("damage") or 0), hp_after=next_hp,
+                target_id="player", target_name=str(p.get("name") or "Bohater"),
+                hit=False,
+                narrative=json.dumps({"reaction": "take", "choice": ch,
+                                      "damage": int(out.get("damage") or 0)}, ensure_ascii=False),
+            )
+
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+
+    if out.get("player_incapacitated"):
         end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
         out["defeated_by"] = out.get("enemy_name")
         out["combat_state"] = load_combat_snapshot(campaign_id)

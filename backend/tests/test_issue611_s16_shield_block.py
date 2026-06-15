@@ -248,15 +248,19 @@ def _combat_db(tmp_path, *, declared, skill_rank, shield=True, shield_durability
     return db
 
 
+# ⚠️ SF10 (#633): pre-deklaracja → model reaktywny. Trafienie z dostępną reakcją otwiera
+# okno (resolve_attack → reaction_window); blok rozliczany w resolve_reaction('shield_block').
+
 def test_resolve_attack_block_reduces_damage(tmp_path, monkeypatch):
-    """Realny silnik: blok udany → obrażenia zredukowane o 1d6+STR."""
-    db = _combat_db(tmp_path, declared="shield_block", skill_rank=2, attack_bonus=0)
+    """SF10: okno reakcji → resolve_reaction('block') udany → obrażenia zredukowane o 1d6+STR."""
+    db = _combat_db(tmp_path, declared=None, skill_rank=2, attack_bonus=0)
     # raw 14 → wróg trafia (attack_roll 14 ≥ AC 10). Test bloku: 14 + STR2 + rank2 = 18 vs DC 14 → +4
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 14)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)  # dmg 6 ; 1d6 redukcja 6
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out["hit"] is True
+        win = combat_service.resolve_attack(1, 0, attacker="enemy")
+        assert win["hit"] is True and win.get("reaction_window") is True
+        out = combat_service.resolve_reaction(1, "block")
     assert out.get("reaction", {}).get("reaction") == "shield_block"
     assert out["reaction"]["full_block"] is False
     # dmg 6 − (1d6=6 + STR2=2 = 8, min 0) → 0
@@ -265,13 +269,14 @@ def test_resolve_attack_block_reduces_damage(tmp_path, monkeypatch):
 
 
 def test_resolve_attack_block_critfail_hits_durability(tmp_path, monkeypatch):
-    """Krytyczna porażka bloku → tarcza traci 3 durability, pełne obrażenia."""
-    db = _combat_db(tmp_path, declared="shield_block", skill_rank=2, shield_durability=60, attack_bonus=10)
+    """SF10: blok przez resolve_reaction — krytyczna porażka → tarcza traci 3 durability, pełne obrażenia."""
+    db = _combat_db(tmp_path, declared=None, skill_rank=2, shield_durability=60, attack_bonus=10)
     # raw 3 → attack_roll 13 (trafia AC 10). Blok: 3 + STR2 + rank2 = 7 vs DC 13 → margines -6 ≤ -5
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 3)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        out = combat_service.resolve_attack(1, 0, attacker="enemy")
+        combat_service.resolve_attack(1, 0, attacker="enemy")
+        out = combat_service.resolve_reaction(1, "block")
     assert out["reaction"]["durability_hit"] is True
     assert out["damage"] == 5
     conn = sqlite3.connect(str(db))
@@ -305,14 +310,15 @@ def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
     assert out["attack_roll"] == 28                   # 18 + attack_bonus 10, nietknięte
 
 
-# ─── Backward compat: dodge nadal działa, brak deklaracji = normalne obrażenia ─
+# ─── SF10: okno reakcji → take = pełne obrażenia ──────────────────────────────
 
-def test_resolve_attack_no_declaration_normal_damage(tmp_path, monkeypatch):
-    """Bez pre-deklaracji cios zadaje normalne obrażenia (brak reakcji)."""
+def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
+    """SF10: okno reakcji (skill+tarcza) → resolve_reaction('take') → pełne obrażenia."""
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert "reaction" not in out
+        win = combat_service.resolve_attack(1, 0, attacker="enemy")
+        assert win.get("reaction_window") is True
+        out = combat_service.resolve_reaction(1, "take")
     assert out["damage"] == 6
