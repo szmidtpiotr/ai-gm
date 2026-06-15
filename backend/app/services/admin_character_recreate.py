@@ -13,7 +13,12 @@ DB_PATH = "/data/ai_gm.db"
 
 
 def list_characters_admin() -> list[dict]:
-    """All characters with id, name, campaign and owner — for admin recreate UI."""
+    """All characters — for admin recreate UI + HI2 Inspektor sekcja „Bohaterowie".
+
+    HI2 (#625): LEFT JOIN campaigns (bohaterowie IDLE z campaign_id NULL też widoczni —
+    model hero-first) + LEFT JOIN users (owner_name). Dociąga archetype/level/hp/max_hp
+    z sheet_json oraz status. Czysty odczyt — zero mutacji.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -24,9 +29,16 @@ def list_characters_admin() -> list[dict]:
                 c.name,
                 c.campaign_id,
                 c.user_id,
-                cp.title AS campaign_title
+                cp.title AS campaign_title,
+                c.status,
+                u.username AS owner_name,
+                json_extract(c.sheet_json, '$.archetype')  AS archetype,
+                json_extract(c.sheet_json, '$.level')       AS level,
+                json_extract(c.sheet_json, '$.current_hp')  AS hp,
+                json_extract(c.sheet_json, '$.max_hp')       AS max_hp
             FROM characters c
-            JOIN campaigns cp ON cp.id = c.campaign_id
+            LEFT JOIN campaigns cp ON cp.id = c.campaign_id
+            LEFT JOIN users u ON u.id = c.user_id
             ORDER BY c.id ASC
             """
         ).fetchall()

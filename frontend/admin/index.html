@@ -101,6 +101,7 @@
       { key: 'overview',   label: 'Przegląd',   ico: '▦' },
       { key: 'players',    label: 'Gracze',     ico: '◉' },
       { key: 'campaigns',  label: 'Kampanie',   ico: '⛺' },
+      { key: 'heroes',     label: 'Bohaterowie',ico: '🧍' },
       { key: 'content',    label: 'Przedmioty', ico: '⚔' },
       { key: 'world',      label: 'Świat',      ico: '⊕' },
       { key: 'map',        label: 'Mapa',       ico: '🗺' },
@@ -138,7 +139,7 @@
 
     // FADM-P15: wszystkie 15 sekcji sportowane do modularnego admin/. admin3 wycofany
     // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
-    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics']);
+    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'heroes', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics']);
 
     function placeholder(key) {
       return `<div class="section active"><div class="adm-placeholder">
@@ -163,7 +164,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=31`);
+        const mod = await import(`./sections/${key}.js?v=35`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)
