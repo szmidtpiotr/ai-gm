@@ -4,6 +4,36 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.3.2 — 2026-06-15 — FAZA S/B/SF/HI: silnik skilli i stanów, balans klas, feedback walki, Inspektor Bohatera
+
+### Added
+- **FAZA S — silnik Skilli i Stanów (S1–S19)**: backend silnika skilli/stanów (+ ogon FAZY U); pełny suite pytest real-engine dla S2–S19 oraz Playwright e2e (regression) dla S8–S19 i #582–#601; domknięcie fazy S20 playtest + infra
+- **FAZA S/U frontend**: karty rzutu z marginesem sukcesu i przerzutem, kondycje w Sandboxie, targowanie w sklepie, panele admin world/forge/map
+- **FAZA B (Blok 1+2) — balans 3 klas + czary maga Faza 1 (B1–B12)**: przebalansowanie wojownika/maga/łotrzyka; pierwsza fala czarów maga; łotrzyk dostaje bonus DEX+2/LCK+1 zamiast bonusów maga (#624, B1)
+- **FAZA SF — warstwy feedbacku walki (SF5–SF9)**: kamień #639, krytyki #641; walka mobilna — pasek 3-filarowy + bottom sheet akcji (#619/#620, SF1/SF2)
+- **FAZA HI — Inspektor Bohatera (7/7)**:
+  - HI1 — backend Inspektora: odczyt arkusza + 3 luki edycji + audyt + guard (#623)
+  - HI2/HI3 — sekcja Bohaterowie w adminie + zakładka Arkusz w Inspektorze (#625/#626)
+  - HI4 — equip / zaklęcia / questy z poziomu Inspektora (backend, guard+audyt) (#627)
+  - frontend Inspektora Bohatera (#627/#628/#629/#630) + pytest kontraktów i Playwright
+  - dokumentacja: notes FAZA HI + game_mechanics CZĘŚĆ AL
+- **Panel wskrzeszania (admin)**: tryby kosztu wskrzeszenia zamiast sztywnego fixed/percent/unlimited
+- **#594 — onboarding + Wiedza**: unifikacja kart onboardingu i `knowledge_book` przez kolumnę `kind`; niezależne flagi widoczności (jeden wpis, obie powierzchnie); audyt + refresh treści Wiedzy (`_refresh_knowledge_content`)
+- Prompty startowe FAZ + design zaklęć (dokumentacja statusów SF/HI/B/skip-turn)
+
+### Changed
+- **SF10** — reaktywny modal uniku/bloku zamiast pre-deklaracji (#633)
+- **#640** — narracja walki skrócona do 2–3 zdań (scoped do aktywnej walki)
+- **#621** — kondycje `skip_turn` (slowed/stunned) pomijają turę w walce
+
+### Fixed
+- **#618** — spójne bazowe HP: kreator pokazuje prawdziwe wartości, dodano klucz `rogue`
+- **#617** — kreator postaci: przywrócona animacja rzutu + podłączone nowe skille (FAZA S)
+- **#616** — deterministyczny tor hazardu: stawka rusza złotem w swobodnej grze
+- **admin** — utworzenie brakujących tabel `bug_reports`/`push`/`voice`/`ui_texts` + klucz presetu LLM
+
+---
+
 ## v1.3.1 — 2026-06-14 — FAZA U: Blok 4 ekonomia/UX + unifikacja przedmiotów + usability (U11–U26)
 
 ### Added
