@@ -27,6 +27,7 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 - **#621** — kondycje `skip_turn` (slowed/stunned) pomijają turę w walce
 
 ### Fixed
+- **Crash startu PROD (B8a)** — migracja `v2-spells-faza-b-b8-starter-backfill` (dosiew startowych czarów scholarom) biegła PRZED `v2-spells-faza-b-seed`, więc INSERT do `character_spells` odwoływał się do jeszcze niezaseedowanych czarów (`fire_bolt`/`minor_heal`/`ward_of_iron`/`detect_magic`) → `FOREIGN KEY constraint failed` → abort startupu → deploy fail. DEV nie wykrył (0 scholarów); PROD ma 10. Naprawiono kolejność: seed czarów przed backfillem postaci. Zweryfikowano na kopii bazy PROD (40 czarów nadanych, 4 zaseedowane)
 - **#618** — spójne bazowe HP: kreator pokazuje prawdziwe wartości, dodano klucz `rogue`
 - **#617** — kreator postaci: przywrócona animacja rzutu + podłączone nowe skille (FAZA S)
 - **#616** — deterministyczny tor hazardu: stawka rusza złotem w swobodnej grze

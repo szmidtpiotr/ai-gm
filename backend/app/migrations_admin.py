@@ -2589,25 +2589,6 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
     """, "v2-spells-magic-light-backfill-all")
 
-    # ── FAZA B / B8 (#655): startowy zestaw maga L1 = fire_bolt + minor_heal +
-    # ward_of_iron + detect_magic (atak/heal/obrona/utility, 4× tier 1). Dosiej
-    # ten zestaw WSZYSTKIM istniejącym scholarom — NIE-destrukcyjnie (INSERT OR
-    # IGNORE: stare czary magic_bolt/mend_wounds/magic_light zostają nietknięte).
-    # Decyzja obronna: ward_of_iron (tier 1), NIE mage_armor (tier 2) — spójność
-    # z bramką nauki L1 z B7. Czary zaseedowane w B6 (v2-spells-faza-b-seed).
-    _exec("""
-        INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank)
-        SELECT c.id, s.spell_key, 1
-        FROM characters c
-        CROSS JOIN (
-            SELECT 'fire_bolt' AS spell_key UNION ALL
-            SELECT 'minor_heal' UNION ALL
-            SELECT 'ward_of_iron' UNION ALL
-            SELECT 'detect_magic'
-        ) s
-        WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
-    """, "v2-spells-faza-b-b8-starter-backfill")
-
     # ── FAZA B / B6 (#648): seed czarów maga Faza 1 z rpg_spells_design_doc.md ──
     # Adoptowalne dziś: atak single-target / heal-self / self-buff obronny /
     # kondycje mapowane na ISTNIEJĄCE stany FAZY S (zero duplikatu stanu).
@@ -2635,6 +2616,27 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('stun_bolt',       'Piorun Ogłuszenia',   4, 4, 'effect',    '1d6', NULL,  'WIS', 'stunned',  1, 'any',     0, 'Skondensowana kula energii ogłusza zmysły celu — stunned.',                   NULL, NULL),
         ('detect_magic',    'Wykrycie Magii',      1, 1, 'narrative', NULL,  NULL,  NULL,  NULL,       0, 'self',    0, 'Trzecie oko rzucającego widzi aurę magiczną wokół przedmiotów i istot.',      NULL, NULL)
     """, "v2-spells-faza-b-seed")
+
+    # ── FAZA B / B8 (#655): startowy zestaw maga L1 = fire_bolt + minor_heal +
+    # ward_of_iron + detect_magic (atak/heal/obrona/utility, 4× tier 1). Dosiej
+    # ten zestaw WSZYSTKIM istniejącym scholarom — NIE-destrukcyjnie (INSERT OR
+    # IGNORE: stare czary magic_bolt/mend_wounds/magic_light zostają nietknięte).
+    # Decyzja obronna: ward_of_iron (tier 1), NIE mage_armor (tier 2) — spójność
+    # z bramką nauki L1 z B7. MUSI biec PO v2-spells-faza-b-seed (FK
+    # character_spells.spell_key → game_config_spells.key; inaczej crash na PROD
+    # gdy istnieją realni scholarzy a czary jeszcze nie zaseedowane).
+    _exec("""
+        INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank)
+        SELECT c.id, s.spell_key, 1
+        FROM characters c
+        CROSS JOIN (
+            SELECT 'fire_bolt' AS spell_key UNION ALL
+            SELECT 'minor_heal' UNION ALL
+            SELECT 'ward_of_iron' UNION ALL
+            SELECT 'detect_magic'
+        ) s
+        WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+    """, "v2-spells-faza-b-b8-starter-backfill")
 
     # ── FAZA B / B10 (#657): pula absorpcji (temp-HP) dla tarcz maga ──────────
     # ward_of_iron/mage_armor dostają effect_json.absorb — ile obrażeń wroga pula
