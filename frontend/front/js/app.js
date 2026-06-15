@@ -3834,17 +3834,23 @@ function showSkillTestPopup(pending) {
     const resultNum  = document.getElementById('dice-result-num');
     const resultTot  = document.getElementById('dice-result-total');
     const resultVerd = document.getElementById('dice-result-verdict');
+    const stakeBanner = document.getElementById('dice-stake-banner');
+
+    // SF6 (#635) — hazard: pokaż stawkę „Ryzykujesz X zł" przez cały rzut (czyta payload).
+    if (stakeBanner) {
+        const stakeLbl = sf6StakeLabel(pending);
+        stakeBanner.textContent = stakeLbl || '';
+        stakeBanner.hidden = !stakeLbl;
+    }
 
     // Pre-populate result card header (shown after roll)
     if (resultSkill)  resultSkill.textContent  = name;
     if (resultIntent) { resultIntent.textContent = intent; resultIntent.hidden = !intent; }
 
-    const modParts = [
-        mod.skill_rank  ? `Ranga +${mod.skill_rank}`  : '',
-        mod.stat_mod != null ? `Mod.${mod.governing_stat||'STAT'} ${mod.stat_mod>=0?'+':''}${mod.stat_mod}` : '',
-        mod.proficiency ? `Biegłość +${mod.proficiency}` : '',
-    ].filter(Boolean);
-    if (resultTot) resultTot.textContent = (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}`;
+    // SF8 (#637) — rozbicie po nazwanym źródle (polskie nazwy stata, kolory składników).
+    const modParts = sf8SkillBreakdown(mod);
+    const modHtml = sf8BreakdownHtml(modParts);
+    if (resultTot) resultTot.innerHTML = (modHtml ? modHtml + ' · ' : '') + `Bonus ${sign}${total}`;
 
     resultNum.textContent  = '';
     resultNum.className    = '';
@@ -3867,15 +3873,15 @@ function showSkillTestPopup(pending) {
         resultNum.textContent = rolled;
         resultNum.className   = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
 
-        // Overwrite the mod line with the final sum
-        if (resultTot) resultTot.textContent =
-            (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}  =  ${sum}`;
+        // Overwrite the mod line with the final sum (SF8 — z rozbiciem + kolorami)
+        if (resultTot) resultTot.innerHTML =
+            `🎲 ${rolled} ` + (modHtml ? modHtml : '') + `  =  <strong>${sum}</strong>`;
 
         if (nat20) {
-            resultVerd.textContent = '✦ Naturalny 20!';
+            resultVerd.textContent = '✦ Krytyczny sukces!';
             resultVerd.className   = 'nat20';
         } else if (nat1) {
-            resultVerd.textContent = '✧ Naturalny 1';
+            resultVerd.textContent = '✧ Krytyczna porażka';
             resultVerd.className   = 'nat1';
         } else {
             const dc = pending.dc || 12;
@@ -3892,6 +3898,7 @@ function showSkillTestPopup(pending) {
             overlay.removeEventListener('click', _closeResult);
             overlay.hidden = true;
             if (skillCard) skillCard.hidden = false;
+            if (stakeBanner) stakeBanner.hidden = true; // SF6 — sprzątnij baner stawki
             await resolveSkillTest(pending.skill_test_id, rolled, null);
         }
         setTimeout(_closeResult, 5500);
@@ -3968,11 +3975,14 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
                 ? sr.margin
                 : (sr.player_total - sr.opponent_total);
             const marginStr = (margin >= 0 ? '+' : '') + margin;
+            // SF6 (#635) — słowny stopień marginesu (krytyki zostają czyste, są samowyjaśniające).
+            const _deg = sf6MarginDegree(margin);
+            const _degStr = _deg ? ` (${_deg})` : '';
             let outcome;
-            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Sukces krytyczny ${marginStr}`;
-            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Porażka krytyczna ${marginStr}`;
-            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}`;
-            else outcome = ` — Porażka ${marginStr}`;
+            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Krytyczny sukces ${marginStr}`;
+            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Krytyczna porażka ${marginStr}`;
+            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}${_degStr}`;
+            else outcome = ` — Porażka ${marginStr}${_degStr}`;
             const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
             appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
             // Keep reference to roll bubble so we can scroll to it (not the very bottom)
@@ -3981,6 +3991,8 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         // Crit flash (T34) — skill-test path
         if (sr.nat20) triggerCritFlash('crit');
         else if (sr.nat1) triggerCritFlash('fumble');
+        // SF5 (#634) — zły omen (S11) zepsuł rzut → ulotny komunikat w logu.
+        if (sr.omen_applied) flashCombatEvent('omen');
 
         if (response.prose) {
             const { narrative: gmContent } = parseGmFull(response.prose);
@@ -4043,11 +4055,14 @@ function _renderInspiredRerollButton(skillTestId, offer) {
             const sr = resp.skill_test_result || {};
             const margin = (typeof sr.margin === 'number') ? sr.margin : (sr.player_total - sr.opponent_total);
             const marginStr = (margin >= 0 ? '+' : '') + margin;
+            // SF6 (#635) — słowny stopień marginesu (krytyki czyste).
+            const _deg = sf6MarginDegree(margin);
+            const _degStr = _deg ? ` (${_deg})` : '';
             let outcome;
-            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Sukces krytyczny ${marginStr}`;
-            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Porażka krytyczna ${marginStr}`;
-            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}`;
-            else outcome = ` — Porażka ${marginStr}`;
+            if (sr.outcome === 'CRITICAL_SUCCESS' || sr.nat20) outcome = ` — Krytyczny sukces ${marginStr}`;
+            else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Krytyczna porażka ${marginStr}`;
+            else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}${_degStr}`;
+            else outcome = ` — Porażka ${marginStr}${_degStr}`;
             const skillName = sr.skill_label || sr.skill_key || 'Test';
             appendMessage({ role: 'user', content: `🎲 ↻ ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`, created_at: new Date() });
             if (sr.nat20) triggerCritFlash('crit'); else if (sr.nat1) triggerCritFlash('fumble');
@@ -4631,8 +4646,8 @@ function setCombatMsg(text, isError) {
 // ── Crit flash (T34) — Nat 20 / Nat 1 theatrical overlay ─────────────────
 let _critFlashTimer = null;
 const CRIT_FLASH_COPY = {
-    crit:   { title: 'Cios Krytyczny', sub: 'Naturalny 20 — podwójne obrażenia' },
-    fumble: { title: 'Fatalne Pudło',  sub: 'Naturalny 1 — coś poszło nie tak' },
+    crit:   { title: 'Krytyczny Sukces', sub: 'Naturalny 20 — podwójne obrażenia' },
+    fumble: { title: 'Krytyczna Porażka', sub: 'Naturalny 1 — coś poszło nie tak' },
 };
 function triggerCritFlash(kind) {
     const el = elements.critFlash;
@@ -4679,7 +4694,138 @@ const COND_BADGE_MAP = {
     blinded:      { glyph: '🫥', label: 'Oślepiony',    variant: 'blind'    },
     cursed:       { glyph: '🕷', label: 'Przeklęty',    variant: 'curse'    },
     break:        { glyph: '💢', label: 'Złamany',      variant: 'break'    },
+    // SF7 (#636) — 8 kondycji FAZY S; klucze = kanon katalogu game_config_conditions.
+    on_fire:      { glyph: '🔥', label: 'Podpalony',       variant: 'burn'     },
+    exhausted:    { glyph: '😓', label: 'Wyczerpany',      variant: 'exhaust'  },
+    hidden:       { glyph: '🌫', label: 'Ukryty',          variant: 'hidden'   },
+    rage:         { glyph: '😤', label: 'Furia',           variant: 'rage'     },
+    blessed:      { glyph: '✨', label: 'Pobłogosławiony', variant: 'blessed'  },
+    hasted:       { glyph: '⚡', label: 'Przyśpieszony',   variant: 'haste'    },
+    hemorrhage:   { glyph: '🩸', label: 'Krwotok',         variant: 'bleed'    },
+    inspired:     { glyph: '🌟', label: 'Zainspirowany',   variant: 'inspire'  },
 };
+// SF7 (#636) — wystaw mapę na window dla kontraktu Playwright (const nie trafia na window).
+window.COND_BADGE_MAP = COND_BADGE_MAP;
+
+// ─── SF5 (#634): ulotne komunikaty zdarzeń — ujawniają ukrytą mechanikę FAZY S ───
+// „Mechanika decyduje, LLM narruje": front CZYTA gotowy sygnał z payloadu, NIC nie liczy.
+// Pure-helper (bez DOM) — mapuje sygnał → {icon, text, variant}. null = nic nie migać.
+function sf5EphemeralMessage(kind, ctx = {}) {
+    switch (String(kind || '')) {
+        case 'omen': // S11 — zła wróżba zepsuła rzut umiejętności
+            return { icon: '🌑', text: 'Zły omen — klątwa zepsuła rzut', variant: 'curse' };
+        case 'extra_action': // S12 — pośpiech: ruch nie zużył tury
+            return { icon: '⚡', text: 'Ruch za darmo — pośpiech nie zużył tury', variant: 'haste' };
+        case 'behavior': { // S18 — kondycja (confused/berserk/panicked) steruje turą wroga (k4)
+            const who = String(ctx.enemy_name || 'Wróg').trim() || 'Wróg';
+            const action = String(ctx.action || '');
+            let what;
+            if (action === 'stand') what = `${who} oszołomiony — traci turę`;
+            else if (action === 'flee') what = `${who} ucieka w panice`;
+            else if (action === 'attack_random' || action === 'attack_nearest')
+                what = `${who} zdezorientowany — atakuje na ślepo (k4)`;
+            else what = `${who} miota się w amoku (k4)`;
+            return { icon: '🎲', text: what, variant: 'confuse' };
+        }
+        default:
+            return null;
+    }
+}
+
+// Render ulotnego wpisu w logu walki. `targetEl` opcjonalny (test) → domyślnie strumień czatu.
+// Wpis zanika animacją i znika z DOM po czasie ekspozycji (SF5: 6000 ms, fade 600 ms).
+function flashCombatEvent(kind, ctx = {}, targetEl = null) {
+    const msg = sf5EphemeralMessage(kind, ctx);
+    if (!msg) return null;
+    const host = targetEl || elements.chatMessages;
+    if (!host) return null;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble--cturn-ephemeral cturn--ephemeral';
+    bubble.dataset.sf5 = String(kind);
+    bubble.innerHTML =
+        `<div class="cturn cturn--ephemeral-row cturn--ephemeral-${msg.variant}">` +
+        `<span class="cturn__icon">${msg.icon}</span>` +
+        `<span class="cturn__text">${escapeHtml(msg.text)}</span></div>`;
+    host.appendChild(bubble);
+    // Auto-usuń po ekspozycji; fade odpala CSS animacją na końcu (forwards).
+    setTimeout(() => { try { bubble.remove(); } catch (_e) {} }, 6000);
+    return bubble;
+}
+
+// ─── SF6 (#635): karta rzutu hazardu — stawka + słowny stopień marginesu ─────────
+// „Mechanika decyduje, LLM narruje": stawkę niesie pending.gamble.stake (S7/#616),
+// margines sr.margin (S1/#581). Front tylko PREZENTUJE — nic nie liczy.
+// Pure-helpery (bez DOM) pod test kontraktowy.
+function sf6StakeLabel(pending) {
+    const stake = Number(pending && pending.gamble ? pending.gamble.stake : NaN);
+    if (!Number.isFinite(stake) || stake <= 0) return null;
+    return `🪙 Ryzykujesz ${stake} zł`;
+}
+
+// Słowny stopień marginesu testu wg |margines|: luźny → ciasny → na włos.
+function sf6MarginDegree(margin) {
+    const m = Number(margin);
+    if (!Number.isFinite(m)) return null;
+    const a = Math.abs(m);
+    if (a >= 5) return 'z nawiązką';
+    if (a >= 2) return 'na styk';
+    return 'o włos';
+}
+
+// ─── SF8 (#637): karta rzutu — rozbicie wyniku po NAZWANYM źródle ────────────────
+// „Mechanika decyduje, front czyta": helpery NIC nie liczą — tylko nazywają już
+// policzone składniki z payloadu (atak: attack_roll.*; skill: modifier_breakdown).
+// Zero zmian mechaniki/backendu — kondycje/rana nie wchodzą do rzutu GRACZA, więc
+// rozbijamy wyłącznie to, co realnie jest w wyniku (osobny ticket = wliczenie kondycji).
+const SF8_STAT_LABELS = {
+    STR: 'Siła', DEX: 'Zręczność', CON: 'Kondycja',
+    INT: 'Inteligencja', WIS: 'Mądrość', CHA: 'Charyzma', LCK: 'Szczęście',
+};
+
+// Pure-helper (bez DOM). Zwraca uporządkowaną listę {label, value} składników ataku.
+// Stat ZAWSZE obecny (nawet 0); pozostałe składniki = 0 odfiltrowane.
+function sf8AttackBreakdown(attackRoll, extras = {}) {
+    const ar = attackRoll || {};
+    const ex = extras || {};
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const statKey = String(ar.attack_stat || '').toUpperCase();
+    const parts = [{ label: SF8_STAT_LABELS[statKey] || statKey || 'Atak', value: num(ar.stat_mod) }];
+    const add = (label, value) => { const v = num(value); if (v !== 0) parts.push({ label, value: v }); };
+    add('Ranga', ar.skill_rank);
+    add('Biegłość', ar.proficiency);
+    add('Oburęczny', ar.weapon_bonus);
+    add('Zaskoczenie', ex.surprise);
+    add('Zniszczona broń', ex.durability);
+    return parts;
+}
+
+// Pure-helper. Rozbicie testu umiejętności z modifier_breakdown (U20). Stat zawsze.
+function sf8SkillBreakdown(modBreakdown) {
+    const mb = modBreakdown || {};
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const statKey = String(mb.governing_stat || '').toUpperCase();
+    const parts = [{ label: SF8_STAT_LABELS[statKey] || statKey || 'Cecha', value: num(mb.stat_mod) }];
+    const add = (label, value) => { const v = num(value); if (v !== 0) parts.push({ label, value: v }); };
+    add('Ranga', mb.skill_rank);
+    add('Biegłość', mb.proficiency);
+    return parts;
+}
+
+// Wspólny render listy {label,value} → HTML span-y (dodatnie zielone, ujemne czerwone).
+function sf8BreakdownHtml(parts) {
+    if (!Array.isArray(parts) || !parts.length) return '';
+    return parts.map((p) => {
+        const v = Number(p.value) || 0;
+        const sign = v >= 0 ? '+' : '−';
+        const cls = v >= 0 ? 'sf8-part--pos' : 'sf8-part--neg';
+        return `<span class="sf8-part ${cls}">${sign}${Math.abs(v)} <i>${escapeHtml(String(p.label))}</i></span>`;
+    }).join(' ');
+}
+
+// Wystaw helpery na window dla kontraktu Playwright (deklaracje funkcji nie trafiają na window).
+window.sf8AttackBreakdown = sf8AttackBreakdown;
+window.sf8SkillBreakdown = sf8SkillBreakdown;
+window.sf8BreakdownHtml = sf8BreakdownHtml;
 
 function _renderConditionBadges(conds) {
     if (!Array.isArray(conds) || !conds.length) return '';
@@ -5077,7 +5223,7 @@ async function fetchAndAppendNewCombatTurns() {
         const newRows = rows
             .filter(row => {
                 const et = String(row?.event_type || '');
-                return row && (et === 'attack' || et === 'death' || et === 'zone_change' || et === 'reaction' || et === 'wrestling') &&
+                return row && (et === 'attack' || et === 'death' || et === 'zone_change' || et === 'reaction' || et === 'wrestling' || et === 'behavior') &&
                     Number(row.id) > lastRenderedCombatTurnId;
             })
             .sort((a, b) => {
@@ -5147,6 +5293,19 @@ function appendCombatTurnCard(row) {
         return;
     }
 
+    if (evt === 'behavior') {
+        // SF5 (#634) — kondycja (S18) steruje turą wroga (confused/berserk/panicked, k4).
+        // Ulotny wpis ujawnia DLACZEGO wróg zrobił coś nietypowego. Front czyta narrative JSON.
+        let meta = {};
+        try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        flashCombatEvent('behavior', {
+            enemy_name: meta.enemy_name || row.target_name,
+            action: meta.action,
+            behavior: meta.behavior,
+        });
+        return;
+    }
+
     if (evt === 'zone_change') {
         let meta = {};
         try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
@@ -5178,9 +5337,17 @@ function appendCombatTurnCard(row) {
         const hitLine = hit
             ? `<span class="cturn__hit">✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń</span>`
             : `<span class="cturn__miss">❌ PUDŁO</span>`;
+        // SF8 (#637) — rozbicie rzutu po nazwanym źródle (z live response, jednorazowo).
+        let breakdownLine = '';
+        const bd = window._pendingAttackBreakdown;
+        window._pendingAttackBreakdown = null;
+        if (bd && Array.isArray(bd.parts) && bd.parts.length) {
+            breakdownLine = `<div class="cturn__breakdown">🎲 ${bd.d20} ${sf8BreakdownHtml(bd.parts)} = <strong>${bd.total}</strong></div>`;
+        }
         html = `<div class="cturn cturn--player">
             <div class="cturn__head">⚔️ <strong>${label}</strong>${stat} → ${tgt}</div>
             <div class="cturn__detail">Rzut: ${rv != null ? rv : '—'}${ac} → ${hitLine}</div>
+            ${breakdownLine}
         </div>`;
     } else if (evt === 'attack' && actor === 'enemy') {
         const hit = row.hit === 1 || row.hit === true;
@@ -5226,7 +5393,7 @@ function pickEnemyTarget(cs) {
 // DICE.dice_box, but decoupled from skill-test resolution (no resolveSkillTest, no
 // "back to campaigns" skip button). Lands on the pre-rolled d20. Returns a Promise that
 // resolves when the modal closes (auto ~1.6s or on click) so combat can continue.
-function playCombatDiceRoll(forcedD20, label) {
+function playCombatDiceRoll(forcedD20, label, breakdown = null) {
     return new Promise((resolve) => {
         const overlay     = document.getElementById('dice-overlay');
         const container   = document.getElementById('dice-container');
@@ -5266,10 +5433,16 @@ function playCombatDiceRoll(forcedD20, label) {
         const showResult = (rolled) => {
             resultNum.textContent = rolled;
             resultNum.className   = rolled === 20 ? 'nat20' : rolled === 1 ? 'nat1' : '';
-            if (rolled === 20)      { resultVerd.textContent = '✦ Naturalny 20!'; resultVerd.className = 'nat20'; }
-            else if (rolled === 1)  { resultVerd.textContent = '✧ Naturalny 1';   resultVerd.className = 'nat1'; }
+            if (rolled === 20)      { resultVerd.textContent = '✦ Krytyczny sukces!'; resultVerd.className = 'nat20'; }
+            else if (rolled === 1)  { resultVerd.textContent = '✧ Krytyczna porażka';  resultVerd.className = 'nat1'; }
+            // SF8 (#637) — rozbicie rzutu w oknie kości (parytet z testem umiejętności).
+            let dwell = 1600;
+            if (breakdown && Array.isArray(breakdown.parts) && breakdown.parts.length && resultTot) {
+                resultTot.innerHTML = `🎲 ${rolled} ${sf8BreakdownHtml(breakdown.parts)}  =  <strong>${breakdown.total}</strong>`;
+                dwell = 2800; // dłużej widoczne — gracz ma przeczytać składniki (wartość startowa)
+            }
             resultCard.hidden = false;
-            setTimeout(finish, 1600);
+            setTimeout(finish, dwell);
             overlay.addEventListener('click', finish, { once: true });
         };
 
@@ -5328,15 +5501,14 @@ async function handleCombatAttack() {
         const diceData = await diceResp.json();
         const d20 = Number(diceData.total ?? 0);
 
-        // #569: visible 3D dice modal (parity with skill-test rolls). Lands on the
-        // already-rolled d20, then resolves so combat continues.
-        await playCombatDiceRoll(d20, 'Atak');
-
         const target = pickEnemyTarget(lastCombatState);
         const body = { raw_d20: d20, attacker: 'player' };
         if (target?.enemy_key) body.enemy_key = String(target.enemy_key);
         if (target?.id) body.target_id = String(target.id);
 
+        // SF8 (#637): rozlicz atak PRZED animacją kości, żeby okno mogło pokazać
+        // rozbicie wyniku (składniki liczy silnik). d20 jest predeterminowany —
+        // animacja i tak ląduje na nim, więc kolejność nie zmienia wyniku.
         window.clog?.event('combat_resolve_attack_request', { d20 });
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/resolve-attack`, {
             method: 'POST',
@@ -5346,6 +5518,17 @@ async function handleCombatAttack() {
         const data = await r.json().catch(() => ({}));
         window.clog?.event('combat_resolve_attack_response', { status: r.status, hit: !!data.hit, damage: data.damage ?? 0, enemy_dead: !!data.enemy_dead });
         if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+
+        // Rozbicie do okna kości + dymka (oba z tych samych policzonych składników).
+        const _atk = data.attack_roll || {};
+        const _bdParts = _atk.attack_stat
+            ? sf8AttackBreakdown(_atk, { surprise: data.surprise_atk_bonus, durability: data.durability_attack_penalty })
+            : null;
+        const _bdTotal = Number(data.attack_total ?? _atk.total ?? d20);
+
+        // #569: visible 3D dice modal (parity with skill-test rolls). Lands on the
+        // already-rolled d20; SF8 — pokazuje rozbicie składników na karcie wyniku.
+        await playCombatDiceRoll(d20, 'Atak', _bdParts ? { parts: _bdParts, total: _bdTotal } : null);
 
         await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (e) {
@@ -5377,7 +5560,7 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         return;
     }
     if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
-    else if (data.player_nat1) { setCombatMsg('Fatalne pudło!', true); }
+    else if (data.player_nat1) { setCombatMsg('Krytyczna porażka!', true); }
     else { setCombatMsg('Pudło.'); }
 
     // Crit flash (T34) — fire after setCombatMsg so the message also lands
@@ -5394,6 +5577,20 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
     }
 
     if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+
+    // SF8 (#637) — rozbicie rzutu po nazwanym źródle. Live response niesie wszystkie
+    // policzone składniki (attack_roll.* + surprise/durability); karta w feedzie je
+    // skonsumuje. Front NIC nie liczy — tylko nazywa. Graceful degrade gdy brak.
+    if (atkRoll && atkRoll.attack_stat) {
+        window._pendingAttackBreakdown = {
+            d20: Number(data.player_raw_d20 ?? atkRoll.raw ?? d20),
+            total: Number(data.attack_total ?? atkRoll.total ?? total),
+            parts: sf8AttackBreakdown(atkRoll, {
+                surprise: data.surprise_atk_bonus,
+                durability: data.durability_attack_penalty,
+            }),
+        };
+    }
 
     await fetchAndAppendNewCombatTurns();
 
@@ -5444,6 +5641,8 @@ async function handleCombatMove() {
         const cs = data.combat_state;
         const moveText = data.to === 'engaged' ? 'Zbliżasz się — wchodzisz w zwarcie.' : 'Cofasz się — przechodzisz na dystans.';
         appendMessage({ role: 'system', content: `🚶 ${moveText}`, created_at: new Date() });
+        // SF5 (#634) — pośpiech (S12): ruch nie zużył tury → ulotny komunikat.
+        if (data.extra_action_used) flashCombatEvent('extra_action');
         if (cs) { lastCombatState = cs; renderCombatUI(cs); }
         setCombatMsg(data.to === 'engaged' ? 'Jesteś w zwarciu.' : 'Jesteś na dystansie.');
         // Enemy may now act
@@ -8486,6 +8685,22 @@ async function showDeathScreen(characterName) {
     }
 }
 
+// ─── SF9 (#638): różnicowany komunikat „dlaczego wskrzeszenie niedostępne" ───
+// „Mechanika decyduje, LLM narruje": front CZYTA gotowy preview.reason z backendu (cost_preview),
+// NIC nie liczy. Pure-helper (bez DOM) — mapuje reason → polski komunikat. Fallback bez wyjątku na null.
+function sf9DisabledReason(preview) {
+    switch (String(preview?.reason || '')) {
+        case 'resurrection_disabled':
+            return 'Wskrzeszenia wyłączone przez Mistrza Gry.';
+        case 'no_uses_remaining':
+            return 'Brak pozostałych wskrzeszeń.';
+        default:
+            return 'Wskrzeszenie nie jest dostępne dla tego konta.';
+    }
+}
+// Wystaw na window dla kontraktu Playwright (funkcja deklarowana lokalnie nie trafia na window).
+window.sf9DisabledReason = sf9DisabledReason;
+
 function _formatResurrectCostLine(preview) {
     const cost = preview?.cost || {};
     switch (cost.mode) {
@@ -8685,7 +8900,8 @@ async function handleResurrect() {
         catch { return null; }
     })();
     if (!preview?.enabled) {
-        showToast('Wskrzeszenie nie jest dostępne dla tego konta.', 'error');
+        // SF9 (#638) — rozróżnij powód z payloadu (resurrection_disabled / no_uses_remaining).
+        showToast(sf9DisabledReason(preview), 'error');
         return;
     }
     const costLine = _formatResurrectCostLine(preview);

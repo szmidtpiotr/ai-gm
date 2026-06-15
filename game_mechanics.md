@@ -4585,22 +4585,27 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 **Dla agenta:** `app.js` — nowy render z `player.conditions[]` (snapshot ma `key/label/effect_json/runtime.level`). Poziom pokaż przy stackowalnych („Wyczerpany 2/2"). To wypełnia lukę „S9 poziom niewidoczny".
 **Weryfikacja:** Sandbox/Playwright: nałóż exhausted 2× → pasek pokazuje „Wyczerpany 2/2"; on_fire → „Płonie".
 
-#### SF5 — Ulotne komunikaty zdarzeń (k4, omen, darmowa akcja, odporność)
+#### SF5 — Ulotne komunikaty zdarzeń (k4, omen, darmowa akcja, odporność) ✅ (#634)
+> ✅ **Wdrożone (#634, 2026-06-15):** ulotne wpisy w logu walki (helper `sf5EphemeralMessage` + `flashCombatEvent`, klasa `.cturn--ephemeral`, 6 s ekspozycji). Podłączone 3 sygnały JUŻ obecne w payloadzie gracza: omen S11 (`skill_test_result.omen_applied`), pośpiech S12 (`extra_action_used` z zone-change), confused/berserk wroga S18 (feed `event_type='behavior'` — dodany do whitelisty). **Odłożone** (brak w payloadzie gracza → wymaga drobnego rozszerzenia payloadu, NIE realizowane w SF): S14 odporność zablokowała stan (`reason="immune"` porzucany w `turns.py`), player-side k4 (confused gracza, prose-only). 3/3 Playwright kontrakt GREEN; weryfikacja wizualna 390px OK.
 **Cel:** Krótkie, znikające wpisy w logu walki dla ukrytej dotąd mechaniki: confused/berserk gracza („Twoja akcja może pójść losowo — k4"), zły omen (klątwa zepsuła rzut), darmowa akcja (hasted nie zużył tury), odporność zablokowała stan (S14).
 **Dla agenta:** Źródła sygnałów: combat snapshot / wynik rzutu / odpowiedź zone-change (`extra_action_used`), `omen_applied`. Jeśli któregoś sygnału brak w odpowiedzi dla gracza — odnotuj w issue (drobne rozszerzenie payloadu, NIE zmiana mechaniki). To wypełnia luki S11/S12/S14/S18 (player-side).
 **Weryfikacja:** Sandbox/Playwright per sygnał: hasted → „Ruch za darmo"; rage + próba slowed → „Odporność: stan nie wszedł".
 
-#### SF6 — Karta rzutu: stawka hazardu + stopień słowny
+#### SF6 — Karta rzutu: stawka hazardu + stopień słowny ✅ (#635)
+> ✅ **Wdrożone (#635, 2026-06-15):** baner stawki „🪙 Ryzykujesz X zł" (`#dice-stake-banner` w overlay rzutu, czyta `pending.gamble.stake` z S7/#616) widoczny przez cały rzut; słowny stopień marginesu (`|sr.margin|≥5 → z nawiązką`, `2–4 → na styk`, `≤1 → o włos`) dołożony do linii wyniku Sukces/Porażka (krytyki czyste). Pure-helpery `sf6StakeLabel`/`sf6MarginDegree` (kontrakt Playwright). ZERO zmian backendu — sygnały już w payloadzie. 3/3 Playwright GREEN + wizualna 390px OK; bump `?v=635`.
 **Cel:** Na karcie rzutu hazardu pokaż „Ryzykujesz X zł"; margines (jest) uzupełnij słownym stopniem (z nawiązką / na styk / o włos).
 **Dla agenta:** Pending niesie `gamble.stake` (S7/#616) — wyświetl na karcie. Stopień z `outcome`. `app.js` render karty rzutu.
 **Weryfikacja:** Playwright: „stawiam 5 złota i gram w kości" → karta pokazuje „Ryzykujesz 5 zł".
 
-#### SF7 — Ikony 8 nowych kondycji (kosmetyka, domknięcie spójności)
+#### SF7 — Ikony 8 nowych kondycji (kosmetyka, domknięcie spójności) ✅ (#636)
+> ✅ **Wdrożone (#636, 2026-06-15):** 8 glifów dodane do `COND_BADGE_MAP` (`app.js`), klucze = kanon katalogu `game_config_conditions`. Mapa wystawiona na `window.COND_BADGE_MAP` dla kontraktu Playwright (const nie trafia na window). 2/2 Playwright GREEN + wizualna 390px OK (8 chipów renderuje emoji). ZERO backendu; bump `?v=636`. Reguły CSS tintujące nowe varianty poza zakresem (glif widoczny bez tinta).
 **Cel:** Dodaj glify do `COND_BADGE_MAP`: on_fire 🔥, exhausted 😓, hidden 🌫, rage 😤, blessed ✨, hasted ⚡, hemorrhage 🩸, inspired 🌟 (dziś renderują się generyczną kropką).
 **Dla agenta:** `app.js` `COND_BADGE_MAP` (linie ~4555). Tylko mapa ikon.
 **Weryfikacja:** Wizualnie: te kondycje w torze inicjatywy/pasku mają własną ikonę.
 
-#### SF8 — Karta rzutu: rozbicie wyniku po NAZWANYM źródle (skąd to "+3")
+#### SF8 — Karta rzutu: rozbicie wyniku po NAZWANYM źródle (skąd to "+3") ✅ (#637)
+
+> ✅ **Wdrożone (#637, 2026-06-15) — KOREKTA ZAKRESU:** audyt kodu wykazał, że pierwotna premissa spec była błędna — kondycje (Pobłogosławiony/Wyczerpany), kara rany i afiksy broni **NIE wchodzą do sumy rzutu GRACZA** (`weapon_rules.py:235`: tylko `d20+stat_mod+skill_rank+proficiency+weapon_bonus`; `_combatant_stat_modifier` składa kondycje TYLKO dla wrogów). Wszystkie realne składniki już są w payloadzie (`attack_roll.*` + `surprise_atk_bonus`/`durability_attack_penalty`; skill: `modifier_breakdown`). Dlatego pokazywanie kondycji byłoby kłamstwem albo zmianą mechaniki (zabronioną) → SF8 zrealizowany jako **CZYSTY FRONTEND GRACZA, ZERO backendu** (wyjątek `breakdown[]` okazał się niepotrzebny). Karta ataku w logu (`appendCombatTurnCard`), **okno kości ataku** (`playCombatDiceRoll` — rozliczenie przeniesione przed animację, by pokazać rozbicie na karcie wyniku; parytet z testem umiejętności) oraz overlay testu umiejętności (`showSkillTestPopup`) rozbijają wynik po polskiej nazwie składnika: `🎲 14 +2 Siła +3 Ranga +2 Biegłość = 21`, dodatnie zielone (`--success`), ujemne czerwone (`--danger`). Pure-helpery `sf8AttackBreakdown`/`sf8SkillBreakdown`/`sf8BreakdownHtml` (na `window`, kontrakt Playwright). 5/5 Playwright GREEN + wizualna 390px OK (dymek + żywe okno kości #84); `?v=637b`. **ODŁOŻONE (osobny ticket mechaniczny):** wliczenie kondycji/rany/afiksów do rzutu gracza — S8/S9 dziś nie obejmują rzutów gracza, to zmiana mechaniki walki poza SF.
 
 **Cel:** Gdy gracz rzuca 12 na kości, a wynik to 15, karta rzutu ma pokazać DLACZEGO — rozbicie po nazwanych składnikach, nie jedną sumę. Przykład: `🎲 12 + 1 (Zręczność) + 2 (Pobłogosławiony) − 1 (Wyczerpany) = 14 vs DC 12 ✓`. Dotyczy ataku i testów umiejętności. To domyka pierwotną obawę Piotra: gracz nie wie, skąd bierze się bonus/kara w rzucie.
 
@@ -4611,7 +4616,9 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** Sandbox: nałóż blessed + exhausted na klona, wykonaj atak → karta rzutu pokazuje obie pozycje z nazwą i wartością, suma = wynik silnika. Playwright: rzut z modyfikatorem pokazuje ≥2 nazwane składniki, nie samą sumę. Liczby na karcie = liczby z combat snapshot (front nic nie liczy sam).
 
-#### SF9 — Bug: wskrzeszenie włączone w adminie nie działa
+#### SF9 — Bug: wskrzeszenie włączone w adminie nie działa ✅ (#638, hotfix + cz.2/cz.3)
+
+> ✅ **Domknięte (2026-06-15):** (1) admin select `system.js` — HOTFIX: 5 prawdziwych trybów `VALID_MODES` + opis (zapis configu znów działa). (2) **#638** front gracza — `handleResurrect` rozróżnia `preview.reason` przez pure-helper `sf9DisabledReason(preview)` (na `window`, kontrakt Playwright): `resurrection_disabled`→„Wskrzeszenia wyłączone przez Mistrza Gry", `no_uses_remaining`→„Brak pozostałych wskrzeszeń", reszta→fallback. ZERO backendu (`cost_preview` już zwraca `reason`). 3/3 Playwright GREEN + wizualna 390px OK; bump `?v=638`. (3) **Decyzja Piotra 2026-06-15:** przycisk przy `!enabled` zostaje UKRYTY (już w kodzie: `#resurrect-btn` `hidden` + `showDeathScreen` odsłania tylko gdy `enabled`) — wariant „wyszarz+powód" odrzucony.
 
 **Cel:** Admin włącza wskrzeszenie w panelu, ale gracz na ekranie śmierci nie dostaje działającego przycisku. Naprawić, żeby włączenie w adminie faktycznie udostępniało wskrzeszenie graczowi.
 
@@ -4657,7 +4664,7 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: trafienie z dostępną reakcją → `pending_reaction` ustawione, obrażenia NIE naliczone; `resolve-reaction take` → pełne obrażenia; `dodge` sukces → 0 dmg; tylko 1 modal/rundę; brak skilla → brak modalu (auto-take). Ręcznie/Playwright: Sandbox + walka gracza — wróg trafia → modal bez liczby → wybór → rzut w logu; timeout 8 s → przyjmij. Sprawdź, że toggle „uzbrojony" zniknął.
 
-**Weryfikacja całości (kamień SF):** `/game-screen` na szerokości telefonu — pasek 3-przyciskowy czytelny, arkusz działa, pasek statusu i komunikaty pojawiają się w Sandbox sweep kondycji, karta rzutu rozbija wynik po źródłach, wskrzeszenie działa po włączeniu w adminie, modal reaktywny uniku/bloku działa z timeoutem. Werdykt czytelności od Piotra.
+**Weryfikacja całości (kamień SF):** ✅ **Wykonane (#639, 2026-06-15) — sweep czytelności 390px (kampania #84) + przegląd warstwy feedbacku przez realne ścieżki renderu:** pasek 3-przyciskowy [Atak·Akcja·Ucieczka] czytelny + bottom sheet działa; pasek statusu pokazuje kondycje z ikoną i poziomem („Wyczerpany 2/2"); ulotne komunikaty SF5 (omen/pośpiech/k4) renderują; SF6 stawka „🪙 Ryzykujesz X zł" + słowny margines; SF8 rozbicie rzutu po nazwanym źródle; SF9 komunikaty wskrzeszenia; SF10 reaktywny modal (#633 GREEN). Brak błędów JS UI walki. Raport: `[SMOKE] FAZA SF` #639. **Werdykt czytelności należy do Piotra** (`needs-testing`). **FAZA SF KOMPLETNA.**
 
 ---
 

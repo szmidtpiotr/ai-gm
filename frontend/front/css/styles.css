@@ -6356,6 +6356,58 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: rgba(255, 150, 80, 0.9);
 }
 
+/* SF8 (#637) — rozbicie rzutu po nazwanym źródle (atak + test umiejętności). */
+.cturn__breakdown {
+  margin-top: var(--space-xs, 4px);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.sf8-part {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sf8-part i {
+  font-style: normal;
+  opacity: 0.85;
+}
+.sf8-part--pos { color: var(--success, #6dcc88); }
+.sf8-part--neg { color: var(--danger, #d9534f); }
+
+/* ── SF5 (#634): ulotne komunikaty zdarzeń — przygaszony wpis, zanika po ekspozycji ── */
+.chat-bubble--cturn-ephemeral {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px 0 !important;
+  margin: 2px 0 !important;
+}
+.cturn--ephemeral-row {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.74rem;
+  font-style: italic;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  /* widoczne 5.4 s, potem 0.6 s fade-out (łącznie 6 s = setTimeout w JS) */
+  animation: sf5EphemeralFade 6s ease forwards;
+}
+.cturn--ephemeral-row .cturn__icon { font-size: 0.95rem; opacity: 0.85; }
+.cturn--ephemeral-curse  { color: rgba(190, 150, 220, 0.9); }
+.cturn--ephemeral-haste  { color: var(--accent); }
+.cturn--ephemeral-confuse { color: rgba(230, 190, 120, 0.92); }
+
+@keyframes sf5EphemeralFade {
+  0%   { opacity: 0; transform: translateY(4px); }
+  6%   { opacity: 1; transform: translateY(0); }
+  90%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cturn--ephemeral-row { animation: none; }
+}
+
 /* ── Wizard stat/skill adjustment steps ── */
 .wizard-hint {
   font-size: 0.82rem;
@@ -6988,6 +7040,26 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   transition: background 0.15s, color 0.15s;
 }
 #dice-skip-btn:hover { background: rgba(80, 40, 10, 0.9); color: #d4a040; }
+
+/* SF6 (#635) — baner stawki hazardu: widoczny u góry przez cały rzut, nad kością */
+#dice-stake-banner {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  padding: 6px 16px;
+  background: rgba(20, 14, 4, 0.92);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-light);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+#dice-stake-banner[hidden] { display: none !important; }
 
 #dice-container {
   position: absolute;
