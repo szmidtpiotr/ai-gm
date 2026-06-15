@@ -209,6 +209,15 @@ def _build_character_sheet(
             skills["athletics"] = max(int(skills.get("athletics", 0)), 2)
             skills["melee_attack"] = max(int(skills.get("melee_attack", 0)), 2)
             skills["intimidation"] = max(int(skills.get("intimidation", 0)), 1)
+    elif normalized_archetype == "rogue":
+        # B1 (#624): łotrzyk = zwinny zwiadowca/złodziej (canon AK.2: DEX+2/LCK+1),
+        # nie bonusy maga. Lustro frontendu app.js ARCHETYPE_BONUS.rogue.
+        stats["DEX"] = int(stats.get("DEX", 10)) + 2
+        stats["LCK"] = int(stats.get("LCK", 10)) + 1
+        if apply_archetype_skill_minimums:
+            skills["stealth"] = max(int(skills.get("stealth", 0)), 2)
+            skills["sleight_of_hand"] = max(int(skills.get("sleight_of_hand", 0)), 2)
+            skills["awareness"] = max(int(skills.get("awareness", 0)), 1)
     else:
         stats["INT"] = int(stats.get("INT", 10)) + 2
         stats["WIS"] = int(stats.get("WIS", 10)) + 1
@@ -437,11 +446,15 @@ def _core_bases_from_stored_stats(stats: dict, archetype: str) -> dict[str, int]
         lk = k.lower()
         out[k] = int(stats.get(k, stats.get(lk, 10)))
     a = (archetype or "warrior").strip().lower()
-    if a not in ("scholar", "warrior"):
+    if a not in ("scholar", "warrior", "rogue"):
         a = "warrior"
     if a == "warrior":
         out["STR"] -= 2
         out["CON"] -= 1
+    elif a == "rogue":
+        # B1 (#624): odwrotność bonusu łotrzyka (DEX+2/LCK+1).
+        out["DEX"] -= 2
+        out["LCK"] -= 1
     else:
         out["INT"] -= 2
         out["WIS"] -= 1
