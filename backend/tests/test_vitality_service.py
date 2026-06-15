@@ -39,8 +39,8 @@ class TestCalculateHP:
         assert calculate_hp("scholar", 10, 1) == 6
 
     def test_rogue_level1_defaults(self):
-        # CON 12, mod +1, level 1: 10 + 1×1 = 11 (rogue base 10, explicit key)
-        assert calculate_hp("rogue", 12, 1) == 11
+        # CON 12, mod +1, level 1: 8 + 1×1 = 9 (rogue base 8 — B2 #642)
+        assert calculate_hp("rogue", 12, 1) == 9
 
     def test_warrior_level1_high_con(self):
         # CON 16, mod +3, level 1: 10 + 3×1 = 13
@@ -69,7 +69,7 @@ class TestCalculateHP:
 
     def test_base_hp_constants(self):
         assert ARCHETYPE_BASE_HP["warrior"] == 10
-        assert ARCHETYPE_BASE_HP["rogue"] == 10
+        assert ARCHETYPE_BASE_HP["rogue"] == 8   # B2 #642 — zwiadowca < warrior
         assert ARCHETYPE_BASE_HP["scholar"] == 6
 
 

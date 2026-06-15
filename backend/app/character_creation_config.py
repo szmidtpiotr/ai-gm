@@ -8,6 +8,9 @@ from typing import Final
 # --- Skill budget (creation only) ---
 SKILL_BUDGET: Final = {
     "warrior": {"slots": 8, "active_skills": 7},
+    # Łotrzyk = filar "najwięcej skilli" (CZĘŚĆ AK.2): 10 slotów / 9 aktywnych,
+    # więcej niż warrior (7) i ≥ scholar (8).
+    "rogue": {"slots": 10, "active_skills": 9},
     "scholar": {"slots": 10, "active_skills": 8},
 }
 
@@ -18,6 +21,16 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
         "endurance",
         "intimidation",
         "survival",
+    ],
+    # Bias złodzieja/zwiadowcy (CZĘŚĆ AK.2). lockpick/acrobatics dołączone do
+    # CREATION_SKILL_POOL poniżej, żeby ten bias nie był martwy.
+    "rogue": [
+        "stealth",
+        "lockpick",
+        "sleight_of_hand",
+        "acrobatics",
+        "awareness",
+        "investigation",
     ],
     "scholar": [
         "arcana",
@@ -37,6 +50,8 @@ CREATION_SKILL_POOL: Final = frozenset(
         "athletics",
         "stealth",
         "sleight_of_hand",
+        "lockpick",
+        "acrobatics",
         "endurance",
         "arcana",
         "investigation",

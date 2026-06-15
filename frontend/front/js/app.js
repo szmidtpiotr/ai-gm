@@ -1772,7 +1772,7 @@ function _renderStep1(c) {
                         <span class="archetype-icon">🏹</span>
                         <span class="archetype-title">Łotrzyk</span>
                         <span class="archetype-desc">Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.</span>
-                        <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 10</span>
+                        <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 8</span>
                     </button>
                     <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar">
                         <span class="archetype-icon">📜</span>
@@ -1795,7 +1795,7 @@ function _renderStep1(c) {
 // Step 2 — Stat redistribution (pool model matching original frontend)
 let _step2FirstRender = false;
 function _wizardCalcHP(archetype, con, level = 1) {
-    const base = archetype === 'warrior' ? 10 : archetype === 'rogue' ? 10 : archetype === 'scholar' ? 6 : 8;
+    const base = archetype === 'warrior' ? 10 : archetype === 'rogue' ? 8 : archetype === 'scholar' ? 6 : 8;
     const mod = Math.floor((con - 10) / 2);
     return Math.max(1, base + mod * level);
 }
@@ -4607,6 +4607,7 @@ function hideCombatUI() {
     elements.combatBanner.hidden = true;
     elements.combatComposer.hidden = true;
     closeCombatSheet();  // SF1 (#619): zamknij arkusz akcji na koniec walki
+    closeAttackSheet();  // B6c (#651): zamknij też arkusz ataku
     elements.composer?.classList.remove('composer--hidden');
     const _statusBar = document.getElementById('combat-player-status');  // SF4 (#632): schowaj pasek statusu
     if (_statusBar) { _statusBar.hidden = true; _statusBar.innerHTML = ''; }
@@ -4632,6 +4633,89 @@ function closeCombatSheet() {
     if (!elements.combatActionSheet) return;
     elements.combatActionSheet.classList.remove('is-open');
     elements.combatActionSheet.hidden = true;
+}
+
+// ── B6c (#651): rozwijane menu „Atak" dla maga — atak bronią + czary atakujące ──
+function _combatIsScholar() {
+    const sheet = characterData?.sheet_json || characterData || {};
+    const parsed = typeof sheet === 'string' ? (() => { try { return JSON.parse(sheet); } catch { return {}; } })() : sheet;
+    return parsed.archetype === 'scholar';
+}
+
+function closeAttackSheet() {
+    const el = document.getElementById('combat-attack-sheet');
+    if (!el) return;
+    el.classList.remove('is-open');
+    el.hidden = true;
+}
+
+function openAttackSheet() {
+    const el = document.getElementById('combat-attack-sheet');
+    if (!el) return;
+    if (elements.btnCombatAttack?.disabled) return;
+    el.hidden = false;
+    el.classList.add('is-open');
+    populateAttackSheet();
+}
+
+function _attackSheetWeaponHtml() {
+    return `<button type="button" class="combat-btn combat-btn--attack" data-attack-mode="weapon" data-clog="combat_attack_weapon">
+        <span class="combat-btn__body"><span class="combat-btn__head">
+            <span class="combat-btn__label">⚔ Atak bronią</span>
+            <span class="combat-btn__cost combat-btn__cost--action">⏳ tura</span>
+        </span><span class="combat-btn__desc">Podstawowy atak (mag: kantryp 1d4, bez many)</span></span>
+    </button>`;
+}
+
+function _wireAttackSheet(list) {
+    list.querySelector('[data-attack-mode="weapon"]')?.addEventListener('click', () => {
+        closeAttackSheet(); handleCombatAttack();
+    });
+    list.querySelectorAll('.combat-btn--spell:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => { closeAttackSheet(); handleCombatSpellAttack(btn.dataset.spellKey); });
+    });
+}
+
+async function populateAttackSheet() {
+    const list = document.getElementById('combat-attack-sheet-list');
+    if (!list) return;
+    const sheet = (() => { const s = characterData?.sheet_json || characterData || {}; return typeof s === 'string' ? JSON.parse(s) : s; })();
+    const mana = sheet.current_mana ?? 0;
+    const weaponBtn = _attackSheetWeaponHtml();
+    list.innerHTML = weaponBtn + '<div style="padding:6px 12px;color:#888;font-size:0.75rem">Czary atakujące…</div>';
+    _wireAttackSheet(list);  // broń aktywna nawet jeśli czary się nie załadują
+    try {
+        if (!_cachedSpells || _cachedSpells._charId !== characterData?.id) {
+            const resp = await apiRequest('GET', `/characters/${characterData.id}/spells`);
+            _cachedSpells = resp.spells || [];
+            _cachedSpells._charId = characterData.id;
+        }
+        const offensive = (_cachedSpells || []).filter(s => s.spell_type === 'attack' || s.spell_type === 'attack_aoe');
+        const spellHtml = offensive.map(s => {
+            const cost = s.mana_cost || 2;
+            const canCast = mana >= cost;
+            const icon = s.spell_type === 'attack_aoe' ? '💥' : '🔥';
+            return `<button type="button" class="combat-btn combat-btn--spell" data-spell-key="${escapeHtml(s.spell_key)}" ${canCast ? '' : 'disabled'}>
+                <span class="combat-btn__body"><span class="combat-btn__head">
+                    <span class="combat-btn__label">${icon} ${escapeHtml(s.label || s.spell_key)}</span>
+                    <span class="combat-btn__cost combat-btn__cost--action">🔮 ${cost}</span>
+                </span><span class="combat-btn__desc">${s.damage_die ? `Obrażenia ${escapeHtml(s.damage_die)}` : 'Czar atakujący'}${canCast ? '' : ' — za mało many'}</span></span>
+            </button>`;
+        }).join('');
+        list.innerHTML = weaponBtn + (spellHtml || '<div style="padding:8px 12px;color:#888;font-size:0.75rem">Brak czarów atakujących.</div>');
+        _wireAttackSheet(list);
+    } catch {
+        list.innerHTML = weaponBtn + '<div style="padding:8px 12px;color:#f87171;font-size:0.75rem">Błąd ładowania czarów.</div>';
+        _wireAttackSheet(list);
+    }
+}
+
+function onCombatAttackButton() {
+    if (!combatActive) return;
+    if (lastCombatState?.current_turn !== 'player') { setCombatMsg('Nie twoja tura.', true); return; }
+    // Mag → menu (atak bronią/kantryp + czary atakujące). Reszta → bezpośredni atak jak dziś.
+    if (_combatIsScholar()) { openAttackSheet(); return; }
+    handleCombatAttack();
 }
 
 function setCombatMsg(text, isError) {
@@ -5088,6 +5172,7 @@ function renderCombatUI(cs) {
         const def = c.defense != null ? ` · DEF ${c.defense}` : '';
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
         if (isPlayer) {
+            const _absorb = Math.max(0, Number(c.absorb_hp ?? 0));  // B10 (#657): pula absorpcji tarczy
             const hpPct = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
             const woundHTML = renderWoundLabelHTML(hpCur, hpMax);
             const wpn = _equippedDurability.weapon;
@@ -5107,7 +5192,7 @@ function renderCombatUI(cs) {
                         </div>
                         <div class="combat-combatant__hp-row">
                             <span>HP</span>
-                            <span>${hpCur} / ${hpMax}${def}</span>
+                            <span>${hpCur} / ${hpMax}${def}${_absorb > 0 ? ` · 🛡 ${_absorb}` : ''}</span>
                         </div>
                         <div class="combat-enemy__bar">
                             <div class="combat-enemy__bar-fill combat-player__bar-fill--${hpPct}" style="width: ${pct}%"></div>
@@ -5202,7 +5287,7 @@ function renderCombatUI(cs) {
     elements.btnCombatAttack.disabled = !canAct;
     elements.btnCombatFlee.disabled = !canAct;
     if (elements.btnCombatAction) elements.btnCombatAction.disabled = !canAct;  // SF1 (#619)
-    if (!canAct) closeCombatSheet();  // SF1 (#619): poza turą gracza arkusz nie wisi otwarty
+    if (!canAct) { closeCombatSheet(); closeAttackSheet(); }  // SF1 (#619)/B6c: poza turą arkusze nie wiszą
     gate(elements.btnCombatMove, true);
     gate(elements.btnCombatDodge, true);
     gate(elements.btnCombatBlock, _equippedShield);
@@ -5223,7 +5308,7 @@ async function fetchAndAppendNewCombatTurns() {
         const newRows = rows
             .filter(row => {
                 const et = String(row?.event_type || '');
-                return row && (et === 'attack' || et === 'death' || et === 'zone_change' || et === 'reaction' || et === 'wrestling' || et === 'behavior') &&
+                return row && (et === 'attack' || et === 'death' || et === 'zone_change' || et === 'reaction' || et === 'wrestling' || et === 'wrestling_followup' || et === 'behavior') &&
                     Number(row.id) > lastRenderedCombatTurnId;
             })
             .sort((a, b) => {
@@ -5286,6 +5371,20 @@ function appendCombatTurnCard(row) {
             CRITICAL_FAILURE: `💪 Chwyt fatalny — sam przewrócony ${rolls}`
         };
         const txt = labels[oc] || `💪 Zapasy ${rolls}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble chat-bubble--cturn-player';
+        bubble.innerHTML = `<div class="cturn cturn--wrestling"><span class="cturn__icon">💪</span><span class="cturn__text">${escapeHtml(txt)}</span></div>`;
+        elements.chatMessages.appendChild(bubble);
+        return;
+    }
+
+    if (evt === 'wrestling_followup') {
+        // S17-EXT (#622) — rank ≥ 3: udane zapasy dają słabszy darmowy cios (obrażenia ÷2).
+        let meta = {};
+        try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        const dmg = meta.damage ?? row.damage ?? '?';
+        const dead = meta.enemy_dead === true ? ' — wróg pada' : '';
+        const txt = `💪 Dodatkowy cios — wróg traci ${dmg} HP (połowa obrażeń)${dead}`;
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble chat-bubble--cturn-player';
         bubble.innerHTML = `<div class="cturn cturn--wrestling"><span class="cturn__icon">💪</span><span class="cturn__text">${escapeHtml(txt)}</span></div>`;
@@ -5559,6 +5658,65 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         if (data.combat_state) { lastCombatState = data.combat_state; renderCombatUI(data.combat_state); }
         return;
     }
+    // B9 (#656): czar NIE-atakujący (kondycja) — pojedynek INT vs WIS/CON, NIE obrażenia.
+    // Karta pokazuje „łapie / opór / pomyłka", bez liczby obrażeń.
+    if (data.spell_type === 'effect' || data.spell_effect || data.block_reason === 'unsupported_effect') {
+        const COND_PL = {
+            slowed: 'spowolniony', poisoned: 'zatruty', stunned: 'ogłuszony',
+            cursed: 'przeklęty', blinded: 'oślepiony', confused: 'zdezorientowany',
+        };
+        const condPl = COND_PL[data.condition_key] || data.condition_key || 'efekt';
+        const se = data.spell_effect || {};
+        if (data.block_reason === 'unsupported_effect') {
+            setCombatMsg(data.message || 'Ten czar nie działa jeszcze w walce.', true);
+        } else if (data.condition_applied) {
+            setCombatMsg(`Czar łapie — wróg ${condPl}.`);
+        } else if (se.outcome === 'miscast' || data.player_nat1) {
+            setCombatMsg('Czar wymyka się spod kontroli!', true);
+            triggerCritFlash('fumble');
+        } else {
+            const refund = Number(data.mana_refund || 0);
+            setCombatMsg(`Wróg opiera się${refund ? ` — ${refund} many wraca` : ''}.`);
+        }
+        const csE = data.combat_state || null;
+        if (csE) { lastCombatState = csE; renderCombatUI(csE); }
+        await fetchAndAppendNewCombatTurns();
+        const payloadE = {
+            kind: 'player_attack',
+            character_name: characterData?.name || 'Bohater',
+            d20, modifiers: [], total: d20,
+            hit: !!data.condition_applied, damage: 0,
+            target_name: targetName, enemy_key: enemyKey || '',
+            attack_mode: 'spell',
+            spell_label: data.weapon_label || 'zaklęcie',
+            spell_effect: se.outcome || (data.block_reason === 'unsupported_effect' ? 'unsupported' : null),
+            condition_applied: !!data.condition_applied,
+            condition_pl: condPl,
+        };
+        await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadE)}`);
+        await refreshCharacterData();
+        return;
+    }
+    // B10 (#657): czar OBRONNY — nakłada pulę absorpcji (temp-HP), NIE atakuje wroga.
+    if (data.spell_type === 'defense') {
+        const absorb = Number(data.absorb_granted || data.absorb_hp || 0);
+        setCombatMsg(`🛡 Tarcza aktywna — pochłonie ${absorb} obrażeń.`);
+        const csD = data.combat_state || null;
+        if (csD) { lastCombatState = csD; renderCombatUI(csD); }
+        await fetchAndAppendNewCombatTurns();
+        const payloadD = {
+            kind: 'player_attack',
+            character_name: characterData?.name || 'Bohater',
+            d20, modifiers: [], total: d20, hit: true, damage: 0,
+            target_name: targetName, enemy_key: enemyKey || '',
+            attack_mode: 'spell',
+            spell_label: data.weapon_label || 'tarcza',
+            spell_defense: true, absorb,
+        };
+        await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadD)}`);
+        await refreshCharacterData();
+        return;
+    }
     if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
     else if (data.player_nat1) { setCombatMsg('Krytyczna porażka!', true); }
     else { setCombatMsg('Pudło.'); }
@@ -5607,6 +5765,13 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         enemy_dead: !!data.enemy_dead,
         combat_victory: !!victoryNow,
     };
+    // #650 (B6b): oznacz atak czarem, żeby narracja opisała MAGIĘ, nie cios wyposażoną bronią.
+    const _isSpell = (data.weapon_type || atkRoll.weapon_type) === 'spell'
+        || (data.attack_test || atkRoll.test) === 'spell_attack';
+    if (_isSpell) {
+        payload.attack_mode = 'spell';
+        payload.spell_label = data.weapon_label || atkRoll.weapon_label || 'zaklęcie';
+    }
     const dbLine = `${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
     await sendCombatNarration(dbLine);
 
@@ -5740,16 +5905,13 @@ async function handleCombatWrestle() {
         const cs = data.combat_state;
         if (data.blocked) {
             setCombatMsg('Cel poza zwarciem — najpierw się zbliż.', true);
-        } else {
-            const map = {
-                CRITICAL_SUCCESS: `💪 Chwyt mistrzowski — ${data.target} unieruchomiony!`,
-                SUCCESS: `💪 Chwyt udany — ${data.target} schwytany (spowolniony).`,
-                FAILURE: `💪 Chwyt nieudany — ${data.target} się wyrywa.`,
-                CRITICAL_FAILURE: '💪 Chwyt fatalny — sam się przewracasz!'
-            };
-            appendMessage({ role: 'system', content: map[data.outcome] || '💪 Zapasy.', created_at: new Date() });
         }
         if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+        // S17 (#612) + S17-EXT (#622): chwyt ORAZ ewentualny follow-up (rank ≥ 3 → „Dodatkowy
+        // cios") renderują się jako karty z feedu walki — natychmiast i w kolejności. Bez tego
+        // follow-up pojawiał się dopiero po turze wroga (out-of-context) → gracz go nie widział.
+        // fetchAndAppendNewCombatTurns przesuwa watermark, więc późniejszy poll tury wroga nie dubluje.
+        if (!data.blocked) await fetchAndAppendNewCombatTurns();
         if (cs && cs.current_turn !== 'player' && cs.status === 'active') {
             await pollCombatState();
         }
@@ -9817,7 +9979,7 @@ function initEventListeners() {
     elements.btnOpenCodex?.addEventListener('click', showCodexLibrary);
 
     // Combat
-    elements.btnCombatAttack?.addEventListener('click', handleCombatAttack);
+    elements.btnCombatAttack?.addEventListener('click', onCombatAttackButton);  // B6c (#651): mag → menu ataku
     elements.btnCombatFlee?.addEventListener('click', handleCombatFlee);
     elements.btnCombatMove?.addEventListener('click', handleCombatMove);
     elements.btnCombatDodge?.addEventListener('click', handleCombatDodge);
@@ -9834,6 +9996,12 @@ function initEventListeners() {
     });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && elements.combatActionSheet && !elements.combatActionSheet.hidden) closeCombatSheet();
+    });
+    // B6c (#651): arkusz „Atak" (mag) — tło/Esc zamyka; pozycje mają własne handlery.
+    document.getElementById('combat-attack-sheet-backdrop')?.addEventListener('click', closeAttackSheet);
+    document.addEventListener('keydown', (e) => {
+        const sh = document.getElementById('combat-attack-sheet');
+        if (e.key === 'Escape' && sh && !sh.hidden) closeAttackSheet();
     });
     document.getElementById('spell-picker-close')?.addEventListener('click', closeSpellPicker);
     document.getElementById('spell-picker-overlay')?.addEventListener('click', e => {
@@ -10863,9 +11031,10 @@ async function openSpellPicker() {
             _cachedSpells = resp.spells || [];
             _cachedSpells._charId = characterData.id;
         }
-        const spells = _cachedSpells;
+        // B6c (#651): atakujące czary żyją pod „Atak" — tu zostają tylko nie-atakujące.
+        const spells = (_cachedSpells || []).filter(s => s.spell_type !== 'attack' && s.spell_type !== 'attack_aoe');
         if (!spells.length) {
-            list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Brak wyuczonych zaklęć.</div>';
+            list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Brak nie-atakujących zaklęć (atakujące są pod „Atak").</div>';
             return;
         }
         const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥', narrative:'🕯' };
@@ -10934,7 +11103,7 @@ async function castSpellOutOfCombat(spellKey) {
 }
 
 async function handleCombatSpellAttack(spellKey) {
-    if (!combatActive || !currentCampaignId || combatBusy) return;
+    if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) return;
     combatBusy = true;
     elements.btnCombatAttack.disabled = true;
     document.getElementById('combat-spell-btn').disabled = true;
@@ -10962,13 +11131,30 @@ async function handleCombatSpellAttack(spellKey) {
         if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
 
         _cachedSpells = null; // Invalidate cache (mana changed)
-        await _handleCombatAttackResult(data);
+
+        // #649 (B6a): animacja kości — parytet ze zwykłym atakiem (przedtem czar jej nie miał).
+        const _atk = data.attack_roll || {};
+        const _bdParts = _atk.attack_stat
+            ? sf8AttackBreakdown(_atk, { surprise: data.surprise_atk_bonus, durability: data.durability_attack_penalty })
+            : null;
+        const _bdTotal = Number(data.attack_total ?? _atk.total ?? d20);
+        await playCombatDiceRoll(d20, 'Czar', _bdParts ? { parts: _bdParts, total: _bdTotal } : null);
+
+        await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (err) {
         setCombatMsg(err.message || 'Błąd zaklęcia.', true);
+    } finally {
+        // #649 (B6a): reset NIEZALEŻNIE od wyniku. Bez tego po udanym czarze combatBusy
+        // zostawało true i watcher tury wroga (warunek !combatBusy) nigdy nie odpalał →
+        // tura wroga wisiała do F5. Lustro finally z handleCombatAttack.
         combatBusy = false;
-        elements.btnCombatAttack.disabled = false;
-        document.getElementById('combat-spell-btn').disabled = false;
-        elements.btnCombatFlee.disabled = false;
+        if (combatActive) {
+            if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
+            elements.btnCombatAttack.disabled = false;
+            const _spellBtn = document.getElementById('combat-spell-btn');
+            if (_spellBtn) _spellBtn.disabled = false;
+            elements.btnCombatFlee.disabled = false;
+        }
     }
 }
 

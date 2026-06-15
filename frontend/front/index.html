@@ -894,6 +894,16 @@
       </div>
     </div>
 
+    <!-- B6c (#651): atak czarem jako rozwijane menu przy „Atak" (mirror arkusza Akcji) -->
+    <div id="combat-attack-sheet" class="combat-action-sheet" hidden>
+      <div class="combat-action-sheet__backdrop" id="combat-attack-sheet-backdrop"></div>
+      <div class="combat-action-sheet__panel" role="dialog" aria-label="Wybór ataku">
+        <div class="combat-action-sheet__handle"></div>
+        <div class="combat-action-sheet__title">Atak</div>
+        <div class="combat-action-sheet__list" id="combat-attack-sheet-list"></div>
+      </div>
+    </div>
+
     <!-- Spell Picker (Scholar combat) -->
     <div id="spell-picker-overlay" class="spell-picker-overlay" hidden>
       <div class="spell-picker-box">
@@ -1797,7 +1807,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=641-crit-labels-2026-06-15"></script>
+  <script src="./js/app.js?v=657-b10-shield-absorption-2026-06-15"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

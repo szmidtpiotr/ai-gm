@@ -916,20 +916,36 @@ function _openSpellForm(prefill, onSubmit) {
   const p = prefill || {};
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
-  overlay.innerHTML = `<div class="modal-box" style="width:480px">
+  const stype = p.spell_type || 'attack';
+  const tzone = p.target_zone || 'any';
+  const sopt = (v,lbl) => `<option value="${v}" ${stype===v?'selected':''}>${lbl}</option>`;
+  const zopt = (v,lbl) => `<option value="${v}" ${tzone===v?'selected':''}>${lbl}</option>`;
+  const STATS = ['STR','DEX','CON','INT','WIS','CHA'];
+  overlay.innerHTML = `<div class="modal-box" style="width:520px">
     <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj czar' : 'Nowy czar'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. magic_bolt" ${p.key?'readonly':''}></div>
       <div class="form-row"><label class="form-label">Nazwa *</label><input class="form-input" name="label" value="${_esc(p.label||'')}"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-row"><label class="form-label">Typ czaru *</label><select class="form-input" name="spell_type">${sopt('attack','Atak (1 cel)')}${sopt('attack_aoe','Atak AoE')}${sopt('heal','Leczenie')}${sopt('defense','Obrona / tarcza')}${sopt('effect','Efekt / kondycja')}</select></div>
         <div class="form-row"><label class="form-label">Tier (1-5)</label><input class="form-input" name="tier" type="number" value="${p.tier??1}" min="1" max="5"></div>
-        <div class="form-row"><label class="form-label">Koszt many</label><input class="form-input" name="mana_cost" type="number" value="${p.mana_cost??1}" min="0"></div>
-        <div class="form-row"><label class="form-label">Kość obrażeń</label><input class="form-input" name="damage_die" value="${_esc(p.damage_die||'')}" placeholder="np. d6"></div>
-        <div class="form-row"><label class="form-label">Kość leczenia</label><input class="form-input" name="heal_die" value="${_esc(p.heal_die||'')}" placeholder="np. d4"></div>
-        <div class="form-row"><label class="form-label">Strefa celu</label><select class="form-input" name="target_zone"><option value="single" ${(p.target_zone||'single')==='single'?'selected':''}>Single</option><option value="aoe" ${p.target_zone==='aoe'?'selected':''}>AoE</option><option value="self" ${p.target_zone==='self'?'selected':''}>Self</option></select></div>
-        <div class="form-row" style="align-self:end;padding-bottom:4px"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="is_active" ${(p.is_active??true)?'checked':''}> Aktywny</label></div>
+        <div class="form-row"><label class="form-label">Koszt many (1-10)</label><input class="form-input" name="mana_cost" type="number" value="${p.mana_cost??1}" min="0" max="10"></div>
+        <div class="form-row"><label class="form-label">Strefa celu</label><select class="form-input" name="target_zone">${zopt('any','Dowolna')}${zopt('self','Tylko siebie')}${zopt('engaged','Zwarcie')}${zopt('ranged','Dystans')}</select></div>
+        <div class="form-row"><label class="form-label">Kość obrażeń</label><input class="form-input" name="damage_die" value="${_esc(p.damage_die||'')}" placeholder="np. 2d6"></div>
+        <div class="form-row"><label class="form-label">Kość leczenia</label><input class="form-input" name="heal_die" value="${_esc(p.heal_die||'')}" placeholder="np. 2d6"></div>
+        <div class="form-row"><label class="form-label">Stat obrony celu</label><select class="form-input" name="effect_stat"><option value="" ${!p.effect_stat?'selected':''}>—</option>${STATS.map(s=>`<option value="${s}" ${p.effect_stat===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="form-row"><label class="form-label">Klucz kondycji (FAZA S)</label><input class="form-input" name="effect_type" value="${_esc(p.effect_type||'')}" placeholder="np. slowed, stunned"></div>
+        <div class="form-row"><label class="form-label">Czas trwania (rundy)</label><input class="form-input" name="effect_duration" type="number" value="${p.effect_duration??1}" min="1" max="10"></div>
+        <div class="form-row" style="align-self:end;padding-bottom:4px;display:flex;gap:16px">
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="aoe" ${p.aoe?'checked':''}> AoE</label>
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="is_active" ${(p.is_active??true)?'checked':''}> Aktywny</label>
+        </div>
       </div>
       <div class="form-row" style="margin-top:4px"><label class="form-label">Opis</label><textarea class="form-input" name="description" rows="2">${_esc(p.description||'')}</textarea></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-row"><label class="form-label">Ranga 2 (JSON)</label><textarea class="form-input" name="rank2_json" rows="2" placeholder='{"mana_cost":2,"damage_die":"2d8"}'>${_esc(p.rank2_json||'')}</textarea></div>
+        <div class="form-row"><label class="form-label">Ranga 3 (JSON)</label><textarea class="form-input" name="rank3_json" rows="2" placeholder='{"mana_cost":1,"damage_die":"3d6"}'>${_esc(p.rank3_json||'')}</textarea></div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
@@ -938,17 +954,25 @@ function _openSpellForm(prefill, onSubmit) {
   </div>`;
   document.body.appendChild(overlay);
   overlay.querySelector('#spell-save-btn').onclick = async () => {
-    const key = overlay.querySelector('[name="key"]').value.trim();
-    const label = overlay.querySelector('[name="label"]').value.trim();
+    const val = n => overlay.querySelector(`[name="${n}"]`).value.trim();
+    const key = val('key');
+    const label = val('label');
     if (!key || !label) { showToast('Klucz i nazwa są wymagane.', 'error'); return; }
     const data = { key, label,
-      tier: parseInt(overlay.querySelector('[name="tier"]').value,10)||1,
-      mana_cost: parseInt(overlay.querySelector('[name="mana_cost"]').value,10)||0,
-      damage_die: overlay.querySelector('[name="damage_die"]').value.trim()||null,
-      heal_die:   overlay.querySelector('[name="heal_die"]').value.trim()||null,
-      target_zone: overlay.querySelector('[name="target_zone"]').value,
+      spell_type: val('spell_type'),
+      tier: parseInt(val('tier'),10)||1,
+      mana_cost: parseInt(val('mana_cost'),10)||0,
+      target_zone: val('target_zone'),
+      damage_die: val('damage_die')||null,
+      heal_die:   val('heal_die')||null,
+      effect_stat: val('effect_stat')||null,
+      effect_type: val('effect_type')||null,
+      effect_duration: parseInt(val('effect_duration'),10)||1,
+      aoe: overlay.querySelector('[name="aoe"]').checked ? 1 : 0,
       is_active: overlay.querySelector('[name="is_active"]').checked,
-      description: overlay.querySelector('[name="description"]').value.trim()||null,
+      rank2_json: val('rank2_json')||null,
+      rank3_json: val('rank3_json')||null,
+      description: val('description')||null,
     };
     overlay.remove();
     await onSubmit(data);
@@ -1065,6 +1089,7 @@ const SE_TABLE_LABELS = {
   game_config_enemies:    'Wrogowie',
   game_config_armor:      'Zbroja',
   game_config_loot_tables:'Tabele Łupów',
+  game_config_spells:     'Czary',
 };
 const SE_SUPPORTED = Object.keys(SE_TABLE_LABELS);
 
@@ -1399,7 +1424,7 @@ function _closeSmartEntry() { if (_seOverlay) _seOverlay.classList.remove('visib
 
 function _openSmartEntryForCurrentTab() {
   const activeTab = document.querySelector('#content-tabs .stab.active')?.dataset?.tab || 'weapons';
-  const map = { weapons:'game_config_weapons', items:'game_config_items', consumables:'game_config_consumables', armor:'game_config_armor', loot:'game_config_loot_tables' };
+  const map = { weapons:'game_config_weapons', items:'game_config_items', consumables:'game_config_consumables', armor:'game_config_armor', loot:'game_config_loot_tables', spells:'game_config_spells' };
   const table = map[activeTab];
   if (!table) { showToast('Kreator AI nie obsługuje tej zakładki.', 'warn'); return; }
   _openSmartEntry(table);

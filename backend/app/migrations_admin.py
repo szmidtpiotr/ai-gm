@@ -2588,6 +2588,73 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         FROM characters c
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
     """, "v2-spells-magic-light-backfill-all")
+
+    # ── FAZA B / B8 (#655): startowy zestaw maga L1 = fire_bolt + minor_heal +
+    # ward_of_iron + detect_magic (atak/heal/obrona/utility, 4× tier 1). Dosiej
+    # ten zestaw WSZYSTKIM istniejącym scholarom — NIE-destrukcyjnie (INSERT OR
+    # IGNORE: stare czary magic_bolt/mend_wounds/magic_light zostają nietknięte).
+    # Decyzja obronna: ward_of_iron (tier 1), NIE mage_armor (tier 2) — spójność
+    # z bramką nauki L1 z B7. Czary zaseedowane w B6 (v2-spells-faza-b-seed).
+    _exec("""
+        INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank)
+        SELECT c.id, s.spell_key, 1
+        FROM characters c
+        CROSS JOIN (
+            SELECT 'fire_bolt' AS spell_key UNION ALL
+            SELECT 'minor_heal' UNION ALL
+            SELECT 'ward_of_iron' UNION ALL
+            SELECT 'detect_magic'
+        ) s
+        WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+    """, "v2-spells-faza-b-b8-starter-backfill")
+
+    # ── FAZA B / B6 (#648): seed czarów maga Faza 1 z rpg_spells_design_doc.md ──
+    # Adoptowalne dziś: atak single-target / heal-self / self-buff obronny /
+    # kondycje mapowane na ISTNIEJĄCE stany FAZY S (zero duplikatu stanu).
+    # Poza zakresem: AoE (→ B11, po #595), summon/ally/reakcje (→ Blok 3).
+    # effect_type wskazuje klucz game_config_conditions (slowed/cursed/poisoned/
+    # blinded/confused/stunned). Naliczanie kondycji w silniku = B9 (tu tylko dane).
+    # rank2/rank3_json = NULL (skalowanie rang = tuning po B7/B13). Wartości = doc.
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, rank2_json, rank3_json) VALUES
+        ('fire_bolt',       'Ognisty Pocisk',      1, 2, 'attack',    '1d8', NULL,  NULL,  NULL,       1, 'any',     0, 'Skupiona kula ognia ciśnięta w cel; może go podpalić.',                       NULL, NULL),
+        ('frost_bolt',      'Mroźna Strzała',      1, 2, 'attack',    '1d8', NULL,  NULL,  NULL,       1, 'any',     0, 'Lodowaty bełt uderza w cel, mrożąc go (przy trafieniu może spowolnić).',      NULL, NULL),
+        ('acid_splash',     'Plusk Kwasu',         1, 1, 'attack',    '1d6', NULL,  NULL,  NULL,       1, 'nearby',  0, 'Fala parzącej cieczy żre cel i jego zbroję.',                                 NULL, NULL),
+        ('lightning_arrow', 'Piorunowy Grot',      2, 3, 'attack',    '2d6', NULL,  NULL,  NULL,       1, 'any',     0, 'Naładowany elektrycznie pocisk razi cel energią.',                            NULL, NULL),
+        ('ice_lance',       'Lodowa Lanca',        2, 3, 'attack',    '2d8', NULL,  NULL,  NULL,       1, 'any',     0, 'Ciężka kolumna lodu przeszywa cel z impetem tarana (krit: frozen).',          NULL, NULL),
+        ('inferno_strike',  'Uderzenie Inferno',   3, 4, 'attack',    '3d6', NULL,  NULL,  NULL,       1, 'any',     0, 'Skupiony żar piekielnego ognia wybucha w jednym punkcie.',                    NULL, NULL),
+        ('minor_heal',      'Leczniczy Dotyk',     1, 1, 'heal',      NULL,  '1d6', NULL,  NULL,       1, 'self',    0, 'Strumień kojącej energii zamyka rany rzucającego.',                           NULL, NULL),
+        ('ward_of_iron',    'Żelazna Straż',       1, 2, 'defense',   NULL,  NULL,  NULL,  NULL,       1, 'self',    0, 'Niewidoczne pole ochronne pochłania następne trafienie (absorpcja: B10).',    NULL, NULL),
+        ('mage_armor',      'Zbroja Maga',         2, 3, 'defense',   NULL,  NULL,  NULL,  NULL,       1, 'self',    0, 'Warstwa zmaterializowanej energii zwiększa pancerz rzucającego.',             NULL, NULL),
+        ('frost_grip',      'Mroźny Uchwyt',       1, 2, 'effect',    NULL,  NULL,  'WIS', 'slowed',   2, 'any',     0, 'Przenikliwy mróz krępuje ruchy celu — slowed.',                               NULL, NULL),
+        ('hex',             'Klątwa',              2, 2, 'effect',    NULL,  NULL,  'WIS', 'cursed',   3, 'any',     0, 'Mroczna klątwa osłabia ducha celu — cursed.',                                 NULL, NULL),
+        ('poison_touch',    'Trujący Dotyk',       2, 2, 'effect',    '1d4', NULL,  'WIS', 'poisoned', 3, 'engaged', 0, 'Magiczna trucizna na dłoni zatruwa cel — poisoned.',                          NULL, NULL),
+        ('blind',           'Oślepienie',          2, 3, 'effect',    NULL,  NULL,  'WIS', 'blinded',  2, 'any',     0, 'Fala oślepiającego światła odbiera celowi wzrok — blinded.',                  NULL, NULL),
+        ('confusion',       'Zamęt',               3, 3, 'effect',    NULL,  NULL,  'WIS', 'confused', 2, 'any',     0, 'Chaotyczne obrazy dezorientują cel — confused.',                              NULL, NULL),
+        ('stun_bolt',       'Piorun Ogłuszenia',   4, 4, 'effect',    '1d6', NULL,  'WIS', 'stunned',  1, 'any',     0, 'Skondensowana kula energii ogłusza zmysły celu — stunned.',                   NULL, NULL),
+        ('detect_magic',    'Wykrycie Magii',      1, 1, 'narrative', NULL,  NULL,  NULL,  NULL,       0, 'self',    0, 'Trzecie oko rzucającego widzi aurę magiczną wokół przedmiotów i istot.',      NULL, NULL)
+    """, "v2-spells-faza-b-seed")
+
+    # ── FAZA B / B10 (#657): pula absorpcji (temp-HP) dla tarcz maga ──────────
+    # ward_of_iron/mage_armor dostają effect_json.absorb — ile obrażeń wroga pula
+    # pochłonie, zanim spadnie HP. Wartości startowe (Numbers Policy): ward 6 (T1),
+    # mage 10 (T2); płaskie, NIE stackują, combat-scoped. NIE-destrukcyjne.
+    # Silnik czyta to przez spell_service.defense_absorb_amount. Kolumna effect_json
+    # NIE istniała na game_config_spells — najpierw ją dodajemy (idempotentnie).
+    _exec("""
+        ALTER TABLE game_config_spells ADD COLUMN effect_json TEXT
+    """, "v2-spells-effect-json-col")
+    _exec("""
+        UPDATE game_config_spells SET effect_json = '{"absorb":6}'
+        WHERE key = 'ward_of_iron'
+    """, "v2-spells-b10-ward-absorb")
+    _exec("""
+        UPDATE game_config_spells
+        SET effect_json = '{"absorb":10}',
+            description = 'Warstwa zmaterializowanej energii pochłania nadchodzące obrażenia (pula absorpcji).'
+        WHERE key = 'mage_armor'
+    """, "v2-spells-b10-mage-absorb")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Knowledge Book (tips shown during travel/rest) ───────────────────────

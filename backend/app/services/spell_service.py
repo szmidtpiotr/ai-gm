@@ -73,6 +73,36 @@ def get_spell_stats_at_rank(spell: dict, rank: int) -> dict:
     return base
 
 
+# ── Defense / absorption (B10 #657) ───────────────────────────────────────────
+
+# Fallback puli absorpcji wg tieru, gdy spell.effect_json nie podaje `absorb`.
+# Wartości startowe (Numbers Policy #657) — tuning po playteście B13.
+_ABSORB_FALLBACK_BY_TIER = {1: 4, 2: 8, 3: 12, 4: 16, 5: 20}
+
+
+def defense_absorb_amount(spell_row) -> int:
+    """Ile temp-HP (pula absorpcji) daje czar obronny (B10).
+
+    Czyta `effect_json.absorb` (źródło prawdy, edytowalne z panelu admina B12);
+    brak/niepoprawny → fallback wg tieru (≥4, nigdy 0). Płaska wartość — bez INT_mod
+    (przewidywalna tarcza; kandydat na skalowanie po B13)."""
+    raw = None
+    if isinstance(spell_row, dict):
+        raw = spell_row.get("effect_json")
+        tier = int(spell_row.get("tier") or 1)
+    else:  # sqlite3.Row
+        raw = spell_row["effect_json"] if "effect_json" in spell_row.keys() else None
+        tier = int((spell_row["tier"] if "tier" in spell_row.keys() else 1) or 1)
+    if raw:
+        try:
+            absorb = int(json.loads(raw).get("absorb"))
+            if absorb > 0:
+                return absorb
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return _ABSORB_FALLBACK_BY_TIER.get(tier, max(4, tier * 4))
+
+
 # ── Mana management ───────────────────────────────────────────────────────────
 
 def check_and_deduct_mana(sheet: dict, mana_cost: int) -> tuple[bool, int]:
@@ -257,13 +287,98 @@ def record_spell_use(character_id: int, spell_key: str, conn=None) -> dict:
             conn.close()
 
 
+# ── B7 (#652): tier-gating nauki + model trafienia czaru (D-spell) ───────────
+
+def max_spell_tier_for_level(level: int) -> int:
+    """Bramka tieru: max_tier = ceil(level/2). Tier T wymaga poziomu 2T-1.
+
+    L1-2→T1, L3-4→T2, L5-6→T3, … Wartości startowe (Numbers Policy, tuning po B13).
+    """
+    lvl = max(1, int(level or 1))
+    return (lvl + 1) // 2
+
+
+# Kondycja czaru → stat OBRONY celu (D-spell, CZĘŚĆ AK.6): WIS=umysł, CON=ciało.
+# Klucze = istniejące kondycje FAZY S (reużycie, zero duplikatu).
+_SPELL_SAVE_STAT = {
+    "confused": "WIS", "cursed": "WIS", "blinded": "WIS", "charmed": "WIS", "feared": "WIS",
+    "slowed": "CON", "frozen": "CON", "stunned": "CON", "poisoned": "CON",
+}
+
+
+def spell_save_stat(condition_key: str) -> str:
+    """Stat, którym cel broni się przed czarem nie-atakującym. Fallback = CON (ciało)."""
+    return _SPELL_SAVE_STAT.get(str(condition_key or "").strip().lower(), "CON")
+
+
+def resolve_spell_opposed_save(
+    caster_sheet: dict, target_stats: dict, condition_key: str, rng=random
+) -> dict:
+    """Pojedynek trafienia czaru nie-atakującego (D-spell):
+    `d20 + INT_mod` (mag) vs `d20 + stat_obrony_mod` (cel). Remis → mag wygrywa.
+
+    Czary ATAKUJĄCE nie używają tej ścieżki (d20+INT vs unik wroga — #475 nietknięte).
+    Stat obrony zależy od efektu (WIS umysł / CON ciało). Czyste — bez DB, rng wstrzykiwalny.
+    """
+    from app.services.vitality_service import stat_modifier
+
+    int_mod = stat_modifier(int((caster_sheet.get("stats") or {}).get("INT", 10) or 10))
+    save_stat = spell_save_stat(condition_key)
+    tgt_val = int((target_stats or {}).get(save_stat, 10) or 10)
+    target_mod = (tgt_val - 10) // 2
+    caster_roll = rng.randint(1, 20)
+    target_roll = rng.randint(1, 20)
+    caster_total = caster_roll + int_mod
+    target_total = target_roll + target_mod
+    return {
+        "landed": caster_total >= target_total,  # remis → mag
+        "save_stat": save_stat,
+        "caster_roll": caster_roll, "int_mod": int_mod, "caster_total": caster_total,
+        "target_roll": target_roll, "target_mod": target_mod, "target_total": target_total,
+    }
+
+
+def mana_refund_on_resist(mana_cost: int) -> int:
+    """Zwrot ½ many (floor) gdy cel się oparł — kara = tylko tura, jak pudło wojownika.
+
+    Pełna mana gdy czar łapie / przy miscast (rozliczane przez wywołującego).
+    """
+    return max(0, int(mana_cost or 0)) // 2
+
+
+def resolve_combat_effect_spell(
+    caster_sheet: dict, target_stats: dict, condition_key: str,
+    mana_cost: int, raw_d20: int | None = None, rng=random,
+) -> dict:
+    """B9 (#656): rozstrzygnięcie czaru NIE-atakującego (kondycja) w walce.
+
+    Model trafienia D-spell (CZĘŚĆ AK.6): pojedynek przeciwny `d20+INT_mod (mag)` vs
+    `d20+stat_obrony_mod (cel)` — NIE rzut na unik. Stat obrony wg kondycji
+    (`spell_save_stat`: WIS umysł / CON ciało). Mana wydawana z góry przez wywołującego;
+    przy oporze ½ many wraca (`mana_refund_on_resist`). Nat 1 = miscast (pełna mana).
+
+    Czysta funkcja — apply-condition i persist robi `combat_service` (jedno źródło
+    persistu walki). Zwraca {outcome, condition_applied, save_stat, mana_refund, save}.
+    """
+    save_stat = spell_save_stat(condition_key)
+    if raw_d20 == 1:
+        return {"outcome": "miscast", "condition_applied": False,
+                "save_stat": save_stat, "mana_refund": 0, "save": None}
+    save = resolve_spell_opposed_save(caster_sheet, target_stats, condition_key, rng=rng)
+    if save.get("landed"):
+        return {"outcome": "landed", "condition_applied": True,
+                "save_stat": save_stat, "mana_refund": 0, "save": save}
+    return {"outcome": "resisted", "condition_applied": False,
+            "save_stat": save_stat, "mana_refund": mana_refund_on_resist(mana_cost), "save": save}
+
+
 def learn_spell(character_id: int, spell_key: str) -> dict:
-    """Add a spell at rank 1 to character_spells."""
+    """Add a spell at rank 1 to character_spells. B7 (#652): bramkuje tier wg poziomu."""
     conn = _get_db()
     try:
         # Verify spell exists
         spell = conn.execute(
-            "SELECT key, label FROM game_config_spells WHERE key = ?",
+            "SELECT key, label, tier FROM game_config_spells WHERE key = ?",
             (spell_key,),
         ).fetchone()
         if not spell:
@@ -288,6 +403,14 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
                 char_level = int(_j.loads(sj_row["sheet_json"] or "{}").get("level") or 1)
             except Exception:
                 char_level = 1
+        # B7 (#652): bramka tieru — nie wolno nauczyć się czaru ponad max_tier dla poziomu.
+        spell_tier = int(spell["tier"] or 1) if "tier" in spell.keys() else 1
+        max_tier = max_spell_tier_for_level(char_level)
+        if spell_tier > max_tier:
+            raise ValueError(
+                f"Za niski poziom: „{spell['label']}” to tier {spell_tier}, "
+                f"wymaga poziomu {spell_tier * 2 - 1}+ (masz {char_level})."
+            )
         conn.execute(
             "INSERT INTO character_spells (character_id, spell_key, rank, learned_at_level) VALUES (?, ?, 1, ?)",
             (character_id, spell_key, char_level),
@@ -402,12 +525,14 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
 def grant_starting_spells(
     character_id: int, conn: sqlite3.Connection | None = None
 ) -> None:
-    """Grant Scholar's starting spells: magic_bolt R1 and mend_wounds R1."""
+    """Grant Scholar's L1 starting kit (B8 #655): fire_bolt, minor_heal,
+    ward_of_iron, detect_magic — pełna tożsamość maga (atak/heal/obrona/utility),
+    4× tier 1 (spójne z bramką nauki L1 z B7). Wszystkie R1."""
     managed = conn is None
     if managed:
         conn = _get_db()
     try:
-        for spell_key in ("magic_bolt", "mend_wounds", "magic_light"):
+        for spell_key in ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic"):
             conn.execute(
                 "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
                 (character_id, spell_key),

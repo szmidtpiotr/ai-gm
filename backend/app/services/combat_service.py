@@ -571,6 +571,22 @@ def _hidden_conditions(combatant: dict[str, Any], *, sheet: dict[str, Any] | Non
     return out
 
 
+# B4 (#645): łotrzyk — sneak attack jako cecha klasy (decyzja D2, Piotr 2026-06-15).
+# Wartość startowa kości (Numbers Policy — tuning po B5/B13). Płaska, niezależna od poziomu.
+ROGUE_SNEAK_ATTACK_DICE = "1d6"
+
+
+def _sneak_attack_bonus(sheet: dict[str, Any] | None) -> int:
+    """B4 (#645): dodatkowe obrażenia sneak attack łotrzyka atakującego z ukrycia.
+
+    CECHA KLASY — rzut tylko dla ``archetype == 'rogue'``; każda inna klasa (oraz
+    brak/niepełny sheet) → 0 bez rzutu. Add ponad generyczny ``ambush_bonus``
+    (S19 #614). Liczy silnik (``roll_damage_dice``); LLM tylko opisuje."""
+    if str((sheet or {}).get("archetype") or "").strip().lower() != "rogue":
+        return 0
+    return int(roll_damage_dice(ROGUE_SNEAK_ATTACK_DICE, 0))
+
+
 def _roll_ambush_bonus(conditions: list[dict[str, Any]]) -> int:
     """Suma rzutów `ambush_bonus` (value = kość, np. 2d6) z podanych kondycji. RAZ na atak."""
     total = 0
@@ -1597,6 +1613,259 @@ def get_active_combat(campaign_id: int) -> dict[str, Any] | None:
 
 
 # ── Stage 3 Z4: apply a condition to a combatant by enemy_key/name ─────────
+
+def _resolve_effect_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    enemy: dict, target_id, spell_row, raw_d20, out: dict[str, Any],
+) -> dict[str, Any]:
+    """B9 (#656): rozlicz czar NIE-atakujący (kondycja) w aktywnej walce.
+
+    Pojedynek przeciwny INT vs stat obrony celu (`spell_service.resolve_combat_effect_spell`):
+      • łapie  → `apply_condition_to_combatant` (reużycie kondycji FAZY S), pełna mana
+      • opór   → kondycja NIE nałożona, ½ many zwrócona (kara = tylko tura)
+      • Nat 1  → miscast (pełna mana, bez kondycji)
+    Czar kontroli NIE zadaje obrażeń. Tury NIE zaawansowujemy tu — parytet z atakiem gracza
+    (turę „zużywa" pierwszy enemy-turn, jak przy zwykłym ataku).
+    """
+    from app.services import spell_service
+
+    condition_key = str(spell_row["effect_type"] or "").strip().lower()
+    mana_cost = int(spell_row["mana_cost"] or 0)
+    label = str(spell_row["label"] or spell_row["key"])
+    spell_k = str(spell_row["key"])
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_effect"
+    out["spell_type"] = "effect"
+    out["condition_key"] = condition_key
+    out["target_id"] = target_id
+    out["target_name"] = str(enemy.get("name") or "") or None
+    out["enemy_key"] = str(enemy.get("enemy_key") or "")
+    out["damage"] = 0  # czar kontroli nie zadaje obrażeń
+
+    # Mana z góry (pełny koszt; ½ wraca przy oporze). Darmowy czar (mana 0) pomija kontrolę.
+    if mana_cost > 0:
+        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+        conn.commit()
+
+    player_raw = int(raw_d20) if raw_d20 is not None else None
+    target_stats = enemy.get("stats") if isinstance(enemy.get("stats"), dict) else {}
+    resolution = spell_service.resolve_combat_effect_spell(
+        sheet, target_stats, condition_key, mana_cost, raw_d20=player_raw,
+    )
+    out["spell_effect"] = resolution
+    out["player_raw_d20"] = player_raw
+    out["player_nat1"] = (player_raw == 1)
+
+    if resolution["outcome"] == "miscast":
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        out["miscast"] = _miscast
+        out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+        conn.commit()
+        out["hit"] = False
+        out["condition_applied"] = False
+    elif resolution["outcome"] == "landed":
+        # Persist combatants (identity/zone) PRZED apply-condition: apply_condition_to_combatant
+        # czyta świeży stan z DB i dopisuje kondycję — kolejność chroni przed nadpisaniem.
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+        target_ref = str(enemy.get("enemy_key") or enemy.get("name") or target_id)
+        _ac = apply_condition_to_combatant(campaign_id, target_ref, condition_key)
+        out["condition_result"] = _ac
+        out["condition_applied"] = bool(_ac.get("ok")) and _ac.get("reason") in (
+            "applied", "level_bumped", "level_capped", "already_present",
+        )
+        out["hit"] = bool(out["condition_applied"])
+    else:  # resisted → zwrot ½ many, brak kondycji
+        refund = int(resolution.get("mana_refund") or 0)
+        if refund > 0:
+            cur = int(sheet.get("current_mana", 0) or 0)
+            mx = int(sheet.get("max_mana", 0) or 0)
+            sheet["current_mana"] = min(mx, cur + refund) if mx > 0 else cur + refund
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+            )
+            conn.commit()
+        out["mana_refund"] = refund
+        out["condition_applied"] = False
+        out["hit"] = False
+
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+
+    # Progresja rangi czaru — udane rzucenie liczy się jak użycie (jak czary atakujące).
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn,
+        combat_id=cid,
+        campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor="player",
+        event_type="spell_effect",
+        roll_value=int(player_raw) if player_raw is not None else None,
+        damage=0,
+        hp_after=int(enemy.get("hp_current", 0) or 0),
+        target_id=target_id,
+        target_name=str(enemy.get("name") or "") or None,
+        hit=bool(out.get("condition_applied")),
+        narrative=json.dumps(
+            {
+                "spell_key": spell_k, "spell_label": label,
+                "condition": condition_key, "outcome": resolution["outcome"],
+                "save_stat": resolution.get("save_stat"),
+                "mana_refund": int(out.get("mana_refund") or 0),
+            },
+            ensure_ascii=False,
+        ),
+    )
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def _apply_absorption(p: dict, dmg: int, out: dict[str, Any]) -> int:
+    """B10 (#657): pula absorpcji (temp-HP tarczy) pochłania obrażenia PRZED HP.
+
+    Wpinane w ścieżki obrażeń wroga PO uniku/bloku, PRZED `next_hp = max(0, prev-dmg)`.
+    Mutuje `p["absorb_hp"]` (usuwa klucz gdy pula 0) i dopisuje `out.absorbed` /
+    `out.absorb_remaining`. Zwraca obrażenia POZOSTAŁE do zadania w HP."""
+    pool = int(p.get("absorb_hp", 0) or 0)
+    if pool <= 0 or dmg <= 0:
+        return dmg
+    soaked = min(pool, dmg)
+    pool -= soaked
+    dmg -= soaked
+    if pool > 0:
+        p["absorb_hp"] = pool
+    else:
+        p.pop("absorb_hp", None)
+    out["absorbed"] = soaked
+    out["absorb_remaining"] = pool
+    return dmg
+
+
+def _resolve_defense_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    spell_row, out: dict[str, Any],
+) -> dict[str, Any]:
+    """B10 (#657): czar OBRONNY (ward_of_iron/mage_armor) w aktywnej walce.
+
+    Nakłada pulę absorpcji (temp-HP) na combatanta gracza:
+      • odejmij PEŁNĄ manę (tarcza nie „pudłuje" — brak zwrotu); za mało → blocked
+      • `absorb_hp` = wartość czaru (NIE stackuje — re-cast = świeża pula)
+      • ZERO obrażeń wrogowi; tury NIE zaawansowujemy (parytet z atakiem/efektem)
+    Pula żyje na combatancie (combat-scoped) — znika po walce, nie brudzi sheet_json.
+    """
+    from app.services import spell_service
+
+    label = str(spell_row["label"] or spell_row["key"])
+    spell_k = str(spell_row["key"])
+    mana_cost = int(spell_row["mana_cost"] or 0)
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_defense"
+    out["spell_type"] = "defense"
+    out["damage"] = 0  # tarcza nie zadaje obrażeń
+
+    if mana_cost > 0:
+        _mana_ok, _ = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+        )
+
+    # effect_json (pula absorpcji) — osobny fetch, by detekcja nie selektowała kolumny,
+    # której mogą nie mieć izolowane fikstury testowe (real schema zawsze ją ma).
+    _ej_row = conn.execute(
+        "SELECT effect_json FROM game_config_spells WHERE key = ? AND is_active = 1",
+        (spell_k,),
+    ).fetchone()
+    absorb = spell_service.defense_absorb_amount(
+        {"key": spell_k, "tier": int(spell_row["tier"] or 1),
+         "effect_json": (_ej_row["effect_json"] if _ej_row else None)},
+    )
+    p = _find_combatant(combatants, "player")
+    if not p:
+        raise ValueError("player combatant missing")
+    p["absorb_hp"] = absorb  # NIE stackuje — świeża pula = wartość czaru
+
+    out["hit"] = True
+    out["absorb_granted"] = absorb
+    out["absorb_hp"] = absorb
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+    out["message"] = (
+        f"Rzucasz {label} — magiczna tarcza pochłonie {absorb} obrażeń."
+    )
+
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn,
+        combat_id=cid,
+        campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor="player",
+        event_type="spell_defense",
+        roll_value=None,
+        damage=0,
+        hp_after=int(p.get("hp_current", 0) or 0),
+        target_id="player",
+        target_name=str(p.get("name") or "Bohater"),
+        hit=True,
+        narrative=json.dumps(
+            {"spell_key": spell_k, "spell_label": label, "absorb": absorb,
+             "mana_cost": mana_cost},
+            ensure_ascii=False,
+        ),
+    )
+    _persist_combatants(conn, row, combatants)
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
 
 def apply_condition_to_combatant(
     campaign_id: int, enemy_ref: str, condition_key: str,
@@ -3202,6 +3471,51 @@ def resolve_attack(
             if not enemy:
                 raise ValueError("enemy combatant missing")
 
+            # ── B9 (#656): czar NIE-atakujący (kondycja) — pojedynek INT vs WIS/CON, NIE unik ──
+            # Wykrywamy PRZED ścieżką ataku/obrażeń: czar `effect` w walce nakłada kondycję
+            # FAZY S testem przeciwnym (decyzja D-spell), zamiast zadawać obrażenia jak broń.
+            if spell_key:
+                _eff_row = conn.execute(
+                    "SELECT key, label, spell_type, effect_type, effect_duration, mana_cost, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _eff_row and str(_eff_row["spell_type"] or "").strip().lower() == "effect":
+                    _cond_k = str(_eff_row["effect_type"] or "").strip().lower()
+                    _has_cond = conn.execute(
+                        "SELECT 1 FROM game_config_conditions WHERE key = ? AND is_active = 1",
+                        (_cond_k,),
+                    ).fetchone()
+                    if _has_cond:
+                        return _resolve_effect_spell_in_combat(
+                            conn, row, campaign_id, ch_id, sheet, combatants,
+                            enemy, target_id, _eff_row, raw_d20, out,
+                        )
+                    # Efekt bez kondycji w katalogu FAZY S (np. sleep→sleeping): nie wspieramy
+                    # w Fazie 1 — łagodne odbicie, tura nietknięta (zero duplikatu stanów).
+                    out["hit"] = False
+                    out["blocked"] = True
+                    out["block_reason"] = "unsupported_effect"
+                    out["message"] = (
+                        f"Czar „{_eff_row['label']}” nie jest jeszcze wspierany w walce."
+                    )
+                    out["combat_state"] = _row_to_combat_dict(row)
+                    return out
+
+            # ── B10 (#657): czar OBRONNY (ward_of_iron/mage_armor) — pula absorpcji ──
+            # Self-buff: nakłada temp-HP na combatanta gracza, NIE atakuje wroga.
+            # Wykrywany PRZED ścieżką ataku (inaczej wpadał w fallback 2d6 — ukryty bug).
+            if spell_key:
+                _def_row = conn.execute(
+                    "SELECT key, label, spell_type, mana_cost, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _def_row and str(_def_row["spell_type"] or "").strip().lower() == "defense":
+                    return _resolve_defense_spell_in_combat(
+                        conn, row, campaign_id, ch_id, sheet, combatants, _def_row, out,
+                    )
+
             card_key, card_name = _roll_card_enemy_identity(conn, enemy, str(target_id))
             old_ek = str(enemy.get("enemy_key") or "").strip().lower()
             if old_ek in ("", "enemy"):
@@ -3448,6 +3762,13 @@ def resolve_attack(
                         if _ambush:
                             dmg += _ambush
                             out["ambush_bonus"] = _ambush
+                        # B4 (#645): łotrzyk — sneak attack PONAD ambush, oddzielny add
+                        # PO mnożniku (jak ambush/gear — NIE podwajany na cricie/nat20).
+                        # Cecha klasy: rzut tylko dla rogue (inni → 0).
+                        _sneak = _sneak_attack_bonus(sheet)
+                        if _sneak:
+                            dmg += _sneak
+                            out["sneak_attack"] = _sneak
                         _remove_combatant_conditions(_pc_for_dmg, _hidden)
                 out["damage"] = dmg
                 prev_hp = int(enemy.get("hp_current", 0) or 0)
@@ -4049,6 +4370,8 @@ def resolve_attack(
                     out["reaction"] = _block
                     if _block.get("available"):
                         dmg = int(_block.get("damage_after", dmg))
+            # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
+            dmg = _apply_absorption(p, dmg, out)
             out["damage"] = dmg
             prev = int(p.get("hp_current", 0) or 0)
             next_hp = max(0, prev - dmg)
@@ -4249,6 +4572,8 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         p.pop("reaction_declared", None)
         p["reaction_used_round"] = round_n
 
+        # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
+        dmg = _apply_absorption(p, dmg, out)
         out["damage"] = dmg
         prev = int(p.get("hp_current", 0) or 0)
         next_hp = max(0, prev - dmg)
@@ -4608,6 +4933,55 @@ def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[s
                 "enemy_roll": enemy_d20, "enemy_total": opponent_total, "stat": stat,
             }, ensure_ascii=False),
         )
+
+        # S17-EXT (#622) Część A (solo): udane zapasy gracza z wrestling rank ≥ 3 nagradzają
+        # SŁABSZYM darmowym ciosem w tej samej turze. Rank 1–2 = czysta kontrola (baza nietknięta
+        # = balans chroniony; darmowy atak bezwarunkowo obsoletowałby „Atak"). Reuse ekonomii
+        # `extra_action` (S12): follow-up NIE konsumuje kolejnej akcji — wrestling i tak woła
+        # advance_turn() RAZ. Jeden cios na zapasy (inline event, brak pętli/rekurencji), obrażenia
+        # ÷2 (floor, min 1), BEZ nat-20-double, BEZ ponownego wyzwalania zapasów. RZUTY ATAKU w
+        # walce (nat 20/nat 1) NIETKNIĘTE — follow-up to osobny, słabszy cios. Część B (MP przewaga
+        # sojusznika) ⛔ FAZA 5. Liczby = wartości startowe (Numbers Policy → tuning po B5/B13).
+        followup: dict[str, Any] | None = None
+        _oc = str(derived["outcome"]).strip().upper()
+        if skill_rank >= 3 and _oc in ("SUCCESS", "CRITICAL_SUCCESS"):
+            try:
+                _fw = resolve_sheet_weapon(conn, sheet, int(row["character_id"])) or {}
+                _die = str(_fw.get("damage_die") or "1d6").strip().lower()
+                _dstat = str(_fw.get("linked_stat") or "STR").upper()
+                _wlabel = str(_fw.get("label") or "broń")
+            except Exception:
+                _die, _dstat, _wlabel = "1d6", "STR", "broń"
+            _raw = roll_damage_dice(_die, _stat_mod(sheet, _dstat))
+            _half = max(1, _raw // 2)  # ÷2 floor, min 1 — słabszy cios
+            _prev_hp = int(target.get("hp_current", 0) or 0)
+            _new_hp = max(0, _prev_hp - _half)
+            target["hp_current"] = _new_hp
+            _fdead = _new_hp <= 0
+            tn2 = _next_combat_log_sequence(conn, cid)
+            log_combat_turn(
+                conn,
+                combat_id=cid,
+                campaign_id=campaign_id,
+                turn_number=tn2,
+                actor="player",
+                event_type="wrestling_followup",
+                roll_value=None,
+                damage=_half,
+                hp_after=_new_hp,
+                target_id=str(target.get("id")),
+                target_name=target_name,
+                hit=True,
+                narrative=json.dumps({
+                    "raw_damage": _raw, "damage": _half, "halved": True,
+                    "weapon_label": _wlabel, "enemy_dead": _fdead, "skill_rank": skill_rank,
+                }, ensure_ascii=False),
+            )
+            followup = {
+                "damage": _half, "raw_damage": _raw, "weapon_label": _wlabel,
+                "target_hp_remaining": _new_hp, "enemy_dead": _fdead,
+            }
+
         _persist_combatants(conn, row, combatants)
         conn.commit()
 
@@ -4626,6 +5000,7 @@ def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[s
         "stat": stat,
         "target": target_name,
         "applied": applied,
+        "followup": followup,
         "combat_state": load_combat_snapshot(campaign_id),
     }
 

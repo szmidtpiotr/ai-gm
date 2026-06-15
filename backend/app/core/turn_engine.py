@@ -34,6 +34,24 @@ def _user_text_for_llm_context(raw: str | None) -> str:
             "Gracz zakończył walkę w silniku przez ucieczkę. Opisz dynamicznie moment wycofania "
             "się z walki i natychmiastowe konsekwencje (2–4 zdania). Nie kończ pytaniem o następną akcję."
         )
+    # #650 (B6b): atak czarem — bez tego LLM widzi tylko surowy JSON trafienia + wyposażoną
+    # broń (laska) w bloku ekwipunku i opisuje cios bronią zamiast zaklęcia. Daj mu jawną
+    # instrukcję, że to MAGIA. Silnik liczy trafienie/obrażenia — tu tylko poprawiamy OPIS.
+    if d.get("kind") == "player_attack" and str(d.get("attack_mode") or "").lower() == "spell":
+        spell_label = (str(d.get("spell_label") or "").strip()) or "zaklęcie"
+        target = (str(d.get("target_name") or "").strip()) or "wroga"
+        if d.get("player_nat1"):
+            outcome = "Zaklęcie wymyka się spod kontroli (krytyczna porażka)"
+        elif d.get("hit"):
+            dmg = d.get("damage") or 0
+            outcome = f"Zaklęcie trafia ({dmg} obrażeń)" if dmg else "Zaklęcie trafia"
+        else:
+            outcome = "Zaklęcie chybia (cel uniknął)"
+        return (
+            f"Bohater rzuca zaklęcie „{spell_label}” na {target}. {outcome}. "
+            "Opisz to jako akt MAGII — gesty, sploty energii, runy, żywioł zaklęcia — "
+            "a NIE jako cios bronią fizyczną (bohater NIE atakuje laską ani mieczem)."
+        )
     summary = (d.get("summary_line") or "").strip()
     intent = (d.get("intent") or "").strip()
     if summary and intent:

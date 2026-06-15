@@ -10,9 +10,10 @@ Formulas:
   Mana = 8 + INT_modifier × level                     (Scholar only, min 1)
   Mana = 0                                             (Warrior)
 
-Base HP constants match game_config_archetypes.hp_base:
-  Warrior: 10
-  Scholar: 6
+Base HP constants (canonical class balance, game_mechanics.md CZĘŚĆ AK.2):
+  Warrior: 10   (tank — najwięcej HP)
+  Rogue:    8   (zwiadowca — mniej niż warrior, więcej niż mag)
+  Scholar:  6   (glass cannon — najmniej HP)
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from __future__ import annotations
 
 ARCHETYPE_BASE_HP: dict[str, int] = {
     "warrior": 10,
-    "rogue":   10,   # explicit (was missing → fell through to .get default 10)
+    "rogue":   8,    # B2 (#642): zwiadowca — mniej HP niż warrior, więcej niż mag
     "scholar": 6,
     "ranger":  8,    # future archetype — forward-compatible
 }
