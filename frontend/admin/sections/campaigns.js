@@ -291,6 +291,19 @@ function filterTableGeneric(input, tableId, nameClass) {
     } catch(e) { _showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera'; }
   }
 
+  // HI5 (#628): otwórz Inspektora Bohatera (modal HI2) dla bohatera tej kampanii.
+  // REUSE — dynamiczny import sekcji „Bohaterowie"; ten sam URL/wersja co loader sekcji
+  // (?v=37) → ta sama instancja modułu w cache, bez podwójnego fetchu. Modal sam dba o
+  // banery #1013 + live-lock i guardowane zapisy (audyt + 409).
+  async function _campOpenInspector(charId) {
+    try {
+      const mod = await import('./heroes.js?v=39');
+      mod.openInspector(Number(charId));
+    } catch (e) {
+      _showToast(`Nie udało się otworzyć inspektora: ${e.message}`, 'error');
+    }
+  }
+
 // ══════════════════════════════════════════════════════════════
 //  Hex-map rendering + edit modal
 // ══════════════════════════════════════════════════════════════
@@ -477,6 +490,7 @@ function filterTableGeneric(input, tableId, nameClass) {
             </div>
             <div>
               <div style="margin-bottom:8px">${_hp(c.char_current_hp, c.char_max_hp)}</div>
+              ${c.char_id ? `<button class="btn btn-sm" data-hi-open-inspector style="width:100%;margin-bottom:8px" onclick="_campOpenInspector(${c.char_id})">🧍 Otwórz inspektora</button>` : ''}
               ${(c.char_id && c.char_current_hp != null && c.char_current_hp <= 0) ? `<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="_campModalResurrect(${c.char_id},'${_esc(c.char_name||'Bohater')}',this)">✦ Wskrześ bohatera</button>` : ''}
               <div style="font-size:0.75rem;color:var(--t2);font-weight:600;margin-bottom:4px">Kondycje</div>
               <div style="display:flex;gap:4px;flex-wrap:wrap">${condArr.length ? condArr.map(cd => `<span class="badge badge-amber">${_esc(cd)}</span>`).join('') : '<span class="td-muted">Brak</span>'}</div>
@@ -1101,6 +1115,7 @@ export async function init(panel) {
     _campCmdKey,
     _campCmd,
     _campModalResurrect,
+    _campOpenInspector,   // HI5 (#628) — link do Inspektora Bohatera
     openCampaignModal,
     advanceCampScene,
     sendWorkshopMsg,

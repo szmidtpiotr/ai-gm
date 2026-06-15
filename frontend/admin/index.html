@@ -164,7 +164,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=35`);
+        const mod = await import(`./sections/${key}.js?v=39`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)

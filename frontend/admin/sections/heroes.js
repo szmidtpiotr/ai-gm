@@ -16,6 +16,9 @@ const OBSERVED_OWNER_ID = 1013; // PiotrSzmidt — konto obserwowane (read-only 
 // Staty edytowalne przez cheat „add stat" (delta). LCK celowo poza — backend add stat go nie wspiera.
 const EDITABLE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 let _condCatalog = null; // cache katalogu kondycji (GET /api/admin/conditions)
+// HI6 (#629): tryb „Wymuś edycję" — omija live-lock (walka/tura), NIE #1013.
+// Per modal (otwarcie resetuje); helpery dołączają force do payloadów mutacji.
+let _forceEdit = false;
 
 function _esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -117,7 +120,7 @@ async function _cheat(heroId, payload) {
   try {
     await apiFetch(`/api/admin/cheat/${heroId}`, {
       method: 'POST',
-      body: JSON.stringify({ ...payload, inspector: true }),
+      body: JSON.stringify({ ...payload, inspector: true, force: _forceEdit }),
     });
     return true;
   } catch (e) {
@@ -144,9 +147,92 @@ async function _grantXp(heroId, ownerId, amount, reason) {
   }
 }
 
+// ── HI4: katalogi (cache) + mutacje equip/zaklęć ──────────────────────────────
+
+let _itemCatalog = null;  // [{key,label,kind}] z weapons+items+consumables
+let _spellCatalog = null; // [{key,label,tier}] z /admin/spells
+
+async function _loadItemCatalog() {
+  if (_itemCatalog) return _itemCatalog;
+  const out = [];
+  const sources = [
+    { ep: '/api/admin/weapons', kind: 'weapon' },
+    { ep: '/api/admin/items', kind: 'item' },
+    { ep: '/api/admin/consumables', kind: 'consumable' },
+  ];
+  for (const s of sources) {
+    try {
+      const res = await apiFetch(s.ep);
+      const list = (res && (res.items || res)) || [];
+      list.forEach(r => out.push({ key: r.key, label: r.label || r.name || r.key, kind: s.kind }));
+    } catch { /* pomiń jedno źródło */ }
+  }
+  _itemCatalog = out;
+  return out;
+}
+
+async function _loadSpellCatalog() {
+  if (_spellCatalog) return _spellCatalog;
+  try {
+    const res = await apiFetch('/api/admin/spells');
+    const list = (res && (res.items || res)) || [];
+    _spellCatalog = list.map(r => ({ key: r.key, label: r.label || r.name || r.key, tier: r.tier }));
+  } catch {
+    _spellCatalog = [];
+  }
+  return _spellCatalog;
+}
+
+/** Załóż/zdejmij (slot=null → zdejmij). Inspector:true → guard live-lock + audyt. */
+async function _equip(heroId, inventoryId, slot) {
+  try {
+    await apiFetch(`/api/inventory/${heroId}/equip`, {
+      method: 'POST',
+      body: JSON.stringify({ inventory_id: inventoryId, slot: slot ?? null, inspector: true, force: _forceEdit }),
+    });
+    return true;
+  } catch (e) {
+    if (e instanceof APIError && e.status === 409) {
+      showToast('⚔ Bohater w trakcie walki/tury — edycja zablokowana.', 'error');
+    } else {
+      showToast(`Błąd: ${e.message}`, 'error');
+    }
+    return false;
+  }
+}
+
+/** Naucz/awansuj zaklęcie. Inspector:true → guard live-lock + audyt. */
+async function _spellAction(heroId, action, spellKey) {
+  try {
+    await apiFetch(`/api/admin/characters/${heroId}/spells/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ spell_key: spellKey, inspector: true, force: _forceEdit }),
+    });
+    return true;
+  } catch (e) {
+    if (e instanceof APIError && e.status === 409) {
+      showToast('⚔ Bohater w trakcie walki/tury — edycja zablokowana.', 'error');
+    } else {
+      showToast(`Błąd: ${e.message}`, 'error');
+    }
+    return false;
+  }
+}
+
+const _ITEM_TYPE_GROUPS = [
+  { key: 'weapon', label: 'Broń' },
+  { key: 'armor', label: 'Zbroja' },
+  { key: 'consumable', label: 'Konsumpcja' },
+  { key: 'item', label: 'Przedmioty' },
+  { key: 'quest', label: 'Zadaniowe' },
+  { key: 'narrative', label: 'Narracyjne' },
+];
+
 // ── Modal Inspektora ──────────────────────────────────────────────────────────
 
-async function openInspector(heroId) {
+// HI5 (#628): wyeksportowany — monitor kampanii (campaigns.js) reużywa TEN SAM modal.
+export async function openInspector(heroId) {
+  _forceEdit = false; // HI6: każde otwarcie startuje z wyłączonym wymuszeniem
   document.getElementById('hero-inspector-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'hero-inspector-overlay';
@@ -186,8 +272,16 @@ async function openInspector(heroId) {
     _renderTab(_activeTab);
   }
 
+  // #1013 (konto obserwowane) → blokada TWARDA, nieprzełamywalna.
+  function _observedLocked() {
+    return Boolean(full && Number(full.owner_id) === OBSERVED_OWNER_ID);
+  }
+  // Edycja zablokowana gdy: #1013 (zawsze) LUB live-lock i NIE włączono wymuszenia (HI6).
   function _editLocked() {
-    return Boolean(full && (full.is_live_locked || Number(full.owner_id) === OBSERVED_OWNER_ID));
+    if (!full) return false;
+    if (_observedLocked()) return true;
+    if (full.is_live_locked && !_forceEdit) return true;
+    return false;
   }
 
   function _renderBanners() {
@@ -195,11 +289,31 @@ async function openInspector(heroId) {
     if (Number(full.owner_id) === OBSERVED_OWNER_ID) {
       banners.push(`<div class="hero-banner" style="margin:10px 0;padding:8px 12px;border-radius:6px;background:rgba(220,60,60,.12);border:1px solid var(--red);color:var(--red);font-size:0.82rem">👁 Konto obserwowane (#1013) — protokół tylko-do-odczytu. Edycja zablokowana.</div>`);
     }
-    if (full.is_live_locked) {
+    // Live-lock: pokaż baner + toggle „Wymuś edycję" (HI6) — ale NIE dla #1013 (twarda blokada).
+    if (full.is_live_locked && !_observedLocked()) {
+      if (_forceEdit) {
+        banners.push(`<div class="hero-banner" style="margin:10px 0;padding:8px 12px;border-radius:6px;background:rgba(220,60,60,.16);border:1px solid var(--red);color:var(--red);font-size:0.82rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>🔓 <b>Tryb wymuszonej edycji</b> — zmiany zapisują się MIMO blokady (${_esc(full.live_lock_reason || 'live_locked')}). Ryzyko desyncu z grą. Każda zmiana jest audytowana.</span>
+          <button class="btn btn-sm" data-hi-force-toggle style="margin-left:auto">Wyłącz wymuszenie</button>
+        </div>`);
+      } else {
+        banners.push(`<div class="hero-banner" style="margin:10px 0;padding:8px 12px;border-radius:6px;background:rgba(230,170,40,.14);border:1px solid #e6aa28;color:#e6aa28;font-size:0.82rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>⚔ Bohater w trakcie walki/tury (${_esc(full.live_lock_reason || 'live_locked')}) — edycja zablokowana.</span>
+          <button class="btn btn-sm" data-hi-force-toggle style="margin-left:auto">🔓 Wymuś edycję</button>
+        </div>`);
+      }
+    } else if (full.is_live_locked) {
+      // #1013 + live-lock: pokaż info bez toggle (force nie omija #1013).
       banners.push(`<div class="hero-banner" style="margin:10px 0;padding:8px 12px;border-radius:6px;background:rgba(230,170,40,.14);border:1px solid #e6aa28;color:#e6aa28;font-size:0.82rem">⚔ Bohater w trakcie walki/tury (${_esc(full.live_lock_reason || 'live_locked')}) — edycja zablokowana.</div>`);
     }
     const el = document.getElementById('hero-banners');
     if (el) el.innerHTML = banners.join('');
+    // Bind toggle (HI6): przełącz tryb force i przerysuj banery + aktywną zakładkę.
+    el?.querySelector('[data-hi-force-toggle]')?.addEventListener('click', () => {
+      _forceEdit = !_forceEdit;
+      _renderBanners();
+      _renderTab(_activeTab);
+    });
   }
 
   // ── Zakładka Arkusz (HI3) — pełna edycja przez reuse endpointów ──────────────
@@ -231,14 +345,22 @@ async function openInspector(heroId) {
         </div>` : '';
 
     // Skille z rankami — input 0..ceiling (backend waliduje).
+    // HI7 (#630): grupowanie „Posiadane" (rank ≥1) nad „Niewyuczone" (rank 0); każda grupa A→Z.
     const skills = full.skills || {};
-    const skillKeys = Object.keys(skills).sort();
-    const skillRows = skillKeys.length
-      ? skillKeys.map(k => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+    const allSkillKeys = Object.keys(skills).sort();
+    const knownKeys = allSkillKeys.filter(k => (skills[k] ?? 0) >= 1);
+    const noneKeys = allSkillKeys.filter(k => (skills[k] ?? 0) < 1);
+    const _skillRow = (k, group) => `<div data-hi-skill-group="${group}" data-hi-skill-key="${_esc(k)}" style="display:flex;align-items:center;gap:8px;padding:3px 0">
           <span style="flex:1">${_esc(k)}</span>
           <input type="number" class="form-input" data-hi-skill-input="${k}" value="${skills[k] ?? 0}" min="0" style="width:70px" ${dis}>
           <button class="btn btn-sm" data-hi-save="skill" data-hi-skill="${k}" ${dis}>Zapisz</button>
-        </div>`).join('')
+        </div>`;
+    const _skillSep = (group, label, n) => `<div data-hi-skill-sep="${group}" style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px;padding-top:6px;border-top:1px solid var(--border)">${label} (${n})</div>`;
+    const skillRows = allSkillKeys.length
+      ? [
+          knownKeys.length ? _skillSep('known', 'Posiadane', knownKeys.length) + knownKeys.map(k => _skillRow(k, 'known')).join('') : '',
+          noneKeys.length ? _skillSep('none', 'Niewyuczone', noneKeys.length) + noneKeys.map(k => _skillRow(k, 'none')).join('') : '',
+        ].join('')
       : '<div style="color:var(--t3);font-size:0.8rem">brak skilli w arkuszu</div>';
 
     // Kondycje — chipy z ✕ + dropdown katalogu + Dodaj.
@@ -412,33 +534,217 @@ async function openInspector(heroId) {
     });
   }
 
-  // ── Pozostałe zakładki — placeholdery (HI4) ──────────────────────────────────
+  // ── Zakładka Ekwipunek (HI4) — grupowana lista + dodaj/usuń/załóż ─────────────
 
-  function _otherHtml(tab) {
-    if (tab === 'inventory') {
-      const inv = full.inventory || {};
-      const count = Array.isArray(inv) ? inv.length : Object.values(inv).reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0);
-      return `<div style="color:var(--t3)">Pozycji w ekwipunku: <b>${count}</b>. Pełne zarządzanie (dodaj/usuń/załóż) — w zadaniu HI4.</div>`;
-    }
-    if (tab === 'spells') {
-      return `<div style="color:var(--t3)">Znanych zaklęć: <b>${(full.spells || []).length}</b>. Naucz/awansuj — w zadaniu HI4.</div>`;
-    }
-    if (tab === 'quests') {
-      return `<div style="color:var(--t3)">Aktywne questy: <b>${(full.quests_active || []).length}</b>, ukończone: <b>${(full.quests_completed || []).length}</b>. Dodaj/zalicz — w zadaniu HI4.</div>`;
-    }
-    return '';
+  function _inventoryHtml() {
+    const locked = _editLocked();
+    const dis = locked ? 'disabled' : '';
+    const inv = Array.isArray(full.inventory) ? full.inventory : [];
+    const groups = {};
+    inv.forEach(it => { const t = it.item_type || 'item'; (groups[t] = groups[t] || []).push(it); });
+
+    const sections = _ITEM_TYPE_GROUPS.filter(g => (groups[g.key] || []).length).map(g => {
+      const rows = groups[g.key].map(it => {
+        const d = it.durability;
+        const dur = (d && d.max) ? ` <small style="color:var(--t3)">[${d.current ?? '?'}/${d.max}]</small>` : '';
+        const eq = it.equipped ? ` <span class="badge" style="background:rgba(120,180,100,.2)">założone${it.slot ? ' · ' + _esc(it.slot) : ''}</span>` : '';
+        const qty = (it.quantity && it.quantity > 1) ? ` ×${it.quantity}` : '';
+        const canEquip = (it.item_type === 'weapon' || it.item_type === 'armor');
+        const equipBtn = canEquip
+          ? (it.equipped
+              ? `<button class="btn btn-sm" data-hi-unequip="${it.id}" ${dis}>Zdejmij</button>`
+              : `<button class="btn btn-sm" data-hi-equip="${it.id}" data-hi-itype="${_esc(it.item_type)}" ${dis}>Załóż</button>`)
+          : '';
+        const rmKey = it.key || '';
+        const rmBtn = rmKey ? `<button class="btn btn-sm" data-hi-item-remove="${_esc(rmKey)}" ${dis}>Usuń</button>` : '';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+          <span style="flex:1">${_esc(it.label || it.key || '—')}${qty}${dur}${eq}</span>
+          ${equipBtn}${rmBtn}
+        </div>`;
+      }).join('');
+      return `<fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">${g.label}</legend>
+        <div style="display:grid;gap:2px">${rows}</div>
+      </fieldset>`;
+    }).join('');
+    const empty = inv.length ? '' : '<div style="color:var(--t3);font-size:0.8rem">Ekwipunek pusty.</div>';
+
+    return `<div style="display:grid;gap:14px">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Dodaj z katalogu</legend>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select class="form-input" id="hi-item-select" style="max-width:320px" ${dis}><option value="">— ładowanie katalogu… —</option></select>
+          <button class="btn btn-sm" data-hi-item-add ${dis}>Dodaj</button>
+        </div>
+      </fieldset>
+      ${sections}${empty}
+    </div>`;
+  }
+
+  function _bindInventory() {
+    const body = document.getElementById('hero-modal-body');
+    if (!body) return;
+    _loadItemCatalog().then(cat => {
+      const sel = body.querySelector('#hi-item-select');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— wybierz przedmiot —</option>';
+      const lbl = { weapon: 'Broń', item: 'Przedmiot', consumable: 'Konsumpcja' };
+      cat.forEach(c => {
+        const o = document.createElement('option');
+        o.value = `${c.kind}|${c.key}`;
+        o.textContent = `[${lbl[c.kind] || c.kind}] ${c.label}`;
+        sel.appendChild(o);
+      });
+    });
+    body.querySelector('[data-hi-item-add]')?.addEventListener('click', async () => {
+      const v = body.querySelector('#hi-item-select').value;
+      if (!v) { showToast('Wybierz przedmiot', 'error'); return; }
+      const sep = v.indexOf('|');
+      const kind = v.slice(0, sep);
+      const key = v.slice(sep + 1);
+      const ok = await _cheat(heroId, { cmd: 'add item', key, kind });
+      if (ok) { showToast('Dodano przedmiot', 'success'); refresh(); }
+    });
+    body.querySelectorAll('[data-hi-item-remove]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await _cheat(heroId, { cmd: 'remove item', key: btn.dataset.hiItemRemove });
+        if (ok) { showToast('Usunięto przedmiot', 'success'); refresh(); }
+      });
+    });
+    body.querySelectorAll('[data-hi-equip]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const slot = btn.dataset.hiItype === 'armor' ? 'armor' : 'main_hand';
+        const ok = await _equip(heroId, Number(btn.dataset.hiEquip), slot);
+        if (ok) refresh();
+      });
+    });
+    body.querySelectorAll('[data-hi-unequip]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await _equip(heroId, Number(btn.dataset.hiUnequip), null);
+        if (ok) refresh();
+      });
+    });
+  }
+
+  // ── Zakładka Zaklęcia (HI4) — naucz + awansuj rank ───────────────────────────
+
+  function _spellsHtml() {
+    const locked = _editLocked();
+    const dis = locked ? 'disabled' : '';
+    const spells = Array.isArray(full.spells) ? full.spells : [];
+    const rows = spells.length
+      ? spells.map(s => {
+          const rank = s.rank ?? 1;
+          const canUp = rank < 3;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+            <span style="flex:1">${_esc(s.label || s.spell_key)} <small style="color:var(--t3)">(rank ${rank}${s.tier ? ', tier ' + s.tier : ''})</small></span>
+            ${canUp ? `<button class="btn btn-sm" data-hi-spell-up="${_esc(s.spell_key)}" ${dis}>Awansuj →${rank + 1}</button>` : '<small style="color:var(--t3)">max</small>'}
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--t3);font-size:0.8rem">Bohater nie zna zaklęć.</div>';
+    return `<div style="display:grid;gap:14px">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Naucz zaklęcia</legend>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select class="form-input" id="hi-spell-select" style="max-width:320px" ${dis}><option value="">— ładowanie… —</option></select>
+          <button class="btn btn-sm" data-hi-spell-learn ${dis}>Naucz</button>
+        </div>
+      </fieldset>
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Znane zaklęcia (${spells.length})</legend>
+        <div style="display:grid;gap:2px">${rows}</div>
+      </fieldset>
+    </div>`;
+  }
+
+  function _bindSpells() {
+    const body = document.getElementById('hero-modal-body');
+    if (!body) return;
+    _loadSpellCatalog().then(cat => {
+      const sel = body.querySelector('#hi-spell-select');
+      if (!sel) return;
+      const known = new Set((full.spells || []).map(s => s.spell_key));
+      sel.innerHTML = '<option value="">— wybierz zaklęcie —</option>';
+      cat.filter(s => !known.has(s.key)).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.key; o.textContent = s.tier ? `${s.label} (tier ${s.tier})` : s.label;
+        sel.appendChild(o);
+      });
+    });
+    body.querySelector('[data-hi-spell-learn]')?.addEventListener('click', async () => {
+      const key = body.querySelector('#hi-spell-select').value;
+      if (!key) { showToast('Wybierz zaklęcie', 'error'); return; }
+      const ok = await _spellAction(heroId, 'learn', key);
+      if (ok) { showToast('Nauczono zaklęcia', 'success'); refresh(); }
+    });
+    body.querySelectorAll('[data-hi-spell-up]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await _spellAction(heroId, 'upgrade', btn.dataset.hiSpellUp);
+        if (ok) { showToast('Rank zaklęcia podniesiony', 'success'); refresh(); }
+      });
+    });
+  }
+
+  // ── Zakładka Questy (HI4) — dodaj + zalicz ───────────────────────────────────
+
+  function _questsHtml() {
+    const locked = _editLocked();
+    const dis = locked ? 'disabled' : '';
+    const active = full.quests_active || [];
+    const completed = full.quests_completed || [];
+    const activeRows = active.length
+      ? active.map(q => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+          <span style="flex:1">${_esc(q)}</span>
+          <button class="btn btn-sm" data-hi-quest-complete="${_esc(q)}" ${dis}>Zalicz ✓</button>
+        </div>`).join('')
+      : '<div style="color:var(--t3);font-size:0.8rem">Brak aktywnych questów.</div>';
+    const compRows = completed.length
+      ? completed.map(q => `<div style="padding:3px 0;color:var(--t3)">✓ ${_esc(q)}</div>`).join('')
+      : '<div style="color:var(--t3);font-size:0.8rem">Brak ukończonych.</div>';
+    return `<div style="display:grid;gap:14px">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Dodaj quest</legend>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="text" class="form-input" id="hi-quest-input" placeholder="klucz questa (np. quest_intro)" style="max-width:280px" ${dis}>
+          <button class="btn btn-sm" data-hi-quest-add ${dis}>Dodaj</button>
+        </div>
+      </fieldset>
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Aktywne (${active.length})</legend>
+        <div style="display:grid;gap:2px">${activeRows}</div>
+      </fieldset>
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <legend style="font-size:0.78rem;color:var(--t2);padding:0 6px">Ukończone (${completed.length})</legend>
+        <div style="display:grid;gap:2px">${compRows}</div>
+      </fieldset>
+    </div>`;
+  }
+
+  function _bindQuests() {
+    const body = document.getElementById('hero-modal-body');
+    if (!body) return;
+    body.querySelector('[data-hi-quest-add]')?.addEventListener('click', async () => {
+      const key = (body.querySelector('#hi-quest-input').value || '').trim();
+      if (!key) { showToast('Podaj klucz questa', 'error'); return; }
+      const ok = await _cheat(heroId, { cmd: 'quest add', key });
+      if (ok) { showToast('Quest dodany', 'success'); refresh(); }
+    });
+    body.querySelectorAll('[data-hi-quest-complete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await _cheat(heroId, { cmd: 'quest complete', key: btn.dataset.hiQuestComplete });
+        if (ok) { showToast('Quest zaliczony', 'success'); refresh(); }
+      });
+    });
   }
 
   function _renderTab(tab) {
     _activeTab = tab;
     const body = document.getElementById('hero-modal-body');
     if (!body) return;
-    if (tab === 'sheet') {
-      body.innerHTML = _sheetHtml();
-      _bindSheet();
-    } else {
-      body.innerHTML = _otherHtml(tab);
-    }
+    if (tab === 'sheet') { body.innerHTML = _sheetHtml(); _bindSheet(); }
+    else if (tab === 'inventory') { body.innerHTML = _inventoryHtml(); _bindInventory(); }
+    else if (tab === 'spells') { body.innerHTML = _spellsHtml(); _bindSpells(); }
+    else if (tab === 'quests') { body.innerHTML = _questsHtml(); _bindQuests(); }
   }
 
   // Pierwsze ładowanie
