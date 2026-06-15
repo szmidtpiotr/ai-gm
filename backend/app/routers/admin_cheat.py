@@ -286,6 +286,11 @@ AVAILABLE_CMDS = [
     "add health",
     "set health",
     "add stat",
+    "set skill",
+    "set mana",
+    "add mana",
+    "add condition",
+    "remove condition",
     "set level",
     "set location",
     "add item",
@@ -297,6 +302,72 @@ AVAILABLE_CMDS = [
     "show state",
 ]
 
+# HI1 (#623): nowe luki zapisu inspektora — zawsze guardowane + audytowane.
+INSPECTOR_NEW_CMDS = {"set skill", "set mana", "add mana", "add condition", "remove condition"}
+# Operacyjne komendy, których guard live_locked NIE blokuje (np. „combat end" MUSI działać
+# w trakcie walki — to nią kończy; „show state" to odczyt).
+GUARD_EXEMPT_CMDS = {"show state", "combat end"}
+
+
+def character_inspector_live_lock(
+    conn: sqlite3.Connection, campaign_id: int
+) -> tuple[bool, str | None]:
+    """HI1: czy bohater jest w „żywym" stanie blokującym edycję inspektora.
+
+    Locked gdy kampania ma aktywną walkę (`active_combat status='active'`) LUB turę
+    w toku (`game_sessions.session_flags.pending_skill_test`). Idle bohater (bez
+    kampanii) nigdy nie jest zablokowany. Brak tabel = traktuj jak brak blokady.
+    """
+    if not campaign_id:
+        return (False, None)
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if row:
+            return (True, "active_combat")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if row and row["session_flags"]:
+            flags = json.loads(row["session_flags"] or "{}")
+            if isinstance(flags, dict) and flags.get("pending_skill_test"):
+                return (True, "pending_skill_test")
+    except (sqlite3.OperationalError, json.JSONDecodeError, TypeError):
+        pass
+    return (False, None)
+
+
+def _write_inspector_audit(
+    conn: sqlite3.Connection,
+    character_id: int,
+    cmd: str,
+    req: "CheatRequest",
+    result: dict[str, Any],
+) -> None:
+    """HI1: zapisz mutację inspektora do admin_audit_log (kto/co/delta)."""
+    try:
+        old_values = json.dumps(
+            {"key": req.key, "value": req.value, "stat": req.stat}, ensure_ascii=False
+        )
+        new_values = json.dumps(result, ensure_ascii=False)
+        conn.execute(
+            "INSERT INTO admin_audit_log (table_name, row_key, operation, old_values, new_values) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("characters", str(character_id), f"inspector:{cmd}", old_values, new_values),
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _stat_modifier(value: int) -> int:
+    return (int(value) - 10) // 2
+
 
 class CheatRequest(BaseModel):
     cmd: str
@@ -304,6 +375,9 @@ class CheatRequest(BaseModel):
     key: str | None = None
     stat: str | None = None
     kind: str | None = None
+    # HI1 (#623): inspektor — guard live_locked + audyt.
+    inspector: bool = False
+    force: bool = False
 
 
 @router.post("/admin/cheat/{character_id}")
@@ -328,6 +402,18 @@ def admin_cheat(
         result: dict[str, Any] = {}
         pending_new_act: tuple[dict[str, Any], dict[str, Any]] | None = None
         cmd = req.cmd.strip().lower()
+
+        # HI1 (#623): wywołanie traktowane jak inspektorskie gdy klient ustawił flagę
+        # `inspector` LUB użył nowej luki zapisu. Takie mutacje są guardowane (live_locked)
+        # i audytowane.
+        is_inspector_call = bool(req.inspector) or cmd in INSPECTOR_NEW_CMDS
+        if is_inspector_call and cmd not in GUARD_EXEMPT_CMDS and not req.force:
+            locked, lock_reason = character_inspector_live_lock(conn, campaign_id)
+            if locked:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"reason": "live_locked", "lock_reason": lock_reason},
+                )
 
         if cmd == "add gold":
             amount = int(req.value or 0)
@@ -395,6 +481,97 @@ def admin_cheat(
                 (json.dumps(sheet, ensure_ascii=False), character_id),
             )
             result = {"stat": stat_key, "new_value": stats[stat_key]}
+
+        elif cmd == "set skill":
+            skill_key = str(req.key or "").strip()
+            if not skill_key:
+                raise HTTPException(status_code=422, detail="skill_key_required")
+            try:
+                rank = int(req.value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="invalid_rank") from None
+            from app.services.xp_service import _rank_ceiling_for_skill
+
+            ceiling = _rank_ceiling_for_skill(skill_key)
+            if rank < 0 or rank > ceiling:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"error": "invalid_rank", "min": 0, "max": ceiling},
+                )
+            skills: dict[str, Any] = sheet.get("skills") or {}
+            skills[skill_key] = rank
+            sheet["skills"] = skills
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), character_id),
+            )
+            result = {"skill": skill_key, "rank": rank}
+
+        elif cmd in ("set mana", "add mana"):
+            max_mana = int(sheet.get("max_mana", sheet.get("current_mana", 0)) or 0)
+            cur_mana = int(sheet.get("current_mana", max_mana) or 0)
+            if str(req.value).strip().lower() == "max":
+                sheet["current_mana"] = max_mana
+            elif cmd == "add mana":
+                sheet["current_mana"] = max(0, min(max_mana, cur_mana + int(req.value or 0)))
+            else:
+                sheet["current_mana"] = max(0, min(max_mana, int(req.value or 0)))
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), character_id),
+            )
+            result = {"current_mana": sheet["current_mana"], "max_mana": max_mana}
+
+        elif cmd == "add condition":
+            ckey = str(req.key or "").strip()
+            if not ckey:
+                raise HTTPException(status_code=422, detail="condition_key_required")
+            label = ckey
+            try:
+                row = conn.execute(
+                    "SELECT key, label FROM game_config_conditions WHERE key = ? AND is_active = 1 LIMIT 1",
+                    (ckey,),
+                ).fetchone()
+                if row is None:
+                    raise HTTPException(status_code=422, detail="invalid_condition")
+                label = str(row["label"] or ckey)
+            except sqlite3.OperationalError:
+                # Brak katalogu kondycji — przepuść (środowiska bez seeda).
+                pass
+            conds_raw = sheet.get("conditions")
+            conds: list[Any] = conds_raw if isinstance(conds_raw, list) else []
+            already = any(
+                isinstance(c, dict) and str(c.get("key") or "") == ckey for c in conds
+            ) or ckey in conds
+            if not already:
+                conds.append({"key": ckey, "label": label, "source": "inspector"})
+            sheet["conditions"] = conds
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), character_id),
+            )
+            result = {"added": ckey, "conditions": conds}
+
+        elif cmd == "remove condition":
+            ckey = str(req.key or "").strip()
+            if not ckey:
+                raise HTTPException(status_code=422, detail="condition_key_required")
+            conds_raw = sheet.get("conditions")
+            conds = conds_raw if isinstance(conds_raw, list) else []
+            conds = [
+                c
+                for c in conds
+                if not (
+                    (isinstance(c, dict) and str(c.get("key") or "") == ckey)
+                    or c == ckey
+                )
+            ]
+            sheet["conditions"] = conds
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), character_id),
+            )
+            result = {"removed": ckey, "conditions": conds}
 
         elif cmd == "set level":
             sheet["level"] = max(1, int(req.value or 1))
@@ -563,6 +740,10 @@ def admin_cheat(
                 detail={"error": "unknown_cmd", "available": AVAILABLE_CMDS},
             )
 
+        # HI1 (#623): audyt mutacji inspektora (pomijamy czysty odczyt „show state").
+        if is_inspector_call and cmd != "show state":
+            _write_inspector_audit(conn, character_id, cmd, req, result)
+
         conn.commit()
         if pending_new_act is not None:
             from app.services.new_act_service import maybe_trigger_new_act_after_main_quest
@@ -585,3 +766,73 @@ def admin_cheat(
         raise HTTPException(status_code=500, detail=str(exc)) from None
     finally:
         conn.close()
+
+
+@router.get("/admin/characters/{character_id}/full")
+def admin_character_full(
+    character_id: int = Path(...),
+    _: None = Depends(require_admin_token),
+) -> dict[str, Any]:
+    """HI1 (#623): czysty agregat bohatera dla Inspektora — odpowiednik
+    `sandbox.py:get_character_full`, ale w routerze admina, działa dla idle i active,
+    z `is_live_locked` (guard tury/walki). REUSE `loot_service` + `spell_service`.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id, name, sheet_json, COALESCE(gold_gp, 0) AS gold_gp, "
+            "campaign_id, user_id, status, is_active "
+            "FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="character_not_found")
+        sheet = json.loads(row["sheet_json"] or "{}")
+        campaign_id = int(row["campaign_id"] or 0)
+        locked, lock_reason = character_inspector_live_lock(conn, campaign_id)
+    finally:
+        conn.close()
+
+    # Inventory + spells: wywołaj usługi bezpośrednio (jak sandbox), tolerując brak danych.
+    try:
+        from app.services import loot_service
+
+        inventory = loot_service.get_character_inventory(character_id)
+    except Exception:
+        inventory = {}
+    try:
+        from app.services.spell_service import get_character_spells
+
+        spells = get_character_spells(character_id)
+    except Exception:
+        spells = []
+
+    stats = sheet.get("stats") or {}
+    stat_modifiers = {k: _stat_modifier(v) for k, v in stats.items() if isinstance(v, (int, float))}
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "gold_gp": row["gold_gp"] or 0,
+        "archetype": sheet.get("archetype"),
+        "level": int(sheet.get("level") or 1),
+        "status": row["status"],
+        "campaign_id": campaign_id or None,
+        "owner_id": row["user_id"],
+        "stats": stats,
+        "stat_modifiers": stat_modifiers,
+        "skills": sheet.get("skills") or {},
+        "hp": int(sheet.get("current_hp") or 0),
+        "max_hp": int(sheet.get("max_hp") or 0),
+        "mana": int(sheet.get("current_mana") or 0),
+        "max_mana": int(sheet.get("max_mana") or 0),
+        "conditions": sheet.get("conditions") or [],
+        "inventory": inventory,
+        "spells": spells,
+        "xp": int(sheet.get("xp") or sheet.get("xp_lifetime_earned") or 0),
+        "quests_active": sheet.get("quests_active") or [],
+        "quests_completed": sheet.get("quests_completed") or [],
+        "is_live_locked": locked,
+        "live_lock_reason": lock_reason,
+    }
