@@ -2375,16 +2375,33 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
 
             for effect in effects:
                 effect_type = str(effect.get("type") or "").strip().lower()
-                if effect_type != "block_action":
-                    continue
-                blocked = True
-                events.append(
-                    {
-                        "type": "block_action",
-                        "condition_key": key,
-                        "condition_label": label,
-                    }
-                )
+                if effect_type == "block_action":
+                    blocked = True
+                    events.append(
+                        {
+                            "type": "block_action",
+                            "condition_key": key,
+                            "condition_label": label,
+                        }
+                    )
+                elif effect_type == "skip_turn":
+                    # #621: strukturalny skip_turn (slowed/stunned). Honoruj `chance`
+                    # (domyślnie 1.0 = zawsze pomija, jak stunned); slowed=0.5 losuje co turę.
+                    # Czas trwania ogarnia osobny mechanizm wygasania kondycji — nie duplikuj.
+                    try:
+                        chance = float(effect.get("chance", 1.0))
+                    except (TypeError, ValueError):
+                        chance = 1.0
+                    if chance >= 1.0 or random.random() < chance:
+                        blocked = True
+                        events.append(
+                            {
+                                "type": "block_action",
+                                "condition_key": key,
+                                "condition_label": label,
+                                "via": "skip_turn",
+                            }
+                        )
 
             # S9 (#604): stacking_levels — progi (threshold_effects) odpalają się,
             # gdy runtime poziom kondycji ≥ próg (np. exhausted poziom 2 → omdlenie).
