@@ -143,7 +143,7 @@ const _HTML = `
         <div class="card">
           <div class="card-header"><span class="card-title">🪦 Konfiguracja wskrzeszania</span></div>
           <div style="padding:14px;display:flex;flex-direction:column;gap:12px;max-width:520px">
-            <div style="font-size:0.78rem;color:var(--t3)">Definiuje, ile razy gracz może wskrzesić zmarłą postać. Tryb <code>fixed</code> — sztywny limit (<em>default_uses</em>); <code>percent_of_xp</code> — limit zależny od XP; <code>unlimited</code> — bez limitu.</div>
+            <div style="font-size:0.78rem;color:var(--t3)"><strong>Tryb</strong> = czym gracz płaci za wskrzeszenie (koszt). <strong>Domyślny limit</strong> = ile razy może wskrzesić zmarłą postać (puste = bez limitu). Tryby: <code>admin_free</code> — za darmo; <code>gold_percent</code> — % posiadanego złota; <code>gold_recent_days</code> — złoto zarobione w ostatnich dniach; <code>xp_revert</code> — cofnięcie części XP; <code>item_loss</code> — utrata przedmiotu.</div>
             <div class="form-row" style="flex-direction:row;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
                 <input type="checkbox" id="sys-res-enabled"> Włącz wskrzeszenia (globalnie)
@@ -152,9 +152,11 @@ const _HTML = `
             </div>
             <div class="form-row"><label class="form-label">Tryb</label>
               <select class="form-input" id="sys-res-mode">
-                <option value="fixed">fixed (sztywny limit)</option>
-                <option value="percent_of_xp">percent_of_xp (zależny od XP)</option>
-                <option value="unlimited">unlimited (bez limitu)</option>
+                <option value="admin_free">za darmo (admin)</option>
+                <option value="gold_percent">% złota gracza</option>
+                <option value="gold_recent_days">złoto z ostatnich dni</option>
+                <option value="xp_revert">cofnięcie XP</option>
+                <option value="item_loss">utrata przedmiotu</option>
               </select>
             </div>
             <div class="form-row"><label class="form-label">Domyślny limit (default_uses)</label>
@@ -1042,7 +1044,7 @@ async function _loadSysResurrection() {
     const set = (id,v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
     const enabledEl = document.getElementById('sys-res-enabled');
     if (enabledEl) enabledEl.checked = !!(cfg.enabled);
-    set('sys-res-mode', cfg.mode || 'fixed');
+    set('sys-res-mode', cfg.mode || 'admin_free');
     set('sys-res-default', cfg.default_uses ?? '');
     set('sys-res-cap', cfg.cap_percent ?? '');
     set('sys-res-value', cfg.value ?? '');
