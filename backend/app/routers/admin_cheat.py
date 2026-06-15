@@ -314,33 +314,13 @@ def character_inspector_live_lock(
 ) -> tuple[bool, str | None]:
     """HI1: czy bohater jest w „żywym" stanie blokującym edycję inspektora.
 
-    Locked gdy kampania ma aktywną walkę (`active_combat status='active'`) LUB turę
-    w toku (`game_sessions.session_flags.pending_skill_test`). Idle bohater (bez
-    kampanii) nigdy nie jest zablokowany. Brak tabel = traktuj jak brak blokady.
+    HI4 (#627): logika przeniesiona do `inspector_guard` (jedno źródło — współdzielone
+    z equip/zaklęciami). Ta funkcja deleguje, zachowując sygnaturę dla istniejących
+    wywołań w tym module.
     """
-    if not campaign_id:
-        return (False, None)
-    try:
-        row = conn.execute(
-            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
-            (int(campaign_id),),
-        ).fetchone()
-        if row:
-            return (True, "active_combat")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        row = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (int(campaign_id),),
-        ).fetchone()
-        if row and row["session_flags"]:
-            flags = json.loads(row["session_flags"] or "{}")
-            if isinstance(flags, dict) and flags.get("pending_skill_test"):
-                return (True, "pending_skill_test")
-    except (sqlite3.OperationalError, json.JSONDecodeError, TypeError):
-        pass
-    return (False, None)
+    from app.services import inspector_guard
+
+    return inspector_guard.live_lock_by_campaign(conn, campaign_id)
 
 
 def _write_inspector_audit(

@@ -17,6 +17,9 @@ class EquipRequest(BaseModel):
 
     inventory_id: int
     slot: str | None = None
+    # HI4 (#627): tryb Inspektora Bohatera — guard live-lock (409) + audyt mutacji.
+    inspector: bool = False
+    force: bool = False
 
 
 class GoldDeltaRequest(BaseModel):
@@ -63,12 +66,29 @@ def get_inventory_drop_comparison(character_id: int, inventory_id: int):
 
 @router.post("/inventory/{character_id}/equip")
 def post_inventory_equip(character_id: int, body: EquipRequest):
+    # HI4 (#627): mutacja inspektora → blokada podczas walki/tury + audyt.
+    # Zwykłe wywołania (gra) nie ustawiają `inspector` → ścieżka niezmieniona.
+    if body.inspector:
+        from app.services import inspector_guard
+
+        inspector_guard.guard_or_raise(character_id, force=body.force)
     try:
         slot_raw = body.slot
         if slot_raw is None or (isinstance(slot_raw, str) and not str(slot_raw).strip()):
             data = loot_service.unequip_item(character_id, body.inventory_id)
+            op = "inspector:unequip"
         else:
             data = loot_service.equip_item(character_id, body.inventory_id, str(slot_raw))
+            op = "inspector:equip"
+        if body.inspector:
+            from app.services import inspector_guard
+
+            inspector_guard.audit(
+                character_id,
+                op,
+                {"inventory_id": body.inventory_id, "slot": body.slot},
+                data if isinstance(data, dict) else {"result": str(data)},
+            )
         return {"ok": True, "data": data}
     except ValueError as e:
         msg = str(e).lower()

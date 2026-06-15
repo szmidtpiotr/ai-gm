@@ -3438,8 +3438,19 @@ def admin_learn_spell(
     spell_key = req.get("spell_key", "")
     if not spell_key:
         raise HTTPException(status_code=400, detail="spell_key is required")
+    # HI4 (#627): tryb Inspektora — guard live-lock (409) + audyt.
+    if req.get("inspector"):
+        from app.services import inspector_guard
+
+        inspector_guard.guard_or_raise(character_id, force=bool(req.get("force")))
     try:
         result = learn_spell(character_id, spell_key)
+        if req.get("inspector"):
+            from app.services import inspector_guard
+
+            inspector_guard.audit(
+                character_id, "inspector:spell_learn", {"spell_key": spell_key}, result
+            )
         return {"ok": True, "spell": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -3456,8 +3467,19 @@ def admin_upgrade_spell(
     spell_key = req.get("spell_key", "")
     if not spell_key:
         raise HTTPException(status_code=400, detail="spell_key is required")
+    # HI4 (#627): tryb Inspektora — guard live-lock (409) + audyt.
+    if req.get("inspector"):
+        from app.services import inspector_guard
+
+        inspector_guard.guard_or_raise(character_id, force=bool(req.get("force")))
     try:
         result = upgrade_spell(character_id, spell_key)
+        if req.get("inspector"):
+            from app.services import inspector_guard
+
+            inspector_guard.audit(
+                character_id, "inspector:spell_upgrade", {"spell_key": spell_key}, result
+            )
         return {"ok": True, "spell": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
