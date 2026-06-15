@@ -3,13 +3,15 @@ Pracujemy nad FAZĄ L — Lochy kafelkowe (redesign trybu lochów AI-GM). Przecz
 2. game_mechanics.md → CZĘŚĆ AJ (pełne opisy zadań FAZY L + Decyzje 1–17 + tabela kolizji + Numbers Policy),
 3. notes.md → sekcja "FAZA L" (checklista — jedyne źródło statusów).
 
-ZAKRES (decyzje Piotra, 2026-06-12, sesja "Fable Lochy Projekt"):
+ZAKRES (decyzje Piotra, 2026-06-12 + kolejność 2026-06-13):
 - Jeden tryb lochów: kafelkowy. Legacy proceduralny tryb usuwamy w L9 — wcześniej go nie
   naprawiaj ani nie rozbudowuj.
-- FAZA L jest niezależna od FAZ U i S z JEDNYM twardym wyjątkiem: L5 wymaga ukończonego S2
-  (statbloki wrogów). Jeśli pierwsze niezrobione zadanie to L5, a S2 w notes.md nie jest [x]
-  — STOP i zapytaj (możesz zaproponować wykonanie S2 albo przeskok do innego dostępnego
-  zadania zgodnie z zależnościami).
+- KOLEJNOŚĆ: FAZA L idzie PO CAŁEJ FAZIE S (decyzja 2026-06-13). Cała mechanika walki gotowa,
+  więc dawna zależność "L5 wymaga S2" jest bezprzedmiotowa — S2 i reszta S są już [x].
+  Walka i treść lochów (L5–L8, wrogowie, bossowie) mają KORZYSTAĆ z mechanik FAZY S:
+  statbloki wrogów (S2), kondycje przez tag [APPLY_CONDITION] (S8–S14), absolutna skala D1–D5
+  bez rubber-bandingu (S2-zależna; L5). Jeśli przy zadaniu L coś z S brakuje w notes.md jako [x]
+  — STOP i zapytaj (nie powinno się zdarzyć, ale to sygnał, że FAZA S nie była domknięta).
 - L17 wykonujemy dopiero PO L19 (kamieniu milowym). L9 dopiero gdy L1–L8 działają end-to-end.
 - Nadpisania zatwierdzone (nie traktuj starych zapisów jako sprzeczności): CZĘŚĆ AA
   (nawigacja lazy, śmierć=restart) nadpisana przez CZĘŚĆ AJ; E16 #431 (restart od pokoju 1)
@@ -20,7 +22,7 @@ ZAKRES (decyzje Piotra, 2026-06-12, sesja "Fable Lochy Projekt"):
 
 TWOJE ZADANIE W TEJ SESJI — dokładnie JEDNO zadanie L, ani mniej, ani więcej:
 1. W notes.md → FAZA L znajdź pierwsze niezaznaczone [ ] zadanie zgodnie z kolejnością
-   z sekcji "FAZA L — zależności i kolejność" w CZĘŚCI AJ (L1→L2→L3→L4 → L5[S2!]/L6/L7→L8
+   z sekcji "FAZA L — zależności i kolejność" w CZĘŚCI AJ (L1→L2→L3→L4 → L5/L6/L7→L8
    → L9; L10 i L14→L15 można równolegle wcześniej; L11→L12→L13/L13b po L4; L18→L19; L17 po L19).
 2. Przeczytaj pełny opis zadania w CZĘŚCI AJ (Cel / Dla agenta / Weryfikacja) i sprawdź
    w kodzie, czy opis zgadza się z rzeczywistością (szczególnie app.js po zmianach U28–U30).

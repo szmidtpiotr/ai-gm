@@ -14,23 +14,24 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
 | **U (Plan naprawczy)** | **30/35** | **86% — PRZED Fazą 5 MP (U21–U23 odłożone do FAZY L; otwarte: U26, U27)** |
-| **S (Skille i Stany)** | **18/20** | **90% — ▶ W TOKU (S1–S18 ✅, Blok 4 prawie gotowy); następne S19 (kondycja hidden: untargetable + ambush)** |
+| **S (Skille i Stany)** | **20/20** | **100% ✅ KOMPLETNE** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **114/193** | **59%** |
+| **HI (Inspektor Bohatera)** | 0/5 | 0% — narzędzie admina, niezależne od S/L/MP (decyzja 2026-06-15) |
+| **TOTAL** | **114/198** | **58%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
 > ## 🧭 KOLEJNOŚĆ FAZ (decyzja Piotra 2026-06-13) — co implementować dalej
 > FAZA U gameplay gotowa, bramka U27 = **NO-GO dla MP**. Kolejność do MP:
 > ```
-> 1. #578  — fix tekstowego ruchu (bloker NO-GO z U27)        → prompt_hf.md
-> 2. FAZA S — CAŁA (S1→S20)                                    → prompt_s.md
-> 3. FAZA L — CAŁA (L1→L19)                                    → prompt_l.md
+> 1. #578  — fix tekstowego ruchu (bloker NO-GO z U27)        → prompt_hf.md   ✅ ZROBIONE
+> 2. FAZA S — CAŁA (S1→S20)                                    → prompt_s.md    ✅ ZROBIONE (20/20)
+> 3. FAZA L — CAŁA (L1→L19)                                    → prompt_l.md    ◀ ▶ TU JESTEŚMY
 > 4. FAZA 5 — Multiplayer (dopiero teraz)                      → prompt MP (TBD)
 > ```
-> **Zasada:** całe S przed całym L (decyzja: zero ryzyka przeróbek — mechanika walki w pełni gotowa przed treścią/balansem lochów). Znosi to dawną notkę "L niezależne od S" i twardą zależność L5↔S2 (S i tak całe przed L). **NASTĘPNE ZADANIE: #578** — wklej `prompt_hf.md`. Po #578 → `prompt_s.md` (S1).
+> **Zasada:** całe S przed całym L (zero ryzyka przeróbek — mechanika walki w pełni gotowa przed treścią/balansem lochów). **NASTĘPNE ZADANIE: L1** — wklej `prompt_l.md`. Walka i treść lochów mają korzystać z mechanik FAZY S (statbloki S2, kondycje [APPLY_CONDITION] S8–S14, skala D1–D5).
 
 ---
 
@@ -306,7 +307,24 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — ⏸ PO CAŁEJ FAZIE S (decyzja 2026-06-13: całe S przed L; dawna zależność L5↔S2 bezprzedmiotowa, bo S w całości wcześniej)
+## FAZA SF — Frontend FAZY S: pasek akcji + warstwa informacji zwrotnej (2026-06-15, post-S20)
+
+> Pełny opis + język wizualny (`/interface-design`): `game_mechanics.md` CZĘŚĆ AI → „FAZA SF". Skąd: audyt frontendu po S20 — akcje FAZY S podłączone, ale pasek walki upycha 7 przycisków (na telefonie nieczytelny) i brak warstwy „dlaczego" (k4/omen/darmowa akcja/odporność/poziom wyczerpania). Decyzja Piotra 2026-06-15: 3 przyciski **[Atak] · [Akcja ▾] · [Ucieczka]**, „Akcja" otwiera bottom sheet. **Domyślnie tylko frontend gracza, ZERO zmian mechaniki/endpointów** — WYJĄTEK (dozwolony): SF8 (drobne rozszerzenie payloadu rzutu o `breakdown[]`, bez zmiany liczenia). SF9 okazał się czysto frontendowy (prezentacja powodu + gating przycisku). Każde zadanie = `[TASK] SFNN` wdrażane `/tdd` (test Playwright UI). Reużyć tokeny dark-fantasy, bump `?v=`. Prompt startowy: `prompt_sf.md`.
+
+- [x] SF1 — Pasek 3 filary [Atak]·[Akcja ▾]·[Ucieczka] + bottom sheet (reszta przycisków → arkusz, te same handlery) [#619]
+- [x] SF2 — Zawartość arkusza: znacznik kosztu (⏳ tura / ↺ reakcja) + dostępność + powód wyszarzenia (zwarcie/tarcza/mana/strefa) [#620]
+- [ ] SF3 — Reakcje (Unik/Blok) jako toggle „uzbrojony", wizualnie różne od akcji zużywających turę (z `reaction_declared`)
+- [ ] SF4 — Pasek statusu gracza: trwałe kondycje z ikoną + skutkiem + poziomem (np. „Wyczerpany 2/2") — wypełnia lukę S9
+- [ ] SF5 — Ulotne komunikaty zdarzeń: confused/berserk k4, zły omen (S11), darmowa akcja hasted (S12), odporność zablokowała stan (S14)
+- [ ] SF6 — Karta rzutu: stawka hazardu „Ryzykujesz X zł" (S7/#616) + słowny stopień marginesu
+- [ ] SF7 — Ikony 8 kondycji w COND_BADGE_MAP (on_fire/exhausted/hidden/rage/blessed/hasted/hemorrhage/inspired)
+- [ ] SF8 — Karta rzutu: rozbicie wyniku po NAZWANYM źródle ("12 +1 Zręczność +2 Pobłogosławiony −1 Wyczerpany = 14") — domyka obawę Piotra "skąd ten bonus/kara w rzucie". ⚠️ Wyjątek od reguły SF: dokłada `breakdown[]` do payloadu rzutu (wystawia policzone składniki z etykietą, NIE zmienia liczenia)
+- [ ] SF9 — 🐛 BUG: wskrzeszenie nie da się włączyć w adminie + mylący komunikat u gracza. **Diagnoza PEWNA (2026-06-15, test API):** backend OK (curl PATCH utrwala). GŁÓWNA przyczyna: select „Tryb" w System→Wskrzeszenie (`system.js:154`) ma FIKCYJNE opcje (fixed/percent_of_xp/unlimited), backend zna inne (`VALID_MODES`: xp_revert/gold_percent/gold_recent_days/item_loss/admin_free) → zapis leci ze złym mode → 422 → cały PATCH (z `enabled`) odrzucony → „mimo kliknięcia nie zapisuje". Fix: (1) ✅ HOTFIX 2026-06-15 — poprawiono opcje selecta na 5 prawdziwych trybów + opis (system.js, ?v=31→32; zapis configu znów działa); (2) [ ] front gracza: rozróżnić `preview.reason` w komunikacie; (3) [ ] nie pokazywać klikalnego przycisku gdy `!enabled`. ⚠️ Czysto frontend (admin+gracz). Uwaga: globalny stan włączony ręcznie API 2026-06-15. Pozostaje (2)+(3) do FAZY SF.
+- [ ] SF — 🎮 Kamień: `/game-screen` na szerokości telefonu + Sandbox sweep feedbacku + karta rzutu z rozbiciem + wskrzeszenie po włączeniu w adminie; werdykt czytelności Piotra (bez TDD)
+
+---
+
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — ▶ NASTĘPNA W KOLEJCE (FAZA S ✅ kompletna; dawna zależność L5↔S2 bezprzedmiotowa; prompt: prompt_l.md)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
@@ -343,6 +361,51 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] L19 — 🎮 KAMIEŃ MILOWY: playtest lochu (2 cykle endless, śmierć z checkpointem, porzucenie, mobile; raport do [SMOKE] FAZA L; bez TDD)
 
 > Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).
+
+---
+
+## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)
+
+> Pełne definicje liczb + system czarów + fazy adaptacji + decyzje: `game_mechanics.md` CZĘŚĆ AK. Założenia: warrior=tank (mało INT), rogue=zwinny/najwięcej skilli/mniej HP niż warrior, mag=słaby fizycznie/nadrabia czarami. Audyt ujawnił 4 rozjazdy kod↔DB↔design. Czary z `rpg_spells_design_doc.md` (50 szt.). Każde zadanie = GitHub Issue `[TASK] BNN` wdrażane `/tdd`. **Blok 1 standalone** (przerywnik — można PRZED/równolegle z FAZĄ L). **Blok 2 niezależny od L** (po FAZIE S ✅). **Blok 3 ⛔ wymaga FAZY 5 (MP/towarzysze) + systemu reakcji.**
+
+### Blok 1 — Tożsamość klas (naprawa bugów, PILNE)
+- [x] [#624](https://github.com/szmidtpiotr/ai-gm/issues/624) — B1 — Rogue staty: DEX+2/LCK+1 zamiast INT+2/WIS+1 — osobna gałąź `rogue` w `_build_character_sheet` (`characters.py:205`) + odwrotność w `_core_bases_from_stored_stats:440`. **Bug krytyczny** (rogue dziś dostaje staty maga)
+- [ ] B2 — Rogue HP base 8: dodać do `ARCHETYPE_BASE_HP` (`vitality_service`); wyrównać kod↔DB seed (`migrations_admin.py:2892` już = 8); kreator pokazuje 8
+- [ ] B3 — Rogue budżet skilli: `SKILL_BUDGET["rogue"]`=10/9 + `ARCHETYPE_SKILL_WEIGHTS["rogue"]` (bias złodzieja/zwiadowcy: stealth/lockpick/sleight_of_hand/acrobatics/awareness/investigation) — `character_creation_config.py`
+- [ ] B4 — (D2) Rogue sneak attack jako cecha klasy (+1d6 z ukrycia) — wg decyzji D2 (alternatywa: zostawić generyczny `hidden`)
+- [ ] B5 — Test balansu regresyjny: pytest 3-klasowy (HP ordering warrior>rogue>scholar, staty per klasa, rogue skille>warrior, przeżywalność band w widełkach) — rozszerzenie `test_issue475_combat_balance.py`
+- [ ] [#622](https://github.com/szmidtpiotr/ai-gm/issues/622) — S17-EXT: follow-up zapasów gated za `wrestling` rank 3. **Część A (solo):** sukces → słabszy darmowy cios (obrażenia ÷2) przez prymityw `extra_action` (S12) — wdrażalne teraz, `/tdd`. **Część B (MP przewaga dla sojuszników):** ⛔ FAZA 5. Decyzja Piotra 2026-06-15 (dyskusja przy #621). Spec: `game_mechanics.md` → S17 → „S17-EXT"
+
+### Blok 2 — Czary maga Faza 1 (ST/self/heal/kontrola; po FAZIE S ✅)
+- [ ] B6 — Schema + seed czarów z `rpg_spells_design_doc.md` adoptowalnych teraz (atak ST, heal self, self-buff AC, kondycje) — tier/DC/mana wg docu
+- [ ] B7 — Tier-gating wg poziomu (max_tier=ceil(level/2)) + DC rzucania (T1-2=10/T3-4=14/T5-6=18) + integracja z istniejącym `arcane_points`/XP (nauka/upgrade)
+- [ ] B8 — Startowy zestaw maga L1 (fire_bolt+minor_heal+mage_armor+detect_magic); migracja istniejących scholarów
+- [ ] B9 — Mapowanie DoT/kondycji czarów na FAZA S (poisoned/slowed/frozen/blinded/stunned/confused/cursed) — reużycie, nie duplikat
+- [ ] B10 — Pula absorpcji / temp-HP dla tarcz (ward_of_iron, mage_armor) — drobna dobudowa silnika
+- [ ] B11 — AoE multi-target maga (burning_arc/chain/fireball) — ⛔ PO #595 (wybór celu)
+- [ ] B12 — Admin: czary w panelu (Świat/Mechaniki) + Smart Entry dla `game_config_spells`
+- [ ] B13 — Playtest: mag solo grywalny (heal/tarcza/atak/kontrola w realnej walce) — raport do `[SMOKE] FAZA B`
+
+### Blok 3 — Czary Faza 2 (⛔ WYMAGA FAZY 5 + system reakcji)
+- [ ] B14 — Ally-target (group_heal, haste, stoneskin_ally, divine_shield_ally, mass_*) — ⛔ wymaga MP/towarzyszy (FAZA 5)
+- [ ] B15 — Summony (familiar, elemental, animate_dead, shadow_clone) jako kombatant-towarzysz — ⛔ duża dobudowa silnika walki
+- [ ] B16 — System reakcji (blink, mirror_image redirect, globe_invulnerability) — ⛔ okno reakcji w silniku
+- [ ] B17 — (D3) Czary CHA (charm_person, mass_fear) — wg decyzji D3
+
+> **Decyzje do potwierdzenia (CZĘŚĆ AK.6):** D1 HP 10/8/6 (przyjęte roboczo) vs 12/10/8+retune wrogów · D2 rogue sneak attack cecha vs generyczny hidden · D3 mag CHA-czary tak/nie.
+> Poza zakresem FAZY B (Faza 2 czarów): pełny system towarzyszy/petów, leaderboard czarów, czary rytualne poza walką.
+
+---
+
+## FAZA HI — Inspektor Bohatera (admin) (2026-06-15 — decyzje w game_mechanics.md CZĘŚĆ AL) [3/5]
+
+> Narzędzie admina: podgląd+edycja żywego bohatera (ekwipunek dodaj/usuń/załóż, staty, skille, zaklęcia, kondycje, złoto, XP, questy) — jak monitor kampanii, ale dla bohatera. **~90% backendu już istnieje** (reuse cheat/xp/inventory/spells); dopisać tylko 3 luki + czysty GET. Decyzje Piotra: (1) nowa sekcja nawigacji „Bohaterowie" + link z monitora kampanii; (2) reuse cheat + 3 luki (set skill rank, set mana, add/remove condition); (3) audyt `admin_audit_log` + ostrzeżenie konto #1013 + blokada edycji w trakcie walki/tury. **Niezależne od S/L/MP — intermezzo kiedy Piotr zechce** (rekomendacja: po FAZIE L). Każde zadanie = `[TASK] HINN` wdrażane `/tdd`. Prompt startowy: `prompt_hi.md`.
+
+- [x] HI1 — Backend: czysty `GET /admin/characters/{id}/full` (agregat) + 3 luki (set skill rank, set mana, add/remove condition) + audyt mutacji w `admin_audit_log` + guard `live_locked` (409 gdy aktywna walka/tura) — [#623](https://github.com/szmidtpiotr/ai-gm/issues/623)
+- [x] HI2 — Sekcja „Bohaterowie": nawigacja (`index.html` SECTIONS+PORTED, bump ?v) + `sections/heroes.js` lista hero-first (filtr status/owner) + szkielet modalu inspektora; baner #1013 + live-lock — [#625](https://github.com/szmidtpiotr/ai-gm/issues/625)
+- [x] HI3 — Inspektor zak. Arkusz: edycja statów/skilli/HP/many/poziomu/kondycji/złota/XP przez reuse endpointów; re-fetch `/full` po zapisie; respekt 409 live-lock — [#626](https://github.com/szmidtpiotr/ai-gm/issues/626)
+- [ ] HI4 — Inspektor zak. Ekwipunek (dodaj/usuń/załóż + trwałość/afiksy) + Zaklęcia (naucz/awansuj) + Questy (dodaj/zalicz)
+- [ ] HI5 — Link „🧍 Otwórz inspektora" z monitora kampanii (`campaigns.js`) + weryfikacja audytu/live-lock end-to-end + Playwright
 
 ---
 
@@ -439,6 +502,7 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#567](https://github.com/szmidtpiotr/ai-gm/issues/567) — Walka: generyczny „Wróg" (key='enemy') wybierany bo słowo „wróg" pasowało do etykiety placeholdera w `_resolve_enemy_key_from_context`. Fix: pomijanie generycznych placeholderów (`_GENERIC_ENEMY_KEYS/_LABELS`) + polska nazwa fallbacku „Napastnik" w `_create_pending_combat_enemy`. 3/3 pytest + 1/1 Playwright GREEN. **needs-testing**
 - [x] [#568](https://github.com/szmidtpiotr/ai-gm/issues/568) — Walka: „brak lootu po zwycięstwie" — **WERDYKT: RNG, nie bug**. `roll_loot` rzuca każdy wpis niezależnie wg wagi (loot_enemy: 50/40/15%) → P(nic)≈25%. Ścieżka grant niezmieniona. Uwaga: `drop_chance=0.8` na wrogu nieużywana w roll_loot (do ew. decyzji projektowej). 3/3 pytest + 1/1 Playwright GREEN (dowody). **needs-testing**
 - [x] [#569](https://github.com/szmidtpiotr/ai-gm/issues/569) — Walka: widoczny modal rzutu k20 (3D) przy ataku (parytet z testami umiejętności). `playCombatDiceRoll` reużywa dice-overlay + DICE.dice_box, odsprzężona od resolveSkillTest; wpięta w `handleCombatAttack` po wylosowaniu d20. 1/1 Playwright GREEN. **needs-testing**
+- [x] [#621](https://github.com/szmidtpiotr/ai-gm/issues/621) — Walka: strukturalny `skip_turn` ignorowany → `slowed`/`stunned` bez efektu (zapasy „nic nie dają", wróg atakował mimo wygranej). Root cause: `evaluate_current_turn_conditions` blokował turę tylko dla `type=="block_action"`; nowy format `effects:[{"type":"skip_turn",chance,...}]` nieczytany (legacy płaski tylko gdy `effects` puste). Fix: handler `skip_turn` w pętli strukturalnej — losuje `chance` (default 1.0), trafienie → `block_action`. Dotyczy wszystkich źródeł slowed/stunned (też czary). TDD 4/4 pytest + 1/1 Playwright GREEN. **needs-testing**
 - [x] [#395](https://github.com/szmidtpiotr/ai-gm/issues/395) — Aktywny preset LLM jako jedyne źródło prawdy: spójna tożsamość endpointu (provider+base_url+model z jednego źródła), leniwa hydratacja presetu w świeżych procesach, `LLMConfigError` zamiast cichego fallbacku do Ollama/gemma (TDD, 8/8 GREEN) — commit 526cfdd — zweryfikowane, zamknięte
 - [ ] #C-acc — Acceptance harness C1–C19 (pytest 13/13 + Playwright LLM-play) — `scripts/acceptance_c_series.sh`, `docs/ACCEPTANCE_C_SERIES.md` — commit 687f7ed; RED backlog: C9 (modal Ucz się), C10/C11 (questy)
 - [x] [#396](https://github.com/szmidtpiotr/ai-gm/issues/396) — Admin3 Narzędzia→Playwright odpala wszystkie suity ux (regression/acceptance/admin3); test-agent skan rekursywny + run po ścieżce/grupie; nowy admin3 smoke 16/16 GREEN — commit 6058f90 (TDD 7/7 GREEN)

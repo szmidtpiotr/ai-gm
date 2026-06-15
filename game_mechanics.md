@@ -36,6 +36,10 @@
 > | CZĘŚĆ AF | Złoto i Ekonomia (sinki, crafting, durability) |
 > | CZĘŚĆ AG | Infrastruktura (.170=RTX3060, .16=GTX1660, workload rules) |
 > | **CZĘŚĆ AH** | **FAZA U — Plan naprawczy używalności (audyt 2026-06-11; wykonać PRZED Fazą 5 MP)** |
+> | CZĘŚĆ AI | FAZA S — Skille i Stany (+ FAZA SF: frontend warstwy informacji zwrotnej) |
+> | CZĘŚĆ AJ | FAZA L — Lochy kafelkowe (redesign) |
+> | CZĘŚĆ AK | Balans 3 klas + System Czarów Maga (FAZA B) |
+> | **CZĘŚĆ AL** | **FAZA HI — Inspektor Bohatera (admin: podgląd+edycja arkusza/ekwipunku/skilli żywego bohatera)** |
 > | CZĘŚĆ 10 | Zasady projektowe (5 reguł) |
 > | CZĘŚĆ 10b | Observability — odłożone do prod deployment |
 > | **WYKONANE** | **Fazy zakończone (FAZA -1 A1-A12, FAZA 0 B1-B7, FAZA 1 C1-C19) — na końcu pliku** |
@@ -4488,6 +4492,18 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 
 **Weryfikacja:** pytest: opposed STR vs STR, kondycja na celu po sukcesie/crit, self-condition przy crit-fail, gate strefy. Ręcznie: Sandbox — wrestling na wrogu, chip kondycji `slowed` pojawia się przy wrogu.
 
+##### S17-EXT — Follow-up zapasów gated za rang (decyzja Piotra 2026-06-15) 📋 ZAPLANOWANE [#622]
+
+> **Skąd:** po naprawie #621 (skip_turn działa) Piotr zauważył: zapasy zużywają turę gracza i odbierają turę wrogowi — tempo-neutralnie, ale bez „nagrody" w chwili wykonania. Pytanie: czy udane zapasy mają dawać dodatkowy atak w tej samej turze? **Analiza ekonomii akcji:** bezwarunkowy darmowy atak = zapasy ściśle lepsze od ataku → obsoletuje „Atak", łamie balans. **Decyzja:** NIE w bazie — gate za inwestycję w skill (spójnie z proficiency od rank 3). Wybór formy: **oba** warianty.
+>
+> **Reguła (wartości startowe — Numbers Policy):**
+> - Wyzwalacz: udane zapasy (`SUCCESS`/`CRITICAL_SUCCESS`) **ORAZ** `wrestling` rank ≥ 3. Rank 1–2 = czysta kontrola (jak dziś). Baza nietknięta = balans chroniony.
+> - **SOLO (wdrażalne teraz):** sukces → **słabszy darmowy cios** w tej samej turze. Lekki atak: rzut bronią, obrażenia **÷2** (zaokrąglone w dół, min 1), bez nat-20-double-na-follow-upie, BEZ ponownego wyzwalania zapasów. Reużyć prymityw `extra_action` z hasted (S12, `extra_action_used`) — follow-up nie konsumuje kolejnej akcji ekonomii. Jeden cios na zapasy.
+> - **MP (⛔ ODŁOŻONE do FAZY 5 — wymaga towarzyszy/MP + systemu reakcji, dziś nieistniejących):** schwytany wróg (slowed/stunned z zapasów) = „schwytany" → następny atak **sojusznika** na niego ma przewagę/bonus. Synergia drużynowa (ty trzymasz, sojusznik bije). Marker „grappled" + ścieżka przewagi parkowane do FAZY 5/G.
+> - **NIETKNIĘTE:** rzuty ataku w walce (nat 20/nat 1, podwójne obrażenia) — follow-up to osobny, słabszy cios. Zasada 1 (data-driven outcome) zachowana.
+>
+> **Weryfikacja (gdy wdrażane):** pytest — rank 2 brak follow-upu; rank 3 sukces → jeden cios ÷2 obrażeń przez `extra_action`; krytyk identycznie; brak rekurencji. Sandbox — klon z `wrestling=3`, udane zapasy → log pokazuje „Dodatkowy cios" za połowę obrażeń.
+
 #### S18 — Prymityw: wymuszenie zachowania + pełne `confused` / `berserk` / `panicked` ✅ ZROBIONE [#613]
 
 > **Wdrożone (2026-06-14):** nowy typ efektu `behavior_override` (pole `behavior`: `random_table_k4` / `attack_nearest` / `flee`) dodany do U10 (`effect_schema.json` + walidator). `evaluate_current_turn_conditions` wyznacza `forced_behavior` aktora bieżącej tury generycznie (zero `if condition_key==`); k4 rzucany RAZ/turę i persystowany w runtime, by `resolve_attack` odczytał tę samą decyzję. ENEMY: enemy branch `resolve_attack` wykonuje stand/flee/attack — **nowa ścieżka obrażeń wróg→wróg** (berserk atakuje najbliższego niezależnie od frakcji + obsługa śmierci celu-wroga). PLAYER: banner z wynikiem k4/ucieczki w torze walki (tura NIE przejęta w całości — UX). Seedy: `confused` podniesiony o random_table_k4, `panicked` o flee+periodic_save WIS 14, `berserk` NOWA (attack_nearest, +3 atak/+3 obrażenia foldowane generycznie w atak wroga przez `_combatant_stat_modifier`, -3 AC, WIS DC 14, 6 rund). Przy okazji naprawiono ukryty bug `_block` UnboundLocalError z S16 (atak wroga przy pudle). Zasada 4 w 4 miejscach (schema+walidator / forge.js / system_prompt.txt / CZĘŚĆ X). Sandbox: apply-condition przyjmuje `enemy_ref` (test kondycji na wrogu). Rzuty ataku gracza (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTE. 17/17 pytest real-engine + 1/1 Playwright. Liczby = wartości startowe (Numbers Policy → tuning po S20).
@@ -4529,6 +4545,92 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 4. Bez TDD, bez issue [TASK] — czysty playtest.
 
 **Weryfikacja:** Tabela checkpointów w issue; werdykt grywalności; decyzja Piotra o tuningu liczb.
+
+---
+
+### FAZA SF — Frontend FAZY S: pasek akcji + warstwa informacji zwrotnej (2026-06-15, post-S20)
+
+> **Skąd to się wzięło:** Audyt frontendu po S20 (analiza, bez kodu) wykazał, że WSZYSTKIE akcje FAZY S są podłączone (endpointy + przyciski istnieją), ale: (a) pasek walki upycha do 7 przycisków w jednym rzędzie → na telefonie nieczytelny; (b) brakuje „warstwy informacji zwrotnej" — gracz wykonuje akcję, ale gra nie mówi mu DLACZEGO coś się stało (szał/dezorientacja k4, stawka hazardu, zły omen, darmowa akcja hasted, odporność zablokowała stan, poziom wyczerpania).
+> **Decyzja Piotra (2026-06-15):** zwinąć pasek do 3 kciukowych przycisków **[Atak] · [Akcja ▾] · [Ucieczka]**; „Akcja" otwiera arkusz (bottom sheet) z resztą opcji; dołożyć warstwę feedbacku.
+> **Zasady projektowe:** tylko frontend gracza (`frontend/front/`), ZERO zmian mechaniki/endpointów (backend FAZY S jest kompletny — to czysta prezentacja). Każde zadanie = `[TASK] SFNN` wdrażane `/tdd` (test = Playwright UI + kontrakt; pytest tylko jeśli dotknie helpera). Reużyć istniejące tokeny dark-fantasy (`--bg-primary`, `--accent` złoto #c9a54a, `--danger` krew, `--success` zieleń, skala `--space-*`) — BEZ nowej palety. „Mechanika decyduje, LLM narruje" obowiązuje — feedback czyta stan z combat snapshot / wyniku rzutu, nic nie liczy sam.
+
+**Język wizualny (z `/interface-design`, ugruntowany w istniejących tokenach):**
+- **3 filary akcji** zamiast rzędu 7 ikon. Atak = krew (`--danger` akcent), Akcja = złoto (`--accent`, neutralny rdzeń), Ucieczka = przygaszony/popielaty. Kciukowy zasięg: pełna szerokość dołu ekranu, min. 44–48 px wysokości celu dotyku.
+- **Bottom sheet, NIE modal centralny** — wysuwa się od dołu (kciuk), półprzezroczyste tło, lista kart akcji. Każda karta: ikona + nazwa + 1 linijka „co robi" + **znacznik kosztu**: `⏳ zużywa turę` (akcje: zaklęcie, zapasy, zmiana strefy) vs `↺ reakcja — za darmo` (Unik/Blok, pre-deklaracja do najbliższego ataku).
+- **Reakcja ≠ akcja.** Unik/Blok to przełączniki „uzbrajane" przed ciosem wroga — pokazane jako toggle z poświatą (`--accent-glow`) i stanem „uzbrojony do następnego ataku", a nie jak przyciski zużywające turę. Akcje znikają z arkusza, reakcje zostają widoczne jako aktywny stan.
+- **Niedostępne opcje = widoczne, wyszarzone + powód.** Np. „Zapasy — wymaga zwarcia", „Blok — brak tarczy", „Zaklęcie — za mało many". Popielaty `--text-muted`, kursor zablokowany, krótki powód pod nazwą (gracz UCZY SIĘ zasad, zamiast zgadywać czemu przycisku nie ma).
+- **Warstwa feedbacku = trwałe + ulotne.** Trwałe: pasek statusu gracza nad kompozerem (ikony aktywnych kondycji z 1-słownym skutkiem). Ulotne: krótkie komunikaty inline w logu walki na zdarzenie (k4, omen, darmowa akcja, odporność).
+
+**Zadania (kolejność):**
+
+#### SF1 — Pasek akcji: 3 filary [Atak] · [Akcja ▾] · [Ucieczka] + bottom sheet ✅ (#619)
+**Cel:** Zwiń `#combat-composer` do trzech czytelnych przycisków; „Akcja" otwiera bottom sheet. Reszta przycisków (Zaklęcie, Zbliż/Cofnij, Unik, Blok, Zapasy) przenosi się do arkusza — te same handlery/endpointy, inne miejsce.
+**Dla agenta:** `frontend/front/index.html` (`#combat-composer`, linie ~782–832) + `app.js` (render paska, bindy przycisków). Nowy kontener arkusza + funkcja otwórz/zamknij. Atak/Ucieczka zostają na pasku; reszta = pozycje arkusza. Bump `?v=`. Zero zmian backendu.
+**Weryfikacja:** Playwright: w walce widoczne dokładnie 3 przyciski paska; klik „Akcja" pokazuje arkusz z pozycjami; klik pozycji wywołuje ten sam endpoint co dziś (np. zone-change). Wizualnie `/game-screen` na telefonowej szerokości — przyciski nie nachodzą.
+
+#### SF2 — Zawartość arkusza: koszt tury, dostępność, powód niedostępności ✅ (#620)
+**Cel:** Każda pozycja arkusza ma ikonę, nazwę, 1-linijkowy opis, znacznik kosztu (`⏳ tura` / `↺ reakcja`) oraz stan dostępne/wyszarzone+powód (zwarcie, tarcza, mana, strefa).
+**Dla agenta:** Logika dostępności czyta z combat snapshot (zone, equipped shield, mana, skill ranks) — dane już są w stanie walki/sheetcie. Powód = statyczny tekst per warunek. NIE licz mechaniki, tylko czytaj stan.
+**Weryfikacja:** Playwright: bez tarczy „Blok" wyszarzony z powodem „brak tarczy"; w dystansie „Zapasy" wyszarzone „wymaga zwarcia". Reakcje mają `↺`, akcje `⏳`.
+
+#### SF3 — Reakcje jako toggle „uzbrojony" (odróżnienie od akcji)
+**Cel:** Unik/Blok wizualnie różne od akcji zużywających turę: przełącznik z poświatą + etykieta „uzbrojony do następnego ataku"; po zużyciu/rozładowaniu gaśnie.
+**Dla agenta:** Reużyj istniejącego `reaction_declared` z combat snapshot (S15/S16) — render stanu toggla z niego. `app.js` render reakcji w arkuszu/na pasku statusu.
+**Weryfikacja:** Playwright: klik „Unik" → stan „uzbrojony"; po ataku wroga (event reakcji) stan gaśnie; log pokazuje wynik (jest już z S15).
+
+#### SF4 — Pasek statusu gracza (trwała warstwa kondycji)
+**Cel:** Nad kompozerem pasek aktywnych kondycji GRACZA z ikoną + 1-słownym skutkiem „teraz" (Płonie −2/2k6, Wyczerpany 2/2, Ukryty, Pobłogosławiony, Krwawi). Reużywa katalogu `/api/mechanics/conditions` (label+opis) + combat snapshot (poziom stackowania).
+**Dla agenta:** `app.js` — nowy render z `player.conditions[]` (snapshot ma `key/label/effect_json/runtime.level`). Poziom pokaż przy stackowalnych („Wyczerpany 2/2"). To wypełnia lukę „S9 poziom niewidoczny".
+**Weryfikacja:** Sandbox/Playwright: nałóż exhausted 2× → pasek pokazuje „Wyczerpany 2/2"; on_fire → „Płonie".
+
+#### SF5 — Ulotne komunikaty zdarzeń (k4, omen, darmowa akcja, odporność)
+**Cel:** Krótkie, znikające wpisy w logu walki dla ukrytej dotąd mechaniki: confused/berserk gracza („Twoja akcja może pójść losowo — k4"), zły omen (klątwa zepsuła rzut), darmowa akcja (hasted nie zużył tury), odporność zablokowała stan (S14).
+**Dla agenta:** Źródła sygnałów: combat snapshot / wynik rzutu / odpowiedź zone-change (`extra_action_used`), `omen_applied`. Jeśli któregoś sygnału brak w odpowiedzi dla gracza — odnotuj w issue (drobne rozszerzenie payloadu, NIE zmiana mechaniki). To wypełnia luki S11/S12/S14/S18 (player-side).
+**Weryfikacja:** Sandbox/Playwright per sygnał: hasted → „Ruch za darmo"; rage + próba slowed → „Odporność: stan nie wszedł".
+
+#### SF6 — Karta rzutu: stawka hazardu + stopień słowny
+**Cel:** Na karcie rzutu hazardu pokaż „Ryzykujesz X zł"; margines (jest) uzupełnij słownym stopniem (z nawiązką / na styk / o włos).
+**Dla agenta:** Pending niesie `gamble.stake` (S7/#616) — wyświetl na karcie. Stopień z `outcome`. `app.js` render karty rzutu.
+**Weryfikacja:** Playwright: „stawiam 5 złota i gram w kości" → karta pokazuje „Ryzykujesz 5 zł".
+
+#### SF7 — Ikony 8 nowych kondycji (kosmetyka, domknięcie spójności)
+**Cel:** Dodaj glify do `COND_BADGE_MAP`: on_fire 🔥, exhausted 😓, hidden 🌫, rage 😤, blessed ✨, hasted ⚡, hemorrhage 🩸, inspired 🌟 (dziś renderują się generyczną kropką).
+**Dla agenta:** `app.js` `COND_BADGE_MAP` (linie ~4555). Tylko mapa ikon.
+**Weryfikacja:** Wizualnie: te kondycje w torze inicjatywy/pasku mają własną ikonę.
+
+#### SF8 — Karta rzutu: rozbicie wyniku po NAZWANYM źródle (skąd to "+3")
+
+**Cel:** Gdy gracz rzuca 12 na kości, a wynik to 15, karta rzutu ma pokazać DLACZEGO — rozbicie po nazwanych składnikach, nie jedną sumę. Przykład: `🎲 12 + 1 (Zręczność) + 2 (Pobłogosławiony) − 1 (Wyczerpany) = 14 vs DC 12 ✓`. Dotyczy ataku i testów umiejętności. To domyka pierwotną obawę Piotra: gracz nie wie, skąd bierze się bonus/kara w rzucie.
+
+**Dla agenta:**
+1. Źródło danych: silnik już liczy modyfikatory — `combat_service._combatant_stat_modifier()` składa stat + skille + kondycje (`stat_mods` + `static_stat_modifier` z S8) + afiksy; `weapon_rules.resolve_attack_roll_for_weapon()` zna stat/skill/proficiency/weapon. Dziś wynik leci do frontu jako `total` + `modifier` (jedna liczba) — BRAK listy składników.
+2. **To NIE jest czysty frontend** (wyjątek od reguły SF): trzeba dołożyć do payloadu rzutu listę `breakdown: [{label, value, source_type}]` — bez zmiany JAK liczy się rzut, tylko WYSTAWIENIE już policzonych składników z etykietami. `source_type` ∈ stat/skill/proficiency/wound/condition/affix/weapon. Kara rany i kondycje muszą trafić do listy z czytelną polską nazwą (np. "Wyczerpany", "Pobłogosławiony", afiks "Ostry").
+3. Frontend (`app.js`, render karty rzutu): renderuj `d20 + Σ składników = total`, każdy składnik z etykietą i znakiem; ujemne na czerwono (`--danger`), dodatnie na zielono (`--success`). Reużyj słów z istniejącego breakdownu (te same nazwy co w roll card — spójność z U20).
+
+**Weryfikacja:** Sandbox: nałóż blessed + exhausted na klona, wykonaj atak → karta rzutu pokazuje obie pozycje z nazwą i wartością, suma = wynik silnika. Playwright: rzut z modyfikatorem pokazuje ≥2 nazwane składniki, nie samą sumę. Liczby na karcie = liczby z combat snapshot (front nic nie liczy sam).
+
+#### SF9 — Bug: wskrzeszenie włączone w adminie nie działa
+
+**Cel:** Admin włącza wskrzeszenie w panelu, ale gracz na ekranie śmierci nie dostaje działającego przycisku. Naprawić, żeby włączenie w adminie faktycznie udostępniało wskrzeszenie graczowi.
+
+**Diagnoza POTWIERDZONA (2026-06-15, odczyt DEV DB + kod + test API):** Backend jest ZDROWY — PATCH `/admin/resurrection-config {enabled:true}` przez curl utrwala stan poprawnie (zweryfikowane dwoma odczytami). Bug jest w **panelu admina System → Wskrzeszenie** (`frontend/admin/sections/system.js`).
+
+**GŁÓWNA PRZYCZYNA (pewna): rozjazd wartości trybu select↔backend.**
+- Select „Tryb" w `system.js:154–158` ma opcje: `fixed`, `percent_of_xp`, `unlimited`.
+- Backend `VALID_MODES` (`resurrection_service.py:42`) zna ZUPEŁNIE inne: `xp_revert`, `gold_percent`, `gold_recent_days`, `item_loss`, `admin_free`. Żadna opcja selecta nie istnieje w backendzie.
+- Skutek: (a) na load stored mode (np. `admin_free`) nie pasuje do żadnej opcji → select.value=''; (b) na save `mode` (pusty lub jeden z fikcyjnych) → `set_global_resurrection_config` rzuca ValueError → **422 → cały PATCH odrzucony razem z `enabled`** → ptaszek „Włącz" nigdy się nie utrwala. To dlatego „mimo kliknięcia nie zapisuje stanu".
+
+**Dla agenta — fix (frontend admina, czysto prezentacja):**
+1. **Napraw opcje selecta `sys-res-mode`** — wstaw 5 prawdziwych trybów z `VALID_MODES` z polskimi etykietami (xp_revert = „cofnięcie XP", gold_percent = „% złota", gold_recent_days = „złoto z ostatnich dni", item_loss = „utrata przedmiotu", admin_free = „za darmo (admin)"). Popraw też opis nad polem (`system.js:146` wymienia nieistniejące fixed/percent_of_xp/unlimited).
+2. Po naprawie selecta zapis `enabled` zacznie działać (backend już OK).
+
+**Dwa defekty po stronie gracza (frontend gracza, `app.js`):**
+3. **Mylący komunikat.** `handleResurrect` (`app.js:8536`) pokazuje „…dla tego konta" niezależnie od powodu. Rozróżnij `preview.reason`: `resurrection_disabled` → „Wskrzeszenia wyłączone przez Mistrza Gry", `no_uses_remaining` → „Brak pozostałych wskrzeszeń". `reason` jest już w odpowiedzi `cost_preview`.
+4. **Przycisk widoczny mimo `enabled:false`** (zrzut Piotra). Gating (`app.js` ~8322) nieszczelny — albo ukryj przy `!enabled`, albo pokaż wyszarzony z powodem (spójnie z SF2). Nie pokazuj klikalnego przycisku, który zawsze kończy się błędem.
+
+**Weryfikacja:** (a) Admin: System → Wskrzeszenie → wybierz tryb, zaznacz „Włącz", Zapisz → przeładuj zakładkę → stan utrzymany (DB `enabled:true`, mode = wybrany). (b) Gracz Demo (uses=6) ginie → ekran śmierci pokazuje działający „✦ Wskrześ bohatera". (c) Po wyłączeniu globalnym → gracz widzi właściwy komunikat / brak klikalnego przycisku. `/game-test-player-screenshot` stanu on. Uwaga: stan globalny włączony ręcznie przez API 2026-06-15 — przy teście „off" najpierw go wyłącz.
+
+**Weryfikacja całości (kamień SF):** `/game-screen` na szerokości telefonu — pasek 3-przyciskowy czytelny, arkusz działa, pasek statusu i komunikaty pojawiają się w Sandbox sweep kondycji, karta rzutu rozbija wynik po źródłach, wskrzeszenie działa po włączeniu w adminie. Werdykt czytelności od Piotra.
 
 ---
 
@@ -4756,6 +4858,7 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 ## Poprawki standalone (poza fazami A-H)
 
+- #621 — Walka: silnik ignorował strukturalny `skip_turn` → `slowed`/`stunned` bez efektu (zapasy S17 „nic nie dawały", wróg atakował mimo wygranego testu). `evaluate_current_turn_conditions` blokował turę aktora tylko dla `type=="block_action"`; nowy format `effects:[{"type":"skip_turn","chance":0.5,...}]` (slowed/stunned) był nieczytany — stary płaski `skip_turn` działał tylko gdy `effects` puste. Fix: handler `skip_turn` w pętli strukturalnej — losuje `chance` (domyślnie 1.0 = zawsze pomija, jak stunned; slowed 0.5 co turę), trafienie → `block_action`. Czas trwania ogarnia istniejący mechanizm wygasania. Dotyczy WSZYSTKICH źródeł slowed/stunned (też czary maga). Naprawa silnika za zgodą Piotra 2026-06-15. TDD 4/4 pytest + 1/1 Playwright. ✅ needs-testing
 - #456 — SB-2: `scene_enemies` / `player_conditions` zawsze puste — naprawione: `initiate_combat()` → `set_world_state_flags(scene_enemies=[...])`, `end_combat()` → clear, `auto_save_snapshot()` → `_sync_player_conditions()` z arkusza postaci. Commit po deploy DEV (TDD 4/4 + Playwright 2/2). ✅
 - #457 — SB-3/SB-4: keyword scan nadpisywał `SKILL_TEST_PENDING` — guard przed skanem w `create_turn` + ścieżce streaming; fix `is_admin` w `slash_registry_key_for_dispatch` (HTTP 500 na slash komendy). ✅
 - #458 — SB-5: test umiejętności zablokowany po `committed_d20` — SB-3/SB-4 guard rozszerzony: gdy `committed_d20` ustawione → auto-resolve inline (`resolve_skill_test` + LLM prose + save turn + clear state); gdy brak → re-surface (backward compat SB-3/SB-4). ✅
@@ -5165,3 +5268,146 @@ Batch standalone (panel admina + Web Push), wdrożone metodą /tdd (pogrupowane 
 | #593 | Web Push | Pełny stack: `pywebpush` + VAPID env + frontend SW register/subscribe + przycisk w Ustawieniach | 5/5 pytest + 3/3 Playwright |
 
 Status: wszystkie **review/needs-testing** — czekają na weryfikację wizualną Piotra na DEV. Szczegóły w `notes.md` → „Zrobione dodatkowe".
+
+---
+
+## CZĘŚĆ AK — Balans 3 klas + System Czarów Maga (2026-06-14)
+
+> Sesja projektowa: rozjazdy między założeniami klas a kodem (audyt przy okazji #618) + adopcja `rpg_spells_design_doc.md` (50 czarów). Plan wdrożenia krok-po-kroku: `notes.md` → **FAZA B**. Każde zadanie = GitHub Issue `[TASK] BNN`.
+
+### AK.1 — Filary tożsamości 3 klas
+
+| Klasa | Fantazja | Mocna strona | Słabość | Kompensuje |
+|---|---|---|---|---|
+| **Wojownik** | Tank pierwszej linii | najwyższe HP, melee STR, prostota | mało INT, brak zasięgu/magii, mało skilli | wytrzymałość + DPS w zwarciu |
+| **Łotrzyk** | Zwiadowca/złodziej | najwięcej skilli, DEX, burst z ukrycia | mniej HP niż warrior, słaby w długiej wymianie | skille poza walką + zasadzka + ucieczka |
+| **Mag (Uczony)** | Glass cannon / support | czary (atak/heal/protect/buff/control) | najniższe HP, słaby fizycznie, limit many | dystans + tarcze + kontrola + leczenie |
+
+### AK.2 — Liczby kanoniczne per klasa (cel)
+
+| Oś | Wojownik | Łotrzyk | Mag |
+|---|---|---|---|
+| HP bazowe | **10** | **8** | **6** |
+| Bonus statów | STR+2, CON+1 | **DEX+2, LCK+1** | INT+2, WIS+1 |
+| Tendencja AC | średnia (ciężka zbroja) | wysoka (DEX) | niska |
+| Skille aktywne / sloty | 7 / 8 | **9 / 10** | 8 / 10 |
+| Bias skilli | melee, atletyka, zastraszanie, przetrwanie | stealth, lockpick, sleight_of_hand, acrobatics, awareness, investigation | arcana, lore, medicine, investigation |
+| Zasób | — | — (sygnatura: zasadzka) | mana 8+INT_mod×lvl |
+| Stat ataku / strefa | STR / zwarcie | DEX / zwarcie+dystans | INT / dystans |
+
+**Decyzja HP:** warrior zostaje **10** (nie ruszamy balansu walk #475); różnicowanie przez obniżenie rogue **10→8**. Wartość 8 = już zaseedowana w tabeli `archetypes` DB (`migrations_admin.py:2892`) → wyrównanie kod↔DB↔design jednym ruchem. Mag 6 bez zmian (poprawnie kruchy; przeżywalność melee ~160% = MUSI grać dystansem/czarami).
+
+### AK.3 — Diagnoza: 4 rozjazdy łamiące design (stan 2026-06-14)
+
+1. ✅ **Rogue dostaje staty maga.** ~~`characters.py:212-218` gałąź `else` (rogue+scholar) → INT+2/WIS+1. Frontend obiecuje DEX+2/LCK+1 (`app.js:239`). Rogue nie jest zwinny mechanicznie. KRYTYCZNY.~~ **Naprawione B1 ([#624](https://github.com/szmidtpiotr/ai-gm/issues/624), 2026-06-15):** osobna gałąź `elif rogue` → DEX+2/LCK+1 + thief skill minimums (stealth/sleight_of_hand/awareness 2/2/1); odwrotność `_core_bases_from_stored_stats` rogue → DEX-2/LCK-1. Backend == kreator.
+2. **Rogue HP == warrior.** `vitality_service` = 10, DB `archetypes` = 8, design = <warrior. Potrójny rozjazd.
+3. **Rogue brak budżetu skilli.** `character_creation_config.py:9/14` — brak klucza `rogue` → fallback na warrior (8/7, bez biasu). Design chce więcej + bias złodzieja.
+4. **Toolkit maga cienki.** 10 czarów: atak 6 / heal 1 (self) / tarcza 2 (self) / buff 0 / party 0. Nie może pełnić roli supportu → adopcja `rpg_spells_design_doc.md`.
+
+### AK.4 — System czarów maga (z `rpg_spells_design_doc.md`)
+
+50 czarów, 6 szkół. DC rzucania: T1-2=10, T3-4=14, T5-6=18. Test = INT (rzadko CHA). Sukces krytyczny (≥5 nad DC) = wzmocnienie; krit. porażka (≥5 pod DC) = efekt negatywny / obrażenia dla rzucającego. Mana wydana nawet przy fizzle.
+
+Pokrycie ról po adopcji: **atak ST** (fire/frost/ice/inferno), **atak AoE** (acid_cloud, blizzard, storm_call, fireball), **heal** (minor_heal, group_heal, mass_restoration, regenerate), **tarcza/buff** (ward_of_iron, mage_armor, mirror_image, blink, haste, power_word_shield), **kontrola** (frost_grip, hex, blind, confusion, stun_bolt, mass_stun), **utility** (detect_magic, silent_step, levitate, illusions, dispel, scrying, teleport), **summon** (familiar, elemental, animate_dead, shadow_clone).
+
+- **Startowy zestaw maga (L1, 4× tier 1):** `fire_bolt` (atak) + `minor_heal` (heal) + `mage_armor`/`ward_of_iron` (obrona) + `detect_magic` (utility). Pełna tożsamość od startu.
+- **Progresja:** tier-gating wg poziomu (np. max_tier = ceil(level/2)); nauka/upgrade za istniejące `arcane_points`/XP.
+- **DoT/kondycje czarów** mapować na istniejące kondycje FAZY S (poisoned/slowed/frozen/blinded/stunned/confused/cursed) — reużycie, nie duplikat.
+
+### AK.5 — Fazy adaptacji czarów (co silnik uniesie)
+
+| Kategoria | Silnik dziś | Werdykt |
+|---|---|---|
+| Atak ST / heal self / kondycje | ✅ wspiera | adoptuj od razu (Faza 1) |
+| Self-buff AC + pula absorpcji | ⚠️ AC tak, absorpcja = nowa | drobna dobudowa (Faza 1) |
+| DoT / over-time | ⚠️ częściowo (kondycje FAZY S) | mapuj na kondycje (Faza 1) |
+| AoE multi-target | ⚠️ zależy od wyboru celu (#595) | po #595 (Faza 1.5) |
+| Ally-target (group_heal, haste…) | ❌ solo = brak sojuszników | ⛔ Faza 2 — wymaga MP/towarzyszy (FAZA 5) |
+| Summon (elemental, familiar…) | ❌ brak kombatanta-towarzysza | ⛔ Faza 2 — duża dobudowa silnika |
+| Reakcje (blink, mirror redirect) | ❌ brak okna reakcji | ⛔ Faza 2 — system reakcji |
+
+### AK.6 — Decyzje do potwierdzenia (NIE zapomnieć)
+
+- **D1 — HP:** 10/8/6 (rekomendacja, bez retune wrogów) **vs** 12/10/8 (+ re-tune wrogów #475, atak +1). → przyjęto roboczo **10/8/6**.
+- **D2 — Rogue sygnatura:** sneak attack jako cecha klasy (+1d6 z ukrycia) **vs** zostawić generyczny mechanizm `hidden`.
+- **D3 — Mag CHA-czary:** dopuścić charm_person/mass_fear na CHA **vs** trzymać maga czysto na INT.
+
+### AK.7 — Mapowanie na wdrożenie
+
+Kroki krok-po-kroku, zależności i kolejność: `notes.md` → **FAZA B** (Blok 1 = naprawa tożsamości klas, standalone; Blok 2 = czary Faza 1, po FAZIE S; Blok 3 = czary Faza 2, ⛔ po FAZIE 5 + reakcje).
+
+---
+
+## CZĘŚĆ AL — FAZA HI: Inspektor Bohatera (admin)
+
+> **Skąd:** Piotr 2026-06-15 — w panelu admina brakuje odpowiednika monitora kampanii, ale dla BOHATERA. Admin chce w jednym miejscu podejrzeć i edytować żywego bohatera gracza: ekwipunek (dodaj/usuń/załóż), statystyki, skille, zaklęcia, kondycje, złoto, XP, questy. Dziś te możliwości są rozsypane (cheaty, sandbox na klonie, players.js tylko do poziomu konta).
+> **Stan zastany (recon 2026-06-15):** ~90% backendu już istnieje — odczyt: `GET /api/admin/sandbox/character/{id}` (agregat); zapisy: `POST /api/admin/cheat/{id}` (gold/hp/staty/poziom/dodaj-usuń przedmiot/questy), `POST /characters/{id}/xp/grant-mg`, `PATCH /characters/{id}/sheet`, `/admin/characters/{id}/spells/learn|upgrade`, `api/inventory.py` (equip/use/drop). Gotowy renderer arkusza+ekwipunku: `admin_panel_v2/sections/sandbox.js:997` (ale działa na klonie). Brak: czystego odczytu poza routerem sandbox, set-skill-rank, set-mana, add/remove-condition poza walką, oraz LIVE inspektora w modular admin.
+> **Decyzje Piotra (2026-06-15):**
+> 1. **Umiejscowienie:** nowa sekcja nawigacji **„Bohaterowie"** (lista hero-first, filtr idle/active/właściciel) → modal inspektora; dodatkowo link z monitora kampanii (karta bohatera → „Otwórz inspektora").
+> 2. **Model edycji:** REUSE istniejących endpointów (cheat/xp/inventory/spells); dopisać TYLKO 3 luki (set skill rank, set mana, add/remove condition) + czysty GET odczytu. Minimum nowego backendu, zero dublowania logiki.
+> 3. **Bezpieczeństwo:** każda mutacja → wpis do `admin_audit_log`; ostrzeżenie przy koncie obserwowanym (PiotrSzmidt #1013); **blokada edycji gdy bohater ma aktywną walkę/turę w toku** (anty-desync).
+> **Zasady projektowe:** mechanika decyduje — inspektor czyta/zapisuje przez istniejące, walidujące ścieżki; żadnych surowych zapisów do sheet_json poza guardowanym „trybem zaawansowanym". Modular admin (`frontend/admin/`), wzorzec sekcji `init(panel)`, bump `?v=`. Każde zadanie = `[TASK] HINN` wdrażane `/tdd`. Prompt startowy: `prompt_hi.md`.
+> **Niezależność:** FAZA HI to narzędzie admina — NIE blokuje i nie jest blokowana przez S/L/MP. Można ją wcisnąć jako intermezzo kiedy Piotr zechce (osobny prompt). Rekomendacja: po FAZIE L albo jako przerwa między blokami L.
+
+### HI1 — Backend: czysty odczyt + 3 luki + audyt + guard tury ✅ ([#623](https://github.com/szmidtpiotr/ai-gm/issues/623), 2026-06-15)
+
+> **Wdrożone:** `GET /api/admin/characters/{id}/full` (agregat + `is_live_locked`/`live_lock_reason`, działa dla idle i active) + nowe cmd-y w `admin_cheat.py`: `set skill` (walidacja rank 0..ceiling przez `xp_service._rank_ceiling_for_skill`), `set mana`/`add mana` (clamp 0..max_mana), `add condition`/`remove condition` (katalog `game_config_conditions` → `sheet_json.conditions[]`). Każda mutacja inspektora (flaga `inspector:true` lub nowy cmd) → audyt `admin_audit_log` + guard `character_inspector_live_lock` (409 `live_locked` gdy `active_combat` aktywne LUB `session_flags.pending_skill_test`; override `force=true`). Stare wywołania cheat bez flagi `inspector` niezmienione (zero regresji). REUSE w `admin_cheat.py`. 16/16 pytest + 3/3 Playwright GREEN.
+
+**Cel:** Domknąć backend, żeby frontend miał jeden czysty kontrakt i komplet zapisów, plus bezpieczniki.
+
+**Dla agenta:**
+1. **Czysty odczyt:** `GET /api/admin/characters/{id}/full` — agregat jak `sandbox.py:313` (name, gold_gp, archetype, level, stats, stat_modifiers, skills, hp/max_hp, mana/max_mana, conditions, inventory, spells, xp, quests), ale w routerze admina (nie sandbox). Reuse `loot_service.get_character_inventory` + `spell_service.get_character_spells`. Dołącz `is_live_locked: bool` (czy aktywna walka/tura — patrz pkt 4).
+2. **Set skill rank:** rozszerz `admin_cheat` o `cmd: "set skill"` (key+rank) ALBO dodaj do `/admin/characters/{id}/...`; zapis do `sheet_json.skills[key]`. Waliduj rank wg zasad gry.
+3. **Set mana:** `cmd: "set mana"` (analogicznie do „set health", pola `current_mana`/`max_mana`).
+4. **Add/remove condition poza walką:** endpoint nakładający/zdejmujący kondycję z katalogu na `sheet_json.conditions[]` (reuse katalogu `/api/mechanics/conditions`; sandbox apply-condition jest tylko combat-only).
+5. **Audyt:** każda mutacja przez inspektora pisze do `admin_audit_log` (kto, character_id, akcja, delta).
+6. **Guard tury:** helper `character_edit_locked(id)` — true gdy bohater ma `active_combat` aktywne LUB turę w toku; endpointy zapisu zwracają 409 z `reason: live_locked` gdy zablokowane (override flagą `force=true` tylko świadomie).
+
+**Weryfikacja:** pytest: `/full` zwraca komplet; set-skill/set-mana/condition zmieniają sheet; mutacja loguje audyt; przy aktywnej walce zapis → 409. Bez pełnego `pytest tests/`.
+
+### HI2 — Sekcja „Bohaterowie": lista + szkielet modalu ✅ ([#625](https://github.com/szmidtpiotr/ai-gm/issues/625), 2026-06-15)
+
+> **Wdrożone:** nowa pozycja nawigacji „Bohaterowie" (🧍) w modular admin (`/admin/#heroes`, `heroes` w `SECTIONS`+`PORTED`, bump `?v=34`) + `sections/heroes.js` (lista hero-first: imię/archetyp/poziom/właściciel/status/kampania/HP, filtr statusu wszyscy/wolni/w grze + szukajka po imieniu/właścicielu, klik → modal). Szkielet modalu Inspektora z zakładkami Arkusz/Ekwipunek/Zaklęcia/Questy (placeholdery — treść w HI3–HI4), ładuje `GET /admin/characters/{id}/full`; banery #1013 (owner_id==1013) i live-lock (is_live_locked). **Decyzja Piotra (wariant A):** wzbogacono czysty odczyt `GET /admin/characters` — `list_characters_admin()` `JOIN`→`LEFT JOIN campaigns` (idle widoczni, hero-first) + kolumny archetype/level/hp/max_hp z `sheet_json`, status, owner_name z `users`. Zero mutacji, bez migracji. 3/3 pytest + 3/3 Playwright GREEN.
+
+**Cel:** Nowa pozycja w nawigacji modular admina = lista wszystkich bohaterów (jak lista kampanii), wejście do inspektora.
+
+**Dla agenta:** `frontend/admin/index.html` — dodaj klucz `heroes` do `SECTIONS` + `PORTED` (bump `?v=`). Nowy `frontend/admin/sections/heroes.js` (`init(panel)`): tabela z `GET /admin/characters` (kolumny: imię, archetyp, poziom, właściciel, status idle/active, kampania, HP); filtry status + owner; klik wiersza → otwiera modal inspektora (szkielet z zakładkami: Arkusz / Ekwipunek / Zaklęcia / Questy — wypełniane w HI3–HI4). Modal ładuje `GET /admin/characters/{id}/full`. Baner ostrzegawczy gdy `owner_id == 1013` (konto obserwowane) i gdy `is_live_locked`.
+
+**Weryfikacja:** Playwright: sekcja widoczna w nav; lista renderuje bohaterów; filtr działa; klik otwiera modal z danymi z `/full`. Baner #1013 i live-lock widoczne.
+
+### HI3 — Inspektor: zakładka Arkusz (staty/skille/HP/mana/poziom/kondycje/złoto/XP) ✅ ([#626](https://github.com/szmidtpiotr/ai-gm/issues/626), 2026-06-15)
+
+> **Wdrożone (frontend-only, zero zmian backendu):** zakładka „📊 Arkusz" w modalu Inspektora (`sections/heroes.js`, bump `?v=35`) — pełna edycja liczb bohatera przez REUSE endpointów z `inspector:true` (guard `live_locked` + audyt `admin_audit_log`): 6 statów STR/DEX/CON/INT/WIS/CHA stepperem ±1 (`add stat`; LCK read-only — cheat `add stat` go nie wspiera), skille rank 0..ceiling (`set skill`), HP (`set health` + „Max"), mana gdy max>0 (`set mana` + „Max"), poziom (`set level`), złoto (`set gold`), kondycje add/remove z katalogu `GET /admin/conditions` (`add/remove condition`), XP przez `xp/grant-mg?user_id={owner}` (tylko bohater w kampanii). Po każdym zapisie re-fetch `GET /admin/characters/{id}/full` → przerysowanie zakładki. Edycja zablokowana (kontrolki `disabled`) gdy `is_live_locked` LUB `owner_id==1013`; 409 `live_locked` z backendu → toast. 11/11 pytest (kontrakt edycji Arkusza: round-trip + guard + audyt) + 3/3 Playwright (kontrakt `/full`, round-trip `set gold`, UI render kontrolek) GREEN.
+
+**Cel:** Edycja liczb bohatera w jednym miejscu, przez walidujące endpointy.
+
+**Dla agenta:** Render z `/full`. Edytowalne: 7 statów (cheat „add stat"/nowy set), skille z rankami (HI1 set skill), HP (cheat „set health"), mana (HI1 set mana), poziom (cheat „set level"), kondycje add/remove (HI1), złoto (`api/inventory` gold delta lub cheat), XP (`xp/grant-mg`). Każdy zapis: potwierdzenie, po sukcesie re-fetch `/full`. Respektuj 409 live-lock (pokaż „bohater w trakcie walki — edycja zablokowana"). Reuse stylu kart z `sandbox.js:997` (siatka statów, chipy kondycji).
+
+**Weryfikacja:** Playwright/Sandbox: zmiana statu/HP/many/skilla/złota/XP odzwierciedlona w `/full` i w grze; przy aktywnej walce edycja zablokowana z komunikatem.
+
+### HI4 — Inspektor: zakładki Ekwipunek + Zaklęcia + Questy
+
+**Cel:** Pełne zarządzanie przedmiotami, zaklęciami i questami bohatera.
+
+**Dla agenta:**
+- **Ekwipunek:** lista grupowana (broń/zbroja/konsumpcja/przedmiot/narracyjne) z `/full`; dodaj z katalogu (cheat „add item", typ rozstrzygany jak `admin_cheat.py:80`), usuń (cheat „remove item"), załóż/zdejmij (`api/inventory equip`). Pokaż trwałość/afiksy (dane są w `character_inventory`).
+- **Zaklęcia:** lista + naucz (`/admin/characters/{id}/spells/learn`) + awansuj rank (`/upgrade`).
+- **Questy:** lista `character_quests` + dodaj/zalicz (cheat „quest add"/„quest complete").
+
+**Weryfikacja:** Playwright: dodanie i usunięcie przedmiotu widoczne; założenie zmienia equipped; nauczenie zaklęcia pojawia się w `/full`; quest dodany/zaliczony zmienia status.
+
+### HI5 — Link z monitora kampanii + audyt UI + weryfikacja
+
+**Cel:** Wejście do inspektora z miejsca, gdzie admin już patrzy na bohatera; domknięcie bezpieczeństwa i testów.
+
+**Dla agenta:** `frontend/admin/sections/campaigns.js` — na karcie bohatera (zakładka Przegląd) przycisk „🧍 Otwórz inspektora" → otwiera modal HI2. Potwierdź, że baner #1013 i live-lock działają end-to-end. Dla mutacji potwierdź wpisy w `admin_audit_log`.
+
+**Weryfikacja:** Playwright: link z kampanii otwiera inspektora właściwego bohatera; `/game-test-player-screenshot` lub ręcznie na DEV — edycja przedmiotu/statu realnego bohatera Demo widoczna w grze; audyt zapisany; przy turze w toku edycja zablokowana.
+
+### FAZA HI — zależności i kolejność
+
+```
+HI1 (backend: odczyt+luki+audyt+guard) → HI2 (sekcja+lista+szkielet modalu)
+  → HI3 (Arkusz) → HI4 (Ekwipunek/Zaklęcia/Questy) → HI5 (link z kampanii + weryfikacja)
+```
+HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od S/L/MP — intermezzo wg decyzji Piotra.
