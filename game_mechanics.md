@@ -5385,7 +5385,9 @@ Kroki krok-po-kroku, zależności i kolejność: `notes.md` → **FAZA B** (Blok
 
 **Weryfikacja:** Playwright/Sandbox: zmiana statu/HP/many/skilla/złota/XP odzwierciedlona w `/full` i w grze; przy aktywnej walce edycja zablokowana z komunikatem.
 
-### HI4 — Inspektor: zakładki Ekwipunek + Zaklęcia + Questy
+### HI4 — Inspektor: zakładki Ekwipunek + Zaklęcia + Questy ✅ ([#627](https://github.com/szmidtpiotr/ai-gm/issues/627), 2026-06-15)
+
+> **Wdrożone (frontend + cienki backend):** trzy działające zakładki w modalu Inspektora (`sections/heroes.js`, bump `?v=36`). **Ekwipunek** — lista grupowana z `/full` (Broń/Zbroja/Konsumpcja/Przedmiot/Zadaniowe/Narracyjne) z trwałością + badge „założone · slot"; dodaj z katalogu (dropdown łączy `/admin/weapons|items|consumables` → cheat `add item` z `kind`), usuń (cheat `remove item`), załóż/zdejmij (`POST /inventory/{id}/equip`). **Zaklęcia** — naucz (`/admin/.../spells/learn`) + awansuj rank do 3 (`/upgrade`). **Questy** — dodaj (cheat `quest add`) + zalicz (cheat `quest complete`). **Decyzja Piotra (2026-06-15):** equip i zaklęcia dostały cienki guard+audyt inspektora — nowy moduł `app/services/inspector_guard.py` (jedno źródło `live_lock_*` + `write_audit`; `admin_cheat.character_inspector_live_lock` do niego deleguje), endpointy equip/spells-learn/upgrade z flagą `inspector:true` → 409 `live_locked` + wpis do `admin_audit_log` (stare wywołania bez flagi niezmienione, zero regresji). Kontrolki `disabled` gdy `is_live_locked` LUB `owner_id==1013`; re-fetch `/full` po każdym zapisie. 15/15 pytest + 3/3 Playwright + audyt potwierdzony w DEV DB GREEN.
 
 **Cel:** Pełne zarządzanie przedmiotami, zaklęciami i questami bohatera.
 
@@ -5396,13 +5398,27 @@ Kroki krok-po-kroku, zależności i kolejność: `notes.md` → **FAZA B** (Blok
 
 **Weryfikacja:** Playwright: dodanie i usunięcie przedmiotu widoczne; założenie zmienia equipped; nauczenie zaklęcia pojawia się w `/full`; quest dodany/zaliczony zmienia status.
 
-### HI5 — Link z monitora kampanii + audyt UI + weryfikacja
+### HI5 — Link z monitora kampanii + audyt UI + weryfikacja ✅ ([#628](https://github.com/szmidtpiotr/ai-gm/issues/628), 2026-06-15)
+
+> **Wdrożone (frontend-only, zero zmian backendu):** przycisk „🧍 Otwórz inspektora" na karcie bohatera w monitorze kampanii (`sections/campaigns.js`, zakł. Przegląd, widoczny gdy `char_id`) → `_campOpenInspector(charId)` dynamicznie importuje `sections/heroes.js?v=37` i wywołuje **wyeksportowane** `openInspector(charId)` (ten sam modal HI2 — banery #1013 + live-lock, 4 zakładki, guardowane zapisy). Bump loadera sekcji `?v=37` (`index.html`). Kontrakt bezpieczeństwa (audyt `admin_audit_log` + 409 `live_locked`) dziedziczony z HI1/HI4 — żadnych nowych ścieżek zapisu. 4/4 pytest (live-lock 409 podczas walki/tury + audyt udanej mutacji + override `force`) + 2/2 Playwright (kontrakt `/full` celu linku + klik w Przeglądzie otwiera modal właściwego bohatera) GREEN. **FAZA HI domknięta (5/5).**
 
 **Cel:** Wejście do inspektora z miejsca, gdzie admin już patrzy na bohatera; domknięcie bezpieczeństwa i testów.
 
 **Dla agenta:** `frontend/admin/sections/campaigns.js` — na karcie bohatera (zakładka Przegląd) przycisk „🧍 Otwórz inspektora" → otwiera modal HI2. Potwierdź, że baner #1013 i live-lock działają end-to-end. Dla mutacji potwierdź wpisy w `admin_audit_log`.
 
 **Weryfikacja:** Playwright: link z kampanii otwiera inspektora właściwego bohatera; `/game-test-player-screenshot` lub ręcznie na DEV — edycja przedmiotu/statu realnego bohatera Demo widoczna w grze; audyt zapisany; przy turze w toku edycja zablokowana.
+
+### HI6 — Inspektor: opcja „Wymuś edycję" (force) gdy live-lock ✅ ([#629](https://github.com/szmidtpiotr/ai-gm/issues/629), 2026-06-15)
+
+> **Wdrożone (frontend-only, zero zmian backendu):** toggle „🔓 Wymuś edycję" w banerze modalu Inspektora (`sections/heroes.js`, bump `?v=38`) — widoczny gdy `is_live_locked` i konto NIE jest obserwowane (#1013). Włączenie ustawia modalowy `_forceEdit=true`: `_editLocked()` przestaje blokować kontrolki, a helpery cheat/equip/spell dokładają `force:true` → backend (`inspector_guard.guard_or_raise(force=...)`, istnieje od HI1/HI4) omija 409 `live_locked`. Baner robi się czerwony (ostrzeżenie o desyncu). **Decyzje Piotra (2026-06-15):** (1) force omija TYLKO live-lock (walka/tura), NIE #1013 — konto obserwowane zostaje twardo read-only (`_observedLocked()` rozdzielone od live-lock); (2) wymuszona edycja NADAL pisze audyt `admin_audit_log` (backend audytuje niezależnie od `force`) — pełna śledzalność. `campaigns.js` dynamic import heroes.js też bump `?v=38` (ta sama instancja modułu). 3/3 pytest (force omija lock + nadal audytuje + bez force lock trzyma) + 1/1 Playwright (live-locked: toggle widoczny, kontrolki disabled→enabled po kliknięciu) + potwierdzenie end-to-end na DEV (409 bez force / 200 z force / wiersz audytu) GREEN. **Backend od HI1 zawsze wspierał `force` — HI6 tylko wystawia to świadomie w UI.**
+
+**Cel:** Admin może świadomie wymusić edycję bohatera mimo blokady kampanią, bez utraty audytu i bez naruszenia ochrony konta obserwowanego.
+
+### HI7 — Arkusz: grupowanie i sortowanie skilli ✅ ([#630](https://github.com/szmidtpiotr/ai-gm/issues/630), 2026-06-15)
+
+> **Wdrożone (frontend-only, zero zmian backendu):** lista skilli w zakładce Arkusz (`sections/heroes.js`, `_sheetHtml()`, bump `?v=39`) podzielona na dwie grupy: **„Posiadane"** (rank ≥ 1) nad separatorem, **„Niewyuczone"** (rank 0) pod nim; każda grupa sortowana A→Z, nagłówek z licznikiem. Dane z `GET /admin/characters/{id}/full` (mapa skill→rank); grupowanie/sortowanie czysto po stronie klienta — próg podziału rank ≥ 1. Edycja ranka (input + „Zapisz") niezmieniona, kontrolki nadal respektują live-lock / force (HI6) / #1013; po zapisie re-fetch `/full` przerzuca skill do właściwej grupy. Markery dla testu: `data-hi-skill-sep`, `data-hi-skill-group`, `data-hi-skill-key`. `campaigns.js` dynamic import heroes.js też `?v=39`. 1/1 Playwright (kolejność separatorów known→none + sort w grupach + known nad none) GREEN; brak pytestu (zmiana czysto prezentacyjna, brak nowej powierzchni backendu).
+
+**Cel:** Na pierwszy rzut oka widać, co bohater faktycznie umie, bez przekopywania się przez skille na ranku 0.
 
 ### FAZA HI — zależności i kolejność
 

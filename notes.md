@@ -397,15 +397,17 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA HI — Inspektor Bohatera (admin) (2026-06-15 — decyzje w game_mechanics.md CZĘŚĆ AL) [3/5]
+## FAZA HI — Inspektor Bohatera (admin) (2026-06-15 — decyzje w game_mechanics.md CZĘŚĆ AL) [7/7]
 
 > Narzędzie admina: podgląd+edycja żywego bohatera (ekwipunek dodaj/usuń/załóż, staty, skille, zaklęcia, kondycje, złoto, XP, questy) — jak monitor kampanii, ale dla bohatera. **~90% backendu już istnieje** (reuse cheat/xp/inventory/spells); dopisać tylko 3 luki + czysty GET. Decyzje Piotra: (1) nowa sekcja nawigacji „Bohaterowie" + link z monitora kampanii; (2) reuse cheat + 3 luki (set skill rank, set mana, add/remove condition); (3) audyt `admin_audit_log` + ostrzeżenie konto #1013 + blokada edycji w trakcie walki/tury. **Niezależne od S/L/MP — intermezzo kiedy Piotr zechce** (rekomendacja: po FAZIE L). Każde zadanie = `[TASK] HINN` wdrażane `/tdd`. Prompt startowy: `prompt_hi.md`.
 
 - [x] HI1 — Backend: czysty `GET /admin/characters/{id}/full` (agregat) + 3 luki (set skill rank, set mana, add/remove condition) + audyt mutacji w `admin_audit_log` + guard `live_locked` (409 gdy aktywna walka/tura) — [#623](https://github.com/szmidtpiotr/ai-gm/issues/623)
 - [x] HI2 — Sekcja „Bohaterowie": nawigacja (`index.html` SECTIONS+PORTED, bump ?v) + `sections/heroes.js` lista hero-first (filtr status/owner) + szkielet modalu inspektora; baner #1013 + live-lock — [#625](https://github.com/szmidtpiotr/ai-gm/issues/625)
 - [x] HI3 — Inspektor zak. Arkusz: edycja statów/skilli/HP/many/poziomu/kondycji/złota/XP przez reuse endpointów; re-fetch `/full` po zapisie; respekt 409 live-lock — [#626](https://github.com/szmidtpiotr/ai-gm/issues/626)
-- [ ] HI4 — Inspektor zak. Ekwipunek (dodaj/usuń/załóż + trwałość/afiksy) + Zaklęcia (naucz/awansuj) + Questy (dodaj/zalicz)
-- [ ] HI5 — Link „🧍 Otwórz inspektora" z monitora kampanii (`campaigns.js`) + weryfikacja audytu/live-lock end-to-end + Playwright
+- [x] HI4 — Inspektor zak. Ekwipunek (dodaj/usuń/załóż + trwałość) + Zaklęcia (naucz/awansuj) + Questy (dodaj/zalicz); cienki guard+audyt inspektora dla equip+zaklęć (nowy `inspector_guard.py`) — [#627](https://github.com/szmidtpiotr/ai-gm/issues/627)
+- [x] HI5 — Link „🧍 Otwórz inspektora" z monitora kampanii (`campaigns.js`, zakł. Przegląd) → reuse `openInspector` (export z `heroes.js`, bump `?v=37`); kontrakt bezpieczeństwa (audyt + 409 live-lock) dziedziczony z HI1/HI4, potwierdzony end-to-end — [#628](https://github.com/szmidtpiotr/ai-gm/issues/628)
+- [x] HI6 — Opcja „🔓 Wymuś edycję" (force) gdy bohater live-locked (walka/tura): toggle w banerze modalu odblokowuje kontrolki, mutacje lecą z `force:true` (omija 409); #1013 twardo read-only (force nie omija); wymuszona edycja nadal audytowana; bump `?v=38` — [#629](https://github.com/szmidtpiotr/ai-gm/issues/629)
+- [x] HI7 — Arkusz: grupowanie skilli „Posiadane" (rank ≥1) nad „Niewyuczone" (rank 0), każda grupa A→Z + licznik; czysto prezentacyjne nad `/full`; bump `?v=39` — [#630](https://github.com/szmidtpiotr/ai-gm/issues/630)
 
 ---
 
