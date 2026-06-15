@@ -2135,6 +2135,13 @@ def get_combat_context_for_prompt(campaign_id: int) -> str | None:
         "Rules: player attacks when it is their turn. Enemy attacks resolve after the player "
         "when using the enemy-turn endpoint. DO NOT invent HP values — use only this block."
     )
+    # #640 — narracja walki krótka i dynamiczna. Reguła scoped: powstaje TYLKO podczas
+    # aktywnej walki, więc nadpisuje globalny styl 4-6 zdań wyłącznie tu. Mechaniki nie rusza.
+    lines.append(
+        "NARRACJA WALKI (NADPISUJE styl 4-6 zdań dopóki trwa walka): opisz tę akcję w "
+        "MAKSYMALNIE 2-3 krótkich, dynamicznych zdaniach. Bez rozwlekłych opisów otoczenia, "
+        "bez dygresji, bez powtarzania znanych faktów — tylko sama akcja i jej skutek."
+    )
     return "\n".join(lines)
 
 
