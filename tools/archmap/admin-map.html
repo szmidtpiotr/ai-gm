@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-GM · Mapa architektury — Admin Shell</title>
+<style>
+  :root{
+    --bg:#0F0F0F; --panel:#161616; --panel-2:#1c1c1c; --border:#2a2a2a;
+    --text:#e8e8e8; --muted:#8a8a8a;
+    --client:#4ea1ff; --route:#7bd389; --service:#c792ea; --db:#ffb86b;
+    --external:#ff6b9d; --critical:#ff3860; --accent:#f5b942; --accent-2:#ff7a45;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden}
+  #topbar{position:absolute;top:10px;left:10px;right:auto;max-width:calc(100vw - 360px);z-index:5;
+    display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+    padding:8px 12px;background:rgba(20,20,20,.96);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #topbar h1{font-size:13px;margin:0 12px 0 0;font-weight:600;letter-spacing:.3px;white-space:nowrap;cursor:move;user-select:none}
+  #topbar h1:active{cursor:grabbing}
+  #topbar h1 .grip{color:var(--accent);margin-right:6px;font-size:14px}
+  #topbar h1 span{color:var(--muted);font-weight:400}
+  .chip{padding:4px 10px;border:1px solid var(--border);border-radius:14px;background:var(--panel-2);
+    color:var(--muted);cursor:pointer;user-select:none;font-size:12px;transition:.12s}
+  .chip:hover{color:var(--text);border-color:#3a3a3a}
+  .chip.active{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+  .zoombtns{margin-left:auto;display:flex;gap:6px}
+  .zoombtns button{width:28px;height:28px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--text);border-radius:6px;cursor:pointer;font-size:14px}
+  .zoombtns button:hover{border-color:#3a3a3a}
+  #canvas{flex:1;position:relative;overflow:hidden;cursor:grab}
+  #canvas.grabbing{cursor:grabbing}
+  svg{position:absolute;top:0;left:0;width:100%;height:100%}
+  #scene{transition:none}
+  .cluster rect{fill-opacity:.10;stroke-opacity:.45;stroke-width:1}
+  .cluster text{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;fill:var(--muted)}
+  .node{cursor:pointer}
+  .node rect{fill:var(--panel);stroke-width:1.4;rx:7;transition:opacity .12s}
+  .node .lbl{font-size:12px;font-weight:600;fill:var(--text)}
+  .node .sub{font-size:10.5px;fill:var(--muted)}
+  .node.crit rect{stroke-width:2.4}
+  .node.dead rect{stroke-dasharray:4 3;fill:#141014}
+  .node.dimmed{opacity:.16}
+  .edge{fill:none;stroke-width:1.4;opacity:.55}
+  .edge.dimmed{opacity:.05}
+  .elabel{font-size:9.5px;fill:var(--muted);opacity:.8}
+  .elabel.dimmed{opacity:.04}
+  .badge-fix{fill:var(--route)}
+  .badge-bug{fill:var(--critical)}
+  .badge text{font-size:9px;font-weight:700;fill:#0c0c0c}
+  #sidebar{width:340px;background:var(--panel);border-left:1px solid var(--border);
+    overflow-y:auto;padding:16px 16px 40px;z-index:6}
+  #sidebar h2{font-size:14px;margin:0 0 2px}
+  #sidebar .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+    color:var(--accent);word-break:break-all;margin-bottom:10px}
+  #sidebar .role{font-size:12.5px;margin:8px 0}
+  #sidebar .plain{font-size:12.5px;color:#cfcfcf;background:var(--panel-2);border-left:2px solid var(--service);padding:8px 10px;border-radius:4px;margin:8px 0}
+  #sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+  #sidebar ul{margin:4px 0;padding-left:16px}
+  #sidebar li{margin:3px 0;font-size:12px;color:#cfcfcf}
+  .pill{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;margin:2px 4px 2px 0;border:1px solid var(--border);color:var(--muted)}
+  .edgeline{font-size:11.5px;margin:3px 0;color:#cfcfcf}
+  .edgeline b{color:var(--text);font-weight:600}
+  .arrow{color:var(--muted)}
+  .bug{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#241317;border-left:2px solid var(--critical)}
+  .bug .sev{font-weight:700;text-transform:uppercase;font-size:9px;color:var(--critical)}
+  .fix{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#142117;border-left:2px solid var(--route)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .legend span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}
+  .legend i{width:18px;height:0;border-top:2px solid;display:inline-block}
+  .muted{color:var(--muted)}
+  #overlaystate{font-size:10.5px;color:var(--muted);padding:2px 8px;border:1px dashed var(--border);border-radius:10px}
+  .task{cursor:pointer;transition:.1s}
+  .task:hover{filter:brightness(1.35)}
+  #pop{position:fixed;inset:0;z-index:20;display:none;background:rgba(0,0,0,.6)}
+  #pop.show{display:block}
+  #popbox{position:fixed;left:0;top:0;width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:0 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #pophead{display:flex;align-items:flex-start;gap:10px;cursor:move;user-select:none;background:var(--panel-2);margin:0 -22px 12px;padding:12px 16px 12px 14px;border-radius:12px 12px 0 0;border-bottom:1px solid var(--accent)}
+  #pophead:active{cursor:grabbing}
+  #pophead .grip{color:var(--accent);font-size:18px;line-height:1.3;flex:0 0 auto}
+  #pophead .htext{flex:1;min-width:0}
+  #popclose{background:none;border:0;color:var(--muted);font-size:24px;line-height:.8;cursor:pointer;padding:0 2px;flex:0 0 auto}
+  #popclose:hover{color:var(--text)}
+  #popbox .num{font-family:ui-monospace,monospace;font-size:12px;color:var(--accent);font-weight:700}
+  #popbox .num::after{content:" · przeciągnij";color:var(--muted);font-weight:400;font-size:10.5px}
+  #popbox h2#poptitle{font-size:16px;margin:4px 0 0;color:var(--text);font-weight:600;line-height:1.3}
+  #popbox .meta{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;flex-wrap:wrap}
+  #popbox .meta .lbl{border:1px solid var(--border);border-radius:10px;padding:1px 7px}
+  #popbody{overflow-y:auto;flex:1;border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;font-size:12.5px;line-height:1.55;color:#d6d6d6}
+  #popbody h3{font-size:13.5px;color:var(--accent);margin:14px 0 4px;border:0;text-transform:none;letter-spacing:0}
+  #popbody pre.code{background:#0c0c0c;border:1px solid var(--border);border-radius:6px;padding:8px 10px;overflow-x:auto;font-family:ui-monospace,monospace;font-size:11.5px;color:#cbd5b5;white-space:pre}
+  #popbody code{background:#0c0c0c;border:1px solid var(--border);border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:11.5px;color:#e0c98a}
+  #popbody .li{margin:2px 0 2px 6px}
+  #popbody .li.done{color:var(--route)}
+  #popbody a{color:var(--client)}
+  #popbody .cmt{border-left:2px solid var(--service);background:var(--panel-2);padding:8px 12px;border-radius:4px;margin:10px 0}
+  #popbody .cmt .who{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:5px}
+  #popbody .loading{color:var(--muted);font-style:italic}
+  #popbox .actions{display:flex;gap:10px;justify-content:flex-end}
+  #popbox a.btn,#popbox button.btn{font-size:12.5px;padding:7px 14px;border-radius:7px;cursor:pointer;text-decoration:none;border:1px solid var(--border);background:var(--panel-2);color:var(--text)}
+  #popbox a.btn{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas">
+    <div id="topbar">
+      <h1 title="Przeciągnij, by przesunąć"><span class="grip">⠿</span>AI-GM <span>· mapa architektury · Admin Shell</span></h1>
+      <div id="chips"></div>
+      <span id="overlaystate">overlay: —</span>
+      <div class="zoombtns">
+        <button id="zfit">⤢</button><button id="zin">+</button><button id="zout">−</button>
+      </div>
+    </div>
+    <svg id="svg">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#6a6a6a"></path></marker>
+        <marker id="arrcrit" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#ff3860"></path></marker>
+      </defs>
+      <g id="scene"><g id="gClusters"></g><g id="gEdges"></g><g id="gLabels"></g><g id="gNodes"></g></g>
+    </svg>
+  </div>
+  <div id="sidebar"></div>
+</div>
+<div id="pop" onclick="if(event.target===this)closeTask()">
+  <div id="popbox">
+    <div id="pophead"><span class="grip">⠿</span><div class="htext"><div class="num" id="popnum"></div><h2 id="poptitle"></h2></div><button id="popclose" onclick="closeTask()">×</button></div>
+    <div class="meta" id="popmeta"></div>
+    <div id="popbody"></div>
+    <div class="actions"><button class="btn" onclick="closeTask()">Zamknij</button><a class="btn" id="poplink" target="_blank" rel="noopener">Otwórz na GitHub ↗</a></div>
+  </div>
+</div>
+<script>
+const COLORS = { client:'--client', route:'--route', service:'--service', db:'--db', external:'--external', critical:'--critical' };
+function col(kind){ return getComputedStyle(document.documentElement).getPropertyValue(COLORS[kind]||'--service').trim(); }
+
+const clusters = [
+  { id:'frontend',  label:'Frontend shell',      x:20,  y:70, w:260, h:280, color:'client' },
+  { id:'sections',  label:'Admin sections (JS)',  x:310, y:70, w:560, h:580, color:'service' },
+  { id:'backend',   label:'Backend admin routes', x:900, y:70, w:260, h:580, color:'route' },
+  { id:'observ',    label:'Observability (O3)',   x:1190,y:70, w:260, h:280, color:'db' },
+];
+
+const N = (id, cl, label, sub, x, y, w, h, color, opts={}) => ({ id, cluster:cl, label, sub, x, y, w, h, color, ...opts });
+
+const nodes = [
+  /* ---- Frontend shell ---- */
+  N('adm-entry','frontend','admin/index.html','shell entry :1',40,110,220,54,'client',{
+    role:'Modular admin shell entry. Loads sidebar nav, injects section modules dynamically on click.',
+    plain:'The admin panel homepage. Clicks in the sidebar load separate JS modules for each section.',
+    path:'frontend/admin/index.html:1',
+    notes:['Sidebar nav with data-section attributes','Dynamically imports sections/*.js','Login overlay using doLogin/doLogout + localStorage token'],
+    tag:['overview','all'] }),
+  N('adm-api','frontend','admin/shared/api.js','adminFetch :1',40,186,220,50,'client',{
+    role:'Shared fetch wrapper adding Bearer token header; APIError for structured error handling.',
+    plain:'The shared network layer all admin sections use. Adds the admin token and handles errors consistently.',
+    path:'frontend/admin/shared/api.js:1',
+    notes:['adminFetch(path, opts) wraps fetch','APIError class for structured rejection','Used by all sections as sole HTTP client'],
+    tag:['overview','all'] }),
+  N('adm-shared','frontend','shared/toast.js + modal.js','UI utilities',40,258,220,48,'client',{
+    role:'Toast notifications and reusable modal component used across all admin sections.',
+    plain:'Pop-up messages and dialog boxes that every admin section uses for feedback and confirmations.',
+    path:'frontend/admin/shared/toast.js',
+    notes:['toast.js: showToast(msg, type)','modal.js: openModal/closeModal helpers','Imported by sections/*.js'],
+    tag:['overview','all'] }),
+
+  /* ---- Admin sections ---- */
+  N('sec-overview','sections','sections/overview.js','stats overview',330,110,160,50,'service',{
+    role:'Overview dashboard: player count, campaign count, recent activity.',
+    plain:'The admin landing view showing key numbers at a glance.',
+    path:'frontend/admin/sections/overview.js',
+    notes:['GET /api/admin/stats or similar','First section loaded on login'],
+    tag:['overview','all'] }),
+  N('sec-players','sections','sections/players.js','user accounts',330,182,160,50,'service',{
+    role:'User account management: list players, view LLM settings, manage roles.',
+    plain:'Where admins see all registered players and manage their AI model preferences.',
+    path:'frontend/admin/sections/players.js',
+    notes:['GET/PATCH /api/admin/users','Per-user LLM mode (custom/default)'],
+    tag:['overview','all'] }),
+  N('sec-campaigns','sections','sections/campaigns.js','campaign monitor',330,254,160,54,'service',{
+    role:'Campaign cards: status, delete, modal with 5 tabs (Przegląd/Plan GM/Tury/Mapa/Warsztat).',
+    plain:'Where admins watch live campaigns, read the GM plan, browse turn history, and workshop with the AI.',
+    path:'frontend/admin/sections/campaigns.js',
+    notes:['Campaign modal 5 tabs: overview/gm-plan/turns/map/workshop','DELETE /api/campaigns/{id}','Warsztat: chat → propose changes → approve patches'],
+    tag:['overview','all'] }),
+  N('sec-content','sections','sections/content.js','weapons/items',330,330,160,52,'service',{
+    role:'CRUD for game_config_weapons, items, consumables, enemies + 🤖 AI Kreator (Smart Entry).',
+    plain:'Where admins create and edit all game content: weapons, items, enemies. AI helper fills forms.',
+    path:'frontend/admin/sections/content.js',
+    notes:['Smart Entry overlay: chat fills form via LLM','smart_entry.js v4 (left chat / right form)','After save: CustomEvent("smart-entry-saved")'],
+    tag:['overview','content','all'] }),
+  N('sec-world','sections','sections/world.js','locations/NPCs',330,404,160,52,'service',{
+    role:'World builder: locations, NPCs, enemies, encounter templates, pending review.',
+    plain:'Where admins manage the game world: places, characters, and enemies waiting for approval.',
+    path:'frontend/admin/sections/world.js',
+    notes:['Świat→Oczekujące: pending enemies/items','Location tree, NPC list','World review: approve/reject pending content'],
+    tag:['overview','all'] }),
+  N('sec-dungeons','sections','sections/dungeons.js','dungeon seeds',330,478,160,50,'service',{
+    role:'Admin UI for dungeon seeds: create/edit game_dungeons, preview tile graphs.',
+    plain:'Where admins configure dungeon blueprints and see the tile graph before publishing.',
+    path:'frontend/admin/sections/dungeons.js',
+    notes:['CRUD game_dungeons (key, rooms, boss, loot_tier)','Preview: GET /dungeon-tiles/preview-graph/{cat}','cooldown_hours=0 allowed (test runs)'],
+    tag:['overview','dungeons','all'] }),
+  N('sec-analytics','sections','sections/analytics.js','stats + logs · O3',510,110,160,54,'service',{
+    role:'Observability panel (O3): KPI cards + 4 tabs (Aktywność/Zdarzenia/Wydajność LLM/Błędy).',
+    plain:'The new analytics panel added in Phase 11. Shows game statistics, LLM performance, and error logs.',
+    path:'frontend/admin/sections/analytics.js',
+    notes:['KPI: players/campaigns/turns/events','Tab: Aktywność (daily turns/events)','Tab: Wydajność LLM (latency p50/p95/p99)','OBSERVABILITY: reads game_events/llm_call_log via O3 endpoints'],
+    tag:['overview','observability','all'] }),
+  N('sec-forge','sections','sections/forge.js','AI asset forge',510,186,160,50,'service',{
+    role:'Batch AI content generator: weapon/item/enemy creation via template + prompt → bulk save.',
+    plain:'The AI content factory. Describe what you want and the AI creates multiple game items at once.',
+    path:'frontend/admin/sections/forge.js',
+    notes:['adventure_forge.py backend','Template-driven batch generation','Publishes to content tables on approval'],
+    tag:['overview','content','all'] }),
+  N('sec-map','sections','sections/map.js','hex world map',510,258,160,52,'service',{
+    role:'Hex grid world map editor: paint biomes, manage teleport connections, generate world.',
+    plain:'The world map editor. Admins paint hexes, set biome types, and connect locations with teleports.',
+    path:'frontend/admin/sections/map.js',
+    notes:['Uses hex_world.py router','PATCH /hexes/{q}/{r}, POST /teleport-connections','Per-campaign hex overlays (fog, encounter_cleared)'],
+    tag:['overview','all'] }),
+  N('sec-system','sections','sections/system.js','LLM presets',510,332,160,50,'service',{
+    role:'LLM preset management: add/activate/delete presets, config export/import.',
+    plain:'Where admins switch between different AI providers and models, and export/import server config.',
+    path:'frontend/admin/sections/system.js',
+    notes:['POST /api/admin/llm/preset','POST /api/admin/llm/activate/{id}','Config export/import with auto-backup'],
+    tag:['overview','all'] }),
+  N('sec-tools','sections','sections/tools.js','test runner',510,404,160,50,'service',{
+    role:'Playwright test runner UI: list test suites, trigger runs, show results inline.',
+    plain:'Where admins run automated browser tests from the admin panel.',
+    path:'frontend/admin/sections/tools.js',
+    notes:['test_runner.py backend','Calls ai_test_agent on port 4000','Shows test pass/fail with logs'],
+    tag:['overview','all'] }),
+  N('sec-heroes','sections','sections/heroes.js','hero inspector',510,476,160,50,'service',{
+    role:'Hero Inspector (HI): browse all characters, view full sheet + inventory + spell list.',
+    plain:'Where admins look at any hero: their stats, gear, spells, and campaign history.',
+    path:'frontend/admin/sections/heroes.js',
+    notes:['GET /api/admin/characters','Sheet JSON viewer','HI narzędzie admina (niezależne od S/L/MP)'],
+    tag:['overview','all'] }),
+
+  /* ---- Backend admin routes ---- */
+  N('adm-router','backend','routers/admin.py','require_admin_token :747',920,110,220,54,'route',{
+    role:'Core admin router: auth (dev-login/verify), LLM preset CRUD, account management, Smart Entry.',
+    plain:'The main admin backend. Handles login, AI model settings, and the AI content creation form.',
+    path:'backend/app/routers/admin.py:747',
+    notes:['admin_dev_login:793, admin_verify:806','LLM preset CRUD :847/:874/:887/:898','Smart Entry: /schema, /list, /record, /message, /save'],
+    tag:['overview','all'] }),
+  N('adm-analytics-router','backend','routers/admin_analytics.py','analytics_dashboard :91',920,186,220,54,'route',{
+    role:'O3 analytics endpoints: dashboard KPIs, events, LLM metrics, player stats, errors.',
+    plain:'The backend serving numbers to the analytics panel. Queries game_events and llm_call_log.',
+    path:'backend/app/routers/admin_analytics.py:91',
+    notes:['GET /api/admin/analytics/dashboard','GET /api/admin/analytics/events','GET /api/admin/analytics/llm','OBSERVABILITY: primary O3 data source'],
+    tag:['overview','observability','all'] }),
+  N('adm-analytics-svc','backend','services/admin_analytics.py','KPI queries',920,262,220,52,'service',{
+    role:'Analytics service: SQL queries over game_events, llm_call_log, campaign_turns for KPIs.',
+    plain:'Runs the SQL queries that produce the numbers shown in the analytics panel.',
+    path:'backend/app/services/admin_analytics.py',
+    notes:['Reads game_events (O1), llm_call_log (O1)','Aggregates per day/hour/model','Called by analytics router'],
+    tag:['overview','observability','all'] }),
+  N('adm-campaigns-router','backend','services/admin_campaigns.py','campaign admin queries',920,336,220,52,'service',{
+    role:'Admin campaign service: list all campaigns, get details, delete, workshop patch.',
+    plain:'The backend for the campaign monitor. Lists, reads, deletes, and modifies campaigns.',
+    path:'backend/app/services/admin_campaigns.py',
+    notes:['list_campaigns, get_campaign_admin','Workshop PATCH: approve gm_plan changes','Called by admin.py router'],
+    tag:['overview','all'] }),
+  N('adm-smart-entry','backend','routers/smart_entry.py','Smart Entry v4',920,410,220,52,'service',{
+    role:'AI content creator: schema validation, LLM form fill (one-shot JSON), save to DB.',
+    plain:'The backend for the AI form filler. Validates the form shape, asks the AI to fill it, saves on approve.',
+    path:'backend/app/routers/smart_entry.py',
+    notes:['GET /schema?table=X, GET /record','POST /message: LLM fills draft JSON','POST /save: insert/update record'],
+    tag:['overview','content','all'] }),
+  N('adm-forge-router','backend','routers/adventure_forge.py','batch AI generation',920,484,220,52,'service',{
+    role:'Forge backend: template management, batch LLM generation, bulk publish to game tables.',
+    plain:'Creates game content in bulk using AI templates and saves everything on admin approval.',
+    path:'backend/app/routers/adventure_forge.py',
+    notes:['POST /forge/generate (batch LLM)','forge_create_game_entry MCP tool','Templates in game_forge_templates'],
+    tag:['overview','content','all'] }),
+
+  /* ---- Observability O3 ---- */
+  N('adm-game-events','observ','game_events','table (DB) · O1',1210,110,220,50,'db',{
+    role:'Source for analytics KPIs: combat_victory, player_death, beat_complete events.',
+    plain:'The game event log read by the analytics panel to show activity charts.',
+    path:'data-dev/ai_gm.db · game_events',
+    notes:['Written by event_logger (O1/O2)','Read by admin_analytics_svc','OBSERVABILITY: Phase 11 primary'],
+    tag:['overview','observability','all'] }),
+  N('adm-llm-log','observ','llm_call_log','table (DB) · O1',1210,176,220,50,'db',{
+    role:'Source for LLM performance metrics: latency p50/p95, token counts, error rate.',
+    plain:'Records every AI call; the analytics panel uses it to show how fast the AI responds.',
+    path:'data-dev/ai_gm.db · llm_call_log',
+    notes:['Written by event_logger (O1/O2)','Read by admin_analytics_svc','latency_ms, tokens_in/out, error'],
+    tag:['overview','observability','all'] }),
+];
+
+const edges = [
+  { from:'adm-entry', to:'adm-api', kind:'normal', label:'imports', tag:['overview','all'] },
+  { from:'adm-entry', to:'adm-shared', kind:'normal', label:'imports', tag:['all'] },
+  { from:'adm-entry', to:'sec-overview', kind:'normal', label:'load section', tag:['overview','all'] },
+  { from:'adm-entry', to:'sec-campaigns', kind:'normal', label:'load section', tag:['overview','all'] },
+  { from:'adm-entry', to:'sec-analytics', kind:'normal', label:'load section', tag:['overview','observability','all'] },
+  { from:'adm-api', to:'adm-router', kind:'normal', label:'Bearer token', tag:['overview','all'] },
+  { from:'adm-api', to:'adm-analytics-router', kind:'normal', label:'analytics calls', tag:['overview','observability','all'] },
+  { from:'sec-content', to:'adm-smart-entry', kind:'normal', label:'smart entry calls', tag:['content','all'] },
+  { from:'sec-forge', to:'adm-forge-router', kind:'normal', label:'batch gen calls', tag:['content','all'] },
+  { from:'sec-analytics', to:'adm-analytics-router', kind:'normal', label:'KPI / events', tag:['overview','observability','all'] },
+  { from:'adm-analytics-router', to:'adm-analytics-svc', kind:'normal', label:'queries', tag:['observability','all'] },
+  { from:'adm-analytics-svc', to:'adm-game-events', kind:'db', label:'SELECT', tag:['observability','all'] },
+  { from:'adm-analytics-svc', to:'adm-llm-log', kind:'db', label:'SELECT', tag:['observability','all'] },
+  { from:'adm-router', to:'adm-campaigns-router', kind:'normal', label:'delegates', tag:['all'] },
+];
+
+let FIXES={}, KNOWN_BUGS={}, HEAT={};
+
+const FINDINGS = [
+  ['NOTE','Admin shell at /admin/ — all new admin work goes here. Legacy admin2/ is read-only; never add features there.'],
+  ['NOTE','sections/analytics.js (O3) reads game_events + llm_call_log via admin_analytics endpoints. Enabled after O1+O2.'],
+  ['NOTE','Smart Entry (smart_entry.js v4) lives in sections/content.js; backend in routers/smart_entry.py. LLM fills the form JSON in one shot.'],
+  ['NOTE','Forge (sections/forge.js) uses adventure_forge.py for batch AI content generation with template management.'],
+  ['NOTE','adm-shared API module: all HTTP calls go through adminFetch — single auth point, never raw fetch in sections.'],
+];
+
+/* ============ shared render engine ============ */
+const SVG=document.getElementById('svg'),scene=document.getElementById('scene');
+const gC=document.getElementById('gClusters'),gE=document.getElementById('gEdges'),gL=document.getElementById('gLabels'),gN=document.getElementById('gNodes');
+const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
+const NS='http://www.w3.org/2000/svg';
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+clusters.forEach(c=>{const g=el('g',{class:'cluster'});const r=el('rect',{x:c.x,y:c.y,width:c.w,height:c.h,rx:12,fill:col(c.color),stroke:col(c.color)});const t=el('text',{x:c.x+12,y:c.y+22});t.textContent=c.label;g.appendChild(r);g.appendChild(t);gC.appendChild(g);});
+function edgePath(a,b){const x1=a.x+a.w,y1=a.y+a.h/2,x2=b.x,y2=b.y+b.h/2;let sx=x1,ex=x2;if(b.x<a.x){sx=a.x;ex=b.x+b.w;}const dx=Math.max(40,Math.abs(ex-sx)*0.5);const c1x=sx+(ex>=sx?dx:-dx),c2x=ex-(ex>=sx?dx:-dx);return{d:`M ${sx} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${ex} ${y2}`,mx:(sx+ex)/2,my:(y1+y2)/2};}
+const edgeEls=[];
+edges.forEach((e,i)=>{const a=nodeById[e.from],b=nodeById[e.to];if(!a||!b)return;const g=edgePath(a,b);const isC=e.kind==='critical';const stroke=isC?col('critical'):e.kind==='db'?col('db'):'#5a5a5a';const p=el('path',{class:'edge'+(isC?' crit':''),d:g.d,stroke,'marker-end':isC?'url(#arrcrit)':'url(#arr)'});gE.appendChild(p);const lbl=el('text',{class:'elabel',x:g.mx,y:g.my-3-(i%2?8:0),'text-anchor':'middle'});lbl.textContent=e.label||'';gL.appendChild(lbl);edgeEls.push({e,p,lbl});});
+const nodeEls={};
+nodes.forEach(n=>{const g=el('g',{class:'node'+(n.critical?' crit':'')+(n.dead?' dead':''),'data-id':n.id});const c=col(n.color);const r=el('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:7,stroke:c});const lbl=el('text',{class:'lbl',x:n.x+12,y:n.y+22});lbl.textContent=n.label;const sub=el('text',{class:'sub',x:n.x+12,y:n.y+39});sub.textContent=n.sub||'';g.appendChild(r);g.appendChild(lbl);g.appendChild(sub);const badge=el('g',{class:'badges'});g.appendChild(badge);gN.appendChild(g);g.addEventListener('mouseenter',()=>select(n.id,true));g.addEventListener('mouseleave',()=>{if(!pinned)clearDim();});g.addEventListener('click',e=>{e.stopPropagation();pinned=(pinned===n.id)?null:n.id;select(pinned||n.id,true);});nodeEls[n.id]={g,r,badge};});
+function renderBadges(){nodes.forEach(n=>{const{badge}=nodeEls[n.id];badge.innerHTML='';const f=(FIXES[n.id]||[]).length,b=(KNOWN_BUGS[n.id]||[]).length;let ox=n.x+n.w-14;if(b){const grp=el('g',{class:'badge'});const ci=el('circle',{class:'badge-bug',cx:ox,cy:n.y+12,r:8});const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=b;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);ox-=18;}if(f){const grp=el('g',{class:'badge'});const ci=el('circle',{class:'badge-fix',cx:ox,cy:n.y+12,r:8});const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=f;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);}});}
+function renderHeat(){nodes.forEach(n=>{const h=HEAT[n.id];const{r}=nodeEls[n.id];if(activeChip==='heat'&&h){const calls=h.calls||0;const w=calls<=0?1.4:Math.min(6,1.4+Math.log10(calls+1)*1.8);r.setAttribute('stroke-width',w);r.setAttribute('stroke',h.errors>0?col('critical'):col('db'));}else{r.setAttribute('stroke-width',n.critical?2.4:1.4);r.setAttribute('stroke',col(n.color));}});}
+let pinned=null,activeChip='overview';
+function neighbors(id){const s=new Set([id]);edges.forEach(e=>{if(e.from===id)s.add(e.to);if(e.to===id)s.add(e.from);});return s;}
+function select(id){const sb=document.getElementById('sidebar');if(!id){if(!pinned){clearDim();sb.innerHTML=defaultSidebar();}return;}const n=nodeById[id];const nb=neighbors(id);nodes.forEach(m=>nodeEls[m.id].g.classList.toggle('dimmed',!nb.has(m.id)));edgeEls.forEach(({e,p,lbl})=>{const on=(e.from===id||e.to===id);p.classList.toggle('dimmed',!on);lbl.classList.toggle('dimmed',!on);});sb.innerHTML=nodeSidebar(n);}
+function clearDim(){nodes.forEach(m=>nodeEls[m.id].g.classList.remove('dimmed'));edgeEls.forEach(({p,lbl})=>{p.classList.remove('dimmed');lbl.classList.remove('dimmed');});}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escAttr(s){return "'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}
+function nodeSidebar(n){const ins=edges.filter(e=>e.to===n.id),outs=edges.filter(e=>e.from===n.id);const bugs=KNOWN_BUGS[n.id]||[],fixes=FIXES[n.id]||[],heat=HEAT[n.id];return`<h2>${esc(n.label)}</h2><div class="path">${esc(n.path||'')}</div>${n.dead?'<div class="pill" style="border-color:var(--critical);color:var(--critical)">DEAD CODE</div>':''}${n.critical?'<div class="pill" style="border-color:var(--critical);color:var(--critical)">CRITICAL PATH</div>':''}<div class="role">${esc(n.role||'')}</div><div class="plain">${esc(n.plain||'')}</div>${n.notes?`<h3>Notes</h3><ul>${n.notes.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<h3>Incoming (${ins.length})</h3>${ins.map(e=>`<div class="edgeline"><span class="arrow">←</span> <b>${esc(e.from)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}<h3>Outgoing (${outs.length})</h3>${outs.map(e=>`<div class="edgeline"><span class="arrow">→</span> <b>${esc(e.to)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}<h3>Tags</h3>${(n.tag||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}`;}
+function defaultSidebar(){return`<h2>Admin Shell</h2><div class="muted">${nodes.length} węzłów · ${edges.length} krawędzi · panel admina</div><h3>Notable findings</h3>${FINDINGS.map(([k,t])=>`<div class="edgeline"><b style="color:var(--accent)">${k}</b> · ${esc(t)}</div>`).join('')}<h3>Inne mapy</h3><div class="edgeline"><a href="architecture-map.html">Combat</a> · <a href="turn-flow-map.html">Turn Flow</a> · <a href="world-map.html">Świat/Lokacje</a> · <a href="dungeon-map.html">Lochy (FAZA L)</a></div><h3>Legenda</h3><div class="legend"><span><i style="border-color:var(--client)"></i>frontend</span><span><i style="border-color:var(--route)"></i>route</span><span><i style="border-color:#5a5a5a"></i>call</span></div>`;}
+
+let REPO='szmidtpiotr/ai-gm';
+const ISSUE_CACHE={};
+let popSeq=0;
+function mdToHtml(md){let s=esc(md||'');s=s.replace(/```(\w*)\n([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${c.replace(/\n$/,'')}</pre>`);s=s.replace(/^######\s?(.*)$/gm,'<h6>$1</h6>').replace(/^#####\s?(.*)$/gm,'<h5>$1</h5>').replace(/^####\s?(.*)$/gm,'<h4>$1</h4>').replace(/^###\s?(.*)$/gm,'<h4>$1</h4>').replace(/^##\s?(.*)$/gm,'<h3>$1</h3>').replace(/^#\s?(.*)$/gm,'<h3>$1</h3>');s=s.replace(/^\s*[-*]\s+\[x\]\s?(.*)$/gim,'<div class="li done">☑ $1</div>').replace(/^\s*[-*]\s+\[ \]\s?(.*)$/gim,'<div class="li">☐ $1</div>').replace(/^\s*[-*]\s+(.*)$/gm,'<div class="li">• $1</div>').replace(/^\s*\d+\.\s+(.*)$/gm,'<div class="li">$1</div>');s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');s=s.replace(/\n{2,}/g,'<br><br>').replace(/(?<!>)\n(?!<)/g,'<br>');return s;}
+function fmtDate(iso){return iso?iso.slice(0,10):'';}
+async function fetchIssue(num){if(ISSUE_CACHE[num])return ISSUE_CACHE[num];const base='https://api.github.com/repos/'+REPO+'/issues/'+num;const headers={'Accept':'application/vnd.github+json'};const iss=await fetch(base,{headers}).then(r=>{if(!r.ok)throw new Error('issue '+r.status);return r.json();});let comments=[];if(iss.comments>0){comments=await fetch(base+'/comments?per_page=100',{headers}).then(r=>r.ok?r.json():[]).catch(()=>[]);}const data={iss,comments};ISSUE_CACHE[num]=data;return data;}
+function openTask(num,title,kind){const seq=++popSeq;document.getElementById('popnum').textContent=(kind==='task'?'Zadanie #':'Bug #')+num;document.getElementById('poptitle').textContent=title;document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span><span class="lbl">ładowanie…</span>`;document.getElementById('poplink').href='https://github.com/'+REPO+'/issues/'+num;const body=document.getElementById('popbody');body.innerHTML='<div class="loading">Pobieram…</div>';const box=document.getElementById('popbox');document.getElementById('pop').classList.add('show');const w=box.offsetWidth,h=Math.min(box.offsetHeight,window.innerHeight*0.88);box.style.left=Math.max(8,(window.innerWidth-w)/2)+'px';box.style.top=Math.max(8,(window.innerHeight-h)/2)+'px';fetchIssue(num).then(({iss,comments})=>{if(seq!==popSeq)return;const labels=(iss.labels||[]).map(l=>`<span class="lbl">${esc(l.name)}</span>`).join('');document.getElementById('popmeta').innerHTML=`<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span><span class="lbl">${fmtDate(iss.created_at)}</span>${labels}`;let html=mdToHtml(iss.body||'');if(comments.length){html+='<h3>Komentarze</h3>';comments.forEach(c=>{html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`;});}body.innerHTML=html;body.scrollTop=0;}).catch(err=>{if(seq!==popSeq)return;body.innerHTML=`<div class="loading">Błąd: ${esc(err.message)}</div>`;});}
+function closeTask(){document.getElementById('pop').classList.remove('show');popSeq++;}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeTask();});
+(function(){const box=document.getElementById('popbox'),head=document.getElementById('pophead');let drag=null;head.addEventListener('mousedown',e=>{if(e.target.id==='popclose')return;const r=box.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};document.body.style.userSelect='none';e.preventDefault();e.stopPropagation();});document.addEventListener('mousemove',e=>{if(!drag)return;box.style.left=Math.max(4,Math.min(window.innerWidth-60,e.clientX-drag.dx))+'px';box.style.top=Math.max(4,Math.min(window.innerHeight-40,e.clientY-drag.dy))+'px';});document.addEventListener('mouseup',()=>{if(drag){drag=null;document.body.style.userSelect='';}});})();
+(function(){const bar=document.getElementById('topbar'),handle=bar.querySelector('h1');let d=null;try{const p=JSON.parse(localStorage.getItem('archmap_topbar_pos_adm'));if(p){bar.style.left=p.left+'px';bar.style.top=p.top+'px';bar.style.right='auto';}}catch(e){}handle.addEventListener('mousedown',e=>{const r=bar.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top};bar.style.right='auto';document.body.style.userSelect='none';e.preventDefault();e.stopPropagation();});document.addEventListener('mousemove',e=>{if(!d)return;bar.style.left=Math.max(4,Math.min(window.innerWidth-120,e.clientX-d.dx))+'px';bar.style.top=Math.max(4,Math.min(window.innerHeight-40,e.clientY-d.dy))+'px';});document.addEventListener('mouseup',()=>{if(!d)return;const r=bar.getBoundingClientRect();try{localStorage.setItem('archmap_topbar_pos_adm',JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));}catch(e){}d=null;document.body.style.userSelect='';});})();
+document.getElementById('canvas').addEventListener('click',()=>{pinned=null;clearDim();document.getElementById('sidebar').innerHTML=defaultSidebar();});
+const CHIPS=[['overview','Overview'],['content','Zawartość'],['observability','Observability'],['heat','Heat-map (live)'],['all','Wszystkie kable']];
+const chipsBox=document.getElementById('chips');
+CHIPS.forEach(([id,label])=>{const c=document.createElement('div');c.className='chip'+(id==='overview'?' active':'');c.textContent=label;c.dataset.id=id;c.addEventListener('click',()=>applyChip(id));chipsBox.appendChild(c);});
+function applyChip(id){activeChip=id;[...chipsBox.children].forEach(c=>c.classList.toggle('active',c.dataset.id===id));const showAll=id==='all';nodes.forEach(n=>{const on=showAll||id==='heat'||(n.tag||[]).includes(id);nodeEls[n.id].g.style.display=on?'':'none';});edgeEls.forEach(({e,p,lbl})=>{const on=showAll||(id==='heat'?true:(e.tag||[]).includes(id));p.style.display=on?'':'none';lbl.style.display=on?'':'none';});renderHeat();if(!pinned)document.getElementById('sidebar').innerHTML=defaultSidebar();}
+let vx=0,vy=0,vz=1,dragging=false,sx=0,sy=0;
+const canvas=document.getElementById('canvas');
+function setView(x,y,z){vx=x;vy=y;vz=z;scene.setAttribute('transform',`translate(${x},${y}) scale(${z})`);}
+canvas.addEventListener('mousedown',e=>{if(e.target.closest('.node')||e.target.closest('#topbar'))return;dragging=true;sx=e.clientX-vx;sy=e.clientY-vy;canvas.classList.add('grabbing');});
+document.addEventListener('mouseup',()=>{dragging=false;canvas.classList.remove('grabbing');});
+document.addEventListener('mousemove',e=>{if(!dragging)return;setView(e.clientX-sx,e.clientY-sy,vz);});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.15,Math.min(4,vz*(1-e.deltaY*0.001)));const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;setView(mx-(mx-vx)/vz*z,my-(my-vy)/vz*z,z);},{passive:false});
+document.getElementById('zfit').onclick=()=>{const bb=scene.getBBox();const cw=canvas.clientWidth,ch=canvas.clientHeight;const z=Math.min(0.98*(cw/(bb.width+40)),0.98*(ch/(bb.height+40)),4);setView((cw-bb.width*z)/2-bb.x*z,(ch-bb.height*z)/2-bb.y*z,z);};
+document.getElementById('zin').onclick=()=>{setView(vx,vy,Math.min(4,vz*1.25));};
+document.getElementById('zout').onclick=()=>{setView(vx,vy,Math.max(0.15,vz/1.25));};
+fetch('overlay/map-overlay.json').then(r=>r.json()).then(data=>{const repo=data.repo||REPO;REPO=repo;const bugs=data.bugs||{},fixes=data.fixes||{},heat=data.heat||{};nodes.forEach(n=>{FIXES[n.id]=(fixes[n.id]||[]);KNOWN_BUGS[n.id]=(bugs[n.id]||[]);HEAT[n.id]=heat[n.id]||null;});renderBadges();renderHeat();const gen=data.generated_at?` · ${data.generated_at}`:'';const bct=Object.values(bugs).reduce((s,a)=>s+a.length,0);const fct=Object.values(fixes).reduce((s,a)=>s+a.length,0);document.getElementById('overlaystate').textContent=`overlay: ${fct} zadań · ${bct} bugów${gen}`;document.getElementById('sidebar').innerHTML=defaultSidebar();}).catch(()=>{document.getElementById('overlaystate').textContent='overlay: brak (statyczna mapa)';document.getElementById('sidebar').innerHTML=defaultSidebar();});
+setView(30,30,1);
+document.getElementById('sidebar').innerHTML=defaultSidebar();
+</script>
+</body>
+</html>

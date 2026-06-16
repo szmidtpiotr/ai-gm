@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-GM · Mapa architektury — Świat / Lokacje</title>
+<style>
+  :root{--bg:#0F0F0F;--panel:#161616;--panel-2:#1c1c1c;--border:#2a2a2a;--text:#e8e8e8;--muted:#8a8a8a;--client:#4ea1ff;--route:#7bd389;--service:#c792ea;--db:#ffb86b;--external:#ff6b9d;--critical:#ff3860;--accent:#f5b942;--accent-2:#ff7a45;}
+  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden}
+  #topbar{position:absolute;top:10px;left:10px;right:auto;max-width:calc(100vw - 360px);z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:rgba(20,20,20,.96);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #topbar h1{font-size:13px;margin:0 12px 0 0;font-weight:600;letter-spacing:.3px;white-space:nowrap;cursor:move;user-select:none}
+  #topbar h1:active{cursor:grabbing}#topbar h1 .grip{color:var(--accent);margin-right:6px;font-size:14px}#topbar h1 span{color:var(--muted);font-weight:400}
+  .chip{padding:4px 10px;border:1px solid var(--border);border-radius:14px;background:var(--panel-2);color:var(--muted);cursor:pointer;user-select:none;font-size:12px;transition:.12s}.chip:hover{color:var(--text);border-color:#3a3a3a}.chip.active{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+  .zoombtns{margin-left:auto;display:flex;gap:6px}.zoombtns button{width:28px;height:28px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);border-radius:6px;cursor:pointer;font-size:14px}
+  #canvas{flex:1;position:relative;overflow:hidden;cursor:grab}#canvas.grabbing{cursor:grabbing}
+  svg{position:absolute;top:0;left:0;width:100%;height:100%}#scene{transition:none}
+  .cluster rect{fill-opacity:.10;stroke-opacity:.45;stroke-width:1}.cluster text{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;fill:var(--muted)}
+  .node{cursor:pointer}.node rect{fill:var(--panel);stroke-width:1.4;rx:7;transition:opacity .12s}.node .lbl{font-size:12px;font-weight:600;fill:var(--text)}.node .sub{font-size:10.5px;fill:var(--muted)}.node.crit rect{stroke-width:2.4}.node.dead rect{stroke-dasharray:4 3;fill:#141014}.node.dimmed{opacity:.16}
+  .edge{fill:none;stroke-width:1.4;opacity:.55}.edge.dimmed{opacity:.05}.elabel{font-size:9.5px;fill:var(--muted);opacity:.8}.elabel.dimmed{opacity:.04}
+  .badge-fix{fill:var(--route)}.badge-bug{fill:var(--critical)}.badge text{font-size:9px;font-weight:700;fill:#0c0c0c}
+  #sidebar{width:340px;background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;padding:16px 16px 40px;z-index:6}
+  #sidebar h2{font-size:14px;margin:0 0 2px}#sidebar .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--accent);word-break:break-all;margin-bottom:10px}
+  #sidebar .role{font-size:12.5px;margin:8px 0}#sidebar .plain{font-size:12.5px;color:#cfcfcf;background:var(--panel-2);border-left:2px solid var(--service);padding:8px 10px;border-radius:4px;margin:8px 0}
+  #sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+  #sidebar ul{margin:4px 0;padding-left:16px}#sidebar li{margin:3px 0;font-size:12px;color:#cfcfcf}
+  .pill{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;margin:2px 4px 2px 0;border:1px solid var(--border);color:var(--muted)}
+  .edgeline{font-size:11.5px;margin:3px 0;color:#cfcfcf}.edgeline b{color:var(--text);font-weight:600}.arrow{color:var(--muted)}
+  .bug{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#241317;border-left:2px solid var(--critical)}.bug .sev{font-weight:700;text-transform:uppercase;font-size:9px;color:var(--critical)}
+  .fix{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#142117;border-left:2px solid var(--route)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.legend span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}.legend i{width:18px;height:0;border-top:2px solid;display:inline-block}
+  .muted{color:var(--muted)}#overlaystate{font-size:10.5px;color:var(--muted);padding:2px 8px;border:1px dashed var(--border);border-radius:10px}
+  .task{cursor:pointer;transition:.1s}.task:hover{filter:brightness(1.35)}
+  #pop{position:fixed;inset:0;z-index:20;display:none;background:rgba(0,0,0,.6)}#pop.show{display:block}
+  #popbox{position:fixed;left:0;top:0;width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:0 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #pophead{display:flex;align-items:flex-start;gap:10px;cursor:move;user-select:none;background:var(--panel-2);margin:0 -22px 12px;padding:12px 16px 12px 14px;border-radius:12px 12px 0 0;border-bottom:1px solid var(--accent)}
+  #pophead:active{cursor:grabbing}#pophead .grip{color:var(--accent);font-size:18px;line-height:1.3;flex:0 0 auto}#pophead .htext{flex:1;min-width:0}
+  #popclose{background:none;border:0;color:var(--muted);font-size:24px;line-height:.8;cursor:pointer;padding:0 2px;flex:0 0 auto}#popclose:hover{color:var(--text)}
+  #popbox .num{font-family:ui-monospace,monospace;font-size:12px;color:var(--accent);font-weight:700}#popbox .num::after{content:" · przeciągnij";color:var(--muted);font-weight:400;font-size:10.5px}
+  #popbox h2#poptitle{font-size:16px;margin:4px 0 0;color:var(--text);font-weight:600;line-height:1.3}
+  #popbox .meta{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;flex-wrap:wrap}#popbox .meta .lbl{border:1px solid var(--border);border-radius:10px;padding:1px 7px}
+  #popbody{overflow-y:auto;flex:1;border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;font-size:12.5px;line-height:1.55;color:#d6d6d6}
+  #popbody h3{font-size:13.5px;color:var(--accent);margin:14px 0 4px;border:0;text-transform:none;letter-spacing:0}
+  #popbody pre.code{background:#0c0c0c;border:1px solid var(--border);border-radius:6px;padding:8px 10px;overflow-x:auto;font-family:ui-monospace,monospace;font-size:11.5px;color:#cbd5b5;white-space:pre}
+  #popbody code{background:#0c0c0c;border:1px solid var(--border);border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:11.5px;color:#e0c98a}
+  #popbody .li{margin:2px 0 2px 6px}#popbody .li.done{color:var(--route)}#popbody a{color:var(--client)}
+  #popbody .cmt{border-left:2px solid var(--service);background:var(--panel-2);padding:8px 12px;border-radius:4px;margin:10px 0}#popbody .cmt .who{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:5px}
+  #popbody .loading{color:var(--muted);font-style:italic}#popbox .actions{display:flex;gap:10px;justify-content:flex-end}
+  #popbox a.btn,#popbox button.btn{font-size:12.5px;padding:7px 14px;border-radius:7px;cursor:pointer;text-decoration:none;border:1px solid var(--border);background:var(--panel-2);color:var(--text)}
+  #popbox a.btn{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas">
+    <div id="topbar">
+      <h1 title="Przeciągnij"><span class="grip">⠿</span>AI-GM <span>· mapa architektury · Świat / Lokacje</span></h1>
+      <div id="chips"></div>
+      <span id="overlaystate">overlay: —</span>
+      <div class="zoombtns"><button id="zfit">⤢</button><button id="zin">+</button><button id="zout">−</button></div>
+    </div>
+    <svg id="svg">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#6a6a6a"></path></marker>
+        <marker id="arrcrit" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#ff3860"></path></marker>
+      </defs>
+      <g id="scene"><g id="gClusters"></g><g id="gEdges"></g><g id="gLabels"></g><g id="gNodes"></g></g>
+    </svg>
+  </div>
+  <div id="sidebar"></div>
+</div>
+<div id="pop" onclick="if(event.target===this)closeTask()">
+  <div id="popbox">
+    <div id="pophead"><span class="grip">⠿</span><div class="htext"><div class="num" id="popnum"></div><h2 id="poptitle"></h2></div><button id="popclose" onclick="closeTask()">×</button></div>
+    <div class="meta" id="popmeta"></div><div id="popbody"></div>
+    <div class="actions"><button class="btn" onclick="closeTask()">Zamknij</button><a class="btn" id="poplink" target="_blank" rel="noopener">Otwórz na GitHub ↗</a></div>
+  </div>
+</div>
+<script>
+const COLORS={client:'--client',route:'--route',service:'--service',db:'--db',external:'--external',critical:'--critical'};
+function col(kind){return getComputedStyle(document.documentElement).getPropertyValue(COLORS[kind]||'--service').trim();}
+
+const clusters=[
+  {id:'entry',   label:'Routes / Entry',      x:20,  y:70, w:260, h:340, color:'route'},
+  {id:'svc',     label:'Services',             x:310, y:70, w:270, h:530, color:'service'},
+  {id:'hex',     label:'Hex World',            x:610, y:70, w:260, h:340, color:'external'},
+  {id:'storage', label:'DB / Storage',         x:900, y:70, w:260, h:530, color:'db'},
+];
+
+const N=(id,cl,label,sub,x,y,w,h,color,opts={})=>({id,cluster:cl,label,sub,x,y,w,h,color,...opts});
+
+const nodes=[
+  /* ---- Routes ---- */
+  N('wld-locations-router','entry','routers/locations.py','list_locations :148',40,110,220,54,'route',{
+    role:'REST CRUD for locations: list, create, get, update, delete, admin list + patch.',
+    plain:'The location database API. Admins use this to manage all the named places in the game world.',
+    path:'backend/app/routers/locations.py:148',
+    notes:['GET /locations, POST /locations','GET /locations/{key}, PUT/DELETE','GET /admin/locations, PATCH /admin/locations/{key}'],
+    tag:['overview','all']}),
+  N('wld-admin-location','entry','routers/admin_location.py','admin location ops',40,186,220,52,'route',{
+    role:'Admin location operations: generate descriptions, attach images, manage sublocation structure.',
+    plain:'Extra admin tools for locations: generate text descriptions with AI and link images.',
+    path:'backend/app/routers/admin_location.py',
+    notes:['POST /admin/locations/{key}/generate-description','POST /admin/locations/{key}/image','Sublocation nesting support'],
+    tag:['overview','all']}),
+  N('wld-session-location','entry','routers/session_location.py','session scene tracking',40,260,220,52,'route',{
+    role:'Tracks the current location scene for an active session; used to restore context on reconnect.',
+    plain:'Remembers where the player currently is so that reloading the game puts them back in the right place.',
+    path:'backend/app/routers/session_location.py',
+    notes:['GET/POST /campaigns/{id}/session-location','Feeds into context_injector location injection'],
+    tag:['overview','all']}),
+  N('wld-world-review','entry','routers/world_review.py','pending approval',40,334,220,52,'route',{
+    role:'World content pending-review queue: approve or reject AI-generated locations, NPCs, enemies.',
+    plain:'Holds new AI-created content for admin approval before it enters the live game world.',
+    path:'backend/app/routers/world_review.py',
+    notes:['GET /world-review/pending','POST /world-review/approve/{id}, /reject/{id}','Feeds into game_config_* tables on approve'],
+    tag:['overview','all']}),
+
+  /* ---- Services ---- */
+  N('wld-world-state','svc','world_state_service.py','get_world_state_flags :28',330,110,230,58,'service',{
+    role:'THE SEAM. Reads/writes session world state: location_key, combat_roster, conditions, discovered flags, and save snapshots.',
+    plain:'The running world memory. Tracks where the hero is, who is in the scene, and what has happened — loaded every turn.',
+    path:'backend/app/services/world_state_service.py:28',
+    notes:['get_world_state_flags:28, set_world_state_flags:64','enter_location_scene:99, exit_location_scene:146','auto_save_snapshot:298, build_snapshot:228','Feeds context_injector with location state'],
+    tag:['overview','critical-path','all'], critical:true}),
+  N('wld-encounter-svc','svc','encounter_service.py','maybe_inject_encounter :113',330,192,230,54,'service',{
+    role:'Probabilistic encounter injection: checks trigger, location type, hero level, dwell_chance_multiplier.',
+    plain:'Decides if a random event (ambush, NPC, discovery) happens this turn based on where you are and how long you have been there.',
+    path:'backend/app/services/encounter_service.py:113',
+    notes:['maybe_inject_encounter:113, encounter_matches:299','dwell_chance_multiplier:341 (increases with turns stayed)','ensure_encounter_enemies_in_db:36 (syncs enemy config)'],
+    tag:['overview','all']}),
+  N('wld-encounter-seed','svc','encounter_seed_service.py','encounter templates',330,268,230,50,'service',{
+    role:'Manages encounter template config (type, trigger, hex type, enemy keys, narrative hints).',
+    plain:'The library of possible encounters: what can happen where, and which enemies to use.',
+    path:'backend/app/services/encounter_seed_service.py',
+    notes:['match_encounter_templates:381','select_encounter_template:416','Called by maybe_inject_encounter'],
+    tag:['overview','all']}),
+  N('wld-campaign-plan-rt','svc','campaign_plan_runtime.py','auto_complete_beats :auto',330,340,230,52,'service',{
+    role:'Auto-advances narrative beats based on in-game events (kill_enemy, enter_location, talk_to_npc).',
+    plain:'Advances the story automatically when a key event happens. Kill the right villain, move to the next chapter.',
+    path:'backend/app/services/campaign_plan_runtime.py',
+    notes:['auto_complete_beats_by_event("kill_enemy"):~4527 in turns.py','Reads gm_plan_json from campaigns table','OBSERVABILITY: beat_complete event written here (O2)'],
+    tag:['overview','all']}),
+  N('wld-context-inject','svc','context_injector.py','_inject_location :location block',330,414,230,52,'service',{
+    role:'Location context block injected into every narrator prompt: current room description, exits, NPCs present.',
+    plain:'Tells the AI what the current location looks like, who is here, and what exits exist.',
+    path:'backend/app/services/context_injector.py:85',
+    notes:['ContextInjector.build:105 calls world_state','Location description injected from locations table','See also: turn-flow-map.html for full seam'],
+    tag:['overview','all']}),
+  N('wld-world-state-hist','svc','routers/world_state_history.py','snapshot archive',330,488,230,50,'service',{
+    role:'Archives world state snapshots for admin review and rollback.',
+    plain:'Keeps a history of world states so admins can see how the world changed over time.',
+    path:'backend/app/routers/world_state_history.py',
+    notes:['GET /world-state-history/{campaign_id}','Called auto_save_snapshot on every turn'],
+    tag:['overview','all']}),
+
+  /* ---- Hex World ---- */
+  N('wld-hex-router','hex','routers/hex_world.py','hex map CRUD :81',630,110,220,54,'external',{
+    role:'Hex grid world map: paint hexes, set types, teleport connections, per-campaign overlays, generate world.',
+    plain:'The API for the hex world map. Admins paint terrain, set connections, and generate new areas.',
+    path:'backend/app/routers/hex_world.py:81',
+    notes:['GET /map, PATCH /hexes/{q}/{r}','POST /teleport-connections, DELETE','POST /generate — LLM generates new hex area'],
+    tag:['overview','all']}),
+  N('wld-travel-svc','hex','turns.py · travel','execute_directional_travel :7086',630,186,220,52,'service',{
+    role:'Player travel: validate destination hex, move hero, update session_flags.location_key.',
+    plain:'Handles moving the hero to a new hex on the world map, checking if travel is valid.',
+    path:'backend/app/api/turns.py:7086',
+    notes:['POST /campaigns/{id}/travel, /hex-travel','execute_directional_travel in turn_pipeline.py:155','Updates campaigns.session_flags.location_key'],
+    tag:['overview','all']}),
+  N('wld-hex-db','hex','world_map_hexes','table (DB)',630,260,220,50,'db',{
+    role:'Per-hex world state: biome type, discovered/encounter_cleared flags, per-campaign overlays.',
+    plain:'One row per hex. Stores the terrain type, whether the player has been there, and campaign-specific notes.',
+    path:'data-dev/ai_gm.db · world_map_hexes',
+    notes:['q, r coordinates (axial hex grid)','discovered, encounter_cleared, campaign_label','campaign_notes per campaign'],
+    tag:['overview','all']}),
+
+  /* ---- Storage ---- */
+  N('wld-locations-db','storage','locations','table (DB)',920,110,220,50,'db',{
+    role:'Location definitions: key, label, description, sublocation_of, rules JSON, image_url.',
+    plain:'The location database. Every named place in the game world with its description and rules.',
+    path:'data-dev/ai_gm.db · locations',
+    notes:['key (slug), label, description','sublocation_of FK for nesting','rules JSON: special mechanics at this location'],
+    tag:['overview','all']}),
+  N('wld-session-flags-db','storage','campaigns.session_flags','JSON column (DB)',920,176,220,52,'db',{
+    role:'Per-campaign session world state: location_key, combat_roster, explored_locations, scene_enemies.',
+    plain:'Saved in the campaign row as JSON. Everything the game needs to restore the world exactly where you left it.',
+    path:'data-dev/ai_gm.db · campaigns.session_flags',
+    notes:['location_key, scene_enemies[]','explored_locations set','world_state_service reads/writes this'],
+    tag:['overview','all']}),
+  N('wld-snapshots-db','storage','world_state_snapshots','table (DB)',920,250,220,50,'db',{
+    role:'Archive of auto-saved world state snapshots; used for admin review and potential rollback.',
+    plain:'A history of saved world states. Admins can look back at how the world looked at any point.',
+    path:'data-dev/ai_gm.db · world_state_snapshots',
+    notes:['campaign_id, snapshot_json, created_at','Written by auto_save_snapshot:298','source: "auto" / "manual"'],
+    tag:['overview','all']}),
+  N('wld-encounters-db','storage','game_encounter_templates','table (DB)',920,322,220,50,'db',{
+    role:'Encounter template definitions: trigger type, hex_type filter, enemy_keys, weight.',
+    plain:'The table of all possible random events. The encounter service picks from these.',
+    path:'data-dev/ai_gm.db · game_encounter_templates',
+    notes:['trigger: dwell/travel/enter','hex_type filter (forest/mountain/…)','enemy_keys: which enemies spawn'],
+    tag:['overview','all']}),
+  N('wld-npcs-db','storage','game_config_npcs','table (DB)',920,394,220,50,'db',{
+    role:'NPC definitions: name, archetype, location, dialogue templates, is_alive flag.',
+    plain:'The NPC database. All named characters in the world with their personality and where they live.',
+    path:'data-dev/ai_gm.db · game_config_npcs',
+    notes:['name, archetype, location_key FK','dialogue_template, personality','is_alive: global death flag'],
+    tag:['overview','all']}),
+  N('wld-enemies-db','storage','game_config_enemies','table (DB)',920,466,220,50,'db',{
+    role:'Enemy definitions: stats, abilities, loot_table_key, level range, encounter weight.',
+    plain:'The enemy database. All monsters and foes with their stats and what loot they drop.',
+    path:'data-dev/ai_gm.db · game_config_enemies',
+    notes:['hp_base, damage_dice, level_min/max','loot_table_key FK, drop_chance','status: active/pending_review'],
+    tag:['overview','all']}),
+];
+
+const edges=[
+  {from:'wld-locations-router',to:'wld-locations-db',kind:'db',label:'CRUD',tag:['overview','all']},
+  {from:'wld-admin-location',to:'wld-locations-db',kind:'db',label:'UPDATE',tag:['all']},
+  {from:'wld-session-location',to:'wld-session-flags-db',kind:'db',label:'R/W session',tag:['all']},
+  {from:'wld-world-state',to:'wld-session-flags-db',kind:'db',label:'read/write flags',tag:['overview','all']},
+  {from:'wld-world-state',to:'wld-snapshots-db',kind:'db',label:'auto-save snapshot',tag:['all']},
+  {from:'wld-encounter-svc',to:'wld-encounters-db',kind:'db',label:'SELECT templates',tag:['all']},
+  {from:'wld-encounter-svc',to:'wld-encounter-seed',kind:'normal',label:'select template',tag:['all']},
+  {from:'wld-world-state',to:'wld-context-inject',kind:'normal',label:'location context',tag:['overview','all']},
+  {from:'wld-hex-router',to:'wld-hex-db',kind:'db',label:'CRUD hexes',tag:['overview','all']},
+  {from:'wld-travel-svc',to:'wld-world-state',kind:'normal',label:'update location_key',tag:['overview','all']},
+  {from:'wld-travel-svc',to:'wld-hex-db',kind:'db',label:'mark discovered',tag:['all']},
+  {from:'wld-campaign-plan-rt',to:'wld-session-flags-db',kind:'db',label:'update beat state',tag:['all']},
+  {from:'wld-world-review',to:'wld-enemies-db',kind:'db',label:'approve enemy',tag:['all']},
+  {from:'wld-world-state-hist',to:'wld-snapshots-db',kind:'db',label:'read archive',tag:['all']},
+];
+
+let FIXES={},KNOWN_BUGS={},HEAT={};
+const FINDINGS=[
+  ['SEAM','world_state_service.py is the single source of truth for where the hero is and what is in the scene. Every turn reads this.'],
+  ['NOTE','encounter_service.maybe_inject_encounter is called from turns.py on every narrative turn — random events emerge here.'],
+  ['NOTE','session_flags is a JSON blob in the campaigns row, not a separate table. Evolves with features — always check for missing keys.'],
+  ['NOTE','Hex world (hex_world.py) is separate from the location tree (locations.py). Both affect navigation — locations are named rooms, hexes are the overworld.'],
+  ['NOTE','world_review.py gates AI-generated content. Approve/reject writes to game_config_enemies/locations/npcs.'],
+];
+
+const SVG=document.getElementById('svg'),scene=document.getElementById('scene');
+const gC=document.getElementById('gClusters'),gE=document.getElementById('gEdges'),gL=document.getElementById('gLabels'),gN=document.getElementById('gNodes');
+const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
+const NS='http://www.w3.org/2000/svg';
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+clusters.forEach(c=>{const g=el('g',{class:'cluster'});const r=el('rect',{x:c.x,y:c.y,width:c.w,height:c.h,rx:12,fill:col(c.color),stroke:col(c.color)});const t=el('text',{x:c.x+12,y:c.y+22});t.textContent=c.label;g.appendChild(r);g.appendChild(t);gC.appendChild(g);});
+function edgePath(a,b){const x1=a.x+a.w,y1=a.y+a.h/2,x2=b.x,y2=b.y+b.h/2;let sx=x1,ex=x2;if(b.x<a.x){sx=a.x;ex=b.x+b.w;}const dx=Math.max(40,Math.abs(ex-sx)*0.5);const c1x=sx+(ex>=sx?dx:-dx),c2x=ex-(ex>=sx?dx:-dx);return{d:`M ${sx} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${ex} ${y2}`,mx:(sx+ex)/2,my:(y1+y2)/2};}
+const edgeEls=[];
+edges.forEach((e,i)=>{const a=nodeById[e.from],b=nodeById[e.to];if(!a||!b)return;const g=edgePath(a,b);const isC=e.kind==='critical';const stroke=isC?col('critical'):e.kind==='db'?col('db'):'#5a5a5a';const p=el('path',{class:'edge'+(isC?' crit':''),d:g.d,stroke,'marker-end':isC?'url(#arrcrit)':'url(#arr)'});gE.appendChild(p);const lbl=el('text',{class:'elabel',x:g.mx,y:g.my-3-(i%2?8:0),'text-anchor':'middle'});lbl.textContent=e.label||'';gL.appendChild(lbl);edgeEls.push({e,p,lbl});});
+const nodeEls={};
+nodes.forEach(n=>{const g=el('g',{class:'node'+(n.critical?' crit':'')+(n.dead?' dead':''),'data-id':n.id});const c=col(n.color);const r=el('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:7,stroke:c});const lbl=el('text',{class:'lbl',x:n.x+12,y:n.y+22});lbl.textContent=n.label;const sub=el('text',{class:'sub',x:n.x+12,y:n.y+39});sub.textContent=n.sub||'';g.appendChild(r);g.appendChild(lbl);g.appendChild(sub);const badge=el('g',{class:'badges'});g.appendChild(badge);gN.appendChild(g);g.addEventListener('mouseenter',()=>select(n.id));g.addEventListener('mouseleave',()=>{if(!pinned)clearDim();});g.addEventListener('click',e=>{e.stopPropagation();pinned=(pinned===n.id)?null:n.id;select(pinned||n.id);});nodeEls[n.id]={g,r,badge};});
+function renderBadges(){nodes.forEach(n=>{const{badge}=nodeEls[n.id];badge.innerHTML='';const f=(FIXES[n.id]||[]).length,b=(KNOWN_BUGS[n.id]||[]).length;let ox=n.x+n.w-14;if(b){const grp=el('g',{class:'badge'});const ci=el('circle',{class:'badge-bug',cx:ox,cy:n.y+12,r:8});const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=b;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);ox-=18;}if(f){const grp=el('g',{class:'badge'});const ci=el('circle',{class:'badge-fix',cx:ox,cy:n.y+12,r:8});const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=f;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);}});}
+function renderHeat(){nodes.forEach(n=>{const h=HEAT[n.id];const{r}=nodeEls[n.id];if(activeChip==='heat'&&h){const w=h.calls<=0?1.4:Math.min(6,1.4+Math.log10(h.calls+1)*1.8);r.setAttribute('stroke-width',w);r.setAttribute('stroke',h.errors>0?col('critical'):col('db'));}else{r.setAttribute('stroke-width',n.critical?2.4:1.4);r.setAttribute('stroke',col(n.color));}});}
+let pinned=null,activeChip='overview';
+function neighbors(id){const s=new Set([id]);edges.forEach(e=>{if(e.from===id)s.add(e.to);if(e.to===id)s.add(e.from);});return s;}
+function select(id){const sb=document.getElementById('sidebar');if(!id){if(!pinned){clearDim();sb.innerHTML=defaultSidebar();}return;}const n=nodeById[id];const nb=neighbors(id);nodes.forEach(m=>nodeEls[m.id].g.classList.toggle('dimmed',!nb.has(m.id)));edgeEls.forEach(({e,p,lbl})=>{const on=(e.from===id||e.to===id);p.classList.toggle('dimmed',!on);lbl.classList.toggle('dimmed',!on);});sb.innerHTML=nodeSidebar(n);}
+function clearDim(){nodes.forEach(m=>nodeEls[m.id].g.classList.remove('dimmed'));edgeEls.forEach(({p,lbl})=>{p.classList.remove('dimmed');lbl.classList.remove('dimmed');});}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escAttr(s){return"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}
+function nodeSidebar(n){const ins=edges.filter(e=>e.to===n.id),outs=edges.filter(e=>e.from===n.id);const bugs=KNOWN_BUGS[n.id]||[],fixes=FIXES[n.id]||[];return`<h2>${esc(n.label)}</h2><div class="path">${esc(n.path||'')}</div>${n.critical?'<div class="pill" style="border-color:var(--critical);color:var(--critical)">CRITICAL PATH</div>':''}<div class="role">${esc(n.role||'')}</div><div class="plain">${esc(n.plain||'')}</div>${n.notes?`<h3>Notes</h3><ul>${n.notes.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<h3>Incoming (${ins.length})</h3>${ins.map(e=>`<div class="edgeline"><span class="arrow">←</span> <b>${esc(e.from)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}<h3>Outgoing (${outs.length})</h3>${outs.map(e=>`<div class="edgeline"><span class="arrow">→</span> <b>${esc(e.to)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}<h3>Tags</h3>${(n.tag||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}`;}
+function defaultSidebar(){return`<h2>Świat / Lokacje</h2><div class="muted">${nodes.length} węzłów · ${edges.length} krawędzi</div><h3>Notable findings</h3>${FINDINGS.map(([k,t])=>`<div class="edgeline"><b style="color:var(--accent)">${k}</b> · ${esc(t)}</div>`).join('')}<h3>Inne mapy</h3><div class="edgeline"><a href="architecture-map.html">Combat</a> · <a href="turn-flow-map.html">Turn Flow</a> · <a href="admin-map.html">Admin Shell</a> · <a href="dungeon-map.html">Lochy (FAZA L)</a></div><h3>Legenda</h3><div class="legend"><span><i style="border-color:var(--route)"></i>route</span><span><i style="border-color:var(--db)"></i>DB R/W</span><span><i style="border-color:#5a5a5a"></i>call</span></div>`;}
+let REPO='szmidtpiotr/ai-gm';const ISSUE_CACHE={};let popSeq=0;
+function mdToHtml(md){let s=esc(md||'');s=s.replace(/```(\w*)\n([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${c.replace(/\n$/,'')}</pre>`);s=s.replace(/^######\s?(.*)$/gm,'<h6>$1</h6>').replace(/^####\s?(.*)$/gm,'<h4>$1</h4>').replace(/^###\s?(.*)$/gm,'<h4>$1</h4>').replace(/^##\s?(.*)$/gm,'<h3>$1</h3>').replace(/^#\s?(.*)$/gm,'<h3>$1</h3>');s=s.replace(/^\s*[-*]\s+(.*)$/gm,'<div class="li">• $1</div>').replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');s=s.replace(/\n{2,}/g,'<br><br>').replace(/(?<!>)\n(?!<)/g,'<br>');return s;}
+function fmtDate(iso){return iso?iso.slice(0,10):'';}
+async function fetchIssue(num){if(ISSUE_CACHE[num])return ISSUE_CACHE[num];const base='https://api.github.com/repos/'+REPO+'/issues/'+num;const headers={'Accept':'application/vnd.github+json'};const iss=await fetch(base,{headers}).then(r=>{if(!r.ok)throw new Error('issue '+r.status);return r.json();});let comments=[];if(iss.comments>0){comments=await fetch(base+'/comments?per_page=100',{headers}).then(r=>r.ok?r.json():[]).catch(()=>[]);}const data={iss,comments};ISSUE_CACHE[num]=data;return data;}
+function openTask(num,title,kind){const seq=++popSeq;document.getElementById('popnum').textContent=(kind==='task'?'Zadanie #':'Bug #')+num;document.getElementById('poptitle').textContent=title;document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span><span class="lbl">ładowanie…</span>`;document.getElementById('poplink').href='https://github.com/'+REPO+'/issues/'+num;const body=document.getElementById('popbody');body.innerHTML='<div class="loading">Pobieram…</div>';const box=document.getElementById('popbox');document.getElementById('pop').classList.add('show');const w=box.offsetWidth,h=Math.min(box.offsetHeight,window.innerHeight*0.88);box.style.left=Math.max(8,(window.innerWidth-w)/2)+'px';box.style.top=Math.max(8,(window.innerHeight-h)/2)+'px';fetchIssue(num).then(({iss,comments})=>{if(seq!==popSeq)return;document.getElementById('popmeta').innerHTML=`<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span>`;let html=mdToHtml(iss.body||'');if(comments.length){html+='<h3>Komentarze</h3>';comments.forEach(c=>{html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')}</div>${mdToHtml(c.body||'')}</div>`;});}body.innerHTML=html;body.scrollTop=0;}).catch(err=>{if(seq!==popSeq)return;body.innerHTML=`<div class="loading">Błąd: ${esc(err.message)}</div>`;});}
+function closeTask(){document.getElementById('pop').classList.remove('show');popSeq++;}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeTask();});
+(function(){const box=document.getElementById('popbox'),head=document.getElementById('pophead');let drag=null;head.addEventListener('mousedown',e=>{if(e.target.id==='popclose')return;const r=box.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};document.body.style.userSelect='none';e.preventDefault();e.stopPropagation();});document.addEventListener('mousemove',e=>{if(!drag)return;box.style.left=Math.max(4,Math.min(window.innerWidth-60,e.clientX-drag.dx))+'px';box.style.top=Math.max(4,Math.min(window.innerHeight-40,e.clientY-drag.dy))+'px';});document.addEventListener('mouseup',()=>{if(drag){drag=null;document.body.style.userSelect='';}});})();
+(function(){const bar=document.getElementById('topbar'),handle=bar.querySelector('h1');let d=null;try{const p=JSON.parse(localStorage.getItem('archmap_topbar_pos_wld'));if(p){bar.style.left=p.left+'px';bar.style.top=p.top+'px';bar.style.right='auto';}}catch(e){}handle.addEventListener('mousedown',e=>{const r=bar.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top};bar.style.right='auto';document.body.style.userSelect='none';e.preventDefault();e.stopPropagation();});document.addEventListener('mousemove',e=>{if(!d)return;bar.style.left=Math.max(4,Math.min(window.innerWidth-120,e.clientX-d.dx))+'px';bar.style.top=Math.max(4,Math.min(window.innerHeight-40,e.clientY-d.dy))+'px';});document.addEventListener('mouseup',()=>{if(!d)return;const r=bar.getBoundingClientRect();try{localStorage.setItem('archmap_topbar_pos_wld',JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));}catch(e){}d=null;document.body.style.userSelect='';});})();
+document.getElementById('canvas').addEventListener('click',()=>{pinned=null;clearDim();document.getElementById('sidebar').innerHTML=defaultSidebar();});
+const CHIPS=[['overview','Overview'],['critical-path','Ścieżka krytyczna',true],['heat','Heat-map (live)'],['all','Wszystkie kable']];
+const chipsBox=document.getElementById('chips');
+CHIPS.forEach(([id,label,crit])=>{const c=document.createElement('div');c.className='chip'+(crit?' crit':'')+(id==='overview'?' active':'');c.textContent=label;c.dataset.id=id;c.addEventListener('click',()=>applyChip(id));chipsBox.appendChild(c);});
+function applyChip(id){activeChip=id;[...chipsBox.children].forEach(c=>c.classList.toggle('active',c.dataset.id===id));const showAll=id==='all';nodes.forEach(n=>{const on=showAll||id==='heat'||(n.tag||[]).includes(id);nodeEls[n.id].g.style.display=on?'':'none';});edgeEls.forEach(({e,p,lbl})=>{const on=showAll||(id==='heat'?true:(e.tag||[]).includes(id));p.style.display=on?'':'none';lbl.style.display=on?'':'none';});renderHeat();if(!pinned)document.getElementById('sidebar').innerHTML=defaultSidebar();}
+let vx=0,vy=0,vz=1,dragging=false,sx=0,sy=0;
+const canvas=document.getElementById('canvas');
+function setView(x,y,z){vx=x;vy=y;vz=z;scene.setAttribute('transform',`translate(${x},${y}) scale(${z})`);}
+canvas.addEventListener('mousedown',e=>{if(e.target.closest('.node')||e.target.closest('#topbar'))return;dragging=true;sx=e.clientX-vx;sy=e.clientY-vy;canvas.classList.add('grabbing');});
+document.addEventListener('mouseup',()=>{dragging=false;canvas.classList.remove('grabbing');});
+document.addEventListener('mousemove',e=>{if(!dragging)return;setView(e.clientX-sx,e.clientY-sy,vz);});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.15,Math.min(4,vz*(1-e.deltaY*0.001)));const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;setView(mx-(mx-vx)/vz*z,my-(my-vy)/vz*z,z);},{passive:false});
+document.getElementById('zfit').onclick=()=>{const bb=scene.getBBox();const cw=canvas.clientWidth,ch=canvas.clientHeight;const z=Math.min(0.98*(cw/(bb.width+40)),0.98*(ch/(bb.height+40)),4);setView((cw-bb.width*z)/2-bb.x*z,(ch-bb.height*z)/2-bb.y*z,z);};
+document.getElementById('zin').onclick=()=>setView(vx,vy,Math.min(4,vz*1.25));
+document.getElementById('zout').onclick=()=>setView(vx,vy,Math.max(0.15,vz/1.25));
+fetch('overlay/map-overlay.json').then(r=>r.json()).then(data=>{REPO=data.repo||REPO;const bugs=data.bugs||{},fixes=data.fixes||{},heat=data.heat||{};nodes.forEach(n=>{FIXES[n.id]=(fixes[n.id]||[]);KNOWN_BUGS[n.id]=(bugs[n.id]||[]);HEAT[n.id]=heat[n.id]||null;});renderBadges();renderHeat();const gen=data.generated_at?` · ${data.generated_at}`:'';const bct=Object.values(bugs).reduce((s,a)=>s+a.length,0);const fct=Object.values(fixes).reduce((s,a)=>s+a.length,0);document.getElementById('overlaystate').textContent=`overlay: ${fct} zadań · ${bct} bugów${gen}`;document.getElementById('sidebar').innerHTML=defaultSidebar();}).catch(()=>{document.getElementById('overlaystate').textContent='overlay: brak (statyczna mapa)';document.getElementById('sidebar').innerHTML=defaultSidebar();});
+setView(30,30,1);document.getElementById('sidebar').innerHTML=defaultSidebar();
+</script>
+</body>
+</html>
