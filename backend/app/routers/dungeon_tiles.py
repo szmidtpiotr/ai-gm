@@ -26,7 +26,7 @@ from app.services.dungeon_tile_service import (
     draw_tile_sequence,
     resolve_tile_content,
 )
-from app.services.tile_compositor import composite_tile, default_overlays_for
+from app.services.tile_compositor import TILE_SIZE, composite_tile, default_overlays_for
 
 DB_PATH = Path("/data/ai_gm.db")
 TILES_DIR = Path("/app/tiles")  # bind-mounted to frontend/images/tiles
@@ -561,7 +561,9 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
     doors = _normalize_doors(tile_dict.get("doors") or [])
     overlays = tile_dict.get("door_overlays") or {}
     try:
-        final_bytes = composite_tile(raw_bytes, doors, overlays)
+        # L15: keep the full generated resolution (768) through compositing — don't
+        # downscale to the legacy 512 baseline, which flattened the new rich tiles.
+        final_bytes = composite_tile(raw_bytes, doors, overlays, tile_size=height)
     except Exception as exc:
         raise HTTPException(status_code=500,
                             detail=f"Compositor failed: {exc}") from None
@@ -628,8 +630,15 @@ def recomposite_tile_image(tile_id: int) -> dict:
     raw_bytes = raw_path.read_bytes()
     doors = _normalize_doors(tile_dict.get("doors") or [])
     overlays = tile_dict.get("door_overlays") or {}
+    # L15: preserve the raw image's native resolution (768 for new tiles, 512 for legacy).
     try:
-        final_bytes = composite_tile(raw_bytes, doors, overlays)
+        from PIL import Image as _PILImage
+        import io as _io
+        _raw_size = _PILImage.open(_io.BytesIO(raw_bytes)).size[0]
+    except Exception:
+        _raw_size = TILE_SIZE
+    try:
+        final_bytes = composite_tile(raw_bytes, doors, overlays, tile_size=_raw_size)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Compositor failed: {exc}") from None
 

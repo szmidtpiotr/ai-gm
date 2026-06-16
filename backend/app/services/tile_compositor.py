@@ -18,11 +18,14 @@ from PIL import Image, ImageDraw
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
-TILE_SIZE = 512                    # output canvas (square)
+TILE_SIZE = 768                    # output canvas (square) — L15: bumped 512→768
 WALL_BORDER = 0                    # kept for API compatibility; no longer used
-BORDER_THICKNESS = 5               # thin black outline around tile
-DOOR_MARKER_LONG = 100             # door marker length along edge (px)
-DOOR_MARKER_SHORT = 22             # door marker depth perpendicular to edge (px)
+# Marker/border geometry below is calibrated for a 512px baseline and scaled
+# proportionally to the actual tile_size at composite time (see _scaled()).
+GEOMETRY_BASE = 512
+BORDER_THICKNESS = 5               # thin black outline around tile (@512 baseline)
+DOOR_MARKER_LONG = 100             # door marker length along edge (px @512)
+DOOR_MARKER_SHORT = 22             # door marker depth perpendicular to edge (px @512)
 
 # Canonical overlay positions kept for API compatibility with door overlay editor.
 DEFAULT_DOOR_OVERLAYS: dict[str, dict[str, float]] = {
@@ -36,6 +39,11 @@ DEFAULT_DOOR_OVERLAYS: dict[str, dict[str, float]] = {
 
 BORDER_COLOR = (10, 10, 10, 255)           # thin tile outline
 DOOR_MARKER_COLOR = (245, 158, 11, 255)    # amber #f59e0b — door passage indicator
+
+
+def _scaled(px: int, size: int) -> int:
+    """Scale a 512-baseline pixel value to the actual tile size (min 1)."""
+    return max(1, round(px * size / GEOMETRY_BASE))
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -86,7 +94,7 @@ def _build_thin_border(size: int) -> Image.Image:
     """4-sided thin black outline at tile perimeter."""
     frame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(frame)
-    b = BORDER_THICKNESS
+    b = _scaled(BORDER_THICKNESS, size)
     draw.rectangle([(0, 0), (size - 1, b - 1)], fill=BORDER_COLOR)           # top
     draw.rectangle([(0, size - b), (size - 1, size - 1)], fill=BORDER_COLOR)  # bottom
     draw.rectangle([(0, b), (b - 1, size - b - 1)], fill=BORDER_COLOR)        # left
@@ -104,8 +112,8 @@ def _build_door_markers(size: int, doors: list[str]) -> Image.Image:
     """
     layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    half = DOOR_MARKER_LONG // 2
-    depth = DOOR_MARKER_SHORT
+    half = _scaled(DOOR_MARKER_LONG, size) // 2
+    depth = _scaled(DOOR_MARKER_SHORT, size)
     mid = size // 2
 
     for side in doors:

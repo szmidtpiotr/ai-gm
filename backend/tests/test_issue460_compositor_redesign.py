@@ -179,6 +179,40 @@ class TestCompositorThinBorder:
         assert img.size == (TILE_SIZE, TILE_SIZE)
 
 
+# ── L15: resolution preserved through compositing ─────────────────────────────
+
+class TestCompositorPreservesResolution:
+    """L15 (#691): new rich tiles render at 768; compositor must not downscale to 512."""
+
+    def test_default_canvas_is_768(self):
+        """Default TILE_SIZE bumped 512 → 768 for richer tiles."""
+        assert TILE_SIZE == 768
+
+    def test_768_raw_stays_768(self):
+        """A 768 raw image composites to a 768 output (no silent downscale)."""
+        raw = _make_solid_png(size=768)
+        result = composite_tile(raw, doors=["N"], overlays={}, tile_size=768)
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (768, 768)
+
+    def test_door_marker_scales_with_size(self):
+        """Door marker depth is proportional — present at the 768 edge, absent at legacy 512 depth."""
+        raw = _make_solid_png(color=(30, 30, 30), size=768)
+        result = composite_tile(raw, doors=["N"], overlays={}, tile_size=768)
+        # Amber marker should reach deeper than the legacy 22px (≈33px at 768).
+        px = _pixel_at(result, 768 // 2, 28)
+        assert px[0] > 180 and px[1] > 110 and px[2] < 80, (
+            f"expected amber door marker at depth 28 on 768 tile, got {px}"
+        )
+
+    def test_512_still_supported(self):
+        """Legacy 512 path still composites to 512 (recomposite of old raw images)."""
+        raw = _make_solid_png(size=512)
+        result = composite_tile(raw, doors=["S"], overlays={}, tile_size=512)
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (512, 512)
+
+
 # ── generate-description endpoint ────────────────────────────────────────────
 
 class TestGenerateDescriptionEndpoint:
