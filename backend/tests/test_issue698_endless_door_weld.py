@@ -12,6 +12,8 @@ Testujemy czystą funkcję sklejającą `_attach_endless_segment`, żeby unikną
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.services.dungeon_tile_service import (  # noqa: E402
@@ -135,6 +137,89 @@ def test_extend_welds_seam_no_null_no_ghost_no_orphan():
 
     # 6. Osierocona zaślepka usunięta (cap_s nie wisi już w grafie jako sierota)
     assert "cap_s" not in nodes or nodes["cap_s"]["doors_open"].get("N") == old_boss
+
+
+# ─── Regresja z /playwright-test-report L13c (2026-06-16) ─────────────────────
+# Pierwsza wersja fixu sklejała segment na DOWOLNYCH drzwiach bossa, których
+# przeciwległy kierunek istniał w kaflu-wejściu — także na drzwiach prowadzących
+# do REALNEJ ścieżki. Skutek na żywym grafie: kradła krawędź ścieżki bossa
+# (asymetria) i nadpisywała drzwi-onward kafla-wejścia (cały nowy segment osierocony).
+# Reguła: styk MUSI użyć drzwi „zapasowych" (None lub zaślepka) po OBU stronach;
+# gdy takiej pary nie ma → przegeneruj segment (helper rzuca ValueError).
+
+
+def _old_graph_two_path_two_cap_boss():
+    """Boss z 2 drzwiami ŚCIEŻKI (W→node_4, S→node_2) i 2 zaślepkami (N, E).
+
+    Odwzorowuje realny graf z kampanii 99762: boss node_5 miał W→node_4 (wejście
+    ścieżki) i S→node_2, a N/E były zaślepione.
+    """
+    nodes = {
+        "node_0": _node(10, (-2, 0), ["E"], {"E": "node_4"}),
+        "node_4": _node(11, (-1, 0), ["E", "W"], {"W": "node_0", "E": "node_5"}),
+        "node_2": _node(12, (0, -1), ["N"], {"N": "node_5"}),
+        "cap_n": _node(99, (0, 1), ["S"], {"S": "node_5"}),
+        "cap_e": _node(99, (1, 0), ["W"], {"W": "node_5"}),
+        "node_5": _node(20, (0, 0), ["N", "S", "E", "W"],
+                        {"N": "cap_n", "S": "node_2", "E": "cap_e", "W": "node_4"}, is_boss=True),
+    }
+    return nodes, "node_5"
+
+
+def test_seam_uses_spare_doors_never_steals_boss_path():
+    """Boss z 2 ścieżkami + 2 zaślepkami: styk dobiera zaślepkę↔zaślepkę,
+    NIE odpina ścieżki bossa ani drzwi-onward wejścia → zero sierot/asymetrii."""
+    old_nodes, old_boss = _old_graph_two_path_two_cap_boss()
+    # nowy segment: wejście ma drzwi S=zaślepka (pasuje do bossa N) + E=onward
+    new_graph = {
+        "nodes": {
+            "node_0": _node(30, (0, 0), ["S", "E"], {"S": "fill_0", "E": "node_1"}),
+            "node_1": _node(40, (1, 0), ["W"], {"W": "node_0"}, is_boss=True),
+            "fill_0": _node(99, (0, -1), ["N"], {"N": "node_0"}),
+        },
+        "entry_node": "node_0",
+        "boss_node": "node_1",
+    }
+    caps = [_cap_tile(99, d) for d in ("N", "S", "E", "W")]
+    result = _attach_endless_segment(old_nodes, old_boss, new_graph, new_cycle=2, non_boss_caps=caps)
+    nodes = result["nodes"]
+
+    assert _count_open_doors(nodes) == 0, "zostały otwarte drzwi"
+    # boss ścieżki nienaruszone: node_4↔boss (W) i node_2↔boss (S) dalej symetryczne
+    assert nodes[old_boss]["doors_open"]["W"] == "node_4"
+    assert nodes["node_4"]["doors_open"]["E"] == old_boss
+    assert nodes[old_boss]["doors_open"]["S"] == "node_2"
+    # drzwi-onward wejścia c2 zachowane (segment NIE osierocony)
+    assert nodes["c2_node_0"]["doors_open"]["E"] == "c2_node_1"
+    # symetria + brak sierot na całości
+    for nid, n in nodes.items():
+        for d, tgt in n["doors_open"].items():
+            assert tgt is not None
+            assert nodes[tgt]["doors_open"].get(OPPOSITE[d]) == nid, f"asym {nid}.{d}"
+            assert d in set(n["content"]["doors"]), f"ghost {nid}.{d}"
+    assert set(nodes.keys()) == _all_dirs_reachable(nodes, "node_0"), "sieroty"
+
+
+def test_no_compatible_spare_pair_raises_for_redraw():
+    """Gdy żadna para zapasowych drzwi nie pasuje (jedyne wolne drzwi bossa nie mają
+    odpowiednika-zapasu w wejściu) → helper rzuca ValueError zamiast łączyć przez
+    ścieżkę/onward (sygnał dla wołającego: przegeneruj segment)."""
+    old_nodes, old_boss = _old_graph_two_path_two_cap_boss()
+    # wejście: jedyne drzwi pasujące kierunkiem (S→boss N) to drzwi-ONWARD (nie zapas);
+    # zapasowe drzwi wejścia W nie mają zapasowego odpowiednika u bossa (E to zaślepka,
+    # ale opp(W)=E… ustawmy tak, by realnie nie było pary)
+    new_graph = {
+        "nodes": {
+            # entry: S = onward (do node_1), brak innych drzwi → opp(N bossa)=S = onward
+            "node_0": _node(30, (0, 0), ["S"], {"S": "node_1"}),
+            "node_1": _node(40, (0, 1), ["N"], {"N": "node_0"}, is_boss=True),
+        },
+        "entry_node": "node_0",
+        "boss_node": "node_1",
+    }
+    caps = [_cap_tile(99, d) for d in ("N", "S", "E", "W")]
+    with pytest.raises(ValueError):
+        _attach_endless_segment(old_nodes, old_boss, new_graph, new_cycle=2, non_boss_caps=caps)
 
 
 # ─── Backward compat — entry-run graf (#697) pozostaje nienaruszony ───────────

@@ -1900,11 +1900,14 @@ def _attach_endless_segment(
     logic always fell into the `else` branch → orphaned cap + ghost door at the seam.
 
     This helper:
-      - picks `attach_dir` from the boss's REAL doors (content.doors), preferring a
-        direction currently sealed by a cap (so the real path is never detached) and
-        whose opposite is a REAL door of the new entry tile (no ghost door);
-      - removes the boss-side cap at that door and the new-segment cap that would
-        collide with the boss cell (both are orphans after the weld);
+      - picks the seam from a pair of SPARE doors (unconnected or sealed by a 1-door
+        cap) — one on the boss, one on the new entry, opposite-facing and both real
+        doors of their tiles. A real-PATH door is never used (regression found by
+        /playwright-test-report L13c 2026-06-16: attaching on the boss's path door
+        orphaned the whole new segment + broke symmetry);
+      - raises ValueError when no compatible spare pair exists, so the caller can
+        regenerate the segment instead of forcing a bad weld;
+      - removes the spare caps the weld replaces (both would be orphaned otherwise);
       - shifts the new segment so its entry occupies the freed boss-adjacent cell;
       - connects boss↔entry on both sides, then re-runs `_fill_open_doors` over the
         WHOLE merged graph to close any door freed by cap removal.
@@ -1922,20 +1925,7 @@ def _attach_endless_segment(
     new_boss_key = new_graph.get("boss_node")
     cycle_prefix = f"c{new_cycle}_"
 
-    boss_node = merged_old.get(old_boss_nid) or {}
-    boss_pos = list(boss_node.get("position") or [0, 0])
-    boss_doors = dict(boss_node.get("doors_open") or {})
-    boss_real = [d for d in DIRECTIONS if d in set((boss_node.get("content") or {}).get("doors") or [])]
-    entry_real = set(((new_nodes.get(new_entry_key) or {}).get("content") or {}).get("doors") or [])
-
-    # Pick attach_dir from boss real doors whose opposite is a real entry door.
-    candidates = [d for d in boss_real if OPPOSITE[d] in entry_real]
-    capped = [d for d in candidates if _is_cap_node(merged_old.get(boss_doors.get(d)))]
-    pref = capped or candidates or boss_real or ["S"]
-    attach_dir = pref[0]
-    opp_dir = OPPOSITE.get(attach_dir, "N")
-
-    # Remap new-segment nodes: cycle-prefixed IDs (positions shifted below).
+    # Remap new-segment nodes: cycle-prefixed IDs (positions shifted after seam pick).
     new_boss_nid: str | None = None
     remapped: dict[str, dict] = {}
     for old_nid, node in new_nodes.items():
@@ -1953,13 +1943,45 @@ def _attach_endless_segment(
         }
     new_entry_nid = cycle_prefix + new_entry_key
 
-    # Drop the boss-side cap occupying attach_dir (would be orphaned by the weld).
+    boss_node = merged_old.get(old_boss_nid) or {}
+    boss_pos = list(boss_node.get("position") or [0, 0])
+    boss_doors = dict(boss_node.get("doors_open") or {})
+    boss_real = [d for d in DIRECTIONS if d in set((boss_node.get("content") or {}).get("doors") or [])]
+    entry_node = remapped.get(new_entry_nid) or {}
+    entry_doors = dict(entry_node.get("doors_open") or {})
+    entry_real = [d for d in DIRECTIONS if d in set((entry_node.get("content") or {}).get("doors") or [])]
+
+    def _spare(doors: dict, d: str, nodes_map: dict) -> bool:
+        """A door is spare if unconnected (None) or sealed by a 1-door cap — it can
+        host the seam WITHOUT detaching a real path."""
+        tgt = doors.get(d)
+        return tgt is None or _is_cap_node(nodes_map.get(tgt))
+
+    # Seam = a spare door on BOTH sides, opposite-facing, real on both tiles.
+    pairs: list[tuple[int, str, str]] = []
+    for d in boss_real:
+        if not _spare(boss_doors, d, merged_old):
+            continue
+        e = OPPOSITE[d]
+        if e not in entry_real or not _spare(entry_doors, e, remapped):
+            continue
+        # Prefer removing caps on both sides (cleanest closure); deterministic tiebreak.
+        cap_score = _is_cap_node(merged_old.get(boss_doors.get(d))) + _is_cap_node(
+            remapped.get(entry_doors.get(e))
+        )
+        pairs.append((-cap_score, d, e))
+    if not pairs:
+        raise ValueError(
+            "Brak zgodnej pary zapasowych drzwi na styku segmentów (#698) — przegeneruj segment."
+        )
+    pairs.sort(key=lambda x: (x[0], x[1]))
+    _, attach_dir, opp_dir = pairs[0]
+
+    # Drop the spare caps the weld replaces (both would be orphaned otherwise).
     boss_cap = boss_doors.get(attach_dir)
     if boss_cap and _is_cap_node(merged_old.get(boss_cap)):
         merged_old.pop(boss_cap, None)
-
-    # Drop the new-segment cap on entry's opp_dir (would collide with the boss cell).
-    entry_cap = remapped[new_entry_nid]["doors_open"].get(opp_dir)
+    entry_cap = entry_doors.get(opp_dir)
     if entry_cap and _is_cap_node(remapped.get(entry_cap)):
         remapped.pop(entry_cap, None)
 
@@ -1972,7 +1994,7 @@ def _attach_endless_segment(
     for n in remapped.values():
         n["position"] = [n["position"][0] + pdx, n["position"][1] + pdy]
 
-    # Weld both sides (both are real doors now → no ghost door).
+    # Weld both sides (both spare real doors → no ghost, no detached path).
     boss_doors[attach_dir] = new_entry_nid
     merged_old[old_boss_nid]["doors_open"] = boss_doors
     remapped[new_entry_nid]["doors_open"][opp_dir] = old_boss_nid
@@ -2042,9 +2064,6 @@ def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
     # Length = tile_count + n × (new_cycle − 1)
     new_tile_count = max(2, base_tile_count + endless_growth_n * (new_cycle - 1))
 
-    # Generate new segment (reuses full graph builder including branches)
-    new_graph = draw_tile_graph(category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle)
-
     # Load the cap pool so _attach_endless_segment can re-seal freed doors.
     conn2 = _get_db()
     try:
@@ -2052,10 +2071,28 @@ def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
     finally:
         conn2.close()
 
-    # Issue #698: weld the segment onto the boss using its real doors (no orphan/ghost).
-    merged = _attach_endless_segment(
-        old_nodes, old_boss_nid, new_graph, new_cycle, non_boss_caps
-    )
+    # Issue #698: weld the segment onto a SPARE boss door (cap/free) matched to a spare
+    # entry door — never a real-path door. If the freshly drawn segment has no entry
+    # door compatible with a spare boss door, regenerate it (draw is randomised, so a
+    # retry usually yields a compatible entry) before giving up.
+    merged = None
+    last_err: Exception | None = None
+    for _ in range(12):
+        new_graph = draw_tile_graph(
+            category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle
+        )
+        try:
+            merged = _attach_endless_segment(
+                old_nodes, old_boss_nid, new_graph, new_cycle, non_boss_caps
+            )
+            break
+        except ValueError as e:
+            last_err = e
+            continue
+    if merged is None:
+        raise ValueError(
+            f"Nie udało się doczepić segmentu endless po 12 próbach: {last_err}"
+        )
     all_nodes = merged["nodes"]
     new_entry_nid = merged["entry_node"]
 
