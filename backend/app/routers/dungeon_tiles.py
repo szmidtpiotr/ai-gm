@@ -35,13 +35,21 @@ TILES_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_GEN_URL = os.getenv("DUNGEON_IMAGE_GEN_URL", "http://192.168.1.170:8765/generate")
 IMAGE_GEN_MODEL = os.getenv("DUNGEON_IMAGE_GEN_MODEL", "flux1-schnell-Q5_K_S.gguf")
 IMAGE_GEN_TIMEOUT = int(os.getenv("DUNGEON_IMAGE_GEN_TIMEOUT", "180"))
+IMAGE_GEN_TILE_SIZE = int(os.getenv("DUNGEON_IMAGE_GEN_SIZE", "768"))
 
+# L15: rich drawn interiors — furniture, props, atmospheric details for Vision/LLM narration.
+# Walls and doors are composited mechanically by tile_compositor.py, so the prompt forbids them.
 BASE_PROMPT = (
-    "Gloomhaven dungeon tile art style, top down view, flat 2D illustration, "
-    "stone floor with room interior decor and furniture, fantasy board game tile, "
-    "overhead perspective, square tile format, painted game art, cartoonish style, "
+    "fantasy dungeon tile, top-down overhead view, richly detailed interior illustration, "
+    "painted tabletop RPG art style, high detail, elaborate furniture and props: "
+    "stone benches, weapon racks, chests, candelabras, iron braziers, barrels, crates, "
+    "stone pillars, urns, tapestries, wall sconces, ritual objects, scattered bones and skulls, "
+    "dramatic atmospheric lighting from candles and torches casting warm orange and amber glow, "
+    "intricate floor stonework with cracks, moss, and stains, "
+    "rich storytelling details a narrator can describe in 2-4 sentences, "
+    "square tile format, overhead perspective, 2D illustrated game art, "
     "interior designed with 2-4 open pathways toward wall edges for dungeon connectivity, "
-    "NO explicit walls, NO explicit doors, NO doorways, NO archways — only floor and interior content"
+    "NO walls, NO explicit doors, NO doorways, NO archways — only floor and interior content"
 )
 
 DIRECTION_WORDS = {"N": "north", "S": "south", "E": "east", "W": "west"}
@@ -505,9 +513,12 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
         _gcfg = {}
     _global_steps = int(_gcfg.get("image_gen.steps") or 4)
     _global_model = str(_gcfg.get("image_gen.checkpoint") or "").strip() or IMAGE_GEN_MODEL
+    _global_size = int(_gcfg.get("image_gen.tile_size") or IMAGE_GEN_TILE_SIZE)
 
     steps = int((payload or {}).get("steps") or _global_steps)
     model = str((payload or {}).get("model") or _global_model)
+    width = int((payload or {}).get("width") or (payload or {}).get("size") or _global_size)
+    height = int((payload or {}).get("height") or (payload or {}).get("size") or _global_size)
 
     _gen_url = str(_gcfg.get("image_gen.url") or IMAGE_GEN_URL).strip().rstrip("/") + "/generate"
     if not _gen_url.startswith("http"):
@@ -516,7 +527,7 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
     try:
         resp = requests.post(
             _gen_url,
-            json={"prompt": prompt, "width": 512, "height": 512, "steps": steps, "model": model},
+            json={"prompt": prompt, "width": width, "height": height, "steps": steps, "model": model},
             timeout=IMAGE_GEN_TIMEOUT,
         )
     except requests.RequestException as exc:
