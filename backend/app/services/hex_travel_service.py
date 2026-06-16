@@ -464,6 +464,34 @@ def _label_similarity(a: str, b: str) -> float:
     return len(wa & wb) / max(len(wa), len(wb))
 
 
+def _pick_random_start_location(conn: sqlite3.Connection) -> str:
+    """
+    Pick a starting location from canonical game_locations.
+    50% settlement (town/city/village), 50% wilderness — prevents always-wilderness starts.
+    Called when no explicit starting_location_name is provided.
+    """
+    if random.random() < 0.5:
+        row = conn.execute(
+            """SELECT label FROM game_locations
+               WHERE is_active=1 AND canonical=1 AND location_type='macro'
+                 AND map_icon IN ('town','city','village','castle')
+                 AND label NOT LIKE 'Start %' AND label NOT LIKE 'Test %'
+                 AND review_status='permanent'
+               ORDER BY RANDOM() LIMIT 1"""
+        ).fetchone()
+        if row:
+            return row["label"]
+    row = conn.execute(
+        """SELECT label FROM game_locations
+           WHERE is_active=1 AND canonical=1 AND location_type='macro'
+             AND map_icon IN ('forest','road','wilderness','plains','mountain','cave','swamp')
+             AND label NOT LIKE 'Start %' AND label NOT LIKE 'Test %'
+             AND review_status='permanent'
+           ORDER BY RANDOM() LIMIT 1"""
+    ).fetchone()
+    return row["label"] if row else ""
+
+
 def _infer_hex_type_from_name(name: str) -> str:
     """Guess terrain type from a location name."""
     n = _normalize(name)
@@ -613,6 +641,11 @@ def resolve_starting_hex(
     Returns the hex dict {q, r, hex_type, label, is_new}.
     """
     import json as _json
+
+    # When no starting location is given, pick one randomly (50% settlement, 50% wilderness)
+    # to avoid the always-wilderness bias in LLM-generated opening scenes.
+    if not starting_location_name:
+        starting_location_name = _pick_random_start_location(conn) or None
 
     # Try to match existing hex by label
     matched_hex = None
