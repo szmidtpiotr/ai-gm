@@ -2140,8 +2140,13 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     skills = rebuilt.get("skills") or {}
                     hp = rebuilt.get("max_hp", "?")
                     mana = rebuilt.get("max_mana", 0)
-                    location = str(char_row["location"] or "")
-                    if not location:
+                    location = str(char_row["location"] or "").strip()
+                    _is_loc_sentinel = (
+                        not location
+                        or location.lower() == "start"
+                        or (location.lower().startswith("start ") and location[6:].isdigit())
+                    )
+                    if _is_loc_sentinel:
                         location = _pick_random_start_location(conn)
                     _start_location_override = location
                     background = str(rebuilt.get("background") or "").strip()
