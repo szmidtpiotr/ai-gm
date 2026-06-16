@@ -3440,7 +3440,7 @@ async function _executeTravelFromPill(q, r, label) {
             const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
             const hWord = hours === 1 ? 'godzinę' : (hours < 5 ? 'godziny' : 'godzin');
             prose = destLabel
-                ? `Dotarłeś do <strong>${escapeHtml(destLabel)}</strong>. Droga zajęła ${hStr} ${hWord}.`
+                ? `Dotarłeś do **${destLabel}**. Droga zajęła ${hStr} ${hWord}.`
                 : `Dotarłeś do celu. Droga zajęła ${hStr} ${hWord}.`;
         } else {
             prose = `Przenosisz się${destLabel ? ` do ${escapeHtml(destLabel)}` : ''}.`;
@@ -3452,7 +3452,7 @@ async function _executeTravelFromPill(q, r, label) {
         if (enc && enc.enemy_key) {
             appendMessage({
                 role: 'system',
-                content: `⚔️ Napotkałeś wroga na szlaku: <strong>${escapeHtml(enc.enemy_label || enc.enemy_key)}</strong>!`,
+                content: `⚔️ Napotkałeś wroga na szlaku: **${enc.enemy_label || enc.enemy_key}**!`,
                 created_at: new Date(),
             });
         }
