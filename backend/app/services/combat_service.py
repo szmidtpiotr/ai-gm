@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.services.actor_stats import parse_stats_json
 from app.services.effect_json_migration import legacy_effect_fields_from_json
 from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
+from app.services.event_logger import write_game_event
 from app.services.weapon_rules import (
     load_weapon_row,
     resolve_attack_roll_for_weapon,
@@ -2948,6 +2949,7 @@ def _next_combat_log_sequence(conn: sqlite3.Connection, combat_id: int) -> float
 def _log_combat_end_event(conn: sqlite3.Connection, row: sqlite3.Row, reason: str) -> None:
     cid = int(row["id"])
     camp = int(row["campaign_id"])
+    ch_id = int(row["character_id"])
     tn = _next_combat_log_sequence(conn, cid)
     evt = "flee" if reason == "fled" else "end"
     log_combat_turn(
@@ -2965,6 +2967,34 @@ def _log_combat_end_event(conn: sqlite3.Connection, row: sqlite3.Row, reason: st
         campaign_id=camp,
         ended_reason=reason,
     )
+    if reason == "victory":
+        try:
+            combatants = json.loads(row["combatants"] or "[]")
+        except Exception:
+            combatants = []
+        dead_enemies = [c for c in combatants if c.get("type") == "enemy"]
+        write_game_event(
+            "combat_victory",
+            camp,
+            ch_id,
+            None,
+            {
+                "enemies_killed": len(dead_enemies),
+                "enemy_keys": [c.get("enemy_key", "") for c in dead_enemies],
+                "rounds": int(row["round"] or 1),
+                "xp_awarded": 0,
+            },
+            conn=conn,
+        )
+    elif reason == "fled":
+        write_game_event(
+            "combat_fled",
+            camp,
+            ch_id,
+            None,
+            {"round": int(row["round"] or 1)},
+            conn=conn,
+        )
 
 
 def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
@@ -3742,6 +3772,13 @@ def initiate_combat(
         enemy=",".join(started_keys),
         enemy_keys=started_keys,
         combat_id=out.get("id"),
+    )
+    write_game_event(
+        "combat_start",
+        int(campaign_id),
+        int(character_id),
+        None,
+        {"enemy_keys": started_keys, "enemy_count": len(started_keys)},
     )
 
     # Sync scene_enemies world-state column from active combatants.

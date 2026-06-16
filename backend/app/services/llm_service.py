@@ -7,6 +7,7 @@ from typing import Any, Generator
 import httpx
 
 from app.core.logging import get_logger
+from app.services.event_logger import write_llm_log
 
 _runtime_config: dict[str, str] = {
     "provider": "",
@@ -596,7 +597,14 @@ def _raise_llm_http_error(exc: httpx.HTTPStatusError) -> None:
     ) from exc
 
 
-def generate_chat(messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None) -> str:
+def generate_chat(
+    messages: list[dict],
+    model: str | None = None,
+    llm_config: dict[str, str] | None = None,
+    *,
+    call_type: str | None = None,
+    campaign_id: int | None = None,
+) -> str:
     effective = get_effective_config(llm_config, strict=True)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
@@ -606,14 +614,19 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
         raise RuntimeError(
             f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
         )
+    _llm_err: str | None = None
+    _result: str | None = None
     try:
         if provider == "ollama":
-            return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
-        if provider == "openai":
-            return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
-        if provider == "azure":
-            return AzureDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+            _result = OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        elif provider == "openai":
+            _result = OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        elif provider == "azure":
+            _result = AzureDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        else:
+            raise RuntimeError(f"Unknown LLM provider: {provider}")
     except httpx.TimeoutException as exc:
+        _llm_err = "timeout"
         logger.error(
             "llm_timeout",
             model=resolved_model,
@@ -623,6 +636,7 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
         )
         raise RuntimeError(f"LLM timeout: {exc}") from exc
     except httpx.HTTPStatusError as exc:
+        _llm_err = "http_error"
         detail = exc.response.text if exc.response is not None else str(exc)
         logger.error(
             "llm_error",
@@ -633,6 +647,7 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
         )
         _raise_llm_http_error(exc)
     except httpx.RequestError as exc:
+        _llm_err = "connection_error"
         logger.error(
             "llm_error",
             model=resolved_model,
@@ -642,6 +657,7 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
         )
         raise RuntimeError(f"LLM connection error: {exc}") from exc
     except RuntimeError as exc:
+        _llm_err = str(exc)[:120]
         logger.error(
             "llm_error",
             model=resolved_model,
@@ -650,7 +666,15 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
             error_message=str(exc),
         )
         raise
-    raise RuntimeError(f"Unknown LLM provider: {provider}")
+    finally:
+        write_llm_log(
+            call_type or "unknown",
+            resolved_model,
+            _duration_ms(started_at),
+            campaign_id=campaign_id,
+            error=_llm_err,
+        )
+    return _result  # type: ignore[return-value]
 
 
 def generate_chat_stream(

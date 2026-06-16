@@ -9,6 +9,7 @@ from typing import Any
 import sqlite3
 
 from app.core.logging import get_logger
+from app.services.event_logger import write_game_event
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -172,6 +173,17 @@ def end_solo_campaign_on_death(
         cause=death_reason,
         campaign_id=campaign_id,
         character_name=name,
+    )
+    write_game_event(
+        "player_death",
+        int(campaign_id),
+        int(character_row["id"]),
+        int(character_row["user_id"] or 0) or None,
+        {
+            "cause": death_reason,
+            "death_save_count": int((sheet or {}).get("death_save_count") or 0),
+        },
+        severity="warning",
     )
     return epitaph
 

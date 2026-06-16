@@ -15,6 +15,8 @@ import re
 import sqlite3
 import structlog
 
+from app.services.event_logger import write_game_event
+
 logger = structlog.get_logger()
 
 # E6 (#421) — narrator emits [ARC_ADVANCE: arc_key] to jump the active arc.
@@ -121,9 +123,17 @@ def mark_beat_visited(
                 pass
 
     if changed:
+        current_act = int(plan.get("active_act", 1))
         _check_and_advance_act(plan, conn)
         save_plan(campaign_id, plan, conn)
         logger.info("beat_visited", campaign_id=campaign_id, beat_key=beat_key)
+        write_game_event(
+            "beat_complete",
+            int(campaign_id),
+            None,
+            None,
+            {"beat_key": beat_key, "act": current_act, "turn": turn_number},
+        )
 
     return changed
 
