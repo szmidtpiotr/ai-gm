@@ -793,6 +793,34 @@ def _dict_to_identity_preview(data: dict) -> GeneratedIdentityPreview:
 OPENING_SYSTEM_PROMPT = SYSTEM_PROMPT_TEXT
 
 
+def _pick_random_start_location(conn: sqlite3.Connection) -> str:
+    """
+    Pick a starting location from canonical game_locations.
+    50% settlement (town/city/village), 50% wilderness/road — prevents always-wilderness starts.
+    Falls back to "nieznane miejsce" when the DB has no matching entries.
+    """
+    if random.random() < 0.5:
+        row = conn.execute(
+            """SELECT label FROM game_locations
+               WHERE is_active=1 AND canonical=1 AND location_type='macro'
+                 AND map_icon IN ('town','city','village','castle')
+                 AND label NOT LIKE 'Start %' AND label NOT LIKE 'Test %'
+                 AND review_status='permanent'
+               ORDER BY RANDOM() LIMIT 1"""
+        ).fetchone()
+        if row:
+            return row["label"]
+    row = conn.execute(
+        """SELECT label FROM game_locations
+           WHERE is_active=1 AND canonical=1 AND location_type='macro'
+             AND map_icon IN ('forest','road','wilderness','plains','mountain','cave','swamp')
+             AND label NOT LIKE 'Start %' AND label NOT LIKE 'Test %'
+             AND review_status='permanent'
+           ORDER BY RANDOM() LIMIT 1"""
+    ).fetchone()
+    return row["label"] if row else "nieznane miejsce"
+
+
 # ── Task 42: Character-first flow endpoints ───────────────────────────────────
 
 @router.get("/characters")
@@ -2075,6 +2103,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     # finalize-sheet is the final step of character creation; trigger plan
     # generation here so the player gets the opening GM message immediately.
     opening_message = None
+    _start_location_override = None  # resolved below, shared with hex-placement block
     try:
         char_row = conn.execute(
             "SELECT campaign_id, user_id, name, location FROM characters WHERE id = ?",
@@ -2111,7 +2140,10 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     skills = rebuilt.get("skills") or {}
                     hp = rebuilt.get("max_hp", "?")
                     mana = rebuilt.get("max_mana", 0)
-                    location = str(char_row["location"] or "nieznane miejsce")
+                    location = str(char_row["location"] or "")
+                    if not location:
+                        location = _pick_random_start_location(conn)
+                    _start_location_override = location
                     background = str(rebuilt.get("background") or "").strip()
                     archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
                     stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
@@ -2210,8 +2242,9 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     # ── Place player on starting hex (match global hex or create nearby) ─────
     try:
         from app.services.hex_travel_service import resolve_starting_hex
-        # Get starting location from the character's sheet
-        _start_loc = str(rebuilt.get("location") or "")
+        # Use sheet location if set, else fall back to the randomly-picked location
+        # resolved during GM-plan generation (avoids always-wilderness starts).
+        _start_loc = str(rebuilt.get("location") or _start_location_override or "")
         gs_check = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
