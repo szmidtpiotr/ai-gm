@@ -249,7 +249,7 @@ def review_entity(entity_type: str, key: str, req: ReviewAction):
     entity_type: location | npc | enemy | weapon
     action: approve | discard
     """
-    if entity_type not in ("location", "npc", "enemy", "weapon"):
+    if entity_type not in ("location", "npc", "enemy", "weapon", "item"):
         raise HTTPException(status_code=400, detail=f"Unknown entity type: {entity_type}")
     if req.action not in ("approve", "discard"):
         raise HTTPException(status_code=400, detail="action must be 'approve' or 'discard'")
