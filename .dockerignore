@@ -13,6 +13,9 @@ backend/*.db
 frontend/
 ai_test_agent/
 mcp_server/
+!mcp_server/server.py
+!mcp_server/requirements.txt
+!mcp_server/tests/
 docs/
 scripts/
 backups/

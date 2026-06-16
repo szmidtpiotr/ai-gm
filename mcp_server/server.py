@@ -948,7 +948,46 @@ def get_system_health() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Tool 9: get_full_campaign_context
+# Tool 9: search_events
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def search_events(
+    query: str,
+    from_date: Optional[str] = None,
+) -> list[dict]:
+    """Full-text search across game_events.event_data JSON. Use for: finding specific enemy keys, beat keys, NPC names in events."""
+    conn = get_db()
+    try:
+        clauses = ["event_data LIKE ?"]
+        params: list = [f"%{query}%"]
+        if from_date:
+            clauses.append("created_at >= ?")
+            params.append(from_date)
+        where = "WHERE " + " AND ".join(clauses)
+        rows = conn.execute(
+            f"""
+            SELECT id, event_type, severity, campaign_id, character_id, user_id, event_data, created_at
+            FROM game_events
+            {where}
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            params,
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["data"] = parse_json_safe(d.pop("event_data"), {})
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 10: get_full_campaign_context
 # ---------------------------------------------------------------------------
 
 

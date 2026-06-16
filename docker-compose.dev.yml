@@ -134,6 +134,28 @@ services:
     labels:
       - service=test-agent-dev
 
+  mcp-server:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./data-dev:/data:ro
+    environment:
+      - DB_PATH=/data/ai_gm.db
+      - GAME_API_URL=http://backend:8000/api
+      - MCP_TRANSPORT=streamable-http
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8400
+    ports:
+      - "8400:8400"
+    depends_on:
+      - backend
+    networks:
+      - ai-gm-dev
+    labels:
+      - service=mcp-server-dev
+
 networks:
   ai-gm-dev:
     driver: bridge
