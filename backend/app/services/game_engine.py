@@ -240,6 +240,55 @@ def _death_mechanica_system_append(
     )
 
 
+def _inject_dungeon_loch_context(run: dict, character, messages: list[dict]) -> None:
+    """L13c (#689): inject the current tile-dungeon room as the overriding context.
+
+    When the player is inside a tile dungeon, ALL overworld context (location, NPCs,
+    ŚWIAT terrain, travel hints) is suppressed by the caller and this block replaces
+    it — so the narrator colorizes the current dungeon room instead of inventing an
+    overworld scene (e.g. a forest) or offering travel.
+    """
+    graph = run.get("graph") or {}
+    nodes = graph.get("nodes") or {}
+    positions = run.get("positions") or {}
+    nid = next(iter(positions.values()), None) or graph.get("entry_node")
+    node = nodes.get(nid) or {}
+    content = node.get("content") or {}
+    desc = content.get("room_description") or ""
+    label = content.get("label") or "pomieszczenie lochu"
+    open_doors = node.get("doors_open") or {}
+    door_hints = node.get("door_hints") or {}
+    PL = {"N": "północ", "S": "południe", "E": "wschód", "W": "zachód"}
+    dirs = [d for d in ("N", "S", "E", "W") if open_doors.get(d)]
+    door_str = ", ".join(
+        (f"{PL[d]} ({door_hints[d]})" if door_hints.get(d) else PL[d]) for d in dirs
+    ) or "brak otwartych drzwi"
+    enemies = content.get("enemies") or []
+    cleared = bool(node.get("cleared"))
+    foes_line = (
+        "W pomieszczeniu są wrogowie — trwa lub grozi walka.\n"
+        if (enemies and not cleared)
+        else "Pomieszczenie jest bezpieczne (wrogowie pokonani lub brak).\n"
+    )
+    block = (
+        "[LOCH — NADRZĘDNY KONTEKST]\n"
+        f"Bohater jest WEWNĄTRZ lochu, w pomieszczeniu: {label}.\n"
+        f"Opis pomieszczenia: {desc}\n"
+        f"Wyjścia (drzwi): {door_str}\n"
+        f"{foes_line}"
+        "ZASADY NARRACJI W LOCHU:\n"
+        "- Opisuj WYŁĄCZNIE to pomieszczenie lochu. To NIE jest las, pole ani otwarty świat.\n"
+        "- Nie wymyślaj nowych lokacji, NPC, podróży ani wyjść poza wymienione drzwi.\n"
+        "- Koloryzuj 1–2 zdaniami zgodnie z opisem; nie zmieniaj faktów.\n"
+        "- Ruch między pomieszczeniami i akcje (skrzynia, zagadka) obsługują przyciski UI, "
+        "nie narracja. Jeśli gracz pyta „co dalej”, wskaż, że może wybrać drzwi przyciskami kierunków.\n"
+        "[/LOCH]"
+    )
+    msg = {"role": "system", "content": block}
+    ins_at = len(messages) - 1 if (messages and messages[-1].get("role") == "user") else len(messages)
+    messages.insert(ins_at, msg)
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -521,17 +570,43 @@ def build_narrative_messages(
         combat_context_block=combat_block,
     )
 
+    # L13c (#689): when inside an active tile dungeon, suppress overworld context
+    # and inject the dungeon room instead (set below, used to gate ŚWIAT/STALE too).
+    _in_dungeon = False
+
     if has_db_conn:
         _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
-        _inject_location_llm_context(conn, int(campaign["id"]), messages)
-        _inject_npc_llm_context(conn, int(campaign["id"]), messages)
-        _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
+
+        try:
+            _dng_row = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? "
+                "ORDER BY created_at DESC, id DESC LIMIT 1",
+                (int(campaign["id"]),),
+            ).fetchone()
+            _dng_flags = json.loads((_dng_row["session_flags"] if _dng_row else None) or "{}")
+            _drun = _dng_flags.get("dungeon_run") or {}
+            _in_dungeon = (
+                _drun.get("system") == "tiles_v2"
+                and not _drun.get("completed")
+                and not _drun.get("failed")
+            )
+        except Exception:
+            _in_dungeon = False
+            _drun = {}
+
+        if _in_dungeon:
+            _inject_dungeon_loch_context(_drun, character, messages)
+        else:
+            _inject_location_llm_context(conn, int(campaign["id"]), messages)
+            _inject_npc_llm_context(conn, int(campaign["id"]), messages)
+            _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
 
         # U29 fix: inject === ŚWIAT === block (hex terrain + locations) into the
         # streaming/narrative path. Inserted as a SEPARATE system message just before
         # the final user message — appended to the 40k-char head system prompt it gets
         # buried and 8 turns of story continuity win over it.
-        if messages:
+        # L13c (#689): skipped inside a dungeon (overworld terrain is irrelevant there).
+        if messages and not _in_dungeon:
             try:
                 _sw_row = conn.execute(
                     "SELECT session_flags FROM game_sessions WHERE campaign_id = ? "
@@ -567,7 +642,8 @@ def build_narrative_messages(
 
         # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
         # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
-        if messages:
+        # L13c (#689): skipped inside a dungeon (no overworld travel to push toward).
+        if messages and not _in_dungeon:
             try:
                 _sf_row = conn.execute(
                     "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",

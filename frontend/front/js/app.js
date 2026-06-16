@@ -4442,6 +4442,14 @@ async function handleCombatEnded(cs) {
                 }
             } catch (_) { /* non-fatal — fall through to normal overlay */ }
             updateDungeonHUD();
+            // L13c (#689): clear next-step prompt after clearing a tile so the
+            // player knows to pick a door instead of typing free text.
+            appendMessage({
+                role: 'assistant',
+                content: '⚔️ Pomieszczenie wyczyszczone. Wybierz drzwi przyciskami kierunków (prawy dolny róg), aby iść dalej.',
+                created_at: new Date(),
+            });
+            scrollToBottom();
         }
         showCombatEndOverlay('victory', loot, gold);
     } else if (reason === 'fled') {

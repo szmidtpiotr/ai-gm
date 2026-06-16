@@ -4741,6 +4741,18 @@ def create_turn(
         _turns_stale = int(_sf_for_sa.get("turns_at_location", 0) or 0)
         _travel_escalation_level = 2 if _turns_stale >= 10 else (1 if _turns_stale >= 5 else 0)
 
+        # L13c (#689): inside an active tile dungeon — no overworld travel UI.
+        # Suppress the anti-stuck travel banner and drop travel-type suggested
+        # actions; dungeon movement is via the D-pad / tile actions only.
+        _drun_sa = (_sf_for_sa.get("dungeon_run") or {})
+        if (_drun_sa.get("system") == "tiles_v2"
+                and not _drun_sa.get("completed") and not _drun_sa.get("failed")):
+            _travel_escalation_level = 0
+            _suggested_actions = [
+                a for a in _suggested_actions
+                if isinstance(a, dict) and a.get("type") != "travel"
+            ]
+
         out: dict = {
             "id": log["id"],
             "campaign_id": log["campaign_id"],

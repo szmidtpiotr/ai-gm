@@ -141,20 +141,44 @@ class ContextInjector:
         # prepend the latest player_summary as a "previously, on…" prefix.
         continuity_block = self._build_continuity_block(campaign_id, session_flags)
 
-        # Build blocks
-        blocks = [
-            continuity_block,
-            self._build_narrative_state_block(session_flags),
-            self._build_world_block(session_flags, ingame_hours, player_message),
-            self._build_stale_block(session_flags),
-            self._build_entities_block(npcs, combat_roster),
-            self._build_mechanic_block(action_type, mechanic_result),
-            self._build_character_state_block(character, active_conditions),
-            self._build_tone_block(tone),
-            self._build_content_index_block(mechanic_result),
-            self._build_loch_block(session_flags),
-            NARRATOR_CONSTRAINTS,
-        ]
+        # L13c (#689): when an active tile dungeon run is in progress, the player is
+        # INSIDE the dungeon — suppress all overworld context (world/ŚWIAT, location,
+        # overworld NPCs, stale, narrative-state, content-index). Otherwise those
+        # blocks dominate the [LOCH] block and the narrator invents overworld scenes
+        # (e.g. a forest) and offers travel hooks. Keep only the dungeon tile,
+        # combat mechanic, character state and tone.
+        _drun = (session_flags or {}).get("dungeon_run") or {}
+        _in_dungeon = (
+            _drun.get("system") == "tiles_v2"
+            and not _drun.get("completed")
+            and not _drun.get("failed")
+        )
+
+        if _in_dungeon:
+            blocks = [
+                continuity_block,
+                self._build_loch_block(session_flags),
+                self._build_entities_block([], combat_roster),  # enemies only, no overworld NPCs
+                self._build_mechanic_block(action_type, mechanic_result),
+                self._build_character_state_block(character, active_conditions),
+                self._build_tone_block(tone),
+                NARRATOR_CONSTRAINTS,
+            ]
+        else:
+            # Build blocks
+            blocks = [
+                continuity_block,
+                self._build_narrative_state_block(session_flags),
+                self._build_world_block(session_flags, ingame_hours, player_message),
+                self._build_stale_block(session_flags),
+                self._build_entities_block(npcs, combat_roster),
+                self._build_mechanic_block(action_type, mechanic_result),
+                self._build_character_state_block(character, active_conditions),
+                self._build_tone_block(tone),
+                self._build_content_index_block(mechanic_result),
+                self._build_loch_block(session_flags),
+                NARRATOR_CONSTRAINTS,
+            ]
 
         prompt = "\n\n".join(b for b in blocks if b)
 
