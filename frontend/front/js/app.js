@@ -11949,10 +11949,22 @@ async function _dungeonMove(direction) {
             scrollToBottom();
         }
 
+        // The move endpoint returns the destination node but NOT the whole run, so
+        // patch our local run so HUD/nav reflect the tile we just stepped onto.
+        if (_activeDungeonRun?.graph?.nodes && resp.node_id && characterData?.id) {
+            _activeDungeonRun.positions = _activeDungeonRun.positions || {};
+            _activeDungeonRun.positions[String(characterData.id)] = resp.node_id;
+            if (resp.node) _activeDungeonRun.graph.nodes[resp.node_id] = resp.node;
+        }
+
         if (resp.completed || _activeDungeonRun?.completed) {
             _showDungeonComplete(resp);
         } else {
             updateDungeonHUD();
+            // #687: refresh the D-pad/action cluster for the NEW tile — hides it when
+            // the move lands on a combat tile (else it overlaps the combat controls)
+            // and drops the stale chest/riddle button from the previous room.
+            updateDungeonNav(_activeDungeonRun);
             // Auto-open map on first move
             const visitedCount = Object.values(_activeDungeonRun?.graph?.nodes || {}).filter(n => n.visited).length;
             if (visitedCount === 2) openDungeonMap(true);
