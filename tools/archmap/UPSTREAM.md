@@ -15,8 +15,9 @@ This `tools/archmap/` is the AI-GM **instance** of the reusable archmap kit.
 
 - **Refresh this map** (issue badges + heat + drift): `./overlay/refresh.sh` (cron on .61).
   See `INSTRUKCJA.md`. Served by `archmap.service` at http://192.168.1.61:4747/.
-- **Engine improvements** (new render features, smarter overlay) go to the kit repo first,
-  then copy the changed `engine/*` back here. See the kit's `UPDATING.md` (Flow 2).
+- **Engine/render improvements made HERE** → port up to the kit with `./sync_to_kit.sh`
+  (mechanical: engine + render shell, data never leaves). Trigger phrase + rules:
+  `SYNC_TO_KIT.md`.
 - **Build a map for a different project:** clone the kit and follow its
   `USE_IN_NEW_PROJECT.md` — point an agent at the kit and it authors a new map.
 
