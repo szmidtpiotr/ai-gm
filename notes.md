@@ -325,7 +325,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (14/21; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (14/24; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
@@ -362,6 +362,9 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 6 — Weryfikacja
 - [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
+- [ ] L20a — Portrety wrogów/NPC: persystencja (migracja image_url na game_config_enemies+npcs, update_enemy/update_npc, portret BASE_PROMPT, batch --entity) — naprawia zepsuty zapis istniejącego modala (TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
+- [ ] L20b — Portrety wrogów/NPC: display u gracza (modal startu walki jak Dice Roll + miniatura w panelu/chipie, fallback emoji; reuse w normalnej kampanii; ożywia [NPC_INTERACTION]) + USUNIĘCIE bloku „Pozycje sprite'ów na kafelku" z edytora kafla (TDD) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
+- [ ] L20c — Portrety nieumarłych krypty: pilot 5 → akceptacja Piotra → batch (bez TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
 - [ ] L19 — 🎮 KAMIEŃ MILOWY: pełny playtest lochu skillem `/game-smoke-dungeon` (na treści krypta po L16: 2 cykle endless, śmierć z checkpointem, porzucenie, mapa, mobile; 14 checkpointów; raport do [SMOKE] FAZA L; bez TDD). Pierwszy kandydat na loch GRYWALNY.
 
 > Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).

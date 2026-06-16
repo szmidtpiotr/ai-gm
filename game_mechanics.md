@@ -5014,7 +5014,7 @@ Blok 3: L9                            (czystka legacy — dopiero gdy nowy flow 
 Blok 4: L10 (niezależne, można od razu); L11 → L12 → L13, L13b (po L4)
         → L13c (🎮 smoke-bramka silnika: /game-smoke-dungeon --engine; P0 → hotfix PRZED Blokiem 5)
 Blok 5: L14 → L15 → L16              (kontent; L14–L15 niezależne od kodu — można równolegle z Blokiem 1; L16 wymaga L14+L15, konfiguracja lochu wymaga L1)
-Blok 6: L18 (po L8+L12) → L19 (🎮 kamień: /game-smoke-dungeon pełny, po wszystkim poza L17) → L17 (kolejne kategorie, po L19)
+Blok 6: L18 (po L8+L12) → L20 (portrety wrogów/NPC + display, PRZED L19) → L19 (🎮 kamień: /game-smoke-dungeon pełny, po wszystkim poza L17) → L17 (kolejne kategorie, po L19)
 
 🎮 Dwie bramki smoke (skill /game-smoke-dungeon):
   L13c po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią); P0 blokuje wejście w Blok 5
@@ -5036,6 +5036,9 @@ Blok 6: L18 (po L8+L12) → L19 (🎮 kamień: /game-smoke-dungeon pełny, po ws
 | Porzucenie | 50% `cooldown_hours` | kod L7 |
 | Kafelki per kategoria | 20 (≈6× 2-drzwiowe, 8× 3-drzwiowe, 4× 4-drzwiowe, 2× boss) | kontent L14 |
 | Pilot obrazków / rozdzielczość / kroki | 5 szt. / 768px / 8 (test w pilocie) | L15 |
+| Portret wroga/NPC: rozdzielczość / kroki | 576×1024 (portret) / 8 | L20a |
+| Czas pokazu modala portretu na start walki | auto-zamknięcie 2 s LUB klik/tap | L20b |
+| Pilot portretów (nieumarli krypty) | 5 szt. → akceptacja → batch | L20c |
 
 ---
 
@@ -5299,6 +5302,46 @@ Blok 6: L18 (po L8+L12) → L19 (🎮 kamień: /game-smoke-dungeon pełny, po ws
 **Cel prostym językiem:** Pełna wyprawa zagrana jak przez gracza — od ekranu startu, przez 2 cykle endless, po śmierć/wyjście — z raportem co działa, a co nie. Pierwszy kandydat na loch GRYWALNY.
 
 **Dla agenta:** Skill `/game-smoke-dungeon` (tryb pełny, na treści krypta po L16). Bez TDD, bez issue [TASK] — raport do issue `[SMOKE] FAZA L`. 14 checkpointów ze skilla. Scenariusz: wejście z ekranu start (L13b) + wejście z hexa (E21), pełny segment, boss, „idź głębiej", drugi boss, śmierć w cyklu 3 (weryfikacja checkpointu: XP/gold/HP), porzucenie w osobnym runie (50% cooldown), mapa i przyciski na telefonie, reakcje SF10 w walce lochu. Defekty → issues P0/P1/P2. Zaliczone = GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2. **Różni się od L13c:** L13c = silnik na kafelkach testowych (przed treścią); L19 = pełny na prawdziwej krypcie z obrazkami/opisami.
+
+---
+
+### BLOK 7 — Immersja: portrety wrogów/NPC (L20) — PRZED L19
+
+> **Decyzje Piotra (2026-06-16):** (1) wyświetlanie **hybryda** — modal na start walki + miniatura na stałe w panelu walki; (2) portret jako **kafelek-karta z tłem** (BEZ przezroczystości / rembg — choć pipeline `remove-bg` istnieje, nie jest wymagany); (3) **przed L19**, by playtest milowy krypty miał już portrety; (4) **dokańczamy istniejący pipeline**, nie piszemy drugiego; (5) usuwamy z edytora kafla blok „Pozycje sprite'ów na kafelku" (porzucona Opcja A — nakładka na kafel).
+
+**Stan zastany (zbadanie 2026-06-16):** Generacja jest dojrzała i działa: `/api/admin/images/{generate,refine,remove-bg,describe-prompt,list}` (FLUX .170), modale admina „Obraz wroga"/„Obraz NPC" (rozmiar 576×1024 portret, `describe-prompt` robi prompt EN z opisu). **Zepsuty jest ZAPIS**: frontend PATCH-uje `image_url` na `/api/admin/enemies/{key}` i `/api/admin/npcs/{id}`, ale kolumny `image_url` **nie ma** w `game_config_enemies` ani `npcs`, a `update_enemy`/`update_npc` jej nie obsługują → obraz powstaje jako plik, lecz nie zapisuje się do rekordu. **Wyświetlanie martwe**: `turns.py` `[NPC_INTERACTION]` czyta `npcs.image_url` (brak kolumny), walka pokazuje emoji, kafel sam pokój.
+
+#### L20a — Persystencja portretów (TDD)
+
+**Cel prostym językiem:** Wygenerowany portret wroga/NPC NAPRAWDĘ zapisuje się i wraca po reloadzie (dziś znika).
+
+**Dla agenta:**
+1. Migracja idempotentna (`migrations_admin.py`, wzorzec ALTER): `game_config_enemies` + `image_url TEXT`, `image_url_raw TEXT`, `image_gen_prompt TEXT`; `npcs` analogicznie. **Niedestrukcyjnie** — kolumny dodawane, nic nie kasujemy.
+2. `admin_config.update_enemy` + ścieżka update NPC: dodaj `image_url`/`image_url_raw`/`image_gen_prompt` do allowed fields; `list_enemies`/lista NPC zwracają `image_url`.
+3. Portret BASE_PROMPT (osobny od kafli): popiersie/portret postaci twarzą do gracza, dark fantasy, spójny framing, „no text, no UI"; zapisywany w `image_gen_prompt` (reuse `describe-prompt`).
+4. Batch: uogólnij `scripts/generate_tiles_batch.py` o `--entity enemy|npc` (albo bliźniaczy `generate_portraits_batch.py`) — woła `/api/admin/images/generate` + PATCH `image_url`.
+
+**Weryfikacja:** wygeneruj portret wroga w adminie → reload → obraz nadal jest; pytest na migracji + update_enemy(image_url).
+
+#### L20b — Wyświetlanie u gracza: modal walki + miniatura (TDD)
+
+**Cel prostym językiem:** Na start walki wyskakuje karta z portretem przeciwnika (jak modal rzutu kością), znika po 2 s/kliknięciu; przez całą walkę mała miniatura przeciwnika widnieje w panelu. Działa też w normalnej kampanii, nie tylko w lochu.
+
+**Dla agenta:**
+1. Backend dokłada `image_url` przeciwników do stanu walki (`initiate_combat`/combat state) i do `[NPC_INTERACTION]` (po L20a kolumna istnieje).
+2. Player UI (`app.js`): modal startu walki — karta-z-tłem z portretem(ami) wroga/bossa, auto-zamknięcie 2 s lub klik (wzorzec modala Dice Roll); miniatura w chipie inicjatywy / wierszu `combat-enemies` zamiast emoji ⚔️ (fallback emoji gdy brak portretu). Bump `?v=`.
+3. NPC: ten sam komponent na `[NPC_INTERACTION]` (ożywia martwy hook).
+4. **Usuń** blok „Pozycje sprite'ów na kafelku" z edytora kafla (`dungeons.js`) + render nakładki wrogów w siatce kafli (`_tileEnemyImgCache`, overlay w `_renderTileCard`). Nakładki **drzwi** zostają (osobny mechanizm). Pole `enemies[].overlays` w danych kafla = martwe → przestajemy je czytać/zapisywać (kolumny nie ruszamy).
+
+**Weryfikacja:** Combat Sandbox — start walki pokazuje modal portretu + miniaturę; brak portretu → emoji fallback; edytor kafla bez bloku sprite'ów. pytest (combat state zawiera image_url) + Playwright (modal + miniatura).
+
+#### L20c — Kontent: portrety nieumarłych krypty (bez TDD)
+
+**Cel prostym językiem:** Wrogowie krypty dostają portrety; pilot → akceptacja Piotra → batch.
+
+**Dla agenta:** Pilot 5 portretów nieumarłych (vampire_master, lich, zombie, wraith, skeleton…) przez batch L20a → akceptacja Piotra → reszta wrogów krypty. Bez TDD, weryfikacja wizualna. Po L20c krypta na L19 ma pełne portrety.
+
+**Weryfikacja:** 5 portretów pilota w adminie; po akceptacji wrogowie krypty mają `image_url`; w Sandboxie walka z nimi pokazuje portrety.
 
 ---
 
