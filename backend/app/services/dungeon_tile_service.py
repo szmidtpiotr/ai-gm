@@ -980,6 +980,28 @@ def _get_char_dex_modifier(conn: sqlite3.Connection, character_id: int) -> int:
         return 0
 
 
+def _apply_damage_to_character(conn: sqlite3.Connection, character_id: int, damage: int) -> int | None:
+    """Subtract `damage` from characters.sheet_json.current_hp (clamp ≥0). Returns new HP."""
+    if damage <= 0:
+        return None
+    try:
+        row = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not row:
+            return None
+        sheet = json.loads(row["sheet_json"] or "{}")
+        cur = int(sheet.get("current_hp", sheet.get("max_hp", 0)) or 0)
+        new_hp = max(0, cur - int(damage))
+        sheet["current_hp"] = new_hp
+        conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
+                     (json.dumps(sheet), character_id))
+        conn.commit()
+        return new_hp
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("trap damage apply failed")
+        return None
+
+
 def _trigger_trap_chance(content: dict, tier: int) -> dict | None:
     """Return trap dict at 30% chance, None otherwise.
 
@@ -1073,22 +1095,11 @@ def _action_open_chest(
     loot: list[dict] = []
 
     if success:
+        # NOTE: loot is GRANTED by the resolve-tile endpoint (grant_dungeon_loot) which
+        # replaces result["loot"] with the granted entries (with labels). Do NOT grant
+        # here too — that double-grants.
         loot = _roll_chest_loot_for_run(conn, run.get("dungeon_key", ""), tier)
         chest_state["opened"] = True
-        # L12b fix: actually GRANT the rolled loot to the character's inventory
-        # (previously only rolled — items never reached the bag).
-        if loot:
-            try:
-                from app.services.loot_service import grant_loot_to_character
-                rarity = loot[0].get("rarity")
-                granted = grant_loot_to_character(
-                    character_id, loot, source="dungeon_chest", loot_tier=rarity,
-                )
-                if granted:
-                    loot = granted
-            except Exception:
-                import logging
-                logging.getLogger(__name__).exception("chest loot grant failed")
         narrative = f"Otwierasz skrzynię! (Rzut: {d20}{dex_mod:+}={total} vs DC {dc})"
         narrative += f" Znalazłeś {len(loot)} przedmiot(y)!" if loot else " Skrzynia jest pusta."
     else:
@@ -1105,6 +1116,12 @@ def _action_open_chest(
                 f"Pozostało prób: {remaining}."
             )
         trap = _trigger_trap_chance(content, tier)
+        # L12b fix: actually apply trap damage to the hero's HP (was rolled, never applied).
+        if trap and trap.get("damage"):
+            hp_after = _apply_damage_to_character(conn, character_id, int(trap["damage"]))
+            if hp_after is not None:
+                trap["hp_after"] = hp_after
+                narrative += f" Pułapka! Tracisz {trap['damage']} HP."
 
     node["chest_state"] = chest_state
     return {
@@ -1436,6 +1453,125 @@ def _try_build_branch(
     return steps  # 1-tile branch (no valid second tile found)
 
 
+# Issue #697 (Decyzja 2b): safety cap on filler nodes. With multi-door pools and no
+# 1-door „zaślepki", cap-fill would expand the grid indefinitely (each filler exposes
+# new open doors). Caps the cascade; remaining open doors fall to the best-graph fallback.
+_FILL_NODE_CAP = 60
+
+
+def _adjacent_repeat_ok(
+    tile_id: int,
+    pos: tuple[int, int],
+    tile_id_to_node_ids: dict[int, list[str]],
+    all_nodes: dict[str, dict],
+) -> bool:
+    """No node with the same tile_id may sit orthogonally adjacent (Decyzja 9 constraint)."""
+    for existing_nid in tile_id_to_node_ids.get(tile_id, []):
+        enode = all_nodes.get(existing_nid)
+        if not enode:
+            continue
+        ep = tuple(enode["position"])
+        if abs(ep[0] - pos[0]) + abs(ep[1] - pos[1]) <= 1:
+            return False
+    return True
+
+
+def _fill_open_doors(
+    nodes: dict[str, dict],
+    used_positions: set[tuple[int, int]],
+    non_boss: list[dict],
+    tile_id_to_node_ids: dict[int, list[str]],
+) -> dict[str, dict]:
+    """Issue #697: connect every drawn-but-open door so the d-pad matches the tile art.
+
+    Repeats to a fixpoint:
+      - Weld: an open door facing an EXISTING neighbour with the matching opposite open
+        door is linked directly (no new tile; also closes path/branch shortcuts).
+      - Cap-fill: an open door facing a FREE grid cell gets a 1-door „zaślepka" attached
+        (a tile whose only door is the matching opposite). 1-door caps add no new open
+        door — closure terminates without cascade (Decyzja 2b: „cap bez kaskady").
+        Multi-door tiles are deliberately NOT used here: they would expose fresh open
+        doors and expand the grid indefinitely. Respects the adjacent-same-tile rule.
+
+    Open doors that cannot be closed (cell occupied by a non-matching neighbour, or no
+    matching cap in the pool) are left as None for the caller's best-graph fallback.
+    `pos_to_nid` and `used_positions` are kept live so two fillers never collide.
+    """
+    pos_to_nid: dict[tuple[int, int], str] = {
+        tuple(n["position"]): nid for nid, n in nodes.items()
+    }
+    # Index 1-door zaślepki by their single door direction.
+    caps_by_dir: dict[str, list[dict]] = {}
+    for t in non_boss:
+        d = _doors(t)
+        if len(d) == 1:
+            caps_by_dir.setdefault(d[0], []).append(t)
+
+    fill_counter = 0
+    progress = True
+    while progress and fill_counter < _FILL_NODE_CAP:
+        progress = False
+        for nid in list(nodes.keys()):
+            node = nodes[nid]
+            for direction in list(node["doors_open"].keys()):
+                if node["doors_open"][direction] is not None:
+                    continue
+                dx, dy = OFFSET[direction]
+                px, py = node["position"]
+                npos = (px + dx, py + dy)
+                opp = OPPOSITE[direction]
+
+                # Pass 1 — weld to an existing neighbour with a matching open door
+                if npos in used_positions:
+                    nbr_nid = pos_to_nid.get(npos)
+                    if nbr_nid is not None:
+                        nbr_doors = nodes[nbr_nid]["doors_open"]
+                        if opp in nbr_doors and nbr_doors[opp] is None:
+                            node["doors_open"][direction] = nbr_nid
+                            nbr_doors[opp] = nid
+                            progress = True
+                    # cell occupied (welded or mismatched) — cannot place a tile here
+                    continue
+
+                # Pass 2 — place a 1-door cap (never cascades). Caps are exempt from the
+                # adjacent-same-tile rule: a 1-door stub only ever connects back to its
+                # parent (never to a sibling cap), so two adjacent caps create no
+                # "same room twice" path. With one cap per direction this exemption is
+                # what lets a minimal cap set fully close every door.
+                caps = caps_by_dir.get(opp, [])
+                if fill_counter >= _FILL_NODE_CAP or not caps:
+                    continue
+                cap = caps[0]
+
+                fill_nid = f"fill_{fill_counter}"
+                fill_counter += 1
+                nodes[fill_nid] = {
+                    "tile_id": cap["id"],
+                    "position": [npos[0], npos[1]],
+                    "doors_open": {opp: nid},
+                    "door_hints": {},
+                    "content": _get_tile_content(cap),
+                    "visited": False,
+                    "cleared": False,
+                    "is_boss": False,
+                }
+                node["doors_open"][direction] = fill_nid
+                used_positions.add(npos)
+                pos_to_nid[npos] = fill_nid
+                tile_id_to_node_ids.setdefault(cap["id"], []).append(fill_nid)
+                progress = True
+    return nodes
+
+
+def _count_open_doors(nodes: dict[str, dict]) -> int:
+    return sum(
+        1
+        for n in nodes.values()
+        for t in (n.get("doors_open") or {}).values()
+        if t is None
+    )
+
+
 def _try_build_graph(
     non_boss: list[dict],
     boss_pool: list[dict],
@@ -1534,6 +1670,10 @@ def _try_build_graph(
             branch_count += 1
             break  # one branch attempt per parent node
 
+    # Issue #697 (Decyzja 2b): close every drawn-but-open door so the d-pad matches
+    # the tile art (weld neighbours + cap-fill free cells with 1-door zaślepki).
+    _fill_open_doors(nodes, used_positions, non_boss, tile_id_to_node_ids)
+
     # Generate door hints for all nodes
     for node in nodes.values():
         hints: dict[str, str] = {}
@@ -1590,10 +1730,30 @@ def draw_tile_graph(
     finally:
         conn.close()
 
+    # Issue #697: prefer a graph with ZERO open doors. Keep the best (fewest open
+    # doors) across retries; fall back to it (never block dungeon entry) + log.
+    best: dict | None = None
+    best_open: int | None = None
     for _ in range(max_retries):
         graph = _try_build_graph(non_boss, boss_pool, tile_count, boss_tile_id)
-        if graph:
+        if not graph:
+            continue
+        open_doors = _count_open_doors(graph["nodes"])
+        if open_doors == 0:
             return graph
+        if best_open is None or open_doors < best_open:
+            best, best_open = graph, open_doors
+
+    if best is not None:
+        if best_open:
+            import logging
+            logging.getLogger(__name__).warning(
+                "draw_tile_graph: '%s' best graph still has %d open door(s) after %d "
+                "retries — falling back (add 1-door zaślepki to the category to close them)",
+                category_key, best_open, max_retries,
+            )
+        return best
+
     raise ValueError(
         f"Could not build valid dungeon graph in '{category_key}' after {max_retries} retries — "
         f"pool may be too small or door distribution unbalanced"

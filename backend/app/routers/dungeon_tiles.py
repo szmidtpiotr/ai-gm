@@ -23,6 +23,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from app.routers.admin import require_admin_token
 from app.services.dungeon_tile_service import (
     DIRECTIONS,
+    draw_tile_graph,
     draw_tile_sequence,
     resolve_tile_content,
 )
@@ -766,3 +767,57 @@ def preview_path(category_key: str, count: int = 4,
             "is_boss_tile": bool(t.get("is_boss_tile") or 0),
         })
     return {"ok": True, "sequence": enriched, "count": len(enriched)}
+
+
+@router.get("/dungeon-tiles/preview-graph/{category_key}",
+            dependencies=[Depends(require_admin_token)])
+def preview_graph(category_key: str, count: int = 4,
+                  boss_tile_id: int | None = None) -> dict:
+    """Issue #697: build a graph and report whether every drawn door is connected.
+
+    Returns `open_doors` (count of doors_open == null across all nodes — must be 0 for
+    a clean run) and `caps_complete` (does the category carry a 1-door „zaślepka" for
+    each of N/S/E/W — the condition under which the generator can fully close doors).
+    """
+    if count < 2:
+        raise HTTPException(status_code=400, detail="count must be >= 2")
+    try:
+        graph = draw_tile_graph(category_key, count, boss_tile_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+    nodes = graph.get("nodes") or {}
+    open_doors = sum(
+        1
+        for n in nodes.values()
+        for tgt in (n.get("doors_open") or {}).values()
+        if tgt is None
+    )
+
+    # caps_complete: a 1-door tile exists for every direction in this category
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT doors_json FROM dungeon_tiles "
+            "WHERE category_key = ? AND is_active = 1 AND is_boss_tile = 0",
+            (category_key,),
+        ).fetchall()
+    cap_dirs: set[str] = set()
+    for r in rows:
+        try:
+            d = [x for x in json.loads(r["doors_json"] or "[]") if x in DIRECTIONS]
+        except Exception:
+            d = []
+        if len(d) == 1:
+            cap_dirs.add(d[0])
+    caps_complete = set(DIRECTIONS) <= cap_dirs
+
+    return {
+        "ok": True,
+        "category_key": category_key,
+        "node_count": len(nodes),
+        "open_doors": open_doors,
+        "caps_complete": caps_complete,
+        "cap_directions": sorted(cap_dirs),
+        "entry_node": graph.get("entry_node"),
+        "boss_node": graph.get("boss_node"),
+    }
