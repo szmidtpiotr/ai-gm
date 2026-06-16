@@ -6,6 +6,9 @@ Mechanical, no LLM. For each OPEN issue it reads the '## Files changed' section
 of the body, maps each file path to a map node id via node-map.json, and records
 the issue as a BUG (red badge) or FIX (green badge) on that node.
 
+Also embeds issue body + metadata for matched issues so map popups work without
+a GitHub API token (private repo fix — browser can't call API unauthenticated).
+
 The 'heat' registry (runtime calls/errors per node) is left untouched here — it is
 written by update_heat.py once observability (Phase 11 game_events/llm_call_log)
 exists. This way issues stay fresh daily without touching runtime data.
@@ -60,7 +63,8 @@ def extract_paths(body):
 
 def gh_issues(repo):
     cmd = ["gh", "issue", "list", "--state", "open",
-           "--json", "number,title,labels,body", "--limit", "500"]
+           "--json", "number,title,labels,body,state,author,createdAt,comments",
+           "--limit", "500"]
     if repo:
         cmd += ["--repo", repo]
     res = subprocess.run(cmd, capture_output=True, text=True)
@@ -92,6 +96,7 @@ def main():
     issues = gh_issues(args.repo)
 
     bugs, fixes = {}, {}
+    matched_nums = set()
     matched = 0
     for iss in issues:
         nodes = set()
@@ -102,6 +107,7 @@ def main():
         if not nodes:
             continue
         matched += 1
+        matched_nums.add(iss["number"])
         kind = classify(iss.get("labels", []))
         for n in nodes:
             if kind == "bug":
@@ -115,6 +121,23 @@ def main():
                     "n": iss["number"],
                     "t": iss["title"][:90],
                 })
+
+    # embed body + meta for matched issues so map popups work without GitHub API token
+    # (private repo — browser unauthenticated API calls return 404)
+    issues_cache = {}
+    for iss in issues:
+        if iss["number"] not in matched_nums:
+            continue
+        issues_cache[str(iss["number"])] = {
+            "title":         iss.get("title", ""),
+            "body":          iss.get("body") or "",
+            "state":         iss.get("state", "open"),
+            "user_login":    (iss.get("author") or {}).get("login", "?"),
+            "created_at":    iss.get("createdAt", ""),
+            "labels":        [l["name"] for l in iss.get("labels", [])],
+            "comment_count": iss.get("comments", 0) if isinstance(iss.get("comments"), int)
+                             else len(iss.get("comments", [])),
+        }
 
     # preserve existing heat
     heat = {}
@@ -136,10 +159,12 @@ def main():
         "generated_at": subprocess.run(["date", "-u", "+%Y-%m-%dT%H:%MZ"],
                                        capture_output=True, text=True).stdout.strip(),
         "bugs": bugs, "fixes": fixes, "heat": heat,
+        "issues": issues_cache,
     }
     txt = json.dumps(out, indent=2, ensure_ascii=False)
     print(f"issues scanned: {len(issues)} · matched to nodes: {matched} · "
-          f"bug-nodes: {len(bugs)} · fix-nodes: {len(fixes)}")
+          f"bug-nodes: {len(bugs)} · fix-nodes: {len(fixes)} · "
+          f"issues cached: {len(issues_cache)}")
     if args.dry_run:
         print(txt)
     else:

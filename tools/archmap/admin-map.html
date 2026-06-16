@@ -321,6 +321,7 @@ const edges = [
 ];
 
 let FIXES={}, KNOWN_BUGS={}, HEAT={};
+let ISSUE_BAKED= {};   // { '<num>': {title,body,state,user_login,created_at,labels[],comment_count} }
 
 const FINDINGS = [
   ['NOTE','Admin shell at /admin/ — all new admin work goes here. Legacy admin2/ is read-only; never add features there.'],
@@ -360,8 +361,42 @@ const ISSUE_TTL=10*60*1000;
 let popSeq=0;
 function mdToHtml(md){let s=esc(md||'');s=s.replace(/```(\w*)\n([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${c.replace(/\n$/,'')}</pre>`);s=s.replace(/^######\s?(.*)$/gm,'<h6>$1</h6>').replace(/^#####\s?(.*)$/gm,'<h5>$1</h5>').replace(/^####\s?(.*)$/gm,'<h4>$1</h4>').replace(/^###\s?(.*)$/gm,'<h4>$1</h4>').replace(/^##\s?(.*)$/gm,'<h3>$1</h3>').replace(/^#\s?(.*)$/gm,'<h3>$1</h3>');s=s.replace(/^\s*[-*]\s+\[x\]\s?(.*)$/gim,'<div class="li done">☑ $1</div>').replace(/^\s*[-*]\s+\[ \]\s?(.*)$/gim,'<div class="li">☐ $1</div>').replace(/^\s*[-*]\s+(.*)$/gm,'<div class="li">• $1</div>').replace(/^\s*\d+\.\s+(.*)$/gm,'<div class="li">$1</div>');s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');s=s.replace(/\n{2,}/g,'<br><br>').replace(/(?<!>)\n(?!<)/g,'<br>');return s;}
 function fmtDate(iso){return iso?iso.slice(0,10):'';}
-async function fetchIssue(num){const cached=ISSUE_CACHE[num];if(cached&&Date.now()-cached.ts<ISSUE_TTL)return cached.data;const base='https://api.github.com/repos/'+REPO+'/issues/'+num;const headers={'Accept':'application/vnd.github+json'};const iss=await fetch(base,{headers}).then(r=>{if(!r.ok)throw new Error('issue '+r.status);return r.json();});let comments=[];if(iss.comments>0){comments=await fetch(base+'/comments?per_page=100',{headers}).then(r=>r.ok?r.json():[]).catch(()=>[]);}const data={iss,comments};ISSUE_CACHE[num]={data,ts:Date.now()};return data;}
-function openTask(num,title,kind){const seq=++popSeq;document.getElementById('popnum').textContent=(kind==='task'?'Zadanie #':'Bug #')+num;document.getElementById('poptitle').textContent=title;document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span><span class="lbl">ładowanie…</span>`;document.getElementById('poplink').href='https://github.com/'+REPO+'/issues/'+num;const body=document.getElementById('popbody');body.innerHTML='<div class="loading">Pobieram…</div>';const box=document.getElementById('popbox');document.getElementById('pop').classList.add('show');const w=box.offsetWidth,h=Math.min(box.offsetHeight,window.innerHeight*0.88);box.style.left=Math.max(8,(window.innerWidth-w)/2)+'px';box.style.top=Math.max(8,(window.innerHeight-h)/2)+'px';fetchIssue(num).then(({iss,comments})=>{if(seq!==popSeq)return;const labels=(iss.labels||[]).map(l=>`<span class="lbl">${esc(l.name)}</span>`).join('');document.getElementById('popmeta').innerHTML=`<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span><span class="lbl">${fmtDate(iss.created_at)}</span>${labels}`;let html=mdToHtml(iss.body||'');if(comments.length){html+='<h3>Komentarze</h3>';comments.forEach(c=>{html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`;});}body.innerHTML=html;body.scrollTop=0;}).catch(err=>{if(seq!==popSeq)return;body.innerHTML=`<div class="loading">Błąd: ${esc(err.message)}</div>`;});}
+async function fetchIssue(num){
+  const cached=ISSUE_CACHE[num];
+  if(cached && Date.now()-cached.ts<ISSUE_TTL) return cached.data;
+  // Try baked data from overlay JSON first (works for private repos, no token needed).
+  const baked=ISSUE_BAKED[String(num)];
+  if(baked){
+    const data={
+      iss:{
+        state:      baked.state||'open',
+        user:       {login: baked.user_login||'?'},
+        created_at: baked.created_at||'',
+        labels:     (baked.labels||[]).map(n=>({name:n})),
+        body:       baked.body||'_(brak opisu)_',
+        comments:   baked.comment_count||0,
+      },
+      comments:[],  // full comment text not embedded; link to GitHub below
+      _baked:true,
+      _comment_count: baked.comment_count||0,
+    };
+    ISSUE_CACHE[num]={data,ts:Date.now()};
+    return data;
+  }
+  // Fallback: GitHub REST API (works only for public repos or with a token).
+  const base='https://api.github.com/repos/'+REPO+'/issues/'+num;
+  const headers={'Accept':'application/vnd.github+json'};
+  const iss=await fetch(base,{headers}).then(r=>{if(!r.ok)throw new Error('issue '+r.status);return r.json();});
+  let comments=[];
+  if(iss.comments>0){
+    comments=await fetch(base+'/comments?per_page=100',{headers})
+      .then(r=>r.ok?r.json():[]).catch(()=>[]);
+  }
+  const data={iss,comments};
+  ISSUE_CACHE[num]={data,ts:Date.now()};
+  return data;
+}
+function openTask(num,title,kind){const seq=++popSeq;document.getElementById('popnum').textContent=(kind==='task'?'Zadanie #':'Bug #')+num;document.getElementById('poptitle').textContent=title;document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span><span class="lbl">ładowanie…</span>`;document.getElementById('poplink').href='https://github.com/'+REPO+'/issues/'+num;const body=document.getElementById('popbody');body.innerHTML='<div class="loading">Pobieram…</div>';const box=document.getElementById('popbox');document.getElementById('pop').classList.add('show');const w=box.offsetWidth,h=Math.min(box.offsetHeight,window.innerHeight*0.88);box.style.left=Math.max(8,(window.innerWidth-w)/2)+'px';box.style.top=Math.max(8,(window.innerHeight-h)/2)+'px';fetchIssue(num).then(({iss,comments})=>{if(seq!==popSeq)return;const labels=(iss.labels||[]).map(l=>`<span class="lbl">${esc(l.name)}</span>`).join('');document.getElementById('popmeta').innerHTML=`<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span><span class="lbl">${fmtDate(iss.created_at)}</span>${labels}`;let html=mdToHtml(iss.body||'');if(comments.length){html+='<h3>Komentarze</h3>';comments.forEach(c=>{html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`;});} else if(data._baked&&data._comment_count>0){html+=`<p style="color:var(--muted);font-size:0.82rem;margin-top:12px">💬 ${data._comment_count} komentarz(y) — otwórz na GitHub (przycisk poniżej) żeby zobaczyć.</p>`;}body.innerHTML=html;body.scrollTop=0;}).catch(err=>{if(seq!==popSeq)return;body.innerHTML=`<div class="loading">Błąd: ${esc(err.message)}</div>`;});}
 function closeTask(){document.getElementById('pop').classList.remove('show');popSeq++;}
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeTask();});
 (function(){const box=document.getElementById('popbox'),head=document.getElementById('pophead');let drag=null;head.addEventListener('mousedown',e=>{if(e.target.id==='popclose')return;const r=box.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};document.body.style.userSelect='none';e.preventDefault();e.stopPropagation();});document.addEventListener('mousemove',e=>{if(!drag)return;box.style.left=Math.max(4,Math.min(window.innerWidth-60,e.clientX-drag.dx))+'px';box.style.top=Math.max(4,Math.min(window.innerHeight-40,e.clientY-drag.dy))+'px';});document.addEventListener('mouseup',()=>{if(drag){drag=null;document.body.style.userSelect='';}});})();
@@ -381,7 +416,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.15,Mat
 document.getElementById('zfit').onclick=()=>{const bb=scene.getBBox();const cw=canvas.clientWidth,ch=canvas.clientHeight;const z=Math.min(0.98*(cw/(bb.width+40)),0.98*(ch/(bb.height+40)),4);setView((cw-bb.width*z)/2-bb.x*z,(ch-bb.height*z)/2-bb.y*z,z);};
 document.getElementById('zin').onclick=()=>{setView(vx,vy,Math.min(4,vz*1.25));};
 document.getElementById('zout').onclick=()=>{setView(vx,vy,Math.max(0.15,vz/1.25));};
-fetch('overlay/map-overlay.json').then(r=>r.json()).then(data=>{const repo=data.repo||REPO;REPO=repo;const bugs=data.bugs||{},fixes=data.fixes||{},heat=data.heat||{};nodes.forEach(n=>{FIXES[n.id]=(fixes[n.id]||[]);KNOWN_BUGS[n.id]=(bugs[n.id]||[]);HEAT[n.id]=heat[n.id]||null;});renderBadges();renderHeat();const gen=data.generated_at?` · ${data.generated_at}`:'';const bct=Object.values(bugs).reduce((s,a)=>s+a.length,0);const fct=Object.values(fixes).reduce((s,a)=>s+a.length,0);document.getElementById('overlaystate').textContent=`overlay: ${fct} zadań · ${bct} bugów${gen}`;document.getElementById('sidebar').innerHTML=defaultSidebar();}).catch(()=>{document.getElementById('overlaystate').textContent='overlay: brak (statyczna mapa)';document.getElementById('sidebar').innerHTML=defaultSidebar();});
+fetch('overlay/map-overlay.json').then(r=>r.json()).then(data=>{const repo=data.repo||REPO;REPO=repo;const bugs=data.bugs||{},fixes=data.fixes||{},heat=data.heat||{};ISSUE_BAKED=data.issues||{};nodes.forEach(n=>{FIXES[n.id]=(fixes[n.id]||[]);KNOWN_BUGS[n.id]=(bugs[n.id]||[]);HEAT[n.id]=heat[n.id]||null;});renderBadges();renderHeat();const gen=data.generated_at?` · ${data.generated_at}`:'';const bct=Object.values(bugs).reduce((s,a)=>s+a.length,0);const fct=Object.values(fixes).reduce((s,a)=>s+a.length,0);document.getElementById('overlaystate').textContent=`overlay: ${fct} zadań · ${bct} bugów${gen}`;document.getElementById('sidebar').innerHTML=defaultSidebar();}).catch(()=>{document.getElementById('overlaystate').textContent='overlay: brak (statyczna mapa)';document.getElementById('sidebar').innerHTML=defaultSidebar();});
 setView(30,30,1);
 document.getElementById('sidebar').innerHTML=defaultSidebar();
 </script>

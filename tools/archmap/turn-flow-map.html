@@ -360,6 +360,7 @@ const edges = [
 ];
 
 let FIXES = {}, KNOWN_BUGS = {}, HEAT = {};
+let ISSUE_BAKED= {};   // { '<num>': {title,body,state,user_login,created_at,labels[],comment_count} }
 
 const FINDINGS = [
   ['HOT','api/turns.py is a 7304-line monolith containing intent detection, cue parsers, opening scene, travel, skill-test, and more — prime refactor candidate.'],
@@ -530,12 +531,37 @@ function fmtDate(iso){ return iso? iso.slice(0,10) : ''; }
 async function fetchIssue(num){
   const cached=ISSUE_CACHE[num];
   if(cached && Date.now()-cached.ts<ISSUE_TTL) return cached.data;
+  // Try baked data from overlay JSON first (works for private repos, no token needed).
+  const baked=ISSUE_BAKED[String(num)];
+  if(baked){
+    const data={
+      iss:{
+        state:      baked.state||'open',
+        user:       {login: baked.user_login||'?'},
+        created_at: baked.created_at||'',
+        labels:     (baked.labels||[]).map(n=>({name:n})),
+        body:       baked.body||'_(brak opisu)_',
+        comments:   baked.comment_count||0,
+      },
+      comments:[],  // full comment text not embedded; link to GitHub below
+      _baked:true,
+      _comment_count: baked.comment_count||0,
+    };
+    ISSUE_CACHE[num]={data,ts:Date.now()};
+    return data;
+  }
+  // Fallback: GitHub REST API (works only for public repos or with a token).
   const base='https://api.github.com/repos/'+REPO+'/issues/'+num;
   const headers={'Accept':'application/vnd.github+json'};
   const iss=await fetch(base,{headers}).then(r=>{ if(!r.ok) throw new Error('issue '+r.status); return r.json(); });
   let comments=[];
-  if(iss.comments>0){ comments=await fetch(base+'/comments?per_page=100',{headers}).then(r=>r.ok?r.json():[]).catch(()=>[]); }
-  const data={iss,comments}; ISSUE_CACHE[num]={data,ts:Date.now()}; return data;
+  if(iss.comments>0){
+    comments=await fetch(base+'/comments?per_page=100',{headers})
+      .then(r=>r.ok?r.json():[]).catch(()=>[]);
+  }
+  const data={iss,comments};
+  ISSUE_CACHE[num]={data,ts:Date.now()};
+  return data;
 }
 function openTask(num,title,kind){
   const seq=++popSeq;
@@ -558,7 +584,9 @@ function openTask(num,title,kind){
       `<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span>`+
       `<span class="lbl">${fmtDate(iss.created_at)}</span><span class="lbl">${comments.length} komentarzy</span>${labels}`;
     let html=mdToHtml(iss.body||'_(brak opisu)_');
-    if(comments.length){ html+='<h3>Komentarze ('+comments.length+')</h3>'; comments.forEach(c=>{ html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`; }); }
+    if(comments.length){ html+='<h3>Komentarze ('+comments.length+')</h3>'; comments.forEach(c=>{ html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`; }); } else if(data._baked && data._comment_count>0){
+      html+=`<p style="color:var(--muted);font-size:0.82rem;margin-top:12px">💬 ${data._comment_count} komentarz(y) — otwórz na GitHub (przycisk poniżej) żeby zobaczyć.</p>`;
+    }
     body.innerHTML=html; body.scrollTop=0;
   }).catch(err=>{ if(seq!==popSeq) return; document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span>`; body.innerHTML=`<div class="loading">Nie udało się pobrać (${esc(err.message)}). Otwórz na GitHub.</div>`; });
 }
@@ -622,6 +650,7 @@ const OVERLAY_PATH='overlay/map-overlay.json';
 fetch(OVERLAY_PATH).then(r=>r.json()).then(data=>{
   const repo=data.repo||REPO; REPO=repo;
   const bugs=data.bugs||{}, fixes=data.fixes||{}, heat=data.heat||{};
+  ISSUE_BAKED=data.issues||{};
   nodes.forEach(n=>{ FIXES[n.id]=(fixes[n.id]||[]); KNOWN_BUGS[n.id]=(bugs[n.id]||[]); HEAT[n.id]=heat[n.id]||null; });
   renderBadges(); renderHeat();
   const gen=data.generated_at?` · ${data.generated_at}`:'';
