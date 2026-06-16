@@ -201,7 +201,7 @@ Tor 1 — Observability:
 - [x] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest ✅; fix `get_campaign_summary` (campaign_catalog_entities → campaign_known_npcs)
 
 Tor 2 — Mapa węzłów:
-- [ ] O6 — Mapa: cron overlay na .61 (refresh.sh 03:30) + opcjonalne wydzielenie repo `archmap`
+- [x] O6 — Mapa: cron overlay na .61 (refresh.sh 03:30) + opcjonalne wydzielenie repo `archmap` — [#707](https://github.com/szmidtpiotr/ai-gm/issues/707)
 - [ ] O7 — Mapa: pozostałe podsystemy (turn-flow+LLM seam, admin, world, dungeons)
 - [ ] O8 — Mapa↔observability: pełna heat-map (włącz `_phase11` w heat-source.json; węzły observability) — wymaga O1+O2
 - [ ] O9 — (opcjonalnie) MCP serwuje mapę (`get_architecture_map`)

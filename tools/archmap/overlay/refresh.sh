@@ -11,6 +11,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO="${ARCHMAP_REPO:-szmidtpiotr/ai-gm}"
 
+# Load GH_TOKEN from ~/.gh_token if not already set (needed in cron where env is stripped)
+if [ -z "${GH_TOKEN:-}" ] && [ -f "${HOME:-/home/claude}/.gh_token" ]; then
+    GH_TOKEN=$(cat "${HOME:-/home/claude}/.gh_token")
+    export GH_TOKEN
+fi
+
 echo "== $(date -u +%FT%TZ) archmap overlay refresh =="
 echo "-- issues -> badges"
 python3 update_overlay.py --repo "$REPO" || echo "  (issues step failed — keeping previous badges)"

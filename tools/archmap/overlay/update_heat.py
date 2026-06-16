@@ -32,7 +32,11 @@ def run_sql(cfg, sql, local):
     else:
         db = cfg["db"]
         inner = f'sqlite3 -readonly {db["db_path"]} "{sql}"'
-        cmd = ["ssh", db["ssh_host"], "docker", "exec", db["container"], "sh", "-c", inner]
+        if db.get("local_docker"):
+            # Script runs on the same host as the DB — skip SSH, exec directly
+            cmd = ["docker", "exec", db["container"], "sh", "-c", inner]
+        else:
+            cmd = ["ssh", db["ssh_host"], "docker", "exec", db["container"], "sh", "-c", inner]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         sys.stderr.write(f"[skip] {sql[:60]}... -> {res.stderr.strip()}\n")

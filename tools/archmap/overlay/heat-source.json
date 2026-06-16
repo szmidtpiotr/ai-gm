@@ -3,7 +3,8 @@
   "db": {
     "ssh_host": "claude@192.168.1.61",
     "container": "ai-gm-dev-backend-1",
-    "db_path": "/data/ai_gm.db"
+    "db_path": "/data/ai_gm.db",
+    "local_docker": true
   },
   "sources": [
     {
