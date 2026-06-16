@@ -325,7 +325,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (13/21; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (14/21; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
@@ -356,7 +356,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
 - [x] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie) — [#690](https://github.com/szmidtpiotr/ai-gm/issues/690)
-- [ ] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5 obrazków → akceptacja Piotra → pełny batch
+- [x] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5→akceptacja Piotra→pełny batch 20/20 krypta. Fix: kompozytor skalował 768→512 (#691, geometria proporcjonalna). — [#691](https://github.com/szmidtpiotr/ai-gm/issues/691)
 - [ ] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5)
 - [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
 
