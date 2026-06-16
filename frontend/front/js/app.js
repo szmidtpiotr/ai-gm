@@ -4200,6 +4200,11 @@ let combatActive = false;
 let combatBusy = false;
 let lastCombatState = null;
 let enemyTurnInFlight = false;
+// #700: rozróżnij "realny POST walki w locie" od "zalegającej flagi". Reconciler ufa backendowi,
+// gdy ŻADEN z tych fetchy nie trwa — wtedy zdejmuje zaciśnięty overlay/akcję (watchdog re-sync).
+let enemyTurnFetchActive = false;     // true tylko między POST enemy-turn a jego odpowiedzią
+let playerActionFetchActive = false;  // true tylko między POST akcji gracza a jego odpowiedzią
+let _enemyTurnStartedAt = 0;          // timestamp startu POST enemy-turn (awaryjny watchdog)
 let reactionPending = false;   // SF10 (#633): okno reakcji otwarte — wstrzymuje pętlę tury wroga
 let _reactionTimer = null;     // SF10: handle odliczania 8 s (auto-take)
 let pendingLoot = null;
@@ -4251,6 +4256,11 @@ async function pollCombatState() {
             showCombatUI();
         }
 
+        // #700: reaktywny re-sync z backendem (źródło prawdy). Jeśli backend oddał turę graczowi,
+        // a front zaciął się na overlayu/zablokowanej akcji (zalegające combatBusy/enemyTurnInFlight)
+        // przy braku realnego fetchu walki w locie — zdejmij overlay, włącz akcję, wyczyść flagi.
+        _reconcileCombatTurnUI(cs);
+
         // Auto-trigger enemy turn when it's not the player's turn
         // SF10 (#633): nie odpalaj kolejnej tury wroga, gdy otwarte jest okno reakcji.
         if (cs.current_turn !== 'player' && !enemyTurnInFlight && !combatBusy && !reactionPending) {
@@ -4258,6 +4268,32 @@ async function pollCombatState() {
         }
     } catch (e) {
         window.clog?.warn('combat_poll_exception', { message: String(e?.message || e) });
+    }
+}
+
+// #700: aplikuj dyrektywy czystego reconcilera (combat_reconcile.js) do realnego UI.
+// Wywoływane z pollCombatState (co 3.5 s) i po turze wroga — gwarantuje, że overlay/akcja
+// zawsze podążają za backendem, nawet gdy lokalne flagi zacisnęły się pod szybkim inputem.
+function _reconcileCombatTurnUI(cs) {
+    if (typeof reconcileCombatTurn !== 'function') return;
+    const d = reconcileCombatTurn(cs, {
+        combatBusy,
+        enemyTurnInFlight,
+        enemyTurnFetchActive,
+        playerActionFetchActive,
+        reactionPending,
+        enemyTurnStartedAt: _enemyTurnStartedAt,
+    }, Date.now());
+    // Wyczyść zalegające flagi ZANIM przerysujemy — inaczej renderCombatUI znów je uwzględni.
+    if (d.clearEnemyTurnInFlight) enemyTurnInFlight = false;
+    if (d.clearCombatBusy) combatBusy = false;
+    if (d.reason === 'watchdog_resync' || d.reason === 'watchdog_timeout') {
+        window.clog?.warn('combat_turn_watchdog_resync', {
+            reason: d.reason, current_turn: cs?.current_turn ?? null,
+            had_busy: combatBusy, had_enemy_inflight: enemyTurnInFlight,
+        });
+        _showEnemyTurnOverlay(false);
+        if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
 
@@ -4297,12 +4333,16 @@ async function handleEnemyTurn() {
     // state poll proves the player has control back. Avoids a flicker window
     // between POST request and the next render.
     _showEnemyTurnOverlay(true);
+    // #700: oznacz REALNY POST tury wroga jako w locie (z timestampem dla awaryjnego watchdoga).
+    enemyTurnFetchActive = true;
+    _enemyTurnStartedAt = Date.now();
     try {
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/enemy-turn`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await r.json().catch(() => ({}));
+        enemyTurnFetchActive = false;   // #700: POST rozliczony — sieć już nie wisi
         if (!r.ok) {
             setCombatMsg('Błąd tury wroga.', true);
             return;
@@ -4311,6 +4351,9 @@ async function handleEnemyTurn() {
         if (cs) {
             lastCombatState = cs;
             renderCombatUI(cs);
+            // #700: backend mógł właśnie oddać turę graczowi — od razu zdejmij overlay i włącz akcję,
+            // nie czekając na kolejny poll (3.5 s). Zapobiega zawieszeniu "Tura wroga" pod szybkim inputem.
+            _reconcileCombatTurnUI(cs);
         }
         await fetchAndAppendNewCombatTurns();
         // SF10 (#633): wróg trafił i gracz ma reakcję → OKNO REAKCJI zamiast obrażeń.
@@ -4333,6 +4376,7 @@ async function handleEnemyTurn() {
         window.clog?.warn('enemy_turn_exception', { message: String(e?.message || e) });
     } finally {
         enemyTurnInFlight = false;
+        enemyTurnFetchActive = false;   // #700: gwarancja resetu nawet przy wyjątku
     }
 }
 
@@ -5822,7 +5866,7 @@ async function handleCombatAttack() {
         setCombatMsg('Nie twoja tura.', true);
         return;
     }
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     elements.btnCombatAttack.disabled = true;
     elements.btnCombatFlee.disabled = true;
     setCombatMsg('Rzucam k20...');
@@ -5846,12 +5890,14 @@ async function handleCombatAttack() {
         // rozbicie wyniku (składniki liczy silnik). d20 jest predeterminowany —
         // animacja i tak ląduje na nim, więc kolejność nie zmienia wyniku.
         window.clog?.event('combat_resolve_attack_request', { d20 });
+        playerActionFetchActive = true;   // #700: realny POST akcji gracza w locie
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/resolve-attack`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
         const data = await r.json().catch(() => ({}));
+        playerActionFetchActive = false;  // #700: POST rozliczony (animacja/narracja to nie sieć)
         window.clog?.event('combat_resolve_attack_response', { status: r.status, hit: !!data.hit, damage: data.damage ?? 0, enemy_dead: !!data.enemy_dead });
         if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
 
@@ -5873,6 +5919,7 @@ async function handleCombatAttack() {
         setCombatMsg(`Błąd ataku: ${e.message || e}`, true);
     } finally {
         combatBusy = false;
+        playerActionFetchActive = false;   // #700: gwarancja resetu nawet przy wyjątku
         if (combatActive) {
             if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
             elements.btnCombatAttack.disabled = false;
@@ -6073,7 +6120,7 @@ async function handleCombatMove() {
         setCombatMsg('Nie twoja tura.', true);
         return;
     }
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     if (elements.btnCombatMove) elements.btnCombatMove.disabled = true;
     elements.btnCombatAttack.disabled = true;
     elements.btnCombatFlee.disabled = true;
@@ -6099,7 +6146,7 @@ async function handleCombatMove() {
         setCombatMsg(`Błąd ruchu: ${e.message || e}`, true);
         window.clog?.error('combat_move_exception', { message: String(e?.message || e) });
     } finally {
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
@@ -6112,7 +6159,7 @@ async function handleCombatDodge() {
         setCombatMsg('Unik deklarujesz w swojej turze.', true);
         return;
     }
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     try {
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/declare-reaction`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -6128,7 +6175,7 @@ async function handleCombatDodge() {
     } catch (e) {
         setCombatMsg(`Unik niedostępny: ${e.message || e}`, true);
     } finally {
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
@@ -6142,7 +6189,7 @@ async function handleCombatBlock() {
         setCombatMsg('Blok deklarujesz w swojej turze.', true);
         return;
     }
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     try {
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/declare-reaction`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -6158,7 +6205,7 @@ async function handleCombatBlock() {
     } catch (e) {
         setCombatMsg(`Blok niedostępny: ${e.message || e}`, true);
     } finally {
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
@@ -6172,7 +6219,7 @@ async function handleCombatWrestle() {
         setCombatMsg('Zapasy wykonujesz w swojej turze.', true);
         return;
     }
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     elements.btnCombatAttack.disabled = true;
     if (elements.btnCombatWrestle) elements.btnCombatWrestle.disabled = true;
     setCombatMsg('Próba chwytu…');
@@ -6199,7 +6246,7 @@ async function handleCombatWrestle() {
     } catch (e) {
         setCombatMsg(`Zapasy niedostępne: ${e.message || e}`, true);
     } finally {
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
@@ -6212,7 +6259,7 @@ async function handleCombatFlee() {
     }
     if (!confirm('Uciec z walki?')) { window.clog?.event('combat_flee_cancelled'); return; }
 
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     elements.btnCombatAttack.disabled = true;
     elements.btnCombatFlee.disabled = true;
     setCombatMsg('Próba ucieczki...');
@@ -6248,7 +6295,7 @@ async function handleCombatFlee() {
     } catch (e) {
         window.clog?.error('combat_flee_exception', { message: String(e?.message || e) });
         setCombatMsg(`Błąd ucieczki: ${e.message || e}`, true);
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
@@ -11428,7 +11475,7 @@ async function castSpellOutOfCombat(spellKey) {
 
 async function handleCombatSpellAttack(spellKey) {
     if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) return;
-    combatBusy = true;
+    combatBusy = true; playerActionFetchActive = true;  // #700
     elements.btnCombatAttack.disabled = true;
     document.getElementById('combat-spell-btn').disabled = true;
     elements.btnCombatFlee.disabled = true;
@@ -11472,7 +11519,7 @@ async function handleCombatSpellAttack(spellKey) {
         // #649 (B6a): reset NIEZALEŻNIE od wyniku. Bez tego po udanym czarze combatBusy
         // zostawało true i watcher tury wroga (warunek !combatBusy) nigdy nie odpalał →
         // tura wroga wisiała do F5. Lustro finally z handleCombatAttack.
-        combatBusy = false;
+        combatBusy = false; playerActionFetchActive = false;  // #700
         if (combatActive) {
             if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
             elements.btnCombatAttack.disabled = false;
@@ -11957,8 +12004,17 @@ async function _dungeonResolveTile(action, payload) {
         if (resp.loot?.length) {
             await refreshCharacterData();
         }
-        // L12b: show chest result modal (roll + granted items + trap)
-        if (action === 'open_chest') showChestResultModal(resp);
+        // L12b: chest → play the dice animation (like skill tests/combat), then result modal.
+        if (action === 'open_chest') {
+            if (typeof resp.roll === 'number' && typeof playCombatDiceRoll === 'function') {
+                const dex = resp.dex_mod ?? 0;
+                const parts = [{ label: 'k20', value: resp.roll }];
+                if (dex) parts.push({ label: 'DEX', value: dex });
+                try { await playCombatDiceRoll(resp.roll, 'Skrzynia (DEX)', { parts, total: resp.total }); } catch (_) {}
+            }
+            if (resp.trap?.triggered) await refreshCharacterData();  // trap dealt HP damage
+            showChestResultModal(resp);
+        }
     } catch (err) {
         showToast(err.message || 'Błąd akcji', 'error');
     }

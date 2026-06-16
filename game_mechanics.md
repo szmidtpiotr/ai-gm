@@ -5365,6 +5365,14 @@ Batch standalone (panel admina + Web Push), wdrożone metodą /tdd (pogrupowane 
 
 Status: wszystkie **review/needs-testing** — czekają na weryfikację wizualną Piotra na DEV. Szczegóły w `notes.md` → „Zrobione dodatkowe".
 
+## Poprawki walka/loch — 2026-06-16 (smoke FAZA L)
+
+| Issue | Obszar | Co naprawiono | Testy |
+|---|---|---|---|
+| #700 | Walka (front) | Desync tury: backend=player, front wisi na „Tura wroga" (Atak disabled) pod szybkim inputem. Czysty reconciler `combat_reconcile.js` (`reconcileCombatTurn`, backend=źródło prawdy) wpięty w `pollCombatState` + po turze wroga; flagi `enemyTurnFetchActive`/`playerActionFetchActive` (realny POST vs zalegająca flaga) + watchdog | 4/4 Playwright |
+
+Status: **review/needs-testing** — silnik walki niezmieniony (tylko maszyna stanu tury we froncie).
+
 ---
 
 ## CZĘŚĆ AK — Balans 3 klas + System Czarów Maga (2026-06-14)
