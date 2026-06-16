@@ -84,10 +84,8 @@
     out.canAct = true;
     out.clearEnemyTurnInFlight = !!flags.enemyTurnInFlight;
     out.clearCombatBusy = !!flags.combatBusy;
-    if (!out.reason || out.reason === "fetch_in_flight") {
-      out.reason =
-        flags.enemyTurnInFlight || flags.combatBusy ? "watchdog_resync" : "player_turn";
-    }
+    // reason was "no_combat" (default) or "watchdog_timeout" — always override here.
+    out.reason = flags.enemyTurnInFlight || flags.combatBusy ? "watchdog_resync" : "player_turn";
     return out;
   }
 

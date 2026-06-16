@@ -62,6 +62,31 @@ test("REGRESSION #700 — realny fetch tury wroga w locie: brak fałszywego resy
   expect(out.clearEnemyTurnInFlight).toBe(false);
 });
 
+test("REGRESSION #701 — DESYNC: reason musi być 'watchdog_resync' gdy flagi=true, nie 'no_combat'", async ({ page }) => {
+  await loadReconciler(page);
+  const out = await page.evaluate(() => {
+    const cs = { status: "active", current_turn: "player" };
+    const flags = {
+      combatBusy: true,
+      enemyTurnInFlight: true,
+      enemyTurnFetchActive: false,
+      playerActionFetchActive: false,
+    };
+    return window.reconcileCombatTurn(cs, flags, 0);
+  });
+  expect(out.reason, "DESYNC z flagami musi dać 'watchdog_resync', nie 'no_combat'").toBe("watchdog_resync");
+});
+
+test("REGRESSION #701 — DESYNC: reason='player_turn' gdy flagi czyste", async ({ page }) => {
+  await loadReconciler(page);
+  const out = await page.evaluate(() => {
+    const cs = { status: "active", current_turn: "player" };
+    const flags = { combatBusy: false, enemyTurnInFlight: false };
+    return window.reconcileCombatTurn(cs, flags, 0);
+  });
+  expect(out.reason).toBe("player_turn");
+});
+
 test("REGRESSION #700 — walka zakończona: brak overlayu, brak akcji", async ({ page }) => {
   await loadReconciler(page);
   const out = await page.evaluate(() => {
