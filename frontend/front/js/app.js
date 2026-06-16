@@ -5717,7 +5717,7 @@ function buildDamageStage(data) {
 // forcedD20). Stage 2 (optional, `damageStage`) = the NdX damage/heal roll,
 // landing on the backend's per-die results. Returns a Promise that resolves when
 // the modal closes (auto-dwell or on click) so combat can continue.
-function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = null) {
+function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = null, outcome = null) {
     return new Promise((resolve) => {
         const overlay     = document.getElementById('dice-overlay');
         const container   = document.getElementById('dice-container');
@@ -5836,6 +5836,19 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 resultTot.innerHTML = `🎲 ${rolled} ${sf8BreakdownHtml(breakdown.parts)}  =  <strong>${breakdown.total}</strong>`;
                 dwell = 2800; // dłużej widoczne — gracz ma przeczytać składniki (wartość startowa)
             } else if (resultTot) { resultTot.textContent = 'k20'; }
+            // Trafienie to test OPOZYCYJNY: Twój atak vs rzut na unik wroga (k20 + ZRC).
+            // Bez tego gracz nie rozumie, czemu wysoki rzut czasem chybia, a niski trafia.
+            // nat20 (auto-trafienie) / nat1 (auto-pudło) pomijamy — wróg nie rzuca uniku.
+            if (outcome && outcome.dodge && rolled !== 20 && rolled !== 1 && resultTot) {
+                const dg = outcome.dodge;
+                const atk = Number(outcome.attack_total ?? breakdown?.total ?? rolled);
+                const m = Number(dg.modifier || 0);
+                const modTxt = m ? (m > 0 ? ` + ${m}` : ` − ${Math.abs(m)}`) : '';
+                resultTot.innerHTML += `<div class="dice-dodge-line">🛡 Unik wroga: 🎲 ${dg.raw}${modTxt} = <strong>${dg.total}</strong> vs Twój atak <strong>${atk}</strong></div>`;
+                if (outcome.dodged) { resultVerd.textContent = '🛡 Wróg uniknął ciosu'; resultVerd.className = 'dice-verdict-miss'; }
+                else { resultVerd.textContent = '✔ Trafienie!'; resultVerd.className = 'dice-verdict-hit'; }
+                dwell = Math.max(dwell, 2800);
+            }
             resultCard.hidden = false;
             armAdvance(dwell, afterAttack);
         };
@@ -5911,7 +5924,10 @@ async function handleCombatAttack() {
         // #569: visible 3D dice modal (parity with skill-test rolls). Lands on the
         // already-rolled d20; SF8 — pokazuje rozbicie składników na karcie wyniku.
         // #661: po trafieniu druga animacja — rzut kośćmi obrażeń (NdX).
-        await playCombatDiceRoll(d20, 'Atak', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data));
+        const _dodgeOutcome = data.dodge_roll
+            ? { dodge: data.dodge_roll, dodged: !!data.dodged, hit: !!data.hit, attack_total: Number(data.attack_total ?? _bdTotal) }
+            : null;
+        await playCombatDiceRoll(d20, 'Atak', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data), _dodgeOutcome);
 
         await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (e) {
@@ -11510,7 +11526,10 @@ async function handleCombatSpellAttack(spellKey) {
             : null;
         const _bdTotal = Number(data.attack_total ?? _atk.total ?? d20);
         // #661: czar atakujący → animacja obrażeń; heal → animacja leczenia (NdX).
-        await playCombatDiceRoll(d20, 'Czar', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data));
+        const _dodgeOutcomeSpell = data.dodge_roll
+            ? { dodge: data.dodge_roll, dodged: !!data.dodged, hit: !!data.hit, attack_total: Number(data.attack_total ?? _bdTotal) }
+            : null;
+        await playCombatDiceRoll(d20, 'Czar', _bdParts ? { parts: _bdParts, total: _bdTotal } : null, buildDamageStage(data), _dodgeOutcomeSpell);
 
         await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (err) {

@@ -7309,6 +7309,15 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 #dice-result-verdict.failure { color: #9b2020; text-shadow: 0 0 20px rgba(155, 32, 32, 0.3); }
 #dice-result-verdict.nat20   { color: #ffd700; text-shadow: 0 0 30px rgba(255, 215, 0, 0.6); }
 #dice-result-verdict.nat1    { color: #9b2020; }
+/* Opozycyjny test trafienia — werdykt + linia z rzutem wroga na unik. */
+#dice-result-verdict.dice-verdict-hit  { color: #4caf78; font-size: 1.35rem; }
+#dice-result-verdict.dice-verdict-miss { color: #c9712a; font-size: 1.35rem; }
+.dice-dodge-line {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #d9a441;
+  letter-spacing: 0.03em;
+}
 
 #dice-result-skill {
   font-family: 'Cinzel', serif;
