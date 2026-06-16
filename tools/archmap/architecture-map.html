@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-GM · Mapa architektury — Combat (pilot)</title>
+<style>
+  :root{
+    --bg:#0F0F0F; --panel:#161616; --panel-2:#1c1c1c; --border:#2a2a2a;
+    --text:#e8e8e8; --muted:#8a8a8a;
+    --client:#4ea1ff; --route:#7bd389; --service:#c792ea; --db:#ffb86b;
+    --external:#ff6b9d; --critical:#ff3860; --accent:#f5b942; --accent-2:#ff7a45;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden}
+  /* ---- top bar ---- */
+  #topbar{position:absolute;top:10px;left:10px;right:auto;max-width:calc(100vw - 360px);z-index:5;
+    display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+    padding:8px 12px;background:rgba(20,20,20,.96);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  #topbar h1{font-size:13px;margin:0 12px 0 0;font-weight:600;letter-spacing:.3px;white-space:nowrap;
+    cursor:move;user-select:none}
+  #topbar h1:active{cursor:grabbing}
+  #topbar h1 .grip{color:var(--accent);margin-right:6px;font-size:14px}
+  #topbar h1 span{color:var(--muted);font-weight:400}
+  .chip{padding:4px 10px;border:1px solid var(--border);border-radius:14px;background:var(--panel-2);
+    color:var(--muted);cursor:pointer;user-select:none;font-size:12px;transition:.12s}
+  .chip:hover{color:var(--text);border-color:#3a3a3a}
+  .chip.active{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+  .chip.crit.active{background:var(--critical);color:#fff;border-color:var(--critical)}
+  .zoombtns{margin-left:auto;display:flex;gap:6px}
+  .zoombtns button{width:28px;height:28px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--text);border-radius:6px;cursor:pointer;font-size:14px}
+  .zoombtns button:hover{border-color:#3a3a3a}
+  /* ---- canvas ---- */
+  #canvas{flex:1;position:relative;overflow:hidden;cursor:grab}
+  #canvas.grabbing{cursor:grabbing}
+  svg{position:absolute;top:0;left:0;width:100%;height:100%}
+  #scene{transition:none}
+  .cluster rect{fill-opacity:.10;stroke-opacity:.45;stroke-width:1}
+  .cluster text{font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;fill:var(--muted)}
+  .node{cursor:pointer}
+  .node rect{fill:var(--panel);stroke-width:1.4;rx:7;transition:opacity .12s}
+  .node .lbl{font-size:12px;font-weight:600;fill:var(--text)}
+  .node .sub{font-size:10.5px;fill:var(--muted)}
+  .node.crit rect{stroke-width:2.4}
+  .node.dead rect{stroke-dasharray:4 3;fill:#141014}
+  .node.dimmed{opacity:.16}
+  .edge{fill:none;stroke-width:1.4;opacity:.55}
+  .edge.dimmed{opacity:.05}
+  .edge.hot{stroke-width:2.6;opacity:.9}
+  .elabel{font-size:9.5px;fill:var(--muted);opacity:.8}
+  .elabel.dimmed{opacity:.04}
+  .badge-fix{fill:var(--route)}
+  .badge-bug{fill:var(--critical)}
+  .badge text{font-size:9px;font-weight:700;fill:#0c0c0c}
+  /* ---- sidebar ---- */
+  #sidebar{width:340px;background:var(--panel);border-left:1px solid var(--border);
+    overflow-y:auto;padding:16px 16px 40px;z-index:6}
+  #sidebar h2{font-size:14px;margin:0 0 2px}
+  #sidebar .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+    color:var(--accent);word-break:break-all;margin-bottom:10px}
+  #sidebar .role{font-size:12.5px;margin:8px 0}
+  #sidebar .plain{font-size:12.5px;color:#cfcfcf;background:var(--panel-2);border-left:2px solid var(--service);
+    padding:8px 10px;border-radius:4px;margin:8px 0}
+  #sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+    margin:16px 0 6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+  #sidebar ul{margin:4px 0;padding-left:16px}
+  #sidebar li{margin:3px 0;font-size:12px;color:#cfcfcf}
+  .pill{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;margin:2px 4px 2px 0;
+    border:1px solid var(--border);color:var(--muted)}
+  .edgeline{font-size:11.5px;margin:3px 0;color:#cfcfcf}
+  .edgeline b{color:var(--text);font-weight:600}
+  .arrow{color:var(--muted)}
+  .bug{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#241317;border-left:2px solid var(--critical)}
+  .bug .sev{font-weight:700;text-transform:uppercase;font-size:9px;color:var(--critical)}
+  .fix{font-size:11.5px;margin:4px 0;padding:5px 8px;border-radius:4px;background:#142117;border-left:2px solid var(--route)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .legend span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}
+  .legend i{width:18px;height:0;border-top:2px solid;display:inline-block}
+  .muted{color:var(--muted)}
+  .heatnote{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+  #overlaystate{font-size:10.5px;color:var(--muted);padding:2px 8px;border:1px dashed var(--border);border-radius:10px}
+  .task{cursor:pointer;transition:.1s}
+  .task:hover{filter:brightness(1.35)}
+  /* ---- task popup ---- */
+  #pop{position:fixed;inset:0;z-index:20;display:none;background:rgba(0,0,0,.6)}
+  #pop.show{display:block}
+  #popbox{position:fixed;left:0;top:0;width:min(720px,94vw);max-height:88vh;display:flex;flex-direction:column;
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:0 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  /* title bar — obvious, contrasting, draggable */
+  #pophead{display:flex;align-items:flex-start;gap:10px;cursor:move;user-select:none;
+    background:var(--panel-2);margin:0 -22px 12px;padding:12px 16px 12px 14px;
+    border-radius:12px 12px 0 0;border-bottom:1px solid var(--accent)}
+  #pophead:active{cursor:grabbing}
+  #pophead .grip{color:var(--accent);font-size:18px;line-height:1.3;flex:0 0 auto}
+  #pophead .htext{flex:1;min-width:0}
+  #popclose{background:none;border:0;color:var(--muted);font-size:24px;line-height:.8;cursor:pointer;
+    padding:0 2px;flex:0 0 auto}
+  #popclose:hover{color:var(--text)}
+  #popbox .num{font-family:ui-monospace,monospace;font-size:12px;color:var(--accent);font-weight:700}
+  #popbox .num::after{content:" · przeciągnij za ten pasek";color:var(--muted);font-weight:400;font-size:10.5px}
+  #popbox h2#poptitle{font-size:16px;margin:4px 0 0;color:var(--text);font-weight:600;line-height:1.3}
+  #popbox .meta{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  #popbox .meta .lbl{border:1px solid var(--border);border-radius:10px;padding:1px 7px}
+  #popbody{overflow-y:auto;flex:1;border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;
+    font-size:12.5px;line-height:1.55;color:#d6d6d6}
+  #popbody h3{font-size:13.5px;color:var(--accent);margin:14px 0 4px;border:0;text-transform:none;letter-spacing:0}
+  #popbody h4{font-size:12.5px;color:#cfcfcf;margin:10px 0 3px}
+  #popbody h5,#popbody h6{font-size:12px;color:var(--muted);margin:8px 0 2px}
+  #popbody pre.code{background:#0c0c0c;border:1px solid var(--border);border-radius:6px;padding:8px 10px;
+    overflow-x:auto;font-family:ui-monospace,monospace;font-size:11.5px;color:#cbd5b5;white-space:pre}
+  #popbody code{background:#0c0c0c;border:1px solid var(--border);border-radius:4px;padding:0 4px;
+    font-family:ui-monospace,monospace;font-size:11.5px;color:#e0c98a}
+  #popbody .li{margin:2px 0 2px 6px}
+  #popbody .li.done{color:var(--route)}
+  #popbody a{color:var(--client)}
+  #popbody .cmt{border-left:2px solid var(--service);background:var(--panel-2);padding:8px 12px;
+    border-radius:4px;margin:10px 0}
+  #popbody .cmt .who{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:5px}
+  #popbody .loading{color:var(--muted);font-style:italic}
+  #popbox .actions{display:flex;gap:10px;justify-content:flex-end}
+  #popbox a.btn,#popbox button.btn{font-size:12.5px;padding:7px 14px;border-radius:7px;cursor:pointer;
+    text-decoration:none;border:1px solid var(--border);background:var(--panel-2);color:var(--text)}
+  #popbox a.btn{background:var(--accent);color:#1a1400;border-color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas">
+    <div id="topbar">
+      <h1 title="Przeciągnij, by przesunąć panel filtrów"><span class="grip">⠿</span>AI-GM <span>· mapa architektury · Combat (pilot)</span></h1>
+      <div id="chips"></div>
+      <span id="overlaystate">overlay: —</span>
+      <div class="zoombtns">
+        <button id="zfit" title="Dopasuj">⤢</button>
+        <button id="zin" title="Przybliż">+</button>
+        <button id="zout" title="Oddal">−</button>
+      </div>
+    </div>
+    <svg id="svg">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#6a6a6a"></path>
+        </marker>
+        <marker id="arrcrit" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#ff3860"></path>
+        </marker>
+      </defs>
+      <g id="scene">
+        <g id="gClusters"></g>
+        <g id="gEdges"></g>
+        <g id="gLabels"></g>
+        <g id="gNodes"></g>
+      </g>
+    </svg>
+  </div>
+  <div id="sidebar"></div>
+</div>
+
+<div id="pop" onclick="if(event.target===this)closeTask()">
+  <div id="popbox">
+    <div id="pophead">
+      <span class="grip">⠿</span>
+      <div class="htext">
+        <div class="num" id="popnum"></div>
+        <h2 id="poptitle"></h2>
+      </div>
+      <button id="popclose" onclick="closeTask()" title="Zamknij (Esc)">×</button>
+    </div>
+    <div class="meta" id="popmeta"></div>
+    <div id="popbody"></div>
+    <div class="actions">
+      <button class="btn" onclick="closeTask()">Zamknij</button>
+      <a class="btn" id="poplink" target="_blank" rel="noopener">Otwórz na GitHub ↗</a>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   EDIT-BY-HAND DATA. Shape is fixed so you can extend nodes/edges manually.
+   Every path + line number below was confirmed by reading the file.
+   ========================================================================== */
+
+const COLORS = { client:'--client', route:'--route', service:'--service',
+                 db:'--db', external:'--external', critical:'--critical' };
+function col(kind){ return getComputedStyle(document.documentElement).getPropertyValue(COLORS[kind]||'--service').trim(); }
+
+const clusters = [
+  { id:'routes',  label:'Routes / Entry',     x:20,   y:70,  w:250, h:540, color:'route' },
+  { id:'engine',  label:'Combat engine',      x:300,  y:70,  w:270, h:760, color:'critical' },
+  { id:'support', label:'Combat support',     x:600,  y:70,  w:250, h:540, color:'service' },
+  { id:'post',    label:'Post-combat',        x:880,  y:70,  w:250, h:540, color:'db' },
+  { id:'world',   label:'World / DB / external',x:1160,y:70,  w:260, h:620, color:'external' },
+  { id:'dead',    label:'Legacy / dead code', x:300,  y:860, w:550, h:140, color:'external' },
+];
+
+const N = (id, cluster, label, sub, x, y, w, h, color, opts={}) =>
+  ({ id, cluster, label, sub, x, y, w, h, color, ...opts });
+
+const nodes = [
+  /* ---- Routes ---- */
+  N('combat-api','routes','api/combat.py','post_resolve_attack :97',40,110,210,58,'route',{
+    role:'FastAPI router exposing every combat HTTP action; delegates all logic to combat_service.',
+    plain:'The front door for fighting. The game screen sends a "I attack" message here, and this hands it to the combat brain.',
+    path:'backend/app/api/combat.py:97',
+    notes:['post_resolve_attack:97 → resolve_attack','post_start_combat:51, post_enemy_turn:168','post_zone_change:112, post_flee:195, post_claim_loot:242'],
+    tag:['overview','critical-path','attack','zones','loot-xp','all'], critical:true }),
+  N('sandbox','routes','routers/sandbox.py','admin test harness',40,190,210,54,'route',{
+    role:'Admin-only combat sandbox; clones a hero and calls the real combat engine for testing.',
+    plain:'A safe practice arena for admins. It copies a hero and runs real fights so nothing in a live game breaks.',
+    path:'backend/app/routers/sandbox.py:40',
+    notes:['list_heroes:40, _clone_hero_for_sandbox:75','Calls initiate_combat + resolve_attack directly','Clone tagged __sandbox_clone__; original never touched'],
+    tag:['overview','attack','all'] }),
+  N('inventory-api','routes','api/inventory.py','equip / use',40,266,210,54,'route',{
+    role:'Inventory routes; equipping changes the weapon/AC used by the combat engine.',
+    plain:'Where you change gear. Swapping a sword here changes what the fight code picks up next round.',
+    path:'backend/app/api/inventory.py:68',
+    notes:['post_inventory_equip:68 → loot_service.equip_item','get_inventory:34','Affects attack rolls via equipped weapon'],
+    tag:['overview','loot-xp','all'] }),
+
+  /* ---- Combat engine (combat_service.py split into logical nodes) ---- */
+  N('resolve-attack','engine','resolve_attack','combat_service.py :3923',320,110,230,64,'critical',{
+    role:'THE SEAM. Resolves a player or enemy attack end-to-end: target, weapon, rolls, damage, conditions, death, loot, XP, events.',
+    plain:'The heart of every fight. One big function that figures out who you hit, how hard, what happens to them, and what you get for it.',
+    path:'backend/app/services/combat_service.py:3923',
+    notes:['Demuxed by attacker="player"|"enemy"','Zone gating 3979-4003 (melee blocked if out of range)','Damage roll 4298, death branch 4389, victory 4568','Writes event via log_combat_turn:2893'],
+    tag:['overview','critical-path','attack','zones','conditions','loot-xp','death','observability','all'], critical:true }),
+  N('initiate-combat','engine','initiate_combat',':3545',320,196,230,52,'service',{
+    role:'Builds the combatants list, rolls initiative, writes the active_combat row.',
+    plain:'Sets up a fight: lines up everyone, decides who goes first, and saves the starting state.',
+    path:'backend/app/services/combat_service.py:3545',
+    notes:['Sets default zones (warrior engaged / scholar ranged)','Writes active_combat row','log_combat_turn event_type="start"/"initiative"'],
+    tag:['overview','attack','zones','all'] }),
+  N('conditions','engine','condition / effect system','apply_condition :2346',320,266,230,58,'service',{
+    role:'Data-driven condition engine; all behavior comes from effect_json, zero hardcoded keys.',
+    plain:'Handles status effects (poisoned, stunned, blessed...). Every effect is read from config, so designers add new ones without code changes.',
+    path:'backend/app/services/combat_service.py:2346',
+    notes:['apply_condition_to_combatant:2346, _to_player:2482','_condition_effects:520, _decode_effect_json:503','behavior_override (confused/berserk) :1251','evaluate_current_turn_conditions:2970 ticks each turn'],
+    tag:['overview','conditions','all'] }),
+  N('zones','engine','combat zones','change_player_zone :5292',320,342,230,54,'service',{
+    role:'Engaged/ranged zone model; gates melee and drives enemy charging.',
+    plain:'Tracks who is in melee range vs at a distance. Stops you swinging a sword at someone across the room.',
+    path:'backend/app/services/combat_service.py:5292',
+    notes:['_ensure_zones:1391, _default_zone_for_enemy:1377','ZONE_ENGAGED/ZONE_RANGED','Per docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4'],
+    tag:['overview','zones','all'] }),
+  N('reactions','engine','reactions','resolve_reaction :5092',320,414,230,52,'service',{
+    role:'Player dodge/shield-block reaction window after an incoming hit.',
+    plain:'Your split-second defense. When an enemy swings, you can try to dodge or raise a shield.',
+    path:'backend/app/services/combat_service.py:5092',
+    notes:['declare_player_reaction:5239','compute_player_attack_dodge_outcome:3872','resolve_wrestling:5418 (opposed STR)'],
+    tag:['overview','attack','all'] }),
+  N('turn-end','engine','advance_turn / end_combat',':5759 / :5814',320,484,230,54,'service',{
+    role:'Advances initiative order, ticks end-of-round conditions, ends combat (victory/defeat/fled).',
+    plain:'Moves the fight forward turn by turn and wraps it up when one side wins or someone runs.',
+    path:'backend/app/services/combat_service.py:5759',
+    notes:['advance_turn:5759, end_combat:5814','_scholar_restore_mana_after_combat:5785','claim_post_combat_loot:5906'],
+    tag:['overview','loot-xp','death','all'] }),
+  N('log-event','engine','log_combat_turn',':2893  (event sink)',320,556,230,54,'db',{
+    role:'Writes every combat event row (attack/death/zone_change/...) to combat_turns. Future observability hook point.',
+    plain:'The fight diary. Every swing and death is written down here — and this is exactly where the new monitoring will read from.',
+    path:'backend/app/services/combat_service.py:2893',
+    notes:['event_type: start|attack|death|zone_change|detection|behavior','OBSERVABILITY: Phase 11 game_events writer goes alongside here','Feeds heat-map overlay (calls/errors per node)'],
+    tag:['overview','observability','all'] }),
+
+  /* ---- Combat support ---- */
+  N('dice','support','dice.py','roll_d20 :249',620,110,210,54,'service',{
+    role:'Dice primitives: d20 with adv/dis, DC resolution, detailed multi-die rolls for animation.',
+    plain:'The dice cup. Rolls the 20-sided die and any damage dice, and remembers each die for the on-screen animation.',
+    path:'backend/app/services/dice.py:249',
+    notes:['roll_d20:249, roll_dice_detailed:1209','resolve_dc_for_roll:139, parse_character_sheet:241'],
+    tag:['overview','critical-path','attack','all'], critical:true }),
+  N('weapon-rules','support','weapon_rules.py','resolve_attack_roll :221',620,186,210,58,'service',{
+    role:'Resolves equipped weapon and computes the attack roll (raw d20 + stat mod + bonus).',
+    plain:'Looks at your weapon and works out your to-hit number from your strength/skill plus the die.',
+    path:'backend/app/services/weapon_rules.py:221',
+    notes:['resolve_sheet_weapon:173 (fallback unarmed)','effective_attack_stat_for_weapon:186','stat_modifier:29 = (stat-10)//2'],
+    tag:['overview','critical-path','attack','all'], critical:true }),
+  N('spell-service','support','spell_service.py','check_and_deduct_mana :108',620,262,210,56,'service',{
+    role:'Spell config, mana deduction, miscast (Nat1) and Nat20 secondary effects for Scholar.',
+    plain:'The magic rules. Charges mana for spells and handles botches (Nat 1) and big crits (Nat 20).',
+    path:'backend/app/services/spell_service.py:108',
+    notes:['get_spell:22, get_character_spells:34','resolve_miscast:120, defense_absorb_amount:83','Called from resolve_attack when spell_key set'],
+    tag:['overview','attack','all'] }),
+  N('wound-utils','support','wound_utils.py','wound_penalty :65',620,340,210,52,'service',{
+    role:'Maps HP% to a wound tier and a roll penalty (0 / -1 / -2 / -4).',
+    plain:'The hurt penalty. The more wounded you are, the worse you roll.',
+    path:'backend/app/services/wound_utils.py:65',
+    notes:['wound_tier:37, wound_penalty:65','Imported combat_service.py:26'],
+    tag:['overview','attack','all'] }),
+  N('effect-migration','support','effect_json_migration.py','legacy fields :103',620,412,210,52,'service',{
+    role:'Bridges legacy damage_dice/damage_bonus columns to the new effect_json format.',
+    plain:'A translator for old content. Lets weapons saved in the old format still work with the new effect system.',
+    path:'backend/app/services/effect_json_migration.py:103',
+    notes:['legacy_effect_fields_from_json:103','Imported combat_service.py:18'],
+    tag:['overview','conditions','all'] }),
+
+  /* ---- Post-combat ---- */
+  N('loot-service','post','loot_service.py','roll_loot :479',900,110,210,56,'db',{
+    role:'Rolls loot tables + gold on enemy death and grants items to character inventory.',
+    plain:'The reward dispenser. When an enemy dies it rolls for drops and gold and puts them in your bag.',
+    path:'backend/app/services/loot_service.py:479',
+    notes:['roll_loot:479, roll_gold_drop:517','grant_loot_to_character:614','get_character_inventory:805, equip_item'],
+    tag:['overview','loot-xp','all'] }),
+  N('xp-service','post','xp_service.py','grant_character_xp :271',900,186,210,56,'db',{
+    role:'Computes enemy-defeat XP from tier and awards it, handling level-up thresholds.',
+    plain:'The experience tracker. Decides how much XP a kill is worth and levels you up when you cross a threshold.',
+    path:'backend/app/services/xp_service.py:271',
+    notes:['resolve_enemy_defeat_xp_amount:566','grant_character_xp:271','get_xp_reward_amount:535'],
+    tag:['overview','loot-xp','all'] }),
+  N('xp-sources','post','xp_sources.py','grant_outnumbered',900,262,210,50,'service',{
+    role:'Bonus XP source (XS13) for defeating 3+ enemies.',
+    plain:'A reward for tough odds: beating a crowd gives extra XP.',
+    path:'backend/app/services/xp_sources.py',
+    notes:['grant_outnumbered_victory','Called combat_service.py:4606'],
+    tag:['overview','loot-xp','all'] }),
+  N('solo-death','post','solo_death_service.py','end_solo_campaign_on_death',900,332,210,54,'service',{
+    role:'Ends a solo campaign when the player hits 0 HP and builds the death summary.',
+    plain:'The game-over handler for solo play: when your hero dies, it closes the campaign and writes the death scene.',
+    path:'backend/app/services/solo_death_service.py',
+    notes:['end_solo_campaign_on_death, death_summary_payload','OBSERVABILITY: player_death event written here (Phase 11)'],
+    tag:['overview','death','observability','all'] }),
+  N('npc-death','post','npc_global_death_service.py','NPC death (not on core path)',900,404,210,54,'external',{
+    role:'Handles global NPC death bookkeeping; not called from the core attack path.',
+    plain:'Keeps the world consistent when a named character dies — separate from normal fights.',
+    path:'backend/app/services/npc_global_death_service.py',
+    notes:['Investigate: weak coupling to combat core','Verify live callers before relying on it'],
+    tag:['conditions','all'] }),
+
+  /* ---- World / DB / external ---- */
+  N('active-combat-db','world','active_combat','table (DB)',1180,110,220,50,'db',{
+    role:'SQLite row holding live combat state: combatants JSON, turn order, status.',
+    plain:'The saved snapshot of the current fight, so a refresh does not lose your battle.',
+    path:'data-dev/ai_gm.db · active_combat',
+    notes:['combatants JSON read/written every action','load_combat_snapshot:1599, get_active_combat:1614'],
+    tag:['overview','attack','all'] }),
+  N('combat-turns-db','world','combat_turns','table (DB)',1180,176,220,50,'db',{
+    role:'Append-only log of every combat event; source for the events feed + heat-map.',
+    plain:'The permanent record of every action in every fight. The new dashboard reads this.',
+    path:'data-dev/ai_gm.db · combat_turns',
+    notes:['Written by log_combat_turn:2893','OBSERVABILITY: joins game_events in Phase 11'],
+    tag:['overview','observability','all'] }),
+  N('dungeon-tile','world','dungeon_tile_service','mark_node_cleared',1180,242,220,52,'external',{
+    role:'Marks a dungeon tile cleared when its combat is won.',
+    plain:'Tells the dungeon map that you cleared this room after winning the fight.',
+    path:'backend/app/services/dungeon_tile_service.py',
+    notes:['Called from resolve_attack victory branch :4623','FAZA L integration point'],
+    tag:['overview','loot-xp','all'] }),
+  N('campaign-plan','world','campaign_plan_runtime','auto_complete_beats',1180,314,220,52,'external',{
+    role:'Auto-completes narrative beats on combat events (e.g. kill_enemy).',
+    plain:'Advances the story automatically — kill the right enemy and the plot moves on.',
+    path:'backend/app/services/campaign_plan_runtime.py',
+    notes:['auto_complete_beats_by_event("kill_enemy") :4527'],
+    tag:['overview','all'] }),
+  N('world-state','world','world_state_service','scene_enemies flags',1180,386,220,52,'external',{
+    role:'Reads/writes world flags such as scene_enemies used to seed combat.',
+    plain:'Keeps track of who is in the scene so fights start with the right enemies.',
+    path:'backend/app/services/world_state_service.py',
+    notes:['Provides scene enemy keys to initiate_combat'],
+    tag:['overview','all'] }),
+
+  /* ---- Legacy / dead ---- */
+  N('combat-v2','dead','combat_v2_service.py','DEAD · 637 lines, 0 live callers',320,900,250,54,'external',{
+    role:'Alternate/experimental combat resolution; not reachable from the live engine.',
+    plain:'An old second version of the fight code that nothing uses anymore. A cleanup candidate.',
+    path:'backend/app/services/combat_v2_service.py',
+    notes:['resolve_enemy_action:104, resolve_death_save_v2:315','Grep confirms zero live callers','DELETE CANDIDATE — verify in cleanup pass'],
+    tag:['dead-code','all'], dead:true }),
+  N('dead-helpers','dead','combat_service dead exports','resolve_player_attack:5220 +2',600,900,250,54,'external',{
+    role:'Top-level combat_service exports with zero callers anywhere in backend/app.',
+    plain:'Leftover helper functions nobody calls. Safe to remove once double-checked.',
+    path:'backend/app/services/combat_service.py:5220',
+    notes:['resolve_player_attack:5220 (alias, dead)','get_current_actor:5670 (dead)','is_combat_active:5682 (dead)'],
+    tag:['dead-code','all'], dead:true }),
+];
+
+const edges = [
+  /* critical spine */
+  { from:'combat-api', to:'resolve-attack', kind:'critical', label:'POST resolve-attack', tag:['overview','critical-path','attack','all'] },
+  { from:'resolve-attack', to:'weapon-rules', kind:'critical', label:'1 · resolve_sheet_weapon', tag:['overview','critical-path','attack','all'] },
+  { from:'resolve-attack', to:'dice', kind:'critical', label:'2 · roll_d20 (dodge)', tag:['overview','critical-path','attack','all'] },
+  { from:'weapon-rules', to:'dice', kind:'critical', label:'raw d20 in', tag:['critical-path','attack','all'] },
+
+  /* routes -> engine */
+  { from:'combat-api', to:'initiate-combat', kind:'normal', label:'POST start', tag:['overview','attack','all'] },
+  { from:'combat-api', to:'zones', kind:'normal', label:'POST zone-change', tag:['overview','zones','all'] },
+  { from:'combat-api', to:'reactions', kind:'normal', label:'POST resolve-reaction', tag:['overview','attack','all'] },
+  { from:'combat-api', to:'turn-end', kind:'normal', label:'POST flee / claim-loot', tag:['overview','loot-xp','all'] },
+  { from:'sandbox', to:'resolve-attack', kind:'normal', label:'test attacks', tag:['attack','all'] },
+  { from:'sandbox', to:'initiate-combat', kind:'normal', label:'test setup', tag:['attack','all'] },
+  { from:'inventory-api', to:'loot-service', kind:'normal', label:'equip_item', tag:['loot-xp','all'] },
+
+  /* engine internal / support */
+  { from:'resolve-attack', to:'spell-service', kind:'normal', label:'check_and_deduct_mana', tag:['attack','all'] },
+  { from:'resolve-attack', to:'wound-utils', kind:'normal', label:'wound_penalty', tag:['attack','all'] },
+  { from:'resolve-attack', to:'conditions', kind:'normal', label:'apply_condition', tag:['conditions','all'] },
+  { from:'conditions', to:'effect-migration', kind:'normal', label:'legacy_effect_fields', tag:['conditions','all'] },
+  { from:'resolve-attack', to:'reactions', kind:'normal', label:'dodge outcome', tag:['attack','all'] },
+  { from:'initiate-combat', to:'world-state', kind:'normal', label:'scene_enemies', tag:['all'] },
+
+  /* engine -> post combat */
+  { from:'resolve-attack', to:'loot-service', kind:'db', label:'3 · roll_loot / gold', tag:['overview','loot-xp','all'] },
+  { from:'resolve-attack', to:'xp-service', kind:'db', label:'grant_character_xp', tag:['overview','loot-xp','all'] },
+  { from:'resolve-attack', to:'xp-sources', kind:'normal', label:'grant_outnumbered', tag:['loot-xp','all'] },
+  { from:'resolve-attack', to:'solo-death', kind:'normal', label:'on player death', tag:['overview','death','all'] },
+  { from:'turn-end', to:'loot-service', kind:'db', label:'claim_post_combat_loot', tag:['loot-xp','all'] },
+
+  /* engine -> world / db / observability */
+  { from:'resolve-attack', to:'log-event', kind:'normal', label:'log event', tag:['overview','observability','all'] },
+  { from:'log-event', to:'combat-turns-db', kind:'db', label:'DB write', tag:['overview','observability','all'] },
+  { from:'resolve-attack', to:'active-combat-db', kind:'db', label:'combatants R/W', tag:['overview','attack','all'] },
+  { from:'initiate-combat', to:'active-combat-db', kind:'db', label:'DB write', tag:['attack','all'] },
+  { from:'resolve-attack', to:'dungeon-tile', kind:'normal', label:'mark_node_cleared', tag:['overview','loot-xp','all'] },
+  { from:'resolve-attack', to:'campaign-plan', kind:'normal', label:'auto_complete_beats', tag:['overview','all'] },
+];
+
+/* Overlay registries — populated at runtime from overlay/map-overlay.json.
+   Shape kept here so the map renders standalone even with no overlay file. */
+let FIXES      = {};   // { 'node-id': [{n,t}], ... }
+let KNOWN_BUGS = {};   // { 'node-id': [{sev,ref,t}], ... }
+let HEAT       = {};   // { 'node-id': {calls, errors, p95_ms} }  (Phase 11 observability)
+
+/* Static notable findings — the maintainer's first read. */
+const FINDINGS = [
+  ['DEAD','combat_v2_service.py (637 lines) has zero live callers — full-file delete candidate.'],
+  ['DEAD','combat_service.py exports resolve_player_attack:5220, get_current_actor:5670, is_combat_active:5682 — all zero callers.'],
+  ['HOT','resolve_attack:3923 is a 5998-line god-function carrying the whole fight; every feature edge lands on this one node.'],
+  ['SEAM','Observability plugs in at log_combat_turn:2893 — the single event sink. Phase 11 game_events writer belongs here, no new path needed.'],
+  ['WEAK','npc_global_death_service.py is in the combat folder but not on the core attack path — verify coupling before trusting it.'],
+];
+
+/* ============================ RENDER ============================ */
+const SVG=document.getElementById('svg'), scene=document.getElementById('scene');
+const gC=document.getElementById('gClusters'), gE=document.getElementById('gEdges'),
+      gL=document.getElementById('gLabels'), gN=document.getElementById('gNodes');
+const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
+const NS='http://www.w3.org/2000/svg';
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+
+// clusters
+clusters.forEach(c=>{
+  const g=el('g',{class:'cluster'});
+  const r=el('rect',{x:c.x,y:c.y,width:c.w,height:c.h,rx:12,fill:col(c.color),stroke:col(c.color)});
+  const t=el('text',{x:c.x+12,y:c.y+22});t.textContent=c.label;
+  g.appendChild(r);g.appendChild(t);gC.appendChild(g);
+});
+
+// edge geometry
+function edgePath(a,b){
+  const x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x, y2=b.y+b.h/2;
+  // if b is left of a (back-edge), exit/enter on left/right sensibly
+  let sx=x1, ex=x2;
+  if(b.x < a.x){ sx=a.x; ex=b.x+b.w; }
+  const dx=Math.max(40,Math.abs(ex-sx)*0.5);
+  const c1x = sx + (ex>=sx?dx:-dx), c2x = ex - (ex>=sx?dx:-dx);
+  return {d:`M ${sx} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${ex} ${y2}`, mx:(sx+ex)/2, my:(y1+y2)/2};
+}
+const edgeEls=[];
+edges.forEach((e,i)=>{
+  const a=nodeById[e.from], b=nodeById[e.to]; if(!a||!b)return;
+  const g=edgePath(a,b);
+  const isC=e.kind==='critical';
+  const stroke = isC?col('critical'): e.kind==='db'?col('db'): e.kind==='api'?col('accent-2'): e.kind==='mount'?col('client'):'#5a5a5a';
+  const p=el('path',{class:'edge'+(isC?' crit':''),d:g.d,stroke,'marker-end':isC?'url(#arrcrit)':'url(#arr)'});
+  gE.appendChild(p);
+  const lbl=el('text',{class:'elabel',x:g.mx,y:g.my-3 - (i%2?8:0),'text-anchor':'middle'});
+  lbl.textContent=e.label||''; gL.appendChild(lbl);
+  edgeEls.push({e,p,lbl});
+});
+
+// nodes
+const nodeEls={};
+nodes.forEach(n=>{
+  const g=el('g',{class:'node'+(n.critical?' crit':'')+(n.dead?' dead':''),'data-id':n.id});
+  const c=col(n.color);
+  const r=el('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:7,stroke:c});
+  const lbl=el('text',{class:'lbl',x:n.x+12,y:n.y+22});lbl.textContent=n.label;
+  const sub=el('text',{class:'sub',x:n.x+12,y:n.y+39});sub.textContent=n.sub||'';
+  g.appendChild(r);g.appendChild(lbl);g.appendChild(sub);
+  // badges container (filled by overlay)
+  const badge=el('g',{class:'badges'}); g.appendChild(badge);
+  gN.appendChild(g);
+  g.addEventListener('mouseenter',()=>select(n.id,true));
+  // keep the sidebar after the mouse leaves — only drop the dimming so the map
+  // returns to normal. Sidebar text persists so you can move the mouse onto it
+  // and click the task rows. Background click fully resets.
+  g.addEventListener('mouseleave',()=>{ if(!pinned) clearDim(); });
+  g.addEventListener('click',e=>{e.stopPropagation();pinned=(pinned===n.id)?null:n.id;select(pinned||n.id,true);});
+  nodeEls[n.id]={g,r,badge};
+});
+
+function renderBadges(){
+  nodes.forEach(n=>{
+    const {badge}=nodeEls[n.id]; badge.innerHTML='';
+    const f=(FIXES[n.id]||[]).length, b=(KNOWN_BUGS[n.id]||[]).length;
+    let ox=n.x+n.w-14;
+    if(b){ const grp=el('g',{class:'badge'}); const ci=el('circle',{class:'badge-bug',cx:ox,cy:n.y+12,r:8});
+      const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=b;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);ox-=18;}
+    if(f){ const grp=el('g',{class:'badge'}); const ci=el('circle',{class:'badge-fix',cx:ox,cy:n.y+12,r:8});
+      const tx=el('text',{x:ox,y:n.y+15,'text-anchor':'middle'});tx.textContent=f;grp.appendChild(ci);grp.appendChild(tx);badge.appendChild(grp);}
+  });
+}
+function renderHeat(){
+  nodes.forEach(n=>{
+    const h=HEAT[n.id]; const {r}=nodeEls[n.id];
+    if(activeChip==='heat' && h){
+      const calls=h.calls||0; const w = calls<=0?1.4: Math.min(6, 1.4+Math.log10(calls+1)*1.8);
+      r.setAttribute('stroke-width', w);
+      r.setAttribute('stroke', h.errors>0?col('critical'):col('db'));
+    } else {
+      r.setAttribute('stroke-width', n.critical?2.4:1.4);
+      r.setAttribute('stroke', col(n.color));
+    }
+  });
+}
+
+/* ============================ INTERACTION ============================ */
+let pinned=null, activeChip='overview';
+function neighbors(id){
+  const s=new Set([id]);
+  edges.forEach(e=>{ if(e.from===id)s.add(e.to); if(e.to===id)s.add(e.from); });
+  return s;
+}
+function select(id,fromHover){
+  const sb=document.getElementById('sidebar');
+  if(!id){ if(!pinned){ clearDim(); sb.innerHTML=defaultSidebar(); } return; }
+  const n=nodeById[id]; const nb=neighbors(id);
+  nodes.forEach(m=>nodeEls[m.id].g.classList.toggle('dimmed', !nb.has(m.id)));
+  edgeEls.forEach(({e,p,lbl})=>{
+    const on=(e.from===id||e.to===id);
+    p.classList.toggle('dimmed',!on); lbl.classList.toggle('dimmed',!on);
+  });
+  sb.innerHTML=nodeSidebar(n);
+}
+function clearDim(){
+  nodes.forEach(m=>nodeEls[m.id].g.classList.remove('dimmed'));
+  edgeEls.forEach(({p,lbl})=>{p.classList.remove('dimmed');lbl.classList.remove('dimmed');});
+}
+function nodeSidebar(n){
+  const ins=edges.filter(e=>e.to===n.id), outs=edges.filter(e=>e.from===n.id);
+  const bugs=KNOWN_BUGS[n.id]||[], fixes=FIXES[n.id]||[], heat=HEAT[n.id];
+  return `
+  <h2>${esc(n.label)}</h2>
+  <div class="path">${esc(n.path||'')}</div>
+  ${n.dead?'<div class="pill" style="border-color:var(--critical);color:var(--critical)">DEAD CODE</div>':''}
+  ${n.critical?'<div class="pill" style="border-color:var(--critical);color:var(--critical)">CRITICAL PATH</div>':''}
+  <div class="role">${esc(n.role||'')}</div>
+  <div class="plain">${esc(n.plain||'')}</div>
+  ${n.notes?`<h3>Notes</h3><ul>${n.notes.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+  ${heat?`<h3>Runtime (observability)</h3><div class="edgeline">calls: <b>${heat.calls}</b> · errors: <b>${heat.errors}</b> · p95: <b>${heat.p95_ms}ms</b></div>`:''}
+  ${bugs.length?`<h3>Known bugs (${bugs.length})</h3>${bugs.map(b=>`<div class="bug task" onclick="openTask('${(b.ref||'').replace('#','')}',${escAttr(b.t)},'${esc(b.sev)}')"><span class="sev">${esc(b.sev)}</span> ${b.ref?`<b>${esc(b.ref)}</b> `:''}${esc(b.t)}</div>`).join('')}`:''}
+  ${fixes.length?`<h3>Planned tasks (${fixes.length})</h3>${fixes.map(f=>`<div class="fix task" onclick="openTask('${f.n}',${escAttr(f.t)},'task')"><b>#${f.n}</b> · ${esc(f.t)}</div>`).join('')}`:''}
+  <h3>Incoming (${ins.length})</h3>${ins.map(e=>`<div class="edgeline"><span class="arrow">←</span> <b>${esc(e.from)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}
+  <h3>Outgoing (${outs.length})</h3>${outs.map(e=>`<div class="edgeline"><span class="arrow">→</span> <b>${esc(e.to)}</b> · ${esc(e.label||'')}</div>`).join('')||'<div class="muted">none</div>'}
+  <h3>Tags</h3>${(n.tag||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}
+  `;
+}
+function defaultSidebar(){
+  return `
+  <h2>Combat — mapa pilotażowa</h2>
+  <div class="muted">${nodes.length} węzłów · ${edges.length} krawędzi · 1 podsystem</div>
+  <h3>Notable findings from this map</h3>
+  ${FINDINGS.map(([k,t])=>`<div class="edgeline"><b style="color:var(--accent)">${k}</b> · ${esc(t)}</div>`).join('')}
+  <h3>Critical path (spine)</h3>
+  <div class="edgeline">POST /combat/resolve-attack <span class="arrow">→</span> resolve_attack:3923 <span class="arrow">→</span> resolve_sheet_weapon <span class="arrow">→</span> roll_d20 <span class="arrow">→</span> damage <span class="arrow">→</span> loot + XP + event</div>
+  <h3>Filters</h3>
+  <div class="muted">Klik chip u góry. „Heat-map (live)" koloruje węzły wg ruchu z observability (puste dopóki Phase 11 nie zapisze danych).</div>
+  <div class="heatnote" id="ovinfo"></div>
+  <h3>Legenda krawędzi</h3>
+  <div class="legend">
+    <span><i style="border-color:var(--critical)"></i>critical</span>
+    <span><i style="border-color:var(--db)"></i>DB R/W</span>
+    <span><i style="border-color:#5a5a5a"></i>call</span>
+  </div>
+  <h3>Jak czytać</h3>
+  <ul><li>Najedź na węzeł = podświetl sąsiadów</li><li>Klik = przypnij</li><li>Klik w tło = wyczyść</li><li>Kółko myszy = zoom, przeciągnij = pan</li></ul>
+  `;
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escAttr(s){return "'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}
+
+/* ---- task popup: click a task/bug row -> fetch the GitHub issue body + comments
+   and render them inline. Public repo, so the browser reads the GitHub REST API
+   directly (no token). Lazy + cached. Falls back to the GitHub link if offline or
+   rate-limited (60 req/h per IP unauthenticated). ---- */
+let REPO='szmidtpiotr/ai-gm';
+const ISSUE_CACHE={};
+let popSeq=0;
+
+/* minimal markdown -> HTML, enough for issue bodies (headings, code, lists,
+   checkboxes, bold/italic, inline code, links). Tables degrade to plain lines. */
+function mdToHtml(md){
+  let s=esc(md||'');
+  s=s.replace(/```(\w*)\n([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${c.replace(/\n$/,'')}</pre>`);
+  s=s.replace(/^######\s?(.*)$/gm,'<h6>$1</h6>')
+     .replace(/^#####\s?(.*)$/gm,'<h5>$1</h5>')
+     .replace(/^####\s?(.*)$/gm,'<h4>$1</h4>')
+     .replace(/^###\s?(.*)$/gm,'<h4>$1</h4>')
+     .replace(/^##\s?(.*)$/gm,'<h3>$1</h3>')
+     .replace(/^#\s?(.*)$/gm,'<h3>$1</h3>');
+  s=s.replace(/^\s*[-*]\s+\[x\]\s?(.*)$/gim,'<div class="li done">☑ $1</div>')
+     .replace(/^\s*[-*]\s+\[ \]\s?(.*)$/gim,'<div class="li">☐ $1</div>')
+     .replace(/^\s*[-*]\s+(.*)$/gm,'<div class="li">• $1</div>')
+     .replace(/^\s*\d+\.\s+(.*)$/gm,'<div class="li">$1</div>');
+  s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // collapse paragraphs; leave block tags alone
+  s=s.replace(/\n{2,}/g,'<br><br>').replace(/(?<!>)\n(?!<)/g,'<br>');
+  return s;
+}
+
+function fmtDate(iso){ return iso? iso.slice(0,10) : ''; }
+
+async function fetchIssue(num){
+  if(ISSUE_CACHE[num]) return ISSUE_CACHE[num];
+  const base='https://api.github.com/repos/'+REPO+'/issues/'+num;
+  const headers={'Accept':'application/vnd.github+json'};
+  const iss=await fetch(base,{headers}).then(r=>{ if(!r.ok) throw new Error('issue '+r.status); return r.json(); });
+  let comments=[];
+  if(iss.comments>0){
+    comments=await fetch(base+'/comments?per_page=100',{headers})
+      .then(r=>r.ok?r.json():[]).catch(()=>[]);
+  }
+  const data={iss,comments};
+  ISSUE_CACHE[num]=data;
+  return data;
+}
+
+function openTask(num,title,kind){
+  const seq=++popSeq;
+  document.getElementById('popnum').textContent=(kind==='task'?'Zadanie #':'Bug #')+num;
+  document.getElementById('poptitle').textContent=title;
+  document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span><span class="lbl">ładowanie…</span>`;
+  document.getElementById('poplink').href='https://github.com/'+REPO+'/issues/'+num;
+  const body=document.getElementById('popbody');
+  body.innerHTML='<div class="loading">Pobieram treść z GitHub…</div>';
+  const box=document.getElementById('popbox');
+  document.getElementById('pop').classList.add('show');
+  // center on each open (box is always position:fixed; left/top in px)
+  const w=box.offsetWidth, h=Math.min(box.offsetHeight, window.innerHeight*0.88);
+  box.style.left=Math.max(8,(window.innerWidth-w)/2)+'px';
+  box.style.top =Math.max(8,(window.innerHeight-h)/2)+'px';
+  box.scrollTop=0;
+
+  fetchIssue(num).then(({iss,comments})=>{
+    if(seq!==popSeq) return; // a newer popup opened meanwhile
+    const labels=(iss.labels||[]).map(l=>`<span class="lbl">${esc(l.name)}</span>`).join('');
+    document.getElementById('popmeta').innerHTML=
+      `<span class="lbl">${esc(iss.state)}</span><span class="lbl">@${esc(iss.user?.login||'?')}</span>`+
+      `<span class="lbl">${fmtDate(iss.created_at)}</span><span class="lbl">${comments.length} komentarzy</span>${labels}`;
+    let html=mdToHtml(iss.body||'_(brak opisu)_');
+    if(comments.length){
+      html+='<h3>Komentarze ('+comments.length+')</h3>';
+      comments.forEach(c=>{
+        html+=`<div class="cmt"><div class="who">@${esc(c.user?.login||'?')} · ${fmtDate(c.created_at)}</div>${mdToHtml(c.body||'')}</div>`;
+      });
+    }
+    body.innerHTML=html;
+    body.scrollTop=0;
+  }).catch(err=>{
+    if(seq!==popSeq) return;
+    document.getElementById('popmeta').innerHTML=`<span class="lbl">${REPO}</span>`;
+    body.innerHTML=`<div class="loading">Nie udało się pobrać treści (${esc(err.message)}).`+
+      ` Otwórz na GitHub przyciskiem poniżej. (Limit API to 60 zapytań/h na IP bez logowania.)</div>`;
+  });
+}
+function closeTask(){ document.getElementById('pop').classList.remove('show'); popSeq++; }
+window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeTask(); });
+
+/* ---- drag the popup by its header bar (#pophead) ---- */
+(function(){
+  const box=document.getElementById('popbox');
+  const head=document.getElementById('pophead');
+  let drag=null;
+  head.addEventListener('mousedown',e=>{
+    if(e.target.id==='popclose') return; // close button stays clickable
+    const r=box.getBoundingClientRect();
+    drag={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    document.body.style.userSelect='none';
+    e.preventDefault(); e.stopPropagation();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    box.style.left=Math.max(4,Math.min(window.innerWidth -60, e.clientX-drag.dx))+'px';
+    box.style.top =Math.max(4,Math.min(window.innerHeight-40, e.clientY-drag.dy))+'px';
+  });
+  document.addEventListener('mouseup',()=>{ if(drag){drag=null; document.body.style.userSelect='';} });
+})();
+
+/* ---- drag the filter toolbar (#topbar) by its title; remember position ---- */
+(function(){
+  const bar=document.getElementById('topbar');
+  const handle=bar.querySelector('h1');
+  let d=null;
+  try{const p=JSON.parse(localStorage.getItem('archmap_topbar_pos'));
+    if(p){bar.style.left=p.left+'px'; bar.style.top=p.top+'px'; bar.style.right='auto';}}catch(e){}
+  handle.addEventListener('mousedown',e=>{
+    const r=bar.getBoundingClientRect();
+    d={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    bar.style.right='auto';
+    document.body.style.userSelect='none';
+    e.preventDefault(); e.stopPropagation();   // don't pan the map underneath
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!d) return;
+    bar.style.left=Math.max(4,Math.min(window.innerWidth -120, e.clientX-d.dx))+'px';
+    bar.style.top =Math.max(4,Math.min(window.innerHeight-40,  e.clientY-d.dy))+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!d) return;
+    const r=bar.getBoundingClientRect();
+    try{localStorage.setItem('archmap_topbar_pos',JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));}catch(e){}
+    d=null; document.body.style.userSelect='';
+  });
+})();
+
+document.getElementById('canvas').addEventListener('click',()=>{pinned=null;clearDim();document.getElementById('sidebar').innerHTML=defaultSidebar();});
+
+/* ---- filter chips ---- */
+const CHIPS=[
+  ['overview','Overview'],['critical-path','Ścieżka krytyczna',true],['attack','Atak'],
+  ['conditions','Kondycje'],['zones','Strefy'],['loot-xp','Loot/XP'],['death','Śmierć'],
+  ['observability','Observability'],['dead-code','Martwy kod'],['heat','Heat-map (live)'],['all','Wszystkie kable'],
+];
+const chipsBox=document.getElementById('chips');
+CHIPS.forEach(([id,label,crit])=>{
+  const c=document.createElement('div');c.className='chip'+(crit?' crit':'')+(id==='overview'?' active':'');
+  c.textContent=label;c.dataset.id=id;
+  c.addEventListener('click',()=>applyChip(id));
+  chipsBox.appendChild(c);
+});
+function applyChip(id){
+  activeChip=id;
+  [...chipsBox.children].forEach(c=>c.classList.toggle('active',c.dataset.id===id));
+  const showAll = id==='all';
+  nodes.forEach(n=>{
+    const on = showAll || id==='heat' || (n.tag||[]).includes(id);
+    nodeEls[n.id].g.style.display = on?'':'none';
+  });
+  edgeEls.forEach(({e,p,lbl})=>{
+    const on = showAll || (id==='heat'? true : (e.tag||[]).includes(id));
+    p.style.display=on?'':'none'; lbl.style.display=(on && id!=='heat')?'':'none';
+  });
+  renderHeat();
+  pinned=null;clearDim();document.getElementById('sidebar').innerHTML=defaultSidebar();
+  const oi=document.getElementById('ovinfo'); if(oi) oi.textContent = id==='heat'? heatMsg() : '';
+}
+
+/* ============================ PAN / ZOOM ============================ */
+let tx=0,ty=0,s=1;
+function apply(){scene.setAttribute('transform',`translate(${tx},${ty}) scale(${s})`);}
+const cv=document.getElementById('canvas');
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=cv.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const ds=Math.exp(-e.deltaY*0.0014); const ns=Math.min(2.5,Math.max(0.25,s*ds));
+  tx = mx - (mx-tx)*(ns/s); ty = my - (my-ty)*(ns/s); s=ns; apply();
+},{passive:false});
+let drag=null;
+cv.addEventListener('mousedown',e=>{drag={x:e.clientX-tx,y:e.clientY-ty};cv.classList.add('grabbing');});
+window.addEventListener('mousemove',e=>{if(drag){tx=e.clientX-drag.x;ty=e.clientY-drag.y;apply();}});
+window.addEventListener('mouseup',()=>{drag=null;cv.classList.remove('grabbing');});
+function fit(){
+  const pad=40, W=cv.clientWidth-340, H=cv.clientHeight;
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  clusters.forEach(c=>{minX=Math.min(minX,c.x);minY=Math.min(minY,c.y);maxX=Math.max(maxX,c.x+c.w);maxY=Math.max(maxY,c.y+c.h);});
+  const bw=maxX-minX, bh=maxY-minY;
+  s=Math.min((W-pad*2)/bw,(H-pad*2)/bh,1.4);
+  tx=pad-minX*s + Math.max(0,(W-bw*s)/2-pad);
+  ty=pad-minY*s; apply();
+}
+document.getElementById('zfit').onclick=fit;
+document.getElementById('zin').onclick=()=>{s=Math.min(2.5,s*1.15);apply();};
+document.getElementById('zout').onclick=()=>{s=Math.max(0.25,s/1.15);apply();};
+
+/* ============================ OVERLAY LOAD ============================ */
+function heatMsg(){
+  const ids=Object.keys(HEAT); if(!ids.length) return 'Heat-map pusta — Phase 11 (game_events/llm_call_log) jeszcze nie zapisała danych. Odpal overlay/update_overlay.sh gdy tabele istnieją.';
+  const tot=ids.reduce((a,k)=>a+(HEAT[k].calls||0),0);
+  return `Heat-map: ${ids.length} węzłów z danymi, ${tot} wywołań w oknie.`;
+}
+function setOverlayState(t){const e=document.getElementById('overlaystate'); if(e) e.textContent='overlay: '+t;}
+fetch('overlay/map-overlay.json',{cache:'no-store'})
+  .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(o=>{
+    FIXES=o.fixes||{}; KNOWN_BUGS=o.bugs||{}; HEAT=o.heat||{}; if(o.repo) REPO=o.repo;
+    const nb=Object.values(KNOWN_BUGS).reduce((a,x)=>a+x.length,0);
+    const nf=Object.values(FIXES).reduce((a,x)=>a+x.length,0);
+    setOverlayState(`${nb} bugów · ${nf} fixów · ${Object.keys(HEAT).length} heat${o.generated_at?` · ${o.generated_at}`:''}`);
+    renderBadges(); renderHeat();
+  })
+  .catch(()=>{ setOverlayState('brak (statyczna mapa)'); renderBadges(); });
+
+/* boot */
+document.getElementById('sidebar').innerHTML=defaultSidebar();
+fit();
+</script>
+</body>
+</html>

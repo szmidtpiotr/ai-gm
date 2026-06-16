@@ -35,6 +35,141 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
+## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5
+
+> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = sekcja "FAZA U — zależności i kolejność" w CZĘŚCI AH (NIE numeracja — U9b/U28–U32/U32b wchodzą przed Blokiem 4). Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`; wyjątki U4/U9b/U32b = czyste playtesty /game-smoke (bez TDD, bez nowego issue, raporty do #512/#513).
+
+### Blok 6 — Lochy: stawka — ❌ WCHŁONIĘTE PRZEZ FAZĘ L (redesign 2026-06-12; nie wykonywać jako U)
+- [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
+- [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
+
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (15/24; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
+
+> Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
+
+### Blok 4 — UI gracza
+> L12b (#694) — rewizja L12 po weryfikacji L16 na mobile: obraz kafla jako modal popup (pierwsze wejście + klik kafla na mapie) zamiast inline nad czatem (przykrywał interfejs); surowy `room_description` zdjęty z czatu (zostaje paliwem narratora); d-pad drzwi naprawiony przez usunięcie obrazu. Nadpisuje fragment Decyzji 14 „obraz kafla w scenie". **needs-testing** (wizualna na DEV).
+- [ ] L13c — 🎮 KAMIEŃ MILOWY (mid-faza): `/game-smoke-dungeon --engine` po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią L14–L16). Łapie bugi grafu/ruchu/mapy/walki/bossa/endless/śmierci/porzucenia ZANIM włożymy treść. Bez TDD, raport do [SMOKE] FAZA L. Checkpointy zależne od treści (opisy PL, zagadki) = N/D. Zaliczone = przebieg silnika bez P0; werdykt min. GRYWALNY Z ZASTRZEŻENIAMI.
+  - SMOKE 2026-06-16: pierwszy przebieg **NIEGRYWALNY** (1×P0). Działa: graf/ruch/walka(skala D1–D5)/skrzynia/boss/endless(+1lvl/cykl)/flaga. Defekty: **#684 P0** — brak `import math` → `/dungeons/death` i `/dungeons/exit` zwracają 500; **#685 P1→P0** — entry tile z wrogami = soft-lock. Raport: #686.
+  - 🟢 FIX 2026-06-16: oba naprawione na DEV i przetestowane ponownie — death 200 (+72h cd), abandon 200 (+36h cd), 0/20 enters z combat entry. Werdykt engine: **GRYWALNY (bez P0)**. Zmiany w drzewie roboczym FAZA L (niezacommitowane). Zaznaczyć [x] po wizualnej weryfikacji UI + commicie FAZA L; wtedy zamknąć #684/#685.
+
+### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
+  - 🟢 FIX 2026-06-16: seed zapisał `dungeon_difficulty='D2'` (string) — `int()` w `dungeon_tile_service` (linie 510/689/1234/1674) rzucał `invalid literal for int() with base 10: 'D2'` przy wejściu. Kolumna trzyma INT (D2=2, jak crypt_of_bones=2). Naprawione: DB UPDATE→2 + seed poprawiony. Re-test enter: `ok:true`, graf zbudowany, difficulty=2.
+- [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
+
+### Blok 6 — Weryfikacja
+- [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
+- [ ] L20a — Portrety wrogów/NPC: persystencja (migracja image_url na game_config_enemies+npcs, update_enemy/update_npc, portret BASE_PROMPT, batch --entity) — naprawia zepsuty zapis istniejącego modala (TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
+- [ ] L20b — Portrety wrogów/NPC: display u gracza (modal startu walki jak Dice Roll + miniatura w panelu/chipie, fallback emoji; reuse w normalnej kampanii; ożywia [NPC_INTERACTION]) + USUNIĘCIE bloku „Pozycje sprite'ów na kafelku" z edytora kafla (TDD) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
+- [ ] L20c — Portrety nieumarłych krypty: pilot 5 → akceptacja Piotra → batch (bez TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
+- [ ] L19 — 🎮 KAMIEŃ MILOWY: pełny playtest lochu skillem `/game-smoke-dungeon` (na treści krypta po L16: 2 cykle endless, śmierć z checkpointem, porzucenie, mapa, mobile; 14 checkpointów; raport do [SMOKE] FAZA L; bez TDD). Pierwszy kandydat na loch GRYWALNY.
+
+> Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).
+
+---
+
+## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)
+
+> Pełne definicje liczb + system czarów + fazy adaptacji + decyzje: `game_mechanics.md` CZĘŚĆ AK. Założenia: warrior=tank (mało INT), rogue=zwinny/najwięcej skilli/mniej HP niż warrior, mag=słaby fizycznie/nadrabia czarami. Audyt ujawnił 4 rozjazdy kod↔DB↔design. Czary z `rpg_spells_design_doc.md` (50 szt.). Każde zadanie = GitHub Issue `[TASK] BNN` wdrażane `/tdd`. **Blok 1 standalone** (przerywnik — można PRZED/równolegle z FAZĄ L). **Blok 2 niezależny od L** (po FAZIE S ✅). **Blok 3 ⛔ wymaga FAZY 5 (MP/towarzysze) + systemu reakcji.**
+
+### Blok 3 — Czary Faza 2 (⛔ WYMAGA FAZY 5 + system reakcji)
+- [ ] B14 — Ally-target (group_heal, haste, stoneskin_ally, divine_shield_ally, mass_*) — ⛔ wymaga MP/towarzyszy (FAZA 5)
+- [ ] B15 — Summony (familiar, elemental, animate_dead, shadow_clone) jako kombatant-towarzysz — ⛔ duża dobudowa silnika walki
+- [ ] B16 — System reakcji (blink, mirror_image redirect, globe_invulnerability) — ⛔ okno reakcji w silniku
+- [ ] B17 — (D3) Czary CHA (charm_person, mass_fear) — wg decyzji D3
+
+> **Decyzje do potwierdzenia (CZĘŚĆ AK.6):** D1 HP 10/8/6 (przyjęte roboczo) vs 12/10/8+retune wrogów · D2 rogue sneak attack cecha vs generyczny hidden · D3 mag CHA-czary tak/nie.
+> Poza zakresem FAZY B (Faza 2 czarów): pełny system towarzyszy/petów, leaderboard czarów, czary rytualne poza walką.
+
+---
+
+## FAZA 5 — Multiplayer (sesja projektowa 2026-06-12 — decyzje w game_mechanics.md CZĘŚĆ AC)
+
+> ⛔ Start dopiero po U27 (go/no-go) **ORAZ po wdrożeniu FAZY L (lochy)** — ostatnia faza gameplay w kolejce (decyzja 2026-06-12). Pełne opisy zadań + decyzje projektowe: `game_mechanics.md` CZĘŚĆ AC. Wyjątek: G20 (eksport-książka) można prototypować wcześniej — wymaga tylko H4 (Ollama na .170) i historii kampanii, działa też dla solo.
+
+- [ ] G16 — Wybór postaci przy zaproszeniu + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych
+- [ ] G1 — Timer enforcement — background sweep co ~30s (domknij rundę po deadline)
+- [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie; 3 ostrzeżenia → propozycja vote-kick
+- [ ] G3 — Vote-to-kick ręczny (większość pozostałych graczy; host niewyrzucalny; 2-os = host wyrzuca sam) + zastępstwo w trakcie kampanii
+- [ ] G4 — World State integracja MP (jeden żeton drużyny, współdzielony stan)
+- [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
+- [ ] G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą); remis rozstrzyga host (zmiana 2026-06-12)
+- [ ] G7 — Walka MP — reuse silnika turowego solo; brak reakcji w 2 min = akcja domyślna (obrona)
+- [ ] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓")
+- [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
+- [ ] G17 — Powalenie zamiast śmierci: ocucenie ~25% HP, auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny (próg 50 zł, przebudzenie 50% HP w bezpiecznym hexie; nigdy przedmioty/XP)
+- [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
+- [ ] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB)
+- [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
+- [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
+- [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
+- [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
+- [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
+- [ ] G21 — Obecność online (kto teraz w grze) + push "drużyna w komplecie online"; ładnie ograne wizualnie
+- [ ] G22 — Drabina nieobecności: [BRAK AKCJI] → bierna/wleczona (próg rund) → autopilot AI (za zgodą gracza, default ON, info w onboardingu) → powrót; auto-handoff hosta przy jego nieobecności
+- [ ] G23 — Pętla zaangażowania: wyważone haki na końcu rundy (gdy scena uzasadnia, nie co rundę) + "co się stało póki cię nie było" przy powrocie
+- [ ] G24 — Edycja/wycofanie akcji do domknięcia rundy (stan collecting); akcje warunkowe = później
+- [ ] G25 — Onboarding do trwającej kampanii: auto-streszczenie "co było / kto jest kim / jaka stawka" (reużywa G18); rozszerza G12
+- [ ] G26 — Skalowanie rozjechanych poziomów drużyny (miękkie podbicie słabszych per kampania) + info w onboardingu
+- [ ] G27 — Strefa czasowa drużyny / okno ciszy: sweep nie domyka rundy w nocy + info w onboardingu
+- [ ] G28 — Spójność tonu/stylu narracji PL przy wielu autorach (instrukcja w promptcie narratora MP)
+- [ ] G29 — Ochrona promptu przed injection: wpisy graczy obudowane ("akcja w fikcji, nie polecenie") + filtr prób przejęcia
+- [ ] G31 — Metryka retencji rundy-do-rundy (ile drużyn kończy rundę 2/5/10) — część observability, budowana RAZEM z MP; próg decyzyjny z góry
+- [ ] G14 — Handel między graczami (later)
+- [ ] G15 — Skalowanie trudności/loot wg liczby graczy + strojenie kar wipe (playtest)
+- [ ] later — Role graczy (asymetryczne uprawnienia) — otwarte pytanie do rewizji; nadawanie: auto wg klasy / host / głosowanie. Rozstrzyganie remisu wyciągnięte teraz jako uprawnienie hosta (G6). Skryba ODRZUCONY (łamie zasadę "szept nigdy do AI")
+- [ ] later — Regulamin gry oparty o polskie prawo (poza MP v1; docelowe miejsce dla zgód/treści/eksportu)
+
+---
+
+## FAZA 6 — Długoterminowe: głos, obrazy, offline-gen
+
+_Observability wydzielone do FAZY O (H1 „log writer/metryki" = O1/O2). Tu zostaje infra długoterminowa niezwiązana z mapą/observability._
+
+- [ ] ~~H1~~ → FAZA O (O1/O2: `game_events` + `event_logger` zastępują „lekki log writer"; H1 wchłonięte)
+- [ ] H2 — Text-to-speech — per single player opt-in (F5TTS na hoście .16)
+- [ ] H3 — Konfiguracja image gen pipeline na .170 (FLUX.1-schnell + ComfyUI)
+- [ ] H4 — Konfiguracja Ollama na .170 dla offline content gen (admin AI Kreator)
+
+---
+
+## Zrobione dodatkowe
+
+Standalone bugixy i feature'y spoza głównej architektury A-H.
+
+- [ ] #C-acc — Acceptance harness C1–C19 (pytest 13/13 + Playwright LLM-play) — `scripts/acceptance_c_series.sh`, `docs/ACCEPTANCE_C_SERIES.md` — commit 687f7ed; RED backlog: C9 (modal Ucz się), C10/C11 (questy)
+- [ ] [#400](https://github.com/szmidtpiotr/ai-gm/issues/400) — Admin spectator + resume: admin z player frontendu widzi WSZYSTKIE kampanie (dropdown wyboru usera, default własny), podgląda read-only i wznawia (re-attach bohatera z historii tur + aktywacja). Endpointy gated is_admin. TDD 7/7 + Playwright. Bug po drodze: campaigns.updated_at nie istnieje → created_at (awaits-testing)
+
+---
+
+## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 0/10
+
+_Spec: `docs/V2_ARCHITECTURE/22_FAZA_O_OBSERVABILITY_ARCHMAP.md` (łączy Phase 11 observability z mapą architektury `tools/archmap/`). Start prompt: `prompt_o.md`. Nie blokuje FAZY 5 MP._
+_Uwaga: tabele `game_events`/`llm_call_log` już istnieją od #587 (migracja) — O1 częściowo zrobione, zostaje `event_logger.py` + payloady._
+_Wchłania H1 z FAZY 6 (stary „observability design / log writer") — zastąpione przez O1/O2._
+
+Tor 1 — Observability:
+- [ ] O1 — `game_events`+`llm_call_log` + `event_logger.py` (tabele są od #587; brak serwisu helpera)
+- [ ] O2 — Zapis zdarzeń z serwisów (combat/śmierć/beat/LLM) wg payloadów §Part 1
+- [ ] O3 — Panel admina „Statystyki i Logi" (KPI + 4 zakładki, endpointy analytics — częściowo od #587)
+- [ ] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service)
+- [ ] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest, bez issue [TASK]
+
+Tor 2 — Mapa węzłów:
+- [ ] O6 — Mapa: cron overlay na .61 (refresh.sh 03:30) + opcjonalne wydzielenie repo `archmap`
+- [ ] O7 — Mapa: pozostałe podsystemy (turn-flow+LLM seam, admin, world, dungeons)
+- [ ] O8 — Mapa↔observability: pełna heat-map (włącz `_phase11` w heat-source.json; węzły observability) — wymaga O1+O2
+- [ ] O9 — (opcjonalnie) MCP serwuje mapę (`get_architecture_map`)
+- [ ] O10 — Mapa: interaktywny UX (pływające panele + persist layout, popup issue z body+komentarzami na żywo, reset układu) — część zrobiona w pilocie, reszta po O7
+
+> **Pilot gotowy (2026-06-16):** `tools/archmap/architecture-map.html` (combat, 27 węzłów) + generator nakładki z GitHub issues + strażnik driftu + instrukcja `INSTRUKCJA.md`. Generator przetestowany na żywym repo (24/106 issues dopasowane). UX (O10) częściowo: pływający pasek filtrów z persist + przeciągany popup issue z live body+komentarzami z GitHub API.
+
+---
+
+# ✅ FAZY UKOŃCZONE — archiwum
+
+_Zrobione fazy i zrobione pod-sekcje faz częściowo ukończonych. Nagłówki zduplikowane: otwarte zadania zostają u góry, zrobione tu. Nic nie usunięte._
+
 ## FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-06)
 
 - [x] A1 — Dead code cleanup (~1.1GB: voice-service 708M, observability 438M, docs/OLD 6.1M, output) — **0798fb2**
@@ -168,10 +303,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5
-
-> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = sekcja "FAZA U — zależności i kolejność" w CZĘŚCI AH (NIE numeracja — U9b/U28–U32/U32b wchodzą przed Blokiem 4). Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`; wyjątki U4/U9b/U32b = czyste playtesty /game-smoke (bez TDD, bez nowego issue, raporty do #512/#513).
-
+## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5  —  ✅ zrobione (przeniesione)
 ### Blok 1 — Dokument prawdy
 - [x] U1 — Sprzątanie game_mechanics.md (statusy, kolizje kodów D8–D13, wiszące refy F0/FINF-1) — [#509](https://github.com/szmidtpiotr/ai-gm/issues/509)
 - [x] U2 — Uzgodnienie spec↔impl ekonomii (reroll droższy niż nałożenie, durability broń-przy-ataku/zbroja-przy-ciosie, stałe craftingu, anti-farm = 24h realne) — [#510](https://github.com/szmidtpiotr/ai-gm/issues/510)
@@ -234,9 +366,6 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 6 — Lochy: stawka — ❌ WCHŁONIĘTE PRZEZ FAZĘ L (redesign 2026-06-12; nie wykonywać jako U)
 - [x] ~~U21~~ → FAZA L: L7 (semantyka checkpointów; UWAGA: śmierć=koniec runu zamiast restartu — zmiana względem pierwotnego U21) — [#676](https://github.com/szmidtpiotr/ai-gm/issues/676)
-- [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
-- [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
-
 ### 🎯 Weryfikacja Bloku 4 (celowana; po U20, PRZED U24; poza licznikiem U)
 - [x] B4V — `/game-test-player-screenshot` jednego scenariusza sklep+trwałość+przedmiot na koncie Demo. **Po co:** od U32b minął cały Blok 4 (unifikacja 3 tabel→game_items, dual-write, aktywacja trwałości #467, nowy sklep z U16) BEZ playtestu — najcięższy zestaw zmian FAZY U; żółta flaga = 18 czerwonych testów shop/loot/inventory z U11c (#557/#558). Tańsze niż pełny dwutrybowy smoke; pełny smoke i tak będzie w U27. **Bez TDD, bez nowego feature-issue** — defekty → osobne issues `[BUG] B4V — ...` (bug + needs-testing). Prompt: `prompt_b4v.md`. Zaliczone = sklep zdejmuje/dolicza złoto z saldem po, pasek trwałości widoczny i spada po walce, przedmiot z lootu trafia do ekwipunku z game_items. Każdy ❌ w tych trzech = defekt Bloku 4 do naprawy PRZED U27.
   - **WYNIK 2026-06-13: BLOK 4 OK (grywalny)** — kampania B4V (id 73), bohater [TEST] Wojownik (id 2), DEV. Wszystkie 3 mechaniki ✅ dla gracza:
@@ -325,10 +454,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (14/24; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
-
-> Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
-
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (15/24; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)  —  ✅ zrobione (przeniesione)
 ### Blok 1 — Silnik grafu
 - [x] L1 — Konfiguracja kafelkowa lochu w DB + admin (tile_category_key, tile_count, boss_tile_id, endless_growth_n — dziś modal zbiera, baza nie zapisuje) — [#670](https://github.com/szmidtpiotr/ai-gm/issues/670)
 - [x] L2 — Generator rozgałęzionego grafu + dungeon_run v2 (odnogi, fog, door hints, powtórki z re-rollem, positions per postać — podwalina MP) — [#671](https://github.com/szmidtpiotr/ai-gm/issues/671)
@@ -350,31 +476,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] L12 — Wybór drzwi: przyciski kierunków pod composerem + klik na mapie + obraz kafelka w scenie + akcje skrzynia/zagadka — [#681](https://github.com/szmidtpiotr/ai-gm/issues/681) **needs-testing**
 - [x] L13 — Modale: śmierć / porzucenie / resume / wybór po bossie — [#682](https://github.com/szmidtpiotr/ai-gm/issues/682) **needs-testing**
 - [x] L13b — Wejście z ekranu startowego (bohater idle; scalenie trybów D9 w jeden "Wyprawa do lochu") — [#683](https://github.com/szmidtpiotr/ai-gm/issues/683) **needs-testing**
-- [ ] L13c — 🎮 KAMIEŃ MILOWY (mid-faza): `/game-smoke-dungeon --engine` po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią L14–L16). Łapie bugi grafu/ruchu/mapy/walki/bossa/endless/śmierci/porzucenia ZANIM włożymy treść. Bez TDD, raport do [SMOKE] FAZA L. Checkpointy zależne od treści (opisy PL, zagadki) = N/D. Zaliczone = przebieg silnika bez P0; werdykt min. GRYWALNY Z ZASTRZEŻENIAMI.
-  - SMOKE 2026-06-16: pierwszy przebieg **NIEGRYWALNY** (1×P0). Działa: graf/ruch/walka(skala D1–D5)/skrzynia/boss/endless(+1lvl/cykl)/flaga. Defekty: **#684 P0** — brak `import math` → `/dungeons/death` i `/dungeons/exit` zwracają 500; **#685 P1→P0** — entry tile z wrogami = soft-lock. Raport: #686.
-  - 🟢 FIX 2026-06-16: oba naprawione na DEV i przetestowane ponownie — death 200 (+72h cd), abandon 200 (+36h cd), 0/20 enters z combat entry. Werdykt engine: **GRYWALNY (bez P0)**. Zmiany w drzewie roboczym FAZA L (niezacommitowane). Zaznaczyć [x] po wizualnej weryfikacji UI + commicie FAZA L; wtedy zamknąć #684/#685.
-
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
 - [x] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie) — [#690](https://github.com/szmidtpiotr/ai-gm/issues/690)
 - [x] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5→akceptacja Piotra→pełny batch 20/20 krypta. Fix: kompozytor skalował 768→512 (#691, geometria proporcjonalna). — [#691](https://github.com/szmidtpiotr/ai-gm/issues/691)
-- [ ] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5)
-- [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
+- [x] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5) — [#693](https://github.com/szmidtpiotr/ai-gm/issues/693)
 
-### Blok 6 — Weryfikacja
-- [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
-- [ ] L20a — Portrety wrogów/NPC: persystencja (migracja image_url na game_config_enemies+npcs, update_enemy/update_npc, portret BASE_PROMPT, batch --entity) — naprawia zepsuty zapis istniejącego modala (TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
-- [ ] L20b — Portrety wrogów/NPC: display u gracza (modal startu walki jak Dice Roll + miniatura w panelu/chipie, fallback emoji; reuse w normalnej kampanii; ożywia [NPC_INTERACTION]) + USUNIĘCIE bloku „Pozycje sprite'ów na kafelku" z edytora kafla (TDD) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
-- [ ] L20c — Portrety nieumarłych krypty: pilot 5 → akceptacja Piotra → batch (bez TDD; przed L19) — [#692](https://github.com/szmidtpiotr/ai-gm/issues/692)
-- [ ] L19 — 🎮 KAMIEŃ MILOWY: pełny playtest lochu skillem `/game-smoke-dungeon` (na treści krypta po L16: 2 cykle endless, śmierć z checkpointem, porzucenie, mapa, mobile; 14 checkpointów; raport do [SMOKE] FAZA L; bez TDD). Pierwszy kandydat na loch GRYWALNY.
-
-> Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).
-
----
-
-## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)
-
-> Pełne definicje liczb + system czarów + fazy adaptacji + decyzje: `game_mechanics.md` CZĘŚĆ AK. Założenia: warrior=tank (mało INT), rogue=zwinny/najwięcej skilli/mniej HP niż warrior, mag=słaby fizycznie/nadrabia czarami. Audyt ujawnił 4 rozjazdy kod↔DB↔design. Czary z `rpg_spells_design_doc.md` (50 szt.). Każde zadanie = GitHub Issue `[TASK] BNN` wdrażane `/tdd`. **Blok 1 standalone** (przerywnik — można PRZED/równolegle z FAZĄ L). **Blok 2 niezależny od L** (po FAZIE S ✅). **Blok 3 ⛔ wymaga FAZY 5 (MP/towarzysze) + systemu reakcji.**
-
+## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)  —  ✅ zrobione (przeniesione)
 ### Blok 1 — Tożsamość klas (naprawa bugów, PILNE)
 - [x] [#624](https://github.com/szmidtpiotr/ai-gm/issues/624) — B1 — Rogue staty: DEX+2/LCK+1 zamiast INT+2/WIS+1 — osobna gałąź `rogue` w `_build_character_sheet` (`characters.py:205`) + odwrotność w `_core_bases_from_stored_stats:440`. **Bug krytyczny** (rogue dziś dostaje staty maga)
 - [x] [#642](https://github.com/szmidtpiotr/ai-gm/issues/642) — B2 — Rogue HP base 8: `ARCHETYPE_BASE_HP["rogue"]` 10→8 (`vitality_service`); DB seed już = 8 (`migrations_admin.py:2892`, bez migracji); kreator pokazuje 8 w DWÓCH miejscach (`_wizardCalcHP` + etykieta karty archetypu). Ordering warrior 10 > rogue 8 > mag 6. **Uwaga:** DB `game_config_archetypes.hp_base` dla warrior zdryfował do 12 (kolumna NIE czytana przy tworzeniu postaci — char HP liczy `vitality_service`, więc gra niezmieniona) — osobny task do decyzji Piotra
@@ -396,17 +503,6 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] [#658](https://github.com/szmidtpiotr/ai-gm/issues/658) — B12 — Admin: czary w panelu + Smart Entry dla `game_config_spells`. **Audyt: większość już istniała** (backend `/api/admin/spells` CRUD + Smart Entry `game_config_spells` w `WRITABLE_TABLES`/schemacie od B6/B7; zakładka **Czary** w `content.js`). **B12 domknął FRONTEND:** (1) wpięcie czarów do Kreatora AI — `SE_TABLE_LABELS`+=`Czary`, mapa `_openSmartEntryForCurrentTab`+=`spells→game_config_spells` (wcześniej klik Kreator AI na Czarach dawał „nie obsługuje tej zakładki"); (2) ręczny formularz `_openSpellForm` rozszerzony do pełnego schematu (`spell_type`/`effect_stat`/`effect_type`/`effect_duration`/`aoe`/`rank2_json`/`rank3_json`; `target_zone` poprawione single/aoe/self→any/self/engaged/ranged). Bump `?v=39→40`. Backend bez zmian (pytest 6/6 strażnik kontraktu Smart Entry + Playwright 2/2 RED→GREEN UI).
 - [x] [#663](https://github.com/szmidtpiotr/ai-gm/issues/663) — B13 — Playtest: mag solo grywalny (heal/tarcza/atak/kontrola w realnej walce). **Werdykt: MAG GRYWALNY (2026-06-15).** fire_bolt ✅ atak czarem (dmg 5, mana 9→7) · ward_of_iron ✅ absorpcja tarczy (pool 6 soaks enemy hits) · frost_grip ✅ kondycja `slowed` na wrogu (single → CON) · minor_heal ✅ leczenie w walce (healed +2, hp 6→7). **Bug P0 znaleziony i naprawiony:** `minor_heal` (spell_type='heal') brak dispatcha → wpadał w ścieżkę ataku (zabijał wroga za heal_die dmg); fix: `_resolve_heal_spell_in_combat` + dispatch blok [#666](https://github.com/szmidtpiotr/ai-gm/issues/666). 95/95 pytest GREEN (B6–B13). Raport → [#663 komentarz](https://github.com/szmidtpiotr/ai-gm/issues/663#issuecomment-4711587747). **Domyka Blok 2 (czary Faza 1).** needs-testing
 
-### Blok 3 — Czary Faza 2 (⛔ WYMAGA FAZY 5 + system reakcji)
-- [ ] B14 — Ally-target (group_heal, haste, stoneskin_ally, divine_shield_ally, mass_*) — ⛔ wymaga MP/towarzyszy (FAZA 5)
-- [ ] B15 — Summony (familiar, elemental, animate_dead, shadow_clone) jako kombatant-towarzysz — ⛔ duża dobudowa silnika walki
-- [ ] B16 — System reakcji (blink, mirror_image redirect, globe_invulnerability) — ⛔ okno reakcji w silniku
-- [ ] B17 — (D3) Czary CHA (charm_person, mass_fear) — wg decyzji D3
-
-> **Decyzje do potwierdzenia (CZĘŚĆ AK.6):** D1 HP 10/8/6 (przyjęte roboczo) vs 12/10/8+retune wrogów · D2 rogue sneak attack cecha vs generyczny hidden · D3 mag CHA-czary tak/nie.
-> Poza zakresem FAZY B (Faza 2 czarów): pełny system towarzyszy/petów, leaderboard czarów, czary rytualne poza walką.
-
----
-
 ## FAZA HI — Inspektor Bohatera (admin) (2026-06-15 — decyzje w game_mechanics.md CZĘŚĆ AL) [7/7]
 
 > Narzędzie admina: podgląd+edycja żywego bohatera (ekwipunek dodaj/usuń/załóż, staty, skille, zaklęcia, kondycje, złoto, XP, questy) — jak monitor kampanii, ale dla bohatera. **~90% backendu już istnieje** (reuse cheat/xp/inventory/spells); dopisać tylko 3 luki + czysty GET. Decyzje Piotra: (1) nowa sekcja nawigacji „Bohaterowie" + link z monitora kampanii; (2) reuse cheat + 3 luki (set skill rank, set mana, add/remove condition); (3) audyt `admin_audit_log` + ostrzeżenie konto #1013 + blokada edycji w trakcie walki/tury. **Niezależne od S/L/MP — intermezzo kiedy Piotr zechce** (rekomendacja: po FAZIE L). Każde zadanie = `[TASK] HINN` wdrażane `/tdd`. Prompt startowy: `prompt_hi.md`.
@@ -421,55 +517,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA 5 — Multiplayer (sesja projektowa 2026-06-12 — decyzje w game_mechanics.md CZĘŚĆ AC)
-
-> ⛔ Start dopiero po U27 (go/no-go) **ORAZ po wdrożeniu FAZY L (lochy)** — ostatnia faza gameplay w kolejce (decyzja 2026-06-12). Pełne opisy zadań + decyzje projektowe: `game_mechanics.md` CZĘŚĆ AC. Wyjątek: G20 (eksport-książka) można prototypować wcześniej — wymaga tylko H4 (Ollama na .170) i historii kampanii, działa też dla solo.
-
-- [ ] G16 — Wybór postaci przy zaproszeniu + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych
-- [ ] G1 — Timer enforcement — background sweep co ~30s (domknij rundę po deadline)
-- [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie; 3 ostrzeżenia → propozycja vote-kick
-- [ ] G3 — Vote-to-kick ręczny (większość pozostałych graczy; host niewyrzucalny; 2-os = host wyrzuca sam) + zastępstwo w trakcie kampanii
-- [ ] G4 — World State integracja MP (jeden żeton drużyny, współdzielony stan)
-- [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
-- [ ] G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą); remis rozstrzyga host (zmiana 2026-06-12)
-- [ ] G7 — Walka MP — reuse silnika turowego solo; brak reakcji w 2 min = akcja domyślna (obrona)
-- [ ] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓")
-- [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
-- [ ] G17 — Powalenie zamiast śmierci: ocucenie ~25% HP, auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny (próg 50 zł, przebudzenie 50% HP w bezpiecznym hexie; nigdy przedmioty/XP)
-- [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
-- [ ] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB)
-- [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
-- [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
-- [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
-- [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
+## FAZA 5 — Multiplayer (sesja projektowa 2026-06-12 — decyzje w game_mechanics.md CZĘŚĆ AC)  —  ✅ zrobione (przeniesione)
 - [x] G20 — Eksport-książka: nowelizacja kampanii lokalnym modelem (Bielik 11B / Ollama na .170), offline; działa też dla solo — **prototyp CLI gotowy** (`book_export_service.py`, pilot 3 rozdz. z kamp. #546); UI/modal odłożone do FAZY G — [#547](https://github.com/szmidtpiotr/ai-gm/issues/547)
-- [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
-- [ ] G21 — Obecność online (kto teraz w grze) + push "drużyna w komplecie online"; ładnie ograne wizualnie
-- [ ] G22 — Drabina nieobecności: [BRAK AKCJI] → bierna/wleczona (próg rund) → autopilot AI (za zgodą gracza, default ON, info w onboardingu) → powrót; auto-handoff hosta przy jego nieobecności
-- [ ] G23 — Pętla zaangażowania: wyważone haki na końcu rundy (gdy scena uzasadnia, nie co rundę) + "co się stało póki cię nie było" przy powrocie
-- [ ] G24 — Edycja/wycofanie akcji do domknięcia rundy (stan collecting); akcje warunkowe = później
-- [ ] G25 — Onboarding do trwającej kampanii: auto-streszczenie "co było / kto jest kim / jaka stawka" (reużywa G18); rozszerza G12
-- [ ] G26 — Skalowanie rozjechanych poziomów drużyny (miękkie podbicie słabszych per kampania) + info w onboardingu
-- [ ] G27 — Strefa czasowa drużyny / okno ciszy: sweep nie domyka rundy w nocy + info w onboardingu
-- [ ] G28 — Spójność tonu/stylu narracji PL przy wielu autorach (instrukcja w promptcie narratora MP)
-- [ ] G29 — Ochrona promptu przed injection: wpisy graczy obudowane ("akcja w fikcji, nie polecenie") + filtr prób przejęcia
-- [ ] G31 — Metryka retencji rundy-do-rundy (ile drużyn kończy rundę 2/5/10) — część observability, budowana RAZEM z MP; próg decyzyjny z góry
-- [ ] G14 — Handel między graczami (later)
-- [ ] G15 — Skalowanie trudności/loot wg liczby graczy + strojenie kar wipe (playtest)
-- [ ] later — Role graczy (asymetryczne uprawnienia) — otwarte pytanie do rewizji; nadawanie: auto wg klasy / host / głosowanie. Rozstrzyganie remisu wyciągnięte teraz jako uprawnienie hosta (G6). Skryba ODRZUCONY (łamie zasadę "szept nigdy do AI")
-- [ ] later — Regulamin gry oparty o polskie prawo (poza MP v1; docelowe miejsce dla zgód/treści/eksportu)
 
----
-
-## FAZA 6 — Observability + Długoterminowe
-
-- [ ] H1 — Observability design: co logować, schemat metryk, lekki log writer w backendzie
-- [ ] H2 — Text-to-speech — per single player opt-in (F5TTS na hoście .16)
-- [ ] H3 — Konfiguracja image gen pipeline na .170 (FLUX.1-schnell + ComfyUI)
-- [ ] H4 — Konfiguracja Ollama na .170 dla offline content gen (admin AI Kreator)
-- [ ] ~~H5~~ — GPU pipeline: tile → LLM Vision → opis → DB → REALIZOWANE JAKO L16 (FAZA L, 2026-06-12)
-
----
+## FAZA 6 — Observability + Długoterminowe  —  ✅ zrobione (przeniesione)
+- [x] ~~H5~~ — GPU pipeline: tile → LLM Vision → opis → DB → ZREALIZOWANE JAKO L16 (FAZA L, 2026-06-16) — [#693](https://github.com/szmidtpiotr/ai-gm/issues/693)
 
 ## FADM — Przebudowa Admin Panelu (strangler-fig) ✅ KOMPLETNE 2026-06-09
 
@@ -479,10 +531,10 @@ Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekc
 - [x] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) ✅ 2026-06-08
 - [x] FADM-P2 — Port sekcji mechanics — [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) ✅ 2026-06-08
 - [x] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) ✅ 2026-06-08
-- [ ] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) **← następne**
-- [ ] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
-- [ ] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
-- [ ] FADM-P7 — Port sekcji dungeons — [#409](https://github.com/szmidtpiotr/ai-gm/issues/409)
+- [x] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) **← następne**
+- [x] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
+- [x] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
+- [x] FADM-P7 — Port sekcji dungeons — [#409](https://github.com/szmidtpiotr/ai-gm/issues/409)
 - [x] FADM-P8 — ⏭ RETROAKTYWNIE ANULOWANY (Forge portowano w P14; pierwotny skip cofnięty) — [#410](https://github.com/szmidtpiotr/ai-gm/issues/410)
 - [x] FADM-P9 — Port sekcji players — [#411](https://github.com/szmidtpiotr/ai-gm/issues/411)
 - [x] FADM-P10 — Port sekcji tools (sandbox/Playwright/Inspector) — [#412](https://github.com/szmidtpiotr/ai-gm/issues/412)
@@ -497,12 +549,8 @@ Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekc
 
 ---
 
-## Zrobione dodatkowe
-
-Standalone bugixy i feature'y spoza głównej architektury A-H.
-
+## Zrobione dodatkowe  —  ✅ zrobione (przeniesione)
 - [x] [#595](https://github.com/szmidtpiotr/ai-gm/issues/595) — wybór celu ataku w walce z wieloma wrogami: backend honoruje `target_id` (czysty helper `_select_player_target` — żywy wróg, melee bramkowane strefą, fallback=auto), endpoint `resolve-attack` przekazuje `target_id`, front: klikalne wiersze wrogów + podświetlenie celu 🎯. **Odblokowuje B11 (AoE).** 7/7 pytest + 1/1 Playwright + dowód silnikowy w Sandbox (skeleton 0/10, goblin 10/10). **#595a follow-up:** po zabiciu celu z focusem 🎯 przeskakuje na następnego żywego wroga (`_nextLivingEnemyId`, kolejność inicjatywy) zamiast się czyścić — +1/1 Playwright. **review/needs-testing**
-
 - [x] [#372](https://github.com/szmidtpiotr/ai-gm/issues/372) — Opening scene zawsze w lesie: wyodrębniono `build_opening_plan_context()` + 16 testów TDD — commit 88c1d9a
 - [x] [#397](https://github.com/szmidtpiotr/ai-gm/issues/397) — Opening scene zawsze "budzisz się w lochu": system_prompt OTWARCIE SESJI dopuszcza miasta/tawerny, zakaz tropu przebudzenia — commit 635b72f
 - [x] [#398](https://github.com/szmidtpiotr/ai-gm/issues/398) — Header HP bar 50% mimo 30/30: enterGame() woła updateHeaderStats() — commit 635b72f
@@ -518,9 +566,7 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#569](https://github.com/szmidtpiotr/ai-gm/issues/569) — Walka: widoczny modal rzutu k20 (3D) przy ataku (parytet z testami umiejętności). `playCombatDiceRoll` reużywa dice-overlay + DICE.dice_box, odsprzężona od resolveSkillTest; wpięta w `handleCombatAttack` po wylosowaniu d20. 1/1 Playwright GREEN. **needs-testing**
 - [x] [#621](https://github.com/szmidtpiotr/ai-gm/issues/621) — Walka: strukturalny `skip_turn` ignorowany → `slowed`/`stunned` bez efektu (zapasy „nic nie dają", wróg atakował mimo wygranej). Root cause: `evaluate_current_turn_conditions` blokował turę tylko dla `type=="block_action"`; nowy format `effects:[{"type":"skip_turn",chance,...}]` nieczytany (legacy płaski tylko gdy `effects` puste). Fix: handler `skip_turn` w pętli strukturalnej — losuje `chance` (default 1.0), trafienie → `block_action`. Dotyczy wszystkich źródeł slowed/stunned (też czary). TDD 4/4 pytest + 1/1 Playwright GREEN. **needs-testing**
 - [x] [#395](https://github.com/szmidtpiotr/ai-gm/issues/395) — Aktywny preset LLM jako jedyne źródło prawdy: spójna tożsamość endpointu (provider+base_url+model z jednego źródła), leniwa hydratacja presetu w świeżych procesach, `LLMConfigError` zamiast cichego fallbacku do Ollama/gemma (TDD, 8/8 GREEN) — commit 526cfdd — zweryfikowane, zamknięte
-- [ ] #C-acc — Acceptance harness C1–C19 (pytest 13/13 + Playwright LLM-play) — `scripts/acceptance_c_series.sh`, `docs/ACCEPTANCE_C_SERIES.md` — commit 687f7ed; RED backlog: C9 (modal Ucz się), C10/C11 (questy)
 - [x] [#396](https://github.com/szmidtpiotr/ai-gm/issues/396) — Admin3 Narzędzia→Playwright odpala wszystkie suity ux (regression/acceptance/admin3); test-agent skan rekursywny + run po ścieżce/grupie; nowy admin3 smoke 16/16 GREEN — commit 6058f90 (TDD 7/7 GREEN)
-- [ ] [#400](https://github.com/szmidtpiotr/ai-gm/issues/400) — Admin spectator + resume: admin z player frontendu widzi WSZYSTKIE kampanie (dropdown wyboru usera, default własny), podgląda read-only i wznawia (re-attach bohatera z historii tur + aktywacja). Endpointy gated is_admin. TDD 7/7 + Playwright. Bug po drodze: campaigns.updated_at nie istnieje → created_at (awaits-testing)
 - [x] [#393](https://github.com/szmidtpiotr/ai-gm/issues/393) — Playwright panel w admin3 Narzędzia: lista speców, live SSE stream, /playwright-specs + /playwright-run endpointy (TDD 7/7 GREEN)
 - [x] [#415](https://github.com/szmidtpiotr/ai-gm/issues/415) — Brakujące endpointy mapy: /hex-terrain-config, POST /generate, DELETE /clear, /locations-map (TDD 11/11 GREEN)
 - [x] [#456](https://github.com/szmidtpiotr/ai-gm/issues/456) — SB-2: Stan Świata zawsze pusty — scene_enemies/player_conditions nigdy nie aktualizowane; fix: initiate_combat() → set_world_state_flags(scene_enemies), end_combat() → clear, auto_save_snapshot() → _sync_player_conditions() (TDD 4/4 GREEN + Playwright 2/2)

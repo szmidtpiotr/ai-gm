@@ -1,0 +1,26 @@
+{
+  "_doc": "Maps repo file paths -> map node ids. The overlay generator reads each GitHub issue's '## Files changed' section, matches paths against these prefixes (longest match wins), and attaches the issue to the node as a bug or fix. Keep this in sync with the nodes[] in architecture-map.html.",
+  "map": "architecture-map.html (combat pilot)",
+  "paths": {
+    "backend/app/api/combat.py": "combat-api",
+    "backend/app/routers/sandbox.py": "sandbox",
+    "backend/app/api/inventory.py": "inventory-api",
+    "backend/app/services/combat_service.py": "resolve-attack",
+    "backend/app/services/combat_v2_service.py": "combat-v2",
+    "backend/app/services/dice.py": "dice",
+    "backend/app/services/weapon_rules.py": "weapon-rules",
+    "backend/app/services/spell_service.py": "spell-service",
+    "backend/app/services/wound_utils.py": "wound-utils",
+    "backend/app/services/effect_json_migration.py": "effect-migration",
+    "backend/app/services/loot_service.py": "loot-service",
+    "backend/app/services/xp_service.py": "xp-service",
+    "backend/app/services/xp_sources.py": "xp-sources",
+    "backend/app/services/solo_death_service.py": "solo-death",
+    "backend/app/services/npc_global_death_service.py": "npc-death",
+    "backend/app/services/dungeon_tile_service.py": "dungeon-tile",
+    "backend/app/services/campaign_plan_runtime.py": "campaign-plan",
+    "backend/app/services/world_state_service.py": "world-state"
+  },
+  "_label_to_bug_when": "issue is OPEN and has label 'bug'",
+  "_label_to_fix_when": "issue is OPEN and has label 'enhancement' or 'needs-testing'"
+}
