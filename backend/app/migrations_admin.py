@@ -91,6 +91,12 @@ ADMIN_MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # O1 — indices for game_events and llm_call_log (tables created above in #587,
+    # indices missing — added 2026-06-16).
+    "CREATE INDEX IF NOT EXISTS idx_game_events_type_date ON game_events (event_type, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_game_events_campaign ON game_events (campaign_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_game_events_severity ON game_events (severity, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_llm_log_type_date ON llm_call_log (call_type, created_at)",
     # Admin-surface tables whose CREATE was never migrated (only existed in
     # e2e_bootstrap.sql or not at all) → caused 500s on /admin/bug-reports,
     # /admin/push/subscriptions, /admin/voice/hosts, /admin/ui-texts.
