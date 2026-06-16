@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 DB_PATH = os.environ.get("DB_PATH", "/data/ai_gm.db")
 _HOST = os.environ.get("FASTMCP_HOST", "0.0.0.0")
 _PORT = int(os.environ.get("FASTMCP_PORT", "8400"))
+ARCHMAP_DIR = os.environ.get("ARCHMAP_DIR", "/archmap")
 
 # ---------------------------------------------------------------------------
 # Player session — HTTP API (write tools)
@@ -1994,6 +1995,85 @@ def forge_create_game_entry(entry_type: str, data: dict, template_id: int | None
         return f"ERROR {e.response.status_code}: {e.response.text[:200]}"
     except Exception as e:
         return f"ERROR: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 16: get_architecture_map  (O9)
+# ---------------------------------------------------------------------------
+
+_SUBSYSTEM_FOR_NODE = {
+    "tf-": "turn-flow",
+    "adm-": "admin",
+    "sec-": "admin",
+    "wld-": "world",
+    "dng-": "dungeons",
+}
+
+
+def _node_subsystem(node_id: str) -> str:
+    for prefix, sub in _SUBSYSTEM_FOR_NODE.items():
+        if node_id.startswith(prefix):
+            return sub
+    return "combat"
+
+
+@mcp.tool()
+def get_architecture_map(subsystem: str = "all") -> dict:
+    """
+    Returns architecture map nodes with open GitHub issue counts per node.
+    subsystem: 'combat' | 'turn-flow' | 'admin' | 'world' | 'dungeons' | 'all'.
+    Data sourced from map-overlay.json (refreshed nightly by cron).
+    Use to answer: 'which combat nodes have open bugs?', 'show tasks for admin subsystem'.
+    Each node includes open_bugs (label:bug) and open_fixes (label:enhancement/needs-testing).
+    """
+    overlay_path = os.path.join(ARCHMAP_DIR, "map-overlay.json")
+    try:
+        with open(overlay_path) as f:
+            overlay = json.load(f)
+    except FileNotFoundError:
+        return {
+            "error": f"map-overlay.json not found at {overlay_path}. "
+                     "Mount tools/archmap/overlay/ into the container (ARCHMAP_DIR env var)."
+        }
+    except Exception as e:
+        return {"error": f"Failed to read map-overlay.json: {e}"}
+
+    bugs_by_node = overlay.get("bugs", {})
+    fixes_by_node = overlay.get("fixes", {})
+    all_node_ids = set(bugs_by_node.keys()) | set(fixes_by_node.keys())
+
+    result_nodes = []
+    for node_id in sorted(all_node_ids):
+        node_sub = _node_subsystem(node_id)
+        if subsystem != "all" and node_sub != subsystem:
+            continue
+
+        node_bugs = bugs_by_node.get(node_id, [])
+        node_fixes = fixes_by_node.get(node_id, [])
+        result_nodes.append(
+            {
+                "node_id": node_id,
+                "subsystem": node_sub,
+                "open_bugs": len(node_bugs),
+                "open_fixes": len(node_fixes),
+                "bugs": [{"issue": b.get("n"), "title": b.get("t")} for b in node_bugs],
+                "fixes": [{"issue": f.get("n"), "title": f.get("t")} for f in node_fixes],
+            }
+        )
+
+    return {
+        "subsystem_filter": subsystem,
+        "generated_at": overlay.get("generated_at"),
+        "repo": overlay.get("repo"),
+        "total_nodes_returned": len(result_nodes),
+        "summary": {
+            "total_open_bugs": sum(n["open_bugs"] for n in result_nodes),
+            "total_open_fixes": sum(n["open_fixes"] for n in result_nodes),
+            "nodes_with_bugs": sum(1 for n in result_nodes if n["open_bugs"] > 0),
+            "nodes_with_fixes": sum(1 for n in result_nodes if n["open_fixes"] > 0),
+        },
+        "nodes": result_nodes,
+    }
 
 
 # ---------------------------------------------------------------------------

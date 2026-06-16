@@ -141,12 +141,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./data-dev:/data:ro
+      - ./tools/archmap/overlay:/archmap:ro
     environment:
       - DB_PATH=/data/ai_gm.db
       - GAME_API_URL=http://backend:8000/api
       - MCP_TRANSPORT=streamable-http
       - FASTMCP_HOST=0.0.0.0
       - FASTMCP_PORT=8400
+      - ARCHMAP_DIR=/archmap
     ports:
       - "8400:8400"
     depends_on:
