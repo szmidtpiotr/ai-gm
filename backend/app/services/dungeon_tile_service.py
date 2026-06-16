@@ -1880,12 +1880,134 @@ def on_boss_tile_cleared(campaign_id: int, character_id: int) -> dict:
     return {"is_boss_tile": True, "loot": loot_items}
 
 
+def _is_cap_node(node: dict | None) -> bool:
+    """True for a 1-door zaślepka (stub that only connects back to its parent)."""
+    if not node or node.get("is_boss"):
+        return False
+    return len((node.get("content") or {}).get("doors") or []) == 1
+
+
+def _attach_endless_segment(
+    old_nodes: dict[str, dict],
+    old_boss_nid: str,
+    new_graph: dict,
+    new_cycle: int,
+    non_boss_caps: list[dict],
+) -> dict:
+    """Issue #698 (L-doors2): weld a freshly drawn segment onto the existing graph.
+
+    After #697 the boss has EVERY door capped (0 free). The old "first free door"
+    logic always fell into the `else` branch → orphaned cap + ghost door at the seam.
+
+    This helper:
+      - picks `attach_dir` from the boss's REAL doors (content.doors), preferring a
+        direction currently sealed by a cap (so the real path is never detached) and
+        whose opposite is a REAL door of the new entry tile (no ghost door);
+      - removes the boss-side cap at that door and the new-segment cap that would
+        collide with the boss cell (both are orphans after the weld);
+      - shifts the new segment so its entry occupies the freed boss-adjacent cell;
+      - connects boss↔entry on both sides, then re-runs `_fill_open_doors` over the
+        WHOLE merged graph to close any door freed by cap removal.
+
+    Returns {"nodes", "boss_node", "entry_node"} for the merged graph.
+    """
+    # Work on copies so callers' dicts stay intact.
+    merged_old = {
+        nid: {**n, "doors_open": dict(n.get("doors_open") or {})}
+        for nid, n in old_nodes.items()
+    }
+
+    new_nodes = new_graph.get("nodes") or {}
+    new_entry_key = new_graph.get("entry_node") or "node_0"
+    new_boss_key = new_graph.get("boss_node")
+    cycle_prefix = f"c{new_cycle}_"
+
+    boss_node = merged_old.get(old_boss_nid) or {}
+    boss_pos = list(boss_node.get("position") or [0, 0])
+    boss_doors = dict(boss_node.get("doors_open") or {})
+    boss_real = [d for d in DIRECTIONS if d in set((boss_node.get("content") or {}).get("doors") or [])]
+    entry_real = set(((new_nodes.get(new_entry_key) or {}).get("content") or {}).get("doors") or [])
+
+    # Pick attach_dir from boss real doors whose opposite is a real entry door.
+    candidates = [d for d in boss_real if OPPOSITE[d] in entry_real]
+    capped = [d for d in candidates if _is_cap_node(merged_old.get(boss_doors.get(d)))]
+    pref = capped or candidates or boss_real or ["S"]
+    attach_dir = pref[0]
+    opp_dir = OPPOSITE.get(attach_dir, "N")
+
+    # Remap new-segment nodes: cycle-prefixed IDs (positions shifted below).
+    new_boss_nid: str | None = None
+    remapped: dict[str, dict] = {}
+    for old_nid, node in new_nodes.items():
+        new_nid = cycle_prefix + old_nid
+        if old_nid == new_boss_key:
+            new_boss_nid = new_nid
+        new_doors: dict[str, str | None] = {}
+        for d, tgt in (node.get("doors_open") or {}).items():
+            new_doors[d] = (cycle_prefix + tgt) if tgt else None
+        remapped[new_nid] = {
+            **node,
+            "position": list(node["position"]),
+            "doors_open": new_doors,
+            "content": dict(node.get("content") or {}),
+        }
+    new_entry_nid = cycle_prefix + new_entry_key
+
+    # Drop the boss-side cap occupying attach_dir (would be orphaned by the weld).
+    boss_cap = boss_doors.get(attach_dir)
+    if boss_cap and _is_cap_node(merged_old.get(boss_cap)):
+        merged_old.pop(boss_cap, None)
+
+    # Drop the new-segment cap on entry's opp_dir (would collide with the boss cell).
+    entry_cap = remapped[new_entry_nid]["doors_open"].get(opp_dir)
+    if entry_cap and _is_cap_node(remapped.get(entry_cap)):
+        remapped.pop(entry_cap, None)
+
+    # Shift the new segment so entry sits at boss_pos + offset(attach_dir).
+    dx, dy = OFFSET.get(attach_dir, (0, 1))
+    target_entry_pos = [boss_pos[0] + dx, boss_pos[1] + dy]
+    entry_old_pos = list(remapped[new_entry_nid]["position"])
+    pdx = target_entry_pos[0] - entry_old_pos[0]
+    pdy = target_entry_pos[1] - entry_old_pos[1]
+    for n in remapped.values():
+        n["position"] = [n["position"][0] + pdx, n["position"][1] + pdy]
+
+    # Weld both sides (both are real doors now → no ghost door).
+    boss_doors[attach_dir] = new_entry_nid
+    merged_old[old_boss_nid]["doors_open"] = boss_doors
+    remapped[new_entry_nid]["doors_open"][opp_dir] = old_boss_nid
+
+    all_nodes = {**merged_old, **remapped}
+
+    # Re-seal the whole graph: close any door freed by cap removal (weld + cap-fill).
+    used_positions = {tuple(n["position"]) for n in all_nodes.values()}
+    tile_id_to_node_ids: dict[int, list[str]] = {}
+    for nid, n in all_nodes.items():
+        tile_id_to_node_ids.setdefault(n.get("tile_id"), []).append(nid)
+    _fill_open_doors(all_nodes, used_positions, non_boss_caps, tile_id_to_node_ids)
+
+    # Refresh door hints across the merged graph.
+    for node in all_nodes.values():
+        hints: dict[str, str] = {}
+        for direction, tgt in node["doors_open"].items():
+            if tgt is not None and tgt in all_nodes:
+                hints[direction] = _content_hint(all_nodes[tgt]["content"])
+        node["door_hints"] = hints
+
+    return {
+        "nodes": all_nodes,
+        "boss_node": new_boss_nid or (cycle_prefix + "node_0"),
+        "entry_node": new_entry_nid,
+    }
+
+
 def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
     """L8: go_deeper — generate next segment and append to existing graph.
 
     New segment length = tile_count + endless_growth_n × (new_cycle − 1).
     New nodes use cycle-prefixed IDs to avoid collisions.
-    Boss node's first free door connects to new segment's entry.
+    Seam is welded via `_attach_endless_segment` (Issue #698): attach direction is
+    chosen from the boss's real doors, orphaned caps removed, whole graph re-sealed.
     Positions (col, row) continue the existing grid.
     """
     from app.services.dungeon_service import get_dungeon
@@ -1922,62 +2044,26 @@ def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
 
     # Generate new segment (reuses full graph builder including branches)
     new_graph = draw_tile_graph(category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle)
-    new_nodes = new_graph.get("nodes") or {}
-    new_entry_key = new_graph.get("entry_node") or "node_0"
-    new_boss_key = new_graph.get("boss_node")
 
-    # Boss node position → determine attach direction
-    boss_node = old_nodes.get(old_boss_nid) or {}
-    boss_pos = list(boss_node.get("position") or [0, 0])
-    boss_doors = dict(boss_node.get("doors_open") or {})
+    # Load the cap pool so _attach_endless_segment can re-seal freed doors.
+    conn2 = _get_db()
+    try:
+        non_boss_caps = _load_tiles(conn2, category_key, include_boss=False)
+    finally:
+        conn2.close()
 
-    free_dirs = [d for d, t in boss_doors.items() if t is None]
-    if free_dirs:
-        attach_dir = free_dirs[0]
-    else:
-        # All boss doors used — find an unused cardinal direction
-        attach_dir = next((d for d in DIRECTIONS if d not in boss_doors), "S")
-
-    opp_dir = OPPOSITE.get(attach_dir, "N")
-    dx, dy = OFFSET.get(attach_dir, (0, 1))
-    new_entry_pos = [boss_pos[0] + dx, boss_pos[1] + dy]
-
-    # Compute position delta to shift new graph next to boss
-    entry_node_data = new_nodes.get(new_entry_key) or {}
-    entry_old_pos = list(entry_node_data.get("position") or [0, 0])
-    pdx = new_entry_pos[0] - entry_old_pos[0]
-    pdy = new_entry_pos[1] - entry_old_pos[1]
-
-    # Remap new graph nodes: cycle-prefixed IDs + shifted positions
-    cycle_prefix = f"c{new_cycle}_"
-    remapped: dict[str, dict] = {}
-    new_boss_nid: str | None = None
-    for old_nid, node in new_nodes.items():
-        new_nid = cycle_prefix + old_nid
-        if old_nid == new_boss_key:
-            new_boss_nid = new_nid
-        shifted_pos = [node["position"][0] + pdx, node["position"][1] + pdy]
-        new_doors: dict[str, str | None] = {}
-        for d, tgt in (node.get("doors_open") or {}).items():
-            new_doors[d] = (cycle_prefix + tgt) if tgt else None
-        remapped[new_nid] = {**node, "position": shifted_pos, "doors_open": new_doors}
-
-    new_entry_nid = cycle_prefix + new_entry_key
-
-    # Connect: boss → new entry, new entry → boss
-    boss_doors[attach_dir] = new_entry_nid
-    if old_boss_nid in old_nodes:
-        old_nodes[old_boss_nid]["doors_open"] = boss_doors
-    remapped[new_entry_nid]["doors_open"][opp_dir] = old_boss_nid
-
-    # Merge graphs and save
-    all_nodes = {**old_nodes, **remapped}
+    # Issue #698: weld the segment onto the boss using its real doors (no orphan/ghost).
+    merged = _attach_endless_segment(
+        old_nodes, old_boss_nid, new_graph, new_cycle, non_boss_caps
+    )
+    all_nodes = merged["nodes"]
+    new_entry_nid = merged["entry_node"]
 
     conn, flags = _load_flags(campaign_id)
     try:
         run = flags.get("dungeon_run") or {}
         run["graph"]["nodes"] = all_nodes
-        run["graph"]["boss_node"] = new_boss_nid or (cycle_prefix + "node_0")
+        run["graph"]["boss_node"] = merged["boss_node"]
         run["cycle"] = new_cycle
         run["at_checkpoint"] = False
         run["boss_choice_pending"] = False
