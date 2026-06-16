@@ -187,7 +187,7 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 
 ---
 
-## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 2/10
+## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 4/10
 
 _Spec: `docs/V2_ARCHITECTURE/22_FAZA_O_OBSERVABILITY_ARCHMAP.md` (łączy Phase 11 observability z mapą architektury `tools/archmap/`). Start prompt: `prompt_o.md`. Nie blokuje FAZY 5 MP._
 _Uwaga: tabele `game_events`/`llm_call_log` już istnieją od #587 (migracja) — O1 częściowo zrobione, zostaje `event_logger.py` + payloady._
@@ -197,7 +197,7 @@ Tor 1 — Observability:
 - [x] O1 — `game_events`+`llm_call_log` + `event_logger.py` (tabele są od #587; brak serwisu helpera) — [#702](https://github.com/szmidtpiotr/ai-gm/issues/702) d04b6bc
 - [x] O2 — Zapis zdarzeń z serwisów (combat/śmierć/beat/LLM) wg payloadów §Part 1 — [#704](https://github.com/szmidtpiotr/ai-gm/issues/704) 7c28c0e
 - [x] O3 — Panel admina „Statystyki i Logi” (KPI + 4 zakładki, endpointy analytics) — [#705](https://github.com/szmidtpiotr/ai-gm/issues/705) 381e5fd
-- [ ] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service)
+- [x] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service) — [#706](https://github.com/szmidtpiotr/ai-gm/issues/706) 76ab35c
 - [ ] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest, bez issue [TASK]
 
 Tor 2 — Mapa węzłów:
