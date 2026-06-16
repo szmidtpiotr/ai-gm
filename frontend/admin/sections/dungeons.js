@@ -211,7 +211,7 @@ function _sectionHtml() { return `
     try {
       const d = await apiFetch('/api/admin/dungeon-tile-categories');
       const cats = d.categories || d.items || [];
-      return `<option value="">— (tryb proceduralny) —</option>` +
+      return `<option value="">— (wybierz kategorię) —</option>` +
         cats.map(c=>`<option value="${_esc(c.key)}" ${c.key===selected?'selected':''}>${_esc(c.label)} (${_esc(c.key)})</option>`).join('');
     } catch { return `<option value="">— błąd ładowania kategorii —</option>`; }
   }
@@ -230,9 +230,7 @@ function _sectionHtml() { return `
   function _dungeonModeToggle(prefix) {
     const cat = document.getElementById(`${prefix}-tile-cat`)?.value || '';
     const tileSection = document.getElementById(`${prefix}-tile-section`);
-    const legacySection = document.getElementById(`${prefix}-legacy-section`);
     if (tileSection) tileSection.style.display = cat ? '' : 'none';
-    if (legacySection) legacySection.style.display = cat ? 'none' : '';
   }
 
   async function openNewDungeonModal() {
@@ -250,35 +248,21 @@ function _sectionHtml() { return `
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="nd-atmo" class="form-input" rows="2" placeholder="Ciasne tunele, smród gnijącego mięsa…"></textarea></div>
 
         <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
-          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Tryb Kafelkowy</label>
-          <span style="font-size:0.75rem;color:var(--t3);display:block;margin-top:2px">Wybierz kategorię kafelków aby włączyć tryb kafelkowy. Pozostaw puste dla trybu proceduralnego (stary system).</span>
+          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Konfiguracja kafelkowa</label>
         </div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Kategoria kafelków</label>
-          <select id="nd-tile-cat" class="form-input" onchange="_dungeonModeToggle('nd'); _ndReloadBossTiles()">${catOpts}</select>
+          <select id="nd-tile-cat" class="form-input" onchange="_ndReloadBossTiles()">${catOpts}</select>
         </div>
 
-        <div id="nd-tile-section" style="display:none;grid-column:1/-1;display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="nd-tile-count" class="form-input" type="number" value="3" min="1" max="20" placeholder="3"></div>
+        <div id="nd-tile-section" style="grid-column:1/-1">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="nd-tile-count" class="form-input" type="number" value="6" min="1" max="20" placeholder="6"></div>
             <div class="form-row"><label class="form-label">Kafelek boss</label>
               <select id="nd-boss-tile" class="form-input"><option value="">Losowy boss z kategorii</option></select>
             </div>
-          </div>
-        </div>
-
-        <div id="nd-legacy-section" style="grid-column:1/-1">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pokoje (1–20)</label><input id="nd-rooms" class="form-input" type="number" value="5" min="1" max="20"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Jakość łupów</label>
-              <select id="nd-loot" class="form-input">
-                <option value="poor">Słabe</option><option value="standard" selected>Standardowe</option><option value="rich">Bogate</option>
-              </select>
-            </div>
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pula wrogów (klucze oddzielone przecinkami)</label><input id="nd-pool" class="form-input form-mono" placeholder='goblin_warrior,skeleton_archer'></div>
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Boss (klucz wroga)</label><input id="nd-boss" class="form-input form-mono" placeholder="goblin_shaman"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy ze skrzyń</label><input id="nd-chest" class="form-input form-mono"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy z bossa</label><input id="nd-bloot" class="form-input form-mono"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Szansa łupu z komnaty</label><input id="nd-rloot" class="form-input" type="number" value="0.15" min="0" max="1" step="0.05"></div>
+            <div class="form-row"><label class="form-label">Wzrost endless (n)</label><input id="nd-endless-n" class="form-input" type="number" value="0" min="0" max="10" placeholder="0" title="Liczba kafelków dodawana do segmentu za każdy kolejny cykl endless"></div>
+            <div class="form-row"><label class="form-label">Łupy ze skrzyń</label><input id="nd-chest" class="form-input form-mono" placeholder="klucz tabeli łupów"></div>
+            <div class="form-row"><label class="form-label">Łupy z bossa</label><input id="nd-bloot" class="form-input form-mono" placeholder="klucz tabeli łupów"></div>
           </div>
         </div>
 
@@ -309,9 +293,6 @@ function _sectionHtml() { return `
     const key = g('nd-key')?.value?.trim();
     const label = g('nd-label')?.value?.trim();
     if (!key || !label) { _showToast('Klucz i nazwa są wymagane.','error'); return; }
-    const tileMode = !!(g('nd-tile-cat')?.value);
-    const poolRaw = g('nd-pool')?.value?.trim() || '';
-    const enemy_pool = poolRaw ? JSON.stringify(poolRaw.split(',').map(s=>s.trim()).filter(Boolean)) : '[]';
     const body = { key, label,
       location_key: g('nd-loc')?.value?.trim() || key,
       min_level: parseInt(g('nd-lvl')?.value)||1,
@@ -319,17 +300,11 @@ function _sectionHtml() { return `
       atmosphere: g('nd-atmo')?.value?.trim()||null,
       is_active: g('nd-active')?.checked ? 1 : 0,
       tile_category_key: g('nd-tile-cat')?.value || null,
-      tile_count: tileMode ? (parseInt(g('nd-tile-count')?.value)||3) : null,
-      boss_tile_id: tileMode ? (parseInt(g('nd-boss-tile')?.value)||null) : null,
-      // legacy fields
-      rooms: tileMode ? 5 : (parseInt(g('nd-rooms')?.value)||5),
-      loot_tier: tileMode ? 'standard' : (g('nd-loot')?.value||'standard'),
-      enemy_pool: tileMode ? '[]' : enemy_pool,
-      boss_enemy: tileMode ? null : (g('nd-boss')?.value?.trim()||null),
-      chest_loot_table_key: tileMode ? null : (g('nd-chest')?.value?.trim()||null),
-      boss_loot_table_key: tileMode ? null : (g('nd-bloot')?.value?.trim()||null),
-      room_loot_chance: tileMode ? 0.15 : (parseFloat(g('nd-rloot')?.value)||0.15),
-      riddle_source: 'database', riddle_max_hints: 2,
+      tile_count: parseInt(g('nd-tile-count')?.value)||6,
+      boss_tile_id: parseInt(g('nd-boss-tile')?.value)||null,
+      endless_growth_n: parseInt(g('nd-endless-n')?.value)||0,
+      chest_loot_table_key: g('nd-chest')?.value?.trim()||null,
+      boss_loot_table_key: g('nd-bloot')?.value?.trim()||null,
     };
     btn.disabled = true; btn.textContent = '⏳';
     try {
@@ -351,8 +326,6 @@ function _sectionHtml() { return `
   }
 
   async function openEditDungeonModal(dg) {
-    const poolArr = (() => { try { const p = typeof dg.enemy_pool==='string' ? JSON.parse(dg.enemy_pool||'[]') : (dg.enemy_pool||[]); return p.join(','); } catch { return ''; } })();
-    const selLoot = ['poor','standard','rich'].map(v=>`<option value="${v}" ${(dg.loot_tier||'standard')===v?'selected':''}>${{poor:'Słabe',standard:'Standardowe',rich:'Bogate'}[v]}</option>`).join('');
     const catOpts = await _dungeonTileCatOptions(dg.tile_category_key||'');
     const bossOpts = await _dungeonBossTileOptions(dg.tile_category_key||'', dg.boss_tile_id);
     const isTile = !!(dg.tile_category_key);
@@ -370,30 +343,21 @@ function _sectionHtml() { return `
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="ed-atmo" class="form-input" rows="2">${_esc(dg.atmosphere||'')}</textarea></div>
 
         <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
-          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Tryb Kafelkowy</label>
+          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Konfiguracja kafelkowa</label>
         </div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Kategoria kafelków</label>
-          <select id="ed-tile-cat" class="form-input" onchange="_dungeonModeToggle('ed'); _edReloadBossTiles()">${catOpts}</select>
+          <select id="ed-tile-cat" class="form-input" onchange="_edReloadBossTiles()">${catOpts}</select>
         </div>
 
-        <div id="ed-tile-section" style="${isTile?'':'display:none;'}grid-column:1/-1">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="ed-tile-count" class="form-input" type="number" value="${dg.tile_count||3}" min="1" max="20"></div>
+        <div id="ed-tile-section" style="grid-column:1/-1">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="ed-tile-count" class="form-input" type="number" value="${dg.tile_count||6}" min="1" max="20"></div>
             <div class="form-row"><label class="form-label">Kafelek boss</label>
               <select id="ed-boss-tile" class="form-input">${bossOpts}</select>
             </div>
-          </div>
-        </div>
-
-        <div id="ed-legacy-section" style="${isTile?'display:none;':''}grid-column:1/-1">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pokoje (1–20)</label><input id="ed-rooms" class="form-input" type="number" value="${dg.rooms||5}" min="1" max="20"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Jakość łupów</label><select id="ed-loot" class="form-input">${selLoot}</select></div>
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pula wrogów (klucze oddzielone przecinkami)</label><input id="ed-pool" class="form-input form-mono" value="${_esc(poolArr)}"></div>
-            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Boss (klucz wroga)</label><input id="ed-boss" class="form-input form-mono" value="${_esc(dg.boss_enemy||'')}"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy ze skrzyń</label><input id="ed-chest" class="form-input form-mono" value="${_esc(dg.chest_loot_table_key||'')}"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy z bossa</label><input id="ed-bloot" class="form-input form-mono" value="${_esc(dg.boss_loot_table_key||'')}"></div>
-            <div class="form-row"><label class="form-label" style="color:var(--t3)">Szansa łupu z komnaty</label><input id="ed-rloot" class="form-input" type="number" value="${dg.room_loot_chance??0.15}" min="0" max="1" step="0.05"></div>
+            <div class="form-row"><label class="form-label">Wzrost endless (n)</label><input id="ed-endless-n" class="form-input" type="number" value="${dg.endless_growth_n||0}" min="0" max="10" title="Liczba kafelków dodawana do segmentu za każdy kolejny cykl endless"></div>
+            <div class="form-row"><label class="form-label">Łupy ze skrzyń</label><input id="ed-chest" class="form-input form-mono" value="${_esc(dg.chest_loot_table_key||'')}"></div>
+            <div class="form-row"><label class="form-label">Łupy z bossa</label><input id="ed-bloot" class="form-input form-mono" value="${_esc(dg.boss_loot_table_key||'')}"></div>
           </div>
         </div>
 
@@ -420,9 +384,6 @@ function _sectionHtml() { return `
 
   async function _doSaveDungeon(key, btn) {
     const g = id => document.getElementById(id);
-    const tileMode = !!(g('ed-tile-cat')?.value);
-    const poolRaw = g('ed-pool')?.value?.trim() || '';
-    const enemy_pool = JSON.stringify(poolRaw ? poolRaw.split(',').map(s=>s.trim()).filter(Boolean) : []);
     const body = {
       label: g('ed-label')?.value?.trim(),
       location_key: g('ed-loc')?.value?.trim()||key,
@@ -432,16 +393,11 @@ function _sectionHtml() { return `
       is_active: g('ed-active')?.checked ? 1 : 0,
       atmosphere: g('ed-atmo')?.value?.trim()||null,
       tile_category_key: g('ed-tile-cat')?.value || null,
-      tile_count: tileMode ? (parseInt(g('ed-tile-count')?.value)||3) : null,
-      boss_tile_id: tileMode ? (parseInt(g('ed-boss-tile')?.value)||null) : null,
-      rooms: tileMode ? 5 : (parseInt(g('ed-rooms')?.value)||5),
-      loot_tier: tileMode ? 'standard' : (g('ed-loot')?.value||'standard'),
-      enemy_pool: tileMode ? '[]' : enemy_pool,
-      boss_enemy: tileMode ? null : (g('ed-boss')?.value?.trim()||null),
-      chest_loot_table_key: tileMode ? null : (g('ed-chest')?.value?.trim()||null),
-      boss_loot_table_key: tileMode ? null : (g('ed-bloot')?.value?.trim()||null),
-      room_loot_chance: tileMode ? 0.15 : (parseFloat(g('ed-rloot')?.value)||0.15),
-      riddle_source: 'database', riddle_max_hints: 2,
+      tile_count: parseInt(g('ed-tile-count')?.value)||6,
+      boss_tile_id: parseInt(g('ed-boss-tile')?.value)||null,
+      endless_growth_n: parseInt(g('ed-endless-n')?.value)||0,
+      chest_loot_table_key: g('ed-chest')?.value?.trim()||null,
+      boss_loot_table_key: g('ed-bloot')?.value?.trim()||null,
     };
     btn.disabled = true; btn.textContent = '⏳';
     try {

@@ -2319,6 +2319,21 @@ def _resolve_aoe_spell_in_combat(
             set_world_state_flags(campaign_id, scene_enemies=[])
         except Exception:
             pass
+        # L4: mark current dungeon tile node cleared after victory
+        try:
+            from app.services.dungeon_tile_service import mark_node_cleared
+            mark_node_cleared(campaign_id, int(ch_id))
+        except Exception:
+            pass
+        # L8: boss tile cleared → checkpoint + loot + boss_choice_pending flag
+        try:
+            from app.services.dungeon_tile_service import on_boss_tile_cleared
+            _boss_result = on_boss_tile_cleared(campaign_id, int(ch_id))
+            if _boss_result.get("is_boss_tile"):
+                out["dungeon_boss_defeated"] = True
+                out["dungeon_boss_loot"] = _boss_result.get("loot", [])
+        except Exception:
+            pass
     else:
         _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
         conn.commit()
@@ -3527,7 +3542,12 @@ def _save_combat_row(
     )
 
 
-def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) -> dict[str, Any]:
+def initiate_combat(
+    campaign_id: int,
+    character_id: int,
+    enemy_keys: list[str],
+    _dungeon_enemy_overrides: "dict[str, dict] | None" = None,
+) -> dict[str, Any]:
     if not enemy_keys:
         raise ValueError("enemy_keys required")
 
@@ -3620,8 +3640,12 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         for ek, er in resolved_enemies:
             idx += 1
             slug = _enemy_slug(ek, idx)
-            hp_max_e = int(er["hp_base"] or 1)
-            ac_e = int(er["ac_base"] or 10)
+            # L5: apply dungeon tier stat overrides when provided (absolute D1–D5 scaling)
+            _ov = (_dungeon_enemy_overrides or {}).get(ek) if _dungeon_enemy_overrides else None
+            hp_max_e = int((_ov.get("hp_base") if _ov else None) or er["hp_base"] or 1)
+            ac_e = int((_ov.get("ac_base") if _ov else None) or er["ac_base"] or 10)
+            _atk_override = _ov.get("attack_bonus") if _ov else None
+            _atk = int(_atk_override if _atk_override is not None else (er["attack_bonus"] or 0))
             dex_e_mod = int(er["dex_modifier"] or 0)
             init_e = roll_d20() + dex_e_mod
             xp_award_e = 0
@@ -3638,7 +3662,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "hp_current": hp_max_e,
                     "hp_max": hp_max_e,
                     "defense": ac_e,
-                    "attack_bonus": int(er["attack_bonus"] or 0),
+                    "attack_bonus": _atk,
                     "dex_modifier": int(er["dex_modifier"] or 0),
                     "damage_dice": (er["damage_die"] or "1d6").strip().lower(),
                     "damage_stat": "STR",
@@ -4591,6 +4615,21 @@ def resolve_attack(
                         # HF-1 (#523): clear scene_enemies after victory — bypass end_combat() path
                         try:
                             set_world_state_flags(campaign_id, scene_enemies=[])
+                        except Exception:
+                            pass
+                        # L4: mark current dungeon tile node cleared after victory
+                        try:
+                            from app.services.dungeon_tile_service import mark_node_cleared
+                            mark_node_cleared(campaign_id, int(ch_id))
+                        except Exception:
+                            pass
+                        # L8: boss tile cleared → checkpoint + loot + boss_choice_pending flag
+                        try:
+                            from app.services.dungeon_tile_service import on_boss_tile_cleared
+                            _boss_result = on_boss_tile_cleared(campaign_id, int(ch_id))
+                            if _boss_result.get("is_boss_tile"):
+                                out["dungeon_boss_defeated"] = True
+                                out["dungeon_boss_loot"] = _boss_result.get("loot", [])
                         except Exception:
                             pass
                         out["combat_state"] = load_combat_snapshot(campaign_id)
@@ -5663,6 +5702,12 @@ def _advance_turn_impl(campaign_id: int) -> str:
             # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
             try:
                 set_world_state_flags(campaign_id, scene_enemies=[])
+            except Exception:
+                pass
+            # L4: mark current dungeon tile node cleared after victory
+            try:
+                from app.services.dungeon_tile_service import mark_node_cleared
+                mark_node_cleared(campaign_id, int(row["character_id"]))
             except Exception:
                 pass
             return "ended"

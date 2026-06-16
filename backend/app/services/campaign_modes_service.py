@@ -6,6 +6,9 @@ flow (e.g. "Gotowa kampania" is hidden/disabled when no template is published).
 
 Admin can also force-disable any mode via System → Tryby gry (game_mode_flags
 stored in game_config_meta). A disabled flag always wins over data availability.
+
+L9: removed legacy procedural dungeon mode.
+L10: merged loch_kafelki into loch (one tile-based dungeon mode, dungeon_enabled flag).
 """
 from __future__ import annotations
 
@@ -16,8 +19,7 @@ import sqlite3
 _MODES = [
     ("nowa", "Nowa kampania", "Stwórz świeżą przygodę od zera"),
     ("gotowa", "Gotowa kampania", "Wybierz gotowy scenariusz (szablon)"),
-    ("loch", "Loch", "Farmowalny loch solo"),
-    ("loch_kafelki", "Loch z kafelkami", "Loch budowany z kafelków"),
+    ("loch", "Wyprawa do lochu", "Kafelkowy loch z grafem komnat, checkpointami i łupami"),
     ("multiplayer", "Multiplayer", "Graj z innymi"),
 ]
 
@@ -26,7 +28,6 @@ _FLAG_MAP = {
     "nowa":        ("ai_campaign_enabled",   True),
     "gotowa":      ("prebuilt_enabled",      True),
     "loch":        ("dungeon_enabled",       True),
-    "loch_kafelki":("dungeon_tiles_enabled", True),
     "multiplayer": ("multiplayer_enabled",   False),
 }
 
@@ -53,16 +54,14 @@ def _load_mode_flags(conn: sqlite3.Connection) -> dict:
 
 
 def get_available_modes(conn: sqlite3.Connection) -> list[dict]:
-    """Return the 5 hub modes with availability + a count where relevant."""
+    """Return hub modes with availability + a count where relevant."""
     published = _count(conn, "SELECT COUNT(*) FROM campaign_templates WHERE status = 'published' AND COALESCE(player_visible, 1) = 1")
     dungeons = _count(conn, "SELECT COUNT(*) FROM game_dungeons WHERE COALESCE(is_active, 1) = 1")
-    tiles = _count(conn, "SELECT COUNT(*) FROM dungeon_tiles WHERE is_active = 1")
 
     data_availability = {
         "nowa":        (True, None),
         "gotowa":      (published > 0, published),
         "loch":        (dungeons > 0, dungeons),
-        "loch_kafelki":(tiles > 0, tiles),
         "multiplayer": (True, None),
     }
 

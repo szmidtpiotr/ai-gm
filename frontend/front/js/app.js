@@ -4430,13 +4430,31 @@ async function handleCombatEnded(cs) {
         if (loot.length > 0 || gold > 0) {
             await showLootPopup(loot, gold);
         }
+        // L13: In dungeon, check if boss was defeated → show boss choice modal
+        if (_dungeonCampaignId) {
+            try {
+                const runResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}/dungeon-run`);
+                if (runResp?.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
+                if (_activeDungeonRun?.boss_choice_pending) {
+                    updateDungeonHUD();
+                    showDungeonBossChoiceModal(_activeDungeonRun);
+                    return;
+                }
+            } catch (_) { /* non-fatal — fall through to normal overlay */ }
+            updateDungeonHUD();
+        }
         showCombatEndOverlay('victory', loot, gold);
     } else if (reason === 'fled') {
         hideCombatUI();
         showCombatEndOverlay('fled', [], 0);
     } else if (reason === 'player_dead') {
         hideCombatUI();
-        showDeathScreen(characterData?.name || 'Bohater');
+        // L13: In dungeon, handle death via dungeon death modal
+        if (_dungeonCampaignId && characterData?.id) {
+            await showDungeonDeathModal();
+        } else {
+            showDeathScreen(characterData?.name || 'Bohater');
+        }
     } else {
         hideCombatUI();
     }
@@ -11234,6 +11252,11 @@ async function _wmOpen() {
   if (!currentCampaignId || !characterData?.id) {
     showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
   }
+  // L11: In active dungeon, show tile map instead of hex world map
+  if (_activeDungeonRun && !_activeDungeonRun.completed && !_activeDungeonRun.failed) {
+    openDungeonMap();
+    return;
+  }
   _wmap.panel.removeAttribute('hidden');
   _wmap.panel.style.transform = 'translateX(0)';
 
@@ -11479,23 +11502,30 @@ async function openDungeonPicker() {
         const dungeons = data.dungeons || [];
         list.innerHTML = '';
 
-        // E22: Resume card at top when active run exists
+        // L13/E22: active run → show resume modal (kontynuuj / porzuć) instead of silent card
         if (activeRun) {
-            const resumeCard = document.createElement('button');
-            resumeCard.className = 'dungeon-card dungeon-card--resume';
-            resumeCard.innerHTML = `
-                <div class="dungeon-card__icon">▶</div>
-                <div class="dungeon-card__body">
-                    <div class="dungeon-card__name">Wznów ekspedycję</div>
-                    <div class="dungeon-card__meta">${escapeHtml(activeRun.dungeon_key || '?')} · Komnata ${activeRun.current_room || 1}</div>
-                    <div class="dungeon-card__atm" style="color:#86efac">Niedokończony run — wróć do lochu</div>
-                </div>
-                <div class="dungeon-card__arrow" style="color:#86efac">›</div>`;
-            resumeCard.addEventListener('click', async () => {
-                overlay.setAttribute('hidden', '');
-                await _resumeDungeonRun(activeRun.campaign_id);
-            });
-            list.appendChild(resumeCard);
+            overlay.setAttribute('hidden', '');
+            showDungeonResumeModal(activeRun);
+            // Wire buttons (once per call; old listeners replaced each time modal shows)
+            const continueBtn = document.getElementById('dungeon-resume-continue-btn');
+            const abandonBtn = document.getElementById('dungeon-resume-abandon-btn');
+            const resumeModal = document.getElementById('dungeon-resume-modal');
+            if (continueBtn) {
+                continueBtn.onclick = async () => {
+                    resumeModal?.setAttribute('hidden', '');
+                    await _resumeDungeonRun(activeRun.campaign_id);
+                };
+            }
+            if (abandonBtn) {
+                abandonBtn.onclick = () => {
+                    resumeModal?.setAttribute('hidden', '');
+                    // Set up context so abandon modal can call _doExitDungeon
+                    _dungeonCampaignId = activeRun.campaign_id;
+                    _activeDungeonRun = activeRun;
+                    showDungeonAbandonModal();
+                };
+            }
+            return; // don't show picker list while resume modal is showing
         }
 
         if (!dungeons.length && !activeRun) {
@@ -11624,28 +11654,36 @@ function updateDungeonHUD() {
 
     if (label) label.textContent = `⛏ ${run.dungeon_label || 'Loch'}`;
 
+    // v2: progress = visited nodes count / total nodes count
     if (progress) {
-        const total = run.total_rooms || 1;
-        const cur = run.current_room || 1;
-        const pips = Array.from({length: total}, (_, i) => {
-            const room = run.rooms?.[i];
-            const cleared = room?.cleared;
-            const isCurrent = i + 1 === cur;
-            const icon = ROOM_TYPE_ICONS[room?.room_type] || '●';
-            return `<span class="dungeon-pip${cleared ? ' cleared' : ''}${isCurrent ? ' current' : ''}" title="${room?.room_type || ''}">${icon}</span>`;
-        }).join('');
-        progress.innerHTML = pips;
+        const nodes = run.graph?.nodes || {};
+        const total = Object.keys(nodes).length || 1;
+        const visitedCount = Object.values(nodes).filter(n => n.visited).length;
+        progress.textContent = `${visitedCount}/${total}`;
     }
 
-    const currentRoom = run.rooms?.find(r => r.room_id === run.current_room);
-    if (roomType && currentRoom) {
-        const typeNames = {combat:'Walka', boss:'BOSS', riddle:'Zagadka', trap:'Pułapka', chest:'Skrzynia', rest:'Odpoczynek'};
-        roomType.textContent = typeNames[currentRoom.room_type] || currentRoom.room_type;
+    // v2: current node info
+    const charId = characterData?.id;
+    const positions = run.positions || {};
+    const currentNodeId = (charId && positions[String(charId)]) || run.graph?.entry_node;
+    const currentNode = run.graph?.nodes?.[currentNodeId];
+
+    if (roomType && currentNode) {
+        const content = currentNode.content || {};
+        const typeName = currentNode.is_boss ? 'BOSS'
+            : content.enemies?.length ? 'Walka'
+            : content.riddle ? 'Zagadka'
+            : content.chest ? 'Skrzynia'
+            : 'Komnata';
+        roomType.textContent = typeName;
     }
 
-    // Show advance button only if current room is cleared and dungeon not complete
-    const cleared = currentRoom?.cleared;
-    if (advBtn) advBtn.hidden = !cleared || run.completed;
+    // v2: hide legacy advance-btn (movement via direction buttons)
+    if (advBtn) advBtn.hidden = true;
+
+    // Refresh nav + tile scene
+    updateDungeonNav(run);
+    renderTileScene(currentNode);
 
     // Refresh map if it's open
     if (!document.getElementById('dungeon-map-overlay')?.hidden) {
@@ -11688,18 +11726,79 @@ window.addEventListener('resize', () => {
 });
 
 function renderCurrentRoom() {
-    const run = _activeDungeonRun;
-    if (!run) return;
-    const room = run.rooms?.find(r => r.room_id === run.current_room);
-    if (!room) return;
+    // v2: delegate to updateDungeonHUD which handles v2 node state
+    updateDungeonHUD();
+}
 
+function renderTileScene(node) {
+    const panel = document.getElementById('dungeon-tile-scene');
+    if (!panel) return;
+    if (!node) { panel.setAttribute('hidden', ''); return; }
+    const content = node.content || {};
+    const img = document.getElementById('dungeon-tile-scene-img');
+    const desc = document.getElementById('dungeon-tile-scene-desc');
+    if (content.image_url && img) {
+        img.src = content.image_url;
+        img.removeAttribute('hidden');
+    } else if (img) {
+        img.src = '';
+        img.setAttribute('hidden', '');
+    }
+    if (desc) desc.textContent = content.room_description || node.door_hints?.[Object.keys(node.door_hints || {})[0]] || '';
+    panel.removeAttribute('hidden');
+}
+
+function updateDungeonNav(run) {
+    const nav = document.getElementById('dungeon-nav');
+    if (!nav) return;
+
+    const charId = characterData?.id;
+    const positions = run?.positions || {};
+    const currentNodeId = (charId && positions[String(charId)]) || run?.graph?.entry_node;
+    const currentNode = run?.graph?.nodes?.[currentNodeId];
+    const content = currentNode?.content || {};
+
+    // Hide nav during combat (enemies present and not cleared)
+    const inCombat = content.enemies?.length > 0 && !currentNode?.cleared;
+    if (inCombat || !run || run.completed || run.failed) {
+        nav.setAttribute('hidden', '');
+        return;
+    }
+    nav.removeAttribute('hidden');
+
+    // Show/hide direction buttons based on available exits
+    const doorsOpen = currentNode?.doors_open || {};
+    for (const dir of ['N', 'S', 'E', 'W']) {
+        const btn = nav.querySelector(`[data-dungeon-dir="${dir}"]`);
+        if (!btn) continue;
+        if (doorsOpen[dir]) {
+            btn.removeAttribute('hidden');
+            const hint = currentNode.door_hints?.[dir];
+            btn.title = hint ? `${dir}: ${hint}` : dir;
+        } else {
+            btn.setAttribute('hidden', '');
+        }
+    }
+
+    // Tile action buttons
+    const chestBtn = document.getElementById('dungeon-open-chest');
+    const riddleBtn = document.getElementById('dungeon-answer-riddle');
+    const hintBtn = nav.querySelector('[data-dungeon-action="riddle_hint"]');
     const riddlePanel = document.getElementById('dungeon-riddle-panel');
 
-    if (room.room_type === 'riddle' && !room.cleared) {
+    const hasChest = content.chest && !currentNode.cleared;
+    const hasRiddle = content.riddle && !currentNode.cleared;
+
+    if (chestBtn) chestBtn.hidden = !hasChest;
+    if (riddleBtn) riddleBtn.hidden = !hasRiddle;
+    if (hintBtn) hintBtn.hidden = !hasRiddle;
+
+    // Riddle panel (text input for answer)
+    if (hasRiddle) {
         if (riddlePanel) {
             riddlePanel.removeAttribute('hidden');
             const txt = document.getElementById('dungeon-riddle-text');
-            if (txt) txt.textContent = room.riddle_text || '…';
+            if (txt) txt.textContent = content.riddle?.question || content.riddle || '…';
             const hint = document.getElementById('dungeon-riddle-hint');
             if (hint) { hint.textContent = ''; hint.setAttribute('hidden', ''); }
         }
@@ -11708,41 +11807,61 @@ function renderCurrentRoom() {
     }
 }
 
-async function _dungeonAdvance() {
+async function _dungeonMove(direction) {
     if (!_dungeonCampaignId || !characterData?.id) return;
+    // Disable all dir buttons during request
+    document.querySelectorAll('[data-dungeon-dir]').forEach(b => b.disabled = true);
     try {
-        const resp = await apiRequest('POST', '/dungeons/advance-room', {
+        const resp = await apiRequest('POST', '/dungeons/move', {
             campaign_id: _dungeonCampaignId,
             character_id: characterData.id,
+            direction,
         });
-        _activeDungeonRun = resp.dungeon_run;
+
+        if (!resp.ok) {
+            showToast(resp.reason || `Brak drzwi ${direction}`, 'warning');
+            return;
+        }
+
+        if (resp.dungeon_run) _activeDungeonRun = resp.dungeon_run;
 
         if (resp.narrative) {
             appendMessage({ role: 'assistant', content: resp.narrative, created_at: new Date() });
             scrollToBottom();
         }
 
-        if (resp.completed) {
+        if (resp.completed || _activeDungeonRun?.completed) {
             _showDungeonComplete(resp);
         } else {
             updateDungeonHUD();
-            renderCurrentRoom();
-            // Auto-open map on first advance (room 2) so player learns the layout exists
-            const newRoom = _activeDungeonRun?.current_room;
-            if (newRoom === 2) openDungeonMap(true);
+            // Auto-open map on first move
+            const visitedCount = Object.values(_activeDungeonRun?.graph?.nodes || {}).filter(n => n.visited).length;
+            if (visitedCount === 2) openDungeonMap(true);
+        }
+
+        // If combat started, refresh combat state
+        if (resp.combat) {
+            const campResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}`);
+            if (campResp?.campaign) {
+                currentCampaignId = campResp.campaign.id;
+                await loadCombatState();
+            }
         }
     } catch (err) {
-        showToast(err.message || 'Błąd', 'error');
+        showToast(err.message || 'Błąd ruchu', 'error');
+    } finally {
+        document.querySelectorAll('[data-dungeon-dir]').forEach(b => b.disabled = false);
     }
 }
 
-async function _dungeonResolveRoom(playerInput) {
+async function _dungeonResolveTile(action, payload) {
     if (!_dungeonCampaignId || !characterData?.id) return;
     try {
-        const resp = await apiRequest('POST', '/dungeons/resolve-room', {
+        const resp = await apiRequest('POST', '/dungeons/resolve-tile', {
             campaign_id: _dungeonCampaignId,
             character_id: characterData.id,
-            player_input: playerInput || null,
+            action,
+            payload: payload || null,
         });
 
         if (resp.narrative) {
@@ -11755,23 +11874,19 @@ async function _dungeonResolveRoom(playerInput) {
             if (hintEl) { hintEl.textContent = `💡 ${resp.hint}`; hintEl.removeAttribute('hidden'); }
         }
 
-        // Reload run state
+        // Reload run to get updated node state
         const runResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}/dungeon-run`);
-        if (runResp.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
+        if (runResp?.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
         updateDungeonHUD();
-        renderCurrentRoom();
 
-        if (resp.advance_available && resp.success !== false) {
-            document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
-            document.getElementById('dungeon-advance-btn')?.removeAttribute('hidden');
+        if (resp.heal_amount && resp.heal_amount > 0) {
+            await refreshCharacterData();
         }
-
-        // Heal on rest room
-        if (resp.heal_pct && resp.heal_pct > 0) {
+        if (resp.loot?.length) {
             await refreshCharacterData();
         }
     } catch (err) {
-        showToast(err.message || 'Błąd', 'error');
+        showToast(err.message || 'Błąd akcji', 'error');
     }
 }
 
@@ -11803,6 +11918,21 @@ function _showDungeonComplete(resp) {
 
 async function _exitDungeon() {
     if (!_dungeonCampaignId || !characterData?.id) { showScreen('campaigns'); return; }
+
+    // L13: if mid-segment (not at checkpoint, not completed), show abandon confirmation modal
+    const run = _activeDungeonRun;
+    const atCheckpoint = run?.at_checkpoint || false;
+    const isCompleted = run?.completed || false;
+    if (run && !isCompleted && !atCheckpoint) {
+        showDungeonAbandonModal();
+        return;
+    }
+
+    await _doExitDungeon();
+}
+
+async function _doExitDungeon() {
+    if (!_dungeonCampaignId || !characterData?.id) { showScreen('campaigns'); return; }
     try {
         const resp = await apiRequest('POST', '/dungeons/exit', {
             campaign_id: _dungeonCampaignId,
@@ -11817,7 +11947,10 @@ async function _exitDungeon() {
         try { localStorage.removeItem('aigm_campaign_id'); } catch {}
         showDungeonHUD(false);
         document.getElementById('dungeon-complete-overlay')?.setAttribute('hidden', '');
+        document.getElementById('dungeon-abandon-modal')?.setAttribute('hidden', '');
         document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
+        document.getElementById('dungeon-nav')?.setAttribute('hidden', '');
+        document.getElementById('dungeon-tile-scene')?.setAttribute('hidden', '');
         // Reload hero and go to campaign screen
         if (currentHero?.id) {
             const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
@@ -11831,140 +11964,346 @@ async function _exitDungeon() {
     }
 }
 
-// ── Dungeon Map (square tile grid) ───────────────────────────────────────────
+// ── L13 (#682): Dungeon Modals ────────────────────────────────────────────────
+
+async function showDungeonDeathModal() {
+    // Call backend to restore checkpoint and set cooldown
+    let deathResult = { restored: false, cooldown_until: null };
+    try {
+        deathResult = await apiRequest('POST', '/dungeons/death', {
+            campaign_id: _dungeonCampaignId,
+            character_id: characterData?.id,
+        });
+        // Reload hero data after restore
+        if (deathResult.restored && currentHero?.id) {
+            const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+            currentHero = heroResp.character || heroResp;
+            characterData = currentHero;
+        }
+    } catch (_) { /* show modal anyway */ }
+
+    const modal = document.getElementById('dungeon-death-modal');
+    if (!modal) return;
+
+    const checkpointMsg = document.getElementById('dungeon-death-checkpoint-msg');
+    const xpMsg = document.getElementById('dungeon-death-xp-msg');
+    const cooldownMsg = document.getElementById('dungeon-death-cooldown-msg');
+
+    if (checkpointMsg) {
+        const run = _activeDungeonRun;
+        const hasCheckpoint = Array.isArray(run?.checkpoints) && run.checkpoints.length > 1;
+        checkpointMsg.textContent = hasCheckpoint
+            ? 'Stan przywrócony do ostatniego bossa (punkt kontrolny).'
+            : 'Stan przywrócony do momentu wejścia do lochu.';
+    }
+    if (xpMsg) {
+        xpMsg.textContent = 'XP i złoto zdobyte po punkcie kontrolnym utracone.';
+    }
+    if (cooldownMsg && deathResult.cooldown_until) {
+        const until = new Date(deathResult.cooldown_until);
+        const hours = Math.round((until - Date.now()) / 3600000);
+        cooldownMsg.textContent = `Cooldown lochu: ${hours > 0 ? hours + 'h' : 'zakończony'}.`;
+    } else if (cooldownMsg) {
+        cooldownMsg.textContent = '';
+    }
+
+    modal.removeAttribute('hidden');
+    document.getElementById('dungeon-death-exit-btn')?.focus();
+}
+
+function showDungeonAbandonModal() {
+    const modal = document.getElementById('dungeon-abandon-modal');
+    if (!modal) return;
+
+    const run = _activeDungeonRun;
+    const dungeon = run?.dungeon_label || run?.dungeon_key || 'lochu';
+    const msg = document.getElementById('dungeon-abandon-msg');
+    if (msg) msg.textContent = `Opuszczasz ${escapeHtml(dungeon)} w połowie segmentu.`;
+
+    modal.removeAttribute('hidden');
+    document.getElementById('dungeon-abandon-cancel-btn')?.focus();
+}
+
+function showDungeonResumeModal(activeRun) {
+    const modal = document.getElementById('dungeon-resume-modal');
+    if (!modal) return;
+
+    const nameEl = document.getElementById('dungeon-resume-dungeon-name');
+    const roomEl = document.getElementById('dungeon-resume-room-msg');
+
+    if (nameEl) nameEl.textContent = activeRun.dungeon_label || activeRun.dungeon_key || 'Loch';
+    if (roomEl) {
+        const room = activeRun.current_room || 1;
+        const total = Object.keys(activeRun.graph?.nodes || {}).length || '?';
+        roomEl.textContent = `Komnata ${room} z ${total} — niedokończona wyprawa.`;
+    }
+
+    modal.removeAttribute('hidden');
+    document.getElementById('dungeon-resume-continue-btn')?.focus();
+}
+
+function showDungeonBossChoiceModal(run) {
+    const modal = document.getElementById('dungeon-boss-modal');
+    if (!modal) return;
+
+    const lootEl = document.getElementById('dungeon-boss-loot');
+    const cycleEl = document.getElementById('dungeon-boss-cycle-msg');
+
+    // Boss loot from last checkpoint
+    const lastCheckpoint = (run?.checkpoints || []).slice(-1)[0];
+    const loot = lastCheckpoint?.loot || [];
+    if (lootEl) {
+        lootEl.innerHTML = loot.length
+            ? '<ul>' + loot.map(l => `<li>👑 ${escapeHtml(l.label || l.key || '?')} ×${l.quantity || 1}</li>`).join('') + '</ul>'
+            : '<p>Łupy zostaną przyznane przy wyjściu.</p>';
+    }
+
+    const cycle = run?.current_cycle || 1;
+    if (cycleEl) {
+        cycleEl.textContent = `Możesz zejść głębiej — Cykl ${cycle + 1} (silniejsi wrogowie, lepsze łupy).`;
+    }
+
+    modal.removeAttribute('hidden');
+    document.getElementById('dungeon-boss-exit-btn')?.focus();
+}
+
+function _closeDungeonModals() {
+    ['dungeon-death-modal', 'dungeon-abandon-modal', 'dungeon-resume-modal', 'dungeon-boss-modal']
+        .forEach(id => document.getElementById(id)?.setAttribute('hidden', ''));
+}
+
+// ── Dungeon Map v2 (tile graph) — L11 ────────────────────────────────────────
 
 const ROOM_TYPE_LABELS = {
     combat: 'Walka', boss: 'BOSS', riddle: 'Zagadka',
     trap: 'Pułapka', chest: 'Skrzynia', rest: 'Odpoczynek'
 };
 
+// Direction offsets: N/S/E/W → [dcol, drow]
+const _DIR_OFFSET = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+
+// Pan/zoom state for dungeon map overlay
+const _dmap = { zoom: 1, pan: { x: 0, y: 0 }, dragging: false, lastX: 0, lastY: 0 };
+
 function renderDungeonMap(run) {
     const svg = document.getElementById('dmap-svg');
     if (!svg || !run) return;
 
-    const rooms = run.rooms || [];
-    const currentRoomId = run.current_room || 1;
+    // v2 graph format (L2)
+    const graph = run.graph || {};
+    const nodes = graph.nodes || {};
+    const entryNode = graph.entry_node;
 
-    // Grid metrics
-    const S = 52;          // tile size
-    const GAP = 28;        // corridor length
-    const PAD = 20;        // padding
-    const R = 8;           // corner radius
+    // Current player node from positions dict (first value = solo player)
+    const positions = run.positions || {};
+    const currentNodeId = Object.values(positions)[0] || entryNode;
+
+    if (!Object.keys(nodes).length) {
+        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#6a5a30" font-size="12">Brak danych mapy</text>';
+        return;
+    }
+
+    // Grid metrics — Numbers Policy (L11 starting values, tuning after L19 playtest)
+    const S = 52;           // tile size px
+    const GAP = 28;         // corridor length px
+    const PAD = 32;         // padding px
+    const R = 8;            // corner radius px
     const STEP = S + GAP;
 
-    // Ensure all rooms have coordinates (fallback: linear layout by room_id)
-    rooms.forEach((r, i) => {
-        if (r.map_col == null) r.map_col = i;
-        if (r.map_row == null) r.map_row = 0;
-    });
+    // Determine which nodes to render:
+    // - visited=true  → known tile (draw with image or colored box)
+    // - fog           → unvisited node referenced by a visited node's doors_open
+    const visitedIds = new Set(
+        Object.entries(nodes).filter(([, n]) => n.visited).map(([id]) => id)
+    );
+    const fogIds = new Set();
+    for (const [nid, node] of Object.entries(nodes)) {
+        if (!node.visited) continue;
+        for (const neighborId of Object.values(node.doors_open || {})) {
+            if (neighborId && !visitedIds.has(neighborId)) fogIds.add(neighborId);
+        }
+    }
 
-    // Determine grid bounds
-    const maxCol = Math.max(...rooms.map(r => r.map_col));
-    const maxRow = Math.max(...rooms.map(r => r.map_row));
-    const svgW = (maxCol + 1) * STEP + GAP + PAD * 2;
-    const svgH = (maxRow + 1) * STEP + GAP + PAD * 2;
+    const drawIds = new Set([...visitedIds, ...fogIds]);
 
-    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
-    svg.setAttribute('width', svgW);
-    svg.setAttribute('height', svgH);
+    // Compute grid bounds
+    let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+    for (const nid of drawIds) {
+        const pos = nodes[nid]?.position;
+        if (!pos) continue;
+        minCol = Math.min(minCol, pos[0]);
+        maxCol = Math.max(maxCol, pos[0]);
+        minRow = Math.min(minRow, pos[1]);
+        maxRow = Math.max(maxRow, pos[1]);
+    }
+    if (!isFinite(minCol)) { minCol = 0; maxCol = 0; minRow = 0; maxRow = 0; }
 
-    const tileX = (col) => PAD + col * STEP;
-    const tileY = (row) => PAD + row * STEP;
-    const cx = (col) => tileX(col) + S / 2;
-    const cy = (row) => tileY(row) + S / 2;
+    const svgW = (maxCol - minCol + 1) * STEP + GAP + PAD * 2;
+    const svgH = (maxRow - minRow + 1) * STEP + GAP + PAD * 2;
+
+    const tileX = (col) => PAD + (col - minCol) * STEP;
+    const tileY = (row) => PAD + (row - minRow) * STEP;
+    const cxFn  = (col) => tileX(col) + S / 2;
+    const cyFn  = (row) => tileY(row) + S / 2;
 
     let html = '';
 
-    // Draw corridors first (behind tiles)
-    for (let i = 0; i < rooms.length; i++) {
-        const room = rooms[i];
-        const next = rooms[i + 1];
-        if (!next) continue;
+    // ── Corridors (drawn first, behind tiles) ────────────────────────────────
+    const drawnCorridors = new Set();
+    for (const [nid, node] of Object.entries(nodes)) {
+        if (!drawIds.has(nid) || !node.visited) continue;
+        const pos = node.position;
+        if (!pos) continue;
+        for (const [dir, neighborId] of Object.entries(node.doors_open || {})) {
+            if (!neighborId || !drawIds.has(neighborId)) continue;
+            const key = [nid, neighborId].sort().join('|');
+            if (drawnCorridors.has(key)) continue;
+            drawnCorridors.add(key);
 
-        const x1 = tileX(room.map_col) + S;
-        const y1 = cy(room.map_row);
-        const x2 = tileX(next.map_col);
-        const y2 = cy(next.map_row);
+            const nPos = nodes[neighborId]?.position;
+            if (!nPos) continue;
 
-        const bothKnown = room.cleared || room.room_id === currentRoomId;
-        const corridorOpacity = bothKnown ? 0.6 : 0.15;
+            const x1 = cxFn(pos[0]);
+            const y1 = cyFn(pos[1]);
+            const x2 = cxFn(nPos[0]);
+            const y2 = cyFn(nPos[1]);
+            const neighborVisited = visitedIds.has(neighborId);
+            const opacity = neighborVisited ? 0.65 : 0.3;
 
-        html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
-            stroke="#4a3010" stroke-width="3" opacity="${corridorOpacity}"/>`;
+            html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+                stroke="#5a3818" stroke-width="4" opacity="${opacity}"/>`;
+        }
     }
 
-    // Draw tiles
-    rooms.forEach(room => {
-        const col = room.map_col || 0;
-        const row = room.map_row || 0;
+    // ── Tiles ────────────────────────────────────────────────────────────────
+    const imagesHtml = [];  // collect image elements (drawn after rects, before text)
+
+    for (const nid of drawIds) {
+        const node = nodes[nid];
+        if (!node?.position) continue;
+
+        const [col, row] = node.position;
         const x = tileX(col);
         const y = tileY(row);
-        const isCurrent = room.room_id === currentRoomId;
-        const isCleared = room.cleared;
-        const isRevealed = isCurrent || isCleared;
-        const isBoss = room.room_type === 'boss';
+        const isCurrent = nid === currentNodeId;
+        const isVisited = visitedIds.has(nid);
+        const isFog = fogIds.has(nid);
+        const isCleared = node.cleared;
+        const isBoss = node.is_boss;
+        const content = node.content || {};
+        const imageUrl = content.image_url;
 
-        // Determine colors
-        let fill, stroke, strokeW, textColor, opacity;
-        if (!isRevealed) {
-            fill = '#0d0904'; stroke = '#2a1a08'; strokeW = 1;
-            textColor = '#4a3a20'; opacity = '0.7';
-        } else if (isCurrent) {
-            fill = '#1a1005'; stroke = '#c9751a'; strokeW = 2;
-            textColor = '#d4a060'; opacity = '1';
-        } else if (isCleared) {
-            fill = '#100e08'; stroke = '#3a2808'; strokeW = 1;
-            textColor = '#5a4a28'; opacity = '0.85';
-        }
+        if (isVisited) {
+            // ── Known room ───────────────────────────────────────────────────
+            let fill, stroke, strokeW, textColor;
+            if (isCurrent) {
+                fill = '#1a1005'; stroke = '#c9751a'; strokeW = 2.5; textColor = '#d4a060';
+            } else if (isCleared) {
+                fill = '#100e08'; stroke = '#3a2808'; strokeW = 1; textColor = '#5a4a28';
+            } else {
+                fill = '#0f0c06'; stroke = '#3a2808'; strokeW = 1.5; textColor = '#b89050';
+            }
+            if (isBoss) { stroke = '#8a2010'; fill = '#140802'; }
 
-        if (isBoss && isRevealed) { stroke = '#8a2010'; fill = '#140802'; }
+            // Glow ring for current node
+            if (isCurrent) {
+                html += `<rect x="${x - 3}" y="${y - 3}" width="${S + 6}" height="${S + 6}" rx="${R + 3}"
+                    fill="none" stroke="#c9751a" stroke-width="1" opacity="0.3"/>`;
+            }
 
-        // Tile background
-        html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
-            fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="${opacity}"/>`;
+            // Background rect (always drawn; image renders on top if available)
+            html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
+                fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
 
-        if (isCurrent) {
-            // Subtle glow ring
-            html += `<rect x="${x - 2}" y="${y - 2}" width="${S + 4}" height="${S + 4}" rx="${R + 2}"
-                fill="none" stroke="#c9751a" stroke-width="1" opacity="0.25"/>`;
-        }
+            if (imageUrl) {
+                // Clip image to rounded rect
+                const clipId = `clip-${nid.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                html += `<defs><clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"/></clipPath></defs>`;
+                imagesHtml.push(`<image href="${escapeHtml(imageUrl)}" x="${x}" y="${y}" width="${S}" height="${S}"
+                    clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice" opacity="${isCleared ? 0.6 : 1}"/>`);
+                // Dark overlay for cleared rooms so icon/text visible
+                if (isCleared) {
+                    imagesHtml.push(`<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
+                        fill="rgba(0,0,0,0.35)" clip-path="url(#${clipId})"/>`);
+                }
+            } else {
+                // Fallback: icon
+                const icon = isBoss ? '💀' : (ROOM_TYPE_ICONS[content.enemies?.length ? 'combat' : (content.riddle ? 'riddle' : 'rest')] || '●');
+                html += `<text x="${cxFn(col)}" y="${cyFn(row) - 4}" text-anchor="middle"
+                    dominant-baseline="middle" font-size="18" style="pointer-events:none">${icon}</text>`;
+            }
 
-        // Icon or ?
-        const icon = isRevealed ? (ROOM_TYPE_ICONS[room.room_type] || '●') : '?';
-        const iconSize = isRevealed ? 18 : 16;
-        const iconY = y + S / 2 - (isRevealed ? 6 : 4);
-
-        html += `<text x="${cx(col)}" y="${iconY}" text-anchor="middle"
-            dominant-baseline="middle" font-size="${iconSize}"
-            fill="${textColor}" style="pointer-events:none">${icon}</text>`;
-
-        // Room label (revealed only)
-        if (isRevealed) {
-            const label = isBoss ? 'BOSS' : (ROOM_TYPE_LABELS[room.room_type] || room.room_type || '');
-            const labelY = y + S - 10;
-            html += `<text x="${cx(col)}" y="${labelY}" text-anchor="middle"
+            // Label at bottom
+            const labelStr = isBoss ? 'BOSS' : (ROOM_TYPE_LABELS[content.enemies?.length ? 'combat' : (content.riddle ? 'riddle' : 'rest')] || '');
+            html += `<text x="${cxFn(col)}" y="${y + S - 9}" text-anchor="middle"
                 font-size="7" fill="${textColor}" font-family="sans-serif"
-                style="pointer-events:none;text-transform:uppercase;letter-spacing:0.08em">${label}</text>`;
+                style="pointer-events:none;text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(labelStr)}</text>`;
+
+            // Cleared checkmark
+            if (isCleared && !isCurrent) {
+                html += `<text x="${x + S - 9}" y="${y + 13}" text-anchor="middle"
+                    font-size="9" fill="#5a9040" style="pointer-events:none">✓</text>`;
+            }
+
+            // Player marker 📍
+            if (isCurrent) {
+                html += `<text x="${cxFn(col)}" y="${cyFn(row) + (imageUrl ? 8 : 4)}" text-anchor="middle"
+                    font-size="16" style="pointer-events:none">📍</text>`;
+            }
+
+        } else if (isFog) {
+            // ── Fog node: outline + "?" ──────────────────────────────────────
+            // Find door hint from the visited neighbor
+            let hint = '';
+            for (const [vnid, vnode] of Object.entries(nodes)) {
+                if (!visitedIds.has(vnid)) continue;
+                for (const [dir, nbId] of Object.entries(vnode.doors_open || {})) {
+                    if (nbId === nid) {
+                        hint = vnode.door_hints?.[dir] || '';
+                        break;
+                    }
+                }
+                if (hint) break;
+            }
+
+            html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
+                fill="#0a0805" stroke="#2a2010" stroke-width="1" opacity="0.7"
+                stroke-dasharray="4,3">
+                ${hint ? `<title>${escapeHtml(hint)}</title>` : ''}
+            </rect>`;
+            html += `<text x="${cxFn(col)}" y="${cyFn(row)}" text-anchor="middle"
+                dominant-baseline="middle" font-size="20" fill="#3a3020"
+                style="pointer-events:none">?</text>`;
         }
+    }
 
-        // Cleared checkmark
-        if (isCleared && !isCurrent) {
-            html += `<text x="${x + S - 10}" y="${y + 12}" text-anchor="middle"
-                font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
-        }
+    // Compose SVG: lines → rects (html) → images → player
+    html = html + imagesHtml.join('');
 
-        // Room number
-        html += `<text x="${x + 8}" y="${y + 12}" text-anchor="middle"
-            font-size="8" fill="${isRevealed ? '#6a5a30' : '#2a2010'}"
-            style="pointer-events:none">${room.room_id}</text>`;
-    });
+    // Wrap in pannable/zoomable <g>
+    const tx = _dmap.pan.x;
+    const ty = _dmap.pan.y;
+    const z  = _dmap.zoom;
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.setAttribute('data-map-w', svgW);
+    svg.setAttribute('data-map-h', svgH);
+    svg.innerHTML = `<g id="dmap-g" transform="translate(${tx},${ty}) scale(${z})">${html}</g>`;
 
-    svg.innerHTML = html;
+    // Reset pan/zoom when freshly opened (map changed size)
+    _dmap._lastSvgW = svgW;
+}
+
+function _dmapResetView() {
+    _dmap.zoom = 1;
+    _dmap.pan = { x: 0, y: 0 };
 }
 
 function openDungeonMap(autoClose = false) {
     const overlay = document.getElementById('dungeon-map-overlay');
     if (!overlay) return;
+    _dmapResetView();
     renderDungeonMap(_activeDungeonRun);
     overlay.removeAttribute('hidden');
     if (autoClose) {
@@ -11981,14 +12320,178 @@ function initDungeon() {
     document.getElementById('dungeon-picker-close')?.addEventListener('click', () => {
         document.getElementById('dungeon-picker-overlay')?.setAttribute('hidden', '');
     });
-    document.getElementById('dungeon-advance-btn')?.addEventListener('click', _dungeonAdvance);
+    // L12: direction buttons
+    document.querySelectorAll('[data-dungeon-dir]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dir = btn.dataset.dungeonDir;
+            if (dir) _dungeonMove(dir);
+        });
+    });
+
+    // L12: tile action buttons
+    document.getElementById('dungeon-open-chest')?.addEventListener('click', () => {
+        _dungeonResolveTile('open_chest');
+    });
+    document.getElementById('dungeon-answer-riddle')?.addEventListener('click', () => {
+        const riddleInput = document.getElementById('dungeon-riddle-input');
+        const answer = riddleInput?.value.trim();
+        if (!answer) { showToast('Wpisz odpowiedź w polu poniżej', 'info'); return; }
+        if (riddleInput) riddleInput.value = '';
+        _dungeonResolveTile('answer_riddle', { answer });
+    });
+    document.querySelector('[data-dungeon-action="riddle_hint"]')?.addEventListener('click', () => {
+        _dungeonResolveTile('riddle_hint');
+    });
+
+    document.getElementById('dungeon-advance-btn')?.addEventListener('click', () => {
+        // Legacy: advance-btn no longer used in v2 but kept for safety
+    });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
+
+    // L13 (#682): dungeon modal buttons
+    document.getElementById('dungeon-death-exit-btn')?.addEventListener('click', async () => {
+        document.getElementById('dungeon-death-modal')?.setAttribute('hidden', '');
+        await _doExitDungeon();
+    });
+    document.getElementById('dungeon-abandon-confirm-btn')?.addEventListener('click', async () => {
+        document.getElementById('dungeon-abandon-modal')?.setAttribute('hidden', '');
+        await _doExitDungeon();
+    });
+    document.getElementById('dungeon-abandon-cancel-btn')?.addEventListener('click', () => {
+        document.getElementById('dungeon-abandon-modal')?.setAttribute('hidden', '');
+    });
+    document.getElementById('dungeon-boss-exit-btn')?.addEventListener('click', async () => {
+        document.getElementById('dungeon-boss-modal')?.setAttribute('hidden', '');
+        if (!_dungeonCampaignId || !characterData?.id) return;
+        try {
+            await apiRequest('POST', '/dungeons/boss-choice', {
+                campaign_id: _dungeonCampaignId,
+                character_id: characterData.id,
+                choice: 'exit',
+            });
+        } catch (_) { /* still exit */ }
+        await _doExitDungeon();
+    });
+    document.getElementById('dungeon-boss-deeper-btn')?.addEventListener('click', async () => {
+        document.getElementById('dungeon-boss-modal')?.setAttribute('hidden', '');
+        if (!_dungeonCampaignId || !characterData?.id) return;
+        try {
+            const resp = await apiRequest('POST', '/dungeons/boss-choice', {
+                campaign_id: _dungeonCampaignId,
+                character_id: characterData.id,
+                choice: 'go_deeper',
+            });
+            if (resp.ok) {
+                showToast(`Schodzisz głębiej — Cykl ${resp.new_cycle}`, 'info', 3000);
+                // Reload run and refresh HUD/map
+                const runResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}/dungeon-run`);
+                if (runResp?.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
+                updateDungeonHUD();
+                if (resp.narrative) {
+                    appendMessage({ role: 'assistant', content: resp.narrative, created_at: new Date() });
+                    scrollToBottom();
+                }
+            }
+        } catch (err) {
+            showToast(err.message || 'Błąd', 'error');
+        }
+    });
     document.getElementById('dungeon-map-overlay')?.addEventListener('click', (e) => {
         if (e.target === document.getElementById('dungeon-map-overlay')) closeDungeonMap();
     });
+
+    // Pan/zoom on dmap-svg (L11)
+    const dmapSvg = document.getElementById('dmap-svg');
+    if (dmapSvg) {
+        dmapSvg.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+            _dmap.zoom = Math.min(4, Math.max(0.4, _dmap.zoom * factor));
+            renderDungeonMap(_activeDungeonRun);
+        }, { passive: false });
+
+        dmapSvg.addEventListener('mousedown', (e) => {
+            _dmap.dragging = true; _dmap.lastX = e.clientX; _dmap.lastY = e.clientY;
+            dmapSvg.style.cursor = 'grabbing';
+        });
+        window.addEventListener('mouseup', () => {
+            _dmap.dragging = false; dmapSvg.style.cursor = '';
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!_dmap.dragging) return;
+            _dmap.pan.x += (e.clientX - _dmap.lastX) / _dmap.zoom;
+            _dmap.pan.y += (e.clientY - _dmap.lastY) / _dmap.zoom;
+            _dmap.lastX = e.clientX; _dmap.lastY = e.clientY;
+            renderDungeonMap(_activeDungeonRun);
+        });
+
+        // Touch pan (mobile)
+        let _touchStart = null;
+        dmapSvg.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) _touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, { passive: true });
+        dmapSvg.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && _touchStart) {
+                const dx = e.touches[0].clientX - _touchStart.x;
+                const dy = e.touches[0].clientY - _touchStart.y;
+                _dmap.pan.x += dx / _dmap.zoom;
+                _dmap.pan.y += dy / _dmap.zoom;
+                _touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                renderDungeonMap(_activeDungeonRun);
+            }
+        }, { passive: true });
+    }
+
+    // L12: click-to-move on SVG map nodes — find closest direction from current node
+    if (dmapSvg) {
+        dmapSvg.addEventListener('click', (e) => {
+            if (_dmap.dragging) return;
+            const run = _activeDungeonRun;
+            if (!run) return;
+            const charId = characterData?.id;
+            const positions = run.positions || {};
+            const currentNodeId = (charId && positions[String(charId)]) || run.graph?.entry_node;
+            const currentNode = run.graph?.nodes?.[currentNodeId];
+            if (!currentNode) return;
+
+            // Find which node was clicked by position proximity (SVG coordinate hit)
+            const svgRect = dmapSvg.getBoundingClientRect();
+            const svgW = parseFloat(dmapSvg.getAttribute('data-map-w') || 0);
+            const svgH = parseFloat(dmapSvg.getAttribute('data-map-h') || 0);
+            if (!svgW || !svgH) return;
+            const scaleX = svgW / svgRect.width;
+            const scaleY = svgH / svgRect.height;
+            const clickSvgX = (e.clientX - svgRect.left) * scaleX / _dmap.zoom - _dmap.pan.x;
+            const clickSvgY = (e.clientY - svgRect.top) * scaleY / _dmap.zoom - _dmap.pan.y;
+
+            const S = 52; const GAP = 28; const PAD = 32; const STEP = S + GAP;
+            const nodes = run.graph.nodes || {};
+            const drawIds = Object.entries(nodes).filter(([, n]) => n.visited || Object.values(n.doors_open || {}).some(id => nodes[id]?.visited)).map(([id]) => id);
+            const positions2 = Object.values(nodes).filter(n => n.position).map(n => n.position);
+            const minCol = positions2.length ? Math.min(...positions2.map(p => p[0])) : 0;
+            const minRow = positions2.length ? Math.min(...positions2.map(p => p[1])) : 0;
+
+            let closestDir = null;
+            let closestDist = 9999;
+            for (const [dir, targetId] of Object.entries(currentNode.doors_open || {})) {
+                const tn = nodes[targetId];
+                if (!tn?.position) continue;
+                const tx = PAD + (tn.position[0] - minCol) * STEP + S / 2;
+                const ty = PAD + (tn.position[1] - minRow) * STEP + S / 2;
+                const dist = Math.hypot(clickSvgX - tx, clickSvgY - ty);
+                if (dist < closestDist && dist < S) {
+                    closestDist = dist; closestDir = dir;
+                }
+            }
+            if (closestDir) {
+                closeDungeonMap();
+                _dungeonMove(closestDir);
+            }
+        });
+    }
 
     // Riddle submit
     const riddleInput = document.getElementById('dungeon-riddle-input');
@@ -11996,18 +12499,18 @@ function initDungeon() {
         const val = riddleInput?.value.trim();
         if (!val) return;
         if (riddleInput) riddleInput.value = '';
-        _dungeonResolveRoom(val);
+        _dungeonResolveTile('answer_riddle', { answer: val });
     });
     riddleInput?.addEventListener('keypress', e => {
         if (e.key === 'Enter') {
             const val = riddleInput.value.trim();
             if (!val) return;
             riddleInput.value = '';
-            _dungeonResolveRoom(val);
+            _dungeonResolveTile('answer_riddle', { answer: val });
         }
     });
     document.getElementById('dungeon-riddle-hint-btn')?.addEventListener('click', () => {
-        _dungeonResolveRoom(null); // null = request hint
+        _dungeonResolveTile('riddle_hint');
     });
 }
 

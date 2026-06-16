@@ -30,7 +30,6 @@ from app.services.dungeon_service import (
     check_cooldown,
     complete_dungeon,
     get_dungeon,
-    scale_enemy_stats,
 )
 
 # ── Spatial constants ─────────────────────────────────────────────────────────
@@ -38,6 +37,84 @@ from app.services.dungeon_service import (
 DIRECTIONS = ("N", "S", "E", "W")
 OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 OFFSET = {"N": (0, 1), "S": (0, -1), "E": (1, 0), "W": (-1, 0)}
+
+# ── Numbers Policy (starting values — tuning after L19) ───────────────────────
+
+BRANCH_CHANCE = 0.30     # chance of branch per main path tile with free doors
+MAX_BRANCHES = 3         # max branches in the full graph
+MAX_BRANCH_LENGTH = 2    # max tiles per branch (1 or 2)
+
+# ── L5: Absolutna skala D1–D5 (Decyzja 8) ────────────────────────────────────
+# (min_enemy_level, max_enemy_level, boss_level) per dungeon tier 1–5
+
+TIER_ENEMY_LEVELS: dict[int, tuple[int, int, int]] = {
+    1: (1, 2, 3),    # D1: enemy lvl 1–2, boss lvl 3
+    2: (3, 4, 5),    # D2: enemy lvl 3–4, boss lvl 5
+    3: (5, 6, 7),    # D3: enemy lvl 5–6, boss lvl 7
+    4: (7, 8, 9),    # D4: enemy lvl 7–8, boss lvl 9
+    5: (9, 10, 10),  # D5: enemy lvl 9–10, boss lvl 10 (+ endless %-modifier)
+}
+
+
+def scale_enemy_for_dungeon_tier(
+    base: dict,
+    dungeon_tier: int,
+    is_boss: bool = False,
+    cycle: int = 1,
+) -> dict:
+    """L5: Absolutna skala D1–D5 — wrogowie skalowani tierem lochu, nie poziomem bohatera.
+
+    HP = max(1, hp_base + max(0, CON_mod) × effective_level).
+    Attack bonus = base_attack_bonus + effective_level // 2.
+    Damage bonus = base_damage_bonus + effective_level // 4.
+    Endless (cycle > 1): +1 level per cycle up to cap 10; above 10 → +15% HP/dmg_bonus per cycle.
+    """
+    tier = max(1, min(5, int(dungeon_tier)))
+    min_lvl, max_lvl, boss_lvl = TIER_ENEMY_LEVELS[tier]
+    eff_level = boss_lvl if is_boss else random.randint(min_lvl, max_lvl)
+
+    # Endless scaling (Decyzja 7)
+    percent_bonus = 0.0
+    if cycle > 1:
+        extra = cycle - 1
+        head_room = max(0, 10 - eff_level)
+        level_bumps = min(extra, head_room)
+        eff_level += level_bumps
+        overflow = extra - level_bumps
+        if overflow > 0:
+            percent_bonus = overflow * 0.15
+
+    # CON modifier from S2 stats_json (floor negative mods at 0 for enemies)
+    try:
+        stats = json.loads(base.get("stats_json") or "{}")
+        con = int(stats.get("CON") or 10)
+    except Exception:
+        con = 10
+    con_mod = max(0, (con - 10) // 2)
+
+    base_hp = int(base.get("hp_base") or 5)
+    hp = base_hp + con_mod * eff_level
+    if percent_bonus > 0:
+        hp = round(hp * (1 + percent_bonus))
+
+    atk = int(base.get("attack_bonus") or 0) + eff_level // 2
+    dmg_bonus = int(base.get("damage_bonus") or 0) + eff_level // 4
+    if percent_bonus > 0:
+        dmg_bonus = round(dmg_bonus * (1 + percent_bonus))
+
+    scaled = dict(base)
+    scaled["hp_base"] = max(1, hp)
+    scaled["attack_bonus"] = atk
+    scaled["damage_bonus"] = dmg_bonus
+    return scaled
+
+_DOOR_HINTS = {
+    "boss": "Czujesz lodowaty wiatr i słyszysz głęboki oddech.",
+    "enemies": "Słyszysz odgłosy walki za drzwiami.",
+    "riddle": "Czujesz aurę tajemnicy przy tych drzwiach.",
+    "chest": "Widzisz metaliczny blask w szczelinie drzwi.",
+    "empty": "Panuje cisza za tymi drzwiami.",
+}
 
 
 # ── Tile draw ─────────────────────────────────────────────────────────────────
@@ -59,6 +136,14 @@ def _doors(tile: dict) -> list[str]:
         return []
 
 
+def _tile_has_enemies(tile: dict) -> bool:
+    """True if the tile would start combat on entry (used to avoid combat entry tiles)."""
+    try:
+        return len(json.loads(tile.get("enemies_json") or "[]")) > 0
+    except Exception:
+        return False
+
+
 def _try_build_path(
     tiles: list[dict],
     boss_pool: list[dict],
@@ -71,11 +156,17 @@ def _try_build_path(
     if tile_count < 2:
         return None
 
-    # Pick entry tile (must have at least 1 door)
+    # Pick entry tile (must have at least 1 door). L13c fix (#685): the entry node
+    # never triggers combat (initiate_combat only fires on move_through_door INTO a
+    # tile), and enemies_cleared exit conditions would then soft-lock the run with no
+    # way to fight. So prefer an enemy-free entrance; fall back to any door tile only
+    # when the whole category is combat tiles (authoring should always include one
+    # safe entrance).
     entry_candidates = [t for t in tiles if _doors(t)]
     if not entry_candidates:
         return None
-    first = random.choice(entry_candidates)
+    safe_entries = [t for t in entry_candidates if not _tile_has_enemies(t)]
+    first = random.choice(safe_entries or entry_candidates)
 
     sequence: list[dict] = [{
         "tile_id": first["id"],
@@ -214,8 +305,13 @@ _ITEM_TABLES = {
 }
 
 
-def resolve_tile_content(tile_id: int, hero_level: int) -> dict | None:
-    """Join a tile row with referenced enemies, items, riddle. Scaling applied."""
+def resolve_tile_content(
+    tile_id: int,
+    dungeon_tier: int = 1,
+    cycle: int = 1,
+    hero_level: int = 1,  # kept for backward compat — ignored (L5: tier scales, not hero)
+) -> dict | None:
+    """Join a tile row with referenced enemies, items, riddle. L5: tier-based scaling."""
     conn = _get_db()
     try:
         row = conn.execute("SELECT * FROM dungeon_tiles WHERE id = ?", (tile_id,)).fetchone()
@@ -251,13 +347,13 @@ def resolve_tile_content(tile_id: int, hero_level: int) -> dict | None:
                 continue
             r = conn.execute(
                 "SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, damage_bonus, "
-                "dex_modifier, tier FROM game_config_enemies WHERE key = ?",
+                "dex_modifier, tier, stats_json FROM game_config_enemies WHERE key = ?",
                 (enemy_key,),
             ).fetchone()
             if not r:
                 continue
             base = dict(r)
-            scaled = scale_enemy_stats(base, hero_level, is_boss=is_boss)
+            scaled = scale_enemy_for_dungeon_tier(base, dungeon_tier, is_boss=is_boss, cycle=cycle)
             resolved_enemies.append({
                 "enemy_key": enemy_key,
                 "label": base.get("label", enemy_key),
@@ -324,6 +420,51 @@ def resolve_tile_content(tile_id: int, hero_level: int) -> dict | None:
         conn.close()
 
 
+# ── L5: Re-roll enemies on repeated tiles (Decyzja 9) ────────────────────────
+
+def _reroll_repeated_tile_enemies(
+    graph: dict,
+    enemy_pool: list[str],
+    conn: sqlite3.Connection,
+) -> dict:
+    """Re-roll enemies for nodes whose tile_id appears more than once in the graph.
+
+    First occurrence keeps original enemies. Subsequent occurrences draw 1–2 random
+    enemies from enemy_pool if available; otherwise original enemies are kept.
+    """
+    if not enemy_pool:
+        return graph
+
+    nodes = graph.get("nodes") or {}
+    # Track which tile_ids have been seen (first occurrence = skip)
+    seen_tile_ids: set[int] = set()
+
+    # Validate pool enemies exist in DB
+    valid_pool = []
+    for ek in enemy_pool:
+        r = conn.execute("SELECT key FROM game_config_enemies WHERE key = ?", (ek,)).fetchone()
+        if r:
+            valid_pool.append(ek)
+
+    if not valid_pool:
+        return graph
+
+    for node_id, node in nodes.items():
+        tile_id = node.get("tile_id")
+        if tile_id is None:
+            continue
+        if tile_id in seen_tile_ids:
+            # Re-roll: pick 1–2 random enemies from pool
+            count = random.randint(1, min(2, len(valid_pool)))
+            chosen = random.sample(valid_pool, count)
+            node["content"]["enemies"] = [{"enemy_key": k, "count": 1} for k in chosen]
+        else:
+            seen_tile_ids.add(tile_id)
+
+    graph["nodes"] = nodes
+    return graph
+
+
 # ── Dungeon run orchestration (tile mode) ─────────────────────────────────────
 
 def _tile_count_for_difficulty(dungeon: dict, hero_level: int) -> int:
@@ -345,6 +486,11 @@ def enter_dungeon_tiles(
     hero_level: int,
     previous_campaign_id: int | None = None,
 ) -> dict:
+    """Build a branching tile graph (v2) and store it in session_flags as dungeon_run.
+
+    L3: replaces the linear tile sequence with draw_tile_graph(). The API endpoint
+    /enter now calls this instead of legacy dungeon_service.enter_dungeon().
+    """
     cd = check_cooldown(character_id, dungeon_key)
     if cd.get("on_cooldown"):
         raise PermissionError(
@@ -357,50 +503,66 @@ def enter_dungeon_tiles(
 
     category_key = dungeon.get("tile_category_key")
     if not category_key:
-        raise ValueError(
-            f"Dungeon '{dungeon_key}' is not configured for the tile system "
-            f"(tile_category_key is NULL). Set it in the admin panel or use legacy mode."
-        )
+        raise ValueError("Loch nie ma skonfigurowanej kategorii kafelków.")
 
     tile_count = _tile_count_for_difficulty(dungeon, hero_level)
     boss_tile_id = dungeon.get("boss_tile_id")
+    dungeon_difficulty = int(dungeon.get("dungeon_difficulty") or 1)
 
-    sequence = draw_tile_sequence(category_key, tile_count, boss_tile_id)
+    graph = draw_tile_graph(category_key, tile_count, boss_tile_id)
 
-    # Resolve every tile's content (snapshot at entry time)
-    resolved_tiles: list[dict] = []
-    for step in sequence:
-        content = resolve_tile_content(step["tile_id"], hero_level)
-        if not content:
-            continue
-        content.update({
-            "step_index": step["index"],
-            "entry_door": step["entry_door"],
-            "exit_door": step.get("exit_door"),
-            "position": list(step["position"]),
-            "cleared": False,
-            "states_applied_turns": 0,
-        })
-        resolved_tiles.append(content)
-
-    run = {
-        "system": "tiles",
-        "dungeon_key": dungeon_key,
-        "dungeon_label": dungeon.get("label", dungeon_key),
-        "category_key": category_key,
-        "tiles": resolved_tiles,
-        "total_tiles": len(resolved_tiles),
-        "current_index": 0,
-        "discovered_positions": [list(resolved_tiles[0]["position"])] if resolved_tiles else [],
-        "completed": False,
-        "failed": False,
-        "hero_level_at_entry": hero_level,
-        "cooldown_hours": int(dungeon.get("cooldown_hours") or 72),
-        "loot_collected": [],
-    }
-
+    # L5/Decyzja 9: re-roll enemies on repeated tiles using dungeon's enemy_pool
     conn, flags = _load_flags(campaign_id)
     try:
+        enemy_pool_raw = dungeon.get("enemy_pool") or "[]"
+        try:
+            enemy_pool = json.loads(enemy_pool_raw) if isinstance(enemy_pool_raw, str) else list(enemy_pool_raw)
+        except Exception:
+            enemy_pool = []
+        graph = _reroll_repeated_tile_enemies(graph, enemy_pool, conn)
+
+        # L7: entry checkpoint — capture XP at dungeon start for rollback on death
+        _char_row = None
+        try:
+            _char_conn = _get_db()
+            try:
+                _char_row = _char_conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+                ).fetchone()
+            finally:
+                _char_conn.close()
+        except Exception:
+            _char_row = None
+        if _char_row:
+            _entry_sheet = json.loads(_char_row["sheet_json"] or "{}")
+            entry_checkpoint: dict[str, Any] = {
+                "cycle": 1,
+                "source": "dungeon_enter",
+                "xp_lifetime_earned": int(_entry_sheet.get("xp_lifetime_earned") or 0),
+                "xp_available": int(_entry_sheet.get("xp_available") or 0),
+            }
+        else:
+            entry_checkpoint = {"cycle": 1, "source": "dungeon_enter",
+                                "xp_lifetime_earned": 0, "xp_available": 0}
+
+        run = {
+            "system": "tiles_v2",
+            "dungeon_key": dungeon_key,
+            "dungeon_label": dungeon.get("label", dungeon_key),
+            "category_key": category_key,
+            "dungeon_difficulty": dungeon_difficulty,  # L5: tier for enemy scaling
+            "graph": graph,
+            "positions": {str(character_id): graph["entry_node"]},
+            "cycle": 1,
+            "checkpoints": [entry_checkpoint],
+            "at_checkpoint": False,
+            "completed": False,
+            "failed": False,
+            "hero_level_at_entry": hero_level,
+            "cooldown_hours": int(dungeon.get("cooldown_hours") or 72),
+            "loot_collected": [],
+        }
+
         flags["dungeon_run"] = run
         if previous_campaign_id:
             flags["dungeon_previous_campaign_id"] = previous_campaign_id
@@ -412,11 +574,168 @@ def enter_dungeon_tiles(
 
 
 def get_current_tile(run: dict) -> dict | None:
+    """Return current tile/node for v2 graph runs or legacy v1 linear runs."""
+    if run.get("system") == "tiles_v2":
+        graph = run.get("graph") or {}
+        nodes = graph.get("nodes") or {}
+        positions = run.get("positions") or {}
+        node_id = next(iter(positions.values()), None) or graph.get("entry_node")
+        return nodes.get(node_id) if node_id else None
+    # Legacy v1 linear format
     idx = int(run.get("current_index", 0))
     tiles = run.get("tiles") or []
     if 0 <= idx < len(tiles):
         return tiles[idx]
     return None
+
+
+def get_current_node_id(run: dict, character_id: int) -> str | None:
+    """Return node_id of character's current position in v2 run."""
+    positions = run.get("positions") or {}
+    node_id = positions.get(str(character_id))
+    if node_id:
+        return node_id
+    graph = run.get("graph") or {}
+    return graph.get("entry_node")
+
+
+def mark_node_cleared(campaign_id: int, character_id: int) -> None:
+    """L4: Mark current dungeon tile node cleared after combat victory."""
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run")
+        if not run or run.get("system") != "tiles_v2":
+            return
+        graph = run.get("graph") or {}
+        nodes = graph.get("nodes") or {}
+        node_id = get_current_node_id(run, character_id)
+        if node_id and node_id in nodes:
+            nodes[node_id]["cleared"] = True
+            run["graph"]["nodes"] = nodes
+            flags["dungeon_run"] = run
+            _save_flags(conn, campaign_id, flags)
+    finally:
+        conn.close()
+
+
+def move_through_door(campaign_id: int, character_id: int, direction: str) -> dict:
+    """L4: Move character through a door in the given direction.
+
+    Validates direction, checks exit_conditions on current node, updates positions,
+    marks visited, discovers fog, and starts combat deterministically (Decision 4).
+    Backtracking to cleared nodes skips combat.
+    """
+    if direction not in DIRECTIONS:
+        return {"ok": False, "blocked": True, "reason": f"Nieprawidłowy kierunek: {direction}"}
+
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run")
+        if not run or run.get("system") != "tiles_v2":
+            raise ValueError("Brak aktywnego lochu kafelkowego (v2).")
+
+        graph = run.get("graph") or {}
+        nodes = graph.get("nodes") or {}
+        positions = run.get("positions") or {}
+
+        current_node_id = get_current_node_id(run, character_id)
+        if not current_node_id:
+            raise ValueError("Nie można określić bieżącej pozycji.")
+
+        current_node = nodes.get(current_node_id)
+        if not current_node:
+            raise ValueError("Bieżący kafelek nie istnieje w grafie.")
+
+        doors_open = current_node.get("doors_open") or {}
+        target_node_id = doors_open.get(direction)
+        if not target_node_id:
+            return {"ok": False, "blocked": True, "reason": f"Brak drzwi w kierunku {direction}."}
+
+        # Check exit conditions — merge content with node-level cleared flag
+        current_content = current_node.get("content") or {}
+        tile_for_check = {**current_content, "cleared": current_node.get("cleared", False)}
+        allowed, reason = check_exit_conditions(tile_for_check, character_id)
+        if not allowed:
+            return {"ok": False, "blocked": True, "reason": reason}
+
+        target_node = nodes.get(target_node_id)
+        if not target_node:
+            raise ValueError("Kafelek docelowy nie istnieje w grafie.")
+
+        # Mark current node as cleared on exit
+        nodes[current_node_id]["cleared"] = True
+
+        # Move character to target node
+        nodes[target_node_id]["visited"] = True
+        run["positions"] = {**positions, str(character_id): target_node_id}
+
+        # Fog discovery: reveal outline of not-yet-visited neighbors of target
+        target_doors = target_node.get("doors_open") or {}
+        fog_discovered = [
+            nbr_id
+            for _d, nbr_id in target_doors.items()
+            if nbr_id and nbr_id != current_node_id and not nodes.get(nbr_id, {}).get("visited")
+        ]
+
+        run["graph"]["nodes"] = nodes
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+
+        # Decision 4: deterministic combat start on entering a tile with enemies
+        target_content = target_node.get("content") or {}
+        is_cleared = target_node.get("cleared", False)
+
+        # L5: read dungeon tier + cycle for absolute scaling
+        dungeon_tier = int(run.get("dungeon_difficulty", 1))
+        cycle = int(run.get("cycle", 1))
+        is_boss_tile = bool(target_content.get("is_boss_tile", False))
+
+        combat_state = None
+        if not is_cleared:
+            raw_enemies = target_content.get("enemies") or []
+            enemy_keys: list[str] = []
+            for e in raw_enemies:
+                key = e.get("enemy_key")
+                count = int(e.get("count") or 1)
+                if key:
+                    enemy_keys.extend([key] * count)
+            if enemy_keys:
+                try:
+                    from app.services.combat_service import initiate_combat
+                    # L5: build tier-scaled stat overrides for each unique enemy key
+                    _enemy_overrides: dict[str, dict] = {}
+                    for ek in set(enemy_keys):
+                        r = conn.execute(
+                            "SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, "
+                            "damage_bonus, dex_modifier, tier, stats_json FROM game_config_enemies "
+                            "WHERE key = ?",
+                            (ek,),
+                        ).fetchone()
+                        if r:
+                            _enemy_overrides[ek] = scale_enemy_for_dungeon_tier(
+                                dict(r), dungeon_tier, is_boss=is_boss_tile, cycle=cycle
+                            )
+                    combat_state = initiate_combat(
+                        campaign_id, character_id, enemy_keys,
+                        _dungeon_enemy_overrides=_enemy_overrides if _enemy_overrides else None,
+                    )
+                except Exception as exc:
+                    combat_state = {"error": str(exc)}
+
+        room_description = target_content.get("room_description") or ""
+        return {
+            "ok": True,
+            "node_id": target_node_id,
+            "node": target_node,
+            "content": target_content,
+            "room_description": room_description,
+            "fog_discovered": fog_discovered,
+            "is_cleared": is_cleared,
+            "combat": combat_state,
+            "narrative": room_description or "Wchodzisz do kolejnego pomieszczenia.",
+        }
+    finally:
+        conn.close()
 
 
 def check_exit_conditions(tile: dict, character_id: int) -> tuple[bool, str | None]:
@@ -614,5 +933,880 @@ def resolve_riddle_tiles(campaign_id: int, player_input: str) -> dict:
                     "narrative": f"Błędna odpowiedź. Podpowiedź: {hint}"}
 
         return {"ok": True, "solved": False, "narrative": "Błędna odpowiedź. Brak podpowiedzi."}
+    finally:
+        conn.close()
+
+
+# ── L6: Non-combat tile actions (chest / riddle / rest) ───────────────────────
+
+_MAX_CHEST_ATTEMPTS = 3
+_TRAP_TRIGGER_CHANCE = 0.30
+_MAX_RIDDLE_ATTEMPTS = 3
+_MAX_RIDDLE_HINTS = 2
+_REST_HEAL_PCT = 20
+
+
+def _roll_die_expr(expr: str) -> int:
+    """Roll NdM+k expression. Returns 0 on parse failure."""
+    import re
+    m = re.match(r"(\d*)d(\d+)(?:\s*\+\s*(\d+))?", str(expr).strip().lower())
+    if m:
+        n = int(m.group(1) or 1)
+        sides = int(m.group(2))
+        bonus = int(m.group(3) or 0)
+        return sum(random.randint(1, sides) for _ in range(n)) + bonus
+    return 0
+
+
+def _get_char_dex_modifier(conn: sqlite3.Connection, character_id: int) -> int:
+    """Return DEX modifier ((DEX-10)//2) from characters.sheet_json."""
+    try:
+        row = conn.execute("SELECT sheet_json FROM characters WHERE id = ?",
+                           (character_id,)).fetchone()
+        if not row:
+            return 0
+        sheet = json.loads(row["sheet_json"] or "{}")
+        dex = int(sheet.get("DEX", sheet.get("dex", 10)) or 10)
+        return (dex - 10) // 2
+    except Exception:
+        return 0
+
+
+def _trigger_trap_chance(content: dict, tier: int) -> dict | None:
+    """Return trap dict at 30% chance, None otherwise.
+
+    Checks content.active_states for trap-type states first; falls back to 1d4+tier.
+    """
+    if random.random() >= _TRAP_TRIGGER_CHANCE:
+        return None
+    active_states = content.get("active_states") or []
+    for state in active_states:
+        stype = str(state.get("type") or "").lower()
+        if "trap" in stype:
+            dmg_die = state.get("damage_die") or state.get("damage") or f"1d4+{tier}"
+            damage = _roll_die_expr(str(dmg_die))
+            return {
+                "triggered": True,
+                "type": stype,
+                "description": state.get("narrative") or "Pułapka!",
+                "damage": damage,
+                "damage_die": str(dmg_die),
+            }
+    damage = random.randint(1, 4) + tier
+    return {
+        "triggered": True,
+        "type": "trap",
+        "description": "Ukryta pułapka!",
+        "damage": damage,
+        "damage_die": f"1d4+{tier}",
+    }
+
+
+def _roll_chest_loot_for_run(conn: sqlite3.Connection, dungeon_key: str, tier: int) -> list[dict]:
+    """Roll chest loot from dungeon's chest_loot_table_key."""
+    from app.services.dungeon_service import get_dungeon, get_loot_rarity_for_difficulty, _roll_loot_table
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        return []
+    chest_table = dungeon.get("chest_loot_table_key") or ""
+    if not chest_table:
+        return []
+    loot = _roll_loot_table(conn, chest_table)
+    rarity = get_loot_rarity_for_difficulty(tier)
+    for item in loot:
+        item["rarity"] = rarity
+    return loot
+
+
+def _empty_corridor_response(action: str) -> dict:
+    """U22 fallback: return pusty_korytarz when tile node missing."""
+    import logging
+    logging.getLogger(__name__).warning("L6 U22 fallback: node missing, returning empty corridor")
+    return {
+        "ok": True,
+        "action": action,
+        "fallback": True,
+        "tile_label": "Pusty korytarz",
+        "room_description": "Wąski kamienny korytarz. Puste ściany. Cisza.",
+        "narrative": "Stoisz w pustym korytarzu. Nie ma tu nic do zrobienia.",
+        "trap": None,
+    }
+
+
+def _action_open_chest(
+    conn: sqlite3.Connection,
+    node: dict,
+    content: dict,
+    character_id: int,
+    tier: int,
+    run: dict,
+) -> dict:
+    chest_state = node.get("chest_state") or {}
+    if chest_state.get("locked_forever"):
+        return {
+            "ok": True,
+            "action": "open_chest",
+            "chest_locked_forever": True,
+            "loot": [],
+            "trap": None,
+            "narrative": "Skrzynia jest na zawsze zablokowana.",
+        }
+
+    attempts = int(chest_state.get("attempts", 0))
+    dc = 12 + tier
+    dex_mod = _get_char_dex_modifier(conn, character_id)
+    d20 = random.randint(1, 20)
+    total = d20 + dex_mod
+    success = total >= dc
+    attempts += 1
+    chest_state["attempts"] = attempts
+
+    trap = None
+    loot: list[dict] = []
+
+    if success:
+        loot = _roll_chest_loot_for_run(conn, run.get("dungeon_key", ""), tier)
+        chest_state["opened"] = True
+        narrative = f"Otwierasz skrzynię! (Rzut: {d20}{dex_mod:+}={total} vs DC {dc})"
+        narrative += f" Znalazłeś {len(loot)} przedmiot(y)!" if loot else " Skrzynia jest pusta."
+    else:
+        if attempts >= _MAX_CHEST_ATTEMPTS:
+            chest_state["locked_forever"] = True
+            narrative = (
+                f"Nieudana próba ({d20}{dex_mod:+}={total} vs DC {dc}). "
+                "Mechanizm blokuje skrzynię na zawsze!"
+            )
+        else:
+            remaining = _MAX_CHEST_ATTEMPTS - attempts
+            narrative = (
+                f"Nieudana próba ({d20}{dex_mod:+}={total} vs DC {dc}). "
+                f"Pozostało prób: {remaining}."
+            )
+        trap = _trigger_trap_chance(content, tier)
+
+    node["chest_state"] = chest_state
+    return {
+        "ok": True,
+        "action": "open_chest",
+        "success": success,
+        "roll": d20,
+        "dex_mod": dex_mod,
+        "total": total,
+        "dc": dc,
+        "attempt": attempts,
+        "max_attempts": _MAX_CHEST_ATTEMPTS,
+        "chest_locked_forever": chest_state.get("locked_forever", False),
+        "loot": loot,
+        "trap": trap,
+        "narrative": narrative,
+    }
+
+
+def _action_answer_riddle(node: dict, content: dict, answer: str, tier: int) -> dict:
+    from app.services.dungeon_service import _answer_matches
+
+    riddle = content.get("riddle")
+    if not riddle:
+        return {"ok": False, "action": "answer_riddle",
+                "narrative": "Brak zagadki w tym pomieszczeniu."}
+
+    riddle_state = node.get("riddle_state") or {}
+
+    if riddle_state.get("solved") or riddle.get("solved"):
+        return {"ok": True, "action": "answer_riddle", "solved": True,
+                "trap": None, "narrative": "Zagadka już rozwiązana."}
+
+    if riddle_state.get("failed_permanently"):
+        return {"ok": True, "action": "answer_riddle", "solved": False,
+                "failed_permanently": True, "trap": None,
+                "narrative": "Wyczerpałeś wszystkie próby."}
+
+    attempts = int(riddle_state.get("attempts", 0))
+    if attempts >= _MAX_RIDDLE_ATTEMPTS:
+        riddle_state["failed_permanently"] = True
+        node["riddle_state"] = riddle_state
+        return {"ok": True, "action": "answer_riddle", "solved": False,
+                "failed_permanently": True, "attempt": attempts,
+                "max_attempts": _MAX_RIDDLE_ATTEMPTS, "trap": None,
+                "narrative": "Wyczerpałeś wszystkie próby odpowiedzi."}
+
+    attempts += 1
+    riddle_state["attempts"] = attempts
+
+    r_answer = riddle.get("answer", "")
+    r_alts = riddle.get("answer_alts", [])
+
+    if _answer_matches(answer, r_answer, r_alts):
+        riddle_state["solved"] = True
+        riddle["solved"] = True
+        content["riddle"] = riddle
+        node["riddle_state"] = riddle_state
+        return {
+            "ok": True, "action": "answer_riddle", "solved": True,
+            "attempt": attempts, "max_attempts": _MAX_RIDDLE_ATTEMPTS,
+            "trap": None, "narrative": "Zagadka rozwiązana! Drzwi się otwierają.",
+        }
+
+    # Wrong answer → optional hint + 30% trap
+    trap = _trigger_trap_chance(content, tier)
+    hints = riddle.get("hints", [])
+    hints_used = int(riddle_state.get("hints_used", 0))
+    hint = None
+    if hints_used < len(hints) and hints_used < _MAX_RIDDLE_HINTS:
+        hint = hints[hints_used]
+        riddle_state["hints_used"] = hints_used + 1
+
+    failed_permanently = attempts >= _MAX_RIDDLE_ATTEMPTS
+    if failed_permanently:
+        riddle_state["failed_permanently"] = True
+
+    node["riddle_state"] = riddle_state
+    narrative = "Błędna odpowiedź."
+    if hint:
+        narrative += f" Podpowiedź {riddle_state['hints_used']}: {hint}"
+    if failed_permanently:
+        narrative += " Wyczerpałeś wszystkie próby!"
+    else:
+        narrative += f" Pozostało prób: {_MAX_RIDDLE_ATTEMPTS - attempts}."
+
+    return {
+        "ok": True, "action": "answer_riddle", "solved": False,
+        "failed_permanently": failed_permanently,
+        "attempt": attempts, "max_attempts": _MAX_RIDDLE_ATTEMPTS,
+        "hint": hint, "trap": trap, "narrative": narrative,
+    }
+
+
+def _action_riddle_hint(node: dict, content: dict) -> dict:
+    riddle = content.get("riddle")
+    if not riddle:
+        return {"ok": False, "action": "riddle_hint",
+                "narrative": "Brak zagadki w tym pomieszczeniu."}
+
+    riddle_state = node.get("riddle_state") or {}
+    hints_used = int(riddle_state.get("hints_used", 0))
+    hints = riddle.get("hints", [])
+
+    if hints_used >= _MAX_RIDDLE_HINTS or hints_used >= len(hints):
+        node["riddle_state"] = riddle_state
+        return {"ok": True, "action": "riddle_hint", "hint": None, "no_more_hints": True,
+                "narrative": "Brak kolejnych podpowiedzi."}
+
+    hint = hints[hints_used]
+    riddle_state["hints_used"] = hints_used + 1
+    node["riddle_state"] = riddle_state
+    return {
+        "ok": True, "action": "riddle_hint",
+        "hint": hint, "hints_used": riddle_state["hints_used"],
+        "no_more_hints": False,
+        "narrative": f"Podpowiedź {riddle_state['hints_used']}: {hint}",
+    }
+
+
+def _action_rest(node: dict, content: dict, character_id: int) -> dict:
+    desc = content.get("room_description") or "Odpoczywasz przez chwilę."
+    node["rested"] = True
+    return {
+        "ok": True, "action": "rest",
+        "heal_pct": _REST_HEAL_PCT,
+        "narrative": f"{desc} Leczysz {_REST_HEAL_PCT}% maksymalnego HP.",
+        "trap": None,
+    }
+
+
+def resolve_tile_action(
+    campaign_id: int,
+    character_id: int,
+    action: str,
+    payload: dict | None = None,
+) -> dict:
+    """L6: Resolve non-combat tile action (open_chest / answer_riddle / riddle_hint / rest).
+
+    Returns action result dict. U22 fallback: missing node → empty corridor response.
+    Raises ValueError for unknown action or no active v2 run.
+    """
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run")
+        if not run or run.get("system") != "tiles_v2":
+            raise ValueError("Brak aktywnego lochu kafelkowego (v2).")
+
+        tier = int(run.get("dungeon_difficulty", 1))
+        graph = run.get("graph") or {}
+        nodes = graph.get("nodes") or {}
+        node_id = get_current_node_id(run, character_id)
+
+        if not node_id or node_id not in nodes:
+            return _empty_corridor_response(action)
+
+        node = nodes[node_id]
+        content = node.get("content") or {}
+
+        if action == "open_chest":
+            result = _action_open_chest(conn, node, content, character_id, tier, run)
+        elif action == "answer_riddle":
+            answer = (payload or {}).get("answer", "")
+            result = _action_answer_riddle(node, content, answer, tier)
+        elif action == "riddle_hint":
+            result = _action_riddle_hint(node, content)
+        elif action == "rest":
+            result = _action_rest(node, content, character_id)
+        else:
+            raise ValueError(f"Nieznana akcja: {action}")
+
+        nodes[node_id] = node
+        run["graph"]["nodes"] = nodes
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+        return result
+    finally:
+        conn.close()
+
+
+# ── Graph generation (L2) ─────────────────────────────────────────────────────
+
+def _get_tile_content(tile: dict) -> dict:
+    """Parse raw tile dict into content summary for graph storage.
+
+    Enemy stats are NOT scaled here (L5 adds tier-based scaling via absolutna skala D1–D5).
+    Riddle is stored as key only; full resolution happens in L3.
+    """
+    if not tile:
+        return {
+            "tile_id": None, "label": "???", "image_url": None,
+            "room_description": "", "doors": [], "enemies": [],
+            "items": [], "active_states": [], "exit_conditions": [],
+            "riddle": None, "is_boss_tile": False,
+        }
+    try:
+        enemies = json.loads(tile.get("enemies_json") or "[]")
+    except Exception:
+        enemies = []
+    try:
+        items = json.loads(tile.get("items_json") or "[]")
+    except Exception:
+        items = []
+    try:
+        active_states = json.loads(tile.get("active_states_json") or "[]")
+    except Exception:
+        active_states = []
+    try:
+        exit_conditions = json.loads(tile.get("exit_conditions_json") or "[]")
+    except Exception:
+        exit_conditions = []
+    return {
+        "tile_id": tile.get("id"),
+        "label": tile.get("label", ""),
+        "image_url": tile.get("image_url"),
+        "room_description": tile.get("room_description") or "",
+        "doors": _doors(tile),
+        "enemies": enemies,
+        "items": items,
+        "active_states": active_states,
+        "exit_conditions": exit_conditions,
+        "riddle": tile.get("riddle_key"),
+        "is_boss_tile": bool(tile.get("is_boss_tile") or 0),
+    }
+
+
+def _content_hint(content: dict) -> str:
+    """Return a door hint string based on what's behind that door."""
+    if content.get("is_boss_tile"):
+        return _DOOR_HINTS["boss"]
+    if content.get("enemies"):
+        return _DOOR_HINTS["enemies"]
+    if content.get("riddle"):
+        return _DOOR_HINTS["riddle"]
+    if content.get("items"):
+        return _DOOR_HINTS["chest"]
+    return _DOOR_HINTS["empty"]
+
+
+def _is_reward_tile(tile: dict) -> bool:
+    """True if tile has riddle or items (preferred for branch endings)."""
+    if tile.get("riddle_key"):
+        return True
+    try:
+        return len(json.loads(tile.get("items_json") or "[]")) > 0
+    except Exception:
+        return False
+
+
+def _try_build_branch(
+    branch_dir: str,
+    parent_pos: list[int],
+    non_boss_tiles: list[dict],
+    used_positions: set[tuple[int, int]],
+    tile_id_to_node_ids: dict[int, list[str]],
+    all_nodes: dict[str, dict],
+) -> list[dict] | None:
+    """Try to build a 1–2 tile branch starting from parent_pos going branch_dir.
+
+    Returns list of step dicts [{tile_id, entry_door, exit_door, position}] or None.
+    Constraint: no tile can be placed adjacent to another node with the same tile_id.
+    """
+    entry_needed = OPPOSITE[branch_dir]
+    dx, dy = OFFSET[branch_dir]
+    first_pos = (parent_pos[0] + dx, parent_pos[1] + dy)
+    if first_pos in used_positions:
+        return None
+
+    candidates = [t for t in non_boss_tiles if entry_needed in _doors(t)]
+    if not candidates:
+        return None
+
+    def adjacent_repeat_ok(tile_id: int, pos: tuple[int, int]) -> bool:
+        for existing_nid in tile_id_to_node_ids.get(tile_id, []):
+            enode = all_nodes.get(existing_nid)
+            if not enode:
+                continue
+            ep = tuple(enode["position"])
+            if abs(ep[0] - pos[0]) + abs(ep[1] - pos[1]) <= 1:
+                return False
+        return True
+
+    branch_length = random.randint(1, MAX_BRANCH_LENGTH)
+
+    random.shuffle(candidates)
+    if branch_length == 1:
+        candidates = sorted(candidates, key=lambda t: 0 if _is_reward_tile(t) else 1)
+
+    first_tile = None
+    for cand in candidates:
+        if adjacent_repeat_ok(cand["id"], first_pos):
+            first_tile = cand
+            break
+    if first_tile is None:
+        return None
+
+    steps: list[dict] = [{
+        "tile_id": first_tile["id"],
+        "entry_door": entry_needed,
+        "exit_door": None,
+        "position": first_pos,
+    }]
+    if branch_length == 1:
+        return steps
+
+    # Attempt second tile
+    free_exits = [d for d in _doors(first_tile) if d != entry_needed]
+    random.shuffle(free_exits)
+    for exit_dir in free_exits:
+        dx2, dy2 = OFFSET[exit_dir]
+        second_pos = (first_pos[0] + dx2, first_pos[1] + dy2)
+        if second_pos in used_positions:
+            continue
+        second_entry = OPPOSITE[exit_dir]
+        second_cands = [t for t in non_boss_tiles if second_entry in _doors(t)]
+        random.shuffle(second_cands)
+        second_cands = sorted(second_cands, key=lambda t: 0 if _is_reward_tile(t) else 1)
+        for cand in second_cands:
+            if adjacent_repeat_ok(cand["id"], second_pos):
+                steps[0]["exit_door"] = exit_dir
+                steps.append({
+                    "tile_id": cand["id"],
+                    "entry_door": second_entry,
+                    "exit_door": None,
+                    "position": second_pos,
+                })
+                return steps
+
+    return steps  # 1-tile branch (no valid second tile found)
+
+
+def _try_build_graph(
+    non_boss: list[dict],
+    boss_pool: list[dict],
+    tile_count: int,
+    boss_tile_id: int | None,
+) -> dict | None:
+    """Try to build a branching graph. Returns graph dict or None on failure."""
+    sequence = _try_build_path(non_boss, boss_pool, tile_count, boss_tile_id)
+    if sequence is None:
+        return None
+
+    all_tiles_by_id: dict[int, dict] = {t["id"]: t for t in non_boss + boss_pool}
+    nodes: dict[str, dict] = {}
+    used_positions: set[tuple[int, int]] = set()
+    tile_id_to_node_ids: dict[int, list[str]] = {}
+
+    # Build main path nodes
+    for i, step in enumerate(sequence):
+        nid = f"node_{i}"
+        pos = tuple(step["position"])
+        used_positions.add(pos)
+        tile_id = step["tile_id"]
+        tile = all_tiles_by_id.get(tile_id, {})
+
+        doors_open: dict[str, str | None] = {d: None for d in _doors(tile)}
+        if i > 0 and step.get("entry_door"):
+            doors_open[step["entry_door"]] = f"node_{i - 1}"
+        if i < len(sequence) - 1 and step.get("exit_door"):
+            doors_open[step["exit_door"]] = f"node_{i + 1}"
+
+        nodes[nid] = {
+            "tile_id": tile_id,
+            "position": list(pos),
+            "doors_open": doors_open,
+            "door_hints": {},
+            "content": _get_tile_content(tile),
+            "visited": False,
+            "cleared": False,
+            "is_boss": step.get("is_boss", False),
+        }
+        tile_id_to_node_ids.setdefault(tile_id, []).append(nid)
+
+    # Add branches to non-boss main path nodes
+    branch_count = 0
+    for i in range(len(sequence) - 1):
+        if branch_count >= MAX_BRANCHES:
+            break
+        parent_nid = f"node_{i}"
+        parent = nodes[parent_nid]
+        free_dirs = [d for d, t in parent["doors_open"].items() if t is None]
+        if not free_dirs:
+            continue
+        if random.random() >= BRANCH_CHANCE:
+            continue
+
+        random.shuffle(free_dirs)
+        for branch_dir in free_dirs:
+            branch_steps = _try_build_branch(
+                branch_dir, parent["position"],
+                non_boss, used_positions, tile_id_to_node_ids, nodes,
+            )
+            if branch_steps is None:
+                continue
+
+            prev_nid = parent_nid
+            first_branch_nid: str | None = None
+            for bi, bstep in enumerate(branch_steps):
+                bid = f"branch_{branch_count}_{bi}"
+                if bi == 0:
+                    first_branch_nid = bid
+                bpos = tuple(bstep["position"])
+                used_positions.add(bpos)
+                btile_id = bstep["tile_id"]
+                btile = all_tiles_by_id.get(btile_id, {})
+                bdoors_open: dict[str, str | None] = {d: None for d in _doors(btile)}
+                bdoors_open[bstep["entry_door"]] = prev_nid
+                if bstep.get("exit_door") and bi < len(branch_steps) - 1:
+                    bdoors_open[bstep["exit_door"]] = f"branch_{branch_count}_{bi + 1}"
+
+                nodes[bid] = {
+                    "tile_id": btile_id,
+                    "position": list(bpos),
+                    "doors_open": bdoors_open,
+                    "door_hints": {},
+                    "content": _get_tile_content(btile),
+                    "visited": False,
+                    "cleared": False,
+                    "is_boss": False,
+                }
+                tile_id_to_node_ids.setdefault(btile_id, []).append(bid)
+                if bi < len(branch_steps) - 1:
+                    prev_nid = bid
+
+            if first_branch_nid:
+                parent["doors_open"][branch_dir] = first_branch_nid
+            branch_count += 1
+            break  # one branch attempt per parent node
+
+    # Generate door hints for all nodes
+    for node in nodes.values():
+        hints: dict[str, str] = {}
+        for direction, target_nid in node["doors_open"].items():
+            if target_nid is not None:
+                hints[direction] = _content_hint(nodes[target_nid]["content"])
+        node["door_hints"] = hints
+
+    return {
+        "nodes": nodes,
+        "entry_node": "node_0",
+        "boss_node": f"node_{len(sequence) - 1}",
+    }
+
+
+def draw_tile_graph(
+    category_key: str,
+    tile_count: int,
+    boss_tile_id: int | None = None,
+    growth_cycle: int = 1,
+    max_retries: int = 25,
+) -> dict:
+    """Generate a branching dungeon graph (dungeon_run v2 format).
+
+    Main path of length `tile_count` (including boss) plus side branches:
+    30% chance per non-boss tile with free doors, max 3 branches, 1–2 tiles each.
+    Door hints assigned per direction from content type of the target node.
+
+    Numbers Policy starting values (tuning after L19):
+      BRANCH_CHANCE=0.30, MAX_BRANCHES=3, MAX_BRANCH_LENGTH=2
+
+    Returns:
+        {
+          "nodes": {node_id: {tile_id, position, doors_open, door_hints,
+                               content, visited, cleared, is_boss}},
+          "entry_node": str,
+          "boss_node": str,
+        }
+    Raises:
+        ValueError if pool too small or all retries fail.
+    """
+    conn = _get_db()
+    try:
+        non_boss = _load_tiles(conn, category_key, include_boss=False)
+        boss_pool = _load_tiles(conn, category_key, include_boss=True)
+        if not boss_pool:
+            boss_pool = non_boss
+        available = len(non_boss) + len(boss_pool)
+        if available < 2:
+            raise ValueError(
+                f"Category '{category_key}' has fewer than 2 tiles — cannot build dungeon"
+            )
+        tile_count = min(tile_count, available)
+    finally:
+        conn.close()
+
+    for _ in range(max_retries):
+        graph = _try_build_graph(non_boss, boss_pool, tile_count, boss_tile_id)
+        if graph:
+            return graph
+    raise ValueError(
+        f"Could not build valid dungeon graph in '{category_key}' after {max_retries} retries — "
+        f"pool may be too small or door distribution unbalanced"
+    )
+
+
+# ── L7: Boss checkpoint ───────────────────────────────────────────────────────
+
+def save_dungeon_checkpoint(campaign_id: int, character_id: int) -> dict:
+    """L7: Save boss checkpoint after boss is defeated.
+
+    Saves a world_state_snapshots row (source='dungeon_boss_checkpoint') and
+    appends the checkpoint to run['checkpoints']. Sets run['at_checkpoint']=True.
+    Called by L8 boss completion flow.
+    """
+    from app.services.world_state_service import save_snapshot
+
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run") or {}
+        char = conn.execute(
+            "SELECT sheet_json, gold, gold_gp FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        if not char:
+            return {}
+        sheet = json.loads(char["sheet_json"] or "{}")
+        inv_rows = conn.execute(
+            """SELECT item_key, weapon_key, consumable_key, quantity, equipped
+               FROM character_inventory WHERE character_id = ?""",
+            (character_id,),
+        ).fetchall()
+        inventory = [dict(r) for r in inv_rows]
+        turn_row = conn.execute(
+            "SELECT MAX(turn_number) AS t FROM campaign_turns WHERE campaign_id = ?", (campaign_id,)
+        ).fetchone()
+        turn_number = (turn_row["t"] or 0) if turn_row else 0
+
+        xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
+        xp_available = int(sheet.get("xp_available") or 0)
+
+        state_dict = {
+            "current_hp": sheet.get("current_hp"),
+            "max_hp": sheet.get("max_hp"),
+            "current_mana": sheet.get("current_mana"),
+            "gold": char["gold"],
+            "gold_gp": char["gold_gp"],
+            "inventory": inventory,
+            "xp_lifetime_earned": xp_lifetime,
+            "xp_available": xp_available,
+        }
+
+        snapshot_id = save_snapshot(campaign_id, turn_number, state_dict, source="dungeon_boss_checkpoint")
+
+        checkpoint: dict[str, Any] = {
+            "cycle": run.get("cycle", 1),
+            "source": "dungeon_boss_checkpoint",
+            "snapshot_id": snapshot_id,
+            "xp_lifetime_earned": xp_lifetime,
+            "xp_available": xp_available,
+        }
+
+        run.setdefault("checkpoints", []).append(checkpoint)
+        run["at_checkpoint"] = True
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+
+        return checkpoint
+    finally:
+        conn.close()
+
+
+# ── L8: Boss cleared hook + endless extension ─────────────────────────────────
+
+def on_boss_tile_cleared(campaign_id: int, character_id: int) -> dict:
+    """L8: Called after combat victory clears a boss tile node.
+
+    If current node is_boss_tile and boss_choice_pending not yet set:
+    - Grants boss loot (rarity adjusted for endless cycle via get_boss_loot_rarity_for_cycle)
+    - Saves boss checkpoint (L7 save_dungeon_checkpoint)
+    - Sets run['boss_choice_pending'] = True
+    Idempotent: second call returns early.
+    Returns {is_boss_tile: bool, loot: list[dict]}
+    """
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run") or {}
+        if not run or run.get("system") != "tiles_v2":
+            return {"is_boss_tile": False, "loot": []}
+        if run.get("boss_choice_pending"):
+            return {"is_boss_tile": True, "loot": []}
+        node_id = get_current_node_id(run, character_id)
+        if not node_id:
+            return {"is_boss_tile": False, "loot": []}
+        node = (run.get("graph") or {}).get("nodes", {}).get(node_id) or {}
+        content = node.get("content") or {}
+        if not content.get("is_boss_tile"):
+            return {"is_boss_tile": False, "loot": []}
+        dungeon_key = run.get("dungeon_key", "")
+        cycle = int(run.get("cycle", 1))
+        dungeon_tier = int(run.get("dungeon_difficulty", 1))
+        # Mark pending early to prevent double-grant on concurrent calls
+        run["boss_choice_pending"] = True
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+    finally:
+        conn.close()
+
+    from app.services.dungeon_service import (
+        roll_boss_loot_for_endless, grant_dungeon_loot,
+    )
+    loot_items, loot_tier = roll_boss_loot_for_endless(dungeon_key, cycle)
+    if loot_items:
+        try:
+            grant_dungeon_loot(character_id, campaign_id, loot_items, loot_tier=loot_tier)
+        except Exception:
+            pass
+
+    # Checkpoint after loot granted (captures loot in inventory)
+    try:
+        save_dungeon_checkpoint(campaign_id, character_id)
+    except Exception:
+        pass
+
+    return {"is_boss_tile": True, "loot": loot_items}
+
+
+def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
+    """L8: go_deeper — generate next segment and append to existing graph.
+
+    New segment length = tile_count + endless_growth_n × (new_cycle − 1).
+    New nodes use cycle-prefixed IDs to avoid collisions.
+    Boss node's first free door connects to new segment's entry.
+    Positions (col, row) continue the existing grid.
+    """
+    from app.services.dungeon_service import get_dungeon
+
+    # Read current run state
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run") or {}
+        if not run or run.get("system") != "tiles_v2":
+            raise ValueError("Brak aktywnego lochu kafelkowego (v2).")
+        current_cycle = int(run.get("cycle", 1))
+        dungeon_key = run.get("dungeon_key", "")
+        old_graph = run.get("graph") or {}
+        old_nodes = dict(old_graph.get("nodes") or {})
+        old_boss_nid = old_graph.get("boss_node") or ""
+    finally:
+        conn.close()
+
+    new_cycle = current_cycle + 1
+
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        raise ValueError("Dungeon not found.")
+    category_key = dungeon.get("tile_category_key")
+    if not category_key:
+        raise ValueError("Brak kategorii kafelków dla trybu endless.")
+
+    base_tile_count = int(dungeon.get("tile_count") or dungeon.get("rooms") or 4)
+    endless_growth_n = int(dungeon.get("endless_growth_n") or 0)
+    boss_tile_id = dungeon.get("boss_tile_id")
+
+    # Length = tile_count + n × (new_cycle − 1)
+    new_tile_count = max(2, base_tile_count + endless_growth_n * (new_cycle - 1))
+
+    # Generate new segment (reuses full graph builder including branches)
+    new_graph = draw_tile_graph(category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle)
+    new_nodes = new_graph.get("nodes") or {}
+    new_entry_key = new_graph.get("entry_node") or "node_0"
+    new_boss_key = new_graph.get("boss_node")
+
+    # Boss node position → determine attach direction
+    boss_node = old_nodes.get(old_boss_nid) or {}
+    boss_pos = list(boss_node.get("position") or [0, 0])
+    boss_doors = dict(boss_node.get("doors_open") or {})
+
+    free_dirs = [d for d, t in boss_doors.items() if t is None]
+    if free_dirs:
+        attach_dir = free_dirs[0]
+    else:
+        # All boss doors used — find an unused cardinal direction
+        attach_dir = next((d for d in DIRECTIONS if d not in boss_doors), "S")
+
+    opp_dir = OPPOSITE.get(attach_dir, "N")
+    dx, dy = OFFSET.get(attach_dir, (0, 1))
+    new_entry_pos = [boss_pos[0] + dx, boss_pos[1] + dy]
+
+    # Compute position delta to shift new graph next to boss
+    entry_node_data = new_nodes.get(new_entry_key) or {}
+    entry_old_pos = list(entry_node_data.get("position") or [0, 0])
+    pdx = new_entry_pos[0] - entry_old_pos[0]
+    pdy = new_entry_pos[1] - entry_old_pos[1]
+
+    # Remap new graph nodes: cycle-prefixed IDs + shifted positions
+    cycle_prefix = f"c{new_cycle}_"
+    remapped: dict[str, dict] = {}
+    new_boss_nid: str | None = None
+    for old_nid, node in new_nodes.items():
+        new_nid = cycle_prefix + old_nid
+        if old_nid == new_boss_key:
+            new_boss_nid = new_nid
+        shifted_pos = [node["position"][0] + pdx, node["position"][1] + pdy]
+        new_doors: dict[str, str | None] = {}
+        for d, tgt in (node.get("doors_open") or {}).items():
+            new_doors[d] = (cycle_prefix + tgt) if tgt else None
+        remapped[new_nid] = {**node, "position": shifted_pos, "doors_open": new_doors}
+
+    new_entry_nid = cycle_prefix + new_entry_key
+
+    # Connect: boss → new entry, new entry → boss
+    boss_doors[attach_dir] = new_entry_nid
+    if old_boss_nid in old_nodes:
+        old_nodes[old_boss_nid]["doors_open"] = boss_doors
+    remapped[new_entry_nid]["doors_open"][opp_dir] = old_boss_nid
+
+    # Merge graphs and save
+    all_nodes = {**old_nodes, **remapped}
+
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run") or {}
+        run["graph"]["nodes"] = all_nodes
+        run["graph"]["boss_node"] = new_boss_nid or (cycle_prefix + "node_0")
+        run["cycle"] = new_cycle
+        run["at_checkpoint"] = False
+        run["boss_choice_pending"] = False
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+        return {
+            "ok": True,
+            "new_cycle": new_cycle,
+            "new_segment_tile_count": new_tile_count,
+            "new_entry_node": new_entry_nid,
+            "new_boss_node": run["graph"]["boss_node"],
+        }
     finally:
         conn.close()

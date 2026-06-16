@@ -233,7 +233,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] U20 — Onboarding: poprawki triggerów kart. Retarget karty death_save na **pierwszy spadek HP<25%** (zamiast 1. rzutu na śmierć; czyta świeże HP z sheet w injectorze). Karta XP dopisana o instrukcję wydania PD (Odpoczynek→★ Długi→📖 Ucz się), karta rzutu ujednolicona o „Biegłość". **3 nowe karty:** durability (<50% trwałości założonego sprzętu), raids/napady (dziki hex + złoto>100), crafter (rozmowa z NPC `is_crafter`). **Decyzja Piotra (2026-06-13):** crafter via nowa kolumna `npcs.is_crafter` + migracja oznaczająca kowali (9 NPC na DEV) — żywa baza nie miała tej flagi ani flow rozmowy z rzemieślnikiem (kucie idzie z karty przedmiotu U16). Injector dostaje `character` (3 tory turns.py) + sygnał `npc_dialogue`. 13/13 pytest + 1/1 Playwright GREEN; live: HP 1/10 → payload `onboarding_cards:['death_save']` w torze streamingowym. — [#572](https://github.com/szmidtpiotr/ai-gm/issues/572) **needs-testing**
 
 ### Blok 6 — Lochy: stawka — ❌ WCHŁONIĘTE PRZEZ FAZĘ L (redesign 2026-06-12; nie wykonywać jako U)
-- [ ] ~~U21~~ → FAZA L: L7 (semantyka checkpointów; UWAGA: śmierć=koniec runu zamiast restartu — zmiana względem pierwotnego U21)
+- [x] ~~U21~~ → FAZA L: L7 (semantyka checkpointów; UWAGA: śmierć=koniec runu zamiast restartu — zmiana względem pierwotnego U21) — [#676](https://github.com/szmidtpiotr/ai-gm/issues/676)
 - [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
 - [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
 
@@ -325,31 +325,34 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — ▶ NASTĘPNA W KOLEJCE (FAZA S ✅ kompletna; dawna zależność L5↔S2 bezprzedmiotowa; prompt: prompt_l.md)
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (13/21; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
 ### Blok 1 — Silnik grafu
-- [ ] L1 — Konfiguracja kafelkowa lochu w DB + admin (tile_category_key, tile_count, boss_tile_id, endless_growth_n — dziś modal zbiera, baza nie zapisuje)
-- [ ] L2 — Generator rozgałęzionego grafu + dungeon_run v2 (odnogi, fog, door hints, powtórki z re-rollem, positions per postać — podwalina MP)
-- [ ] L3 — Wejście przez graf: /enter → tylko kafelki; 409 bez kategorii; blok [LOCH] w kontekście narratora (hybryda: opis z DB + koloryzacja LLM)
-- [ ] L4 — Ruch przez drzwi: POST /dungeons/move + exit_conditions + deterministyczny start walki + backtracking
+- [x] L1 — Konfiguracja kafelkowa lochu w DB + admin (tile_category_key, tile_count, boss_tile_id, endless_growth_n — dziś modal zbiera, baza nie zapisuje) — [#670](https://github.com/szmidtpiotr/ai-gm/issues/670)
+- [x] L2 — Generator rozgałęzionego grafu + dungeon_run v2 (odnogi, fog, door hints, powtórki z re-rollem, positions per postać — podwalina MP) — [#671](https://github.com/szmidtpiotr/ai-gm/issues/671)
+- [x] L3 — Wejście przez graf: /enter → tylko kafelki; 409 bez kategorii; blok [LOCH] w kontekście narratora (hybryda: opis z DB + koloryzacja LLM) — [#672](https://github.com/szmidtpiotr/ai-gm/issues/672)
+- [x] L4 — Ruch przez drzwi: POST /dungeons/move + exit_conditions + deterministyczny start walki + backtracking — [#673](https://github.com/szmidtpiotr/ai-gm/issues/673)
 
 ### Blok 2 — Mechaniki na kafelku
-- [ ] L5 — Walka: absolutna skala D1–D5 (koniec rubber-bandingu; dawne U23) — ⛔ WYMAGA S2
-- [ ] L6 — Skrzynie (rzut DEX, 3 próby, 30% pułapki), zagadki (3 próby + hinty), pułapki jako efekty, no soft-locks (dawne U22)
-- [ ] L7 — Checkpointy + śmierć kończy run + porzucenie 50% cooldown (dawne U21; NADPISUJE E16-restart)
-- [ ] L8 — Boss, loot, tryb nieskończony ("Wyjdź z łupem / Idź głębiej", segmenty +n, skalowanie cykli)
+- [x] L5 — Walka: absolutna skala D1–D5 (koniec rubber-bandingu; dawne U23; TIER_ENEMY_LEVELS, scale_enemy_for_dungeon_tier, re-roll Decyzja 9, endless %-bonus Decyzja 7, _dungeon_enemy_overrides w initiate_combat) — [#674](https://github.com/szmidtpiotr/ai-gm/issues/674) **needs-testing**
+- [x] L6 — Skrzynie (rzut DEX, 3 próby, 30% pułapki), zagadki (3 próby + hinty), pułapki jako efekty, no soft-locks (dawne U22) — [#675](https://github.com/szmidtpiotr/ai-gm/issues/675) **needs-testing**
+- [x] L7 — Checkpointy + śmierć kończy run + porzucenie 50% cooldown (dawne U21; NADPISUJE E16-restart) — [#676](https://github.com/szmidtpiotr/ai-gm/issues/676) **needs-testing**
+- [x] L8 — Boss, loot, tryb nieskończony ("Wyjdź z łupem / Idź głębiej", segmenty +n, skalowanie cykli) — [#677](https://github.com/szmidtpiotr/ai-gm/issues/677) **needs-testing**
 
 ### Blok 3 — Czystka legacy
-- [ ] L9 — Usunięcie trybu proceduralnego (kod + admin UI + testy legacy; seedy starych lochów is_active=0; DB bez destrukcji)
+- [x] L9 — Usunięcie trybu proceduralnego (kod + admin UI + testy legacy; seedy starych lochów is_active=0; DB bez destrukcji) — [#678](https://github.com/szmidtpiotr/ai-gm/issues/678)
 
 ### Blok 4 — UI gracza
-- [ ] L10 — Flaga dungeon_enabled dla graczy (admin toggle, default ON; egzekwowana w API i UI)
-- [ ] L11 — Mapa kafelkowa: przycisk mapy w lochu pokazuje graf (odwiedzone obrazki + zarysy za drzwiami + marker pozycji)
-- [ ] L12 — Wybór drzwi: przyciski kierunków pod composerem + klik na mapie + obraz kafelka w scenie + akcje skrzynia/zagadka
-- [ ] L13 — Modale: śmierć / porzucenie / resume / wybór po bossie
-- [ ] L13b — Wejście z ekranu startowego (bohater idle; scalenie trybów D9 w jeden "Loch")
+- [x] L10 — Flaga dungeon_enabled dla graczy (admin toggle, default ON; egzekwowana w API i UI) — [#679](https://github.com/szmidtpiotr/ai-gm/issues/679)
+- [x] L11 — Mapa kafelkowa: przycisk mapy w lochu pokazuje graf (odwiedzone obrazki + zarysy za drzwiami + marker pozycji) — [#680](https://github.com/szmidtpiotr/ai-gm/issues/680) **needs-testing**
+- [x] L12 — Wybór drzwi: przyciski kierunków pod composerem + klik na mapie + obraz kafelka w scenie + akcje skrzynia/zagadka — [#681](https://github.com/szmidtpiotr/ai-gm/issues/681) **needs-testing**
+- [x] L13 — Modale: śmierć / porzucenie / resume / wybór po bossie — [#682](https://github.com/szmidtpiotr/ai-gm/issues/682) **needs-testing**
+- [x] L13b — Wejście z ekranu startowego (bohater idle; scalenie trybów D9 w jeden "Wyprawa do lochu") — [#683](https://github.com/szmidtpiotr/ai-gm/issues/683) **needs-testing**
+- [ ] L13c — 🎮 KAMIEŃ MILOWY (mid-faza): `/game-smoke-dungeon --engine` po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią L14–L16). Łapie bugi grafu/ruchu/mapy/walki/bossa/endless/śmierci/porzucenia ZANIM włożymy treść. Bez TDD, raport do [SMOKE] FAZA L. Checkpointy zależne od treści (opisy PL, zagadki) = N/D. Zaliczone = przebieg silnika bez P0; werdykt min. GRYWALNY Z ZASTRZEŻENIAMI.
+  - SMOKE 2026-06-16: pierwszy przebieg **NIEGRYWALNY** (1×P0). Działa: graf/ruch/walka(skala D1–D5)/skrzynia/boss/endless(+1lvl/cykl)/flaga. Defekty: **#684 P0** — brak `import math` → `/dungeons/death` i `/dungeons/exit` zwracają 500; **#685 P1→P0** — entry tile z wrogami = soft-lock. Raport: #686.
+  - 🟢 FIX 2026-06-16: oba naprawione na DEV i przetestowane ponownie — death 200 (+72h cd), abandon 200 (+36h cd), 0/20 enters z combat entry. Werdykt engine: **GRYWALNY (bez P0)**. Zmiany w drzewie roboczym FAZA L (niezacommitowane). Zaznaczyć [x] po wizualnej weryfikacji UI + commicie FAZA L; wtedy zamknąć #684/#685.
 
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
 - [ ] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie)
@@ -359,7 +362,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ### Blok 6 — Weryfikacja
 - [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
-- [ ] L19 — 🎮 KAMIEŃ MILOWY: playtest lochu (2 cykle endless, śmierć z checkpointem, porzucenie, mobile; raport do [SMOKE] FAZA L; bez TDD)
+- [ ] L19 — 🎮 KAMIEŃ MILOWY: pełny playtest lochu skillem `/game-smoke-dungeon` (na treści krypta po L16: 2 cykle endless, śmierć z checkpointem, porzucenie, mapa, mobile; 14 checkpointów; raport do [SMOKE] FAZA L; bez TDD). Pierwszy kandydat na loch GRYWALNY.
 
 > Poza zakresem FAZY L (zapisane w CZĘŚCI AJ): multiplayer w lochach (tylko kształt danych), rotacja kafelków, leaderboard endless, przedmioty dungeon-exclusive (kontent), pełny podsystem pułapek (wykrywanie/rozbrajanie).
 

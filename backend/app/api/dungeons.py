@@ -15,6 +15,22 @@ def _get_db():
     return conn
 
 
+def _is_dungeon_enabled() -> bool:
+    """Read dungeon_enabled from game_mode_flags in game_config_meta. Default True."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'game_mode_flags'"
+        ).fetchone()
+        if row and row[0]:
+            return bool(json.loads(row[0]).get("dungeon_enabled", True))
+        return True
+    except Exception:
+        return True
+    finally:
+        conn.close()
+
+
 def _get_hero_level(character_id: int) -> int:
     conn = _get_db()
     try:
@@ -112,10 +128,12 @@ def _save_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> None:
     state_dict = {
         "current_hp": sheet.get("current_hp"),
         "max_hp": sheet.get("max_hp"),
+        "current_mana": sheet.get("current_mana"),  # L7: for mana restore on death
         "gold": char["gold"],
         "gold_gp": char["gold_gp"],
         "inventory": inventory,
-        "dungeon_key": None,  # populated by caller context, available via session_flags
+        "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),  # L7: XP rollback
+        "xp_available": int(sheet.get("xp_available") or 0),
     }
     save_snapshot(campaign_id, turn_number, state_dict, source="dungeon_enter")
 
@@ -130,7 +148,14 @@ class DungeonEnterReq(BaseModel):
 
 @router.post("/dungeons/{dungeon_key}/enter")
 def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
-    from app.services.dungeon_service import enter_dungeon as _enter, get_dungeon
+    if not _is_dungeon_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "dungeon_disabled", "message": "Lochy są obecnie wyłączone przez administratora."},
+        )
+
+    from app.services.dungeon_service import get_dungeon
+    from app.services.dungeon_tile_service import enter_dungeon_tiles
 
     dungeon = get_dungeon(dungeon_key)
     if not dungeon:
@@ -139,125 +164,77 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
     hero_level = _get_hero_level(req.character_id)
 
     try:
-        instance = _enter(
+        instance = enter_dungeon_tiles(
             req.campaign_id, req.character_id, dungeon_key, hero_level,
             previous_campaign_id=req.previous_campaign_id
         )
     except PermissionError as e:
-        parts = str(e).split(":")
+        parts = str(e).split("|")
         detail: dict = {"error": "dungeon_on_cooldown"}
         if len(parts) >= 3:
             detail["cooldown_until"] = parts[1]
-            detail["hours_remaining"] = float(parts[2])
+            try:
+                detail["hours_remaining"] = float(parts[2])
+            except (ValueError, IndexError):
+                pass
         raise HTTPException(status_code=423, detail=detail)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     _save_dungeon_entry_snapshot(req.campaign_id, req.character_id)
 
-    first_room = instance["rooms"][0] if instance["rooms"] else {}
-    room_type = first_room.get("room_type", "combat")
-    atm = instance.get("atmosphere", "")
+    # Build entry narrative from tile description (Decision 3: DB desc + LLM colorizes)
     label = instance["dungeon_label"]
+    graph = instance.get("graph") or {}
+    nodes = graph.get("nodes") or {}
+    entry_node_id = graph.get("entry_node", "")
+    entry_node = nodes.get(entry_node_id) or {}
+    entry_content = entry_node.get("content") or {}
+    entry_desc = entry_content.get("room_description") or ""
 
-    narrative = f"Wkraczasz do *{label}*. {atm}"
-    if room_type == "combat":
-        enemy_label = first_room.get("enemy_label") or first_room.get("enemy_key") or "wroga"
-        narrative += f" Pierwsza komnata — {enemy_label} staje na twej drodze."
-    elif room_type == "riddle":
-        narrative += " Drzwi zabezpieczone zagadką. Musisz odpowiedzieć poprawnie."
-    elif room_type == "trap":
-        narrative += " Wchodząc, czujesz że powietrze jest inne. Ostrożnie."
-    elif room_type == "chest":
-        narrative += " Glimmer of gold catches your eye — a chest in the corner."
-    elif room_type == "rest":
-        narrative += " " + first_room.get("rest_description", "Spokojne miejsce.")
+    narrative = f"Wkraczasz do *{label}*."
+    if entry_desc:
+        narrative += f" {entry_desc}"
 
     return {"ok": True, "dungeon_run": instance, "room_narrative": narrative}
 
 
-# ── Advance room ──────────────────────────────────────────────────────────────
+# ── Legacy endpoints (L9: removed) ───────────────────────────────────────────
 
 @router.post("/dungeons/advance-room")
-def advance_dungeon_room(req: DungeonEnterReq):
-    from app.services.dungeon_service import (
-        advance_room, get_active_dungeon_run, complete_dungeon,
-        get_current_room, roll_boss_loot, grant_dungeon_loot
-    )
-
-    run = get_active_dungeon_run(req.campaign_id)
-    if not run:
-        raise HTTPException(status_code=409, detail="No active dungeon run")
-
-    updated_run = advance_room(req.campaign_id)
-
-    # If dungeon completed, record clear + roll boss loot
-    if updated_run.get("completed"):
-        boss_loot: list[dict] = []
-        try:
-            boss_loot = roll_boss_loot(updated_run["dungeon_key"])
-            if boss_loot:
-                granted = grant_dungeon_loot(
-                    req.character_id, req.campaign_id, boss_loot,
-                    loot_tier=updated_run.get("loot_tier"),
-                )
-                updated_run.setdefault("loot_collected", []).extend(granted)
-        except Exception:
-            pass
-        try:
-            complete_dungeon(req.character_id, updated_run["dungeon_key"])
-        except Exception:
-            pass
-        return {
-            "ok": True,
-            "dungeon_run": updated_run,
-            "completed": True,
-            "loot": boss_loot,
-            "narrative": f"Pokonałeś *{updated_run['dungeon_label']}*! Zdobyłeś łupy i możesz wyjść.",
-        }
-
-    next_room = get_current_room(updated_run)
-    if not next_room:
-        raise HTTPException(status_code=409, detail="Room not found")
-
-    room_type = next_room.get("room_type", "combat")
-    room_num = updated_run["current_room"]
-    total = updated_run["total_rooms"]
-
-    narratives = {
-        "combat": f"Komnata {room_num}/{total} — {next_room.get('enemy_label') or next_room.get('enemy_key', 'wróg')} czeka.",
-        "boss": f"KOMNATA BOSSA {room_num}/{total} — {next_room.get('enemy_label') or next_room.get('enemy_key', 'boss')} strzeże wyjścia!",
-        "riddle": f"Komnata {room_num}/{total} — zagadka. Odgadnij aby przejść.",
-        "trap": f"Komnata {room_num}/{total} — {next_room.get('trap', {}).get('description', 'Pułapka!')}",
-        "chest": f"Komnata {room_num}/{total} — skrzynia skarbów.",
-        "rest": f"Komnata {room_num}/{total} — {next_room.get('rest_description', 'Chwila odpoczynku.')}",
-    }
-
-    return {
-        "ok": True,
-        "dungeon_run": updated_run,
-        "completed": False,
-        "next_room": next_room,
-        "narrative": narratives.get(room_type, f"Komnata {room_num}/{total}."),
-    }
-
-
-# ── Resolve non-combat room ───────────────────────────────────────────────────
-
-class DungeonResolveReq(BaseModel):
-    character_id: int
-    campaign_id: int
-    player_input: str | None = None  # riddle answer or empty for hint request
+def advance_dungeon_room_gone():
+    raise HTTPException(status_code=410, detail="Procedural dungeon system removed. Use /dungeons/move instead.")
 
 
 @router.post("/dungeons/resolve-room")
-def resolve_dungeon_room(req: DungeonResolveReq):
-    from app.services.dungeon_service import resolve_room, grant_dungeon_loot, get_active_dungeon_run
+def resolve_dungeon_room_gone():
+    raise HTTPException(status_code=410, detail="Procedural dungeon system removed. Use /dungeons/resolve-tile instead.")
+
+
+# ── L6: Resolve tile action ───────────────────────────────────────────────────
+
+class DungeonResolveTileReq(BaseModel):
+    character_id: int
+    campaign_id: int
+    action: str  # open_chest | answer_riddle | riddle_hint | rest
+    payload: dict | None = None  # e.g. {"answer": "..."} for answer_riddle
+
+
+@router.post("/dungeons/resolve-tile")
+def resolve_dungeon_tile(req: DungeonResolveTileReq):
+    """L6: Resolve non-combat tile action.
+
+    Returns action result. 409 when no active v2 dungeon run.
+    U22 fallback: missing node returns ok=True, fallback=True (pusty korytarz).
+    """
+    from app.services.dungeon_tile_service import resolve_tile_action
+    from app.services.dungeon_service import grant_dungeon_loot, get_active_dungeon_run
 
     try:
-        result = resolve_room(req.campaign_id, req.character_id, req.player_input)
+        result = resolve_tile_action(req.campaign_id, req.character_id, req.action, req.payload)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
-    # Grant any chest loot to inventory
     if result.get("loot"):
         run = get_active_dungeon_run(req.campaign_id)
         granted = grant_dungeon_loot(
@@ -267,6 +244,106 @@ def resolve_dungeon_room(req: DungeonResolveReq):
         result["loot"] = granted
 
     return {"ok": True, **result}
+
+
+# ── L4: Move through door ─────────────────────────────────────────────────────
+
+class DungeonMoveReq(BaseModel):
+    character_id: int
+    campaign_id: int
+    direction: str  # N / S / E / W
+
+
+@router.post("/dungeons/move")
+def dungeon_move(req: DungeonMoveReq):
+    """L4: Move through a door in the given direction.
+
+    Returns {ok, node, content, room_description, fog_discovered, is_cleared, combat, narrative}
+    on success, or {ok: false, blocked: true, reason: str} when blocked.
+    409 when no active v2 dungeon run.
+    """
+    from app.services.dungeon_tile_service import move_through_door
+    try:
+        result = move_through_door(req.campaign_id, req.character_id, req.direction)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return result
+
+
+# ── L8: Boss choice ───────────────────────────────────────────────────────────
+
+class DungeonBossChoiceReq(BaseModel):
+    character_id: int
+    campaign_id: int
+    choice: str  # "exit" | "go_deeper"
+
+
+@router.post("/dungeons/boss-choice")
+def dungeon_boss_choice(req: DungeonBossChoiceReq):
+    """L8: After boss defeated (boss_choice_pending=True), player chooses exit or go_deeper.
+
+    exit: complete_dungeon() + 100% cooldown + return to previous campaign.
+    go_deeper: extend_dungeon_for_endless() → new graph segment, cycle+=1.
+    409 when no active v2 run or boss_choice_pending is False.
+    """
+    from app.services.dungeon_service import (
+        get_active_dungeon_run, complete_dungeon, clear_dungeon_run,
+    )
+    from app.services.dungeon_tile_service import extend_dungeon_for_endless
+    import sqlite3 as _sl
+
+    run = get_active_dungeon_run(req.campaign_id)
+    if not run:
+        raise HTTPException(status_code=409, detail="Brak aktywnego runu lochu.")
+    if not run.get("boss_choice_pending"):
+        raise HTTPException(status_code=409, detail="Nie ma oczekującego wyboru po bossie.")
+
+    if req.choice == "exit":
+        dungeon_key = run.get("dungeon_key", "")
+        try:
+            complete_dungeon(req.character_id, dungeon_key)
+        except Exception:
+            pass
+
+        previous_campaign_id = None
+        conn2 = _sl.connect(DB_PATH)
+        conn2.row_factory = _sl.Row
+        try:
+            row = conn2.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (req.campaign_id,)
+            ).fetchone()
+            if row:
+                _flags = json.loads(row["session_flags"] or "{}")
+                previous_campaign_id = _flags.get("dungeon_previous_campaign_id")
+        finally:
+            conn2.close()
+
+        clear_dungeon_run(req.campaign_id)
+        return {
+            "ok": True,
+            "choice": "exit",
+            "previous_campaign_id": previous_campaign_id,
+            "narrative": "Wychodzisz z lochu z łupami. Dobrze zrobione.",
+        }
+
+    elif req.choice == "go_deeper":
+        try:
+            result = extend_dungeon_for_endless(req.campaign_id, req.character_id)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        return {
+            "ok": True,
+            "choice": "go_deeper",
+            "new_cycle": result["new_cycle"],
+            "new_segment_tile_count": result["new_segment_tile_count"],
+            "new_entry_node": result["new_entry_node"],
+            "new_boss_node": result["new_boss_node"],
+            "narrative": f"Schodzisz głębiej. Cykl {result['new_cycle']} — wrogowie są silniejsi.",
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail="choice musi być 'exit' lub 'go_deeper'.")
 
 
 # ── Death handling ────────────────────────────────────────────────────────────
@@ -282,31 +359,57 @@ def dungeon_death(req: DungeonEnterReq):
 
 @router.post("/dungeons/exit")
 def exit_dungeon(req: DungeonEnterReq):
-    """Exit dungeon: clear run from session, return previous_campaign_id if set."""
-    from app.services.dungeon_service import get_active_dungeon_run, clear_dungeon_run
+    """L7: Abandon dungeon or exit on win.
+
+    Mid-segment: restore from last checkpoint + 50% cooldown.
+    At checkpoint (boss defeated): full reward + 100% cooldown.
+    Completed run (win): no restore, no extra cooldown (complete_dungeon already called).
+    """
+    from app.services.dungeon_service import (
+        get_active_dungeon_run, clear_dungeon_run, handle_dungeon_abandon
+    )
     import sqlite3 as _sl
 
     run = get_active_dungeon_run(req.campaign_id)
-    previous_campaign_id = None
 
-    # Get previous_campaign_id from session flags
+    previous_campaign_id = None
     conn = _sl.connect(DB_PATH)
     conn.row_factory = _sl.Row
     try:
-        row = conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (req.campaign_id,)).fetchone()
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (req.campaign_id,)
+        ).fetchone()
         if row:
             flags = json.loads(row["session_flags"] or "{}")
             previous_campaign_id = flags.get("dungeon_previous_campaign_id")
     finally:
         conn.close()
 
+    if run and run.get("completed"):
+        # Win path: complete_dungeon already called; just clear the run
+        clear_dungeon_run(req.campaign_id)
+        return {
+            "ok": True,
+            "previous_campaign_id": previous_campaign_id,
+            "was_completed": True,
+            "was_failed": False,
+            "restored": False,
+            "at_checkpoint": False,
+        }
+
+    # Abandon path: L7 logic (mid-segment or at checkpoint)
+    abandon_result = handle_dungeon_abandon(req.campaign_id, req.character_id)
     clear_dungeon_run(req.campaign_id)
 
     return {
         "ok": True,
         "previous_campaign_id": previous_campaign_id,
-        "was_completed": run.get("completed", False) if run else False,
-        "was_failed": run.get("failed", False) if run else False,
+        "was_completed": abandon_result.get("at_checkpoint", False),
+        "was_failed": not abandon_result.get("at_checkpoint", False),
+        "restored": abandon_result.get("restored", False),
+        "at_checkpoint": abandon_result.get("at_checkpoint", False),
+        "cooldown_until": abandon_result.get("cooldown_until"),
     }
 
 

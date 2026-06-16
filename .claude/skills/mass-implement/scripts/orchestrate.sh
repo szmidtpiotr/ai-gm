@@ -66,7 +66,10 @@ fi
 # Parse range bounds (numeric). Empty => all.
 RMIN=""; RMAX=""
 if [ -n "$RANGE_ARG" ]; then
-  rclean=$(echo "$RANGE_ARG" | tr 'a-z' 'A-Z' | sed -E "s/$PREFIX//g")
+  # Strip ALL letters (uppercased): removes the prefix AND any task-id suffix
+  # (e.g. "L10-l13b" -> "10-13"). Bounds are numeric; a suffixed task like L13b
+  # has num=13 so it is still included when it falls inside the numeric window.
+  rclean=$(echo "$RANGE_ARG" | tr 'a-z' 'A-Z' | sed -E 's/[A-Z]//g')
   if echo "$rclean" | grep -qE '^[0-9]+-[0-9]+$'; then
     RMIN=$(echo "$rclean" | cut -d- -f1); RMAX=$(echo "$rclean" | cut -d- -f2)
   elif echo "$rclean" | grep -qE '^[0-9]+$'; then

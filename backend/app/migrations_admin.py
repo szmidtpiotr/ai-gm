@@ -3354,6 +3354,22 @@ def _ensure_loot_entries_full_schema(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys=ON")
 
 
+def _ensure_dungeon_tile_l1_columns(conn: sqlite3.Connection) -> None:
+    """L1 (#670): game_dungeons tile config columns for the tile-based dungeon mode."""
+    for sql in [
+        "ALTER TABLE game_dungeons ADD COLUMN tile_category_key TEXT",
+        "ALTER TABLE game_dungeons ADD COLUMN tile_count INTEGER",
+        "ALTER TABLE game_dungeons ADD COLUMN boss_tile_id INTEGER",
+        "ALTER TABLE game_dungeons ADD COLUMN endless_growth_n INTEGER DEFAULT 0",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+
 def _ensure_dungeon_v2_schema(conn: sqlite3.Connection) -> None:
     """Dungeon V2: room types, riddle bank, loot tiers, source_exclusive on items/weapons."""
     # game_dungeons new columns
@@ -4240,6 +4256,21 @@ def _seed_onboarding_cards_into_knowledge(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _l9_deactivate_legacy_dungeons(conn: sqlite3.Connection) -> None:
+    """L9: Deactivate all legacy procedural dungeons (those without tile_category_key).
+
+    Idempotent — safe to run on every startup. Columns are preserved; only is_active flipped.
+    """
+    try:
+        conn.execute(
+            "UPDATE game_dungeons SET is_active = 0 WHERE tile_category_key IS NULL OR tile_category_key = ''"
+        )
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-l9-deactivate-legacy-dungeons")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-l9-deactivate-legacy-dungeons", error=str(e))
+
+
 def _refresh_knowledge_content(conn: sqlite3.Connection) -> None:
     """#594 audit: fix stale/corrupt knowledge_book entries, dedupe, add gaps.
 
@@ -4421,6 +4452,7 @@ def run_admin_migrations() -> None:
         _backfill_enemy_loot_tables(conn)
         _backfill_enemy_stats_json(conn)
         _ensure_user_llm_settings_mode(conn)
+        _ensure_dungeon_tile_l1_columns(conn)
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
@@ -4440,6 +4472,7 @@ def run_admin_migrations() -> None:
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
+        _l9_deactivate_legacy_dungeons(conn)
     finally:
         conn.close()
 

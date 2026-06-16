@@ -7804,6 +7804,34 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: #0d0904; font-weight: 700; padding: 10px 28px; cursor: pointer; font-size: 0.9rem; }
 .dungeon-complete-btn:hover { background: #e8951a; }
 
+/* ── L13 (#682): Dungeon modals (death / abandon / resume / boss) ────────── */
+.dungeon-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center; z-index: 1200; padding: 20px; }
+.dungeon-modal-overlay[hidden] { display: none; }
+.dungeon-modal { background: #0d0904; border: 1px solid #4a2510; border-radius: 12px;
+  padding: 28px 24px; max-width: 380px; width: 100%; text-align: center;
+  box-shadow: 0 0 40px rgba(200,100,20,0.15); }
+.dungeon-modal__icon { font-size: 2.2rem; margin-bottom: 10px; }
+.dungeon-modal__title { font-family: Cinzel, serif; font-size: 1.05rem; color: #c9751a;
+  font-weight: 700; margin-bottom: 16px; letter-spacing: 0.04em; }
+.dungeon-modal__body { font-size: 0.85rem; color: #c0a880; margin-bottom: 20px; line-height: 1.5; }
+.dungeon-modal__body p { margin: 6px 0; }
+.dungeon-modal__warn { color: #e09030 !important; }
+.dungeon-modal__muted { color: #6a5040 !important; font-size: 0.78rem !important; }
+.dungeon-modal__highlight { color: #e09030 !important; font-family: Cinzel, serif; font-size: 0.9rem !important; }
+.dungeon-modal__loot { font-size: 0.82rem; color: #a09070; margin-bottom: 10px; text-align: left; }
+.dungeon-modal__loot ul { list-style: none; padding: 0; margin: 0; }
+.dungeon-modal__loot li { padding: 3px 0; }
+.dungeon-modal__btns { display: flex; flex-direction: column; gap: 10px; }
+.dungeon-modal__btn { border: none; border-radius: 8px; padding: 11px 20px; cursor: pointer;
+  font-size: 0.88rem; font-weight: 600; transition: background 0.15s; }
+.dungeon-modal__btn--primary { background: #c9751a; color: #0d0904; }
+.dungeon-modal__btn--primary:hover { background: #e8951a; }
+.dungeon-modal__btn--danger { background: #8a1010; color: #eee; }
+.dungeon-modal__btn--danger:hover { background: #b01515; }
+.dungeon-modal__btn--cancel { background: #1a1208; border: 1px solid #3a2510; color: #a09070; }
+.dungeon-modal__btn--cancel:hover { border-color: #c9751a; color: #c9751a; }
+
 /* ── Dungeon Map ─────────────────────────────────────────────────────────── */
 .dmap-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
   display: flex; align-items: flex-end; justify-content: center;

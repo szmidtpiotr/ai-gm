@@ -3613,6 +3613,19 @@ def admin_create_dungeon(
             ),
         )
         conn.commit()
+        # L1 (#670): tile config columns
+        tile_updates = {
+            k: req.get(k)
+            for k in ("tile_category_key", "tile_count", "boss_tile_id", "endless_growth_n")
+            if req.get(k) is not None
+        }
+        if tile_updates:
+            sets = ", ".join(f"{k} = ?" for k in tile_updates)
+            conn.execute(
+                f"UPDATE game_dungeons SET {sets} WHERE key = ?",
+                list(tile_updates.values()) + [key],
+            )
+            conn.commit()
         return {"ok": True, "key": key}
     except sqlite3.IntegrityError:
         raise HTTPException(
@@ -3632,6 +3645,7 @@ def admin_update_dungeon(
         "label", "location_key", "rooms", "enemy_pool", "boss_enemy",
         "loot_tier", "atmosphere", "cooldown_hours", "min_level", "is_active",
         "dungeon_difficulty",
+        "tile_category_key", "tile_count", "boss_tile_id", "endless_growth_n",
     }
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:
@@ -4695,7 +4709,6 @@ _GAME_MODE_DEFAULTS = {
     "ai_campaign_enabled":   True,
     "prebuilt_enabled":      True,
     "dungeon_enabled":       True,
-    "dungeon_tiles_enabled": True,
     "multiplayer_enabled":   False,
 }
 _GAME_MODE_META_KEY = "game_mode_flags"

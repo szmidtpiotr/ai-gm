@@ -152,6 +152,7 @@ class ContextInjector:
             self._build_character_state_block(character, active_conditions),
             self._build_tone_block(tone),
             self._build_content_index_block(mechanic_result),
+            self._build_loch_block(session_flags),
             NARRATOR_CONSTRAINTS,
         ]
 
@@ -625,6 +626,50 @@ class ContextInjector:
             lines.append(f"Strach: {fear_label}")
 
         return "\n".join(lines)
+
+    def _build_loch_block(self, session_flags: dict) -> str:
+        """L3 (Decision 3) — inject dungeon tile context for the LLM narrator.
+
+        When the active dungeon_run is v2 (tile graph), provide the current tile's
+        room_description and door_hints. LLM must colorize 1–2 sentences only — no
+        inventing new facts.
+        """
+        run = (session_flags or {}).get("dungeon_run") or {}
+        if run.get("system") != "tiles_v2":
+            return ""
+
+        graph = run.get("graph") or {}
+        nodes = graph.get("nodes") or {}
+        positions = run.get("positions") or {}
+
+        # Find the current node for the first character position
+        current_node_id = next(iter(positions.values()), None) or graph.get("entry_node")
+        if not current_node_id:
+            return ""
+
+        node = nodes.get(current_node_id) or {}
+        content = node.get("content") or {}
+        room_description = content.get("room_description") or ""
+        if not room_description:
+            return ""
+
+        door_hints = node.get("door_hints") or {}
+        open_doors = node.get("doors_open") or {}
+        hints_parts = [
+            f"{d}: {door_hints[d]}"
+            for d in ("N", "S", "E", "W")
+            if open_doors.get(d) and door_hints.get(d)
+        ]
+        hints_str = ", ".join(hints_parts) if hints_parts else "brak otwartych drzwi"
+
+        return (
+            "[LOCH]\n"
+            f"Opis pomieszczenia: {room_description}\n"
+            f"Drzwi: {hints_str}\n"
+            "Instrukcja: Koloryzuj opis 1–2 zdaniami klimatycznie. "
+            "Nie wymyślaj nowych faktów. Nie zmieniaj opisu pomieszczenia.\n"
+            "[/LOCH]"
+        )
 
     def _build_tone_block(self, tone: str) -> str:
         return f"=== TON KAMPANII ===\n{tone}"

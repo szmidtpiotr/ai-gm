@@ -4987,7 +4987,7 @@ Cap poziomu bohatera = 10 (tabela progów XP z F18, `xp_service.py`). Endless po
 | CZĘŚĆ AA — nawigacja lazy + diagram śmierci | NADPISANE Decyzjami 2 i 6. CZĘŚĆ AA dostaje banner odsyłający do CZĘŚCI AJ; opisy historyczne zostają jako kontekst. |
 | S2 (FAZA S) — statbloki wrogów | ~~Twarda zależność: L5 wymaga S2~~ → **bezprzedmiotowe od 2026-06-13**: cała FAZA S kończy się przed startem FAZY L, więc S2 zawsze [x] przy L5. |
 | U10 — effect schema lockdown | `active_states_json`/efekty pułapek w L6: jeśli U10 [x] — schemat U10; jeśli nie — istniejący format efektów + refactor przy U10 (wzorzec U26/S7). |
-| D9 — ekran kampanii, 5 trybów (Loch / Loch-kafelki osobno) | Scalone w jeden tryb „Loch" (L13b aktualizuje D9 i UI). |
+| D9 — ekran kampanii, 5 trybów (Loch / Loch-kafelki osobno) | Scalone w jeden tryb „Wyprawa do lochu" — ✅ ZROBIONE (L13b #683): kafelek D9 przemianowany, label w campaign_modes_service zaktualizowany. |
 | E21 (#436) wejście z hexa, E22 (#437) resume | Zachowane — L8/L13 adaptują do grafu v2 i checkpointów. |
 | E17 — rarity per difficulty | Reuse `get_loot_rarity_for_difficulty()` w L8 (boss) i L6 (skrzynie). |
 | H5 (FAZA 6) — GPU pipeline tile→Vision→opis→DB | Realizowane wcześniej jako L16; H5 dostaje adnotację w notes.md. |
@@ -5012,8 +5012,13 @@ Blok 1: L1 → L2 → L3 → L4            (silnik grafu)
 Blok 2: L5 [WYMAGA S2], L6, L7 → L8  (mechaniki na kafelku; L5–L7 po L4, równolegle między sobą)
 Blok 3: L9                            (czystka legacy — dopiero gdy nowy flow działa end-to-end)
 Blok 4: L10 (niezależne, można od razu); L11 → L12 → L13, L13b (po L4)
+        → L13c (🎮 smoke-bramka silnika: /game-smoke-dungeon --engine; P0 → hotfix PRZED Blokiem 5)
 Blok 5: L14 → L15 → L16              (kontent; L14–L15 niezależne od kodu — można równolegle z Blokiem 1; L16 wymaga L14+L15, konfiguracja lochu wymaga L1)
-Blok 6: L18 (po L8+L12) → L19 (kamień milowy, po wszystkim poza L17) → L17 (kolejne kategorie, po L19)
+Blok 6: L18 (po L8+L12) → L19 (🎮 kamień: /game-smoke-dungeon pełny, po wszystkim poza L17) → L17 (kolejne kategorie, po L19)
+
+🎮 Dwie bramki smoke (skill /game-smoke-dungeon):
+  L13c po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią); P0 blokuje wejście w Blok 5
+  L19  po Bloku 5 — pełny przebieg na krypcie z obrazkami/opisami; kandydat na loch GRYWALNY
 ```
 
 ### Numbers Policy FAZY L (wartości startowe — tuning po L19)
@@ -5221,6 +5226,14 @@ Blok 6: L18 (po L8+L12) → L19 (kamień milowy, po wszystkim poza L17) → L17 
 
 **Weryfikacja:** Ręcznie: bohater idle → ekran start → loch → graf się generuje; powrót po wyjściu na ekran start.
 
+#### L13c — 🎮 Kamień milowy (mid-faza): smoke silnika lochu po Bloku 4
+
+**Cel prostym językiem:** Zanim włożymy treść (kafelki, obrazki, opisy — Blok 5), sprawdzamy w realnym przebiegu, że SAM SILNIK i UI lochu działają: graf, ruch przez drzwi, mapa, walka, boss, tryb nieskończony, śmierć z checkpointem, porzucenie. Tanie złapanie bugów rdzenia, zanim treść je przykryje.
+
+**Dla agenta:** Czysty playtest — BEZ cyklu TDD, BEZ nowego issue [TASK]. Skill `/game-smoke-dungeon --engine`. Na kafelkach TESTOWYCH (jeśli brak kategorii z kafelkami, skill seeduje minimalną testową — bez obrazków). Raport do `[SMOKE] FAZA L` (komentarz). Checkpointy zależne od treści (opisy PL — chk 2, zagadki — chk 7) = N/D „brak treści (L14–L16)". Reszta (graf, ruch, mapa, walka skala D1–D5, boss, endless, śmierć kończy run, porzucenie 50% cooldown, flaga dungeon_enabled, reakcje SF10 w lochu) grana normalnie.
+
+**Weryfikacja:** oba tryby wejścia (hex + ekran startu) jeśli L13b gotowe; przebieg silnika bez P0. Zaliczone = werdykt min. GRYWALNY Z ZASTRZEŻENIAMI; każdy P0 (soft-lock, śmierć restartuje pokój, wejście pada) → hotfix PRZED Blokiem 5. Odhacz w notes.md z linkiem do raportu.
+
 ---
 
 ### BLOK 5 — Kontent: kategoria krypta + obrazki (L14–L17; bez TDD — kontent/skrypty z weryfikacją Piotra)
@@ -5281,11 +5294,11 @@ Blok 6: L18 (po L8+L12) → L19 (kamień milowy, po wszystkim poza L17) → L17 
 
 **Weryfikacja:** spec zielony na DEV 2× z rzędu.
 
-#### L19 — 🎮 KAMIEŃ MILOWY: playtest lochu
+#### L19 — 🎮 KAMIEŃ MILOWY: pełny playtest lochu (na treści)
 
-**Cel prostym językiem:** Pełna wyprawa zagrana jak przez gracza — od ekranu startu, przez 2 cykle endless, po śmierć/wyjście — z raportem co działa, a co nie.
+**Cel prostym językiem:** Pełna wyprawa zagrana jak przez gracza — od ekranu startu, przez 2 cykle endless, po śmierć/wyjście — z raportem co działa, a co nie. Pierwszy kandydat na loch GRYWALNY.
 
-**Dla agenta:** Bez TDD, bez issue [TASK] — raport do issue `[SMOKE] FAZA L`. Scenariusz: wejście z ekranu start (L13b) + wejście z hexa (E21), pełny segment, boss, „idź głębiej", drugi boss, śmierć w cyklu 3 (weryfikacja checkpointu: XP/gold/HP), porzucenie w osobnym runie (50% cooldown), mapa i przyciski na telefonie. Defekty → issues P0/P1/P2. Zaliczone = GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2.
+**Dla agenta:** Skill `/game-smoke-dungeon` (tryb pełny, na treści krypta po L16). Bez TDD, bez issue [TASK] — raport do issue `[SMOKE] FAZA L`. 14 checkpointów ze skilla. Scenariusz: wejście z ekranu start (L13b) + wejście z hexa (E21), pełny segment, boss, „idź głębiej", drugi boss, śmierć w cyklu 3 (weryfikacja checkpointu: XP/gold/HP), porzucenie w osobnym runie (50% cooldown), mapa i przyciski na telefonie, reakcje SF10 w walce lochu. Defekty → issues P0/P1/P2. Zaliczone = GRYWALNY lub Z ZASTRZEŻENIAMI wyłącznie przez P2. **Różni się od L13c:** L13c = silnik na kafelkach testowych (przed treścią); L19 = pełny na prawdziwej krypcie z obrazkami/opisami.
 
 ---
 

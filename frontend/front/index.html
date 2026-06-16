@@ -565,8 +565,8 @@
         <button type="button" class="adv-card adv-card--dungeon" id="dungeon-picker-btn">
           <div class="adv-card__icon">⛏</div>
           <div class="adv-card__body">
-            <h3>Loch</h3>
-            <p>Ekspedycja do losowego lochu — szybka walka, łupy, bez fabuły</p>
+            <h3>Wyprawa do lochu</h3>
+            <p>Ekspedycja do kafelkowego lochu — przejdź graf komnat, walcz, zdobywaj łupy</p>
           </div>
           <span class="adv-card__arrow">›</span>
         </button>
@@ -753,6 +753,12 @@
       <div class="combat-banner__msg" id="combat-msg" hidden></div>
     </div>
 
+    <!-- L12 (#681): Tile image panel — shown above chat during active dungeon run -->
+    <div id="dungeon-tile-scene" class="dungeon-tile-scene" hidden>
+      <img id="dungeon-tile-scene-img" class="dungeon-tile-scene__img" src="" alt="" hidden>
+      <div id="dungeon-tile-scene-desc" class="dungeon-tile-scene__desc"></div>
+    </div>
+
     <main class="chat" id="chat-container">
       <div class="chat__messages" id="chat-messages">
         <!-- Messages will be inserted here -->
@@ -787,6 +793,24 @@
       <span id="char-counter" class="char-counter" style="display:none"></span>
       <div class="composer__voice-status" id="voice-status" hidden></div>
     </footer>
+
+    <!-- L12 (#681): Direction nav + tile actions — shown during dungeon, hidden during combat -->
+    <div id="dungeon-nav" class="dungeon-nav" hidden>
+      <div class="dungeon-nav__dirs">
+        <button type="button" class="dungeon-nav__dir" data-dungeon-dir="N" hidden title="Północ">⬆</button>
+        <div class="dungeon-nav__mid-row">
+          <button type="button" class="dungeon-nav__dir" data-dungeon-dir="W" hidden title="Zachód">⬅</button>
+          <button type="button" class="dungeon-nav__dir dungeon-nav__dir--center" id="dungeon-nav-center" disabled>⊕</button>
+          <button type="button" class="dungeon-nav__dir" data-dungeon-dir="E" hidden title="Wschód">➡</button>
+        </div>
+        <button type="button" class="dungeon-nav__dir" data-dungeon-dir="S" hidden title="Południe">⬇</button>
+      </div>
+      <div class="dungeon-nav__actions">
+        <button type="button" class="dungeon-nav__action" id="dungeon-open-chest" hidden>🪙 Otwórz skrzynię</button>
+        <button type="button" class="dungeon-nav__action" id="dungeon-answer-riddle" hidden>🔮 Odpowiedz na zagadkę</button>
+        <button type="button" class="dungeon-nav__action" data-dungeon-action="riddle_hint" hidden>💡 Podpowiedź</button>
+      </div>
+    </div>
 
     <!-- SF4 (#632): pasek statusu gracza — trwała warstwa aktywnych kondycji nad kompozerem.
          Glif + nazwa PL + (dla stackowalnych) poziom „N/M". Czytany z combat snapshot (player.conditions[]). -->
@@ -1682,6 +1706,71 @@
     </div>
   </div>
 
+  <!-- L13 (#682): Dungeon death modal -->
+  <div id="dungeon-death-modal" class="dungeon-modal-overlay" hidden>
+    <div class="dungeon-modal">
+      <div class="dungeon-modal__icon">💀</div>
+      <div class="dungeon-modal__title">Wyprawa zakończona</div>
+      <div class="dungeon-modal__body" id="dungeon-death-body">
+        <p id="dungeon-death-checkpoint-msg">Stan przywrócony do punktu kontrolnego.</p>
+        <p id="dungeon-death-xp-msg" class="dungeon-modal__warn"></p>
+        <p id="dungeon-death-cooldown-msg" class="dungeon-modal__muted"></p>
+      </div>
+      <div class="dungeon-modal__btns">
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--primary" id="dungeon-death-exit-btn">Wyjdź</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- L13 (#682): Dungeon abandon confirmation modal -->
+  <div id="dungeon-abandon-modal" class="dungeon-modal-overlay" hidden>
+    <div class="dungeon-modal">
+      <div class="dungeon-modal__icon">🚪</div>
+      <div class="dungeon-modal__title">Porzucić wyprawę?</div>
+      <div class="dungeon-modal__body">
+        <p id="dungeon-abandon-msg">Opuszczasz loch w połowie segmentu.</p>
+        <p class="dungeon-modal__warn" id="dungeon-abandon-restore-msg">Stan przywrócony do ostatniego punktu kontrolnego — utracisz XP i łupy zdobyte w tym segmencie.</p>
+        <p class="dungeon-modal__muted" id="dungeon-abandon-cooldown-msg">Cooldown: 50% normalnego czasu.</p>
+      </div>
+      <div class="dungeon-modal__btns">
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--danger" id="dungeon-abandon-confirm-btn">Porzuć (50% cooldown)</button>
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--cancel" id="dungeon-abandon-cancel-btn">Zostań</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- L13 (#682): Dungeon resume modal (E22 adaptation) -->
+  <div id="dungeon-resume-modal" class="dungeon-modal-overlay" hidden>
+    <div class="dungeon-modal">
+      <div class="dungeon-modal__icon">▶</div>
+      <div class="dungeon-modal__title">Niedokończony loch</div>
+      <div class="dungeon-modal__body">
+        <p id="dungeon-resume-dungeon-name" class="dungeon-modal__highlight"></p>
+        <p id="dungeon-resume-room-msg" class="dungeon-modal__muted"></p>
+      </div>
+      <div class="dungeon-modal__btns">
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--primary" id="dungeon-resume-continue-btn">Kontynuuj wyprawę</button>
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--cancel" id="dungeon-resume-abandon-btn">Porzuć</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- L13 (#682): Boss choice modal — after boss defeated -->
+  <div id="dungeon-boss-modal" class="dungeon-modal-overlay" hidden>
+    <div class="dungeon-modal">
+      <div class="dungeon-modal__icon">👑</div>
+      <div class="dungeon-modal__title">Boss pokonany!</div>
+      <div class="dungeon-modal__body">
+        <div class="dungeon-modal__loot" id="dungeon-boss-loot"></div>
+        <p id="dungeon-boss-cycle-msg" class="dungeon-modal__muted"></p>
+      </div>
+      <div class="dungeon-modal__btns">
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--cancel" id="dungeon-boss-exit-btn">🚪 Wyjdź z łupem</button>
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--primary" id="dungeon-boss-deeper-btn">⬇ Idź głębiej</button>
+      </div>
+    </div>
+  </div>
+
   <!-- X6/X7/X8/X9: Awansuj modal -->
   <div id="awansuj-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:16px">
     <div style="background:var(--bg-card,#1a1a2e);border:1px solid var(--border-color,#333);border-radius:12px;width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
@@ -1816,7 +1905,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=668-fab-tester-2026-06-15"></script>
+  <script src="./js/app.js?v=682-l13-dungeon-modals-2026-06-16"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

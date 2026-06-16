@@ -1,18 +1,14 @@
 """TDD: Issue #432 (E17) — Dungeon loot rarity tiers.
 
 5 rarity tiers (common→legendary) mapped to dungeon difficulty D1–D5.
-Boss rooms always drop epic/legendary. Rarity field added to rooms
-and loot rolls in dungeon instances.
+Boss rooms always drop epic/legendary. Rarity constants and mapping function.
+L9: Removed TestDungeonInstanceRarityField and TestRarityBackwardCompat
+    (used deleted procedural generator _build_dungeon_instance).
 """
 
-import json
 import sqlite3
 import pytest
-from fastapi.testclient import TestClient
 
-from app.main import app
-
-client = TestClient(app)
 DB_PATH = "/data/ai_gm.db"
 
 
@@ -144,118 +140,3 @@ class TestDungeonDifficultyColumn:
             conn.close()
 
 
-# ── FAZA 1: Dungeon instance rooms have rarity field ──────────────────────────
-
-class TestDungeonInstanceRarityField:
-    """Dungeon instances built by _build_dungeon_instance must tag rooms with rarity."""
-
-    def test_boss_room_has_rarity_field(self):
-        """Boss room in dungeon instance must have 'rarity' field."""
-        from app.services.dungeon_service import _build_dungeon_instance
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        try:
-            dungeon_row = conn.execute(
-                "SELECT * FROM game_dungeons WHERE key = 'goblin_warren' LIMIT 1"
-            ).fetchone()
-            if not dungeon_row:
-                pytest.skip("goblin_warren not found")
-            instance = _build_dungeon_instance(dict(dungeon_row), hero_level=1)
-        finally:
-            conn.close()
-
-        boss_room = next((r for r in instance["rooms"] if r.get("is_boss")), None)
-        assert boss_room is not None, "No boss room found in dungeon instance"
-        assert "rarity" in boss_room, f"Boss room missing 'rarity' field: {list(boss_room.keys())}"
-        assert boss_room["rarity"] in ("epic", "legendary"), (
-            f"Boss room rarity must be epic/legendary, got: {boss_room['rarity']!r}"
-        )
-
-    def test_chest_room_has_rarity_field(self):
-        """Chest rooms must have 'rarity' field based on dungeon difficulty."""
-        from app.services.dungeon_service import _build_dungeon_instance, RARITY_TIERS
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        try:
-            dungeon_row = conn.execute(
-                "SELECT * FROM game_dungeons WHERE key = 'goblin_warren' LIMIT 1"
-            ).fetchone()
-            if not dungeon_row:
-                pytest.skip("goblin_warren not found")
-            d = dict(dungeon_row)
-            d["room_types_json"] = json.dumps({"combat": 0, "chest": 100, "trap": 0, "riddle": 0, "rest": 0})
-            d["rooms"] = 3
-            instance = _build_dungeon_instance(d, hero_level=1)
-        finally:
-            conn.close()
-
-        chest_rooms = [r for r in instance["rooms"] if r.get("room_type") == "chest"]
-        if not chest_rooms:
-            pytest.skip("No chest rooms generated (random)")
-        for room in chest_rooms:
-            assert "rarity" in room, f"Chest room missing 'rarity': {list(room.keys())}"
-            assert room["rarity"] in RARITY_TIERS, (
-                f"Chest room rarity {room['rarity']!r} not a valid tier"
-            )
-
-    def test_dungeon_instance_has_dungeon_difficulty(self):
-        """Dungeon instance dict must include 'dungeon_difficulty' field."""
-        from app.services.dungeon_service import _build_dungeon_instance
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        try:
-            dungeon_row = conn.execute(
-                "SELECT * FROM game_dungeons WHERE key = 'goblin_warren' LIMIT 1"
-            ).fetchone()
-            if not dungeon_row:
-                pytest.skip("goblin_warren not found")
-            instance = _build_dungeon_instance(dict(dungeon_row), hero_level=1)
-        finally:
-            conn.close()
-
-        assert "dungeon_difficulty" in instance, (
-            f"Instance missing 'dungeon_difficulty': {list(instance.keys())}"
-        )
-
-
-# ── FAZA 1: Backward compat ───────────────────────────────────────────────────
-
-class TestRarityBackwardCompat:
-    """Existing dungeon enter endpoint must still work after rarity changes."""
-
-    def setup_method(self):
-        conn = sqlite3.connect(DB_PATH)
-        try:
-            conn.execute(
-                "DELETE FROM character_dungeon_runs WHERE character_id = 999377 AND location_key = 'goblin_warren'"
-            )
-            sf_row = conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id = 999445 LIMIT 1"
-            ).fetchone()
-            if sf_row and sf_row[0]:
-                sf = json.loads(sf_row[0] or "{}")
-                sf.pop("dungeon_run", None)
-                conn.execute(
-                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = 999445",
-                    (json.dumps(sf),),
-                )
-            conn.commit()
-        finally:
-            conn.close()
-
-    def teardown_method(self):
-        self.setup_method()
-
-    def test_enter_dungeon_still_returns_ok(self):
-        """POST /dungeons/{key}/enter must still return ok=True after rarity changes."""
-        r = client.post("/api/auth/login", json={"username": "demo", "password": "demo"})
-        assert r.status_code == 200
-        token = r.json()["access_token"]
-
-        r = client.post(
-            "/api/dungeons/goblin_warren/enter",
-            json={"campaign_id": 999445, "character_id": 999377},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert r.status_code == 200, f"Enter dungeon failed: {r.text}"
-        assert r.json().get("ok") is True

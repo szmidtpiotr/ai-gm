@@ -1,17 +1,13 @@
-"""Dungeon run service — Task 41 V2 (room types, riddles, loot tiers, death handling)."""
+"""Dungeon run service — L9: tile-only system (procedural generator removed)."""
 from __future__ import annotations
 import json
+import math
 import random
-import re
 import sqlite3
 import unicodedata
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 DB_PATH = "/data/ai_gm.db"
-
-# Room type weights default (boss always last, not in weights)
-DEFAULT_ROOM_WEIGHTS = {"combat": 50, "chest": 15, "trap": 15, "riddle": 10, "rest": 10}
 
 
 def _get_db():
@@ -158,71 +154,6 @@ def get_run_history(character_id: int) -> list[dict]:
         conn.close()
 
 
-# ── Enemy scaling ─────────────────────────────────────────────────────────────
-
-_SCALE_TABLE = [(2, 0.75), (4, 1.0), (6, 1.25), (8, 1.5), (99, 2.0)]
-_DIE_PROGRESSION = ["d4", "d6", "d8", "d10", "d12"]
-
-
-def _level_multiplier(hero_level: int) -> float:
-    for max_level, mult in _SCALE_TABLE:
-        if hero_level <= max_level:
-            return mult
-    return 2.0
-
-
-def _scale_die_up(die_expr: str) -> str:
-    m = re.match(r"^(\d*)d(\d+)$", (die_expr or "1d6").strip().lower())
-    if not m:
-        return die_expr
-    n = m.group(1) or "1"
-    sides = int(m.group(2))
-    try:
-        idx = _DIE_PROGRESSION.index(f"d{sides}")
-        return f"{n}{_DIE_PROGRESSION[min(idx + 1, len(_DIE_PROGRESSION) - 1)]}"
-    except ValueError:
-        return die_expr
-
-
-def scale_enemy_stats(base: dict, hero_level: int, is_boss: bool = False) -> dict:
-    mult = _level_multiplier(hero_level)
-    if is_boss:
-        tiers = [t[1] for t in _SCALE_TABLE]
-        idx = tiers.index(mult) if mult in tiers else 0
-        mult = tiers[min(idx + 1, len(tiers) - 1)]
-    scaled = dict(base)
-    scaled["hp_base"] = max(1, round(int(base.get("hp_base", 5)) * mult))
-    scaled["ac_base"] = max(5, round(int(base.get("ac_base", 8)) * (1 + (mult - 1) * 0.3)))
-    if mult >= 1.5:
-        scaled["damage_die"] = _scale_die_up(str(base.get("damage_die", "1d6")))
-    return scaled
-
-
-# ── Room type generation ──────────────────────────────────────────────────────
-
-def _pick_room_type(weights: dict[str, int]) -> str:
-    """Weighted random pick among non-boss room types."""
-    pool = [t for t in weights if t != "boss"]
-    w = [max(1, weights.get(t, 1)) for t in pool]
-    return random.choices(pool, weights=w, k=1)[0]
-
-
-def _get_riddle_for_theme(conn: sqlite3.Connection, theme: str | None = None, difficulty: int | None = None) -> dict | None:
-    """Pick a random active riddle from the bank, optionally filtered."""
-    clauses, params = ["is_active = 1"], []
-    if theme:
-        clauses.append("theme = ?"); params.append(theme)
-    if difficulty:
-        clauses.append("difficulty <= ?"); params.append(difficulty)
-    rows = conn.execute(
-        f"SELECT * FROM game_config_riddles WHERE {' AND '.join(clauses)} ORDER BY RANDOM() LIMIT 1",
-        params
-    ).fetchall()
-    if not rows:
-        rows = conn.execute("SELECT * FROM game_config_riddles WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1").fetchall()
-    return dict(rows[0]) if rows else None
-
-
 # ── Loot helpers ──────────────────────────────────────────────────────────────
 
 def _roll_loot_table(conn: sqlite3.Connection, table_key: str) -> list[dict]:
@@ -284,152 +215,6 @@ def get_loot_rarity_for_difficulty(difficulty: int, is_boss: bool = False) -> st
     return random.choice([lo, hi])
 
 
-# ── Dungeon instance generation ───────────────────────────────────────────────
-
-def _build_dungeon_instance(dungeon: dict, hero_level: int) -> dict:
-    """Build a dungeon run instance dict from a dungeon config dict."""
-    dungeon_key = dungeon.get("key", "")
-    dungeon_difficulty = int(dungeon.get("dungeon_difficulty") or 1)
-    pool = json.loads(dungeon.get("enemy_pool") or "[]")
-    num_rooms = int(dungeon.get("rooms") or 5)
-    boss_key = dungeon.get("boss_enemy") or (pool[-1] if pool else None)
-    atmosphere = dungeon.get("atmosphere") or ""
-    cooldown_hours = int(dungeon.get("cooldown_hours") or 72)
-    room_loot_chance = float(dungeon.get("room_loot_chance") or 0.15)
-    riddle_source = str(dungeon.get("riddle_source") or "database")
-    riddle_max_hints = int(dungeon.get("riddle_max_hints") or 2)
-
-    try:
-        weights = json.loads(dungeon.get("room_types_json") or "{}")
-    except Exception:
-        weights = {}
-    weights = {**DEFAULT_ROOM_WEIGHTS, **weights}
-
-    conn = _get_db()
-    try:
-        # Cache enemy stats
-        enemy_cache: dict[str, dict] = {}
-        for ek in set(pool + ([boss_key] if boss_key else [])):
-            row = conn.execute(
-                "SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, damage_bonus, dex_modifier, tier FROM game_config_enemies WHERE key = ?",
-                (ek,)
-            ).fetchone()
-            if row:
-                enemy_cache[ek] = dict(row)
-
-        # Ensure first and last rooms are always combat/boss
-        rooms = []
-        for room_num in range(1, num_rooms + 1):
-            is_boss = (room_num == num_rooms)
-            if room_num == 1:
-                room_type = "combat"
-            elif is_boss:
-                room_type = "boss"
-            else:
-                room_type = _pick_room_type(weights)
-
-            room: dict[str, Any] = {
-                "room_id": room_num,
-                "room_type": room_type,
-                "is_boss": is_boss,
-                "cleared": False,
-                "room_loot_chance": room_loot_chance,
-            }
-
-            if room_type in ("combat", "boss"):
-                enemy_key = boss_key if is_boss else (random.choice(pool) if pool else None)
-                enemy_count = 1 if is_boss else min(4, max(1, 1 + hero_level // 3))
-                base_stats = enemy_cache.get(enemy_key, {}) if enemy_key else {}
-                scaled = scale_enemy_stats(base_stats, hero_level, is_boss) if base_stats else base_stats
-                room["enemy_key"] = enemy_key
-                room["enemy_count"] = enemy_count
-                room["enemy_stats"] = scaled
-                room["enemy_label"] = base_stats.get("label", enemy_key or "")
-                room["rarity"] = get_loot_rarity_for_difficulty(dungeon_difficulty, is_boss=is_boss)
-            elif room_type == "riddle":
-                riddle = _get_riddle_for_theme(conn)
-                if riddle:
-                    room["riddle_key"] = riddle["key"]
-                    room["riddle_text"] = riddle["text"]
-                    room["riddle_answer"] = riddle["answer"]
-                    room["riddle_answer_alts"] = json.loads(riddle.get("answer_alts") or "[]")
-                    hints = json.loads(riddle.get("hints") or "[]")
-                    room["riddle_hints"] = hints[:riddle_max_hints]
-                    room["riddle_max_hints"] = riddle_max_hints
-                    room["riddle_hints_used"] = 0
-                    room["riddle_source"] = riddle_source
-                else:
-                    # No riddles in DB — fall back to combat
-                    room["room_type"] = "combat"
-                    enemy_key = random.choice(pool) if pool else None
-                    base_stats = enemy_cache.get(enemy_key, {}) if enemy_key else {}
-                    room["enemy_key"] = enemy_key
-                    room["enemy_count"] = 1
-                    room["enemy_stats"] = scale_enemy_stats(base_stats, hero_level) if base_stats else base_stats
-                    room["enemy_label"] = base_stats.get("label", enemy_key or "")
-            elif room_type == "trap":
-                traps = [
-                    {"name": "Pająki", "save_stat": "DEX", "dc": 12, "damage": "1d6",
-                     "description": "Z sufitu sypią się jadowite pająki!"},
-                    {"name": "Ognista Pułapka", "save_stat": "DEX", "dc": 14, "damage": "2d4",
-                     "description": "Na podłodze widać dziwne symbole — za późno!"},
-                    {"name": "Trujące Opary", "save_stat": "CON", "dc": 13, "damage": "1d4",
-                     "description": "Powietrze gęstnieje od zielonkawej mgiełki."},
-                    {"name": "Zawalający się Sufit", "save_stat": "DEX", "dc": 11, "damage": "1d8",
-                     "description": "Słyszysz pęknięcia powyżej!"},
-                    {"name": "Błysk Runicznej Kuli", "save_stat": "WIS", "dc": 12, "damage": "1d6",
-                     "description": "Runy na ścianie zaczynają świecić złowrogim blaskiem."},
-                ]
-                room["trap"] = random.choice(traps)
-            elif room_type == "chest":
-                room["chest_loot_table"] = dungeon.get("chest_loot_table_key") or ""
-                room["rarity"] = get_loot_rarity_for_difficulty(dungeon_difficulty, is_boss=False)
-            elif room_type == "rest":
-                heal_pct = random.choice([15, 20, 25, 30])
-                rest_descriptions = [
-                    "Między walkami natykasz się na małą jaskinię z podziemnym źródełkiem.",
-                    "W bocznej komnacie stoi porzucona mieszanka ziół — dawny obóz awanturników.",
-                    "Znalazłeś spokojną grotę, dobre miejsce na chwilę wytchnienia.",
-                    "Słabe promienie z podziemnego kryształu kojąco wpływają na twoje rany.",
-                ]
-                room["rest_heal_pct"] = heal_pct
-                room["rest_description"] = random.choice(rest_descriptions)
-
-            # Map coordinates — linear for now, supports branching later
-            room["map_col"] = room_num - 1
-            room["map_row"] = 0
-
-            rooms.append(room)
-
-    finally:
-        conn.close()
-
-    return {
-        "dungeon_key": dungeon_key,
-        "dungeon_label": dungeon.get("label", dungeon_key),
-        "dungeon_difficulty": dungeon_difficulty,
-        "atmosphere": atmosphere,
-        "rooms": rooms,
-        "total_rooms": num_rooms,
-        "current_room": 1,
-        "completed": False,
-        "failed": False,
-        "hero_level_at_entry": hero_level,
-        "cooldown_hours": cooldown_hours,
-        "chest_loot_table_key": dungeon.get("chest_loot_table_key") or "",
-        "boss_loot_table_key": dungeon.get("boss_loot_table_key") or "",
-        "loot_tier": dungeon.get("loot_tier") or "standard",
-        "loot_collected": [],
-    }
-
-
-def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
-    dungeon = get_dungeon(dungeon_key)
-    if not dungeon:
-        raise ValueError(f"Dungeon not found: {dungeon_key}")
-    return _build_dungeon_instance(dungeon, hero_level)
-
-
 # ── Session management ────────────────────────────────────────────────────────
 
 def _load_flags(campaign_id: int) -> tuple[sqlite3.Connection, dict]:
@@ -443,49 +228,6 @@ def _save_flags(conn: sqlite3.Connection, campaign_id: int, flags: dict) -> None
     conn.execute("UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                  (json.dumps(flags, ensure_ascii=False), campaign_id))
     conn.commit()
-
-
-def enter_dungeon(campaign_id: int, character_id: int, dungeon_key: str,
-                  hero_level: int, previous_campaign_id: int | None = None) -> dict:
-    cd = check_cooldown(character_id, dungeon_key)
-    if cd.get("on_cooldown"):
-        raise PermissionError(f"dungeon_on_cooldown:{cd.get('cooldown_until')}:{cd.get('hours_remaining')}")
-
-    instance = generate_dungeon_instance(dungeon_key, hero_level)
-
-    conn, flags = _load_flags(campaign_id)
-    try:
-        flags["dungeon_run"] = instance
-        if previous_campaign_id:
-            flags["dungeon_previous_campaign_id"] = previous_campaign_id
-        _save_flags(conn, campaign_id, flags)
-    finally:
-        conn.close()
-
-    return instance
-
-
-def advance_room(campaign_id: int) -> dict:
-    conn, flags = _load_flags(campaign_id)
-    try:
-        run = flags.get("dungeon_run")
-        if not run:
-            raise ValueError("No active dungeon run")
-        current = int(run.get("current_room", 1))
-        total = int(run.get("total_rooms", 1))
-        for r in run["rooms"]:
-            if r["room_id"] == current:
-                r["cleared"] = True
-                break
-        if current >= total:
-            run["completed"] = True
-        else:
-            run["current_room"] = current + 1
-        flags["dungeon_run"] = run
-        _save_flags(conn, campaign_id, flags)
-        return run
-    finally:
-        conn.close()
 
 
 def get_active_dungeon_run(campaign_id: int) -> dict | None:
@@ -513,107 +255,6 @@ def clear_dungeon_run(campaign_id: int) -> None:
     try:
         flags.pop("dungeon_run", None)
         _save_flags(conn, campaign_id, flags)
-    finally:
-        conn.close()
-
-
-# ── Non-combat room resolution ────────────────────────────────────────────────
-
-def resolve_room(campaign_id: int, character_id: int, player_input: str | None = None) -> dict:
-    """
-    Resolve the current non-combat room (riddle/trap/chest/rest).
-    Returns {success, narrative, loot, heal_pct, advance_available}.
-    """
-    conn, flags = _load_flags(campaign_id)
-    try:
-        run = flags.get("dungeon_run")
-        if not run:
-            raise ValueError("No active dungeon run")
-
-        current = int(run.get("current_room", 1))
-        room = next((r for r in run["rooms"] if r["room_id"] == current), None)
-        if not room:
-            raise ValueError("Room not found")
-
-        room_type = room.get("room_type", "combat")
-        result: dict[str, Any] = {"success": True, "loot": [], "heal_pct": 0, "advance_available": True}
-
-        if room_type == "riddle":
-            if not player_input:
-                # Return hint if available
-                hints_used = int(room.get("riddle_hints_used", 0))
-                hints = room.get("riddle_hints", [])
-                if hints_used < len(hints):
-                    hint = hints[hints_used]
-                    room["riddle_hints_used"] = hints_used + 1
-                    result["success"] = False
-                    result["advance_available"] = False
-                    result["hint"] = hint
-                    result["hints_used"] = hints_used + 1
-                    result["hints_remaining"] = len(hints) - (hints_used + 1)
-                    result["narrative"] = f"Podpowiedź: {hint}"
-                else:
-                    # Out of hints — fail
-                    result["success"] = False
-                    result["advance_available"] = True
-                    result["narrative"] = "Wyczerpałeś wskazówki. Kamienna płyta uderza cię za karę!"
-                    result["fail_damage"] = "1d4"
-            else:
-                answer = room.get("riddle_answer", "")
-                alts = room.get("riddle_answer_alts", [])
-                if _answer_matches(player_input, answer, alts):
-                    result["success"] = True
-                    result["narrative"] = "Zagadka rozwiązana! Drzwi otwierają się ze skrzypnięciem."
-                    # Small bonus loot for solving
-                    room["cleared"] = True
-                else:
-                    hints_used = int(room.get("riddle_hints_used", 0))
-                    hints = room.get("riddle_hints", [])
-                    max_hints = int(room.get("riddle_max_hints", 2))
-                    if hints_used < len(hints) and hints_used < max_hints:
-                        hint = hints[hints_used]
-                        room["riddle_hints_used"] = hints_used + 1
-                        result["success"] = False
-                        result["advance_available"] = False
-                        result["hint"] = hint
-                        result["narrative"] = f"Błędna odpowiedź. Podpowiedź: {hint}"
-                    else:
-                        result["success"] = False
-                        result["advance_available"] = True
-                        result["narrative"] = "Odpowiedź błędna. Mechanizm pułapkowy cię karze!"
-                        result["fail_damage"] = "1d4"
-
-        elif room_type == "trap":
-            trap = room.get("trap", {})
-            # Roll a DEX/CON/WIS save — simplified: ~50% success for now, frontend can animate
-            success = random.random() < 0.5
-            if success:
-                result["narrative"] = f"{trap.get('description', '')} Udaje ci się uniknąć!"
-            else:
-                result["success"] = False
-                result["fail_damage"] = trap.get("damage", "1d4")
-                result["save_stat"] = trap.get("save_stat", "DEX")
-                result["narrative"] = f"{trap.get('description', '')} Nie zdążyłeś!"
-            room["cleared"] = True
-
-        elif room_type == "chest":
-            loot_table = room.get("chest_loot_table") or run.get("chest_loot_table_key") or ""
-            loot = _roll_loot_table(conn, loot_table) if loot_table else []
-            result["loot"] = loot
-            result["narrative"] = "Otwierasz skrzynię. " + (
-                f"W środku znajdujesz {len(loot)} przedmiot(y)!" if loot else "Skrzynia jest pusta.")
-            room["cleared"] = True
-
-        elif room_type == "rest":
-            heal_pct = int(room.get("rest_heal_pct", 20))
-            desc = room.get("rest_description", "Odpoczywasz przez chwilę.")
-            result["heal_pct"] = heal_pct
-            result["narrative"] = f"{desc} Leczysz {heal_pct}% maksymalnego HP."
-            room["cleared"] = True
-
-        flags["dungeon_run"] = run
-        _save_flags(conn, campaign_id, flags)
-        return result
     finally:
         conn.close()
 
@@ -648,6 +289,45 @@ def roll_boss_loot(dungeon_key: str) -> list[dict]:
         conn.close()
 
 
+# L8: Endless rarity progression
+_RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"]
+
+
+def get_boss_loot_rarity_for_cycle(dungeon_tier: int, cycle: int) -> str:
+    """L8: Boss loot rarity with endless cycle bonus (Numbers Policy).
+
+    Base: get_loot_rarity_for_difficulty(tier, is_boss=True) → epic/legendary.
+    Bonus: +1 rarity tier per 2 cycles (cap: legendary).
+    Cycles 1-2 = base, cycles 3-4 = +1, cycles 5-6 = +2, ...
+    """
+    base = get_loot_rarity_for_difficulty(dungeon_tier, is_boss=True)
+    bump = (cycle - 1) // 2
+    if bump > 0 and base in _RARITY_ORDER:
+        idx = _RARITY_ORDER.index(base)
+        base = _RARITY_ORDER[min(idx + bump, len(_RARITY_ORDER) - 1)]
+    return base
+
+
+def roll_boss_loot_for_endless(dungeon_key: str, cycle: int = 1) -> tuple[list[dict], str]:
+    """L8: Roll boss loot with endless cycle rarity bonus.
+
+    Returns (loot_items, rarity_tier_str).
+    """
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        return [], "epic"
+    boss_table = dungeon.get("boss_loot_table_key") or ""
+    dungeon_tier = int(dungeon.get("dungeon_difficulty") or 1)
+    rarity = get_boss_loot_rarity_for_cycle(dungeon_tier, cycle)
+    if not boss_table:
+        return [], rarity
+    conn = _get_db()
+    try:
+        return _roll_loot_table(conn, boss_table), rarity
+    finally:
+        conn.close()
+
+
 def roll_room_ambient_loot(dungeon_key: str, loot_chance: float) -> list[dict]:
     """Post-combat room search — small chance of ambient item find."""
     if random.random() > loot_chance:
@@ -668,15 +348,21 @@ def roll_room_ambient_loot(dungeon_key: str, loot_chance: float) -> list[dict]:
         conn.close()
 
 
-def restore_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> bool:
-    """Restore character HP/gold/inventory from the dungeon_enter snapshot."""
+# ── L7: Checkpoint restore + cooldown helpers ─────────────────────────────────
+
+def restore_dungeon_checkpoint(campaign_id: int, character_id: int) -> bool:
+    """L7: Restore HP/mana/gold/XP/inventory from latest checkpoint snapshot.
+
+    Checks dungeon_boss_checkpoint first (most recent), falls back to dungeon_enter.
+    XP is rolled back to checkpoint value; level is recalculated.
+    """
     conn = _get_db()
     try:
         row = conn.execute(
             """SELECT snapshot_json FROM world_state_snapshots
-               WHERE campaign_id = ? AND snapshot_source = 'dungeon_enter'
+               WHERE campaign_id = ? AND snapshot_source IN ('dungeon_enter', 'dungeon_boss_checkpoint')
                ORDER BY id DESC LIMIT 1""",
-            (campaign_id,)
+            (campaign_id,),
         ).fetchone()
         if not row:
             return False
@@ -693,10 +379,21 @@ def restore_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> bool:
             sheet["current_hp"] = snap["current_hp"]
         if snap.get("max_hp") is not None:
             sheet["max_hp"] = snap["max_hp"]
+        if snap.get("current_mana") is not None:
+            sheet["current_mana"] = snap["current_mana"]
+
+        if snap.get("xp_lifetime_earned") is not None:
+            from app.services.xp_service import get_xp_level_thresholds, level_from_xp
+            checkpoint_xp = int(snap["xp_lifetime_earned"])
+            sheet["xp_lifetime_earned"] = checkpoint_xp
+            if snap.get("xp_available") is not None:
+                sheet["xp_available"] = int(snap["xp_available"])
+            thresholds = get_xp_level_thresholds(conn)
+            sheet["level"] = max(1, level_from_xp(checkpoint_xp, thresholds))
 
         conn.execute(
             "UPDATE characters SET sheet_json = ?, gold = ?, gold_gp = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), snap.get("gold", 0), snap.get("gold_gp", 0), character_id)
+            (json.dumps(sheet, ensure_ascii=False), snap.get("gold", 0), snap.get("gold_gp", 0), character_id),
         )
 
         inventory = snap.get("inventory") or []
@@ -707,7 +404,7 @@ def restore_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> bool:
                        (character_id, item_key, weapon_key, consumable_key, quantity, equipped)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (character_id, item.get("item_key"), item.get("weapon_key"),
-                 item.get("consumable_key"), item.get("quantity", 1), item.get("equipped", 0))
+                 item.get("consumable_key"), item.get("quantity", 1), item.get("equipped", 0)),
             )
         conn.commit()
         return True
@@ -715,37 +412,103 @@ def restore_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> bool:
         conn.close()
 
 
-def _reset_dungeon_run(run: dict) -> dict:
-    """Reset an in-progress run back to room 1 with all rooms un-cleared."""
-    run["current_room"] = 1
-    run["completed"] = False
-    run["failed"] = False
-    for room in run.get("rooms", []):
-        room["cleared"] = False
-    return run
+def start_dungeon_cooldown(character_id: int, dungeon_key: str, fraction: float = 1.0) -> dict:
+    """L7: Set cooldown on character_dungeon_runs. fraction=0.5 = 50% (ceil hours)."""
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        return {}
+    cooldown_hours = int(dungeon.get("cooldown_hours") or 72)
+    partial_hours = max(1, math.ceil(cooldown_hours * fraction))
+    now = _now_utc()
+    cooldown_until = now + timedelta(hours=partial_hours)
+    conn = _get_db()
+    try:
+        conn.execute(
+            """INSERT INTO character_dungeon_runs
+                   (character_id, location_key, cleared_at, cooldown_until, run_count)
+               VALUES (?, ?, ?, ?, 1)
+               ON CONFLICT(character_id, location_key) DO UPDATE SET
+                   cleared_at=excluded.cleared_at,
+                   cooldown_until=excluded.cooldown_until,
+                   run_count=run_count+1""",
+            (character_id, dungeon_key, now.isoformat(), cooldown_until.isoformat()),
+        )
+        conn.commit()
+        return {"cooldown_until": cooldown_until.isoformat(), "cooldown_hours": partial_hours}
+    finally:
+        conn.close()
 
 
 def handle_dungeon_death(campaign_id: int, character_id: int) -> dict:
-    """Hero died in dungeon. Restore entry snapshot and restart run from room 1."""
+    """L7: Hero died in dungeon. Mark run failed, restore from last checkpoint, start cooldown.
+
+    OVERRIDES E16: does NOT restart from tile 1.
+    """
     conn, flags = _load_flags(campaign_id)
     try:
         run = flags.get("dungeon_run")
         if not run:
-            return {"ok": True, "restored": False, "restarted": False}
-        death_mode = _get_meta(conn, "dungeon_death_hp_mode", "campaign_state")
+            return {"ok": True, "restored": False, "failed": False}
         dungeon_key = run.get("dungeon_key", "")
-        _reset_dungeon_run(run)
+        run["failed"] = True
+        run["completed"] = False
         flags["dungeon_run"] = run
         _save_flags(conn, campaign_id, flags)
     finally:
         conn.close()
 
-    restored = restore_dungeon_entry_snapshot(campaign_id, character_id)
+    restored = restore_dungeon_checkpoint(campaign_id, character_id)
+    cooldown_info = start_dungeon_cooldown(character_id, dungeon_key, fraction=1.0)
 
     return {
         "ok": True,
-        "death_mode": death_mode,
         "dungeon_key": dungeon_key,
         "restored": restored,
-        "restarted": True,
+        "failed": True,
+        "cooldown_until": cooldown_info.get("cooldown_until"),
+    }
+
+
+def handle_dungeon_abandon(campaign_id: int, character_id: int) -> dict:
+    """L7: Abandon dungeon run.
+
+    Mid-segment (at_checkpoint=False): restore from last checkpoint + 50% cooldown.
+    At checkpoint (boss defeated, at_checkpoint=True): full reward + 100% cooldown.
+    """
+    conn, flags = _load_flags(campaign_id)
+    try:
+        run = flags.get("dungeon_run")
+        if not run:
+            return {"ok": True, "at_checkpoint": False, "restored": False}
+        dungeon_key = run.get("dungeon_key", "")
+        at_checkpoint = bool(run.get("at_checkpoint", False))
+
+        if at_checkpoint:
+            run["completed"] = True
+            run["failed"] = False
+        else:
+            run["failed"] = True
+            run["completed"] = False
+
+        flags["dungeon_run"] = run
+        _save_flags(conn, campaign_id, flags)
+    finally:
+        conn.close()
+
+    if at_checkpoint:
+        cooldown_info = start_dungeon_cooldown(character_id, dungeon_key, fraction=1.0)
+        return {
+            "ok": True,
+            "at_checkpoint": True,
+            "restored": False,
+            "cooldown_until": cooldown_info.get("cooldown_until"),
+        }
+
+    restored = restore_dungeon_checkpoint(campaign_id, character_id)
+    cooldown_info = start_dungeon_cooldown(character_id, dungeon_key, fraction=0.5)
+    return {
+        "ok": True,
+        "at_checkpoint": False,
+        "restored": restored,
+        "cooldown_until": cooldown_info.get("cooldown_until"),
     }

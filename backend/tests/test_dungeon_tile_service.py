@@ -51,7 +51,8 @@ CREATE TABLE game_config_enemies (
     damage_die TEXT DEFAULT '1d6',
     damage_bonus INTEGER DEFAULT 0,
     dex_modifier INTEGER DEFAULT 0,
-    tier TEXT DEFAULT 'common'
+    tier TEXT DEFAULT 'common',
+    stats_json TEXT DEFAULT NULL
 );
 
 CREATE TABLE game_config_items (key TEXT PRIMARY KEY, label TEXT NOT NULL);

@@ -34,7 +34,8 @@ TWOJE ZADANIE W TEJ SESJI — dokładnie JEDNO zadanie L, ani mniej, ani więcej
    WYJĄTKI bez cyklu TDD:
    - L14–L17 (kontent/batch): wykonaj wg opisu; w L15 obowiązuje twardy STOP po pilocie
      5 obrazków — czekaj na moją akceptację jakości zanim odpalisz pełny batch,
-   - L19 (czysty playtest): bez issue [TASK]; utwórz/użyj issue [SMOKE] FAZA L na raport.
+   - L13c oraz L19 (czyste playtesty): bez issue [TASK]; użyj skilla `/game-smoke-dungeon`
+     (L13c = `--engine` na kafelkach testowych; L19 = pełny na krypcie); raport do [SMOKE] FAZA L.
 5. Wykonaj sekcję "Weryfikacja" z opisu zadania. Walkę na kafelkach weryfikuj w Combat
    Sandbox; flow gracza przez /game-test-player lub ręcznie na DEV.
 6. Zaktualizuj notes.md ([x] + link [#NNN]) i game_mechanics.md CZĘŚĆ AJ, jeśli zadanie

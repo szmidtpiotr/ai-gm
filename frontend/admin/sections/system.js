@@ -507,16 +507,8 @@ const _HTML = `
             <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
               <input type="checkbox" id="gm-dungeon" style="width:18px;height:18px;accent-color:var(--accent)">
               <span>
-                <strong style="font-size:0.92rem">Loch (Dungeon Run)</strong>
-                <span style="display:block;font-size:0.78rem;color:var(--t3)">Krótkie farmowalne lochy z własnym loot systemem. (stary system)</span>
-              </span>
-            </label>
-
-            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
-              <input type="checkbox" id="gm-dungeon-tiles" style="width:18px;height:18px;accent-color:var(--accent)">
-              <span>
-                <strong style="font-size:0.92rem">Loch (Kafelki)</strong>
-                <span style="display:block;font-size:0.78rem;color:var(--t3)">Nowy system kafelkowy — wizualne komnaty z obrazami, wrogami i zagadkami. Wymaga skonfigurowanych kafelków.</span>
+                <strong style="font-size:0.92rem">Loch (Dungeon Kafelkowy)</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Farmowalne lochy z kafelkową mapą, wrogami, zagadkami i skrzyniami.</span>
               </span>
             </label>
 
@@ -1919,7 +1911,6 @@ async function _loadGameModes() {
     set('gm-ai-campaign',    'ai_campaign_enabled');
     set('gm-prebuilt',       'prebuilt_enabled');
     set('gm-dungeon',        'dungeon_enabled');
-    set('gm-dungeon-tiles',  'dungeon_tiles_enabled');
     set('gm-multiplayer',    'multiplayer_enabled');
   } catch(e) { console.warn('game-modes load', e.message); }
 }
@@ -1933,7 +1924,6 @@ async function saveGameModes() {
         ai_campaign_enabled:   get('gm-ai-campaign'),
         prebuilt_enabled:      get('gm-prebuilt'),
         dungeon_enabled:       get('gm-dungeon'),
-        dungeon_tiles_enabled: get('gm-dungeon-tiles'),
         multiplayer_enabled:   get('gm-multiplayer'),
       }),
     });
