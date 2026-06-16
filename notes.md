@@ -194,7 +194,7 @@ _Uwaga: tabele `game_events`/`llm_call_log` już istnieją od #587 (migracja) �
 _Wchłania H1 z FAZY 6 (stary „observability design / log writer") — zastąpione przez O1/O2._
 
 Tor 1 — Observability:
-- [ ] O1 — `game_events`+`llm_call_log` + `event_logger.py` (tabele są od #587; brak serwisu helpera)
+- [x] O1 — `game_events`+`llm_call_log` + `event_logger.py` (tabele są od #587; brak serwisu helpera) — [#702](https://github.com/szmidtpiotr/ai-gm/issues/702) d04b6bc
 - [ ] O2 — Zapis zdarzeń z serwisów (combat/śmierć/beat/LLM) wg payloadów §Part 1
 - [ ] O3 — Panel admina „Statystyki i Logi" (KPI + 4 zakładki, endpointy analytics — częściowo od #587)
 - [ ] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service)
