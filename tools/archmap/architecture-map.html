@@ -139,6 +139,7 @@
         <button id="zfit" title="Dopasuj">⤢</button>
         <button id="zin" title="Przybliż">+</button>
         <button id="zout" title="Oddal">−</button>
+        <button onclick="resetLayout()" title="Przywróć domyślne pozycje paneli" style="width:auto;padding:0 8px;font-size:11px">↺ Reset układu</button>
       </div>
     </div>
     <svg id="svg">
@@ -589,6 +590,7 @@ function escAttr(s){return "'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'
    rate-limited (60 req/h per IP unauthenticated). ---- */
 let REPO='szmidtpiotr/ai-gm';
 const ISSUE_CACHE={};
+const ISSUE_TTL=10*60*1000; // 10 min
 let popSeq=0;
 
 /* minimal markdown -> HTML, enough for issue bodies (headings, code, lists,
@@ -617,7 +619,8 @@ function mdToHtml(md){
 function fmtDate(iso){ return iso? iso.slice(0,10) : ''; }
 
 async function fetchIssue(num){
-  if(ISSUE_CACHE[num]) return ISSUE_CACHE[num];
+  const cached=ISSUE_CACHE[num];
+  if(cached && Date.now()-cached.ts<ISSUE_TTL) return cached.data;
   const base='https://api.github.com/repos/'+REPO+'/issues/'+num;
   const headers={'Accept':'application/vnd.github+json'};
   const iss=await fetch(base,{headers}).then(r=>{ if(!r.ok) throw new Error('issue '+r.status); return r.json(); });
@@ -627,7 +630,7 @@ async function fetchIssue(num){
       .then(r=>r.ok?r.json():[]).catch(()=>[]);
   }
   const data={iss,comments};
-  ISSUE_CACHE[num]=data;
+  ISSUE_CACHE[num]={data,ts:Date.now()};
   return data;
 }
 
@@ -696,8 +699,9 @@ window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeTask(); });
 (function(){
   const bar=document.getElementById('topbar');
   const handle=bar.querySelector('h1');
+  const LS_KEY='archmap_topbar_pos';
   let d=null;
-  try{const p=JSON.parse(localStorage.getItem('archmap_topbar_pos'));
+  try{const p=JSON.parse(localStorage.getItem(LS_KEY));
     if(p){bar.style.left=p.left+'px'; bar.style.top=p.top+'px'; bar.style.right='auto';}}catch(e){}
   handle.addEventListener('mousedown',e=>{
     const r=bar.getBoundingClientRect();
@@ -714,9 +718,10 @@ window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeTask(); });
   document.addEventListener('mouseup',()=>{
     if(!d) return;
     const r=bar.getBoundingClientRect();
-    try{localStorage.setItem('archmap_topbar_pos',JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));}catch(e){}
+    try{localStorage.setItem(LS_KEY,JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));}catch(e){}
     d=null; document.body.style.userSelect='';
   });
+  window.resetLayout=function(){ try{localStorage.removeItem(LS_KEY);}catch(e){} bar.style.left='10px'; bar.style.top='10px'; bar.style.right='auto'; };
 })();
 
 document.getElementById('canvas').addEventListener('click',()=>{pinned=null;clearDim();document.getElementById('sidebar').innerHTML=defaultSidebar();});
