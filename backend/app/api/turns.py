@@ -713,12 +713,25 @@ def _validate_combat_start_target(
     campaign_id: int,
     enemy_key: str,
     assistant_text: str = "",
+    source: str = "injected",
 ) -> tuple:
-    """Unified combat-start target guard — #534 / #596 / #535.
+    """Unified combat-start target guard — #534 / #596 / #535 / #520.
+
+    `source` controls strictness:
+      - 'llm'      → the GM itself emitted [COMBAT_START]. The GM authored both the
+                     tag and the narration, so a catalog enemy is trusted; only a
+                     friendly/quest-giver NPC (#534) or an unknown target is rejected.
+      - 'injected' → the backend is GUESSING from the player's words ("atakuję X").
+                     The player can name any creature, so a bare name-mention in the
+                     narration is unreliable (the GM may have *denied* it:
+                     "w kuźni nie ma żadnego goblina"). The target must be genuinely
+                     present: in scene_enemies, OR named in the narration alongside a
+                     real aggression cue, OR a generic key backed by aggression.
 
     A target is valid only when it is genuinely PRESENT in the encounter:
       1. listed in scene_enemies (authoritative), OR
-      2. a catalog enemy newly named in THIS turn's narration (GM ambush), OR
+      2. (llm) a catalog enemy, OR (injected) a catalog enemy named in this turn's
+         narration together with an aggression cue, OR
       3. a generic key (unknown_attacker) backed by aggressive narration.
     A bare catalog hit with no scene/narrative presence is REJECTED (#596) — this
     is what let a dead/absent wolf (#535) or an off-scene goblin (#596) start a fight.
@@ -774,21 +787,30 @@ def _validate_combat_start_target(
     except Exception:
         pass
 
+    has_aggression = bool(_AGGRESSION_NARRATIVE_RE.search(narr_norm))
+
     # 3. Generic injected key (unknown_attacker/enemy) → valid only if the prose
     #    actually shows an aggressor (#520), otherwise it is a phantom (#535).
     if key_lower in _GENERIC_ENEMY_KEYS:
-        if _AGGRESSION_NARRATIVE_RE.search(narr_norm):
+        if has_aggression:
             return (True, "")
         return (False, "combat_target_not_present")
 
-    # 4. Catalog enemy — valid ONLY if present in this turn's narration (#596).
+    # 4. Catalog enemy.
     try:
         er = conn.execute(
             "SELECT key, label FROM game_config_enemies WHERE LOWER(key) = ? LIMIT 1",
             (key_lower,),
         ).fetchone()
         if er:
-            if _enemy_present_in_narrative(narr_norm, er["label"] or "", er["key"] or ""):
+            if source == "llm":
+                # GM deliberately tagged this enemy — trust it (friendly NPCs already
+                # filtered above). Covers legit GM ambushes.
+                return (True, "")
+            # Backend-injected (player-named): the GM may have *denied* the enemy
+            # ("nie ma żadnego goblina") while still mentioning its name. Require the
+            # name AND a genuine aggression cue so a denial can't spawn a phantom (#596).
+            if _enemy_present_in_narrative(narr_norm, er["label"] or "", er["key"] or "") and has_aggression:
                 return (True, "")
             return (False, "combat_target_not_present")
     except Exception:
@@ -828,7 +850,7 @@ def _maybe_start_combat_from_gm_tag(
             _hfconn.row_factory = sqlite3.Row
             from app.services.llm_tag_parser import log_tag_error as _hf_lte
             for _ek in enemy_keys:
-                _valid, _reason = _validate_combat_start_target(_hfconn, campaign_id, _ek, assistant_text)
+                _valid, _reason = _validate_combat_start_target(_hfconn, campaign_id, _ek, assistant_text, source="llm")
                 if not _valid:
                     _hf_lte(_hfconn, campaign_id, turn_number, match.group(0), _reason)
                     logger.warning(

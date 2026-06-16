@@ -135,6 +135,48 @@ def test_catalog_enemy_named_in_narrative_is_valid():
     assert valid is True and reason == "", (valid, reason)
 
 
+def test_catalog_enemy_named_but_denied_is_rejected():
+    """LIVE #596 repro: player says 'Atakuję goblina!', the GM DENIES the goblin
+    ('w kuźni nie ma żadnego goblina, żaden napastnik nie wyskakuje') — the word
+    'goblin' appears but only inside the denial. A bare name-mention must NOT pass;
+    without an aggression cue the injected target is rejected."""
+    from app.api.turns import _validate_combat_start_target
+    conn = _make_db()
+    _seed_session(conn, 1)
+    conn.execute("INSERT INTO game_config_enemies (key, label) VALUES ('goblin', 'Goblin')")
+    conn.commit()
+    denial = ("Rzucasz te słowa jak iskry, ale w kuźni nie ma żadnego goblina, "
+              "tylko trzask ognia. Żaden zielonoskóry napastnik nie wyskakuje z cienia; "
+              "tutaj na razie jest tylko kuźnia, Wujek i kawałek metalu.")
+    valid, reason = _validate_combat_start_target(conn, 1, "goblin", denial)  # source defaults to 'injected'
+    assert valid is False, "denied goblin must not pass on the injected path"
+    assert reason == "combat_target_not_present", reason
+
+
+def test_llm_source_trusts_catalog_enemy():
+    """When the GM itself emitted the tag (source='llm'), a catalog enemy is trusted
+    even without an aggression cue — GM ambush authored by the model."""
+    from app.api.turns import _validate_combat_start_target
+    conn = _make_db()
+    _seed_session(conn, 1)
+    conn.execute("INSERT INTO game_config_enemies (key, label) VALUES ('goblin', 'Goblin')")
+    conn.commit()
+    narr = "Goblin stoi w progu, szczerząc żółte zęby."
+    valid, reason = _validate_combat_start_target(conn, 1, "goblin", narr, source="llm")
+    assert valid is True and reason == "", (valid, reason)
+
+
+def test_llm_source_still_rejects_friendly_npc():
+    """#534 must hold even for GM-emitted tags: a quest-giver is never a target."""
+    from app.api.turns import _validate_combat_start_target
+    conn = _make_db()
+    _seed_session(conn, 1)
+    conn.execute("INSERT INTO campaign_known_npcs (campaign_id, npc_name) VALUES (1, 'Starzec')")
+    conn.commit()
+    valid, reason = _validate_combat_start_target(conn, 1, "Starzec", "Starzec patrzy.", source="llm")
+    assert valid is False and reason == "combat_target_friendly_npc", reason
+
+
 def test_stale_enemy_from_finished_fight_is_rejected():
     """#535 core: wolf from a finished fight, peaceful current narration → REJECT."""
     from app.api.turns import _validate_combat_start_target
@@ -205,6 +247,20 @@ def test_injection_suppressed_when_enemy_not_present():
     conn.execute("INSERT INTO game_config_enemies (key, label) VALUES ('goblin', 'Goblin')")
     conn.commit()
     out = _ensure_combat_start_tag(conn, 1, "Atakuję goblina!", "Stoisz na pustej polanie. Nikogo tu nie ma.")
+    assert "[COMBAT_START" not in out, out
+
+
+def test_injection_suppressed_when_gm_denies_named_enemy():
+    """LIVE #596 end-to-end: 'Atakuję goblina!' + GM narration that DENIES the goblin
+    → no [COMBAT_START] injected (the name inside the denial must not spawn a fight)."""
+    from app.api.turns import _ensure_combat_start_tag
+    conn = _make_db()
+    _seed_session(conn, 1)
+    conn.execute("INSERT INTO game_config_enemies (key, label) VALUES ('goblin', 'Goblin')")
+    conn.commit()
+    denial = ("Rzucasz te słowa jak iskry, ale w kuźni nie ma żadnego goblina, "
+              "tylko trzask ognia. Żaden zielonoskóry napastnik nie wyskakuje z cienia.")
+    out = _ensure_combat_start_tag(conn, 1, "Atakuję goblina!", denial)
     assert "[COMBAT_START" not in out, out
 
 
