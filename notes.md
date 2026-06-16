@@ -187,7 +187,7 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 
 ---
 
-## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 4/10
+## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 5/10
 
 _Spec: `docs/V2_ARCHITECTURE/22_FAZA_O_OBSERVABILITY_ARCHMAP.md` (łączy Phase 11 observability z mapą architektury `tools/archmap/`). Start prompt: `prompt_o.md`. Nie blokuje FAZY 5 MP._
 _Uwaga: tabele `game_events`/`llm_call_log` już istnieją od #587 (migracja) — O1 częściowo zrobione, zostaje `event_logger.py` + payloady._
@@ -202,7 +202,7 @@ Tor 1 — Observability:
 
 Tor 2 — Mapa węzłów:
 - [x] O6 — Mapa: cron overlay na .61 (refresh.sh 03:30) + opcjonalne wydzielenie repo `archmap` — [#707](https://github.com/szmidtpiotr/ai-gm/issues/707)
-- [ ] O7 — Mapa: pozostałe podsystemy (turn-flow+LLM seam, admin, world, dungeons)
+- [x] O7 — Mapa: pozostałe podsystemy (turn-flow+LLM seam, admin, world, dungeons) — [#708](https://github.com/szmidtpiotr/ai-gm/issues/708) 70959ce
 - [ ] O8 — Mapa↔observability: pełna heat-map (włącz `_phase11` w heat-source.json; węzły observability) — wymaga O1+O2
 - [ ] O9 — (opcjonalnie) MCP serwuje mapę (`get_architecture_map`)
 - [ ] O10 — Mapa: interaktywny UX (pływające panele + persist layout, popup issue z body+komentarzami na żywo, reset układu) — część zrobiona w pilocie, reszta po O7
