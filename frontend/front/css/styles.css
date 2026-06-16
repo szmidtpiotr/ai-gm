@@ -7764,7 +7764,11 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 /* L12 (#681): dungeon movement nav — floating D-pad cluster above the composer.
    Was unstyled (#681 follow-up): raw buttons leaked to the bottom-left of the page. */
-.dungeon-nav { position: fixed; right: 14px; bottom: 84px; z-index: 210;
+/* Sit above the bottom-bar (56px+safe, always shown during game) AND the composer
+   (~72px, last flex child resting on the bar) so the riddle/chest action buttons
+   never get covered by the "Co robisz?" belka. */
+.dungeon-nav { position: fixed; right: 14px;
+  bottom: calc(136px + env(safe-area-inset-bottom)); z-index: 210;
   display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; }
 .dungeon-nav[hidden] { display: none; }
 .dungeon-nav__dirs { display: flex; flex-direction: column; align-items: center; gap: 4px;
