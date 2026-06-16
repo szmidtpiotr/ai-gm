@@ -78,7 +78,7 @@ await browser.close();
 - [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
 - [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (15/25; +L-doors #697 z weryfikacji gracza; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (15/25; +L-doors #697,#698 z weryfikacji gracza; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
