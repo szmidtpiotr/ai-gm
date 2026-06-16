@@ -671,7 +671,8 @@ function openTask(num,title,kind){
   box.style.top =Math.max(8,(window.innerHeight-h)/2)+'px';
   box.scrollTop=0;
 
-  fetchIssue(num).then(({iss,comments})=>{
+  fetchIssue(num).then((data)=>{
+    const {iss,comments}=data;
     if(seq!==popSeq) return; // a newer popup opened meanwhile
     const labels=(iss.labels||[]).map(l=>`<span class="lbl">${esc(l.name)}</span>`).join('');
     document.getElementById('popmeta').innerHTML=
