@@ -70,3 +70,7 @@ backend/ai_gm.db
 
 # Scratch screenshots / temp images
 temp-img/
+
+# Throwaway dev artifacts
+.playwright-mcp/
+mag-game-screen*.png
