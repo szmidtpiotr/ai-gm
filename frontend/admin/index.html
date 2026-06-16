@@ -131,6 +131,7 @@
       { key: 'push',       label: 'Push',       ico: '🔔' },
       { key: 'tools',      label: 'Narzędzia',  ico: '🛠' },
       { key: 'system',     label: 'System',     ico: '⎔' },
+      { key: 'analytics', label: 'Statystyki',  ico: '📊' },
     ];
     const KEYS = SECTIONS.map(s => s.key);
     const LABELS = Object.fromEntries(SECTIONS.map(s => [s.key, s.label]));
@@ -156,7 +157,7 @@
 
     // FADM-P15: wszystkie 15 sekcji sportowane do modularnego admin/. admin3 wycofany
     // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
-    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'heroes', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics']);
+    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'heroes', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics', 'analytics']);
 
     function placeholder(key) {
       return `<div class="section active"><div class="adm-placeholder">

@@ -221,27 +221,50 @@ def get_combat(days: int) -> dict:
         conn.close()
 
 
-# ── Events feed (#587) ──────────────────────────────────────────────────────
+# ── Events feed (#587, extended O3 #705) ────────────────────────────────────
 
-def get_events(days: int, limit: int = 100, conn: sqlite3.Connection | None = None) -> dict:
-    """Recent structured game events (combat, level-up, quest…) for the Zdarzenia tab.
+def get_events(
+    days: int = 30,
+    limit: int = 100,
+    conn: sqlite3.Connection | None = None,
+    event_type: str | None = None,
+    severity: str | None = None,
+    campaign_id: int | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> dict:
+    """Recent structured game events for the Zdarzenia tab.
 
     Reads game_events (written best-effort by event_logger.write_game_event). Missing
     table or empty → {"events": []}, never raises.
+    Supports optional filters: event_type, severity, campaign_id, from_date, to_date.
     """
-    since = _date_from(days)
+    since = from_date or _date_from(days)
     _own = conn is None
     c = conn or _conn()
     try:
-        rows = c.execute(
-            """SELECT event_type, severity, campaign_id, character_id, user_id,
-                      event_data, created_at
-               FROM game_events
-               WHERE date(created_at) >= ?
-               ORDER BY created_at DESC, id DESC
-               LIMIT ?""",
-            (since, limit),
-        ).fetchall()
+        query = (
+            "SELECT event_type, severity, campaign_id, character_id, user_id,"
+            " event_data, created_at"
+            " FROM game_events"
+            " WHERE date(created_at) >= ?"
+        )
+        params: list = [since]
+        if to_date:
+            query += " AND date(created_at) <= ?"
+            params.append(to_date)
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+        if severity:
+            query += " AND severity = ?"
+            params.append(severity)
+        if campaign_id is not None:
+            query += " AND campaign_id = ?"
+            params.append(campaign_id)
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        rows = c.execute(query, params).fetchall()
         return {"events": [dict(r) for r in rows]}
     except sqlite3.OperationalError:
         return {"events": []}
@@ -250,15 +273,20 @@ def get_events(days: int, limit: int = 100, conn: sqlite3.Connection | None = No
             c.close()
 
 
-# ── LLM usage (#587) ────────────────────────────────────────────────────────
+# ── LLM usage (#587, extended O3 #705) ─────────────────────────────────────
 
-def get_llm(days: int, conn: sqlite3.Connection | None = None) -> dict:
+_PERIOD_DAYS = {"24h": 1, "7d": 7, "30d": 30}
+
+
+def get_llm(days: int = 1, period: str | None = None, conn: sqlite3.Connection | None = None) -> dict:
     """LLM call telemetry: aggregate by call_type + slowest calls.
 
     Reads llm_call_log (written best-effort by event_logger.write_llm_log). Missing
     table or empty → empty lists, never raises.
+    period overrides days when provided; accepted values: 24h | 7d | 30d.
     """
-    since = _date_from(days)
+    effective_days = _PERIOD_DAYS.get(period or "", days)
+    since = _date_from(effective_days)
     _own = conn is None
     c = conn or _conn()
     try:
@@ -377,3 +405,124 @@ def get_economy(days: int) -> dict:
         }
     finally:
         conn.close()
+
+
+# ── O3 (#705): Dashboard KPI, Players, Errors ────────────────────────────────
+
+def get_dashboard(conn: sqlite3.Connection | None = None) -> dict:
+    """KPI cards: active_campaigns, turns_today, avg_latency_ms, errors_24h."""
+    _own = conn is None
+    c = conn or _conn()
+    try:
+        active_campaigns = c.execute(
+            "SELECT COUNT(*) FROM campaigns WHERE status='active'"
+        ).fetchone()[0] or 0
+
+        turns_today = c.execute(
+            "SELECT COUNT(*) FROM campaign_turns WHERE date(created_at) = date('now')"
+        ).fetchone()[0] or 0
+
+        avg_row = c.execute(
+            "SELECT AVG(latency_ms) FROM llm_call_log"
+            " WHERE created_at >= datetime('now', '-1 day')"
+        ).fetchone()
+        avg_latency_ms = round(avg_row[0]) if avg_row and avg_row[0] is not None else None
+
+        ge_errors = c.execute(
+            "SELECT COUNT(*) FROM game_events"
+            " WHERE severity='error' AND created_at >= datetime('now', '-1 day')"
+        ).fetchone()[0] or 0
+        llm_errors = c.execute(
+            "SELECT COUNT(*) FROM llm_call_log"
+            " WHERE error IS NOT NULL AND created_at >= datetime('now', '-1 day')"
+        ).fetchone()[0] or 0
+
+        return {
+            "active_campaigns": active_campaigns,
+            "turns_today": turns_today,
+            "avg_latency_ms": avg_latency_ms,
+            "errors_24h": ge_errors + llm_errors,
+        }
+    except sqlite3.OperationalError:
+        return {"active_campaigns": 0, "turns_today": 0, "avg_latency_ms": None, "errors_24h": 0}
+    finally:
+        if _own:
+            c.close()
+
+
+def get_players(conn: sqlite3.Connection | None = None) -> dict:
+    """Recent player activity summary — one row per character with an active campaign."""
+    _own = conn is None
+    c = conn or _conn()
+    try:
+        rows = c.execute(
+            """SELECT u.id AS user_id, u.username, u.display_name,
+                      ch.name AS character_name,
+                      camps.title AS campaign_title,
+                      MAX(ct.created_at) AS last_active,
+                      COUNT(ct.id) AS turns_count
+               FROM characters ch
+               JOIN users u ON u.id = ch.user_id
+               LEFT JOIN campaigns camps ON camps.id = ch.campaign_id
+               LEFT JOIN campaign_turns ct ON ct.campaign_id = ch.campaign_id
+               WHERE ch.campaign_id IS NOT NULL
+                 AND ch.name NOT LIKE '[SBX] %'
+               GROUP BY ch.id, u.id, u.username, u.display_name, ch.name, camps.title
+               ORDER BY last_active DESC
+               LIMIT 50"""
+        ).fetchall()
+
+        death_rows = c.execute(
+            "SELECT user_id, COUNT(*) AS cnt FROM game_events"
+            " WHERE event_type='player_death' GROUP BY user_id"
+        ).fetchall()
+        deaths_by_user = {r["user_id"]: r["cnt"] for r in death_rows}
+
+        return {
+            "players": [
+                {
+                    "username": r["username"],
+                    "display_name": r["display_name"],
+                    "character_name": r["character_name"],
+                    "campaign_title": r["campaign_title"],
+                    "last_active": r["last_active"],
+                    "turns_count": r["turns_count"] or 0,
+                    "deaths": deaths_by_user.get(r["user_id"], 0),
+                }
+                for r in rows
+            ]
+        }
+    except sqlite3.OperationalError:
+        return {"players": []}
+    finally:
+        if _own:
+            c.close()
+
+
+def get_errors(limit: int = 20, conn: sqlite3.Connection | None = None) -> dict:
+    """Merged error feed: game_events severity=error + llm_call_log with error."""
+    _own = conn is None
+    c = conn or _conn()
+    try:
+        ge_rows = c.execute(
+            "SELECT 'game_event' AS source, event_type, severity,"
+            " campaign_id, event_data AS detail, created_at"
+            " FROM game_events WHERE severity='error'"
+            " ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        llm_rows = c.execute(
+            "SELECT 'llm_error' AS source, call_type AS event_type, 'error' AS severity,"
+            " campaign_id, error AS detail, created_at"
+            " FROM llm_call_log WHERE error IS NOT NULL"
+            " ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        merged = [dict(r) for r in ge_rows] + [dict(r) for r in llm_rows]
+        merged.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        return {"errors": merged[:limit]}
+    except sqlite3.OperationalError:
+        return {"errors": []}
+    finally:
+        if _own:
+            c.close()
