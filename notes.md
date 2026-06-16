@@ -196,7 +196,7 @@ _Wchłania H1 z FAZY 6 (stary „observability design / log writer") — zastąp
 Tor 1 — Observability:
 - [x] O1 — `game_events`+`llm_call_log` + `event_logger.py` (tabele są od #587; brak serwisu helpera) — [#702](https://github.com/szmidtpiotr/ai-gm/issues/702) d04b6bc
 - [x] O2 — Zapis zdarzeń z serwisów (combat/śmierć/beat/LLM) wg payloadów §Part 1 — [#704](https://github.com/szmidtpiotr/ai-gm/issues/704) 7c28c0e
-- [ ] O3 — Panel admina „Statystyki i Logi" (KPI + 4 zakładki, endpointy analytics — częściowo od #587)
+- [x] O3 — Panel admina „Statystyki i Logi” (KPI + 4 zakładki, endpointy analytics) — [#705](https://github.com/szmidtpiotr/ai-gm/issues/705) 381e5fd
 - [ ] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service)
 - [ ] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest, bez issue [TASK]
 
