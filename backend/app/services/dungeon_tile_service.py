@@ -563,6 +563,14 @@ def enter_dungeon_tiles(
             "loot_collected": [],
         }
 
+        # L11/L12b: mark the entry node visited so the dungeon map renders the
+        # starting room (+ fog neighbours) immediately — move_through_door only
+        # flags subsequently-entered nodes, so without this the map is blank
+        # until the first move.
+        _entry_nid = graph.get("entry_node")
+        if _entry_nid and _entry_nid in graph.get("nodes", {}):
+            graph["nodes"][_entry_nid]["visited"] = True
+
         flags["dungeon_run"] = run
         if previous_campaign_id:
             flags["dungeon_previous_campaign_id"] = previous_campaign_id
@@ -1067,6 +1075,20 @@ def _action_open_chest(
     if success:
         loot = _roll_chest_loot_for_run(conn, run.get("dungeon_key", ""), tier)
         chest_state["opened"] = True
+        # L12b fix: actually GRANT the rolled loot to the character's inventory
+        # (previously only rolled — items never reached the bag).
+        if loot:
+            try:
+                from app.services.loot_service import grant_loot_to_character
+                rarity = loot[0].get("rarity")
+                granted = grant_loot_to_character(
+                    character_id, loot, source="dungeon_chest", loot_tier=rarity,
+                )
+                if granted:
+                    loot = granted
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("chest loot grant failed")
         narrative = f"Otwierasz skrzynię! (Rzut: {d20}{dex_mod:+}={total} vs DC {dc})"
         narrative += f" Znalazłeś {len(loot)} przedmiot(y)!" if loot else " Skrzynia jest pusta."
     else:

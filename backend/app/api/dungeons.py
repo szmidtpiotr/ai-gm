@@ -196,7 +196,30 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
     if entry_desc:
         narrative += f" {entry_desc}"
 
-    return {"ok": True, "dungeon_run": instance, "room_narrative": narrative}
+    # L12b: teach dungeon mechanics (doors / chest / riddle / death) on first entry.
+    onboarding_cards: list[dict] = []
+    try:
+        from app.services.onboarding_service import get_unseen_cards_for_mechanics
+        conn = _get_db()
+        try:
+            row = conn.execute(
+                "SELECT user_id FROM characters WHERE id = ?", (req.character_id,)
+            ).fetchone()
+            if row and row["user_id"] is not None:
+                onboarding_cards = get_unseen_cards_for_mechanics(
+                    conn, int(row["user_id"]), ["dungeon_tiles"]
+                )
+        finally:
+            conn.close()
+    except Exception:
+        onboarding_cards = []
+
+    return {
+        "ok": True,
+        "dungeon_run": instance,
+        "room_narrative": narrative,
+        "onboarding_cards": onboarding_cards,
+    }
 
 
 # ── Legacy endpoints (L9: removed) ───────────────────────────────────────────
@@ -419,7 +442,30 @@ def exit_dungeon(req: DungeonEnterReq):
 def get_current_dungeon_run(campaign_id: int):
     from app.services.dungeon_service import get_active_dungeon_run
     run = get_active_dungeon_run(campaign_id)
-    return {"dungeon_run": run}
+
+    # L12b: surface the unseen dungeon mechanics codex card so resume/restore paths
+    # (not just fresh enter) can teach it. Frontend shows it at most once per load.
+    onboarding_cards: list[dict] = []
+    if run:
+        try:
+            from app.services.onboarding_service import get_unseen_cards_for_mechanics
+            char_id = next(iter((run.get("positions") or {}).keys()), None)
+            if char_id is not None:
+                conn = _get_db()
+                try:
+                    row = conn.execute(
+                        "SELECT user_id FROM characters WHERE id = ?", (int(char_id),)
+                    ).fetchone()
+                    if row and row["user_id"] is not None:
+                        onboarding_cards = get_unseen_cards_for_mechanics(
+                            conn, int(row["user_id"]), ["dungeon_tiles"]
+                        )
+                finally:
+                    conn.close()
+        except Exception:
+            onboarding_cards = []
+
+    return {"dungeon_run": run, "onboarding_cards": onboarding_cards}
 
 
 @router.get("/characters/{character_id}/dungeon-history")

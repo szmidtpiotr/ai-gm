@@ -19,6 +19,8 @@ VALID_MECHANIC_KEYS = {
     "affixes", "crafting", "multiplayer",
     # U20 (#572)
     "durability", "raids", "crafter",
+    # L16/L12b — dungeon tile mode
+    "dungeon_tiles",
 }
 
 

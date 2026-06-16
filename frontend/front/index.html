@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=687-dungeon-nav-map-2026-06-16">
+  <link rel="stylesheet" href="./css/styles.css?v=697-chest-loot-2026-06-16">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -751,12 +751,6 @@
         <!-- Legacy mount, kept hidden for backward-compat -->
       </div>
       <div class="combat-banner__msg" id="combat-msg" hidden></div>
-    </div>
-
-    <!-- L12 (#681): Tile image panel — shown above chat during active dungeon run -->
-    <div id="dungeon-tile-scene" class="dungeon-tile-scene" hidden>
-      <img id="dungeon-tile-scene-img" class="dungeon-tile-scene__img" src="" alt="" hidden>
-      <div id="dungeon-tile-scene-desc" class="dungeon-tile-scene__desc"></div>
     </div>
 
     <main class="chat" id="chat-container">
@@ -1660,6 +1654,7 @@
     <div class="dungeon-hud__label" id="dungeon-hud-label">⛏ Loch</div>
     <div class="dungeon-hud__progress" id="dungeon-hud-progress"></div>
     <div class="dungeon-hud__room-type" id="dungeon-hud-room-type"></div>
+    <button type="button" class="dungeon-hud__map-btn" id="dungeon-room-view-btn" title="Pokaż widok komnaty" hidden>🖼</button>
     <button type="button" class="dungeon-hud__advance" id="dungeon-advance-btn" hidden>Przejdź dalej →</button>
     <button type="button" class="dungeon-hud__map-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
     <button type="button" class="dungeon-hud__exit" id="dungeon-exit-btn">✕ Wyjdź</button>
@@ -1675,6 +1670,15 @@
       <button type="button" class="dungeon-riddle-submit" id="dungeon-riddle-submit">Odpowiedz</button>
     </div>
     <button type="button" class="dungeon-riddle-hint-btn" id="dungeon-riddle-hint-btn">Podpowiedź</button>
+  </div>
+
+  <!-- L12b (#694): Tile image popup — shown on first entry to a tile + on map tile click -->
+  <div id="dungeon-tile-modal" class="dtile-modal" hidden>
+    <div class="dtile-modal__box">
+      <button type="button" class="dtile-modal__close" id="dungeon-tile-modal-close">✕</button>
+      <div class="dtile-modal__name" id="dungeon-tile-modal-name"></div>
+      <img id="dungeon-tile-modal-img" class="dtile-modal__img" src="" alt="" hidden>
+    </div>
   </div>
 
   <!-- Dungeon Map Overlay -->
@@ -1905,7 +1909,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=689-dungeon-scoped-narration-2026-06-16"></script>
+  <script src="./js/app.js?v=697-chest-loot-2026-06-16"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

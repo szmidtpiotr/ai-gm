@@ -4971,6 +4971,7 @@ Cap poziomu bohatera = 10 (tabela progów XP z F18, `xp_service.py`). Endless po
 **Decyzja 13 — Wejścia do lochu: oba.** (a) hex typu dungeon na mapie świata w kampanii (E21, zostaje), (b) ekran startowy — bohater `idle` → „Wyprawa do lochu" (aktualizacja D9: tryby „Loch" i „Loch-kafelki" scalają się w jeden „Loch"). Loch pozostaje kampanią-kontenerem (`session_flags.dungeon_run` + `previous_campaign_id`).
 
 **Decyzja 14 — Mapa kafelkowa w UI gracza.** W aktywnym `dungeon_run` przycisk mapy pokazuje mapę kafelków zamiast hex-mapy świata: odwiedzone kafelki jako obrazki na siatce (drzwi spasowane), marker pozycji, zarysy za otwartymi drzwiami. Klik na drzwi na mapie = ruch; równolegle przyciski kierunków pod composerem. Po wyjściu z lochu mapa wraca do hexów.
+> **Rewizja L12b (#694, 2026-06-16, weryfikacja mobile):** obraz kafla NIE jest inline nad czatem (przykrywał interfejs na mobile). Obraz to **modal popup** (styl jak Dice Roll): pokazywany automatycznie przy PIERWSZYM wejściu na dany kafel + na żądanie po kliknięciu kafla na mapie. Surowy `room_description` nie pokazuje się graczowi w czacie — zostaje wyłącznie paliwem narratora (Decyzja 3); w popupie widnieje jako podpis pod obrazem.
 
 **Decyzja 15 — Flaga dla graczy.** Lochy włączone dla graczy z możliwością wyłączenia w adminie — reuse `game_mode_flags.dungeon_enabled` (`/admin/game-modes`), default ON.
 

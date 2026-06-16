@@ -11,6 +11,8 @@ function _esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&l
 function _loading(n=3) { return `<tr><td colspan="${n}" style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</td></tr>`; }
 function _errRow(n, msg) { return `<tr><td colspan="${n}" style="text-align:center;padding:24px;color:var(--red)">${_esc(msg)}</td></tr>`; }
 function _showToast(msg, type) { showToast(msg, type); }
+// Parse int preserving 0 (plain `parseInt(v)||d` turns a valid 0 into the default — e.g. cooldown 0).
+function _intOr(v, d) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : d; }
 function filterTableGeneric(input, tableId, nameClass) {
   const q = input.value.toLowerCase();
   document.querySelectorAll(`#${tableId} tbody tr`).forEach(row => {
@@ -244,7 +246,7 @@ function _sectionHtml() { return `
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="nd-label" class="form-input" placeholder="Leśna Jaskinia"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz lokacji</label><input id="nd-loc" class="form-input form-mono" placeholder="Zostaw puste = jak klucz lochu"></div>
         <div class="form-row"><label class="form-label">Min. poziom</label><input id="nd-lvl" class="form-input" type="number" value="1" min="1" max="20"></div>
-        <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="nd-cool" class="form-input" type="number" value="72" min="1" max="720"></div>
+        <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="nd-cool" class="form-input" type="number" value="72" min="0" max="720" title="0 = brak cooldownu (farmowalny bez przerwy — np. loch testowy)"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="nd-atmo" class="form-input" rows="2" placeholder="Ciasne tunele, smród gnijącego mięsa…"></textarea></div>
 
         <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
@@ -295,14 +297,14 @@ function _sectionHtml() { return `
     if (!key || !label) { _showToast('Klucz i nazwa są wymagane.','error'); return; }
     const body = { key, label,
       location_key: g('nd-loc')?.value?.trim() || key,
-      min_level: parseInt(g('nd-lvl')?.value)||1,
-      cooldown_hours: parseInt(g('nd-cool')?.value)||72,
+      min_level: _intOr(g('nd-lvl')?.value, 1),
+      cooldown_hours: _intOr(g('nd-cool')?.value, 72),
       atmosphere: g('nd-atmo')?.value?.trim()||null,
       is_active: g('nd-active')?.checked ? 1 : 0,
       tile_category_key: g('nd-tile-cat')?.value || null,
-      tile_count: parseInt(g('nd-tile-count')?.value)||6,
+      tile_count: _intOr(g('nd-tile-count')?.value, 6),
       boss_tile_id: parseInt(g('nd-boss-tile')?.value)||null,
-      endless_growth_n: parseInt(g('nd-endless-n')?.value)||0,
+      endless_growth_n: _intOr(g('nd-endless-n')?.value, 0),
       chest_loot_table_key: g('nd-chest')?.value?.trim()||null,
       boss_loot_table_key: g('nd-bloot')?.value?.trim()||null,
     };
@@ -338,7 +340,7 @@ function _sectionHtml() { return `
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa</label><input id="ed-label" class="form-input" value="${_esc(dg.label||'')}"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz lokacji</label><input id="ed-loc" class="form-input form-mono" value="${_esc(dg.location_key||'')}"></div>
         <div class="form-row"><label class="form-label">Min. poziom</label><input id="ed-lvl" class="form-input" type="number" value="${dg.min_level||1}" min="1" max="20"></div>
-        <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="ed-cool" class="form-input" type="number" value="${dg.cooldown_hours||72}" min="1" max="720"></div>
+        <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="ed-cool" class="form-input" type="number" value="${dg.cooldown_hours ?? 72}" min="0" max="720" title="0 = brak cooldownu (farmowalny bez przerwy — np. loch testowy)"></div>
         <div class="form-row"><label class="form-label">Trudność (D1–D5)</label><input id="ed-diff" class="form-input" type="number" value="${dg.dungeon_difficulty||1}" min="1" max="5"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="ed-atmo" class="form-input" rows="2">${_esc(dg.atmosphere||'')}</textarea></div>
 
@@ -387,15 +389,15 @@ function _sectionHtml() { return `
     const body = {
       label: g('ed-label')?.value?.trim(),
       location_key: g('ed-loc')?.value?.trim()||key,
-      min_level: parseInt(g('ed-lvl')?.value)||1,
-      cooldown_hours: parseInt(g('ed-cool')?.value)||72,
-      dungeon_difficulty: parseInt(g('ed-diff')?.value)||1,
+      min_level: _intOr(g('ed-lvl')?.value, 1),
+      cooldown_hours: _intOr(g('ed-cool')?.value, 72),
+      dungeon_difficulty: _intOr(g('ed-diff')?.value, 1),
       is_active: g('ed-active')?.checked ? 1 : 0,
       atmosphere: g('ed-atmo')?.value?.trim()||null,
       tile_category_key: g('ed-tile-cat')?.value || null,
-      tile_count: parseInt(g('ed-tile-count')?.value)||6,
+      tile_count: _intOr(g('ed-tile-count')?.value, 6),
       boss_tile_id: parseInt(g('ed-boss-tile')?.value)||null,
-      endless_growth_n: parseInt(g('ed-endless-n')?.value)||0,
+      endless_growth_n: _intOr(g('ed-endless-n')?.value, 0),
       chest_loot_table_key: g('ed-chest')?.value?.trim()||null,
       boss_loot_table_key: g('ed-bloot')?.value?.trim()||null,
     };

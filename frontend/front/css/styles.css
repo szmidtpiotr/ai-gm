@@ -7859,6 +7859,38 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dungeon-modal__btn--cancel { background: #1a1208; border: 1px solid #3a2510; color: #a09070; }
 .dungeon-modal__btn--cancel:hover { border-color: #c9751a; color: #c9751a; }
 
+/* ── L12b (#694): Tile image popup modal (like Dice Roll popup) ──────────── */
+.dtile-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+  display: flex; align-items: center; justify-content: center; z-index: 1150; padding: 20px; }
+.dtile-modal[hidden] { display: none; }
+.dtile-modal__box { position: relative; background: #0d0904; border: 1px solid #5a3518;
+  border-radius: 14px; padding: 16px; max-width: min(92vw, 440px); width: 100%;
+  box-shadow: 0 8px 48px rgba(201,117,26,0.25); display: flex; flex-direction: column; gap: 12px;
+  animation: dtile-pop 0.22s ease-out; }
+@keyframes dtile-pop { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.dtile-modal__close { position: absolute; top: 8px; right: 10px; background: rgba(0,0,0,0.5);
+  border: 1px solid #3a2510; border-radius: 6px; color: #c0a070; font-size: 0.9rem;
+  width: 30px; height: 30px; cursor: pointer; z-index: 2; line-height: 1; }
+.dtile-modal__close:hover { color: #eee; border-color: #c9751a; }
+.dtile-modal__name { font-family: Cinzel, serif; font-size: 0.95rem; color: #e09030;
+  letter-spacing: 0.05em; text-align: center; text-shadow: 0 0 10px rgba(201,117,26,0.4);
+  padding-right: 28px; }
+.dtile-modal__img { display: block; width: 100%; height: auto; max-height: 56vh; object-fit: cover;
+  border-radius: 10px; border: 1px solid #3a2510; }
+.dtile-modal__img[hidden] { display: none; }
+.dtile-modal__desc { font-size: 0.86rem; color: #c0a880; line-height: 1.55; text-align: left;
+  max-height: 22vh; overflow-y: auto; }
+.dtile-modal__desc:empty { display: none; }
+/* L12b (#696): chest result modal (reuses .dtile-modal overlay/box) */
+.dchest__roll { font-size: 0.86rem; color: #c9a060; text-align: center;
+  background: rgba(201,117,26,0.08); border: 1px solid #3a2510; border-radius: 8px; padding: 8px 10px; }
+.dchest__loot { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.dchest__loot li { font-size: 0.9rem; color: #d4c09a; background: #12100c;
+  border: 1px solid #3a2510; border-radius: 8px; padding: 8px 12px; }
+.dchest__empty, .dchest__fail { font-size: 0.86rem; color: #a09070; text-align: center; }
+.dchest__trap { font-size: 0.85rem; color: #e08040; text-align: center;
+  background: rgba(224,128,64,0.08); border: 1px solid #5a3018; border-radius: 8px; padding: 7px 10px; }
+
 /* ── Dungeon Map ─────────────────────────────────────────────────────────── */
 .dmap-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
   display: flex; align-items: flex-end; justify-content: center;

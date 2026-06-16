@@ -1317,6 +1317,7 @@ async function selectCampaign(campaign) {
                         updateDungeonHUD();
                         showDungeonHUD(true);
                         renderCurrentRoom();
+                        _maybeShowDungeonCodexCard(runResp.onboarding_cards);
                     }
                 } catch {}
             }
@@ -11610,6 +11611,7 @@ async function enterDungeon(dungeonKey) {
         });
 
         _activeDungeonRun = resp.dungeon_run;
+        _dungeonSeenTiles = new Set();   // L12b: fresh run → tile popups show again
         await enterGame(dungeonCampaign);
         updateDungeonHUD();
         showDungeonHUD(true);
@@ -11618,6 +11620,8 @@ async function enterDungeon(dungeonKey) {
             appendMessage({ role: 'assistant', content: resp.room_narrative, created_at: new Date() });
             scrollToBottom();
         }
+        // L12b: first-entry dungeon mechanics codex card (doors / chest / riddle / death)
+        if (resp.onboarding_cards?.length) showOnboardingCards(resp.onboarding_cards);
         renderCurrentRoom();
     } catch (err) {
         showToast(err.message || 'Błąd wejścia do lochu', 'error');
@@ -11647,9 +11651,21 @@ async function _resumeDungeonRun(campaignId) {
         updateDungeonHUD();
         showDungeonHUD(true);
         renderCurrentRoom();
+        _maybeShowDungeonCodexCard(runResp.onboarding_cards);
     } catch (err) {
         showToast(err.message || 'Błąd wznawiania lochu', 'error');
     }
+}
+
+// L12b: show the dungeon mechanics codex card once per page-load on resume/restore
+// (fresh enter shows it directly). Guarded so moves/reloads don't re-stack it.
+let _dungeonCardOffered = false;
+function _maybeShowDungeonCodexCard(cards) {
+    if (_dungeonCardOffered) return;
+    if (!cards?.length) return;
+    if (document.getElementById('onboarding-card-overlay')) return;
+    _dungeonCardOffered = true;
+    showOnboardingCards(cards);
 }
 
 function updateDungeonHUD() {
@@ -11685,6 +11701,10 @@ function updateDungeonHUD() {
             : 'Komnata';
         roomType.textContent = typeName;
     }
+
+    // L12b: "show room view" icon — visible only when current tile has an image
+    const roomViewBtn = document.getElementById('dungeon-room-view-btn');
+    if (roomViewBtn) roomViewBtn.hidden = !currentNode?.content?.image_url;
 
     // v2: hide legacy advance-btn (movement via direction buttons)
     if (advBtn) advBtn.hidden = true;
@@ -11738,22 +11758,63 @@ function renderCurrentRoom() {
     updateDungeonHUD();
 }
 
-function renderTileScene(node) {
-    const panel = document.getElementById('dungeon-tile-scene');
-    if (!panel) return;
-    if (!node) { panel.setAttribute('hidden', ''); return; }
+// L12b (#694): node_ids whose tile-image popup was already auto-shown this run.
+// Reset on enter/resume so a fresh run shows popups again.
+let _dungeonSeenTiles = new Set();
+
+// L12b: show the tile image as a popup modal (like the Dice Roll popup).
+// `node` = a graph node ({tile_id, content:{image_url, room_description}, ...}).
+function showTileImageModal(node) {
+    const modal = document.getElementById('dungeon-tile-modal');
+    if (!modal || !node) return;
     const content = node.content || {};
-    const img = document.getElementById('dungeon-tile-scene-img');
-    const desc = document.getElementById('dungeon-tile-scene-desc');
-    if (content.image_url && img) {
-        img.src = content.image_url;
-        img.removeAttribute('hidden');
-    } else if (img) {
-        img.src = '';
-        img.setAttribute('hidden', '');
+    const img = document.getElementById('dungeon-tile-modal-img');
+    const name = document.getElementById('dungeon-tile-modal-name');
+
+    // Image + name only — the room_description is narrator fuel (Decyzja 3),
+    // the player reads the LLM-colorized version in chat, not the raw text.
+    if (name) name.textContent = content.label || node.label || 'Komnata';
+    if (img) {
+        if (content.image_url) {
+            img.src = content.image_url;
+            img.removeAttribute('hidden');
+        } else {
+            img.src = '';
+            img.setAttribute('hidden', '');
+        }
     }
-    if (desc) desc.textContent = content.room_description || node.door_hints?.[Object.keys(node.door_hints || {})[0]] || '';
-    panel.removeAttribute('hidden');
+    modal.removeAttribute('hidden');
+}
+
+function closeTileImageModal() {
+    document.getElementById('dungeon-tile-modal')?.setAttribute('hidden', '');
+}
+
+// L12b: reopen the popup for the room the player is currently standing in.
+function showCurrentTileImageModal() {
+    const run = _activeDungeonRun;
+    if (!run) return;
+    const charId = characterData?.id;
+    const positions = run.positions || {};
+    const nodeId = (charId && positions[String(charId)]) || run.graph?.entry_node;
+    const node = run.graph?.nodes?.[nodeId];
+    if (node?.content?.image_url) showTileImageModal(node);
+    else showToast('Brak obrazu dla tej komnaty', 'info');
+}
+
+// L12b: called from updateDungeonHUD. Image is NO LONGER inline above chat —
+// it pops up as a modal on the FIRST visit to each tile only.
+function renderTileScene(node) {
+    if (!node) return;
+    const charId = characterData?.id;
+    const positions = _activeDungeonRun?.positions || {};
+    const nodeId = (charId && positions[String(charId)]) || _activeDungeonRun?.graph?.entry_node;
+    if (!nodeId) return;
+    const content = node.content || {};
+    if (content.image_url && !_dungeonSeenTiles.has(nodeId)) {
+        _dungeonSeenTiles.add(nodeId);
+        showTileImageModal(node);
+    }
 }
 
 function updateDungeonNav(run) {
@@ -11794,7 +11855,10 @@ function updateDungeonNav(run) {
     const hintBtn = nav.querySelector('[data-dungeon-action="riddle_hint"]');
     const riddlePanel = document.getElementById('dungeon-riddle-panel');
 
-    const hasChest = content.chest && !currentNode.cleared;
+    // Chest lives in content.items as {type:'chest'} (backend never set content.chest → button never showed).
+    const chestState = currentNode.chest_state || {};
+    const hasChestItem = (content.items || []).some(i => String(i.type || '').toLowerCase() === 'chest');
+    const hasChest = hasChestItem && !chestState.opened && !chestState.locked_forever;
     const hasRiddle = content.riddle && !currentNode.cleared;
 
     if (chestBtn) chestBtn.hidden = !hasChest;
@@ -11893,9 +11957,49 @@ async function _dungeonResolveTile(action, payload) {
         if (resp.loot?.length) {
             await refreshCharacterData();
         }
+        // L12b: show chest result modal (roll + granted items + trap)
+        if (action === 'open_chest') showChestResultModal(resp);
     } catch (err) {
         showToast(err.message || 'Błąd akcji', 'error');
     }
+}
+
+// L12b (#696): chest open result — shows the DEX roll, granted loot and any trap.
+function showChestResultModal(resp) {
+    const overlay = document.createElement('div');
+    overlay.className = 'dtile-modal';
+    const loot = Array.isArray(resp.loot) ? resp.loot : [];
+    const success = !!resp.success;
+    const rollLine = (typeof resp.roll === 'number')
+        ? `🎲 d20: ${resp.roll} ${(resp.dex_mod >= 0 ? '+' : '')}${resp.dex_mod ?? 0} = ${resp.total} vs DC ${resp.dc}`
+        : '';
+    let body;
+    if (resp.chest_locked_forever && !success) {
+        body = '<p class="dchest__fail">🔒 Mechanizm zablokował skrzynię na zawsze.</p>';
+    } else if (success) {
+        body = loot.length
+            ? '<ul class="dchest__loot">' + loot.map(l =>
+                `<li>📦 ${escapeHtml(l.label || l.key || '?')} ×${l.quantity || 1}</li>`).join('') + '</ul>'
+            : '<p class="dchest__empty">Skrzynia była pusta.</p>';
+    } else {
+        const left = (resp.max_attempts ?? 3) - (resp.attempt ?? 0);
+        body = `<p class="dchest__fail">Nie udało się otworzyć. Pozostało prób: ${Math.max(0, left)}.</p>`;
+    }
+    const trap = resp.trap?.triggered
+        ? `<p class="dchest__trap">⚠️ Pułapka! ${escapeHtml(resp.trap.description || '')} (−${resp.trap.damage} HP)</p>`
+        : '';
+    overlay.innerHTML = `
+        <div class="dtile-modal__box">
+            <button type="button" class="dtile-modal__close">✕</button>
+            <div class="dtile-modal__name">${success ? '🪙 Skrzynia otwarta' : '🪙 Skrzynia'}</div>
+            ${rollLine ? `<div class="dchest__roll">${escapeHtml(rollLine)}</div>` : ''}
+            ${body}
+            ${trap}
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.querySelector('.dtile-modal__close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.body.appendChild(overlay);
 }
 
 function _showDungeonComplete(resp) {
@@ -11958,7 +12062,8 @@ async function _doExitDungeon() {
         document.getElementById('dungeon-abandon-modal')?.setAttribute('hidden', '');
         document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
         document.getElementById('dungeon-nav')?.setAttribute('hidden', '');
-        document.getElementById('dungeon-tile-scene')?.setAttribute('hidden', '');
+        document.getElementById('dungeon-tile-modal')?.setAttribute('hidden', '');
+        _dungeonSeenTiles = new Set();
         // Reload hero and go to campaign screen
         if (currentHero?.id) {
             const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
@@ -12259,6 +12364,12 @@ function renderDungeonMap(run) {
                     font-size="16" style="pointer-events:none">📍</text>`;
             }
 
+            // L12b (#694): transparent hit-rect on top → click opens tile image popup
+            if (imageUrl) {
+                imagesHtml.push(`<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
+                    fill="transparent" data-node-id="${escapeHtml(nid)}" style="cursor:pointer"/>`);
+            }
+
         } else if (isFog) {
             // ── Fog node: outline + "?" ──────────────────────────────────────
             // Find door hint from the visited neighbor
@@ -12358,6 +12469,22 @@ function initDungeon() {
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
+
+    // L12b (#694): tile image popup — close on ✕ or tap outside box
+    document.getElementById('dungeon-tile-modal-close')?.addEventListener('click', closeTileImageModal);
+    document.getElementById('dungeon-tile-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('dungeon-tile-modal')) closeTileImageModal();
+    });
+    document.getElementById('dungeon-room-view-btn')?.addEventListener('click', showCurrentTileImageModal);
+
+    // L12b: click a visited tile on the map → open its image popup
+    document.getElementById('dmap-svg')?.addEventListener('click', (e) => {
+        const g = e.target.closest('[data-node-id]');
+        if (!g) return;
+        const nid = g.getAttribute('data-node-id');
+        const node = _activeDungeonRun?.graph?.nodes?.[nid];
+        if (node?.content?.image_url) showTileImageModal(node);
+    });
 
     // L13 (#682): dungeon modal buttons
     document.getElementById('dungeon-death-exit-btn')?.addEventListener('click', async () => {

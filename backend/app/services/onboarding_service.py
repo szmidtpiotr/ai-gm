@@ -120,6 +120,21 @@ MECHANIC_CARDS: dict[str, dict] = {
             "(„⚒ Kuźnia afiksów”, „🔧 Naprawa”). Zajrzyj do niego, gdy chcesz wzmocnić ekwipunek."
         ),
     },
+    # L16/L12b — dungeon tile mode mechanics card
+    "dungeon_tiles": {
+        "title": "Loch kafelkowy",
+        "content": (
+            "W lochu eksplorujesz komnatę po komnacie. Pod oknem akcji masz przyciski kierunków "
+            "(⬆⬇⬅➡) — pokazują tylko drzwi prowadzące dalej; kliknij, by przejść do sąsiedniej komnaty. "
+            "Mapę całego lochu otwierasz ikoną 🗺, a widok bieżącej komnaty — ikoną 🖼 przy nazwie komnaty. "
+            "SKRZYNIA: gdy w komnacie jest skrzynia, pod oknem akcji pojawia się przycisk „🪙 Otwórz skrzynię”. "
+            "Otwarcie to test Zręczności (DEX) — masz do 3 prób; nieudana może uruchomić pułapkę, "
+            "a po trzech porażkach skrzynia blokuje się na stałe. ZAGADKA: przycisk „🔮 Odpowiedz na zagadkę” "
+            "(3 próby, 2 podpowiedzi). Wrogowie w komnacie startują walkę od razu — pokonaj ich, "
+            "by otworzyć wyjścia. UWAGA: w lochu śmierć kończy wyprawę (tracisz, co zdobyłeś od ostatniego "
+            "checkpointu po bossie)."
+        ),
+    },
 }
 
 
