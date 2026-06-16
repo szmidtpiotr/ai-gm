@@ -355,7 +355,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
   - 🟢 FIX 2026-06-16: oba naprawione na DEV i przetestowane ponownie — death 200 (+72h cd), abandon 200 (+36h cd), 0/20 enters z combat entry. Werdykt engine: **GRYWALNY (bez P0)**. Zmiany w drzewie roboczym FAZA L (niezacommitowane). Zaznaczyć [x] po wizualnej weryfikacji UI + commicie FAZA L; wtedy zamknąć #684/#685.
 
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
-- [ ] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie)
+- [x] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie) — [#690](https://github.com/szmidtpiotr/ai-gm/issues/690)
 - [ ] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5 obrazków → akceptacja Piotra → pełny batch
 - [ ] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5)
 - [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
