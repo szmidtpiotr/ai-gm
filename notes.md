@@ -35,6 +35,41 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
+## Playwright — testy i weryfikacja w przeglądarce
+
+**Zainstalowany na .19 (headless).** Chromium headless działa bez display. Zweryfikowane 2026-06-16.
+
+**Zasada: screenshoty ZAWSZE do `temp-img/`, nie do `/tmp/`** — `/tmp/` niewidoczny z Claude Code Piotra (nie przez sshfs). `temp-img/` jest na sshfs, widoczny inline przez Read tool.
+
+```js
+// Szablon skryptu (Node ESM w /tmp gdzie playwright zainstalowany)
+import { chromium } from 'playwright';
+const SHOTS = '/home/claude/projects/DEV_AIGM/temp-img/<nazwa-testu>';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto('https://aigm-dev.studio-colorbox.com/', { waitUntil: 'networkidle' });
+await page.screenshot({ path: `${SHOTS}/01-nazwa.png` });
+await browser.close();
+// Potem Read tool na każdym PNG żeby pokazać inline w konwersacji
+```
+
+**Gdzie używać w projekcie:**
+
+| Zadanie | Playwright zastępuje/uzupełnia |
+|---|---|
+| Weryfikacja po fixie UI | `game-screen` (1 shot) → wielokrokowa sesja |
+| **L13c** — smoke silnika kafelkowego | Screenshoty kroków przy `/game-smoke-dungeon` |
+| **L18** — regresja lochu e2e | Docelowy test w `ai_test_agent/` (Docker Playwright) |
+| **L19** — pełny playtest | Screenshoty przy 14 checkpointach |
+| **L-doors #697** — weryfikacja drzwi | Screenshot mapy kafla po każdym przejściu |
+| Bug reproduction | Odtworzenie dokładnych kroków gracza |
+| Admin panel UI | Weryfikacja sekcji `admin/` po zmianach |
+
+**MCP (przyszłość):** `playwright` MCP dodany do `~/.claude.json` (projekt DEV_AIGM). Po restarcie sesji dostępny jako narzędzia inline bez pisania skryptów.
+
+---
+
 ## FAZA U — Plan naprawczy używalności (2026-06-11, audyt pełnego specu) — PRZED Fazą 5
 
 > Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AH. Kolejność wykonania = sekcja "FAZA U — zależności i kolejność" w CZĘŚCI AH (NIE numeracja — U9b/U28–U32/U32b wchodzą przed Blokiem 4). Każde zadanie = GitHub Issue `[TASK] UNN — tytuł` wdrażane `/tdd`; wyjątki U4/U9b/U32b = czyste playtesty /game-smoke (bez TDD, bez nowego issue, raporty do #512/#513).
@@ -56,7 +91,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 > - **Skrzynia [#696]** — (a) przycisk „Otwórz skrzynię" nigdy się nie pokazywał (front sprawdzał `content.chest`, backend trzyma w `content.items`); (b) **loot nie wchodził do inventory** — `_action_open_chest` losował, nie nadawał → dodany `grant_loot_to_character`; (c) modal wyniku skrzyni (rzut DEX + przedmioty + pułapka).
 > - **Kodeks lochu [#696]** — karta „Loch kafelkowy" (`dungeon_tiles`) w MECHANIC_CARDS; trigger przy wejściu ORAZ resume/restore (GET dungeon-run zwraca `onboarding_cards`).
 > - **D2 string bug** — seed L16 zapisał `dungeon_difficulty='D2'` (string) → `int()` crash przy wejściu; naprawione na INT (D2=2).
-- [~] **L-doors [#697]** — Decyzja 2b: generator wypełnia WSZYSTKIE narysowane drzwi kafla (obraz pokazuje N,E,W, graf łączył tylko E,W → ślepe drzwi mylą gracza). Plan 2-cz.: (A) treść — kafle „zaślepki" 1-drzwiowe per kategoria (FLUX, jak L14–L15) — ⛔ DO ZROBIENIA (krypta `caps_complete:false`); (B) generator [TDD] — ✅ ZROBIONE: `_fill_open_doors` (weld sąsiadów + cap-fill 1-drzwiowymi zaślepkami, „cap bez kaskady") + `draw_tile_graph` zwraca graf o ZERO ślepych drzwi gdy są zaślepki, inaczej fallback do najlepszego (entry nigdy zablokowane) + log. Endpoint admina `preview-graph/{cat}` (open_doors/caps_complete). pytest 6/6 + Playwright. ⚠️ pełne domknięcie drzwi w grze dopiero po treści A (4 zaślepki krypty na FLUX).
+- [x] **L-doors [#697]** — Decyzja 2b: generator wypełnia WSZYSTKIE narysowane drzwi kafla. ✅ KOMPLETNE: (A) 4 zaślepki krypty 1-drzwiowe (N/S/E/W, id 26–29, FLUX 768px, opisy PL); (B) generator `_fill_open_doors` (weld + cap-fill); krypta `caps_complete:true`, `open_doors:0`. Endpoint `preview-graph/{cat}`. pytest 6/6 + Playwright. — [#697](https://github.com/szmidtpiotr/ai-gm/issues/697)
 - [ ] L13c — 🎮 KAMIEŃ MILOWY (mid-faza): `/game-smoke-dungeon --engine` po Bloku 4 — silnik+UI na kafelkach testowych (przed treścią L14–L16). Łapie bugi grafu/ruchu/mapy/walki/bossa/endless/śmierci/porzucenia ZANIM włożymy treść. Bez TDD, raport do [SMOKE] FAZA L. Checkpointy zależne od treści (opisy PL, zagadki) = N/D. Zaliczone = przebieg silnika bez P0; werdykt min. GRYWALNY Z ZASTRZEŻENIAMI.
   - SMOKE 2026-06-16: pierwszy przebieg **NIEGRYWALNY** (1×P0). Działa: graf/ruch/walka(skala D1–D5)/skrzynia/boss/endless(+1lvl/cykl)/flaga. Defekty: **#684 P0** — brak `import math` → `/dungeons/death` i `/dungeons/exit` zwracają 500; **#685 P1→P0** — entry tile z wrogami = soft-lock. Raport: #686.
   - 🟢 FIX 2026-06-16: oba naprawione na DEV i przetestowane ponownie — death 200 (+72h cd), abandon 200 (+36h cd), 0/20 enters z combat entry. Werdykt engine: **GRYWALNY (bez P0)**. Zmiany w drzewie roboczym FAZA L (niezacommitowane). Zaznaczyć [x] po wizualnej weryfikacji UI + commicie FAZA L; wtedy zamknąć #684/#685.
@@ -485,7 +520,7 @@ _Zrobione fazy i zrobione pod-sekcje faz częściowo ukończonych. Nagłówki zd
 - [x] L13 — Modale: śmierć / porzucenie / resume / wybór po bossie — [#682](https://github.com/szmidtpiotr/ai-gm/issues/682) **needs-testing**
 - [x] L13b — Wejście z ekranu startowego (bohater idle; scalenie trybów D9 w jeden "Wyprawa do lochu") — [#683](https://github.com/szmidtpiotr/ai-gm/issues/683) **needs-testing**
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
-- [x] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie) — [#690](https://github.com/szmidtpiotr/ai-gm/issues/690)
+- [x] L14 — Kategoria "krypta" + 20 definicji kafelków (mix drzwi 6/8/4/2-boss; wrogowie-nieumarli, zagadki, skrzynie) + **4 kafle-zaślepki 1-drzwiowe (N/S/E/W, id 26–29) wymagane przez Decyzję 2b/L-doors #697** — krypta `caps_complete:true`, `open_doors:0` ✅ — [#690](https://github.com/szmidtpiotr/ai-gm/issues/690)
 - [x] L15 — Nowy BASE_PROMPT (bogate narysowane wnętrza, 768px) + scripts/generate_tiles_batch.py; pilot 5→akceptacja Piotra→pełny batch 20/20 krypta. Fix: kompozytor skalował 768→512 (#691, geometria proporcjonalna). — [#691](https://github.com/szmidtpiotr/ai-gm/issues/691)
 - [x] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5) — [#693](https://github.com/szmidtpiotr/ai-gm/issues/693)
 
