@@ -354,6 +354,74 @@ def _run_with_riddle(riddle_key="r1", tier=1) -> dict:
     return _make_v2_run(tier=tier, node_content=content)
 
 
+def _run_with_riddle_key(riddle_key="r1", tier=1) -> dict:
+    """Graph-realistic run: node content stores `riddle` as a STRING key (as the
+    generator does via _get_tile_content), NOT a pre-resolved dict. Regression for
+    the smoke-loch 500 (AttributeError: 'str' object has no attribute 'get')."""
+    content = {
+        "tile_id": 1, "label": "Zagadka", "enemies": [], "items": [],
+        "active_states": [], "exit_conditions": [],
+        "riddle": riddle_key,  # <-- string key, exactly what the graph stores
+        "is_boss_tile": False, "room_description": "Zagadkowa sala.",
+    }
+    return _make_v2_run(tier=tier, node_content=content)
+
+
+def _seed_riddle(conn, key="r1"):
+    conn.execute(
+        "INSERT INTO game_config_riddles (key, text, answer, answer_alts, hints, is_active) "
+        "VALUES (?, ?, ?, ?, ?, 1)",
+        (key, "Co ma zęby, lecz nie gryzie?", "grzebień",
+         json.dumps(["grzebien"]), json.dumps(["Używasz go codziennie.", "Dotyczy włosów."])),
+    )
+    conn.commit()
+
+
+class TestRiddleStringKey:
+    """Riddle stored as a bare string key in the graph node must still resolve
+    (entry-run AND endless segments store it this way)."""
+
+    def test_hint_with_string_key_does_not_crash(self, db):
+        conn, db_path = db
+        _insert_dungeon(conn)
+        _insert_character(conn)
+        _seed_riddle(conn)
+        run = _run_with_riddle_key()
+        _insert_session(conn, run=run)
+        dts = _patch_db(db_path)
+
+        result = dts.resolve_tile_action(1, 1, "riddle_hint", None)
+        assert result["ok"] is True
+        assert result["hint"] == "Używasz go codziennie."
+
+    def test_answer_with_string_key_solves(self, db):
+        conn, db_path = db
+        _insert_dungeon(conn)
+        _insert_character(conn)
+        _seed_riddle(conn)
+        run = _run_with_riddle_key()
+        _insert_session(conn, run=run)
+        dts = _patch_db(db_path)
+
+        result = dts.resolve_tile_action(1, 1, "answer_riddle", {"answer": "grzebień"})
+        assert result["ok"] is True
+        assert result["solved"] is True
+
+    def test_wrong_answer_with_string_key_does_not_crash(self, db):
+        conn, db_path = db
+        _insert_dungeon(conn)
+        _insert_character(conn)
+        _seed_riddle(conn)
+        run = _run_with_riddle_key()
+        _insert_session(conn, run=run)
+        dts = _patch_db(db_path)
+
+        with patch("app.services.dungeon_tile_service.random.random", return_value=0.99):
+            result = dts.resolve_tile_action(1, 1, "answer_riddle", {"answer": "krzesło"})
+        assert result["ok"] is True
+        assert result["solved"] is False
+
+
 class TestRiddle:
     def test_correct_answer_solves_riddle(self, db):
         conn, db_path = db

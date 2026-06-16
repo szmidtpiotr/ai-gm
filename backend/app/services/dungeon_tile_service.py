@@ -757,7 +757,10 @@ def check_exit_conditions(tile: dict, character_id: int) -> tuple[bool, str | No
                 return False, "Pokonaj wszystkich wrogów w tym pomieszczeniu."
         elif ctype == "riddle_solved":
             riddle = tile.get("riddle") or {}
-            if riddle and not riddle.get("solved"):
+            # Graph stores riddle as a bare key string until first interaction;
+            # a string key means unsolved. Only a dict carries the solved flag.
+            solved = riddle.get("solved") if isinstance(riddle, dict) else False
+            if riddle and not solved:
                 return False, "Rozwiąż zagadkę aby kontynuować."
         elif ctype == "item_in_inventory":
             required = c.get("item_key")
@@ -1141,6 +1144,48 @@ def _action_open_chest(
     }
 
 
+def _resolve_riddle_in_content(conn: sqlite3.Connection, content: dict) -> None:
+    """Normalize content["riddle"] to a dict in-place.
+
+    The graph generator (`_get_tile_content`) stores `riddle` as a bare string key
+    (e.g. "riddle_shadow"); the action handlers and exit checks expect the resolved
+    dict shape produced by `_join_tile`. Resolve the key from game_config_riddles
+    so riddles work at runtime (entry-run AND endless segments). No-op when already
+    a dict or absent. (smoke-loch fix: AttributeError 'str'.get)
+    """
+    riddle = content.get("riddle")
+    if not isinstance(riddle, str) or not riddle:
+        return
+    try:
+        r = conn.execute(
+            "SELECT * FROM game_config_riddles WHERE key = ? AND is_active = 1",
+            (riddle,),
+        ).fetchone()
+    except Exception:
+        r = None
+    if not r:
+        content["riddle"] = None
+        return
+    rd = dict(r)
+    try:
+        answer_alts = json.loads(rd.get("answer_alts") or "[]")
+    except Exception:
+        answer_alts = []
+    try:
+        hints = json.loads(rd.get("hints") or "[]")
+    except Exception:
+        hints = []
+    content["riddle"] = {
+        "key": rd["key"],
+        "text": rd.get("text"),
+        "answer": rd.get("answer", ""),
+        "answer_alts": answer_alts,
+        "hints": hints,
+        "hints_used": 0,
+        "solved": False,
+    }
+
+
 def _action_answer_riddle(node: dict, content: dict, answer: str, tier: int) -> dict:
     from app.services.dungeon_service import _answer_matches
 
@@ -1284,9 +1329,11 @@ def resolve_tile_action(
         if action == "open_chest":
             result = _action_open_chest(conn, node, content, character_id, tier, run)
         elif action == "answer_riddle":
+            _resolve_riddle_in_content(conn, content)
             answer = (payload or {}).get("answer", "")
             result = _action_answer_riddle(node, content, answer, tier)
         elif action == "riddle_hint":
+            _resolve_riddle_in_content(conn, content)
             result = _action_riddle_hint(node, content)
         elif action == "rest":
             result = _action_rest(node, content, character_id)
