@@ -187,7 +187,7 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 
 ---
 
-## FAZA O — Observability + Mapa węzłów (PO FAZIE L) 6/10
+## FAZA O — Observability + Mapa węzłów (PO FAZIE L) ✅ 10/10 KOMPLETNE
 
 _Spec: `docs/V2_ARCHITECTURE/22_FAZA_O_OBSERVABILITY_ARCHMAP.md` (łączy Phase 11 observability z mapą architektury `tools/archmap/`). Start prompt: `prompt_o.md`. Nie blokuje FAZY 5 MP._
 _Uwaga: tabele `game_events`/`llm_call_log` już istnieją od #587 (migracja) — O1 częściowo zrobione, zostaje `event_logger.py` + payloady._
@@ -205,7 +205,7 @@ Tor 2 — Mapa węzłów:
 - [x] O7 — Mapa: pozostałe podsystemy (turn-flow+LLM seam, admin, world, dungeons) — [#708](https://github.com/szmidtpiotr/ai-gm/issues/708) 70959ce
 - [x] O8 — Mapa↔observability: pełna heat-map (usunięto `_phase11`, 6 źródeł heat, węzeł MCP w admin-map) — [#709](https://github.com/szmidtpiotr/ai-gm/issues/709) 4c5d05b
 - [x] O9 — (opcjonalnie) MCP serwuje mapę (`get_architecture_map`) — [#710](https://github.com/szmidtpiotr/ai-gm/issues/710) 4ea0583
-- [ ] O10 — Mapa: interaktywny UX (pływające panele + persist layout, popup issue z body+komentarzami na żywo, reset układu) — część zrobiona w pilocie, reszta po O7
+- [x] O10 — Mapa: interaktywny UX (TTL cache 10 min, przycisk Reset układu, viewport clamp potwierdzony) — [#711](https://github.com/szmidtpiotr/ai-gm/issues/711) 7f24537
 
 > **Pilot gotowy (2026-06-16):** `tools/archmap/architecture-map.html` (combat, 27 węzłów) + generator nakładki z GitHub issues + strażnik driftu + instrukcja `INSTRUKCJA.md`. Generator przetestowany na żywym repo (24/106 issues dopasowane). UX (O10) częściowo: pływający pasek filtrów z persist + przeciągany popup issue z live body+komentarzami z GitHub API.
 
