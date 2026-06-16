@@ -42,7 +42,24 @@
       <div class="sidebar-logo">
         <div class="sidebar-logo-mark">GM</div>
         <div class="sidebar-logo-name">AI-GM Admin <small>modular · strangler-fig</small></div>
-        <div class="sidebar-logo-env">DEV</div>
+        <div class="sidebar-logo-env" id="sidebar-logo-env">DEV</div>
+        <script>
+          // Environment badge derived from hostname — never hardcode (was showing
+          // "DEV" on PROD, misleading admins into destructive edits on production).
+          (function () {
+            var h = location.hostname || '';
+            var isDev = h.indexOf('-dev') !== -1 || h === 'localhost' || h === '127.0.0.1';
+            var el = document.getElementById('sidebar-logo-env');
+            if (!el) return;
+            if (isDev) {
+              el.textContent = 'DEV';
+            } else {
+              el.textContent = 'PROD';
+              el.style.background = '#dc2626';
+              el.style.color = '#fff';
+            }
+          })();
+        </script>
       </div>
       <nav class="sidebar-nav" id="admin-nav">
         <!-- nav items injected by router; data-section keys must stay stable -->
