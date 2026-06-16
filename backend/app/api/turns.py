@@ -238,6 +238,18 @@ _COMBAT_MOTION_STEMS = (
 )
 
 
+# #535 — negation guard. "nie atakuję" / "nic nie atakuję" / "nie walczę"
+# must NOT count as attack intent. Operates on normalised text (no PL diacritics,
+# lowercase), so verb stems are diacritic-free. The negating "nie" must directly
+# precede the attack verb (optionally via "chcę/będę/zamierzam" or "nikogo/nic"),
+# so a real attack later in the sentence ("nie rozmawiam, atakuję") is preserved.
+_NEGATION_ATTACK_RE = re.compile(
+    r"\bnie\s+(?:chce\s+|bede\s+|zamierzam\s+|mam\s+zamiaru\s+)?"
+    r"(?:nikogo\s+|nic\s+|niczego\s+)?"
+    r"(atakuj|zaatakuj|uderz|strzel|walcz|bij|tne|tnac|kluj|dzga|szarz|nacier|rzuc|macha|kop|sieka)",
+)
+
+
 def _player_combat_intent(text: str) -> bool:
     """Detect explicit attack declaration in player text.
 
@@ -245,8 +257,19 @@ def _player_combat_intent(text: str) -> bool:
     1. Direct verb match against _COMBAT_INTENT_VERBS.
     2. Weapon-context: player mentions a weapon item + a motion/action stem
        (catches "machając młotem", "wymachuję toporem", "uderzyłem berłem").
+
+    #535: a negated attack verb ("nie atakuję", "nic nie atakuję") suppresses
+    intent unless an un-negated attack verb also appears.
     """
     norm = _normalize_pl(text or "")
+    if _NEGATION_ATTACK_RE.search(norm):
+        # Remove the negated clause and re-test; if an un-negated attack verb
+        # remains ("nie rozmawiam, atakuję"), intent still holds.
+        stripped = _NEGATION_ATTACK_RE.sub(" ", norm)
+        if not (any(v in stripped for v in _COMBAT_INTENT_VERBS)
+                or (any(ws in stripped for ws in _COMBAT_WEAPON_STEMS)
+                    and any(ms in stripped for ms in _COMBAT_MOTION_STEMS))):
+            return False
     if any(v in norm for v in _COMBAT_INTENT_VERBS):
         return True
     has_weapon = any(ws in norm for ws in _COMBAT_WEAPON_STEMS)
@@ -337,7 +360,12 @@ def _ensure_combat_start_tag(
     the combat engine fires. No-op when a tag/cue is already present or when
     a combat is already active.
     """
-    if not _player_combat_intent(player_text):
+    # Trigger when the PLAYER declares an attack (#535: negation already filtered
+    # by _player_combat_intent) OR when the GM narration itself initiates combat
+    # against the player without emitting a tag (#520 reverse direction).
+    player_intent = _player_combat_intent(player_text)
+    narrative_combat = bool(_AGGRESSION_NARRATIVE_RE.search(_normalize_pl(assistant_text or "")))
+    if not player_intent and not narrative_combat:
         return assistant_text
     if COMBAT_START_RE.search(assistant_text or ""):
         return assistant_text
@@ -353,10 +381,24 @@ def _ensure_combat_start_tag(
     except sqlite3.OperationalError:
         pass
     enemy_key = _resolve_enemy_key_from_context(conn, campaign_id, assistant_text)
+    # #596/#535: never inject a tag for an enemy that is not actually present in the
+    # scene/narration. Validation rejects stale/off-scene/friendly targets, so a
+    # peaceful "nic nie atakuję" turn or an absent goblin can no longer spawn a fight.
+    _valid, _reason = _validate_combat_start_target(conn, campaign_id, enemy_key, assistant_text)
+    if not _valid:
+        logger.info(
+            "combat_start_tag_injection_skipped",
+            campaign_id=campaign_id,
+            enemy_key=enemy_key,
+            reason=_reason,
+            player_snippet=(player_text or "")[:80],
+        )
+        return assistant_text
     logger.info(
         "combat_start_tag_injected",
         campaign_id=campaign_id,
         enemy_key=enemy_key,
+        trigger="player_intent" if player_intent else "narrative_combat",
         player_snippet=(player_text or "")[:80],
     )
     sep = "\n\n" if not (assistant_text or "").endswith("\n") else ""
@@ -633,20 +675,65 @@ def _process_location_intent(
     return assistant_response
 
 
+# #520 — GM narration that initiates combat against the player. Used to (a) inject
+# a [COMBAT_START] tag when the LLM forgot it, and (b) treat a generic
+# (unknown_attacker) target as "present" when the prose clearly shows an aggressor.
+# Normalised text (lowercase, no PL diacritics).
+_AGGRESSION_NARRATIVE_RE = re.compile(
+    r"(rzuca(?:ja)?\s+sie\s+na\s+(?:ciebie|was)"
+    r"|atakuj[ae]\s+(?:ci[ęe]|was|cie)"
+    r"|naciera(?:ja)?\s+na\s+(?:ciebie|was)"
+    r"|szarzuj[ae]\s+na\s+(?:ciebie|was)"
+    r"|rusza(?:ja)?\s+na\s+(?:ciebie|was)"
+    r"|skacze\s+na\s+(?:ciebie|was)"
+    r"|ciska\s+sie\s+na\s+(?:ciebie|was)"
+    r"|dobywa(?:ja)?\s+(?:broni|miecza|noza|sztyletu|topora)"
+    r"|wyciaga(?:ja)?\s+(?:noz|miecz|sztylet|bron)"
+    r"|siega(?:ja)?\s+po\s+(?:bron|noz|miecz|sztylet)"
+    r"|unosi\s+bron"
+    r"|wyprowadza\s+cios"
+    r"|zamierza\s+sie\s+(?:na\s+(?:ciebie|was)|bronia)"
+    r"|warczy\s+i\s+(?:rusza|naciera))",
+)
+
+
+def _enemy_present_in_narrative(narr_norm: str, label: str, key: str) -> bool:
+    """True if the enemy's label or key is mentioned in the (normalised) narration."""
+    label_n = _normalize_pl(label or "")
+    key_n = _normalize_pl(key or "")
+    if label_n and len(label_n) >= 4 and label_n not in _GENERIC_ENEMY_LABELS and label_n in narr_norm:
+        return True
+    if key_n and len(key_n) >= 4 and key_n not in _GENERIC_ENEMY_KEYS and key_n in narr_norm:
+        return True
+    return False
+
+
 def _validate_combat_start_target(
     conn: sqlite3.Connection,
     campaign_id: int,
     enemy_key: str,
+    assistant_text: str = "",
 ) -> tuple:
-    """HF-7 (#534): Validate that enemy_key is a legitimate combat target.
+    """Unified combat-start target guard — #534 / #596 / #535.
+
+    A target is valid only when it is genuinely PRESENT in the encounter:
+      1. listed in scene_enemies (authoritative), OR
+      2. a catalog enemy newly named in THIS turn's narration (GM ambush), OR
+      3. a generic key (unknown_attacker) backed by aggressive narration.
+    A bare catalog hit with no scene/narrative presence is REJECTED (#596) — this
+    is what let a dead/absent wolf (#535) or an off-scene goblin (#596) start a fight.
+    A friendly/quest-giver NPC is always rejected (#534).
 
     Returns (is_valid, rejection_reason).
-    rejection_reason: '' | 'combat_target_friendly_npc' | 'combat_target_unknown'
+    rejection_reason:
+      '' | 'combat_target_friendly_npc' | 'combat_target_not_present'
+         | 'combat_target_unknown'
     """
     import json as _vj
     key_lower = enemy_key.lower()
+    narr_norm = _normalize_pl(assistant_text or "")
 
-    # 1. scene_enemies column in game_sessions
+    # 1. scene_enemies — authoritative "these combatants are in the scene" → valid.
     try:
         se_row = conn.execute(
             "SELECT scene_enemies FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -662,18 +749,7 @@ def _validate_combat_start_target(
     except Exception:
         pass
 
-    # 2. game_config_enemies catalog
-    try:
-        er = conn.execute(
-            "SELECT key FROM game_config_enemies WHERE LOWER(key) = ? LIMIT 1",
-            (key_lower,),
-        ).fetchone()
-        if er:
-            return (True, "")
-    except Exception:
-        pass
-
-    # 3. scene_npcs column in game_sessions
+    # 2. Friendly NPC (scene_npcs / campaign_known_npcs) → never a valid target (#534).
     try:
         sn_row = conn.execute(
             "SELECT scene_npcs FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -688,8 +764,6 @@ def _validate_combat_start_target(
                     return (False, "combat_target_friendly_npc")
     except Exception:
         pass
-
-    # 4. campaign_known_npcs table
     try:
         npc_row = conn.execute(
             "SELECT id FROM campaign_known_npcs WHERE campaign_id = ? AND LOWER(npc_name) = ? LIMIT 1",
@@ -697,6 +771,26 @@ def _validate_combat_start_target(
         ).fetchone()
         if npc_row:
             return (False, "combat_target_friendly_npc")
+    except Exception:
+        pass
+
+    # 3. Generic injected key (unknown_attacker/enemy) → valid only if the prose
+    #    actually shows an aggressor (#520), otherwise it is a phantom (#535).
+    if key_lower in _GENERIC_ENEMY_KEYS:
+        if _AGGRESSION_NARRATIVE_RE.search(narr_norm):
+            return (True, "")
+        return (False, "combat_target_not_present")
+
+    # 4. Catalog enemy — valid ONLY if present in this turn's narration (#596).
+    try:
+        er = conn.execute(
+            "SELECT key, label FROM game_config_enemies WHERE LOWER(key) = ? LIMIT 1",
+            (key_lower,),
+        ).fetchone()
+        if er:
+            if _enemy_present_in_narrative(narr_norm, er["label"] or "", er["key"] or ""):
+                return (True, "")
+            return (False, "combat_target_not_present")
     except Exception:
         pass
 
@@ -734,7 +828,7 @@ def _maybe_start_combat_from_gm_tag(
             _hfconn.row_factory = sqlite3.Row
             from app.services.llm_tag_parser import log_tag_error as _hf_lte
             for _ek in enemy_keys:
-                _valid, _reason = _validate_combat_start_target(_hfconn, campaign_id, _ek)
+                _valid, _reason = _validate_combat_start_target(_hfconn, campaign_id, _ek, assistant_text)
                 if not _valid:
                     _hf_lte(_hfconn, campaign_id, turn_number, match.group(0), _reason)
                     logger.warning(

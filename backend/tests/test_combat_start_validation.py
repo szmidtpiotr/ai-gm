@@ -52,9 +52,9 @@ def _make_db():
     return conn
 
 
-def _validate(conn, campaign_id, enemy_key):
+def _validate(conn, campaign_id, enemy_key, assistant_text=""):
     from app.api.turns import _validate_combat_start_target
-    return _validate_combat_start_target(conn, campaign_id, enemy_key)
+    return _validate_combat_start_target(conn, campaign_id, enemy_key, assistant_text)
 
 
 # ─── Test 1 (regression): scene_enemies target → OK ─────────────────────────
@@ -88,8 +88,10 @@ def test_scene_enemy_name_match_is_valid():
     assert valid is True, f"Expected valid=True for scene enemy name match, got {valid!r}"
 
 
-def test_catalog_enemy_is_valid():
-    """Enemy present in game_config_enemies catalog must be accepted."""
+def test_catalog_enemy_present_in_narrative_is_valid():
+    """#596: catalog enemy is valid ONLY when actually present in this turn's
+    narration (GM ambush). A bare catalog hit with no scene/narrative presence
+    must be rejected — that leak is what let an absent goblin/dead wolf fight."""
     conn = _make_db()
     conn.execute(
         "INSERT INTO game_sessions (campaign_id, scene_enemies) VALUES (?, '[]')", (1,)
@@ -99,8 +101,15 @@ def test_catalog_enemy_is_valid():
     )
     conn.commit()
 
-    valid, reason = _validate(conn, 1, "ork_wojownik")
-    assert valid is True, f"Expected valid=True for catalog enemy, got {valid!r}"
+    # Present in narration → valid.
+    narr = "Zza skały wychodzi Ork Wojownik i rusza na ciebie!"
+    valid, reason = _validate(conn, 1, "ork_wojownik", narr)
+    assert valid is True, f"Expected valid=True for narrated catalog enemy, got {valid!r}"
+
+    # Absent from scene and narration → rejected (#596).
+    valid2, reason2 = _validate(conn, 1, "ork_wojownik", "Polana jest pusta i cicha.")
+    assert valid2 is False, "catalog-only enemy with no presence must be rejected"
+    assert reason2 == "combat_target_not_present", reason2
 
 
 # ─── Test 2 (RED→GREEN): campaign_known_npcs target → REJECT ─────────────────
