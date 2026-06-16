@@ -4,6 +4,50 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.4.0 — 2026-06-16 — FAZA L (lochy kafelkowe) + FAZA O (observability + archmap) + fixy walki i lokacji
+
+### Added
+
+**FAZA L — Lochy kafelkowe (L1–L16)**
+- Silnik lochu kafelkowego: generowanie proceduralnych map z kafli PNG, tryb endless (go_deeper), checkpoint krypty, cooldowny, skalowanie wrogów (#684–#698)
+- 40+ kafli krypty: kategoria nieumarłych (L14, 20 kafli 768px), kafle zaślepki N/S/E/W (L16), kafle krypty 26–29 (caps_complete)
+- Generator domyka wszystkie narysowane drzwi na styku segmentów; endless styk tylko na drzwiach zapasowych z retry (#697, #698)
+- Dungeon UI: loch-scoped narration, osobny widok gracza podczas lochu (#687–#689)
+- Skrypty: batch generacja 768px, seed/verify, kompozytor kafli (L15)
+
+**FAZA O — Observability + Archmap (O1–O10)**
+- Tabele `game_events` / `llm_call_log` z indeksami; hooki w 4 serwisach (turns, combat, LLM, dungeon) (#702–#704)
+- Panel admina **Statystyki i Logi**: 4 zakładki (eventy, LLM calls, KPI, logi), 5 endpointów analytics (#705)
+- Serwer MCP AI-GM: narzędzia `search_events`, `get_architecture_map`, `get_campaign_summary` + docker-compose + testy (#706, #710)
+- **Archmap** — interaktywna mapa architektury kodu: 5 map (combat, turn-flow, admin, world, dungeons), heat-map live z game_events+llm_call_log, node-map.json, węzeł MCP (#708, #709, #711)
+- Archmap UX: TTL cache 10min, przycisk Reset układu, embed treści issues w overlay (#711)
+- Cron refresh archmap na .61 o 03:30 (#706)
+
+**Walka i UX**
+- Pakiet 9 bugfixów walki: #660–#669 (trafienia, kondycje, animacje, skrót narracji maga)
+
+### Fixed
+
+**Lokacja startowa — eliminacja sentinela "Start"**
+- `characters.location = "Start"` (reset-progress) tworzył śmieciowe lokacje `Start {campaign_id}` w `game_locations` (#715)
+- `resolve_starting_hex`: wykrywa sentinel "Start"/"Start N" → losuje prawdziwą canonical lokację
+- `finalize_sheet`: ta sama detekcja → LLM dostaje spójną prawdziwą lokację
+- `turns.py`: lazy opening używa `session.current_location`, nie NULL `char.location`
+- Kampania startuje losowo 50% osada / 50% dzikie tereny zamiast zawsze wilderness
+- DB cleanup: 113 osieroconych lokacji Start N usuniętych
+
+**Admin panel i inne**
+- Plakietka środowiska (DEV/PROD) z hostname zamiast hardcoded
+- Zakładki Statystyki: `display:block` naprawia ukryte panele po kliknięciu
+- `item` dodany do whitelist endpointu review — `Unknown entity type: item`
+- Desync tury walki UI ↔ backend naprawiony (#700)
+- `get_campaign_summary` MCP: poprawiona nazwa tabeli
+
+### Assets
+- Dungeon tiles 26–29 (FLUX-generated, 768px, format krypty)
+
+---
+
 ## v1.3.2 — 2026-06-15 — FAZA S/B/SF/HI: silnik skilli i stanów, balans klas, feedback walki, Inspektor Bohatera
 
 ### Added
