@@ -594,26 +594,23 @@ def get_campaign_summary(campaign_id: int) -> dict:
                 "slot": d["slot"],
             })
 
-        # Known NPCs from campaign_catalog_entities (entity_type='npc')
+        # Known NPCs from campaign_known_npcs
         npc_rows = conn.execute(
             """
-            SELECT entity_key, payload_json
-            FROM campaign_catalog_entities
-            WHERE campaign_id = ? AND entity_type = 'npc'
+            SELECT npc_name, role, relation_status, notes
+            FROM campaign_known_npcs
+            WHERE campaign_id = ?
             ORDER BY updated_at DESC
             """,
             [campaign_id],
         ).fetchall()
         known_npcs = []
         for r in npc_rows:
-            payload = parse_json_safe(r["payload_json"], {})
             known_npcs.append({
-                "key": r["entity_key"],
-                "name": payload.get("name") or payload.get("label") or r["entity_key"],
-                "role": payload.get("role") or payload.get("npc_type"),
-                "relationship": payload.get("relationship"),
-                "is_alive": payload.get("is_alive", True),
-                "notes": payload.get("notes") or payload.get("description"),
+                "name": r["npc_name"],
+                "role": r["role"],
+                "relationship": r["relation_status"],
+                "notes": r["notes"],
             })
 
         # AI summary (most recent, both audiences)

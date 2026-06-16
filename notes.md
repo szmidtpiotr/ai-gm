@@ -198,7 +198,7 @@ Tor 1 — Observability:
 - [x] O2 — Zapis zdarzeń z serwisów (combat/śmierć/beat/LLM) wg payloadów §Part 1 — [#704](https://github.com/szmidtpiotr/ai-gm/issues/704) 7c28c0e
 - [x] O3 — Panel admina „Statystyki i Logi” (KPI + 4 zakładki, endpointy analytics) — [#705](https://github.com/szmidtpiotr/ai-gm/issues/705) 381e5fd
 - [x] O4 — Serwer MCP (`mcp_server/server.py`, 9 narzędzi, docker service) — [#706](https://github.com/szmidtpiotr/ai-gm/issues/706) 76ab35c
-- [ ] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest, bez issue [TASK]
+- [x] O5 — Test MCP z Claude Code (10 przykładowych zapytań) — playtest ✅; fix `get_campaign_summary` (campaign_catalog_entities → campaign_known_npcs)
 
 Tor 2 — Mapa węzłów:
 - [ ] O6 — Mapa: cron overlay na .61 (refresh.sh 03:30) + opcjonalne wydzielenie repo `archmap`
