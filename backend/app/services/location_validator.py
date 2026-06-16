@@ -231,19 +231,29 @@ def _resolve_session_id(
 def _fuzzy_match_location(target_label: str, locations: list[dict]) -> Optional[dict]:
     """
     Fuzzy match po label — zwraca najlepszy match jeśli score >= threshold.
-    
+
+    Canonical (ai_generated=0) locations win over ai_generated ones at equal score.
+    This prevents the fuzzy matcher from selecting pending/unreviewed AI locations
+    when a canonical match exists with the same or better score (#522).
+
     Returns:
         Najlepsza pasująca lokalizacja lub None
     """
     best_match = None
     best_score = 0
-    
+    best_is_canonical = False
+
     for loc in locations:
         score = fuzz.ratio(target_label.lower(), loc["label"].lower())
-        if score > best_score and score >= FUZZY_MATCH_THRESHOLD:
+        is_canonical = not loc.get("ai_generated", False)
+        if score < FUZZY_MATCH_THRESHOLD:
+            continue
+        # Prefer: higher score; tiebreak: canonical over ai_generated
+        if score > best_score or (score == best_score and is_canonical and not best_is_canonical):
             best_score = score
             best_match = loc
-    
+            best_is_canonical = is_canonical
+
     return best_match
 
 
@@ -622,9 +632,12 @@ def validate_move(
         
         if not current_loc:
             # Brak aktualnej lokalizacji — dowolny ruch dozwolony (inicjalizacja)
-            # Spróbuj znaleźć lub utworzyć lokalizację docelową
+            # Spróbuj znaleźć lub utworzyć lokalizację docelową (#522: canonical first)
             all_locs = _find_all_locations()
-            matched = _fuzzy_match_location(intent.target_label, all_locs)
+            canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+            matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+            if not matched:
+                matched = _fuzzy_match_location(intent.target_label, all_locs)
             
             if matched:
                 return _result_with_log(resolved_session_id, intent, ValidationResult(
@@ -651,9 +664,19 @@ def validate_move(
                 block_reason=f"Nieznana lokalizacja: {intent.target_label}"
             ), "blocked")
         
-        # Fuzzy match po wszystkich lokalizacjach
+        # Fuzzy match — for action='move' prefer canonical (ai_generated=0) locations
+        # first. Only fall back to ai_generated ones when no canonical match exists,
+        # to avoid stranding the session on an unreviewed AI-invented place (#522).
+        # For action='create' we always search all locations (including ai_generated)
+        # so the LLM can discover already-pending duplicates before minting another (#39).
         all_locs = _find_all_locations()
-        matched = _fuzzy_match_location(intent.target_label, all_locs)
+        canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+        if intent.action == "move":
+            matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+            if not matched:
+                matched = _fuzzy_match_location(intent.target_label, all_locs)
+        else:
+            matched = _fuzzy_match_location(intent.target_label, all_locs)
         
         if matched:
             # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases)
