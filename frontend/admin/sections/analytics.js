@@ -220,7 +220,7 @@ function _activateTab(key) {
     b.classList.toggle('active', b.dataset.anatab === key)
   );
   document.querySelectorAll('.stab-panel').forEach(p => {
-    p.style.display = p.id === 'anatab-' + key ? '' : 'none';
+    p.style.display = p.id === 'anatab-' + key ? 'block' : 'none';
   });
   if (!_tabLoaded.has(key)) {
     _tabLoaded.add(key);
