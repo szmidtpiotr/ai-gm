@@ -642,9 +642,16 @@ def resolve_starting_hex(
     """
     import json as _json
 
-    # When no starting location is given, pick one randomly (50% settlement, 50% wilderness)
-    # to avoid the always-wilderness bias in LLM-generated opening scenes.
-    if not starting_location_name:
+    # When no starting location is given (or sentinel "Start" from reset-progress),
+    # pick one randomly (50% settlement, 50% wilderness) to avoid always-wilderness starts.
+    _is_sentinel = (
+        not starting_location_name
+        or not starting_location_name.strip()
+        or starting_location_name.strip().lower() == "start"
+        or (starting_location_name.strip().lower().startswith("start ") and
+            starting_location_name.strip()[6:].isdigit())
+    )
+    if _is_sentinel:
         starting_location_name = _pick_random_start_location(conn) or None
 
     # Try to match existing hex by label
@@ -757,14 +764,31 @@ def resolve_starting_hex(
                 starting_name=starting_location_name,
             )
         else:
-            loc_key = f"start_{campaign_id}"
-            conn.execute(
-                """INSERT OR IGNORE INTO game_locations
-                   (key, label, safe_for_rest, canonical, created_by, is_active,
-                    approved, review_status, ai_generated, source_campaign_id)
-                   VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
-                (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
-            )
+            # Fallback: pick any permanent canonical location rather than creating
+            # a meaningless "Start {campaign_id}" placeholder that pollutes the location table.
+            fallback_row = conn.execute(
+                """SELECT key, label FROM game_locations
+                   WHERE canonical=1 AND is_active=1 AND review_status='permanent'
+                   ORDER BY RANDOM() LIMIT 1"""
+            ).fetchone()
+            if fallback_row:
+                loc_key = fallback_row["key"]
+                logger.info(
+                    "s17_canonical_location_fallback",
+                    campaign_id=campaign_id,
+                    loc_key=loc_key,
+                    starting_name=starting_location_name,
+                )
+            else:
+                # World has no canonical locations at all — create one-time placeholder.
+                loc_key = f"start_{campaign_id}"
+                conn.execute(
+                    """INSERT OR IGNORE INTO game_locations
+                       (key, label, safe_for_rest, canonical, created_by, is_active,
+                        approved, review_status, ai_generated, source_campaign_id)
+                       VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
+                    (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
+                )
             logger.info(
                 "s17_start_location_created",
                 campaign_id=campaign_id,
