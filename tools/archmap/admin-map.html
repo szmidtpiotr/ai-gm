@@ -141,7 +141,7 @@ const clusters = [
   { id:'frontend',  label:'Frontend shell',      x:20,  y:70, w:260, h:280, color:'client' },
   { id:'sections',  label:'Admin sections (JS)',  x:310, y:70, w:560, h:580, color:'service' },
   { id:'backend',   label:'Backend admin routes', x:900, y:70, w:260, h:580, color:'route' },
-  { id:'observ',    label:'Observability (O3)',   x:1190,y:70, w:260, h:280, color:'db' },
+  { id:'observ',    label:'Observability (O3+O4)', x:1190,y:70, w:260, h:360, color:'db' },
 ];
 
 const N = (id, cl, label, sub, x, y, w, h, color, opts={}) => ({ id, cluster:cl, label, sub, x, y, w, h, color, ...opts });
@@ -284,13 +284,19 @@ const nodes = [
     role:'Source for analytics KPIs: combat_victory, player_death, beat_complete events.',
     plain:'The game event log read by the analytics panel to show activity charts.',
     path:'data-dev/ai_gm.db · game_events',
-    notes:['Written by event_logger (O1/O2)','Read by admin_analytics_svc','OBSERVABILITY: Phase 11 primary'],
+    notes:['Written by event_logger (O1/O2)','Read by admin_analytics_svc','OBSERVABILITY: heat-map source (O8)'],
     tag:['overview','observability','all'] }),
   N('adm-llm-log','observ','llm_call_log','table (DB) · O1',1210,176,220,50,'db',{
     role:'Source for LLM performance metrics: latency p50/p95, token counts, error rate.',
     plain:'Records every AI call; the analytics panel uses it to show how fast the AI responds.',
     path:'data-dev/ai_gm.db · llm_call_log',
     notes:['Written by event_logger (O1/O2)','Read by admin_analytics_svc','latency_ms, tokens_in/out, error'],
+    tag:['overview','observability','all'] }),
+  N('adm-mcp-server','observ','mcp_server/server.py','9 tools · O4',1210,242,220,54,'service',{
+    role:'FastMCP server exposing game data to Claude Code and other AI agents via 9 MCP tools.',
+    plain:'The MCP server that lets Claude Code query the game database using natural language (get_campaign_summary, query_game_events, get_llm_performance, etc.).',
+    path:'mcp_server/server.py',
+    notes:['9 tools: get_campaign_summary, query_game_events, get_llm_performance, get_player_stats, get_system_health, get_world_analytics, get_error_log, query_action_log, search_events','Transport: stdio (docker service ai-gm-dev-mcp-1)','Read-only DB mount — never writes'],
     tag:['overview','observability','all'] }),
 ];
 
@@ -308,6 +314,8 @@ const edges = [
   { from:'adm-analytics-router', to:'adm-analytics-svc', kind:'normal', label:'queries', tag:['observability','all'] },
   { from:'adm-analytics-svc', to:'adm-game-events', kind:'db', label:'SELECT', tag:['observability','all'] },
   { from:'adm-analytics-svc', to:'adm-llm-log', kind:'db', label:'SELECT', tag:['observability','all'] },
+  { from:'adm-mcp-server', to:'adm-game-events', kind:'db', label:'READ', tag:['observability','all'] },
+  { from:'adm-mcp-server', to:'adm-llm-log', kind:'db', label:'READ', tag:['observability','all'] },
   { from:'adm-router', to:'adm-campaigns-router', kind:'normal', label:'delegates', tag:['all'] },
 ];
 
@@ -316,6 +324,7 @@ let FIXES={}, KNOWN_BUGS={}, HEAT={};
 const FINDINGS = [
   ['NOTE','Admin shell at /admin/ — all new admin work goes here. Legacy admin2/ is read-only; never add features there.'],
   ['NOTE','sections/analytics.js (O3) reads game_events + llm_call_log via admin_analytics endpoints. Enabled after O1+O2.'],
+  ['NOTE','MCP server (O4) at mcp_server/server.py exposes 9 tools for querying game data. Heat-map (O8) colours all observability nodes by real traffic.'],
   ['NOTE','Smart Entry (smart_entry.js v4) lives in sections/content.js; backend in routers/smart_entry.py. LLM fills the form JSON in one shot.'],
   ['NOTE','Forge (sections/forge.js) uses adventure_forge.py for batch AI content generation with template management.'],
   ['NOTE','adm-shared API module: all HTTP calls go through adminFetch — single auth point, never raw fetch in sections.'],

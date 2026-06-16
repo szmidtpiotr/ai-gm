@@ -47,7 +47,8 @@
     "backend/app/api/dungeons.py",
     "backend/app/services/dungeon_tile_service.py",
     "backend/app/services/dungeon_service.py",
-    "backend/app/routers/dungeon_tiles.py"
+    "backend/app/routers/dungeon_tiles.py",
+    "mcp_server/server.py"
   ],
   "paths": {
     "backend/app/api/combat.py": "combat-api",
@@ -109,7 +110,8 @@
     "backend/app/api/dungeons.py": "dng-enter-api",
     "backend/app/services/dungeon_tile_service.py": "dng-enter-svc",
     "backend/app/services/dungeon_service.py": "dng-legacy-svc",
-    "backend/app/routers/dungeon_tiles.py": "dng-tiles-router"
+    "backend/app/routers/dungeon_tiles.py": "dng-tiles-router",
+    "mcp_server/server.py": "adm-mcp-server"
   },
   "_label_to_bug_when": "issue is OPEN and has label 'bug'",
   "_label_to_fix_when": "issue is OPEN and has label 'enhancement' or 'needs-testing'"

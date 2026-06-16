@@ -1,5 +1,5 @@
 {
-  "_doc": "Maps runtime event/call types -> map node ids, so update_heat.py can colour nodes by real traffic. NOW: uses combat_turns.event_type (already exists). PHASE 11: add game_events.event_type and llm_call_log.call_type rows here once those tables land — same shape, no code change.",
+  "_doc": "Maps runtime event/call types -> map node ids, so update_heat.py can colour nodes by real traffic. Activated in O8 (game_events + llm_call_log tables live since O1/O2).",
   "db": {
     "ssh_host": "claude@192.168.1.61",
     "container": "ai-gm-dev-backend-1",
@@ -8,6 +8,7 @@
   },
   "sources": [
     {
+      "_doc": "combat_turns -> architecture-map combat nodes (ACTIVE since pilot)",
       "table": "combat_turns",
       "type_col": "event_type",
       "error_predicate": "0",
@@ -25,26 +26,65 @@
       }
     },
     {
-      "_phase11": true,
+      "_doc": "game_events -> combat/death nodes (architecture-map). O8: _phase11 removed, tables live.",
       "table": "game_events",
       "type_col": "event_type",
       "error_predicate": "severity = 'error'",
       "latency_col": null,
       "window_days": 7,
       "map": {
+        "combat_start": "initiate-combat",
         "combat_victory": "resolve-attack",
+        "combat_fled": "resolve-attack",
         "player_death": "solo-death",
+        "beat_complete": "tf-gm-plan",
         "*": "log-event"
       }
     },
     {
-      "_phase11": true,
+      "_doc": "game_events -> tf-game-events-db table node (turn-flow map)",
+      "table": "game_events",
+      "type_col": "event_type",
+      "error_predicate": "severity = 'error'",
+      "latency_col": null,
+      "window_days": 7,
+      "map": { "*": "tf-game-events-db" }
+    },
+    {
+      "_doc": "game_events -> adm-game-events table node (admin map)",
+      "table": "game_events",
+      "type_col": "event_type",
+      "error_predicate": "severity = 'error'",
+      "latency_col": null,
+      "window_days": 7,
+      "map": { "*": "adm-game-events" }
+    },
+    {
+      "_doc": "llm_call_log -> LLM service / plan / summary nodes (turn-flow map). O8: _phase11 removed.",
       "table": "llm_call_log",
       "type_col": "call_type",
       "error_predicate": "error IS NOT NULL",
       "latency_col": "latency_ms",
       "window_days": 7,
-      "map": {}
+      "map": {
+        "turn_narrative": "tf-llm-service",
+        "gm_plan": "tf-gm-plan",
+        "chapter_summary": "tf-chapter-summary",
+        "workshop": "tf-llm-service",
+        "smart_entry": "tf-llm-service",
+        "forge": "tf-llm-service",
+        "unknown": "tf-llm-service",
+        "*": "tf-llm-service"
+      }
+    },
+    {
+      "_doc": "llm_call_log -> adm-llm-log table node (admin map)",
+      "table": "llm_call_log",
+      "type_col": "call_type",
+      "error_predicate": "error IS NOT NULL",
+      "latency_col": "latency_ms",
+      "window_days": 7,
+      "map": { "*": "adm-llm-log" }
     }
   ]
 }
