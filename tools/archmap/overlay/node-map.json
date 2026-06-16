@@ -1,6 +1,20 @@
 {
   "_doc": "Maps repo file paths -> map node ids. The overlay generator reads each GitHub issue's '## Files changed' section, matches paths against these prefixes (longest match wins), and attaches the issue to the node as a bug or fix. Keep this in sync with the nodes[] in architecture-map.html.",
   "map": "architecture-map.html (combat pilot)",
+  "scope_globs": [
+    "backend/app/services/*combat*.py",
+    "backend/app/services/spell_service.py",
+    "backend/app/services/loot_service.py",
+    "backend/app/services/dice.py",
+    "backend/app/services/weapon_rules.py",
+    "backend/app/services/wound_utils.py",
+    "backend/app/services/xp_*.py",
+    "backend/app/services/*death*.py",
+    "backend/app/services/effect_json_migration.py",
+    "backend/app/api/combat.py",
+    "backend/app/api/inventory.py",
+    "backend/app/routers/sandbox.py"
+  ],
   "paths": {
     "backend/app/api/combat.py": "combat-api",
     "backend/app/routers/sandbox.py": "sandbox",
