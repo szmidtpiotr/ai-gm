@@ -12100,11 +12100,20 @@ async function _exitDungeon() {
 }
 
 async function _doExitDungeon() {
-    if (!_dungeonCampaignId || !characterData?.id) { showScreen('campaigns'); return; }
+    // #699: abandon from the resume modal never loads characterData (we are still
+    // in the picker, hero not yet bound to the session). Prefer the run's own hero,
+    // then the selected currentHero — characterData may be STALE from a previously
+    // open campaign, which would apply restore+cooldown to the WRONG hero. Only
+    // fall back to characterData last (the in-dungeon abandon path sets it correctly).
+    const _runCharId = _activeDungeonRun?.character_id
+        || Object.keys(_activeDungeonRun?.positions || {})[0]
+        || null;
+    const _exitCharId = _runCharId || currentHero?.id || characterData?.id || null;
+    if (!_dungeonCampaignId || !_exitCharId) { showScreen('campaigns'); return; }
     try {
         const resp = await apiRequest('POST', '/dungeons/exit', {
             campaign_id: _dungeonCampaignId,
-            character_id: characterData.id,
+            character_id: _exitCharId,
         });
         // Delete the disposable dungeon campaign
         try { await apiRequest('DELETE', `/campaigns/${_dungeonCampaignId}`); } catch {}
