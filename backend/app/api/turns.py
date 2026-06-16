@@ -2224,10 +2224,20 @@ def _require_gm_plan_before_narrative_llm(
         archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
         stats = sheet.get("stats") or {}
         stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
+        # Prefer the session's current_location (set by resolve_starting_hex) over the
+        # characters.location column (often NULL when frontend omits it).
+        _sess_loc = conn.execute(
+            """SELECT gl.label FROM game_sessions gs
+               JOIN game_locations gl ON gl.id = gs.current_location_id
+               WHERE gs.campaign_id = ? AND gl.label IS NOT NULL
+               LIMIT 1""",
+            (campaign_id,),
+        ).fetchone()
+        _location_label = (_sess_loc["label"] if _sess_loc else None) or char_row["location"] or "nieznane miejsce"
         char_summary = (
             f"Postać: {char_row['name'] or 'Bohater'}, Archetyp: {archetype_label}"
             + (f", Statystyki: {stat_lines}" if stat_lines else "")
-            + f", Lokalizacja: {char_row['location'] or 'nieznane miejsce'}."
+            + f", Lokalizacja startowa: {_location_label}."
         )
         gm_ready, _ = generate_initial_gm_plan_with_retries(
             conn,
