@@ -529,6 +529,12 @@ _Zrobione fazy i zrobione pod-sekcje faz częściowo ukończonych. Nagłówki zd
 - [x] L16 — Opisy PL kafelków (batch + przegląd Piotra; paliwo narratora) + loch pilotażowy krypta_probna (realizuje H5) — [#693](https://github.com/szmidtpiotr/ai-gm/issues/693)
 
 ## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)  —  ✅ zrobione (przeniesione)
+
+> **Weryfikacja `/playwright-test-report` 2026-06-16 (DEV, konto demo):** żywe przebieg przez frontend.
+> - **Mag walka** (kampania 99767, hero Testmag): #649 (animacja k20 + brak zawisu tury wroga przez 5+ rund), #650 (narracja czaru = magia/żywioł, karta „ATAK MAGICZNY · Ognisty Pocisk"), #654 (Leczniczy Dotyk w walce: `spell_heal`, HP 3→5, wróg nietknięty 1/10), #621 (Zapasy SUCCESS → `slowed` → tura wroga `block_action` „Spowolniony: akcja zablokowana"). **Wszystkie ✅ — zamknięte.**
+> - **Rogue kreator** (hero Testlotr 999407): #624 (kreator „+2 DEX/+1 LCK", final LCK 19), #642 (HP 10 = baza 8 + KON +2; karty W:10/Ł:8/U:6), #644 (9 skilli > mag 8, bias złodzieja lockpick/sleight_of_hand), #618 (kreator==karta: mag 5==5). **Wszystkie ✅ — zamknięte.**
+> - **#617** (animacja kostek w kreatorze + skille FAZY S) — ⏳ zostawione otwarte, wymaga osobnego skupionego testu (animacja nie uchwycona klatka-po-klatce).
+
 ### Blok 1 — Tożsamość klas (naprawa bugów, PILNE)
 - [x] [#624](https://github.com/szmidtpiotr/ai-gm/issues/624) — B1 — Rogue staty: DEX+2/LCK+1 zamiast INT+2/WIS+1 — osobna gałąź `rogue` w `_build_character_sheet` (`characters.py:205`) + odwrotność w `_core_bases_from_stored_stats:440`. **Bug krytyczny** (rogue dziś dostaje staty maga)
 - [x] [#642](https://github.com/szmidtpiotr/ai-gm/issues/642) — B2 — Rogue HP base 8: `ARCHETYPE_BASE_HP["rogue"]` 10→8 (`vitality_service`); DB seed już = 8 (`migrations_admin.py:2892`, bez migracji); kreator pokazuje 8 w DWÓCH miejscach (`_wizardCalcHP` + etykieta karty archetypu). Ordering warrior 10 > rogue 8 > mag 6. **Uwaga:** DB `game_config_archetypes.hp_base` dla warrior zdryfował do 12 (kolumna NIE czytana przy tworzeniu postaci — char HP liczy `vitality_service`, więc gra niezmieniona) — osobny task do decyzji Piotra
