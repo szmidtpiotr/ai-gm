@@ -219,6 +219,7 @@ Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 
 - DB change: write migration in `migrations_admin.py` → test on DB copy → update models if needed.
 - Frontend change: edit under `frontend/` → verify in browser at `https://aigm-dev.studio-colorbox.com/` → check console.
 - JS version strings in imports (`?v=N`) must be bumped when a shared module changes to bust browser cache.
+- **Player-UI ledger:** any change under `frontend/front/` (new/changed screen, modal, gameplay component, or system) → add or update the matching `F-NN` entry in `frontend_design.md` (Section 7, Feature Ledger), per the convention in Section 9. Keeps the redesign target 1:1 with the live player UI.
 
 ### Implementation record issues (mandatory)
 
