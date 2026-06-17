@@ -1681,6 +1681,13 @@
     </div>
   </div>
 
+  <!-- L20b (#724): Enemy/NPC portrait modal — shown on combat start and NPC interaction -->
+  <div id="portrait-modal" class="portrait-modal" hidden>
+    <div class="portrait-modal__box" id="portrait-modal-box">
+      <div class="portrait-modal__enemies" id="portrait-modal-enemies"></div>
+    </div>
+  </div>
+
   <!-- Dungeon Map Overlay -->
   <div id="dungeon-map-overlay" class="dmap-overlay" hidden>
     <div class="dmap-box">
@@ -1910,7 +1917,7 @@
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
-  <script src="./js/app.js?v=dice-dwell-3600-2026-06-17"></script>
+  <script src="./js/app.js?v=l20b-portraits-2026-06-17"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

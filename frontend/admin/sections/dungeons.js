@@ -440,7 +440,6 @@ function _sectionHtml() { return `
   const IMAGE_GEN_DEFAULT_MODEL = 'flux1-schnell-Q5_K_S.gguf';
   let _tileCategoriesCache = null;
   let _tilesCache = [];
-  let _tileEnemyImgCache = {};  // key → image_url, used by tile grid card overlay render
 
   async function _ensureTileCategories(force) {
     if (_tileCategoriesCache && !force) return _tileCategoriesCache;
@@ -465,12 +464,8 @@ function _sectionHtml() { return `
           _renderTilesGrid();
         }));
       }
-      const [r, er] = await Promise.all([
-        apiFetch('/api/admin/dungeon-tiles?include_inactive=true'),
-        apiFetch('/api/admin/enemies').catch(()=>({items:[]})),
-      ]);
+      const r = await apiFetch('/api/admin/dungeon-tiles?include_inactive=true');
       _tilesCache = r.tiles || [];
-      _tileEnemyImgCache = Object.fromEntries((er.items||[]).filter(e=>e.image_url).map(e=>[e.key, e.image_url]));
       _renderTilesGrid();
     } catch (e) {
       grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#ef4444">Błąd: ${_esc(e.message)}</div>`;
@@ -508,24 +503,9 @@ function _sectionHtml() { return `
     const imgHtml = t.image_url
       ? `<img src="${_esc(t.image_url)}" style="width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s" class="tc-img">`
       : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:.72rem;text-align:center;padding:10px;gap:6px;background:linear-gradient(135deg,#0a0a12,#0f0f1e)"><span style="font-size:1.8rem;opacity:.3">🏰</span>Brak obrazu</div>`;
-    // Read-only sprite overlay using saved positions per enemy
-    let overlayHtml = '';
-    if (t.image_url && Array.isArray(t.enemies)) {
-      const sprites = [];
-      t.enemies.forEach(e => {
-        const url = _tileEnemyImgCache[e.enemy_key];
-        if (!url) return;
-        const ovs = Array.isArray(e.overlays) ? e.overlays : [];
-        ovs.forEach(o => o && sprites.push({ url, ...o }));
-      });
-      overlayHtml = sprites.map(s =>
-        `<img src="${_esc(s.url)}" style="position:absolute;left:${s.x*100}%;top:${s.y*100}%;width:${(s.scale||.35)*100}%;height:${(s.scale||.35)*100}%;transform:translate(-50%,-50%) rotate(${s.rot||0}deg);object-fit:contain;mix-blend-mode:screen;pointer-events:none">`
-      ).join('');
-    }
     return `<div class="tile-card" style="background:#111120;border:1px solid #222235;border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .12s;position:relative" onclick="openEditTileModal(${t.id})" onmouseenter="this.style.borderColor='#f59e0b33';this.querySelector('.tc-img')&&(this.querySelector('.tc-img').style.transform='scale(1.04)')" onmouseleave="this.style.borderColor='#222235';this.querySelector('.tc-img')&&(this.querySelector('.tc-img').style.transform='')">
       <div style="position:relative;aspect-ratio:1;background:#0a0a0f;overflow:hidden">
         ${imgHtml}
-        ${overlayHtml}
         <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,rgba(0,0,0,.75));pointer-events:none"></div>
         <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px;align-items:center">${bossBadge}${inactiveBadge}${contentDot}</div>
         <div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);color:#facc15;padding:2px 7px;border-radius:4px;font-size:.62rem;font-family:monospace;border:1px solid rgba(245,158,11,.3)">${_esc(doors)}</div>
@@ -755,21 +735,6 @@ function _sectionHtml() { return `
         </div>
       </div>
 
-      <!-- Sprite overlay editor -->
-      <div class="tf-section" id="tf-overlay-section" style="${p.image_url?'':'display:none'}">
-        <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
-          <span>🎯 Pozycje sprite'ów na kafelku</span>
-          <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
-            <button type="button" class="btn btn-secondary btn-sm" id="tf-ov-arrange" title="Rozmieść automatycznie (siatka, bez kolizji)">🎲 Auto</button>
-            <label class="tf-toggle" style="font-size:.72rem"><input type="checkbox" id="tf-ov-collision-warn" checked><span class="tf-toggle-track"></span><span class="tf-toggle-label">Pokaż kolizje</span></label>
-          </span>
-        </div>
-        <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
-        <div id="tf-overlay-surface" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;user-select:none;touch-action:none">
-          <div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>
-        </div>
-      </div>
-
       <!-- Door overlay editor (legacy drag-position editor — hidden; compositor uses fixed midpoint markers) -->
       <div class="tf-section" id="tf-door-overlay-section" style="display:none">
         <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
@@ -905,8 +870,6 @@ function _sectionHtml() { return `
         const hasImg = info?.image_url ? ' style="color:#f59e0b"' : '';
         return `<span class="tf-chip">⚔ <b>${_esc(info?.label||e.enemy_key)}</b> ${tierBadge} <span style="color:#f59e0b;font-family:monospace;font-size:.85em">×${e.count||1}</span><button class="tf-chip-del" data-type="enemy-img" data-key="${_esc(e.enemy_key)}" title="Generuj obraz wroga"${hasImg}>🖼</button><button class="tf-chip-del" data-type="enemy" data-idx="${i}" title="Usuń">✕</button></span>`;
       }).join('');
-      // Sync sprite overlay editor whenever enemy chips re-render
-      if (typeof _renderOverlayEditor === 'function') _renderOverlayEditor();
     }
     function _rfItem() {
       const el = overlay.querySelector('#tf-items-chips');
@@ -949,155 +912,6 @@ function _sectionHtml() { return `
         if (x.dc)   d += ` DC<span style="color:#f59e0b">${x.dc}</span>`;
         return `<span class="tf-chip">${d}<button class="tf-chip-del" data-type="exit" data-idx="${i}" title="Usuń">✕</button></span>`;
       }).join('');
-    }
-
-    // ── Sprite overlay editor ─────────────────────────────────
-    // Each _tfEnemies[i] gets `overlays: [{x, y, scale, rot}]` length=count.
-    // x,y: 0–1 relative to tile surface. scale: 0.1–0.8. rot: degrees.
-    function _ensureOverlays(entry) {
-      const want = Math.max(1, entry.count || 1);
-      entry.overlays = Array.isArray(entry.overlays) ? entry.overlays.slice(0, want) : [];
-      while (entry.overlays.length < want) entry.overlays.push(null); // placeholder, auto-filled
-    }
-    function _autoArrangeOverlays() {
-      // Collect all sprite indices (enemyIdx, instIdx) for entries with image_url
-      const slots = [];
-      _tfEnemies.forEach((e, ei) => {
-        const info = _epPool.find(x => x.key === e.enemy_key);
-        if (!info?.image_url) return;
-        _ensureOverlays(e);
-        for (let ii = 0; ii < e.overlays.length; ii++) slots.push([ei, ii]);
-      });
-      const N = slots.length;
-      if (!N) return;
-      const cols = Math.ceil(Math.sqrt(N));
-      const rows = Math.ceil(N / cols);
-      const cellW = 1 / cols, cellH = 1 / rows;
-      const baseScale = Math.min(0.75 / cols, 0.55);
-      slots.forEach(([ei, ii], i) => {
-        const col = i % cols, row = Math.floor(i / cols);
-        _tfEnemies[ei].overlays[ii] = {
-          x: (col + 0.5) * cellW,
-          y: (row + 0.5) * cellH,
-          scale: baseScale,
-          rot: 0,
-        };
-      });
-      _renderOverlayEditor();
-    }
-    function _spriteBounds(t) {
-      // Approximate sprite bbox in unit coords (square sprite of size = scale)
-      const s = t.scale;
-      return { l: t.x - s/2, r: t.x + s/2, t: t.y - s/2, b: t.y + s/2 };
-    }
-    function _spritesOverlap(a, b) {
-      const A = _spriteBounds(a), B = _spriteBounds(b);
-      return !(A.r < B.l || A.l > B.r || A.b < B.t || A.t > B.b);
-    }
-    function _renderOverlayEditor() {
-      const sec = overlay.querySelector('#tf-overlay-section');
-      const surf = overlay.querySelector('#tf-overlay-surface');
-      if (!sec || !surf) return;
-      const tileImg = overlay.querySelector('#tf-img-preview img')?.src || p.image_url || '';
-      // Build sprite list from enemies with image_url
-      const sprites = [];
-      _tfEnemies.forEach((e, ei) => {
-        const info = _epPool.find(x => x.key === e.enemy_key);
-        if (!info?.image_url) return;
-        _ensureOverlays(e);
-        // Auto-fill any null overlays via auto-arrange — but only those
-        e.overlays.forEach((t, ii) => {
-          if (!t) {
-            // initial placement: center-ish, will be re-laid out via Auto button
-            e.overlays[ii] = { x: 0.5, y: 0.5, scale: 0.35, rot: 0 };
-          }
-          sprites.push({ enemyIdx: ei, instIdx: ii, info, t: e.overlays[ii] });
-        });
-      });
-      sec.style.display = tileImg ? '' : 'none';
-      if (!tileImg || !sprites.length) {
-        surf.innerHTML = `<div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Dodaj wroga i wygeneruj jego obraz (🖼),<br>aby ustawić jego pozycję na kafelku.</div>`;
-        return;
-      }
-      const showColl = overlay.querySelector('#tf-ov-collision-warn')?.checked !== false;
-      // Compute collision pairs
-      const colliding = new Set();
-      if (showColl) {
-        for (let i = 0; i < sprites.length; i++)
-          for (let j = i+1; j < sprites.length; j++)
-            if (_spritesOverlap(sprites[i].t, sprites[j].t)) { colliding.add(i); colliding.add(j); }
-      }
-      surf.innerHTML = `<img src="${_esc(tileImg)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none">` +
-        sprites.map((sp, i) => {
-          const collCls = colliding.has(i) ? 'tf-ov-collide' : '';
-          const sizePct = sp.t.scale * 100;
-          return `<div class="tf-ov-sprite ${collCls}" data-spr="${i}" data-ei="${sp.enemyIdx}" data-ii="${sp.instIdx}"
-            style="position:absolute;left:${sp.t.x*100}%;top:${sp.t.y*100}%;width:${sizePct}%;height:${sizePct}%;transform:translate(-50%,-50%) rotate(${sp.t.rot}deg);cursor:grab;outline:${collCls?'2px solid #ef4444':'1px dashed rgba(245,158,11,.5)'};outline-offset:-1px;border-radius:4px">
-            <img src="${_esc(sp.info.image_url)}" draggable="false" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;pointer-events:none">
-            <div style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#facc15;font-size:.62rem;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;font-family:monospace">${_esc(sp.info.label||sp.info.key)} ${(sp.t.scale*100|0)}%${sp.t.rot?` ${sp.t.rot|0}°`:''}</div>
-          </div>`;
-        }).join('');
-    }
-    // Drag/scale/rotate via pointer events on surface
-    let _ovDrag = null;
-    function _onSurfDown(ev) {
-      const sprite = ev.target.closest('.tf-ov-sprite');
-      if (!sprite) return;
-      ev.preventDefault();
-      const ei = parseInt(sprite.dataset.ei, 10);
-      const ii = parseInt(sprite.dataset.ii, 10);
-      const surf = overlay.querySelector('#tf-overlay-surface');
-      const rect = surf.getBoundingClientRect();
-      const t = _tfEnemies[ei].overlays[ii];
-      _ovDrag = {
-        ei, ii, rect,
-        shift: ev.shiftKey,
-        startX: ev.clientX, startY: ev.clientY,
-        origX: t.x, origY: t.y, origRot: t.rot || 0,
-      };
-      sprite.style.cursor = ev.shiftKey ? 'ew-resize' : 'grabbing';
-      surf.setPointerCapture?.(ev.pointerId);
-    }
-    function _onSurfMove(ev) {
-      if (!_ovDrag) return;
-      const t = _tfEnemies[_ovDrag.ei].overlays[_ovDrag.ii];
-      if (_ovDrag.shift) {
-        // Rotate: dx in pixels → degrees
-        const dx = ev.clientX - _ovDrag.startX;
-        t.rot = (_ovDrag.origRot + dx) % 360;
-      } else {
-        // Move
-        const dx = (ev.clientX - _ovDrag.startX) / _ovDrag.rect.width;
-        const dy = (ev.clientY - _ovDrag.startY) / _ovDrag.rect.height;
-        t.x = Math.max(0.02, Math.min(0.98, _ovDrag.origX + dx));
-        t.y = Math.max(0.02, Math.min(0.98, _ovDrag.origY + dy));
-      }
-      _renderOverlayEditor();
-    }
-    function _onSurfUp() { _ovDrag = null; }
-    function _onSurfWheel(ev) {
-      const sprite = ev.target.closest('.tf-ov-sprite');
-      if (!sprite) return;
-      ev.preventDefault();
-      const ei = parseInt(sprite.dataset.ei, 10);
-      const ii = parseInt(sprite.dataset.ii, 10);
-      const t = _tfEnemies[ei].overlays[ii];
-      const delta = ev.deltaY < 0 ? 0.04 : -0.04;
-      t.scale = Math.max(0.08, Math.min(0.85, (t.scale || 0.35) + delta));
-      _renderOverlayEditor();
-    }
-    // Wire surface events once
-    {
-      const surf = overlay.querySelector('#tf-overlay-surface');
-      if (surf) {
-        surf.addEventListener('pointerdown', _onSurfDown);
-        surf.addEventListener('pointermove', _onSurfMove);
-        surf.addEventListener('pointerup', _onSurfUp);
-        surf.addEventListener('pointercancel', _onSurfUp);
-        surf.addEventListener('wheel', _onSurfWheel, { passive: false });
-      }
-      overlay.querySelector('#tf-ov-arrange')?.addEventListener('click', _autoArrangeOverlays);
-      overlay.querySelector('#tf-ov-collision-warn')?.addEventListener('change', _renderOverlayEditor);
     }
 
     // ── Door overlay editor (Phase 7) ─────────────────────────
@@ -1459,8 +1273,7 @@ function _sectionHtml() { return `
       const sel = overlay.querySelector('#tf-img-model');
       if (sel) sel.innerHTML = '<option value="">Błąd ładowania</option>';
     });
-    // Expose overlay editor refresh so out-of-closure callers can trigger re-render
-    overlay._refreshOverlayEditor = _renderOverlayEditor;
+    // Expose door editor refresh so out-of-closure callers can trigger re-render
     overlay._refreshDoorEditor    = _renderDoorEditor;
   }
 

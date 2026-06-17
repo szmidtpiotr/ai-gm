@@ -3581,6 +3581,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         if (result.onboarding_cards && result.onboarding_cards.length > 0) {
             showOnboardingCards(result.onboarding_cards);
         }
+
+        // L20b (#724): NPC portrait modal on [NPC_INTERACTION] tag
+        if (result.npc_interaction && result.npc_interaction.image_url) {
+            showEnemyPortraitModal([result.npc_interaction]).catch(() => {});
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -3686,6 +3691,11 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
         }
         if (payload.startsWith('[OPEN_SHOP]')) {
             result.open_shop = JSON.parse(payload.slice(11));
+            return;
+        }
+        // L20b (#724): NPC portrait on interaction (dead hook before L20b)
+        if (payload.startsWith('[NPC_INTERACTION]')) {
+            result.npc_interaction = JSON.parse(payload.slice(17));
             return;
         }
 
@@ -4255,6 +4265,11 @@ async function pollCombatState() {
         if (!wasActive) {
             window.clog?.event('combat_started', { round: cs.round, current_turn: cs.current_turn });
             showCombatUI();
+            // L20b (#724): show portrait modal for enemies with images on combat start
+            const _portraitEnemies = (cs.combatants || []).filter(c => c.type === 'enemy');
+            if (_portraitEnemies.length) {
+                showEnemyPortraitModal(_portraitEnemies).catch(() => {});
+            }
         }
 
         // #700: reaktywny re-sync z backendem (źródło prawdy). Jeśli backend oddał turę graczowi,
@@ -5096,7 +5111,14 @@ function _renderInitiativeTrack(cs) {
         const active = !downed && id === currentTurnId;
         const acted = !active && !downed && _initActedThisRound.has(id);
         const tier = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
-        const portrait = isPlayer ? '🛡️' : (downed ? '💀' : '⚔️');
+        // L20b (#724): use portrait thumbnail for enemies with image_url, fallback to emoji
+        const portrait = isPlayer
+            ? '🛡️'
+            : (downed
+                ? '💀'
+                : (c.image_url
+                    ? `<img class="init-chip__portrait-img" src="${escapeHtml(c.image_url)}" alt="">`
+                    : '⚔️'));
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
         const zone = String(c.zone || 'engaged');
         const zoneGlyph = zone === 'ranged' ? '🏹' : '⚔';
@@ -11884,6 +11906,37 @@ function showTileImageModal(node) {
 
 function closeTileImageModal() {
     document.getElementById('dungeon-tile-modal')?.setAttribute('hidden', '');
+}
+
+// L20b (#724): show full-screen portrait modal for enemies/NPCs.
+// enemies = array of {name, image_url} objects. Auto-closes after 2 s or click.
+// Returns a Promise that resolves when the modal closes.
+function showEnemyPortraitModal(entities) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('portrait-modal');
+        const box = document.getElementById('portrait-modal-box');
+        if (!modal || !box) { resolve(); return; }
+
+        const cards = entities.map(e => {
+            const imgHtml = e.image_url
+                ? `<img class="portrait-modal__card-img" src="${escapeHtml(e.image_url)}" alt="${escapeHtml(e.name || '')}">`
+                : `<div class="portrait-modal__card-img-placeholder">⚔️</div>`;
+            return `<div class="portrait-modal__card">${imgHtml}<div class="portrait-modal__card-name">${escapeHtml(e.name || 'Wróg')}</div></div>`;
+        }).join('');
+        box.innerHTML = cards + `<div class="portrait-modal__hint">Dotknij, aby kontynuować</div>`;
+
+        modal.removeAttribute('hidden');
+        let closed = false;
+        const close = () => {
+            if (closed) return;
+            closed = true;
+            modal.setAttribute('hidden', '');
+            modal.removeEventListener('click', close);
+            resolve();
+        };
+        modal.addEventListener('click', close);
+        setTimeout(close, 2000);
+    });
 }
 
 // L12b: reopen the popup for the room the player is currently standing in.

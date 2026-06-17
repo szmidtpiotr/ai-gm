@@ -1413,7 +1413,8 @@ def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
                skills_json,
                stats_json,
                tier,
-               loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award
+               loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award,
+               image_url
         FROM game_config_enemies
         WHERE key = ?
         """,
@@ -3709,6 +3710,8 @@ def initiate_combat(
                     # S2 (#582): 7 ability stats for opposed skill checks (S4). NULL/missing
                     # → every stat defaults to 10 (parse_stats_json), zero combat regression.
                     "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
+                    # L20b (#724): portrait URL for player-facing modal + initiative chip thumbnail.
+                    "image_url": er["image_url"] if "image_url" in er.keys() else None,
                 }
             )
             turn_slots.append((slug, init_e, idx))
