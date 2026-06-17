@@ -20,6 +20,21 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _resolve_cooldown_hours(dungeon: dict) -> int:
+    """Resolve a dungeon's cooldown in hours, honoring an explicit 0 (= no cooldown).
+
+    `int(x or 72)` is wrong here: 0 is falsy, so an admin who sets cooldown=0
+    would silently get the 72h default. Only None/'' (unset) fall back to 72.
+    """
+    raw = dungeon.get("cooldown_hours")
+    if raw is None or raw == "":
+        return 72
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 72
+
+
 def _normalize_answer(s: str) -> str:
     """Lowercase + strip diacritics for fuzzy comparison."""
     nfkd = unicodedata.normalize("NFKD", s.lower().strip())
@@ -98,8 +113,14 @@ def check_cooldown(character_id: int, dungeon_key: str) -> dict:
         ).fetchone()
         if not row:
             return {"on_cooldown": False, "run_count": 0}
-        cooldown_until_str = str(row["cooldown_until"] or "")
         run_count = int(row["run_count"] or 0)
+        # Honor the LIVE cooldown setting: if admin set cooldown_hours=0, the
+        # dungeon has no cooldown — clear any stale cooldown_until snapshot that
+        # was written by an earlier run under a non-zero setting.
+        _dungeon = get_dungeon(dungeon_key)
+        if _dungeon is not None and _resolve_cooldown_hours(_dungeon) == 0:
+            return {"on_cooldown": False, "run_count": run_count}
+        cooldown_until_str = str(row["cooldown_until"] or "")
         try:
             cooldown_until = datetime.fromisoformat(cooldown_until_str.replace("Z", "+00:00"))
             if cooldown_until.tzinfo is None:
@@ -124,7 +145,7 @@ def complete_dungeon(character_id: int, dungeon_key: str) -> dict:
     dungeon = get_dungeon(dungeon_key)
     if not dungeon:
         raise ValueError(f"Dungeon not found: {dungeon_key}")
-    cooldown_hours = int(dungeon.get("cooldown_hours") or 72)
+    cooldown_hours = _resolve_cooldown_hours(dungeon)
     now = _now_utc()
     cooldown_until = now + timedelta(hours=cooldown_hours)
     conn = _get_db()
@@ -417,8 +438,8 @@ def start_dungeon_cooldown(character_id: int, dungeon_key: str, fraction: float 
     dungeon = get_dungeon(dungeon_key)
     if not dungeon:
         return {}
-    cooldown_hours = int(dungeon.get("cooldown_hours") or 72)
-    partial_hours = max(1, math.ceil(cooldown_hours * fraction))
+    cooldown_hours = _resolve_cooldown_hours(dungeon)
+    partial_hours = 0 if cooldown_hours <= 0 else max(1, math.ceil(cooldown_hours * fraction))
     now = _now_utc()
     cooldown_until = now + timedelta(hours=partial_hours)
     conn = _get_db()

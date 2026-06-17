@@ -26,6 +26,7 @@ from app.services.dungeon_service import (
     DB_PATH,
     _get_db,
     _load_flags,
+    _resolve_cooldown_hours,
     _save_flags,
     check_cooldown,
     complete_dungeon,
@@ -559,7 +560,7 @@ def enter_dungeon_tiles(
             "completed": False,
             "failed": False,
             "hero_level_at_entry": hero_level,
-            "cooldown_hours": int(dungeon.get("cooldown_hours") or 72),
+            "cooldown_hours": _resolve_cooldown_hours(dungeon),
             "loot_collected": [],
         }
 

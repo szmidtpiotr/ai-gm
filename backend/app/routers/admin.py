@@ -3613,7 +3613,7 @@ def admin_create_dungeon(
                 req.get("boss_enemy") or None,
                 req.get("loot_tier") or "standard",
                 req.get("atmosphere") or None,
-                int(req.get("cooldown_hours") or 72),
+                72 if req.get("cooldown_hours") in (None, "") else max(0, int(req.get("cooldown_hours"))),
                 int(req.get("min_level") or 1),
                 1 if req.get("is_active", 1) else 0,
             ),
