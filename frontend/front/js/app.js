@@ -12495,7 +12495,7 @@ function renderDungeonMap(run) {
     const svgH = (maxRow - minRow + 1) * STEP + GAP + PAD * 2;
 
     const tileX = (col) => PAD + (col - minCol) * STEP;
-    const tileY = (row) => PAD + (row - minRow) * STEP;
+    const tileY = (row) => PAD + (maxRow - row) * STEP;
     const cxFn  = (col) => tileX(col) + S / 2;
     const cyFn  = (row) => tileY(row) + S / 2;
 
@@ -12852,6 +12852,7 @@ function initDungeon() {
             const positions2 = Object.values(nodes).filter(n => n.position).map(n => n.position);
             const minCol = positions2.length ? Math.min(...positions2.map(p => p[0])) : 0;
             const minRow = positions2.length ? Math.min(...positions2.map(p => p[1])) : 0;
+            const maxRow = positions2.length ? Math.max(...positions2.map(p => p[1])) : 0;
 
             let closestDir = null;
             let closestDist = 9999;
@@ -12859,7 +12860,7 @@ function initDungeon() {
                 const tn = nodes[targetId];
                 if (!tn?.position) continue;
                 const tx = PAD + (tn.position[0] - minCol) * STEP + S / 2;
-                const ty = PAD + (tn.position[1] - minRow) * STEP + S / 2;
+                const ty = PAD + (maxRow - tn.position[1]) * STEP + S / 2;
                 const dist = Math.hypot(clickSvgX - tx, clickSvgY - ty);
                 if (dist < closestDist && dist < S) {
                     closestDist = dist; closestDir = dir;
