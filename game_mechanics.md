@@ -5043,6 +5043,7 @@ Blok 6: L18 (po L8+L12) → L20 (portrety wrogów/NPC + display, PRZED L19) → 
 | Portret wroga/NPC: rozdzielczość / kroki | 576×1024 (portret) / 8 | L20a |
 | Czas pokazu modala portretu na start walki | auto-zamknięcie 2 s LUB klik/tap | L20b |
 | Pilot portretów (nieumarli krypty) | 5 szt. → akceptacja → batch | L20c |
+| Portret wroga: model / rozdzielczość / kroki (po pilocie L20c) | Juggernaut-XL v9 / 768×1024 / 25 (cfg 7.0) — FLUX schnell/dev 8-krok dawał artefakty na portretach postaci | L20c |
 
 ---
 
