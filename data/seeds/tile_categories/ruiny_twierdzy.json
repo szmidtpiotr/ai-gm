@@ -1,0 +1,592 @@
+{
+  "category": {
+    "key": "ruiny_twierdzy",
+    "label": "Ruiny Twierdzy",
+    "description": "Spalone, oblężone ruiny dawnej ludzkiej fortecy — zawalone sale, wyłomy po katapultach, zgliszcza i grabież po bitwie.",
+    "style_modifier": "ruined fire-scorched stone fortress, soot-blackened walls, catapult breaches, burnt collapsed timber, ash and smoldering embers, besieged plundered keep aesthetic",
+    "system_prompt": "Opisujesz salę spalonej, oblężonej twierdzy. Skup się na osmolonym kamieniu, wyłomach po katapultach, zwęglonych belkach, popiele, porzuconej broni i śladach niedawnej bitwy. Opis po polsku, 2-3 zdania klimatyczne, zmysłowe — swąd spalenizny, chrzęst gruzu, żar dogasających ognisk.",
+    "sort_order": 40,
+    "is_active": 1,
+    "base_prompt": "fire-scorched siege-damaged ruined stone fortress chamber seen from directly straight above, soot-blackened stone-block walls with catapult breaches forming the irregular boundary of the room, cracked flagstone floor in the center, burnt collapsed timber beams, scattered ash and charred debris, broken weapons and shattered shields strewn about, 2-3 jagged wall breaches or broken archways leading off the edges as passages, smoldering embers and warm orange firelight, painted tabletop RPG battlemap art style, high detail, strict top-down orthographic overhead view, square map tile, 2D game art, NO perspective, NO side view, flat overhead, no text, no letters, no writing, no UI"
+  },
+  "riddles": [
+    {
+      "key": "riddle_ruiny_ogien",
+      "text": "Pożarłem tę twierdzę w jedną noc oblężenia. Im więcej dostaję, tym bardziej rosnę i wyję. Czym jestem?",
+      "answer": "ogień",
+      "answer_alts": ["płomień", "pożar", "ogień oblężniczy"],
+      "hints": ["Zostawiłem po sobie czarny popiół i dym", "Karmią mnie drewnem, a ja pochłaniam mury"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_ruiny_mur",
+      "text": "Stałem niewzruszony przez sto lat, aż katapulta zrobiła we mnie dziurę. Czym jestem, co teraz leży w gruzie?",
+      "answer": "mur",
+      "answer_alts": ["mur obronny", "ściana", "fortyfikacja", "wał"],
+      "hints": ["Miałem chronić obrońców przed wrogiem", "Pocisk z katapulty przebił mnie na wylot"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_ruiny_miecz",
+      "text": "Wykuto mnie z żelaza, by zabijać, lecz teraz rdzewieję wśród zgliszczy. Trzymał mnie rycerz, póki nie padł. Czym jestem?",
+      "answer": "miecz",
+      "answer_alts": ["ostrze", "broń", "klinga", "oręż"],
+      "hints": ["Tnę i kłuję, mam głownię i jelec", "Leżę porzucony obok poległego wojownika"],
+      "difficulty": 2,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_ruiny_korona",
+      "text": "Zdobiłam skroń pana tej fortecy, aż wróg wdarł się przez wyłom. Dla mnie toczono tę wojnę. Czym jestem?",
+      "answer": "korona",
+      "answer_alts": ["diadem", "korona króla", "władza"],
+      "hints": ["Noszą mnie królowie i panowie zamku", "Jestem ze złota i symbolizuję panowanie"],
+      "difficulty": 2,
+      "theme": "dungeon"
+    }
+  ],
+  "tiles": [
+    {
+      "label": "Ślepy Korytarz (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a dead-end ruined alcove, a charred corpse in melted armor slumped on the cracked flagstones, a broken rusted dagger and dead embers beside it"
+    },
+    {
+      "label": "Ślepy Korytarz (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined dead-end passage terminus, a toppled charred barrel and scattered ash, a forgotten dented helmet half-buried in soot on the floor"
+    },
+    {
+      "label": "Ślepy Korytarz (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a narrow dead-end nook, a shattered shield and a snapped spear shaft lying in soot, scorch marks fanning across the cracked flagstones"
+    },
+    {
+      "label": "Ślepy Korytarz (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a cramped ruined dead-end alcove, a chewed bone and a pool of dark blood dried on the flagstones, a broken arrow and ash scattered about"
+    },
+    {
+      "label": "Zawalony Przejazd (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a collapsed corridor dead-end, rockfall and shattered masonry blocking the way, a knight's burnt gauntlet half-buried in rubble"
+    },
+    {
+      "label": "Zawalony Przejazd (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an abandoned ruined side-passage dead-end, cold campfire ash from looters, a smashed crate and frayed siege rope on the charred floor"
+    },
+    {
+      "label": "Zawalony Przejazd (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a caved-in passage dead-end, splintered timber beams and fallen stone debris, a bent halberd head and a charred femur on the ground"
+    },
+    {
+      "label": "Zawalony Przejazd (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined corridor dead-end, a makeshift barricade of broken furniture and rubble blocking the far end, a discarded soldier's boot in the ash"
+    },
+    {
+      "label": "Wąski Krużganek",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a narrow ruined cloister walkway, soot-streaked flagstones, gnawed corpse scraps and rat droppings, a guttering torch and bloody drag marks"
+    },
+    {
+      "label": "Boczna Cela",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a small ruined side cell, a scavenger's nest of charred rags in the corner, scattered looted trinkets and bones on the scorched floor"
+    },
+    {
+      "label": "Zasadzka w Gruzach",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a rubble ambush nook, crude tripwire strung across charred debris, scattered loot bait and muddy boot tracks, hidden-position scavenger detritus"
+    },
+    {
+      "label": "Zgliszcza Zbrojowni",
+      "doors": ["N", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burnt-out armory corner, a fire-scorched iron-bound chest on the flagstones, half-melted swords fused together, charred broken spear shafts and warped arrowheads"
+    },
+    {
+      "label": "Splądrowana Spiżarnia",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ransacked fortress pantry, smashed barrels and spilled grain charred black, scraps of rancid provisions, a battered locked chest overlooked in the corner"
+    },
+    {
+      "label": "Spalona Kwatera",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "bandit", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burnt soldiers' quarters, a collapsed charred cot and scorched bedding, a dead guard's breastplate and a guttering torch stub on the floor"
+    },
+    {
+      "label": "Przejście Wartowni",
+      "doors": ["S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined guard passage, an overturned sentry stool and a dented helmet on the soot-blackened flagstones, a worn patrol path through the ash"
+    },
+    {
+      "label": "Strażnicze Przejście",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "guard", "count": 1}, {"enemy_key": "thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined patrol checkpoint, two scorched guard posts, abandoned dice and coins from a halted game, crossed broken halberds laid on the cracked flagstones"
+    },
+    {
+      "label": "Nora Szczurów",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a rat-infested ruined passage, gnawed charred timber underfoot, rat nests of shredded battle cloth in the corners, droppings and gnaw marks over corpse scraps"
+    },
+    {
+      "label": "Stanowisko Kuszników",
+      "doors": ["N", "W"],
+      "enemies": [{"enemy_key": "bandit_thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined crossbow post, spent bolts and a cracked crossbow on the scorched flagstones, an overturned bolt quiver, charred arrow-slit rubble nearby"
+    },
+    {
+      "label": "Spalona Kuźnia",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burnt fortress smithy floor, a cold coal forge cracked open, scattered iron scraps and warped tools, a toppled soot-covered anvil and ash drifts"
+    },
+    {
+      "label": "Zalany Loch",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "giant_spider", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a flooded ruined dungeon floor, murky black water pooled over cracked flagstones, web strands and rat droppings, half-submerged bones and a rusted shackle"
+    },
+    {
+      "label": "Komnata Poległych",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "cultist", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a grim charnel chamber, scattered burnt humanoid remains on the flagstones, a cracked skull and a rusted chain, dark ritual scrawls in ash on the floor"
+    },
+    {
+      "label": "Skarbczyk Skarbnika",
+      "doors": ["E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a looted treasury nook, a battered strongbox pried open on the ash-covered flagstones, spilled scorched coins, a ledger burnt to char beside it"
+    },
+    {
+      "label": "Kąt Maga Dworskiego",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_ruiny_ogien",
+      "is_boss": false,
+      "image_gen_prompt": "a court mage's burnt corner, a scorched ritual circle on the flagstones, melted candle stubs and a cracked crystal orb, charred spell scrolls and a fallen staff"
+    },
+    {
+      "label": "Cuchnąca Jama",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a foul ruined refuse pit, rotting corpses and battle debris heaped in a corner, thick web strands across the soot-blackened floor, a horrific reeking dump"
+    },
+    {
+      "label": "Spalone Skrzyżowanie",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}, {"enemy_key": "thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a fire-scorched corridor junction, three breached passages meeting, a smashed lantern and scattered coins from an interrupted scavenger fight, charred signpost stubs"
+    },
+    {
+      "label": "Strażnica Bramna",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "bandit_thug", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined gatehouse guardroom, two scorched sentry stations, a weapon rack of broken halberds toppled flat, a snapped portcullis chain coiled on the flagstones"
+    },
+    {
+      "label": "Splądrowana Kuchnia",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ransacked fortress kitchen, a cold central hearth with a fallen cauldron, smashed crockery and spilled rancid broth, charred bones and overturned tables on the flagstones"
+    },
+    {
+      "label": "Gnijące Rumowisko",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "giant_spider", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a rubble-choked ruined chamber, heaped broken masonry and rotting corpses covering the floor, web-tangled bones, rats scurrying through the charred detritus"
+    },
+    {
+      "label": "Sala Rady Wojennej",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "mercenary", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burnt war council room, a long cracked table scorched black in the center, toppled chairs and a fallen battle map of ash, scattered campaign tokens on the flagstones"
+    },
+    {
+      "label": "Plemienna Zbrojownia",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a fortress armory hall, racks of charred spears and pikes fallen across the flagstones, a reinforced chest bolted to the floor, scattered dented shields and warped breastplates"
+    },
+    {
+      "label": "Zarwane Lochy",
+      "doors": ["N", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a collapsed dungeon level, broken cell bars and fallen stone debris, a prisoner's strongbox spilled open in the rubble, rusted shackles strewn across the flagstones"
+    },
+    {
+      "label": "Spalona Kaplica",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_ruiny_mur",
+      "is_boss": false,
+      "image_gen_prompt": "a burnt fortress chapel, a toppled scorched altar in the center, melted candelabra and shattered stained glass on the flagstones, a charred holy banner in the ash"
+    },
+    {
+      "label": "Dziedziniec Bitwy",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}, {"enemy_key": "thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a small ruined inner courtyard, a blood-stained battle ring in the center, broken weapons and shattered shields scattered, scorched cobbles and a fallen banner pole"
+    },
+    {
+      "label": "Izba Tortur",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}, {"enemy_key": "thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined torture chamber, rusted iron shackle rings bolted into the flagstones, dark dried bloodstains, scattered scorched implements of pain lying flat, grim and dim"
+    },
+    {
+      "label": "Sala Bębnów Wojennych",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "orc_warrior", "count": 1}, {"enemy_key": "orc", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a war drum hall, large charred hide drums on the flagstones, fallen drumsticks and bone mallets, scorched tribal banners and ash-marked rally circles on the floor"
+    },
+    {
+      "label": "Legowisko Ogra",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "ogre", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an ogre's den in the ruins, an enormous worn sleeping hollow of charred bedding, huge gnawed bones and smashed furniture, massive boot-prints crushed into the soot"
+    },
+    {
+      "label": "Psiarnia",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "wolf", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined fortress kennel, a paw-worn enclosure of scorched flagstones, chewed bones and fur tufts scattered, broken iron stake-rings for chains, feral den atmosphere"
+    },
+    {
+      "label": "Pracownia Alchemika",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_ruiny_miecz",
+      "is_boss": false,
+      "image_gen_prompt": "a burnt alchemist's workshop, a cracked workbench and shattered glass vials on the flagstones, spilled scorched reagents and bubbling stains, a melted brazier and charred notes"
+    },
+    {
+      "label": "Sala Najemników",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "mercenary", "count": 1}, {"enemy_key": "brigand", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a sellswords' billet, a cracked stone table and toppled stools on the flagstones, scattered contract scrolls and coin pouches, mercenary banners scorched on the floor"
+    },
+    {
+      "label": "Komnata Pajęczyn",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a spider-infested ruined chamber, thick web strands across the floor cracks, cocooned prey lying flat, silk threads over charred bones caught in ground-level webs"
+    },
+    {
+      "label": "Rozkopana Krypta",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "kobold", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a freshly looted crypt, pried-open sarcophagus lids and scattered grave dirt on the flagstones, a crude digging shovel and fresh excavation marks in the soot"
+    },
+    {
+      "label": "Ognisko Patrolu",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 1}, {"enemy_key": "bandit_thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a scavenger patrol rest stop, a central campfire with smoldering embers on the flagstones, patrol gear laid out — a scratched map, waterskins, a ration sack, ash-worn paths"
+    },
+    {
+      "label": "Schowek Szabrowników",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "brigand", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a looters' stash in the ruins, a pile of plundered goods on the flagstones, a reinforced chest, scattered wares from sacked households, a tally scratched in the ash"
+    },
+    {
+      "label": "Sala Rytualnego Ognia",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_ruiny_korona",
+      "is_boss": false,
+      "image_gen_prompt": "a ritual fire room, a ring of bone-markers around a central fire pit on the flagstones, ash and ember circle, fallen totems and ochre hand-prints spiraling in the soot"
+    },
+    {
+      "label": "Magazyn Łupów",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "thug", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a loot storage room, plundered goods sorted on the flagstones — cloth bundles, scorched crockery, a coil of rope, a guarded chest, an inventory tally in the ash"
+    },
+    {
+      "label": "Komnata Wojennego Szamana",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "orc_shaman", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "an orc shaman boss chamber, a large ritual circle of skulls on the scorched flagstones, a cracked obsidian altar slab, glowing dust in arcane patterns, a bone-staff and dark spiritual energy"
+    },
+    {
+      "label": "Sala Tronowa Dowódcy",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "orc_warchief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a warlord's throne hall, a massive crude throne of stacked shields and bones on the dais, defeated enemy skulls arranged as trophies, scorched war banners and scattered spoils"
+    },
+    {
+      "label": "Jama Herszta",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "bandit_chief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a bandit chief's lair in the ruins, a commanding war table covered in plundered maps, weapons and stolen goods arranged by rank, a personal strongbox bolted to the flagstones"
+    },
+    {
+      "label": "Centralny Plac Broni",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "mercenary", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined central muster yard, a wide four-way breached junction, overturned crates and broken stalls around the edges, a central fire-pit, battle graffiti scorched on the flagstones"
+    },
+    {
+      "label": "Splądrowana Karczma",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ransacked fortress tavern, smashed tables and broken stools on the soot-blackened flagstones, spilled ale puddles and gnawed bones, an overturned cask and toppled mugs"
+    },
+    {
+      "label": "Wielka Sala Rycerska",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a vast burnt great hall, a wide open scorched floor with scattered debris, a massive central hearth ring of cracked stone, ash-worn pathways to all four breached exits"
+    },
+    {
+      "label": "Sala Trofeów Bitewnych",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a trophy hall, defeated enemies' gear arranged on the flagstones — cracked shields, broken swords, dented helmets on display, a locked trophy chest in the center, soot and ash"
+    },
+    {
+      "label": "Bitewne Rozdroże",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}, {"enemy_key": "orc_warrior", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a contested four-way junction, battle debris over the flagstones, overturned barricade remnants, bloodstained soot, broken weapons lying flat, a strategic chokepoint"
+    },
+    {
+      "label": "Zatopiona Krypta",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a flooded crypt junction, black water pooled over most of the floor, web-tangled bones visible beneath, silk strands radiating to all four breached exits, dank and impassable"
+    },
+    {
+      "label": "Skarbiec Twierdzy",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "brigand", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a fortress treasury, a central reinforced chest bolted to the flagstones, spilled scorched coins and plundered valuables arranged around it, a burnt ledger, four watched exits"
+    },
+    {
+      "label": "Komnata Starego Trolla",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "troll", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a troll boss chamber in the ruins, an enormous worn lair hollow, heaps of cracked human bones, a huge crude club lying flat, deep claw-raked scorched flagstones"
+    },
+    {
+      "label": "Komnata Naczelnika Orków",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "orc_warchief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "an orc warchief command chamber, a massive war table covered in battle-plan scratches, fallen weapon racks, a toppled clan totem as a trophy, supreme authority and scorched violence"
+    },
+    {
+      "label": "Sala Zbójeckiego Króla",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit_chief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a bandit king's throne room in the ruins, an ornate stolen throne with nailed-on gold pieces, loot piles and trophies arranged in display, wanted-poster scraps in the ash, underworld royalty"
+    },
+    {
+      "label": "Zgliszcza Stajni",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "wolf", "count": 1}, {"enemy_key": "giant_rat", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burnt fortress stable, collapsed charred stall partitions, scattered horse bones and scorched tack, a fallen feed trough and ash-strewn straw on the flagstones"
+    },
+    {
+      "label": "Wyłom w Murze",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "orc", "count": 1}, {"enemy_key": "bandit_thug", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a catapult breach chamber, a huge jagged hole blasted through the inner wall, scattered siege stones and rubble, broken weapons and a fallen siege ladder on the scorched flagstones"
+    }
+  ]
+}

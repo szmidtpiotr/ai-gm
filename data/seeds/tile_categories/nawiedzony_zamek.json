@@ -1,0 +1,592 @@
+{
+  "category": {
+    "key": "nawiedzony_zamek",
+    "label": "Nawiedzony Zamek",
+    "description": "Ruiny starego zamku opanowane przez nieumarłych — krypty, sale rytualne i komnaty spowite zielonkawą mgłą i świecącymi runami.",
+    "style_modifier": "haunted ruined castle, ancient mossy stone, bones and cobwebs, necromantic green mist, faintly glowing runes, undead-infested crypt aesthetic",
+    "system_prompt": "Opisujesz komnatę nawiedzonego zamku opanowanego przez nieumarłych. Skup się na omszałym starym kamieniu, kościach, pajęczynach, zielonkawej nekromanckiej mgle, świecących runach i grobowej ciszy. Opis po polsku, 2-3 zdania klimatyczne, zmysłowe — chłód, szept w mroku, zapach pleśni i rozkładu.",
+    "sort_order": 50,
+    "is_active": 1,
+    "base_prompt": "haunted undead-overtaken ruined castle chamber seen from directly straight above, ancient mossy stone-block walls forming the irregular boundary of the room, cracked flagstone floor in the center, scattered bones and skulls, cobwebs draping broken pillars, eerie greenish necromantic mist drifting low across the floor, faintly glowing runes carved into the flagstones, 2-3 dark archway openings leading off the edges as passages, cold haunted blue-green lighting, painted tabletop RPG battlemap art style, high detail, strict top-down orthographic overhead view, square map tile, 2D game art, NO perspective, NO side view, flat overhead, no text, no letters, no writing, no UI"
+  },
+  "riddles": [
+    {
+      "key": "riddle_zamek_swieca",
+      "text": "Płonę w mroku, lecz im dłużej żyję, tym bardziej maleję. Gdy zgasnę, zostaje tylko zimny wosk. Czym jestem?",
+      "answer": "świeca",
+      "answer_alts": ["świeczka", "płomień świecy", "knot"],
+      "hints": ["Topię się, gdy daję światło", "Stawiają mnie w lichtarzu w kryptach"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_zamek_kosci",
+      "text": "Nieumarli noszą mnie zamiast ciała, a w grobowcach leżę od stuleci. Twardszy niż mięso, bielszy niż śnieg. Czym jestem?",
+      "answer": "kość",
+      "answer_alts": ["kości", "szkielet", "czaszka"],
+      "hints": ["Zostaję po tym, gdy ciało zniknie", "Szkielet jest ze mnie zbudowany"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_zamek_lustro",
+      "text": "Pokazuję cię takim, jakim jesteś, lecz odwracam lewą i prawą stronę. Mówią, że upiory się we mnie nie odbijają. Czym jestem?",
+      "answer": "lustro",
+      "answer_alts": ["zwierciadło", "tafla lustra", "odbicie"],
+      "hints": ["Wisiałem na ścianie komnaty pańskiej", "Patrzysz w mnie i widzisz samego siebie"],
+      "difficulty": 2,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_zamek_dusza",
+      "text": "Nie mam ciała ani kości, lecz błąkam się po zamku po śmierci. Widać mnie tylko, gdy mróz wpełza w mury. Czym jestem?",
+      "answer": "dusza",
+      "answer_alts": ["duch", "zjawa", "upiór", "widmo"],
+      "hints": ["Opuszczam ciało, gdy ono umiera", "Snuję się po korytarzach i jęczę w nocy"],
+      "difficulty": 2,
+      "theme": "dungeon"
+    }
+  ],
+  "tiles": [
+    {
+      "label": "Ślepa Krypta (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a tiny dead-end burial nook, a single cracked stone urn, gnawed bones and a rusted dagger on the cracked flagstones, draped cobwebs"
+    },
+    {
+      "label": "Ślepa Krypta (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a sealed dead-end tomb recess, a toppled grave slab, scattered finger-bones and a tarnished signet ring, faint green mist pooling low"
+    },
+    {
+      "label": "Ślepa Krypta (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a cramped dead-end ossuary pocket, a shattered skull and broken funeral pottery, a guttered candle stub, cobweb veils"
+    },
+    {
+      "label": "Ślepa Krypta (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a small dead-end crypt alcove, a chewed bone and a puddle of black water, a faint glowing rune scratched into the floor stone"
+    },
+    {
+      "label": "Zawalony Loch (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a collapsed corridor dead-end, fallen masonry rubble blocking the way, a rusted helmet half-buried under stone, faint mist seeping from cracks"
+    },
+    {
+      "label": "Ślepy Loch (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an abandoned side-cell dead-end, cold dead-ash brazier, a broken coffin lid and frayed shroud cloth on the flagstones"
+    },
+    {
+      "label": "Ślepy Loch (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a caved-in passage dead-end, crumbled stone debris, a bent iron grave-spike and a gnawed femur, dim and forsaken"
+    },
+    {
+      "label": "Ślepy Loch (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a narrow dead-end vault, a crude rubble barricade of fallen bricks, scattered bone fragments and a rotted boot on the stone"
+    },
+    {
+      "label": "Wąski Korytarz Grobowy",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a narrow crypt corridor, worn flagstone path between broken pillars, rat droppings and gnawed bone scraps, a sputtering wall sconce and green mist"
+    },
+    {
+      "label": "Boczna Krypta",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a small side burial chamber, a single open stone sarcophagus, a sprawled skeleton in tattered grave-clothes, scattered trinkets and dust"
+    },
+    {
+      "label": "Zasadzka Upiorów",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a haunted ambush recess, a crumbled grave-pit trap in the floor, dragging-corpse smears across the flagstones, faint glowing runes warding the corners"
+    },
+    {
+      "label": "Komnata Zbrojowni",
+      "doors": ["N", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined castle armory recess, a moss-crusted iron-bound chest, rusted broken swords and a dented breastplate strewn across the flagstones, cobwebbed weapon stand"
+    },
+    {
+      "label": "Zatęchła Spiżarnia",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a decayed castle larder, cracked clay jars and rotted bundles, withered hanging meat husks, a locked iron chest in the corner, dank mouldering air"
+    },
+    {
+      "label": "Komnata Zmarłych",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a burial sleeping chamber, a rotting bier of mouldy shrouds and straw, gnawed bones and a cracked skull-bowl, a single guttering grave candle"
+    },
+    {
+      "label": "Przejście Strażnicze",
+      "doors": ["S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a haunted guard passage, a toppled stone sentry bench, a corroded helmet on the cracked flagstones, faint mist drifting through the worn path"
+    },
+    {
+      "label": "Strażnica Nieumarłych",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "skeleton", "count": 1}, {"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an undead watch post, two crumbling sentry plinths marked with carved skulls, scattered grave-coins and crossed rusted halberds laid on the stone"
+    },
+    {
+      "label": "Nora Trupojadów",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a vermin-infested crypt passage, gnawed wooden coffin planks underfoot, shredded shroud nests in floor corners, rat droppings and chewed bones everywhere"
+    },
+    {
+      "label": "Izba Łuczników Kości",
+      "doors": ["N", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a skeletal archer post, a cracked target painted on the floor, scattered brittle arrows lying flat, a fallen quiver and a sprawled bowman skeleton"
+    },
+    {
+      "label": "Stara Kuźnia Zamkowa",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined castle forge floor, a cold ash-choked smithy pit, rusted iron scraps and corroded tools lying flat, a cracked anvil and bone-grey soot"
+    },
+    {
+      "label": "Tunel Pełzaczy",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "ghoul", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a foul crawl-tunnel, gore-streaked flagstones with dragging marks, half-eaten corpse remains and gnawed bones, damp grimy necromantic mist clinging low"
+    },
+    {
+      "label": "Komnata Szkieletów",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "skeleton", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an old bone-pile chamber, scattered humanoid skeleton parts across the floor, a cracked skull used as a bowl, rusted grave-chains, grim and silent charnel recess"
+    },
+    {
+      "label": "Skrytka Skarbów",
+      "doors": ["E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a hidden grave-cache, a tarnished strongbox half-sunk into the floor stone, spilled silver coins and a corroded amulet around it, faint warding rune scratches"
+    },
+    {
+      "label": "Kąt Nekromanty",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_zamek_swieca",
+      "is_boss": false,
+      "image_gen_prompt": "a necromancer's working corner, a ritual circle scratched in the stone, candles and small bones arranged as offerings, a cracked obsidian idol on its side, eerie green glow"
+    },
+    {
+      "label": "Cuchnąca Jama",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "ghoul", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a reeking corpse-pit, black ichor pooling in floor depressions, half-eaten bodies and gnawed bones strewn about, a rotting refuse mound, horrific charnel dump"
+    },
+    {
+      "label": "Skrzyżowanie Krypt",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}, {"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a crypt corridor junction, three archway mouths meeting, weathered carved directional markers near the floor, a shattered lantern and scattered grave-coins on the stone"
+    },
+    {
+      "label": "Strażnica Grobowa",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an undead guard hall, two crumbling sentry stations marked with carved skulls, a rack of rusted halberds lying flat, runic warnings scratched in the flagstones"
+    },
+    {
+      "label": "Zatęchła Kuchnia",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a decayed castle kitchen, a central cold hearth with a rusted cauldron, scattered bones and rotted scraps, cracked crockery and stagnant broth puddles, mouldering chaos"
+    },
+    {
+      "label": "Zgnilna Komora",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "ghoul", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a rotting refuse vault, heaped grave-debris and broken urns covering most of the floor, bones and decayed scraps, black ichor puddles, rats scurrying through the filth"
+    },
+    {
+      "label": "Sala Rytuału Cieni",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "cultist", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a dark cult meeting chamber, a low altar slab in the center, crude seating stones around it, necromantic sigils painted on the floor in dried blood, ritual detritus"
+    },
+    {
+      "label": "Zbrojownia Zamkowa",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ruined castle arsenal, racks of rusted spears and corroded blades lying flat, a reinforced iron chest bolted to the stone, dented shields scattered as decor, cobwebbed and grim"
+    },
+    {
+      "label": "Stara Krypta Górnicza",
+      "doors": ["N", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a half-excavated catacomb dig, loose rubble and piled rock on the floor, a rusted pick lying flat, a tipped cart of bone-fragments, dust-choked excavation recess"
+    },
+    {
+      "label": "Kaplica Umarłych",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_zamek_kosci",
+      "is_boss": false,
+      "image_gen_prompt": "a desecrated chapel floor, a crude idol of stacked skulls and bones in the center, scattered coin and bone offerings in a ritual pattern, a dried blood ritual circle on the stone"
+    },
+    {
+      "label": "Mała Arena Kości",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}, {"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a small fighting pit chamber, a circular ring carved into the flagstone floor, crushed bones and dark dried stains in the center, crude spectator alcoves, scattered grave-coins"
+    },
+    {
+      "label": "Izba Tortur",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 1}, {"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a haunted torture chamber floor, rusted iron shackle rings bolted into the stone, dark dried stains on the flagstones, scattered corroded implements lying flat, grim and dim"
+    },
+    {
+      "label": "Sala Dzwonów Żałobnych",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "wraith", "count": 1}, {"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a funeral bell chamber, large tarnished bronze bells fallen on the stone floor, scattered rope and bone clappers lying flat, mourning sigils carved in the ground, lingering cold resonance"
+    },
+    {
+      "label": "Legowisko Ghula",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "ghoul", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ghoul's feeding den, a gore-stained hollow worn into the floor, heaps of cracked gnawed bones and torn shrouds, dragging-corpse smears, oppressive reek of decay"
+    },
+    {
+      "label": "Psiarnia Cienistych Wilków",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "shadow_stalker", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a shadow-beast kennel, a paw-worn dirt-and-stone floor, gnawed bones and tufts of black fur, rusted iron stake-rings for chaining, swirling dark shadow-mist den"
+    },
+    {
+      "label": "Pracownia Kościarza",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_zamek_lustro",
+      "is_boss": false,
+      "image_gen_prompt": "a bone-craft workshop floor, sorted piles of cleaned bones and skulls on the stone, crude carving tools lying flat, fine bone-dust coating the ground, ritual craft detritus"
+    },
+    {
+      "label": "Sala Upiorów",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "wraith", "count": 1}, {"enemy_key": "zombie", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a wraith-haunted hall, a cracked stone table and toppled stools, ghostly sigils carved into the floor, scattered grave-offerings of rusted blades and bone, swirling pale mist"
+    },
+    {
+      "label": "Komnata Pająków",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a spider-infested vault, thick web strands across the floor cracks, wrapped prey cocoons lying flat, silk threads crossing the flagstones, old bones caught in ground-level webs"
+    },
+    {
+      "label": "Rozkopana Krypta",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "skeleton", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a freshly disturbed burial chamber, broken grave slabs and overturned earth, a rusted spade lying flat, exhumation marks and scattered bones, recently raided tomb feel"
+    },
+    {
+      "label": "Ognisko Patrolu Umarłych",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "zombie", "count": 1}, {"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an undead patrol waystation, a central cold dead-ash brazier, grave-watch gear laid on the stone (a tattered banner, rusted lantern, bone tally), worn shuffling paths"
+    },
+    {
+      "label": "Schowek Grabieżców",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a grave-robber's stash, a pile of looted relics on the floor, a reinforced chest, plundered burial goods and tarnished jewelry, a crude tally scratched in the stone nearby"
+    },
+    {
+      "label": "Sala Rytualna",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_zamek_dusza",
+      "is_boss": false,
+      "image_gen_prompt": "a necromantic ritual hall, a ring of bone-markers around a central glowing rune sigil on the floor, scattered candle stubs and ash, a cracked black mirror leaning flat, eerie green light"
+    },
+    {
+      "label": "Magazyn Łupów",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "zombie", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a grave-loot storeroom, piles of plundered goods sorted on the floor (mouldy cloth bundles, urns, a coil of rusted chain), a guarded chest, inventory tally marks on the stone"
+    },
+    {
+      "label": "Komnata Mrocznego Kapłana",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "lich", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a lich's sanctum, a large ritual circle of skulls arranged on the floor, a cracked obsidian altar at center, glowing arcane dust in patterns, a bone-staff lying on the stone, pulsing dark necromantic energy"
+    },
+    {
+      "label": "Tron Upiornego Lorda",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "undead_champion", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "an undead lord's throne room, a massive throne of fused skulls and rusted armor on the floor, defeated enemy skulls arranged as trophies, tattered funeral banners laid out, scattered war-relics"
+    },
+    {
+      "label": "Krypta Wampirzego Pana",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "vampire_master", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a vampire lord's lair, an ornate stone sarcophagus throne, a war-table covered in dark maps scratched on the floor, blood-stained chalices and relics arranged by rank, a personal coffer bolted to the ground, regal menace"
+    },
+    {
+      "label": "Centralna Sala Tronowa",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a vast ruined throne hall, a wide four-way crossing chamber, crumbled stone benches around the floor edges, a central cracked dais, necromantic sigils covering the flagstones"
+    },
+    {
+      "label": "Zatęchła Komnata Tronowa",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a mouldering audience chamber, cracked flat stone tables and toppled stools on the floor, spilled stagnant goblets and gnawed bones, an overturned tarnished chalice, decayed banquet remains"
+    },
+    {
+      "label": "Wielka Sala Zamkowa",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a vast ruined castle hall, a wide open cracked flagstone floor with scattered debris, a massive central cold fire-circle of fallen stones, worn pathways crossing to all four archways, green mist drifting"
+    },
+    {
+      "label": "Galeria Sarkofagów",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a sarcophagus gallery floor, rows of cracked stone coffins arranged in display, defeated knights' armor laid out as trophies, a locked relic chest in the center, solemn dread"
+    },
+    {
+      "label": "Bitewne Rozdroże Umarłych",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "zombie", "count": 2}, {"enemy_key": "wraith", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "an undead war junction, a four-way archway crossing with battle debris on the floor, overturned barricade rubble, dark dried bloodstains, broken weapons lying flat, contested ground"
+    },
+    {
+      "label": "Jama Ghuli",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "ghoul", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a ghoul-pit junction, gore-streaked floor with dragging corpse marks, half-eaten bodies and gnawed bones, dark ichor pools radiating to all four archways, horrific feeding ground"
+    },
+    {
+      "label": "Skarbiec Zamkowy",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "cultist", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a castle treasury vault, a central reinforced chest bolted to the floor, coin piles and tarnished valuables arranged around it, a warding rune circle on the stone, four guarded archways"
+    },
+    {
+      "label": "Komnata Starego Ghula",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "undead_champion", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "an ancient ghoul-lord chamber, an enormous gore-worn hollow in the floor, heaps of cracked devoured bones, a huge rusted cleaver lying flat, deep claw-raked flagstones, oppressive decay"
+    },
+    {
+      "label": "Komnata Lisza",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "lich", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a lich's command sanctum, a massive arcane sigil-table at center covered in glowing necromantic script, bone weapon racks lying on the floor, a toppled phylactery shrine as a trophy, supreme dark power"
+    },
+    {
+      "label": "Sala Krwawego Wampira",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "vampire_master", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "a vampire king's throne hall, an ornate gilded throne stained with old blood on the floor, loot and relic trophies arranged in display, blood-chalices and torn portraits laid on the stone, undead royalty"
+    },
+    {
+      "label": "Galeria Portretów Klątwy",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "ghost", "count": 1}, {"enemy_key": "shadow_stalker", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a cursed portrait gallery floor, fallen gilt picture frames cracked across the flagstones, slashed canvas scraps and broken glass, ghostly cold mist swirling, a toppled candelabra and scattered bones"
+    },
+    {
+      "label": "Sala Modlitw Mrocznych",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "dark_priest", "count": 1}, {"enemy_key": "skeleton", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "a dark prayer chamber, rows of toppled stone kneeling-benches, a desecrated altar with a glowing necromantic sigil carved into the floor before it, scattered black candles and bone censers, oppressive dread"
+    }
+  ]
+}
