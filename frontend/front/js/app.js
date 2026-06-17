@@ -5835,16 +5835,25 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
         // Throw `notation` and land on `forced` (array of per-die results, or null
         // to let the lib roll freely). Calls onComplete after the dice settle.
         const throwDice = (notation, forced, onComplete) => {
+            // #730: guard the settle phase. If the 3D dice library's settle callback
+            // never fires (WebGL stalled/lost context), `onComplete` would never run →
+            // the „Rzucam k20…" veil hangs forever, dimming the screen and blocking all
+            // controls until reload. A one-shot `finish` + hard timeout guarantees the
+            // roll always advances to the result card and the overlay can close.
+            let _settled = false;
+            const finish = () => { if (_settled) return; _settled = true; onComplete(); };
             requestAnimationFrame(() => {
                 if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
-                    onComplete(); return;
+                    finish(); return;
                 }
                 try {
                     if (!_diceBox) { _diceBox = new DICE.dice_box(container); }
                     else { _diceBox.clear(); _diceBox.reinit(container); }
                     _diceBox.setDice(notation);
-                } catch (_e) { onComplete(); return; }
-                _diceBox.start_throw(() => forced, () => setTimeout(onComplete, 400));
+                } catch (_e) { finish(); return; }
+                // Backstop: force-advance if the dice never report settling.
+                setTimeout(finish, 4000);
+                _diceBox.start_throw(() => forced, () => setTimeout(finish, 400));
             });
         };
 
