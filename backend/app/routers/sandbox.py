@@ -62,13 +62,26 @@ def list_heroes() -> dict[str, Any]:
 
 def _purge_prior_sandbox_clones(c: sqlite3.Connection, user_id: int) -> int:
     """Hard-delete any sandbox clones owned by this user. FK CASCADE drops
-    their inventory + spells. Returns count of clones removed."""
+    their inventory + spells. Returns count of clones removed.
+
+    Some tables reference `characters.id` with `ON DELETE NO ACTION`
+    (`active_combat`, `combat_loot`, `campaign_turns`). A clone can carry such
+    rows tied to a *prior* sandbox campaign id (e.g. the sandbox campaign was
+    re-created with a new id), which the campaign-scoped cleanup in
+    `setup_sandbox` does not reach. Clear those refs by the clone's own id
+    before deleting it, otherwise the DELETE trips a FK constraint. All of
+    this is sandbox-only data, safe to discard.
+    """
     priors = c.execute(
         "SELECT id FROM characters WHERE user_id = ? AND name LIKE '[SBX] %'",
         (user_id,),
     ).fetchall()
     for p in priors:
-        c.execute("DELETE FROM characters WHERE id = ?", (int(p["id"]),))
+        cid = int(p["id"])
+        c.execute("DELETE FROM active_combat WHERE character_id = ?", (cid,))
+        c.execute("DELETE FROM combat_loot WHERE character_id = ?", (cid,))
+        c.execute("DELETE FROM campaign_turns WHERE character_id = ?", (cid,))
+        c.execute("DELETE FROM characters WHERE id = ?", (cid,))
     return len(priors)
 
 
