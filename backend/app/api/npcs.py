@@ -35,6 +35,9 @@ class NpcPatchReq(BaseModel):
     shop_inventory_json: str | None = None
     is_active: int | None = None
     location_keys: list[str] | None = None
+    image_url: str | None = None
+    image_url_raw: str | None = None
+    image_gen_prompt: str | None = None
 
 
 def _conn() -> sqlite3.Connection:

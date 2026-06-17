@@ -4282,6 +4282,31 @@ def _l9_deactivate_legacy_dungeons(conn: sqlite3.Connection) -> None:
         logger.warning("v2_migration_skipped", label="v2-l9-deactivate-legacy-dungeons", error=str(e))
 
 
+def _ensure_portrait_columns(conn: sqlite3.Connection) -> None:
+    """L20a (#692): add portrait persistence columns to game_config_enemies and npcs.
+
+    Idempotent — duplicate column and no such table errors are silently skipped
+    (the latter only occurs in isolated test in-memory DBs).
+    """
+    for sql in [
+        "ALTER TABLE game_config_enemies ADD COLUMN image_url TEXT",
+        "ALTER TABLE game_config_enemies ADD COLUMN image_url_raw TEXT",
+        "ALTER TABLE game_config_enemies ADD COLUMN image_gen_prompt TEXT",
+        "ALTER TABLE npcs ADD COLUMN image_url TEXT",
+        "ALTER TABLE npcs ADD COLUMN image_url_raw TEXT",
+        "ALTER TABLE npcs ADD COLUMN image_gen_prompt TEXT",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "duplicate column" in msg or "no such table" in msg:
+                pass  # idempotent — column exists or table absent in test DB
+            else:
+                raise
+
+
 def _refresh_knowledge_content(conn: sqlite3.Connection) -> None:
     """#594 audit: fix stale/corrupt knowledge_book entries, dedupe, add gaps.
 
@@ -4484,6 +4509,7 @@ def run_admin_migrations() -> None:
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
         _l9_deactivate_legacy_dungeons(conn)
+        _ensure_portrait_columns(conn)
     finally:
         conn.close()
 

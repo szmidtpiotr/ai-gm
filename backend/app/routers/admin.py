@@ -386,6 +386,9 @@ class EnemyPatchReq(BaseModel):
     note: str | None = None
     is_active: bool | None = None
     force: bool = False
+    image_url: str | None = None
+    image_url_raw: str | None = None
+    image_gen_prompt: str | None = None
 
 
 class EnemyDeleteReq(BaseModel):
@@ -1528,6 +1531,9 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             drop_chance=req.drop_chance,
             is_active=req.is_active,
             force=req.force,
+            image_url=req.image_url,
+            image_url_raw=req.image_url_raw,
+            image_gen_prompt=req.image_gen_prompt,
         )
         return {"item": item}
     except KeyError:

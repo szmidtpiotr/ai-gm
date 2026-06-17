@@ -1085,7 +1085,8 @@ def list_enemies() -> list[dict]:
         SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                tier, attacks_per_turn, damage_bonus, damage_type,
                xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
-               description, is_active, locked_at, created_at, updated_at, loot_tier
+               description, is_active, locked_at, created_at, updated_at, loot_tier,
+               image_url, image_url_raw, image_gen_prompt
         FROM game_config_enemies
         ORDER BY key ASC
         """
@@ -1894,6 +1895,9 @@ def update_enemy(
     dex_modifier: int | None = None,
     skills_json: dict[str, int] | None = None,
     stats_json: dict[str, int] | None = None,
+    image_url: str | None = None,
+    image_url_raw: str | None = None,
+    image_gen_prompt: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1905,7 +1909,8 @@ def update_enemy(
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
-                   description, is_active, locked_at, created_at, updated_at
+                   description, is_active, locked_at, created_at, updated_at,
+                   image_url, image_url_raw, image_gen_prompt
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
@@ -1967,13 +1972,18 @@ def update_enemy(
         cur_drop = float(current.get("drop_chance") if current.get("drop_chance") is not None else 1.0)
         final_drop = _validate_drop_chance(drop_chance, current=cur_drop)
 
+        final_image_url = image_url if image_url is not None else current.get("image_url")
+        final_image_url_raw = image_url_raw if image_url_raw is not None else current.get("image_url_raw")
+        final_image_gen_prompt = image_gen_prompt if image_gen_prompt is not None else current.get("image_gen_prompt")
+
         conn.execute(
             """
             UPDATE game_config_enemies
             SET label = ?, hp_base = ?, ac_base = ?, attack_bonus = ?, dex_modifier = ?, damage_die = ?,
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
                 xp_award = ?, conditions_immune = ?, skills_json = ?, stats_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
-                description = ?, is_active = ?, updated_at = datetime('now')
+                description = ?, is_active = ?, image_url = ?, image_url_raw = ?, image_gen_prompt = ?,
+                updated_at = datetime('now')
             WHERE key = ?
             """,
             (
@@ -1996,6 +2006,9 @@ def update_enemy(
                 final_note,
                 description if description is not None else current.get("description"),
                 (1 if is_active else 0) if is_active is not None else current.get("is_active", 1),
+                final_image_url,
+                final_image_url_raw,
+                final_image_gen_prompt,
                 safe_key,
             ),
         )
@@ -2005,7 +2018,8 @@ def update_enemy(
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
-                   description, is_active, locked_at, created_at, updated_at
+                   description, is_active, locked_at, created_at, updated_at,
+                   image_url, image_url_raw, image_gen_prompt
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
