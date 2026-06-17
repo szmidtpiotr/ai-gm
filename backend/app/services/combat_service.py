@@ -2278,6 +2278,15 @@ def _resolve_aoe_spell_in_combat(
 
     # Wygrana / kontynuacja
     if _all_enemies_dead(combatants):
+        # L18 (#729 follow-up): dungeon-only sustain drop into the post-combat loot pool.
+        try:
+            from app.services.dungeon_tile_service import roll_dungeon_sustain_drop
+            _sustain = roll_dungeon_sustain_drop(campaign_id, int(ch_id), conn)
+            if _sustain:
+                loot_pool_accum.append(_sustain)
+                out.setdefault("dungeon_sustain", []).append(_sustain)
+        except Exception:
+            pass
         _persist_combatants_and_maybe_end(
             conn, row, combatants,
             status="ended", ended_reason="victory",
@@ -4609,6 +4618,15 @@ def resolve_attack(
                             hit=True,
                             narrative=player_attack_log_meta,
                         )
+                        # L18 (#729 follow-up): dungeon-only sustain drop into loot pool.
+                        try:
+                            from app.services.dungeon_tile_service import roll_dungeon_sustain_drop
+                            _sustain = roll_dungeon_sustain_drop(campaign_id, int(ch_id), conn)
+                            if _sustain:
+                                loot_pool_accum.append(_sustain)
+                                out.setdefault("dungeon_sustain", []).append(_sustain)
+                        except Exception:
+                            pass
                         _persist_combatants_and_maybe_end(
                             conn,
                             row,

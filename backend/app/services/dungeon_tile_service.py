@@ -692,6 +692,95 @@ def mark_node_cleared(campaign_id: int, character_id: int) -> None:
         conn.close()
 
 
+# ── L18 (#729 follow-up): dungeon-only victory sustain drop ───────────────────
+# A solo low-level hero's HP melts across back-to-back tile fights with no town to
+# restock. To keep dungeons winnable WITHOUT touching world-combat balance, every
+# (non-boss) dungeon combat victory has a tier-scaled chance to drop a healing
+# consumable. This is dungeon-only BY CONSTRUCTION: it only fires when an active
+# tiles_v2 `dungeon_run` exists in session_flags — world combat never reaches it.
+# Lower tiers are more generous (weaker heroes need more sustain). Boss tiles are
+# skipped (they already grant boss loot). Numbers Policy: starting values — tune
+# after live play.
+
+_SUSTAIN_CHANCE_BY_TIER: dict[int, float] = {1: 0.40, 2: 0.33, 3: 0.27, 4: 0.20, 5: 0.15}
+_SUSTAIN_KEYS_BY_TIER: dict[int, list[str]] = {
+    1: ["potion_healing_minor", "bandage", "healing_herb"],
+    2: ["potion_healing_minor", "potion_healing_standard"],
+    3: ["potion_healing_standard"],
+    4: ["potion_healing_standard", "potion_healing_major"],
+    5: ["potion_healing_major"],
+}
+
+
+def roll_dungeon_sustain_drop(
+    campaign_id: int, character_id: int, conn: sqlite3.Connection | None = None
+) -> dict | None:
+    """Roll a dungeon-only healing-consumable drop on a (non-boss) combat victory.
+
+    Returns a loot-pool-shaped entry (claimed via the normal post-combat „co wypadło"
+    reveal) or None. DUNGEON-ONLY: returns None unless an active tiles_v2 dungeon_run
+    exists. Does NOT grant — the caller appends the entry to the combat loot pool so
+    the existing claim flow grants it once (no double-grant).
+    """
+    own = conn is None
+    if own:
+        conn = _get_db()
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return None
+        flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+        run = flags.get("dungeon_run")
+        if not run or run.get("system") != "tiles_v2":
+            return None  # dungeon-only gate
+
+        # Skip boss tiles — they already grant boss loot.
+        node_id = get_current_node_id(run, character_id)
+        node = ((run.get("graph") or {}).get("nodes") or {}).get(node_id) or {}
+        if node.get("is_boss") or (node.get("content") or {}).get("is_boss_tile"):
+            return None
+
+        tier = max(1, min(5, int(run.get("dungeon_difficulty", 1))))
+        if random.random() >= _SUSTAIN_CHANCE_BY_TIER.get(tier, 0.25):
+            return None
+
+        # Pick the first tier-appropriate consumable that actually exists/active;
+        # fall back to any active heal_hp consumable so a missing key never no-ops.
+        candidates = list(_SUSTAIN_KEYS_BY_TIER.get(tier, ["potion_healing_minor"]))
+        random.shuffle(candidates)
+        row = None
+        for key in candidates:
+            row = conn.execute(
+                "SELECT key, label FROM game_config_consumables WHERE key = ? AND is_active = 1",
+                (key,),
+            ).fetchone()
+            if row:
+                break
+        if not row:
+            row = conn.execute(
+                "SELECT key, label FROM game_config_consumables "
+                "WHERE effect_type = 'heal_hp' AND is_active = 1 ORDER BY rarity LIMIT 1"
+            ).fetchone()
+        if not row:
+            return None
+
+        key = row["key"]
+        return {
+            "label": row["label"] or key.replace("_", " "),
+            "item_type": "consumable",
+            "quantity": 1,
+            "source": "dungeon_sustain",
+            "key": key,
+            "enemy_loot_tier": None,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
 def move_through_door(campaign_id: int, character_id: int, direction: str) -> dict:
     """L4: Move character through a door in the given direction.
 
