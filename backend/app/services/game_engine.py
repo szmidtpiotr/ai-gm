@@ -289,6 +289,51 @@ def _inject_dungeon_loch_context(run: dict, character, messages: list[dict]) -> 
     messages.insert(ins_at, msg)
 
 
+_SWIAT_IMPERATIVE_OUTDOOR = (
+    "POWYŻSZY BLOK ŚWIAT TO AKTUALNA POZYCJA BOHATERA — nadrzędny "
+    "wobec wcześniejszych tur. Jeśli teren różni się od miejsca "
+    "opisywanego w poprzednich turach, bohater PRZEMIEŚCIŁ SIĘ: "
+    "opisuj OBECNY teren (zgodnie z `teren:` i `Atmosfera terenu:`), "
+    "nie kontynuuj scenerii ze starych tur."
+)
+
+
+def build_swiat_imperative(
+    conn: sqlite3.Connection, current_location_id: int | None
+) -> str:
+    """#750 — Wybiera imperatyw dołączany pod blok === ŚWIAT ===.
+
+    Gdy ``current_location_id`` wskazuje na sub-lokację (``location_type='sub'`` —
+    wnętrze, np. karczma), bohater jest W POMIESZCZENIU na hexie, NIE na otwartym
+    terenie. Twardy imperatyw „bohater PRZEMIEŚCIŁ SIĘ / opisuj teren" błędnie
+    każe LLM porzucić scenę wnętrza i narratować teren hexa (np. las pod karczmą).
+    W tym wypadku ŚWIAT zostaje jako kontekst otoczenia, ale bez nakazu zmiany
+    scenerii. Dla otwartego terenu (macro / brak sub-lokacji) imperatyw bez zmian.
+    """
+    if not current_location_id:
+        return _SWIAT_IMPERATIVE_OUTDOOR
+    try:
+        loc = conn.execute(
+            "SELECT label, location_type FROM game_locations "
+            "WHERE id = ? AND COALESCE(is_active, 1) = 1",
+            (int(current_location_id),),
+        ).fetchone()
+    except Exception:
+        return _SWIAT_IMPERATIVE_OUTDOOR
+    if not loc or (loc["location_type"] or "") != "sub":
+        return _SWIAT_IMPERATIVE_OUTDOOR
+
+    label = loc["label"]
+    loc_txt = f" „{label}”" if label else ""
+    return (
+        f"BOHATER JEST WEWNĄTRZ LOKACJI{loc_txt} (sub-lokacja na tym hexie). "
+        "POWYŻSZY BLOK ŚWIAT to teren i otoczenie NA ZEWNĄTRZ — kontekst pomocniczy, "
+        "NIE pozycja bohatera. Kontynuuj bieżącą scenę WEWNĄTRZ lokacji z poprzednich "
+        "tur; NIE narratuj terenu hexa jako obecnego miejsca. Bohater opuszcza wnętrze "
+        "dopiero gdy SAM zadeklaruje wyjście."
+    )
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -609,24 +654,19 @@ def build_narrative_messages(
         if messages and not _in_dungeon:
             try:
                 _sw_row = conn.execute(
-                    "SELECT session_flags FROM game_sessions WHERE campaign_id = ? "
+                    "SELECT session_flags, current_location_id FROM game_sessions WHERE campaign_id = ? "
                     "ORDER BY created_at DESC, id DESC LIMIT 1",
                     (int(campaign["id"]),),
                 ).fetchone()
                 _sw_flags = json.loads((_sw_row["session_flags"] if _sw_row else None) or "{}")
+                _cur_loc_id = _sw_row["current_location_id"] if _sw_row else None
+                _imperative = build_swiat_imperative(conn, _cur_loc_id)
                 from app.services.location_context_injector import build_swiat_block
                 _swiat = build_swiat_block(conn, _sw_flags, user_text)
                 if _swiat:
                     _swiat_msg = {
                         "role": "system",
-                        "content": (
-                            f"{_swiat}\n\n"
-                            "POWYŻSZY BLOK ŚWIAT TO AKTUALNA POZYCJA BOHATERA — nadrzędny "
-                            "wobec wcześniejszych tur. Jeśli teren różni się od miejsca "
-                            "opisywanego w poprzednich turach, bohater PRZEMIEŚCIŁ SIĘ: "
-                            "opisuj OBECNY teren (zgodnie z `teren:` i `Atmosfera terenu:`), "
-                            "nie kontynuuj scenerii ze starych tur."
-                        ),
+                        "content": f"{_swiat}\n\n{_imperative}",
                     }
                     _ins_at = len(messages) - 1 if messages[-1].get("role") == "user" else len(messages)
                     messages.insert(_ins_at, _swiat_msg)
