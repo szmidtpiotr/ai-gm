@@ -3435,6 +3435,8 @@ grind loch / walka → złoto + przedmioty
 
 - Mikstury (HP/mana), zwoje, bomby — zużywane w walce, odkupowane w sklepie. Katalog konsumpcji już istnieje.
 - Warunek działania: walki muszą być na tyle groźne, by mikstury były realnie potrzebne (inaczej nikt nie kupuje). Wiąże się z balansem walki + limitem darmowego leczenia (krótki odpoczynek już ograniczony do 2×).
+
+> ⚠️ **ROZJAZD SPEC↔GRA (2026-06-17, `/playwright-test-report` L18):** spec zakłada mikstury „zużywane w walce", ale UI walki (pasek Akcja) oferuje TYLKO „Cofnij się" i „Zapasy" — **brak użycia mikstury/konsumpcji w trakcie starcia**. Sustain drop (#732) i kupione mikstury są używalne tylko poza walką (plecak), więc nie ratują przed bursta. Naprawa: **#734**. Raport: [#733](https://github.com/szmidtpiotr/ai-gm/issues/733#issuecomment-4732883886).
 - Powtarzalny dren proporcjonalny do trudności gry.
 
 ### Sink 3 — Wskrzeszenie ON + naprawy (trwałość)
