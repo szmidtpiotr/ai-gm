@@ -7801,6 +7801,13 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   cursor: pointer; white-space: nowrap; box-shadow: 0 2px 10px rgba(201,117,26,0.25); }
 .dungeon-nav__action[hidden] { display: none; }
 .dungeon-nav__action:hover { background: #e8951a; }
+/* LB1 (#735): rest-on-cleared-tile */
+.dungeon-nav__action--rest { background: #2f7d4f; box-shadow: 0 2px 10px rgba(47,125,79,0.3); }
+.dungeon-nav__action--rest:hover { background: #379a5e; }
+.dungeon-nav__pill { background: rgba(47,125,79,0.18); border: 1px solid #2f7d4f;
+  border-radius: 8px; color: #8fdcab; font-weight: 700; font-size: 0.74rem;
+  padding: 6px 10px; text-align: center; white-space: nowrap; }
+.dungeon-nav__pill[hidden] { display: none; }
 
 /* Riddle panel (shown below HUD during riddle rooms) */
 .dungeon-riddle-panel { position: fixed; top: 54px; left: 50%; transform: translateX(-50%);

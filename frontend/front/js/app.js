@@ -12038,6 +12038,14 @@ function updateDungeonNav(run) {
     if (riddleBtn) riddleBtn.hidden = !hasRiddle;
     if (hintBtn) hintBtn.hidden = !hasRiddle;
 
+    // LB1 (#735): rest on a SAFE (cleared) combat tile — tile became safe after the
+    // enemies were defeated. Backend gates the actual heal/charges per dungeon flag.
+    const restBtn = document.getElementById('dungeon-rest');
+    const restPill = document.getElementById('dungeon-rest-pill');
+    const canRest = (content.enemies?.length > 0) && !!currentNode?.cleared;
+    if (restBtn) restBtn.hidden = !canRest;
+    if (restPill) restPill.hidden = !canRest;
+
     // Riddle panel (text input for answer)
     if (hasRiddle) {
         if (riddlePanel) {
@@ -12141,6 +12149,22 @@ async function _dungeonResolveTile(action, payload) {
         }
         if (resp.loot?.length) {
             await refreshCharacterData();
+        }
+        // LB1 (#735): rest on cleared tile — refresh HP, surface hp_after + onboarding note.
+        if (action === 'rest') {
+            if (resp.blocked) {
+                showToast(resp.narrative || 'Najpierw pokonaj wrogów.', 'warning');
+            } else if (resp.no_charges) {
+                showToast('Brak sił na kolejny odpoczynek w tym lochu.', 'warning');
+            } else {
+                await refreshCharacterData();
+                updateDungeonNav(_activeDungeonRun);
+                const hpTxt = (typeof resp.hp_after === 'number') ? ` — HP: ${resp.hp_after}` : '';
+                showToast(`🕯 Odpoczynek${hpTxt}`, 'success');
+                if (resp.onboarding_note) {
+                    showToast('Pełny odpoczynek to wyjątek lochu wprowadzającego — w głębszych lochach radzisz sobie sam.', 'info');
+                }
+            }
         }
         // L12b: chest → play the dice animation (like skill tests/combat), then result modal.
         if (action === 'open_chest') {
@@ -12663,6 +12687,10 @@ function initDungeon() {
     });
     document.querySelector('[data-dungeon-action="riddle_hint"]')?.addEventListener('click', () => {
         _dungeonResolveTile('riddle_hint');
+    });
+    // LB1 (#735): rest on cleared tile
+    document.getElementById('dungeon-rest')?.addEventListener('click', () => {
+        _dungeonResolveTile('rest');
     });
 
     document.getElementById('dungeon-advance-btn')?.addEventListener('click', () => {

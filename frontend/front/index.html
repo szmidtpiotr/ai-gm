@@ -800,6 +800,9 @@
         <button type="button" class="dungeon-nav__dir" data-dungeon-dir="S" hidden title="Południe">⬇</button>
       </div>
       <div class="dungeon-nav__actions">
+        <!-- LB1 (#735): odpoczynek na wyczyszczonym (bezpiecznym) kaflu -->
+        <div class="dungeon-nav__pill" id="dungeon-rest-pill" hidden>🕯 Pokonano wrogów — możesz odpocząć</div>
+        <button type="button" class="dungeon-nav__action dungeon-nav__action--rest" id="dungeon-rest" hidden>🕯 Odpocznij</button>
         <button type="button" class="dungeon-nav__action" id="dungeon-open-chest" hidden>🪙 Otwórz skrzynię</button>
         <button type="button" class="dungeon-nav__action" id="dungeon-answer-riddle" hidden>🔮 Odpowiedz na zagadkę</button>
         <button type="button" class="dungeon-nav__action" data-dungeon-action="riddle_hint" hidden>💡 Podpowiedź</button>
@@ -1917,7 +1920,7 @@
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
-  <script src="./js/app.js?v=l18-732-sustain-2026-06-17"></script>
+  <script src="./js/app.js?v=lb1-735-rest-2026-06-17"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
