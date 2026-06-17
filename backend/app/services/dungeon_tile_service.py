@@ -56,6 +56,28 @@ TIER_ENEMY_LEVELS: dict[int, tuple[int, int, int]] = {
     5: (9, 10, 10),  # D5: enemy lvl 9–10, boss lvl 10 (+ endless %-modifier)
 }
 
+# L18 (#729): boss power scales with dungeon tier — a D1 boss is a weakened echo,
+# a D5 boss its full self. Lets a strong undead (e.g. lich: 90 HP / AC17 / 2d8) be
+# authored ONCE yet stay tier-appropriate, so a "Poz. 1+" dungeon never fields a
+# 90-HP / +9 boss against a 12-HP hero. Starting values — tune after L19.
+BOSS_TIER_FACTOR: dict[int, float] = {1: 0.45, 2: 0.62, 3: 0.78, 4: 0.90, 5: 1.0}
+
+
+def _scale_damage_die(die: str, factor: float) -> str:
+    """Scale the dice COUNT of an 'NdM(+k)' expression by `factor` (floor 1dM).
+
+    Softens boss burst at low tiers (e.g. 2d8 → 1d8 at D1) without touching the die
+    size or flat bonus. Returns the input unchanged if it can't be parsed.
+    """
+    import re
+    m = re.match(r"\s*(\d*)d(\d+)\s*(?:\+\s*(\d+))?\s*$", str(die or "").lower())
+    if not m:
+        return die
+    n = max(1, round(int(m.group(1) or 1) * factor))
+    sides = int(m.group(2))
+    bonus = int(m.group(3) or 0)
+    return f"{n}d{sides}+{bonus}" if bonus else f"{n}d{sides}"
+
 
 def scale_enemy_for_dungeon_tier(
     base: dict,
@@ -93,13 +115,24 @@ def scale_enemy_for_dungeon_tier(
         con = 10
     con_mod = max(0, (con - 10) // 2)
 
+    # L18 (#729): tier-relative boss softening. A boss in a low-tier dungeon is a
+    # weakened version of its full-power self (HP/AC/attack/damage all scaled).
+    boss_factor = BOSS_TIER_FACTOR.get(tier, 1.0) if is_boss else 1.0
+
     base_hp = int(base.get("hp_base") or 5)
+    if is_boss:
+        base_hp = max(1, round(base_hp * boss_factor))
     hp = base_hp + con_mod * eff_level
     if percent_bonus > 0:
         hp = round(hp * (1 + percent_bonus))
 
-    atk = int(base.get("attack_bonus") or 0) + eff_level // 2
-    dmg_bonus = int(base.get("damage_bonus") or 0) + eff_level // 4
+    base_atk = int(base.get("attack_bonus") or 0)
+    base_dmg = int(base.get("damage_bonus") or 0)
+    if is_boss:
+        base_atk = round(base_atk * boss_factor)
+        base_dmg = round(base_dmg * boss_factor)
+    atk = base_atk + eff_level // 2
+    dmg_bonus = base_dmg + eff_level // 4
     if percent_bonus > 0:
         dmg_bonus = round(dmg_bonus * (1 + percent_bonus))
 
@@ -107,6 +140,13 @@ def scale_enemy_for_dungeon_tier(
     scaled["hp_base"] = max(1, hp)
     scaled["attack_bonus"] = atk
     scaled["damage_bonus"] = dmg_bonus
+    if is_boss:
+        # Soften boss AC toward 10 and burst dice at low tiers (D5 keeps full power).
+        # Clamp so a naturally low-AC boss is never made TOUGHER by the softening.
+        base_ac = int(base.get("ac_base") or 10)
+        scaled["ac_base"] = min(base_ac, 10 + round((base_ac - 10) * boss_factor))
+        if base.get("damage_die"):
+            scaled["damage_die"] = _scale_damage_die(base.get("damage_die"), boss_factor)
     return scaled
 
 _DOOR_HINTS = {
@@ -143,6 +183,25 @@ def _tile_has_enemies(tile: dict) -> bool:
         return len(json.loads(tile.get("enemies_json") or "[]")) > 0
     except Exception:
         return False
+
+
+def _tile_enemies_allowed(tile: dict, allowed_enemy_keys: set[str]) -> bool:
+    """L18 (#729): True if the tile is drawable for a dungeon whose roster is
+    `allowed_enemy_keys`. Enemy-free tiles are always allowed; combat tiles only when
+    EVERY referenced enemy is in the dungeon's declared `enemy_pool`.
+
+    This makes the author-declared pool gate combat content (not just repeat re-rolls),
+    so a starter "Poz. 1+" dungeon never draws an endgame elite (shadow_stalker, etc.)
+    from a shared tile category.
+    """
+    try:
+        enemies = json.loads(tile.get("enemies_json") or "[]")
+    except Exception:
+        enemies = []
+    if not enemies:
+        return True
+    keys = {e.get("enemy_key") for e in enemies if e.get("enemy_key")}
+    return keys.issubset(allowed_enemy_keys)
 
 
 def _try_build_path(
@@ -510,16 +569,22 @@ def enter_dungeon_tiles(
     boss_tile_id = dungeon.get("boss_tile_id")
     dungeon_difficulty = int(dungeon.get("dungeon_difficulty") or 1)
 
-    graph = draw_tile_graph(category_key, tile_count, boss_tile_id)
+    # L18 (#729): the dungeon's enemy_pool gates which combat tiles are drawable, so a
+    # starter dungeon can't pull endgame elites from a shared tile category.
+    enemy_pool_raw = dungeon.get("enemy_pool") or "[]"
+    try:
+        enemy_pool = json.loads(enemy_pool_raw) if isinstance(enemy_pool_raw, str) else list(enemy_pool_raw)
+    except Exception:
+        enemy_pool = []
+    allowed_enemy_keys = {k for k in enemy_pool if k} or None
+
+    graph = draw_tile_graph(
+        category_key, tile_count, boss_tile_id, allowed_enemy_keys=allowed_enemy_keys
+    )
 
     # L5/Decyzja 9: re-roll enemies on repeated tiles using dungeon's enemy_pool
     conn, flags = _load_flags(campaign_id)
     try:
-        enemy_pool_raw = dungeon.get("enemy_pool") or "[]"
-        try:
-            enemy_pool = json.loads(enemy_pool_raw) if isinstance(enemy_pool_raw, str) else list(enemy_pool_raw)
-        except Exception:
-            enemy_pool = []
         graph = _reroll_repeated_tile_enemies(graph, enemy_pool, conn)
 
         # L7: entry checkpoint — capture XP at dungeon start for rollback on death
@@ -1743,6 +1808,7 @@ def draw_tile_graph(
     boss_tile_id: int | None = None,
     growth_cycle: int = 1,
     max_retries: int = 25,
+    allowed_enemy_keys: set[str] | None = None,
 ) -> dict:
     """Generate a branching dungeon graph (dungeon_run v2 format).
 
@@ -1777,6 +1843,19 @@ def draw_tile_graph(
         tile_count = min(tile_count, available)
     finally:
         conn.close()
+
+    # L18 (#729): gate combat tiles to the dungeon's declared roster. Keep the full
+    # pool as a fallback when filtering would starve path-building (never block entry).
+    if allowed_enemy_keys:
+        gated = [t for t in non_boss if _tile_enemies_allowed(t, allowed_enemy_keys)]
+        if len(gated) + len(boss_pool) >= max(tile_count, 4):
+            non_boss = gated
+        else:
+            import logging
+            logging.getLogger(__name__).warning(
+                "draw_tile_graph: '%s' enemy_pool gating left only %d non-boss tiles "
+                "(< needed) — falling back to full pool", category_key, len(gated),
+            )
 
     # Issue #697: prefer a graph with ZERO open doors. Keep the best (fewest open
     # doors) across retries; fall back to it (never block dungeon entry) + log.
@@ -2112,6 +2191,14 @@ def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
     endless_growth_n = int(dungeon.get("endless_growth_n") or 0)
     boss_tile_id = dungeon.get("boss_tile_id")
 
+    # L18 (#729): keep endless segments on the dungeon's declared roster too.
+    _ep_raw = dungeon.get("enemy_pool") or "[]"
+    try:
+        _ep = json.loads(_ep_raw) if isinstance(_ep_raw, str) else list(_ep_raw)
+    except Exception:
+        _ep = []
+    allowed_enemy_keys = {k for k in _ep if k} or None
+
     # Length = tile_count + n × (new_cycle − 1)
     new_tile_count = max(2, base_tile_count + endless_growth_n * (new_cycle - 1))
 
@@ -2130,7 +2217,8 @@ def extend_dungeon_for_endless(campaign_id: int, character_id: int) -> dict:
     last_err: Exception | None = None
     for _ in range(12):
         new_graph = draw_tile_graph(
-            category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle
+            category_key, new_tile_count, boss_tile_id, growth_cycle=new_cycle,
+            allowed_enemy_keys=allowed_enemy_keys,
         )
         try:
             merged = _attach_endless_segment(

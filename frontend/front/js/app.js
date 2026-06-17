@@ -4224,7 +4224,9 @@ let pendingBossLoot = null;   // L8: boss drop (already granted server-side) →
 function startCombatPolling() {
     stopCombatPolling();
     pollCombatState();
-    combatPollTimer = setInterval(pollCombatState, 3500);
+    // #730: 2 s combat poll so a desynced „Tura wroga" overlay is reconciled within ≤2 s
+    // on a live session (acceptance), not the prior 3.5 s.
+    combatPollTimer = setInterval(pollCombatState, 2000);
 }
 
 function stopCombatPolling() {
@@ -4303,14 +4305,20 @@ function _reconcileCombatTurnUI(cs) {
     // Wyczyść zalegające flagi ZANIM przerysujemy — inaczej renderCombatUI znów je uwzględni.
     if (d.clearEnemyTurnInFlight) enemyTurnInFlight = false;
     if (d.clearCombatBusy) combatBusy = false;
-    if (d.reason === 'watchdog_resync' || d.reason === 'watchdog_timeout') {
+    const watchdog = d.reason === 'watchdog_resync' || d.reason === 'watchdog_timeout';
+    if (watchdog) {
         window.clog?.warn('combat_turn_watchdog_resync', {
             reason: d.reason, current_turn: cs?.current_turn ?? null,
             had_busy: combatBusy, had_enemy_inflight: enemyTurnInFlight,
         });
-        _showEnemyTurnOverlay(false);
-        if (lastCombatState) renderCombatUI(lastCombatState);
     }
+    // #730: ZAWSZE synchronizuj nakładkę z dyrektywą reconcilera (backend = źródło prawdy),
+    // nie tylko przy watchdogu. Wcześniej zalegająca nakładka „Tura wroga" z JUŻ wyczyszczonymi
+    // flagami (reason 'player_turn') nie była chowana → wisiała, przyciemniała ekran i jej tło
+    // przechwytywało kliknięcia (Atak/Akcja/Ucieczka), mimo że backend = tura gracza.
+    _showEnemyTurnOverlay(d.overlayVisible);
+    // Po zdjęciu nakładki przerysuj, by bramka turowa przywróciła aktywne przyciski.
+    if (!d.overlayVisible && lastCombatState) renderCombatUI(lastCombatState);
 }
 
 // Stage 7 C2 — toggle the "Tura wroga…" overlay (lazy-creates the DOM node).
@@ -4336,8 +4344,10 @@ function _showEnemyTurnOverlay(show, enemyName) {
         // Mount inside the combat banner so it's scoped to the fight, not the whole screen.
         (elements.combatBanner || document.body).appendChild(overlay);
     }
+    // #730: only update the subtext when a name is explicitly passed. Reconciler-driven
+    // re-shows pass no name and must NOT wipe the active „Działa: <wróg>" label.
     const sub = document.getElementById('combat-status-overlay-sub');
-    if (sub) sub.textContent = enemyName ? `Działa: ${enemyName}` : '';
+    if (sub && enemyName !== undefined) sub.textContent = enemyName ? `Działa: ${enemyName}` : '';
     overlay.classList.add('combat-status-overlay--visible');
 }
 

@@ -3677,6 +3677,10 @@ def initiate_combat(
             ac_e = int((_ov.get("ac_base") if _ov else None) or er["ac_base"] or 10)
             _atk_override = _ov.get("attack_bonus") if _ov else None
             _atk = int(_atk_override if _atk_override is not None else (er["attack_bonus"] or 0))
+            # L18 (#729): honor tier-softened boss damage die from the override (else
+            # boss burst — e.g. lich 2d8 — stays full power regardless of dungeon tier).
+            _die_override = (_ov.get("damage_die") if _ov else None)
+            _dmg_dice = str(_die_override or er["damage_die"] or "1d6").strip().lower()
             dex_e_mod = int(er["dex_modifier"] or 0)
             init_e = roll_d20() + dex_e_mod
             xp_award_e = 0
@@ -3695,7 +3699,7 @@ def initiate_combat(
                     "defense": ac_e,
                     "attack_bonus": _atk,
                     "dex_modifier": int(er["dex_modifier"] or 0),
-                    "damage_dice": (er["damage_die"] or "1d6").strip().lower(),
+                    "damage_dice": _dmg_dice,
                     "damage_stat": "STR",
                     "initiative_roll": init_e,
                     "conditions": [],

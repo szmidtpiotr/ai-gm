@@ -208,10 +208,58 @@ def test_endless_level_cap_at_10():
     # D1 boss level = 3, + 5 cykli = 8 (≤10); żaden test nie ma % bonusu
     scaled = dts.scale_enemy_for_dungeon_tier(dict(base), 1, is_boss=True, cycle=6)
     # Boss D1 = 3, +5 cycles = capped at min(8, 10) = 8
-    # HP = 5 + 0*8 = 5 (CON=10 → CON_mod=0); no % bonus
-    # Attack = 0 + 8//2 = 4
+    # L18 (#729): boss base softened by BOSS_TIER_FACTOR[1]=0.45 → base_hp round(5*.45)=2.
+    # HP = 2 + 0*8 = 2 (CON=10 → CON_mod=0); no % bonus
+    # Attack = round(0*.45) + 8//2 = 4
     assert scaled["attack_bonus"] == 4, f"Expected attack 4, got {scaled['attack_bonus']}"
-    assert scaled["hp_base"] == 5, f"Expected hp 5, got {scaled['hp_base']}"
+    assert scaled["hp_base"] == 2, f"Expected hp 2, got {scaled['hp_base']}"
+
+
+# ─── L18 (#729): tier-relative boss softening ─────────────────────────────────
+
+def test_boss_softened_at_d1_not_at_d5():
+    """A strong boss (lich-like) is a weakened echo at D1, full power at D5."""
+    lich = {"hp_base": 90, "ac_base": 17, "attack_bonus": 9, "damage_bonus": 2,
+            "damage_die": "2d8", "stats_json": '{"CON": 10}'}
+    d1 = dts.scale_enemy_for_dungeon_tier(dict(lich), 1, is_boss=True, cycle=1)
+    d5 = dts.scale_enemy_for_dungeon_tier(dict(lich), 5, is_boss=True, cycle=1)
+    # D1: 90 HP → no longer a 90-HP wall vs a 12-HP hero
+    assert d1["hp_base"] < 50, f"D1 boss HP {d1['hp_base']} still too high"
+    assert d1["ac_base"] < 17, f"D1 boss AC {d1['ac_base']} not softened"
+    assert d1["damage_die"] == "1d8+0" or d1["damage_die"].startswith("1d8"), d1["damage_die"]
+    # D5: full power preserved (factor 1.0)
+    assert d5["hp_base"] == 90 and d5["ac_base"] == 17 and d5["damage_die"] == "2d8"
+    # Monotonic: D1 < D5 across HP/AC/attack
+    assert d1["hp_base"] < d5["hp_base"]
+    assert d1["ac_base"] < d5["ac_base"]
+    assert d1["attack_bonus"] < d5["attack_bonus"]
+
+
+def test_regular_enemy_unaffected_by_boss_softening():
+    """is_boss=False enemies keep their authored base (no boss factor applied)."""
+    e = {"hp_base": 35, "ac_base": 14, "attack_bonus": 7, "damage_bonus": 2,
+         "damage_die": "1d6", "stats_json": '{"CON": 10}'}
+    d1 = dts.scale_enemy_for_dungeon_tier(dict(e), 1, is_boss=False, cycle=1)
+    assert d1["hp_base"] == 35  # base preserved; only level/CON add
+    assert d1["damage_die"] == "1d6"
+
+
+def test_scale_damage_die_floor():
+    assert dts._scale_damage_die("2d8", 0.45) == "1d8"
+    assert dts._scale_damage_die("2d8+2", 0.45) == "1d8+2"
+    assert dts._scale_damage_die("4d6", 0.5) == "2d6"
+    assert dts._scale_damage_die("1d6", 0.45) == "1d6"   # floor at 1 die
+    assert dts._scale_damage_die("bogus", 0.5) == "bogus"
+
+
+def test_tile_enemies_allowed_gating():
+    weak = {"enemies_json": '[{"enemy_key":"skeleton","count":2}]'}
+    elite = {"enemies_json": '[{"enemy_key":"shadow_stalker","count":1}]'}
+    empty = {"enemies_json": "[]"}
+    pool = {"skeleton", "zombie", "ghoul"}
+    assert dts._tile_enemies_allowed(weak, pool) is True
+    assert dts._tile_enemies_allowed(elite, pool) is False
+    assert dts._tile_enemies_allowed(empty, pool) is True   # enemy-free always drawable
 
 
 # ─── T5: Endless % bonus above level 10 ───────────────────────────────────────
