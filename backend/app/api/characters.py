@@ -2427,7 +2427,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
     # Starter pack + gold come only from DB rows for warrior/scholar; unknown types
     # still create a valid sheet (defaults to warrior stats) but get no starter loot.
-    starter_archetype_key = requested_archetype if requested_archetype in ("warrior", "scholar") else None
+    starter_archetype_key = requested_archetype if requested_archetype in ("warrior", "scholar", "rogue") else None
     archetype = starter_archetype_key or "warrior"
     base_sheet["archetype"] = archetype
     # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
