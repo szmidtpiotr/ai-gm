@@ -5378,6 +5378,36 @@ Status: **review/needs-testing** — silnik walki niezmieniony (tylko maszyna st
 
 ---
 
+### FAZA LB — Balans lochów: rozdział onboarding vs głębszy (2026-06-17)
+
+> Sesja projektowa po `/llm-council` + symulacji Monte Carlo (15-30k przejść). **Decyzja: starter-loch `krypta_probna` (5 walk + Lisz 40 PŻ, absolutna skala) jest NIEukańczalny solo lvl1 (clear ≈0%; nawet lvl7 ≈3%).** Zabójca to NIE poziom, lecz: (a) compounding 5 sekwencyjnych walk, (b) action economy multi-enemy (2-3 ataki/rundę vs 1 akcja bohatera), (c) brak leczenia między walkami, (d) boss 40 PŻ. **Rozwiązanie: rozdzielić na DWA uczciwe lochy + ogólna mechanika odpoczynku.** Plan krok-po-kroku: `notes.md` → **FAZA LB**. Każde zadanie = GitHub Issue `[TASK] LBNN`.
+
+**Dane symulacji (clear% solo, HP=10+2·lvl, wrogowie D1 stali, unik #610, mid-heal+mikstury):**
+
+| Config | L1 | L3 | L5 |
+|---|---|---|---|
+| pełna ścieżka (5 walk), bez heal-między | 0 | 2 | 16 |
+| pełna ścieżka + heal-między | 3 | 20 | 62 |
+| cap ≤2 wrogów/komnatę + heal-między | 23 | 56 | 85 |
+| cap 1 wróg/komnatę + heal-między | 32 | 64 | 88 |
+| **2 walki(1 wróg) + boss ~18 + heal-między** (onboarding) | **73-78** | 88 | 93 |
+
+**Decyzja LB-1 — odpoczynek na wyczyszczonym kaflu (ogólna mechanika):** po pokonaniu wrogów kafel staje się **bezpieczny** → gracz może odpocząć NA tym kaflu (akcja na węźle, NIE nowy kafel — nie rusza budowy ścieżki / grafu). Siła leczenia **flagowana lochem** (`game_dungeons.rest_heal_pct` + `rest_charges`): **onboarding = 100% / bez limitu**; pozostałe lochy = 20% / ograniczone ładunki (gracz „radzi sobie sam"). Pill u gracza: „Pokonano wrogów — możesz odpocząć". **Info, że pełny odpoczynek to wyjątek lochu onboarding** (w innych ograniczony). Bazuje na istniejącym `_action_rest` (był 20%).
+
+**Decyzja LB-2 — soft-init w komnacie 1:** w PIERWSZEJ walce runu bohater zawsze działa pierwszy (neutralizuje śmierć-na-inicjatywie zaobserwowaną w teście L18). Dungeon-scoped, mała zmiana inicjatywy. Nie rusza absolutnej skali.
+
+**Decyzja LB-3 — `krypta_probna` = ONBOARDING (re-spec, config/seed):** 2 komnaty walki (**1 wróg/komnata**, najsłabszy z puli), boss **~18 PŻ**, `tile_count=3`, `min_level=1`, `rest_heal_pct=100`. Cel clear **~78-85% solo lvl1** (onboarding ma być prawie nie do przegrania — próg ~85%, nie 50%). Etykieta uczciwa.
+
+**Decyzja LB-4 — nowy głębszy loch `katakumby_mroku`:** obecna treść (5 walk + Lisz 40 PŻ, absolutna skala D1) → **min_level 3**, `rest_heal_pct=20`/ładunki. Tu mają sens i pozostają: **#733 (ease-in), #732 (sustain drop), #734 (mid-fight heal)** — przenoszone z krypta_probna. Cel clear ~60-70% przy min_level.
+
+**Decyzja LB-5 — (przyszłość MP, osobny ticket):** skaluj **LICZBĘ** wrogów rozmiarem drużyny (solo cap1-2/komnatę, duo 3, trio 4-5), **siłę zostaw tierem** — zgodne z absolutną skalą. Nie teraz.
+
+**Walidacja każdego kroku:** Combat Sandbox (żywy silnik) + Playwright przejazd solo lvl1 + instrumentacja realnego clear-rate. Symulator = hipoteza, nie prawda. **TDD** na niezmiennikach (rest-on-cleared + flaga heal%, soft-init, cap encountera); **balans** (HP bossa, #komnat, szanse) przez sim+Sandbox, nie asercje jednostkowe.
+
+> ⚠️ Reklasyfikacja: **#733/#734 dotyczą głębszego lochu (LB4), nie onboardingu.** Onboarding działa BEZ #734 (heal-między niesie go do ~75% L1).
+
+---
+
 ## CZĘŚĆ AK — Balans 3 klas + System Czarów Maga (2026-06-14)
 
 > Sesja projektowa: rozjazdy między założeniami klas a kodem (audyt przy okazji #618) + adopcja `rpg_spells_design_doc.md` (50 czarów). Plan wdrożenia krok-po-kroku: `notes.md` → **FAZA B**. Każde zadanie = GitHub Issue `[TASK] BNN`.

@@ -123,6 +123,21 @@ await browser.close();
 
 ---
 
+## FAZA LB — Balans lochów: rozdział onboarding vs głębszy (2026-06-17, po /llm-council + sim) — 🔨 W TOKU
+
+> Decyzje projektowe + dane symulacji: `game_mechanics.md` → CZĘŚĆ AJ → **FAZA LB**. Powód: starter-loch `krypta_probna` (5 walk + Lisz 40 PŻ) NIEukańczalny solo lvl1 (sim clear ≈0%, nawet lvl7 ≈3%). Zabójca = compounding + action economy multi-enemy + brak heal-między + boss 40 PŻ, NIE poziom. Rozwiązanie: rozdzielić na 2 uczciwe lochy + ogólna mechanika odpoczynku. Każde zadanie = `[TASK] LBNN`. Walidacja: Combat Sandbox (żywy silnik) + Playwright solo lvl1 + instrumentacja clear-rate. TDD na logice, sim+Sandbox na balansie.
+
+- [ ] **LB1** — Mechanika: **odpoczynek na wyczyszczonym kaflu** (kafel staje się „bezpieczny" po pokonaniu wrogów → akcja rest na węźle, NIE nowy kafel; nie rusza budowy ścieżki). Flaga lochu `game_dungeons.rest_heal_pct` (+ `rest_charges`): onboarding 100%/bez limitu, reszta 20%/ładunki. Pill u gracza „możesz odpocząć" + info, że pełny rest to wyjątek onboardingu. Migracja kolumny + backend (gating rest po `cleared`, heal% z flagi) + frontend (pill/przycisk). TDD: rest dostępny po cleared, heal% wg flagi, limit w nie-onboarding. → `[TASK] LB1`
+- [ ] **LB2** — **soft-init komnata 1**: bohater zawsze pierwszy w PIERWSZEJ walce runu (neutralizuje śmierć-na-inicjatywie z testu L18). Kod inicjatywy, dungeon-scoped. TDD. → `[TASK] LB2`
+- [ ] **LB3** — **`krypta_probna` = ONBOARDING** (re-spec config/seed): 2 komnaty walki (1 wróg/komnata), boss ~18 PŻ, `tile_count=3`, `min_level=1`, `rest_heal_pct=100`. Cel clear ~78-85% solo lvl1. Walidacja sim+Sandbox+Playwright. → `[TASK] LB3`
+- [ ] **LB4** — **nowy głębszy loch `katakumby_mroku`** (config/seed): obecna treść 5 walk + Lisz 40 PŻ, absolutna skala, `min_level=3`, `rest_heal_pct=20`. Tu przenoszą się i mają sens: **#733 (ease-in), #732 (sustain), #734 (mid-fight heal)**. Cel clear ~60-70% @ min_level. → `[TASK] LB4`
+- [ ] **LB5** — (przyszłość MP, osobny ticket): skaluj LICZBĘ wrogów rozmiarem drużyny (siłę zostaw tierem). Nie teraz.
+- [ ] **LB6** — Walidacja końcowa: Playwright przejazd onboarding solo lvl1 (cel clear ~80%) + instrumentacja realnego clear-rate.
+
+> Reklasyfikacja: **#733 (ease-in) i #734 (mid-fight heal) → należą do LB4 (głębszy loch), NIE do onboardingu.** Onboarding działa bez #734.
+
+---
+
 ## FAZA B — Balans 3 klas + Czary maga (2026-06-14, sesja projektowa — decyzje w game_mechanics.md CZĘŚĆ AK)
 
 > Pełne definicje liczb + system czarów + fazy adaptacji + decyzje: `game_mechanics.md` CZĘŚĆ AK. Założenia: warrior=tank (mało INT), rogue=zwinny/najwięcej skilli/mniej HP niż warrior, mag=słaby fizycznie/nadrabia czarami. Audyt ujawnił 4 rozjazdy kod↔DB↔design. Czary z `rpg_spells_design_doc.md` (50 szt.). Każde zadanie = GitHub Issue `[TASK] BNN` wdrażane `/tdd`. **Blok 1 standalone** (przerywnik — można PRZED/równolegle z FAZĄ L). **Blok 2 niezależny od L** (po FAZIE S ✅). **Blok 3 ⛔ wymaga FAZY 5 (MP/towarzysze) + systemu reakcji.**
