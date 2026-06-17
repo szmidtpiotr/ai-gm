@@ -78,7 +78,7 @@ await browser.close();
 - [ ] ~~U22~~ → FAZA L: L2/L4 (pre-roll hinty drzwi), L6 (no soft-locks, fallback braku kafelka)
 - [ ] ~~U23~~ → FAZA L: L5 (absolutna skala D1–D5 po S2; bez max_scale — poziom wroga zamiast mnożnika)
 
-## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (17/25; L19 ✅ kamień milowy — loch GRYWALNY 2026-06-17; +L-doors #697,#698 z weryfikacji gracza; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
+## FAZA L — Lochy kafelkowe (2026-06-12, redesign) — 🔨 W TOKU (17/25; L17 ✅ kontent 4 kategorie 2026-06-17; L19 ✅ kamień milowy — loch GRYWALNY 2026-06-17; +L-doors #697,#698 z weryfikacji gracza; FAZA S ✅ kompletna; prompt: prompt_l.md; smoke: /game-smoke-dungeon przy L13c i L19)
 
 > Pełne opisy zadań + 17 decyzji projektowych + tabela kolizji: `game_mechanics.md` CZĘŚĆ AJ. Jeden tryb lochów (kafelkowy, legacy usuwany), rozgałęziony graf przy wejściu, checkpointy po bossach, tryb nieskończony, mapa kafelkowa pod przyciskiem mapy. Kolejność = sekcja "FAZA L — zależności i kolejność" w CZĘŚCI AJ. Każde zadanie = GitHub Issue `[TASK] LNN — tytuł` wdrażane `/tdd`; wyjątki bez TDD: L14–L17 (kontent/batch, weryfikacja Piotra) i L19 (playtest, raport do [SMOKE] FAZA L). Prompt startowy: `prompt_l.md`. Wchłania U21–U23 (Blok 6 FAZY U) i H5 (FAZA 6).
 
@@ -103,7 +103,7 @@ await browser.close();
 
 ### Blok 5 — Kontent: krypta (bez TDD; pilot → akceptacja → batch)
   - 🟢 FIX 2026-06-16: seed zapisał `dungeon_difficulty='D2'` (string) — `int()` w `dungeon_tile_service` (linie 510/689/1234/1674) rzucał `invalid literal for int() with base 10: 'D2'` przy wejściu. Kolumna trzyma INT (D2=2, jak crypt_of_bones=2). Naprawione: DB UPDATE→2 + seed poprawiony. Re-test enter: `ok:true`, graf zbudowany, difficulty=2.
-- [ ] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — ⛔ PO L19; per kategoria powtórka L14–L16
+- [x] L17 — Kolejne kategorie (goblińskie tunele, ruiny…) — per kategoria powtórka L14–L16 — ✅ **ZALICZONE 2026-06-17**: 3 nowe kategorie + krypta top-up, wszystkie content-complete (tiles+FLUX 768px+opisy PL+pilot). **goblinskie_tunele** 58 (dir2_camp, pilot goblin_probna D2 boss orc_warchief, commit 9f0fd97); **ruiny_twierdzy** 60 (po pożarze/oblężeniu, pilot ruiny_probna D2 boss bandit_chief); **nawiedzony_zamek** 60 (nawiedzone/nieumarli, pilot zamek_probna D3 boss lich); **krypta** dorzucone +36→60 (styl Gloomhaven). Style zaakceptowane przez Piotra (cykl prób + dogrywka fire vs haunt). commit 9a88958. Zastrzeżenia (→L18): piloty ruiny/zamek niegrane end-to-end; sporadyczny artefakt-tekst FLUX w rogu (kosmetyka). — [#723](https://github.com/szmidtpiotr/ai-gm/issues/723)
 
 ### Blok 6 — Weryfikacja
 - [ ] L18 — Playwright: regresja lochu end-to-end (wejście→walka→drzwi→zagadka→boss→endless→wyjście + mapa)
