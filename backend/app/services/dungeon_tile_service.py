@@ -971,6 +971,7 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
                 except Exception as exc:
                     combat_state = {"error": str(exc)}
 
+        _resolve_riddle_in_content(conn, target_content)
         room_description = target_content.get("room_description") or ""
         return {
             "ok": True,

@@ -7812,9 +7812,11 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dungeon-nav__pill[hidden] { display: none; }
 
 /* Riddle panel (shown below HUD during riddle rooms) */
-.dungeon-riddle-panel { position: fixed; top: 54px; left: 50%; transform: translateX(-50%);
+.dungeon-riddle-panel { position: fixed;
+  top: calc(var(--dungeon-hud-top, 64px) + var(--dungeon-hud-h, 41px) + 8px);
+  left: 50%; transform: translateX(-50%);
   width: min(420px, 90vw); background: #0d0904; border: 1px solid #4a2510;
-  border-radius: 10px; padding: 16px; z-index: 190;
+  border-radius: 10px; padding: 16px; z-index: 205;
   box-shadow: 0 4px 24px rgba(0,0,0,0.7); }
 .dungeon-riddle-panel[hidden] { display: none; }
 .dungeon-riddle-title { font-family: Cinzel, serif; font-size: 0.82rem; color: #c9751a;

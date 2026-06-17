@@ -12064,7 +12064,7 @@ function updateDungeonNav(run) {
         if (riddlePanel) {
             riddlePanel.removeAttribute('hidden');
             const txt = document.getElementById('dungeon-riddle-text');
-            if (txt) txt.textContent = content.riddle?.question || content.riddle || '…';
+            if (txt) txt.textContent = content.riddle?.text || content.riddle || '…';
             const hint = document.getElementById('dungeon-riddle-hint');
             if (hint) { hint.textContent = ''; hint.setAttribute('hidden', ''); }
         }
