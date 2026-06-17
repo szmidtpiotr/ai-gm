@@ -575,9 +575,6 @@ function _sectionHtml() { return `
         .tf-param-lbl{font-size:.72rem;color:#777;display:flex;flex-direction:column;gap:3px}
         .tf-modal-body::-webkit-scrollbar{width:5px}
         .tf-modal-body::-webkit-scrollbar-thumb{background:#111128;border-radius:3px}
-        .tf-ov-sprite{transition:outline-color .1s}
-        .tf-ov-sprite:hover{outline-color:#f59e0b !important}
-        .tf-ov-collide{outline:2px solid #ef4444 !important}
       `;
       document.head.appendChild(s);
     }
