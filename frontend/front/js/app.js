@@ -11683,25 +11683,38 @@ async function openDungeonPicker() {
             list.innerHTML = '<p class="dungeon-picker-empty">Brak dostępnych lochów.</p>';
             return;
         }
+        // #739: hero level for min_level gating — derive from lifetime XP (canonical),
+        // matching the hero list + backend xp_service.
+        const heroSheet = currentHero?.sheet_json || {};
+        const heroLevel = (heroSheet.xp_lifetime_earned != null)
+            ? Math.min(10, Math.floor(Number(heroSheet.xp_lifetime_earned) / 100) + 1)
+            : (heroSheet.level || currentHero?.level || 1);
+
         dungeons.forEach(d => {
             const cd = d.cooldown || {};
             const onCooldown = cd.on_cooldown;
             const hoursLeft = cd.hours_remaining ? `${cd.hours_remaining}h` : '';
+            const minLevel = d.min_level || 1;
+            const locked = heroLevel < minLevel;            // #739: below required level
             const card = document.createElement('button');
-            card.className = 'dungeon-card' + (onCooldown ? ' dungeon-card--cooldown' : '');
-            card.disabled = !!onCooldown;
+            card.className = 'dungeon-card'
+                + (onCooldown ? ' dungeon-card--cooldown' : '')
+                + (locked ? ' dungeon-card--locked' : '');
+            card.disabled = !!onCooldown || locked;
             card.innerHTML = `
-                <div class="dungeon-card__icon">⛏</div>
+                <div class="dungeon-card__icon">${locked ? '🔒' : '⛏'}</div>
                 <div class="dungeon-card__body">
                     <div class="dungeon-card__name">${escapeHtml(d.label || d.key)}</div>
-                    <div class="dungeon-card__meta">${d.rooms || '?'} komnat · Poz. ${d.min_level || 1}+</div>
+                    <div class="dungeon-card__meta">${d.rooms || '?'} komnat · Poz. ${minLevel}+</div>
                     <div class="dungeon-card__atm">${escapeHtml((d.atmosphere || '').slice(0, 80))}</div>
                 </div>
                 ${onCooldown
                     ? `<div class="dungeon-card__cooldown">⏳ ${hoursLeft}</div>`
-                    : `<div class="dungeon-card__arrow">›</div>`
+                    : locked
+                        ? `<div class="dungeon-card__cooldown">🔒 Wymagany Poz. ${minLevel}</div>`
+                        : `<div class="dungeon-card__arrow">›</div>`
                 }`;
-            if (!onCooldown) {
+            if (!onCooldown && !locked) {
                 card.addEventListener('click', () => {
                     overlay.setAttribute('hidden', '');
                     enterDungeon(d.key);

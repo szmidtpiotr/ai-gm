@@ -38,6 +38,12 @@ def _get_hero_level(character_id: int) -> int:
         if not char:
             return 1
         sheet = json.loads(char["sheet_json"] or "{}")
+        # Canonical level is derived from lifetime XP (matches frontend display +
+        # xp_service). Fall back to a stored sheet.level only when XP is absent.
+        if sheet.get("xp_lifetime_earned") is not None:
+            from app.services.xp_service import get_xp_level_thresholds, level_from_xp
+            thresholds = get_xp_level_thresholds(conn)
+            return level_from_xp(int(sheet.get("xp_lifetime_earned") or 0), thresholds)
         return int(sheet.get("level", 1) or 1)
     finally:
         conn.close()
@@ -162,6 +168,19 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
         raise HTTPException(status_code=404, detail="Dungeon not found")
 
     hero_level = _get_hero_level(req.character_id)
+
+    # #739: gate by min_level — block heroes below the dungeon's required level.
+    min_level = int(dungeon.get("min_level") or 1)
+    if hero_level < min_level:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "level_too_low",
+                "message": f"Wymagany Poz. {min_level}+ — Twój bohater ma Poz. {hero_level}.",
+                "min_level": min_level,
+                "hero_level": hero_level,
+            },
+        )
 
     try:
         instance = enter_dungeon_tiles(

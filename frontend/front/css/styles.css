@@ -7734,6 +7734,8 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   cursor: pointer; width: 100%; text-align: left; transition: border-color 0.15s; }
 .dungeon-card:hover:not(:disabled) { border-color: #c9751a; background: #1a1208; }
 .dungeon-card--cooldown { opacity: 0.5; cursor: not-allowed; }
+.dungeon-card--locked { opacity: 0.45; cursor: not-allowed; }
+.dungeon-card--locked .dungeon-card__cooldown { color: #b06a4a; }
 .dungeon-card__icon { font-size: 1.5rem; flex-shrink: 0; }
 .dungeon-card__body { flex: 1; min-width: 0; }
 .dungeon-card__name { font-weight: 600; color: #d4b07a; font-size: 0.9rem; margin-bottom: 2px; }
