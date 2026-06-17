@@ -108,13 +108,14 @@ def create_category(payload: dict = Body(...)) -> dict:
         try:
             c.execute(
                 """INSERT INTO dungeon_tile_categories
-                   (key, label, description, style_modifier, system_prompt, sort_order)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   (key, label, description, style_modifier, system_prompt, sort_order, base_prompt)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (key, label,
                  payload.get("description", ""),
                  payload.get("style_modifier", ""),
                  payload.get("system_prompt", ""),
-                 int(payload.get("sort_order") or 0)),
+                 int(payload.get("sort_order") or 0),
+                 payload.get("base_prompt")),
             )
             c.commit()
         except sqlite3.IntegrityError:
@@ -127,7 +128,7 @@ def create_category(payload: dict = Body(...)) -> dict:
 def update_category(key: str, payload: dict = Body(...)) -> dict:
     fields = []
     params: list[Any] = []
-    for k in ("label", "description", "style_modifier", "system_prompt", "sort_order", "is_active"):
+    for k in ("label", "description", "style_modifier", "system_prompt", "sort_order", "is_active", "base_prompt"):
         if k in payload:
             fields.append(f"{k} = ?")
             params.append(payload[k])
@@ -465,11 +466,16 @@ def delete_tile(tile_id: int) -> dict:
 
 # ── Image generation ──────────────────────────────────────────────────────────
 
-def _build_prompt(tile: dict, category_style: str) -> str:
+def _build_prompt(tile: dict, category_style: str, category_base: str = "") -> str:
     """Compose final prompt — interior decor only. Walls + doors are composited
     mechanically by `tile_compositor.py`, so the prompt explicitly forbids them.
+
+    `category_base` (L17): a per-category base prompt. When non-empty it REPLACES
+    the global furniture-forcing BASE_PROMPT — e.g. „jaskinie" uses a natural-cave
+    base so tiles render raw rock, not furnished rooms. Empty → global BASE_PROMPT.
     """
-    parts = [BASE_PROMPT]
+    base = (category_base or "").strip() or BASE_PROMPT
+    parts = [base]
     if category_style:
         parts.append(category_style)
     # Use image_gen_prompt (English) not room_description (Polish — FLUX won't understand)
@@ -488,10 +494,11 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
         if not tile:
             raise HTTPException(status_code=404, detail="Tile not found")
         cat = c.execute(
-            "SELECT style_modifier FROM dungeon_tile_categories WHERE key = ?",
+            "SELECT style_modifier, base_prompt FROM dungeon_tile_categories WHERE key = ?",
             (tile["category_key"],),
         ).fetchone()
     cat_style = cat["style_modifier"] if cat else ""
+    cat_base = (cat["base_prompt"] if cat and "base_prompt" in cat.keys() else "") or ""
 
     # Build prompt — admin can override full prompt OR just the image_gen_prompt part
     override_prompt = (payload or {}).get("prompt")
@@ -501,9 +508,9 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
     elif override_img_prompt:
         tile_dict = _tile_to_dict(tile)
         tile_dict["image_gen_prompt"] = str(override_img_prompt).strip()
-        prompt = _build_prompt(tile_dict, cat_style)
+        prompt = _build_prompt(tile_dict, cat_style, cat_base)
     else:
-        prompt = _build_prompt(_tile_to_dict(tile), cat_style)
+        prompt = _build_prompt(_tile_to_dict(tile), cat_style, cat_base)
 
     # Read global image quality config from visual_config (set via #system/imagegen).
     # Per-request overrides from payload still take precedence.

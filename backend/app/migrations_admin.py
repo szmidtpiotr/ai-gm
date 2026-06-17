@@ -1052,6 +1052,11 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_dungeon_tiles_category
     ON dungeon_tiles(category_key, is_active)
     """,
+    # L17 (#723): per-category image base prompt. When set, overrides the global
+    # furniture-forcing BASE_PROMPT in dungeon_tiles._build_prompt — lets a category
+    # (e.g. „jaskinie") render natural cave terrain instead of furnished rooms.
+    # NULL/empty → fall back to global BASE_PROMPT (krypta keeps its furnished look).
+    "ALTER TABLE dungeon_tile_categories ADD COLUMN base_prompt TEXT",
     # U5 (#528): LLM tag error telemetry — one row per malformed/rejected tag
     """
     CREATE TABLE IF NOT EXISTS llm_tag_errors (

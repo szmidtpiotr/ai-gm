@@ -1,0 +1,478 @@
+{
+  "category": {
+    "key": "krypta",
+    "label": "Krypta",
+    "description": "Kamienne katakumby pełne sarkofagów, kości i mrocznej magii nieumarłych.",
+    "style_modifier": "stone catacombs interior, sarcophagi and tombs, bones and skulls scattered on floor, candles and torches, crumbling stone walls, dark and foreboding atmosphere, ancient crypt aesthetic, dusty and decayed",
+    "system_prompt": "Opisujesz pomieszczenie w starożytnej krypcie/katakumbach. Koncentruj się na detalach: sarkofagi, kości, kamienne posadzki, świece, pochodnie, pajęczyny, pył, mrok. Opis po polsku, 2-3 zdania klimatyczne. Używaj zmysłowych szczegółów — co gracz czuje, słyszy, widzi.",
+    "sort_order": 10,
+    "is_active": 1
+  },
+  "riddles": [
+    {
+      "key": "riddle_bones",
+      "text": "Żywych niosę, umarłym nie służę. Czym jestem?",
+      "answer": "statek",
+      "answer_alts": [
+        "łódź",
+        "okręt",
+        "tratwa"
+      ],
+      "hints": [
+        "Pływam po wodzie",
+        "Przewożę ludzi",
+        "Rozsypuję się gdy umrę"
+      ],
+      "difficulty": 2,
+      "theme": "death"
+    },
+    {
+      "key": "riddle_death",
+      "text": "Bogaci go pragną, biedni go mają, a zniszczy tego kto je spożyje. Czym jestem?",
+      "answer": "nic",
+      "answer_alts": [
+        "nicość",
+        "pustka",
+        "zero"
+      ],
+      "hints": [
+        "Bogaci chcą więcej tego czego nie mają",
+        "Biedni nic nie mają",
+        "Jeśli to zjesz..."
+      ],
+      "difficulty": 3,
+      "theme": "death"
+    },
+    {
+      "key": "riddle_shadow",
+      "text": "Podążam za tobą w dzień, znikam w nocy. Czym jestem?",
+      "answer": "cień",
+      "answer_alts": [
+        "shadow",
+        "twój cień",
+        "mój cień"
+      ],
+      "hints": [
+        "Jestem czarny",
+        "Znikam gdy nie ma słońca",
+        "To twój..."
+      ],
+      "difficulty": 1,
+      "theme": "general"
+    },
+    {
+      "key": "riddle_silence",
+      "text": "Im więcej masz, tym mniej mówisz. Czym jestem?",
+      "answer": "mądrość",
+      "answer_alts": [
+        "mądrość",
+        "wiedza"
+      ],
+      "hints": [
+        "Starcy mają tego więcej niż młodzi",
+        "Milczenie bywa jej wyrazem",
+        "Nie można jej kupić, tylko zdobyć"
+      ],
+      "difficulty": 3,
+      "theme": "magic"
+    }
+  ],
+  "tiles": [
+    {
+      "label": "Korytarz Kości",
+      "doors": [
+        "N",
+        "S"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "skeleton",
+          "count": 2
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "stone catacombs corridor top-down view, scattered bones and skulls on stone floor, two wall torches casting orange glow, ancient crumbling stonework, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Cela Umarłego",
+      "doors": [
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "zombie",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "small crypt cell top-down view, single stone sarcophagus in center, torn burial wrappings on floor, single candle stub, damp stone walls, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kaplica Cienia",
+      "doors": [
+        "N",
+        "E"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_shadow",
+      "is_boss": false,
+      "image_gen_prompt": "ancient crypt chapel top-down view, stone altar with dark shadow patterns, melted black candles, faded wall paintings of shadowy figures, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komora Zagadki",
+      "doors": [
+        "S",
+        "W"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_bones",
+      "is_boss": false,
+      "image_gen_prompt": "crypt chamber top-down view, central stone pedestal with inscribed riddle tablet, bone arrangements forming patterns on floor, faded runes on walls, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Izba Spoczynku",
+      "doors": [
+        "N",
+        "S"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "peaceful crypt antechamber top-down view, stone benches along walls, fresh candles burning, clean swept floor, old tapestries, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Nisza z Trumną",
+      "doors": [
+        "N",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "ghost",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crypt niche top-down view, ornate wooden coffin with tarnished silver handles, wilted funeral flowers, dusty cobwebs, greenish ghostly mist wisps, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Sala Szkieletów",
+      "doors": [
+        "N",
+        "S",
+        "E"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "skeleton",
+          "count": 2
+        },
+        {
+          "enemy_key": "zombie",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "large crypt hall top-down view, multiple standing skeleton remains in niches, bone-strewn floor, large stone pillars, cracked stone slabs, chains on walls, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komnata Zgnilizny",
+      "doors": [
+        "N",
+        "S",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "zombie",
+          "count": 1
+        },
+        {
+          "enemy_key": "ghoul",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "putrid crypt chamber top-down view, cracked sarcophagi with lids ajar, dark stains on floor, broken burial urns, fetid water pooling in corners, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skrzyżowanie Widm",
+      "doors": [
+        "N",
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "ghost",
+          "count": 1
+        },
+        {
+          "enemy_key": "wraith",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crypt crossroads top-down view, spectral blue mist swirling on stone floor, ancient iron lanterns with ghostly flame, faded spirit trail markings, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Galeria Posągów",
+      "doors": [
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [],
+      "items": [
+        {
+          "type": "chest"
+        }
+      ],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crypt gallery top-down view, stone statues of robed figures lining walls, ornate treasure chest on stone pedestal in center, dusty pedestals, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komnata Śmierci",
+      "doors": [
+        "N",
+        "S",
+        "E"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "skeleton",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": "riddle_death",
+      "is_boss": false,
+      "image_gen_prompt": "crypt death chamber top-down view, large stone altar with carved skull motifs, hourglass and scales of judgment, black candles in iron holders, inscribed floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Sala Ofiar",
+      "doors": [
+        "N",
+        "S",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "ghoul",
+          "count": 2
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "sacrifice hall top-down view, dark stained altar stone, discarded bones and offerings, ritual circles drawn on floor, iron shackles on walls, guttered black candles, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skarbiec Krypty",
+      "doors": [
+        "N",
+        "E",
+        "W"
+      ],
+      "enemies": [],
+      "items": [
+        {
+          "type": "chest"
+        }
+      ],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crypt treasure vault top-down view, iron-bound chest on raised stone platform, old coins scattered on floor, tarnished silver candlesticks, cobweb-draped shelves, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komora Ciszy",
+      "doors": [
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_silence",
+      "is_boss": false,
+      "image_gen_prompt": "silent crypt chamber top-down view, perfectly smooth stone floor with central inscription, sealed alcoves with carved faces, oppressive stillness, single flame in carved stone bowl, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Główna Sala Krypty",
+      "doors": [
+        "N",
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "wraith",
+          "count": 1
+        },
+        {
+          "enemy_key": "skeleton",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "grand crypt main hall top-down view, vaulted ceiling glimpsed, four stone archways, central raised dais with ancient sarcophagus, wraith-shadow stains on floor, pillar shadows, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Wielka Komnata",
+      "doors": [
+        "N",
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "undead_champion",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "vast crypt chamber top-down view, central stone throne on raised platform, ancient weapons rack, battle-worn banners hanging, bone-dust scattered floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Sanktuarium Mroku",
+      "doors": [
+        "N",
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "wraith",
+          "count": 1
+        }
+      ],
+      "items": [
+        {
+          "type": "chest"
+        }
+      ],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "dark sanctuary top-down view, shadowy altar with sealed iron chest, dark crystal obelisk in corner, silver-inlaid floor patterns, drifting shadow wisps, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kaplica Przeklętych",
+      "doors": [
+        "N",
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cursed crypt chapel top-down view, broken stone pews, cracked stained glass fragments, overgrown with dark vines, toppled candelabra, eerie calm, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Tron Lisza",
+      "doors": [
+        "N",
+        "S",
+        "E",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "lich",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "lich throne room top-down view, massive obsidian throne on elevated platform, arcane rune circles on floor, floating spell tomes, dark energy crystals at corners, ancient phylactery on altar, dramatic dark lighting, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komnata Mistrza Wampirów",
+      "doors": [
+        "N",
+        "S",
+        "W"
+      ],
+      "enemies": [
+        {
+          "enemy_key": "vampire_master",
+          "count": 1
+        }
+      ],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "vampire master lair top-down view, ornate stone coffin with crimson velvet lining, blood-red candles in silver holders, gothic iron furniture, bat-wing carved reliefs, wine-dark stains on ancient stone floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Zaślepiona Nisza Północna",
+      "doors": [
+        "N"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "blind alcove dead end crypt top-down view, ancient stone wall blocking north side, crumbling mortar and fallen stones, single south entrance arch, scattered bones and dust on floor, cobwebs in corners, Gloomhaven board game art style, flat 2D painted illustration, no walls at image border"
+    },
+    {
+      "label": "Zaślepiona Nisza Południowa",
+      "doors": [
+        "S"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "blind alcove dead end crypt top-down view, ancient stone wall blocking south side, crumbling mortar and fallen stones, single north entrance arch, scattered bones and dust on floor, cobwebs in corners, Gloomhaven board game art style, flat 2D painted illustration, no walls at image border"
+    },
+    {
+      "label": "Zaślepiona Nisza Wschodnia",
+      "doors": [
+        "E"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "blind alcove dead end crypt top-down view, ancient stone wall blocking east side, crumbling mortar and fallen stones, single west entrance arch, scattered bones and dust on floor, cobwebs in corners, Gloomhaven board game art style, flat 2D painted illustration, no walls at image border"
+    },
+    {
+      "label": "Zaślepiona Nisza Zachodnia",
+      "doors": [
+        "W"
+      ],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "blind alcove dead end crypt top-down view, ancient stone wall blocking west side, crumbling mortar and fallen stones, single east entrance arch, scattered bones and dust on floor, cobwebs in corners, Gloomhaven board game art style, flat 2D painted illustration, no walls at image border"
+    }
+  ]
+}

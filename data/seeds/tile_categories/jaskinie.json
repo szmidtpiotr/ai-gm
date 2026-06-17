@@ -1,0 +1,592 @@
+{
+  "category": {
+    "key": "jaskinie",
+    "label": "Jaskinie",
+    "description": "Wilgotne podziemne groty pełne stalaktytów, grzybni, kryształów i bestii czyhających w mroku.",
+    "style_modifier": "natural cave interior, stalactites and stalagmites, damp rock walls, underground pools, glowing crystals and bioluminescent fungi, scattered bones and rubble, moss and dripping water, earthy primal atmosphere, raw stone aesthetic",
+    "system_prompt": "Opisujesz naturalną grotę/jaskinię w podziemiach. Koncentruj się na detalach: stalaktyty, stalagmity, wilgotna skała, podziemne kałuże, świecące kryształy, grzybnia, kapiąca woda, echo, chłód. Opis po polsku, 2-3 zdania klimatyczne. Używaj zmysłowych szczegółów — co gracz czuje, słyszy, widzi, czuje pod stopami.",
+    "sort_order": 20,
+    "is_active": 1,
+    "base_prompt": "natural rocky cave floor, rough bare stone and stalagmites, damp glistening rock, a few sparse props scattered (old bones, a wooden crate, a planted torch), mostly raw natural cave terrain, NO forced furniture, painted tabletop RPG art style, warm atmospheric torch lighting, high detail, top-down overhead view, square tile format, 2D game art, 2-4 open pathways toward the edges for dungeon connectivity, NO walls, NO doors, NO doorways, NO archways, no text, no UI, only floor and interior terrain"
+  },
+  "riddles": [
+    {
+      "key": "riddle_cave_drip",
+      "text": "Wisząc u sklepienia rosnę w dół, a mój brat z dna rośnie w górę. Spotkamy się po tysiącu lat. Czym jestem?",
+      "answer": "stalaktyt",
+      "answer_alts": ["stalaktyt i stalagmit", "sopel skalny", "naciek"],
+      "hints": ["Tworzy mnie kapiąca woda", "Rosnę u stropu jaskini"],
+      "difficulty": 2,
+      "theme": "nature"
+    },
+    {
+      "key": "riddle_crystal",
+      "text": "Rosnę w ciemności, choć nie jestem rośliną. Łamię światło na tysiąc barw, a twardszy jestem niż stal. Czym jestem?",
+      "answer": "kryształ",
+      "answer_alts": ["krysztal", "kryształ górski", "diament", "klejnot"],
+      "hints": ["Powstaję w skale przez wieki", "Świecę gdy padnie na mnie blask"],
+      "difficulty": 2,
+      "theme": "nature"
+    },
+    {
+      "key": "riddle_echo",
+      "text": "Mówię wszystko co powiesz, a nie mam ust. Czym jestem?",
+      "answer": "echo",
+      "answer_alts": ["głos", "echo głosu"],
+      "hints": ["Mieszkam w górach i jaskiniach", "Powtarzam twoje słowa", "Nie mam ciała"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_river",
+      "text": "Zawsze biegnę, a nóg nie mam. Czym jestem?",
+      "answer": "rzeka",
+      "answer_alts": ["woda", "strumień", "potok"],
+      "hints": ["Mam brzegi", "Płynę do morza", "Możesz mnie przepłynąć"],
+      "difficulty": 1,
+      "theme": "nature"
+    }
+  ],
+  "tiles": [
+    {
+      "label": "Wąski Korytarz",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "narrow natural cave passage top-down view, jagged rock walls closing in, puddles of dark water on uneven stone floor, small stalactites overhead, scurrying rat nest debris, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grota Nietoperzy",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "small bat cavern top-down view, guano-covered rocky floor, thick cobwebs in corners, low dripping ceiling, scattered small bones, dim earthy gloom, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Świetlista Pieczara",
+      "doors": ["N", "E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_crystal",
+      "is_boss": false,
+      "image_gen_prompt": "glowing crystal grotto top-down view, cluster of luminous blue and violet crystals on a rock plinth, soft crystal light reflecting in a still pool, smooth mineral floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komora Stalaktytów",
+      "doors": ["S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_cave_drip",
+      "is_boss": false,
+      "image_gen_prompt": "stalactite chamber top-down view, forest of stalagmites rising from the floor, dripping mineral formations, shallow reflective water channels, pale damp stone, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Mszysta Nisza",
+      "doors": ["N", "S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "mossy cave alcove top-down view, soft green moss carpeting rounded boulders, trickle of clear water, glowing pale mushrooms along the edges, calm restful nook, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Próg Niedźwiedzia",
+      "doors": ["N", "W"],
+      "enemies": [{"enemy_key": "cave_bear", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave bear den entrance top-down view, large pile of dried leaves and fur bedding, gnawed bones scattered around, deep claw marks on rock, low rough ceiling, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Gniazdo Pająków",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "giant spider nest cavern top-down view, dense webbing draped over rocks, egg sacs clustered in corners, wrapped husks of prey, sticky strands across the floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Obozowisko Koboldów",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "kobold", "count": 2}, {"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "kobold cave camp top-down view, crude bonfire pit with smoke, makeshift hide tents, stolen junk and crude weapons piled up, scratch markings on rock walls, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Rozdroże Grot",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "wolf", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave crossroads cavern top-down view, three rough tunnel mouths meeting, rockfall rubble in center, faint torchlight glow, scattered animal tracks in mud, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skarbiec Krasnoludów",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "abandoned dwarven cave vault top-down view, ornate iron-bound chest on carved stone slab, spilled gold coins, old mining tools, dwarven runes etched into the rock, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komora Echa",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_echo",
+      "is_boss": false,
+      "image_gen_prompt": "echoing cave chamber top-down view, vast smooth domed rock surface, a single resonant gong-stone on a pedestal, ripples in a central still pool, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Żyła Kruszcu",
+      "doors": ["N", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "ore vein cavern top-down view, glittering metallic seams running through dark rock, abandoned mining cart with raw ore, pickaxe leaning on a boulder, lantern glow, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Podziemne Jezioro",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "harpy", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_river",
+      "is_boss": false,
+      "image_gen_prompt": "underground lake cavern top-down view, large mirror-still dark water filling most of the floor, narrow rock ledges around the edge, dripping stalactites reflected, pale glow on the surface, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grzybowa Pieczara",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "slime", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "fungal cavern top-down view, towering bioluminescent mushrooms in blue and green, spore mist drifting low, spongy fungal floor, glowing toadstool clusters, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Wielka Grota",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "cave_bear", "count": 1}, {"enemy_key": "wolf", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "grand cavern hall top-down view, four tunnel mouths around a vast open rock floor, massive central stalagmite column, scattered boulders, shafts of dim light from above, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Przepaść",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "harpy", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cavern chasm top-down view, deep dark crevasse splitting the rock floor, fragile rope-and-plank bridge crossing it, jagged ledges, mist rising from the depths, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kryształowa Katedra",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "golem_stone", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crystal cathedral cavern top-down view, enormous glowing crystal pillars rising in a ring, radiant gem light flooding the floor, an iron chest at the center, smooth mineral ground, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Zawalone Wyrobisko",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "collapsed mine cavern top-down view, broken wooden support beams and rubble piles, overturned mine carts, splintered rails, dust haze in dim lantern light, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Legowisko Pradawnego Trolla",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "ancient_troll", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "ancient troll lair top-down view, enormous moss-covered boulder throne, heaps of cracked bones and crushed armor, dripping water and hanging roots, huge crude club resting against the rock, dramatic shadowy lighting, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Smocze Gniazdo",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "dragon_young", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "young dragon nest cavern top-down view, massive hoard of gold and treasure piled high, scorched blackened rock, large clutch of cracked dragon eggs, smoldering embers, claw-raked stone floor, dramatic fiery glow, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Nisza (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "tiny dead-end cave nook top-down view, single rounded rock recess, a few loose stones and a small puddle, low rough ceiling, quiet and cramped, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Nisza (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "tiny dead-end cave nook top-down view, single shallow rock alcove, scattered pebbles and dripping moisture, cramped low stone ceiling, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Nisza (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "tiny dead-end cave nook top-down view, single cramped rock hollow, small mushroom cluster on the wall, damp uneven floor, dim and quiet, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Nisza (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "tiny dead-end cave nook top-down view, single narrow rock recess, a fallen boulder and faint crystal glint, cramped low ceiling, still air, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Grota (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cramped cave dead-end top-down view, mossy rounded rock terminus, an old torch stub and scattered pebbles, damp seeping wall, tight enclosed feel, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Grota (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave alcove dead-end top-down view, crumbling rock recess with crystal vein, a rat skull and two bones on damp floor, slow drip from ceiling, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Grota (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "shallow cave recess dead-end top-down view, rough circular terminus, old campfire ash pile, empty clay pot, scratched runes on floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ślepa Grota (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "natural cave pocket dead-end top-down view, smooth rounded rock hollow, a small stalagmite cluster, faint fungal glow from crevice, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Podziemny Strumień",
+      "doors": ["N", "S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_river",
+      "is_boss": false,
+      "image_gen_prompt": "underground stream cave top-down view, clear shallow water flowing across the stone floor, stepping stones, moss on wet rocks, rippling surface reflections, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kałuże Smoły",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "slime", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "tar pit cave passage top-down view, black bubbling tar pools on the floor, sticky residue trails, bones half-submerged in pitch, sulfurous yellow cracks in rock, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skalny Mostek",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "natural stone bridge cave top-down view, narrow rock arch over a dark chasm, carved stone chest on the far ledge, rope handrail, faint mist below, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grota Wilcza",
+      "doors": ["N", "W"],
+      "enemies": [{"enemy_key": "wolf", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "wolf cave den top-down view, shredded hide nesting, gnawed deer bones, muddy paw prints, rank fur smell hinted in dark corners, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ciemna Pułapka",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "kobold", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "kobold ambush cave top-down view, thin tripwire stretched across rocky floor, crude wooden spike trap pit, scattered noise-maker pebbles, shadows hiding small crouching figures, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Korzenne Zwężenie",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "narrow cave passage top-down view, thick tree roots bursting through ceiling and floor, gnawed rat nests in root hollows, muddy churned earth, dark cramped feel, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skalne Rysy",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_cave_drip",
+      "is_boss": false,
+      "image_gen_prompt": "cracked cave gallery top-down view, dramatic floor-to-ceiling mineral fissures, slow drip forming a shallow mineral pool, crystalline deposits along crack edges, natural rock art shapes, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Zardzewiała Krata",
+      "doors": ["S", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "locked cave storage top-down view, rusted iron grate set in rock wall, forced-open hinge, a battered lockbox on the stone floor, old torch sconces, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Bagnisko Jaskiniowe",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "slime", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave bog passage top-down view, greenish stagnant pools covering most of the floor, lily-pad fungal mats, bubbling muck, bone fragments visible through murky water, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Księżycowe Odbicia",
+      "doors": ["N", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "moonstone cave grotto top-down view, smooth pale stone floor with silver mineral veins, small luminous ceiling crack letting in pale light, mirror-still floor reflection pool, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Leże Ogra",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "ogre", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "ogre lair cavern top-down view, massive crude stone furniture, heaped food scraps and gnawed bones, a huge iron club propped against the wall, thick muddy boot prints, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kryjówka Trolli",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "troll", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "troll cave hideout top-down view, mossy rock piles used as seats, a smoldering bone fire, shredded mail armor hung on a stalactite, deep claw gouges in the floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grota Poszukiwaczy",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "abandoned adventurer camp cave top-down view, torn bedrolls, overturned supply pack, crude map scratched on the floor, a dead torch and broken weapon, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Spiżarnia Pieczary",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave storeroom top-down view, clay pots and leather sacks stacked along rock shelves, a reinforced chest in the center, small oil lamp, dry organized interior, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Ołtarz Podziemny",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "underground cave altar top-down view, crude stone idol on a flat rock slab, offerings of bones and mushrooms, ritual circle scratched in the ground, glowing purple moss, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Pieczara z Fosą",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave pit room top-down view, a deep open pit in the center, web bridges stretching across the gap, husks of wrapped prey dangling from threads, sticky strands on the floor edges, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Trzepotnące Cienie",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "harpy", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "harpy roost cavern top-down view, high ledges with feathered nests, molted feathers carpeting the stone floor, shiny stolen trinkets in nest piles, bat and bird bones scattered below, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Kryształowe Lustro",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_crystal",
+      "is_boss": false,
+      "image_gen_prompt": "crystal mirror cave top-down view, a vertical crystal slab perfectly smooth and reflective, lavender and gold light refracting across the floor, smaller crystal fragments around the base, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Jaszczurze Korytarze",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}, {"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "lizard-folk cave passage top-down view, smooth muddy tracks across the floor, crude carved lizard totems, a broken spear and painted scale-pattern on the rock, flickering torch stub, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grota z Gejzerem",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_echo",
+      "is_boss": false,
+      "image_gen_prompt": "cave geyser room top-down view, steaming vent hole in the center, wet mineral-encrusted floor, mist clouds, rainbow sheen on water-slicked rock, warm air visible in haze, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skrzyżowanie Tropów",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "wolf", "count": 1}, {"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave hunting ground top-down view, many criss-crossing animal tracks in dried mud, half-eaten carcass at the edge, scattered fur tufts, predator claw marks on the floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Centrum Bestii",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "cave_bear", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "bear cave hub top-down view, packed earth floor worn smooth by heavy paws, large fur-lined sleeping hollow, fish bones and berry stains, scratch post stone pillar, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Centralny Węzeł",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}, {"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave junction hub top-down view, four tunnels meeting in a wide rough chamber, smashed crates and debris in center, crude barricade remnants, overlapping torchlight from multiple directions, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Rozległa Komora",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "vast empty cave chamber top-down view, wide open rock floor with scattered boulders, ancient carved runes on the walls barely visible, peaceful cool air, natural rest spot, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Grota z Fontanną",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave spring fountain top-down view, natural stone basin with upwelling clear water, concentric ripple rings, smooth wet stone, pale minerals around the spring lip, calming underground sanctuary, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Arena Trollowa",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "troll", "count": 1}, {"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cave combat arena top-down view, crude stone ring forming a battle pit, scattered broken shields and crushed bones, goblin spectator ledges, troll-sized claw marks in the floor, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Wilcze Gniazdo",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "wolf", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "wolf pack cave den top-down view, circular communal nest of shredded hide and fur, bones of many meals in a ring, packed dirt floor polished by many paws, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Skrzyżowanie Złodziei",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "bandit cave crossroads top-down view, camp detritus around a four-way junction, crude wooden sign pointing in each direction, stolen goods sack, dice and coins on a flat rock table, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komnata Kamiennego Strażnika",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "golem_stone", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "stone guardian chamber top-down view, ancient carved pillars in a ring, massive circular floor seal with arcane symbols, scattered crumbled former guardians, imposing thick stone atmosphere, dramatic angular shadows, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Siedlisko Matki Pająków",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "spider matriarch lair top-down view, enormous central web spanning the chamber, massive egg cluster in center, dozens of cocooned humanoid shapes hanging from web strands, thick layered silk floor, dim and terrible, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Gniazdo Wywerny",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "wyvern", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "wyvern cave nest top-down view, scorched rock from acid and wing beats, enormous talon-gouged floor, hollow rock dais with shredded bones, dark miasma in corners, venom-stained stone, dramatic dangerous atmosphere, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    },
+    {
+      "label": "Komnata Lisza",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "lich", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "lich throne cave chamber top-down view, obsidian altar draped in necrotic energy, soul gem lanterns casting cold purple light, crumbling skeleton servants scattered as rubble, dark runes carved in every rock surface, dread and ancient evil, Gloomhaven board game art style, flat 2D painted illustration, no walls no doors"
+    }
+  ]
+}

@@ -8,6 +8,8 @@ data/*
 !data/seeds/
 data/seeds/*
 !data/seeds/*.sql
+!data/seeds/*.json
+!data/seeds/tile_categories/
 backups/*
 !backups/.gitkeep
 ollama/
