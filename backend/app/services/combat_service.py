@@ -2278,15 +2278,6 @@ def _resolve_aoe_spell_in_combat(
 
     # Wygrana / kontynuacja
     if _all_enemies_dead(combatants):
-        # L18 (#729 follow-up): dungeon-only sustain drop into the post-combat loot pool.
-        try:
-            from app.services.dungeon_tile_service import roll_dungeon_sustain_drop
-            _sustain = roll_dungeon_sustain_drop(campaign_id, int(ch_id), conn)
-            if _sustain:
-                loot_pool_accum.append(_sustain)
-                out.setdefault("dungeon_sustain", []).append(_sustain)
-        except Exception:
-            pass
         _persist_combatants_and_maybe_end(
             conn, row, combatants,
             status="ended", ended_reason="victory",
@@ -2334,6 +2325,14 @@ def _resolve_aoe_spell_in_combat(
         try:
             from app.services.dungeon_tile_service import mark_node_cleared
             mark_node_cleared(campaign_id, int(ch_id))
+        except Exception:
+            pass
+        # L18 (#729 follow-up): dungeon-only healing sustain drop (granted server-side).
+        try:
+            from app.services.dungeon_tile_service import grant_dungeon_victory_sustain
+            _sustain = grant_dungeon_victory_sustain(campaign_id, int(ch_id))
+            if _sustain:
+                out["dungeon_sustain"] = _sustain
         except Exception:
             pass
         # L8: boss tile cleared → checkpoint + loot + boss_choice_pending flag
@@ -4618,15 +4617,6 @@ def resolve_attack(
                             hit=True,
                             narrative=player_attack_log_meta,
                         )
-                        # L18 (#729 follow-up): dungeon-only sustain drop into loot pool.
-                        try:
-                            from app.services.dungeon_tile_service import roll_dungeon_sustain_drop
-                            _sustain = roll_dungeon_sustain_drop(campaign_id, int(ch_id), conn)
-                            if _sustain:
-                                loot_pool_accum.append(_sustain)
-                                out.setdefault("dungeon_sustain", []).append(_sustain)
-                        except Exception:
-                            pass
                         _persist_combatants_and_maybe_end(
                             conn,
                             row,
@@ -4683,6 +4673,14 @@ def resolve_attack(
                         try:
                             from app.services.dungeon_tile_service import mark_node_cleared
                             mark_node_cleared(campaign_id, int(ch_id))
+                        except Exception:
+                            pass
+                        # L18 (#729 follow-up): dungeon-only healing sustain drop (server-side).
+                        try:
+                            from app.services.dungeon_tile_service import grant_dungeon_victory_sustain
+                            _sustain = grant_dungeon_victory_sustain(campaign_id, int(ch_id))
+                            if _sustain:
+                                out["dungeon_sustain"] = _sustain
                         except Exception:
                             pass
                         # L8: boss tile cleared → checkpoint + loot + boss_choice_pending flag

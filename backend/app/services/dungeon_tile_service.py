@@ -712,19 +712,17 @@ _SUSTAIN_KEYS_BY_TIER: dict[int, list[str]] = {
 }
 
 
-def roll_dungeon_sustain_drop(
-    campaign_id: int, character_id: int, conn: sqlite3.Connection | None = None
-) -> dict | None:
-    """Roll a dungeon-only healing-consumable drop on a (non-boss) combat victory.
+def grant_dungeon_victory_sustain(campaign_id: int, character_id: int) -> dict | None:
+    """Roll AND grant a dungeon-only healing-consumable drop on a (non-boss) victory.
 
-    Returns a loot-pool-shaped entry (claimed via the normal post-combat „co wypadło"
-    reveal) or None. DUNGEON-ONLY: returns None unless an active tiles_v2 dungeon_run
-    exists. Does NOT grant — the caller appends the entry to the combat loot pool so
-    the existing claim flow grants it once (no double-grant).
+    Returns {key, label, quantity} of the granted consumable, or None. DUNGEON-ONLY:
+    returns None unless an active tiles_v2 dungeon_run exists. Grants the consumable
+    directly to the hero's inventory (server-side, like boss loot) — surfaced to the
+    player via the combat-end response (`dungeon_sustain`), not the per-kill „co
+    wypadło" reveal (that path maps every non-weapon to item_key and would mis-store a
+    consumable). Call AFTER the victory commit so it never nests in the combat txn.
     """
-    own = conn is None
-    if own:
-        conn = _get_db()
+    conn = _get_db()
     try:
         gs = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -766,19 +764,23 @@ def roll_dungeon_sustain_drop(
             ).fetchone()
         if not row:
             return None
-
         key = row["key"]
-        return {
-            "label": row["label"] or key.replace("_", " "),
-            "item_type": "consumable",
-            "quantity": 1,
-            "source": "dungeon_sustain",
-            "key": key,
-            "enemy_loot_tier": None,
-        }
+        label = row["label"] or key.replace("_", " ")
     finally:
-        if own:
-            conn.close()
+        conn.close()
+
+    # Grant directly (own connection inside grant_loot_to_character).
+    try:
+        from app.services.loot_service import grant_loot_to_character
+        grant_loot_to_character(
+            character_id, [{"consumable_key": key, "quantity": 1}], source="dungeon_sustain"
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("dungeon sustain grant failed")
+        return None
+
+    return {"key": key, "label": label, "quantity": 1}
 
 
 def move_through_door(campaign_id: int, character_id: int, direction: str) -> dict:

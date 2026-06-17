@@ -418,41 +418,6 @@ def test_enter_dungeon_stores_difficulty(db, monkeypatch):
 
 # ─── L18 (#729 follow-up): dungeon-only victory sustain drop ───────────────────
 
-def _sustain_conn():
-    """Minimal in-memory DB: game_sessions + game_config_consumables."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.executescript(
-        """
-        CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT);
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT, effect_type TEXT,
-            is_active INTEGER DEFAULT 1, rarity INTEGER DEFAULT 1
-        );
-        """
-    )
-    for k, lbl in [
-        ("potion_healing_minor", "Mała mikstura leczenia"),
-        ("bandage", "Bandaż"),
-        ("healing_herb", "Lecznicze zioła"),
-        ("potion_healing_standard", "Mikstura leczenia"),
-        ("potion_healing_major", "Wielka mikstura leczenia"),
-    ]:
-        conn.execute(
-            "INSERT INTO game_config_consumables (key,label,effect_type,is_active,rarity) "
-            "VALUES (?,?,'heal_hp',1,1)", (k, lbl)
-        )
-    return conn
-
-
-def _set_run(conn, campaign_id, run):
-    conn.execute(
-        "INSERT INTO game_sessions (campaign_id, session_flags) VALUES (?,?)",
-        (campaign_id, json.dumps({"dungeon_run": run}) if run else "{}"),
-    )
-    conn.commit()
-
-
 def _dungeon_run(is_boss=False, tier=1):
     return {
         "system": "tiles_v2",
@@ -463,33 +428,82 @@ def _dungeon_run(is_boss=False, tier=1):
     }
 
 
-def test_sustain_drop_dungeon_only(monkeypatch):
-    """No dungeon_run → never drops (world combat must not get dungeon sustain)."""
-    conn = _sustain_conn(); _set_run(conn, 1, None)
+def _sustain_db(tmp_path, run):
+    """Temp-file DB with game_sessions + consumables; returns (db_file, grants list).
+
+    `grant_dungeon_victory_sustain` opens its own _get_db() connection and grants via
+    loot_service.grant_loot_to_character — both are monkeypatched by the caller.
+    """
+    db_file = str(tmp_path / "sustain.db")
+    conn = sqlite3.connect(db_file)
+    conn.execute("CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT)")
+    conn.execute(
+        "CREATE TABLE game_config_consumables (key TEXT PRIMARY KEY, label TEXT, "
+        "effect_type TEXT, is_active INTEGER DEFAULT 1, rarity INTEGER DEFAULT 1)"
+    )
+    for k, lbl in [
+        ("potion_healing_minor", "Mała mikstura leczenia"),
+        ("bandage", "Bandaż"), ("healing_herb", "Lecznicze zioła"),
+        ("potion_healing_standard", "Mikstura leczenia"),
+        ("potion_healing_major", "Wielka mikstura leczenia"),
+    ]:
+        conn.execute(
+            "INSERT INTO game_config_consumables (key,label,effect_type) VALUES (?,?,'heal_hp')",
+            (k, lbl),
+        )
+    conn.execute(
+        "INSERT INTO game_sessions (campaign_id, session_flags) VALUES (1, ?)",
+        (json.dumps({"dungeon_run": run}) if run else "{}",),
+    )
+    conn.commit(); conn.close()
+    return db_file
+
+
+def _patch(monkeypatch, db_file):
+    """Point dts._get_db at the temp DB and capture grant_loot_to_character calls."""
+    def _gdb():
+        c = sqlite3.connect(db_file); c.row_factory = sqlite3.Row; return c
+    monkeypatch.setattr(dts, "_get_db", _gdb)
+    grants = []
+    import app.services.loot_service as ls
+    monkeypatch.setattr(ls, "grant_loot_to_character",
+                        lambda cid, items, **kw: grants.append((cid, items, kw)) or [])
+    return grants
+
+
+def test_sustain_drop_dungeon_only(monkeypatch, tmp_path):
+    """No dungeon_run → never grants (world combat must not get dungeon sustain)."""
+    grants = _patch(monkeypatch, _sustain_db(tmp_path, None))
     monkeypatch.setattr(dts.random, "random", lambda: 0.0)  # would always pass the chance
-    assert dts.roll_dungeon_sustain_drop(1, 7, conn) is None
+    assert dts.grant_dungeon_victory_sustain(1, 7) is None
+    assert grants == []
 
 
-def test_sustain_drop_on_victory(monkeypatch):
-    """Active tiles_v2 run, non-boss tile, chance hit → returns a healing entry."""
-    conn = _sustain_conn(); _set_run(conn, 1, _dungeon_run(is_boss=False, tier=1))
+def test_sustain_drop_on_victory(monkeypatch, tmp_path):
+    """Active tiles_v2 run, non-boss tile, chance hit → grants a healing consumable."""
+    grants = _patch(monkeypatch, _sustain_db(tmp_path, _dungeon_run(is_boss=False, tier=1)))
     monkeypatch.setattr(dts.random, "random", lambda: 0.0)
-    drop = dts.roll_dungeon_sustain_drop(1, 7, conn)
+    drop = dts.grant_dungeon_victory_sustain(1, 7)
     assert drop is not None
-    assert drop["item_type"] == "consumable"
     assert drop["key"] in {"potion_healing_minor", "bandage", "healing_herb"}
-    assert drop["quantity"] == 1 and drop["source"] == "dungeon_sustain"
+    assert drop["quantity"] == 1
+    # granted as a CONSUMABLE (not item_key) to the right character
+    assert len(grants) == 1
+    cid, items, kw = grants[0]
+    assert cid == 7 and items[0]["consumable_key"] == drop["key"]
 
 
-def test_sustain_drop_skips_boss_tile(monkeypatch):
+def test_sustain_drop_skips_boss_tile(monkeypatch, tmp_path):
     """Boss tiles already grant boss loot → no sustain drop there."""
-    conn = _sustain_conn(); _set_run(conn, 1, _dungeon_run(is_boss=True, tier=1))
+    grants = _patch(monkeypatch, _sustain_db(tmp_path, _dungeon_run(is_boss=True, tier=1)))
     monkeypatch.setattr(dts.random, "random", lambda: 0.0)
-    assert dts.roll_dungeon_sustain_drop(1, 7, conn) is None
+    assert dts.grant_dungeon_victory_sustain(1, 7) is None
+    assert grants == []
 
 
-def test_sustain_drop_respects_chance(monkeypatch):
-    """Chance miss → None (drop is probabilistic, not guaranteed)."""
-    conn = _sustain_conn(); _set_run(conn, 1, _dungeon_run(is_boss=False, tier=1))
+def test_sustain_drop_respects_chance(monkeypatch, tmp_path):
+    """Chance miss → None, no grant (drop is probabilistic, not guaranteed)."""
+    grants = _patch(monkeypatch, _sustain_db(tmp_path, _dungeon_run(is_boss=False, tier=1)))
     monkeypatch.setattr(dts.random, "random", lambda: 0.99)  # above any tier chance
-    assert dts.roll_dungeon_sustain_drop(1, 7, conn) is None
+    assert dts.grant_dungeon_victory_sustain(1, 7) is None
+    assert grants == []

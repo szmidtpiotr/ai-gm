@@ -6148,6 +6148,11 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
     if (data.dungeon_boss_defeated && Array.isArray(data.dungeon_boss_loot)) {
         pendingBossLoot = data.dungeon_boss_loot;
     }
+    // L18 (#732): dungeon-only healing sustain drop — granted server-side, surface a
+    // toast so the player knows a heal landed in the plecak after the fight.
+    if (data.dungeon_sustain && data.dungeon_sustain.label) {
+        showToast(`🧪 W lochu znaleziono: ${data.dungeon_sustain.label} — do plecaka`, 'success', 4000);
+    }
 
     if (cs) { lastCombatState = cs; renderCombatUI(cs); }
 
