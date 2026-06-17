@@ -3586,6 +3586,7 @@ def initiate_combat(
     character_id: int,
     enemy_keys: list[str],
     _dungeon_enemy_overrides: "dict[str, dict] | None" = None,
+    _dungeon_first_combat: bool = False,
 ) -> dict[str, Any]:
     if not enemy_keys:
         raise ValueError("enemy_keys required")
@@ -3730,6 +3731,11 @@ def initiate_combat(
 
         # Sort: highest initiative first; ties: player wins (lower tie-break value sorts first after negating init)
         turn_slots.sort(key=lambda t: (-t[1], 0 if t[0] == "player" else 1))
+        # LB2: first combat of the dungeon run — hero always acts first (soft-init)
+        if _dungeon_first_combat:
+            player_idx = next((i for i, t in enumerate(turn_slots) if t[0] == "player"), 0)
+            if player_idx > 0:
+                turn_slots.insert(0, turn_slots.pop(player_idx))
         turn_order = [t[0] for t in turn_slots]
         current = turn_order[0] if turn_order else "player"
 

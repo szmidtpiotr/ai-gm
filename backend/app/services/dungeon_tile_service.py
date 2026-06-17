@@ -945,6 +945,8 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
             if enemy_keys:
                 try:
                     from app.services.combat_service import initiate_combat
+                    # LB2: first combat of the run gets soft-init (hero always first)
+                    _is_first_combat = run.get("combats_started", 0) == 0
                     # L5: build tier-scaled stat overrides for each unique enemy key
                     _enemy_overrides: dict[str, dict] = {}
                     for ek in set(enemy_keys):
@@ -961,7 +963,11 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
                     combat_state = initiate_combat(
                         campaign_id, character_id, enemy_keys,
                         _dungeon_enemy_overrides=_enemy_overrides if _enemy_overrides else None,
+                        _dungeon_first_combat=_is_first_combat,
                     )
+                    run["combats_started"] = run.get("combats_started", 0) + 1
+                    flags["dungeon_run"] = run
+                    _save_flags(conn, campaign_id, flags)
                 except Exception as exc:
                     combat_state = {"error": str(exc)}
 
