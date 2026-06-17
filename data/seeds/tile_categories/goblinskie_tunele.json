@@ -1,0 +1,574 @@
+{
+  "category": {
+    "key": "goblinskie_tunele",
+    "label": "Goblińskie Tunele",
+    "description": "Ręcznie kute korytarze w twardej ziemi — nory, obozy, warsztaty i sale zebrane pod ziemią przez goblińskie klany.",
+    "style_modifier": "hand-dug goblin tunnel, earthen walls, timber support beams, packed dirt floor, crude goblin artifacts, torchlit gloom, filthy underground warren aesthetic",
+    "system_prompt": "Opisujesz goblińską norę/tunel pod ziemią. Koncentruj się na detalach: wykopanej ziemi i skale, belkach stropowych, smrodzie obozu, prymitywnych rekwizytach goblinów (kości, szmaty, prymitywna broń, łupy). Opis po polsku, 2-3 zdania klimatyczne. Używaj zmysłowych szczegółów — co gracz czuje, słyszy, wącha, widzi pod stopami.",
+    "sort_order": 30,
+    "is_active": 1,
+    "base_prompt": "underground goblin tunnel chamber seen from directly straight above, a rough dug-out room carved into earth and rock, rugged earthen tunnel walls form the irregular boundary of the room, packed dirt floor in the center, rough timber support beams bracing the walls, 2-3 dark tunnel mouths leading off the edges as passages, goblin camp inside, crude campfire pit with embers, rags and crude weapons strewn on the dirt, makeshift torch stakes, painted tabletop RPG battlemap art style, warm torch lighting, high detail, strict top-down orthographic overhead view, square map tile, 2D game art, NO perspective, NO side view, flat overhead, no text, no UI"
+  },
+  "riddles": [
+    {
+      "key": "riddle_goblin_fire",
+      "text": "Świecę w ciemności, lecz nie jestem gwiazdą. Gobliny mnie lubią, bo bez mnie zamarzną. Czym jestem?",
+      "answer": "ogień",
+      "answer_alts": ["płomień", "ognisko", "pochodnia"],
+      "hints": ["Możesz mnie dotknąć i poparzyć rękę", "Daję ciepło i światło"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_goblin_shadow",
+      "text": "Chodzi za tobą wszędzie, lecz nie ma ciała. Ucieka od blasku, lecz chwyta cię w ciemności. Czym jestem?",
+      "answer": "cień",
+      "answer_alts": ["mój cień", "cień człowieka"],
+      "hints": ["Znikam gdy gaszą pochodnie", "Mam twój kształt"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_goblin_bones",
+      "text": "Zostanę po tobie nawet po stu latach. Gobliny zbierają mnie jako trofea. Czym jestem?",
+      "answer": "kości",
+      "answer_alts": ["kość", "szkielet", "czaszka"],
+      "hints": ["Jestem w każdym żywym stworzeniu", "Po śmierci mnie widać"],
+      "difficulty": 1,
+      "theme": "dungeon"
+    },
+    {
+      "key": "riddle_goblin_gold",
+      "text": "Wszyscy mnie chcą, lecz nikt mnie nie je. Gobliny zabijają dla mnie przyjaciół. Czym jestem?",
+      "answer": "złoto",
+      "answer_alts": ["monety", "skarb", "kruszec"],
+      "hints": ["Błyszczę jak słońce", "Kupuję wszystko co chcesz"],
+      "difficulty": 2,
+      "theme": "dungeon"
+    }
+  ],
+  "tiles": [
+    {
+      "label": "Zaślepka Goblińska (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "dead-end goblin nook, small cramped earthen hollow, gnawed bones and a discarded crude knife on the dirt floor, torch stub in the wall, scrawled goblin scratch marks"
+    },
+    {
+      "label": "Zaślepka Goblińska (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "dead-end goblin tunnel terminus, loose earth walls, scattered pebbles and small bones, a forgotten goblin sandal and rags on the ground"
+    },
+    {
+      "label": "Zaślepka Goblińska (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "dead-end narrow goblin nook, rough earthen pocket, crude handprint graffiti in mud, a few rat bones and a broken pot shard on the floor"
+    },
+    {
+      "label": "Zaślepka Goblińska (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "cramped goblin dead-end alcove, earth walls, a chewed bone and small puddle of murky water on the floor, scratch tally marks gouged into the dirt"
+    },
+    {
+      "label": "Ślepy Tunel (N)",
+      "doors": ["N"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "collapsed tunnel dead-end, rockfall rubble blocking the way, a goblin helmet half-buried in dirt, faint torch glow from one direction"
+    },
+    {
+      "label": "Ślepy Tunel (S)",
+      "doors": ["S"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "abandoned goblin side-tunnel dead-end, old campfire ash, a broken wooden crate and frayed rope on the earthen floor"
+    },
+    {
+      "label": "Ślepy Tunel (E)",
+      "doors": ["E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "collapsed passage dead-end, earth cave-in debris, bent iron spike and gnawed femur on the ground, dim and abandoned"
+    },
+    {
+      "label": "Ślepy Tunel (W)",
+      "doors": ["W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "narrow goblin tunnel dead-end, crude barricade of sticks and mud blocking the far end, scattered pebbles and an old boot on the floor"
+    },
+    {
+      "label": "Wąski Korytarz",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "narrow goblin patrol corridor, worn dirt path between timber posts, rat droppings and gnawed scraps on the floor, a planted torch and muddy boot prints"
+    },
+    {
+      "label": "Boczna Nora",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "small side tunnel, low earthen ceiling impression, kobold sleeping nest of rags in corner, scattered crude trinkets and bones on the floor"
+    },
+    {
+      "label": "Zasadzka",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin ambush nook, crude wooden spike trap set in dirt floor, scattered noise-makers (tin cans on string), muddy claw tracks, hidden-position detritus"
+    },
+    {
+      "label": "Składzik Broni",
+      "doors": ["N", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crude goblin armory alcove, a battered iron-bound chest on the earthen floor, broken spear shafts leaning against the wall base, scattered rusty arrowheads and bent sword pieces"
+    },
+    {
+      "label": "Spiżarnia",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin food stash room, clay pots and wrapped bundles on the earthen floor, scraps of smoked meat hanging from a low peg, a locked chest in the corner, earthy provisioned feel"
+    },
+    {
+      "label": "Legowisko",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin sleeping quarters, a nest of stolen rags and straw on the floor, chewed bones and a crude pillow of burlap, a small torch in the floor, smelly and cramped"
+    },
+    {
+      "label": "Przejście Wartowni",
+      "doors": ["S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin guard passage, worn sentry post nook, crude wooden guard stool tipped over, a dented helmet on the floor, boot-worn path through packed dirt"
+    },
+    {
+      "label": "Strażnicze Przejście",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}, {"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin patrol exchange point, two crude guard posts marked with painted bones on the floor, dice and coins from a stopped game, crossed spear-shafts laid on the dirt"
+    },
+    {
+      "label": "Nora Szczurołapów",
+      "doors": ["E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "rat-infested tunnel passage, chewed wooden planks underfoot, rat nests of shredded cloth in floor corners, rat droppings and gnaw marks on every surface, squirming infestation feel"
+    },
+    {
+      "label": "Izba Łuczników",
+      "doors": ["N", "W"],
+      "enemies": [{"enemy_key": "goblin_archer", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin archer post, crude archery target painted on the floor (circles in mud), spent arrows lying flat on the dirt, a quiver knocked over, clay practice pots smashed nearby"
+    },
+    {
+      "label": "Kuźnia Goblińska",
+      "doors": ["S", "E"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "crude goblin forge floor, small smoldering coal pit in the center, scattered iron scraps and crude tools lying flat, a rusted anvil on the earthen floor, metalworking debris and ash"
+    },
+    {
+      "label": "Tunel Pełzaczy",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "slime", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "slime-infested tunnel floor, greenish mucus trails across the packed dirt, rat droppings and small bones half-dissolved in slime residue, damp grimy crawlspace atmosphere"
+    },
+    {
+      "label": "Komnata Szkieletów",
+      "doors": ["N", "S"],
+      "enemies": [{"enemy_key": "skeleton", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "old bone dump room, scattered humanoid skeleton parts on the floor, a cracked skull used as a crude bowl, old rusted chain on the ground, grim and quiet goblin charnel alcove"
+    },
+    {
+      "label": "Skrytka Złota",
+      "doors": ["E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin gold stash, a battered strongbox half-buried in the floor dirt, spilled copper and silver coins around it, crude coin-tally scratches on the ground nearby, greedy hidden cache"
+    },
+    {
+      "label": "Kąt Czarownika",
+      "doors": ["N", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_goblin_shadow",
+      "is_boss": false,
+      "image_gen_prompt": "goblin shaman's corner, crude ritual circle scratched in the dirt, small bones and dried herbs arranged as offerings on the floor, a cracked clay idol lying on its side, eerie and dim"
+    },
+    {
+      "label": "Smorodna Jama",
+      "doors": ["S", "W"],
+      "enemies": [{"enemy_key": "slime", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "slime-filled goblin waste pit, greenish-black ooze pooling in low floor depressions, discarded bones and refuse half-dissolved, rancid garbage mound against one side, horrific dump"
+    },
+    {
+      "label": "Skrzyżowanie Tuneli",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}, {"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin tunnel junction, three tunnel mouths meeting, crude directional signs (painted arrows on bark) nailed near floor, a smashed lantern and scattered coins from interrupted guard exchange"
+    },
+    {
+      "label": "Strażnica",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "goblin_archer", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin guard post room, two crude sentry stations marked with painted bones on the floor, a weapon rack of bent spears lying flat, goblin graffiti scratched in the dirt"
+    },
+    {
+      "label": "Kuchnia Goblińska",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin kitchen floor, a large central fire-pit with cauldron hung over it, scattered animal bones and vegetable peelings on the dirt, crude clay bowls and spilled broth puddles, filthy cooking chaos"
+    },
+    {
+      "label": "Śmietnik",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_rat", "count": 2}, {"enemy_key": "slime", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin garbage dump chamber, heaped refuse and broken items covering most of the floor, bones and rotten scraps, slime puddles around the mound, rats scurrying through the detritus"
+    },
+    {
+      "label": "Sala Zebrań",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin meeting room, a low flat rock used as a table in the center, crude seating logs and stones around it, goblin clan symbols painted on the floor in red ochre, chaotic discussion detritus"
+    },
+    {
+      "label": "Zbrojownia Plemienna",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin clan armory, racks of crude spears and clubs lying flat on the floor, a reinforced chest bolted to the ground, crude shield-boss decorations scattered as trophies, well-stocked for war"
+    },
+    {
+      "label": "Kopalnia Goblinów",
+      "doors": ["N", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin dig site, loose earth and piled rock debris on the floor, crude mining pick lying flat, a cart of raw ore nuggets tipped over, ore-stained dirt, cramped excavation floor"
+    },
+    {
+      "label": "Kaplica Gronhura",
+      "doors": ["S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_goblin_gold",
+      "is_boss": false,
+      "image_gen_prompt": "goblin shrine floor, a crude idol of stacked bones and coins in the center, gold and copper coin offerings scattered around it in a ritual pattern, dried blood ritual circle on the dirt"
+    },
+    {
+      "label": "Arenka",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}, {"enemy_key": "kobold", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "small goblin fighting pit, circular earthen ring dug into the floor, crushed bone and dark stains in the center ring, crude spectator pits around the edge, gambling bones and coins scattered"
+    },
+    {
+      "label": "Izba Tortur",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "skeleton", "count": 1}, {"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin torture chamber floor, crude iron shackle rings bolted into the ground, dark stains on the packed earth, scattered crude implements (pliers, hooks) lying flat, grim and dim"
+    },
+    {
+      "label": "Sala Bębnów",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "orc_warrior", "count": 1}, {"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin war drum chamber, large hide drums on the earthen floor, scattered drumsticks and bone mallets lying flat, tribal painted circles on the ground, resonating with past rhythms"
+    },
+    {
+      "label": "Ogrowe Legowisko",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "ogre", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "ogre den in goblin tunnels, enormous sleeping hollow worn into the dirt, huge gnawed bones and smashed furniture pieces on the floor, massive boot-prints in the mud, overpowering scale"
+    },
+    {
+      "label": "Stajnia Wilków",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "wolf", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin wolf pen, earthen enclosure with paw-worn dirt floor, chewed animal bones and fur tufts scattered, crude iron stake-rings for leashing on the ground, feral animal den atmosphere"
+    },
+    {
+      "label": "Pracownia",
+      "doors": ["N", "S", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": "riddle_goblin_bones",
+      "is_boss": false,
+      "image_gen_prompt": "goblin bone-craft workshop floor, sorted piles of cleaned bones and skulls on the dirt, crude carving tools lying flat, bone-dust coating the ground, ritual and craft detritus mixed"
+    },
+    {
+      "label": "Sala Orków",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "orc", "count": 1}, {"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "orc delegation chamber in goblin tunnels, a flat stone table and crude stools on the floor, orc clan markers painted on the ground, scattered negotiation gifts (weapons, meat scraps)"
+    },
+    {
+      "label": "Komnata Pająków",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "giant_spider", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "spider-infested tunnel chamber, web strands across the floor cracks, wrapped prey cocoons lying flat, spider silk threads crossing the dirt ground, goblin bones caught in ground-level webs"
+    },
+    {
+      "label": "Rozkopana Nora",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "kobold", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "freshly dug kobold tunnel room, loose earth mounds and excavation spoil on the floor, crude wooden shovel lying flat, fresh dig marks in the dirt walls, active excavation site feel"
+    },
+    {
+      "label": "Ognisko Patrolu",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}, {"enemy_key": "goblin_archer", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin patrol rest stop, a central campfire with smoldering embers, patrol gear laid out on the dirt (crude map scratched in ground, water skins, ration sack), boot-worn earth paths"
+    },
+    {
+      "label": "Schowek Szabrowników",
+      "doors": ["S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "bandit stash in goblin tunnel, stolen goods pile on the floor, a reinforced chest, scattered wares from looted caravans, crude accounting tally scratched in the dirt nearby"
+    },
+    {
+      "label": "Sala Rytuału",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}],
+      "items": [],
+      "riddle_key": "riddle_goblin_fire",
+      "is_boss": false,
+      "image_gen_prompt": "goblin ritual fire room, a ring of small bone-markers around a central fire pit on the floor, ash and ember circle, crude totems lying flat, ritual ochre hand-prints in a spiral on the dirt"
+    },
+    {
+      "label": "Magazyn Łupów",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin loot storage, piles of stolen goods sorted on the floor (cloth bundles, clay pots, a coil of rope), a guarded chest, crude inventory tally marks scratched on the ground"
+    },
+    {
+      "label": "Komnata Szamana",
+      "doors": ["N", "S", "E"],
+      "enemies": [{"enemy_key": "orc_shaman", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "orc shaman boss chamber, large ritual circle of animal skulls arranged on the floor, a cracked obsidian altar slab at center, glowing mushroom-dust scattered in arcane patterns, bone-staff lying on the dirt, dark spiritual energy"
+    },
+    {
+      "label": "Tron Wódza",
+      "doors": ["N", "S", "W"],
+      "enemies": [{"enemy_key": "orc_warchief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "goblin warchief throne room, a massive crude throne of stacked shields and bones on the floor, defeated enemy skulls arranged as trophies around the seat, goblin clan banners laid out, scattered war-trophies"
+    },
+    {
+      "label": "Jama Banity",
+      "doors": ["N", "E", "W"],
+      "enemies": [{"enemy_key": "bandit_chief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "bandit chief lair in goblin tunnels, a commanding war table (flat rock) covered in crude maps scratched on the floor, weapons and stolen goods arranged by rank, a personal strongbox bolted to the ground, authority and menace"
+    },
+    {
+      "label": "Centralny Plac",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin central plaza, a wide four-way tunnel junction chamber, crude market stalls (overturned crates) around the floor edges, a central fire-pit, goblin clan graffiti covering the floor"
+    },
+    {
+      "label": "Karczma Goblińska",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin tavern floor, crude flat-rock tables and log stools arranged on the earthen floor, spilled drink puddles and gnawed meat bones, overturned clay mug, raucous gathered detritus"
+    },
+    {
+      "label": "Wielka Sala",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "vast goblin gathering hall, wide open earthen floor with scattered debris, a massive central fire-pit ring of stones, worn dirt pathways crossing to all four tunnel exits, capacity for many goblins"
+    },
+    {
+      "label": "Sala Trofea",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin trophy hall floor, arranged piles of defeated enemy equipment: cracked shields, broken swords, helmets, laid out on the floor as display, a locked trophy chest in the center, pride and menace"
+    },
+    {
+      "label": "Bitewne Rozdroże",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "goblin", "count": 2}, {"enemy_key": "orc_warrior", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin-orc war junction, four-way tunnel meeting point with battle debris on the floor, overturned barricade remnants, bloodstained dirt, broken weapons lying flat, contested strategic position"
+    },
+    {
+      "label": "Jama Śluzowców",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "slime", "count": 3}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "slime pit junction, thick greenish-black ooze covering most of the floor, dissolved bones visible in the slime pools, slime trails radiating to all four tunnel exits, toxic and impassable feel"
+    },
+    {
+      "label": "Skarbiec Klanu",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit", "count": 1}],
+      "items": [{"type": "chest"}],
+      "riddle_key": null,
+      "is_boss": false,
+      "image_gen_prompt": "goblin clan treasury, a central reinforced chest bolted to the floor, coin piles and stolen valuables arranged around it, crude goblin accounting tally on the floor, four heavily-watched exits"
+    },
+    {
+      "label": "Komnata Starego Trolla",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "troll", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "troll boss chamber in goblin tunnels, enormous earthen throne hollow worn by massive body, heaps of cracked goblin bones (the troll eats its own clan), a huge crude club lying flat, deep claw-raked floor"
+    },
+    {
+      "label": "Komnata Naczelnika Orków",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "orc_warchief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "orc warchief command chamber, a massive war table (flat stone slab) at center covered in battle plan scratches, weapon racks lying on the floor, orc clan totem pole toppled as trophy, supreme authority and violence"
+    },
+    {
+      "label": "Sala Zbójeckiego Króla",
+      "doors": ["N", "S", "E", "W"],
+      "enemies": [{"enemy_key": "bandit_chief", "count": 1}],
+      "items": [],
+      "riddle_key": null,
+      "is_boss": true,
+      "image_gen_prompt": "bandit king throne room in goblin tunnels, an ornate stolen throne (armchair with nailed-on gold pieces) on the floor, loot piles and trophies arranged in display, wanted-poster scraps nailed to the ground, underworld royalty"
+    }
+  ]
+}
