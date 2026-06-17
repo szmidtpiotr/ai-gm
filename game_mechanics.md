@@ -5396,7 +5396,7 @@ Status: **review/needs-testing** — silnik walki niezmieniony (tylko maszyna st
 
 **Decyzja LB-2 — soft-init w komnacie 1:** w PIERWSZEJ walce runu bohater zawsze działa pierwszy (neutralizuje śmierć-na-inicjatywie zaobserwowaną w teście L18). Dungeon-scoped, mała zmiana inicjatywy. Nie rusza absolutnej skali.
 
-**Decyzja LB-3 — `krypta_probna` = ONBOARDING (re-spec, config/seed):** 2 komnaty walki (**1 wróg/komnata**, najsłabszy z puli), boss **~18 PŻ**, `tile_count=3`, `min_level=1`, `rest_heal_pct=100`. Cel clear **~78-85% solo lvl1** (onboarding ma być prawie nie do przegrania — próg ~85%, nie 50%). Etykieta uczciwa.
+**Decyzja LB-3 — `krypta_probna` = ONBOARDING (re-spec, config/seed):** entry + 2 komnaty walki + boss = **`tile_count=4`**, `min_level=1`, `rest_heal_pct=100`, `rest_charges=0` (unlimited). Boss **`undead_champion` (~20 PŻ przy D1; boss_factor 0.45 × hp_base 45)**. Cel clear **~78-85% solo lvl1** (onboarding ma być prawie nie do przegrania — próg ~85%, nie 50%). Etykieta uczciwa. **Override Piotra (2026-06-17, wdrożenie LB3):** boss = istniejący `undead_champion` zamiast nowego `krypta_opiekun`, `tile_count=4` zamiast pierwotnie zapisanego 3 (4 daje realnie 2 komnaty walki przed bossem). Seed: `seed_lb3_krypta_probna_onboarding.py`.
 
 **Decyzja LB-4 — nowy głębszy loch `katakumby_mroku`:** obecna treść (5 walk + Lisz 40 PŻ, absolutna skala D1) → **min_level 3**, `rest_heal_pct=20`/ładunki. Tu mają sens i pozostają: **#733 (ease-in), #732 (sustain drop), #734 (mid-fight heal)** — przenoszone z krypta_probna. Cel clear ~60-70% przy min_level.
 
