@@ -5859,7 +5859,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             let dwell = 1600;
             if (breakdown && Array.isArray(breakdown.parts) && breakdown.parts.length && resultTot) {
                 resultTot.innerHTML = `🎲 ${rolled} ${sf8BreakdownHtml(breakdown.parts)}  =  <strong>${breakdown.total}</strong>`;
-                dwell = 2800; // dłużej widoczne — gracz ma przeczytać składniki (wartość startowa)
+                dwell = 3600; // dłużej widoczne — gracz ma przeczytać składniki (wartość startowa)
             } else if (resultTot) { resultTot.textContent = 'k20'; }
             // Trafienie to test OPOZYCYJNY: Twój atak vs rzut na unik wroga (k20 + ZRC).
             // Bez tego gracz nie rozumie, czemu wysoki rzut czasem chybia, a niski trafia.
@@ -5872,7 +5872,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 resultTot.innerHTML += `<div class="dice-dodge-line">🛡 Unik wroga: 🎲 ${dg.raw}${modTxt} = <strong>${dg.total}</strong> vs Twój atak <strong>${atk}</strong></div>`;
                 if (outcome.dodged) { resultVerd.textContent = '🛡 Wróg uniknął ciosu'; resultVerd.className = 'dice-verdict-miss'; }
                 else { resultVerd.textContent = '✔ Trafienie!'; resultVerd.className = 'dice-verdict-hit'; }
-                dwell = Math.max(dwell, 2800);
+                dwell = Math.max(dwell, 3600);
             }
             resultCard.hidden = false;
             armAdvance(dwell, afterAttack);
