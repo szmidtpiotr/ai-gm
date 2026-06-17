@@ -204,13 +204,87 @@ def _tile_enemies_allowed(tile: dict, allowed_enemy_keys: set[str]) -> bool:
     return keys.issubset(allowed_enemy_keys)
 
 
+# L18 (#733): ease-in difficulty for the first combat rooms of the MAIN PATH so a
+# solo low-level hero survives the forced opening. #729 gates enemy TYPES; this caps
+# enemy COUNT + total base HP on the first EASE_IN_ROOMS combat tiles. Deeper rooms
+# keep the full pool (curve grows with depth). Endless segments (cycle>1) skip ease-in
+# — the hero is already strong. Numbers Policy: starting values, tune after live play.
+EASE_IN_ROOMS = 2
+EASE_IN_COUNT_CAP: tuple[int, ...] = (1, 2)  # room1 ≤1 enemy, room2 ≤2
+EASE_IN_HP_CAP_BY_TIER: dict[int, tuple[int, ...]] = {
+    1: (16, 28),
+    2: (28, 48),
+    3: (40, 68),
+    4: (52, 88),
+    5: (64, 108),
+}
+
+
+def _tile_enemy_budget(tile: dict, enemy_hp: dict[str, int]) -> tuple[int, int]:
+    """Return (enemy_count, total_base_hp) for a tile from its enemies_json."""
+    try:
+        enemies = json.loads(tile.get("enemies_json") or "[]")
+    except Exception:
+        enemies = []
+    count = 0
+    hp = 0
+    for e in enemies:
+        n = int(e.get("count") or 1)
+        count += n
+        hp += int(enemy_hp.get(e.get("enemy_key"), 12)) * n
+    return count, hp
+
+
+def _ease_in_caps(tier: int, combat_index: int) -> tuple[int, int]:
+    """(max_count, max_total_hp) for the `combat_index`-th main-path combat room."""
+    t = max(1, min(5, int(tier)))
+    i = min(combat_index, EASE_IN_ROOMS - 1)
+    return EASE_IN_COUNT_CAP[i], EASE_IN_HP_CAP_BY_TIER[t][i]
+
+
+def _pick_path_candidate(
+    matching: list[dict],
+    enemy_hp: dict[str, int] | None,
+    tier: int,
+    combat_index: int,
+    ease_in: bool,
+) -> dict:
+    """Pick the next main-path tile from door-matching candidates (already shuffled).
+
+    Outside the ease-in window (or without `enemy_hp`) the first match is used (random,
+    unchanged behaviour). Inside the window, prefer tiles that are enemy-free or within
+    the room's count+HP budget; if none comply, fall back to the LIGHTEST combat tile
+    (least total HP) so the path is never blocked and overshoot is minimised.
+    """
+    if not (ease_in and enemy_hp is not None and combat_index < EASE_IN_ROOMS):
+        return matching[0]
+    cap_count, cap_hp = _ease_in_caps(tier, combat_index)
+
+    def _ok(c: dict) -> bool:
+        cnt, hp = _tile_enemy_budget(c, enemy_hp)
+        return cnt == 0 or (cnt <= cap_count and hp <= cap_hp)
+
+    compliant = [c for c in matching if _ok(c)]
+    if compliant:
+        return compliant[0]
+    return min(matching, key=lambda c: _tile_enemy_budget(c, enemy_hp)[1])
+
+
 def _try_build_path(
     tiles: list[dict],
     boss_pool: list[dict],
     tile_count: int,
     boss_tile_id: int | None,
+    enemy_hp: dict[str, int] | None = None,
+    tier: int = 1,
+    ease_in: bool = False,
 ) -> list[dict] | None:
-    """Try to build a connected path. Returns None on dead-end / collision failure."""
+    """Try to build a connected path. Returns None on dead-end / collision failure.
+
+    L18 (#733): when `ease_in` and `enemy_hp` are provided, the first EASE_IN_ROOMS
+    enemy-bearing tiles on the main path are budget-capped (count + total base HP) per
+    `tier`, so a solo low-level hero can win the forced opening fights.
+    """
     if not tiles:
         return None
     if tile_count < 2:
@@ -245,6 +319,7 @@ def _try_build_path(
     position = (0, 0)
 
     middle_count = tile_count - 2  # excluding first and boss
+    combat_index = 0  # L18 (#733): count of enemy-bearing main-path tiles placed
     for step in range(1, middle_count + 1):
         cdoors = _doors(current)
         last_entry = sequence[-1]["entry_door"]
@@ -258,25 +333,27 @@ def _try_build_path(
             if next_pos in used_positions:
                 continue
             opp = OPPOSITE[exit_dir]
-            # Find a pool tile with the required entry door
-            for candidate in list(pool):
-                if opp in _doors(candidate):
-                    pool.remove(candidate)
-                    sequence[-1]["exit_door"] = exit_dir
-                    sequence.append({
-                        "tile_id": candidate["id"],
-                        "entry_door": opp,
-                        "exit_door": None,
-                        "position": next_pos,
-                        "index": step,
-                    })
-                    used_positions.add(next_pos)
-                    current = candidate
-                    position = next_pos
-                    progressed = True
-                    break
-            if progressed:
-                break
+            # Find a pool tile with the required entry door (ease-in budget-aware).
+            matching = [c for c in pool if opp in _doors(c)]
+            if not matching:
+                continue
+            candidate = _pick_path_candidate(matching, enemy_hp, tier, combat_index, ease_in)
+            pool.remove(candidate)
+            sequence[-1]["exit_door"] = exit_dir
+            sequence.append({
+                "tile_id": candidate["id"],
+                "entry_door": opp,
+                "exit_door": None,
+                "position": next_pos,
+                "index": step,
+            })
+            used_positions.add(next_pos)
+            current = candidate
+            position = next_pos
+            if _tile_has_enemies(candidate):
+                combat_index += 1
+            progressed = True
+            break
         if not progressed:
             return None  # dead end
 
@@ -579,7 +656,8 @@ def enter_dungeon_tiles(
     allowed_enemy_keys = {k for k in enemy_pool if k} or None
 
     graph = draw_tile_graph(
-        category_key, tile_count, boss_tile_id, allowed_enemy_keys=allowed_enemy_keys
+        category_key, tile_count, boss_tile_id,
+        allowed_enemy_keys=allowed_enemy_keys, tier=dungeon_difficulty,
     )
 
     # L5/Decyzja 9: re-roll enemies on repeated tiles using dungeon's enemy_pool
@@ -1781,9 +1859,15 @@ def _try_build_graph(
     boss_pool: list[dict],
     tile_count: int,
     boss_tile_id: int | None,
+    enemy_hp: dict[str, int] | None = None,
+    tier: int = 1,
+    ease_in: bool = False,
 ) -> dict | None:
     """Try to build a branching graph. Returns graph dict or None on failure."""
-    sequence = _try_build_path(non_boss, boss_pool, tile_count, boss_tile_id)
+    sequence = _try_build_path(
+        non_boss, boss_pool, tile_count, boss_tile_id,
+        enemy_hp=enemy_hp, tier=tier, ease_in=ease_in,
+    )
     if sequence is None:
         return None
 
@@ -1900,6 +1984,7 @@ def draw_tile_graph(
     growth_cycle: int = 1,
     max_retries: int = 25,
     allowed_enemy_keys: set[str] | None = None,
+    tier: int = 1,
 ) -> dict:
     """Generate a branching dungeon graph (dungeon_run v2 format).
 
@@ -1932,8 +2017,17 @@ def draw_tile_graph(
                 f"Category '{category_key}' has fewer than 2 tiles — cannot build dungeon"
             )
         tile_count = min(tile_count, available)
+        # L18 (#733): enemy base-HP map for ease-in budgeting of the first combat rooms.
+        enemy_hp = {
+            r["key"]: int(r["hp_base"] or 0)
+            for r in conn.execute("SELECT key, hp_base FROM game_config_enemies").fetchall()
+        }
     finally:
         conn.close()
+
+    # L18 (#733): ease-in only on the entry run (cycle 1) — endless segments keep full
+    # difficulty since the hero is already strong by then.
+    ease_in = growth_cycle == 1
 
     # L18 (#729): gate combat tiles to the dungeon's declared roster. Keep the full
     # pool as a fallback when filtering would starve path-building (never block entry).
@@ -1953,7 +2047,10 @@ def draw_tile_graph(
     best: dict | None = None
     best_open: int | None = None
     for _ in range(max_retries):
-        graph = _try_build_graph(non_boss, boss_pool, tile_count, boss_tile_id)
+        graph = _try_build_graph(
+            non_boss, boss_pool, tile_count, boss_tile_id,
+            enemy_hp=enemy_hp, tier=tier, ease_in=ease_in,
+        )
         if not graph:
             continue
         open_doors = _count_open_doors(graph["nodes"])

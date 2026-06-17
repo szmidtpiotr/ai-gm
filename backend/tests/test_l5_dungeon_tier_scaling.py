@@ -507,3 +507,89 @@ def test_sustain_drop_respects_chance(monkeypatch, tmp_path):
     monkeypatch.setattr(dts.random, "random", lambda: 0.99)  # above any tier chance
     assert dts.grant_dungeon_victory_sustain(1, 7) is None
     assert grants == []
+
+
+# ─── L18 (#733): ease-in budget on first main-path combat rooms ────────────────
+
+def test_tile_enemy_budget():
+    hp = {"skeleton": 10, "wraith": 18}
+    t = {"enemies_json": '[{"enemy_key":"skeleton","count":2},{"enemy_key":"wraith","count":1}]'}
+    assert dts._tile_enemy_budget(t, hp) == (3, 38)
+    assert dts._tile_enemy_budget({"enemies_json": "[]"}, hp) == (0, 0)
+    # missing enemy key falls back to 12 HP (never crashes)
+    assert dts._tile_enemy_budget({"enemies_json": '[{"enemy_key":"???","count":1}]'}, hp) == (1, 12)
+
+
+def test_ease_in_caps_tiers():
+    assert dts._ease_in_caps(1, 0) == (1, 16)
+    assert dts._ease_in_caps(1, 1) == (2, 28)
+    assert dts._ease_in_caps(5, 0) == (1, 64)
+    # combat_index beyond the window clamps to the last room's cap
+    assert dts._ease_in_caps(1, 5) == dts._ease_in_caps(1, 1)
+
+
+def test_pick_candidate_prefers_within_budget():
+    hp = {"skeleton": 10, "ghoul": 20}
+    heavy = {"id": 1, "enemies_json": '[{"enemy_key":"ghoul","count":2}]'}   # 40 HP
+    light = {"id": 2, "enemies_json": '[{"enemy_key":"skeleton","count":1}]'}  # 10 HP
+    # D1 room1 cap (1,16): heavy first but light must be chosen
+    pick = dts._pick_path_candidate([heavy, light], hp, tier=1, combat_index=0, ease_in=True)
+    assert pick["id"] == 2
+
+
+def test_pick_candidate_fallback_lightest():
+    hp = {"ghoul": 20, "wraith": 18}
+    a = {"id": 1, "enemies_json": '[{"enemy_key":"ghoul","count":2}]'}    # 40
+    b = {"id": 2, "enemies_json": '[{"enemy_key":"wraith","count":1}]'}   # 18
+    # both exceed D1 room1 cap (16) → fall back to lightest (b)
+    pick = dts._pick_path_candidate([a, b], hp, tier=1, combat_index=0, ease_in=True)
+    assert pick["id"] == 2
+
+
+def test_pick_candidate_enemy_free_allowed_and_no_easein():
+    hp = {"ghoul": 20}
+    heavy = {"id": 1, "enemies_json": '[{"enemy_key":"ghoul","count":2}]'}  # 40 > cap
+    free = {"id": 2, "enemies_json": "[]"}                                  # always ok
+    # enemy-free is compliant → chosen over heavy in the window
+    assert dts._pick_path_candidate([heavy, free], hp, 1, 0, ease_in=True)["id"] == 2
+    # ease_in off → first match unchanged (no budgeting)
+    assert dts._pick_path_candidate([heavy, free], hp, 1, 0, ease_in=False)["id"] == 1
+    # past the window → first match unchanged
+    assert dts._pick_path_candidate([heavy, free], hp, 1, 2, ease_in=True)["id"] == 1
+
+
+def test_ease_in_first_two_combat_rooms_within_budget_d1():
+    """Integration: a straight N/S path keeps its first 2 combat rooms in D1 budget."""
+    enemy_hp = {"skeleton": 10, "ghoul": 20}
+
+    def tile(i, enemies):
+        return {"id": i, "doors_json": '["N","S"]', "enemies_json": json.dumps(enemies)}
+
+    entry = tile(0, [])
+    tiles = [entry,
+             tile(1, [{"enemy_key": "skeleton", "count": 1}]),   # 10
+             tile(2, [{"enemy_key": "skeleton", "count": 1}]),   # 10
+             tile(3, [{"enemy_key": "ghoul", "count": 2}])]       # 40 — must be kept out of first 2
+    boss = tile(9, [{"enemy_key": "ghoul", "count": 1}])
+    by_id = {t["id"]: t for t in tiles + [boss]}
+
+    built = 0
+    for _ in range(30):
+        seq = dts._try_build_path(tiles, [boss], tile_count=4, boss_tile_id=None,
+                                  enemy_hp=enemy_hp, tier=1, ease_in=True)
+        if not seq:
+            continue
+        built += 1
+        combat_i = 0
+        for s in seq[1:]:                       # skip entry; include boss-less mids
+            if s.get("is_boss"):
+                continue
+            cnt, hp = dts._tile_enemy_budget(by_id[s["tile_id"]], enemy_hp)
+            if cnt == 0:
+                continue
+            cap_c, cap_hp = dts._ease_in_caps(1, combat_i)
+            assert cnt <= cap_c and hp <= cap_hp, (
+                f"room {combat_i} over budget: count={cnt} hp={hp} > {cap_c},{cap_hp}"
+            )
+            combat_i += 1
+    assert built > 0, "no valid path built in 30 attempts"
