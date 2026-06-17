@@ -1522,14 +1522,81 @@ def _action_riddle_hint(node: dict, content: dict) -> dict:
     }
 
 
-def _action_rest(node: dict, content: dict, character_id: int) -> dict:
-    desc = content.get("room_description") or "Odpoczywasz przez chwilę."
+def _apply_heal_to_character(conn: sqlite3.Connection, character_id: int, pct: int) -> int | None:
+    """LB1 (#735): heal `pct`% of max HP (pct>=100 → full). Returns new current_hp."""
+    try:
+        row = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (character_id,)).fetchone()
+        if not row:
+            return None
+        sheet = json.loads(row["sheet_json"] or "{}")
+        mx = int(sheet.get("max_hp") or 0)
+        cur = int(sheet.get("current_hp", mx) or 0)
+        if mx <= 0:
+            return cur
+        heal = mx if pct >= 100 else max(1, (mx * pct) // 100)
+        new_hp = min(mx, cur + heal)
+        sheet["current_hp"] = new_hp
+        conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
+                     (json.dumps(sheet, ensure_ascii=False), character_id))
+        conn.commit()
+        return new_hp
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("rest heal apply failed")
+        return None
+
+
+def _dungeon_rest_policy(conn: sqlite3.Connection, dungeon_key: str) -> tuple[int, int | None]:
+    """LB1 (#735): (heal_pct, max_charges) for a dungeon. charges None = unlimited
+    (onboarding); default 20% / 2 charges = 'fend for yourself' in deeper dungeons."""
+    try:
+        r = conn.execute(
+            "SELECT rest_heal_pct, rest_charges FROM game_dungeons WHERE key = ?",
+            (dungeon_key,),
+        ).fetchone()
+    except Exception:
+        r = None
+    if not r:
+        return _REST_HEAL_PCT, 2
+    pct = int(r["rest_heal_pct"] if r["rest_heal_pct"] is not None else _REST_HEAL_PCT)
+    ch = r["rest_charges"]
+    charges: int | None = None if ch is None else int(ch)
+    if charges is not None and charges <= 0:  # convention: <=0 → unlimited
+        charges = None
+    return pct, charges
+
+
+def _action_rest(conn: sqlite3.Connection, node: dict, content: dict,
+                 character_id: int, run: dict) -> dict:
+    """LB1 (#735): rest on a SAFE (cleared / enemy-free) tile. Heals per dungeon policy;
+    onboarding = full heal + unlimited, others = limited % + charges ('radź sobie sam')."""
+    enemies = content.get("enemies") or []
+    if enemies and not node.get("cleared"):
+        return {"ok": False, "action": "rest", "blocked": True, "trap": None,
+                "narrative": "Najpierw pokonaj wrogów w tej komnacie, zanim odpoczniesz."}
+
+    heal_pct, max_charges = _dungeon_rest_policy(conn, run.get("dungeon_key", ""))
+    used = int(run.get("rest_used", 0))
+    if max_charges is not None and used >= max_charges:
+        return {"ok": True, "action": "rest", "no_charges": True, "trap": None,
+                "narrative": "Brak sił na kolejny odpoczynek w tym lochu — radź sobie tym, co masz."}
+
+    new_hp = _apply_heal_to_character(conn, character_id, heal_pct)
     node["rested"] = True
+    run["rest_used"] = used + 1
+    full = heal_pct >= 100
+    charges_left = None if max_charges is None else max(0, max_charges - (used + 1))
+    if full:
+        note = "Pełny odpoczynek to udogodnienie tego lochu wprowadzającego — w głębszych lochach musisz radzić sobie sam."
+        heal_txt = "pełne HP"
+    else:
+        note = f"Odpoczynek w tym lochu jest ograniczony ({heal_pct}% HP, pozostało: {charges_left})."
+        heal_txt = f"{heal_pct}% maksymalnego HP"
     return {
-        "ok": True, "action": "rest",
-        "heal_pct": _REST_HEAL_PCT,
-        "narrative": f"{desc} Leczysz {_REST_HEAL_PCT}% maksymalnego HP.",
+        "ok": True, "action": "rest", "heal_pct": heal_pct, "hp_after": new_hp,
+        "full_rest": full, "charges_left": charges_left, "onboarding_note": full,
         "trap": None,
+        "narrative": f"Komnata jest oczyszczona i bezpieczna. Odpoczywasz — leczysz {heal_txt}. {note}",
     }
 
 
@@ -1571,7 +1638,7 @@ def resolve_tile_action(
             _resolve_riddle_in_content(conn, content)
             result = _action_riddle_hint(node, content)
         elif action == "rest":
-            result = _action_rest(node, content, character_id)
+            result = _action_rest(conn, node, content, character_id, run)
         else:
             raise ValueError(f"Nieznana akcja: {action}")
 

@@ -3372,6 +3372,11 @@ def _ensure_dungeon_tile_l1_columns(conn: sqlite3.Connection) -> None:
         "ALTER TABLE game_dungeons ADD COLUMN tile_count INTEGER",
         "ALTER TABLE game_dungeons ADD COLUMN boss_tile_id INTEGER",
         "ALTER TABLE game_dungeons ADD COLUMN endless_growth_n INTEGER DEFAULT 0",
+        # FAZA LB (#735): rest-on-cleared-tile policy per dungeon. heal_pct = % max HP
+        # restored per rest; charges = how many rests (NULL/large = unlimited, used by
+        # the onboarding dungeon). Default 20% / 2 charges = "fend for yourself".
+        "ALTER TABLE game_dungeons ADD COLUMN rest_heal_pct INTEGER DEFAULT 20",
+        "ALTER TABLE game_dungeons ADD COLUMN rest_charges INTEGER DEFAULT 2",
     ]:
         try:
             conn.execute(sql)

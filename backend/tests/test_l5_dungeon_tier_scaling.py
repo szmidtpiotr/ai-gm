@@ -593,3 +593,59 @@ def test_ease_in_first_two_combat_rooms_within_budget_d1():
             )
             combat_i += 1
     assert built > 0, "no valid path built in 30 attempts"
+
+
+# ─── LB1 (#735): rest-on-cleared-tile + per-dungeon heal policy ────────────────
+
+def _rest_db(tmp_path, heal_pct, charges, hp_cur=4, hp_max=12):
+    f = str(tmp_path / "rest.db")
+    conn = sqlite3.connect(f); conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, sheet_json TEXT)")
+    conn.execute("CREATE TABLE game_dungeons (key TEXT PRIMARY KEY, rest_heal_pct INTEGER, rest_charges INTEGER)")
+    conn.execute("INSERT INTO characters VALUES (7, ?)",
+                 (json.dumps({"current_hp": hp_cur, "max_hp": hp_max}),))
+    conn.execute("INSERT INTO game_dungeons (key,rest_heal_pct,rest_charges) VALUES ('d',?,?)",
+                 (heal_pct, charges))
+    conn.commit(); return conn
+
+
+def _hp(conn, cid=7):
+    return json.loads(conn.execute("SELECT sheet_json FROM characters WHERE id=?", (cid,)).fetchone()[0])["current_hp"]
+
+
+def test_rest_policy_reads_flag_and_default(tmp_path):
+    conn = _rest_db(tmp_path, 100, 0)   # onboarding: full + unlimited (charges<=0)
+    assert dts._dungeon_rest_policy(conn, "d") == (100, None)
+    assert dts._dungeon_rest_policy(conn, "unknown") == (20, 2)  # default fend-for-yourself
+
+
+def test_rest_full_heal_onboarding(tmp_path):
+    conn = _rest_db(tmp_path, 100, 0, hp_cur=4, hp_max=12)
+    run = {"dungeon_key": "d"}
+    node = {"cleared": True}
+    r = dts._action_rest(conn, node, {"enemies": []}, 7, run)
+    assert r["ok"] and r["full_rest"] is True and r["onboarding_note"] is True
+    assert _hp(conn) == 12 and r["charges_left"] is None
+    assert run["rest_used"] == 1
+
+
+def test_rest_partial_and_charges_deep(tmp_path):
+    conn = _rest_db(tmp_path, 20, 2, hp_cur=4, hp_max=12)
+    run = {"dungeon_key": "d"}
+    # first rest: 20% of 12 = 2 → hp 6, 1 charge left
+    r1 = dts._action_rest(conn, {"cleared": True}, {"enemies": []}, 7, run)
+    assert r1["full_rest"] is False and _hp(conn) == 6 and r1["charges_left"] == 1
+    # second rest: hp 8, 0 left
+    r2 = dts._action_rest(conn, {"cleared": True}, {"enemies": []}, 7, run)
+    assert r2["charges_left"] == 0 and _hp(conn) == 8
+    # third rest: exhausted
+    r3 = dts._action_rest(conn, {"cleared": True}, {"enemies": []}, 7, run)
+    assert r3.get("no_charges") is True and _hp(conn) == 8  # no further heal
+
+
+def test_rest_blocked_on_uncleared_combat_tile(tmp_path):
+    conn = _rest_db(tmp_path, 100, 0)
+    run = {"dungeon_key": "d"}
+    node = {"cleared": False}
+    r = dts._action_rest(conn, node, {"enemies": [{"enemy_key": "skeleton", "count": 1}]}, 7, run)
+    assert r.get("blocked") is True and _hp(conn) == 4  # no heal until cleared
