@@ -4209,6 +4209,7 @@ let reactionPending = false;   // SF10 (#633): okno reakcji otwarte — wstrzymu
 let _reactionTimer = null;     // SF10: handle odliczania 8 s (auto-take)
 let pendingLoot = null;
 let pendingGold = 0;
+let pendingBossLoot = null;   // L8: boss drop (already granted server-side) → reveal-only popup
 
 function startCombatPolling() {
     stopCombatPolling();
@@ -4482,6 +4483,12 @@ async function handleCombatEnded(cs) {
                 if (runResp?.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
                 if (_activeDungeonRun?.boss_choice_pending) {
                     updateDungeonHUD();
+                    // L8: reveal what dropped from the boss (already granted) BEFORE
+                    // the go-deeper/exit choice, so the player sees the spoils.
+                    if (pendingBossLoot && pendingBossLoot.length) {
+                        await showLootPopup(pendingBossLoot, 0, { revealOnly: true });
+                        pendingBossLoot = null;
+                    }
                     showDungeonBossChoiceModal(_activeDungeonRun);
                     return;
                 }
@@ -4543,22 +4550,39 @@ function hideCombatEndOverlay() {
     refreshCharacterData();
 }
 
-function showLootPopup(loot, gold) {
+function showLootPopup(loot, gold, opts = {}) {
     return new Promise(resolve => {
         const el = elements.combatLootOverlay;
         if (!el) { resolve([]); return; }
         const list = Array.isArray(loot) ? loot : [];
         const goldAmt = Math.max(0, Number(gold || 0));
+        // L8: reveal-only mode — boss loot is ALREADY granted (in inventory), so we
+        // just show "co wypadło" with an OK button, no checkboxes / no claim POST.
+        const revealOnly = !!opts.revealOnly;
+        const glyph = revealOnly ? '👑' : '📦';
         let html = list.length === 0
             ? '<p class="combat-loot-empty">Wróg nic nie miał.</p>'
             : '<ul>' + list.map((L, idx) => {
                 const k = String(L?.label || L?.source_key || L?.key || '?').replace(/_/g, ' ');
                 const qty = Number(L?.qty ?? L?.quantity ?? 1) || 1;
-                return `<li><label><input type="checkbox" data-loot-idx="${idx}" checked> 📦 ${escapeHtml(k)} ×${qty}</label></li>`;
+                return revealOnly
+                    ? `<li>${glyph} ${escapeHtml(k)} ×${qty}</li>`
+                    : `<li><label><input type="checkbox" data-loot-idx="${idx}" checked> ${glyph} ${escapeHtml(k)} ×${qty}</label></li>`;
             }).join('') + '</ul>';
         if (goldAmt > 0) html += `<p>💰 +${goldAmt} GP (already added)</p>`;
         elements.combatLootList.innerHTML = html;
         el.hidden = false;
+        if (revealOnly) {
+            // Single confirm — loot already in inventory, nothing to claim/skip.
+            if (elements.combatLootClaimBtn) {
+                elements.combatLootClaimBtn.textContent = '👑 Zabieram';
+                elements.combatLootClaimBtn.onclick = () => { el.hidden = true; resolve([]); };
+            }
+            if (elements.combatLootSkipBtn) elements.combatLootSkipBtn.style.display = 'none';
+            return;
+        }
+        if (elements.combatLootSkipBtn) elements.combatLootSkipBtn.style.display = '';
+        if (elements.combatLootClaimBtn) elements.combatLootClaimBtn.textContent = 'Weź łupy';
         const claim = async () => {
             el.hidden = true;
             const picks = Array.from(el.querySelectorAll('[data-loot-idx]:checked'))
@@ -4677,6 +4701,7 @@ function showDropCelebration(specials) {
 
 function showCombatUI() {
     combatActive = true;
+    pendingBossLoot = null;   // L8: clear any stale boss drop from a prior fight
     lastRenderedCombatTurnId = 0;
     elements.combatBanner.hidden = false;
     elements.combatComposer.hidden = false;
@@ -6076,6 +6101,11 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
     if (data.enemy_dead) {
         pendingLoot = Array.isArray(data.loot) ? data.loot : [];
         pendingGold = Math.max(0, Number(data.gold_drop || 0));
+    }
+    // L8: boss drop is granted server-side (already in inventory) — stash it for a
+    // reveal-only "co wypadło z bossa" popup shown before the go-deeper/exit choice.
+    if (data.dungeon_boss_defeated && Array.isArray(data.dungeon_boss_loot)) {
+        pendingBossLoot = data.dungeon_boss_loot;
     }
 
     if (cs) { lastCombatState = cs; renderCombatUI(cs); }

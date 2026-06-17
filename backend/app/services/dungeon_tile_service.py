@@ -1912,11 +1912,14 @@ def on_boss_tile_cleared(campaign_id: int, character_id: int) -> dict:
         roll_boss_loot_for_endless, grant_dungeon_loot,
     )
     loot_items, loot_tier = roll_boss_loot_for_endless(dungeon_key, cycle)
+    granted: list[dict] = []
     if loot_items:
         try:
-            grant_dungeon_loot(character_id, campaign_id, loot_items, loot_tier=loot_tier)
+            # Return the GRANTED rows (carry human `label`) — the raw roll only has
+            # *_key columns, so the player-facing "co wypadło" reveal would show "?".
+            granted = grant_dungeon_loot(character_id, campaign_id, loot_items, loot_tier=loot_tier)
         except Exception:
-            pass
+            granted = []
 
     # Checkpoint after loot granted (captures loot in inventory)
     try:
@@ -1924,7 +1927,7 @@ def on_boss_tile_cleared(campaign_id: int, character_id: int) -> dict:
     except Exception:
         pass
 
-    return {"is_boss_tile": True, "loot": loot_items}
+    return {"is_boss_tile": True, "loot": granted or loot_items}
 
 
 def _is_cap_node(node: dict | None) -> bool:

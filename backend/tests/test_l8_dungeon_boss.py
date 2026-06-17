@@ -371,6 +371,40 @@ def test_l8_t4_on_boss_tile_cleared_boss_node(db):
     assert updated_run["boss_choice_pending"] is True
 
 
+# ── T4b: on_boss_tile_cleared returns GRANTED loot (with labels) ──────────────
+
+def test_l8_t4b_boss_loot_returns_granted_with_labels(db):
+    """#719: returned loot must be the GRANTED rows (carry human `label`), not the
+    raw roll (only *_key columns). The player-facing 'co wypadło' reveal needs labels."""
+    run = _make_run()
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        _set_run(conn, 9800, run)
+        conn.execute("UPDATE characters SET sheet_json=? WHERE id=9800",
+                     (json.dumps({"level": 1, "current_hp": 10, "max_hp": 10,
+                                  "current_mana": 4, "xp_lifetime_earned": 0, "xp_available": 0}),))
+        conn.commit()
+    finally:
+        conn.close()
+
+    rolled = [{"item_key": "x", "consumable_key": None, "weapon_key": None, "quantity": 1}]
+    granted = [{"label": "Korona Lisza", "item_type": "weapon", "quantity": 1,
+                "source": "dungeon", "key": "x", "inventory_id": 5}]
+
+    with patch.object(dts, "DB_PATH", db), patch.object(ds, "DB_PATH", db):
+        with patch.object(dts, "save_dungeon_checkpoint", return_value={"cycle": 1}), \
+             patch.object(ds, "roll_boss_loot_for_endless", return_value=(rolled, "epic")), \
+             patch.object(ds, "grant_dungeon_loot", return_value=granted) as mock_grant:
+            result = dts.on_boss_tile_cleared(9800, 9800)
+
+    assert result["is_boss_tile"] is True
+    assert result["loot"] == granted, "must return granted rows, not raw *_key roll"
+    assert all("label" in it for it in result["loot"]), "every reveal item needs a label"
+    mock_grant.assert_called_once()
+
+
 # ── T5: on_boss_tile_cleared — idempotent ────────────────────────────────────
 
 def test_l8_t5_on_boss_tile_cleared_idempotent(db):
