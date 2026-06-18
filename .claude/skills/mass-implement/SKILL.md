@@ -1,12 +1,14 @@
 ---
 name: mass-implement
 description: >-
-  Auto-run a whole FAZA checklist task-by-task, one real named resumable Claude
-  session per task. Use when Piotr says "/mass-implement <promptfile> [range]",
-  "wdroż całą fazę", "lec zadanie po zadaniu", or wants the FAZA start-prompt
-  (prompt_b.md, prompt_sf.md, ...) applied to every unchecked task without
-  pasting it manually per session. Each task = its own session named "TASK X-N"
-  in the /resume picker; auto-advances on success, STOPS on a gate.
+  Auto-run a whole checklist task-by-task, one real named resumable Claude
+  session per task. Two modes: FAZA mode ("/mass-implement prompt_b.md [B6-B10]"
+  — FAZA start-prompt applied to notes.md tasks) and LIST mode
+  ("/mass-implement fix_list.md [#767|P0|3-7]" — fix_list.md issues via
+  prompt_fix_mass.md). Use when Piotr says "/mass-implement <file> [selector]",
+  "wdroż całą fazę/listę", "lec zadanie po zadaniu", or wants a start-prompt
+  applied to every unchecked task without pasting it per session. Each task = its
+  own session named "TASK X-N" in the /resume picker; auto-advances, STOPS on a gate.
 ---
 
 # mass-implement
@@ -20,16 +22,31 @@ later and finish verification in the exact session it was done.
 ## Invocation
 
 ```
-/mass-implement <promptfile> [range] [--list]
+/mass-implement <file> [selector] [--list]
 ```
 
-- `<promptfile>` — FAZA start-prompt, bare name or path: `prompt_b.md`, `prompt_sf.md`, …
-- `[range]` — optional task window: `B6-B10`, `B6`, `6-10`, `6`. Omitted = all unchecked.
-- `--list` — preview the plan only; spawn nothing.
+The orchestrator auto-detects the mode from `<file>`:
 
-The FAZA prefix (B / SF / HI / L …) is auto-derived from the `FAZA X` token in the
-prompt file, and the task list is parsed from `notes.md → ## FAZA X` (the single
-source of truth for `[ ]`/`[x]` status).
+**FAZA mode** — `<file>` is a FAZA start-prompt containing a `FAZA X` token
+(`prompt_b.md`, `prompt_sf.md`, …):
+- `[selector]` = task window: `B6-B10`, `B6`, `6-10`, `6`. Omitted = all unchecked.
+- FAZA prefix (B / SF / HI / L …) auto-derived from the `FAZA X` token; task list
+  parsed from `notes.md → ## FAZA X` (the source of truth for `[ ]`/`[x]`).
+
+**LIST mode** — `<file>` is a task-list with no `FAZA X` token (`fix_list.md`):
+- `[selector]` addresses one or more tasks:
+  - omitted → all unchecked
+  - `#767` → the task for issue **#767**
+  - `P0` … `Pn` → all unchecked tasks under the `### P0` section
+  - `5` → the task with global index **5**
+  - `3-7` → tasks with global index **3..7**
+- Tasks parsed from the `## KOLEJNOŚĆ IMPLEMENTACJI` region (lines like
+  `- [ ] 5. #767 — …`). On every run the file is re-numbered 1..n in priority order
+  via `scripts/renumber_fix_list.sh` so indices stay stable & visible (checked tasks
+  keep their number, so ranges don't shift as work gets done). Child prompt =
+  `prompt_fix_mass.md`; task id = `FIX<issue>`; session = `TASK FIX-<issue>`.
+
+`--list` — preview the plan only; spawn nothing (works in both modes).
 
 ## How it behaves (the two decisions Piotr locked in)
 
@@ -44,23 +61,28 @@ source of truth for `[ ]`/`[x]` status).
 
 ## Steps for the agent
 
-1. **Parse args** from the user's `/mass-implement` line. If no promptfile → ask which.
+1. **Parse args** from the user's `/mass-implement` line. If no file → ask which.
+   Note: `fix_list.md #767` means file=`fix_list.md`, selector=`#767` (LIST mode).
 2. **Preview the plan** — run list mode and show Piotr the ordered task list, so he
-   sees exactly what will run and can catch a wrong FAZA/range:
+   sees exactly what will run and can catch a wrong file/selector:
    ```bash
-   bash .claude/skills/mass-implement/scripts/orchestrate.sh <promptfile> [range] --list
+   bash .claude/skills/mass-implement/scripts/orchestrate.sh <file> [selector] --list
    ```
    If the user passed `--list`, stop here.
 3. **Launch the real run in the background** (children take many minutes each;
-   never foreground — it would blow the Bash timeout). Run from the project root,
-   wrapped in `setsid … </dev/null` so the run survives a SIGHUP when Piotr
-   resumes/closes the launching session (without it the orchestrator + its current
-   child get reaped, leaving a `TASK <PREFIX>-N` session staged-but-idle):
+   never foreground — it would blow the Bash timeout). Run from the project root.
+   The orchestrator already wraps each **child** in `setsid env -u CLAUDE*` so the
+   per-task session survives a SIGHUP. Wrapping the **orchestrator** in an outer
+   `setsid … </dev/null` adds protection if Piotr closes the launching session:
    ```bash
-   setsid bash .claude/skills/mass-implement/scripts/orchestrate.sh <promptfile> [range] </dev/null
+   setsid bash .claude/skills/mass-implement/scripts/orchestrate.sh <file> [selector] </dev/null
    ```
-   Use `run_in_background: true`. Tell Piotr: sessions will appear in the panel as
-   `TASK <PREFIX>-N` as they start; he can watch live and reopen any one later.
+   Use `run_in_background: true`. **Caveat:** the outer `setsid` can trip a
+   `Tool permission request failed: Error: Stream closed` in some harness states —
+   if that happens, retry the launch **without** the outer `setsid` (plain
+   `bash …orchestrate.sh <file> [selector]` with `run_in_background: true`); the
+   per-child `setsid` inside the orchestrator still protects the task sessions.
+   Tell Piotr: sessions appear in the panel as `TASK <PREFIX>-N` as they start.
 4. **On completion** (you get re-invoked when the background job exits) read the
    summary file printed in the output (`.claude/skills/mass-implement/.runs/run_*.summary`)
    and report in plain Polish:
@@ -85,7 +107,14 @@ source of truth for `[ ]`/`[x]` status).
 ## Examples
 
 ```
+# FAZA mode
 /mass-implement prompt_b.md --list      # what would run for FAZA B
 /mass-implement prompt_b.md B6-B10      # only B6..B10 (unchecked ones)
 /mass-implement prompt_sf.md            # every unchecked SF task
+
+# LIST mode (fix_list.md)
+/mass-implement fix_list.md #767        # just issue #767
+/mass-implement fix_list.md P0          # all unchecked P0 tasks
+/mass-implement fix_list.md 9-12 --list # preview index range 9..12
+/mass-implement fix_list.md             # every unchecked task on the list
 ```
