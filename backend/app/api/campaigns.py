@@ -378,6 +378,50 @@ def get_campaign_turn_decisions(
     return {"campaign_id": campaign_id, "count": len(decisions), "turn_decisions": decisions}
 
 
+@router.get("/campaigns/{campaign_id}/game-events")
+def get_campaign_game_events(
+    campaign_id: int,
+    event_type: str | None = Query(None, description="Filtr typu zdarzenia."),
+    severity: str | None = Query(None, description="Filtr severity: info|warning|error."),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    """#781: rejestr zdarzeń narracyjnych+walki per kampania (game_events, najnowsze pierwsze)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        where = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if event_type:
+            where.append("event_type = ?"); params.append(event_type)
+        if severity:
+            where.append("severity = ?"); params.append(severity)
+        params.append(limit)
+        rows = conn.execute(
+            "SELECT id, event_type, severity, character_id, user_id, event_data, created_at "
+            "FROM game_events WHERE " + " AND ".join(where)
+            + " ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        out = []
+        for r in rows:
+            try:
+                data = json.loads(r["event_data"] or "{}")
+            except (TypeError, ValueError):
+                data = {}
+            out.append({
+                "id": r["id"],
+                "event_type": r["event_type"],
+                "severity": r["severity"],
+                "character_id": r["character_id"],
+                "user_id": r["user_id"],
+                "data": data,
+                "created_at": r["created_at"],
+            })
+        return {"campaign_id": campaign_id, "count": len(out), "game_events": out}
+    finally:
+        conn.close()
+
+
 @router.get("/campaigns/{campaign_id}/world-snapshots")
 def get_campaign_world_snapshots(
     campaign_id: int,

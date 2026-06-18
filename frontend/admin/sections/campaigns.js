@@ -434,7 +434,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         </div>
       </div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
-        ${['overview','plan','turns','dice','state','decisions','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
+        ${['overview','plan','turns','dice','state','decisions','events','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
         <div id="ctab-overview" style="padding:16px"><div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div></div>
@@ -443,6 +443,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         <div id="ctab-dice"     style="padding:0;display:none"></div>
         <div id="ctab-state"    style="padding:0;display:none"></div>
         <div id="ctab-decisions" style="padding:0;display:none"></div>
+        <div id="ctab-events"   style="padding:0;display:none"></div>
         <div id="ctab-map"      style="padding:16px;display:none"></div>
         <div id="ctab-npcs"     style="padding:16px;display:none"></div>
         <div id="ctab-workshop" style="padding:16px;display:none;height:420px;display:none;flex-direction:column;gap:8px"></div>
@@ -1026,6 +1027,67 @@ function filterTableGeneric(input, tableId, nameClass) {
               }).join('')}</tbody></table>`;
         panel.innerHTML = `<div style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);font-size:0.72rem;color:var(--t3)">${rows.length} decyzji — czemu silnik zrobił X</div><div style="padding:0 4px 16px">${body}</div>`;
       } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
+    }
+
+    else if (tab === 'events') {
+      // #781: rejestr zdarzeń narracyjnych+walki per kampania (game_events).
+      panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
+      // Ikona + etykieta + kolor severity per typ zdarzenia
+      const EV = {
+        quest_complete:{i:'📜',l:'Quest ukończony'}, quest_grant:{i:'📜',l:'Nowy quest'},
+        xp_grant:{i:'⭐',l:'Punkty doświadczenia'}, item_grant:{i:'🎁',l:'Przedmiot'},
+        gold_grant:{i:'💰',l:'Złoto'}, location_new:{i:'🗺️',l:'Nowa lokacja'},
+        combat_start:{i:'⚔️',l:'Start walki'}, combat_victory:{i:'🏆',l:'Zwycięstwo'},
+        combat_fled:{i:'🏃',l:'Ucieczka'}, player_death:{i:'💀',l:'Śmierć bohatera'},
+        beat_complete:{i:'🎬',l:'Beat ukończony'},
+      };
+      const SEV = { error:'var(--red)', warning:'var(--amber)', info:'var(--t2)' };
+      const _render = async (filter) => {
+        try {
+          const qs = filter ? `?event_type=${encodeURIComponent(filter)}&limit=300` : '?limit=300';
+          const d = await apiFetch(`/api/campaigns/${campId}/game-events${qs}`);
+          const rows = d.game_events || [];
+          // zbiór typów obecnych w danych → filtry
+          const present = [...new Set(rows.map(r => r.event_type))];
+          const types = ['', ...present];
+          const bar = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+            ${types.map(t => `<button class="btn btn-sm ev-filter${(t===(filter||''))?' btn-primary':''}" data-evtype="${t}" style="font-size:0.72rem;padding:2px 8px">${t?((EV[t]?.i||'•')+' '+(EV[t]?.l||t)):'Wszystkie'}</button>`).join('')}
+            <span style="margin-left:auto;font-size:0.72rem;color:var(--t3);align-self:center">${rows.length} zdarzeń</span>
+          </div>`;
+          const _detail = (data) => {
+            if (!data || typeof data !== 'object') return '';
+            const bits = [];
+            if (data.quest_title) bits.push(_esc(data.quest_title));
+            if (data.item_label) bits.push(_esc(data.item_label));
+            if (data.location_key) bits.push(_esc(data.location_key));
+            if (data.amount != null) bits.push('+'+data.amount);
+            if (data.new_total_gp != null) bits.push('('+data.new_total_gp+' zł)');
+            if (data.xp != null && data.amount == null) bits.push(data.xp+' PD');
+            if (data.reason) bits.push(_esc(data.reason));
+            if (data.enemy) bits.push(_esc(data.enemy));
+            if (!bits.length) { try { return _esc(JSON.stringify(data).slice(0,80)); } catch(e){ return ''; } }
+            return bits.join(' · ');
+          };
+          const body = !rows.length
+            ? '<p style="text-align:center;padding:24px;color:var(--t3)">Brak zdarzeń. Zagraj turę z questem/łupem/złotem lub stocz walkę.<br><span style="font-size:0.72rem">Stare kampanie sprzed instrumentacji (#777) pozostają puste — zdarzeń nie da się odtworzyć wstecz.</span></p>'
+            : `<table class="data-table" style="width:100%;font-size:0.78rem">
+                <thead><tr><th style="text-align:left">Typ</th><th style="text-align:left">Szczegóły</th><th>Postać</th><th style="text-align:left">Czas</th></tr></thead>
+                <tbody>${rows.map(r => {
+                  const ev = EV[r.event_type] || {i:'•', l:r.event_type};
+                  const col = SEV[r.severity] || 'var(--t2)';
+                  return `<tr>
+                    <td style="text-align:left"><span style="color:${col}">${ev.i} ${_esc(ev.l)}</span></td>
+                    <td style="text-align:left;color:var(--t2)">${_detail(r.data)}</td>
+                    <td style="text-align:center;font-family:monospace;color:var(--t3)">${r.character_id ?? '—'}</td>
+                    <td style="text-align:left;color:var(--t3);font-size:0.72rem">${_esc((r.created_at||'').replace('T',' ').slice(0,16))}</td>
+                  </tr>`;
+                }).join('')}</tbody></table>`;
+          panel.innerHTML = bar + `<div style="padding:0 4px 16px">${body}</div>`;
+          panel.querySelectorAll('.ev-filter').forEach(b =>
+            b.addEventListener('click', () => _render(b.dataset.evtype || null)));
+        } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
+      };
+      await _render(null);
     }
   }
 
