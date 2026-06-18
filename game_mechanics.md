@@ -5390,6 +5390,22 @@ Status: **review/needs-testing** — commity 3639fdd (#777) + fd6b45d (#781) + 4
 
 ---
 
+## Poprawki zaskoczenie/sneak/bramka intencji — 2026-06-19 (#780)
+
+> Domknięcie mechaniki ataku z zaskoczenia Łotrzyka + **ogólna bramka intencji** po zdobyciu przewagi pozycyjnej. Supersedes #778. Casus motywujący: Mizel #99791 (nóż do gardła „by zastraszyć, nie zabić" — gate odrzucał przypadkiem).
+
+| Decyzja | Co zmieniono | Testy |
+|---|---|---|
+| **D1 — bramka intencji** | Po sukcesie Stealth (przewaga, brak aktywnej walki) silnik zwraca `advantage_gate` z 3 przyciskami **[⚔️ Atak / 💬 Zastraszenie / 👤 Wycofaj]** zamiast cicho ustawiać flagę i zależeć od LLM. Frontend renderuje kartę bramki (`renderAdvantageGate`). System_prompt: deklaracja non-lethal przy przewadze → `[SKILL_TEST:intimidation:DC:12]`, **bez** `[COMBAT_START]`. | 3 pytest + Playwright + wizualna |
+| **D2 — auto-trafienie** | Pierwszy cios w `zaskoczony` = **auto-hit** (`first_hit_auto`; wróg nie zdążył zareagować, uniki nie liczą się poza Nat1 gracza). Podwojenie obrażeń 1. ciosu bez zmian. | 2 pytest |
+| **burst — unifikacja** | Sneak die (Łotrzyk) + zasadzka palą się gdy gracz `hidden` **LUB** cel `zaskoczony` (otwarcie ze skradania) — koniec luki „kość Łotrzyka nie pali się przy otwarciu". `_should_fire_burst`. | 3 pytest |
+| **D3 — skalowanie kości** | Kość sneak Łotrzyka wg poziomu: **L1-4 1d6 / L5-8 2d6 / L9+ 3d6** (`_rogue_sneak_dice_for_level`). Roll card pokazuje `sneak_attack` osobno. | 4 pytest |
+| **komunikat korekty** | `combat_correction_message` — odrzucony `[COMBAT_START]` nie kłamie już o „nieosiągalności" celu (cel bywał osiągnięty). | 2 pytest |
+
+Status: **review/needs-testing** — TDD 14/14 + Playwright 1/1. Pełny e2e bramki/intimidacji jest LLM-driven (struktura + prompt zweryfikowane jednostkowo). Historyczne kampanie bez wpisów wstecz (poza zakresem).
+
+---
+
 ### FAZA LB — Balans lochów: rozdział onboarding vs głębszy (2026-06-17)
 
 > Sesja projektowa po `/llm-council` + symulacji Monte Carlo (15-30k przejść). **Decyzja: starter-loch `krypta_probna` (5 walk + Lisz 40 PŻ, absolutna skala) jest NIEukańczalny solo lvl1 (clear ≈0%; nawet lvl7 ≈3%).** Zabójca to NIE poziom, lecz: (a) compounding 5 sekwencyjnych walk, (b) action economy multi-enemy (2-3 ataki/rundę vs 1 akcja bohatera), (c) brak leczenia między walkami, (d) boss 40 PŻ. **Rozwiązanie: rozdzielić na DWA uczciwe lochy + ogólna mechanika odpoczynku.** Plan krok-po-kroku: `notes.md` → **FAZA LB**. Każde zadanie = GitHub Issue `[TASK] LBNN`.

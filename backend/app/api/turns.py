@@ -868,11 +868,10 @@ def _maybe_start_combat_from_gm_tag(
                     )
                     # Append U6-style correction to stored turn narration
                     if turn_log_id:
+                        from app.services.combat_service import combat_correction_message
                         _target_name = _ek.replace("_", " ").title()
-                        if _reason == "combat_target_friendly_npc":
-                            _corr = f"*({_target_name} cofa się o krok, ale nie sięga po broń — to nie wróg.)*"
-                        else:
-                            _corr = "*(Cel ataku okazuje się nieosiągalny — walka nie wybucha.)*"
+                        # #780: uczciwy komunikat — nie kłamie o „nieosiągalności" celu
+                        _corr = combat_correction_message(_reason, _target_name)
                         _turn_row = _hfconn.execute(
                             "SELECT assistant_text FROM campaign_turns WHERE id = ?",
                             (turn_log_id,),
@@ -7027,7 +7026,18 @@ def resolve_skill_test_endpoint(
         except Exception:
             pass
 
-        return {
+        # D1 (#780): bramka intencji — po sukcesie Stealth (przewaga pozycyjna bez
+        # aktywnej walki) silnik STOP i pyta gracza zamiast cicho ustawiać flagę i
+        # zależeć od LLM czy wybuchnie walka. Zwróć 3 przyciski do UI.
+        _adv_gate = None
+        try:
+            from app.services.combat_service import build_advantage_gate
+            if _sf_st.get("pending_zaskoczony"):
+                _adv_gate = build_advantage_gate("stealth")
+        except Exception as _gate_err:
+            logger.warning("advantage_gate_build_error", error=str(_gate_err))
+
+        _resp = {
             "prose": prose,
             "skill_test_result": result,
             "turn_number": turn_number,
@@ -7039,6 +7049,9 @@ def resolve_skill_test_endpoint(
                 "current_location": current_loc.get("key") if current_loc else None,
             },
         }
+        if _adv_gate:
+            _resp["advantage_gate"] = _adv_gate
+        return _resp
     finally:
         conn.close()
 

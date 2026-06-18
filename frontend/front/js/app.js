@@ -3350,6 +3350,38 @@ function renderSuggestedActions(actions) {
     });
 }
 
+// #780: bramka intencji po zdobyciu przewagi (Stealth/grapple/ogłuszenie).
+// Renderuje 3 przyciski (Atak z zaskoczenia / Zastraszenie / Wycofaj). Każda opcja
+// to gotowy tekst tury gracza — silnik decyduje co dalej (walka vs test Zastraszenia).
+function renderAdvantageGate(gate) {
+    if (!gate || !Array.isArray(gate.options) || !gate.options.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'advantage-gate-card';
+    const title = document.createElement('div');
+    title.className = 'advantage-gate-title';
+    title.textContent = '✅ ' + (gate.title || 'Masz przewagę.');
+    wrap.appendChild(title);
+    const row = document.createElement('div');
+    row.className = 'advantage-gate-options';
+    gate.options.forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'advantage-gate-btn advantage-gate-btn--' + (opt.id || 'x');
+        btn.style.setProperty('--i', i);
+        btn.innerHTML = `<span class="ag-label">${(opt.icon ? opt.icon + ' ' : '') + (opt.label || '')}</span>` +
+                        (opt.hint ? `<span class="ag-hint">${opt.hint}</span>` : '');
+        btn.addEventListener('click', () => {
+            wrap.remove();
+            sendTurn(opt.action, 'free_text', opt.label);
+        });
+        row.appendChild(btn);
+    });
+    wrap.appendChild(row);
+    if (elements.chatMessages) {
+        elements.chatMessages.appendChild(wrap);
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
 // U32: Show/hide anti-stuck travel banner (level 0=hidden, 1=pills only, 2=banner)
 let _travelEscalationLevel = 0;
 function renderTravelEscalation(level) {
@@ -4046,6 +4078,11 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         // S11 (#606) — inspired: nieudany test → przycisk przerzutu (keep-best).
         if (sr.reroll_available && !sr.rerolled) {
             _renderInspiredRerollButton(skillTestId, sr.reroll_available);
+        }
+
+        // #780 — bramka intencji po sukcesie Stealth (przewaga): Atak/Zastraszenie/Wycofaj.
+        if (response.advantage_gate) {
+            renderAdvantageGate(response.advantage_gate);
         }
 
         // Update HP if trap dealt damage

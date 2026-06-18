@@ -9880,3 +9880,24 @@ body[data-theme="classic"] {
 .reaction-btn--block { border-color: #4a7ba8; }
 .reaction-modal__timer { margin-top: 14px; font-size: 0.78rem; opacity: 0.6; }
 .reaction-modal__timer #reaction-countdown { color: var(--accent, #c9a54a); font-weight: 700; }
+
+/* #780 — bramka intencji po zdobyciu przewagi (3 przyciski) */
+.advantage-gate-card {
+    margin: 14px auto; max-width: 560px; padding: 14px 16px;
+    border: 1px solid var(--accent, #c9a54a); border-radius: 12px;
+    background: linear-gradient(180deg, rgba(201,165,74,0.10), rgba(0,0,0,0.18));
+    box-shadow: 0 4px 18px rgba(0,0,0,0.25); animation: fadeIn 0.25s ease;
+}
+.advantage-gate-title { font-weight: 700; color: var(--accent, #c9a54a); margin-bottom: 10px; letter-spacing: 0.3px; }
+.advantage-gate-options { display: flex; flex-direction: column; gap: 8px; }
+.advantage-gate-btn {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    text-align: left; padding: 10px 12px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04);
+    color: inherit; transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.advantage-gate-btn:hover { transform: translateY(-1px); border-color: var(--accent, #c9a54a); background: rgba(201,165,74,0.12); }
+.advantage-gate-btn .ag-label { font-weight: 600; font-size: 0.96rem; }
+.advantage-gate-btn .ag-hint { font-size: 0.78rem; opacity: 0.7; }
+.advantage-gate-btn--strike:hover { border-color: #c0584a; background: rgba(192,88,74,0.14); }
+.advantage-gate-btn--withdraw:hover { border-color: #6b8ab0; background: rgba(107,138,176,0.14); }

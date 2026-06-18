@@ -159,8 +159,9 @@ Gdy gracz zda test skradania PRZED rozpoczęciem walki lub w jej trakcie (przeci
 • Pojedynczy cel: stealth ≥ DC 8 → emituj `[APPLY_CONDITION:zaskoczony:<enemy_key>]` dla tego wroga.
 • Grupa wrogów (≥2): stealth ≥ DC 16 → emituj tag DLA KAŻDEGO wroga w osobnej linii.
 • Tag umieść w narracji (nie w ostatniej linii cue) — silnik usunie go z tekstu wyświetlanego graczowi.
-• Mechanika `zaskoczony`: atakujący +2 do rzutu na trafienie, pierwsze trafienie podwaja obrażenia, warunek znika po otrzymaniu obrażeń. Nat 20 łączy się z zaskoczeniem → ×4 obrażeń.
+• Mechanika `zaskoczony` (#780): pierwszy cios w zaskoczonego wroga TRAFIA automatycznie (auto-hit — wróg nie zdążył zareagować) i podwaja obrażenia; warunek znika po otrzymaniu obrażeń. Łotrzyk dorzuca kość zasadzki (sneak) także przy otwarciu ze skradania. Nat 20 łączy się z zaskoczeniem → ×4 obrażeń. Liczy silnik — Ty opisujesz dosadny, błyskawiczny cios.
 • Nie emituj tagu jeśli wróg już Cię widzi, walka jest w pełnym toku, lub gracz nie zadeklarował skradania.
+• INTENCJA PO PRZEWADZE (#780): jeśli gracz ma przewagę (zdany Stealth, „nóż do gardła", wróg ogłuszony/schwytany) i deklaruje cel NON-LETHAL — zastraszenie/poddanie/rozmowę („chcę go zastraszyć, nie zabić", „żądam, by się poddał") — NIE emituj [COMBAT_START]. Zamiast tego wymuś `[SKILL_TEST:intimidation:DC:12]` (z bonusem przewagi) i prowadź scenę bez wybuchu walki. [COMBAT_START] tylko gdy gracz wyraźnie atakuje.
 
 Przykład:
   Gracz: "skradam się za strażnikiem, żeby go zaskoczyć"

@@ -107,7 +107,10 @@ def _apply_attack_bonuses(attacker: dict, target: dict) -> dict[str, Any]:
     deals doubled damage, and condition is consumed after damage (Z3).
     Returns `{atk_bonus: int, first_hit_doubled: bool, consumed_keys: list[str]}`.
     """
-    out: dict[str, Any] = {"atk_bonus": 0, "first_hit_doubled": False, "consumed_keys": []}
+    out: dict[str, Any] = {
+        "atk_bonus": 0, "first_hit_doubled": False, "first_hit_auto": False,
+        "consumed_keys": [],
+    }
     if not isinstance(target, dict):
         return out
     conds = target.get("conditions") or []
@@ -119,6 +122,9 @@ def _apply_attack_bonuses(attacker: dict, target: dict) -> dict[str, Any]:
         if str(c.get("key", "")).lower() == "zaskoczony":
             out["atk_bonus"] += 2
             out["first_hit_doubled"] = True
+            # D2 (#780): wróg nie zdążył zareagować — pierwszy cios trafia automatycznie
+            # (jak Nat20-do-trafienia, ale BEZ dodatkowego podwojenia z tego tytułu).
+            out["first_hit_auto"] = True
             out["consumed_keys"].append("zaskoczony")
             break
     return out
@@ -577,15 +583,98 @@ def _hidden_conditions(combatant: dict[str, Any], *, sheet: dict[str, Any] | Non
 ROGUE_SNEAK_ATTACK_DICE = "1d6"
 
 
+def _rogue_sneak_dice_for_level(level: int) -> str:
+    """D3 (#780): skalowanie kości sneak łotrzyka wg poziomu.
+
+    L1-4 → 1d6, L5-8 → 2d6, L9+ → 3d6. Czysta funkcja (bez rzutu)."""
+    try:
+        lvl = int(level)
+    except (TypeError, ValueError):
+        lvl = 1
+    if lvl >= 9:
+        return "3d6"
+    if lvl >= 5:
+        return "2d6"
+    return "1d6"
+
+
 def _sneak_attack_bonus(sheet: dict[str, Any] | None) -> int:
-    """B4 (#645): dodatkowe obrażenia sneak attack łotrzyka atakującego z ukrycia.
+    """B4 (#645) + D3 (#780): obrażenia sneak attack łotrzyka, skalowane poziomem.
 
     CECHA KLASY — rzut tylko dla ``archetype == 'rogue'``; każda inna klasa (oraz
-    brak/niepełny sheet) → 0 bez rzutu. Add ponad generyczny ``ambush_bonus``
-    (S19 #614). Liczy silnik (``roll_damage_dice``); LLM tylko opisuje."""
+    brak/niepełny sheet) → 0 bez rzutu. Kość wg poziomu (L1-4 1d6 / L5-8 2d6 / L9+
+    3d6). Add ponad generyczny ``ambush_bonus`` (S19 #614). Liczy silnik
+    (``roll_damage_dice``); LLM tylko opisuje."""
     if str((sheet or {}).get("archetype") or "").strip().lower() != "rogue":
         return 0
-    return int(roll_damage_dice(ROGUE_SNEAK_ATTACK_DICE, 0))
+    _dice = _rogue_sneak_dice_for_level((sheet or {}).get("level", 1) or 1)
+    return int(roll_damage_dice(_dice, 0))
+
+
+def _should_fire_burst(target: dict[str, Any] | None, *, player_hidden: bool) -> bool:
+    """burst (#780): otwarcie ze skradania daje wrogowi `zaskoczony`, ale graczowi
+    NIE `hidden`. Sneak die / podwójne obrażenia mają palić się w OBU przypadkach:
+    gdy gracz `hidden` LUB gdy cel `zaskoczony`. Unifikacja `hidden`(gracz) vs
+    `zaskoczony`(wróg)."""
+    if player_hidden:
+        return True
+    if not isinstance(target, dict):
+        return False
+    for c in (target.get("conditions") or []):
+        if isinstance(c, dict) and str(c.get("key", "")).lower() == "zaskoczony":
+            return True
+    return False
+
+
+def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
+    """D1 (#780): bramka intencji po zdobyciu przewagi pozycyjnej.
+
+    Po dowolnej przewadze (sukces Stealth, grapple, wróg ogłuszony/schwytany,
+    „nóż do gardła") silnik STOP i pyta gracza zamiast cicho ustawiać flagę i
+    zależeć od LLM. Zwraca strukturę 3 przycisków (atak / zastraszenie / wycofaj)
+    do renderu w UI gracza. ``None`` gdy brak źródła przewagi."""
+    if not source or not str(source).strip():
+        return None
+    return {
+        "source": str(source),
+        "title": "Masz przewagę.",
+        "options": [
+            {
+                "id": "strike",
+                "icon": "⚔️",
+                "label": "Atak z zaskoczenia",
+                "hint": "Zaatakuj zanim Cię zauważy — pełny cios zasadzki.",
+                # Tekst tury — uruchamia normalny przepływ walki (COMBAT_START po stronie LLM).
+                "action": "Atakuję z zaskoczenia, zanim zdąży zareagować.",
+            },
+            {
+                "id": "intimidate",
+                "icon": "💬",
+                "label": "Zastraszenie / rozmowa",
+                "hint": "Wymuś uległość bez zabijania — test Zastraszenia z bonusem przewagi.",
+                # BEZ walki — jawnie sygnalizuje intencję non-lethal (casus Mizela #99791).
+                "action": "Przykładam ostrze i żądam, by się poddał — chcę go zastraszyć, nie zabić.",
+            },
+            {
+                "id": "withdraw",
+                "icon": "👤",
+                "label": "Wycofaj się",
+                "hint": "Zniknij w cieniu, zachowując przewagę na później.",
+                "action": "Wycofuję się cicho w cień, zachowując przewagę.",
+            },
+        ],
+    }
+
+
+def combat_correction_message(reason: str, target_name: str) -> str:
+    """HF-7/#780: uczciwy komunikat korekty gdy [COMBAT_START] zostaje odrzucony.
+
+    Poprzedni tekst „Cel ataku okazuje się nieosiągalny" KŁAMAŁ — cel bywał
+    osiągnięty (casus Mizela: nóż do gardła), a walka nie wybuchała z innego
+    powodu. Tu komunikat nie twierdzi już, że cel jest nieosiągalny."""
+    if reason == "combat_target_friendly_npc":
+        return f"*({target_name} cofa się o krok, ale nie sięga po broń — to nie wróg.)*"
+    return "*(Na razie nie dochodzi do otwartej walki.)*"
 
 
 def _roll_ambush_bonus(conditions: list[dict[str, Any]]) -> int:
@@ -4341,6 +4430,12 @@ def resolve_attack(
                         )
                     ),
                 }
+            # D2 (#780): pierwszy cios w `zaskoczony` = auto-trafienie. Wróg nie zdążył
+            # zareagować — uniki nie liczą się (poza Nat1 gracza, który zawsze pudłuje).
+            if _surprise_fx.get("first_hit_auto") and not player_nat1 and not hit:
+                hit = True
+                dodged = False
+                out["surprise_auto_hit"] = True
             out["hit"] = hit
             out["dodged"] = dodged
             out["target_id"] = target_id
@@ -4504,18 +4599,24 @@ def resolve_attack(
                 # ataku gracza (nat 20/nat 1) NIETKNIĘTY. Atak zdejmuje hidden (demaskuje).
                 if _pc_for_dmg is not None:
                     _hidden = _hidden_conditions(_pc_for_dmg)
+                    # burst (#780): unifikacja — sneak die / zasadzka palą się gdy gracz
+                    # `hidden` LUB gdy cel `zaskoczony` (otwarcie ze skradania, bez hidden).
+                    _fire_burst = _should_fire_burst(enemy, player_hidden=bool(_hidden))
                     if _hidden:
                         _ambush = _roll_ambush_bonus(_hidden)
                         if _ambush:
                             dmg += _ambush
                             out["ambush_bonus"] = _ambush
-                        # B4 (#645): łotrzyk — sneak attack PONAD ambush, oddzielny add
-                        # PO mnożniku (jak ambush/gear — NIE podwajany na cricie/nat20).
-                        # Cecha klasy: rzut tylko dla rogue (inni → 0).
+                    # B4 (#645) + D3 (#780): łotrzyk — sneak attack PONAD ambush, oddzielny
+                    # add PO mnożniku (jak ambush/gear — NIE podwajany na cricie/nat20).
+                    # Cecha klasy: rzut tylko dla rogue (inni → 0). Pali się też przy
+                    # otwarciu ze skradania (cel zaskoczony), nie tylko gdy gracz hidden.
+                    if _fire_burst:
                         _sneak = _sneak_attack_bonus(sheet)
                         if _sneak:
                             dmg += _sneak
                             out["sneak_attack"] = _sneak
+                    if _hidden:
                         _remove_combatant_conditions(_pc_for_dmg, _hidden)
                 out["damage"] = dmg
                 # #754: strukturalny rejestr — obrażenia gracza (per-kość)
