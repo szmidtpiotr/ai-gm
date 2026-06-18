@@ -8775,8 +8775,9 @@ async function _refreshBugReportFab() {
         } catch { /* offline / brak endpointu — degrade do bieżącego stanu */ }
     }
     const isTester = currentUser?.is_tester === 1 || currentUser?.is_tester === true;
-    const onGameScreen = document.getElementById('game-screen')?.classList.contains('active') ||
-                         document.querySelector('.screen.active')?.id === 'game-screen';
+    // #668: aktywny ekran ma klasę `screen--active` (nie `active`) — stary warunek
+    // zawsze dawał false, więc FAB nigdy się nie pokazywał mimo is_tester=1.
+    const onGameScreen = document.getElementById('game-screen')?.classList.contains('screen--active');
     fab.hidden = !(isTester && onGameScreen);
 }
 
