@@ -23,6 +23,7 @@ _SLOT_VALUES = {
     "r_arm",
     "l_leg",
     "r_leg",
+    "hands",
     "main_hand",
     "off_hand",
 }
@@ -34,6 +35,7 @@ _ARMOR_COVERAGE_TO_SLOTS = {
     "torso": ("torso",),
     "limb_arm": ("l_arm", "r_arm"),  # caller picks one at equip time
     "limb_leg": ("l_leg", "r_leg"),  # caller picks one at equip time
+    "hands": ("hands",),
     "full": ("torso", "l_arm", "r_arm", "l_leg", "r_leg"),
 }
 _VALID_ARMOR_COVERAGE = frozenset(_ARMOR_COVERAGE_TO_SLOTS.keys())
@@ -1585,6 +1587,8 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
                 raise ValueError("arm armor must equip to 'l_arm' or 'r_arm'")
             if coverage == "limb_leg" and s not in ("l_leg", "r_leg"):
                 raise ValueError("leg armor must equip to 'l_leg' or 'r_leg'")
+            if coverage == "hands" and s != "hands":
+                raise ValueError("hand armor can only equip to slot 'hands'")
             if coverage == "full":
                 anchor_slot = "torso"
                 slots_to_free = list(_ARMOR_COVERAGE_TO_SLOTS["full"])

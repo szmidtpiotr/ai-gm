@@ -7207,6 +7207,7 @@ const INV_SLOT_DEFS = [
     { key: 'l_arm',     label: 'Lewe ramię',      icon: 'gaunt',  area: 'larm',      wound: ['arm_wound', 'arm_wound_left',  'l_arm_wound'] },
     { key: 'torso',     label: 'Tors',            icon: 'armor',  area: 'torso',     wound: ['torso_wound', 'chest_wound'] },
     { key: 'r_arm',     label: 'Prawe ramię',     icon: 'gaunt',  area: 'rarm',      wound: ['arm_wound', 'arm_wound_right', 'r_arm_wound'] },
+    { key: 'hands',     label: 'Rękawice',        icon: 'gaunt',  area: 'hands',     wound: ['hand_wound'] },
     { key: 'l_leg',     label: 'Lewa noga',       icon: 'greave', area: 'lleg',      wound: ['leg_wound', 'leg_wound_left',   'l_leg_wound'] },
     { key: 'r_leg',     label: 'Prawa noga',      icon: 'greave', area: 'rleg',      wound: ['leg_wound', 'leg_wound_right',  'r_leg_wound'] },
     { key: 'main_hand', label: 'Główna ręka',     icon: 'sword',  area: 'mainh',     wound: [] },
@@ -7504,6 +7505,7 @@ function _itemFitsSlot(item, slot) {
     if (slot === 'torso')              return cov === 'torso' || cov === 'full';
     if (slot === 'l_arm' || slot === 'r_arm') return cov === 'limb_arm' || cov === 'full';
     if (slot === 'l_leg' || slot === 'r_leg') return cov === 'limb_leg' || cov === 'full';
+    if (slot === 'hands')              return cov === 'hands';
     return false;
 }
 

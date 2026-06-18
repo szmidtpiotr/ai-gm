@@ -685,3 +685,13 @@ Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekc
 - [x] [#522](https://github.com/szmidtpiotr/ai-gm/issues/522) — LLM używał ai_generated=1 lokacji: root cause potwierdzony bezpośrednim testem (`_fuzzy_match_location("Wschodnia Wioska")` → id=168 ai_gen=1). Fix: canonical-first search w validate_move dla action='move' (commit ecdde43). Closed 2026-06-16.
 - [x] [#594](https://github.com/szmidtpiotr/ai-gm/issues/594) — unifikacja onboarding + knowledge_book: niezależne flagi `show_in_onboarding` + `show_in_knowledge` (jeden wpis może być widoczny w OBU miejscach), seed MECHANIC_CARDS→DB z obiema flagami, `onboarding_service._card_content()` czyta z DB (gate show_in_onboarding) z fallbackiem do dict, `/knowledge-tips` filtruje show_in_knowledge, admin Wiedza: 2 checkboxy + 2 badge. 3/3 pytest + 37 onboarding regresja + 1/1 Playwright. **review/needs-testing**
 - [x] [#587–#593] zgłoszone z batcha admin-panel (#587 Zdarzenia analytics, #588 multi-select kampanii, #589 mapa hex→kwadrat, #590 edycja pending/floating, #591 resize/filtr tabel, #592 wpisy Wiedzy FAZY U, #593 pełny stack Web Push) + fix 500 (commit 68d2484): tabele bug_reports/user_push_subscriptions/voice_hosts/ui_texts + klucz LLM w overview.
+
+## FAZA FIX — P0 Krytyczne (most dla /mass-implement prompt_fix_mass.md; id FIX<N> = issue #<N>)
+Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy już zaimplementowane (patrz prompt_fix_mass.md). Kolejność = priorytet P0.
+- [x] FIX743 — Crash przy zakładaniu rękawic (invalid armor_coverage hands) — slot hands w loot_service [#743]
+- [ ] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót
+- [ ] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci
+- [ ] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja
+- [ ] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
+- [ ] FIX721 — Zagadka brak treści + panel pod belką [IN REVIEW] — move_through_door resolve + z-index + pole text
+- [ ] FIX745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved
