@@ -5378,6 +5378,14 @@ Status: wszystkie **review/needs-testing** — czekają na weryfikację wizualn�
 
 Status: **review/needs-testing** — silnik walki niezmieniony (tylko maszyna stanu tury we froncie).
 
+## Poprawki instrumentacja narracyjna — 2026-06-18 (#777)
+
+| Issue | Obszar | Co naprawiono | Testy |
+|---|---|---|---|
+| #777 | Observability | game_events emitowane dla quest_complete, xp_grant, location_new, item_grant, gold_grant; _record_turn_decision_safe wpięta do streaming path (turn_decisions było 0 globalnie) | 8/8 pytest + 3/3 Playwright |
+
+Status: **review/needs-testing** — commit 3639fdd. Historyczne kampanie (np. #99791) nie mają wpisów wstecz (poza zakresem).
+
 ---
 
 ### FAZA LB — Balans lochów: rozdział onboarding vs głębszy (2026-06-17)
