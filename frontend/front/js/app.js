@@ -2586,13 +2586,16 @@ function formatDateTime(dateStr) {
     } catch (_e) { return ''; }
 }
 
+// Strip every [ALLCAPS_TAG: ...] emitted by the LLM — generics cover all current
+// and future mechanic tags. Mirrors backend strip_all_mechanic_tags().
+function stripMechanicTags(s) {
+    return String(s || '').replace(/\s*\[[A-Z][A-Z0-9_]+:[^\]]*\]/g, '').trim();
+}
+
 function parseGmFull(text) {
     if (!text) return { narrative: '', locationIntent: null };
     let raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const stripInternalTags = s => String(s || '')
-        .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
-        .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
-        .trim();
+    const stripInternalTags = s => stripMechanicTags(s);
     try {
         const data = JSON.parse(raw);
         if (data && typeof data === 'object') {
@@ -2607,10 +2610,7 @@ function parseGmFull(text) {
 }
 
 function parseGmResponse(text) {
-    const stripExtra = s => String(s || '')
-        .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
-        .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
-        .trim();
+    const stripExtra = s => stripMechanicTags(s);
 
     if (!text) return '';
     if (text === 'Walka dobiegła końca.') return text;
@@ -3630,11 +3630,12 @@ function _extractStreamingNarrative(raw) {
     const m = raw.match(/^\{"narrative"\s*:\s*"([\s\S]*)/);
     if (m) {
         // Unescape JSON string content (basic: \" → ", \n → newline)
-        return m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        const text = m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        return stripMechanicTags(text);
     }
     // Not yet past the JSON prefix — hide it (show nothing until narrative starts)
     if (raw.startsWith('{') && !raw.includes('"narrative"')) return '';
-    return raw;
+    return stripMechanicTags(raw);
 }
 
 // Streaming implementation — returns {skill_test_pending, suggested_actions} on completion

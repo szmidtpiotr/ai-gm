@@ -140,6 +140,22 @@ TAG_REGISTRY: dict[str, re.Pattern] = {
 _ANY_TAG_RE = re.compile(r'\[([A-Z][A-Z0-9_]+):([^\]]*)\]')
 
 
+# ── Generic mechanic-tag strip ────────────────────────────────────────────────
+
+_STRIP_TAG_RE = re.compile(r'\s*\[[A-Z][A-Z0-9_]+:[^\]]*\]')
+
+
+def strip_all_mechanic_tags(text: Optional[str]) -> str:
+    """Remove every [ALLCAPS_TAG: ...] from text.
+
+    Covers all known (and future) mechanic tags emitted by the LLM.
+    Mirrors the JS stripMechanicTags() in frontend/front/js/app.js.
+    """
+    if not text:
+        return ''
+    return _STRIP_TAG_RE.sub('', str(text)).strip()
+
+
 # ── Unknown tag detection ─────────────────────────────────────────────────────
 
 def find_unknown_tags(text: Optional[str]) -> list[str]:
