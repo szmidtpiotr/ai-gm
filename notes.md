@@ -745,4 +745,4 @@ Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy j
 - [x] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja [#759]
 - [x] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill [#722]
 - [x] FIX721 — Zagadka brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index/CSS + pole text [#721]
-- [ ] FIX745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved
+- [x] FIX745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [#745]

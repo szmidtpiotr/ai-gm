@@ -38,7 +38,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #742 `[TO DO]` — [BUG] Sklep w lochu: (1) modal otwiera się w dungeon-mode + (2) kupione itemy nie pojawiają się w ekwipunku po zakupie
 - [ ] #743 `[IN REVIEW]` — [BUG] Wyposażenie — zakładanie rękawic rzuca 'invalid armor_coverage hands': slot hands nie zdefiniowany w loot_service
 - [ ] #744 `[TO DO]` — [DESIGN] Wojownik startuje z tarczą ale nie może blokować — shield_block wymaga rank >= 1, archetype nie przyznaje startowych skilli
-- [ ] #745 `[IN REVIEW]` — [BUG] Loch — panel zagadki nie znika po rozwiązaniu: cleared=false mimo solved=true
+- [x] #745 `[IN REVIEW]` — [BUG] Loch — panel zagadki nie znika po rozwiązaniu: cleared=false mimo solved=true [wdrożone 8a35c22]
 - [ ] #746 `[TO DO]` — [BUG] #L-fix — Nazwy łupów w modalu walki wyświetlane po angielsku (klucze DB)
 - [ ] #747 `[TO DO]` — [BUG] Kreator postaci — obniżenie wylosowanego skilla (−) zużywa 1 z 4 punktów budżetu
 - [ ] #748 `[TO DO]` — [SETUP] Whisper STT z .16 nie aktywny — fallback na brak voice-service
@@ -71,7 +71,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja [wdrożone bfe0f37]
 - [ ] #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
 - [x] #721 — Zagadka: brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index + pole text [wdrożone 01cda5f]
-- [ ] #745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved
+- [x] #745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [wdrożone 8a35c22]
 
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
 - [ ] #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0]
