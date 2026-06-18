@@ -7267,6 +7267,7 @@ function _invPickEquipSlot(item, occupied) {
         if (/shield|tarcz/.test(k)) return 'off_hand';
         const cov = String(item.armor_coverage || '').toLowerCase();
         if (cov === 'head') return 'head';
+        if (cov === 'hands') return 'hands';   // #743: rękawice → slot dłoni, nie torso
         if (cov === 'limb_arm') return occupied.l_arm ? 'r_arm' : 'l_arm';
         if (cov === 'limb_leg') return occupied.l_leg ? 'r_leg' : 'l_leg';
         if (cov === 'full') return 'torso';
