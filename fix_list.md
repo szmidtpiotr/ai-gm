@@ -67,7 +67,7 @@ Reguła priorytetu: wpływ na gracza × niskie ryzyko × zależności. Rób od g
 Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `[IN REVIEW]` sprawdź komentarze (mógł być zatwierdzony).
 
 ### P0 — Krytyczne: crash / utrata progresu / złamana pętla gry
-- [x] 1. #767 — **KRYTYCZNY** Granie bohaterem przejmuje cudzą aktywną kampanię (korupcja danych, Mizel/99791) — guard w assign_hero_to_campaign + frontend; recovery wykonane ręcznie [wdrożone 6394431 — twardy guard cross-hero, też ten sam user]
+- [x] 1. #767 — **KRYTYCZNY** Granie bohaterem przejmuje cudzą aktywną kampanię (korupcja danych, Mizel/99791) — guard w assign_hero_to_campaign + frontend; recovery wykonane ręcznie [wdrożone 6394431 + 05601e0 — guard assign/create + dungeon-relink; każdy bohater = własne kampanie/lochy, brak przejęć nawet ten sam user]
 - [x] 2. #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone 7712860]
 - [x] 3. #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót [wdrożone 2f8bb72]
 - [x] 4. #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci [wdrożone 53d6825]
