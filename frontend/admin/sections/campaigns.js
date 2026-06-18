@@ -434,7 +434,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         </div>
       </div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
-        ${['overview','plan','turns','dice','state','decisions','events','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
+        ${['overview','plan','turns','dice','state','decisions','events','quests','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',quests:'🎯 Questy+XP',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
         <div id="ctab-overview" style="padding:16px"><div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div></div>
@@ -444,6 +444,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         <div id="ctab-state"    style="padding:0;display:none"></div>
         <div id="ctab-decisions" style="padding:0;display:none"></div>
         <div id="ctab-events"   style="padding:0;display:none"></div>
+        <div id="ctab-quests"   style="padding:0;display:none"></div>
         <div id="ctab-map"      style="padding:16px;display:none"></div>
         <div id="ctab-npcs"     style="padding:16px;display:none"></div>
         <div id="ctab-workshop" style="padding:16px;display:none;height:420px;display:none;flex-direction:column;gap:8px"></div>
@@ -1088,6 +1089,72 @@ function filterTableGeneric(input, tableId, nameClass) {
         } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
       };
       await _render(null);
+    }
+
+    else if (tab === 'quests') {
+      // #779: zakładka Questy+XP — lista questów bohatera + granty XP per kampania
+      panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
+      try {
+        const d = await apiFetch(`/api/admin/campaigns/${campId}/quests-xp`);
+        const quests = d.quests || [];
+        const grants = d.xp_grants || [];
+
+        const _statusBadge = (status) => {
+          if (status === 'completed') return `<span class="badge badge-green">✓ ukończony</span>`;
+          if (status === 'failed') return `<span class="badge badge-red">✗ nieudany</span>`;
+          return `<span class="badge badge-amber">◌ aktywny</span>`;
+        };
+        const _typeLabel = (t) => ({main:'główny',side:'poboczny',daily:'dzienny'})[t] || t;
+
+        const questsHtml = !quests.length
+          ? '<p style="text-align:center;padding:16px;color:var(--t3)">Brak questów w tej kampanii.</p>'
+          : `<table class="data-table" style="width:100%;font-size:0.78rem">
+              <thead><tr>
+                <th style="text-align:left">Tytuł</th>
+                <th>Typ</th>
+                <th>Status</th>
+                <th>Tura start</th>
+                <th>Tura koniec</th>
+              </tr></thead>
+              <tbody>${quests.map(q => `<tr>
+                <td style="text-align:left;color:var(--t1)">${_esc(q.title)}</td>
+                <td style="text-align:center"><span class="badge badge-slate">${_typeLabel(q.quest_type)}</span></td>
+                <td style="text-align:center">${_statusBadge(q.status)}</td>
+                <td style="text-align:center;font-family:monospace">${q.created_turn ?? '—'}</td>
+                <td style="text-align:center;font-family:monospace">${q.completed_turn ?? '—'}</td>
+              </tr>`).join('')}</tbody>
+            </table>`;
+
+        const totalXp = grants.reduce((s, g) => s + (g.amount || 0), 0);
+        const grantsHtml = !grants.length
+          ? '<p style="text-align:center;padding:16px;color:var(--t3)">Brak grantów XP w tej kampanii.</p>'
+          : `<table class="data-table" style="width:100%;font-size:0.78rem">
+              <thead><tr>
+                <th>PD</th>
+                <th style="text-align:left">Powód</th>
+                <th style="text-align:left">Źródło</th>
+                <th>Tura</th>
+              </tr></thead>
+              <tbody>${grants.map(g => `<tr>
+                <td style="text-align:center;font-family:monospace;color:var(--green);font-weight:600">+${g.amount}</td>
+                <td style="text-align:left;color:var(--t2)">${_esc(g.reason)}</td>
+                <td style="text-align:left;color:var(--t3);font-size:0.72rem">${_esc(g.source)}</td>
+                <td style="text-align:center;font-family:monospace">${g.turn_number ?? '—'}</td>
+              </tr>`).join('')}</tbody>
+            </table>`;
+
+        panel.innerHTML = `
+          <div style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;gap:16px;font-size:0.72rem;color:var(--t3)">
+            <span>📜 ${quests.length} questów (${quests.filter(q=>q.status==='completed').length} ukończonych)</span>
+            <span>⭐ ${grants.length} grantów XP — łącznie <strong style="color:var(--t1)">${totalXp} PD</strong></span>
+          </div>
+          <div style="padding:12px 16px">
+            <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📜 Questy</div>
+            ${questsHtml}
+            <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px">⭐ Punkty doświadczenia</div>
+            ${grantsHtml}
+          </div>`;
+      } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
     }
   }
 

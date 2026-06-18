@@ -3822,6 +3822,46 @@ def admin_get_tag_error_count(campaign_id: int, _: None = Depends(require_admin_
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/quests-xp")
+def admin_get_campaign_quests_xp(campaign_id: int, _: None = Depends(require_admin_token)):
+    """#779: Return quests + XP grants for a campaign (Questy+XP tab in campaign monitor)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        camp = conn.execute(
+            "SELECT id FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        quest_rows = conn.execute(
+            """SELECT id, character_id, campaign_id, quest_type, title, status,
+                      narrative, resolution, resolution_narrative,
+                      created_turn, completed_turn, created_at, updated_at
+               FROM character_quests
+               WHERE campaign_id = ?
+               ORDER BY created_turn ASC, id ASC""",
+            (campaign_id,),
+        ).fetchall()
+
+        xp_rows = conn.execute(
+            """SELECT id, character_id, campaign_id, amount, reason, source,
+                      turn_number, detail, created_at
+               FROM character_xp_grants
+               WHERE campaign_id = ?
+               ORDER BY turn_number ASC, id ASC""",
+            (campaign_id,),
+        ).fetchall()
+
+        return {
+            "campaign_id": campaign_id,
+            "quests": [dict(r) for r in quest_rows],
+            "xp_grants": [dict(r) for r in xp_rows],
+        }
+    finally:
+        conn.close()
+
+
 # ── Admin: Riddle Bank ────────────────────────────────────────────────────────
 
 class RiddleReq(BaseModel):
