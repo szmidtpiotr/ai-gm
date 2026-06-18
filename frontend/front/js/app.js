@@ -12320,7 +12320,9 @@ async function _doExitDungeon() {
         }
         await loadCampaigns();
         // #752: auto-return to the campaign we came from before the dungeon.
-        const _prevId = resp.previous_campaign_id;
+        // Backend re-links the hero to it (relinked_campaign_id); fall back to the
+        // stored previous_campaign_id if the re-link was skipped.
+        const _prevId = resp.relinked_campaign_id || resp.previous_campaign_id;
         if (_prevId) {
             try {
                 const listResp = await apiRequest('GET', '/campaigns');

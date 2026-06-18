@@ -428,12 +428,19 @@ def exit_dungeon(req: DungeonEnterReq):
     finally:
         conn.close()
 
+    # #752: re-link the hero to the campaign they came from BEFORE returning, so the
+    # original campaign is continuable regardless of frontend cache/navigation. The
+    # frontend then deletes the disposable dungeon campaign; because the hero already
+    # points at the previous campaign, that DELETE no longer idles them.
+    relinked_campaign_id = _relink_hero_to_previous(req.character_id, previous_campaign_id)
+
     if run and run.get("completed"):
         # Win path: complete_dungeon already called; just clear the run
         clear_dungeon_run(req.campaign_id)
         return {
             "ok": True,
             "previous_campaign_id": previous_campaign_id,
+            "relinked_campaign_id": relinked_campaign_id,
             "was_completed": True,
             "was_failed": False,
             "restored": False,
@@ -447,12 +454,53 @@ def exit_dungeon(req: DungeonEnterReq):
     return {
         "ok": True,
         "previous_campaign_id": previous_campaign_id,
+        "relinked_campaign_id": relinked_campaign_id,
         "was_completed": abandon_result.get("at_checkpoint", False),
         "was_failed": not abandon_result.get("at_checkpoint", False),
         "restored": abandon_result.get("restored", False),
         "at_checkpoint": abandon_result.get("at_checkpoint", False),
         "cooldown_until": abandon_result.get("cooldown_until"),
     }
+
+
+def _relink_hero_to_previous(character_id: int, previous_campaign_id: int | None) -> int | None:
+    """#752: After leaving a dungeon, point the hero back at the campaign they came
+    from so it stays continuable. Only re-links to a still-active, non-dungeon
+    campaign owned by the hero. Returns the campaign id re-linked to, else None."""
+    if not previous_campaign_id:
+        return None
+    import sqlite3 as _sl
+    conn = _sl.connect(DB_PATH)
+    conn.row_factory = _sl.Row
+    try:
+        hero = conn.execute(
+            "SELECT user_id FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+        if not hero:
+            return None
+        camp = conn.execute(
+            "SELECT id, status, mode FROM campaigns WHERE id = ?",
+            (int(previous_campaign_id),),
+        ).fetchone()
+        if not camp or camp["status"] not in ("active", "pending") or camp["mode"] == "dungeon":
+            return None
+        # Free any other active hero parked on the target campaign (defensive).
+        conn.execute(
+            "UPDATE characters SET campaign_id = NULL, status = 'idle' "
+            "WHERE campaign_id = ? AND is_active = 1 AND id != ?",
+            (int(previous_campaign_id), character_id),
+        )
+        conn.execute(
+            "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",
+            (int(previous_campaign_id), character_id),
+        )
+        conn.commit()
+        return int(previous_campaign_id)
+    except Exception:
+        return None
+    finally:
+        conn.close()
 
 
 # ── Active run ────────────────────────────────────────────────────────────────
