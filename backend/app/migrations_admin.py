@@ -4452,6 +4452,63 @@ def _ensure_dice_rolls_table(conn: sqlite3.Connection) -> None:
     logger.info("admin_migration_applied", sql_preview="dice_rolls table (#754)")
 
 
+def _ensure_state_changes_table(conn: sqlite3.Connection) -> None:
+    """#761: state_changes — rejestr zmian zasobów/kondycji gracza (hp/mana/kondycje/strefa).
+
+    before→after + delta + przyczyna + tura. Bez FK CASCADE (przeżywa wyjście z lochu,
+    jak dice_rolls #754). Idempotentne.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS state_changes (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id   INTEGER NOT NULL,
+            character_id  INTEGER,
+            turn_number   REAL,
+            combat_id     INTEGER,
+            resource      TEXT NOT NULL,   -- hp|mana|condition|zone
+            before_val    TEXT,
+            after_val     TEXT,
+            delta         INTEGER,
+            cause         TEXT,            -- combat_damage|heal|trap|rest|level_up|spell_cast|zone_change|condition_apply|condition_expire
+            meta          TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_state_changes_campaign ON state_changes (campaign_id, turn_number)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_state_changes_resource ON state_changes (resource, created_at)")
+    conn.commit()
+    logger.info("admin_migration_applied", sql_preview="state_changes table (#761)")
+
+
+def _ensure_turn_decisions_table(conn: sqlite3.Connection) -> None:
+    """#762: turn_decisions — rejestr decyzji silnika per tura (intent/route/gate).
+
+    Żywy następca martwego action_log. Bez FK CASCADE. Idempotentne.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS turn_decisions (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id        INTEGER NOT NULL,
+            character_id       INTEGER,
+            turn_number        REAL,
+            user_text          TEXT,
+            action_type        TEXT,
+            confidence         REAL,
+            route              TEXT,
+            gate_blocked       INTEGER,
+            gate_reason        TEXT,
+            handler            TEXT,
+            correction_applied INTEGER,
+            raw_intent         TEXT,
+            meta               TEXT,
+            created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_turn_decisions_campaign ON turn_decisions (campaign_id, turn_number)")
+    conn.commit()
+    logger.info("admin_migration_applied", sql_preview="turn_decisions table (#762)")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4548,6 +4605,8 @@ def run_admin_migrations() -> None:
         _l9_deactivate_legacy_dungeons(conn)
         _ensure_portrait_columns(conn)
         _ensure_dice_rolls_table(conn)  # #754
+        _ensure_state_changes_table(conn)  # #761
+        _ensure_turn_decisions_table(conn)  # #762
     finally:
         conn.close()
 

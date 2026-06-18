@@ -1196,6 +1196,34 @@ def _with_turn_trace(payload: dict, turn_id: str) -> dict:
     return {**payload, "turn_id": turn_id}
 
 
+def _record_turn_decision_safe(
+    campaign_id, character_id, user_text, *, route, gate_blocked, gate_reason,
+    handler, conn=None,
+):
+    """#762: zapis decyzji silnika (intent keyword-only — bez LLM, bez kosztu). Best-effort."""
+    try:
+        from app.services.decision_log_service import record_turn_decision
+        from app.services.gate_service import classify_intent_stub
+        action_type = (classify_intent_stub(user_text) or {}).get("action_type")
+        tn = None
+        if conn is not None:
+            try:
+                tn = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                    (campaign_id,),
+                ).fetchone()[0]
+            except Exception:
+                tn = None
+        record_turn_decision(
+            campaign_id=campaign_id, character_id=character_id, turn_number=tn,
+            user_text=user_text, action_type=action_type, confidence=None, route=route,
+            gate_blocked=gate_blocked, gate_reason=gate_reason, handler=handler,
+            raw_intent=action_type,
+        )
+    except Exception:
+        pass
+
+
 def _structured_action_to_tag(action_str: str) -> str:
     """
     T33: Convert a structured button-click payload into an [ACTION:...] tag
@@ -4145,6 +4173,11 @@ def create_turn(
                         reason=_gate_result.reason,
                         action_preview=narrative_text[:60],
                     )
+                    _record_turn_decision_safe(
+                        campaign_id, payload.character_id, narrative_text,
+                        route="blocked", gate_blocked=True, gate_reason=_gate_result.reason,
+                        handler="gate", conn=conn,
+                    )
                     return _with_turn_trace(
                         {
                             "blocked": True,
@@ -4156,6 +4189,13 @@ def create_turn(
             except Exception as _gate_err:
                 logger.warning("gate_check_error", error=str(_gate_err))
                 # Gate errors must never break the game — fall through to LLM
+            # #762: decyzja silnika — tura przepuszczona przez gate (intent + route narracyjny)
+            if not roll_request:
+                _record_turn_decision_safe(
+                    campaign_id, payload.character_id, narrative_text,
+                    route="narrative", gate_blocked=False, gate_reason=None,
+                    handler="narrative", conn=conn,
+                )
 
         # ── U7: detect risky intent before LLM ───────────────────────────────
         _risky_intent_match = None

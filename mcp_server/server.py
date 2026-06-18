@@ -931,6 +931,179 @@ def query_dice_rolls(
 
 
 # ---------------------------------------------------------------------------
+# Tool 7c (#760): query_world_snapshots — przycięty stan świata per tura
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def query_world_snapshots(
+    campaign_id: int,
+    from_turn: Optional[int] = None,
+    to_turn: Optional[int] = None,
+    limit: int = 50,
+) -> list[dict]:
+    """Przycięty stan świata per tura (#760): wrogowie/NPC/questy/kondycje/scene_cleared.
+    Debug 'jak wyglądała scena w turze N' bez replayu i bez surowego ogromnego JSON-a.
+    """
+    conn = get_db()
+    try:
+        clauses = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if from_turn is not None:
+            clauses.append("turn_number >= ?")
+            params.append(from_turn)
+        if to_turn is not None:
+            clauses.append("turn_number <= ?")
+            params.append(to_turn)
+        lim = max(1, min(int(limit or 50), 1000))
+        sql = (
+            "SELECT turn_number, snapshot_json, snapshot_source, created_at "
+            "FROM world_state_snapshots WHERE " + " AND ".join(clauses)
+            + " ORDER BY turn_number DESC LIMIT ?"
+        )
+        params.append(lim)
+        out = []
+        for r in conn.execute(sql, params).fetchall():
+            snap = parse_json_safe(r["snapshot_json"], {}) or {}
+            enemies = snap.get("scene_enemies") or []
+            npcs = snap.get("scene_npcs") or []
+            quests = snap.get("active_quests") or []
+            conds = snap.get("player_conditions") or []
+            out.append({
+                "turn_number": r["turn_number"],
+                "scene_cleared": snap.get("scene_cleared"),
+                "enemies": [
+                    {"key": e.get("key") or e.get("enemy_key"), "name": e.get("name"), "hp": e.get("hp")}
+                    for e in enemies if isinstance(e, dict)
+                ],
+                "enemy_count": len(enemies),
+                "npcs": [n.get("name") or n.get("key") for n in npcs if isinstance(n, dict)],
+                "quests": [
+                    (q if isinstance(q, str) else (q.get("title") or q.get("key")))
+                    for q in quests
+                ],
+                "conditions": [
+                    (c if isinstance(c, str) else c.get("key")) for c in conds
+                ],
+                "source": r["snapshot_source"],
+                "created_at": r["created_at"],
+            })
+        return out
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 7d (#760): query_llm_calls — telemetria LLM per kampania
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def query_llm_calls(
+    campaign_id: int,
+    call_type: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    """Telemetria wywołań LLM per kampania (#760): typ, model, tokeny, latencja, cache_hit, error.
+    Debug 'co kosztowało / co padło / co wolne' bez przeglądania logów Loki.
+    """
+    conn = get_db()
+    try:
+        clauses = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if call_type:
+            clauses.append("call_type = ?")
+            params.append(call_type)
+        lim = max(1, min(int(limit or 50), 1000))
+        sql = (
+            "SELECT call_type, model, prompt_tokens, completion_tokens, latency_ms, "
+            "cache_hit, error, created_at FROM llm_call_log WHERE "
+            + " AND ".join(clauses) + " ORDER BY id DESC LIMIT ?"
+        )
+        params.append(lim)
+        return rows_to_dicts(conn.execute(sql, params).fetchall())
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 7e (#761): query_state_changes — zmiany zasobów/kondycji gracza
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def query_state_changes(
+    campaign_id: int,
+    resource: Optional[str] = None,
+    from_turn: Optional[float] = None,
+    to_turn: Optional[float] = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Zmiany zasobów/kondycji gracza (#761): hp|mana|condition|zone — before→after+cause+tura.
+    Debug 'czemu HP/mana/kondycja/strefa jest teraz X' bez replayu.
+    """
+    import json as _json
+    conn = get_db()
+    try:
+        clauses = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if resource:
+            clauses.append("resource = ?"); params.append(resource)
+        if from_turn is not None:
+            clauses.append("turn_number >= ?"); params.append(from_turn)
+        if to_turn is not None:
+            clauses.append("turn_number <= ?"); params.append(to_turn)
+        lim = max(1, min(int(limit or 100), 1000))
+        sql = "SELECT * FROM state_changes WHERE " + " AND ".join(clauses) + " ORDER BY id DESC LIMIT ?"
+        params.append(lim)
+        rows = rows_to_dicts(conn.execute(sql, params).fetchall())
+        for r in rows:
+            if r.get("meta"):
+                try: r["meta"] = _json.loads(r["meta"])
+                except (TypeError, ValueError): pass
+        return rows
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 7f (#762): query_turn_decisions — decyzje silnika per tura
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def query_turn_decisions(
+    campaign_id: int,
+    from_turn: Optional[float] = None,
+    to_turn: Optional[float] = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Decyzje silnika per tura (#762): action_type, confidence, route, gate blocked/reason,
+    handler, korekta. Debug 'czemu silnik zrobił X zamiast Y' bez replayu.
+    """
+    import json as _json
+    conn = get_db()
+    try:
+        clauses = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if from_turn is not None:
+            clauses.append("turn_number >= ?"); params.append(from_turn)
+        if to_turn is not None:
+            clauses.append("turn_number <= ?"); params.append(to_turn)
+        lim = max(1, min(int(limit or 100), 1000))
+        sql = "SELECT * FROM turn_decisions WHERE " + " AND ".join(clauses) + " ORDER BY id DESC LIMIT ?"
+        params.append(lim)
+        rows = rows_to_dicts(conn.execute(sql, params).fetchall())
+        for r in rows:
+            if r.get("meta"):
+                try: r["meta"] = _json.loads(r["meta"])
+                except (TypeError, ValueError): pass
+        return rows
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Tool 8: get_system_health
 # ---------------------------------------------------------------------------
 

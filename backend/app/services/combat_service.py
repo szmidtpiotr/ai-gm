@@ -5172,6 +5172,16 @@ def resolve_attack(
                     if save_res.get("saved") and save_res.get("hp"):
                         next_hp = int(save_res["hp"])
             _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), int(row["round"] or 1), out)
+            # #761: rejestr zmiany HP gracza (cios wroga)
+            if next_hp != prev:
+                try:
+                    from app.services.state_log_service import record_state_change as _rec_state
+                    _rec_state(campaign_id=campaign_id, resource="hp", character_id=ch_id,
+                               combat_id=int(row["id"]), before_val=prev, after_val=next_hp,
+                               cause="combat_damage", meta={"round": int(row["round"] or 1),
+                                                            "enemy_name": out.get("enemy_name")})
+                except Exception:
+                    pass
             p["hp_current"] = next_hp
             sheet["current_hp"] = next_hp
             out["player_hp_remaining"] = next_hp
@@ -5370,6 +5380,16 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
         _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), round_n, out)
+        # #761: rejestr zmiany HP gracza (cios wroga — ścieżka reakcji)
+        if next_hp != prev:
+            try:
+                from app.services.state_log_service import record_state_change as _rec_state
+                _rec_state(campaign_id=campaign_id, resource="hp", character_id=ch_id,
+                           combat_id=int(row["id"]), before_val=prev, after_val=next_hp,
+                           cause="combat_damage", meta={"round": round_n,
+                                                        "enemy_name": out.get("enemy_name")})
+            except Exception:
+                pass
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp
@@ -5512,6 +5532,15 @@ def change_player_zone(campaign_id: int) -> dict[str, Any]:
         old = str(p.get("zone") or ZONE_ENGAGED)
         new = _opposite_zone(old)
         p["zone"] = new
+        # #761: rejestr zmiany strefy gracza
+        try:
+            from app.services.state_log_service import record_state_change as _rec_state
+            _rec_state(campaign_id=campaign_id, resource="zone",
+                       character_id=row["character_id"], combat_id=int(row["id"]),
+                       before_val=old, after_val=new, cause="zone_change",
+                       meta={"round": int(row["round"] or 1)})
+        except Exception:
+            pass
 
         # S12 (#607): jeśli gracz ma aktywną, niewykorzystaną w tej turze `extra_action`
         # (np. hasted → move_only), zmiana strefy jest DARMOWA — nie zużywa tury. Drugą

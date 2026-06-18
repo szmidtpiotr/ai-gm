@@ -347,6 +347,114 @@ def get_campaign_dice_rolls(
     return {"campaign_id": campaign_id, "count": len(rolls), "dice_rolls": rolls}
 
 
+@router.get("/campaigns/{campaign_id}/state-changes")
+def get_campaign_state_changes(
+    campaign_id: int,
+    resource: str | None = Query(None, description="Filtr zasobu: hp|mana|condition|zone."),
+    from_turn: float | None = Query(None),
+    to_turn: float | None = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """#761: rejestr zmian zasobów/kondycji gracza (before→after+cause+tura)."""
+    from app.services.state_log_service import query_state_changes
+    changes = query_state_changes(
+        campaign_id, resource=resource, from_turn=from_turn, to_turn=to_turn, limit=limit
+    )
+    return {"campaign_id": campaign_id, "count": len(changes), "state_changes": changes}
+
+
+@router.get("/campaigns/{campaign_id}/turn-decisions")
+def get_campaign_turn_decisions(
+    campaign_id: int,
+    from_turn: float | None = Query(None),
+    to_turn: float | None = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """#762: rejestr decyzji silnika per tura (intent/route/gate)."""
+    from app.services.decision_log_service import query_turn_decisions
+    decisions = query_turn_decisions(
+        campaign_id, from_turn=from_turn, to_turn=to_turn, limit=limit
+    )
+    return {"campaign_id": campaign_id, "count": len(decisions), "turn_decisions": decisions}
+
+
+@router.get("/campaigns/{campaign_id}/world-snapshots")
+def get_campaign_world_snapshots(
+    campaign_id: int,
+    from_turn: int | None = Query(None),
+    to_turn: int | None = Query(None),
+    limit: int = Query(50, ge=1, le=1000),
+):
+    """#760: przycięty stan świata per tura (debug bez replayu)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        where = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if from_turn is not None:
+            where.append("turn_number >= ?"); params.append(from_turn)
+        if to_turn is not None:
+            where.append("turn_number <= ?"); params.append(to_turn)
+        params.append(limit)
+        rows = conn.execute(
+            "SELECT turn_number, snapshot_json, snapshot_source, created_at "
+            "FROM world_state_snapshots WHERE " + " AND ".join(where)
+            + " ORDER BY turn_number DESC LIMIT ?",
+            params,
+        ).fetchall()
+        out = []
+        for r in rows:
+            try:
+                snap = json.loads(r["snapshot_json"] or "{}")
+            except (TypeError, ValueError):
+                snap = {}
+            enemies = snap.get("scene_enemies") or []
+            out.append({
+                "turn_number": r["turn_number"],
+                "scene_cleared": snap.get("scene_cleared"),
+                "enemies": [
+                    {"key": e.get("key") or e.get("enemy_key"), "name": e.get("name"), "hp": e.get("hp")}
+                    for e in enemies if isinstance(e, dict)
+                ],
+                "enemy_count": len(enemies),
+                "npcs": [n.get("name") or n.get("key") for n in (snap.get("scene_npcs") or []) if isinstance(n, dict)],
+                "quests": [(q if isinstance(q, str) else (q.get("title") or q.get("key"))) for q in (snap.get("active_quests") or [])],
+                "conditions": [(c if isinstance(c, str) else c.get("key")) for c in (snap.get("player_conditions") or [])],
+                "source": r["snapshot_source"],
+                "created_at": r["created_at"],
+            })
+        return {"campaign_id": campaign_id, "count": len(out), "snapshots": out}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/campaigns/{campaign_id}/llm-calls")
+def get_campaign_llm_calls(
+    campaign_id: int,
+    call_type: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=1000),
+):
+    """#760: telemetria wywołań LLM per kampania (typ/model/tokeny/latencja/cache/error)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        where = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if call_type:
+            where.append("call_type = ?"); params.append(call_type)
+        params.append(limit)
+        rows = conn.execute(
+            "SELECT call_type, model, prompt_tokens, completion_tokens, latency_ms, "
+            "cache_hit, error, created_at FROM llm_call_log WHERE " + " AND ".join(where)
+            + " ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        calls = [dict(r) for r in rows]
+        return {"campaign_id": campaign_id, "count": len(calls), "llm_calls": calls}
+    finally:
+        conn.close()
+
+
 @router.get("/campaigns/{campaign_id}")
 def get_campaign(
     campaign_id: int,
