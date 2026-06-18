@@ -50,7 +50,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #755 `[TO DO]` — [BUG] Tag QUEST_SUGGEST wycieka do bąbla narracji na żywo (stream) — front nie wycina tagów mechanicznych
 - [ ] #756 `[TO DO]` — [BUG] Duplikacja questów — ten sam quest zapisany wielokrotnie pod różnymi tytułami (dedup tylko po tytule)
 - [ ] #757 `[TO DO]` — [BUG] Inventory pokazuje klucz przedmiotu zamiast nazwy — narracyjny item zapisany do game_config_items, nie game_items
-- [ ] #759 `[TO DO]` — [BUG] Boss osiągalny w 1-2 komnacie lochu — _fill_open_doors weluje skrót do węzła bossa
+- [x] #759 `[wdrożone]` — [BUG] Boss osiągalny w 1-2 komnacie lochu — _fill_open_doors weluje skrót do węzła bossa
 - [ ] #764 `[TO DO]` — [FEATURE] System amunicji — strzały dla łuku, bełty dla kuszy; startowe 20 szt, odejmowanie przy ataku dystansowym
 - [ ] #765 `[TO DO]` — [FEATURE] Odzyskiwanie amunicji — 40% szans na odzysk strzały/bełtu + pill informacyjny
 - [ ] #766 `[TO DO]` — [BUG] Modal sklepu otwiera się przy zwykłych deklaracjach — trade-intent regex bez granic słów (skUPiam, przygLADam) + fallback keys[0]
@@ -67,7 +67,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone 7712860]
 - [x] #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót [wdrożone 2f8bb72]
 - [ ] #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci
-- [ ] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja
+- [x] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja [wdrożone]
 - [ ] #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
 - [ ] #721 — Zagadka: brak treści + panel pod belką — move_through_door resolve + z-index + pole text `[IN REVIEW]`
 - [ ] #745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved

@@ -13,6 +13,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
+<<<<<<< Updated upstream
 | **U (Plan naprawczy)** | **30/35** | **86% — PRZED Fazą 5 MP (U21–U23 odłożone do FAZY L; otwarte: U26, U27)** |
 | **S (Skille i Stany)** | **20/20** | **100% ✅ KOMPLETNE** |
 | G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
@@ -20,6 +21,14 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
 | **HI (Inspektor Bohatera)** | 0/5 | 0% — narzędzie admina, niezależne od S/L/MP (decyzja 2026-06-15) |
 | **TOTAL** | **114/198** | **58%** |
+=======
+| **U (Plan naprawczy)** | **8/35** | **23% — PRZED Fazą 5 MP** |
+| **S (Skille i Stany)** | **0/20** | **0% — zaplanowane 2026-06-12; start po/przeplatane z FAZĄ U; Blok 3 wymaga U10** |
+| G (Faza 5 MP) | 0/15 | 0% — start dopiero po U27 go/no-go |
+| H (Faza 6) | 0/5 | 0% |
+| **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
+| **TOTAL** | **103/193** | **53%** |
+>>>>>>> Stashed changes
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -474,7 +483,49 @@ _Zrobione fazy i zrobione pod-sekcje faz częściowo ukończonych. Nagłówki zd
 
 ---
 
+<<<<<<< Updated upstream
 ## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — ✅ UKOŃCZONA (S1–S20, 2026-06-14; werdykt playtestu: GRYWALNE Z ZASTRZEŻENIAMI [#615], dług promptu [#616]) → następna: CAŁA FAZA L
+=======
+## FAZA S — Skille i Stany (2026-06-12, rozszerzenie mechaniki) — po/przeplatane z FAZĄ U
+
+> Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AI. Źródło danych: `skills_conditions_design_doc.md` (korzeń repo). Kolejność = sekcja "FAZA S — zależności i kolejność" w CZĘŚCI AI (S1→S4 → S5→S7 → [U10!] S8→S14 → S15→S19 → S20). Każde zadanie = GitHub Issue `[TASK] SNN — tytuł` wdrażane `/tdd`; wyjątek S20 = czysty playtest (bez TDD, raport do issue [SMOKE] FAZA S). Prompt startowy: `prompt_s.md`.
+
+### Blok 1 — Fundament rzutu
+- [ ] S1 — Margines sukcesu: 4 stopnie wyniku testu umiejętności (zmiana zablokowanej mechaniki — zgoda 2026-06-12)
+- [ ] S2 — Staty wrogów: stats_json + archetypy + seed heurystyką (nadpisuje decyzję CZĘŚĆ AB)
+- [ ] S3 — Staty NPC + lazy generation archetypu
+- [ ] S4 — Testy przeciwne na prawdziwych statach (aktor-agnostycznie; podwalina MP)
+
+### Blok 2 — Skille: batch danych + hooki
+- [ ] S5 — Seed ~16 skilli kategorii A (czyste testy) + countery + keyword map U7
+- [ ] S6 — Haggling: targowanie wpięte w ceny sklepu
+- [ ] S7 — Gamble: hazard z prawdziwą stawką złota
+
+### Blok 3 — Prymitywy efektów + kondycje parami — ⛔ WYMAGA U10
+- [ ] S8 — Batch kondycji z istniejących klocków (on_fire, frozen, lite: confused/insane/panicked/charmed/cursed) + tag [APPLY_CONDITION]
+- [ ] S9 — Prymityw stacking_levels + kondycja exhausted
+- [ ] S10 — Prymityw escalating_dot + kondycja hemorrhage
+- [ ] S11 — Prymityw reroll + inspired + cursed (pełny)
+- [ ] S12 — Prymityw extra_action + on_expire_apply + kondycja hasted
+- [ ] S13 — Prymityw on_zero_hp_save + kondycja blessed
+- [ ] S14 — Prymityw condition_immunity + kondycja rage
+
+### Blok 4 — Zaawansowane mechaniki bojowe (można PRZED Blokiem 3; S18 wymaga S8)
+- [ ] S15 — System reakcji (pre-deklaracja) + skill dodge
+- [ ] S16 — Reakcja shield_block
+- [ ] S17 — Wrestling: skill nakłada kondycje wrogom (opposed STR vs STR)
+- [ ] S18 — Prymityw behavior_override + pełne confused/berserk/panicked
+- [ ] S19 — Kondycja hidden: untargetable + ambush_bonus
+
+### Kamień milowy
+- [ ] S20 — 🎮 Playtest FAZY S (Sandbox sweep + /game-smoke; raport do [SMOKE] FAZA S; bez TDD)
+
+> Poza zakresem FAZY S (zapisane w CZĘŚCI AI): disease/broken_limb (zegar świata), crafting mechaniczny (trade_craft/alchemy = narracyjne), pełne charmed/insane, skutki inwentarzowe pickpocket/torture.
+
+---
+
+## FAZA 5 — Multiplayer
+>>>>>>> Stashed changes
 
 > Pełne opisy zadań: `game_mechanics.md` CZĘŚĆ AI. Źródło danych: `skills_conditions_design_doc.md` (korzeń repo). Kolejność = sekcja "FAZA S — zależności i kolejność" w CZĘŚCI AI (S1→S4 → S5→S7 → [U10!] S8→S14 → S15→S19 → S20). Każde zadanie = GitHub Issue `[TASK] SNN — tytuł` wdrażane `/tdd`; wyjątek S20 = czysty playtest (bez TDD, raport do issue [SMOKE] FAZA S). Prompt startowy: `prompt_s.md`.
 
@@ -691,7 +742,7 @@ Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy j
 - [x] FIX743 — Crash przy zakładaniu rękawic (invalid armor_coverage hands) — slot hands w loot_service [#743]
 - [x] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót [#752]
 - [x] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci [#647]
-- [ ] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja
+- [x] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja [#759]
 - [ ] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
 - [ ] FIX721 — Zagadka brak treści + panel pod belką [IN REVIEW] — move_through_door resolve + z-index + pole text
 - [ ] FIX745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved

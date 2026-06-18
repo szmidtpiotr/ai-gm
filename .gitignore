@@ -76,3 +76,4 @@ temp-img/
 # Throwaway dev artifacts
 .playwright-mcp/
 mag-game-screen*.png
+.GitHubBoard/

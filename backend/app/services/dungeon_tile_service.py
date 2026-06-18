@@ -1837,6 +1837,7 @@ def _fill_open_doors(
     used_positions: set[tuple[int, int]],
     non_boss: list[dict],
     tile_id_to_node_ids: dict[int, list[str]],
+    boss_nid: str | None = None,
 ) -> dict[str, dict]:
     """Issue #697: connect every drawn-but-open door so the d-pad matches the tile art.
 
@@ -1848,6 +1849,10 @@ def _fill_open_doors(
         door — closure terminates without cascade (Decyzja 2b: „cap bez kaskady").
         Multi-door tiles are deliberately NOT used here: they would expose fresh open
         doors and expand the grid indefinitely. Respects the adjacent-same-tile rule.
+
+    Issue #759: boss_nid is excluded from weld on BOTH sides — neither the boss's extra
+    doors are welded to neighbours, nor neighbours' doors are welded to the boss.  Extra
+    boss doors are left for cap-fill (1-door stubs, no shortcut possible).
 
     Open doors that cannot be closed (cell occupied by a non-matching neighbour, or no
     matching cap in the pool) are left as None for the caller's best-graph fallback.
@@ -1869,6 +1874,8 @@ def _fill_open_doors(
         progress = False
         for nid in list(nodes.keys()):
             node = nodes[nid]
+            # Issue #759: never weld boss's extra doors — boss stays a strict dead-end.
+            skip_boss_weld = boss_nid is not None and nid == boss_nid
             for direction in list(node["doors_open"].keys()):
                 if node["doors_open"][direction] is not None:
                     continue
@@ -1880,7 +1887,7 @@ def _fill_open_doors(
                 # Pass 1 — weld to an existing neighbour with a matching open door
                 if npos in used_positions:
                     nbr_nid = pos_to_nid.get(npos)
-                    if nbr_nid is not None:
+                    if nbr_nid is not None and not skip_boss_weld and nbr_nid != boss_nid:
                         nbr_doors = nodes[nbr_nid]["doors_open"]
                         if opp in nbr_doors and nbr_doors[opp] is None:
                             node["doors_open"][direction] = nbr_nid
@@ -2032,9 +2039,30 @@ def _try_build_graph(
             branch_count += 1
             break  # one branch attempt per parent node
 
+    boss_nid = f"node_{len(sequence) - 1}"
+
     # Issue #697 (Decyzja 2b): close every drawn-but-open door so the d-pad matches
     # the tile art (weld neighbours + cap-fill free cells with 1-door zaślepki).
-    _fill_open_doors(nodes, used_positions, non_boss, tile_id_to_node_ids)
+    # Issue #759: pass boss_nid so the boss stays a strict dead-end (no shortcut welds).
+    _fill_open_doors(nodes, used_positions, non_boss, tile_id_to_node_ids, boss_nid=boss_nid)
+
+    # Issue #759 option C: BFS safety-net — boss must not be reachable via a shortcut.
+    # If shortest path entry→boss < len(sequence)-1, a shortcut slipped through;
+    # return None so draw_tile_graph retries with a fresh layout.
+    entry_nid = "node_0"
+    required_depth = len(sequence) - 1
+    if required_depth > 0:
+        dist: dict[str, int] = {entry_nid: 0}
+        queue = [entry_nid]
+        while queue:
+            cur = queue.pop(0)
+            for tgt in nodes[cur]["doors_open"].values():
+                if tgt is not None and tgt not in dist:
+                    dist[tgt] = dist[cur] + 1
+                    queue.append(tgt)
+        boss_dist = dist.get(boss_nid)
+        if boss_dist is not None and boss_dist < required_depth:
+            return None  # shortcut exists — caller retries
 
     # Generate door hints for all nodes
     for node in nodes.values():
@@ -2047,7 +2075,7 @@ def _try_build_graph(
     return {
         "nodes": nodes,
         "entry_node": "node_0",
-        "boss_node": f"node_{len(sequence) - 1}",
+        "boss_node": boss_nid,
     }
 
 
@@ -2394,11 +2422,15 @@ def _attach_endless_segment(
     all_nodes = {**merged_old, **remapped}
 
     # Re-seal the whole graph: close any door freed by cap removal (weld + cap-fill).
+    # Issue #759: protect the new boss from shortcut welds.
     used_positions = {tuple(n["position"]) for n in all_nodes.values()}
     tile_id_to_node_ids: dict[int, list[str]] = {}
     for nid, n in all_nodes.items():
         tile_id_to_node_ids.setdefault(n.get("tile_id"), []).append(nid)
-    _fill_open_doors(all_nodes, used_positions, non_boss_caps, tile_id_to_node_ids)
+    _fill_open_doors(
+        all_nodes, used_positions, non_boss_caps, tile_id_to_node_ids,
+        boss_nid=new_boss_nid,
+    )
 
     # Refresh door hints across the merged graph.
     for node in all_nodes.values():
