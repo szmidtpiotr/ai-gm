@@ -5589,6 +5589,12 @@ HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od 
 
 > **Wdrożone (frontend-only):** Predykat podziału ekwipunku zmieniony z `_invIsLore` (sprawdzał `item_type`: misc/quest/narrative — kruche) na `_invIsUsable` (sprawdza `can_use` + weapon/armor). Narracyjne przedmioty z `item_type='item'` (#757 pattern) teraz trafiają do dolnej sekcji. Sekcja dolna przemianowana na **"PRZEDMIOTY NIEUŻYWALNE"** (było "Przedmioty fabularne"). `?v=770-inv-usability-bucket-2026-06-18`. 9/9 pytest + 2/2 Playwright GREEN.
 
+## Poprawki gold/grant — 2026-06-18
+
+### #775 — Monetary grant_item safety-net: mieszek z monetami → grant_gold ✅ ([#775](https://github.com/szmidtpiotr/ai-gm/issues/775), 2026-06-18)
+
+> **Wdrożone:** Backend safety-net w `extract_grant_cues` (`turns.py`): nowa funkcja `_monetary_item_gold()` wykrywa label zawierający słowo z klasy bag (`mieszek|sakiewka|trzos|sakwa`) AND słowo monetarne (`monet|zapłat|złot|gold|gp`) i konwertuje grant_item na grant_gold zamiast tworzyć martwy item inventory. Kwota ekstrahowana z cyfry w labelu/opisie lub default 10 GP. Osobna zmienna `_bag_gold` gwarantuje że explicit `Grant Gold N` zawsze wygrywa nad bag-conversion. Bezpieczeństwo false-positive: "Pusty mieszek" (brak słowa monetarnego) → nadal zwykły item. Prompt: dodano ZAKAZ używania `Grant Item` dla pieniędzy w sekcji ZŁOTO FABULARNE system_prompt.txt. 9/9 pytest + 3/3 Playwright GREEN. Commit `444d85b`.
+
 ## Poprawki konsumable — 2026-06-18
 
 ### #771 — Konsumable on-use effect builder (damage_enemy + apply_condition target) ✅ ([#771](https://github.com/szmidtpiotr/ai-gm/issues/771), 2026-06-18)
