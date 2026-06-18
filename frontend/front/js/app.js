@@ -1129,9 +1129,15 @@ async function loadCampaigns() {
             if (currentHero?.id) {
                 const campCharId = c.character_id ?? c.char_id;
                 // If campaign has a character assigned and it's not this hero → hide
-                // Also hide if campaign has NO active character (hero was deleted)
-                if (campCharId === null || campCharId === undefined) return false; // no active char
-                if (Number(campCharId) !== Number(currentHero.id)) return false;
+                if (campCharId === null || campCharId === undefined) {
+                    // No active character in campaign. Only hide if THIS hero is busy
+                    // elsewhere; an idle hero may still re-enter (e.g. after exiting a
+                    // dungeon the hero is idle but the original campaign is character-less).
+                    const heroIsIdle = currentHero.status === 'idle' || !currentHero.campaign_id;
+                    if (!heroIsIdle) return false;
+                } else if (Number(campCharId) !== Number(currentHero.id)) {
+                    return false;
+                }
             }
             return true;
         });
@@ -11731,6 +11737,9 @@ async function enterDungeon(dungeonKey) {
     if (!currentHero?.id || !currentUser?.id) return;
     showToast('Wkraczasz do lochu…', 'info', 2000);
 
+    // #752: remember the campaign we came from so we can auto-return on exit.
+    const _prevCampaignId = currentCampaignId || currentHero.campaign_id || null;
+
     try {
         // Create disposable dungeon campaign
         const dungeonCampaign = await apiRequest('POST', '/campaigns', {
@@ -11762,7 +11771,7 @@ async function enterDungeon(dungeonKey) {
         const resp = await apiRequest('POST', `/dungeons/${dungeonKey}/enter`, {
             character_id: currentHero.id,
             campaign_id: dungeonCampaign.id,
-            previous_campaign_id: null,
+            previous_campaign_id: _prevCampaignId,
         });
 
         _activeDungeonRun = resp.dungeon_run;
@@ -12310,6 +12319,19 @@ async function _doExitDungeon() {
             currentHero = heroResp.character || heroResp;
         }
         await loadCampaigns();
+        // #752: auto-return to the campaign we came from before the dungeon.
+        const _prevId = resp.previous_campaign_id;
+        if (_prevId) {
+            try {
+                const listResp = await apiRequest('GET', '/campaigns');
+                const list = listResp.campaigns || (Array.isArray(listResp) ? listResp : []);
+                const prevCamp = list.find(c => Number(c.id) === Number(_prevId));
+                if (prevCamp) {
+                    await selectCampaign(prevCamp);
+                    return;
+                }
+            } catch (e) { console.warn('[Dungeon] auto-return failed', e); }
+        }
         showScreen('campaigns');
     } catch (err) {
         showToast(err.message || 'Błąd', 'error');
