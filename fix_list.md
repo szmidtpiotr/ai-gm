@@ -25,7 +25,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #659 `[TO DO]` — [TASK] B11 — AoE multi-target maga (burning_arc/chain_lightning/fireball)
 - [ ] #719 `[IN REVIEW]` — [TASK] L-fix — Modal kości: pokaż test uniku wroga (czemu wysoki rzut chybia)
 - [ ] #720 `[IN REVIEW]` — [TASK] L-fix — Brak popupu 'co wypadło z bossa' (łup bossa nie pokazany)
-- [ ] #721 `[IN REVIEW]` — [BUG] Loch — panel zagadki pod belką + brak treści zagadki (goły klucz string + pole text/question)
+- [x] #721 `[IN REVIEW]` — [BUG] Loch — panel zagadki pod belką + brak treści zagadki (goły klucz string + pole text/question) [wdrożone 01cda5f]
 - [x] #722 `[TO DO]` — [BUG] Loch — zagadka do pominięcia: kafel z riddle_key ma puste exit_conditions, D-pad przechodzi bez rozwiązania [wdrożone 56dde19]
 - [ ] #724 `[IN REVIEW]` — [TASK] L20b — Wyswietlanie portretow wrogow/NPC u gracza (modal + miniatura)
 - [ ] #727 `[TO DO]` — [BUG] Combat Sandbox setup — HTTP 500 (FK constraint on stale clone active_combat)
@@ -69,7 +69,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci
 - [x] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja [wdrożone bfe0f37]
 - [ ] #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
-- [ ] #721 — Zagadka: brak treści + panel pod belką — move_through_door resolve + z-index + pole text `[IN REVIEW]`
+- [x] #721 — Zagadka: brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index + pole text [wdrożone 01cda5f]
 - [ ] #745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved
 
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
