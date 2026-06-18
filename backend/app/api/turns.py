@@ -1203,8 +1203,20 @@ def _record_turn_decision_safe(
     """#762: zapis decyzji silnika (intent keyword-only — bez LLM, bez kosztu). Best-effort."""
     try:
         from app.services.decision_log_service import record_turn_decision
-        from app.services.gate_service import classify_intent_stub
-        action_type = (classify_intent_stub(user_text) or {}).get("action_type")
+        # #762: intent_service.parse_intent — keyword-only (zero kosztu LLM), ale daje
+        # znormalizowany action_type + confidence (0.8 keyword / 0.4 fallback) + target.
+        action_type = None
+        confidence = None
+        target = None
+        try:
+            from app.services.intent_service import parse_intent
+            _pi = parse_intent(user_text, campaign_id)
+            action_type = _pi.action_type
+            confidence = _pi.confidence
+            target = _pi.target
+        except Exception:
+            from app.services.gate_service import classify_intent_stub
+            action_type = (classify_intent_stub(user_text) or {}).get("action_type")
         tn = None
         if conn is not None:
             try:
@@ -1216,9 +1228,9 @@ def _record_turn_decision_safe(
                 tn = None
         record_turn_decision(
             campaign_id=campaign_id, character_id=character_id, turn_number=tn,
-            user_text=user_text, action_type=action_type, confidence=None, route=route,
+            user_text=user_text, action_type=action_type, confidence=confidence, route=route,
             gate_blocked=gate_blocked, gate_reason=gate_reason, handler=handler,
-            raw_intent=action_type,
+            raw_intent=action_type, meta={"target": target} if target else None,
         )
     except Exception:
         pass

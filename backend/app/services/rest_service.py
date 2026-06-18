@@ -267,6 +267,17 @@ def perform_short_rest(
 
     sheet["current_hp"] = new_hp
     sheet["short_rests_used"] = used + 1
+    # #761: rejestr leczenia z krótkiego odpoczynku
+    if new_hp != hp:
+        try:
+            from app.services.state_log_service import record_state_change
+            record_state_change(
+                campaign_id=campaign_id, resource="hp", character_id=character_id,
+                before_val=hp, after_val=new_hp, cause="rest",
+                meta={"rest_type": "short", "roll": roll, "con_mod": con_mod},
+            )
+        except Exception:
+            pass
 
     # S9 (#604): krótki odpoczynek (1h) zdejmuje 1 poziom kondycji stackowalnych (exhausted).
     conds = sheet.get("conditions")

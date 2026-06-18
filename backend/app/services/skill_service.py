@@ -782,7 +782,25 @@ def resolve_skill_test(
         result["trap_damage_dice"] = damage_dice
         result["trap_condition_key"] = trap.get("condition_key")
         # Apply HP damage
+        _hp_before_trap = None
+        try:
+            _r = conn.execute("SELECT sheet_json FROM characters WHERE id=?", (character_id,)).fetchone()
+            if _r:
+                _hp_before_trap = int(json.loads(_r[0] or "{}").get("current_hp", 0))
+        except Exception:
+            _hp_before_trap = None
         _apply_trap_damage(character_id, dmg, conn)
+        # #761: rejestr obrażeń z pułapki
+        if _hp_before_trap is not None:
+            try:
+                from app.services.state_log_service import record_state_change
+                record_state_change(
+                    campaign_id=campaign_id, resource="hp", character_id=character_id,
+                    before_val=_hp_before_trap, after_val=max(0, _hp_before_trap - dmg),
+                    cause="trap", meta={"damage_dice": damage_dice, "skill_key": result.get("skill_key")},
+                )
+            except Exception:
+                pass
 
     # S11 (#606) — przerzut gracza (inspired): nieudany test → oferta keep-best na karcie.
     if not result["success"]:

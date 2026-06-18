@@ -1695,7 +1695,9 @@ def _resolve_effect_spell_in_combat(
 
     # Mana z góry (pełny koszt; ½ wraca przy oporze). Darmowy czar (mana 0) pomija kontrolę.
     if mana_cost > 0:
-        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -1844,7 +1846,9 @@ def _resolve_defense_spell_in_combat(
     out["damage"] = 0  # tarcza nie zadaje obrażeń
 
     if mana_cost > 0:
-        _mana_ok, _ = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        _mana_ok, _ = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -1941,7 +1945,9 @@ def _resolve_heal_spell_in_combat(
     out["damage"] = 0
 
     if mana_cost > 0:
-        _mana_ok, _ = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        _mana_ok, _ = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -1963,7 +1969,18 @@ def _resolve_heal_spell_in_combat(
         (spell_k,),
     ).fetchone()
     spell_stats = {"heal_die": (heal_die_row["heal_die"] if heal_die_row else None) or "1d6"}
+    _hp_before_heal = int(sheet.get("current_hp") or 0)
     heal_result = spell_service.resolve_mend_wounds(sheet, spell_stats)
+    # #761: rejestr leczenia (HP w górę)
+    try:
+        from app.services.state_log_service import record_state_change as _rec_state
+        _hp_after_heal = int(heal_result.get("hp_after") or _hp_before_heal)
+        if _hp_after_heal != _hp_before_heal:
+            _rec_state(campaign_id=campaign_id, resource="hp", character_id=row["character_id"],
+                       combat_id=int(row["id"]), before_val=_hp_before_heal, after_val=_hp_after_heal,
+                       cause="heal", meta={"spell": "mend_wounds", "healed": heal_result.get("healed")})
+    except Exception:
+        pass
 
     p = _find_combatant(combatants, "player")
     if p:
@@ -2057,7 +2074,9 @@ def _resolve_aoe_spell_in_combat(
 
     # 1. Mana check (pełna cena z góry)
     if mana_cost > 0:
-        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(sheet, mana_cost)
+        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
         if not _mana_ok:
             out["hit"] = False
             out["blocked"] = True
@@ -2691,6 +2710,18 @@ def remove_condition_from_character(
             except Exception:
                 pass
 
+    # #761: rejestr zdjęcia kondycji gracza
+    if removed > 0:
+        try:
+            from app.services.state_log_service import record_state_change
+            record_state_change(
+                campaign_id=campaign_id, resource="condition", character_id=character_id,
+                before_val=condition_key, after_val=None, cause="condition_expire",
+                meta={"removed_count": removed},
+            )
+        except Exception:
+            pass
+
     return removed
 
 
@@ -2772,6 +2803,18 @@ def add_condition_to_character(
                     added += 1
     except Exception:
         pass
+
+    # #761: rejestr nałożenia kondycji na gracza
+    if added > 0:
+        try:
+            from app.services.state_log_service import record_state_change
+            record_state_change(
+                campaign_id=campaign_id, resource="condition", character_id=character_id,
+                before_val=None, after_val=condition_key, cause="condition_apply",
+                meta={"added_count": added},
+            )
+        except Exception:
+            pass
 
     return added
 
@@ -4376,7 +4419,10 @@ def resolve_attack(
             _mana_ok = True
             if _is_spell and not _is_free_cantrip:
                 from app.services.spell_service import check_and_deduct_mana
-                _mana_ok, _new_mana = check_and_deduct_mana(sheet, _spell_mana_cost)
+                _mana_ok, _new_mana = check_and_deduct_mana(
+                    sheet, _spell_mana_cost,
+                    campaign_id=campaign_id, character_id=ch_id, combat_id=int(row["id"]),
+                )
                 if not _mana_ok:
                     _persist_combatants(conn, row, combatants)
                     conn.execute(

@@ -105,13 +105,35 @@ def defense_absorb_amount(spell_row) -> int:
 
 # ── Mana management ───────────────────────────────────────────────────────────
 
-def check_and_deduct_mana(sheet: dict, mana_cost: int) -> tuple[bool, int]:
-    """Check mana available and deduct. Returns (ok, new_current_mana)."""
+def check_and_deduct_mana(
+    sheet: dict,
+    mana_cost: int,
+    *,
+    campaign_id: int | None = None,
+    character_id: int | None = None,
+    combat_id: int | None = None,
+    cause: str = "spell_cast",
+) -> tuple[bool, int]:
+    """Check mana available and deduct. Returns (ok, new_current_mana).
+
+    #761: gdy podasz campaign_id, udane potrącenie many jest zapisane do state_changes
+    (before→after+delta). Best-effort — nigdy nie wywraca rzucania czaru.
+    """
     current = int(sheet.get("current_mana") or 0)
     if current < mana_cost:
         return False, current
     new_mana = current - mana_cost
     sheet["current_mana"] = new_mana
+    if campaign_id is not None:
+        try:
+            from app.services.state_log_service import record_state_change
+            record_state_change(
+                campaign_id=campaign_id, resource="mana", character_id=character_id,
+                combat_id=combat_id, before_val=current, after_val=new_mana,
+                cause=cause, meta={"mana_cost": int(mana_cost)},
+            )
+        except Exception:
+            pass
     return True, new_mana
 
 

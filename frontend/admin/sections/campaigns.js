@@ -434,13 +434,15 @@ function filterTableGeneric(input, tableId, nameClass) {
         </div>
       </div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
-        ${['overview','plan','turns','dice','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
+        ${['overview','plan','turns','dice','state','decisions','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
         <div id="ctab-overview" style="padding:16px"><div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div></div>
         <div id="ctab-plan"     style="padding:16px;display:none"></div>
         <div id="ctab-turns"    style="padding:0;display:none"></div>
         <div id="ctab-dice"     style="padding:0;display:none"></div>
+        <div id="ctab-state"    style="padding:0;display:none"></div>
+        <div id="ctab-decisions" style="padding:0;display:none"></div>
         <div id="ctab-map"      style="padding:16px;display:none"></div>
         <div id="ctab-npcs"     style="padding:16px;display:none"></div>
         <div id="ctab-workshop" style="padding:16px;display:none;height:420px;display:none;flex-direction:column;gap:8px"></div>
@@ -952,6 +954,78 @@ function filterTableGeneric(input, tableId, nameClass) {
         } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
       };
       await _render(null);
+    }
+
+    else if (tab === 'state') {
+      // #761: rejestr zmian zasobów/kondycji gracza.
+      panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
+      const RES = { hp:'❤️ HP', mana:'🔵 Mana', condition:'✨ Kondycja', zone:'📍 Strefa' };
+      const _render = async (filter) => {
+        try {
+          const qs = filter ? `?resource=${encodeURIComponent(filter)}&limit=200` : '?limit=200';
+          const d = await apiFetch(`/api/campaigns/${campId}/state-changes${qs}`);
+          const rows = d.state_changes || [];
+          const types = ['', ...Object.keys(RES)];
+          const bar = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+            ${types.map(t => `<button class="btn btn-sm st-filter${(t===(filter||''))?' btn-primary':''}" data-stype="${t}" style="font-size:0.72rem;padding:2px 8px">${t?RES[t]:'Wszystkie'}</button>`).join('')}
+            <span style="margin-left:auto;font-size:0.72rem;color:var(--t3);align-self:center">${rows.length} zmian</span>
+          </div>`;
+          const fmtDelta = (dl) => dl==null ? '' : (dl>0?`<span style="color:var(--green)">+${dl}</span>`:`<span style="color:var(--red)">${dl}</span>`);
+          const body = !rows.length
+            ? '<p style="text-align:center;padding:24px;color:var(--t3)">Brak zmian. Zagraj turę / walkę / odpocznij.</p>'
+            : `<table class="data-table" style="width:100%;font-size:0.78rem">
+                <thead><tr><th style="text-align:left">Zasób</th><th>Było</th><th>Jest</th><th>Δ</th><th style="text-align:left">Powód</th><th style="text-align:left">Szczegóły</th></tr></thead>
+                <tbody>${rows.map(r => {
+                  const meta = r.meta || {};
+                  const bits = [];
+                  if (meta.round!=null) bits.push('r'+meta.round);
+                  if (meta.enemy_name) bits.push(_esc(meta.enemy_name));
+                  if (meta.spell) bits.push(_esc(meta.spell));
+                  if (meta.skill_key) bits.push(_esc(meta.skill_key));
+                  return `<tr>
+                    <td style="text-align:left">${RES[r.resource]||_esc(r.resource)}</td>
+                    <td style="text-align:center;font-family:monospace">${r.before_val ?? '—'}</td>
+                    <td style="text-align:center;font-family:monospace;font-weight:700">${r.after_val ?? '—'}</td>
+                    <td style="text-align:center;font-family:monospace">${fmtDelta(r.delta)}</td>
+                    <td style="text-align:left">${_esc(r.cause||'—')}</td>
+                    <td style="text-align:left;color:var(--t3);font-size:0.72rem">${bits.join(' · ')}</td>
+                  </tr>`;
+                }).join('')}</tbody></table>`;
+          panel.innerHTML = bar + `<div style="padding:0 4px 16px">${body}</div>`;
+          panel.querySelectorAll('.st-filter').forEach(b =>
+            b.addEventListener('click', () => _render(b.dataset.stype || null)));
+        } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
+      };
+      await _render(null);
+    }
+
+    else if (tab === 'decisions') {
+      // #762: rejestr decyzji silnika per tura (intent/route/gate).
+      panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
+      try {
+        const d = await apiFetch(`/api/campaigns/${campId}/turn-decisions?limit=200`);
+        const rows = d.turn_decisions || [];
+        const body = !rows.length
+          ? '<p style="text-align:center;padding:24px;color:var(--t3)">Brak decyzji. Zagraj turę.</p>'
+          : `<table class="data-table" style="width:100%;font-size:0.78rem">
+              <thead><tr><th>T</th><th style="text-align:left">Wejście gracza</th><th style="text-align:left">Intent</th><th>Conf</th><th style="text-align:left">Trasa</th><th style="text-align:left">Gate</th></tr></thead>
+              <tbody>${rows.map(r => {
+                const blocked = r.gate_blocked === true;
+                const gate = blocked
+                  ? `<span style="color:var(--red);font-weight:600">⛔ ${_esc(r.gate_reason||'blocked')}</span>`
+                  : '<span style="color:var(--green)">✓ pass</span>';
+                const conf = r.confidence==null ? '—' : `${Math.round(r.confidence*100)}%`;
+                return `<tr>
+                  <td style="text-align:center;font-family:monospace">${r.turn_number ?? '—'}</td>
+                  <td style="text-align:left;color:var(--t2)">${_esc((r.user_text||'').slice(0,80))}</td>
+                  <td style="text-align:left"><span class="badge badge-slate">${_esc(r.action_type||'?')}</span></td>
+                  <td style="text-align:center;font-family:monospace">${conf}</td>
+                  <td style="text-align:left">${_esc(r.route||'—')}</td>
+                  <td style="text-align:left">${gate}</td>
+                </tr>`;
+              }).join('')}</tbody></table>`;
+        panel.innerHTML = `<div style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);font-size:0.72rem;color:var(--t3)">${rows.length} decyzji — czemu silnik zrobił X</div><div style="padding:0 4px 16px">${body}</div>`;
+      } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
     }
   }
 
