@@ -1333,6 +1333,20 @@ async function openNpcImageModal(id, encData) {
       document.getElementById('ni-remove-btn').disabled=true;
     } catch(ex){_showToast(ex.message||'Błąd','error');}
   };
+
+  // Auto-enhance prompt from Polish description (LLM PL→EN keywords) — same as enemy modal
+  setTimeout(async () => {
+    if (!n.description || (n.image_gen_prompt && n.image_gen_prompt.trim())) return;
+    try {
+      const r = await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:n.description,context:`fantasy NPC character, type:${n.npc_type||'neutral'}`})});
+      if (r.keywords) {
+        const extra = 'character portrait, warm fantasy lighting, detailed illustration, no text, no UI';
+        ta.value = r.keywords + ', ' + extra; _autoResize(ta);
+        const badge = document.getElementById('ni-trans-badge');
+        if (badge) { badge.textContent='✦ auto+AI'; badge.style.background='#7c3aed33'; badge.style.color='#a78bfa'; }
+      }
+    } catch{}
+  }, 100);
 }
 
 async function niOpenGallery(id) {

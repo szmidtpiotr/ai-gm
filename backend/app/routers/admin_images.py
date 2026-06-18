@@ -338,10 +338,14 @@ async def describe_prompt(req: DescribePromptRequest):
 
     system = (
         "You are a visual prompt engineer for fantasy RPG image generation. "
-        "The user will give you a Polish description of a game location. "
+        "The user will give you a Polish description of a game location OR a character "
+        "(NPC, enemy, creature). The [Context: ...] line tells you which. "
         "Your job: extract the visual essence and output ONLY a short English comma-separated "
         "list of image generation keywords (15-30 words max). "
-        "Focus on: setting, atmosphere, lighting, architecture, nature elements, mood. "
+        "For a character: focus on who/what they are, appearance, clothing/armor, age, gender, "
+        "role, expression, mood. For a location: focus on setting, atmosphere, lighting, "
+        "architecture, nature elements, mood. "
+        "Always reflect the actual subject described — do not output generic adventurer keywords. "
         "No explanations. No Polish words. No sentences. Only English keywords."
     )
     user_msg = req.text.strip()
