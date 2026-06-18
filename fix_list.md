@@ -26,7 +26,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #719 `[IN REVIEW]` — [TASK] L-fix — Modal kości: pokaż test uniku wroga (czemu wysoki rzut chybia)
 - [ ] #720 `[IN REVIEW]` — [TASK] L-fix — Brak popupu 'co wypadło z bossa' (łup bossa nie pokazany)
 - [ ] #721 `[IN REVIEW]` — [BUG] Loch — panel zagadki pod belką + brak treści zagadki (goły klucz string + pole text/question)
-- [ ] #722 `[TO DO]` — [BUG] Loch — zagadka do pominięcia: kafel z riddle_key ma puste exit_conditions, D-pad przechodzi bez rozwiązania
+- [x] #722 `[TO DO]` — [BUG] Loch — zagadka do pominięcia: kafel z riddle_key ma puste exit_conditions, D-pad przechodzi bez rozwiązania [wdrożone 56dde19]
 - [ ] #724 `[IN REVIEW]` — [TASK] L20b — Wyswietlanie portretow wrogow/NPC u gracza (modal + miniatura)
 - [ ] #727 `[TO DO]` — [BUG] Combat Sandbox setup — HTTP 500 (FK constraint on stale clone active_combat)
 - [ ] #728 `[TO DO]` — [BUG] Krypta cooldown=0 nadal pokazuje timeout (20.2h)

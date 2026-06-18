@@ -743,6 +743,6 @@ Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy j
 - [x] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót [#752]
 - [x] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci [#647]
 - [x] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja [#759]
-- [ ] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
+- [x] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill [#722]
 - [ ] FIX721 — Zagadka brak treści + panel pod belką [IN REVIEW] — move_through_door resolve + z-index + pole text
 - [ ] FIX745 — Panel zagadki nie znika po rozwiązaniu — node.cleared=true on solved
