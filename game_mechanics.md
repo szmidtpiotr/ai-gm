@@ -5588,3 +5588,9 @@ HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od 
 ### #770 — Inventory: podział sekcji wg używalności (can_use) ✅ ([#770](https://github.com/szmidtpiotr/ai-gm/issues/770), 2026-06-18)
 
 > **Wdrożone (frontend-only):** Predykat podziału ekwipunku zmieniony z `_invIsLore` (sprawdzał `item_type`: misc/quest/narrative — kruche) na `_invIsUsable` (sprawdza `can_use` + weapon/armor). Narracyjne przedmioty z `item_type='item'` (#757 pattern) teraz trafiają do dolnej sekcji. Sekcja dolna przemianowana na **"PRZEDMIOTY NIEUŻYWALNE"** (było "Przedmioty fabularne"). `?v=770-inv-usability-bucket-2026-06-18`. 9/9 pytest + 2/2 Playwright GREEN.
+
+## Poprawki konsumable — 2026-06-18
+
+### #771 — Konsumable on-use effect builder (damage_enemy + apply_condition target) ✅ ([#771](https://github.com/szmidtpiotr/ai-gm/issues/771), 2026-06-18)
+
+> **Wdrożone:** Pełny system efektów on-use dla konsumabli. (A) Migracja: kolumna `effect_json TEXT` do `game_config_consumables`; backfill 14 konsumabli (holy_water, alchemist_fire, scroll_fireball, potion_strength, potion_giant_strength, potion_resistance, potion_stamina, potion_haste, potion_stealth, smoke_bomb, scroll_magic_bolt, vial_of_acid, scroll_light, scroll_shield). (B) `loot_service.py`: dispatcher `damage_enemy` atakuje pierwszego żywego wroga z `active_combat.combatants`; `apply_condition` z polem `target=enemy` nałożyć kondycję na wroga zamiast na gracza. (C) Admin UI: `_CONSUMABLE_EFFECT_TYPES` + builder graficzny w `content.js`; `_FORGE_CONSUMABLE_EFFECT_TYPES` + `_forgeGetEffectTypes()` w `forge.js`. Poza walką `damage_enemy` → `narrative_only` (brak crashu). 8/8 pytest + 3/3 Playwright GREEN. Commit `c095229`.
