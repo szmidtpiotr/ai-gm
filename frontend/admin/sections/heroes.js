@@ -11,6 +11,7 @@
  */
 import { apiFetch, APIError } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { confirmDialog } from '../shared/modal.js';
 
 const OBSERVED_OWNER_ID = 1013; // PiotrSzmidt — konto obserwowane (read-only protocol)
 // Staty edytowalne przez cheat „add stat" (delta). LCK celowo poza — backend add stat go nie wspiera.
@@ -58,7 +59,7 @@ function _renderRows() {
   if (!tbody) return;
   const rows = _heroes.filter(_matches);
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Brak bohaterów dla tego filtra.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Brak bohaterów dla tego filtra.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(h => {
@@ -74,22 +75,52 @@ function _renderRows() {
       <td><span class="badge">${_esc(statusLbl)}</span></td>
       <td>${_esc(h.campaign_title || '—')}</td>
       <td data-sort-val="${h.hp ?? 0}">${hp}</td>
+      <td style="text-align:center">${observed
+        ? '<span title="Konto obserwowane (#1013) — usuwanie zablokowane" style="color:var(--t3)">🔒</span>'
+        : `<button class="btn btn-sm" data-hero-del="${h.id}" title="Usuń bohatera" style="color:var(--red)">🗑</button>`}</td>
     </tr>`;
   }).join('');
   tbody.querySelectorAll('tr[data-hero-id]').forEach(tr => {
     tr.addEventListener('click', () => openInspector(Number(tr.dataset.heroId)));
   });
+  tbody.querySelectorAll('[data-hero-del]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation(); // nie otwieraj Inspektora przy kliknięciu kosza
+      const h = _heroes.find(x => Number(x.id) === Number(btn.dataset.heroDel));
+      if (h) _deleteHero(h);
+    });
+  });
+}
+
+// Usuń bohatera (DELETE /api/admin/characters/{id}) — twardo blokowane dla #1013, z potwierdzeniem.
+async function _deleteHero(h) {
+  if (Number(h.user_id) === OBSERVED_OWNER_ID) {
+    showToast('👁 Konto obserwowane (#1013) — usuwanie zablokowane.', 'error');
+    return;
+  }
+  const label = h.name || ('#' + h.id);
+  const ok = await confirmDialog(
+    `Usunąć bohatera „${label}"? Operacji NIE można cofnąć — usunięte zostaną też wszystkie tury tej postaci. Kampania pozostaje.`
+  );
+  if (!ok) return;
+  try {
+    await apiFetch(`/api/admin/characters/${h.id}`, { method: 'DELETE' });
+    showToast(`Bohater „${label}" usunięty`, 'success');
+    await _loadList();
+  } catch (e) {
+    showToast(`Błąd usuwania: ${e.message}`, 'error');
+  }
 }
 
 async function _loadList() {
   const tbody = document.getElementById('heroes-tbody');
-  if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3)">Ładowanie…</td></tr>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--t3)">Ładowanie…</td></tr>`;
   try {
     const res = await apiFetch('/api/admin/characters');
     _heroes = (res && res.items) || [];
     _renderRows();
   } catch (e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--red)">Błąd: ${_esc(e.message)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--red)">Błąd: ${_esc(e.message)}</td></tr>`;
   }
 }
 
@@ -164,7 +195,14 @@ async function _loadItemCatalog() {
     try {
       const res = await apiFetch(s.ep);
       const list = (res && (res.items || res)) || [];
-      list.forEach(r => out.push({ key: r.key, label: r.label || r.name || r.key, kind: s.kind }));
+      list.forEach(r => {
+        // Zbroja żyje w game_config_items (item_type='armor') — wydziel ją jako osobną
+        // kategorię „armor", by była łatwa do znalezienia w katalogu i poprawnie auto-zakładana
+        // na slot 'armor' (backend cheat „add item" + _auto_equip_new_inventory_row).
+        const kind = (s.kind === 'item' && String(r.item_type || '').toLowerCase() === 'armor')
+          ? 'armor' : s.kind;
+        out.push({ key: r.key, label: r.label || r.name || r.key, kind });
+      });
     } catch { /* pomiń jedno źródło */ }
   }
   _itemCatalog = out;
@@ -588,8 +626,11 @@ export async function openInspector(heroId) {
       const sel = body.querySelector('#hi-item-select');
       if (!sel) return;
       sel.innerHTML = '<option value="">— wybierz przedmiot —</option>';
-      const lbl = { weapon: 'Broń', item: 'Przedmiot', consumable: 'Konsumpcja' };
-      cat.forEach(c => {
+      const lbl = { weapon: 'Broń', armor: 'Zbroja', item: 'Przedmiot', consumable: 'Konsumpcja' };
+      const order = { weapon: 0, armor: 1, item: 2, consumable: 3 };
+      const sorted = [...cat].sort((a, b) =>
+        (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || String(a.label).localeCompare(String(b.label), 'pl'));
+      sorted.forEach(c => {
         const o = document.createElement('option');
         o.value = `${c.kind}|${c.key}`;
         o.textContent = `[${lbl[c.kind] || c.kind}] ${c.label}`;
@@ -788,7 +829,7 @@ export async function init(panel) {
       </div>
       <table class="data-table" id="heroes-table">
         <thead><tr>
-          <th>Imię</th><th>Archetyp</th><th>Poziom</th><th>Właściciel</th><th>Status</th><th>Kampania</th><th>HP</th>
+          <th>Imię</th><th>Archetyp</th><th>Poziom</th><th>Właściciel</th><th>Status</th><th>Kampania</th><th>HP</th><th></th>
         </tr></thead>
         <tbody id="heroes-tbody"></tbody>
       </table>

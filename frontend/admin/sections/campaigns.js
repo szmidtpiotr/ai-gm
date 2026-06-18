@@ -297,7 +297,7 @@ function filterTableGeneric(input, tableId, nameClass) {
   // banery #1013 + live-lock i guardowane zapisy (audyt + 409).
   async function _campOpenInspector(charId) {
     try {
-      const mod = await import('./heroes.js?v=39');
+      const mod = await import('./heroes.js?v=40');
       mod.openInspector(Number(charId));
     } catch (e) {
       _showToast(`Nie udało się otworzyć inspektora: ${e.message}`, 'error');
