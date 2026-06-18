@@ -57,6 +57,20 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 
 ---
 
+## FAZA — Audyt kampanii narracyjnej #99791 (2026-06-18)
+
+Źródło: pełna analiza kampanii „Pierwsze Kroki" #99791 (34 tury, 0 walk, dużo questów/zapłat). Każdy task = osobny issue z pełnym root cause. **Piotr robi TDD ręcznie.** Kolejność wdrażania (impact × niskie ryzyko × zależności):
+
+1. [ ] **#775** — [A, P0] Zapłata jako `grant_item` "mieszek z monetami" → gracz 0 zł. Fix: prompt (LOCKED, za zgodą) + backend parser grant_item→grant_gold. Najpierw bo łamie ekonomię gry.
+2. [ ] **#776** — [B, P0] Questy dostawy/wymiany nie domykają się. Fix opcja 1: `[QUEST_COMPLETE]` flipuje status + prompt. **Fallback opcja 2 (oddanie quest-itemu) opisany w issue — wdrożyć TYLKO jeśli smoke opcji 1 zawiedzie.**
+3. [ ] **#755** — [leak, P1] Tagi mechaniczne wyciekają do narracji na mobile (stream). Rozszerzony: NARRATIVE_EVENT + NPC_MEMORY + QUEST_SUGGEST. Fix: strip generyczny `[A-Z_]+:...]` w `app.js` (stream+finalize) + bump `?v=`. Frontend-only, najbardziej widoczny dla testerów.
+4. [ ] **#777** — [C, P1] Zakładki Stan/Decyzje/Zdarzenia puste dla kampanii narracyjnych. Fix: emisja game_events dla zdarzeń narracyjnych (quest/gold/item/xp/location) + naprawa writera turn_decisions (0 globalnie). Większy zakres.
+5. [ ] **D — migracja ręczna #99791 (BEZ issue)** — po weryfikacji A-D: ręczna korekta gold/XP/status questa dla Mizela #99791 post-factum. **Czekać na prośbę Piotra** (jeśli wykryje więcej błędów, zrobi się hurtem).
+6. [ ] **#779** — [feature] Zakładka Quest + XP w monitorze kampanii. `(dep: #775, #776, #777)` — rób PO naprawach, inaczej pokaże quest „active" na zawsze i 0 gold.
+7. [ ] **#778** — [P2, design] Brak intencji non-lethal (zastraszenie vs zabójstwo) + mylący komunikat „Cel ataku nieosiągalny". `(design A/B)` — dobry wynik w #99791 był przypadkiem (gate + LLM), nie mechaniką. Ostatni.
+
+---
+
 ## KOLEJNOŚĆ IMPLEMENTACJI (priorytet malejąco)
 
 Reguła priorytetu: wpływ na gracza × niskie ryzyko × zależności. Rób od góry.
