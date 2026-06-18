@@ -4509,6 +4509,24 @@ def _ensure_turn_decisions_table(conn: sqlite3.Connection) -> None:
     logger.info("admin_migration_applied", sql_preview="turn_decisions table (#762)")
 
 
+def _backfill_riddle_exit_conditions(conn: sqlite3.Connection) -> None:
+    """#722: Backfill exit_conditions_json for riddle tiles that have riddle_key but empty gate.
+
+    Idempotent — only updates tiles where exit_conditions_json is '[]' or NULL.
+    Engine auto-injects the gate at runtime too, but DB should be canonical.
+    """
+    try:
+        conn.execute(
+            "UPDATE dungeon_tiles SET exit_conditions_json = '[{\"type\":\"riddle_solved\"}]' "
+            "WHERE riddle_key IS NOT NULL AND riddle_key != '' "
+            "AND (exit_conditions_json IS NULL OR exit_conditions_json = '[]')"
+        )
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="backfill riddle exit_conditions (#722)")
+    except Exception as e:
+        logger.warning("admin_migration_skipped", label="backfill-riddle-exit-conditions-722", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4607,6 +4625,7 @@ def run_admin_migrations() -> None:
         _ensure_dice_rolls_table(conn)  # #754
         _ensure_state_changes_table(conn)  # #761
         _ensure_turn_decisions_table(conn)  # #762
+        _backfill_riddle_exit_conditions(conn)  # #722
     finally:
         conn.close()
 

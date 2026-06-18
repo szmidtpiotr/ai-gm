@@ -473,6 +473,9 @@ def resolve_tile_content(
             exit_conditions = json.loads(tile.get("exit_conditions_json") or "[]")
         except Exception:
             exit_conditions = []
+        # #722: auto-gate riddle tiles — safety net for seeds without exit_conditions_json set
+        if tile.get("riddle_key") and not any(c.get("type") == "riddle_solved" for c in exit_conditions):
+            exit_conditions.append({"type": "riddle_solved"})
 
         is_boss = bool(tile.get("is_boss_tile") or 0)
 
@@ -894,16 +897,18 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
         if not target_node_id:
             return {"ok": False, "blocked": True, "reason": f"Brak drzwi w kierunku {direction}."}
 
-        # Check exit conditions — merge content with node-level cleared flag
-        current_content = current_node.get("content") or {}
-        tile_for_check = {**current_content, "cleared": current_node.get("cleared", False)}
-        allowed, reason = check_exit_conditions(tile_for_check, character_id)
-        if not allowed:
-            return {"ok": False, "blocked": True, "reason": reason}
-
         target_node = nodes.get(target_node_id)
         if not target_node:
             raise ValueError("Kafelek docelowy nie istnieje w grafie.")
+
+        # #722: exit conditions gate forward movement only; backtracking to a visited
+        # node is always allowed (prevents riddle soft-lock on the entry door).
+        if not target_node.get("visited"):
+            current_content = current_node.get("content") or {}
+            tile_for_check = {**current_content, "cleared": current_node.get("cleared", False)}
+            allowed, reason = check_exit_conditions(tile_for_check, character_id)
+            if not allowed:
+                return {"ok": False, "blocked": True, "reason": reason}
 
         # Mark current node as cleared on exit
         nodes[current_node_id]["cleared"] = True
@@ -1689,6 +1694,9 @@ def _get_tile_content(tile: dict) -> dict:
         exit_conditions = json.loads(tile.get("exit_conditions_json") or "[]")
     except Exception:
         exit_conditions = []
+    # #722: auto-gate riddle tiles — safety net for seeds without exit_conditions_json set
+    if tile.get("riddle_key") and not any(c.get("type") == "riddle_solved" for c in exit_conditions):
+        exit_conditions.append({"type": "riddle_solved"})
     return {
         "tile_id": tile.get("id"),
         "label": tile.get("label", ""),
