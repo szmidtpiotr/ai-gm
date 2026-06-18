@@ -19,15 +19,19 @@ set -euo pipefail
 
 OWNER_REPO="szmidtpiotr/ai-gm"
 FIX_LIST="$(cd "$(dirname "$0")/.." && pwd)/fix_list.md"
-# Status labels that move an issue OUT of the To Do column (from the plugin).
-STATUS_LABELS_RE='in-progress|review|blocked'
 
-# To Do = open issues whose labels do NOT include any status label.
+# All OPEN issues (= not Done), each tagged with its board column from labels.
+# Column rule (ClaudeCodeUI github-issues.service.js):
+#   label in-progress -> In Progress | review -> In Review | blocked -> Blocked | else -> To Do
 todo="$(gh issue list --repo "$OWNER_REPO" --state open --limit 400 \
   --json number,title,labels \
-  --jq "sort_by(.number) | .[]
-        | select([.labels[].name] | any(test(\"^(${STATUS_LABELS_RE})\$\")) | not)
-        | \"- [ ] #\(.number) — \(.title)\"")"
+  --jq 'sort_by(.number) | .[]
+        | (.labels | map(.name)) as $l
+        | (if   ($l|index("in-progress")) then "IN PROGRESS"
+           elif ($l|index("review"))      then "IN REVIEW"
+           elif ($l|index("blocked"))     then "BLOCKED"
+           else "TO DO" end) as $c
+        | "- [ ] #\(.number) `[\($c)]` — \(.title)"')"
 
 count="$(printf '%s\n' "$todo" | grep -c '^- ' || true)"
 
@@ -36,7 +40,8 @@ END="<!-- BOARD-TODO:END -->"
 stamp="$(date -u +%Y-%m-%dT%H:%MZ 2>/dev/null || echo manual-run)"
 
 new_section="$START
-## BOARD — kolumna TO DO (auto-sync z ClaudeCodeUI Issues Board, $count pozycji, $stamp)
+## BOARD — otwarte issues (auto-sync z ClaudeCodeUI Issues Board, $count pozycji, $stamp)
+_Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: \`[TO DO]\` + \`[IN REVIEW]\` (In Review = sprawdź komentarze — Piotr mógł odpowiedzieć/zatwierdzić). Pomijaj \`[IN PROGRESS]\` / \`[BLOCKED]\` i feature (chyba że wskazane)._
 $todo
 $END"
 

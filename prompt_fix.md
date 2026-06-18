@@ -8,16 +8,25 @@ lista plików + Acceptance). Nie twórz nowego issue — czytasz gotowy i wdraż
 
 TWOJE ZADANIE W TEJ SESJI — dokładnie JEDNO zadanie, ani mniej ani więcej:
 
-1. W fix_list.md znajdź PIERWSZE niezaznaczone `- [ ]` zadanie, idąc od sekcji A do G (góra→dół).
-   - POMIŃ zadania feature (sekcja F i „Feature backlog" w G) — te wdraża się TYLKO gdy Piotr
-     wskaże numer ręcznie. Jeśli pierwsze niezaznaczone to feature → przeskocz do następnego buga.
-   - Sprawdź `(dep: #MMM)`: jeśli prereq nie jest jeszcze `[x]` → POMIŃ to zadanie, weź następne.
-     Jeśli wszystkie pozostałe są zablokowane przez niezrobione dep → STOP i napisz co odblokować.
+1. Najpierw odśwież lustro boardu: `bash scripts/sync_fix_list_from_board.sh` (wypełnia blok
+   BOARD-TODO otwartymi issues, tagowanymi kolumną). Następnie znajdź PIERWSZE niezaznaczone
+   `- [ ]` zadanie do wdrożenia:
+   - Bierz pod uwagę kolumny `[TO DO]` ORAZ `[IN REVIEW]` (In Review = otwarte, czeka na
+     weryfikację — wciąż aktionable dopóki niezamknięte).
+   - POMIŃ `[IN PROGRESS]` i `[BLOCKED]` oraz zadania feature — te wdraża się TYLKO gdy Piotr
+     wskaże numer ręcznie.
+   - Sprawdź `(dep: #MMM)` w sekcjach A–G: jeśli prereq nie jest `[x]` → POMIŃ, weź następne.
+     Jeśli wszystkie pozostałe zablokowane przez niezrobione dep → STOP i napisz co odblokować.
 
-2. Pobierz issue: `gh issue view #NNN --repo szmidtpiotr/ai-gm`. Przeczytaj Root cause, Fix,
-   Files, Acceptance. SPRAWDŹ w kodzie, czy analiza zgadza się z aktualnym stanem (pliki/linie
-   mogły się przesunąć). Jeśli issue ma `(design)` / sekcję „decyzja A/B" i Piotr nie wybrał
-   opcji — STOP, streść opcje prostym językiem i czekaj na decyzję.
+2. Pobierz issue WRAZ Z KOMENTARZAMI: `gh issue view #NNN --repo szmidtpiotr/ai-gm --comments`.
+   ZAWSZE czytaj komentarze — Piotr często odpowiada w nich (wybór opcji design A/B, doprecyzowanie,
+   „to nadal nie działa", akceptacja). Komentarz Piotra jest NADRZĘDNY nad treścią issue jeśli się
+   różni. Przeczytaj Root cause, Fix, Files, Acceptance + wszystkie komentarze. SPRAWDŹ w kodzie,
+   czy analiza zgadza się z aktualnym stanem (pliki/linie mogły się przesunąć).
+   - Jeśli issue ma `(design)` / „decyzja A/B" i Piotr WYBRAŁ opcję w komentarzu → wdrażaj ją.
+   - Jeśli nie wybrał → STOP, streść opcje prostym językiem i czekaj na decyzję.
+   - Jeśli to `[IN REVIEW]` i komentarz Piotra mówi że działa/zatwierdzone → nie wdrażaj ponownie,
+     zaznacz `[x]` i przejdź dalej; jeśli mówi że wciąż błąd → wdrażaj poprawkę wg jego uwag.
 
 3. Wdróż fix skillem `/tdd` w trybie auto (bez zatrzymywania na pytaniach pośrednich):
    - napisz test (pytest dla backendu i/lub Playwright wg natury buga) odtwarzający błąd,
