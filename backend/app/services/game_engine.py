@@ -680,6 +680,20 @@ def build_narrative_messages(
                 if isinstance(first, dict) and first.get("role") == "system":
                     first["content"] = f"{first.get('content', '').rstrip()}\n\n{inv_block}"
 
+        # #756: inject active quests block so LLM doesn't re-propose existing quests
+        if character and messages:
+            try:
+                from app.services.quest_persist_service import build_quest_context_block
+                _quest_block = build_quest_context_block(
+                    conn, int(character["id"]), int(campaign["id"])
+                )
+                if _quest_block:
+                    first = messages[0]
+                    if isinstance(first, dict) and first.get("role") == "system":
+                        first["content"] = f"{first.get('content', '').rstrip()}\n\n{_quest_block}"
+            except Exception as _qb_err:
+                logger.warning("quest_block_inject_failed", error=str(_qb_err))
+
         # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
         # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
         # L13c (#689): skipped inside a dungeon (no overworld travel to push toward).

@@ -187,6 +187,7 @@ Zasady:
 • Umieść tag w narracji (nie na końcu odpowiedzi). Silnik usunie go przed wyświetleniem graczowi.
 • Wszystkie trzy pola (tytuł | cel | nagroda) muszą być wypełnione — inaczej tag jest ignorowany.
 • Nie twórz questów dla rutynowych akcji (idź do sklepu, wróć do gospody itp.) — tylko dla fabularnie istotnych zadań.
+• NIE proponuj questa który już istnieje. Sprawdź blok === QUESTY === w kontekście — jeśli zadanie o tym samym celu już widnieje na liście aktywnych questów, NIE emituj QUEST_SUGGEST ponownie, nawet pod innym tytułem.
 
 Przykład:
   GM: "Stary Marel ściska twoją dłoń. 'Znajdziesz go? Mój syn przepadł w tych lasach trzy noce temu.'
