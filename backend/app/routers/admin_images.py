@@ -428,3 +428,129 @@ async def delete_image(filename: str):
         raise HTTPException(status_code=404, detail="not found")
     path.unlink()
     return {"status": "ok"}
+
+
+# ── Per-enemy image generation ────────────────────────────────────────────────
+
+class EnemyGenerateRequest(BaseModel):
+    force: bool = False   # regenerate even if image_url already set
+    steps: int | None = None
+    width: int = 576
+    height: int = 1024
+
+
+@router.get("/enemy/missing")
+async def list_enemies_missing_images():
+    """List active enemies without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT key, label, tier, description, image_url, image_gen_prompt "
+            "FROM game_config_enemies "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY key"
+        ).fetchall()
+    return {"enemies": [dict(r) for r in rows], "count": len(rows)}
+
+
+@router.post("/enemy/{key}/generate")
+async def generate_enemy_image(key: str, req: EnemyGenerateRequest = Body(default=None)):
+    """Generate portrait for an enemy. Saves image_url + image_gen_prompt to DB.
+    Skips (status=skipped) if image already exists unless force=true.
+    """
+    if req is None:
+        req = EnemyGenerateRequest()
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        row = c.execute("SELECT * FROM game_config_enemies WHERE key = ?", (key,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Enemy not found: {key}")
+    row = dict(row)
+
+    if row.get("image_url") and not req.force:
+        return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
+
+    # Use saved prompt if available, else generate via LLM
+    saved_prompt = (row.get("image_gen_prompt") or "").strip()
+    if not saved_prompt:
+        description = (row.get("description") or row.get("label") or key).strip()
+        tier = row.get("tier") or "standard"
+        from app.services.llm_service import generate_chat
+        system = (
+            "You are a visual prompt engineer for dark fantasy RPG image generation. "
+            "The user will give you a Polish description of a monster or enemy creature. "
+            "Output ONLY a short English comma-separated list of image generation keywords (20-35 words). "
+            "Focus on: creature appearance, armor/weapons, dark atmosphere, dramatic lighting. "
+            "End with: character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI. "
+            "No explanations. No Polish words. No full sentences. Only English keywords."
+        )
+        user_msg = f"[Context: enemy tier:{tier}, type:creature]\n\n{description}"
+        try:
+            reply = generate_chat(messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ])
+            keywords = reply.strip().strip(".,")
+            saved_prompt = keywords + ", character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI"
+        except Exception:
+            label = row.get("label") or key
+            saved_prompt = (
+                f"{label}, fantasy creature, dark atmosphere, "
+                "character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI"
+            )
+
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    checkpoint = str(_read_visual("image_gen.checkpoint", "") or "")
+    gen_url = _get_image_gen_url()
+
+    payload: dict[str, Any] = {
+        "prompt": saved_prompt,
+        "width": req.width,
+        "height": req.height,
+        "steps": steps,
+    }
+    if checkpoint:
+        payload["checkpoint"] = checkpoint
+
+    TILES_DIR.mkdir(parents=True, exist_ok=True)
+
+    async with httpx.AsyncClient(timeout=300) as client:
+        try:
+            r = await client.post(f"{gen_url}/generate", json=payload)
+            r.raise_for_status()
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail=f"Image generator offline ({gen_url})")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Image generator timeout")
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"Generator error: {e.response.text}")
+
+    data = r.json()
+    if data.get("status") != "ok":
+        raise HTTPException(status_code=502, detail=data.get("error", "generation failed"))
+
+    ts = int(time.time())
+    dest_name = f"aigm_{ts}_{data['filename']}"
+    dest_path = TILES_DIR / dest_name
+
+    b64_data = data.get("b64")
+    if b64_data:
+        dest_path.write_bytes(base64.b64decode(b64_data))
+    else:
+        async with httpx.AsyncClient(timeout=60) as dl:
+            resp = await dl.get(f"{gen_url}/files/{data['filename']}")
+            if resp.status_code == 200:
+                dest_path.write_bytes(resp.content)
+            else:
+                raise HTTPException(status_code=500, detail="Could not retrieve generated image")
+
+    image_url = f"{TILES_URL_PREFIX}/{dest_name}"
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.execute(
+            "UPDATE game_config_enemies SET image_url = ?, image_gen_prompt = ?, updated_at = datetime('now') WHERE key = ?",
+            (image_url, saved_prompt, key),
+        )
+
+    return {"status": "ok", "key": key, "image_url": image_url, "image_gen_prompt": saved_prompt}

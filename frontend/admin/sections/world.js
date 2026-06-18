@@ -897,7 +897,7 @@ function _buildEnemyImagePrompt(e) {
 
 async function openEnemyImageModal(key, encData) {
   const e = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
-  const initialPrompt = _buildEnemyImagePrompt(e);
+  const initialPrompt = (e.image_gen_prompt && e.image_gen_prompt.trim()) ? e.image_gen_prompt.trim() : _buildEnemyImagePrompt(e);
   const m = document.createElement('div');
   m.id = 'enemy-img-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -986,11 +986,12 @@ async function openEnemyImageModal(key, encData) {
   document.getElementById('ei-accept-btn').onclick = async () => {
     if (!_lastUrl) return;
     try {
-      await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl})});
+      const savedPrompt = ta.value.trim();
+      await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl, image_gen_prompt: savedPrompt})});
       _showToast('Obraz zapisany.','success');
       m.remove();
       const eRow = document.querySelector(`#world-enemies-table tr[data-key="${CSS.escape(key)}"]`);
-      if (eRow) { const cur=JSON.parse(decodeURIComponent(eRow.dataset.rjson||'{}')); cur.image_url=_lastUrl; eRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur)); }
+      if (eRow) { const cur=JSON.parse(decodeURIComponent(eRow.dataset.rjson||'{}')); cur.image_url=_lastUrl; cur.image_gen_prompt=savedPrompt; eRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur)); }
       _loadEnemies();
     } catch(ex){ _showToast(ex.message||'Błąd zapisu','error'); }
   };
@@ -1031,7 +1032,7 @@ async function openEnemyImageModal(key, encData) {
   };
 
   setTimeout(async () => {
-    if (e._tileContext || !e.description) return;
+    if (e._tileContext || !e.description || (e.image_gen_prompt && e.image_gen_prompt.trim())) return;
     try {
       const r = await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:e.description,context:`enemy tier:${e.tier||'standard'}, type:creature`})});
       if (r.keywords) {
@@ -1092,6 +1093,71 @@ async function eiPickGallery(key, encUrl) {
     };
   }
 }
+
+// ── Batch enemy image generation ──────────────────────────────────────────────
+window._worldBatchGenEnemies = async function() {
+  let list;
+  try {
+    const r = await apiFetch('/api/admin/images/enemy/missing');
+    list = r.enemies || [];
+  } catch(ex) {
+    _showToast('Błąd pobierania listy: ' + (ex.message||''), 'error'); return;
+  }
+  if (!list.length) { _showToast('Wszyscy wrogowie mają już obrazy!', 'success'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'batch-gen-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(520px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <strong>⚡ Generowanie obrazów wrogów</strong>
+      <button id="batch-cancel-btn" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:12px 16px;overflow-y:auto;flex:1">
+      <div id="batch-status" style="font-size:0.82rem;color:var(--t3);margin-bottom:10px">Znaleziono <strong>${list.length}</strong> wrogów bez obrazu. Kliknij Start.</div>
+      <div id="batch-log" style="font-family:monospace;font-size:0.75rem;line-height:1.8;max-height:340px;overflow-y:auto"></div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <button id="batch-start-btn" class="btn btn-primary" style="flex:1">▶ Start</button>
+      <button onclick="document.getElementById('batch-gen-modal')?.remove()" class="btn btn-secondary">Zamknij</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  let aborted = false;
+  document.getElementById('batch-cancel-btn').onclick = () => { aborted = true; overlay.remove(); };
+
+  const log = document.getElementById('batch-log');
+  const status = document.getElementById('batch-status');
+  const _log = (msg, color='var(--t2)') => {
+    const div = document.createElement('div');
+    div.style.color = color;
+    div.textContent = msg;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  };
+
+  document.getElementById('batch-start-btn').onclick = async () => {
+    document.getElementById('batch-start-btn').disabled = true;
+    document.getElementById('batch-start-btn').textContent = '⏳ Generuję…';
+    let done = 0, skipped = 0, errors = 0;
+    for (const e of list) {
+      if (aborted) { _log('— Przerwano.', 'var(--warning)'); break; }
+      status.innerHTML = `Postęp: <strong>${done + skipped + errors}/${list.length}</strong> — aktualne: ${e.label||e.key}`;
+      _log(`▶ ${e.label||e.key} (${e.key})…`);
+      try {
+        const r = await apiFetch(`/api/admin/images/enemy/${encodeURIComponent(e.key)}/generate`, {method:'POST', body:JSON.stringify({})});
+        if (r.status === 'skipped') { _log(`  ↳ pominięto (ma już obraz)`, 'var(--t3)'); skipped++; }
+        else { _log(`  ↳ ✓ wygenerowano`, 'var(--success)'); done++; }
+      } catch(ex) {
+        _log(`  ↳ ✗ błąd: ${ex.message||'?'}`, 'var(--danger)'); errors++;
+      }
+    }
+    status.innerHTML = `Gotowe: <strong>${done}</strong> wygenerowanych, ${skipped} pominiętych, ${errors} błędów.`;
+    document.getElementById('batch-start-btn').textContent = '✓ Zakończono';
+    if (done > 0) _loadEnemies();
+  };
+};
 
 // ── NPC image modal ────────────────────────────────────────────────────────────
 function _buildNpcImagePrompt(n) {
@@ -1307,6 +1373,7 @@ function _sectionHtml() {
             <input type="text" placeholder="Szukaj wrogów…" oninput="window._worldFilterTable(this,'world-enemies-table','td-name')">
           </div>
           <button class="btn btn-primary btn-sm" onclick="window._worldEnemyForm(null)">+ Dodaj wroga</button>
+          <button class="btn btn-secondary btn-sm" onclick="window._worldBatchGenEnemies()" title="Wygeneruj portrety dla wrogów bez obrazu">⚡ Generuj brakujące</button>
           <div class="toolbar-right">
             <button class="btn-toggle-details" data-details-for="world-enemies-table" onclick="window._worldToggleDetails('world-enemies-table',this)">Szczegóły</button>
           </div>
