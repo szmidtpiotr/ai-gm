@@ -34,6 +34,7 @@ class BugReportReq(BaseModel):
     report_type: str = "bug"
     campaign_id: int | None = None
     js_errors: list[dict] | None = None
+    screenshot_base64: str | None = None
 
 
 def _collect_context(user_id: int, campaign_id: int | None) -> dict[str, Any]:
@@ -286,6 +287,9 @@ def _build_github_body(req: BugReportReq, ctx: dict, user_agent: str) -> str:
 </details>
 """
 
+    if req.screenshot_base64:
+        body += "\n📸 **Screenshot dołączony** — widoczny w Admin Panel → Zgłoszenia błędów.\n"
+
     body += f"""
 ---
 **Gracz:** `{user.get('username','?')}` (ID: {user.get('id','?')})
@@ -371,8 +375,8 @@ async def submit_bug_report(
             """
             INSERT INTO bug_reports
                 (user_id, campaign_id, observation, reproduction, report_type, context_json,
-                 github_issue_url, github_issue_number, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 github_issue_url, github_issue_number, screenshot_base64, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -383,6 +387,7 @@ async def submit_bug_report(
                 json.dumps(ctx, ensure_ascii=False),
                 github_issue_url,
                 github_issue_number,
+                req.screenshot_base64,
                 _now_iso(),
             ),
         )

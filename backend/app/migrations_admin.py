@@ -1818,6 +1818,8 @@ ADMIN_SEEDS = [
     ('messenger',       'Posłaniec: wiadomość',       8,   'Wysłanie wiadomości do pobliskiego miasta', 1),
     ('guide_day',       'Przewodnik: jeden dzień',    12,  'Miejscowy przewodnik przez niebezpieczny teren', 1)
     """
+,
+    "ALTER TABLE bug_reports ADD COLUMN screenshot_base64 TEXT",
 ]
 
 
