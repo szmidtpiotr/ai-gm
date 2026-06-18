@@ -44,6 +44,32 @@ _VALID_ARMOR_COVERAGE = frozenset(_ARMOR_COVERAGE_TO_SLOTS.keys())
 # 'two_handed' anchors at main_hand but locks off_hand too.
 _VALID_WEAPON_SLOT = frozenset({"main_hand", "two_handed", "off_hand_only", "either"})
 
+
+def _auto_pick_armor_slot(conn, character_id: int, coverage: str) -> str:
+    """Map armor_coverage → anatomical doll slot for the 'armor'/'auto' equip sentinel.
+
+    Single source of truth shared with admin_cheat auto-equip. For paired limb coverage
+    picks the free side (left first). 'full' anchors to torso (limb-freeing handled by the
+    caller's coverage=='full' branch). Raises for coverage with no anatomical slot.
+    """
+    cov = str(coverage or "").lower()
+    if cov in ("torso", "full"):
+        return "torso"
+    if cov in ("head", "hands"):
+        return cov
+    if cov in ("limb_arm", "limb_leg"):
+        left, right = _ARMOR_COVERAGE_TO_SLOTS[cov]
+        taken = {
+            str(r["slot"])
+            for r in conn.execute(
+                "SELECT slot FROM character_inventory "
+                "WHERE character_id = ? AND equipped = 1 AND slot IN (?, ?)",
+                (int(character_id), left, right),
+            ).fetchall()
+        }
+        return left if left not in taken else right
+    raise ValueError(f"armor coverage '{cov}' has no auto-equip slot")
+
 # When game_config_items.item_type is wrong (e.g. quest) but effect_* matches consumable mechanics (8H).
 _CONSUMABLE_EFFECT_SIGNAL = frozenset(
     {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff"}
@@ -1544,7 +1570,11 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
     cid = int(character_id)
     iid = int(inventory_id)
     s = str(slot or "").strip().lower()
-    if s not in _SLOT_VALUES:
+    # Sentinel: 'armor'/'auto' = „załóż zbroję, wylicz slot z armor_coverage" — używane przez
+    # panel admina (heroes.js „Załóż") i ścieżkę cheat. Manekin gracza nie ma slotu 'armor',
+    # więc generyczny slot byłby niewidoczny — tu mapujemy go na anatomiczny slot.
+    auto_armor = s in ("auto", "armor")
+    if not auto_armor and s not in _SLOT_VALUES:
         raise ValueError("invalid slot")
 
     with _conn() as conn:
@@ -1573,12 +1603,19 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
         is_weapon = bool(row["weapon_key"]) or item_type == "weapon"
         is_armor = item_type == "armor"
 
+        if auto_armor and not is_armor:
+            raise ValueError("invalid slot")
+
         slots_to_free: list[str] = [s]
         anchor_slot = s
 
         if is_armor:
             if coverage and coverage not in _VALID_ARMOR_COVERAGE:
                 raise ValueError(f"invalid armor_coverage '{coverage}'")
+            if auto_armor:
+                s = _auto_pick_armor_slot(conn, cid, coverage)
+                anchor_slot = s
+                slots_to_free = [s]
             if coverage == "head" and s != "head":
                 raise ValueError("head armor can only equip to slot 'head'")
             if coverage == "torso" and s != "torso":

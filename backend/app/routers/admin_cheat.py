@@ -214,6 +214,33 @@ def _pick_weapon_equip_slot(
     return "main_hand"
 
 
+def _armor_auto_slot(
+    conn: sqlite3.Connection, character_id: int, coverage: str
+) -> str | None:
+    """armor_coverage → anatomiczny slot manekina (zgodnie z loot_service.equip_item).
+
+    Pary kończyn: wolna strona (najpierw lewa). 'full' → torso. Coverage bez slotu w
+    manekinie (feet/back/nieznane) → None (zostaw w plecaku, nie zakładaj na siłę).
+    """
+    cov = str(coverage or "").lower()
+    if cov in ("torso", "full"):
+        return "torso"
+    if cov in ("head", "hands"):
+        return cov
+    if cov in ("limb_arm", "limb_leg"):
+        left, right = ("l_arm", "r_arm") if cov == "limb_arm" else ("l_leg", "r_leg")
+        taken = {
+            str(r["slot"])
+            for r in conn.execute(
+                "SELECT slot FROM character_inventory "
+                "WHERE character_id = ? AND equipped = 1 AND slot IN (?, ?)",
+                (int(character_id), left, right),
+            ).fetchall()
+        }
+        return left if left not in taken else right
+    return None
+
+
 def _auto_equip_new_inventory_row(
     conn: sqlite3.Connection,
     character_id: int,
@@ -232,12 +259,16 @@ def _auto_equip_new_inventory_row(
         slot = _pick_weapon_equip_slot(conn, cid, canonical_key)
     elif col == "item_key":
         row = conn.execute(
-            "SELECT item_type FROM game_config_items WHERE key = ? LIMIT 1",
+            "SELECT item_type, armor_coverage FROM game_config_items WHERE key = ? LIMIT 1",
             (canonical_key,),
         ).fetchone()
         it = str(row["item_type"] or "").lower() if row else ""
         if it == "armor":
-            slot = "armor"
+            # Wylicz anatomiczny slot z armor_coverage (manekin gracza nie zna slotu 'armor').
+            # Coverage bez slotu (feet/back/nieznane) → None: zostaw w plecaku, bez auto-zakładania.
+            slot = _armor_auto_slot(
+                conn, cid, str((row["armor_coverage"] if row else "") or "").lower()
+            )
     else:
         return None
 
