@@ -276,6 +276,23 @@ EXAMINE — params: target (required)
 SKILL_ATTEMPT — params: skill_key (required), target (optional)
 SHOP — params: npc_key (required)
 
+DISAMBIGUATION RULES (critical — read before choosing a tag):
+- Sneaking / leaving quietly / hiding / observing from the shadows
+  ("skradam się", "wychodzę po cichu", "wymykam się", "chowam się",
+   "kryję się", "obserwuję z cienia", "z ukrycia") → STEALTH_ATTEMPT.
+  NEVER emit SKILL_ATTEMPT:skill_key=deception for sneaking or hiding.
+- SKILL_ATTEMPT:skill_key=deception is ONLY for actively lying, bluffing,
+  or impersonating someone IN A CONVERSATION with a present NPC. If the
+  player is not speaking a lie to an NPC, deception does NOT apply.
+- A player declaring they leave/travel toward a named place is MOVEMENT,
+  not a social SKILL_ATTEMPT against the NPC they are leaving. If that named
+  place matches an available destination, emit MOVEMENT:destination_key=<key>.
+  If it is NOT in available destinations but the player is sneaking out,
+  emit STEALTH_ATTEMPT; otherwise EXAMINE. Never substitute a social skill
+  test (deception/persuasion) for a movement the player just declared.
+- Passive observation with no specific hidden target ("rozglądam się",
+  "obserwuję", "patrzę", "co widzę") → EXAMINE (no skill test).
+
 OUTPUT RULES:
 - Output EXACTLY ONE line: the ACTION tag, CLARIFY tag, or BLOCKED tag.
 - Do NOT output any text before or after the tag.

@@ -54,6 +54,19 @@ NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
 3. AKCJA RYZYKOWNA — może się nie powieść lub być niebezpieczna
    (skradanie, skok, przekonywanie wroga, otwieranie pułapki, leczenie w polu, atak gdy walka JUŻ trwa w systemie)
    Otwieranie zamka BEZ klucza (wytrychem, improwizowanym narzędziem lub gołymi rękami) = RYZYKOWNA, wymaga rzutu.
+
+   ══ MAPOWANIE AKCJI → UMIEJĘTNOŚĆ (wybór rzutu) ══
+   • Skradanie / wychodzenie po cichu / chowanie się / wymykanie / obserwacja
+     z cienia / ukrywanie się ("skradam się", "wychodzę po cichu", "wymykam się",
+     "chowam się", "kryję się", "obserwuję z cienia") → Roll Stealth d20.
+     NIGDY Oszustwo (Deception) dla skradania lub ukrywania się.
+   • Oszustwo (Deception) TYLKO gdy gracz AKTYWNIE kłamie, blefuje lub
+     podszywa się pod kogoś W ROZMOWIE z obecnym NPC. Brak kłamstwa = brak Oszustwa.
+   • Pasywna obserwacja bez konkretnego ukrytego celu → BRAK RZUTU (patrz zakaz roll_cue niżej).
+   • Gdy gracz deklaruje WYJŚCIE / PODRÓŻ do nazwanego miejsca — to RUCH, nie
+     test społeczny. NIE wstawiaj testu Oszustwa/Perswazji wobec NPC, którego
+     gracz właśnie OPUSZCZA. Narruj dotarcie + nową scenerię (location_intent),
+     ewentualnie Roll Stealth d20 jeśli gracz wychodzi po kryjomu.
    → Opisz próbę i napięcie sceny w minimum 3-4 zdaniach, a jako OSTATNIĄ linię dodaj cue do rzutu (FORMAT CUE).
    START PRZEMOCY (w systemie nie ma jeszcze aktywnej walki):
    • Preferuj ostatnią linię [COMBAT_START:enemy_key] — wtedy NIE dodawaj drugiej ostatniej linii Roll … d20 (tag uruchamia silnik).
