@@ -567,6 +567,17 @@ def apply_resurrection(
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
 
+    # Reactivate campaign if it was ended by solo death service
+    if campaign_id:
+        try:
+            conn.execute(
+                "UPDATE campaigns SET status='active', death_reason=NULL, ended_at=NULL, epitaph=NULL"
+                " WHERE id = ? AND status='ended'",
+                (campaign_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
+
     # Wipe dungeon cooldown rows
     try:
         conn.execute("DELETE FROM character_dungeon_runs WHERE character_id = ?", (character_id,))
