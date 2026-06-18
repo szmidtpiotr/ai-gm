@@ -485,12 +485,23 @@ def _relink_hero_to_previous(character_id: int, previous_campaign_id: int | None
         ).fetchone()
         if not camp or camp["status"] not in ("active", "pending") or camp["mode"] == "dungeon":
             return None
-        # Free any other active hero parked on the target campaign (defensive).
-        conn.execute(
-            "UPDATE characters SET campaign_id = NULL, status = 'idle' "
-            "WHERE campaign_id = ? AND is_active = 1 AND id != ?",
+        # #767: a campaign belongs to exactly ONE hero. NEVER evict another hero on
+        # relink (this was the recurrence vector — a stale dungeon snapshot pointing
+        # at another hero's campaign). Only relink if the target is genuinely this
+        # hero's: no OTHER active hero parked there, and no foreign play-history.
+        other = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
             (int(previous_campaign_id), character_id),
-        )
+        ).fetchone()
+        if other:
+            return None
+        foreign_turn = conn.execute(
+            "SELECT 1 FROM campaign_turns WHERE campaign_id = ? "
+            "AND character_id IS NOT NULL AND character_id != ? LIMIT 1",
+            (int(previous_campaign_id), character_id),
+        ).fetchone()
+        if foreign_turn:
+            return None
         conn.execute(
             "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",
             (int(previous_campaign_id), character_id),
