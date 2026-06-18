@@ -5383,8 +5383,9 @@ Status: **review/needs-testing** — silnik walki niezmieniony (tylko maszyna st
 | Issue | Obszar | Co naprawiono | Testy |
 |---|---|---|---|
 | #777 | Observability | game_events emitowane dla quest_complete, xp_grant, location_new, item_grant, gold_grant; _record_turn_decision_safe wpięta do streaming path (turn_decisions było 0 globalnie) | 8/8 pytest + 3/3 Playwright |
+| #781 | Observability | Zakładka 🗓 Zdarzenia w monitorze kampanii: endpoint GET /campaigns/{id}/game-events + tab w campaigns.js (ikony, filtry, szczegóły) — viewer dla danych z #777 | 5/5 pytest + 3/3 Playwright + wizualna |
 
-Status: **review/needs-testing** — commit 3639fdd. Historyczne kampanie (np. #99791) nie mają wpisów wstecz (poza zakresem).
+Status: **review/needs-testing** — commity 3639fdd (#777) + fd6b45d (#781). Historyczne kampanie (np. #99791) nie mają wpisów wstecz (poza zakresem).
 
 ---
 
