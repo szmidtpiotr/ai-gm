@@ -122,8 +122,15 @@ def grant_first_location_visit(conn: sqlite3.Connection, character_id: int,
         "UPDATE characters SET visited_location_keys = ? WHERE id = ?",
         (json.dumps(visited, ensure_ascii=False), character_id),
     )
-    return _grant(conn, character_id, campaign_id, "exploration.location_new",
-                  f"Pierwsza wizyta: {location_key}", turn_number)
+    xp = _grant(conn, character_id, campaign_id, "exploration.location_new",
+                f"Pierwsza wizyta: {location_key}", turn_number)
+    from app.services.event_logger import write_game_event
+    write_game_event(
+        "location_new", campaign_id, character_id, None,
+        {"location_key": location_key, "xp": xp, "turn": turn_number},
+        conn=conn,
+    )
+    return xp
 
 
 # ── XS6: First NPC talk ───────────────────────────────────────────────────────
@@ -243,13 +250,21 @@ def process_narrative_xp_tags(
     """Parse XS2-XS4, XS7-XS8, XS12 tags from GM narrative. Returns total granted."""
     total = 0
 
+    from app.services.event_logger import write_game_event
+
     for m in _QUEST_RE.finditer(narrative):
         quest_title = m.group(1).strip()
         flipped = complete_quest_in_character_quests(
             conn, character_id, campaign_id, quest_title, completed_turn=turn_number
         )
         if flipped:
-            total += grant_quest_complete(conn, character_id, campaign_id, quest_title, turn_number)
+            xp = grant_quest_complete(conn, character_id, campaign_id, quest_title, turn_number)
+            total += xp
+            write_game_event(
+                "quest_complete", campaign_id, character_id, None,
+                {"quest_title": quest_title, "xp": xp, "turn": turn_number},
+                conn=conn,
+            )
 
     for m in _DUNGEON_RE.finditer(narrative):
         total += grant_dungeon_clear(conn, character_id, campaign_id, m.group(1), turn_number)
@@ -271,5 +286,11 @@ def process_narrative_xp_tags(
             turn_number, session_free_grant_total,
         )
         total += granted
+        if granted:
+            write_game_event(
+                "xp_grant", campaign_id, character_id, None,
+                {"reason": reason_str, "amount": granted, "turn": turn_number},
+                conn=conn,
+            )
 
     return {"total_granted": total, "session_free_grant_total": session_free_grant_total}

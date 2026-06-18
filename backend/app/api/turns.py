@@ -4801,6 +4801,16 @@ def create_turn(
                                     label=_gil, source="gm", description=_gil_desc)
         if grant_item_labels:
             conn.commit()
+            from app.services.event_logger import write_game_event as _wge_j
+            for _ge_lbl_j in grant_item_labels:
+                try:
+                    _wge_j("item_grant", campaign_id, payload.character_id,
+                           character.get("user_id"),
+                           {"item_label": _ge_lbl_j, "source": "gm_grant_item"},
+                           conn=conn)
+                    conn.commit()
+                except Exception:
+                    pass
         if grant_gold_amount is not None:
             new_total = apply_grant_gold_to_character(
                 conn,
@@ -4815,6 +4825,15 @@ def create_turn(
                 amount=grant_gold_amount,
                 new_total_gp=new_total,
             )
+            try:
+                from app.services.event_logger import write_game_event as _wge_j2
+                _wge_j2("gold_grant", campaign_id, payload.character_id,
+                        character.get("user_id"),
+                        {"amount": grant_gold_amount, "new_total_gp": new_total},
+                        conn=conn)
+                conn.commit()
+            except Exception:
+                pass
 
         # N-turns encounter trigger: every 5 peaceful turns since last combat
         try:
@@ -5591,6 +5610,14 @@ def create_turn_stream(
             except Exception as _pre_err_s:
                 logger.warning("pre_llm_keyword_scan_stream_error: %s", str(_pre_err_s))
 
+        # #777: record turn decision in streaming path (was only in JSON path)
+        if not roll_request:
+            _record_turn_decision_safe(
+                campaign_id, payload.character_id, text,
+                route="narrative", gate_blocked=False, gate_reason=None,
+                handler="narrative", conn=conn,
+            )
+
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
         model = resolve_model_name(
@@ -6153,6 +6180,16 @@ def create_turn_stream(
                                 description=_gil_desc_s)
                     if grant_item_labels:
                         save_conn.commit()
+                        from app.services.event_logger import write_game_event as _wge_s
+                        for _ge_lbl in grant_item_labels:
+                            try:
+                                _wge_s("item_grant", campaign_id_val, character_id_val,
+                                       character.get("user_id"),
+                                       {"item_label": _ge_lbl, "source": "gm_grant_item"},
+                                       conn=save_conn)
+                                save_conn.commit()
+                            except Exception:
+                                pass
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
                             save_conn,
@@ -6167,6 +6204,15 @@ def create_turn_stream(
                             amount=grant_gold_amount,
                             new_total_gp=new_total,
                         )
+                        try:
+                            from app.services.event_logger import write_game_event as _wge_s2
+                            _wge_s2("gold_grant", campaign_id_val, character_id_val,
+                                    character.get("user_id"),
+                                    {"amount": grant_gold_amount, "new_total_gp": new_total},
+                                    conn=save_conn)
+                            save_conn.commit()
+                        except Exception:
+                            pass
                     # XS1/XS2-XS8/XS12/XS15/XS6: narrative tag XP sources (stream handler)
                     try:
                         import re as _xs_re2
