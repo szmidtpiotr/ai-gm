@@ -51,5 +51,6 @@ else
   awk -v repl="$new_section" 'NR==1{print; print ""; print repl; print ""; next} {print}' "$FIX_LIST" > "$tmp"
 fi
 cat "$tmp" > "$FIX_LIST" && rm -f "$tmp"   # cat (not mv) — sshfs uid mismatch breaks mv ownership
+chmod 664 "$FIX_LIST" 2>/dev/null || true   # keep group-writable (sshfs writes drop to 600 → breaks git add as piotrszmidt)
 
 echo "Synced $count To Do issue(s) into $FIX_LIST" >&2
