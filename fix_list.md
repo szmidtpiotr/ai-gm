@@ -36,7 +36,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #740 `[TO DO]` — [BUG] Loch — podwójna narracja wstępna przy wejściu: LLM_OPEN + room_narrative z /enter nakładają się
 - [ ] #741 `[TO DO]` — [FEATURE] Loch D-pad — możliwość przeciągania po ekranie i zapamiętania pozycji
 - [ ] #742 `[TO DO]` — [BUG] Sklep w lochu: (1) modal otwiera się w dungeon-mode + (2) kupione itemy nie pojawiają się w ekwipunku po zakupie
-- [x] #743 `[TO DO]` — [BUG] Wyposażenie — zakładanie rękawic rzuca 'invalid armor_coverage hands': slot hands nie zdefiniowany w loot_service [wdrożone TBD]
+- [x] #743 `[TO DO]` — [BUG] Wyposażenie — zakładanie rękawic rzuca 'invalid armor_coverage hands': slot hands nie zdefiniowany w loot_service [wdrożone 7712860]
 - [ ] #744 `[TO DO]` — [DESIGN] Wojownik startuje z tarczą ale nie może blokować — shield_block wymaga rank >= 1, archetype nie przyznaje startowych skilli
 - [ ] #745 `[TO DO]` — [BUG] Loch — panel zagadki nie znika po rozwiązaniu: cleared=false mimo solved=true
 - [ ] #746 `[TO DO]` — [BUG] #L-fix — Nazwy łupów w modalu walki wyświetlane po angielsku (klucze DB)
@@ -64,7 +64,7 @@ Reguła priorytetu: wpływ na gracza × niskie ryzyko × zależności. Rób od g
 Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `[IN REVIEW]` sprawdź komentarze (mógł być zatwierdzony).
 
 ### P0 — Krytyczne: crash / utrata progresu / złamana pętla gry
-- [x] #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone TBD]
+- [x] #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone 7712860]
 - [ ] #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót
 - [ ] #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci
 - [ ] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja
