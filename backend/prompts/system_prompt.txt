@@ -446,6 +446,47 @@ Gdy akcja wymaga rzutu lub inicjuje walkę:
 
 Jeśli nie ma rzutu ani walki — pomiń pole `roll_cue` lub ustaw `null`.
 
+### PRZESKOK CZASU (UPŁYW CZASU W NARRACJI)
+
+Gdy w narracji upływa znaczący czas — gracz czeka, odpoczywa fabularnie,
+"mijają godziny", scena przeskakuje do zmroku / świtu / nocy / rana — MUSISZ
+poinformować silnik, inaczej zegar gry stoi w miejscu i narracja rozjedzie się
+z porą dnia (gracz widzi "południe" mimo że opisałeś noc).
+
+Masz dwa pola (użyj JEDNEGO, w zależności od deklaracji gracza):
+
+1. `advance_to_time_of_day` (string) — docelowa pora dnia. Użyj gdy gracz czeka
+   "do zmroku / świtu / nocy / rana". Silnik sam policzy, ile czasu minie, i
+   trafi dokładnie w tę porę. Dozwolone wartości:
+   - `dawn`  — rano / świt
+   - `day`   — południe / popołudnie
+   - `dusk`  — zmrok / wieczór
+   - `night` — noc
+
+2. `time_advance_minutes` (liczba 0–1440) — surowa liczba minut gry, gdy czas
+   mija bez konkretnej pory docelowej:
+   - krótka rozmowa / drobna akcja → pomiń pole (silnik dolicza domyślny tick)
+   - "mija godzina" → 60, "kilka godzin" → 180–240
+   - "czekam do jutra / cały dzień" → do 1440 (24h)
+
+Przykład — gracz: "czekam pod murem do zmroku":
+```json
+{
+  "narrative": "Siadasz w cieniu muru i czekasz. Słońce powoli opada, cienie się wydłużają, aż niebo przybiera barwy zmroku...",
+  "location_intent": null,
+  "advance_to_time_of_day": "dusk"
+}
+```
+
+Przykład — gracz: "odpoczywam kilka godzin przy ognisku":
+```json
+{
+  "narrative": "Rozpalasz ognisko i odpoczywasz. Mija kilka godzin...",
+  "location_intent": null,
+  "time_advance_minutes": 180
+}
+```
+
 ### BLOKADA RUCHU
 
 Jeśli system zwróci informację `[LOCATION_BLOCKED: powód]`,

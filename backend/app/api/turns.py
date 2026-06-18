@@ -2527,9 +2527,24 @@ def create_turn_log(
             try:
                 _adata = json.loads(_strip_json_code_fence(assistant_text))
                 if isinstance(_adata, dict):
+                    # #758: explicit target time-of-day jump ("czekam do zmroku").
+                    # Engine computes minutes to the start of the requested phase.
+                    _tod = _adata.get("advance_to_time_of_day")
+                    if _tod:
+                        from app.services.clock_service import (
+                            get_clock_state,
+                            minutes_to_reach_phase,
+                        )
+
+                        _cur = get_clock_state(campaign_id, conn=conn)
+                        llm_min = max(
+                            llm_min, minutes_to_reach_phase(_cur["hour"], str(_tod))
+                        )
+                    # Raw minutes override. Clamp 0-1440 (24h) so "czekam do jutra"
+                    # is not silently truncated to 8h (#758).
                     _raw = _adata.get("time_advance_minutes")
                     if _raw is not None:
-                        llm_min = max(0, min(int(_raw), 480))  # clamp 0-480 (8h)
+                        llm_min = max(llm_min, max(0, min(int(_raw), 1440)))
             except Exception:
                 pass
 

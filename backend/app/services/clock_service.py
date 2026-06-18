@@ -72,6 +72,41 @@ def _time_of_day_label(hour: int) -> str:
     return "Noc"
 
 
+# #758 — target-time-of-day jump. The LLM emits `advance_to_time_of_day` and
+# the engine computes the minutes needed to reach the START of that phase.
+# Phase buckets mirror `time_of_day_service.get_time_of_day_phase`.
+_PHASE_START_HOUR = {"dawn": 6, "day": 12, "dusk": 18, "night": 22}
+_PHASE_ALIASES = {
+    # English canonical
+    "dawn": "dawn", "day": "day", "dusk": "dusk", "night": "night",
+    "morning": "dawn", "noon": "day", "afternoon": "day", "evening": "dusk",
+    "midnight": "night",
+    # Polish synonyms (accent + accent-stripped)
+    "świt": "dawn", "swit": "dawn", "rano": "dawn", "ranek": "dawn", "brzask": "dawn",
+    "dzień": "day", "dzien": "day", "południe": "day", "poludnie": "day",
+    "popołudnie": "day", "popoludnie": "day",
+    "zmrok": "dusk", "wieczór": "dusk", "wieczor": "dusk",
+    "zachód": "dusk", "zachod": "dusk", "zmierzch": "dusk",
+    "noc": "night", "północ": "night", "polnoc": "night",
+}
+
+
+def minutes_to_reach_phase(current_hour: int, target: str) -> int:
+    """Minutes to fast-forward from `current_hour` (0–23) to the start of the
+    target time-of-day phase. Returns 0 when the target is unknown or we are
+    already inside that phase (no jump needed)."""
+    from app.services.time_of_day_service import get_time_of_day_phase
+
+    key = _PHASE_ALIASES.get(str(target or "").strip().lower())
+    if not key:
+        return 0
+    cur = int(current_hour) % 24
+    if get_time_of_day_phase(cur) == key:
+        return 0
+    delta_hours = (_PHASE_START_HOUR[key] - cur) % 24
+    return delta_hours * 60
+
+
 def get_clock_state(campaign_id: int, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
     """Read the current clock state for a campaign.
 
