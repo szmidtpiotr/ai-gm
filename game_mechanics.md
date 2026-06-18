@@ -5577,6 +5577,12 @@ HI1 (backend: odczyt+luki+audyt+guard) → HI2 (sekcja+lista+szkielet modalu)
 ```
 HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od S/L/MP — intermezzo wg decyzji Piotra.
 
+## Poprawki questy — 2026-06-18
+
+### #756 — Quest dedup po celu (Jaccard similarity) ✅ ([#756](https://github.com/szmidtpiotr/ai-gm/issues/756), 2026-06-18)
+
+> **Wdrożone:** Trójwarstwowy fix duplikacji questów. (A) `quest_persist_service.py`: Jaccard word-similarity ≥0.65 na polu `narrative`/`objective` odrzuca bliski duplikat mimo innego tytułu. (B) `game_engine.py`: blok `=== QUESTY (aktywne zadania bohatera) ===` wstrzykiwany do system promptu — LLM widzi co już istnieje. (C) `system_prompt.txt`: reguła "NIE proponuj questa który już istnieje — sprawdź blok QUESTY". 6/6 pytest + 2/2 Playwright GREEN. Commit `0af61e2`.
+
 ## Poprawki ekwipunek — 2026-06-18
 
 ### #770 — Inventory: podział sekcji wg używalności (can_use) ✅ ([#770](https://github.com/szmidtpiotr/ai-gm/issues/770), 2026-06-18)
