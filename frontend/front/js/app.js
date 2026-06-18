@@ -12095,7 +12095,10 @@ function updateDungeonNav(run) {
     const chestState = currentNode.chest_state || {};
     const hasChestItem = (content.items || []).some(i => String(i.type || '').toLowerCase() === 'chest');
     const hasChest = hasChestItem && !chestState.opened && !chestState.locked_forever;
-    const hasRiddle = content.riddle && !currentNode.cleared;
+    // #745: check riddle.solved (set by backend on correct answer) and riddle_state.failed_permanently
+    // cleared is only set on room exit, not on riddle solve — cannot rely on it alone
+    const riddleState = currentNode.riddle_state || {};
+    const hasRiddle = content.riddle && !content.riddle?.solved && !riddleState.failed_permanently && !currentNode.cleared;
 
     if (chestBtn) chestBtn.hidden = !hasChest;
     if (riddleBtn) riddleBtn.hidden = !hasRiddle;
@@ -12200,6 +12203,11 @@ async function _dungeonResolveTile(action, payload) {
         if (resp.hint) {
             const hintEl = document.getElementById('dungeon-riddle-hint');
             if (hintEl) { hintEl.textContent = `💡 ${resp.hint}`; hintEl.removeAttribute('hidden'); }
+        }
+
+        // #745: immediately hide riddle panel on solve/fail before reload to avoid flicker
+        if (action === 'answer_riddle' && (resp.solved || resp.failed_permanently)) {
+            document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
         }
 
         // Reload run to get updated node state
