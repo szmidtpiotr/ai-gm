@@ -559,6 +559,15 @@ const _HTML = `
               <label class="form-label">Kroki (refine)</label>
               <input class="form-input" id="ig-refine-steps" type="number" min="1" max="50" style="width:80px">
             </div>
+            <div class="form-row">
+              <label class="form-label">Rozmiar portretu (wrogowie/NPC)</label>
+              <select class="form-input" id="ig-portrait-size" style="width:200px">
+                <option value="576x1024">576×1024 portret ★</option>
+                <option value="768x1024">768×1024 portret 3:4</option>
+                <option value="512x512">512×512</option>
+                <option value="768x768">768×768</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="card" style="margin-bottom:12px">
@@ -1787,6 +1796,8 @@ async function _loadSysImageGen() {
     set('ig-url', cfg.url || '');
     set('ig-steps', cfg.steps ?? 4);
     set('ig-refine-steps', cfg.refine_steps ?? 8);
+    const pSel = document.getElementById('ig-portrait-size');
+    if (pSel) pSel.value = `${cfg.portrait_width ?? 576}x${cfg.portrait_height ?? 1024}`;
 
     await _refreshImageGenModels(cfg.checkpoint || '');
 
@@ -1811,11 +1822,14 @@ async function _loadSysImageGen() {
         saveBtn.disabled = true;
         const orig = saveBtn.textContent; saveBtn.textContent = '⏳';
         try {
+          const pSize = (document.getElementById('ig-portrait-size')?.value || '576x1024').split('x');
           const payload = {
             url: document.getElementById('ig-url').value.trim() || null,
             checkpoint: document.getElementById('ig-checkpoint').value.trim(),
             steps: parseInt(document.getElementById('ig-steps').value, 10) || null,
             refine_steps: parseInt(document.getElementById('ig-refine-steps').value, 10) || null,
+            portrait_width: parseInt(pSize[0], 10) || 576,
+            portrait_height: parseInt(pSize[1], 10) || 1024,
           };
           if (isNaN(payload.steps)) payload.steps = null;
           if (isNaN(payload.refine_steps)) payload.refine_steps = null;

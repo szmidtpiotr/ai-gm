@@ -949,6 +949,7 @@ async function openEnemyImageModal(key, encData) {
 
   let _lastFilename = e.image_url ? e.image_url.split('/').pop() : null;
   let _lastUrl = e.image_url || null;
+  window._eiSetImageState = (filename, url) => { _lastFilename = filename; _lastUrl = url; };
   const ta = document.getElementById('ei-prompt');
   const _autoResize = t => { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,240)+'px'; };
   ta.addEventListener('input', () => _autoResize(ta)); _autoResize(ta);
@@ -1031,6 +1032,17 @@ async function openEnemyImageModal(key, encData) {
     finally{ btn.disabled=false; btn.textContent='✂ Usuń tło'; }
   };
 
+  // Load default steps + portrait size from system config
+  apiFetch('/api/admin/images/config').then(cfg => {
+    const stepsEl = document.getElementById('ei-steps');
+    if (stepsEl && cfg.steps != null) stepsEl.value = cfg.steps;
+    const sizeEl = document.getElementById('ei-size');
+    if (sizeEl && cfg.portrait_width && cfg.portrait_height) {
+      const val = `${cfg.portrait_width}x${cfg.portrait_height}`;
+      if ([...sizeEl.options].some(o => o.value === val)) sizeEl.value = val;
+    }
+  }).catch(() => {});
+
   setTimeout(async () => {
     if (e._tileContext || !e.description || (e.image_gen_prompt && e.image_gen_prompt.trim())) return;
     try {
@@ -1068,7 +1080,9 @@ async function eiOpenGallery(key) {
     grid.innerHTML = imgs.map(img => {
       const encUrl = encodeURIComponent(img.url);
       return `<div onclick="window.eiPickGallery('${_esc(key)}','${encUrl}')" style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <img src="${_esc(img.url)}" style="width:100%;height:90px;object-fit:cover;display:block" loading="lazy">
+        <div style="background:#111;height:110px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <img src="${_esc(img.url)}" style="max-width:100%;max-height:110px;object-fit:contain;display:block" loading="lazy">
+        </div>
         <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(img.filename)}</div>
       </div>`;
     }).join('');
@@ -1078,14 +1092,27 @@ async function eiOpenGallery(key) {
 async function eiPickGallery(key, encUrl) {
   document.getElementById('ei-gallery-modal')?.remove();
   const url = decodeURIComponent(encUrl);
+  const filename = url.split('/').pop();
+  // Update module-level state so Popraw/Usuń tło work on the picked image
+  if (window._eiSetImageState) window._eiSetImageState(filename, url);
   const prev = document.getElementById('ei-preview');
   if (prev) prev.innerHTML = `<img src="${_esc(url)}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+  // Enable Popraw + Usuń tło buttons
+  const refBtn = document.getElementById('ei-ref-btn');
+  if (refBtn) refBtn.disabled = false;
+  const nobgBtn = document.getElementById('ei-nobg-btn');
+  if (nobgBtn) nobgBtn.disabled = false;
+  document.getElementById('ei-nobg-row')?.style.setProperty('display','flex');
   const acceptBtn2 = document.getElementById('ei-accept-btn');
   if (acceptBtn2) {
     acceptBtn2.disabled = false;
     acceptBtn2.onclick = async () => {
       try {
-        await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:url})});
+        const promptEl = document.getElementById('ei-prompt');
+        const promptVal = promptEl ? promptEl.value.trim() : '';
+        const body = {image_url: url};
+        if (promptVal) body.image_gen_prompt = promptVal;
+        await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify(body)});
         _showToast('Obraz zapisany.','success');
         document.getElementById('enemy-img-modal')?.remove();
         _loadEnemies();

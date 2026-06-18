@@ -21,12 +21,17 @@ TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))
 TILES_URL_PREFIX = "/images/tiles"
 _DB_PATH = Path("/data/ai_gm.db")
 
-_IMAGE_GEN_KEYS = ("image_gen.url", "image_gen.steps", "image_gen.refine_steps", "image_gen.checkpoint")
+_IMAGE_GEN_KEYS = (
+    "image_gen.url", "image_gen.steps", "image_gen.refine_steps",
+    "image_gen.checkpoint", "image_gen.portrait_width", "image_gen.portrait_height",
+)
 _IMAGE_GEN_DEFAULTS: dict[str, Any] = {
     "image_gen.url": IMAGE_GEN_URL,
     "image_gen.steps": 4,
     "image_gen.refine_steps": 8,
     "image_gen.checkpoint": "",
+    "image_gen.portrait_width": 576,
+    "image_gen.portrait_height": 1024,
 }
 
 
@@ -72,6 +77,8 @@ async def get_image_config():
         "steps": cfg.get("image_gen.steps", 4),
         "refine_steps": cfg.get("image_gen.refine_steps", 8),
         "checkpoint": cfg.get("image_gen.checkpoint", ""),
+        "portrait_width": int(cfg.get("image_gen.portrait_width", 576)),
+        "portrait_height": int(cfg.get("image_gen.portrait_height", 1024)),
     }
 
 
@@ -80,6 +87,8 @@ class ImageConfigPatch(BaseModel):
     steps: int | None = None
     refine_steps: int | None = None
     checkpoint: str | None = None
+    portrait_width: int | None = None
+    portrait_height: int | None = None
 
 
 @router.patch("/config")
@@ -93,6 +102,10 @@ async def patch_image_config(req: ImageConfigPatch):
         updates.append(("image_gen.refine_steps", json.dumps(max(1, min(50, req.refine_steps)))))
     if req.checkpoint is not None:
         updates.append(("image_gen.checkpoint", json.dumps(req.checkpoint.strip())))
+    if req.portrait_width is not None:
+        updates.append(("image_gen.portrait_width", json.dumps(max(64, min(2048, req.portrait_width)))))
+    if req.portrait_height is not None:
+        updates.append(("image_gen.portrait_height", json.dumps(max(64, min(2048, req.portrait_height)))))
     if updates:
         with sqlite3.connect(_DB_PATH) as c:
             for key, val in updates:
@@ -435,8 +448,8 @@ async def delete_image(filename: str):
 class EnemyGenerateRequest(BaseModel):
     force: bool = False   # regenerate even if image_url already set
     steps: int | None = None
-    width: int = 576
-    height: int = 1024
+    width: int | None = None   # None → read from image_gen.portrait_width config (default 576)
+    height: int | None = None  # None → read from image_gen.portrait_height config (default 1024)
 
 
 @router.get("/enemy/missing")
@@ -501,13 +514,15 @@ async def generate_enemy_image(key: str, req: EnemyGenerateRequest = Body(defaul
             )
 
     steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    width = req.width if req.width is not None else int(_read_visual("image_gen.portrait_width", 576))
+    height = req.height if req.height is not None else int(_read_visual("image_gen.portrait_height", 1024))
     checkpoint = str(_read_visual("image_gen.checkpoint", "") or "")
     gen_url = _get_image_gen_url()
 
     payload: dict[str, Any] = {
         "prompt": saved_prompt,
-        "width": req.width,
-        "height": req.height,
+        "width": width,
+        "height": height,
         "steps": steps,
     }
     if checkpoint:
