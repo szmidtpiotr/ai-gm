@@ -216,6 +216,8 @@ _Observability wydzielone do FAZY O (H1 „log writer/metryki" = O1/O2). Tu zost
 
 Standalone bugixy i feature'y spoza głównej architektury A-H.
 
+- [x] [#776](https://github.com/szmidtpiotr/ai-gm/issues/776) — QUEST_COMPLETE tag: fix regex (spacje w tytule), flip status=completed w DB, grant XP tylko gdy flipped, instrukcja w system_prompt — commit 87f803d
+
 - [ ] #C-acc — Acceptance harness C1–C19 (pytest 13/13 + Playwright LLM-play) — `scripts/acceptance_c_series.sh`, `docs/ACCEPTANCE_C_SERIES.md` — commit 687f7ed; RED backlog: C9 (modal Ucz się), C10/C11 (questy)
 - [ ] [#400](https://github.com/szmidtpiotr/ai-gm/issues/400) — Admin spectator + resume: admin z player frontendu widzi WSZYSTKIE kampanie (dropdown wyboru usera, default własny), podgląda read-only i wznawia (re-attach bohatera z historii tur + aktywacja). Endpointy gated is_admin. TDD 7/7 + Playwright. Bug po drodze: campaigns.updated_at nie istnieje → created_at (awaits-testing)
 - [x] [#760](https://github.com/szmidtpiotr/ai-gm/issues/760) — Czytniki debug MCP/API: `query_world_snapshots` + `query_llm_calls` (ekspozycja istniejących world_state_snapshots/llm_call_log per kampania, przycięte). Zero nowego zbierania. TDD 4/4 + Playwright 2/2. Commit `0051af9`. ✅ closed

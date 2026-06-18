@@ -5600,3 +5600,9 @@ HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od 
 ### #771 — Konsumable on-use effect builder (damage_enemy + apply_condition target) ✅ ([#771](https://github.com/szmidtpiotr/ai-gm/issues/771), 2026-06-18)
 
 > **Wdrożone:** Pełny system efektów on-use dla konsumabli. (A) Migracja: kolumna `effect_json TEXT` do `game_config_consumables`; backfill 14 konsumabli (holy_water, alchemist_fire, scroll_fireball, potion_strength, potion_giant_strength, potion_resistance, potion_stamina, potion_haste, potion_stealth, smoke_bomb, scroll_magic_bolt, vial_of_acid, scroll_light, scroll_shield). (B) `loot_service.py`: dispatcher `damage_enemy` atakuje pierwszego żywego wroga z `active_combat.combatants`; `apply_condition` z polem `target=enemy` nałożyć kondycję na wroga zamiast na gracza. (C) Admin UI: `_CONSUMABLE_EFFECT_TYPES` + builder graficzny w `content.js`; `_FORGE_CONSUMABLE_EFFECT_TYPES` + `_forgeGetEffectTypes()` w `forge.js`. Poza walką `damage_enemy` → `narrative_only` (brak crashu). 8/8 pytest + 3/3 Playwright GREEN. Commit `c095229`.
+
+## Poprawki questy — 2026-06-18
+
+### #776 — QUEST_COMPLETE tag: regex, flip DB status, XP guard ✅ ([#776](https://github.com/szmidtpiotr/ai-gm/issues/776), 2026-06-18)
+
+> **Wdrożone:** Trójczęściowy fix domykania questów dostawy/wymiany/dialogu. (A) `xp_sources.py`: regex `_QUEST_RE` zmieniony z `[^\]\s]+` na `[^\]]+?` — teraz dopasowuje tytuły ze spacjami (np. „Nocna przesyłka"). (B) `xp_sources.py`: `process_narrative_xp_tags` importuje i woła `complete_quest_in_character_quests()` przed grantem XP — status flippuje się do `completed` + `completed_turn` ustawiony; XP przyznawane TYLKO gdy flip się udał (zero podwójnych nagród). (C) `system_prompt.txt`: nowa sekcja QUEST_COMPLETE — instrukcja kiedy emitować tag, że tytuł musi być identyczny z blokiem QUESTY, i przykład. 4/4 pytest + 3/3 Playwright GREEN. Commit `87f803d`.
