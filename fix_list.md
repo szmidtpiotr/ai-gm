@@ -67,9 +67,9 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] 1. #767 — **KRYTYCZNY** Granie bohaterem przejmuje cudzą aktywną kampanię (korupcja danych, Mizel/99791) — guard w assign_hero_to_campaign + frontend; recovery wykonane ręcznie [wdrożone 49476d7]
 - [x] 2. #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone 7712860]
 - [x] 3. #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót [wdrożone 2f8bb72]
-- [ ] 4. #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci
+- [x] 4. #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci [wdrożone 53d6825]
 - [x] 5. #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja [wdrożone bfe0f37]
-- [ ] 6. #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
+- [x] 6. #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill [wdrożone 56dde19]
 - [x] 7. #721 — Zagadka: brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index + pole text [wdrożone 01cda5f]
 - [x] 8. #745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [wdrożone 8a35c22]
 
@@ -77,27 +77,27 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0]
 - [ ] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize)
 - [ ] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
-- [ ] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location
+- [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
 - [ ] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData
 - [ ] 14. #740 — Podwójna narracja wstępna lochu — LLM_OPEN + room_narrative nakładają się
 - [ ] 15. #751 — Przepłata za posiłek (2 vs 5 GP) — dodaj usługę tavern_meal + reguła cena↔klucz
 - [ ] 16. #746 — Angielskie nazwy łupów w modalu walki — JOIN po label z DB w _preview_loot_from_roll_items
 - [ ] 17. #757 — Inventory pokazuje klucz zamiast nazwy — narracyjny item też do game_items + dymek opisu
-- [ ] 18. #749 — Rogue bez wyposażenia na start — dodaj "rogue" do whitelist starter items
+- [x] 18. #749 — Rogue bez wyposażenia na start — dodaj "rogue" do whitelist starter items [wdrożone 2036bf9]
 - [ ] 19. #748 — Whisper STT nieaktywny — voice_hosts is_active=1 (one-liner)
 - [ ] 20. #734 — Brak użycia mikstury w walce (przeżywalność w lochu) — akcja „użyj mikstury" w starciu
 - [ ] 21. #728 — Krypta cooldown=0 nadal pokazuje timeout (20.2h)
 
 ### P2 — Design: STOP po Twoją decyzję A/B zanim wdrożę
-- [ ] 22. #763 — Ruch zignorowany + zły test (Oszustwo zamiast Skradania) — prompt skill-select `(dep: #750)`
+- [x] 22. #763 — Ruch zignorowany + zły test (Oszustwo zamiast Skradania) — prompt skill-select `(dep: #750)` [wdrożone 1a263b1]
 - [ ] 23. #733 — L18 pierwsza komnata za trudna solo lvl1 — limit liczby/sumy PŻ wrogów `(design — balans)`
 - [ ] 24. #747 — Kreator: obniżenie skilla zużywa punkt budżetu (Math.abs) `(design A/B)`
 - [ ] 25. #753 — Unik double jeopardy + dodge poza pulą losowania `(design — unik zastępuje AC / niższy DC / pula)`
 - [ ] 26. #744 — Wojownik z tarczą nie może blokować (shield_block rank≥1) `(design)`
 
 ### P3 — In Review: sprawdź komentarze (mógł być zatwierdzony → zaznacz [x])
-- [ ] 27. #719 — L-fix: modal kości pokaż test uniku wroga `[IN REVIEW]`
-- [ ] 28. #720 — L-fix: brak popupu „co wypadło z bossa" `[IN REVIEW]`
+- [x] 27. #719 — L-fix: modal kości pokaż test uniku wroga `[IN REVIEW]` [wdrożone cefb46d]
+- [x] 28. #720 — L-fix: brak popupu „co wypadło z bossa" `[IN REVIEW]` [wdrożone 3028497]
 - [ ] 29. #724 — L20b: portrety wrogów/NPC u gracza `[IN REVIEW]`
 
 ### P4 — Feature (wdrażać TYLKO na moją wyraźną prośbę)

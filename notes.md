@@ -747,3 +747,8 @@ Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy j
 - [x] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill [#722]
 - [x] FIX721 — Zagadka brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index/CSS + pole text [#721]
 - [x] FIX745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [#745]
+- [x] FIX750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [#750]
+- [x] FIX749 — Rogue bez wyposażenia na start — whitelist starter items [#749]
+- [x] FIX763 — Ruch zignorowany + zły test (deception idiom „udaję") — skill-select fix [#763]
+- [x] FIX719 — Modal kości pokazuje test uniku wroga (opposed hit) [#719]
+- [x] FIX720 — Popup łupu bossa po zabiciu w lochu [#720]
