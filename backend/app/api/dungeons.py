@@ -505,21 +505,46 @@ def _relink_hero_to_previous(character_id: int, previous_campaign_id: int | None
 
 # ── Active run ────────────────────────────────────────────────────────────────
 
+
+def _resolve_run_riddles(conn: sqlite3.Connection, run: dict | None) -> None:
+    """Resolve all bare string riddle keys to dicts in-place for all graph nodes.
+
+    The graph generator stores riddle as a bare key string (e.g. "riddle_shadow").
+    The frontend needs the full dict {text, answer, hints, solved, ...}.
+    Called on resume and post-action paths that re-fetch the full run from DB.
+    No-op when run is None or has no graph. (#721)
+    """
+    if not run:
+        return
+    from app.services.dungeon_tile_service import _resolve_riddle_in_content
+    nodes = (run.get("graph") or {}).get("nodes") or {}
+    for node in nodes.values():
+        content = (node or {}).get("content")
+        if content and isinstance(content.get("riddle"), str):
+            try:
+                _resolve_riddle_in_content(conn, content)
+            except Exception:
+                pass
+
+
 @router.get("/campaigns/{campaign_id}/dungeon-run")
 def get_current_dungeon_run(campaign_id: int):
     from app.services.dungeon_service import get_active_dungeon_run
     run = get_active_dungeon_run(campaign_id)
 
-    # L12b: surface the unseen dungeon mechanics codex card so resume/restore paths
-    # (not just fresh enter) can teach it. Frontend shows it at most once per load.
     onboarding_cards: list[dict] = []
     if run:
+        conn = _get_db()
         try:
-            from app.services.onboarding_service import get_unseen_cards_for_mechanics
-            char_id = next(iter((run.get("positions") or {}).keys()), None)
-            if char_id is not None:
-                conn = _get_db()
-                try:
+            # #721: resolve bare riddle string keys to dicts for resume/post-action paths
+            _resolve_run_riddles(conn, run)
+
+            # L12b: surface the unseen dungeon mechanics codex card so resume/restore paths
+            # (not just fresh enter) can teach it. Frontend shows it at most once per load.
+            try:
+                from app.services.onboarding_service import get_unseen_cards_for_mechanics
+                char_id = next(iter((run.get("positions") or {}).keys()), None)
+                if char_id is not None:
                     row = conn.execute(
                         "SELECT user_id FROM characters WHERE id = ?", (int(char_id),)
                     ).fetchone()
@@ -527,10 +552,10 @@ def get_current_dungeon_run(campaign_id: int):
                         onboarding_cards = get_unseen_cards_for_mechanics(
                             conn, int(row["user_id"]), ["dungeon_tiles"]
                         )
-                finally:
-                    conn.close()
-        except Exception:
-            onboarding_cards = []
+            except Exception:
+                onboarding_cards = []
+        finally:
+            conn.close()
 
     return {"dungeon_run": run, "onboarding_cards": onboarding_cards}
 
