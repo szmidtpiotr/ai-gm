@@ -1075,13 +1075,16 @@ async function eiOpenGallery(key) {
   const grid = document.getElementById('ei-gallery-grid');
   try {
     const data = await apiFetch('/api/admin/images/list');
-    const imgs = data.images || [];
+    const allImgs = data.images || [];
+    const imgs = allImgs.slice(0, 80); // show 80 most recent — too many kills lazy loading in modal
     if (!imgs.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Brak obrazów.</div>'; return; }
-    grid.innerHTML = imgs.map(img => {
+    const countNote = allImgs.length > imgs.length
+      ? `<div style="grid-column:1/-1;font-size:0.72rem;color:var(--t3);padding:0 2px 6px">Pokazuję ${imgs.length} najnowszych z ${allImgs.length}</div>` : '';
+    grid.innerHTML = countNote + imgs.map(img => {
       const encUrl = encodeURIComponent(img.url);
       return `<div onclick="window.eiPickGallery('${_esc(key)}','${encUrl}')" style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="background:#111;height:110px;display:flex;align-items:center;justify-content:center;overflow:hidden">
-          <img src="${_esc(img.url)}" style="max-width:100%;max-height:110px;object-fit:contain;display:block" loading="lazy">
+          <img src="${_esc(img.url)}" style="max-width:100%;max-height:110px;object-fit:contain;display:block">
         </div>
         <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(img.filename)}</div>
       </div>`;
