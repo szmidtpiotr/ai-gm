@@ -787,6 +787,13 @@ def _validate_combat_start_target(
     except Exception:
         pass
 
+    # LLM-authored tag: after the friendly-NPC gate, trust the GM completely.
+    # initiate_combat() creates a pending_review row for keys not yet in catalog,
+    # so any non-NPC key is safe to proceed with. The catalog-existence guard only
+    # matters for the backend's own injected tags (source='injected').
+    if source == "llm":
+        return (True, "")
+
     has_aggression = bool(_AGGRESSION_NARRATIVE_RE.search(narr_norm))
 
     # 3. Generic injected key (unknown_attacker/enemy) → valid only if the prose
