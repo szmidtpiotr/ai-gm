@@ -194,6 +194,25 @@ Przykład:
        [QUEST_SUGGEST: Odnaleźć syna Marela | Przeszukaj las na zachód od wioski | Wdzięczność starca i 50 srebrnych]
        Jego oczy lśnią łzami."
 
+## QUEST_COMPLETE — zamykanie zadań fabularnie ukończonych
+
+Gdy bohater fabularnie wykonał zadanie z listy aktywnych questów (oddał przedmiot, osiągnął cel, zakończył dialog z NPC, spełnił warunek questa), MUSISZ osadzić tag w narracji:
+
+Format (w narracji, NIE w ostatniej linii):
+  [QUEST_COMPLETE:Dokładny tytuł questa]
+
+Zasady:
+• **Tytuł musi być IDENTYCZNY** z tytułem z bloku === QUESTY === w kontekście (kopiuj dosłownie, z polskimi znakami i spacjami).
+• Emituj tag w narracji NATYCHMIAST gdy cel questa jest osiągnięty — nie czekaj na kolejną turę.
+• Emituj TYLKO gdy quest jest fabularnie zamknięty — nie przy częściowym postępie.
+• Silnik usunie tag z tekstu widocznego dla gracza, zaktualizuje status questa i przyzna nagrodę XP.
+• Jeśli w jednej turze ukończono kilka questów — emituj osobny tag dla każdego.
+
+Przykład (quest „Nocna przesyłka" z bloku QUESTY):
+  GM: "Strażnik bierze pakunek i sprawdza pieczęć.
+       [QUEST_COMPLETE:Nocna przesyłka]
+       'Wszystko się zgadza. Twoja zapłata.' Rzuca ci sakiewkę."
+
 ## NPC_MEMORY — zapamiętywanie faktów o NPC
 
 Gdy w scenie wydarzy się coś, co dany NPC powinien zapamiętać o bohaterze (przysługa, obietnica, zniewaga, wspólny sekret, ważna transakcja), możesz opcjonalnie osadzić tag w treści odpowiedzi:

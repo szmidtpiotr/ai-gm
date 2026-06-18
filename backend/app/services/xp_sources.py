@@ -25,12 +25,14 @@ from typing import Any
 import structlog
 
 from app.services.xp_service import grant_pending_xp, get_xp_reward_amount
+from app.services.quest_persist_service import complete_quest_in_character_quests
 
 logger = structlog.get_logger()
 
 # ── Regex patterns for LLM narrative tags ────────────────────────────────────
 
-_QUEST_RE   = re.compile(r"\[QUEST_COMPLETE:\s*([^\]\s]+)\s*\]", re.I)
+# [^\]]+ allows spaces in quest titles (e.g. "Nocna przesyłka")
+_QUEST_RE   = re.compile(r"\[QUEST_COMPLETE:\s*([^\]]+?)\s*\]", re.I)
 _DUNGEON_RE = re.compile(r"\[DUNGEON_CLEAR:\s*([^\]\s]+)\s*\]", re.I)
 _CAMPAIGN_RE= re.compile(r"\[CAMPAIGN_END:\s*([^\]\s]+)\s*\]", re.I)
 _DISC_RE    = re.compile(r"\[DISCOVERY:\s*([^\]\s]+)\s*\]", re.I)
@@ -242,7 +244,12 @@ def process_narrative_xp_tags(
     total = 0
 
     for m in _QUEST_RE.finditer(narrative):
-        total += grant_quest_complete(conn, character_id, campaign_id, m.group(1), turn_number)
+        quest_title = m.group(1).strip()
+        flipped = complete_quest_in_character_quests(
+            conn, character_id, campaign_id, quest_title, completed_turn=turn_number
+        )
+        if flipped:
+            total += grant_quest_complete(conn, character_id, campaign_id, quest_title, turn_number)
 
     for m in _DUNGEON_RE.finditer(narrative):
         total += grant_dungeon_clear(conn, character_id, campaign_id, m.group(1), turn_number)
