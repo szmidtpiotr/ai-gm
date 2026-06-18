@@ -1310,6 +1310,18 @@ async function selectCampaign(campaign) {
             c.user_id === currentUser?.id || c.userid === currentUser?.id
         );
 
+        // Check if campaign is occupied by a different user's hero
+        const otherHero = characters.find(c =>
+            c.is_active &&
+            (c.user_id !== currentUser?.id && c.userid !== currentUser?.id) &&
+            (c.status === 'in_campaign' || c.campaign_id === campaign.id)
+        );
+        if (otherHero && !myCharacter) {
+            showToast('Ta kampania należy do innego bohatera — nie można przejąć.', 'error', 4000);
+            loadHeroes().then(() => showScreen('heroes'));
+            return;
+        }
+
         if (myCharacter) {
             characterData = myCharacter;
             await enterGame(campaign);

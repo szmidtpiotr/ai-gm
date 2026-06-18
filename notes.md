@@ -739,6 +739,7 @@ Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekc
 
 ## FAZA FIX — P0 Krytyczne (most dla /mass-implement prompt_fix_mass.md; id FIX<N> = issue #<N>)
 Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy już zaimplementowane (patrz prompt_fix_mass.md). Kolejność = priorytet P0.
+- [x] FIX767 — KRYTYCZNY: granie bohaterem przejmuje cudzą aktywną kampanię (korupcja danych, Mizel/99791) — guard w assign_hero_to_campaign + frontend [#767]
 - [x] FIX743 — Crash przy zakładaniu rękawic (invalid armor_coverage hands) — slot hands w loot_service [#743]
 - [x] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót [#752]
 - [x] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci [#647]

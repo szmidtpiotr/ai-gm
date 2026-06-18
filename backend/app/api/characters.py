@@ -1201,10 +1201,15 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
 
         # Free any existing hero in this campaign (except if it's the same hero being re-assigned)
         existing = conn.execute(
-            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
+            "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
             (campaign_id, character_id),
         ).fetchone()
         if existing:
+            if existing["user_id"] != user_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Campaign already has an active hero from another player — cannot take over",
+                )
             conn.execute(
                 "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
                 (existing["id"],),
@@ -2406,10 +2411,17 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 
     # Free any existing hero in this campaign before creating a new one
     existing_hero = conn.execute(
-        "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1",
+        "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1",
         (campaign_id,),
     ).fetchone()
     if existing_hero:
+        if existing_hero["user_id"] != req.user_id:
+            conn.rollback()
+            conn.close()
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign already has an active hero from another player — cannot take over",
+            )
         conn.execute(
             "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
             (existing_hero["id"],),
