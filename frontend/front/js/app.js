@@ -8786,13 +8786,51 @@ async function _refreshBugReportFab() {
     const modal = document.getElementById('bug-report-modal');
     if (!fab || !modal) return;
 
-    fab.addEventListener('click', () => {
+    function openModal() {
         document.getElementById('bug-report-observation').value = '';
         document.getElementById('bug-report-reproduction').value = '';
         document.getElementById('bug-report-type').value = 'bug';
         document.getElementById('bug-report-status').textContent = '';
         modal.style.display = 'flex';
+    }
+
+    // #668: pionowe przeciąganie FAB — tester sam ustawia wysokość. Pozycja w localStorage.
+    // Click otwiera modal tylko gdy NIE był to drag (ruch < progu).
+    const FAB_POS_KEY = 'bugFabBottomPx';
+    function clampBottom(px) {
+        const min = 8, max = window.innerHeight - fab.offsetHeight - 8;
+        return Math.max(min, Math.min(max, px));
+    }
+    try {
+        const saved = parseFloat(localStorage.getItem(FAB_POS_KEY));
+        if (!Number.isNaN(saved)) fab.style.bottom = clampBottom(saved) + 'px';
+    } catch {}
+
+    let dragging = false, moved = false, startY = 0, startBottom = 0;
+    fab.addEventListener('pointerdown', e => {
+        dragging = true; moved = false;
+        startY = e.clientY;
+        startBottom = parseFloat(getComputedStyle(fab).bottom) || 0;
+        fab.setPointerCapture?.(e.pointerId);
     });
+    fab.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dy = startY - e.clientY; // w górę = większy bottom
+        if (Math.abs(dy) > 4) moved = true;
+        fab.style.bottom = clampBottom(startBottom + dy) + 'px';
+    });
+    function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        fab.releasePointerCapture?.(e.pointerId);
+        if (moved) {
+            try { localStorage.setItem(FAB_POS_KEY, String(parseFloat(fab.style.bottom))); } catch {}
+        }
+    }
+    fab.addEventListener('pointerup', endDrag);
+    fab.addEventListener('pointercancel', endDrag);
+
+    fab.addEventListener('click', () => { if (!moved) openModal(); });
 
     function closeModal() { modal.style.display = 'none'; }
     document.getElementById('bug-report-close')?.addEventListener('click', closeModal);
