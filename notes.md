@@ -689,8 +689,8 @@ Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekc
 ## FAZA FIX — P0 Krytyczne (most dla /mass-implement prompt_fix_mass.md; id FIX<N> = issue #<N>)
 Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy już zaimplementowane (patrz prompt_fix_mass.md). Kolejność = priorytet P0.
 - [x] FIX743 — Crash przy zakładaniu rękawic (invalid armor_coverage hands) — slot hands w loot_service [#743]
-- [ ] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót
-- [ ] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci
+- [x] FIX752 — Kampania znika po wyjściu z lochu (utrata dostępu) — filtr loadCampaigns idle hero + auto-powrót [#752]
+- [x] FIX647 — Wskrzeszenie nie reaktywuje kampanii (410 ended) — martwa kampania po śmierci [#647]
 - [ ] FIX759 — Boss osiągalny w 1-2 komnacie — _fill_open_doors wyklucz bossa z weldu + BFS-walidacja
 - [ ] FIX722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
 - [ ] FIX721 — Zagadka brak treści + panel pod belką [IN REVIEW] — move_through_door resolve + z-index + pole text

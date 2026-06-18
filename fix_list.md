@@ -20,7 +20,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #598 `[TO DO]` — [FEATURE] Mechanika walki dwoma broniami (dual-wield) — obecnie nie istnieje
 - [ ] #602 `[TO DO]` — [TASK] Niezawodne powiadomienia — wielokanałowy system (Telegram easy-click + web push + email), wdrażane fazami
 - [ ] #635 `[TO DO]` — [TASK] SF6 — Karta rzutu hazardu: stawka "Ryzykujesz X zł" + słowny stopień marginesu
-- [ ] #647 `[TO DO]` — [BUG] Wskrzeszenie nie reaktywuje kampanii — "This campaign has ended." (410) po revive (kampania #84)
+- [x] #647 `[TO DO]` — [BUG] Wskrzeszenie nie reaktywuje kampanii — "This campaign has ended." (410) po revive (kampania #84) [wdrożone 53d6825]
 - [ ] #653 `[TO DO]` — [BUG] Brak wizualizacji rzutu kostką dla zaklęć leczących/effect rzucanych poza walką (Rana Uleczona)
 - [ ] #659 `[TO DO]` — [TASK] B11 — AoE multi-target maga (burning_arc/chain_lightning/fireball)
 - [ ] #719 `[IN REVIEW]` — [TASK] L-fix — Modal kości: pokaż test uniku wroga (czemu wysoki rzut chybia)
@@ -65,7 +65,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 
 ### P0 — Krytyczne: crash / utrata progresu / złamana pętla gry
 - [x] #743 — Crash przy zakładaniu rękawic (`invalid armor_coverage hands`) — slot `hands` w loot_service [wdrożone 7712860]
-- [ ] #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót
+- [x] #752 — Kampania znika po wyjściu z lochu (gracz traci dostęp) — filtr loadCampaigns idle hero + auto-powrót [wdrożone 2f8bb72]
 - [ ] #647 — Wskrzeszenie nie reaktywuje kampanii (410 „ended") — martwa kampania po śmierci
 - [ ] #759 — Boss osiągalny w 1-2 komnacie (złamana eksploracja) — _fill_open_doors wyklucz bossa + BFS-walidacja
 - [ ] #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill
