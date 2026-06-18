@@ -4608,6 +4608,26 @@ def resolve_attack(
                             if gold_drop > 0:
                                 apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
                             out["gold_drop"] = max(0, gold_drop)
+                            # #754: strukturalny rejestr — loot + złoto (ścieżka pojedynczego ubicia)
+                            try:
+                                from app.services.dice_log_service import record_dice_roll as _rec_roll
+                                _rec_roll(
+                                    campaign_id=campaign_id, roll_type="gold",
+                                    character_id=ch_id, combat_id=int(row["id"]),
+                                    actor=ek, total=max(0, gold_drop), outcome="drop",
+                                    meta={"enemy_key": ek, "loot_tier": _enemy_loot_tier,
+                                          "round": int(row["round"] or 1)},
+                                )
+                                if loot:
+                                    _rec_roll(
+                                        campaign_id=campaign_id, roll_type="loot",
+                                        character_id=ch_id, combat_id=int(row["id"]),
+                                        actor=ek, total=len(loot), outcome="drop",
+                                        meta={"enemy_key": ek, "items": loot,
+                                              "round": int(row["round"] or 1)},
+                                    )
+                            except Exception:
+                                pass
                         except Exception as e:
                             logger.warning(
                                 "combat_loot_grant_failed",
