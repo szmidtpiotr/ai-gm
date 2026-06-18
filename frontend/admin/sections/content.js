@@ -106,15 +106,13 @@ const _ROW_REGISTRY = {
     ], reload: () => { _loaded.delete('items'); _loadItems(); } },
   'consumables-table': { endpoint:'/api/admin/consumables', keyField:'key', fields:[
       {name:'label',       label:'Nazwa',         type:'text'},
-      {name:'effect_type', label:'Typ efektu',    type:'text'},
-      {name:'effect_dice', label:'Kość efektu',   type:'text'},
-      {name:'effect_bonus',label:'Bonus efektu',  type:'number'},
       {name:'charges',     label:'Ładunki',       type:'number'},
       {name:'base_price',  label:'Cena',          type:'number'},
       {name:'weight_kg',   label:'Waga (kg)',     type:'number', step:'0.1'},
       {name:'rarity',      label:'Rzadkość (1-5)', type:'number', min:1, max:5},
       {name:'is_active',   label:'Aktywny',       type:'checkbox'},
       {name:'description', label:'Opis',          type:'textarea'},
+      {name:'effect_json', label:'Efekty on-use', type:'effect_json_builder', effectTypes:'consumable'},
     ], reload: () => { _loaded.delete('consumables'); _loadConsumables(); } },
 };
 
@@ -156,7 +154,7 @@ async function _openGenericEditModal(cfg, record) {
       efxState[f.name] = [...existingEffects];
       return `<div class="form-row" style="grid-column:1/-1;margin-top:6px">
         <label class="form-label" style="margin-bottom:4px">${_esc(f.label)}</label>
-        <div data-efx-field="${_esc(f.name)}">${_effectBuilderHtml(existingEffects)}</div>
+        <div data-efx-field="${_esc(f.name)}" data-efx-types="${_esc(f.effectTypes||'')}">${_effectBuilderHtml(existingEffects, f.effectTypes)}</div>
       </div>`;
     }
     if (f.type === 'checkbox') {
@@ -199,9 +197,7 @@ async function _openGenericEditModal(cfg, record) {
     for (const f of cfg.fields) {
       if (f.type === 'effect_json_builder') {
         const effects = efxState[f.name] || [];
-        payload[f.name] = effects.length > 0
-          ? JSON.stringify({ schema_version: 1, effect_category: 'gear_bonus', effects })
-          : null;
+        payload[f.name] = effects.length > 0 ? _effectsToJson(effects, f.effectTypes) : null;
         continue;
       }
       const el = overlay.querySelector(`[name="${f.name}"]`);
@@ -444,6 +440,22 @@ const _EFFECT_TYPES = [
     tooltip: 'Brak efektu mechanicznego — LLM może odczytać opis w note i narrować specjalne właściwości.' },
 ];
 
+// On-use effects dla konsumabli (#771) — oddzielne od gearowych on-equip
+const _CONSUMABLE_EFFECT_TYPES = [
+  { value: 'heal_hp', label: 'Leczenie HP', fields: ['value'],
+    tooltip: 'Leczy HP gracza. Wartość: kostka (np. 2d4) lub liczba całkowita.' },
+  { value: 'restore_mana', label: 'Przywróć manę', fields: ['value'],
+    tooltip: 'Przywraca manę gracza (tylko Scholar). Wartość: kostka lub liczba.' },
+  { value: 'remove_condition', label: 'Zdejmij kondycję', fields: ['condition_key'],
+    tooltip: 'Usuwa wybraną kondycję z gracza (np. antidote → poisoned).' },
+  { value: 'apply_condition', label: 'Aplikuj kondycję', fields: ['condition_key', 'target', 'duration_rounds'],
+    tooltip: 'Aplikuje kondycję na gracza (self) lub wroga (enemy) przez N rund.' },
+  { value: 'damage_enemy', label: 'Obrażenia wrogowi ⭐', fields: ['value', 'target'],
+    tooltip: 'Zadaje obrażenia wrogowi w walce. Poza walką → tylko narracja. Wartość: kostka (np. 2d6).' },
+  { value: 'narrative_only', label: 'Tylko narracja', fields: [],
+    tooltip: 'Brak efektu mechanicznego — LLM narruje użycie.' },
+];
+
 const _STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
 // Cache kondycji dla dropdownu apply_condition — ładowany raz przy otwarciu modalu
@@ -459,19 +471,25 @@ async function _loadConditionsCache() {
   }
 }
 
-function _effectBuilderHtml(effects) {
-  const rows = (effects || []).map((e, i) => _effectRowHtml(e, i)).join('');
-  return `<div class="effect-builder" id="effect-builder">
+function _resolveEffectTypes(effectTypesHint) {
+  return effectTypesHint === 'consumable' ? _CONSUMABLE_EFFECT_TYPES : _EFFECT_TYPES;
+}
+
+function _effectBuilderHtml(effects, effectTypesHint) {
+  const rows = (effects || []).map((e, i) => _effectRowHtml(e, i, effectTypesHint)).join('');
+  return `<div class="effect-builder" id="effect-builder" data-etypes="${_esc(effectTypesHint||'')}">
     <div id="effect-rows">${rows}</div>
     <button type="button" class="btn btn-sm btn-secondary" id="add-effect-btn" style="margin-top:6px">+ Efekt</button>
   </div>`;
 }
 
-function _effectRowHtml(e, i) {
+function _effectRowHtml(e, i, effectTypesHint) {
+  const types = _resolveEffectTypes(effectTypesHint);
+  const defaultType = types[0]?.value || 'damage_bonus';
   const typeSel = `<select class="form-input effect-type-sel" style="min-width:170px" data-idx="${i}">
-    ${_EFFECT_TYPES.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
+    ${types.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
   </select>`;
-  const tdef = _EFFECT_TYPES.find(t => t.value === (e.type || 'damage_bonus')) || _EFFECT_TYPES[0];
+  const tdef = types.find(t => t.value === (e.type || defaultType)) || types[0];
   const extraFields = _buildExtraFields(tdef, e);
   return `<div class="effect-row" data-idx="${i}" style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap">
     ${typeSel}
@@ -499,7 +517,15 @@ function _buildExtraFields(tdef, e) {
       }
       return `<input class="form-input effect-cond-key" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px" title="${_esc(tdef.tooltip||'')}">`;
     }
-    if (f === 'duration_rounds') return `<input class="form-input effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px" title="Liczba rund trwania kondycji (0 = do końca walki)">`;
+    if (f === 'duration_rounds') return `<input class="form-input effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??3}" style="width:70px" title="Liczba rund trwania kondycji (0 = do końca walki)">`;
+    if (f === 'target') {
+      const cur = e.target || 'self';
+      return `<select class="form-input effect-target" style="width:100px" title="Cel efektu">
+        <option value="self"${cur==='self'?' selected':''}>self (gracz)</option>
+        <option value="enemy"${cur==='enemy'?' selected':''}>enemy (wróg)</option>
+        <option value="area"${cur==='area'?' selected':''}>area (obszar)</option>
+      </select>`;
+    }
     return '';
   }).join('');
 }
@@ -507,21 +533,17 @@ function _buildExtraFields(tdef, e) {
 function _wireEffectBuilder(container, onChange) {
   const rowsEl = container.querySelector('#effect-rows');
   const addBtn = container.querySelector('#add-effect-btn');
-
-  const rebuild = () => {
-    const effects = _readEffects(container);
-    rowsEl.innerHTML = effects.map((e, i) => _effectRowHtml(e, i)).join('');
-    _wireRows();
-    onChange(effects);
-  };
+  const builderEl = container.querySelector('.effect-builder') || container.querySelector('#effect-builder');
+  const effectTypesHint = builderEl?.dataset?.etypes || '';
+  const types = _resolveEffectTypes(effectTypesHint);
 
   const _wireRows = () => {
     rowsEl.querySelectorAll('.effect-type-sel').forEach(sel => {
       sel.addEventListener('change', () => {
         const i = parseInt(sel.dataset.idx);
-        const effects = _readEffects(container);
+        const effects = _readEffects(container, effectTypesHint);
         effects[i] = { type: sel.value };
-        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j)).join('');
+        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j, effectTypesHint)).join('');
         _wireRows();
         onChange(effects);
       });
@@ -529,26 +551,27 @@ function _wireEffectBuilder(container, onChange) {
     rowsEl.querySelectorAll('.effect-del').forEach(btn => {
       btn.addEventListener('click', () => {
         const i = parseInt(btn.dataset.idx);
-        const effects = _readEffects(container);
+        const effects = _readEffects(container, effectTypesHint);
         effects.splice(i, 1);
-        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j)).join('');
+        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j, effectTypesHint)).join('');
         _wireRows();
         onChange(effects);
       });
     });
-    rowsEl.querySelectorAll('.effect-value,.effect-stat,.effect-duration').forEach(inp => {
-      inp.addEventListener('input', () => onChange(_readEffects(container)));
+    rowsEl.querySelectorAll('.effect-value,.effect-stat,.effect-duration,.effect-target').forEach(inp => {
+      inp.addEventListener('input', () => onChange(_readEffects(container, effectTypesHint)));
+      inp.addEventListener('change', () => onChange(_readEffects(container, effectTypesHint)));
     });
     rowsEl.querySelectorAll('.effect-cond-key').forEach(el => {
-      el.addEventListener('change', () => onChange(_readEffects(container)));
-      el.addEventListener('input', () => onChange(_readEffects(container)));
+      el.addEventListener('change', () => onChange(_readEffects(container, effectTypesHint)));
+      el.addEventListener('input', () => onChange(_readEffects(container, effectTypesHint)));
     });
   };
 
   addBtn.addEventListener('click', () => {
-    const effects = _readEffects(container);
-    effects.push({ type: 'damage_bonus', value: 1 });
-    rowsEl.innerHTML = effects.map((e, i) => _effectRowHtml(e, i)).join('');
+    const effects = _readEffects(container, effectTypesHint);
+    effects.push({ type: types[0]?.value || 'damage_bonus' });
+    rowsEl.innerHTML = effects.map((e, i) => _effectRowHtml(e, i, effectTypesHint)).join('');
     _wireRows();
     onChange(effects);
   });
@@ -556,15 +579,19 @@ function _wireEffectBuilder(container, onChange) {
   _wireRows();
 }
 
-function _readEffects(container) {
+function _readEffects(container, effectTypesHint) {
+  const types = _resolveEffectTypes(effectTypesHint);
+  const defaultType = types[0]?.value || 'damage_bonus';
   const rows = container.querySelectorAll('#effect-rows .effect-row');
   return Array.from(rows).map(row => {
-    const type = row.querySelector('.effect-type-sel')?.value || 'damage_bonus';
-    const tdef = _EFFECT_TYPES.find(t => t.value === type) || _EFFECT_TYPES[0];
+    const type = row.querySelector('.effect-type-sel')?.value || defaultType;
+    const tdef = types.find(t => t.value === type) || types[0];
     const e = { type };
     if (tdef.fields.includes('value')) {
-      const v = parseFloat(row.querySelector('.effect-value')?.value ?? '');
-      if (!isNaN(v)) e.value = v;
+      const raw = row.querySelector('.effect-value')?.value ?? '';
+      const v = parseFloat(raw);
+      // preserve dice strings (e.g. "2d6") as-is
+      e.value = isNaN(v) ? (raw.trim() || 0) : v;
     }
     if (tdef.fields.includes('stat')) {
       e.stat = row.querySelector('.effect-stat')?.value || 'STR';
@@ -573,16 +600,20 @@ function _readEffects(container) {
       e.condition_key = (row.querySelector('.effect-cond-key')?.value || '').trim();
     }
     if (tdef.fields.includes('duration_rounds')) {
-      const d = parseInt(row.querySelector('.effect-duration')?.value ?? '2');
-      e.duration_rounds = isNaN(d) ? 2 : d;
+      const d = parseInt(row.querySelector('.effect-duration')?.value ?? '3');
+      e.duration_rounds = isNaN(d) ? 3 : d;
+    }
+    if (tdef.fields.includes('target')) {
+      e.target = row.querySelector('.effect-target')?.value || 'self';
     }
     return e;
   });
 }
 
-function _effectsToJson(effects) {
+function _effectsToJson(effects, effectTypesHint) {
   if (!effects || !effects.length) return null;
-  return JSON.stringify({ schema_version: 1, effect_category: 'gear_bonus', effects });
+  const category = effectTypesHint === 'consumable' ? 'consumable_immediate' : 'gear_bonus';
+  return JSON.stringify({ schema_version: 1, effect_category: category, effects });
 }
 
 function _parseEffectJson(raw) {

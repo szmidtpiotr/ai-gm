@@ -4529,6 +4529,109 @@ def _backfill_riddle_exit_conditions(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_skipped", label="backfill-riddle-exit-conditions-722", error=str(e))
 
 
+def _ensure_consumable_effect_json(conn: sqlite3.Connection) -> None:
+    """#771: Add effect_json column to game_config_consumables, seed buff conditions, backfill 14 consumables."""
+    import json as _json
+
+    # 1. ADD COLUMN
+    try:
+        conn.execute("ALTER TABLE game_config_consumables ADD COLUMN effect_json TEXT")
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="ALTER game_config_consumables +effect_json (#771)")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            logger.warning("admin_migration_skipped", label="consumables-effect-json-771", error=str(e))
+
+    # 2. SEED missing buff conditions
+    buff_conditions = [
+        ("empowered", "Wzmocniony",
+         _json.dumps({"schema_version": 1, "effect_category": "character_condition",
+                      "effects": [{"type": "static_stat_modifier", "stat": "STR", "value": 2,
+                                   "expires": "duration_rounds:3"}]})),
+        ("resistant", "Odporny",
+         _json.dumps({"schema_version": 1, "effect_category": "character_condition",
+                      "effects": [{"type": "static_stat_modifier", "stat": "CON", "value": 2,
+                                   "expires": "duration_rounds:3"}]})),
+        ("energized", "Energiczny",
+         _json.dumps({"schema_version": 1, "effect_category": "character_condition",
+                      "effects": [{"type": "static_stat_modifier", "stat": "CON", "value": 2,
+                                   "expires": "duration_rounds:3"}]})),
+        ("shielded", "Osłonięty",
+         _json.dumps({"schema_version": 1, "effect_category": "character_condition",
+                      "effects": [{"type": "ac_bonus", "value": 3,
+                                   "expires": "duration_rounds:3"}]})),
+    ]
+    try:
+        for key, label, ej in buff_conditions:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, stackable, is_active) VALUES (?, ?, ?, 0, 1)",
+                (key, label, ej),
+            )
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="seed buff conditions empowered/resistant/energized/shielded (#771)")
+    except Exception as e:
+        logger.warning("admin_migration_skipped", label="buff-conditions-seed-771", error=str(e))
+
+    # 3. BACKFILL 14 consumables with effect_json
+    consumable_backfill = {
+        "alchemist_fire": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "damage_enemy", "value": "1d4", "target": "enemy"},
+            {"type": "apply_condition", "condition_key": "burning", "target": "enemy"},
+        ]}),
+        "holy_water": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "damage_enemy", "value": "2d6", "target": "enemy"},
+            {"type": "apply_condition", "condition_key": "on_fire", "target": "enemy"},
+        ]}),
+        "scroll_fireball": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "damage_enemy", "value": "8d6", "target": "area"},
+        ]}),
+        "scroll_magic_bolt": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "damage_enemy", "value": "1d10", "target": "enemy"},
+        ]}),
+        "vial_of_acid": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "damage_enemy", "value": "2d6", "target": "enemy"},
+            {"type": "apply_condition", "condition_key": "weakened", "target": "enemy"},
+        ]}),
+        "smoke_bomb": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "hidden", "target": "self"},
+        ]}),
+        "scroll_light": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "narrative_only"},
+        ]}),
+        "potion_haste": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "hasted", "target": "self"},
+        ]}),
+        "potion_stealth": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "hidden", "target": "self"},
+        ]}),
+        "potion_strength": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "empowered", "target": "self"},
+        ]}),
+        "potion_giant_strength": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "empowered", "target": "self"},
+        ]}),
+        "potion_resistance": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "resistant", "target": "self"},
+        ]}),
+        "potion_stamina": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "energized", "target": "self"},
+        ]}),
+        "scroll_shield": _json.dumps({"effect_category": "consumable_immediate", "effects": [
+            {"type": "apply_condition", "condition_key": "shielded", "target": "self"},
+        ]}),
+    }
+    try:
+        for key, ej in consumable_backfill.items():
+            conn.execute(
+                "UPDATE game_config_consumables SET effect_json = ? WHERE key = ? AND (effect_json IS NULL OR effect_json = '')",
+                (ej, key),
+            )
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="backfill 14 consumables effect_json (#771)")
+    except Exception as e:
+        logger.warning("admin_migration_skipped", label="consumable-backfill-771", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4628,6 +4731,7 @@ def run_admin_migrations() -> None:
         _ensure_state_changes_table(conn)  # #761
         _ensure_turn_decisions_table(conn)  # #762
         _backfill_riddle_exit_conditions(conn)  # #722
+        _ensure_consumable_effect_json(conn)  # #771
     finally:
         conn.close()
 

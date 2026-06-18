@@ -221,7 +221,7 @@ const _EJ_WEAPON_TYPES = {
 const _EJ_STANDARD_CATS = {
   gear_bonus:          { label: 'Bonus wyposażenia (pasywny)',   allowed_types: ['static_stat_modifier','skill_modifier','narrative_only'] },
   character_condition: { label: 'Stan postaci',                  allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','block_action','heal_hp','restore_mana','narrative_only','dot','stacking_levels','escalating_dot','reroll','extra_action','on_expire_apply','on_zero_hp_save','behavior_override','untargetable','ambush_bonus'] },
-  consumable_immediate:{ label: 'Efekt jednorazowy (eliksir)',   allowed_types: ['heal_hp','restore_mana','apply_condition','remove_condition','skill_modifier','narrative_only'] },
+  consumable_immediate:{ label: 'Efekt jednorazowy (eliksir)',   allowed_types: ['heal_hp','restore_mana','apply_condition','remove_condition','damage_enemy','skill_modifier','narrative_only'] },
   aura:                { label: 'Aura',                          allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','apply_condition','remove_condition','block_action','narrative_only'] }
 };
 
@@ -311,7 +311,7 @@ let _ejConditions = [];
 let _ejSkills = [];
 let _ejDataLoaded = false;
 
-// ── Inline effect builder — ta sama mechanika co content.js affix builder ────
+// ── Inline effect builder — gear on-equip types (weapons/armor/items) ────────
 const _FORGE_EFFECT_TYPES = [
   { value: 'damage_bonus',        label: 'Bonus obrażeń',          fields: ['value'],
     tooltip: 'Stały bonus do obrażeń (int). NIE podwaja się przy krytycznym.' },
@@ -326,7 +326,27 @@ const _FORGE_EFFECT_TYPES = [
   { value: 'narrative_only',      label: 'Tylko narracja',          fields: [],
     tooltip: 'Brak efektu mechanicznego.' },
 ];
+
+// On-use effect types dla konsumabli (#771)
+const _FORGE_CONSUMABLE_EFFECT_TYPES = [
+  { value: 'heal_hp',        label: 'Leczenie HP',           fields: ['value'],
+    tooltip: 'Leczy HP gracza. Wartość: kostka (np. 2d4) lub int.' },
+  { value: 'restore_mana',   label: 'Przywróć manę',         fields: ['value'],
+    tooltip: 'Przywraca manę (Scholar). Wartość: kostka lub int.' },
+  { value: 'remove_condition',label: 'Zdejmij kondycję',     fields: ['condition_key'],
+    tooltip: 'Usuwa kondycję z gracza.' },
+  { value: 'apply_condition', label: 'Aplikuj kondycję',     fields: ['condition_key', 'target', 'duration_rounds'],
+    tooltip: 'Aplikuje kondycję na gracza (self) lub wroga (enemy).' },
+  { value: 'damage_enemy',   label: 'Obrażenia wrogowi ⭐', fields: ['value', 'target'],
+    tooltip: 'Obrażenia wrogowi w walce. Poza walką → narracja. Wartość: kostka (np. 2d6).' },
+  { value: 'narrative_only', label: 'Tylko narracja',        fields: [],
+    tooltip: 'Brak efektu mechanicznego.' },
+];
 const _FORGE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+function _forgeGetEffectTypes() {
+  return (_tplEntityCtx?.type === 'consumable') ? _FORGE_CONSUMABLE_EFFECT_TYPES : _FORGE_EFFECT_TYPES;
+}
 
 function _forgeEffectBuilderHtml(effects) {
   const rows = (effects || []).map((e, i) => _forgeEffectRowHtml(e, i)).join('');
@@ -337,9 +357,11 @@ function _forgeEffectBuilderHtml(effects) {
 }
 
 function _forgeEffectRowHtml(e, i) {
-  const tdef = _FORGE_EFFECT_TYPES.find(t => t.value === (e.type || 'damage_bonus')) || _FORGE_EFFECT_TYPES[0];
+  const types = _forgeGetEffectTypes();
+  const defaultType = types[0]?.value || 'damage_bonus';
+  const tdef = types.find(t => t.value === (e.type || defaultType)) || types[0];
   const typeSel = `<select class="form-input effect-type-sel forge-effect-type" style="min-width:170px" data-idx="${i}">
-    ${_FORGE_EFFECT_TYPES.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
+    ${types.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
   </select>`;
   const extras = _forgeBuildExtraFields(tdef, e);
   return `<div class="effect-row" data-idx="${i}" style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap">
@@ -368,7 +390,15 @@ function _forgeBuildExtraFields(tdef, e) {
       }
       return `<input class="form-input forge-effect-cond" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px">`;
     }
-    if (f === 'duration_rounds') return `<input class="form-input forge-effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px">`;
+    if (f === 'duration_rounds') return `<input class="form-input forge-effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??3}" style="width:70px">`;
+    if (f === 'target') {
+      const cur = e.target || 'self';
+      return `<select class="form-input forge-effect-target" style="width:100px">
+        <option value="self"${cur==='self'?' selected':''}>self</option>
+        <option value="enemy"${cur==='enemy'?' selected':''}>enemy</option>
+        <option value="area"${cur==='area'?' selected':''}>area</option>
+      </select>`;
+    }
     return '';
   }).join('');
 }
@@ -376,22 +406,31 @@ function _forgeBuildExtraFields(tdef, e) {
 function _forgeReadEffects() {
   const rowsEl = document.getElementById('forge-effect-rows');
   if (!rowsEl) return [];
+  const types = _forgeGetEffectTypes();
+  const defaultType = types[0]?.value || 'damage_bonus';
   return Array.from(rowsEl.querySelectorAll('.effect-row')).map(row => {
-    const type = row.querySelector('.forge-effect-type')?.value || 'damage_bonus';
-    const tdef = _FORGE_EFFECT_TYPES.find(t => t.value === type) || _FORGE_EFFECT_TYPES[0];
+    const type = row.querySelector('.forge-effect-type')?.value || defaultType;
+    const tdef = types.find(t => t.value === type) || types[0];
     const e = { type };
-    if (tdef.fields.includes('value'))          { const v = parseFloat(row.querySelector('.forge-effect-value')?.value ?? ''); if (!isNaN(v)) e.value = v; }
+    if (tdef.fields.includes('value')) {
+      const raw = row.querySelector('.forge-effect-value')?.value ?? '';
+      const v = parseFloat(raw);
+      e.value = isNaN(v) ? (raw.trim() || 0) : v;
+    }
     if (tdef.fields.includes('stat'))           { e.stat = row.querySelector('.forge-effect-stat')?.value || 'STR'; }
     if (tdef.fields.includes('condition_key'))  { e.condition_key = (row.querySelector('.forge-effect-cond')?.value || '').trim(); }
-    if (tdef.fields.includes('duration_rounds')){ const d = parseInt(row.querySelector('.forge-effect-duration')?.value ?? '2'); e.duration_rounds = isNaN(d) ? 2 : d; }
+    if (tdef.fields.includes('duration_rounds')){ const d = parseInt(row.querySelector('.forge-effect-duration')?.value ?? '3'); e.duration_rounds = isNaN(d) ? 3 : d; }
+    if (tdef.fields.includes('target'))         { e.target = row.querySelector('.forge-effect-target')?.value || 'self'; }
     return e;
   });
 }
 
 function _forgeSyncEjData() {
   const effects = _forgeReadEffects();
+  const isConsumable = _tplEntityCtx?.type === 'consumable';
+  const category = isConsumable ? 'consumable_immediate' : 'gear_bonus';
   _forgeEjData = effects.length > 0
-    ? { schema_version: 1, effect_category: 'gear_bonus', effects }
+    ? { schema_version: 1, effect_category: category, effects }
     : null;
 }
 
@@ -429,7 +468,8 @@ function _forgeWireEffectBuilder() {
 
   addBtn.addEventListener('click', () => {
     const effects = _forgeReadEffects();
-    effects.push({ type: 'damage_bonus', value: 1 });
+    const types = _forgeGetEffectTypes();
+    effects.push({ type: types[0]?.value || 'damage_bonus', value: 1 });
     rowsEl.innerHTML = effects.map((e, i) => _forgeEffectRowHtml(e, i)).join('');
     _wireRows();
     _forgeSyncEjData();

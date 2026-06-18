@@ -74,7 +74,7 @@ def _auto_pick_armor_slot(conn, character_id: int, coverage: str) -> str:
 _CONSUMABLE_EFFECT_SIGNAL = frozenset(
     {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff"}
 )
-_SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only"}
+_SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only", "damage_enemy"}
 
 
 _LEGACY_JOINS = """
@@ -1316,6 +1316,102 @@ def build_drop_comparison(character_id: int, inventory_id: int) -> dict | None:
     }
 
 
+def _damage_enemy_in_combat(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    damage_expr: str,
+) -> tuple[int | None, list | None]:
+    """Apply damage_expr to the first alive enemy in active_combat. Returns (damage_dealt, combatants) or (None, None) if no active combat."""
+    try:
+        row = conn.execute(
+            "SELECT id, combatants FROM active_combat WHERE campaign_id = ? AND character_id = ? AND status = 'active' LIMIT 1",
+            (int(campaign_id), int(character_id)),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None, None
+    if not row:
+        return None, None
+    try:
+        combatants = json.loads(row["combatants"] or "[]")
+    except Exception:
+        return None, None
+    if not isinstance(combatants, list):
+        return None, None
+
+    rolled = _roll_dice_value(damage_expr) if damage_expr.strip() else 1
+    rolled = max(1, int(rolled))
+
+    target = next(
+        (c for c in combatants if isinstance(c, dict) and c.get("id") != "player" and int(c.get("hp_current", 0)) > 0),
+        None,
+    )
+    if not target:
+        return rolled, combatants
+
+    before_hp = int(target.get("hp_current", 0))
+    target["hp_current"] = max(0, before_hp - rolled)
+    conn.execute(
+        "UPDATE active_combat SET combatants = ?, updated_at = datetime('now') WHERE id = ?",
+        (json.dumps(combatants, ensure_ascii=False), int(row["id"])),
+    )
+    return rolled, combatants
+
+
+def _apply_condition_to_enemy_in_combat(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    condition_key: str,
+    cond_row: sqlite3.Row,
+    source_item_key: str,
+) -> bool:
+    """Apply a condition to the first alive enemy in active_combat. Returns True if applied."""
+    try:
+        row = conn.execute(
+            "SELECT id, combatants FROM active_combat WHERE campaign_id = ? AND character_id = ? AND status = 'active' LIMIT 1",
+            (int(campaign_id), int(character_id)),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    if not row:
+        return False
+    try:
+        combatants = json.loads(row["combatants"] or "[]")
+    except Exception:
+        return False
+    if not isinstance(combatants, list):
+        return False
+
+    target = next(
+        (c for c in combatants if isinstance(c, dict) and c.get("id") != "player" and int(c.get("hp_current", 0)) > 0),
+        None,
+    )
+    if not target:
+        return False
+
+    enemy_conditions = target.get("conditions") or []
+    if not isinstance(enemy_conditions, list):
+        enemy_conditions = []
+    already = any(str(c.get("key") or "").strip().lower() == condition_key for c in enemy_conditions)
+    if not already:
+        enemy_conditions.append({
+            "key": str(cond_row["key"]),
+            "label": str(cond_row["label"] or cond_row["key"]),
+            "effect_json": cond_row["effect_json"],
+            "source_item_key": source_item_key,
+            "applied_at": "inventory_use",
+        })
+        target["conditions"] = enemy_conditions
+        conn.execute(
+            "UPDATE active_combat SET combatants = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(combatants, ensure_ascii=False), int(row["id"])),
+        )
+    return True
+
+
 def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     """Consume one inventory stack and apply supported effects to the character sheet."""
     cid = int(character_id)
@@ -1342,6 +1438,7 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                        gi.effect_target,
                        gc.key AS legacy_consumable_key,
                        gc.label AS legacy_consumable_label,
+                       gc.effect_json AS legacy_effect_json,
                        gc.effect_type AS legacy_effect_type,
                        gc.effect_dice AS legacy_effect_dice,
                        gc.effect_bonus AS legacy_effect_bonus,
@@ -1378,6 +1475,7 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                        NULL AS effect_target,
                        gc.key AS legacy_consumable_key,
                        gc.label AS legacy_consumable_label,
+                       gc.effect_json AS legacy_effect_json,
                        gc.effect_type AS legacy_effect_type,
                        gc.effect_dice AS legacy_effect_dice,
                        gc.effect_bonus AS legacy_effect_bonus,
@@ -1426,13 +1524,15 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         conditions = _normalize_sheet_conditions(sheet)
 
         item_row: dict[str, Any] = dict(row)
-        if not item_row.get("effect_json") and item_row.get("effect_type"):
-            pass
-        elif item_row.get("legacy_consumable_key"):
-            item_row["effect_type"] = item_row.get("legacy_effect_type")
-            item_row["effect_dice"] = item_row.get("legacy_effect_dice")
-            item_row["effect_bonus"] = item_row.get("legacy_effect_bonus")
-            item_row["effect_target"] = item_row.get("legacy_effect_target")
+        if item_row.get("legacy_consumable_key"):
+            # prefer consumable's own effect_json over items table effect_json
+            if item_row.get("legacy_effect_json"):
+                item_row["effect_json"] = item_row["legacy_effect_json"]
+            elif not item_row.get("effect_json"):
+                item_row["effect_type"] = item_row.get("legacy_effect_type")
+                item_row["effect_dice"] = item_row.get("legacy_effect_dice")
+                item_row["effect_bonus"] = item_row.get("legacy_effect_bonus")
+                item_row["effect_target"] = item_row.get("legacy_effect_target")
         effects = _effect_payloads_from_item_row(item_row) if catalog_key else []
         if not effects:
             raise ValueError("inventory item has no usable effects")
@@ -1476,6 +1576,19 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                 cond_row = _condition_catalog_row(conn, condition_key)
                 if not cond_row:
                     raise ValueError("condition_not_found")
+                target_scope = str(effect.get("target") or "self").strip().lower()
+                if target_scope == "enemy":
+                    # Apply condition to first active enemy in active_combat
+                    applied_to_enemy = _apply_condition_to_enemy_in_combat(
+                        conn,
+                        campaign_id=int(row["campaign_id"] or 0),
+                        character_id=cid,
+                        condition_key=condition_key,
+                        cond_row=cond_row,
+                        source_item_key=catalog_key,
+                    )
+                    results.append({"type": "apply_condition", "condition_key": condition_key, "target": "enemy", "applied": applied_to_enemy})
+                    continue
                 stackable = bool(int(cond_row["stackable"] or 0)) if "stackable" in cond_row.keys() else False
                 existing_cond = next(
                     (c for c in conditions if str(c.get("key") or "").strip().lower() == condition_key),
@@ -1504,6 +1617,20 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
                 )
                 sheet["conditions"] = conditions
                 results.append({"type": "apply_condition", "condition_key": condition_key, "applied": True})
+                continue
+
+            if effect_type == "damage_enemy":
+                value = effect.get("value", "1d4")
+                damage_dealt, updated_combatants = _damage_enemy_in_combat(
+                    conn,
+                    campaign_id=int(row["campaign_id"] or 0),
+                    character_id=cid,
+                    damage_expr=str(value),
+                )
+                if damage_dealt is None:
+                    results.append({"type": "narrative_only", "reason": "no_active_combat"})
+                else:
+                    results.append({"type": "damage_enemy", "damage_dealt": damage_dealt})
                 continue
 
             if effect_type == "narrative_only":
