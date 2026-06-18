@@ -1305,19 +1305,25 @@ async function selectCampaign(campaign) {
         const response = await apiRequest('GET', `/campaigns/${campaign.id}/characters`);
         const characters = response.characters || (Array.isArray(response) ? response : []);
 
-        // Filter to find current user's character
-        const myCharacter = characters.find(c =>
-            c.user_id === currentUser?.id || c.userid === currentUser?.id
-        );
+        // #767: match THIS campaign's hero — prefer the currently-selected hero,
+        // otherwise any active character of this user already linked to the campaign.
+        // Matching by user_id alone is wrong for multi-hero users (picks wrong hero).
+        const myCharacter =
+            characters.find(c => currentHero?.id && c.id === currentHero.id) ||
+            characters.find(c =>
+                c.is_active &&
+                (c.user_id === currentUser?.id || c.userid === currentUser?.id)
+            );
 
-        // Check if campaign is occupied by a different user's hero
+        // #767: campaign occupied by a DIFFERENT active hero (any user, incl. same
+        // user's other hero) → never auto-assign/take over. Block and bounce back.
         const otherHero = characters.find(c =>
             c.is_active &&
-            (c.user_id !== currentUser?.id && c.userid !== currentUser?.id) &&
+            c.id !== currentHero?.id &&
             (c.status === 'in_campaign' || c.campaign_id === campaign.id)
         );
-        if (otherHero && !myCharacter) {
-            showToast('Ta kampania należy do innego bohatera — nie można przejąć.', 'error', 4000);
+        if (otherHero && !(myCharacter && myCharacter.id === currentHero?.id)) {
+            showToast(`Ta kampania należy do bohatera „${otherHero.name}" — nie można przejąć.`, 'error', 4000);
             loadHeroes().then(() => showScreen('heroes'));
             return;
         }
@@ -5866,7 +5872,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 }
                 try {
                     if (!_diceBox) { _diceBox = new DICE.dice_box(container); }
-                    else { _diceBox.clear(); _diceBox.reinit(container); }
+                    else { _diceBox.clear(); _diceBox.rolling = false; _diceBox.reinit(container); }
                     _diceBox.setDice(notation);
                 } catch (_e) { finish(); return; }
                 // Backstop: force-advance if the dice never report settling.
@@ -8806,8 +8812,50 @@ async function _refreshBugReportFab() {
         document.getElementById('bug-report-reproduction').value = '';
         document.getElementById('bug-report-type').value = 'bug';
         document.getElementById('bug-report-status').textContent = '';
+        const sc = document.getElementById('bug-report-screenshot');
+        if (sc) sc.value = '';
+        const prev = document.getElementById('bug-report-screenshot-preview');
+        if (prev) prev.style.display = 'none';
         modal.style.display = 'flex';
     }
+
+    // Compress screenshot to JPEG ≤800px, base64, before send.
+    function _compressScreenshot(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX = 800;
+                    let w = img.width, h = img.height;
+                    if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.72));
+                };
+                img.onerror = () => resolve(null);
+                img.src = e.target.result;
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    const scInput = document.getElementById('bug-report-screenshot');
+    scInput?.addEventListener('change', () => {
+        const file = scInput.files?.[0];
+        const prev = document.getElementById('bug-report-screenshot-preview');
+        const img = document.getElementById('bug-report-screenshot-img');
+        if (file && prev && img) {
+            const url = URL.createObjectURL(file);
+            img.src = url;
+            img.onload = () => URL.revokeObjectURL(url);
+            prev.style.display = 'block';
+        } else if (prev) {
+            prev.style.display = 'none';
+        }
+    });
 
     // #668: pionowe przeciąganie FAB — tester sam ustawia wysokość. Pozycja w localStorage.
     // Click otwiera modal tylko gdy NIE był to drag (ruch < progu).
@@ -8877,13 +8925,16 @@ async function _refreshBugReportFab() {
                 ?.map(e => ({ message: e.message || e.event, filename: e.error?.filename, lineno: e.error?.lineno }))
                 ?? [];
 
+            const scFile = document.getElementById('bug-report-screenshot')?.files?.[0];
+            const screenshot_base64 = scFile ? await _compressScreenshot(scFile) : null;
+
             const resp = await fetch('/api/bug-report', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`,
                 },
-                body: JSON.stringify({ observation, reproduction, report_type, campaign_id, js_errors }),
+                body: JSON.stringify({ observation, reproduction, report_type, campaign_id, js_errors, screenshot_base64 }),
             });
             const data = await resp.json();
             if (!resp.ok) throw new Error(data?.detail || `HTTP ${resp.status}`);

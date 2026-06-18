@@ -1199,20 +1199,21 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
         if campaign["status"] not in ("active", "pending"):
             raise HTTPException(status_code=409, detail="Campaign is not active")
 
-        # Free any existing hero in this campaign (except if it's the same hero being re-assigned)
+        # HARD GUARD (#767): a campaign belongs to exactly ONE hero. If a DIFFERENT
+        # active hero already occupies this campaign, NEVER free/evict it — block with
+        # 409. This protects against cross-hero takeover even when both heroes belong
+        # to the same user (the Mizel/[SMOKE] Wojownik data-corruption incident).
         existing = conn.execute(
-            "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
+            "SELECT id, name, user_id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
             (campaign_id, character_id),
         ).fetchone()
         if existing:
-            if existing["user_id"] != user_id:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Campaign already has an active hero from another player — cannot take over",
-                )
-            conn.execute(
-                "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
-                (existing["id"],),
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Campaign already belongs to hero '{existing['name']}' "
+                    f"— cannot take over"
+                ),
             )
 
         # Link hero to campaign and ensure game session exists
@@ -2409,22 +2410,22 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         conn.close()
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Free any existing hero in this campaign before creating a new one
+    # HARD GUARD (#767): never evict an existing active hero from a campaign.
+    # A campaign belongs to one hero — if it is already occupied, block (409)
+    # regardless of which user owns the occupying hero.
     existing_hero = conn.execute(
-        "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1",
+        "SELECT id, name, user_id FROM characters WHERE campaign_id = ? AND is_active = 1",
         (campaign_id,),
     ).fetchone()
     if existing_hero:
-        if existing_hero["user_id"] != req.user_id:
-            conn.rollback()
-            conn.close()
-            raise HTTPException(
-                status_code=409,
-                detail="Campaign already has an active hero from another player — cannot take over",
-            )
-        conn.execute(
-            "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
-            (existing_hero["id"],),
+        conn.rollback()
+        conn.close()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Campaign already belongs to hero '{existing_hero['name']}' "
+                f"— cannot take over"
+            ),
         )
 
     if req.system_id != campaign["system_id"]:

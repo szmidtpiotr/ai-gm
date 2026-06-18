@@ -110,6 +110,10 @@ def scenario():
     hero_b = _make_hero(conn, user_b, name="HeroB_767")
     chars.append(hero_b)
 
+    # Same-user second hero — the real Mizel/[SMOKE] incident: both heroes user A
+    hero_a2 = _make_hero(conn, user_a, name="HeroA2_767")
+    chars.append(hero_a2)
+
     empty_camp = _make_campaign(conn, user_b, "Camp767_empty")
     camps.append(empty_camp)
 
@@ -120,6 +124,7 @@ def scenario():
         "user_b": user_b,
         "camp": camp,
         "hero_a": hero_a,
+        "hero_a2": hero_a2,
         "hero_b": hero_b,
         "empty_camp": empty_camp,
     }
@@ -152,6 +157,28 @@ def test_hero_a_not_evicted_after_failed_takeover(scenario):
     ).fetchone()
     conn.close()
     assert row["status"] == "in_campaign"
+    assert row["campaign_id"] == scenario["camp"]
+
+
+def test_same_user_other_hero_cannot_take_over(scenario):
+    """The real incident: a SECOND hero of the SAME user must NOT hijack the campaign.
+
+    Mizel (user 1) and [SMOKE] Wojownik (user 1) — same user, different heroes.
+    Assigning hero_a2 to hero_a's campaign must 409, not evict hero_a.
+    """
+    resp = client.post(
+        f"/api/characters/{scenario['hero_a2']}/assign-campaign",
+        json={"campaign_id": scenario["camp"], "user_id": scenario["user_a"]},
+    )
+    assert resp.status_code == 409, (
+        f"Same-user takeover must 409, got {resp.status_code}: {resp.text}"
+    )
+    conn = _db()
+    row = conn.execute(
+        "SELECT status, campaign_id FROM characters WHERE id = ?", (scenario["hero_a"],)
+    ).fetchone()
+    conn.close()
+    assert row["status"] == "in_campaign", "hero_a was evicted by same-user hero"
     assert row["campaign_id"] == scenario["camp"]
 
 
