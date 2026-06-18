@@ -5576,3 +5576,9 @@ HI1 (backend: odczyt+luki+audyt+guard) → HI2 (sekcja+lista+szkielet modalu)
   → HI3 (Arkusz) → HI4 (Ekwipunek/Zaklęcia/Questy) → HI5 (link z kampanii + weryfikacja)
 ```
 HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od S/L/MP — intermezzo wg decyzji Piotra.
+
+## Poprawki ekwipunek — 2026-06-18
+
+### #770 — Inventory: podział sekcji wg używalności (can_use) ✅ ([#770](https://github.com/szmidtpiotr/ai-gm/issues/770), 2026-06-18)
+
+> **Wdrożone (frontend-only):** Predykat podziału ekwipunku zmieniony z `_invIsLore` (sprawdzał `item_type`: misc/quest/narrative — kruche) na `_invIsUsable` (sprawdza `can_use` + weapon/armor). Narracyjne przedmioty z `item_type='item'` (#757 pattern) teraz trafiają do dolnej sekcji. Sekcja dolna przemianowana na **"PRZEDMIOTY NIEUŻYWALNE"** (było "Przedmioty fabularne"). `?v=770-inv-usability-bucket-2026-06-18`. 9/9 pytest + 2/2 Playwright GREEN.
