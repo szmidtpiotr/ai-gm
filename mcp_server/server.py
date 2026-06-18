@@ -882,6 +882,55 @@ def query_action_log(
 
 
 # ---------------------------------------------------------------------------
+# Tool 7b (#754): query_dice_rolls — strukturalny rejestr rzutów kostką
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def query_dice_rolls(
+    campaign_id: int,
+    roll_type: Optional[str] = None,
+    from_turn: Optional[float] = None,
+    to_turn: Optional[float] = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Strukturalne rzuty kostką kampanii (#754): surowy d20/kości, rozbicie modyfikatorów,
+    DC, outcome, powiązanie z turą/walką. Debug mechaniki bez odtwarzania sesji.
+
+    roll_type: attack_player|attack_enemy|skill_test|dodge|shield_block|damage|save|loot|gold.
+    """
+    import json as _json
+    conn = get_db()
+    try:
+        clauses = ["campaign_id = ?"]
+        params: list = [campaign_id]
+        if roll_type:
+            clauses.append("roll_type = ?")
+            params.append(roll_type)
+        if from_turn is not None:
+            clauses.append("turn_number >= ?")
+            params.append(from_turn)
+        if to_turn is not None:
+            clauses.append("turn_number <= ?")
+            params.append(to_turn)
+        where = "WHERE " + " AND ".join(clauses)
+        lim = max(1, min(int(limit or 100), 1000))
+        sql = f"SELECT * FROM dice_rolls {where} ORDER BY id DESC LIMIT ?"
+        params.append(lim)
+        rows = rows_to_dicts(conn.execute(sql, params).fetchall())
+        for r in rows:
+            for k in ("raw_rolls", "modifiers", "meta"):
+                if r.get(k):
+                    try:
+                        r[k] = _json.loads(r[k])
+                    except (TypeError, ValueError):
+                        pass
+        return rows
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Tool 8: get_system_health
 # ---------------------------------------------------------------------------
 

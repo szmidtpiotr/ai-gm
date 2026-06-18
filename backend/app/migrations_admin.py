@@ -4420,6 +4420,38 @@ def _refresh_knowledge_content(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_dice_rolls_table(conn: sqlite3.Connection) -> None:
+    """#754: dice_rolls — strukturalny rejestr KAŻDEGO rzutu kostką per kampania.
+
+    ŚWIADOMIE bez FK ON DELETE CASCADE do campaigns: lochy kasują kampanię na wyjściu,
+    a rzuty muszą przetrwać post-mortem debug. Orphany ewentualnie czyszczone osobnym
+    zadaniem retencyjnym, nie kaskadą. Idempotentne.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dice_rolls (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id   INTEGER NOT NULL,
+            character_id  INTEGER,
+            turn_number   REAL,
+            combat_id     INTEGER,
+            roll_type     TEXT NOT NULL,
+            actor         TEXT,
+            notation      TEXT,
+            raw_rolls     TEXT,
+            modifiers     TEXT,
+            total         INTEGER,
+            dc            INTEGER,
+            outcome       TEXT,
+            meta          TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dice_rolls_campaign ON dice_rolls (campaign_id, turn_number)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dice_rolls_type ON dice_rolls (roll_type, created_at)")
+    conn.commit()
+    logger.info("admin_migration_applied", sql_preview="dice_rolls table (#754)")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4515,6 +4547,7 @@ def run_admin_migrations() -> None:
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
         _l9_deactivate_legacy_dungeons(conn)
         _ensure_portrait_columns(conn)
+        _ensure_dice_rolls_table(conn)  # #754
     finally:
         conn.close()
 

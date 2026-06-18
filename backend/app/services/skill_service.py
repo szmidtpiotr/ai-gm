@@ -794,6 +794,40 @@ def resolve_skill_test(
         except Exception:
             pass
 
+    # #754: strukturalny rejestr — test skilla (jeden punkt dla WSZYSTKICH ścieżek skill-test).
+    try:
+        from app.services.dice_log_service import record_dice_roll as _rec_roll
+        _tn = None
+        try:
+            _tn = conn.execute(
+                "SELECT COALESCE(MAX(turn_number),0) FROM campaign_turns WHERE campaign_id=?",
+                (campaign_id,),
+            ).fetchone()[0]
+        except Exception:
+            _tn = None
+        _rec_roll(
+            campaign_id=campaign_id,
+            roll_type="skill_test",
+            character_id=character_id,
+            turn_number=_tn,
+            actor="player",
+            notation="1d20",
+            raw_rolls=[int(result["d20_roll"])],
+            modifiers={
+                "total": mod_total,
+                "stat_mod": mod_info.get("stat_mod"),
+                "skill_rank": mod_info.get("skill_rank"),
+                "proficiency": mod_info.get("proficiency"),
+            },
+            total=int(result["player_total"]),
+            dc=int(opponent_total),
+            outcome=str(result["outcome"]).lower(),
+            meta={"skill_key": result["skill_key"], "skill_label": result["skill_label"],
+                  "omen_applied": result.get("omen_applied", False)},
+        )
+    except Exception:
+        pass
+
     return result
 
 

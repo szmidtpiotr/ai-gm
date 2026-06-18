@@ -331,6 +331,22 @@ def list_campaigns():
     return {"campaigns": out}
 
 
+@router.get("/campaigns/{campaign_id}/dice-rolls")
+def get_campaign_dice_rolls(
+    campaign_id: int,
+    roll_type: str | None = Query(None, description="Filtr typu rzutu (np. skill_test, attack_player)."),
+    from_turn: float | None = Query(None, description="Dolny zakres turn_number (włącznie)."),
+    to_turn: float | None = Query(None, description="Górny zakres turn_number (włącznie)."),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """#754: strukturalny rejestr rzutów kampanii (najnowsze pierwsze)."""
+    from app.services.dice_log_service import query_dice_rolls
+    rolls = query_dice_rolls(
+        campaign_id, roll_type=roll_type, from_turn=from_turn, to_turn=to_turn, limit=limit
+    )
+    return {"campaign_id": campaign_id, "count": len(rolls), "dice_rolls": rolls}
+
+
 @router.get("/campaigns/{campaign_id}")
 def get_campaign(
     campaign_id: int,

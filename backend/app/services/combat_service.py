@@ -909,6 +909,39 @@ def _on_zero_hp_save(
 
 # ─── S15 (#610): system reakcji + skill `dodge`. Okno reakcji PRZED aplikacją obrażeń.
 
+def _record_reaction_rolls(campaign_id, character_id, combat_id, round_n, out) -> None:
+    """#754: zapis rzutów reakcyjnych (unik/blok) + save z 0 HP do dice_rolls. Best-effort."""
+    try:
+        from app.services.dice_log_service import record_dice_roll as _rec_roll
+        rx = out.get("reaction") or {}
+        if rx and rx.get("d20") is not None:
+            rtype = "dodge" if rx.get("reaction") == "dodge" else "shield_block"
+            _rec_roll(
+                campaign_id=campaign_id, roll_type=rtype, character_id=character_id,
+                combat_id=combat_id, actor="player", notation="1d20",
+                raw_rolls=[int(rx["d20"])],
+                modifiers={"dex_mod": rx.get("dex_mod"), "str_mod": rx.get("str_mod"),
+                           "skill_rank": rx.get("skill_rank")},
+                total=int(rx.get("dodge_total") or rx.get("block_total") or rx.get("player_total") or 0),
+                dc=int(rx.get("attack_roll") or 0),
+                outcome=(rx.get("outcome") or ("dodged" if rx.get("dodged") else "blocked")),
+                meta={"round": round_n, "available": rx.get("available")},
+            )
+        save = out.get("on_zero_hp_save") or {}
+        if save and save.get("raw") is not None:
+            _rec_roll(
+                campaign_id=campaign_id, roll_type="save", character_id=character_id,
+                combat_id=combat_id, actor="player", notation="1d20",
+                raw_rolls=[int(save["raw"])], total=int(save.get("total") or 0),
+                dc=int(save.get("dc") or 0),
+                outcome="success" if save.get("saved") else "fail",
+                meta={"round": round_n, "stat": save.get("stat"),
+                      "condition": save.get("condition_key")},
+            )
+    except Exception:
+        pass
+
+
 def _try_dodge_reaction(
     p: dict[str, Any],
     sheet: dict[str, Any] | None,
@@ -2206,6 +2239,24 @@ def _resolve_aoe_spell_in_combat(
                     hit_info["gold_drop"] = gold
                     hit_info["loot"] = tgt_loot
                     loot_pool_accum.extend(tgt_loot)
+                    # #754: strukturalny rejestr — loot + złoto
+                    try:
+                        from app.services.dice_log_service import record_dice_roll as _rec_roll
+                        _rec_roll(
+                            campaign_id=campaign_id, roll_type="gold",
+                            character_id=ch_id, combat_id=int(row["id"]),
+                            actor=ek, total=gold, outcome="drop",
+                            meta={"enemy_key": ek, "loot_tier": _loot_tier},
+                        )
+                        if tgt_loot:
+                            _rec_roll(
+                                campaign_id=campaign_id, roll_type="loot",
+                                character_id=ch_id, combat_id=int(row["id"]),
+                                actor=ek, total=len(tgt_loot), outcome="drop",
+                                meta={"enemy_key": ek, "items": tgt_loot},
+                            )
+                    except Exception:
+                        pass
                 except Exception as _loot_e:
                     logger.warning("aoe_loot_error", error=str(_loot_e), enemy_key=ek)
             # XP
@@ -4268,6 +4319,27 @@ def resolve_attack(
                 hit=bool(hit),
                 raw_d20=player_raw,
             )
+            # #754: strukturalny rejestr — atak gracza
+            try:
+                from app.services.dice_log_service import record_dice_roll as _rec_roll
+                _rec_roll(
+                    campaign_id=campaign_id,
+                    roll_type="attack_player",
+                    character_id=ch_id,
+                    combat_id=int(row["id"]),
+                    actor="player",
+                    notation="1d20",
+                    raw_rolls=[player_raw] if player_raw is not None else None,
+                    modifiers={"total_bonus": int(roll_result or 0) - int(player_raw or 0)},
+                    total=int(roll_result or 0),
+                    dc=enemy_ac,
+                    outcome=("crit_success" if player_nat20 else "crit_fail" if player_nat1
+                             else "hit" if hit else "dodged" if dodged else "miss"),
+                    meta={"weapon_key": out.get("weapon_key"), "enemy_key": card_key,
+                          "round": int(row["round"] or 1)},
+                )
+            except Exception:
+                pass
 
             loot: list[dict] = []
             out["gold_drop"] = 0
@@ -4400,6 +4472,27 @@ def resolve_attack(
                             out["sneak_attack"] = _sneak
                         _remove_combatant_conditions(_pc_for_dmg, _hidden)
                 out["damage"] = dmg
+                # #754: strukturalny rejestr — obrażenia gracza (per-kość)
+                try:
+                    from app.services.dice_log_service import record_dice_roll as _rec_roll
+                    _rec_roll(
+                        campaign_id=campaign_id,
+                        roll_type="damage",
+                        character_id=ch_id,
+                        combat_id=int(row["id"]),
+                        actor="player",
+                        notation=str(out.get("damage_die") or die),
+                        raw_rolls=_dmg_detail.get("rolls") or [],
+                        modifiers={"stat_mod": mod, "stat": stat,
+                                   "multiplier": out.get("damage_multiplier", 1),
+                                   "flat_bonus": out.get("damage_bonus", 0)},
+                        total=dmg,
+                        outcome="crit_success" if player_nat20 else "hit",
+                        meta={"weapon_key": out.get("weapon_key"), "enemy_key": card_key,
+                              "round": int(row["round"] or 1)},
+                    )
+                except Exception:
+                    pass
                 prev_hp = int(enemy.get("hp_current", 0) or 0)
                 next_hp = max(0, prev_hp - dmg)
                 enemy["hp_current"] = next_hp
@@ -4954,6 +5047,26 @@ def resolve_attack(
             hit=bool(hit),
             raw_d20=int(raw),
         )
+        # #754: strukturalny rejestr — atak wroga
+        try:
+            from app.services.dice_log_service import record_dice_roll as _rec_roll
+            _rec_roll(
+                campaign_id=campaign_id,
+                roll_type="attack_enemy",
+                character_id=ch_id,
+                combat_id=int(row["id"]),
+                actor=str(enemy.get("enemy_key") or "enemy"),
+                notation="1d20",
+                raw_rolls=[int(raw)],
+                modifiers={"attack_bonus": int(atk_b), "wound_penalty": int(wp)},
+                total=int(attack_roll),
+                dc=int(pac),
+                outcome=("crit_success" if raw == 20 else "crit_fail" if raw == 1
+                         else "hit" if hit else "miss"),
+                meta={"enemy_name": out.get("enemy_name"), "round": int(row["round"] or 1)},
+            )
+        except Exception:
+            pass
 
         dmg = 0
         _dodge = None
@@ -5038,6 +5151,7 @@ def resolve_attack(
                     out["on_zero_hp_save"] = save_res
                     if save_res.get("saved") and save_res.get("hp"):
                         next_hp = int(save_res["hp"])
+            _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), int(row["round"] or 1), out)
             p["hp_current"] = next_hp
             sheet["current_hp"] = next_hp
             out["player_hp_remaining"] = next_hp
@@ -5235,6 +5349,7 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["on_zero_hp_save"] = save_res
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
+        _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), round_n, out)
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp

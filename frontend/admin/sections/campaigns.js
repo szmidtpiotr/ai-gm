@@ -434,12 +434,13 @@ function filterTableGeneric(input, tableId, nameClass) {
         </div>
       </div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
-        ${['overview','plan','turns','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
+        ${['overview','plan','turns','dice','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
         <div id="ctab-overview" style="padding:16px"><div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div></div>
         <div id="ctab-plan"     style="padding:16px;display:none"></div>
         <div id="ctab-turns"    style="padding:0;display:none"></div>
+        <div id="ctab-dice"     style="padding:0;display:none"></div>
         <div id="ctab-map"      style="padding:16px;display:none"></div>
         <div id="ctab-npcs"     style="padding:16px;display:none"></div>
         <div id="ctab-workshop" style="padding:16px;display:none;height:420px;display:none;flex-direction:column;gap:8px"></div>
@@ -890,6 +891,67 @@ function filterTableGeneric(input, tableId, nameClass) {
       await _renderInspector();
       if (window._inspectorTimer) clearInterval(window._inspectorTimer);
       window._inspectorTimer = setInterval(_renderInspector, 1000);
+    }
+
+    else if (tab === 'dice') {
+      // #754: strukturalny rejestr rzutów kostką tej kampanii.
+      panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
+      const TYPE_LABEL = {
+        attack_player:'⚔ Atak gracza', attack_enemy:'👹 Atak wroga', skill_test:'🎯 Test skilla',
+        dodge:'💨 Unik', shield_block:'🛡 Blok', damage:'💥 Obrażenia', save:'✨ Save',
+        loot:'📦 Łup', gold:'🪙 Złoto',
+      };
+      const OUT_COLOR = (o) => {
+        o = (o||'').toLowerCase();
+        if (o.includes('crit_success')||o==='success'||o==='hit'||o==='dodged'||o==='blocked'||o==='drop') return 'var(--green)';
+        if (o.includes('crit_fail')||o==='fail'||o==='miss') return 'var(--red)';
+        return 'var(--t2)';
+      };
+      const _render = async (filter) => {
+        try {
+          const qs = filter ? `?roll_type=${encodeURIComponent(filter)}&limit=200` : '?limit=200';
+          const d = await apiFetch(`/api/campaigns/${campId}/dice-rolls${qs}`);
+          const rolls = d.dice_rolls || [];
+          const types = ['', ...Object.keys(TYPE_LABEL)];
+          const bar = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+            ${types.map(t => `<button class="btn btn-sm dice-filter${(t===(filter||''))?' btn-primary':''}" data-dtype="${t}" style="font-size:0.72rem;padding:2px 8px">${t?TYPE_LABEL[t]:'Wszystkie'}</button>`).join('')}
+            <span style="margin-left:auto;font-size:0.72rem;color:var(--t3);align-self:center">${rolls.length} rzutów</span>
+          </div>`;
+          const body = !rolls.length
+            ? '<p style="text-align:center;padding:24px;color:var(--t3)">Brak rzutów. Zagraj turę / walkę, by zarejestrować rzuty.</p>'
+            : `<table class="data-table" style="width:100%;font-size:0.78rem">
+                <thead><tr>
+                  <th style="text-align:left">Typ</th><th>Rzut</th><th>Mod</th><th>Suma</th>
+                  <th>DC</th><th style="text-align:left">Wynik</th><th style="text-align:left">Szczegóły</th>
+                </tr></thead>
+                <tbody>${rolls.map(r => {
+                  const raw = Array.isArray(r.raw_rolls) ? r.raw_rolls.join(', ') : (r.raw_rolls ?? '—');
+                  const modTotal = (r.modifiers && (r.modifiers.total ?? r.modifiers.total_bonus));
+                  const modStr = (modTotal!=null) ? (modTotal>=0?`+${modTotal}`:`${modTotal}`) : '—';
+                  const metaBits = [];
+                  if (r.meta) {
+                    if (r.meta.skill_key) metaBits.push(_esc(r.meta.skill_key));
+                    if (r.meta.weapon_key) metaBits.push(_esc(r.meta.weapon_key));
+                    if (r.meta.enemy_key||r.meta.enemy_name) metaBits.push(_esc(r.meta.enemy_name||r.meta.enemy_key));
+                    if (r.meta.round!=null) metaBits.push('r'+r.meta.round);
+                  }
+                  return `<tr>
+                    <td style="text-align:left">${TYPE_LABEL[r.roll_type]||_esc(r.roll_type)}</td>
+                    <td style="text-align:center;font-family:monospace">${_esc(String(raw))}${r.notation?` <span style="color:var(--t3)">${_esc(r.notation)}</span>`:''}</td>
+                    <td style="text-align:center;font-family:monospace">${modStr}</td>
+                    <td style="text-align:center;font-family:monospace;font-weight:700">${r.total ?? '—'}</td>
+                    <td style="text-align:center;font-family:monospace">${r.dc ?? '—'}</td>
+                    <td style="text-align:left;color:${OUT_COLOR(r.outcome)};font-weight:600">${_esc(r.outcome||'—')}</td>
+                    <td style="text-align:left;color:var(--t3);font-size:0.72rem">${metaBits.join(' · ')}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>`;
+          panel.innerHTML = bar + `<div style="padding:0 4px 16px">${body}</div>`;
+          panel.querySelectorAll('.dice-filter').forEach(b =>
+            b.addEventListener('click', () => _render(b.dataset.dtype || null)));
+        } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
+      };
+      await _render(null);
     }
   }
 
