@@ -569,3 +569,127 @@ async def generate_enemy_image(key: str, req: EnemyGenerateRequest = Body(defaul
         )
 
     return {"status": "ok", "key": key, "image_url": image_url, "image_gen_prompt": saved_prompt}
+
+
+async def _run_flux_generate(prompt: str, width: int, height: int, steps: int) -> str:
+    """Call FLUX service, save PNG to TILES_DIR, return image_url. Raises HTTPException on error."""
+    checkpoint = str(_read_visual("image_gen.checkpoint", "") or "")
+    gen_url = _get_image_gen_url()
+    payload: dict[str, Any] = {"prompt": prompt, "width": width, "height": height, "steps": steps}
+    if checkpoint:
+        payload["checkpoint"] = checkpoint
+
+    TILES_DIR.mkdir(parents=True, exist_ok=True)
+    async with httpx.AsyncClient(timeout=300) as client:
+        try:
+            r = await client.post(f"{gen_url}/generate", json=payload)
+            r.raise_for_status()
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail=f"Image generator offline ({gen_url})")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Image generator timeout")
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"Generator error: {e.response.text}")
+
+    data = r.json()
+    if data.get("status") != "ok":
+        raise HTTPException(status_code=502, detail=data.get("error", "generation failed"))
+
+    ts = int(time.time())
+    dest_name = f"aigm_{ts}_{data['filename']}"
+    dest_path = TILES_DIR / dest_name
+    b64_data = data.get("b64")
+    if b64_data:
+        dest_path.write_bytes(base64.b64decode(b64_data))
+    else:
+        async with httpx.AsyncClient(timeout=60) as dl:
+            resp = await dl.get(f"{gen_url}/files/{data['filename']}")
+            if resp.status_code == 200:
+                dest_path.write_bytes(resp.content)
+            else:
+                raise HTTPException(status_code=500, detail="Could not retrieve generated image")
+    return f"{TILES_URL_PREFIX}/{dest_name}"
+
+
+# ── Per-NPC image generation ──────────────────────────────────────────────────
+
+class NpcGenerateRequest(BaseModel):
+    force: bool = False
+    steps: int | None = None
+    width: int | None = None
+    height: int | None = None
+
+
+@router.get("/npc/missing")
+async def list_npcs_missing_images():
+    """List active NPCs without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT id, key, label, npc_type, description, image_url, image_gen_prompt "
+            "FROM npcs "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY label"
+        ).fetchall()
+    return {"npcs": [dict(r) for r in rows], "count": len(rows)}
+
+
+@router.post("/npc/{npc_id}/generate")
+async def generate_npc_image(npc_id: int, req: NpcGenerateRequest = Body(default=None)):
+    """Generate portrait for an NPC. Saves image_url + image_gen_prompt to DB.
+    Skips (status=skipped) if image already exists unless force=true.
+    """
+    if req is None:
+        req = NpcGenerateRequest()
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        row = c.execute("SELECT * FROM npcs WHERE id = ?", (npc_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"NPC not found: {npc_id}")
+    row = dict(row)
+
+    if row.get("image_url") and not req.force:
+        return {"status": "skipped", "id": npc_id, "reason": "already has image", "image_url": row["image_url"]}
+
+    saved_prompt = (row.get("image_gen_prompt") or "").strip()
+    if not saved_prompt:
+        description = (row.get("description") or row.get("label") or row.get("key") or "").strip()
+        npc_type = row.get("npc_type") or "neutral"
+        from app.services.llm_service import generate_chat
+        system = (
+            "You are a visual prompt engineer for fantasy RPG NPC portrait generation. "
+            "The user will give you a Polish description of a friendly or neutral NPC character. "
+            "Output ONLY a short English comma-separated list of image generation keywords (20-35 words). "
+            "Focus on: character appearance, clothing, expression, warm atmosphere. "
+            "End with: character portrait, warm fantasy lighting, detailed illustration, no text, no UI. "
+            "No explanations. No Polish words. No full sentences. Only English keywords."
+        )
+        user_msg = f"[Context: NPC type:{npc_type}]\n\n{description}"
+        try:
+            reply = generate_chat(messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ])
+            keywords = reply.strip().strip(".,")
+            saved_prompt = keywords + ", character portrait, warm fantasy lighting, detailed illustration, no text, no UI"
+        except Exception:
+            label = row.get("label") or row.get("key") or "NPC"
+            saved_prompt = (
+                f"{label}, fantasy NPC character, "
+                "character portrait, warm fantasy lighting, detailed illustration, no text, no UI"
+            )
+
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    width = req.width if req.width is not None else int(_read_visual("image_gen.portrait_width", 576))
+    height = req.height if req.height is not None else int(_read_visual("image_gen.portrait_height", 1024))
+
+    image_url = await _run_flux_generate(saved_prompt, width, height, steps)
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.execute(
+            "UPDATE npcs SET image_url = ?, image_gen_prompt = ?, updated_at = datetime('now') WHERE id = ?",
+            (image_url, saved_prompt, npc_id),
+        )
+
+    return {"status": "ok", "id": npc_id, "image_url": image_url, "image_gen_prompt": saved_prompt}

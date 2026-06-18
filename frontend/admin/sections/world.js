@@ -1124,27 +1124,28 @@ async function eiPickGallery(key, encUrl) {
   }
 }
 
-// ── Batch enemy image generation ──────────────────────────────────────────────
-window._worldBatchGenEnemies = async function() {
+// ── Batch image generation (enemies + NPCs) ───────────────────────────────────
+// cfg: { kind, missingUrl, listField, genUrl(item), itemId(item), title, noneMsg, foundNoun, reload }
+async function _worldBatchGen(cfg) {
   let list;
   try {
-    const r = await apiFetch('/api/admin/images/enemy/missing');
-    list = r.enemies || [];
+    const r = await apiFetch(cfg.missingUrl);
+    list = r[cfg.listField] || [];
   } catch(ex) {
     _showToast('Błąd pobierania listy: ' + (ex.message||''), 'error'); return;
   }
-  if (!list.length) { _showToast('Wszyscy wrogowie mają już obrazy!', 'success'); return; }
+  if (!list.length) { _showToast(cfg.noneMsg, 'success'); return; }
 
   const overlay = document.createElement('div');
   overlay.id = 'batch-gen-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
   overlay.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(520px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <strong>⚡ Generowanie obrazów wrogów</strong>
+      <strong>${cfg.title}</strong>
       <button id="batch-cancel-btn" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="padding:12px 16px;overflow-y:auto;flex:1">
-      <div id="batch-status" style="font-size:0.82rem;color:var(--t3);margin-bottom:10px">Znaleziono <strong>${list.length}</strong> wrogów bez obrazu. Kliknij Start.</div>
+      <div id="batch-status" style="font-size:0.82rem;color:var(--t3);margin-bottom:10px">Znaleziono <strong>${list.length}</strong> ${cfg.foundNoun} bez obrazu. Kliknij Start.</div>
       <div id="batch-log" style="font-family:monospace;font-size:0.75rem;line-height:1.8;max-height:340px;overflow-y:auto"></div>
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
@@ -1171,12 +1172,13 @@ window._worldBatchGenEnemies = async function() {
     document.getElementById('batch-start-btn').disabled = true;
     document.getElementById('batch-start-btn').textContent = '⏳ Generuję…';
     let done = 0, skipped = 0, errors = 0;
-    for (const e of list) {
+    for (const it of list) {
       if (aborted) { _log('— Przerwano.', 'var(--warning)'); break; }
-      status.innerHTML = `Postęp: <strong>${done + skipped + errors}/${list.length}</strong> — aktualne: ${e.label||e.key}`;
-      _log(`▶ ${e.label||e.key} (${e.key})…`);
+      const lbl = it.label || it.key || cfg.itemId(it);
+      status.innerHTML = `Postęp: <strong>${done + skipped + errors}/${list.length}</strong> — aktualne: ${lbl}`;
+      _log(`▶ ${lbl}…`);
       try {
-        const r = await apiFetch(`/api/admin/images/enemy/${encodeURIComponent(e.key)}/generate`, {method:'POST', body:JSON.stringify({})});
+        const r = await apiFetch(cfg.genUrl(it), {method:'POST', body:JSON.stringify({})});
         if (r.status === 'skipped') { _log(`  ↳ pominięto (ma już obraz)`, 'var(--t3)'); skipped++; }
         else { _log(`  ↳ ✓ wygenerowano`, 'var(--success)'); done++; }
       } catch(ex) {
@@ -1185,9 +1187,31 @@ window._worldBatchGenEnemies = async function() {
     }
     status.innerHTML = `Gotowe: <strong>${done}</strong> wygenerowanych, ${skipped} pominiętych, ${errors} błędów.`;
     document.getElementById('batch-start-btn').textContent = '✓ Zakończono';
-    if (done > 0) _loadEnemies();
+    if (done > 0) cfg.reload();
   };
-};
+}
+
+window._worldBatchGenEnemies = () => _worldBatchGen({
+  missingUrl: '/api/admin/images/enemy/missing',
+  listField: 'enemies',
+  genUrl: e => `/api/admin/images/enemy/${encodeURIComponent(e.key)}/generate`,
+  itemId: e => e.key,
+  title: '⚡ Generowanie obrazów wrogów',
+  noneMsg: 'Wszyscy wrogowie mają już obrazy!',
+  foundNoun: 'wrogów',
+  reload: () => _loadEnemies(),
+});
+
+window._worldBatchGenNpcs = () => _worldBatchGen({
+  missingUrl: '/api/admin/images/npc/missing',
+  listField: 'npcs',
+  genUrl: n => `/api/admin/images/npc/${encodeURIComponent(n.id)}/generate`,
+  itemId: n => n.id,
+  title: '⚡ Generowanie obrazów NPC',
+  noneMsg: 'Wszyscy NPC mają już obrazy!',
+  foundNoun: 'NPC',
+  reload: () => _loadNPCs(),
+});
 
 // ── NPC image modal ────────────────────────────────────────────────────────────
 function _buildNpcImagePrompt(n) {
@@ -1199,7 +1223,7 @@ function _buildNpcImagePrompt(n) {
 
 async function openNpcImageModal(id, encData) {
   const n = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
-  const initialPrompt = _buildNpcImagePrompt(n);
+  const initialPrompt = (n.image_gen_prompt && n.image_gen_prompt.trim()) ? n.image_gen_prompt.trim() : _buildNpcImagePrompt(n);
   const m = document.createElement('div');
   m.id = 'npc-img-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -1242,10 +1266,23 @@ async function openNpcImageModal(id, encData) {
   document.body.appendChild(m);
   m.addEventListener('click', ev => { if (ev.target===m) m.remove(); });
 
-  let _lastFilename=null, _lastUrl=null;
+  let _lastFilename = n.image_url ? n.image_url.split('/').pop() : null;
+  let _lastUrl = n.image_url || null;
+  window._niSetImageState = (filename, url) => { _lastFilename = filename; _lastUrl = url; };
   const ta=document.getElementById('ni-prompt');
   const _autoResize=t=>{t.style.height='auto';t.style.height=Math.min(t.scrollHeight,240)+'px';};
   ta.addEventListener('input',()=>_autoResize(ta)); _autoResize(ta);
+
+  // Load default steps + portrait size from system config
+  apiFetch('/api/admin/images/config').then(cfg => {
+    const stepsEl = document.getElementById('ni-steps');
+    if (stepsEl && cfg.steps != null) stepsEl.value = cfg.steps;
+    const sizeEl = document.getElementById('ni-size');
+    if (sizeEl && cfg.portrait_width && cfg.portrait_height) {
+      const val = `${cfg.portrait_width}x${cfg.portrait_height}`;
+      if ([...sizeEl.options].some(o => o.value === val)) sizeEl.value = val;
+    }
+  }).catch(() => {});
 
   document.getElementById('ni-gen-btn').onclick = async () => {
     const btn=document.getElementById('ni-gen-btn');
@@ -1278,11 +1315,12 @@ async function openNpcImageModal(id, encData) {
   document.getElementById('ni-accept-btn').onclick = async () => {
     if(!_lastUrl) return;
     try {
-      await apiFetch(`/api/admin/npcs/${encodeURIComponent(String(id))}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl})});
+      const savedPrompt = ta.value.trim();
+      await apiFetch(`/api/admin/npcs/${encodeURIComponent(String(id))}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl, image_gen_prompt: savedPrompt})});
       _showToast('Obraz NPC zapisany.','success');
       m.remove();
       const nRow=document.querySelector(`#npcs-table tr[data-key="${CSS.escape(String(id))}"]`);
-      if(nRow){const cur=JSON.parse(decodeURIComponent(nRow.dataset.rjson||'{}'));cur.image_url=_lastUrl;nRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur));}
+      if(nRow){const cur=JSON.parse(decodeURIComponent(nRow.dataset.rjson||'{}'));cur.image_url=_lastUrl;cur.image_gen_prompt=savedPrompt;nRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur));}
       _loadNPCs();
     } catch(ex){_showToast(ex.message||'Błąd zapisu','error');}
   };
@@ -1315,12 +1353,17 @@ async function niOpenGallery(id) {
   const grid=document.getElementById('ni-gallery-grid');
   try {
     const data=await apiFetch('/api/admin/images/list');
-    const imgs=data.images||[];
+    const allImgs=data.images||[];
+    const imgs=allImgs.slice(0,80);
     if(!imgs.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Brak obrazów.</div>';return;}
-    grid.innerHTML=imgs.map(img=>{
+    const countNote = allImgs.length > imgs.length
+      ? `<div style="grid-column:1/-1;font-size:0.72rem;color:var(--t3);padding:0 2px 6px">Pokazuję ${imgs.length} najnowszych z ${allImgs.length}</div>` : '';
+    grid.innerHTML=countNote + imgs.map(img=>{
       const encUrl=encodeURIComponent(img.url);
       return `<div onclick="window.niPickGallery('${_esc(id)}','${encUrl}')" style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <img src="${_esc(img.url)}" style="width:100%;height:90px;object-fit:cover;display:block" loading="lazy">
+        <div style="background:#111;height:110px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <img src="${_esc(img.url)}" style="max-width:100%;max-height:110px;object-fit:contain;display:block">
+        </div>
         <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(img.filename)}</div>
       </div>`;
     }).join('');
@@ -1330,14 +1373,22 @@ async function niOpenGallery(id) {
 async function niPickGallery(id, encUrl) {
   document.getElementById('ni-gallery-modal')?.remove();
   const url=decodeURIComponent(encUrl);
+  const filename=url.split('/').pop();
+  if (window._niSetImageState) window._niSetImageState(filename, url);
   const prev=document.getElementById('ni-preview');
   if(prev) prev.innerHTML=`<img src="${_esc(url)}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+  const refBtn=document.getElementById('ni-ref-btn');
+  if(refBtn) refBtn.disabled=false;
   const acceptBtn=document.getElementById('ni-accept-btn');
   if(acceptBtn){
     acceptBtn.disabled=false;
     acceptBtn.onclick=async()=>{
       try {
-        await apiFetch(`/api/admin/npcs/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({image_url:url})});
+        const promptEl=document.getElementById('ni-prompt');
+        const promptVal=promptEl ? promptEl.value.trim() : '';
+        const body={image_url:url};
+        if(promptVal) body.image_gen_prompt=promptVal;
+        await apiFetch(`/api/admin/npcs/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(body)});
         _showToast('Obraz NPC zapisany.','success');
         document.getElementById('npc-img-modal')?.remove();
         _loadNPCs();
@@ -1379,6 +1430,7 @@ function _sectionHtml() {
             <span class="search-box-icon">🔍</span>
             <input type="text" placeholder="Szukaj NPC…" oninput="window._worldFilterTable(this,'npcs-table','td-name')">
           </div>
+          <button class="btn btn-secondary btn-sm" onclick="window._worldBatchGenNpcs()" title="Wygeneruj portrety dla NPC bez obrazu">⚡ Generuj brakujące</button>
         </div>
         <div class="table-wrap">
           <table class="data-table" id="npcs-table">
