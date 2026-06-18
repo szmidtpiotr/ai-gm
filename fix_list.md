@@ -67,7 +67,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 4. [ ] **#777** — [C, P1] Zakładki Stan/Decyzje/Zdarzenia puste dla kampanii narracyjnych. Fix: emisja game_events dla zdarzeń narracyjnych (quest/gold/item/xp/location) + naprawa writera turn_decisions (0 globalnie). Większy zakres.
 5. [ ] **D — migracja ręczna #99791 (BEZ issue)** — po weryfikacji A-D: ręczna korekta gold/XP/status questa dla Mizela #99791 post-factum. **Czekać na prośbę Piotra** (jeśli wykryje więcej błędów, zrobi się hurtem).
 6. [ ] **#779** — [feature] Zakładka Quest + XP w monitorze kampanii. `(dep: #775, #776, #777)` — rób PO naprawach, inaczej pokaże quest „active" na zawsze i 0 gold.
-7. [ ] **#778** — [P2, design] Brak intencji non-lethal (zastraszenie vs zabójstwo) + mylący komunikat „Cel ataku nieosiągalny". `(design A/B)` — dobry wynik w #99791 był przypadkiem (gate + LLM), nie mechaniką. Ostatni.
+7. [ ] **#780** — [P2, design] Atak z zaskoczenia + **ogólna bramka intencji** po zdobyciu przewagi ([⚔️ Atak]/[💬 Zastraszenie]/[👤 Wycofaj]). Konsoliduje sesję sneak attack (D1 gate + D2 auto-hit + burst, decyzje Piotra zatwierdzone) + audyt #99791. **Supersedes #778** (zamknięte). Rodzeństwo #773 (grapple → ta sama bramka). Bazuje na #645/#614 (closed). Dobry wynik w #99791 był przypadkiem (gate+LLM), bramka D1 to rozwiązuje projektowo.
 
 ---
 
