@@ -1866,6 +1866,30 @@ def _parse_grant_item_entry(x: object) -> tuple[str, str | None] | None:
     return None
 
 
+_MONETARY_BAG_RE = re.compile(
+    r'\b(mieszek|sakiewka|trzos|sakwa|woreczek)\b',
+    re.IGNORECASE,
+)
+_MONETARY_CONTENT_RE = re.compile(
+    r'\b(monet|zapłat|złot|gold|gp)\w*\b',
+    re.IGNORECASE,
+)
+_AMOUNT_RE = re.compile(r'\b(\d+)\b')
+
+
+def _monetary_item_gold(label: str, description: str | None) -> int | None:
+    """Return gold amount if label is a monetary purse/bag; None if it's a regular item.
+
+    Requires bag keyword in label AND money keyword in label+description to avoid
+    false-positives like 'Pusty mieszek' (empty bag = narrative prop, not currency).
+    """
+    combined = (label or "") + " " + (description or "")
+    if not (_MONETARY_BAG_RE.search(label or "") and _MONETARY_CONTENT_RE.search(combined)):
+        return None
+    m = _AMOUNT_RE.search(combined)
+    return int(m.group(1)) if m else 10
+
+
 def extract_grant_cues(
     assistant_text: str,
 ) -> tuple[str, list[str], int | None, str | None, dict[str, str | None]]:
@@ -1879,10 +1903,19 @@ def extract_grant_cues(
     grant_item_labels: list[str] = []
     grant_item_descriptions: dict[str, str | None] = {}
     grant_gold_amount: int | None = None
+    # Bag-converted gold (#775) — explicit Grant Gold N always wins over bag conversion
+    _bag_gold: int | None = None
     open_shop_npc_key: str | None = None
 
     def _add_entry(entry: tuple[str, str | None] | None) -> None:
+        nonlocal _bag_gold
         if entry and entry[0] not in grant_item_labels:
+            gold = _monetary_item_gold(entry[0], entry[1])
+            if gold is not None:
+                # Safety-net: monetary bag → grant_gold fallback (#775)
+                if _bag_gold is None:
+                    _bag_gold = gold
+                return
             grant_item_labels.append(entry[0])
             grant_item_descriptions[entry[0]] = entry[1]
 
@@ -1900,16 +1933,21 @@ def extract_grant_cues(
                     _add_entry(_parse_grant_item_entry(x))
             else:
                 _add_entry(_parse_grant_item_entry(raw_gi))
-            if grant_item_labels:
-                payload["grant_item"] = None
-                clean_text = json.dumps(payload, ensure_ascii=False)
+            # Clear grant_item from payload whether converted to gold or kept as item
+            payload["grant_item"] = None
+            clean_text = json.dumps(payload, ensure_ascii=False)
 
         roll_cue = str(payload.get("roll_cue") or "").strip()
         if roll_cue:
             rc_item = parse_grant_item_cue(roll_cue)
             if rc_item and rc_item not in grant_item_labels:
-                grant_item_labels.append(rc_item)
-                grant_item_descriptions.setdefault(rc_item, None)
+                gold = _monetary_item_gold(rc_item, None)
+                if gold is not None:
+                    if _bag_gold is None:
+                        _bag_gold = gold
+                else:
+                    grant_item_labels.append(rc_item)
+                    grant_item_descriptions.setdefault(rc_item, None)
             if grant_gold_amount is None:
                 grant_gold_amount = parse_grant_gold_cue(roll_cue)
             if open_shop_npc_key is None:
@@ -1921,10 +1959,16 @@ def extract_grant_cues(
     for _ in range(4):
         maybe_item = parse_grant_item_cue(clean_text)
         if maybe_item and maybe_item not in grant_item_labels:
-            grant_item_labels.append(maybe_item)
-            # Plain-text cues carry no description
-            grant_item_descriptions.setdefault(maybe_item, None)
+            gold = _monetary_item_gold(maybe_item, None)
             clean_text = strip_last_grant_item_cue(clean_text)
+            if gold is not None:
+                # Safety-net: monetary bag → grant_gold fallback (#775)
+                if _bag_gold is None:
+                    _bag_gold = gold
+            else:
+                grant_item_labels.append(maybe_item)
+                # Plain-text cues carry no description
+                grant_item_descriptions.setdefault(maybe_item, None)
             continue
         if grant_gold_amount is None:
             maybe_gold = parse_grant_gold_cue(clean_text)
@@ -1939,6 +1983,9 @@ def extract_grant_cues(
                 clean_text = strip_last_open_shop_cue(clean_text)
                 continue
         break
+    # Bag-converted gold fills in only if no explicit Grant Gold cue was found (#775)
+    if grant_gold_amount is None and _bag_gold is not None:
+        grant_gold_amount = _bag_gold
     return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key, grant_item_descriptions
 
 

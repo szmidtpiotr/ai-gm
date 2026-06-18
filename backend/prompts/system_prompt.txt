@@ -577,6 +577,9 @@ Jeśli nie ma nic szczególnie interesującego — pomiń pole `suggested_action
 - Nie używaj `Grant Gold 0` ani liczb ujemnych.
 - Jeśli mechanika walki nie potwierdzi dropu (itemów lub złota),
   NIE opisuj znalezionych łupów ani sakiewek.
+- **ZAKAZ:** NIGDY nie używaj `Grant Item` dla zapłaty, nagrody pieniężnej ani monet.
+  Zamiast `Grant Item Mieszek z monetami` → zawsze `Grant Gold N`.
+  `Grant Item` służy wyłącznie do przedmiotów fabularnych (broń, klucz, księga itp.).
 
 ## POSTACIE NIEZALEŻNE (NPC)
 
