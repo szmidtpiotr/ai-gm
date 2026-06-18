@@ -7296,9 +7296,10 @@ function _invPickEquipSlot__legacy(item, occupied) {
     return null;
 }
 
-function _invIsLore(item) {
+function _invIsUsable(item) {
     const t = String(item.item_type || '').toLowerCase();
-    return t === 'misc' || t === 'quest' || t === 'narrative';
+    if (t === 'weapon' || t === 'armor') return true;  // equippable
+    return item.can_use === true;                       // consumable / ammo (#764)
 }
 
 // ── Spells Tab (Scholar) ──────────────────────────────────────────────────────
@@ -7432,10 +7433,10 @@ async function renderInventoryTab(character) {
                     occupied[cs] = true;
                 }
             }
-        } else if (_invIsLore(item)) {
-            lore.push(item);
-        } else {
+        } else if (_invIsUsable(item)) {
             backpack.push(item);
+        } else {
+            lore.push(item);
         }
     }
     _equippedDurability = _eqDura;
@@ -7478,7 +7479,7 @@ async function renderInventoryTab(character) {
     if (loreList) {
         loreList.innerHTML = lore.length
             ? lore.map(_renderLoreRow).join('')
-            : `<div class="inv-empty">Brak przedmiotów fabularnych</div>`;
+            : `<div class="inv-empty">Brak przedmiotów nieużywalnych</div>`;
     }
 
     _wireInventoryActions();
