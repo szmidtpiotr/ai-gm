@@ -215,6 +215,19 @@ RAW_MIGRATIONS = [
     # generic enough to match unrelated narration. Clear entirely; the code-
     # level _COMBAT_CLASS_SKILLS guard backs this up.
     "UPDATE game_config_skills SET trigger_keywords = '' WHERE key = 'initiative'",
+    # 2026-06-18 #763: 'deception' keyword 'udaję' false-matched the common Polish
+    # movement idiom "udaję się [do/na ...]" (= "I head to ..."), spawning a phantom
+    # Oszustwo (Deception) test on every travel declaration and trapping the player
+    # in the current scene. Drop the bare 'udaję'; keep explicit lie/bluff/impersonate
+    # verbs (active deception only). Idempotent — fires only while old value present.
+    "UPDATE game_config_skills SET trigger_keywords = 'blefuję oszukuję oszukać ściemniam kłamię podszywam' "
+        "WHERE key = 'deception' AND trigger_keywords LIKE '%udaję%'",
+    # 2026-06-18 #763: 'stealth' had EMPTY trigger_keywords, so genuine sneaking never
+    # fired a Stealth test via the keyword pre-scan (and worse, ambiguous declarations
+    # fell to deception). Seed active-sneak verbs. Passive observation ("obserwuję",
+    # "z cienia") intentionally NOT included — that stays no-roll, handled by narrator.
+    "UPDATE game_config_skills SET trigger_keywords = 'skradam zakradam podkradam przemykam ukradkiem chyłkiem' "
+        "WHERE key = 'stealth' AND (trigger_keywords IS NULL OR trigger_keywords = '')",
     # 2026-05-18 W4: rename fear conditions to spec terminology and collapse
     # 4 stages (fear_shaken/fear_frightened/terror/break) to 3 (frightened/
     # panicked/break) per [D2]. Idempotent — re-runs are no-ops once data is
