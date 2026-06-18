@@ -61,9 +61,9 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 
 Źródło: pełna analiza kampanii „Pierwsze Kroki" #99791 (34 tury, 0 walk, dużo questów/zapłat). Każdy task = osobny issue z pełnym root cause. **Piotr robi TDD ręcznie.** Kolejność wdrażania (impact × niskie ryzyko × zależności):
 
-1. [ ] **#775** — [A, P0] Zapłata jako `grant_item` "mieszek z monetami" → gracz 0 zł. Fix: prompt (LOCKED, za zgodą) + backend parser grant_item→grant_gold. Najpierw bo łamie ekonomię gry.
-2. [ ] **#776** — [B, P0] Questy dostawy/wymiany nie domykają się. Fix opcja 1: `[QUEST_COMPLETE]` flipuje status + prompt. **Fallback opcja 2 (oddanie quest-itemu) opisany w issue — wdrożyć TYLKO jeśli smoke opcji 1 zawiedzie.**
-3. [ ] **#755** — [leak, P1] Tagi mechaniczne wyciekają do narracji na mobile (stream). Rozszerzony: NARRATIVE_EVENT + NPC_MEMORY + QUEST_SUGGEST. Fix: strip generyczny `[A-Z_]+:...]` w `app.js` (stream+finalize) + bump `?v=`. Frontend-only, najbardziej widoczny dla testerów.
+1. [x] **#775** — [A, P0] Zapłata jako `grant_item` "mieszek z monetami" → gracz 0 zł. Fix: prompt (LOCKED, za zgodą) + backend parser grant_item→grant_gold. Najpierw bo łamie ekonomię gry.
+2. [x] **#776** — [B, P0] Questy dostawy/wymiany nie domykają się. Fix opcja 1: `[QUEST_COMPLETE]` flipuje status + prompt. **Fallback opcja 2 (oddanie quest-itemu) opisany w issue — wdrożyć TYLKO jeśli smoke opcji 1 zawiedzie.**
+3. [x] **#755** — [leak, P1] Tagi mechaniczne wyciekają do narracji na mobile (stream). Rozszerzony: NARRATIVE_EVENT + NPC_MEMORY + QUEST_SUGGEST. Fix: strip generyczny `[A-Z_]+:...]` w `app.js` (stream+finalize) + bump `?v=`. Frontend-only, najbardziej widoczny dla testerów. [wdrożone 5597f51]
 4. [ ] **#777** — [C, P1] Zakładki Stan/Decyzje/Zdarzenia puste dla kampanii narracyjnych. Fix: emisja game_events dla zdarzeń narracyjnych (quest/gold/item/xp/location) + naprawa writera turn_decisions (0 globalnie). Większy zakres.
 5. [ ] **D — migracja ręczna #99791 (BEZ issue)** — po weryfikacji A-D: ręczna korekta gold/XP/status questa dla Mizela #99791 post-factum. **Czekać na prośbę Piotra** (jeśli wykryje więcej błędów, zrobi się hurtem).
 6. [ ] **#779** — [feature] Zakładka Quest + XP w monitorze kampanii. `(dep: #775, #776, #777)` — rób PO naprawach, inaczej pokaże quest „active" na zawsze i 0 gold.
@@ -88,7 +88,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
 - [ ] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0]
-- [ ] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize)
+- [x] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
 - [ ] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
 - [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
 - [ ] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData
