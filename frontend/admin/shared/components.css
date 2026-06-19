@@ -69,6 +69,11 @@
       font-size: 14px;
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      /* #830 (MOBILE M0-1): nie pozwol szerokiej tresci rozepchnac layout viewportu na
+         mobile (Chrome Android wide-viewport) - inaczej cala strona skaluje sie w dol do
+         szerokosci ekranu ("pomniejszony desktop"). Przycina poziomy nadmiar u zrodla. */
+      max-width: 100vw;
+      overflow-x: hidden;
     }
 
     /* ──────────────────────── SHELL ──────────────────────── */
