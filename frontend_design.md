@@ -184,7 +184,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-23 | Dziennik (panel) | ikona dziennika | Zadania / Wątki / Kronika, recap "Poprzednio…", regen | — |
 | F-24 | Akcja walki (sheet) | "Akcja" w walce | Czar / Ruch / Unik-Blok / Zapasy; ikona+nazwa+koszt+opis | — |
 | F-25 | Atak (sheet) | "Atak" w walce | warianty ataku (melee/ranged/spell) | — |
-| F-26 | Wybór czaru | mag rzuca czar | pula many + lista czarów | — |
+| F-26 | Wybór czaru | mag rzuca czar | pula many + lista czarów; heal/efekt OOC z animacją kości NdX (#653) | — |
 | F-27 | Level-up | próg XP | alokacja statystyk | — |
 | F-28 | Ekran śmierci | HP ≤ 0 | czaszka, epitafium, akcje (nowa przygoda/świat/bohater/wskrzeszenie) | — |
 | F-29 | Ekran zwycięstwa | boss pokonany (loch) | laur, tytuł zakończenia, statystyki, akcje | — |

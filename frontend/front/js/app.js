@@ -5996,7 +5996,8 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             armAdvance(dwell, afterAttack);
         };
 
-        // #653: heal-only rolls (OOC) skip Stage 1 (d20) and go straight to Stage 2.
+        // #653: forcedD20===null means caller wants Stage 2 only (no d20 throw).
+        // Used by OOC heal spells: skip the attack roll, show only the NdX heal dice.
         if (forcedD20 === null && damageStage && damageStage.notation) {
             requestAnimationFrame(() => runDamageStage());
             return;
@@ -7514,7 +7515,13 @@ async function renderSpellsTab(character, sheet) {
             </div>`;
         }).join('');
         listEl.querySelectorAll('.spell-card__cast-btn:not(:disabled)').forEach(btn => {
-            btn.addEventListener('click', () => castSpellOutOfCombat(btn.dataset.spellKey));
+            // #653: async handler — disable button for the duration of the spell cast
+            // (animation holds ~4s; without this a fast double-click double-casts).
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try { await castSpellOutOfCombat(btn.dataset.spellKey); }
+                finally { btn.disabled = false; }
+            });
         });
     } catch {
         listEl.innerHTML = '<p class="sheet-lore-text">Błąd ładowania zaklęć.</p>';
@@ -11818,7 +11825,8 @@ async function castSpellOutOfCombat(spellKey) {
             // already in the response); Stage 1 (d20) skipped via null forcedD20.
             if (data.spell_type === 'heal') {
                 const healStage = buildDamageStage(data);
-                if (healStage) await playCombatDiceRoll(null, 'Leczenie', null, healStage);
+                // null label: Stage 1 (d20) is skipped so label param is never rendered.
+                if (healStage) await playCombatDiceRoll(null, null, null, healStage);
             }
             const msg = data.message || `Rzucono ${data.label || spellKey}.`;
             appendMessage({ role: 'system', content: `🔮 ${msg}`, created_at: new Date() });

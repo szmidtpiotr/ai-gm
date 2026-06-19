@@ -490,6 +490,9 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
     """
     conn = _get_db()
     try:
+        # BEGIN IMMEDIATE acquires a reserved lock before the read so no concurrent
+        # writer can slip in between our SELECT and UPDATE (lost-update prevention).
+        conn.execute("BEGIN IMMEDIATE")
         char_row = conn.execute(
             "SELECT sheet_json FROM characters WHERE id = ?",
             (character_id,),

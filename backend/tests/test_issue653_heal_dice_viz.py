@@ -71,22 +71,37 @@ def test_heal_capped_at_max_hp():
 # ─── Backward compatibility ──────────────────────────────────────────────────
 
 def test_defense_spell_has_no_heal_dice():
-    """#653: defense spell response must NOT contain heal dice fields (no regression)."""
-    from app.services.spell_service import cast_spell_out_of_combat
-    # Use a mock-friendly approach: test resolve path directly
-    # Defense path: outcome='defense', no heal fields expected
-    # We test resolve_mend_wounds is NOT called for defense type
-    import app.services.spell_service as svc
+    """#653: defense spell cast OOC must NOT include heal_rolls/heal_die/heal_modifier."""
+    from unittest.mock import patch, MagicMock
 
     sheet = _make_scholar_sheet()
-    # defense spell has no heal_die in spell_stats
-    spell_stats = {"mana_cost": 1}
+    defense_spell = {
+        "key": "ward_of_iron", "label": "Tarcza Żelazna",
+        "spell_type": "defense", "tier": 2,
+        "base_mana_cost": 0, "base_damage_die": None, "base_heal_die": None,
+        "r1_mana_cost": 0, "r2_mana_cost": 0, "r3_mana_cost": 0,
+        "r1_damage_die": None, "r2_damage_die": None, "r3_damage_die": None,
+        "r1_heal_die": None, "r2_heal_die": None, "r3_heal_die": None,
+        "description": "Tarcza ochronna",
+    }
 
-    # resolve_mend_wounds with no heal_die falls back to "2d6" per default in code
-    # but a defense spell never calls resolve_mend_wounds — test the direct service func
-    # by checking: if spell_type != 'heal', response has no heal_rolls
-    # We simulate this by checking the resolve_mend_wounds output shape is separate from defense
-    result = {"spell_type": "defense", "outcome": "defense", "conditions": []}
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.return_value = {
+        "sheet_json": json.dumps(sheet)
+    }
 
-    assert "heal_rolls" not in result, "defense response must not have heal_rolls"
-    assert "heal_die" not in result, "defense response must not have heal_die"
+    with patch("app.services.spell_service._get_db", return_value=mock_conn), \
+         patch("app.services.spell_service.get_character_spell",
+               return_value={"spell_key": "ward_of_iron", "rank": 1}), \
+         patch("app.services.spell_service.get_spell", return_value=defense_spell), \
+         patch("app.services.spell_service.get_spell_stats_at_rank",
+               return_value={"mana_cost": 0}), \
+         patch("app.services.spell_service.record_spell_use"):
+
+        from app.services.spell_service import cast_spell_out_of_combat
+        result = cast_spell_out_of_combat(1, "ward_of_iron")
+
+    assert "heal_rolls" not in result, f"defense response must not have heal_rolls, got: {result}"
+    assert "heal_die" not in result, f"defense response must not have heal_die, got: {result}"
+    assert "heal_modifier" not in result, f"defense response must not have heal_modifier, got: {result}"
+    assert result.get("outcome") == "defense"
