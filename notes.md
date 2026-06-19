@@ -65,7 +65,7 @@ Graf kodu (26k węzłów). Claude pyta graf zamiast czytać pliki. **Działa aut
 - **Odśwież po większych zmianach kodu** (robi Claude): `graphify update .`
 - Podgląd: `graphify explain "<nazwa>"` · `graphify path "A" "B"`
 - Wyłączyć trial: `graphify uninstall --purge`
-- Mechanizm: instrukcja w `~/.claude/CLAUDE.md` (pytania o kod → graf najpierw). Bez twardego hooka.
+- Mechanizm: **twardy hook PreToolUse** na Grep/Glob (`~/.claude/hooks/graphify-nudge.py`) wstrzykuje „użyj graphify najpierw" przed każdym Grep/Glob + post-commit hook auto-odświeża graf. (Sam CLAUDE.md-nudge okazał się za słaby — tdd go ignorował.)
 
 ## 🔧 Pending (przesiadka na nowy system)
 - `/tdd` — wywalić krok „update notes.md" (zostaje update ISSUE).
