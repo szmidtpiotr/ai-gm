@@ -903,7 +903,10 @@ def get_character_inventory(character_id: int) -> list[dict]:
             key = r["consumable_catalog_item_key"] or r["consumable_key"]
         else:
             raw_kind = str(r["item_kind"] or "item").strip().lower()
-            label = str(r["item_label"] or r["item_key"])
+            # #757: pending/narrative items live in game_config_items, not game_items
+            # (rozjazd po #573), więc item_label (z game_items) jest NULL. Czytaj nazwę
+            # zdenormalizowaną na wierszu (ci.label = narrative_label) zanim spadniesz na klucz.
+            label = str(r["item_label"] or _rget(r, "narrative_label") or r["item_key"])
             key = r["item_key"]
             # Legacy consumables table OR catalog effect_type → consumable (fixes wrong item_type on unified catalog rows).
             legacy = legacy_effect_fields_from_json(r["gi_effect_json"]) or {}

@@ -394,6 +394,14 @@ RAW_MIGRATIONS = [
     # #668: kolumna is_tester istniała na PROD, ale brak jej na DEV (auth miał fallback) —
     # przez to gating FAB raportu bugów był zawsze false i ikona znikała. Parytet DEV↔PROD.
     "ALTER TABLE users ADD COLUMN is_tester INTEGER NOT NULL DEFAULT 0",
+    # #757: narracyjne pending itemy żyją w game_config_items (nie game_items), więc lista
+    # plecaka nie rozwiązywała nazwy. Backfill zdenormalizowanej ci.label dla istniejących
+    # wierszy (np. id 485 #99791) z katalogu game_config_items. Idempotentny.
+    "UPDATE character_inventory SET label = ("
+    "  SELECT label FROM game_config_items WHERE key = character_inventory.item_key)"
+    " WHERE (label IS NULL OR TRIM(label) = '')"
+    " AND item_key LIKE 'narrative_item_%'"
+    " AND item_key IN (SELECT key FROM game_config_items)",
 ]
 
 

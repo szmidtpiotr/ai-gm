@@ -549,6 +549,14 @@ Ustaw `location_intent: null`.
   ```
   "grant_item": "Żelazny klucz"
   ```
+- **OPIS PRZEDMIOTU (zalecane dla przedmiotów fabularnych):** zamiast samej nazwy
+  możesz podać obiekt `{"label": "...", "description": "..."}` — opis (1 zdanie:
+  do czego służy / skąd pochodzi) pokaże się graczowi w dymku przedmiotu w plecaku.
+  ```
+  "grant_item": [{"label": "Złożony pergamin", "description": "Mapa skarbu z zatartą pieczęcią, znaleziona w ruinach."}]
+  ```
+  Mieszanie form jest OK: `["Pochodnia", {"label": "Zwój", "description": "..."}]`.
+  Dla unikalnych/fabularnych przedmiotów ZAWSZE dołącz sensowny opis.
 
 - Przykłady:
   * "biorę torbę i księgę" → `"grant_item": ["Torba z notatkami", "Stara Księga"]`
