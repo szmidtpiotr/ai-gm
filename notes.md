@@ -1,3 +1,72 @@
+# 📋 KOMENDY + JAK PRACUJEMY (czytaj tu — ta strona otwiera się domyślnie)
+
+> Ściąga Piotra. Zadania żyją w **GitHub Issues + Milestones (faza)** — NIE na liście faz niżej.
+> Lista faz poniżej = archiwum/proza; aktywne zadania bierzemy z **Planu** (issues).
+
+## 📦 Gdzie żyją zadania (system od 2026-06-19)
+- **Issue = jedno zadanie. Milestone = faza** (FAZA L/LB/B/SF/5 Multiplayer/6/FIX).
+- Widok = **„Plan"** (zakładka w pluginie). Mówisz **„Plan"/„tablica"/„fazy"** → wiem: GitHub issues+milestones.
+- **Planowane zadanie → od razu issue + milestone.** „Dodaj X do fazy Y" → Claude zakłada issue + milestone + label.
+- **Zmiana fazy = zmiana milestone** (sam możesz, w GitHub/Plan tabie).
+- **Zawsze aktualizuję issue** (status in-progress→review→closed + komentarz fix/SHA). Issue = pamięć zadania.
+
+## ⚙️ Jak wygląda praca teraz
+```
+PLANOWANIE: "dodaj X do fazy Y" → ja zakładam issue + milestone + label
+PRACA:      bierzesz issue z Planu → /tdd → /code-review → /playwright
+            → ZAWSZE aktualizuję issue → ty zamykasz po obejrzeniu na DEV
+WIDOK:      Plan tab — fazy z paskami postępu, kolejność, klik → modal issue
+```
+
+## 🔁 Rytm sesji — jedno issue, 3 warstwy obrony
+**test** = złamana logika · **code-review** = bug obok · **playwright** = zepsuty wygląd.
+```
+1. /tdd #NNN              → test + fix
+2. /code-review (diff)    → 🔴 napraw (wróć do /tdd), 🔵 pomiń
+3. /playwright-test-report → przejście jako gracz + zrzuty (lub /game-screen)
+4. commit + push (Claude sam, develop) · issue → review + needs-testing
+5. TY oglądasz na DEV → zamykasz issue
+```
+
+### 📋 Prompt na start (podmień numer — blok ma przycisk Copy)
+```
+Przeczytaj notes.md (góra). Robimy #NNN przez /tdd.
+Przed commitem /code-review na diffie — realne bugi napraw, kosmetykę pomiń.
+Na końcu /playwright-test-report + raport po polsku.
+```
+Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez pytań" (wychodzisz) · „co następne?" (Claude poda z Planu).
+
+## 🎯 6 poleceń
+| Komenda | Kiedy |
+|---|---|
+| „stan?" | gdzie jesteśmy (Plan + STATUS) |
+| `/github-task` | co robić / przesuń / status issue |
+| `tdd #NNN` | wdróż jedno zadanie |
+| `/mass-implement` | wychodzisz, Claude leci listą issues sam |
+| `/playwright-test-report` | sprawdź UI + zgłoś bugi |
+| `/game-screen` | szybki podgląd ekranu |
+
+## 🧪 Testowanie — który kiedy
+*bug widać na ekranie?* → `/playwright-test-report` · *liczby w bazie przez wiele tur?* → `/game-test-player-screenshot` · *cały tryb grywalny?* → `/game-smoke[-dungeon]` · *szybki podgląd?* → `/game-screen`. (Pomijasz: `/game-test`, `/verify`, `/webapp-testing`.)
+
+## 🛠 Kodowanie / jakość
+- **`tdd #NNN`** — główny: test→kod→sprzątanie + Playwright + aktualizuje ISSUE.
+- **`/code-review`** — szuka bugów w diffie (bezpieczny, tylko czyta). `--fix` naprawia.
+- **`/simplify` / `/cleanup`** — ⚠️ tylko w klatce: mały diff + osobny commit + retest. Strach o regresję słuszny.
+
+## 🧠 Myślenie / 🎨 Design (znasz, używasz)
+`/brainstorming` (przed ficzerem) · `/llm-council` (A/B) · `/deep-research` · `/game-design` · `/frontend-design` `/ui-ux-pro-max` · `/canvas-design` · `/creating-mermaid-diagrams` `/excalidraw-diagram`.
+
+## ⚙️ Automaty (zero akcji)
+caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
+
+## 🔧 Pending (przesiadka na nowy system)
+- `/tdd` — wywalić krok „update notes.md" (zostaje update ISSUE).
+- `mass-implement` — jedzie wyłącznie z issues (LIST), FAZA-mode/notes odstaw.
+- notes.md (sekcje niżej) → docelowo tylko proza; lista zadań = Plan.
+
+---
+
 # AI-GM — Master Task Checklist
 _Ostatnia aktualizacja: 2026-06-12 (dodano FAZĘ S — Skille i Stany, 20 zadań; opisy w game_mechanics.md CZĘŚĆ AI)_
 
