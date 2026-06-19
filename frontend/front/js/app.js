@@ -5925,7 +5925,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 }
                 try {
                     if (!_diceBox) { _diceBox = new DICE.dice_box(container); }
-                    else { _diceBox.clear(); _diceBox.rolling = false; _diceBox.reinit(container); }
+                    else { try { _diceBox.clear(); } catch (_e) {} _diceBox = new DICE.dice_box(container); }
                     _diceBox.setDice(notation);
                 } catch (_e) { finish(); return; }
                 // Backstop: force-advance if the dice never report settling.
