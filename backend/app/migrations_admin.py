@@ -136,6 +136,14 @@ ADMIN_MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # #748 — voice_config była używana przez voice_proxy (POST /voice/config),
+    # ale nigdy nie powstała → zapis ustawień głosu w panelu wykraszał.
+    """
+    CREATE TABLE IF NOT EXISTS voice_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS ui_texts (
         key TEXT PRIMARY KEY,
@@ -4634,6 +4642,47 @@ def _ensure_consumable_effect_json(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_skipped", label="consumable-backfill-771", error=str(e))
 
 
+# #748 — standalone Piper+Whisper GPU box (.16). Domyślny host głosu na DEV.
+WHISPER_GPU_HOST_URL = "http://192.168.1.16:8300"
+
+
+def _ensure_voice_config_table(conn: sqlite3.Connection) -> None:
+    """#748 — voice_config była używana przez voice_proxy, lecz nigdy nie powstała,
+    więc zapis ustawień głosu (POST /voice/config) wykraszał na INSERT. Idempotentne."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    conn.commit()
+
+
+def _ensure_active_voice_host(conn: sqlite3.Connection) -> None:
+    """#748 — gdy żaden host głosu nie jest aktywny, proxy fallbackuje na bundlowany
+    `voice-service:8300`, którego na DEV nie ma → STT/TTS pada z 'Name or service not
+    known'. Self-heal: gdy istnieje wiersz hosta .16 i żaden host nie jest aktywny —
+    aktywuj .16. No-op gdy: jakiś host już aktywny (nie nadpisujemy wyboru admina),
+    brak tabeli, lub brak wiersza .16 (PROD → zostaje przy bundlowanym voice-service)."""
+    has_table = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='voice_hosts'"
+    ).fetchone()
+    if not has_table:
+        return
+    active = conn.execute(
+        "SELECT 1 FROM voice_hosts WHERE is_active = 1 LIMIT 1"
+    ).fetchone()
+    if active:
+        return
+    conn.execute(
+        "UPDATE voice_hosts SET is_active = 1 WHERE base_url = ?",
+        (WHISPER_GPU_HOST_URL,),
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4734,6 +4783,8 @@ def run_admin_migrations() -> None:
         _ensure_turn_decisions_table(conn)  # #762
         _backfill_riddle_exit_conditions(conn)  # #722
         _ensure_consumable_effect_json(conn)  # #771
+        _ensure_voice_config_table(conn)  # #748
+        _ensure_active_voice_host(conn)  # #748
     finally:
         conn.close()
 
