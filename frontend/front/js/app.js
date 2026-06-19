@@ -5996,6 +5996,12 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             armAdvance(dwell, afterAttack);
         };
 
+        // #653: heal-only rolls (OOC) skip Stage 1 (d20) and go straight to Stage 2.
+        if (forcedD20 === null && damageStage && damageStage.notation) {
+            requestAnimationFrame(() => runDamageStage());
+            return;
+        }
+
         requestAnimationFrame(() => {
             // Fallback: brief number spin when the 3D dice library failed to load.
             if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
@@ -11808,6 +11814,12 @@ async function castSpellOutOfCombat(spellKey) {
             const actionText = `Rzucam zaklęcie ${data.label || spellKey}. ${data.message || ''}`.trim();
             await sendTurn(actionText, 'free_text', `🕯 ${data.label || spellKey}`);
         } else {
+            // #653: heal spells OOC show dice animation (heal_die/heal_rolls/heal_modifier
+            // already in the response); Stage 1 (d20) skipped via null forcedD20.
+            if (data.spell_type === 'heal') {
+                const healStage = buildDamageStage(data);
+                if (healStage) await playCombatDiceRoll(null, 'Leczenie', null, healStage);
+            }
             const msg = data.message || `Rzucono ${data.label || spellKey}.`;
             appendMessage({ role: 'system', content: `🔮 ${msg}`, created_at: new Date() });
             scrollToBottom();
