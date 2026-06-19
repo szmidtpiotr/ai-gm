@@ -47,6 +47,8 @@ RUN_REMOTE="$(cfg '.run_host.remote_root')"
 STATE_DIR="$SKILL_DIR/.runs"; mkdir -p "$STATE_DIR"
 
 # ── Args ─────────────────────────────────────────────────────────────────────
+# Allow "faza X [sel]" with FAZA as a separate leading word: /mass-implement faza S
+case "${1:-}" in [Ff][Aa][Zz][AaĄą]) shift ;; esac
 FILE_ARG="${1:-}"; SELECTOR_ARG="${2:-}"; LIST_ONLY=0
 for a in "$@"; do [ "$a" = "--list" ] && LIST_ONLY=1; done
 [ "$SELECTOR_ARG" = "--list" ] && SELECTOR_ARG=""
