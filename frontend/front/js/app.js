@@ -5722,15 +5722,19 @@ function appendCombatTurnCard(row) {
         const dmg = row.damage != null ? Number(row.damage) : null;
         let meta = {};
         try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
-        const pac = meta.target_ac != null ? ` vs AC ${meta.target_ac}` : '';
         const rawD20 = meta.raw_d20 != null ? meta.raw_d20 : rv;
         const enemyName = escapeHtml(String(meta.enemy_name || row.target_name || 'Wróg'));
+        // #828: pokaż pasywny unik gracza (d20+DEX) gdy dostępny, nie AC (AC = redukcja pancerza, nie próg trafienia)
+        const pev = meta.player_evasion;
+        const vsLabel = pev && pev.total != null
+            ? ` vs Unik ${pev.total} (d20 ${pev.raw}+ZRC ${pev.dex_mod})`
+            : (meta.target_ac != null ? ` vs AC ${meta.target_ac}` : '');
         const hitLine = hit
             ? `<span class="cturn__hit">✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń</span>`
             : `<span class="cturn__miss">❌ PUDŁO</span>`;
         html = `<div class="cturn cturn--enemy">
             <div class="cturn__head">🗡️ <strong>ATAK WROGA</strong> — ${enemyName}</div>
-            <div class="cturn__detail">Rzut: ${rawD20 != null ? rawD20 : '—'}${pac} → ${hitLine}</div>
+            <div class="cturn__detail">Rzut: ${rawD20 != null ? rawD20 : '—'}${vsLabel} → ${hitLine}</div>
         </div>`;
     }
 

@@ -4175,6 +4175,30 @@ def compute_enemy_attack_hit(
     return int(attack_roll) > int(player_evasion_total)
 
 
+def _enemy_attack_narrative_dict(
+    out: dict,
+    raw: int,
+    attack_roll: int,
+    pac: int,
+    enemy: dict,
+    atk_b: int = 0,
+) -> dict:
+    """#828: narrative JSON dla log_combat_turn (atak wroga na gracza).
+
+    Zawiera player_evasion gdy pasywny unik był użyty (brak okna reakcji), None gdy
+    gracze mieli otwarte okno reakcji. Frontend używa tego do pokazania 'vs Unik' zamiast 'vs AC'.
+    """
+    d: dict = {
+        "raw_d20": int(raw),
+        "attack_bonus": int(atk_b),
+        "attack_roll": int(attack_roll),
+        "target_ac": int(pac),
+        "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
+        "player_evasion": out.get("player_evasion") or None,
+    }
+    return d
+
+
 def compute_player_attack_dodge_outcome(
     attack_total: int,
     dodge_roll_raw: int,
@@ -5463,12 +5487,7 @@ def resolve_attack(
             target_name=str(p.get("name") or "Gracz"),
             hit=bool(hit),
             narrative=json.dumps(
-                {
-                    "raw_d20": int(raw),
-                    "attack_roll": int(attack_roll),
-                    "target_ac": int(pac),
-                    "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
-                },
+                _enemy_attack_narrative_dict(out, raw, attack_roll, pac, enemy, atk_b),
                 ensure_ascii=False,
             ),
         )

@@ -334,7 +334,11 @@ function buildReport() {
       if (evt === "attack" && r.actor === "player") {
         lines.push(`- [#${r.id}] PLAYER attack → ${r.target_name || "?"} · d20=${r.roll_value} mod=${meta.modifier ?? "?"} total=${meta.total ?? "?"} vs AC=${meta.target_ac ?? "?"} · ${r.hit ? "HIT" : "MISS"}${r.damage != null ? ` dmg=${r.damage}` : ""} · weapon=${meta.weapon_key || "?"}`);
       } else if (evt === "attack" && r.actor === "enemy") {
-        lines.push(`- [#${r.id}] ENEMY ${meta.enemy_name || r.target_name || "?"} attack · raw_d20=${meta.raw_d20 ?? r.roll_value} bonus=${meta.attack_bonus ?? "?"} total=${meta.attack_roll ?? r.roll_value} vs AC=${meta.target_ac ?? "?"} · ${r.hit ? "HIT" : "MISS"}${r.damage != null ? ` dmg=${r.damage}` : ""}`);
+        {
+          const pev = meta.player_evasion;
+          const vsStr = pev && pev.total != null ? `vs Unik=${pev.total}(d20 ${pev.raw}+ZRC ${pev.dex_mod})` : `vs AC=${meta.target_ac ?? "?"}`;
+          lines.push(`- [#${r.id}] ENEMY ${meta.enemy_name || r.target_name || "?"} attack · raw_d20=${meta.raw_d20 ?? r.roll_value} bonus=${meta.attack_bonus ?? "?"} total=${meta.attack_roll ?? r.roll_value} ${vsStr} · ${r.hit ? "HIT" : "MISS"}${r.damage != null ? ` dmg=${r.damage}` : ""}`);
+        }
       } else if (evt === "zone_change") {
         lines.push(`- [#${r.id}] ZONE_CHANGE ${r.actor} ${meta.enemy_name || ""} ${meta.from} → ${meta.to}${meta.charged ? " (charged)" : ""}`);
       } else if (evt === "death") {
@@ -547,18 +551,22 @@ function renderEventCard(row) {
   }
   if (evt === "attack" && actor === "enemy") {
     const enemyName = esc(String(meta.enemy_name || row.target_name || "Wróg"));
-    const ac = meta.target_ac != null ? ` <span class="sbx-evt-ac">vs AC ${meta.target_ac}</span>` : "";
     const rawD20 = meta.raw_d20 != null ? meta.raw_d20 : rv;
     const atkB = meta.attack_bonus != null ? Number(meta.attack_bonus) : null;
     const total = meta.attack_roll != null ? Number(meta.attack_roll) : rv;
     const bonus = atkB != null ? ` ${atkB >= 0 ? "+" : ""}${atkB}` : "";
+    // #828: pasywny unik (d20+ZRC) zamiast "vs AC" gdy dostępny; AC = redukcja pancerza, nie próg trafienia
+    const pev = meta.player_evasion;
+    const vsLabel = pev && pev.total != null
+      ? ` <span class="sbx-evt-ac">vs Unik ${pev.total} (d20 ${pev.raw}+ZRC ${pev.dex_mod})</span>`
+      : (meta.target_ac != null ? ` <span class="sbx-evt-ac">vs AC ${meta.target_ac}</span>` : "");
     const verdict = hit
       ? `<span class="sbx-evt-hit">✅ TRAFIENIE${dmg != null ? ` · ${dmg} obrażeń` : ""}</span>`
       : `<span class="sbx-evt-miss">❌ PUDŁO</span>`;
     return `
       <div class="sbx-evt sbx-evt--enemy">
         <div class="sbx-evt-head">🗡️ <b>${enemyName}</b> atakuje</div>
-        <div class="sbx-evt-detail">d20 <b>${rawD20}</b>${bonus} = <b>${total}</b>${ac} → ${verdict}</div>
+        <div class="sbx-evt-detail">d20 <b>${rawD20}</b>${bonus} = <b>${total}</b>${vsLabel} → ${verdict}</div>
       </div>`;
   }
   if (evt === "reaction") {
