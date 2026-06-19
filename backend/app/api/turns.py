@@ -582,6 +582,14 @@ def _process_location_intent(
                 "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
                 (result.resolved_location_id,),
             )
+            # #825: clear scene_enemies/scene_npcs on any narrative location change.
+            # Pre-spawn enemies (no hp) from a prior encounter must not follow the
+            # player into the new location — hex-travel already did this; now narrative
+            # movement (tavern room entry, etc.) does too.
+            conn.execute(
+                "UPDATE game_sessions SET scene_enemies = '[]', scene_npcs = '[]' WHERE campaign_id = ?",
+                (campaign_id,),
+            )
             # Also sync current_hex so the world map pin follows narrative movement
             try:
                 import json as _jloc

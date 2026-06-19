@@ -1058,6 +1058,12 @@ def build_camp(campaign_id: int):
             "UPDATE game_sessions SET session_flags = ?, current_location_id = (SELECT id FROM game_locations WHERE key = ?) WHERE id = ?",
             (json.dumps(flags, ensure_ascii=False), location["key"], session_row["id"]),
         )
+        # #825: clear scene_enemies when moving to camp — prior encounter enemies
+        # (pre-spawn, no hp) must not persist into the new temp_camp sublocation.
+        conn.execute(
+            "UPDATE game_sessions SET scene_enemies = '[]', scene_npcs = '[]' WHERE campaign_id = ?",
+            (campaign_id,),
+        )
         conn.commit()
 
         clock = advance_clock(campaign_id, 1, reason="camp_setup")

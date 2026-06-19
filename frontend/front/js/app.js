@@ -9125,7 +9125,13 @@ function _openInspectorModal() {
             const gr = d.gate_result || {};
             const blocked = gr.blocked === true;
             const enemies = (ws.scene_enemies || []);
-            const aliveEnemies = enemies.filter(e => (e.hp || 0) > 0);
+            const aliveEnemies = enemies.filter(e => (e.hp ?? null) !== null && (e.hp || 0) > 0);
+            const spawnEnemies = enemies.filter(e => e.hp === null || e.hp === undefined);
+            // #825: header label — distinguish "alive" (in combat, hp>0) from "spawned" (pre-combat, no hp)
+            const wsLabel = ws.scene_cleared ? '✓ cleared'
+              : aliveEnemies.length ? aliveEnemies.length + ' alive'
+              : spawnEnemies.length ? spawnEnemies.length + ' spawned'
+              : '—';
             document.getElementById('dev-inspector-body').innerHTML = `
               <div style="margin-bottom:10px">
                 <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Intent</div>
@@ -9147,9 +9153,9 @@ function _openInspectorModal() {
                 ${gr.feedback ? `<div style="color:#64748b;margin-top:2px">${_esc(gr.feedback)}</div>` : ''}
               </div>
               <div>
-                <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">World State <span style="color:#334155;font-weight:400">${ws.scene_cleared?'✓ cleared':aliveEnemies.length+' alive'}</span></div>
+                <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">World State <span style="color:#334155;font-weight:400">${wsLabel}</span></div>
                 <div style="display:flex;flex-direction:column;gap:2px">
-                  <div><span style="color:#334155">Enemies:</span> ${enemies.length ? enemies.map(e=>`<span style="color:${(e.hp||0)<=0?'#f87171':'#4ade80'}">${_esc(e.name||e.key||'?')}(${e.hp??'?'})</span>`).join(' ') : '<span style="color:#334155">—</span>'}</div>
+                  <div><span style="color:#334155">Enemies:</span> ${enemies.length ? enemies.map(e=>`<span style="color:${(e.hp??null)===null?'#f59e0b':(e.hp||0)<=0?'#f87171':'#4ade80'}">${_esc(e.name||e.key||'?')}${(e.hp??null)===null?'(spawn)':'('+e.hp+')'}</span>`).join(' ') : '<span style="color:#334155">—</span>'}</div>
                   <div><span style="color:#334155">NPCs:</span> ${(ws.scene_npcs||[]).map(n=>_esc(n.name||n.key||'?')).join(', ')||'<span style="color:#334155">—</span>'}</div>
                   <div><span style="color:#334155">Quests:</span> ${(ws.active_quests||[]).length || '<span style="color:#334155">—</span>'}</div>
                 </div>
