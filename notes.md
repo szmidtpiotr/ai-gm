@@ -761,3 +761,4 @@ Auto-kolejka P0 z fix_list.md. Każdy child: czyta komentarze + weryfikuje czy j
 - [x] FIX763 — Ruch zignorowany + zły test (deception idiom „udaję") — skill-select fix [#763]
 - [x] FIX719 — Modal kości pokazuje test uniku wroga (opposed hit) [#719]
 - [x] FIX720 — Popup łupu bossa po zabiciu w lochu [#720]
+- [x] [#742](https://github.com/szmidtpiotr/ai-gm/issues/742) — Sklep w lochu: (1) guard `_should_emit_open_shop_in_mode()` blokuje open_shop w dungeon mode, (2) `refreshCharacterData()` po buy/sell — commit 7985e46. Raport: https://github.com/szmidtpiotr/ai-gm/issues/742#issuecomment-4750322191 ✅
