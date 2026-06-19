@@ -5924,33 +5924,30 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                     finish(); return;
                 }
                 try {
-                    // #829: a fresh dice_box per throw is the only thing that gives Stage 2
-                    // a clean WebGL context — reinit() left the canvas blank. BUT the library
-                    // constructor APPENDS a new <canvas> and opens a new WebGL context on every
-                    // call and never removes the old one. Left unchecked that stacks dead
-                    // canvases and leaks contexts until the browser evicts the oldest → blank
-                    // dice mid-combat. So before recreating: drop the old context and strip every
-                    // stale <canvas> from the container, leaving exactly one live canvas.
-                    if (_diceBox) {
+                    // #829: REUSE the one live dice_box across both stages. The earlier
+                    // attempts all broke Stage 2 (the damage roll) on the SECOND throw:
+                    //   • reinit(container) — rebuilds camera/desk, paints blank
+                    //   • new dice_box() / forceContextLoss()+dispose() — tears down and
+                    //     recreates the WebGL context in the same frame as the next throw;
+                    //     the new context reports healthy (isContextLost()===false) but
+                    //     paints NOTHING, so the die stays invisible until the 4s backstop.
+                    // Verified in a real browser: the only thing that renders Stage 2 is
+                    // keeping the SAME context that already drew Stage 1 and re-rolling into
+                    // it. So just clear the settled dice and reset the roll flags — no
+                    // reinit, no recreate, no context churn. `running = false` stops a stale
+                    // Stage-1 animation loop if it advanced via backstop rather than settle.
+                    if (!_diceBox) {
+                        _diceBox = new DICE.dice_box(container);
+                    } else {
                         try { _diceBox.clear(); } catch (_e) {}
-                        try {
-                            const _r = _diceBox.renderer;
-                            if (_r && typeof _r.forceContextLoss === 'function') _r.forceContextLoss();
-                            if (_r && typeof _r.dispose === 'function') _r.dispose();
-                        } catch (_e) {}
+                        _diceBox.rolling = false;
+                        _diceBox.running = false;
                     }
-                    try { container.querySelectorAll('canvas').forEach((c) => c.remove()); } catch (_e) {}
-                    _diceBox = new DICE.dice_box(container);
                     _diceBox.setDice(notation);
                 } catch (_e) { finish(); return; }
                 // Backstop: force-advance if the dice never report settling.
                 setTimeout(finish, 4000);
-                // #829: the freshly-appended canvas needs one extra layout pass before the
-                // physics throw, otherwise start_throw renders into a 0-sized buffer (blank).
-                requestAnimationFrame(() => {
-                    try { _diceBox.start_throw(() => forced, () => setTimeout(finish, 400)); }
-                    catch (_e) { finish(); }
-                });
+                _diceBox.start_throw(() => forced, () => setTimeout(finish, 400));
             });
         };
 

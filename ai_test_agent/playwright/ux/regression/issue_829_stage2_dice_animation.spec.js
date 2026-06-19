@@ -16,26 +16,34 @@ test("REGRESSION #829 — backend health and Stage 2 API contract", async ({ pag
   expect(body.status, "backend status must be 'ok'").toBe("ok");
 });
 
-test("REGRESSION #829 — throwDice frees WebGL context + strips stale canvases", async ({ page }) => {
-  // The dice library constructor appends a new <canvas> and opens a new WebGL
-  // context on every dice_box(). Without the leak-guard, Stage 2 stacks dead
-  // canvases until the browser evicts contexts → blank dice. This asserts the
-  // source-level fix is present so a future refactor can't silently reintroduce it.
+test("REGRESSION #829 — Stage 2 reuses the live dice_box (no recreate/reinit)", async ({ page }) => {
+  // Root cause (verified live in a real browser): recreating the dice_box or
+  // calling forceContextLoss()+dispose() between Stage 1 and Stage 2 tears down
+  // and rebuilds the WebGL context in the same frame as the next throw. The new
+  // context reports healthy but paints nothing → Stage 2 die invisible until the
+  // 4s backstop. reinit() was equally blank. The fix reuses the SAME box that
+  // already rendered Stage 1: clear() + reset roll flags, no context churn.
   const r = await page.request.get("/js/app.js");
   expect(r.ok(), "app.js must be served").toBeTruthy();
   const src = await r.text();
 
-  // Fix markers — leak-guard before recreating the dice_box for Stage 2
-  expect(src.includes("forceContextLoss"), "missing forceContextLoss() — WebGL context leak guard").toBeTruthy();
+  // The combat throwDice must reset BOTH roll flags on the existing box — this is
+  // the unique fingerprint of the reuse fix (the skill-test path only resets rolling
+  // before its own reinit; only the Stage-2 reuse path touches `running`).
   expect(
-    src.includes("querySelectorAll('canvas')") || src.includes('querySelectorAll("canvas")'),
-    "missing canvas-strip — stale <canvas> elements would stack across throws"
+    src.includes("_diceBox.running = false"),
+    "missing `_diceBox.running = false` — Stage 2 reuse fix not deployed"
+  ).toBeTruthy();
+  expect(
+    src.includes("_diceBox.rolling = false"),
+    "missing `_diceBox.rolling = false` — Stage 2 reuse fix not deployed"
   ).toBeTruthy();
 
-  // The broken pattern (reinit between Stage 1 and Stage 2) must be gone from throwDice.
+  // The actual forceContextLoss recreate CODE must be gone (only the explanatory
+  // comment may mention it). The broken code used `_r.forceContextLoss()`.
   expect(
-    src.includes("_diceBox.rolling = false; _diceBox.reinit(container)"),
-    "old reinit-between-stages pattern still present — Stage 2 will render blank"
+    src.includes("_r.forceContextLoss"),
+    "forceContextLoss recreate-path still live — Stage 2 context paints nothing"
   ).toBeFalsy();
 });
 
