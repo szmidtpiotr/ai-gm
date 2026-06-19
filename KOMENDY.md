@@ -1,7 +1,19 @@
 # KOMENDY — ściąga (co odpalić, kiedy)
 
 > Jednostronicowa ściąga dla Piotra. Nie musisz pamiętać ~50 skilli — to jest lista realnie używanych.
-> Decyzje z sesji 2026-06-19 (przegląd narzędzi).
+> Decyzje z sesji 2026-06-19 (przegląd narzędzi + przesiadka na nowy system zadań).
+
+---
+
+## 📋 Gdzie żyją zadania (NOWY system — od 2026-06-19)
+
+**Jedyne źródło zadań = GitHub Issues + Milestones.** NIE notes.md, NIE fix_list.md.
+- **Issue = jedno zadanie.** **Milestone = faza** (FAZA L / LB / B / SF / 5 Multiplayer / 6 / FIX).
+- Widok = **„Plan"** — zakładka w pluginie claude-github-issue (issues pogrupowane po fazie, z kolejnością). Gdy mówisz **„Plan"**, **„tablica"**, **„fazy"** — wiem: GitHub issues+milestones.
+- **Planowane zadanie → od razu issue + milestone.** Mówisz „dodaj task X do fazy Y" → Claude zakłada issue, przypisuje milestone, labele. Nie wpisujemy już zadań do notes.md.
+- **Zmiana fazy ticketu = zmiana milestone** (w GitHub / Plan tabie). Tak, możesz to robić sam.
+- **Zawsze aktualizuj issue:** Claude przy pracy przesuwa status (in-progress→review→closed) + komentuje fix+SHA. Issue = pamięć zadania.
+- `notes.md` / `game_mechanics.md` = **tylko proza** (decyzje, ZAKRES, mechanika), NIE lista zadań.
 
 ---
 
@@ -68,7 +80,7 @@ Warianty:
 
 | Skill | Co robi | Status |
 |---|---|---|
-| **`tdd #NNN`** | pełny cykl: test→kod→sprzątanie + Playwright + GitHub + update notes/game_mechanics + narracja PL | ✅ główny |
+| **`tdd #NNN`** | pełny cykl: test→kod→sprzątanie + Playwright + **aktualizuje ISSUE** (status+komentarz fix/SHA) + narracja PL. ⚠️ stara wersja skilla pisze też do notes.md — do poprawienia (patrz „Do dopracowania") | ✅ główny |
 | **`/code-review`** | szuka **bugów** w diffie + jakość. `--comment` (PR), `--fix` (napraw). `ultra` = głęboki w chmurze | 🔜 testujesz |
 | **`/simplify`** | tylko jakość (mniej powtórzeń) — **NIE szuka bugów** | ⚠️ tylko w klatce |
 | **`/cleanup`** | kasuje martwy kod, partiami, zgoda na każdą + kwarantanna | ⚠️ tylko w klatce |
@@ -120,7 +132,9 @@ Warianty:
 ---
 
 ## 🔧 Do dopracowania (notatka)
-- **`mass-implement`** — Piotr lubi, ale: (1) psuje się gdy plik źle ustrukturyzowany, (2) wymaga osobnego, poprawnego pliku-promptu. Cel: bardziej odporny na zły input + uniwersalny między projektami.
+- **`mass-implement` v2 ✅ zrobione** (config-driven, fail-loud, drop-in). **Reconcile na nowy system PENDING:** ma jechać wyłącznie z issues (LIST mode), FAZA-mode/notes.md odstawić.
+- **`/tdd` — edycja PENDING:** krok „update notes.md" wywalić (notes już nie trzyma zadań); zostaje aktualizacja ISSUE (już robi) + game_mechanics tylko przy zmianie specu.
+- **`/playwright-test-report`, `/game-smoke*`** — zakładają/aktualizują issues (OK), ale wzmianki o notes.md do przejrzenia przy reconcile.
 
 ## ⚙️ Automaty (zero akcji od ciebie)
 - **caveman** — zwięzła komunikacja (oszczędza tokeny). `/caveman lite|full|ultra`.
