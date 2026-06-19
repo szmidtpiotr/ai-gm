@@ -9,11 +9,6 @@
   "github": { "owner": "szmidtpiotr", "repo": "ai-gm" },
   "branch": "develop",
   "checklists": {
-    "faza": {
-      "file": "notes.md",
-      "section_prefix": "## FAZA",
-      "id_pattern": "{PREFIX}[0-9]+[a-z]?"
-    },
     "list": {
       "file": "fix_list.md",
       "region_prefix": "## KOLEJNOŚĆ",
@@ -21,6 +16,7 @@
       "renumber_script": "scripts/renumber_fix_list.sh"
     }
   },
+  "_note": "FAZA mode (notes.md sections) removed 2026-06-19 — tasks live as GitHub issues+milestones. LIST mode (fix_list.md = auto-synced issue board mirror) is the sole source.",
   "child": {
     "spec_files": ["CLAUDE.md", "game_mechanics.md"],
     "pipeline": ["/tdd", "/code-review", "/playwright-test-report"]

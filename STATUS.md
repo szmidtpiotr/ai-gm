@@ -1,7 +1,7 @@
 # STATUS — gdzie jesteśmy (captain's log)
 
 > **Po co ten plik:** czytasz go na starcie sesji żeby w 30 sek wiedzieć gdzie jesteśmy.
-> Po polsku, narracja — NIE lista zadań (ta jest w `fix_list.md` / GitHub Issues) i NIE spec (`game_mechanics.md`).
+> Po polsku, narracja — NIE lista zadań (ta jest w **GitHub Issues + Milestones = „Plan"**) i NIE spec (`game_mechanics.md`).
 > **Claude utrzymuje ten plik** — aktualizuje sekcje na końcu każdej sesji. Ty tylko czytasz.
 >
 > Trzy sekcje: **CO ROBIMY TERAZ** · **OSTATNIO ZROBIONE** · **UWAŻAJ (pułapki)**.
@@ -12,20 +12,15 @@ _Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 
 ## 🎯 CO ROBIMY TERAZ
 
-**FOKUS: `fix_list.md` — bieżące bugi wykryte przez Piotra grając przez kampanię.** To jest aktywny tor. Cel: doprowadzić mechanikę do stanu **sprawdzonej i grywalnej** — bo to brama do Multiplayera.
+**Zadania = GitHub Issues + Milestones (Plan).** Rozkład faz: FAZA 5 Multiplayer 33 · **FIX 23** · FAZA L 12 · FAZA B 11 · FAZA 6 6 · FAZA LB 2 · FAZA SF 1.
 
-**Dwa tory zadań (zrozum różnicę):**
-- **Tor A — `notes.md`** = planowy rozwój, wdrażanie mechanik z `game_mechanics.md` (fazy A–H, U, S, L, MP). *Obecnie przyhamowany* — patrz stan faz niżej.
-- **Tor B — `fix_list.md`** = bieżące bugi z przejść kampanii. **← TU PRACUJEMY TERAZ.**
+**FOKUS: milestone `FIX` — bieżące bugi z przejść kampanii.** Cel: mechanika **sprawdzona i grywalna** → to brama do Multiplayera (FAZA 5 świadomie WSTRZYMANA aż single-player grywalny).
 
-**Stan faz (Tor A):**
-- FAZA L (lochy) — **praktycznie skończona** i GRYWALNA (L19 zaliczony 2026-06-17, Piotr przeszedł 14/14 checkpointów na mobile).
-- Faza 5 / Multiplayer — **WSTRZYMANY** świadomie, aż mechanika single-player będzie sprawdzona i grywalna (czyli aż fix_list się wyczyści). Nie ruszamy MP wcześniej.
+**Stan faz:**
+- FAZA L (lochy) — praktycznie skończona i GRYWALNA (L19, 14/14 checkpointów na mobile).
+- FAZA 5 Multiplayer — 33 issues (backlog, planowane); start dopiero po wyczyszczeniu FIX.
 
-**Następne sensowne zadania** (z `fix_list.md`, priorytet malejąco):
-- P1 quick wins jeszcze otwarte: **#751** (przepłata za posiłek 2 vs 5 GP), **#746** (angielskie nazwy łupów w modalu walki), **#757** (inventory pokazuje klucz zamiast nazwy), **#734** (brak mikstury w walce).
-- ~~#756, #742~~ — ✅ DONE i zweryfikowane.
-- Wymaga TWOJEJ decyzji A/B zanim ruszę (`design`): **#733** (balans 1. komnaty solo lvl1), **#747** (kreator: minus skilla zjada punkt), **#753** (unik double jeopardy), **#744** (wojownik z tarczą nie blokuje).
+**Następne sensowne (milestone FIX, otwarte):** #751 (przepłata za posiłek), #746 (angielskie nazwy łupów), #757 (inventory klucz zamiast nazwy), #734 (brak mikstury w walce). Decyzja A/B przed startem (`design`): #733, #747, #753, #744.
 
 ---
 
@@ -52,7 +47,6 @@ _Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 
 ## ⚠️ UWAŻAJ (pułapki / kruche miejsca)
 
-- **Rozjazd w fix_list:** #740 jest `[DONE]` w bloku BOARD (commit 6172dac), ale w sekcji P1 (linia 95) wciąż odhaczone na `[ ]`. Lista wymaga drobnej synchronizacji.
 - **#516 BLOCKED** — smoke P1 wywala się na braku tabeli `character_rentals` (migracja F13). Trzeba najpierw odblokować migracją.
 - **Backend = obraz Dockera.** `docker compose restart` NIE łapie zmian Pythona — zawsze `--build` (patrz CLAUDE.md).
 - **Piloty lochów ruiny/zamek niegrane end-to-end** — content-complete ale bez pełnego przejścia; #733/#734 przeniesione do nowego lochu katakumby_mroku (#738).
@@ -61,7 +55,7 @@ _Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 ---
 
 ## 📌 Jak czytać resztę
-- **`fix_list.md`** = **Tor B** — bieżące bugi z przejść kampanii, priorytety P0–P5. ← aktywny tor.
-- **`notes.md`** = **Tor A** — master checklist faz (A–H, U, S, L, MP) = wdrażanie z game_mechanics + dziennik decyzji.
-- **`game_mechanics.md`** — spec mechanik (jak gra MA działać). Źródło zadań Toru A.
-- GitHub Issues — pełna analiza każdego bugu (root cause + fix + acceptance).
+- **Plan** (GitHub Issues + Milestones, zakładka w pluginie) = **jedyne źródło zadań**. Milestone = faza. ← tu bierzesz pracę.
+- **`notes.md`** (góra) = ściąga komend + „jak pracujemy"; (niżej) archiwum faz + proza/decyzje. NIE lista zadań.
+- **`game_mechanics.md`** — spec mechanik (jak gra MA działać).
+- GitHub Issue — pełna analiza każdego zadania (root cause + fix + acceptance + komentarze).
