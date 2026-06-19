@@ -52,7 +52,6 @@ _Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 
 ## ⚠️ UWAŻAJ (pułapki / kruche miejsca)
 
-- **`notes.md` ma NIEROZWIĄZANY konflikt merge** (linie ~16–31: `<<<<<<< Updated upstream` / `>>>>>>> Stashed changes`) w tabeli postępu faz. Dwie wersje liczb (114/198 vs 103/193). **Do posprzątania** — Claude powinien to rozwiązać zanim tabela będzie wiarygodna.
 - **Rozjazd w fix_list:** #740 jest `[DONE]` w bloku BOARD (commit 6172dac), ale w sekcji P1 (linia 95) wciąż odhaczone na `[ ]`. Lista wymaga drobnej synchronizacji.
 - **#516 BLOCKED** — smoke P1 wywala się na braku tabeli `character_rentals` (migracja F13). Trzeba najpierw odblokować migracją.
 - **Backend = obraz Dockera.** `docker compose restart` NIE łapie zmian Pythona — zawsze `--build` (patrz CLAUDE.md).
