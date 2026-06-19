@@ -16,6 +16,39 @@ test("REGRESSION #829 — backend health and Stage 2 API contract", async ({ pag
   expect(body.status, "backend status must be 'ok'").toBe("ok");
 });
 
+test("REGRESSION #829 — throwDice frees WebGL context + strips stale canvases", async ({ page }) => {
+  // The dice library constructor appends a new <canvas> and opens a new WebGL
+  // context on every dice_box(). Without the leak-guard, Stage 2 stacks dead
+  // canvases until the browser evicts contexts → blank dice. This asserts the
+  // source-level fix is present so a future refactor can't silently reintroduce it.
+  const r = await page.request.get("/js/app.js");
+  expect(r.ok(), "app.js must be served").toBeTruthy();
+  const src = await r.text();
+
+  // Fix markers — leak-guard before recreating the dice_box for Stage 2
+  expect(src.includes("forceContextLoss"), "missing forceContextLoss() — WebGL context leak guard").toBeTruthy();
+  expect(
+    src.includes("querySelectorAll('canvas')") || src.includes('querySelectorAll("canvas")'),
+    "missing canvas-strip — stale <canvas> elements would stack across throws"
+  ).toBeTruthy();
+
+  // The broken pattern (reinit between Stage 1 and Stage 2) must be gone from throwDice.
+  expect(
+    src.includes("_diceBox.rolling = false; _diceBox.reinit(container)"),
+    "old reinit-between-stages pattern still present — Stage 2 will render blank"
+  ).toBeFalsy();
+});
+
+test("REGRESSION #829 — damage result modal dwell lengthened (#829 follow-up)", async ({ page }) => {
+  // Piotr: "Wydłuż wyświetlanie modalu" — the damage card must stay long enough to read.
+  const r = await page.request.get("/js/app.js");
+  const src = await r.text();
+  expect(
+    src.includes("armAdvance(3200, cleanup)"),
+    "damage card dwell must be lengthened to 3200ms (was 1600ms)"
+  ).toBeTruthy();
+});
+
 test("REGRESSION #829 — attack response shape has damage_die and damage_rolls", async ({ page }) => {
   // Login as demo user and get an active combat campaign
   await page.goto("/");

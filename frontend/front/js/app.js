@@ -5924,13 +5924,33 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                     finish(); return;
                 }
                 try {
-                    if (!_diceBox) { _diceBox = new DICE.dice_box(container); }
-                    else { try { _diceBox.clear(); } catch (_e) {} _diceBox = new DICE.dice_box(container); }
+                    // #829: a fresh dice_box per throw is the only thing that gives Stage 2
+                    // a clean WebGL context — reinit() left the canvas blank. BUT the library
+                    // constructor APPENDS a new <canvas> and opens a new WebGL context on every
+                    // call and never removes the old one. Left unchecked that stacks dead
+                    // canvases and leaks contexts until the browser evicts the oldest → blank
+                    // dice mid-combat. So before recreating: drop the old context and strip every
+                    // stale <canvas> from the container, leaving exactly one live canvas.
+                    if (_diceBox) {
+                        try { _diceBox.clear(); } catch (_e) {}
+                        try {
+                            const _r = _diceBox.renderer;
+                            if (_r && typeof _r.forceContextLoss === 'function') _r.forceContextLoss();
+                            if (_r && typeof _r.dispose === 'function') _r.dispose();
+                        } catch (_e) {}
+                    }
+                    try { container.querySelectorAll('canvas').forEach((c) => c.remove()); } catch (_e) {}
+                    _diceBox = new DICE.dice_box(container);
                     _diceBox.setDice(notation);
                 } catch (_e) { finish(); return; }
                 // Backstop: force-advance if the dice never report settling.
                 setTimeout(finish, 4000);
-                _diceBox.start_throw(() => forced, () => setTimeout(finish, 400));
+                // #829: the freshly-appended canvas needs one extra layout pass before the
+                // physics throw, otherwise start_throw renders into a 0-sized buffer (blank).
+                requestAnimationFrame(() => {
+                    try { _diceBox.start_throw(() => forced, () => setTimeout(finish, 400)); }
+                    catch (_e) { finish(); }
+                });
             });
         };
 
@@ -5955,7 +5975,9 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                     resultTot.innerHTML = `${line}  =  <strong>${total}</strong> ${unit}`;
                 }
                 resultCard.hidden = false;
-                armAdvance(1600, cleanup);  // wartość startowa — druga animacja wydłuża turę
+                // #829: dłuższe wyświetlanie karty obrażeń — gracz ma zdążyć odczytać wynik
+                // (klik nadal pomija od razu). Wartość startowa, Sandbox-tunable.
+                armAdvance(3200, cleanup);
             };
             throwDice(ds.notation, forced, showDmg);
         };
