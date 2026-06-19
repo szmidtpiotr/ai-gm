@@ -272,10 +272,12 @@ const WIZARD_STEPS = [
 ];
 function _skillRow(key) { return ALL_SKILL_ROWS.find(r => r.key === key) || { key, label: key, stat: '?' }; }
 function _skillBudgetUsed() {
+    // Opcja A (#747) — model redystrybucji: budżet = suma podniesień MINUS suma obniżeń.
+    // Bez Math.abs — obniżenie wylosowanego skilla (delta < 0) zwraca punkt do wydania gdzie indziej.
     return ALL_SKILL_ROWS.reduce((s, { key }) => {
         const o = Number(wizardSkillSnapshot[key] || 0);
         if (!o) return s;
-        return s + Math.abs((wizardSkillLevels[key] ?? o) - o);
+        return s + ((wizardSkillLevels[key] ?? o) - o);
     }, 0);
 }
 function _canAdjSkill(origKey, delta) {
@@ -285,10 +287,11 @@ function _canAdjSkill(origKey, delta) {
     const next = cur + delta;
     if (next < 0 || next > 2) return false;
     const test = { ...wizardSkillLevels, [origKey]: next };
+    // ta sama formuła netto co _skillBudgetUsed — inaczej licznik rozjedzie się z blokowaniem przycisków
     const budget = ALL_SKILL_ROWS.reduce((s, { key }) => {
         const oo = Number(wizardSkillSnapshot[key] || 0);
         if (!oo) return s;
-        return s + Math.abs((test[key] ?? oo) - oo);
+        return s + ((test[key] ?? oo) - oo);
     }, 0);
     return budget <= WIZARD_MAX_SWAPS;
 }
@@ -1922,7 +1925,7 @@ function _renderStep2(c, animate = false) {
 
 // Step 3 — Skill swaps + level adjustments (matching original frontend mechanic)
 function _renderStep3(c, animate = false) {
-    const budgetUsed = _skillBudgetUsed();
+    const budgetUsed = Math.max(0, _skillBudgetUsed()); // netto może być ujemne (więcej obniżeń niż podniesień) — pokaż 0
     const slotRows = ALL_SKILL_ROWS.filter(r => Number(wizardSkillSnapshot[r.key] || 0) > 0)
         .sort((a, b) => {
             const db = Number(wizardSkillSnapshot[b.key] || 0) - Number(wizardSkillSnapshot[a.key] || 0);
@@ -1986,7 +1989,7 @@ function _renderStep3(c, animate = false) {
 
     c.innerHTML = `
         <div class="wizard-form">
-            <p class="wizard-hint">Wylosowane umiejętności. Zamiana (↔) na inną bezpłatna. Zmiana poziomu (±) kosztuje punkty budżetu. Max ${WIZARD_MAX_SWAPS} łącznie.</p>
+            <p class="wizard-hint">Wylosowane umiejętności. Zamiana (↔) na inną bezpłatna. Podniesienie (+) kosztuje punkt budżetu, obniżenie (−) zwraca punkt do wydania gdzie indziej. Netto max ${WIZARD_MAX_SWAPS}.</p>
             <div class="wizard-swaps">Zmieniono: <strong>${budgetUsed} / ${WIZARD_MAX_SWAPS}</strong></div>
             <div class="wizard-skill-list">${rows}</div>
             <button type="button" class="btn btn--secondary wizard-reset-btn" id="wiz-skill-reset">Reset</button>
