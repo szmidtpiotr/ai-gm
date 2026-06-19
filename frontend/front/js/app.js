@@ -3662,8 +3662,15 @@ function _extractStreamingNarrative(raw) {
     // Try: once we have at least {"narrative": " we can strip the prefix
     const m = raw.match(/^\{"narrative"\s*:\s*"([\s\S]*)/);
     if (m) {
-        // Unescape JSON string content (basic: \" → ", \n → newline)
-        const text = m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // Cut at the first unescaped closing quote to avoid leaking trailing
+        // JSON fields (grant_item, location_intent, etc.) into the live bubble.
+        let body = m[1];
+        let end = -1;
+        for (let i = 0; i < body.length; i++) {
+            if (body[i] === '"' && body[i - 1] !== '\\') { end = i; break; }
+        }
+        if (end >= 0) body = body.substring(0, end);
+        const text = body.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
         return stripMechanicTags(text);
     }
     // Not yet past the JSON prefix — hide it (show nothing until narrative starts)
