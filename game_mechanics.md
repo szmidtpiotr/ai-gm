@@ -5638,3 +5638,9 @@ HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od 
 ### #766 — Trade-intent regex word boundaries + brak losowego fallback sklepu ✅ ([#766](https://github.com/szmidtpiotr/ai-gm/issues/766), 2026-06-19)
 
 > **Wdrożone:** Dwa chirurgiczne fixy w `turns.py`. (A) `_TRADE_USER_INTENT_RE`: regex dostał `\b` word boundaries — fragment `kup` w `skupiam`, `cen` w `scena`, `lad` w `przygladam` nie pasują już do intencji handlu. Zastąpiono krótkie fragmenty pełnymi prefixami słów handlowych. (B) `_pick_shop_npc_key`: usunięto blankietowy fallback `return keys[0]` → teraz `return None` gdy narracja nie zawiera nazwy żadnego kupca z listy. 14/14 pytest + 2/2 Playwright GREEN. Commit `870a692`.
+
+## Poprawki dungeon — 2026-06-19
+
+### #740 — Dungeon entry: jedna narracja wstępna (usunięte dublowanie LLM_OPEN + room_narrative) ✅ ([#740](https://github.com/szmidtpiotr/ai-gm/issues/740), 2026-06-19)
+
+> **Wdrożone (frontend-only):** Usunięty osobny `appendMessage(resp.room_narrative)` po `enterGame()` w bloku dungeon entry (`app.js` ~11927). Backend już poprawnie wstrzykuje `room_description` do LLM przez `_inject_dungeon_loch_context` — blok `__AI_GM_OPEN` zawiera pełną narrację z kontekstem komnaty. Dodany `opts.dungeonFallbackNarrative` do sygnatury `enterGame()` — `room_narrative` używane teraz TYLKO jako fallback gdy LLM rzuci wyjątek. 6/6 pytest (guard `_inject_dungeon_loch_context`) + 3/3 Playwright GREEN. Commit `6172dac`.

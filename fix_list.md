@@ -32,7 +32,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #733 `[TO DO]` — [BUG] L18 — pierwsza komnata lochu za trudna dla solo lvl1 (limit liczby/sumy PŻ wrogów, nie tylko typów)
 - [ ] #734 `[TO DO]` — [BUG] L18 — brak użycia mikstury w walce (Akcja = tylko Cofnij/Zapasy); sustain #732 bezużyteczny w trakcie starcia
 - [ ] #738 `[TO DO]` — [TASK] LB4 — nowy głębszy loch katakumby_mroku (min_level 3, absolutna skala) — przenosi #733/#732/#734
-- [ ] #740 `[TO DO]` — [BUG] Loch — podwójna narracja wstępna przy wejściu: LLM_OPEN + room_narrative z /enter nakładają się
+- [x] #740 `[DONE]` — [BUG] Loch — podwójna narracja wstępna przy wejściu: LLM_OPEN + room_narrative z /enter nakładają się [commit 6172dac]
 - [ ] #741 `[TO DO]` — [FEATURE] Loch D-pad — możliwość przeciągania po ekranie i zapamiętania pozycji
 - [ ] #742 `[TO DO]` — [BUG] Sklep w lochu: (1) modal otwiera się w dungeon-mode + (2) kupione itemy nie pojawiają się w ekwipunku po zakupie
 - [ ] #743 `[TO DO]` — [BUG] Wyposażenie — zakładanie rękawic rzuca 'invalid armor_coverage hands': slot hands nie zdefiniowany w loot_service
@@ -67,7 +67,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 4. [x] **#777** — [C, P1] Zakładki Stan/Decyzje/Zdarzenia puste dla kampanii narracyjnych. Fix: emisja game_events dla zdarzeń narracyjnych (quest/gold/item/xp/location) + naprawa writera turn_decisions (0 globalnie). TDD 8/8 + Playwright 3/3. Commit 3639fdd. needs-testing
 5. [x] **D — migracja ręczna #99791 (BEZ issue)** — po weryfikacji A-D: ręczna korekta gold/XP/status questa dla Mizela #99791 post-factum. **Czekać na prośbę Piotra** (jeśli wykryje więcej błędów, zrobi się hurtem). [wdrożone: gold +20 (entry 149 przy t34), quest completed t34, +40 XP → xp_lifetime=490]
 6. [x] **#779** — [feature] Zakładka Quest + XP w monitorze kampanii. `(dep: #775, #776, #777)` — endpoint GET /api/admin/campaigns/{id}/quests-xp + zakładka 🎯 Questy+XP w campaigns.js. TDD 6/6 + Playwright 3/3. Commit 4032129. needs-testing
-7. [ ] **#780** — [P2, design] Atak z zaskoczenia + **ogólna bramka intencji** po zdobyciu przewagi ([⚔️ Atak]/[💬 Zastraszenie]/[👤 Wycofaj]). Konsoliduje sesję sneak attack (D1 gate + D2 auto-hit + burst, decyzje Piotra zatwierdzone) + audyt #99791. **Supersedes #778** (zamknięte). Rodzeństwo #773 (grapple → ta sama bramka). Bazuje na #645/#614 (closed). Dobry wynik w #99791 był przypadkiem (gate+LLM), bramka D1 to rozwiązuje projektowo.
+7. [x] **#780** — [P2, design] Atak z zaskoczenia + **ogólna bramka intencji** po zdobyciu przewagi ([⚔️ Atak]/[💬 Zastraszenie]/[👤 Wycofaj]). Konsoliduje sesję sneak attack (D1 gate + D2 auto-hit + burst, decyzje Piotra zatwierdzone) + audyt #99791. **Supersedes #778** (zamknięte). Rodzeństwo #773 (grapple → ta sama bramka). Bazuje na #645/#614 (closed). Dobry wynik w #99791 był przypadkiem (gate+LLM), bramka D1 to rozwiązuje projektowo.
 
 ---
 
