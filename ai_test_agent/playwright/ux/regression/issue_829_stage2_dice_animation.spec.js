@@ -16,35 +16,36 @@ test("REGRESSION #829 — backend health and Stage 2 API contract", async ({ pag
   expect(body.status, "backend status must be 'ok'").toBe("ok");
 });
 
-test("REGRESSION #829 — Stage 2 reuses the live dice_box (no recreate/reinit)", async ({ page }) => {
-  // Root cause (verified live in a real browser): recreating the dice_box or
-  // calling forceContextLoss()+dispose() between Stage 1 and Stage 2 tears down
-  // and rebuilds the WebGL context in the same frame as the next throw. The new
-  // context reports healthy but paints nothing → Stage 2 die invisible until the
-  // 4s backstop. reinit() was equally blank. The fix reuses the SAME box that
-  // already rendered Stage 1: clear() + reset roll flags, no context churn.
+test("REGRESSION #829 — Stage 2 damage uses reliable 2D dice (not 3D second-throw)", async ({ page }) => {
+  // Final root cause (verified live in a real browser, instrumented timeline):
+  // the 3D library's SECOND throw (after the d20) never repaints on player devices
+  // — the WebGL re-roll paints nothing and the physics never settles (always hits
+  // the 4s backstop). Confirmed structurally: with a shared canvas, Stage-1-visible
+  // must imply Stage-2-visible unless the second throw genuinely fails to paint.
+  // Fix: Stage 2 (damage/heal) renders a pure-DOM 2D dice roll that cannot fail —
+  // it tumbles random faces then lands each die on the backend's per-die result.
   const r = await page.request.get("/js/app.js");
   expect(r.ok(), "app.js must be served").toBeTruthy();
   const src = await r.text();
 
-  // The combat throwDice must reset BOTH roll flags on the existing box — this is
-  // the unique fingerprint of the reuse fix (the skill-test path only resets rolling
-  // before its own reinit; only the Stage-2 reuse path touches `running`).
+  // The 2D roll function must exist and be wired into the damage stage.
   expect(
-    src.includes("_diceBox.running = false"),
-    "missing `_diceBox.running = false` — Stage 2 reuse fix not deployed"
+    src.includes("function play2dDiceRoll"),
+    "missing play2dDiceRoll — 2D damage dice not deployed"
   ).toBeTruthy();
   expect(
-    src.includes("_diceBox.rolling = false"),
-    "missing `_diceBox.rolling = false` — Stage 2 reuse fix not deployed"
+    src.includes("play2dDiceRoll(container, ds, forced, showDmg)"),
+    "damage stage not wired to play2dDiceRoll — Stage 2 still uses the flaky 3D throw"
   ).toBeTruthy();
 
-  // The actual forceContextLoss recreate CODE must be gone (only the explanatory
-  // comment may mention it). The broken code used `_r.forceContextLoss()`.
+  // The 2D CSS must be present in the stylesheet.
+  const css = await page.request.get("/css/styles.css");
+  expect(css.ok(), "styles.css must be served").toBeTruthy();
+  const cssSrc = await css.text();
   expect(
-    src.includes("_r.forceContextLoss"),
-    "forceContextLoss recreate-path still live — Stage 2 context paints nothing"
-  ).toBeFalsy();
+    cssSrc.includes(".dice2d-die"),
+    "missing .dice2d-die CSS — 2D dice would be unstyled/invisible"
+  ).toBeTruthy();
 });
 
 test("REGRESSION #829 — damage result modal dwell lengthened (#829 follow-up)", async ({ page }) => {

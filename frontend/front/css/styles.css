@@ -7213,6 +7213,49 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: block;
 }
 
+/* #829 — reliable 2D damage dice (Stage 2). The 3D second-throw was invisible on
+   player devices; this pure-DOM roll always renders the damage dice. */
+.dice2d-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 2;
+  pointer-events: none;
+}
+.dice2d-die {
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: #f3e0b0;
+  background: linear-gradient(145deg, #3a2410, #1b1107);
+  border: 2px solid var(--accent, #c08020);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6), inset 0 0 14px rgba(200, 150, 60, 0.25);
+  transform: rotate(-7deg);
+}
+.dice2d-die--heal {
+  color: #bfe9b6;
+  border-color: #5fae57;
+  background: linear-gradient(145deg, #16300f, #0a1c08);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6), inset 0 0 14px rgba(95, 174, 87, 0.3);
+}
+.dice2d-die--land {
+  color: #ffd76a;
+  animation: dice2dLand 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.dice2d-die--heal.dice2d-die--land { color: #9fe88f; }
+@keyframes dice2dLand {
+  0%   { transform: scale(1.45) rotate(9deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
 #dice-skill-card {
   position: relative;
   z-index: 1;

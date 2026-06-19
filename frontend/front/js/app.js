@@ -5846,6 +5846,47 @@ function buildDamageStage(data) {
     return null;
 }
 
+// #829: reliable 2D damage-dice animation for Stage 2. The 3D library's second
+// throw (after the d20) is invisible on many player devices — the WebGL context
+// does not repaint the re-roll and the physics never settles (always backstop).
+// This 2D roll is pure DOM/CSS: it tumbles random faces, then lands each die on
+// the backend's per-die result. Cannot fail, always visible. `onDone` fires after
+// the dice settle so the result card can reveal.
+function play2dDiceRoll(container, ds, forced, onDone) {
+    // Drop any lingering 3D canvas content (the settled d20) so it doesn't show behind.
+    if (_diceBox && typeof _diceBox.clear === 'function') { try { _diceBox.clear(); } catch (_e) {} }
+    const sides = Math.max(2, parseInt(String(ds.notation || '1d6').split('d')[1], 10) || 6);
+    const finals = (Array.isArray(forced) && forced.length)
+        ? forced.slice(0, 8)
+        : [Math.max(1, Number(ds.total) || 1)];
+    const isHeal = ds.kind === 'heal';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'dice2d-wrap';
+    finals.forEach(() => {
+        const d = document.createElement('div');
+        d.className = 'dice2d-die' + (isHeal ? ' dice2d-die--heal' : '');
+        d.textContent = '?';
+        wrap.appendChild(d);
+    });
+    container.appendChild(wrap);
+    const dice = Array.from(wrap.children);
+
+    let ticks = 0;
+    const TICKS = 13;
+    const iv = setInterval(() => {
+        dice.forEach((d) => { d.textContent = String(1 + Math.floor(Math.random() * sides)); });
+        if (++ticks >= TICKS) {
+            clearInterval(iv);
+            dice.forEach((d, i) => {
+                d.textContent = String(finals[i] ?? finals[0]);
+                d.classList.add('dice2d-die--land');
+            });
+            setTimeout(() => { try { wrap.remove(); } catch (_e) {} onDone(); }, 650);
+        }
+    }, 60);
+}
+
 // #569 / #661: visible 3D dice modal for combat rolls. Reuses the skill-test
 // dice-overlay + DICE.dice_box. Stage 1 = the d20 attack (lands on pre-rolled
 // forcedD20). Stage 2 (optional, `damageStage`) = the NdX damage/heal roll,
@@ -5976,7 +6017,12 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 // (klik nadal pomija od razu). Wartość startowa, Sandbox-tunable.
                 armAdvance(3200, cleanup);
             };
-            throwDice(ds.notation, forced, showDmg);
+            // #829: Stage 2 (rzut obrażeń) renderujemy jako NIEZAWODNĄ animację 2D, nie 3D.
+            // Druga animacja 3D w tej samej sesji overlay była niewidoczna na urządzeniach
+            // graczy: po rzucie d20 silnik kości nie odmalowuje drugiego rzutu (kontekst
+            // WebGL nie repaintuje, fizyka nigdy nie „osiada" — zawsze backstop). 2D nie
+            // zależy od WebGL, zawsze widać kostki lądujące na wyniku z backendu.
+            play2dDiceRoll(container, ds, forced, showDmg);
         };
 
         const afterAttack = () => {
