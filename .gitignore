@@ -78,3 +78,6 @@ temp-img/
 .playwright-mcp/
 mag-game-screen*.png
 .GitHubBoard/
+
+# graphify trial — code-graph artifacts (local, not committed)
+graphify-out/
