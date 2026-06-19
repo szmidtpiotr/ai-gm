@@ -2366,7 +2366,7 @@ function applyTimeOfDayOverlay(period) {
     root.dataset.todPeriod = period || '';
 }
 
-async function enterGame(campaign) {
+async function enterGame(campaign, opts = {}) {
     // Persist session so F5 restores to this exact state
     try {
         if (currentHero?.id) localStorage.setItem('aigm_hero_id', currentHero.id);
@@ -2465,7 +2465,8 @@ async function enterGame(campaign) {
                 }
             } catch (_e) {
                 typingIndicator.remove();
-                appendMessage({ role: 'assistant', content: 'Witaj, bohaterze. Twoja przygoda się zaczyna…', created_at: new Date() });
+                const fallback = opts.dungeonFallbackNarrative || 'Witaj, bohaterze. Twoja przygoda się zaczyna…';
+                appendMessage({ role: 'assistant', content: fallback, created_at: new Date() });
             }
             scrollToBottom();
             return; // already called showScreen + startCombatPolling above
@@ -11920,14 +11921,12 @@ async function enterDungeon(dungeonKey) {
 
         _activeDungeonRun = resp.dungeon_run;
         _dungeonSeenTiles = new Set();   // L12b: fresh run → tile popups show again
-        await enterGame(dungeonCampaign);
+        await enterGame(dungeonCampaign, { dungeonFallbackNarrative: resp.room_narrative });
         updateDungeonHUD();
         showDungeonHUD(true);
 
-        if (resp.room_narrative) {
-            appendMessage({ role: 'assistant', content: resp.room_narrative, created_at: new Date() });
-            scrollToBottom();
-        }
+        // #740: room_narrative is now fallback inside enterGame (used only if LLM fails).
+        // Removed separate append — LLM __AI_GM_OPEN already has room context injected.
         // L12b: first-entry dungeon mechanics codex card (doors / chest / riddle / death)
         if (resp.onboarding_cards?.length) showOnboardingCards(resp.onboarding_cards);
         renderCurrentRoom();
