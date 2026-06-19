@@ -6806,13 +6806,12 @@ async function openAwansujPanel(character, sheet) {
     body.innerHTML = '<div class="camp-loading">Ładowanie…</div>';
 
     try {
-        // Stage 10-C — route through apiRequest so the JWT Bearer header is
-        // attached automatically. Mechanics metadata is public, raw fetch ok.
-        const [xpData, skillMeta] = await Promise.all([
+        const [xpData, creatorHelp] = await Promise.all([
             apiRequest('GET', `/characters/${character.id}/xp?user_id=${currentUser?.id}`),
-            fetch('/api/mechanics/metadata').then(r => r.ok ? r.json() : {})
+            fetch('/api/mechanics/creator-help').then(r => r.ok ? r.json() : { skills: [], stats: [] })
         ]);
         const xpAvail = xpData.xp_available ?? 0;
+        const xpLifetime = xpData.xp_lifetime_earned ?? 0;
         const skills = sheet.skills || {};
         const stats = sheet.stats || {};
         const mods = sheet.stat_modifiers || {};
@@ -6822,41 +6821,100 @@ async function openAwansujPanel(character, sheet) {
         const statValueCeiling = xpData.stat_value_ceiling ?? 19;
         const isScholar = (sheet.archetype || '').toLowerCase() === 'scholar';
 
-        // X6: skill rank-up cards
-        const skillCards = Object.entries(skills).filter(([, rank]) => rank < skillRankCeiling).map(([key, rank]) => {
-            const newRank = rank + 1;
-            const cost = rankCosts[newRank] || rankCosts[String(newRank)] || '?';
-            const canAfford = typeof cost === 'number' && xpAvail >= cost;
-            const label = (skillMeta?.skills || []).find(s => s.key === key)?.label || key;
-            return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
-                <div class="awansuj-card__title">${escapeHtml(label)}</div>
-                <div class="awansuj-card__detail">Ranga ${rank} → ${newRank}</div>
-                <button class="awansuj-card__btn" data-action="skill" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
-                    ${cost} PD
-                </button>
-            </div>`;
-        }).join('');
+        const skillInfoMap = {};
+        (creatorHelp.skills || []).forEach(s => { skillInfoMap[s.key] = s; });
 
-        // X7: stat point-up cards
+        const LEGACY_SKILLS = {
+            sleight_of_hand: { label: 'Zręczność rąk', stat: 'DEX', description: 'Manipulacja, kieszonkowość, ukrywanie przedmiotów.' },
+            melee_attack:    { label: 'Atak wręcz',     stat: 'STR', description: 'Skuteczny cios: celowanie, siła i timing ataku.' },
+            ranged_attack:   { label: 'Atak dystansowy', stat: 'DEX', description: 'Strzelanie i miotanie — precyzja na odległość.' },
+            spell_attack:    { label: 'Atak czarów',    stat: 'INT', description: 'Koncentracja przy wyrzucaniu zaklęć ofensywnych.' },
+        };
+
         const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
-        const statCards = Object.entries(stats).map(([key, val]) => {
+        const STAT_DESC = {
+            STR: 'Siła fizyczna i moc ciosu. Modyfikuje ataki bronią białą i test Atletyki.',
+            DEX: 'Zwinność, skradanie, refleks. Decyduje o inicjatywie i atakach dystansowych.',
+            CON: 'Wytrzymałość i zdrowie. Zwiększa maks. PŻ i odporność na trucizny.',
+            INT: 'Wiedza i magia. Zasila zaklęcia i pulę many Uczonego.',
+            WIS: 'Spostrzegawczość i intuicja. Wchodzi do wykrywania zagrożeń i medycyny.',
+            CHA: 'Perswazja i charyzma. Wpływa na negocjacje, zastraszanie, podszęp.',
+            LCK: 'Szczęście i traf. Modyfikuje rzuty łutowe i szanse na bonus.',
+        };
+
+        function _notchTrack(current, ceiling) {
+            let html = '<div class="awrow__track">';
+            for (let i = 1; i <= ceiling; i++) {
+                if (i <= current) html += '<div class="awrow__notch awrow__notch--filled" title="Ranga ' + i + ' ✓"></div>';
+                else if (i === current + 1) html += '<div class="awrow__notch awrow__notch--next" title="Następna ranga"></div>';
+                else html += '<div class="awrow__notch" title="Ranga ' + i + ' — zablokowane"></div>';
+            }
+            return html + '</div>';
+        }
+
+        function _awRow(opts) {
+            const missing = typeof opts.cost === 'number' ? opts.cost - opts.xpAvail : 0;
+            const rightHtml = opts.canAfford
+                ? `<button class="awrow__commit" data-action="${opts.action}" data-key="${escapeHtml(opts.dataKey)}" data-cost="${opts.cost}">${opts.cost} PD</button>`
+                : `<span class="awrow__gap">brakuje ${missing > 0 ? missing : '?'} PD</span>`;
+            return `<div class="awrow ${opts.canAfford ? 'awrow--affordable' : 'awrow--locked'} ${opts.cls || ''}">
+  <div class="awrow__left">
+    <span class="awrow__name">${opts.nameHtml}</span>${opts.statBadge ? `<span class="awrow__stat">${opts.statBadge}</span>` : ''}
+    ${opts.descHtml ? `<span class="awrow__desc">${opts.descHtml}</span>` : ''}
+  </div>
+  <div class="awrow__mid">
+    ${opts.track || ''}
+    <div class="awrow__rank-lbl">${opts.rankLbl || ''}</div>
+  </div>
+  ${rightHtml}
+</div>`;
+        }
+
+        let skillRows = '';
+        Object.entries(skills).forEach(([key, rank]) => {
+            if (rank >= skillRankCeiling) return;
+            const newRank = rank + 1;
+            const cost = rankCosts[newRank] || rankCosts[String(newRank)];
+            if (!cost) return;
+            const canAfford = xpAvail >= cost;
+            const info = skillInfoMap[key] || LEGACY_SKILLS[key] || {};
+            skillRows += _awRow({
+                nameHtml: escapeHtml(info.label || key),
+                statBadge: info.stat || '',
+                descHtml: escapeHtml(info.description || ''),
+                track: _notchTrack(rank, skillRankCeiling),
+                rankLbl: `Ranga ${rank} → ${newRank}`,
+                action: 'skill',
+                dataKey: key,
+                cost,
+                canAfford,
+                xpAvail,
+            });
+        });
+
+        let statRows = '';
+        Object.entries(stats).forEach(([key, val]) => {
             const newVal = val + 1;
             const cost = statCosts[newVal] || statCosts[String(newVal)];
-            if (!cost || newVal > statValueCeiling) return '';
+            if (!cost || newVal > statValueCeiling) return;
             const canAfford = xpAvail >= cost;
             const mod = mods[key] ?? Math.floor((val - 10) / 2);
             const newMod = Math.floor((newVal - 10) / 2);
-            return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
-                <div class="awansuj-card__title">${STAT_LABELS[key] || key}</div>
-                <div class="awansuj-card__detail">${val} (${mod >= 0 ? '+' : ''}${mod}) → ${newVal} (${newMod >= 0 ? '+' : ''}${newMod})</div>
-                <button class="awansuj-card__btn" data-action="stat" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
-                    ${cost} PD
-                </button>
-            </div>`;
-        }).filter(Boolean).join('');
+            statRows += _awRow({
+                nameHtml: escapeHtml(STAT_LABELS[key] || key),
+                statBadge: '',
+                descHtml: escapeHtml(STAT_DESC[key] || ''),
+                track: '',
+                rankLbl: `${val} (${mod >= 0 ? '+' : ''}${mod}) → ${newVal} (${newMod >= 0 ? '+' : ''}${newMod})`,
+                action: 'stat',
+                dataKey: key,
+                cost,
+                canAfford,
+                xpAvail,
+            });
+        });
 
-        // X8: Scholar spell cards
-        let spellCards = '';
+        let spellRows = '';
         if (isScholar) {
             const [knownSpells, allSpells] = await Promise.all([
                 fetch(`/api/characters/${character.id}/spells`).then(r => r.json()),
@@ -6866,63 +6924,87 @@ async function openAwansujPanel(character, sheet) {
             (knownSpells.spells || []).forEach(s => { knownMap[s.spell_key] = s.rank; });
             (allSpells.spells || []).forEach(spell => {
                 const currentRank = knownMap[spell.key] ?? 0;
-                if (currentRank === 0) {
-                    const canAfford = xpAvail >= 75;
-                    spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
-                        <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
-                        <div class="awansuj-card__detail">Naucz (R1)</div>
-                        <button class="awansuj-card__btn" data-action="spell-learn" data-key="${spell.key}" data-cost="75" ${canAfford ? '' : 'disabled'}>75 PD</button>
-                    </div>`;
-                } else if (currentRank < 3) {
-                    const cost = currentRank === 1 ? 50 : 100;
-                    const canAfford = xpAvail >= cost;
-                    spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
-                        <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
-                        <div class="awansuj-card__detail">R${currentRank} → R${currentRank + 1}</div>
-                        <button class="awansuj-card__btn" data-action="spell-upgrade" data-key="${spell.key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>${cost} PD</button>
-                    </div>`;
-                }
+                if (currentRank >= 3) return;
+                const cost = currentRank === 0 ? 75 : currentRank === 1 ? 50 : 100;
+                const canAfford = xpAvail >= cost;
+                spellRows += _awRow({
+                    cls: 'awrow--spell',
+                    nameHtml: escapeHtml(spell.label),
+                    statBadge: 'INT',
+                    descHtml: escapeHtml(spell.description || ''),
+                    track: _notchTrack(currentRank, 3),
+                    rankLbl: currentRank === 0 ? 'Naucz (Ranga 1)' : `Ranga ${currentRank} → ${currentRank + 1}`,
+                    action: currentRank === 0 ? 'spell-learn' : 'spell-upgrade',
+                    dataKey: spell.key,
+                    cost,
+                    canAfford,
+                    xpAvail,
+                });
             });
         }
 
         body.innerHTML = `
-            <div class="awansuj-xp-badge">Dostępne PD: <strong>${xpAvail}</strong></div>
-            ${skillCards || statCards ? `<div class="awansuj-section-label">Umiejętności</div><div class="awansuj-grid">${skillCards}</div>
-            <div class="awansuj-section-label">Cechy</div><div class="awansuj-grid">${statCards}</div>` : ''}
-            ${isScholar && spellCards ? `<div class="awansuj-section-label">Zaklęcia (Scholar)</div><div class="awansuj-grid">${spellCards}</div>` : ''}
-            <div class="awansuj-section-label">Historia PD</div>
-            <div id="awansuj-xp-log"><div class="camp-loading">Ładowanie…</div></div>`;
+<div class="awansuj-hero-bar">
+  <div class="awansuj-pd-col">
+    <span class="awansuj-pd-label">Dostępne PD</span>
+    <span class="awansuj-pd-value">${xpAvail}</span>
+  </div>
+  <div class="awansuj-pd-col" style="text-align:right">
+    <span class="awansuj-pd-label">Łącznie zdobyte</span>
+    <span class="awansuj-pd-lifetime">${xpLifetime} PD</span>
+  </div>
+</div>
+${skillRows ? `<div class="awansuj-section"><div class="awansuj-section-hdr">Umiejętności</div>${skillRows}</div>` : ''}
+${statRows ? `<div class="awansuj-section"><div class="awansuj-section-hdr">Cechy</div>${statRows}</div>` : ''}
+${isScholar && spellRows ? `<div class="awansuj-section"><div class="awansuj-section-hdr">Zaklęcia</div>${spellRows}</div>` : ''}
+<div class="awansuj-section">
+  <div class="awansuj-section-hdr">Historia PD</div>
+  <div id="awansuj-xp-log"><div class="camp-loading">Ładowanie…</div></div>
+</div>`;
 
         loadXpLog(character, document.getElementById('awansuj-xp-log'));
 
-        body.querySelectorAll('[data-action]').forEach(btn => {
-            btn.addEventListener('click', async () => {
+        body.querySelectorAll('.awrow__commit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const row = btn.closest('.awrow');
+                if (!row) return;
+                row.querySelector('.awrow__confirm')?.remove();
                 const { action, key, cost } = btn.dataset;
-                if (!confirm(`Wydać ${cost} PD?`)) return;
-                let url, payload;
-                if (action === 'skill') {
-                    url = `/api/characters/${character.id}/xp/spend-skill`;
-                    payload = { skill_key: key, user_id: currentUser?.id };
-                } else if (action === 'stat') {
-                    url = `/api/characters/${character.id}/xp/spend-stat`;
-                    payload = { stat_key: key, user_id: currentUser?.id };
-                } else if (action === 'spell-learn') {
-                    url = `/api/characters/${character.id}/xp/spend-spell-learn`;
-                    payload = { spell_key: key, user_id: currentUser?.id };
-                } else if (action === 'spell-upgrade') {
-                    url = `/api/characters/${character.id}/xp/spend-spell-upgrade`;
-                    payload = { spell_key: key, user_id: currentUser?.id };
-                }
-                try {
-                    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    const data = await r.json();
-                    if (!r.ok) throw new Error(data.detail || 'error');
-                    showToast(`Zakupiono! Pozostało: ${data.xp_available} PD`, 'success');
-                    modal.style.display = 'none';
-                    await refreshCharacterSheet();
-                } catch (e) {
-                    showToast('Błąd: ' + e.message, 'error');
-                }
+                const strip = document.createElement('div');
+                strip.className = 'awrow__confirm';
+                strip.innerHTML = `<span>Wydać <strong>${cost} PD</strong>?</span>
+<button class="awrow__confirm-yes" data-action="${action}" data-key="${escapeHtml(key)}" data-cost="${cost}">Tak, rozwijaj się</button>
+<button class="awrow__confirm-no">Anuluj</button>`;
+                row.appendChild(strip);
+                strip.querySelector('.awrow__confirm-no').addEventListener('click', () => strip.remove());
+                strip.querySelector('.awrow__confirm-yes').addEventListener('click', async () => {
+                    strip.innerHTML = '<span style="color:var(--text-muted)">Zapisuję…</span>';
+                    let url, payload;
+                    if (action === 'skill') {
+                        url = `/api/characters/${character.id}/xp/spend-skill`;
+                        payload = { skill_key: key, user_id: currentUser?.id };
+                    } else if (action === 'stat') {
+                        url = `/api/characters/${character.id}/xp/spend-stat`;
+                        payload = { stat_key: key, user_id: currentUser?.id };
+                    } else if (action === 'spell-learn') {
+                        url = `/api/characters/${character.id}/xp/spend-spell-learn`;
+                        payload = { spell_key: key, user_id: currentUser?.id };
+                    } else if (action === 'spell-upgrade') {
+                        url = `/api/characters/${character.id}/xp/spend-spell-upgrade`;
+                        payload = { spell_key: key, user_id: currentUser?.id };
+                    }
+                    try {
+                        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        const data = await r.json();
+                        if (!r.ok) throw new Error(data.detail || 'error');
+                        showToast(`Zapisano! Pozostało: ${data.xp_available} PD`, 'success');
+                        modal.style.display = 'none';
+                        await refreshCharacterSheet();
+                    } catch (e) {
+                        showToast('Błąd: ' + e.message, 'error');
+                        strip.remove();
+                    }
+                });
             });
         });
     } catch (e) {
@@ -6930,11 +7012,10 @@ async function openAwansujPanel(character, sheet) {
     }
 }
 
-// X9: XP grant log (loaded into awansuj-xp-log div)
+// XP grant log
 async function loadXpLog(character, container) {
     if (!container) return;
     try {
-        // Stage 10-C — apiRequest attaches the Bearer header.
         const data = await apiRequest('GET', `/characters/${character.id}/xp/grant-log?user_id=${currentUser?.id}&limit=20`);
         const grants = data.grants || [];
         if (!grants.length) { container.innerHTML = '<p class="section-note">Brak historii PD.</p>'; return; }
@@ -6952,7 +7033,6 @@ async function loadXpLog(character, container) {
     }
 }
 
-// ============================================================================
 // Skills tab — trained skills with rank/ceiling and tap-for-description
 // ============================================================================
 
