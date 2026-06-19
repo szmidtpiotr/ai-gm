@@ -83,6 +83,12 @@ GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
 
+
+def _should_emit_open_shop_in_mode(npc_key: str | None, campaign_mode: str) -> bool:
+    """Return True only when npc_key is set and campaign is NOT in dungeon mode (#742)."""
+    return bool(npc_key) and str(campaign_mode or "solo").lower() != "dungeon"
+
+
 # K2 fix helpers ──────────────────────────────────────────────────────────────
 _PL_NORMALIZE = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
 
@@ -5051,7 +5057,7 @@ def create_turn(
             out["combat_state"] = new_combat
         if combat_extra:
             out.update(combat_extra)
-        if open_shop_npc_key:
+        if _should_emit_open_shop_in_mode(open_shop_npc_key, campaign["mode"]):
             out["open_shop"] = open_shop_npc_key
         # Hex travel signal: frontend uses this to auto-update map pin
         if _hex_after_enc and _hex_before_enc and _hex_after_enc != _hex_before_enc:
@@ -6356,7 +6362,7 @@ def create_turn_stream(
                 yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
             if combat_extra:
                 yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
-            if open_shop_npc_key:
+            if _should_emit_open_shop_in_mode(open_shop_npc_key, campaign["mode"]):
                 yield f"data: [OPEN_SHOP]{json.dumps({'npc_key': open_shop_npc_key}, ensure_ascii=False)}\n\n"
 
             # V2: process [CREATE_*] / [NPC_KILLED] tags from accumulated text

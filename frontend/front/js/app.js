@@ -7918,6 +7918,7 @@ async function openShopModal(npcKey) {
                 if (!r.ok) throw new Error(j.detail || 'Nie udało się kupić');
                 setGold(j.data.gold_gp);
                 showToast(`Kupiono: ${it.label} za ${j.data.paid_gp} zł`, 'success');
+                await refreshCharacterData();
                 renderBuy();
             } catch (e) { showToast(e.message || 'Błąd zakupu', 'error'); b.disabled = false; }
         }));
@@ -7960,6 +7961,7 @@ async function openShopModal(npcKey) {
                     const jj = await rr.json();
                     if (jj?.ok) { data.sell_items = jj.data.sell_items; data.items = jj.data.items; }
                 } catch (_e) { /* keep old */ }
+                await refreshCharacterData();
                 renderSell();
             } catch (e) { showToast(e.message || 'Błąd sprzedaży', 'error'); b.disabled = false; }
         }));
