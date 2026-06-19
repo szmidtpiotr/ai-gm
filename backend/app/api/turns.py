@@ -406,9 +406,24 @@ def _ensure_combat_start_tag(
 
 
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
+# #766: \b word boundaries prevent fragment matches (skUPiam→kup, s-CEN-a→cen, przyg-LAD-am→lad).
 _TRADE_USER_INTENT_RE = re.compile(
-    r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
-    r"|masz\s+do|cen|koszt|zapła|zapla|cennik|asorty|ofert|kram|lad|ladę|ladą|kupiec|merch)",
+    r"\b("
+    r"kupuj|kupic|kupie|kup\b"
+    r"|sprzedaj|sprzedac|sprzedaje|sprzeda"
+    r"|handlu|handel"
+    r"|sklep"
+    r"|pokaz\b"
+    r"|towar"
+    r"|masz\s+do"
+    r"|cena\b|cenie\b|ceny\b|cennik"
+    r"|koszt"
+    r"|zapla"
+    r"|asorty|ofert|kram"
+    r"|lada"
+    r"|kupiec|kupca"
+    r"|merch|targ"
+    r")",
     re.IGNORECASE,
 )
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
@@ -1811,7 +1826,7 @@ def _pick_shop_npc_key(narrative: str, keys: list[str]) -> str | None:
     for key in keys:
         if key.replace("_", "") in nlow.replace("_", ""):
             return key
-    return keys[0]
+    return None  # #766: no blanket fallback — only open shop when narrative names a known NPC
 
 
 def maybe_append_open_shop_fallback(
