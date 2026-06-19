@@ -5,6 +5,20 @@ Każdy issue ma już PEŁNĄ analizę w GitHub (root cause + fix + pliki + accep
 
 Format: `- [ ] #NNN — krótki tytuł` · `(dep: #MMM)` = zależność (rób PO prereq) · `(design)` = wymaga decyzji A/B w issue.
 
+<!-- MASS-ZAKRES:START -->
+**Źródło opisu zadania:** issue GitHub `szmidtpiotr/ai-gm` WRAZ Z KOMENTARZAMI (`gh issue view #<N> --comments`). Komentarz Piotra jest NADRZĘDNY nad treścią issue (wybór A/B, „to nadal nie działa", „działa/zatwierdzone"). Każde issue ma już PEŁNĄ analizę — NIE twórz nowego.
+
+**Mapowanie id:** `FIX<N>` = issue **#<N>** (np. FIX743 = #743).
+
+**Decyzje / zakres:** wdrażaj wg sekcji Fix z issue; `[IN REVIEW]` + komentarz „działa" → traktuj jak DONE bez zmian; `[IN REVIEW]` + „wciąż błąd" → wdrażaj wg uwag.
+
+**Poza zakresem (NIE implementuj):** issue `(design)` bez rozstrzygniętej decyzji A/B → GATE; `[BLOCKED]` bez odblokowania → GATE; feature z P4 bez wyraźnej prośby Piotra.
+
+**Wyjątki pipeline:** brak — wszystkie FIX idą pełnym pipeline (/tdd → /code-review → /playwright-test-report).
+
+**Testy:** na Demo (user_id=1). NIGDY na Mizelu (char 999420 — postać Piotra, read-only). Backend/walkę → test lub Combat Sandbox; flow gracza → /game-test-player lub ręcznie na DEV.
+<!-- MASS-ZAKRES:END -->
+
 > **Auto-sync z kolumną TO DO (ClaudeCodeUI Issues Board):** `bash scripts/sync_fix_list_from_board.sh`
 > wypełnia blok `BOARD-TODO` poniżej. Board NIE jest Projects v2 — to kanban pluginu liczony z
 > labeli issue (To Do = open bez labeli `in-progress`/`review`/`blocked`). Wystarcza scope `repo`
@@ -89,7 +103,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
 - [x] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0] [wdrożone 870a692]
 - [x] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
-- [ ] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
+- [x] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
 - [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
 - [ ] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData
 - [ ] 14. #740 — Podwójna narracja wstępna lochu — LLM_OPEN + room_narrative nakładają się
@@ -117,20 +131,20 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 30. #764 — System amunicji (strzały/bełty + start 20 + odejmowanie przy ataku dystansowym)
 - [ ] 31. #765 — Odzyskiwanie amunicji (40% + pill) `(dep: #764)`
 - [ ] 32. #741 — Loch D-pad: przeciąganie + środkowy ⊕ otwiera mapę
-- [ ] 32b. #770 — Ekwipunek: podział sekcji wg używalności (góra używalne/zużywalne, dół nieużywalne) — mały front, sparowany z #757
-- [ ] 32c. #771 — Konsumable on-use effect builder + `damage_enemy` + `apply_condition(target)`; migracja 14 itemów (Woda Święcona, mikstury siły) `(dep: #757)` — decyzje: stat_buff→apply_condition, holy_water→apply on enemy, migracja od razu
-- [ ] 33. #738 — LB4 głębszy loch katakumby_mroku (przenosi #733/#734)
-- [ ] 34. #659 — B11 AoE multi-target maga
-- [ ] 35. #635 — SF6 karta rzutu hazardu
-- [ ] 36. #598 — Walka dwoma broniami (dual-wield)
-- [ ] 37. #547 — G20 eksport kampanii do książki
-- [ ] 38. #593 — Web Push pełny stack
-- [ ] 39. #602 — Niezawodne powiadomienia (wielokanałowe)
+- [ ] 33. 32b. #770 — Ekwipunek: podział sekcji wg używalności (góra używalne/zużywalne, dół nieużywalne) — mały front, sparowany z #757
+- [ ] 34. 32c. #771 — Konsumable on-use effect builder + `damage_enemy` + `apply_condition(target)`; migracja 14 itemów (Woda Święcona, mikstury siły) `(dep: #757)` — decyzje: stat_buff→apply_condition, holy_water→apply on enemy, migracja od razu
+- [ ] 35. #738 — LB4 głębszy loch katakumby_mroku (przenosi #733/#734)
+- [ ] 36. #659 — B11 AoE multi-target maga
+- [ ] 37. #635 — SF6 karta rzutu hazardu
+- [ ] 38. #598 — Walka dwoma broniami (dual-wield)
+- [ ] 39. #547 — G20 eksport kampanii do książki
+- [ ] 40. #593 — Web Push pełny stack
+- [ ] 41. #602 — Niezawodne powiadomienia (wielokanałowe)
 
 ### P5 — Zablokowane / narzędzia / minor (najpierw odblokuj lub niski priorytet)
-- [ ] 40. #516 — `[BLOCKED]` SMOKE P1: brak tabeli character_rentals (F13 migracja) — najpierw odblokować
-- [ ] 41. #727 — Combat Sandbox setup HTTP 500 (narzędzie admin, nie gracz)
-- [ ] 42. #653 — Brak wizualizacji rzutu dla zaklęć leczących poza walką (minor)
+- [ ] 42. #516 — `[BLOCKED]` SMOKE P1: brak tabeli character_rentals (F13 migracja) — najpierw odblokować
+- [ ] 43. #727 — Combat Sandbox setup HTTP 500 (narzędzie admin, nie gracz)
+- [ ] 44. #653 — Brak wizualizacji rzutu dla zaklęć leczących poza walką (minor)
 
 ---
 

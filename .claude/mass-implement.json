@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "run_host": {
+    "type": "ssh",
+    "host": "claude@192.168.1.61",
+    "remote_root": "/home/piotrszmidt/ai-gm",
+    "git_user": "piotrszmidt"
+  },
+  "github": { "owner": "szmidtpiotr", "repo": "ai-gm" },
+  "branch": "develop",
+  "checklists": {
+    "faza": {
+      "file": "notes.md",
+      "section_prefix": "## FAZA",
+      "id_pattern": "{PREFIX}[0-9]+[a-z]?"
+    },
+    "list": {
+      "file": "fix_list.md",
+      "region_prefix": "## KOLEJNOŚĆ",
+      "id_prefix": "FIX",
+      "renumber_script": "scripts/renumber_fix_list.sh"
+    }
+  },
+  "child": {
+    "spec_files": ["CLAUDE.md", "game_mechanics.md"],
+    "pipeline": ["/tdd", "/code-review", "/playwright-test-report"]
+  }
+}

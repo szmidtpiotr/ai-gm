@@ -60,6 +60,7 @@ voice-service/models/stt/
 # Use wildcard so negation of skills/ can work (git won't descend into ignored dirs)
 .claude/*
 !.claude/skills/
+!.claude/mass-implement.json
 
 # Stray SQLite DB files at project root (data/ is the real mount)
 backend/ai_gm.db
