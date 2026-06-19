@@ -180,7 +180,11 @@ def test_resolve_attack_dodge_negates_damage(tmp_path, monkeypatch):
 
 
 def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
-    """SF10: okno reakcji → resolve_reaction('take') → pełne obrażenia."""
+    """SF10: okno reakcji → resolve_reaction('take') → pełne obrażenia.
+
+    #826: 'take' nie zmniejsza ciosu unikiem, ale obrażenia przechodzą przez nowy model:
+    7 baza + margines (atak 28 − obrona pac 10 = 18 → 3 progi → +3), pancerz 0 (ac_base 10).
+    Razem 10."""
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
@@ -188,19 +192,23 @@ def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win.get("reaction_window") is True
         out = combat_service.resolve_reaction(1, "take")
-    assert out["damage"] == 7
-    assert out["player_hp_remaining"] == 13
+    assert out["damage"] == 10                 # 7 baza + 3 margines (#826)
+    assert out.get("margin_damage_bonus") == 3
+    assert out["player_hp_remaining"] == 10
 
 
 def test_resolve_attack_no_skill_no_reaction(tmp_path, monkeypatch):
-    """Skill-gated: pre-deklaracja bez skilla dodge → reakcja niedostępna, normalne obrażenia."""
+    """Skill-gated: bez skilla dodge → reakcja niedostępna; #826: rozstrzyga pojedynczy
+    pasywny unik d20+DEX (d20=18 + DEX 0 = 18 < atak 28 → trafienie), obrażenia przez nowy
+    model: 7 baza + 3 margines (atak 28 − pac 10), pancerz 0 → 10."""
     db = _combat_db(tmp_path, declared="dodge", skill_rank=0)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction") is None or out.get("reaction", {}).get("available") is not True
-    assert out["damage"] == 7
+    assert out["damage"] == 10                 # 7 baza + 3 margines (#826)
+    assert out.get("margin_damage_bonus") == 3
 
 
 def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):

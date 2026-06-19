@@ -129,16 +129,20 @@ def test_hit_opens_reaction_window_not_damage(tmp_path, monkeypatch):
 
 
 def test_resolve_reaction_take_applies_full_damage(tmp_path, monkeypatch):
-    """Po oknie: choice=take → pełne obrażenia, pending wyczyszczone."""
+    """Po oknie: choice=take → pełne obrażenia, pending wyczyszczone.
+
+    #826: 'take' przepuszcza obrażenia przez nowy model: 7 baza + margines (atak 20 −
+    obrona pac 10 = 10 → 2 progi → +2), pancerz 0 (ac_base 10). Razem 9."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         combat_service.resolve_attack(1, 0, attacker="enemy")
         out = combat_service.resolve_reaction(1, "take")
-    assert out["damage"] == 7
-    assert out["player_hp_remaining"] == 13
-    assert _combatant_hp(db) == 13
+    assert out["damage"] == 9                   # 7 baza + 2 margines (#826)
+    assert out.get("margin_damage_bonus") == 2
+    assert out["player_hp_remaining"] == 11
+    assert _combatant_hp(db) == 11
     assert _pending(db) is None
 
 
@@ -161,7 +165,12 @@ def test_resolve_reaction_dodge_success_negates(tmp_path, monkeypatch):
 # ─── Brak dostępnej reakcji → natychmiastowe obrażenia (backward-compat) ───────
 
 def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
-    """Brak dodge i tarczy → brak okna reakcji, obrażenia naliczone od razu."""
+    """Brak dodge i tarczy → brak okna reakcji, obrażenia naliczone od razu.
+
+    #826: AC nie jest już progiem trafienia — bez reakcji rozstrzyga pojedynczy pasywny
+    unik d20+DEX (tu d20=10 + DEX_mod 2 = 12 < atak 20 → trafienie). Obrażenia bazowe 5
+    + margines (atak 20 − obrona pac 10 = 10 → 2 progi po 5 → +2), pancerz 0 (ac_base 10
+    → armor max(0,10−10)=0). Razem 7."""
     db = _combat_db(tmp_path, dodge_rank=0, shield_block_rank=0, shield=False, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
@@ -169,30 +178,49 @@ def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is True
     assert out.get("reaction_window") is not True
-    assert out["damage"] == 5
-    assert _combatant_hp(db) == 15
+    assert out["damage"] == 7          # 5 baza + 2 margines (#826), pancerz 0
+    assert out.get("margin_damage_bonus") == 2
+    assert _combatant_hp(db) == 13
 
 
 # ─── 1 reakcja/rundę ──────────────────────────────────────────────────────────
 
 def test_one_reaction_per_round(tmp_path, monkeypatch):
-    """Reakcja już zużyta w tej rundzie → drugi cios bez okna, obrażenia od razu."""
+    """Reakcja już zużyta w tej rundzie → drugi cios bez okna, obrażenia od razu.
+
+    #826: reakcja zużyta → ścieżka bez reakcji (pasywny unik d20+DEX 12 < atak 20 → trafia).
+    6 baza + 2 margines (atak 20 − pac 10), pancerz 0 → 8."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1, reaction_used_round=1)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction_window") is not True
-    assert out["damage"] == 6
-    assert _combatant_hp(db) == 14
+    assert out["damage"] == 8          # 6 baza + 2 margines (#826)
+    assert _combatant_hp(db) == 12
 
 
-# ─── Regresja: pudło wroga → brak okna reakcji (rzut ataku wroga nietknięty) ───
+# ─── #826: gracz z reakcją dostaje OKNO uniku nawet na słaby cios ──────────────
 
-def test_enemy_miss_no_window(tmp_path, monkeypatch):
-    """Pudło wroga (total < AC) → brak trafienia, brak okna reakcji, HP nietknięte."""
+def test_enemy_low_roll_opens_window_for_reaction_player(tmp_path, monkeypatch):
+    """#826 (zastępuje pudło-AC): AC nie jest progiem trafienia. Gracz z dostępnym
+    unikiem dostaje okno reakcji na KAŻDY cios (poza Nat 1 wroga) — słaby rzut wroga
+    zostanie łatwo uniknięty w oknie, zamiast być z góry odfiltrowanym progiem AC.
+    To naprawia 'wcisnąłem unik a oberwałem': unik mierzy się z faktycznym rzutem ataku."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=0)
-    monkeypatch.setattr(combat_service, "roll_d20", lambda: 3)   # 3 + 0 = 3 < AC 10 → pudło
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 3)   # słaby cios wroga (atak 3)
+    with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
+        out = combat_service.resolve_attack(1, 0, attacker="enemy")
+    assert out["hit"] is True                 # cios dosięga; jedyny test = okno uniku
+    assert out.get("reaction_window") is True
+    assert "dodge" in (out.get("reaction_options") or [])
+    assert _combatant_hp(db) == 20            # obrażenia wstrzymane do resolve_reaction
+
+
+def test_enemy_nat1_auto_miss_no_window(tmp_path, monkeypatch):
+    """#826: Nat 1 wroga = auto-pudło nawet gdy gracz ma unik — żadnego okna, HP nietknięte."""
+    db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=0)
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 1)   # Nat 1 wroga
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is False

@@ -203,6 +203,7 @@ Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 
 - **Stats (7):** STR, DEX, CON, INT, WIS, CHA, LCK
 - **Roll formula:** `d20 + stat_modifier + skill_rank + proficiency_bonus ≥ DC`. Proficiency bonus +2 when `skill_rank ≥ 3`. Nat 20 = auto-success + double damage; Nat 1 = auto-fail + complication.
 - **DC scale:** Easy 8 / Medium 12 / Hard 16 / Extreme 20 / Legendary 24+
+- **Combat defense (#826, 2026-06-19 — redesigned with explicit approval):** ONE defensive test per hit (no double jeopardy). Armor (`ac_base`/AC) = **damage reduction**, not a to-hit threshold (`armor = max(0, ac_base − 10)`, min 1 dmg/hit, Nat 20 ignores armor). Margin → damage: `+1 dmg` per full 5 pts of attack over defender's defense (Nat 20 ×2 separate). Symmetric player↔enemy. Helpers: `apply_defense_model`/`compute_enemy_attack_hit` in `combat_service.py`. **All values are STARTING values, Sandbox-tunable** (`MARGIN_DAMAGE_STEP`, `MARGIN_DAMAGE_BONUS`, `ARMOR_REDUCTION_OFFSET`). See `game_mechanics.md` CZĘŚĆ AB. Supersedes #753, covers #744.
 - **HP:** archetype base + `CON_mod × level`. **Mana (Mage only):** `8 + INT_mod × level`.
 - Source of truth: `backend/prompts/system_prompt.txt`. DB schema changes require a migration, never direct DB edits. Fix code, not test assertions.
 

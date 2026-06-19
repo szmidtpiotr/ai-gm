@@ -2544,6 +2544,19 @@ Gracz widzi w tooltipie kary które backend stosuje przy innych progach. **Trzeb
 
 > **⚠️ NADPISANE CZĘŚCIOWO przez CZĘŚĆ AI Decyzję 2 (2026-06-12, S2 [#582]):** wrogowie dostali jednak `stats_json` (7 statów STR…LCK). **Ścieżka walki BEZ ZMIAN** — atak nadal `d20 + attack_bonus`, obrona nadal `ac_base`; tabela wyżej w kolumnach Atak/Obrona/HP pozostaje aktualna. Nowe staty służą **wyłącznie testom przeciwnym** (perswazja vs WIS, zapasy vs STR — S4) i interakcjom skillowym. Argument "admin wpisuje 4 liczby" stoi: staty generuje archetyp heurystyką po keywordach (`backend/app/services/actor_stats.py`), admin może je nadpisać. NULL/brak = każdy stat liczony jako 10 (zero regresji).
 
+> **⚠️ NADPISANE przez #826 — Spójny model obrony (2026-06-19, zgoda Piotra na ruszenie zablokowanej mechaniki):**
+> Kolumna **Obrona** w tabelach wyżej (`AC = próg trafienia` / `ac_base = stała`) jest **nieaktualna**. Nowy, symetryczny model (gracz ↔ wróg), wartości STARTOWE do strojenia na Sandboxie:
+>
+> 1. **Jeden rzut obronny — koniec double jeopardy.** Trafienie rozstrzyga JEDEN test, nigdy dwa.
+>    - Gracz z dostępną reakcją (unik/blok): cios dosięga (poza Nat 1 wroga) i otwiera się **okno reakcji** — jedyny test obronny to unik (`d20 + DEX + dodge_rank + proficiency` vs rzut ataku); **AC pominięte**. To naprawia „wcisnąłem unik a oberwałem" (#753): unik mierzy się z faktycznym rzutem ataku, nie z rzutem, który już przebił AC.
+>    - Gracz bez reakcji: pojedynczy test (AC jako próg pasywny) — bez drugiego testu, więc bez double jeopardy.
+>    - Wróg jako obrońca: pojedynczy unik `d20 + DEX` (jak dotąd, `compute_player_attack_dodge_outcome`).
+> 2. **Pancerz = redukcja obrażeń (nie próg trafienia).** Po trafieniu `armor = max(0, ac_base − 10)` (część `ac_base`/AC ponad nieopancerzony próg 10) odejmowana od obrażeń. Efekt: zwinny wróg = trudny do trafienia (wysoki DEX/unik), łatwy do zranienia (niski pancerz); opancerzony = łatwy do trafienia, trudny do zranienia. **Min 1 dmg na trafienie**; **Nat 20 ignoruje pancerz**. (Stała `ARMOR_REDUCTION_OFFSET=10` w `combat_service.py`; OFFSET=0 = literalne `ac_base` ze spec — strój na Sandboxie.)
+> 3. **Margines sukcesu → obrażenia.** `+1 dmg` za każde pełne **5 pkt** rzutu ataku ponad obronę celu (`MARGIN_DAMAGE_STEP=5`, `MARGIN_DAMAGE_BONUS=1`). PRIMARY: +1 dmg/próg; BACKUP (gdy za słabe na Sandboxie): +1 KOŚĆ/próg. Nat 20 ×2 działa **osobno** (kryt nadal król).
+> 4. **Skille reakcji osiągalne.** `dodge` (DEX) i `shield_block` (STR + tarcza) dodane do `CREATION_SKILL_POOL` + biasów archetypów (warrior→shield_block/dodge, rogue→dodge). Wcześniej były poza pulą = martwe (#744).
+>
+> Implementacja: `apply_defense_model()` (jeden punkt wejścia obrażeń, symetria), `compute_enemy_attack_hit()`, `_armor_value()`, `_margin_damage_bonus()` w `combat_service.py`; pula skilli w `character_creation_config.py`. Zastępuje #753, obejmuje #744. Wszystkie liczby = STARTOWE (Numbers Policy #826).
+
 ### Efekty broni (`on_hit_save`) — działa, czeka na Unified Effects
 
 Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, plus ofiara robi rzut obronny (save) — jak nie zda, łapie warunek (np. Płonący → obrażenia co turę). Już działa (`weapon_rules.py`). To dokładnie fundament pod afiksy "ognisty miecz" (patrz CZĘŚĆ X — System Afiksów). Po redesignie Effect Objects ten mechanizm staje się jednym z triggerów (`on_hit`).

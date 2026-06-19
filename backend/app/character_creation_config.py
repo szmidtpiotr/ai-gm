@@ -21,6 +21,10 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
         "endurance",
         "intimidation",
         "survival",
+        # #826 pkt.4 (obejmuje #744): wojownik startuje z tarczą — `shield_block` w biasie,
+        # by faktycznie mógł blokować. `dodge` też mile widziany na froncie.
+        "shield_block",
+        "dodge",
     ],
     # Bias złodzieja/zwiadowcy (CZĘŚĆ AK.2). lockpick/acrobatics dołączone do
     # CREATION_SKILL_POOL poniżej, żeby ten bias nie był martwy.
@@ -31,6 +35,8 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
         "acrobatics",
         "awareness",
         "investigation",
+        # #826 pkt.4: zwinny łotrzyk — `dodge` (DEX) pasuje do profilu uniku.
+        "dodge",
     ],
     "scholar": [
         "arcana",
@@ -65,6 +71,10 @@ CREATION_SKILL_POOL: Final = frozenset(
         "ranged_attack",
         "spell_attack",
         "alchemy",
+        # #826 pkt.4: skille reakcji osiągalne losowo/zamianą (wcześniej poza pulą → martwe).
+        # `dodge` = aktywny unik (DEX), `shield_block` = blok tarczą (STR + założona tarcza).
+        "dodge",
+        "shield_block",
     }
 )
 

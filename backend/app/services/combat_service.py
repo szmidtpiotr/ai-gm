@@ -4110,6 +4110,71 @@ def _choose_behavior_target(
     return (same_zone or candidates)[0]
 
 
+# ─── #826: Spójny model obrony — jeden rzut obronny + pancerz=redukcja + margines→dmg ───
+# Wszystkie wartości STARTOWE (Numbers Policy #826) — do strojenia na Sandboxie. Symetria
+# gracz↔wróg: ten sam silnik obrażeń po trafieniu w obie strony.
+MARGIN_DAMAGE_STEP = 5        # co ile pełnych pkt ataku ponad obronę → bonus obrażeń (PRIMARY)
+MARGIN_DAMAGE_BONUS = 1       # +1 dmg za próg (BACKUP w #826: +1 KOŚĆ — gdy +1 dmg za słabe na Sandboxie)
+ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = część `ac_base`/AC ponad
+                              # nieopancerzony próg (AC 10). OFFSET=0 → literalne ac_base ze spec #826
+                              # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
+
+
+def _armor_value(defense_stat: int) -> int:
+    """#826 pkt.2: pancerz jako liczba redukcji obrażeń (część `ac_base`/AC ponad nieopancerzony próg)."""
+    return max(0, int(defense_stat or 0) - ARMOR_REDUCTION_OFFSET)
+
+
+def _margin_damage_bonus(attack_total: int, defense_stat: int) -> int:
+    """#826 pkt.3: +MARGIN_DAMAGE_BONUS za każde pełne MARGIN_DAMAGE_STEP pkt ataku ponad obronę.
+    Margines liczony względem STAŁEJ obrony celu (deterministyczny, strojny), nie rzutu uniku."""
+    margin = int(attack_total or 0) - int(defense_stat or 0)
+    if margin < MARGIN_DAMAGE_STEP:
+        return 0
+    return (margin // MARGIN_DAMAGE_STEP) * MARGIN_DAMAGE_BONUS
+
+
+def apply_defense_model(
+    base_damage: int,
+    attack_total: int,
+    defense_stat: int,
+    *,
+    ignore_armor: bool,
+) -> dict[str, int]:
+    """#826: JEDEN punkt wejścia obrażeń PO TRAFIENIU (symetria gracz↔wróg).
+
+    1) margines→dmg: +bonus za każde MARGIN_DAMAGE_STEP pkt ataku ponad obronę,
+    2) pancerz→redukcja: −armor, ale **min 1 dmg na trafienie**; Nat 20 (`ignore_armor`) pomija pancerz.
+
+    Zwraca {final, margin_bonus, armor_reduction}. Nat 20 ×2 liczone OSOBNO (po stronie wywołującej)."""
+    base = int(base_damage or 0)
+    if base <= 0:
+        return {"final": 0, "margin_bonus": 0, "armor_reduction": 0}
+    bonus = _margin_damage_bonus(attack_total, defense_stat)
+    pre_armor = base + bonus
+    if ignore_armor:
+        return {"final": pre_armor, "margin_bonus": bonus, "armor_reduction": 0}
+    armor = _armor_value(defense_stat)
+    final = max(1, pre_armor - armor)
+    return {"final": final, "margin_bonus": bonus, "armor_reduction": pre_armor - final}
+
+
+def compute_enemy_attack_hit(
+    attack_roll: int,
+    raw_d20: int,
+    player_evasion_total: int,
+) -> bool:
+    """#826: enemy→player to-hit = POJEDYNCZY test (symetria z player→enemy, koniec double jeopardy).
+
+    AC NIE jest już progiem trafienia (przeszło na redukcję obrażeń). Nat 1 = auto-pudło,
+    Nat 20 = auto-trafienie; inaczej trafienie gdy ``attack_roll > evasion`` (obrońca wygrywa remis)."""
+    if int(raw_d20) == 1:
+        return False
+    if int(raw_d20) == 20:
+        return True
+    return int(attack_roll) > int(player_evasion_total)
+
+
 def compute_player_attack_dodge_outcome(
     attack_total: int,
     dodge_roll_raw: int,
@@ -4618,6 +4683,19 @@ def resolve_attack(
                             out["sneak_attack"] = _sneak
                     if _hidden:
                         _remove_combatant_conditions(_pc_for_dmg, _hidden)
+                # #826: margines→dmg + pancerz=redukcja (po wszystkich bonusach, przed HP).
+                # Obrona celu = `ac_base` wroga (już nie próg trafienia — to liczy unik d20+DEX).
+                # Nat 20 pomija pancerz (×2 obrażeń policzone wyżej, osobno).
+                if dmg > 0:
+                    _dm826 = apply_defense_model(
+                        dmg, int(roll_result or 0), int(enemy.get("defense", 0) or 0),
+                        ignore_armor=bool(player_nat20),
+                    )
+                    if _dm826["margin_bonus"]:
+                        out["margin_damage_bonus"] = _dm826["margin_bonus"]
+                    if _dm826["armor_reduction"]:
+                        out["armor_reduction"] = _dm826["armor_reduction"]
+                    dmg = _dm826["final"]
                 out["damage"] = dmg
                 # #754: strukturalny rejestr — obrażenia gracza (per-kość)
                 try:
@@ -5199,7 +5277,22 @@ def resolve_attack(
             raise ValueError("player combatant missing")
         pac = int(p.get("defense", _player_ac_from_sheet(sheet)))
         p["defense"] = pac
-        hit = attack_roll >= pac
+        # #826: KONIEC double jeopardy. AC NIE jest progiem trafienia (przeszło na redukcję
+        # obrażeń niżej). Jeden test obronny:
+        #  • gracz ma reakcję (dodge/shield + tarcza) → cios dosięga, jedyny test = OKNO REAKCJI
+        #    (rozliczane w resolve_reaction / _try_dodge_reaction poniżej); AC pominięte.
+        #  • brak reakcji → pojedynczy pasywny unik d20+DEX (symetria z wrogiem).
+        _round_now826 = int(row["round"] or 1)
+        if _reaction_options(conn, ch_id, p, sheet, _round_now826):
+            hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
+            out["target_evasion"] = None
+        else:
+            _player_dex_mod = _stat_mod(sheet, "DEX")
+            _ev_raw = roll_d20()
+            _ev_total = int(_ev_raw) + int(_player_dex_mod)
+            hit = compute_enemy_attack_hit(attack_roll, raw, _ev_total)
+            out["player_evasion"] = {"raw": int(_ev_raw), "dex_mod": int(_player_dex_mod),
+                                     "total": _ev_total}
         out["hit"] = hit
         out["attack_roll"] = attack_roll
         out["raw_d20"] = raw
@@ -5261,6 +5354,7 @@ def resolve_attack(
                     "attack_roll": int(attack_roll),
                     "round": _round_now,
                     "options": _opts,
+                    "nat20": bool(raw == 20),  # #826: Nat 20 pomija pancerz przy rozliczeniu reakcji
                     "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
                 }
                 cid = int(row["id"])
@@ -5302,6 +5396,16 @@ def resolve_attack(
                     out["reaction"] = _block
                     if _block.get("available"):
                         dmg = int(_block.get("damage_after", dmg))
+            # #826: margines→dmg + pancerz=redukcja na obrażeniach wroga (po uniku/bloku,
+            # przed absorpcją/HP). Obrona gracza = pac (AC) — już nie próg trafienia. Nat 20 wroga
+            # pomija pancerz. Symetria z player→enemy (ten sam apply_defense_model).
+            if dmg > 0:
+                _dm826p = apply_defense_model(dmg, int(attack_roll), int(pac), ignore_armor=bool(raw == 20))
+                if _dm826p["margin_bonus"]:
+                    out["margin_damage_bonus"] = _dm826p["margin_bonus"]
+                if _dm826p["armor_reduction"]:
+                    out["armor_reduction"] = _dm826p["armor_reduction"]
+                dmg = _dm826p["final"]
             # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
             dmg = _apply_absorption(p, dmg, out)
             out["damage"] = dmg
@@ -5514,6 +5618,18 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         p.pop("pending_reaction", None)
         p.pop("reaction_declared", None)
         p["reaction_used_round"] = round_n
+
+        # #826: margines→dmg + pancerz=redukcja na obrażeniach wroga (ścieżka reakcji — take/blok
+        # po nieudanym uniku). Obrona gracza = pac (AC). Nat 20 wroga (z pending) pomija pancerz.
+        if dmg > 0:
+            _pac826 = int(p.get("defense", _player_ac_from_sheet(sheet)))
+            _dm826r = apply_defense_model(dmg, int(attack_roll), _pac826,
+                                          ignore_armor=bool(pending.get("nat20")))
+            if _dm826r["margin_bonus"]:
+                out["margin_damage_bonus"] = _dm826r["margin_bonus"]
+            if _dm826r["armor_reduction"]:
+                out["armor_reduction"] = _dm826r["armor_reduction"]
+            dmg = _dm826r["final"]
 
         # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
         dmg = _apply_absorption(p, dmg, out)
