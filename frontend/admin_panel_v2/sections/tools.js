@@ -1,7 +1,7 @@
 /* Tools section — combines Combat Sandbox + Rest Sandbox + Debug under one tab */
 
 const TABS = [
-    { key: 'sandbox', label: '⚔ Combat',  module: '/admin_panel_v2/sections/sandbox.js?v=15' },
+    { key: 'sandbox', label: '⚔ Combat',  module: '/admin_panel_v2/sections/sandbox.js?v=16' },
     { key: 'rest',    label: '💤 Rest',    module: '/admin_panel_v2/sections/rest_sandbox.js?v=1' },
     { key: 'debug',   label: '🐛 Debug',   module: '/admin_panel_v2/sections/debug.js?v=1' },
 ];

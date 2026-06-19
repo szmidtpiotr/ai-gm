@@ -673,7 +673,7 @@ async function doDeclareDodge(panel) {
       : "[Reakcja] Unik anulowany.");
   } catch (e) {
     logMsg(panel, "Dodge error: " + (e.message || "?"));
-    showToast("Unik niedostępny: " + (e.message || "?") + " (potrzebny skill „dodge" rank ≥ 1)", "error");
+    showToast("Unik niedostępny: " + (e.message || "?") + " (potrzebny skill „dodge” rank ≥ 1)", "error");
   } finally {
     state.busy = false;
     renderCombat(panel);
@@ -696,7 +696,7 @@ async function doDeclareBlock(panel) {
       : "[Reakcja] Blok anulowany.");
   } catch (e) {
     logMsg(panel, "Block error: " + (e.message || "?"));
-    showToast("Blok niedostępny: " + (e.message || "?") + " (potrzebny skill „shield_block" rank ≥ 1 + tarcza)", "error");
+    showToast("Blok niedostępny: " + (e.message || "?") + " (potrzebny skill „shield_block” rank ≥ 1 + tarcza)", "error");
   } finally {
     state.busy = false;
     renderCombat(panel);
