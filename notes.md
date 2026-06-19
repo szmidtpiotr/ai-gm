@@ -60,13 +60,6 @@ Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez py
 ## ⚙️ Automaty (zero akcji)
 caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 
-## 🔍 graphify (oszczędzanie tokenów — TRIAL od 2026-06-19)
-Graf kodu (26k węzłów). Claude pyta graf zamiast czytać pliki. **Działa automatycznie — przy `/tdd` nic nie dodajesz.** Mówisz `#NNN przez /tdd` jak zawsze, graf jest używany w tle.
-- **Odśwież po większych zmianach kodu** (robi Claude): `graphify update .`
-- Podgląd: `graphify explain "<nazwa>"` · `graphify path "A" "B"`
-- Wyłączyć trial: `graphify uninstall --purge`
-- Mechanizm: **twardy hook PreToolUse** na Grep/Glob (`~/.claude/hooks/graphify-nudge.py`) wstrzykuje „użyj graphify najpierw" przed każdym Grep/Glob + post-commit hook auto-odświeża graf. (Sam CLAUDE.md-nudge okazał się za słaby — tdd go ignorował.)
-
 ## 🔧 Pending (przesiadka na nowy system)
 - `/tdd` — wywalić krok „update notes.md" (zostaje update ISSUE).
 - `mass-implement` — jedzie wyłącznie z issues (LIST), FAZA-mode/notes odstaw.
