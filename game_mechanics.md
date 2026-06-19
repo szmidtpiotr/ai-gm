@@ -5632,3 +5632,9 @@ HI1 pierwsze (frontend HI2–HI5 zależy od `/full` i guardów). Niezależne od 
 ### #776 — QUEST_COMPLETE tag: regex, flip DB status, XP guard ✅ ([#776](https://github.com/szmidtpiotr/ai-gm/issues/776), 2026-06-18)
 
 > **Wdrożone:** Trójczęściowy fix domykania questów dostawy/wymiany/dialogu. (A) `xp_sources.py`: regex `_QUEST_RE` zmieniony z `[^\]\s]+` na `[^\]]+?` — teraz dopasowuje tytuły ze spacjami (np. „Nocna przesyłka"). (B) `xp_sources.py`: `process_narrative_xp_tags` importuje i woła `complete_quest_in_character_quests()` przed grantem XP — status flippuje się do `completed` + `completed_turn` ustawiony; XP przyznawane TYLKO gdy flip się udał (zero podwójnych nagród). (C) `system_prompt.txt`: nowa sekcja QUEST_COMPLETE — instrukcja kiedy emitować tag, że tytuł musi być identyczny z blokiem QUESTY, i przykład. 4/4 pytest + 3/3 Playwright GREEN. Commit `87f803d`.
+
+## Poprawki sklep — 2026-06-19
+
+### #766 — Trade-intent regex word boundaries + brak losowego fallback sklepu ✅ ([#766](https://github.com/szmidtpiotr/ai-gm/issues/766), 2026-06-19)
+
+> **Wdrożone:** Dwa chirurgiczne fixy w `turns.py`. (A) `_TRADE_USER_INTENT_RE`: regex dostał `\b` word boundaries — fragment `kup` w `skupiam`, `cen` w `scena`, `lad` w `przygladam` nie pasują już do intencji handlu. Zastąpiono krótkie fragmenty pełnymi prefixami słów handlowych. (B) `_pick_shop_npc_key`: usunięto blankietowy fallback `return keys[0]` → teraz `return None` gdy narracja nie zawiera nazwy żadnego kupca z listy. 14/14 pytest + 2/2 Playwright GREEN. Commit `870a692`.

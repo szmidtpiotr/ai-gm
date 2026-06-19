@@ -50,7 +50,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #759 `[IN PROGRESS]` — [BUG] Boss osiągalny w 1-2 komnacie lochu — _fill_open_doors weluje skrót do węzła bossa
 - [ ] #764 `[TO DO]` — [FEATURE] System amunicji — strzały dla łuku, bełty dla kuszy; startowe 20 szt, odejmowanie przy ataku dystansowym
 - [ ] #765 `[TO DO]` — [FEATURE] Odzyskiwanie amunicji — 40% szans na odzysk strzały/bełtu + pill informacyjny
-- [ ] #766 `[TO DO]` — [BUG] Modal sklepu otwiera się przy zwykłych deklaracjach — trade-intent regex bez granic słów (skUPiam, przygLADam) + fallback keys[0]
+- [x] #766 `[DONE]` — [BUG] Modal sklepu otwiera się przy zwykłych deklaracjach — trade-intent regex bez granic słów (skUPiam, przygLADam) + fallback keys[0] [commit 870a692]
 - [ ] #768 `[TO DO]` — [TASK] Admin Bohaterowie — kategoria Zbroja w katalogu ekwipunku + usuwanie bohatera
 - [ ] #771 `[TO DO]` — [FEATURE] Konsumable on-use effect builder + damage_enemy + apply_condition(target); migracja 14 itemów (Woda Święcona itp.)
 <!-- BOARD-TODO:END -->
@@ -87,7 +87,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] 8. #745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [wdrożone 8a35c22]
 
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
-- [ ] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0]
+- [x] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0] [wdrożone 870a692]
 - [x] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
 - [ ] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
 - [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
