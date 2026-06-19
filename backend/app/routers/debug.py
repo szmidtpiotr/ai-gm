@@ -789,6 +789,34 @@ def robbery_preview(level: int = Query(1, ge=1, le=20)):
     }
 
 
+@router.get("/service-price", tags=["debug"])
+def service_price(key: str = Query(...)):
+    """#751 — read-only podgląd ceny usługi z game_config_services.
+
+    Deterministyczny kontrakt dla Playwright: potwierdza że klucz usługi
+    (np. tavern_meal) istnieje i ma poprawną cenę z bazy. Nie zmienia stanu.
+    found=False gdy klucz nieznany/nieaktywny.
+    """
+    conn = _open_conn()
+    try:
+        row = conn.execute(
+            "SELECT key, label, cost_gp FROM game_config_services "
+            "WHERE key = ? AND is_active = 1 LIMIT 1",
+            (key,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return {"ok": True, "key": key, "found": False, "cost_gp": None}
+    return {
+        "ok": True,
+        "key": row["key"],
+        "found": True,
+        "label": row["label"],
+        "cost_gp": int(row["cost_gp"]),
+    }
+
+
 def _open_conn():
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row

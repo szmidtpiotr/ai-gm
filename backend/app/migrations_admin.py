@@ -1816,7 +1816,9 @@ ADMIN_SEEDS = [
     ('stable_night',    'Stajnia: jedna noc',         3,   'Nocleg i pasza dla konia lub wierzchowca', 1),
     ('blacksmith_repair', 'Kowal: naprawa ekwipunku', 15,  'Naprawa uszkodzonej broni lub zbroi', 1),
     ('messenger',       'Posłaniec: wiadomość',       8,   'Wysłanie wiadomości do pobliskiego miasta', 1),
-    ('guide_day',       'Przewodnik: jeden dzień',    12,  'Miejscowy przewodnik przez niebezpieczny teren', 1)
+    ('guide_day',       'Przewodnik: jeden dzień',    12,  'Miejscowy przewodnik przez niebezpieczny teren', 1),
+    ('tavern_meal',     'Gospoda: posiłek',           2,   'Jedzenie i napój w gospodzie — bez noclegu (#751)', 1),
+    ('tavern_drink',    'Gospoda: napój',             1,   'Sam napój (piwo, wino, woda) — bez jedzenia (#751)', 1)
     """
 ,
     "ALTER TABLE bug_reports ADD COLUMN screenshot_base64 TEXT",
