@@ -6,7 +6,7 @@
 >
 > Trzy sekcje: **CO ROBIMY TERAZ** · **OSTATNIO ZROBIONE** · **UWAŻAJ (pułapki)**.
 
-_Ostatnia aktualizacja: 2026-06-19_
+_Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 
 ---
 
@@ -23,7 +23,8 @@ _Ostatnia aktualizacja: 2026-06-19_
 - Faza 5 / Multiplayer — **WSTRZYMANY** świadomie, aż mechanika single-player będzie sprawdzona i grywalna (czyli aż fix_list się wyczyści). Nie ruszamy MP wcześniej.
 
 **Następne sensowne zadania** (z `fix_list.md`, priorytet malejąco):
-- P1 quick wins jeszcze otwarte: **#756** (duplikacja questów co turę), **#742** (sklep w lochu + brak odświeżenia ekwipunku), **#751** (przepłata za posiłek 2 vs 5 GP), **#746** (angielskie nazwy łupów w modalu walki), **#757** (inventory pokazuje klucz zamiast nazwy), **#734** (brak mikstury w walce).
+- P1 quick wins jeszcze otwarte: **#751** (przepłata za posiłek 2 vs 5 GP), **#746** (angielskie nazwy łupów w modalu walki), **#757** (inventory pokazuje klucz zamiast nazwy), **#734** (brak mikstury w walce).
+- ~~#756, #742~~ — ✅ DONE i zweryfikowane.
 - Wymaga TWOJEJ decyzji A/B zanim ruszę (`design`): **#733** (balans 1. komnaty solo lvl1), **#747** (kreator: minus skilla zjada punkt), **#753** (unik double jeopardy), **#744** (wojownik z tarczą nie blokuje).
 
 ---
@@ -44,6 +45,8 @@ _Ostatnia aktualizacja: 2026-06-19_
 - #767 — KRYTYCZNY: granie bohaterem przejmowało cudzą aktywną kampanię (korupcja danych) → guard.
 - #743 — crash przy zakładaniu rękawic → slot `hands`.
 - #759/#722/#721/#745 — bugi grafu lochu i zagadek (boss osiągalny za wcześnie, zagadki).
+- **#756** — duplikacja questów co turę → zweryfikowane Playwright 2026-06-19 ✅.
+- **#742** — sklep w lochu (guard dungeon-mode) + odświeżenie ekwipunku po buy/sell → TDD 4/4 + Playwright 3/3 + visual test 2026-06-19 ✅.
 
 ---
 
