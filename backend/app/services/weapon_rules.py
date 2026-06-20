@@ -8,6 +8,14 @@ from typing import Any
 ATTACK_TESTS = frozenset({"melee_attack", "ranged_attack", "spell_attack"})
 TWO_HANDED_SKILL_KEYS = ("two_handed", "great_weapon")
 
+# ─── Dual-wield (#598) ───────────────────────────────────────────────────────
+# Mechanika walki dwoma broniami, klasyfikowana wg PARY (main + off):
+#   • dwie LEKKIE bronie + skill `dual_wield` rank≥1 → drugi atak off-hand
+#   • dowolna broń + druga broń (nie-2-lekkie)        → parowanie (+obrona)
+#   • pusta off-hand / tarcza (nie-broń) / 2H w main  → brak (1 atak jak dziś)
+DUAL_WIELD_SKILL_KEY = "dual_wield"
+PARRY_DEFENSE_BONUS = 2  # STARTING value, Sandbox-tunable (#598)
+
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -88,6 +96,97 @@ def weapon_key_from_inventory(conn: sqlite3.Connection, character_id: int) -> st
     if not row or row["weapon_key"] is None:
         return None
     return str(row["weapon_key"]).strip() or None
+
+
+def offhand_weapon_key_from_inventory(conn: sqlite3.Connection, character_id: int) -> str | None:
+    """Equipped weapon in OFF hand (#598). Mirror of :func:`weapon_key_from_inventory`,
+    slot = 'off_hand'. Zwraca None gdy off-hand pusty albo trzyma nie-broń (tarczę)."""
+    try:
+        row = conn.execute(
+            """
+            SELECT weapon_key FROM character_inventory
+            WHERE character_id = ?
+              AND COALESCE(equipped, 0) = 1
+              AND LOWER(TRIM(COALESCE(slot, ''))) = 'off_hand'
+              AND weapon_key IS NOT NULL
+              AND TRIM(weapon_key) != ''
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (int(character_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row or row["weapon_key"] is None:
+        return None
+    return str(row["weapon_key"]).strip() or None
+
+
+def is_light_weapon(weapon_row: dict[str, Any] | None) -> bool:
+    """Czy broń jest 'lekka' (kwalifikuje się do dual-wield jako jedna z dwóch).
+
+    MVP #598: pochodna `finesse` (sztylet finesse=1 → lekka; miecze nie). Broń
+    dwuręczna NIGDY nie jest lekka. Jawna kolumna `light` (gdy kiedyś dodana)
+    nadpisuje heurystykę finesse — pozwala adminowi sterować per broń."""
+    if not weapon_row:
+        return False
+    if _safe_int(weapon_row.get("two_handed"), 0):
+        return False
+    light = weapon_row.get("light")
+    if light is not None:
+        return bool(_safe_int(light, 0))
+    return bool(_safe_int(weapon_row.get("finesse"), 0))
+
+
+def dual_wield_skill_rank(sheet: dict[str, Any]) -> int:
+    """Rank skilla `dual_wield` z karty (0 gdy brak)."""
+    return _safe_int(_sheet_skills(sheet).get(DUAL_WIELD_SKILL_KEY, 0), 0)
+
+
+def classify_dual_combo(
+    main_row: dict[str, Any] | None,
+    off_row: dict[str, Any] | None,
+    dual_wield_rank: int,
+) -> str:
+    """Klasyfikacja pary broni (#598) → 'dual_attack' | 'parry' | 'none'.
+
+    • brak off-hand (None) lub 2H w main → 'none'
+    • dwie lekkie bronie → 'dual_attack' jeśli skill rank≥1, inaczej 'none'
+    • każda inna para z bronią w off → 'parry'
+    """
+    if not off_row:
+        return "none"
+    if main_row and _safe_int(main_row.get("two_handed"), 0):
+        return "none"
+    if is_light_weapon(main_row) and is_light_weapon(off_row):
+        return "dual_attack" if int(dual_wield_rank or 0) >= 1 else "none"
+    return "parry"
+
+
+def player_dual_combo_for_character(
+    conn: sqlite3.Connection,
+    character_id: int,
+    sheet: dict[str, Any],
+) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    """Rozwiąż parę broni gracza z karty+ekwipunku → (combo, main_row, off_row)."""
+    main_key = weapon_key_from_sheet(sheet)
+    if not main_key:
+        main_key = _normalize_catalog_weapon_key(weapon_key_from_inventory(conn, int(character_id)))
+    off_key = _normalize_catalog_weapon_key(offhand_weapon_key_from_inventory(conn, int(character_id)))
+    main_row = load_weapon_row(conn, main_key) if main_key else None
+    off_row = load_weapon_row(conn, off_key) if off_key else None
+    combo = classify_dual_combo(main_row, off_row, dual_wield_skill_rank(sheet))
+    return combo, main_row, off_row
+
+
+def parry_defense_bonus(
+    conn: sqlite3.Connection,
+    character_id: int,
+    sheet: dict[str, Any],
+) -> int:
+    """Bonus do obrony gracza z parowania (#598). PARRY_DEFENSE_BONUS gdy combo=='parry', inaczej 0."""
+    combo, _, _ = player_dual_combo_for_character(conn, int(character_id), sheet)
+    return PARRY_DEFENSE_BONUS if combo == "parry" else 0
 
 
 def _normalize_weapon_row(row: sqlite3.Row | None) -> dict[str, Any] | None:

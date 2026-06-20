@@ -107,6 +107,18 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    # #598: dual-wield — drugi atak off-hand (ta sama tura) gdy para broni = 'dual_attack'.
+    # PRZED advance_turn, by oba ataki rozliczyły się w jednej turze gracza. Tylko melee
+    # (nie spell), tura nie zablokowana, walka wciąż aktywna (resolve_offhand_followup waliduje).
+    if body.attacker == "player" and not res.get("blocked") and not body.spell_key:
+        try:
+            off = combat.resolve_offhand_followup(campaign_id)
+        except ValueError:
+            off = None
+        if off is not None:
+            res["offhand"] = off
+            res["combat_state"] = off.get("combat_state", res.get("combat_state"))
+
     # #848: advance turn server-side after player attack so enemy turn is never lost on F5/reload.
     # Skip if blocked (turn not consumed: out_of_range, mana_insufficient, unsupported_effect).
     # Mirrors post_enemy_turn — advance only when combat still active.

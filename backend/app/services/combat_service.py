@@ -20,6 +20,8 @@ from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d
 from app.services.event_logger import write_game_event
 from app.services.weapon_rules import (
     load_weapon_row,
+    parry_defense_bonus,
+    player_dual_combo_for_character,
     resolve_attack_roll_for_weapon,
     resolve_sheet_weapon,
     stat_modifier,
@@ -4257,10 +4259,13 @@ def resolve_attack(
     raw_d20: int | None = None,
     spell_key: str | None = None,
     target_id: str | None = None,
+    weapon_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
     attacker: 'enemy' ignores roll_result; rolls d20+attack_bonus internally vs player AC.
+    weapon_override: #598 dual-wield — force this weapon row (off-hand) instead of the
+      sheet/inventory main weapon. Used by :func:`resolve_offhand_followup`.
     """
     turn_effects = evaluate_current_turn_conditions(campaign_id)
     if turn_effects.get("blocked"):
@@ -4418,8 +4423,11 @@ def resolve_attack(
             if old_nm in ("", "wróg", "wrog", "enemy"):
                 enemy["name"] = card_name
 
+            # #598: dual-wield off-hand — wymuszona broń (pomija sheet/spell/scholar)
+            if weapon_override is not None:
+                weapon_row = weapon_override
             # If spell_key provided, override weapon with spell stats
-            if spell_key:
+            elif spell_key:
                 spell_weapon = conn.execute(
                     "SELECT key, label, mana_cost, damage_die, spell_type, tier FROM game_config_spells WHERE key = ? AND is_active = 1",
                     (spell_key,),
@@ -5303,7 +5311,16 @@ def resolve_attack(
         if not p:
             raise ValueError("player combatant missing")
         pac = int(p.get("defense", _player_ac_from_sheet(sheet)))
-        p["defense"] = pac
+        p["defense"] = pac  # przechowujemy BAZOWĄ obronę (bez parowania)
+        # #598: parowanie (cięższa main + druga broń w off) → +obrona dla TEGO ciosu,
+        # czyli redukcja obrażeń wg #826. Nie zapisywane na combatancie (brak stackowania).
+        try:
+            _parry598 = int(parry_defense_bonus(conn, ch_id, sheet) or 0)
+        except Exception:
+            _parry598 = 0
+        if _parry598:
+            pac += _parry598
+            out["parry_bonus"] = _parry598
         # #826: KONIEC double jeopardy. AC NIE jest progiem trafienia (przeszło na redukcję
         # obrażeń niżej). Jeden test obronny:
         #  • gracz ma reakcję (dodge/shield + tarcza) → cios dosięga, jedyny test = OKNO REAKCJI
@@ -5667,6 +5684,14 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         # po nieudanym uniku). Obrona gracza = pac (AC). Nat 20 wroga (z pending) pomija pancerz.
         if dmg > 0:
             _pac826 = int(p.get("defense", _player_ac_from_sheet(sheet)))
+            # #598: parowanie dolicza obronę także na ścieżce reakcji (take/blok)
+            try:
+                _parry598r = int(parry_defense_bonus(conn, ch_id, sheet) or 0)
+            except Exception:
+                _parry598r = 0
+            if _parry598r:
+                _pac826 += _parry598r
+                out["parry_bonus"] = _parry598r
             _dm826r = apply_defense_model(dmg, int(attack_roll), _pac826,
                                           ignore_armor=bool(pending.get("nat20")))
             if _dm826r["margin_bonus"]:
@@ -5752,6 +5777,36 @@ def resolve_player_attack(
 ) -> dict[str, Any]:
     """Step 4.1 — alias for :func:`resolve_attack` with ``attacker='player'`` (dodge, damage, HP)."""
     return resolve_attack(campaign_id, roll_result, attacker="player", raw_d20=raw_d20)
+
+
+def resolve_offhand_followup(campaign_id: int) -> dict[str, Any] | None:
+    """#598 — drugi atak OFF-HAND w tej samej turze gracza.
+
+    Wołane po głównym ataku gracza, PRZED `advance_turn` (oba ataki = jedna tura).
+    Strzela tylko gdy para broni klasyfikuje się jako 'dual_attack' (dwie lekkie
+    bronie + skill `dual_wield` rank≥1) i walka wciąż trwa z żywym wrogiem.
+    Zwraca wynik off-hand `resolve_attack` (pełny: unik/obrażenia/#826/loot/XP) albo
+    None gdy brak dual-wield / brak żywych wrogów / nie tura gracza."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row or str(row["current_turn"]) != "player":
+            return None
+        ch_id = int(row["character_id"])
+        ch = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (ch_id,)).fetchone()
+        sheet = parse_character_sheet(ch["sheet_json"]) if ch and ch["sheet_json"] else {}
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        combo, _main_row, off_row = player_dual_combo_for_character(conn, ch_id, sheet)
+        if combo != "dual_attack" or not off_row:
+            return None
+        if not _living_enemy_ids(combatants):
+            return None
+    off_raw = roll_d20()
+    return resolve_attack(
+        campaign_id, None, attacker="player", raw_d20=off_raw, weapon_override=off_row,
+    )
 
 
 def resolve_enemy_attack(
