@@ -2585,6 +2585,13 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 | Tabela ran spójna front ↔ back | ⚠️ dwie różne tabele — do unifikacji (C4) |
 | Rany dla wrogów (symetria) | ❌ wróg nie dostaje kary — do dodania (C5, C6) |
 | Wizualne linie frontu w UI | ❌ opcjonalny polish (D6) |
+| Walka dwoma broniami (dual-wield, #598) | ✅ silnik — klasyfikacja po parze broni (UI render `offhand`/parowania = osobne issue) |
+
+> **Dual-wield (#598).** Klasyfikacja po PARZE broni (główna + pomocnicza):
+> - **dwie lekkie bronie** (lekkość = `finesse`, override jawną kolumną `light`) **+ skill `dual_wield` rank ≥ 1** → drugi atak off-hand w tej samej turze (pełny rzut d20 + pełny mod cechy do obrażeń). Realizacja: drugi `resolve_attack(weapon_override=off_hand)` przed wspólnym `advance_turn`.
+> - **cięższa główna + druga broń w off-hand** → **parowanie**: `+PARRY_DEFENSE_BONUS` (start **+2**, Sandbox-tunable) do obrony gracza = redukcja obrażeń wg modelu #826. Jeden atak. Bez wymogu skilla.
+> - **tarcza (`off_hand_only`) / pusty off / broń 2H w głównej** → bez zmian (1 atak; tarcza = `shield_block` S16).
+> Wartości startowe, Sandbox-tunable. Helpers: `weapon_rules.classify_dual_combo`, `parry_defense_bonus`, `combat_service.resolve_offhand_followup`.
 
 ### Zadania implementacyjne
 
