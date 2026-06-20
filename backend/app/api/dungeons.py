@@ -202,6 +202,15 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
 
     _save_dungeon_entry_snapshot(req.campaign_id, req.character_id)
 
+    # #865: resolve bare riddle string keys to dicts before returning, so the fresh-entry
+    # path matches the resume endpoint (GET /dungeon-run). Without this the frontend gets
+    # content.riddle = "riddle_silence" and renders the bare key instead of the riddle text.
+    _conn = _get_db()
+    try:
+        _resolve_run_riddles(_conn, instance)
+    finally:
+        _conn.close()
+
     # Build entry narrative from tile description (Decision 3: DB desc + LLM colorizes)
     label = instance["dungeon_label"]
     graph = instance.get("graph") or {}
