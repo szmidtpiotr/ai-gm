@@ -839,7 +839,7 @@ async function _openLootEntriesModal(tableKey, tableLabel) {
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:flex-end">
         <button class="btn btn-sm btn-primary" id="add-entry-btn">+ Wpis</button>
       </div>
-      <div class="table-wrap" style="max-height:50vh;overflow-y:auto">
+      <div class="data-table--scroll table-wrap" style="max-height:50vh;overflow-y:auto">
         <table class="data-table">
           <thead><tr>
             <th>Przedmiot</th><th>Typ</th><th style="width:70px">Szansa %</th>
@@ -1489,7 +1489,7 @@ function _sectionHtml() {
           <button class="btn-toggle-details" data-details-for="weapons-table">Szczegóły</button>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="weapons-table">
           <thead><tr>
             <th class="detail-col"><div class="th-inner">Klucz</div></th>
@@ -1519,7 +1519,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj zbroi…" data-filter-for="armor-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="armor-table">Szczegóły</button></div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="armor-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Typ</th>
@@ -1538,7 +1538,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj przedmiotów…" data-filter-for="items-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="items-table">Szczegóły</button></div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="items-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Typ</th>
@@ -1557,7 +1557,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj konsumabli…" data-filter-for="consumables-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="consumables-table">Szczegóły</button></div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="consumables-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Efekt</th>
@@ -1575,7 +1575,7 @@ function _sectionHtml() {
       <div class="toolbar">
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj tabel łupów…" data-filter-for="loot-table"></div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="loot-table">
           <thead><tr>
             <th class="td-sticky">Klucz</th><th>Nazwa</th>
@@ -1594,7 +1594,7 @@ function _sectionHtml() {
         <button class="btn btn-primary btn-sm" id="add-spell-btn">+ Czar</button>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="spells-table">Szczegóły</button></div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="spells-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Szkoła</th>
@@ -1615,7 +1615,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj afiksów…" data-filter-for="affixes-table"></div>
         <button class="btn btn-primary btn-sm" id="add-affix-btn">+ Afiks</button>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--scroll table-wrap">
         <table class="data-table" id="affixes-table">
           <thead><tr>
             <th class="td-sticky">Klucz</th><th>Nazwa</th><th style="width:60px">Tier</th>

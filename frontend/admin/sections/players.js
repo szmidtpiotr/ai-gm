@@ -127,17 +127,17 @@ async function _loadPlayers() {
     }
     tbody.innerHTML = items.map(u => `<tr data-player-id="${u.id}">
       <td class="col-check"><input type="checkbox" class="player-row-check" onchange="rowCheck('player')"></td>
-      <td class="td-sticky" data-sort-val="${_esc(u.username||'')}">
+      <td class="td-sticky" data-label="Użytkownik" data-sort-val="${_esc(u.username||'')}">
         <div style="display:flex;align-items:center;gap:8px">
           <div class="user-avatar" style="width:24px;height:24px;font-size:10px">${_esc((u.username||'?')[0].toUpperCase())}</div>
           <div><div class="td-name">${_esc(u.username)}</div><div class="td-muted">${_esc(u.display_name||'')}</div></div>
         </div>
       </td>
-      <td>${u.is_admin ? '<span class="badge badge-red">Admin</span>' : '<span class="badge badge-blue">Gracz</span>'}${u.is_tester ? '<span class="badge badge-amber" style="margin-left:4px">Tester</span>' : ''}</td>
-      <td class="td-muted" data-sort-val="${u.campaigns_count ?? 0}">${u.campaigns_count ?? 0} kampanii</td>
-      <td class="td-mono" data-sort-val="0">—</td>
-      <td class="td-muted" data-sort-val="${u.created_at || ''}">${_timeAgo(u.created_at) || '—'}</td>
-      <td><span class="badge badge-slate" id="llm-badge-${u.id}">…</span></td>
+      <td data-label="Rola">${u.is_admin ? '<span class="badge badge-red">Admin</span>' : '<span class="badge badge-blue">Gracz</span>'}${u.is_tester ? '<span class="badge badge-amber" style="margin-left:4px">Tester</span>' : ''}</td>
+      <td class="td-muted" data-label="Kampanie" data-sort-val="${u.campaigns_count ?? 0}">${u.campaigns_count ?? 0} kampanii</td>
+      <td class="td-mono" data-label="Tury" data-sort-val="0">—</td>
+      <td class="td-muted" data-label="Aktywność" data-sort-val="${u.created_at || ''}">${_timeAgo(u.created_at) || '—'}</td>
+      <td data-label="LLM"><span class="badge badge-slate" id="llm-badge-${u.id}">…</span></td>
       <td class="td-actions">
         <button class="btn-icon" title="Otwórz panel gracza" onclick="openPlayerDrawer(${u.id},'${_esc(u.username)}')">▶</button>
         ${!u.is_admin ? `<button class="btn-icon danger" title="Usuń" onclick="_deletePlayerRow(${u.id},'${_esc(u.username)}',this)">✕</button>` : ''}
@@ -562,7 +562,7 @@ export async function init(panel) {
           <button class="chip"     onclick="filterPlayers(this,'gracz')">Gracze</button>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="players-table">
           <thead>
             <tr>

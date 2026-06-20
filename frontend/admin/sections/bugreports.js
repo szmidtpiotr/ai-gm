@@ -64,11 +64,11 @@ async function _loadBugReports() {
         ? `<span class="badge badge-green" style="font-size:0.7rem">💡</span>`
         : `<span class="badge badge-red" style="font-size:0.7rem">🐛</span>`;
       return `<tr style="cursor:pointer" onclick="openBrDrawer(${i})">
-        <td class="td-mono" style="font-size:0.78rem;white-space:nowrap">${date}</td>
-        <td>${typeCell} <span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
-        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
-        <td>${ghLink}</td>
-        <td>${statusCell}</td>
+        <td class="td-mono" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${date}</td>
+        <td data-label="Gracz">${typeCell} <span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
+        <td data-label="Obserwacja" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
+        <td data-label="GitHub">${ghLink}</td>
+        <td data-label="Status">${statusCell}</td>
         <td><button class="btn-icon" onclick="event.stopPropagation();openBrDrawer(${i})">▶</button></td>
       </tr>`;
     }).join('');
@@ -338,7 +338,7 @@ export async function init(panel) {
       </div>
 
       <div class="card" style="overflow:hidden">
-        <div class="table-wrap" style="overflow-x:auto">
+        <div class="data-table--cards table-wrap" style="overflow-x:auto">
           <table class="data-table" id="br-table">
             <thead><tr>
               <th>Data</th>

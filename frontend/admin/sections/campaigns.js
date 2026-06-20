@@ -70,13 +70,13 @@ function filterTableGeneric(input, tableId, nameClass) {
       const statusBadge = s => ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[s] || `<span class="badge badge-slate">${_esc(s)}</span>`);
       tbody.innerHTML = items.map(c => `<tr>
         <td class="col-check"><input type="checkbox" class="camp-row-check" onchange="rowCheck('camp')"></td>
-        <td class="td-sticky" data-sort-val="${_esc(c.title)}"><div class="campaign-row-name">${_esc(c.title)}${c.plan_degraded ? ' <span title="GM Plan nie mógł być wygenerowany przez LLM; użyto planu zapasowego. Zregeneruj z Warsztatu." style="font-size:0.72rem;color:#f59e0b;cursor:help">⚠ Plan uproszczony</span>' : ''}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
-        <td class="td-mono" data-sort-val="${_esc(c.char_name||'')}">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
-        <td data-sort-val="${_esc(archMap[c.char_archetype]||c.char_archetype||'')}">${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
-        <td class="td-mono" data-sort-val="${c.char_level??''}">${c.char_level??'—'}</td>
-        <td data-sort-val="${c.char_current_hp??''}">${_hp(c.char_current_hp, c.char_max_hp)}</td>
-        <td class="td-mono" data-sort-val="${c.turn_count??''}">${c.turn_count??'—'}</td>
-        <td data-sort-val="${c.status??''}">${statusBadge(c.status)}</td>
+        <td class="td-sticky" data-label="Kampania" data-sort-val="${_esc(c.title)}"><div class="campaign-row-name">${_esc(c.title)}${c.plan_degraded ? ' <span title="GM Plan nie mógł być wygenerowany przez LLM; użyto planu zapasowego. Zregeneruj z Warsztatu." style="font-size:0.72rem;color:#f59e0b;cursor:help">⚠ Plan uproszczony</span>' : ''}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
+        <td class="td-mono" data-label="Bohater" data-sort-val="${_esc(c.char_name||'')}">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
+        <td data-label="Klasa" data-sort-val="${_esc(archMap[c.char_archetype]||c.char_archetype||'')}">${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
+        <td class="td-mono" data-label="Poz." data-sort-val="${c.char_level??''}">${c.char_level??'—'}</td>
+        <td data-label="HP" data-sort-val="${c.char_current_hp??''}">${_hp(c.char_current_hp, c.char_max_hp)}</td>
+        <td class="td-mono" data-label="Tura" data-sort-val="${c.turn_count??''}">${c.turn_count??'—'}</td>
+        <td data-label="Status" data-sort-val="${c.status??''}">${statusBadge(c.status)}</td>
         <td class="td-actions"><button class="btn-icon" title="Szczegóły" onclick="openCampaignModal(${c.id})">⊞</button> <button class="btn-icon danger" title="Usuń kampanię" onclick="deleteCampaign(${c.id},'${_esc(c.title)}',this)">✕</button></td>
       </tr>`).join('');
       const pg = document.querySelector('#section-campaigns .pagination span');
@@ -1273,7 +1273,7 @@ function _sectionHtml() {
           <button class="btn btn-sm btn-danger" onclick="_bulkDeleteCampaigns(this)">Usuń zaznaczone</button>
         </div>
 
-        <div class="table-wrap" id="campaigns-table-view">
+        <div class="data-table--cards table-wrap" id="campaigns-table-view">
           <table class="data-table" id="campaigns-table">
             <thead>
               <tr>
