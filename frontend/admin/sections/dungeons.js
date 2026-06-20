@@ -55,7 +55,7 @@ function _sectionHtml() { return `
             <button class="chip" onclick="filterDungeons(this,'w przygotowaniu')">W przygotowaniu</button>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="data-table--cards table-wrap">
           <table class="data-table" id="dungeons-table">
             <thead>
               <tr>
@@ -74,50 +74,50 @@ function _sectionHtml() { return `
             <tbody>
               <tr>
                 <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-                <td class="td-sticky td-mono">dungeon_goblin_warren</td>
-                <td class="td-name">Nory Goblinów</td>
-                <td class="td-muted">1–3</td>
-                <td class="td-mono editable" onclick="startEdit(this)">5</td>
-                <td><span class="badge badge-green">common</span></td>
-                <td class="td-mono editable" onclick="startEdit(this)">8h</td>
-                <td class="td-mono">2</td>
-                <td><span class="badge badge-green">● Aktywny</span></td>
+                <td class="td-sticky td-mono" data-label="Klucz">dungeon_goblin_warren</td>
+                <td class="td-name" data-label="Nazwa">Nory Goblinów</td>
+                <td class="td-muted" data-label="Min. poziom">1–3</td>
+                <td class="td-mono editable" data-label="Tryb" onclick="startEdit(this)">5</td>
+                <td data-label="Tier łupów"><span class="badge badge-green">common</span></td>
+                <td class="td-mono editable" data-label="Cooldown" onclick="startEdit(this)">8h</td>
+                <td class="td-mono" data-label="Biegi">2</td>
+                <td data-label="Status"><span class="badge badge-green">● Aktywny</span></td>
                 <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger">✕</button></td>
               </tr>
               <tr>
                 <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-                <td class="td-sticky td-mono">dungeon_crypt</td>
-                <td class="td-name">Krypta Umarłych</td>
-                <td class="td-muted">4–6</td>
-                <td class="td-mono editable" onclick="startEdit(this)">8</td>
-                <td><span class="badge badge-blue">uncommon</span></td>
-                <td class="td-mono editable" onclick="startEdit(this)">12h</td>
-                <td class="td-mono">1</td>
-                <td><span class="badge badge-green">● Aktywny</span></td>
+                <td class="td-sticky td-mono" data-label="Klucz">dungeon_crypt</td>
+                <td class="td-name" data-label="Nazwa">Krypta Umarłych</td>
+                <td class="td-muted" data-label="Min. poziom">4–6</td>
+                <td class="td-mono editable" data-label="Tryb" onclick="startEdit(this)">8</td>
+                <td data-label="Tier łupów"><span class="badge badge-blue">uncommon</span></td>
+                <td class="td-mono editable" data-label="Cooldown" onclick="startEdit(this)">12h</td>
+                <td class="td-mono" data-label="Biegi">1</td>
+                <td data-label="Status"><span class="badge badge-green">● Aktywny</span></td>
                 <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger">✕</button></td>
               </tr>
               <tr>
                 <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-                <td class="td-sticky td-mono">dungeon_wizard_tower</td>
-                <td class="td-name">Wieża Maga</td>
-                <td class="td-muted">7–9</td>
-                <td class="td-mono editable" onclick="startEdit(this)">10</td>
-                <td><span class="badge badge-amber">rare</span></td>
-                <td class="td-mono editable" onclick="startEdit(this)">24h</td>
-                <td class="td-mono">0</td>
-                <td><span class="badge badge-green">● Aktywny</span></td>
+                <td class="td-sticky td-mono" data-label="Klucz">dungeon_wizard_tower</td>
+                <td class="td-name" data-label="Nazwa">Wieża Maga</td>
+                <td class="td-muted" data-label="Min. poziom">7–9</td>
+                <td class="td-mono editable" data-label="Tryb" onclick="startEdit(this)">10</td>
+                <td data-label="Tier łupów"><span class="badge badge-amber">rare</span></td>
+                <td class="td-mono editable" data-label="Cooldown" onclick="startEdit(this)">24h</td>
+                <td class="td-mono" data-label="Biegi">0</td>
+                <td data-label="Status"><span class="badge badge-green">● Aktywny</span></td>
                 <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger">✕</button></td>
               </tr>
               <tr>
                 <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-                <td class="td-sticky td-mono">dungeon_dragon_lair</td>
-                <td class="td-name">Jaskinia Smoka</td>
-                <td class="td-muted">10–12</td>
-                <td class="td-mono editable" onclick="startEdit(this)">6</td>
-                <td><span class="badge badge-red">epic</span></td>
-                <td class="td-mono editable" onclick="startEdit(this)">48h</td>
-                <td class="td-mono">0</td>
-                <td><span class="badge badge-slate">○ Wkrótce</span></td>
+                <td class="td-sticky td-mono" data-label="Klucz">dungeon_dragon_lair</td>
+                <td class="td-name" data-label="Nazwa">Jaskinia Smoka</td>
+                <td class="td-muted" data-label="Min. poziom">10–12</td>
+                <td class="td-mono editable" data-label="Tryb" onclick="startEdit(this)">6</td>
+                <td data-label="Tier łupów"><span class="badge badge-red">epic</span></td>
+                <td class="td-mono editable" data-label="Cooldown" onclick="startEdit(this)">48h</td>
+                <td class="td-mono" data-label="Biegi">0</td>
+                <td data-label="Status"><span class="badge badge-slate">○ Wkrótce</span></td>
                 <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger">✕</button></td>
               </tr>
             </tbody>
@@ -140,7 +140,7 @@ function _sectionHtml() { return `
               <button class="chip" onclick="filterRiddles(this,'3')">Trudne</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div class="data-table--cards table-wrap">
             <table class="data-table" id="riddles-table">
               <thead><tr>
                 <th class="td-sticky"><div class="th-inner">Treść</div></th>
@@ -181,7 +181,7 @@ function _sectionHtml() { return `
 
         <!-- Kategorie tab -->
         <div class="stab-panel" id="dtab-tilecats">
-          <div class="table-wrap">
+          <div class="data-table--cards table-wrap">
             <table class="data-table" id="tilecats-table">
               <thead><tr>
                 <th>Klucz</th><th>Nazwa</th><th>Opis</th><th>Styl prompt</th>
@@ -421,13 +421,13 @@ function _sectionHtml() { return `
       const tierBadge = t => ({common:'badge-green',uncommon:'badge-blue',rare:'badge-amber',epic:'badge-red',legendary:'badge-red'}[t]||'badge-slate');
       tbody.innerHTML = items.map(dg => `<tr>
         <td class="col-check"><input type="checkbox" class="dung-row-check" onchange="rowCheck('dung')"></td>
-        <td class="td-sticky td-mono" data-sort-val="${_esc(dg.key)}">${_esc(dg.key)}</td>
-        <td class="td-name" data-sort-val="${_esc(dg.label||dg.key)}">${_esc(dg.label||dg.key)}</td>
-        <td class="td-muted" data-sort-val="${dg.min_level??''}">${dg.min_level?dg.min_level+'+':'—'}</td>
-        <td data-sort-val="${_esc(dg.tile_category_key||'')}">${dg.tile_category_key ? `<span class="badge badge-blue" title="Tryb kafelkowy: ${_esc(dg.tile_category_key)}">🗺 ${_esc(dg.tile_category_key)}</span>` : `<span class="badge badge-slate" title="Tryb proceduralny">⚙ ${dg.rooms??'?'}p</span>`}</td>
-        <td class="td-mono editable" data-sort-val="${dg.cooldown_hours??''}" onclick="startEdit(this)">${dg.cooldown_hours?dg.cooldown_hours+'h':'—'}</td>
-        <td class="td-mono" data-sort-val="${dg.active_runs??dg.active_runs_count??dg.runs_active??''}">${dg.active_runs ?? dg.active_runs_count ?? dg.runs_active ?? '—'}</td>
-        <td data-sort-val="${dg.is_active?1:0}"><span class="badge ${dg.is_active?'badge-green':'badge-slate'}">${dg.is_active?'● Aktywny':'○ Nieaktywny'}</span></td>
+        <td class="td-sticky td-mono" data-label="Klucz" data-sort-val="${_esc(dg.key)}">${_esc(dg.key)}</td>
+        <td class="td-name" data-label="Nazwa" data-sort-val="${_esc(dg.label||dg.key)}">${_esc(dg.label||dg.key)}</td>
+        <td class="td-muted" data-label="Min. poziom" data-sort-val="${dg.min_level??''}">${dg.min_level?dg.min_level+'+':'—'}</td>
+        <td data-label="Tryb" data-sort-val="${_esc(dg.tile_category_key||'')}">${dg.tile_category_key ? `<span class="badge badge-blue" title="Tryb kafelkowy: ${_esc(dg.tile_category_key)}">🗺 ${_esc(dg.tile_category_key)}</span>` : `<span class="badge badge-slate" title="Tryb proceduralny">⚙ ${dg.rooms??'?'}p</span>`}</td>
+        <td class="td-mono editable" data-label="Cooldown" data-sort-val="${dg.cooldown_hours??''}" onclick="startEdit(this)">${dg.cooldown_hours?dg.cooldown_hours+'h':'—'}</td>
+        <td class="td-mono" data-label="Biegi" data-sort-val="${dg.active_runs??dg.active_runs_count??dg.runs_active??''}">${dg.active_runs ?? dg.active_runs_count ?? dg.runs_active ?? '—'}</td>
+        <td data-label="Status" data-sort-val="${dg.is_active?1:0}"><span class="badge ${dg.is_active?'badge-green':'badge-slate'}">${dg.is_active?'● Aktywny':'○ Nieaktywny'}</span></td>
         <td class="td-actions"><button class="btn-icon" title="Edytuj" onclick="openEditDungeonModal(${JSON.stringify(dg).replace(/"/g,'&quot;')})">✎</button> <button class="btn-icon danger" title="Usuń" onclick="deleteDungeon('${_esc(dg.key)}',this)">✕</button></td>
       </tr>`).join('');
       const pg = document.getElementById('dungeons-count');
@@ -1455,11 +1455,11 @@ function _sectionHtml() { return `
       _tileCategoriesCache = items;
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak kategorii</td></tr>`; return; }
       tbody.innerHTML = items.map(c => `<tr data-key="${_esc(c.key)}">
-        <td class="td-sticky td-mono">${_esc(c.key)}</td>
-        <td class="td-name">${_esc(c.label)}</td>
-        <td class="td-muted">${_esc(c.description || '—')}</td>
-        <td class="td-muted" style="font-size:0.72rem">${_esc(c.style_modifier || '—')}</td>
-        <td>${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
+        <td class="td-sticky td-mono" data-label="Klucz">${_esc(c.key)}</td>
+        <td class="td-name" data-label="Nazwa">${_esc(c.label)}</td>
+        <td class="td-muted" data-label="Opis">${_esc(c.description || '—')}</td>
+        <td class="td-muted" data-label="Styl prompt" style="font-size:0.72rem">${_esc(c.style_modifier || '—')}</td>
+        <td data-label="Aktywna">${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
         <td class="td-actions">
           <button class="btn-icon" title="Edytuj" onclick='openEditTileCategoryModal(${JSON.stringify(c).replace(/"/g,"&quot;")})'>✎</button>
         </td>
@@ -1566,12 +1566,12 @@ function _sectionHtml() { return `
       const diffLabel = n => (['','Łatwa','Średnia','Trudna','Bardzo trudna','Legendarna'][n] || `${n}`);
       const diffBadge = n => n <= 1 ? 'badge-green' : n <= 2 ? 'badge-blue' : n <= 3 ? 'badge-amber' : 'badge-red';
       tbody.innerHTML = items.map(r => `<tr data-key="${_esc(r.key)}">
-        <td class="td-sticky td-name" style="max-width:220px;white-space:normal;font-size:0.82rem">${_esc(r.text)}</td>
-        <td class="td-muted" style="font-size:0.82rem">${_esc(r.answer)}</td>
-        <td class="td-muted">${_esc(r.theme||'—')}</td>
-        <td><span class="badge ${diffBadge(r.difficulty)} diff-badge">${r.difficulty}</span></td>
-        <td class="td-mono">${Array.isArray(r.hints)?r.hints.length:0}</td>
-        <td>${r.is_active?'<span class="badge badge-green">●</span>':'<span class="badge badge-slate">○</span>'}</td>
+        <td class="td-sticky td-name" data-label="Treść" style="max-width:220px;white-space:normal;font-size:0.82rem">${_esc(r.text)}</td>
+        <td class="td-muted" data-label="Odpowiedź" style="font-size:0.82rem">${_esc(r.answer)}</td>
+        <td class="td-muted" data-label="Motyw">${_esc(r.theme||'—')}</td>
+        <td data-label="Trudność"><span class="badge ${diffBadge(r.difficulty)} diff-badge">${r.difficulty}</span></td>
+        <td class="td-mono" data-label="Podpowiedzi">${Array.isArray(r.hints)?r.hints.length:0}</td>
+        <td data-label="Aktywna">${r.is_active?'<span class="badge badge-green">●</span>':'<span class="badge badge-slate">○</span>'}</td>
         <td class="td-actions">
           <button class="btn-icon" title="Edytuj" onclick="openEditRiddleModal(${JSON.stringify(r).replace(/"/g,'&quot;')})">✎</button>
           <button class="btn-icon danger" title="Usuń" onclick="deleteRiddle('${_esc(r.key)}',this)">✕</button>
