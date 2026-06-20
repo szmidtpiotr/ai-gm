@@ -96,7 +96,7 @@ def get_combat_turns_history(campaign_id: int, limit: int = Query(500, ge=1, le=
 @router.post("/campaigns/{campaign_id}/combat/resolve-attack")
 def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
     try:
-        return combat.resolve_attack(
+        res = combat.resolve_attack(
             campaign_id,
             body.roll_result,
             attacker=body.attacker,
@@ -106,6 +106,22 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # #848: advance turn server-side after player attack so enemy turn is never lost on F5/reload.
+    # Skip if blocked (turn not consumed: out_of_range, mana_insufficient, unsupported_effect).
+    # Mirrors post_enemy_turn — advance only when combat still active.
+    if body.attacker == "player" and not res.get("blocked"):
+        snap = combat.load_combat_snapshot(campaign_id)
+        if snap and snap.get("status") == "active":
+            try:
+                res["advance_turn"] = combat.advance_turn(campaign_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+        else:
+            res["advance_turn"] = "ended"
+        res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+
+    return res
 
 
 @router.post("/campaigns/{campaign_id}/combat/zone-change")

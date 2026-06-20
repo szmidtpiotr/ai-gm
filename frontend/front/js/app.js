@@ -6286,6 +6286,8 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         };
         await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadE)}`);
         await refreshCharacterData();
+        // #848: trigger enemy turn poll when server already advanced turn after player action
+        if (csE && csE.current_turn !== 'player' && csE.status === 'active') await pollCombatState();
         return;
     }
     // B10 (#657): czar OBRONNY — nakłada pulę absorpcji (temp-HP), NIE atakuje wroga.
@@ -6306,6 +6308,8 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         };
         await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadD)}`);
         await refreshCharacterData();
+        // #848: trigger enemy turn poll when server already advanced turn after player action
+        if (csD && csD.current_turn !== 'player' && csD.status === 'active') await pollCombatState();
         return;
     }
     // B11 (#659): czar AoE (attack_aoe) — jeden rzut, obrażenia wielu wrogom.
@@ -6349,6 +6353,8 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         };
         await sendCombatNarration(`${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payloadA)}`);
         await refreshCharacterData();
+        // #848: trigger enemy turn poll when server already advanced turn after player action
+        if (csA && csA.current_turn !== 'player' && csA.status === 'active') await pollCombatState();
         return;
     }
     if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
@@ -6423,6 +6429,8 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         await handleCombatEnded(cs);
     } else {
         await refreshCharacterData();
+        // #848: trigger enemy turn poll when server already advanced turn after player attack
+        if (cs && cs.current_turn !== 'player' && cs.status === 'active') await pollCombatState();
     }
 }
 
