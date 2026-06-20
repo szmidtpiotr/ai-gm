@@ -594,7 +594,7 @@ def reset_test_env():
             """
             UPDATE campaigns
             SET status = 'active', death_reason = NULL, ended_at = NULL, epitaph = NULL,
-                model_id = NULL
+                model_id = COALESCE(NULLIF(model_id, ''), 'gemma4:e4b')
             WHERE id = ?
             """,
             (campaign_id,),
@@ -815,6 +815,28 @@ def service_price(key: str = Query(...)):
         "label": row["label"],
         "cost_gp": int(row["cost_gp"]),
     }
+
+
+@router.post("/stub_llm")
+def stub_llm(body: dict = Body(...)):
+    """AI_TEST_MODE only: set or clear the in-process LLM stub for Playwright tests.
+
+    POST {"text": "..."}  — enables AI_TEST_STUB_LLM=1 with the given stub text.
+    POST {"text": null}   — disables the stub (resets AI_TEST_STUB_LLM).
+
+    Used by issue #772 regression spec to inject a deterministic LLM response
+    containing [COMBAT_START:invented_key] without hitting the real LLM.
+    """
+    if os.getenv("AI_TEST_MODE") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
+    text = body.get("text")
+    if text is None:
+        os.environ.pop("AI_TEST_STUB_LLM", None)
+        os.environ.pop("AI_TEST_STUB_LLM_TEXT", None)
+        return {"ok": True, "stub": False}
+    os.environ["AI_TEST_STUB_LLM"] = "1"
+    os.environ["AI_TEST_STUB_LLM_TEXT"] = str(text)
+    return {"ok": True, "stub": True}
 
 
 def _open_conn():
