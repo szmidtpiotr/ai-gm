@@ -75,10 +75,10 @@ async function _loadStats(root) {
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--t3)">Brak statystyk</td></tr>`; return; }
     tbody.innerHTML = items.map(s => `<tr>
-      <td class="td-mono">${_esc(s.key)}</td>
-      <td class="td-name editable" data-key="${_esc(s.key)}" data-field="label" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc(s.label||s.key)}</td>
-      <td class="td-muted editable" data-key="${_esc(s.key)}" data-field="description" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc((s.description||'').slice(0,80)||'—')}</td>
-      <td>${s.locked_at ? `<span class="badge badge-amber" title="${_esc(s.locked_at)}">🔒</span>` : '<span class="td-muted">—</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(s.key)}</td>
+      <td class="td-name editable" data-label="Nazwa" data-key="${_esc(s.key)}" data-field="label" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc(s.label||s.key)}</td>
+      <td class="td-muted editable" data-label="Opis" data-key="${_esc(s.key)}" data-field="description" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc((s.description||'').slice(0,80)||'—')}</td>
+      <td data-label="Zablokowany">${s.locked_at ? `<span class="badge badge-amber" title="${_esc(s.locked_at)}">🔒</span>` : '<span class="td-muted">—</span>'}</td>
     </tr>`).join('');
     root.querySelectorAll('#stats-table .editable').forEach(td => td.addEventListener('click', () => _startEdit(td)));
   } catch(e) { tbody.innerHTML = _errRow(4, e.message); }
@@ -96,13 +96,13 @@ async function _loadSkills(root) {
     const items = sk.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak umiejętności</td></tr>`; return; }
     tbody.innerHTML = items.map(s => `<tr>
-      <td class="td-mono">${_esc(s.key)}</td>
-      <td class="td-name">${_esc(s.label||s.key)}</td>
-      <td><span class="badge badge-blue">${_esc(s.linked_stat||'—')}</span></td>
-      <td class="td-mono">${s.rank_ceiling??'—'}</td>
-      <td class="td-muted" style="font-size:0.72rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.trigger_keywords||'')}">${_esc(s.trigger_keywords||'—')}</td>
-      <td class="td-muted">${_esc((s.description||'').slice(0,60)||'—')}</td>
-      <td>${s.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(s.key)}</td>
+      <td class="td-name" data-label="Nazwa">${_esc(s.label||s.key)}</td>
+      <td data-label="Statystyka"><span class="badge badge-blue">${_esc(s.linked_stat||'—')}</span></td>
+      <td class="td-mono" data-label="Maks. rang">${s.rank_ceiling??'—'}</td>
+      <td class="td-muted" data-label="Słowa klucz." style="font-size:0.72rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.trigger_keywords||'')}">${_esc(s.trigger_keywords||'—')}</td>
+      <td class="td-muted" data-label="Opis">${_esc((s.description||'').slice(0,60)||'—')}</td>
+      <td data-label="Zablokowany">${s.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj" data-edit-skill="${_esc(s.key)}">✎</button>
         <button class="btn-icon danger" title="Usuń" data-delete-skill="${_esc(s.key)}" data-locked="${s.locked_at ? '1' : ''}">✕</button>
@@ -150,11 +150,11 @@ async function _loadDC(root) {
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--t3)">Brak poziomów DC</td></tr>`; return; }
     tbody.innerHTML = items.map(dc => `<tr>
-      <td class="td-mono">${_esc(dc.key)}</td>
-      <td class="td-name">${_esc(dc.label||dc.key)}</td>
-      <td class="td-mono editable" data-patch="/api/admin/dc/${_esc(dc.key)}" data-field="value">${dc.value??'—'}</td>
-      <td class="td-muted">${_esc((dc.description||'').slice(0,80)||'—')}</td>
-      <td>${dc.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(dc.key)}</td>
+      <td class="td-name" data-label="Nazwa">${_esc(dc.label||dc.key)}</td>
+      <td class="td-mono editable" data-label="Wartość" data-patch="/api/admin/dc/${_esc(dc.key)}" data-field="value">${dc.value??'—'}</td>
+      <td class="td-muted" data-label="Opis">${_esc((dc.description||'').slice(0,80)||'—')}</td>
+      <td data-label="Zablokowany">${dc.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
     </tr>`).join('');
     root.querySelectorAll('#dc-table .editable[data-patch]').forEach(td =>
       td.addEventListener('click', () => _mechPatchEdit(td, td.dataset.patch, td.dataset.field)));
@@ -172,12 +172,12 @@ async function _loadConditions(root) {
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--t3)">Brak kondycji</td></tr>`; return; }
     tbody.innerHTML = items.map(c => `<tr>
-      <td class="td-mono">${_esc(c.key)}</td>
-      <td class="td-name">${_esc(c.label||c.key)}</td>
-      <td class="td-mono" style="font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${c.effect_json ? _esc(typeof c.effect_json==='string'?c.effect_json:JSON.stringify(c.effect_json)) : '—'}</td>
-      <td style="text-align:center">${c.stackable ? '✓' : '—'}</td>
-      <td style="text-align:center">${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
-      <td>${c.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(c.key)}</td>
+      <td class="td-name" data-label="Nazwa">${_esc(c.label||c.key)}</td>
+      <td class="td-mono" data-label="Efekt JSON" style="font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${c.effect_json ? _esc(typeof c.effect_json==='string'?c.effect_json:JSON.stringify(c.effect_json)) : '—'}</td>
+      <td data-label="Kumulowalny" style="text-align:center">${c.stackable ? '✓' : '—'}</td>
+      <td data-label="Aktywny" style="text-align:center">${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
+      <td data-label="Zablokowany">${c.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj" data-edit-cond="${_esc(c.key)}">✎</button>
         ${!c.locked_at ? `<button class="btn-icon danger" title="Usuń" data-delete-cond="${_esc(c.key)}">✕</button>` : ''}
@@ -201,12 +201,12 @@ async function _loadArchetypes(root) {
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak archetypów</td></tr>`; return; }
     tbody.innerHTML = items.map(a => `<tr>
-      <td class="td-mono">${_esc(a.key)}</td>
-      <td class="td-name">${_esc(a.label||a.key)}</td>
-      <td class="td-mono editable" data-patch="/api/admin/archetypes/${_esc(a.key)}" data-field="hp_base">${a.hp_base??'—'}</td>
-      <td class="td-mono editable" data-patch="/api/admin/archetypes/${_esc(a.key)}" data-field="starter_gold_gp">${a.starter_gold_gp??'—'}</td>
-      <td class="td-muted">${_esc((a.description||'').slice(0,60)||'—')}</td>
-      <td>${a.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(a.key)}</td>
+      <td class="td-name" data-label="Nazwa">${_esc(a.label||a.key)}</td>
+      <td class="td-mono editable" data-label="HP bazowe" data-patch="/api/admin/archetypes/${_esc(a.key)}" data-field="hp_base">${a.hp_base??'—'}</td>
+      <td class="td-mono editable" data-label="Złoto start." data-patch="/api/admin/archetypes/${_esc(a.key)}" data-field="starter_gold_gp">${a.starter_gold_gp??'—'}</td>
+      <td class="td-muted" data-label="Opis">${_esc((a.description||'').slice(0,60)||'—')}</td>
+      <td data-label="Zablokowany">${a.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
     </tr>`).join('');
     root.querySelectorAll('#archetypes-table .editable[data-patch]').forEach(td =>
       td.addEventListener('click', () => _mechPatchEdit(td, td.dataset.patch, td.dataset.field)));
@@ -224,12 +224,12 @@ async function _loadXpAwards(root) {
     const items = d.items || [];
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak wpisów XP</td></tr>`; return; }
     tbody.innerHTML = items.map(a => `<tr data-award-id="${a.id}">
-      <td class="td-mono">${_esc(a.source_key||a.id)}</td>
-      <td class="td-muted">${_esc(a.category||'—')}</td>
-      <td class="td-name">${_esc(a.label||'—')}</td>
-      <td class="td-mono editable" data-patch="/api/admin/xp-awards/${a.id}" data-field="xp_amount" style="text-align:right">${a.xp_amount??'—'}</td>
-      <td class="td-muted">${_esc((a.description||'').slice(0,80)||'—')}</td>
-      <td class="xp-active-toggle" data-award-id="${a.id}" data-active="${a.is_active?1:0}" style="cursor:pointer;text-align:center">${a.is_active ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>'}</td>
+      <td class="td-mono" data-label="Klucz">${_esc(a.source_key||a.id)}</td>
+      <td class="td-muted" data-label="Kategoria">${_esc(a.category||'—')}</td>
+      <td class="td-name" data-label="Nazwa">${_esc(a.label||'—')}</td>
+      <td class="td-mono editable" data-label="XP" data-patch="/api/admin/xp-awards/${a.id}" data-field="xp_amount" style="text-align:right">${a.xp_amount??'—'}</td>
+      <td class="td-muted" data-label="Opis">${_esc((a.description||'').slice(0,80)||'—')}</td>
+      <td class="xp-active-toggle" data-label="Aktywny" data-award-id="${a.id}" data-active="${a.is_active?1:0}" style="cursor:pointer;text-align:center">${a.is_active ? '<span class="badge badge-green">Tak</span>' : '<span class="badge badge-gray">Nie</span>'}</td>
     </tr>`).join('');
     root.querySelectorAll('#xp-awards-table .editable[data-patch]').forEach(td =>
       td.addEventListener('click', () => _mechPatchEdit(td, td.dataset.patch, td.dataset.field)));
@@ -289,7 +289,7 @@ function _openSkillForm(root, prefill, stats, onSubmit) {
   const p = prefill || {};
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
-  overlay.innerHTML = `<div class="modal-box" style="width:440px">
+  overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
     <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj umiejętność' : 'Nowa umiejętność'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. acrobatics" ${p.key?'readonly':''}></div>
@@ -346,7 +346,7 @@ function _openConditionForm(root, prefill) {
   const p = prefill || {};
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
-  overlay.innerHTML = `<div class="modal-box" style="width:440px">
+  overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
     <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj kondycję' : 'Nowa kondycja'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. poisoned" ${p.key?'readonly':''}></div>
@@ -450,7 +450,7 @@ function _sectionHtml() {
       </div>
       <div id="mtab-stats" class="stab-panel active">
         <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Statystyki są zdefiniowane systemowo — możesz edytować nazwę i opis.</span></div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="stats-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th>Opis</th><th style="width:80px">Zablokowany</th>
@@ -464,7 +464,7 @@ function _sectionHtml() {
           <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" id="skills-search" placeholder="Szukaj umiejętności…"></div>
           <button class="btn btn-primary btn-sm" id="add-skill-btn">+ Umiejętność</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="skills-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th>Statystyka</th><th>Maks. rang</th><th>Słowa kluczowe</th><th>Opis</th><th>Zablokowany</th><th class="td-actions">Akcje</th>
@@ -475,7 +475,7 @@ function _sectionHtml() {
       </div>
       <div id="mtab-dc" class="stab-panel" style="display:none">
         <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Poziomy DC są stałe — możesz edytować wartość i opis.</span></div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="dc-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th style="width:80px">Wartość</th><th>Opis</th><th style="width:80px">Zablokowany</th>
@@ -489,7 +489,7 @@ function _sectionHtml() {
           <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" id="conditions-search" placeholder="Szukaj kondycji…"></div>
           <button class="btn btn-primary btn-sm" id="add-cond-btn">+ Kondycja</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="conditions-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th>Efekt JSON</th><th style="width:90px">Kumulowalny</th><th style="width:90px">Aktywny</th><th>Zablokowany</th><th class="td-actions">Akcje</th>
@@ -500,7 +500,7 @@ function _sectionHtml() {
       </div>
       <div id="mtab-archetypes" class="stab-panel" style="display:none">
         <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Archetypy definiują klasy postaci — HP bazowe i złoto startowe.</span></div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="archetypes-table">
             <thead><tr>
               <th>Klucz</th><th>Nazwa</th><th style="width:90px">HP bazowe</th><th style="width:100px">Złoto startowe</th><th>Opis</th><th style="width:80px">Zablokowany</th>
@@ -511,7 +511,7 @@ function _sectionHtml() {
       </div>
       <div id="mtab-xp" class="stab-panel" style="display:none">
         <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Katalog zdarzeń przyznających XP (game_config_xp_awards). Tylko do odczytu.</span></div>
-        <div class="table-wrap">
+        <div class="table-wrap data-table--cards">
           <table class="data-table" id="xp-awards-table">
             <thead><tr>
               <th>Klucz</th><th style="width:110px">Kategoria</th><th>Nazwa</th><th style="width:80px;text-align:right">XP</th><th>Opis</th><th style="width:70px">Aktywny</th>

@@ -48,7 +48,7 @@ _Wszystkie niezamknięte, tagowane kolumną. Do auto-wdrożenia: `[TO DO]` + `[I
 - [ ] #738 `[TO DO]` — [TASK] LB4 — nowy głębszy loch katakumby_mroku (min_level 3, absolutna skala) — przenosi #733/#732/#734
 - [x] #740 `[DONE]` — [BUG] Loch — podwójna narracja wstępna przy wejściu: LLM_OPEN + room_narrative z /enter nakładają się [commit 6172dac]
 - [ ] #741 `[TO DO]` — [FEATURE] Loch D-pad — możliwość przeciągania po ekranie i zapamiętania pozycji
-- [ ] #742 `[TO DO]` — [BUG] Sklep w lochu: (1) modal otwiera się w dungeon-mode + (2) kupione itemy nie pojawiają się w ekwipunku po zakupie
+- [x] #742 `[DONE]` — [BUG] Sklep w lochu: (1) modal otwiera się w dungeon-mode + (2) kupione itemy nie pojawiają się w ekwipunku po zakupie [commit 7985e46]
 - [ ] #743 `[TO DO]` — [BUG] Wyposażenie — zakładanie rękawic rzuca 'invalid armor_coverage hands': slot hands nie zdefiniowany w loot_service
 - [ ] #744 `[TO DO]` — [DESIGN] Wojownik startuje z tarczą ale nie może blokować — shield_block wymaga rank >= 1, archetype nie przyznaje startowych skilli
 - [ ] #745 `[IN REVIEW]` — [BUG] Loch — panel zagadki nie znika po rozwiązaniu: cleared=false mimo solved=true
@@ -105,7 +105,7 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
 - [x] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
 - [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
-- [ ] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData
+- [x] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData [commit 7985e46]
 - [ ] 14. #740 — Podwójna narracja wstępna lochu — LLM_OPEN + room_narrative nakładają się
 - [ ] 15. #751 — Przepłata za posiłek (2 vs 5 GP) — dodaj usługę tavern_meal + reguła cena↔klucz
 - [ ] 16. #746 — Angielskie nazwy łupów w modalu walki — JOIN po label z DB w _preview_loot_from_roll_items
@@ -146,8 +146,66 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 43. #727 — Combat Sandbox setup HTTP 500 (narzędzie admin, nie gracz)
 - [ ] 44. #653 — Brak wizualizacji rzutu dla zaklęć leczących poza walką (minor)
 
+### PM — Admin Panel Mobile M0 (prereq #830 ✅, #831 ✅ wdrożone)
+- [x] 45. #832 — [MOBILE][M0-3] Tabele — hybryda C: `.data-table--cards` (card-view) + `.data-table--scroll` (sticky) [commit 96183cf]
+- [x] 46. #833 — [MOBILE][M0-4] Formularze 2-col→1-col `<768px` + touch-targety 44px [commit 72d5847]
+- [x] 47. #834 — [MOBILE][M0-5] Hex mapa — podgląd skalowany + blokada edycji z notką [commit 8500d6d]
+
+### PM — Admin Panel Mobile M1 (dep: M0 ✅)
+- [ ] 48. #835 — [MOBILE][M1] Sekcja: Przegląd/Zaproszenia/Push (lekkie, w biegu)
+- [ ] 49. #836 — [MOBILE][M1] Sekcja: Kampanie (lista + przegląd) na mobile
+- [ ] 50. #837 — [MOBILE][M1] Sekcja: Zgłoszenia (bug reports) na mobile
+- [ ] 51. #838 — [MOBILE][M1] Sekcja: Gracze + ustawienia LLM na mobile
+- [ ] 52. #839 — [MOBILE][M1] Sekcja: System (toggle ustawień/presetów) na mobile
+
+### PM — Admin Panel Mobile M2 (dep: M0 ✅, M1 w toku)
+- [ ] 53. #854 — [MOBILE][M2-1] Sekcja: Zawartość (content.js) — tabele kart/scroll na mobile
+- [ ] 54. #855 — [MOBILE][M2-2] Sekcja: Świat (world.js) — tabele na mobile
+- [x] 55. #856 — [MOBILE][M2-3] Sekcja: Mechaniki (mechanics.js) — tabele na mobile
+- [ ] 56. #857 — [MOBILE][M2-4] Sekcja: Lochy (dungeons.js) — tabele na mobile
+
+---
+
+---
+
+## Admin Panel Mobile — M0 (fundament responsywny) ✅ DONE
+
+M0-1 (#830 ✅), M0-2 (#831 ✅), M0-3 (#832 ✅ 96183cf), M0-4 (#833 ✅ 72d5847), M0-5 (#834 ✅ 8500d6d). Cały M0 wdrożony.
+
+---
+
+## Admin Panel Mobile — M1 (sekcje „w biegu")
+
+Dep: M0 ✅. Spec: `docs/superpowers/specs/2026-06-19-admin-panel-mobile-design.md`. Kolejność 835→836→837→838→839 (brak hard-dep między nimi, lekkie najpierw).
+
+Definicja done: screenshot @390px — brak poziomego scrolla strony, czytelny tekst, klikalne targety ≥44px; brak regresji desktop (≥1024px).
+
+- [ ] #835 — [MOBILE][M1] Sekcja: Przegląd/Zaproszenia/Push (overview.js, invites.js, push.js) — gridy statów 1-col, karty czytelne
+- [ ] #836 — [MOBILE][M1] Sekcja: Kampanie (campaigns.js) — lista card-view, modal zakładkowy używalny na telefonie
+- [ ] #837 — [MOBILE][M1] Sekcja: Zgłoszenia (bugreports.js) — inbox card-view, drawer szczegółów
+- [ ] #838 — [MOBILE][M1] Sekcja: Gracze (players.js) — lista card-view, panel ustawień LLM toggle
+- [ ] #839 — [MOBILE][M1] Sekcja: System (system.js) — presety/toggles; eksport/import może zostać desktop-pref
+
+---
+
+## Admin Panel Mobile — M2 (sekcje contentowe — ciężkie tabele)
+
+Dep: M0 ✅. Spec: `docs/superpowers/specs/2026-06-19-admin-panel-mobile-design.md` §M2. Kolejność 854→855→856→857.
+
+Strategia: card-view dla list encji, poziomy scroll + sticky kol. 1 dla tabel porównawczych. Edycja inline z touch-targetami ≥44px.
+
+Definicja done: screenshot @390px — brak poziomego scrolla strony, czytelny tekst, klikalne targety ≥44px; brak regresji desktop (≥1024px).
+
+- [ ] #854 — [MOBILE][M2-1] content.js — 8 tabel (bronie, zbroje, przedmioty, konsumable, wrogowie, loot): card-view + scroll wg C
+- [ ] #855 — [MOBILE][M2-2] world.js — lokacje, NPC, wrogowie oczekujące: card-view, przyciski zatwierdź/odrzuć ≥44px
+- [x] #856 — [MOBILE][M2-3] mechanics.js — statystyki, umiejętności, DC, kondycje: card lub scroll wg kolumnowości
+- [ ] #857 — [MOBILE][M2-4] dungeons.js — seeds card-view, runs scroll + sticky
+
 ---
 
 ## Log zmian listy
 - 2026-06-18 — utworzono (sekcje A–G); przeporządkowano wg priorytetu implementacji P0–P5; #754/#758 zamknięte (usunięte z listy).
 - 2026-06-18 — #771 utworzony (konsumable on-use builder); #743 reopen (nawrót frontend, fix c555313).
+- 2026-06-20 — dodano sekcję Admin Panel Mobile M0 (#832, #833, #834).
+- 2026-06-20 — M0 done (wszystkie commity); dodano sekcję M1 (#835–#839, indeksy 48–52).
+- 2026-06-20 — dodano sekcję M2 (#854–#857, indeksy 53–56).
