@@ -4807,3 +4807,36 @@ def save_game_modes(payload: dict = Body(...)) -> dict:
         return {"ok": True, "flags": current}
     finally:
         conn.close()
+
+
+# ── Combat narrative toggle (global admin flag) ───────────────────────────────
+_SKIP_COMBAT_NARRATIVE_KEY = "skip_combat_narrative_global"
+
+
+@router.get("/admin/config/combat-narrative", dependencies=[Depends(require_admin_token)])
+def get_combat_narrative_config() -> dict:
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ?", (_SKIP_COMBAT_NARRATIVE_KEY,)
+        ).fetchone()
+        skip = str((row[0] if row else "") or "").strip().lower() in ("1", "true", "yes")
+        return {"skip_combat_narrative": skip}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/config/combat-narrative", dependencies=[Depends(require_admin_token)])
+def patch_combat_narrative_config(payload: dict = Body(...)) -> dict:
+    skip = bool(payload.get("skip_combat_narrative", False))
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (_SKIP_COMBAT_NARRATIVE_KEY, "1" if skip else "0"),
+        )
+        conn.commit()
+        return {"ok": True, "skip_combat_narrative": skip}
+    finally:
+        conn.close()

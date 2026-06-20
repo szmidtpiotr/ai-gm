@@ -3687,10 +3687,11 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
     const token = localStorage.getItem('aigm_access_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    const _skipNarr = inputType === 'combat_roll' && localStorage.getItem('aigm_skip_combat_narrative') === '1';
     const resp = await fetch(`/api/campaigns/${currentCampaignId}/turns/stream`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ text, character_id: characterData.id, input_type: inputType }),
+        body: JSON.stringify({ text, character_id: characterData.id, input_type: inputType, skip_narrative: _skipNarr }),
     });
 
     if (!resp.ok) {
@@ -11030,6 +11031,14 @@ function initBubblePrefs() {
             bubblePrefs.showDateTime = e.target.checked;
             localStorage.setItem('bubble_datetime', String(e.target.checked));
             applyBubblePrefs();
+        });
+    }
+
+    const skipCombatNarrToggle = document.getElementById('skip-combat-narr-toggle');
+    if (skipCombatNarrToggle) {
+        skipCombatNarrToggle.checked = localStorage.getItem('aigm_skip_combat_narrative') === '1';
+        skipCombatNarrToggle.addEventListener('change', e => {
+            localStorage.setItem('aigm_skip_combat_narrative', e.target.checked ? '1' : '0');
         });
     }
 

@@ -475,6 +475,19 @@ const _HTML = `
               </div>
             </div>
           </div>
+
+          <!-- Combat narrative toggle -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">⚔ Narracja w walce</span></div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:0.78rem;color:var(--t3);line-height:1.5">Globalny przełącznik — wyłącza generowanie narracji LLM po każdej akcji bojowej. Gracz widzi tylko mechaniczny wynik (Cios trafia — X obrażeń). Każdy gracz może też wyłączyć narrację indywidualnie w swoich ustawieniach.</div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+                <input type="checkbox" id="sys-skip-combat-narr"> Wyłącz narrację bojową globalnie (szybka walka)
+              </label>
+              <div><button class="btn btn-primary" id="sys-skip-combat-narr-save">Zapisz</button></div>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 
@@ -1890,6 +1903,23 @@ async function _loadNarration() {
       try {
         await apiFetch('/api/settings/story-gravity', { method: 'PATCH', body: JSON.stringify(payload) });
         showToast('Progi Story Gravity zapisane.', 'success');
+      } catch(e) { showToast(e.message || 'Błąd zapisu.', 'error'); }
+    });
+  }
+  // Combat narrative global toggle
+  try {
+    const cnr = await apiFetch('/api/admin/config/combat-narrative');
+    const el = document.getElementById('sys-skip-combat-narr');
+    if (el) el.checked = !!cnr?.skip_combat_narrative;
+  } catch(e) { console.warn('combat-narrative-cfg', e.message); }
+  const cnBtn = document.getElementById('sys-skip-combat-narr-save');
+  if (cnBtn && !cnBtn.dataset.wired) {
+    cnBtn.dataset.wired = '1';
+    cnBtn.addEventListener('click', async () => {
+      const skip = document.getElementById('sys-skip-combat-narr')?.checked ?? false;
+      try {
+        await apiFetch('/api/admin/config/combat-narrative', { method: 'PATCH', body: JSON.stringify({ skip_combat_narrative: skip }) });
+        showToast(skip ? 'Narracja bojowa wyłączona globalnie.' : 'Narracja bojowa włączona.', 'success');
       } catch(e) { showToast(e.message || 'Błąd zapisu.', 'error'); }
     });
   }

@@ -1206,6 +1206,7 @@ class TurnCreate(BaseModel):
     engine: str | None = None
     game_id: int | None = None
     input_type: str = "free_text"   # "free_text" | "structured"
+    skip_narrative: bool = False     # player toggle: skip LLM narration for combat rolls
 
 
 class SearchPayload(BaseModel):
@@ -1541,6 +1542,50 @@ def _stream_combat_roll_extras(campaign_id: int, user_text_val: str) -> tuple[di
         combat_ended="present" if combat_ended else "absent",
     )
     return gm_roll, combat_ended
+
+
+def _build_combat_narrative_stub(user_text_val: str) -> str:
+    """Mechanical summary when LLM narration is skipped for a combat roll."""
+    s = (user_text_val or "").strip()
+    if s.startswith(COMBAT_ROLL_CTX_PREFIX):
+        tail = s[len(COMBAT_ROLL_CTX_PREFIX):].lstrip("\r\n \t")
+        try:
+            pl = json.loads(tail)
+            if isinstance(pl, dict) and pl.get("kind") == "player_attack":
+                hit = pl.get("hit")
+                damage = int(pl.get("damage") or 0)
+                target = (pl.get("target_name") or "wróg").strip()
+                nat20 = int(pl.get("d20") or 0) == 20
+                nat1 = int(pl.get("d20") or 0) == 1
+                if nat1:
+                    return "Krytyczna porażka!"
+                if hit and nat20:
+                    return f"Trafienie krytyczne! {damage} obrażeń — {target} pada."
+                if hit:
+                    return f"Cios trafia — {damage} obrażeń ({target})."
+                return "Pudło."
+        except Exception:
+            pass
+    return "Akcja rozliczona."
+
+
+_SKIP_COMBAT_NARRATIVE_META_KEY = "skip_combat_narrative_global"
+
+
+def _get_skip_combat_narrative_global() -> bool:
+    try:
+        from app.db.database import get_db as _gdb
+        c = _gdb()
+        try:
+            row = c.execute(
+                "SELECT value FROM game_config_meta WHERE key = ?",
+                (_SKIP_COMBAT_NARRATIVE_META_KEY,),
+            ).fetchone()
+            return str((row[0] if row else "") or "").strip().lower() in ("1", "true", "yes")
+        finally:
+            c.close()
+    except Exception:
+        return False
 
 
 def _parse_post_loot_summary_payload(user_text_val: str) -> dict | None:
@@ -5864,6 +5909,26 @@ def create_turn_stream(
                         turn_row=stream_log,
                         user_text=user_text_val,
                         assistant_text=clean_text,
+                    )
+                finally:
+                    save_conn.close()
+                yield f"data: {clean_text}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            # ── Skip-narrative fast path (player toggle or global admin flag) ──
+            _skip_narrative = payload.skip_narrative or _get_skip_combat_narrative_global()
+            if _skip_narrative and user_text_val.startswith(COMBAT_ROLL_CTX_PREFIX):
+                clean_text = _build_combat_narrative_stub(user_text_val)
+                save_conn = get_db()
+                try:
+                    create_turn_log(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                        route="narrative",
                     )
                 finally:
                     save_conn.close()
