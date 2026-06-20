@@ -137,9 +137,9 @@ async function _loadNPCs() {
       return `<tr data-key="${_esc(n.id??n.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox"></td>
         <td class="td-sticky td-name">${_esc(n.label||n.key)}</td>
-        <td>${att}</td>
-        <td class="td-muted">${_esc(loc)}</td>
-        <td class="td-muted">${_esc(n.npc_type||'—')}</td>
+        <td data-label="Nastawienie">${att}</td>
+        <td class="td-muted" data-label="Lokacja">${_esc(loc)}</td>
+        <td class="td-muted" data-label="Rola">${_esc(n.npc_type||'—')}</td>
         <td class="td-actions">${n.is_shop ? `<button class="btn btn-sm" style="font-size:0.72rem;padding:2px 6px;margin-right:4px" title="Ekwipunek sklepu" onclick="window._worldShopInv(${n.id},this)">🛒</button>` : ''}<button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="window._worldNpcImage('${_esc(n.id??n.key)}','${enc}')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
     }).join('');
@@ -237,11 +237,11 @@ async function _loadEnemies() {
       return `<tr data-key="${_esc(e.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox"></td>
         <td class="td-sticky td-name">${_esc(e.label||e.key)}</td>
-        <td class="td-mono">${e.tier??'—'}</td>
-        <td class="td-mono">${e.hp_base??'—'}</td>
-        <td class="td-mono">${_esc(e.damage_die||'—')}</td>
-        <td>${tierBadge(e.tier)}</td>
-        <td class="td-muted">${_esc(e.loot_table_key||'—')}</td>
+        <td class="td-mono" data-label="Poziom">${e.tier??'—'}</td>
+        <td class="td-mono" data-label="HP">${e.hp_base??'—'}</td>
+        <td class="td-mono" data-label="Kość">${_esc(e.damage_die||'—')}</td>
+        <td data-label="Tier">${tierBadge(e.tier)}</td>
+        <td class="td-muted" data-label="Łupy">${_esc(e.loot_table_key||'—')}</td>
         <td class="td-actions">
           <button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="window._worldEnemyImage('${_esc(e.key)}','${enc}')">🖼</button>
           <button class="btn-icon" title="Edytuj" onclick="window._worldEnemyForm('${enc}')">✎</button>
@@ -388,7 +388,7 @@ async function _loadBestiaryLoot() {
     const d = await apiFetch('/api/admin/loot-tables');
     const items = d.items || [];
     if (!items.length) { container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Brak tabel łupów.</div>'; return; }
-    container.innerHTML = `<div class="table-wrap"><table class="data-table" id="world-loot-table">
+    container.innerHTML = `<div class="data-table--scroll table-wrap"><table class="data-table" id="world-loot-table">
       <thead><tr>
         <th><div class="th-inner">Klucz</div></th>
         <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
@@ -595,10 +595,10 @@ async function _loadBestiaryPending() {
     const mkNpcRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.name||p.key)}">${_pn(p.label||p.name, p.key)}</td>
-      <td data-sort-val="NPC"><span class="badge badge-green">NPC</span></td>
-      <td class="td-muted" data-sort-val="${_esc(p.npc_type||p.role||'')}">${_esc(p.npc_type||p.role||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc((p.description||p.backstory||'').slice(0,70))}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.backstory||'')}">${_esc((p.description||p.backstory||'').slice(0,70)||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
+      <td data-sort-val="NPC" data-label="Typ"><span class="badge badge-green">NPC</span></td>
+      <td class="td-muted" data-sort-val="${_esc(p.npc_type||p.role||'')}" data-label="Rola">${_esc(p.npc_type||p.role||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc((p.description||p.backstory||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.backstory||'')}">${_esc((p.description||p.backstory||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditNpc(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('npc','${_esc(p.key)}','approve',this)">✓</button>
@@ -608,10 +608,10 @@ async function _loadBestiaryPending() {
     const mkEnemyRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
-      <td data-sort-val="Wróg"><span class="badge badge-red">Wróg</span></td>
-      <td class="td-muted" data-sort-val="${_esc(p.tier||'')}">${_esc(p.tier||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
+      <td data-sort-val="Wróg" data-label="Typ"><span class="badge badge-red">Wróg</span></td>
+      <td class="td-muted" data-sort-val="${_esc(p.tier||'')}" data-label="Tier">${_esc(p.tier||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditEnemy(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('enemy','${_esc(p.key)}','approve',this)">✓</button>
@@ -621,10 +621,10 @@ async function _loadBestiaryPending() {
     const mkWeaponRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
-      <td data-sort-val="Broń"><span class="badge badge-amber">Broń</span></td>
-      <td class="td-muted" data-sort-val="${_esc(p.weapon_type||p.damage_die||'')}">${_esc(p.weapon_type||p.damage_die||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
+      <td data-sort-val="Broń" data-label="Typ"><span class="badge badge-amber">Broń</span></td>
+      <td class="td-muted" data-sort-val="${_esc(p.weapon_type||p.damage_die||'')}" data-label="Rola">${_esc(p.weapon_type||p.damage_die||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','approve',this)">✓</button>
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','discard',this)">✕</button>
@@ -633,19 +633,19 @@ async function _loadBestiaryPending() {
     const mkItemRow = p => `<tr>
       <td class="col-check"><input type="checkbox"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
-      <td data-sort-val="${p.pending_category==='trivial'?'Drobiazg':'Przedmiot'}">${p.pending_category==='trivial'
+      <td data-sort-val="${p.pending_category==='trivial'?'Drobiazg':'Przedmiot'}" data-label="Typ">${p.pending_category==='trivial'
         ? '<span class="badge" style="background:rgba(120,120,120,0.18);color:var(--t3)" title="Heurystyka: wygląda na śmieć narracyjny (U6)">🍂 Drobiazg</span>'
         : '<span class="badge badge-blue">Przedmiot</span>'}</td>
-      <td class="td-muted" data-sort-val="${_esc(p.item_type||'')}">${_esc(p.item_type||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
-      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.item_type||'')}" data-label="Rola">${_esc(p.item_type||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditItem(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('item','${_esc(p.key)}','approve',this)">✓</button>
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('item','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    container.innerHTML = `<div class="table-wrap"><table class="data-table" id="bestiary-pending-table">
+    container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table" id="bestiary-pending-table">
       <thead><tr>
         <th class="col-check"></th>
         <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
@@ -1446,7 +1446,7 @@ function _sectionHtml() {
           </div>
           <button class="btn btn-secondary btn-sm" onclick="window._worldBatchGenNpcs()" title="Wygeneruj portrety dla NPC bez obrazu">⚡ Generuj brakujące</button>
         </div>
-        <div class="table-wrap">
+        <div class="data-table--cards table-wrap">
           <table class="data-table" id="npcs-table">
             <thead><tr>
               <th class="col-check"><input type="checkbox"></th>
@@ -1474,7 +1474,7 @@ function _sectionHtml() {
             <button class="btn-toggle-details" data-details-for="world-enemies-table" onclick="window._worldToggleDetails('world-enemies-table',this)">Szczegóły</button>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="data-table--cards table-wrap">
           <table class="data-table" id="world-enemies-table">
             <thead><tr>
               <th class="col-check"><input type="checkbox"></th>
