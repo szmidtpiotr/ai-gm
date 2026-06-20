@@ -1637,10 +1637,12 @@ function _onSmartEntrySaved(e) {
   else if (t === 'game_config_consumables') { _loaded.delete('consumables'); _loadConsumables(); }
   else if (t === 'game_config_armor')   { _loaded.delete('armor'); _loadArmor(); }
   else if (t === 'game_config_loot_tables') { _loaded.delete('loot'); _loadLootTables(); }
+  else if (t === 'game_config_spells')      { _loaded.delete('spells'); _loadSpells(); }
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────────
 export async function init(panel) {
+  _loaded.clear();
   panel.innerHTML = _sectionHtml();
   const root = panel.querySelector('#section-content');
 
