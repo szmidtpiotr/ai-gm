@@ -2067,6 +2067,25 @@
     }
 
     /* ══════════════════════════════════════════════════════════
+       M1 — CAMPAIGNS MODAL  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* Modal tab bar: horizontal scroll instead of wrapping */
+      .camp-modal-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .camp-modal-tabs::-webkit-scrollbar { display: none; }
+
+      /* Overview grid: 2-col → 1-col */
+      .camp-overview-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════
        M0-4 — MOBILE FORMS + TOUCH TARGETS  (max-width: 768px)
        ══════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {

@@ -433,7 +433,7 @@ function filterTableGeneric(input, tableId, nameClass) {
           <button class="modal-close" onclick="if(window._inspectorTimer){clearInterval(window._inspectorTimer);window._inspectorTimer=null;}this.closest('.modal-overlay').remove()">✕</button>
         </div>
       </div>
-      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
+      <div class="camp-modal-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
         ${['overview','plan','turns','dice','state','decisions','events','quests','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',quests:'🎯 Questy+XP',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
@@ -483,7 +483,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         const archMap = { warrior:'Wojownik', scholar:'Uczony', rogue:'Złodziej', ranger:'Ranger' };
         const condArr = Array.isArray(c.char_conditions) ? c.char_conditions : (c.char_conditions ? [c.char_conditions] : []);
         panel.innerHTML = `
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div class="camp-overview-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div class="info-grid">
               <div class="info-row"><span class="info-key">Postać</span><span class="info-val">${_esc(c.char_name||'—')}</span></div>
               <div class="info-row"><span class="info-key">Archetyp</span><span class="info-val">${_esc(archMap[c.char_archetype]||c.char_archetype||'—')}</span></div>
