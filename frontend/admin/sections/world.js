@@ -420,7 +420,7 @@ function _openAddLootTableModal() {
     <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
       <div><label class="form-label">Klucz *</label><input class="form-input form-mono" id="nlt-key" placeholder="np. loot_bandyta"></div>
       <div><label class="form-label">Nazwa *</label><input class="form-input" id="nlt-label" placeholder="Łupy bandyty"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="grid-2col" style="gap:8px">
         <div><label class="form-label">Złoto min</label><input class="form-input" id="nlt-gmin" type="number" value="1"></div>
         <div><label class="form-label">Złoto max</label><input class="form-input" id="nlt-gmax" type="number" value="5"></div>
       </div>
@@ -744,7 +744,7 @@ function openPendingEnemyEditModal(item) {
   overlay.className = 'modal-overlay open';
   overlay.innerHTML = `<div class="modal-box" style="max-width:560px">
     <div class="modal-head"><span class="modal-title">Edytuj i Zatwierdź: ${_esc(p.label||p.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="modal-body grid-2col" style="gap:10px">
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="pe-label" class="field-input" value="${_esc(p.label||'')}"></div>
       <div class="form-row"><label class="form-label">Poziom</label>
         <select id="pe-tier" class="field-input">${TIERS.map(t=>`<option value="${t}"${p.tier===t?' selected':''}>${t}</option>`).join('')}</select>
@@ -810,7 +810,7 @@ function openPendingItemEditModal(item) {
   overlay.className = 'modal-overlay open';
   overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
     <div class="modal-head"><span class="modal-title">Edytuj i Zatwierdź: ${_esc(p.label||p.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="modal-body grid-2col" style="gap:10px">
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="pi-label" class="field-input" value="${_esc(p.label||'')}"></div>
       <div class="form-row"><label class="form-label">Typ</label>
         <select id="pi-type" class="field-input">${TYPES.map(t=>`<option value="${t}"${(p.item_type||'misc')===t?' selected':''}>${t}</option>`).join('')}</select>

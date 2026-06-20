@@ -1320,6 +1320,9 @@
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
     @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
+    /* ──────────────────────── GRID-2COL (responsive utility) ── */
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; }
+
     /* ──────────────────────── SECTION ACTIONS ──────────────── */
     .action-group {
       display: flex;
@@ -2028,3 +2031,76 @@
       margin: 0 auto 10px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ══════════════════════════════════════════════════════════
+       M0-4 — MOBILE FORMS + TOUCH TARGETS  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+
+      /* 1. Dwukolumnowe gridy → 1 kolumna */
+      .form-grid,
+      .grid-2col,
+      [class*="two-col"],
+      .stat-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* 2. Inputy — full-width + prevent iOS zoom (font-size < 16px triggers zoom) */
+      .form-input,
+      .form-select,
+      .form-textarea,
+      .field-input {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 16px;
+      }
+
+      /* 3. detail-row — stack vertically */
+      .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .detail-label { width: 100%; }
+
+      /* 4. Touch-targety ≥ 44×44px (WCAG / Apple HIG) */
+      .btn-icon,
+      button.icon-btn,
+      .action-btn,
+      [data-action],
+      .delete-btn,
+      td button,
+      .table-actions button,
+      .card-actions button {
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
+      }
+
+      /* 5. Checkboxy i radio — większy obszar dotyku */
+      input[type="checkbox"],
+      input[type="radio"] {
+        min-width: 20px;
+        min-height: 20px;
+      }
+      label:has(input[type="checkbox"]),
+      label:has(input[type="radio"]) {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* 6. Linki-przyciski */
+      a.btn,
+      .nav-action {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+    }

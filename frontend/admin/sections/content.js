@@ -686,7 +686,7 @@ async function _openAffixModal(existing) {
         <label class="form-label">Nazwa *</label>
         <input class="form-input" name="name" type="text" placeholder="np. Ostry +" value="${_esc(existing?.name||'')}">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="grid-2col" style="gap:8px">
         <div class="form-row">
           <label class="form-label">Tier (1-5)</label>
           <input class="form-input" name="tier" type="number" min="1" max="5" value="${existing?.tier||1}">
@@ -957,7 +957,7 @@ function _openSpellForm(prefill, onSubmit) {
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. magic_bolt" ${p.key?'readonly':''}></div>
       <div class="form-row"><label class="form-label">Nazwa *</label><input class="form-input" name="label" value="${_esc(p.label||'')}"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grid-2col" style="gap:10px">
         <div class="form-row"><label class="form-label">Typ czaru *</label><select class="form-input" name="spell_type">${sopt('attack','Atak (1 cel)')}${sopt('attack_aoe','Atak AoE')}${sopt('heal','Leczenie')}${sopt('defense','Obrona / tarcza')}${sopt('effect','Efekt / kondycja')}</select></div>
         <div class="form-row"><label class="form-label">Tier (1-5)</label><input class="form-input" name="tier" type="number" value="${p.tier??1}" min="1" max="5"></div>
         <div class="form-row"><label class="form-label">Koszt many (1-10)</label><input class="form-input" name="mana_cost" type="number" value="${p.mana_cost??1}" min="0" max="10"></div>
@@ -973,7 +973,7 @@ function _openSpellForm(prefill, onSubmit) {
         </div>
       </div>
       <div class="form-row" style="margin-top:4px"><label class="form-label">Opis</label><textarea class="form-input" name="description" rows="2">${_esc(p.description||'')}</textarea></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="grid-2col" style="gap:10px">
         <div class="form-row"><label class="form-label">Ranga 2 (JSON)</label><textarea class="form-input" name="rank2_json" rows="2" placeholder='{"mana_cost":2,"damage_die":"2d8"}'>${_esc(p.rank2_json||'')}</textarea></div>
         <div class="form-row"><label class="form-label">Ranga 3 (JSON)</label><textarea class="form-input" name="rank3_json" rows="2" placeholder='{"mana_cost":1,"damage_die":"3d6"}'>${_esc(p.rank3_json||'')}</textarea></div>
       </div>
