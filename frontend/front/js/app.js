@@ -4603,6 +4603,8 @@ async function handleCombatEnded(cs) {
             scrollToBottom();
         }
         showCombatEndOverlay('victory', loot, gold);
+        // #765: po zwycięstwie zaproponuj odzysk wystrzelonej amunicji (pill 40%).
+        await showAmmoRecoveryPill(cs?.campaign_id || currentCampaignId);
     } else if (reason === 'fled') {
         hideCombatUI();
         showCombatEndOverlay('fled', [], 0);
@@ -4617,6 +4619,51 @@ async function handleCombatEnded(cs) {
     } else {
         hideCombatUI();
     }
+}
+
+// #765: pill odzysku amunicji po walce — pokazuje szansę PRZED i wynik PO akcji.
+async function showAmmoRecoveryPill(campaignId) {
+    if (!campaignId) return;
+    try {
+        const r = await fetch(`/api/campaigns/${campaignId}/combat/ammo-spent`);
+        if (!r.ok) return;
+        const d = (await r.json())?.data || {};
+        if (!d.can_recover) return;
+        const pct = Math.round((Number(d.chance) || 0.4) * 100);
+        const fired = Number(d.total) || 0;
+        const ammoKey = Object.keys(d.fired || {})[0] || 'arrows';
+        const ammoPl = ammoKey === 'bolts' ? 'bełtów' : 'strzał';
+        await new Promise((resolve) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'ammo-recover-pill';
+            wrap.innerHTML = `
+                <div class="ammo-recover-pill__card">
+                  <div class="ammo-recover-pill__title">🏹 Pozbieraj amunicję</div>
+                  <div class="ammo-recover-pill__body">Wystrzelono <b>${fired}</b> ${ammoPl}. Szansa odzysku: <b>${pct}%</b> na sztukę.</div>
+                  <div class="ammo-recover-pill__actions">
+                    <button class="ammo-recover-pill__btn ammo-recover-pill__btn--go">Pozbieraj</button>
+                    <button class="ammo-recover-pill__btn ammo-recover-pill__btn--skip">Zostaw</button>
+                  </div>
+                </div>`;
+            document.body.appendChild(wrap);
+            const close = () => { wrap.remove(); resolve(); };
+            wrap.querySelector('.ammo-recover-pill__btn--skip').onclick = close;
+            wrap.querySelector('.ammo-recover-pill__btn--go').onclick = async () => {
+                const go = wrap.querySelector('.ammo-recover-pill__btn--go');
+                go.disabled = true; go.textContent = 'Zbieram…';
+                try {
+                    const rr = await fetch(`/api/campaigns/${campaignId}/combat/recover-ammo`, { method: 'POST' });
+                    const got = Number((await rr.json())?.data?.total) || 0;
+                    wrap.querySelector('.ammo-recover-pill__body').innerHTML = got > 0
+                        ? `✅ Odzyskano <b>${got}/${fired}</b> ${ammoPl} — wróciły do plecaka.`
+                        : `❌ Nie udało się odzyskać żadnej sztuki.`;
+                    wrap.querySelector('.ammo-recover-pill__actions').innerHTML =
+                        `<button class="ammo-recover-pill__btn ammo-recover-pill__btn--skip">OK</button>`;
+                    wrap.querySelector('.ammo-recover-pill__btn--skip').onclick = close;
+                } catch (_) { close(); }
+            };
+        });
+    } catch (_) { /* non-fatal */ }
 }
 
 function showCombatEndOverlay(reason, loot, gold) {
@@ -6274,6 +6321,18 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         if (data.combat_state) { lastCombatState = data.combat_state; renderCombatUI(data.combat_state); }
         return;
     }
+    // #764: brak amunicji — strzał zablokowany, tura nietknięta.
+    if (data.blocked && data.block_reason === 'no_ammo') {
+        setCombatMsg(data.message || 'Brak amunicji — zdobądź strzały/bełty.', true);
+        showToast?.(data.message || 'Brak amunicji do strzału!', 'warning');
+        if (data.combat_state) { lastCombatState = data.combat_state; renderCombatUI(data.combat_state); }
+        return;
+    }
+    // #764: po udanym strzale dystansowym zasygnalizuj pozostałą amunicję (nie nadpisuje karty trafienia).
+    if (data.ammo_key && typeof data.ammo_remaining === 'number') {
+        const ammoPl = data.ammo_key === 'bolts' ? 'bełtów' : 'strzał';
+        showToast?.(`🏹 Pozostało ${data.ammo_remaining} ${ammoPl}`, data.ammo_remaining <= 3 ? 'warning' : 'info');
+    }
     // B9 (#656): czar NIE-atakujący (kondycja) — pojedynek INT vs WIS/CON, NIE obrażenia.
     // Karta pokazuje „łapie / opór / pomyłka", bez liczby obrażeń.
     if (data.spell_type === 'effect' || data.spell_effect || data.block_reason === 'unsupported_effect') {
@@ -7558,12 +7617,15 @@ const INV_ICONS = {
     pack: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/><path d="M8 8V5a4 4 0 0 1 8 0v3"/><path d="M9 13h6"/></svg>`,
     chain: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>`,
     blood: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9 7 6 11 6 15a6 6 0 0 0 12 0c0-4-3-8-6-13z"/></svg>`,
+    // #764: amunicja (strzały/bełty) — kołczan ze strzałą.
+    quiver: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21L21 3"/><path d="M21 3l-5 1 4 4 1-5z"/><path d="M3 21l3.5-.7"/><path d="M3 21l.7-3.5"/></svg>`,
 };
 
 // Map item_type → inventory section + icon glyph
 function _invIconKind(item) {
     const t = String(item.item_type || '').toLowerCase();
     const k = String(item.key || item.label || '').toLowerCase();
+    if (item.is_ammo || /^(arrows|bolts)$/.test(k))     return 'quiver';  // #764
     if (t === 'weapon')                                 return /bow|łuk/.test(k) ? 'sword' : 'sword';
     if (t === 'armor' && /shield|tarcz/.test(k))        return 'shield';
     if (t === 'armor')                                  return 'armor';

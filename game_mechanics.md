@@ -2586,6 +2586,18 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 | Rany dla wrogów (symetria) | ❌ wróg nie dostaje kary — do dodania (C5, C6) |
 | Wizualne linie frontu w UI | ❌ opcjonalny polish (D6) |
 | Walka dwoma broniami (dual-wield, #598) | ✅ silnik — klasyfikacja po parze broni (UI render `offhand`/parowania = osobne issue) |
+| Amunicja — łuki zużywają strzały, kusze bełty (#764) | ✅ silnik — strzał odejmuje 1 szt., brak amunicji blokuje strzał (tura nietknięta) |
+| Odzysk amunicji po walce — 40% na sztukę (#765) | ✅ silnik + pill — rzut per wystrzelona sztuka, odzyskane wracają do plecaka |
+
+> **Amunicja (#764).** Broń dystansowa ma `game_config_weapons.ammo_key` (łuk→`arrows`, kusza→`bolts`).
+> Amunicja to consumable (`arrows`/`bolts`) stackowalny w plecaku; archetypy z łukiem na starcie dostają **20 strzał** (warrior, rogue).
+> Atak dystansowy (`weapon_type='ranged'`, nie czar, nie off-hand) odejmuje **1 sztukę** pasującej amunicji.
+> **Brak amunicji → strzał zablokowany BEZ konsumpcji tury** (`blocked, block_reason='no_ammo'`), analogicznie do `out_of_range`.
+> Helpers: `ammo_service.{ammo_key_for_weapon,get_ammo_quantity,consume_ammo,add_ammo}`; hook w `combat_service.resolve_attack`.
+>
+> **Odzysk amunicji (#765).** Wystrzelone sztuki liczone na `active_combat.ammo_spent_json`. Po zwycięstwie pill „Pozbieraj amunicję"
+> proponuje odzysk: **rzut per sztuka, 40% szansy** (`ammo_service.DEFAULT_RECOVER_CHANCE`, wartość STARTOWA, Sandbox-tunable).
+> Odzyskane wracają do plecaka jako stack. Endpointy: `GET /combat/ammo-spent`, `POST /combat/recover-ammo`. Helper: `combat_service.recover_combat_ammo`.
 
 > **Dual-wield (#598).** Klasyfikacja po PARZE broni (główna + pomocnicza):
 > - **dwie lekkie bronie** (lekkość = `finesse`, override jawną kolumną `light`) **+ skill `dual_wield` rank ≥ 1** → drugi atak off-hand w tej samej turze (pełny rzut d20 + pełny mod cechy do obrażeń). Realizacja: drugi `resolve_attack(weapon_override=off_hand)` przed wspólnym `advance_turn`.

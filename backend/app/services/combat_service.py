@@ -4252,6 +4252,107 @@ def _reaction_options(conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int)
     return opts
 
 
+def _record_ammo_spent(conn, campaign_id: int, ammo_key: str, n: int = 1) -> None:
+    """#765: accumulate ammo fired this combat on active_combat.ammo_spent_json.
+
+    Idempotent against schema drift — silently no-ops if the column is absent
+    (e.g. isolated test DBs without the migration).
+    """
+    if not ammo_key or n <= 0:
+        return
+    try:
+        row = conn.execute(
+            "SELECT ammo_spent_json FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (int(campaign_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return
+    if not row:
+        return
+    try:
+        spent = json.loads(row["ammo_spent_json"] or "{}")
+        if not isinstance(spent, dict):
+            spent = {}
+    except (TypeError, ValueError):
+        spent = {}
+    spent[ammo_key] = int(spent.get(ammo_key, 0) or 0) + int(n)
+    conn.execute(
+        "UPDATE active_combat SET ammo_spent_json = ? WHERE campaign_id = ? AND status = 'active'",
+        (json.dumps(spent), int(campaign_id)),
+    )
+    conn.commit()
+
+
+def _read_ammo_spent_row(conn, campaign_id: int):
+    """Latest combat row for the campaign carrying an ammo-spent ledger (or None)."""
+    try:
+        return conn.execute(
+            "SELECT id, character_id, ammo_spent_json FROM active_combat "
+            "WHERE campaign_id = ? ORDER BY id DESC LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+
+
+def get_ammo_spent(campaign_id: int) -> dict[str, Any]:
+    """#765: ile sztuk amunicji wystrzelono w (ostatniej) walce — dla pilla szansy odzysku."""
+    from app.services import ammo_service as _ammo
+    with _conn() as conn:
+        row = _read_ammo_spent_row(conn, campaign_id)
+        spent: dict[str, int] = {}
+        if row and row["ammo_spent_json"]:
+            try:
+                raw = json.loads(row["ammo_spent_json"] or "{}")
+                if isinstance(raw, dict):
+                    spent = {str(k): int(v or 0) for k, v in raw.items() if int(v or 0) > 0}
+            except (TypeError, ValueError):
+                spent = {}
+    return {
+        "fired": spent,
+        "total": sum(spent.values()),
+        "chance": _ammo.DEFAULT_RECOVER_CHANCE,
+        "can_recover": bool(spent),
+    }
+
+
+def recover_combat_ammo(
+    campaign_id: int,
+    chance: float | None = None,
+    rng=None,
+) -> dict[str, Any]:
+    """#765: odzyskaj część wystrzelonej amunicji (rzut per sztuka, 40% startowo).
+
+    Po odzysku kasuje rejestr, by ponowne wywołanie nie dublowało zwrotu.
+    """
+    from app.services import ammo_service as _ammo
+    c = _ammo.DEFAULT_RECOVER_CHANCE if chance is None else float(chance)
+    with _conn() as conn:
+        row = _read_ammo_spent_row(conn, campaign_id)
+        if not row or not row["ammo_spent_json"]:
+            return {"recovered": {}, "total": 0, "chance": c, "fired": {}}
+        try:
+            spent = json.loads(row["ammo_spent_json"] or "{}")
+            if not isinstance(spent, dict):
+                spent = {}
+        except (TypeError, ValueError):
+            spent = {}
+        ch_id = int(row["character_id"])
+        recovered: dict[str, int] = {}
+        for ammo_key, fired in spent.items():
+            got = _ammo.recover_ammo(conn, ch_id, str(ammo_key), int(fired or 0), chance=c, rng=rng)
+            if got:
+                recovered[str(ammo_key)] = got
+        conn.execute("UPDATE active_combat SET ammo_spent_json = NULL WHERE id = ?", (row["id"],))
+        conn.commit()
+    return {
+        "recovered": recovered,
+        "total": sum(recovered.values()),
+        "chance": c,
+        "fired": {str(k): int(v or 0) for k, v in spent.items()},
+    }
+
+
 def resolve_attack(
     campaign_id: int,
     roll_result: int | None,
@@ -4459,6 +4560,30 @@ def resolve_attack(
                 }
             else:
                 weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
+            # ── #764: amunicja — broń dystansowa zużywa strzały/bełty ──────────
+            # Brak amunicji → blokada strzału BEZ konsumpcji tury (jak out_of_range).
+            # Off-hand (#598) i czary pomijamy — liczy się broń główna dystansowa.
+            if weapon_override is None and not spell_key:
+                from app.services import ammo_service as _ammo
+                _ammo_key = _ammo.ammo_key_for_weapon(weapon_row)
+                if _ammo_key:
+                    _have = _ammo.get_ammo_quantity(conn, ch_id, _ammo_key)
+                    if _have <= 0:
+                        out["hit"] = False
+                        out["blocked"] = True
+                        out["block_reason"] = "no_ammo"
+                        out["ammo_key"] = _ammo_key
+                        out["ammo_remaining"] = 0
+                        out["message"] = (
+                            "Brak amunicji — nie masz czym wystrzelić. "
+                            "Zdobądź strzały/bełty lub użyj innej broni."
+                        )
+                        out["combat_state"] = _row_to_combat_dict(row)
+                        return out
+                    _ammo.consume_ammo(conn, ch_id, _ammo_key, 1)
+                    out["ammo_key"] = _ammo_key
+                    out["ammo_remaining"] = max(0, _have - 1)
+                    _record_ammo_spent(conn, campaign_id, _ammo_key, 1)
             attack_roll: dict[str, Any] | None = None
             player_raw = int(raw_d20) if raw_d20 is not None else None
             if player_raw is not None:

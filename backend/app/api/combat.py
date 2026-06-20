@@ -266,6 +266,18 @@ def post_cast_spell(campaign_id: int, body: CastSpellRequest):
     return result
 
 
+@router.get("/campaigns/{campaign_id}/combat/ammo-spent")
+def get_combat_ammo_spent(campaign_id: int):
+    """#765: ile amunicji wystrzelono w (ostatniej) walce + szansa odzysku — dla pilla."""
+    return {"ok": True, "data": combat.get_ammo_spent(campaign_id)}
+
+
+@router.post("/campaigns/{campaign_id}/combat/recover-ammo")
+def post_recover_ammo(campaign_id: int):
+    """#765: odzyskaj część wystrzelonej amunicji (rzut per sztuka, 40% startowo)."""
+    return {"ok": True, "data": combat.recover_combat_ammo(campaign_id)}
+
+
 @router.post("/campaigns/{campaign_id}/combat/loot/claim")
 def post_claim_loot(campaign_id: int, body: ClaimLootRequest):
     try:

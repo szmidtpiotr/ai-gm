@@ -893,6 +893,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "is_narrative": True,
             })
             continue
+        is_ammo = False  # #764: amunicja (strzały/bełty) — consumable, ale bez akcji „użyj"
         if r["weapon_key"]:
             label = str(r["weapon_label"] or r["weapon_key"])
             item_type = "weapon"
@@ -912,6 +913,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
             legacy = legacy_effect_fields_from_json(r["gi_effect_json"]) or {}
             et = str(legacy.get("effect_type") or r["gi_effect_type"] or "").strip().lower()
             dice = str(legacy.get("effect_dice") or r["gi_effect_dice"] or "").strip()
+            is_ammo = et == "ammo"
             if r["consumable_catalog_item_key"]:
                 item_type = "consumable"
                 clab = r["consumable_by_item_key_label"]
@@ -956,7 +958,8 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "label": label,
                 "item_type": item_type,
                 "key": key,
-                "can_use": item_type == "consumable",
+                "can_use": item_type == "consumable" and not is_ammo,
+                "is_ammo": is_ammo,
                 "armor_coverage": coverage,
                 "weapon_slot": wslot,
                 "covered_slots": covered_slots,

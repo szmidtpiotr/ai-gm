@@ -1059,6 +1059,7 @@ def list_weapons() -> list[dict]:
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
+               ammo_key,
                description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
                COALESCE(campaign_id, NULL) AS campaign_id,

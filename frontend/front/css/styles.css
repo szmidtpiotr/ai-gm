@@ -10035,3 +10035,32 @@ body[data-theme="classic"] {
 .advantage-gate-btn .ag-hint { font-size: 0.78rem; opacity: 0.7; }
 .advantage-gate-btn--strike:hover { border-color: #c0584a; background: rgba(192,88,74,0.14); }
 .advantage-gate-btn--withdraw:hover { border-color: #6b8ab0; background: rgba(107,138,176,0.14); }
+
+/* #765: ammo recovery pill — post-combat 40% recover prompt */
+.ammo-recover-pill {
+  position: fixed; inset: 0; z-index: 4000;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none; padding-bottom: 18vh;
+}
+.ammo-recover-pill__card {
+  pointer-events: auto;
+  background: linear-gradient(180deg, #1f2733, #161c25);
+  border: 1px solid #3a4858; border-radius: 14px;
+  padding: 16px 20px; max-width: 340px; width: 88%;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+  color: #e7eef6; text-align: center;
+  animation: ammoPillIn .22s ease-out;
+}
+@keyframes ammoPillIn { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.ammo-recover-pill__title { font-weight: 700; font-size: 1.02rem; margin-bottom: 6px; }
+.ammo-recover-pill__body { font-size: 0.9rem; opacity: 0.92; margin-bottom: 14px; line-height: 1.4; }
+.ammo-recover-pill__actions { display: flex; gap: 10px; justify-content: center; }
+.ammo-recover-pill__btn {
+  border: 1px solid #3a4858; border-radius: 9px; padding: 8px 16px;
+  font-weight: 600; cursor: pointer; background: #232c38; color: #e7eef6;
+  transition: background .15s, border-color .15s;
+}
+.ammo-recover-pill__btn--go { background: rgba(86,160,108,0.18); border-color: #4f8b5f; color: #aee9bd; }
+.ammo-recover-pill__btn--go:hover:not(:disabled) { background: rgba(86,160,108,0.3); }
+.ammo-recover-pill__btn--go:disabled { opacity: 0.6; cursor: default; }
+.ammo-recover-pill__btn--skip:hover { border-color: #6b8ab0; }

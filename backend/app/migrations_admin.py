@@ -1152,6 +1152,8 @@ ADMIN_MIGRATIONS = [
     # U11a (#556): FK target columns — NULL until U11c switches write path
     "ALTER TABLE character_inventory ADD COLUMN game_item_key TEXT",
     "ALTER TABLE game_config_loot_entries ADD COLUMN game_item_key TEXT",
+    # #764: ammunition link — ranged weapon → required ammo consumable key
+    "ALTER TABLE game_config_weapons ADD COLUMN ammo_key TEXT",
 ]
 
 ADMIN_SEEDS = [
@@ -1831,6 +1833,55 @@ ADMIN_SEEDS = [
     """
 ,
     "ALTER TABLE bug_reports ADD COLUMN screenshot_base64 TEXT",
+    # ── #764: amunicja — strzały (łuki) i bełty (kusze) ───────────────────────
+    """
+    INSERT OR IGNORE INTO game_config_consumables
+        (key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
+         weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at)
+    VALUES
+     ('arrows', 'Strzały', 'Amunicja do łuków. Zużywana przy strzale dystansowym.', 'ammo', NULL, 0, 'self',
+      0.05, 1, 1, 'Amunicja: łuki', 1, NULL, datetime('now'), datetime('now')),
+     ('bolts', 'Bełty', 'Amunicja do kusz. Zużywana przy strzale dystansowym.', 'ammo', NULL, 0, 'self',
+      0.075, 1, 1, 'Amunicja: kusze', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    # Unified catalog (game_items) — daje ładną etykietę + item_type=consumable w plecaku.
+    """
+    INSERT OR IGNORE INTO game_items
+        (key, kind, label, description, price_gp, item_data, weight_kg, note, is_active, created_by, approved, created_at, updated_at)
+    VALUES
+     ('arrows', 'consumable', 'Strzały', 'Amunicja do łuków.', 1,
+      json_object('effect_type','ammo','ammo','arrows'), 0.05, 'Amunicja: łuki', 1, 'seed', 1, datetime('now'), datetime('now')),
+     ('bolts', 'consumable', 'Bełty', 'Amunicja do kusz.', 1,
+      json_object('effect_type','ammo','ammo','bolts'), 0.075, 'Amunicja: kusze', 1, 'seed', 1, datetime('now'), datetime('now'))
+    """,
+    # Mapowanie broń → amunicja: łuki→strzały, kusze→bełty.
+    """
+    UPDATE game_config_weapons SET ammo_key = 'arrows'
+    WHERE ammo_key IS NULL AND weapon_type = 'ranged'
+      AND (LOWER(label) LIKE '%bow%' OR LOWER(label) LIKE '%łuk%' OR LOWER(key) LIKE '%bow%')
+      AND LOWER(label) NOT LIKE '%cross%' AND LOWER(label) NOT LIKE '%kusz%'
+      AND LOWER(key)   NOT LIKE '%cross%'
+    """,
+    """
+    UPDATE game_config_weapons SET ammo_key = 'bolts'
+    WHERE ammo_key IS NULL AND weapon_type = 'ranged'
+      AND (LOWER(label) LIKE '%cross%' OR LOWER(label) LIKE '%kusz%' OR LOWER(key) LIKE '%cross%')
+    """,
+    # Amunicja startowa: archetypy z łukiem na starcie dostają 20 strzał (#764, powiązane #749).
+    """
+    UPDATE game_config_archetypes
+    SET starter_items_json =
+      '[{"weapon_key":"shortsword"},{"weapon_key":"wooden_shield"},{"weapon_key":"shortbow"},{"item_key":"leatherarmor"},{"consumable_key":"arrows","quantity":20}]',
+        updated_at = datetime('now')
+    WHERE key = 'warrior'
+    """,
+    """
+    UPDATE game_config_archetypes
+    SET starter_items_json =
+      '[{"weapon_key":"dagger"},{"weapon_key":"shortbow"},{"item_key":"leather_armor"},{"consumable_key":"arrows","quantity":20}]',
+        updated_at = datetime('now')
+    WHERE key = 'rogue'
+    """,
 ]
 
 
@@ -2249,6 +2300,20 @@ def _ensure_active_combat_loot_pool(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE active_combat ADD COLUMN loot_pool TEXT DEFAULT NULL")
         conn.commit()
         logger.info("admin_migration_applied", sql_preview="active_combat ADD COLUMN loot_pool")
+
+
+def _ensure_active_combat_ammo_spent(conn: sqlite3.Connection) -> None:
+    """#765: track ammo fired during a combat so it can be recovered afterwards."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='active_combat'"
+    ).fetchone()
+    if not row:
+        return
+    existing = [r[1] for r in conn.execute("PRAGMA table_info(active_combat)").fetchall()]
+    if "ammo_spent_json" not in existing:
+        conn.execute("ALTER TABLE active_combat ADD COLUMN ammo_spent_json TEXT DEFAULT NULL")
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="active_combat ADD COLUMN ammo_spent_json")
 
 
 def _ensure_campaign_ai_summaries_audience(conn: sqlite3.Connection) -> None:
@@ -4719,6 +4784,7 @@ def run_admin_migrations() -> None:
 
         _ensure_active_combat_location_tag(conn)
         _ensure_active_combat_loot_pool(conn)
+        _ensure_active_combat_ammo_spent(conn)
 
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)
