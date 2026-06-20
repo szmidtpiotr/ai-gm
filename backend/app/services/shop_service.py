@@ -18,6 +18,16 @@ from app.services import haggle_service
 
 SELL_RATIO = 0.5
 
+# Type aliases: catalog may return sub-types that map to canonical stored types.
+# "gear" appears in game_config_items.item_type and is returned by catalog for
+# general equipment (torch, rope, etc.), but shop_inventory_json stores them as "item".
+_ITEM_TYPE_ALIASES: dict[str, str] = {"gear": "item"}
+
+
+def _norm_item_type(t: str) -> str:
+    """Canonical form of item_type for comparison (e.g. 'gear' → 'item')."""
+    return _ITEM_TYPE_ALIASES.get(str(t or "").strip().lower(), str(t or "").strip().lower())
+
 
 def _campaign_id_for_character(conn: sqlite3.Connection, character_id: int) -> int | None:
     """S6: bohater wie, w jakiej kampanii gra → tam żyją session_flags z rabatem."""
@@ -483,8 +493,9 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
         entries = _effective_shop_entries(conn, npc)
+        req_type_norm = _norm_item_type(item_type)
         allowed = any(
-            e["type"] == str(item_type).strip().lower() and e["key"] == str(item_key).strip()
+            _norm_item_type(e["type"]) == req_type_norm and e["key"] == str(item_key).strip()
             for e in entries
         )
         if not allowed:
