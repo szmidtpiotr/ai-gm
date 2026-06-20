@@ -4708,6 +4708,55 @@ def _ensure_consumable_effect_json(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_skipped", label="consumable-backfill-771", error=str(e))
 
 
+def _ensure_warrior_shared_heal_858(conn: sqlite3.Connection) -> None:
+    """#858 — bandaż jako uniwersalne (class-agnostic) leczenie w walce.
+
+    Decyzja Piotra: wspólne mechaniki leczenia (mikstura, bandaż) dostępne dla KAŻDEJ klasy.
+    1) Bandaż leczy SIEBIE (effect_target='self'), nie sojusznika ('ally') — to bazowe
+       leczenie gracza, odpowiednik mikstury maga. heal_hp i tak ignoruje target przy self-use,
+       ale zapis 'self' jest poprawny semantycznie i pod display/przyszłą logikę target-aware.
+    2) Wojownik dostaje bandaż na starcie — bazowe leczenie w walce (analog mikstury/spella maga),
+       żeby nie był zależny wyłącznie od mikstur w plecaku. Idempotentne.
+    """
+    import json as _json
+
+    # 1. Bandaż = self-heal
+    try:
+        conn.execute(
+            "UPDATE game_config_consumables SET effect_target = 'self' "
+            "WHERE key = 'bandage' AND COALESCE(effect_target, '') != 'self'"
+        )
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="bandage effect_target -> self (#858)")
+    except Exception as e:
+        logger.warning("admin_migration_skipped", label="bandage-self-target-858", error=str(e))
+
+    # 2. Wojownik startuje z bandażem (×2)
+    try:
+        row = conn.execute(
+            "SELECT starter_items_json FROM game_config_archetypes WHERE key = 'warrior'"
+        ).fetchone()
+        if row is not None:
+            items = _json.loads(row["starter_items_json"] or "[]")
+            if not isinstance(items, list):
+                items = []
+            has_bandage = any(
+                isinstance(it, dict) and str(it.get("consumable_key") or "") == "bandage"
+                for it in items
+            )
+            if not has_bandage:
+                items.append({"consumable_key": "bandage", "quantity": 2})
+                conn.execute(
+                    "UPDATE game_config_archetypes SET starter_items_json = ?, updated_at = datetime('now') "
+                    "WHERE key = 'warrior'",
+                    (_json.dumps(items, ensure_ascii=False),),
+                )
+                conn.commit()
+                logger.info("admin_migration_applied", sql_preview="warrior starter +bandage x2 (#858)")
+    except Exception as e:
+        logger.warning("admin_migration_skipped", label="warrior-starter-bandage-858", error=str(e))
+
+
 # #748 — standalone Piper+Whisper GPU box (.16). Domyślny host głosu na DEV.
 WHISPER_GPU_HOST_URL = "http://192.168.1.16:8300"
 
@@ -4850,6 +4899,7 @@ def run_admin_migrations() -> None:
         _ensure_turn_decisions_table(conn)  # #762
         _backfill_riddle_exit_conditions(conn)  # #722
         _ensure_consumable_effect_json(conn)  # #771
+        _ensure_warrior_shared_heal_858(conn)  # #858
         _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
     finally:
