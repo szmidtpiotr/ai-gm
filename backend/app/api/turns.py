@@ -283,6 +283,40 @@ def _player_combat_intent(text: str) -> bool:
     return has_weapon and has_motion
 
 
+# #773 — subdue/grapple intent (obezwładnienie poza walką). Mirror of the combat-intent
+# detection but for NON-LETHAL takedowns ("obezwładniam", "przyciskam do ściany",
+# "zakuwam w kajdany"). Per #773 comment: such an aggressive non-lethal declaration must
+# route through the #780 advantage gate, NOT auto-fire [COMBAT_START] (casus Mizela #99791).
+# Stems run on normalised text (no PL diacritics). Word-boundary-safe forms avoid fragment
+# collisions: `zaku[cw]`/`sku[cw]` match "zakuć"/"skuwam" but NOT "zakup"/"skupiam" (#766).
+_SUBDUE_INTENT_RE = re.compile(
+    r"(obezwladn|schwyt|chwyt|chwyc|pochwyc|przypr|przypier|przycisk|przycisn"
+    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym)"
+)
+_NEGATION_SUBDUE_RE = re.compile(
+    r"\bnie\s+(?:chce\s+|bede\s+|zamierzam\s+|mam\s+zamiaru\s+)?"
+    r"(?:go\s+|ja\s+|jej\s+|jego\s+|ich\s+|nikogo\s+|nic\s+|niczego\s+)?"
+    r"(obezwladn|schwyt|chwyt|chwyc|pochwyc|przypr|przypier|przycisk|przycisn"
+    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym)"
+)
+
+
+def _subdue_intent(text: str) -> bool:
+    """Detect a non-lethal subdue/grapple declaration in player text.
+
+    #535-style negation guard: a negated subdue verb ("nie chwytam", "nie obezwładniam")
+    suppresses intent unless an un-negated subdue verb also remains.
+    """
+    norm = _normalize_pl(text or "")
+    if not _SUBDUE_INTENT_RE.search(norm):
+        return False
+    if _NEGATION_SUBDUE_RE.search(norm):
+        stripped = _NEGATION_SUBDUE_RE.sub(" ", norm)
+        if not _SUBDUE_INTENT_RE.search(stripped):
+            return False
+    return True
+
+
 def _resolve_enemy_key_from_context(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -5118,6 +5152,18 @@ def create_turn(
         if _dungeon_clear_result:
             out["dungeon_cleared"] = _dungeon_clear_result
 
+        # #773 (1A) — deklaracja obezwładnienia poza walką → bramka intencji (#780)
+        # zamiast cichego COMBAT_START. Agresywna deklaracja non-lethal („obezwładniam",
+        # „przyciskam do ściany") nie wybucha śmiertelną walką — silnik STOP i pyta gracza.
+        if new_combat is None and not combat_was_active and _subdue_intent(text):
+            try:
+                from app.services.combat_service import build_advantage_gate
+                _sub_gate = build_advantage_gate("grapple")
+                if _sub_gate:
+                    out["advantage_gate"] = _sub_gate
+            except Exception as _sub_err:
+                logger.warning("subdue_gate_build_error", error=str(_sub_err))
+
         # B5: auto-save World State snapshot after each narrative turn
         try:
             from app.services.world_state_service import auto_save_snapshot as _ws_snap, get_world_state_flags as _gwsf_out
@@ -6543,6 +6589,15 @@ def create_turn_stream(
                     _sa_conn.close()
             except Exception:
                 pass
+            # #773 (1A) — subdue/grapple intent → bramka intencji (#780) w odpowiedzi stream.
+            try:
+                if new_combat is None and not combat_was_active and _subdue_intent(user_text_val):
+                    from app.services.combat_service import build_advantage_gate as _bag_s
+                    _sub_gate_s = _bag_s("grapple")
+                    if _sub_gate_s:
+                        done_payload["advantage_gate"] = _sub_gate_s
+            except Exception as _sub_err_s:
+                logger.warning("subdue_gate_build_error_stream", error=str(_sub_err_s))
             # B5: auto-save World State snapshot after each streaming narrative turn
             try:
                 from app.services.world_state_service import auto_save_snapshot as _ws_snap_s, get_world_state_flags as _gwsf_done, set_world_state_flags as _swsf_done

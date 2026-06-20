@@ -637,8 +637,9 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
     do renderu w UI gracza. ``None`` gdy brak źródła przewagi."""
     if not source or not str(source).strip():
         return None
-    return {
-        "source": str(source),
+    src = str(source).strip()
+    gate = {
+        "source": src,
         "title": "Masz przewagę.",
         "options": [
             {
@@ -666,6 +667,31 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
             },
         ],
     }
+    # #773 (grapple) — gdy przewaga pochodzi z deklaracji obezwładnienia, dołącz
+    # deterministyczną mapę rozwiązania (3A): sukces → kondycja `schwytany` na celu,
+    # porażka → COMBAT_START. Frontend/silnik używa jej zamiast zgadywania po narracji.
+    if src.lower() in ("grapple", "subdue"):
+        gate["subdue_resolution"] = {
+            "success": subdue_outcome_to_effect("SUCCESS"),
+            "failure": subdue_outcome_to_effect("FAILURE"),
+        }
+    return gate
+
+
+def subdue_outcome_to_effect(outcome: str) -> dict[str, Any]:
+    """#773 (3A): deterministyczne mapowanie wyniku obezwładnienia (grapple poza walką).
+
+    Wzorzec _derive_outcome (S1). Sukces nakłada na cel kondycję `schwytany`
+    (block_action — wróg nie atakuje ani nie ucieka); naturalna 20 dokłada `bonus`
+    (np. wróg ogłuszony / mówi prawdę). Porażka ZAWSZE startuje walkę (decyzja A3=A),
+    a krytyczna porażka oddaje wrogowi inicjatywę kontrataku."""
+    o = str(outcome or "").strip().upper()
+    if o in ("SUCCESS", "CRITICAL_SUCCESS"):
+        eff: dict[str, Any] = {"apply_condition": "schwytany", "to": "target"}
+        if o == "CRITICAL_SUCCESS":
+            eff["bonus"] = True
+        return eff
+    return {"combat_start": True, "enemy_initiative": o == "CRITICAL_FAILURE"}
 
 
 def combat_correction_message(reason: str, target_name: str) -> str:

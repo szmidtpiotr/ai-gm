@@ -1477,6 +1477,17 @@ ADMIN_SEEDS = [
     VALUES
     ('hidden', 'Ukryty', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"untargetable"},{"type":"ambush_bonus","value":"2d6"}],"granted_by":{"skill":"stealth","dc":14},"detect_dc":14}', 'Postać skutecznie się ukryła — wrogowie nie mogą jej atakować, dopóki jej nie wykryją. Pierwszy atak z ukrycia zadaje +2k6 obrażeń (zasadzka) i zdejmuje ukrycie. Wejście: udany test skradania (stealth DC 14). Zejście: własny atak (demaskuje) lub wykrycie (wróg WIS DC 14 przy aktywnym poszukiwaniu). Nie zmienia strefy — możliwa zasadzka również w zwarciu.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
     """,
+    # #773 (2A) — kondycja `schwytany`: udane obezwładnienie poza walką (grapple).
+    # block_action = wróg nie atakuje ani nie ucieka (silnik honoruje przez istniejący
+    # prymityw block_action w evaluate_current_turn_conditions, Zasada 1 — zero if-ów).
+    # Gracz może przesłuchać/związać/ogłuszyć kolejnymi akcjami. Bez `expires` → trwa
+    # do końca sceny lub kolejnej akcji gracza. Wartości startowe (Numbers Policy).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('schwytany', 'Schwytany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"block_action"}]}', 'Cel obezwładniony i unieruchomiony — nie może atakować ani uciec. Gracz może go przesłuchać, związać, ogłuszyć lub uwolnić kolejnymi akcjami. Wejście: udany test obezwładnienia (grapple/Athletics) poza walką. Nie generuje XP (poza ewentualną misją).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
     """
     UPDATE game_config_stats
     SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
