@@ -1681,39 +1681,75 @@ def _read_loot_pool_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
     return _parse_loot_pool_column(row["loot_pool"])
 
 
+_LOOT_LABEL_TABLE = {
+    "weapon": "game_config_weapons",
+    "consumable": "game_config_consumables",
+    "item": "game_config_items",
+}
+
+
+def _lookup_loot_label(conn: sqlite3.Connection, item_type: str, key: str) -> str | None:
+    """#746: pobierz polską etykietę z odpowiedniej tabeli konfiguracyjnej.
+    Zwraca None gdy klucza nie ma w DB (caller degraduje do key.replace)."""
+    table = _LOOT_LABEL_TABLE.get(item_type)
+    if not table:
+        return None
+    try:
+        row = conn.execute(
+            f"SELECT label FROM {table} WHERE key = ? LIMIT 1", (key,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    label = str(row["label"] or "").strip()
+    return label or None
+
+
 def _preview_loot_from_roll_items(
     loot_items: list[dict[str, Any]],
     loot_tier: str | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for raw in loot_items or []:
-        if not isinstance(raw, dict):
-            continue
-        qty = max(1, int(raw.get("quantity") or 1))
-        key = ""
-        item_type = "item"
-        if raw.get("weapon_key"):
-            key = str(raw.get("weapon_key") or "").strip()
-            item_type = "weapon"
-        elif raw.get("consumable_key"):
-            key = str(raw.get("consumable_key") or "").strip()
-            item_type = "consumable"
-        elif raw.get("item_key"):
-            key = str(raw.get("item_key") or "").strip()
+    # #746: etykiety łupu muszą pochodzić z DB (polskie nazwy), nie z key.replace.
+    # Otwórz własne połączenie gdy caller go nie podał (zamknij na końcu).
+    _owns_conn = conn is None
+    if _owns_conn:
+        conn = _conn()
+    try:
+        out: list[dict[str, Any]] = []
+        for raw in loot_items or []:
+            if not isinstance(raw, dict):
+                continue
+            qty = max(1, int(raw.get("quantity") or 1))
+            key = ""
             item_type = "item"
-        if not key:
-            continue
-        out.append(
-            {
-                "label": key.replace("_", " "),
-                "item_type": item_type,
-                "quantity": qty,
-                "source": "loot",
-                "key": key,
-                "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
-            }
-        )
-    return out
+            if raw.get("weapon_key"):
+                key = str(raw.get("weapon_key") or "").strip()
+                item_type = "weapon"
+            elif raw.get("consumable_key"):
+                key = str(raw.get("consumable_key") or "").strip()
+                item_type = "consumable"
+            elif raw.get("item_key"):
+                key = str(raw.get("item_key") or "").strip()
+                item_type = "item"
+            if not key:
+                continue
+            label = _lookup_loot_label(conn, item_type, key) or key.replace("_", " ")
+            out.append(
+                {
+                    "label": label,
+                    "item_type": item_type,
+                    "quantity": qty,
+                    "source": "loot",
+                    "key": key,
+                    "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
+                }
+            )
+        return out
+    finally:
+        if _owns_conn:
+            conn.close()
 
 
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -2367,7 +2403,7 @@ def _resolve_aoe_spell_in_combat(
                     _loot_tier = str(tgt.get("loot_tier") or "") or None
                     loot_items = roll_loot(ek)
                     tgt_loot = (
-                        _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier)
+                        _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
                         if loot_items else []
                     )
                     gold = int(roll_gold_drop(ek) or 0)
@@ -5041,7 +5077,7 @@ def resolve_attack(
                             loot_items = roll_loot(ek)
                             _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
                             if loot_items:
-                                loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier)
+                                loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
                             else:
                                 loot = []
                             gold_drop = int(roll_gold_drop(ek) or 0)

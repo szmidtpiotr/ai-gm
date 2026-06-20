@@ -4715,7 +4715,7 @@ function showLootPopup(loot, gold, opts = {}) {
                     ? `<li>${glyph} ${escapeHtml(k)} ×${qty}</li>`
                     : `<li><label><input type="checkbox" data-loot-idx="${idx}" checked> ${glyph} ${escapeHtml(k)} ×${qty}</label></li>`;
             }).join('') + '</ul>';
-        if (goldAmt > 0) html += `<p>💰 +${goldAmt} GP (already added)</p>`;
+        if (goldAmt > 0) html += `<p>💰 +${goldAmt} ZŁ (dodano)</p>`;
         elements.combatLootList.innerHTML = html;
         el.hidden = false;
         if (revealOnly) {
