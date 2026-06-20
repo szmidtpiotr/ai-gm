@@ -2386,8 +2386,8 @@ async function enterGame(campaign, opts = {}) {
     if (_diceOverlayEl) _diceOverlayEl.hidden = true;
 
     // T5 — fetch initial clock state and render in header
-    // Visual overlay settings loaded in parallel; clock render also applies overlay
-    Promise.all([loadVisualSettings(), Promise.resolve()]).then(() => {
+    // Visual overlay settings + dice config loaded in parallel; clock render also applies overlay
+    Promise.all([loadVisualSettings(), _fetchDice3DConfig()]).then(() => {
         fetchAndRenderClock(campaign.id);
     });
 
@@ -5854,6 +5854,16 @@ function buildDamageStage(data) {
 let _dice3d = null;
 let _dice3dInit = null;       // Promise that resolves when the box finished async init.
 let _dice3dFailed = false;
+let _dice3dRemoteConfig = null;  // #850: loaded from /api/game/dice-config on enterGame
+
+// #850: Fetch admin-saved dice config (no auth). Stores result for ensureDice3D() to pick up.
+async function _fetchDice3DConfig() {
+    try {
+        const r = await fetch('/api/game/dice-config');
+        if (r.ok) { _dice3dRemoteConfig = (await r.json()).config || null; }
+    } catch (_e) {}
+}
+
 // Build the 3D dice box (once) and kick off its ASYNC initialize() (loads themes /
 // builds the WebGL scene). Returns the box immediately; readiness is `_dice3dInit`.
 function ensureDice3D() {
@@ -5862,18 +5872,28 @@ function ensureDice3D() {
     const Ctor = window['dice-box-threejs'];
     const el = document.getElementById('dice3d-container');
     if (typeof Ctor !== 'function' || !el) { _dice3dFailed = true; return null; }
+    // #850: merge admin config over defaults; admin may override colorset/texture/physics
+    const rc = _dice3dRemoteConfig || {};
+    const cc = rc.customColorset || {};
     try {
         _dice3d = new Ctor('#dice3d-container', {
             assetPath: '/vendor/dice-box-threejs/',
             sounds: false,
             shadows: true,
-            theme_colorset: 'white',
-            theme_texture: '',
-            theme_material: 'plastic',
-            gravity_multiplier: 400,
-            light_intensity: 0.9,
-            baseScale: 100,
-            strength: 1.4,
+            theme_colorset: cc.foreground ? 'custom' : 'white',
+            theme_texture: cc.texture || '',
+            theme_material: cc.material || 'plastic',
+            customColorset: cc.foreground ? {
+                foreground: cc.foreground,
+                background: cc.background || ['#1b1107'],
+                outline: cc.outline || '#c08020',
+                texture: cc.texture || 'fire',
+                material: cc.material || 'plastic',
+            } : undefined,
+            gravity_multiplier: rc.gravity_multiplier ?? 400,
+            light_intensity: rc.light_intensity ?? 0.9,
+            baseScale: rc.baseScale ?? 100,
+            strength: rc.strength ?? 1.4,
         });
         // initialize() is async (loads assets, builds scene). roll() before it resolves
         // throws "renderer undefined", so every roll must await this first.

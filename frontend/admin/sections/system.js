@@ -55,6 +55,7 @@ const _HTML = `
         <button class="stab" data-systab="narration">📜 Narracja</button>
         <button class="stab" data-systab="gamemodes">🎮 Tryby gry</button>
         <button class="stab" data-systab="imagegen">🖼 Obrazy</button>
+        <button class="stab" data-systab="dice">🎲 Kostki</button>
       </div>
 
       <!-- LLM tab -->
@@ -591,6 +592,113 @@ const _HTML = `
           <button class="btn btn-primary" id="ig-save-btn">💾 Zapisz ustawienia</button>
         </div>
       </div>
+
+      <!-- Dice config tab (#850) -->
+      <div class="stab-panel" id="systab-dice" style="display:none">
+        <div class="two-col" style="gap:16px">
+          <!-- Controls column -->
+          <div>
+            <div class="card" style="margin-bottom:12px">
+              <div class="card-header"><span class="card-title">Kolory kostek</span></div>
+              <div style="padding:12px 0 4px">
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Kolor cyfr (foreground)</label>
+                  <input type="color" id="dc-fg" value="#ffd76a" style="width:60px;height:32px;cursor:pointer;border:none;background:none">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Kolor 1 bryły (background)</label>
+                  <input type="color" id="dc-bg1" value="#1b1107" style="width:60px;height:32px;cursor:pointer;border:none;background:none">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Kolor 2 bryły (opcjonalny)</label>
+                  <input type="color" id="dc-bg2" value="#3a2410" style="width:60px;height:32px;cursor:pointer;border:none;background:none">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Obrys cyfr (outline)</label>
+                  <input type="color" id="dc-outline" value="#c08020" style="width:60px;height:32px;cursor:pointer;border:none;background:none">
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-bottom:12px">
+              <div class="card-header"><span class="card-title">Styl</span></div>
+              <div style="padding:12px 0 4px">
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Tekstura</label>
+                  <select class="form-input" id="dc-texture" style="width:160px">
+                    <option value="fire">fire</option>
+                    <option value="marble">marble</option>
+                    <option value="stone">stone</option>
+                    <option value="dragon">dragon</option>
+                    <option value="skulls">skulls</option>
+                    <option value="ice">ice</option>
+                    <option value="metal">metal</option>
+                    <option value="wood">wood</option>
+                    <option value="stars">stars</option>
+                    <option value="paper">paper</option>
+                    <option value="cloudy">cloudy</option>
+                    <option value="lizard">lizard</option>
+                    <option value="glitter">glitter</option>
+                    <option value="noise">noise</option>
+                    <option value="water">water</option>
+                    <option value="speckles">speckles</option>
+                    <option value="stainedglass">stainedglass</option>
+                    <option value="">none</option>
+                  </select>
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Materiał</label>
+                  <select class="form-input" id="dc-material" style="width:160px">
+                    <option value="plastic">plastic</option>
+                    <option value="metal">metal</option>
+                    <option value="glass">glass</option>
+                    <option value="wood">wood</option>
+                    <option value="">none</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-bottom:12px">
+              <div class="card-header"><span class="card-title">Fizyka &amp; skala</span></div>
+              <div style="padding:12px 0 4px">
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Grawitacja (gravity_multiplier) <span id="dc-grav-val" style="color:var(--accent);font-weight:600">400</span></label>
+                  <input type="range" id="dc-gravity" min="100" max="800" value="400" oninput="document.getElementById('dc-grav-val').textContent=this.value" style="width:100%">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Siła rzutu (strength) <span id="dc-str-val" style="color:var(--accent);font-weight:600">1.4</span></label>
+                  <input type="range" id="dc-strength" min="5" max="30" value="14" oninput="document.getElementById('dc-str-val').textContent=(this.value/10).toFixed(1)" style="width:100%">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Rozmiar (baseScale) <span id="dc-scale-val" style="color:var(--accent);font-weight:600">100</span></label>
+                  <input type="range" id="dc-scale" min="60" max="150" value="100" oninput="document.getElementById('dc-scale-val').textContent=this.value" style="width:100%">
+                </div>
+                <div class="form-row" style="margin-bottom:10px">
+                  <label class="form-label">Światło (light_intensity) <span id="dc-light-val" style="color:var(--accent);font-weight:600">0.9</span></label>
+                  <input type="range" id="dc-light" min="2" max="20" value="9" oninput="document.getElementById('dc-light-val').textContent=(this.value/10).toFixed(1)" style="width:100%">
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+              <button class="btn btn-primary" onclick="_saveDiceConfig()">💾 Zapisz</button>
+              <button class="btn btn-secondary" onclick="_resetDiceConfig()">↺ Reset do domyślnych</button>
+            </div>
+          </div>
+          <!-- Preview column -->
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Podgląd 3D</span>
+                <button class="btn btn-sm btn-secondary" onclick="_previewDiceRoll()">🎲 Rzuć podgląd</button>
+              </div>
+              <div id="dc-preview-wrap" style="position:relative;width:100%;height:280px;background:#111;border-radius:8px;overflow:hidden;margin-top:8px">
+                <div id="dc-preview-container" style="width:100%;height:100%"></div>
+                <div id="dc-preview-hint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.85rem;pointer-events:none">Kliknij &quot;Rzuć podgląd&quot;</div>
+              </div>
+              <p style="font-size:0.75rem;color:var(--t3);margin-top:8px">Podgląd używa tej samej biblioteki co gra. Po zapisaniu config gracz zobaczy nowe kostki po F5.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>`;
 
 // ── Tab wiring + lazy load ────────────────────────────────────────────────────
@@ -618,6 +726,7 @@ function _loadSysTab(tab) {
     slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual,
     resurrection: _loadSysResurrection, teksty: _loadSysTeksty, voice: _loadVoice,
     narration: _loadNarration, gamemodes: _loadGameModes, imagegen: _loadSysImageGen,
+    dice: _loadDiceConfig,
   }[tab];
   if (fn) fn().catch(e => { _sysTabLoaded.delete(tab); console.warn('sys tab', tab, e.message); });
 }
@@ -1975,6 +2084,128 @@ async function saveGameModes() {
   } catch(e) { showToast('Błąd zapisu: ' + e.message, 'error'); }
 }
 
+// ── Dice config (#850) ────────────────────────────────────────────────────────
+const _DC_DEFAULTS = {
+  customColorset: { foreground:'#ffd76a', background:['#1b1107','#3a2410'], outline:'#c08020', texture:'fire', material:'plastic' },
+  gravity_multiplier: 400, strength: 1.4, baseScale: 100, light_intensity: 0.9,
+};
+let _dcPreviewBox = null;
+
+function _dcGet(id) { return document.getElementById(id); }
+
+function _dcApplyToUI(cfg) {
+  const cc = cfg.customColorset || {};
+  const setVal = (id, v) => { const el = _dcGet(id); if (el) el.value = v; };
+  const setBg = (id, v) => { const el = _dcGet(id); if (el) el.value = v; };
+  setVal('dc-fg', cc.foreground || '#ffd76a');
+  setBg('dc-bg1', (cc.background||[])[0] || '#1b1107');
+  setBg('dc-bg2', (cc.background||[])[1] || '#3a2410');
+  setVal('dc-outline', cc.outline || '#c08020');
+  const tex = _dcGet('dc-texture'); if (tex) tex.value = cc.texture || 'fire';
+  const mat = _dcGet('dc-material'); if (mat) mat.value = cc.material || 'plastic';
+  const grav = _dcGet('dc-gravity'); if (grav) { grav.value = cfg.gravity_multiplier ?? 400; _dcGet('dc-grav-val').textContent = grav.value; }
+  const str = _dcGet('dc-strength'); if (str) { str.value = Math.round((cfg.strength ?? 1.4)*10); _dcGet('dc-str-val').textContent = (cfg.strength ?? 1.4).toFixed(1); }
+  const sc = _dcGet('dc-scale'); if (sc) { sc.value = cfg.baseScale ?? 100; _dcGet('dc-scale-val').textContent = sc.value; }
+  const li = _dcGet('dc-light'); if (li) { li.value = Math.round((cfg.light_intensity ?? 0.9)*10); _dcGet('dc-light-val').textContent = (cfg.light_intensity ?? 0.9).toFixed(1); }
+}
+
+function _dcReadFromUI() {
+  const bg1 = _dcGet('dc-bg1')?.value || '#1b1107';
+  const bg2 = _dcGet('dc-bg2')?.value;
+  const bg = bg2 ? [bg1, bg2] : [bg1];
+  return {
+    customColorset: {
+      foreground: _dcGet('dc-fg')?.value || '#ffd76a',
+      background: bg,
+      outline: _dcGet('dc-outline')?.value || '#c08020',
+      texture: _dcGet('dc-texture')?.value || 'fire',
+      material: _dcGet('dc-material')?.value || 'plastic',
+    },
+    gravity_multiplier: parseInt(_dcGet('dc-gravity')?.value || '400', 10),
+    strength: parseFloat((_dcGet('dc-strength')?.value || '14') / 10),
+    baseScale: parseInt(_dcGet('dc-scale')?.value || '100', 10),
+    light_intensity: parseFloat((_dcGet('dc-light')?.value || '9') / 10),
+  };
+}
+
+async function _loadDiceConfig() {
+  try {
+    const d = await apiFetch('/api/admin/dice-config');
+    _dcApplyToUI(d.config || _DC_DEFAULTS);
+  } catch(e) {
+    _dcApplyToUI(_DC_DEFAULTS);
+    console.warn('dice config load', e.message);
+  }
+}
+
+async function _saveDiceConfig() {
+  const cfg = _dcReadFromUI();
+  try {
+    await apiFetch('/api/admin/dice-config', { method: 'POST', body: JSON.stringify({ config: cfg }) });
+    showToast('Konfiguracja kostek zapisana — gracze zobaczą zmiany po F5', 'success');
+  } catch(e) { showToast('Błąd zapisu: ' + e.message, 'error'); }
+}
+
+async function _resetDiceConfig() {
+  try {
+    await apiFetch('/api/admin/dice-config', { method: 'POST', body: JSON.stringify({ config: _DC_DEFAULTS }) });
+    _dcApplyToUI(_DC_DEFAULTS);
+    showToast('Reset do domyślnych', 'success');
+  } catch(e) { showToast('Błąd resetu: ' + e.message, 'error'); }
+}
+
+async function _previewDiceRoll() {
+  const hint = _dcGet('dc-preview-hint');
+  if (hint) hint.style.display = 'none';
+  const wrap = _dcGet('dc-preview-wrap');
+  if (!wrap) return;
+
+  // Destroy previous preview box (replace container to clear WebGL context)
+  const oldC = _dcGet('dc-preview-container');
+  if (oldC) oldC.remove();
+  const newC = document.createElement('div');
+  newC.id = 'dc-preview-container';
+  newC.style.cssText = 'width:100%;height:100%';
+  wrap.insertBefore(newC, wrap.firstChild);
+  _dcPreviewBox = null;
+
+  // Load dice library if not already on page
+  if (typeof window['dice-box-threejs'] !== 'function') {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = '/vendor/dice-box-threejs/dice-box-threejs.umd.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const Ctor = window['dice-box-threejs'];
+  if (typeof Ctor !== 'function') { showToast('Biblioteka kostek niedostępna', 'error'); return; }
+
+  const cfg = _dcReadFromUI();
+  const cc = cfg.customColorset || {};
+  try {
+    _dcPreviewBox = new Ctor('#dc-preview-container', {
+      assetPath: '/vendor/dice-box-threejs/',
+      sounds: false,
+      shadows: true,
+      theme_colorset: 'custom',
+      theme_texture: cc.texture || '',
+      theme_material: cc.material || 'plastic',
+      customColorset: { foreground: cc.foreground, background: cc.background, outline: cc.outline, texture: cc.texture, material: cc.material },
+      gravity_multiplier: cfg.gravity_multiplier,
+      light_intensity: cfg.light_intensity,
+      baseScale: cfg.baseScale,
+      strength: cfg.strength,
+    });
+    await Promise.resolve(_dcPreviewBox.initialize());
+    _dcPreviewBox.roll('2d6');
+  } catch(e) {
+    showToast('Podgląd niedostępny: ' + e.message, 'error');
+    console.warn('dice preview', e);
+  }
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 export async function init(panel) {
   _sysTabLoaded.clear();
@@ -1996,5 +2227,6 @@ export async function init(panel) {
     testTTS, testSTT, _onSeedRandomToggle, selectWhisperPreset,
     _pingImageGen, _refreshImageGenModels,
     togglePromptEdit, setTone, saveGameModes,
+    _saveDiceConfig, _resetDiceConfig, _previewDiceRoll,
   });
 }
