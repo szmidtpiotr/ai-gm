@@ -7207,6 +7207,19 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   inset: 0;
 }
 
+/* #829 — modern 3D dice (dice-box-threejs) mount. Same footprint as #dice-container,
+   below the result/skill cards (which sit at z-index 1+). */
+#dice3d-container {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+#dice3d-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
 #dice-container canvas {
   width: 100% !important;
   height: 100% !important;

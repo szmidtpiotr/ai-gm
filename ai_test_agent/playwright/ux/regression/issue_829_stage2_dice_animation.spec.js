@@ -16,36 +16,44 @@ test("REGRESSION #829 — backend health and Stage 2 API contract", async ({ pag
   expect(body.status, "backend status must be 'ok'").toBe("ok");
 });
 
-test("REGRESSION #829 — Stage 2 damage uses reliable 2D dice (not 3D second-throw)", async ({ page }) => {
-  // Final root cause (verified live in a real browser, instrumented timeline):
-  // the 3D library's SECOND throw (after the d20) never repaints on player devices
-  // — the WebGL re-roll paints nothing and the physics never settles (always hits
-  // the 4s backstop). Confirmed structurally: with a shared canvas, Stage-1-visible
-  // must imply Stage-2-visible unless the second throw genuinely fails to paint.
-  // Fix: Stage 2 (damage/heal) renders a pure-DOM 2D dice roll that cannot fail —
-  // it tumbles random faces then lands each die on the backend's per-die result.
+test("REGRESSION #829 — combat dice use modern 3D lib (dice-box-threejs) with 2D fallback", async ({ page }) => {
+  // The legacy 2015 dice.js never reliably repainted its SECOND throw (combat damage)
+  // on player devices. Replaced with @3d-dice/dice-box-threejs (THREE r143 + Cannon-ES,
+  // self-contained UMD) which uses ONE persistent canvas/context for all rolls — the
+  // old context-churn failure mode is structurally gone. Predetermined notation
+  // ('2d6@3,5') lands each die on the backend's exact result. 2D dice remain the
+  // automatic fallback when WebGL/init fails. Verified live: real two-stage flow
+  // rendered both d20 and damage into a single canvas, landing on forced values.
+
+  // Vendored UMD library must be served.
+  const lib = await page.request.get("/vendor/dice-box-threejs/dice-box-threejs.umd.js");
+  expect(lib.ok(), "dice-box-threejs UMD not served").toBeTruthy();
+  // A vendored texture must be served (assetPath).
+  const tex = await page.request.get("/vendor/dice-box-threejs/textures/cloudy.webp");
+  expect(tex.ok(), "dice-box-threejs textures not served (assetPath broken)").toBeTruthy();
+
   const r = await page.request.get("/js/app.js");
-  expect(r.ok(), "app.js must be served").toBeTruthy();
   const src = await r.text();
 
-  // The 2D roll function must exist and be wired into the damage stage.
+  // Combat dice routed through the 3D wrapper, with init + predetermined notation.
+  expect(src.includes("function rollDiceVisual"), "missing rollDiceVisual wrapper").toBeTruthy();
+  expect(src.includes("ensureDice3D"), "missing ensureDice3D (3D engine bootstrap)").toBeTruthy();
   expect(
-    src.includes("function play2dDiceRoll"),
-    "missing play2dDiceRoll — 2D damage dice not deployed"
+    src.includes("_dice3d.initialize()"),
+    "must await the async initialize() — roll before init throws 'renderer undefined'"
   ).toBeTruthy();
   expect(
-    src.includes("play2dDiceRoll(container, ds, forced, showDmg)"),
-    "damage stage not wired to play2dDiceRoll — Stage 2 still uses the flaky 3D throw"
+    src.includes("`${notation}@${forced.join(',')}`"),
+    "missing predetermined notation — dice would not land on the backend result"
   ).toBeTruthy();
+  // 2D fallback must remain wired inside the wrapper.
+  expect(src.includes("play2dDiceRoll"), "2D fallback must remain available").toBeTruthy();
 
-  // The 2D CSS must be present in the stylesheet.
-  const css = await page.request.get("/css/styles.css");
-  expect(css.ok(), "styles.css must be served").toBeTruthy();
-  const cssSrc = await css.text();
-  expect(
-    cssSrc.includes(".dice2d-die"),
-    "missing .dice2d-die CSS — 2D dice would be unstyled/invisible"
-  ).toBeTruthy();
+  // index.html must load the UMD lib and expose the 3D mount.
+  const html = await page.request.get("/");
+  const htmlSrc = await html.text();
+  expect(htmlSrc.includes("dice-box-threejs.umd.js"), "UMD script tag missing in index.html").toBeTruthy();
+  expect(htmlSrc.includes('id="dice3d-container"'), "missing #dice3d-container mount").toBeTruthy();
 });
 
 test("REGRESSION #829 — damage result modal dwell lengthened (#829 follow-up)", async ({ page }) => {

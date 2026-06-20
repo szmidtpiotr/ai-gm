@@ -5846,6 +5846,91 @@ function buildDamageStage(data) {
     return null;
 }
 
+// #829: modern 3D dice (@3d-dice/dice-box-threejs). Replaces the flaky 2015 dice.js
+// for COMBAT rolls — it's maintained (THREE r143 + Cannon-ES), renders reliably on
+// mobile, and supports predetermined results (`1d20@15`) so the die lands on the
+// value the backend already rolled. Lazy singleton bound to #dice3d-container.
+let _dice3d = null;
+let _dice3dInit = null;       // Promise that resolves when the box finished async init.
+let _dice3dFailed = false;
+// Build the 3D dice box (once) and kick off its ASYNC initialize() (loads themes /
+// builds the WebGL scene). Returns the box immediately; readiness is `_dice3dInit`.
+function ensureDice3D() {
+    if (_dice3dFailed) return null;
+    if (_dice3d) return _dice3d;
+    const Ctor = window['dice-box-threejs'];
+    const el = document.getElementById('dice3d-container');
+    if (typeof Ctor !== 'function' || !el) { _dice3dFailed = true; return null; }
+    try {
+        _dice3d = new Ctor('#dice3d-container', {
+            assetPath: '/vendor/dice-box-threejs/',
+            sounds: false,
+            shadows: true,
+            theme_colorset: 'white',
+            theme_texture: '',
+            theme_material: 'plastic',
+            gravity_multiplier: 400,
+            light_intensity: 0.9,
+            baseScale: 100,
+            strength: 1.4,
+        });
+        // initialize() is async (loads assets, builds scene). roll() before it resolves
+        // throws "renderer undefined", so every roll must await this first.
+        _dice3dInit = Promise.resolve(_dice3d.initialize());
+    } catch (_e) {
+        _dice3dFailed = true; _dice3d = null;
+        window.clog?.warn?.('dice3d_init_failed', { error: String(_e && _e.message || _e) });
+        return null;
+    }
+    return _dice3d;
+}
+
+// Pre-warm the 3D engine so the first combat roll isn't delayed by asset loading.
+function prewarmDice3D() { try { ensureDice3D(); } catch (_e) {} }
+
+// Clear any settled 3D dice (called on overlay close / before next roll).
+function clearDice3D() {
+    if (!_dice3d) return;
+    try { if (typeof _dice3d.clearDice === 'function') _dice3d.clearDice(); else if (typeof _dice3d.clear === 'function') _dice3d.clear(); } catch (_e) {}
+}
+
+// Roll `notation` (e.g. '1d20', '2d6') landing on `forced` (per-die results from the
+// backend) and call `onComplete` once the dice settle. Tries the modern 3D dice first;
+// on ANY failure (lib missing, init/roll error, or stall) falls back to the reliable 2D
+// dice so the player ALWAYS sees a roll. `kind` ('attack'|'damage'|'heal') steers the 2D look.
+function rollDiceVisual(notation, forced, kind, onComplete) {
+    let _done = false;
+    const finish = () => { if (_done) return; _done = true; onComplete(); };
+    const el2d = document.getElementById('dice-container');
+    const fallback2d = () => { if (_done) return; play2dDiceRoll(el2d, { notation, rolls: forced, kind }, forced, finish); };
+
+    const box = ensureDice3D();
+    if (!box) { fallback2d(); return; }
+
+    // Predetermined notation lands each die on the backend's exact result: "2d6@3,5".
+    const predet = (Array.isArray(forced) && forced.length)
+        ? `${notation}@${forced.join(',')}`
+        : String(notation);
+    // Backstop: covers async init + animation. If the 3D roll never reports back, show
+    // the result anyway (don't hang the veil). Generous because the FIRST roll also waits
+    // for asset loading (~1-2s) on top of the ~2.5s animation.
+    const backstop = setTimeout(finish, 9000);
+
+    _dice3dInit.then(() => {
+        if (!_dice3d || _dice3d.initialized !== true) throw new Error('dice3d not initialized');
+        clearDice3D();
+        _dice3d.onRollComplete = () => { clearTimeout(backstop); setTimeout(finish, 550); };
+        const p = _dice3d.roll(predet);
+        // roll() may also return a promise; swallow its rejection (onRollComplete drives us).
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+    }).catch((_e) => {
+        clearTimeout(backstop);
+        _dice3dFailed = true;
+        window.clog?.warn?.('dice3d_roll_failed', { error: String(_e && _e.message || _e) });
+        fallback2d();
+    });
+}
+
 // #829: reliable 2D damage-dice animation for Stage 2. The 3D library's second
 // throw (after the d20) is invisible on many player devices — the WebGL context
 // does not repaint the re-roll and the physics never settles (always backstop).
@@ -5931,6 +6016,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             overlay.hidden = true;
             // #669: sprzątnij osiadłą kostkę przy zamknięciu, by nie została na poprzednim wyniku.
             if (_diceBox && typeof _diceBox.clear === 'function') { try { _diceBox.clear(); } catch (_e) {} }
+            clearDice3D();  // #829: also clear the modern 3D dice
             if (skillCard) skillCard.hidden = false;
             if (skipBtn)   skipBtn.style.display = '';
             resolve();
@@ -6017,12 +6103,9 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                 // (klik nadal pomija od razu). Wartość startowa, Sandbox-tunable.
                 armAdvance(3200, cleanup);
             };
-            // #829: Stage 2 (rzut obrażeń) renderujemy jako NIEZAWODNĄ animację 2D, nie 3D.
-            // Druga animacja 3D w tej samej sesji overlay była niewidoczna na urządzeniach
-            // graczy: po rzucie d20 silnik kości nie odmalowuje drugiego rzutu (kontekst
-            // WebGL nie repaintuje, fizyka nigdy nie „osiada" — zawsze backstop). 2D nie
-            // zależy od WebGL, zawsze widać kostki lądujące na wyniku z backendu.
-            play2dDiceRoll(container, ds, forced, showDmg);
+            // #829: Stage 2 (rzut obrażeń) — modern 3D dice (predeterminowane na wynik
+            // backendu), z automatycznym fallbackiem do animacji 2D gdy WebGL zawiedzie.
+            rollDiceVisual(ds.notation, forced, ds.kind || 'damage', showDmg);
         };
 
         const afterAttack = () => {
@@ -6068,18 +6151,9 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             return;
         }
 
+        // #829: Stage 1 (k20 ataku) — modern 3D dice with automatic 2D fallback.
         requestAnimationFrame(() => {
-            // Fallback: brief number spin when the 3D dice library failed to load.
-            if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
-                resultCard.hidden = false;
-                let ticks = 0;
-                const iv = setInterval(() => {
-                    resultNum.textContent = Math.ceil(Math.random() * 20);
-                    if (++ticks >= 10) { clearInterval(iv); showAttack(d20); }
-                }, 60);
-                return;
-            }
-            throwDice('1d20', [d20], () => showAttack(d20));
+            rollDiceVisual('1d20', [d20], 'attack', () => showAttack(d20));
         });
     });
 }

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=829-dmg-2d-dice-2026-06-19">
+  <link rel="stylesheet" href="./css/styles.css?v=829-dice3d-threejs-2026-06-19">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1453,6 +1453,9 @@
     <!-- Dice roll overlay — issue #65 dice.js 3D physics -->
     <div id="dice-overlay" hidden>
       <div id="dice-container"></div>
+      <!-- #829: dedicated mount for the modern 3D dice (dice-box-threejs). Kept separate from
+           #dice-container (legacy dice.js / 2D fallback) so their canvases never collide. -->
+      <div id="dice3d-container"></div>
       <button id="dice-skip-btn" title="Wróć do wyboru kampanii" onclick="window.dismissDiceRoll&&window.dismissDiceRoll()">✕</button>
       <div id="dice-stake-banner" hidden></div>
       <div id="dice-skill-card">
@@ -1927,8 +1930,11 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
+  <!-- #829: modern 3D dice (@3d-dice/dice-box-threejs, THREE r143 + Cannon, self-contained UMD).
+       Replaces the flaky 2015 dice.js for combat rolls; supports predetermined results (1d20@15). -->
+  <script src="./vendor/dice-box-threejs/dice-box-threejs.umd.js?v=0.0.12"></script>
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
-  <script src="./js/app.js?v=829-dmg-2d-dice-2026-06-19"></script>
+  <script src="./js/app.js?v=829-dice3d-threejs-2026-06-19"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
