@@ -284,7 +284,7 @@ const _HTML = `
         </div>
 
         <!-- TTS + STT config (editable) -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div id="sys-voice-panels-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div class="card">
             <div class="card-header"><span class="card-title">TTS — Synteza mowy</span><span id="v-tts-enabled"></span></div>
             <div style="padding:12px 16px;display:flex;flex-direction:column;gap:14px">
@@ -404,7 +404,7 @@ const _HTML = `
         <!-- Test console -->
         <div class="card" style="margin-top:14px">
           <div class="card-header"><span class="card-title">🎙 Konsola testowa</span><span class="card-count">aktywny host</span></div>
-          <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div id="sys-voice-test-grid" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div>
               <label class="form-label">Test TTS — synteza</label>
               <div style="display:flex;gap:8px">

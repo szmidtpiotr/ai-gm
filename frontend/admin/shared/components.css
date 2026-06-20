@@ -2217,3 +2217,42 @@
         text-overflow: unset !important;
       }
     }
+
+    /* ══════════════════════════════════════════════════════════
+       M1 — SYSTEM SECTION MOBILE (#839)  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* 1. Stab bar: 13 tabs → horizontal scroll (also benefits forge/mechanics/tools) */
+      .stab-bar {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .stab-bar::-webkit-scrollbar { display: none; }
+      .stab-bar .stab { flex-shrink: 0; }
+
+      /* 2. Slash commands: fixed-width column header overflows → scroll */
+      #systab-slash .card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* 3. Voice TTS/STT 2-col grid → 1-col */
+      #sys-voice-panels-grid { grid-template-columns: 1fr !important; }
+
+      /* 4. Voice test console 2-col → 1-col */
+      #sys-voice-test-grid { grid-template-columns: 1fr !important; }
+
+      /* 5. Whisper preset grid: 3-col → 2-col (cards stay readable) */
+      #whisper-preset-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+      /* 6. Voice route toggles: 2-col → 1-col */
+      #v-route-toggles { grid-template-columns: 1fr !important; }
+
+      /* 7. Visual tab: periods + bg-grid inline 2-col → 1-col */
+      #vis-periods,
+      #vis-bg-grid { grid-template-columns: 1fr !important; }
+    }
