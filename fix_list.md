@@ -159,10 +159,15 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 52. #839 — [MOBILE][M1] Sekcja: System (toggle ustawień/presetów) na mobile
 
 ### PM — Admin Panel Mobile M2 (dep: M0 ✅, M1 w toku)
-- [ ] 53. #854 — [MOBILE][M2-1] Sekcja: Zawartość (content.js) — tabele kart/scroll na mobile
-- [ ] 54. #855 — [MOBILE][M2-2] Sekcja: Świat (world.js) — tabele na mobile
-- [x] 55. #856 — [MOBILE][M2-3] Sekcja: Mechaniki (mechanics.js) — tabele na mobile
-- [ ] 56. #857 — [MOBILE][M2-4] Sekcja: Lochy (dungeons.js) — tabele na mobile
+- [ ] 53. #840 — [MOBILE][M2] Sekcja: Zawartość (8 tabel: bronie/pancerze/przedmioty/...) na mobile
+- [ ] 54. #841 — [MOBILE][M2] Sekcja: Świat (NPC/wrogowie/loot/oczekujące) na mobile
+- [ ] 55. #842 — [MOBILE][M2] Sekcja: Mechanika na mobile
+- [ ] 56. #843 — [MOBILE][M2] Sekcja: Lochy (seeds + runs) na mobile
+
+### PM — Admin Panel Mobile M3–M5
+- [ ] 57. #844 — [MOBILE][M3] Sekcja: Kuźnia (forge.js, 194K) na mobile
+- [ ] 58. #845 — [MOBILE][M4] Polish + regresja na realnym urządzeniu (Moto G32)
+- [ ] 59. #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja)
 
 ---
 
@@ -190,16 +195,28 @@ Definicja done: screenshot @390px — brak poziomego scrolla strony, czytelny te
 
 ## Admin Panel Mobile — M2 (sekcje contentowe — ciężkie tabele)
 
-Dep: M0 ✅. Spec: `docs/superpowers/specs/2026-06-19-admin-panel-mobile-design.md` §M2. Kolejność 854→855→856→857.
+Dep: M0 ✅. Spec: `docs/superpowers/specs/2026-06-19-admin-panel-mobile-design.md` §M2. Kolejność 840→841→842→843.
+
+Uwaga: #854–#857 były duplikatami; zamknięte. Commity deacc41 (#854→#840), 000d3c4 (#855→#841), accee71 (#856→#842) już wdrożone.
 
 Strategia: card-view dla list encji, poziomy scroll + sticky kol. 1 dla tabel porównawczych. Edycja inline z touch-targetami ≥44px.
 
 Definicja done: screenshot @390px — brak poziomego scrolla strony, czytelny tekst, klikalne targety ≥44px; brak regresji desktop (≥1024px).
 
-- [ ] #854 — [MOBILE][M2-1] content.js — 8 tabel (bronie, zbroje, przedmioty, konsumable, wrogowie, loot): card-view + scroll wg C
-- [ ] #855 — [MOBILE][M2-2] world.js — lokacje, NPC, wrogowie oczekujące: card-view, przyciski zatwierdź/odrzuć ≥44px
-- [x] #856 — [MOBILE][M2-3] mechanics.js — statystyki, umiejętności, DC, kondycje: card lub scroll wg kolumnowości
-- [ ] #857 — [MOBILE][M2-4] dungeons.js — seeds card-view, runs scroll + sticky
+- [ ] #840 — [MOBILE][M2] content.js — 8 tabel (bronie, pancerze, przedmioty, konsumable, wrogowie, loot): card-view + scroll wg C
+- [ ] #841 — [MOBILE][M2] world.js — NPC, wrogowie oczekujące, loot: card-view, przyciski zatwierdź/odrzuć ≥44px
+- [ ] #842 — [MOBILE][M2] mechanics.js — statystyki, umiejętności, DC, kondycje: card lub scroll wg kolumnowości
+- [ ] #843 — [MOBILE][M2] dungeons.js — seeds card-view, runs scroll + sticky
+
+---
+
+## Admin Panel Mobile — M3–M5
+
+Dep: M2 ✅.
+
+- [ ] #844 — [MOBILE][M3] forge.js (194K) — największy; osobna faza ze względu na rozmiar/ryzyko
+- [ ] #845 — [MOBILE][M4] Polish + Moto G32 Appium regresja wszystkich sekcji @390/@768
+- [ ] #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja); map.js + campaigns hex
 
 ---
 
@@ -208,4 +225,4 @@ Definicja done: screenshot @390px — brak poziomego scrolla strony, czytelny te
 - 2026-06-18 — #771 utworzony (konsumable on-use builder); #743 reopen (nawrót frontend, fix c555313).
 - 2026-06-20 — dodano sekcję Admin Panel Mobile M0 (#832, #833, #834).
 - 2026-06-20 — M0 done (wszystkie commity); dodano sekcję M1 (#835–#839, indeksy 48–52).
-- 2026-06-20 — dodano sekcję M2 (#854–#857, indeksy 53–56).
+- 2026-06-20 — dodano sekcję M2 (#854–#857, indeksy 53–56); zastąpione przez #840–#843 (Piotr stworzył kanoniczne issues); dodano M3–M5 (#844–#846, indeksy 57–59); duplikaty #854–#857 zamknięte.
