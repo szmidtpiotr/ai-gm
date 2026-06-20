@@ -1716,7 +1716,7 @@ def character_rest(
 
         if not result.get("ok"):
             err = result.get("error", "unknown")
-            code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted") else 500
+            code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted", "in_combat") else 500
             raise HTTPException(status_code=code, detail=err)
         return result
     finally:

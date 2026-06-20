@@ -110,6 +110,19 @@ def hex_is_safe_for_rest(
 MAX_SHORT_RESTS = 2  # T23 spec: max 2 short rests between long rests
 
 
+def _has_active_combat(campaign_id: int, conn: sqlite3.Connection) -> bool:
+    """#860: True if combat is in progress for the campaign (status='active').
+
+    Rest must be blocked mid-fight regardless of how 'safe' the location is —
+    otherwise a fight in a `safe_for_rest=true` location is healable mid-combat.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    return row is not None
+
+
 def _is_safe_for_character(character_id: int, campaign_id: int, conn: sqlite3.Connection) -> bool:
     """Check safe_for_rest via current_location_id, then hex fallback."""
     sess = conn.execute(
@@ -154,6 +167,9 @@ def perform_long_rest(
     """
     from app.services.clock_service import advance_clock
     from app.services.dice import parse_character_sheet
+
+    if _has_active_combat(campaign_id, conn):
+        return {"ok": False, "error": "in_combat"}
 
     if not _is_safe_for_character(character_id, campaign_id, conn):
         return {"ok": False, "error": "not_safe_for_rest"}
@@ -243,6 +259,9 @@ def perform_short_rest(
     """
     from app.services.clock_service import advance_clock
     from app.services.dice import parse_character_sheet
+
+    if _has_active_combat(campaign_id, conn):
+        return {"ok": False, "error": "in_combat"}
 
     if not _is_safe_for_character(character_id, campaign_id, conn):
         return {"ok": False, "error": "not_safe_for_rest"}
