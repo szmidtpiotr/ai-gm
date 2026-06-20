@@ -1173,8 +1173,11 @@ const _ROW_REGISTRY = {
     }
 
     svg.innerHTML = html;
-    svg.querySelectorAll('.whx,.whg').forEach(el => el.addEventListener('click', _wbOnHexClick));
-    svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
+    const _wbRoot = document.getElementById('wb-root');
+    if (!_wbRoot?.dataset.mobileReadonly) {
+      svg.querySelectorAll('.whx,.whg').forEach(el => el.addEventListener('click', _wbOnHexClick));
+      svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
+    }
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
   }
@@ -1561,6 +1564,18 @@ const _ROW_REGISTRY = {
   async function _loadBuilder() {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
+
+    // #834 — Mobile: show read-only notice and block hex edit interactions
+    if (window.innerWidth <= 768) {
+      const wbRoot = document.getElementById('wb-root');
+      if (wbRoot && !wbRoot.querySelector('.mobile-edit-notice')) {
+        const note = document.createElement('div');
+        note.className = 'mobile-edit-notice';
+        note.textContent = '📱 Edycja hexów niedostępna na mobile — przejdź na desktop aby edytować mapę.';
+        wbRoot.prepend(note);
+        wbRoot.dataset.mobileReadonly = 'true';
+      }
+    }
 
     _wbHexes = {}; _wbTeleports = []; _wbLocations = {}; _wbSelected = null;
     _wbZoom = 1; _wbPan = { x: 400, y: 280 }; _wbDrawingTp = null;

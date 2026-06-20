@@ -1359,6 +1359,27 @@
     .wb-pb:hover { border-color: #888; }
     .wb-pb.active { border-color: #f0c040; }
     .wb-hint { font-size: 0.68rem; color: var(--t3); padding: 6px 8px; line-height: 1.6; }
+    /* ── #834 Mobile hex map ──────────────────────────────────────────────── */
+    .mobile-edit-notice {
+      display: none;
+      background: rgba(255,200,0,0.12);
+      border: 1px solid rgba(255,200,0,0.35);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.85em;
+      color: var(--t2, #b0a080);
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    @media (max-width: 768px) {
+      .mobile-edit-notice { display: block; }
+      .wb-layout { flex-direction: column; height: auto; }
+      .wb-sidebar, .wb-detail { display: none; }
+      .wb-canvas-wrap { height: 60vw; min-height: 280px; overflow: hidden; }
+      .wb-canvas-wrap svg { width: 100% !important; height: 100% !important; max-width: 100vw; touch-action: none; }
+      #admin-hex-map-svg-wrap { overflow: hidden !important; width: 100%; max-width: 100vw; height: auto !important; min-height: 240px; }
+      #admin-hex-map-svg-wrap svg { width: 100% !important; height: auto !important; min-width: 0 !important; touch-action: none; }
+    }
     /* Hidden v2-parity columns — revealed by Szczegóły toggle */
     th.detail-col, td.detail-col { display: none; }
     table.show-details th.detail-col, table.show-details td.detail-col { display: table-cell; }

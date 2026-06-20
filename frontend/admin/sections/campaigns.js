@@ -690,6 +690,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         const overlay_hexes = hexes.filter(h => h.has_overlay || h.discovered || h.campaign_label);
         const svgHtml = _renderAdminHexMap(hexes, hexTypes, currentHex);
         panel.innerHTML = `
+          <div class="mobile-edit-notice">📱 Edycja hexów niedostępna na mobile — przejdź na desktop aby edytować mapę.</div>
           <div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">${hexes.length} heksów · ${overlay_hexes.length} z nakładką · <span style="color:var(--t3)">Kliknij hex aby edytować</span></div>
           ${svgHtml}
           <div style="margin-top:8px;font-size:0.72rem;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
@@ -701,7 +702,9 @@ function filterTableGeneric(input, tableId, nameClass) {
         hexes.forEach(h => { hexData[`${h.q},${h.r}`] = h; });
         const svgWrap = panel.querySelector('#admin-hex-map-svg-wrap');
         if (svgWrap) {
+          if (window.innerWidth <= 768) svgWrap.dataset.mobileReadonly = 'true';
           svgWrap.addEventListener('click', e => {
+            if (svgWrap.dataset.mobileReadonly) return;
             const g = e.target.closest('g[data-q]');
             if (!g) return;
             const q = parseInt(g.dataset.q), r = parseInt(g.dataset.r);
