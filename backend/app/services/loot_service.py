@@ -163,6 +163,15 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
                    CASE WHEN ci.weapon_key IS NOT NULL
                         THEN json_extract(gi.weapon_data, '$.weapon_slot')
                         ELSE NULL END AS gw_weapon_slot,
+                   CASE WHEN ci.weapon_key IS NOT NULL
+                        THEN json_extract(gi.weapon_data, '$.finesse')
+                        ELSE NULL END AS gw_finesse,
+                   CASE WHEN ci.weapon_key IS NOT NULL
+                        THEN json_extract(gi.weapon_data, '$.light')
+                        ELSE NULL END AS gw_light,
+                   CASE WHEN ci.weapon_key IS NOT NULL
+                        THEN json_extract(gi.weapon_data, '$.two_handed')
+                        ELSE NULL END AS gw_two_handed,
                    CASE WHEN ci.consumable_key IS NOT NULL THEN gi.label ELSE NULL END AS consumable_label,
                    CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
                              AND gi.kind = 'consumable'
@@ -940,6 +949,20 @@ def get_character_inventory(character_id: int) -> list[dict]:
             pass
         coverage = (armor_coverage_raw or "").lower() if item_type == "armor" else None
         wslot = (weapon_slot_raw or "").lower() if item_type == "weapon" else None
+        # #863: czy broń jest LEKKA (kwalifikuje się do ręki pomocniczej / dual-wield).
+        # Mirror weapon_rules.is_light_weapon: 2H nigdy nie lekka; jawne `light` nadpisuje
+        # heurystykę finesse. None dla nie-broni. Frontend używa do gatingu slotu off_hand.
+        is_light: bool | None = None
+        if item_type == "weapon":
+            th = _rget(r, "gw_two_handed")
+            lt = _rget(r, "gw_light")
+            fn = _rget(r, "gw_finesse")
+            if th is not None and int(th or 0):
+                is_light = False
+            elif lt is not None:
+                is_light = bool(int(lt or 0))
+            else:
+                is_light = bool(int(fn or 0))
         covered_slots: list[str] = []
         if item_type == "armor" and int(r["equipped"] or 0) == 1 and coverage == "full":
             covered_slots = list(_ARMOR_COVERAGE_TO_SLOTS["full"])
@@ -962,6 +985,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "is_ammo": is_ammo,
                 "armor_coverage": coverage,
                 "weapon_slot": wslot,
+                "is_light": is_light,
                 "covered_slots": covered_slots,
                 "durability": durability_view(dur_cur, dur_max),
             }
@@ -1778,6 +1802,33 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
                 # Two-handed weapons anchor to main_hand and occupy both.
                 anchor_slot = "main_hand"
                 slots_to_free = ["main_hand", "off_hand"]
+            # #863: off-hand equip rules spójne z modelem dual-wield (#598).
+            # Do ręki pomocniczej trafiają TYLKO: tarcze/buklery (off_hand_only) oraz
+            # LEKKIE bronie 'either' (finesse). Ciężka broń 'either' (np. długi miecz)
+            # idzie wyłącznie do głównej ręki. Broń dwuręczna w main blokuje off-hand.
+            if s == "off_hand":
+                from app.services import weapon_rules
+
+                main_two_handed = conn.execute(
+                    """
+                    SELECT 1 FROM character_inventory ci
+                    JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+                    WHERE ci.character_id = ? AND ci.equipped = 1 AND ci.slot = 'main_hand'
+                      AND LOWER(COALESCE(gw.weapon_slot, '')) = 'two_handed'
+                    LIMIT 1
+                    """,
+                    (cid,),
+                ).fetchone()
+                if main_two_handed:
+                    raise ValueError(
+                        "Broń dwuręczna w głównej ręce zajmuje obie ręce — slot pomocniczy zablokowany."
+                    )
+                if weapon_slot_kind == "either":
+                    wrow = weapon_rules.load_weapon_row(conn, str(row["weapon_key"] or ""))
+                    if not weapon_rules.is_light_weapon(wrow):
+                        raise ValueError(
+                            "Ta broń jest za ciężka na rękę pomocniczą — w pomocniczej tylko lekkie bronie lub tarcza."
+                        )
 
         # Free whatever sits in any slot this equip is about to claim.
         placeholders = ",".join(["?"] * len(slots_to_free))

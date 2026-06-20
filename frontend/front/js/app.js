@@ -7678,7 +7678,8 @@ function _invPickEquipSlot(item, occupied) {
         const ws = String(item.weapon_slot || 'main_hand').toLowerCase();
         if (ws === 'two_handed')    return 'main_hand';
         if (ws === 'off_hand_only') return 'off_hand';
-        if (ws === 'either')        return occupied.main_hand ? 'off_hand' : 'main_hand';
+        // #863: 'either' do off_hand TYLKO gdy lekka (finesse); ciężka → zawsze main.
+        if (ws === 'either')        return (occupied.main_hand && item.is_light === true) ? 'off_hand' : 'main_hand';
         return 'main_hand';
     }
     return null;
@@ -7688,7 +7689,8 @@ function _invPickEquipSlot(item, occupied) {
 function _itemFitsSlot__weapon(item, slot) {
     const ws = String(item.weapon_slot || 'main_hand').toLowerCase();
     if (slot === 'main_hand') return ws === 'main_hand' || ws === 'two_handed' || ws === 'either';
-    if (slot === 'off_hand')  return ws === 'off_hand_only' || ws === 'either';
+    // #863: off_hand = tarcze/buklery (off_hand_only) + LEKKIE bronie 'either'. Ciężka 'either' → tylko main.
+    if (slot === 'off_hand')  return ws === 'off_hand_only' || (ws === 'either' && item.is_light === true);
     return false;
 }
 
