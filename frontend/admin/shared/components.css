@@ -2157,3 +2157,29 @@
         padding-right: 12px;
       }
     }
+
+    /* ══════════════════════════════════════════════════════════
+       M1 — BUGREPORTS MOBILE (#837)  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* Detail drawer: tighter padding, no resize handle on touch */
+      #br-drawer {
+        padding: 16px !important;
+        resize: none !important;
+        min-width: 0 !important;
+      }
+
+      /* Section header buttons: wrap below heading on narrow screens */
+      #section-bugreports .section-header {
+        flex-wrap: wrap;
+      }
+
+      /* Observation column: allow text wrap in card-view
+         (inline style has max-width:240px + white-space:nowrap which breaks card layout) */
+      .br-obs-td {
+        max-width: none !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+      }
+    }

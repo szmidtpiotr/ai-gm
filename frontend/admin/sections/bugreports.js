@@ -28,7 +28,7 @@ async function _loadBugReports() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr>`;
   try {
     const d = await apiFetch('/api/admin/bug-reports');
-    _brItems = d.items || [];
+    _brItems = d.items || d.reports || [];
     const withGH = _brItems.filter(r => r.github_issue_url).length;
     const local = _brItems.length - withGH;
 
@@ -66,7 +66,7 @@ async function _loadBugReports() {
       return `<tr style="cursor:pointer" onclick="openBrDrawer(${i})">
         <td class="td-mono" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${date}</td>
         <td data-label="Gracz">${typeCell} <span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
-        <td data-label="Obserwacja" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
+        <td class="br-obs-td" data-label="Obserwacja" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
         <td data-label="GitHub">${ghLink}</td>
         <td data-label="Status">${statusCell}</td>
         <td><button class="btn-icon" onclick="event.stopPropagation();openBrDrawer(${i})">▶</button></td>
