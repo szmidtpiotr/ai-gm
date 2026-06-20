@@ -5436,6 +5436,18 @@ Status: **review/needs-testing** — commity 3639fdd (#777) + fd6b45d (#781) + 4
 
 Status: **review/needs-testing** — TDD 14/14 + Playwright 1/1. Pełny e2e bramki/intimidacji jest LLM-driven (struktura + prompt zweryfikowane jednostkowo). Historyczne kampanie bez wpisów wstecz (poza zakresem).
 
+### #773 — obezwładnienie (grapple) poza walką = ta sama bramka (2026-06-20)
+
+> Rodzeństwo #780. Deklaracja obezwładnienia non-lethal („obezwładniam", „przyciskam do ściany", „zakuwam w kajdany") nie wybucha śmiertelną walką — przechodzi przez bramkę intencji #780 (decyzja Piotra **1A**), nie przez `[COMBAT_START]`.
+
+| Decyzja | Co zmieniono | Testy |
+|---|---|---|
+| **1A — wykrycie + bramka** | `_subdue_intent` (turns.py) wykrywa słowa-klucze obezwładnienia + filtr negacji (#535-style); kolizje fragmentów (zakup/skupiam) odfiltrowane (#766). Subdue ≠ śmiertelny atak (nie łapie go `_player_combat_intent`). Po wykryciu poza walką → `advantage_gate("grapple")` w odpowiedzi tury (non-stream + stream). | pytest + Playwright |
+| **2A — kondycja `schwytany`** | Nowa kondycja `schwytany` (efekt `block_action`) — wróg nie atakuje ani nie ucieka. Silnik honoruje przez ISTNIEJĄCY prymityw `block_action` w `evaluate_current_turn_conditions` (Zasada 1 — zero `if key=="schwytany"`). | pytest |
+| **3A — porażka → walka** | `subdue_outcome_to_effect`: sukces → `schwytany` (Nat20 dokłada `bonus`); porażka → `COMBAT_START` (Nat1/krytyk = inicjatywa wroga). Mapa dołączana do bramki jako `subdue_resolution`. | pytest |
+
+Status: **review/needs-testing** — TDD 25/25 + Playwright 1/1. ⏸ Poza zakresem: instrukcja Athletics roll_cue w `system_prompt.txt` (LOCKED — osobne zatwierdzenie) + wpięcie kliknięcia opcji bramki w pełny rzut (kontrakt deterministyczny gotowy, UI dzielone z #780).
+
 ---
 
 ### FAZA LB — Balans lochów: rozdział onboarding vs głębszy (2026-06-17)
