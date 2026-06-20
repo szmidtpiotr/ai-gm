@@ -6497,6 +6497,24 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: rgba(255, 150, 80, 0.9);
 }
 
+/* #861 — dual-wield: drugi cios off-hand wyróżniony lewym akcentem. */
+.cturn--offhand {
+  border-left: 2px solid rgba(120, 180, 255, 0.55);
+  padding-left: var(--space-xs, 6px);
+  opacity: 0.95;
+}
+
+/* #861 — parowanie (#598): badge przy ataku wroga + delikatny akcent karty. */
+.cturn--parried {
+  border-left: 2px solid rgba(120, 200, 160, 0.55);
+}
+.cturn__parry {
+  margin-top: var(--space-xs, 4px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6dccaa;
+}
+
 /* SF8 (#637) — rozbicie rzutu po nazwanym źródle (atak + test umiejętności). */
 .cturn__breakdown {
   margin-top: var(--space-xs, 4px);

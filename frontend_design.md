@@ -212,7 +212,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | ID | Komponent | Opis | React |
 |---|---|---|---|
 | F-50 | Composer | pole akcji + licznik znaków + mic STT + paleta + wyślij + overlay "czytanie TTS" | — |
-| F-51 | Log narracji | dymki gracza/GM/system, metadane (nazwa/tura/data — toggle), fade-in, auto-scroll, slash-popup | — |
+| F-51 | Log narracji | dymki gracza/GM/system, metadane (nazwa/tura/data — toggle), fade-in, auto-scroll, slash-popup; karty combat_turn (⚔️ atak gracza / 🗡️ atak wroga / 💀 śmierć / 🛡 reakcja). **#861 (dual-wield):** off-hand drugi cios → karta „🗡️🗡️ DRUGI CIOS" (klasa `cturn--offhand`); atak wroga sparowany → badge „🛡 Parujesz (+N obrona)" (`cturn--parried`) — flagi `offhand`/`parry_bonus` z meta combat_turn (silnik #598) | — |
 | F-52 | Karta rzutu | nazwa testu, modyfikator, suma, werdykt (sukces/porażka/krytyk) | — |
 | F-53 | Baner walki | runda, czyja tura, arena z 2 strefami (ZWARCIE/DYSTANS), chipy wrogów (HP/nazwa/portret), aktywny aktor, axis hint "← bliżej · dalej →" | — |
 | F-54 | Paski HP/Mana/XP | nagłówek (HP, Mana-mag) + karty w sheecie + XP bar z meta | — |

@@ -4197,8 +4197,41 @@ def _enemy_attack_narrative_dict(
         "target_ac": int(pac),
         "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
         "player_evasion": out.get("player_evasion") or None,
+        # #861: parowanie (#598) — gracz z cięższą main + drugą bronią w off odbija cios
+        # (+N obrona → redukcja obrażeń). UI rysuje badge „Parujesz +N" z tej flagi.
+        "parry_bonus": int(out.get("parry_bonus") or 0),
     }
     return d
+
+
+def _player_attack_narrative_dict(
+    attack_roll: dict,
+    player_raw: int | None,
+    roll_result: int | None,
+    weapon_row: dict | None,
+    offhand: bool = False,
+) -> dict:
+    """#861: narrative JSON dla log_combat_turn (atak gracza na wroga).
+
+    `offhand=True` oznacza drugi cios off-hand (#598 dual-wield) — UI rysuje go jako
+    osobną kartę „drugi cios", a nie powtórzony atak główny.
+    """
+    return {
+        "raw_d20": int(player_raw) if player_raw is not None else None,
+        "attack_test": str(attack_roll.get("test") or ""),
+        "attack_stat": str(attack_roll.get("attack_stat") or ""),
+        "attack_label": {
+            "melee_attack": "ATAK WRĘCZ",
+            "ranged_attack": "ATAK DYSTANSOWY",
+            "spell_attack": "KANTRYP MAGICZNY" if (weapon_row or {}).get("key") == "scholar_cantrip" else "ATAK MAGICZNY",
+        }.get(str(attack_roll.get("test") or ""), "ATAK"),
+        "modifier": int(attack_roll.get("modifier") or 0),
+        "total": int(attack_roll.get("total") or roll_result or 0),
+        "weapon_key": str(attack_roll.get("weapon_key") or ""),
+        "weapon_label": str(attack_roll.get("weapon_label") or ""),
+        "weapon_type": str(attack_roll.get("weapon_type") or ""),
+        "offhand": bool(offhand),
+    }
 
 
 def compute_player_attack_dodge_outcome(
@@ -4706,22 +4739,12 @@ def resolve_attack(
             dmg = 0
             player_attack_log_meta = None
             if attack_roll:
+                # #861: weapon_override (dual-wield off-hand) → oznacz kartę jako 'drugi cios'.
                 player_attack_log_meta = json.dumps(
-                    {
-                        "raw_d20": int(player_raw) if player_raw is not None else None,
-                        "attack_test": str(attack_roll.get("test") or ""),
-                        "attack_stat": str(attack_roll.get("attack_stat") or ""),
-                        "attack_label": {
-                            "melee_attack": "ATAK WRĘCZ",
-                            "ranged_attack": "ATAK DYSTANSOWY",
-                            "spell_attack": "KANTRYP MAGICZNY" if (weapon_row or {}).get("key") == "scholar_cantrip" else "ATAK MAGICZNY",
-                        }.get(str(attack_roll.get("test") or ""), "ATAK"),
-                        "modifier": int(attack_roll.get("modifier") or 0),
-                        "total": int(attack_roll.get("total") or roll_result or 0),
-                        "weapon_key": str(attack_roll.get("weapon_key") or ""),
-                        "weapon_label": str(attack_roll.get("weapon_label") or ""),
-                        "weapon_type": str(attack_roll.get("weapon_type") or ""),
-                    },
+                    _player_attack_narrative_dict(
+                        attack_roll, player_raw, roll_result, weapon_row,
+                        offhand=weapon_override is not None,
+                    ),
                     ensure_ascii=False,
                 )
 

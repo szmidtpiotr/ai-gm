@@ -5642,6 +5642,21 @@ async function fetchAndAppendNewCombatTurns() {
     } catch (_e) {}
 }
 
+// #861: czyste helpery render dual-wield — eksportowane na window dla testów Playwright.
+// Front NIC nie liczy — czyta flagi z meta combat_turn ustawione przez silnik (#598).
+function combatMetaIsOffhand(meta) {
+    return !!(meta && meta.offhand === true);
+}
+function combatParryBadgeHtml(meta) {
+    const parry = Number(meta && meta.parry_bonus || 0);
+    if (!(parry > 0)) return '';
+    return `<div class="cturn__parry">🛡 Parujesz (+${parry} obrona) — obrażenia zredukowane</div>`;
+}
+if (typeof window !== 'undefined') {
+    window._combatMetaIsOffhand = combatMetaIsOffhand;
+    window._combatParryBadgeHtml = combatParryBadgeHtml;
+}
+
 function appendCombatTurnCard(row) {
     const evt = String(row.event_type || '');
     const actor = String(row.actor || '');
@@ -5746,21 +5761,28 @@ function appendCombatTurnCard(row) {
         const tgt = escapeHtml(String(row.target_name || 'wróg'));
         let meta = {};
         try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        // #861: drugi cios off-hand (#598 dual-wield) — osobna, wyróżniona karta.
+        const offhand = combatMetaIsOffhand(meta);
         const label = escapeHtml(String(meta.attack_label || 'ATAK'));
+        const headIcon = offhand ? '🗡️🗡️' : '⚔️';
+        const headLabel = offhand ? `DRUGI CIOS · ${label}` : label;
         const stat = meta.attack_stat ? ` · ${escapeHtml(String(meta.attack_stat).toUpperCase())}` : '';
         const ac = meta.target_ac != null ? ` vs AC ${meta.target_ac}` : '';
         const hitLine = hit
             ? `<span class="cturn__hit">✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń</span>`
             : `<span class="cturn__miss">❌ PUDŁO</span>`;
         // SF8 (#637) — rozbicie rzutu po nazwanym źródle (z live response, jednorazowo).
+        // Off-hand nie konsumuje breakdownu głównego ciosu — należy do main-handa.
         let breakdownLine = '';
-        const bd = window._pendingAttackBreakdown;
-        window._pendingAttackBreakdown = null;
-        if (bd && Array.isArray(bd.parts) && bd.parts.length) {
-            breakdownLine = `<div class="cturn__breakdown">🎲 ${bd.d20} ${sf8BreakdownHtml(bd.parts)} = <strong>${bd.total}</strong></div>`;
+        if (!offhand) {
+            const bd = window._pendingAttackBreakdown;
+            window._pendingAttackBreakdown = null;
+            if (bd && Array.isArray(bd.parts) && bd.parts.length) {
+                breakdownLine = `<div class="cturn__breakdown">🎲 ${bd.d20} ${sf8BreakdownHtml(bd.parts)} = <strong>${bd.total}</strong></div>`;
+            }
         }
-        html = `<div class="cturn cturn--player">
-            <div class="cturn__head">⚔️ <strong>${label}</strong>${stat} → ${tgt}</div>
+        html = `<div class="cturn cturn--player${offhand ? ' cturn--offhand' : ''}">
+            <div class="cturn__head">${headIcon} <strong>${escapeHtml(headLabel)}</strong>${stat} → ${tgt}</div>
             <div class="cturn__detail">Rzut: ${rv != null ? rv : '—'}${ac} → ${hitLine}</div>
             ${breakdownLine}
         </div>`;
@@ -5780,9 +5802,12 @@ function appendCombatTurnCard(row) {
         const hitLine = hit
             ? `<span class="cturn__hit">✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń</span>`
             : `<span class="cturn__miss">❌ PUDŁO</span>`;
-        html = `<div class="cturn cturn--enemy">
+        // #861: parowanie (#598) — badge + nota o zredukowanych obrażeniach.
+        const parryBadge = combatParryBadgeHtml(meta);
+        html = `<div class="cturn cturn--enemy${parryBadge ? ' cturn--parried' : ''}">
             <div class="cturn__head">🗡️ <strong>ATAK WROGA</strong> — ${enemyName}</div>
             <div class="cturn__detail">Rzut: ${rawD20 != null ? rawD20 : '—'}${vsLabel} → ${hitLine}</div>
+            ${parryBadge}
         </div>`;
     }
 
