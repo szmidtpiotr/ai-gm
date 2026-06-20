@@ -2256,3 +2256,39 @@
       #vis-periods,
       #vis-bg-grid { grid-template-columns: 1fr !important; }
     }
+
+    /* ══════════════════════════════════════════════════════════
+       M3 — FORGE SECTION MOBILE (#844)  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* 1. Pływający chat → full-width bottom sheet (zamiast fixed 390px po prawej) */
+      .forge-float-chat {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 60vh !important;
+        border-radius: var(--r-lg, 10px) var(--r-lg, 10px) 0 0;
+        resize: none !important;
+      }
+      .forge-float-drag-dots { display: none; }
+      .forge-float-drag-handle { cursor: default; }
+
+      /* 2. Responsywne siatki w edytorze szablonów (klasy dodane w JS) */
+      .forge-grid-2col { grid-template-columns: 1fr !important; }
+      .forge-grid-3col { grid-template-columns: 1fr !important; }
+
+      /* 3. Nagłówek edytora szablonu — zawijanie przycisków */
+      .forge-tpl-header { flex-wrap: wrap !important; gap: 8px !important; }
+      .forge-tpl-header #tpl-title { max-width: 100% !important; }
+      .forge-tpl-header-btns { flex-wrap: wrap !important; margin-left: 0 !important; gap: 4px !important; }
+
+      /* 4. Modal spotkania — 2-kol → 1-kol na mobile */
+      .forge-encounter-modal-body { grid-template-columns: 1fr !important; }
+
+      /* 5. Nagłówek panelu scenariusza — zawijanie (tytuł + przyciski) */
+      .forge-scenario-header { flex-wrap: wrap; }
+
+      /* 6. Szelf zapisanych pomysłów — tekst hint mniejszy */
+      .forge-ideas-shelf-header { padding: 8px 10px; }
+    }

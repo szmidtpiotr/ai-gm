@@ -2982,7 +2982,7 @@ function _sectionHtml() {
           </div>
           <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').classList.remove('open')">✕</button>
         </div>
-        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="modal-body forge-encounter-modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <!-- Left column: form fields -->
           <div style="display:flex;flex-direction:column;gap:10px">
             <div class="form-row">
@@ -3108,11 +3108,11 @@ function _sectionHtml() {
 
       <!-- Template Full Editor (hidden by default, shown when editing a template) -->
       <div id="forge-template-editor" style="display:none">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div class="forge-tpl-header" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
           <button class="btn btn-sm btn-secondary" onclick="_closeTemplateEditor()">← Szablony</button>
           <input id="tpl-title" class="form-input" style="font-weight:600;font-size:0.95rem;max-width:320px" placeholder="Tytuł szablonu">
           <span id="tpl-status-badge" style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border)"></span>
-          <div style="margin-left:auto;display:flex;gap:6px" id="tpl-workflow-btns">
+          <div class="forge-tpl-header-btns" style="margin-left:auto;display:flex;gap:6px" id="tpl-workflow-btns">
             <!-- E12 (#427) — workflow buttons injected by _renderTplWorkflow(status) -->
             <button class="btn btn-sm btn-secondary" id="tpl-publish-btn" onclick="_toggleTemplatePublish()"></button>
             <button class="btn btn-sm btn-secondary" id="tpl-revert-btn" style="display:none" onclick="_revertTemplate()"></button>
@@ -3137,14 +3137,14 @@ function _sectionHtml() {
               <textarea id="tpl-description" class="form-input" rows="3" style="resize:vertical"></textarea>
               <button class="btn btn-sm btn-secondary" onclick="forgeGenerateTplDescription(event)" style="margin-top:6px">🤖 Generuj opis</button>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+            <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
               <div class="form-row"><label class="form-label">Klimat / atmosfera</label><input id="tpl-atmosphere" class="form-input" type="text" placeholder="np. mroczna, tajemnicza"></div>
               <div class="form-row"><label class="form-label">Trudność (1-5)</label>
                 <div id="tpl-difficulty-stars" style="display:flex;gap:4px;padding:4px 0"></div>
               </div>
             </div>
             <!-- E7 (#422) — required NPCs/beats + player visibility -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+            <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
               <div class="form-row"><label class="form-label">Wymagani NPC (klucze, po przecinku)</label><input id="tpl-required-npcs" class="form-input" type="text" placeholder="np. npc_alik, npc_strażnik"></div>
               <div class="form-row"><label class="form-label">Wymagane beaty (klucze, po przecinku)</label><input id="tpl-required-beats" class="form-input" type="text" placeholder="np. beat_intro, beat_finał"></div>
             </div>
@@ -3173,7 +3173,7 @@ function _sectionHtml() {
 
         <!-- Tab: Postaci & Lokacje -->
         <div id="tpl-tab-characters" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div class="forge-grid-3col" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
             <div class="card" style="padding:14px">
               <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Postaci NPC</div>
               <div id="tpl-npcs-list" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3194,12 +3194,12 @@ function _sectionHtml() {
 
         <!-- Tab: Zakończenia -->
         <div id="tpl-tab-endings" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="tpl-endings-list"></div>
+          <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="tpl-endings-list"></div>
         </div>
 
         <!-- Tab: Przedmioty -->
         <div id="tpl-tab-items" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div class="card" style="padding:14px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <div style="font-size:0.83rem;font-weight:600;color:var(--t1)">Broń kampanii</div>
