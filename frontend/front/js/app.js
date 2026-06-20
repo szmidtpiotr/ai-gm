@@ -5840,6 +5840,7 @@ function buildDamageStage(data) {
             total: Number(data.damage ?? 0),
             modifier: Number(data.damage_modifier ?? 0),
             multiplier: Number(data.damage_multiplier ?? 1),
+            armorReduction: Number(data.armor_reduction ?? 0),
             label: 'Obrażenia',
             kind: 'damage',
         };
@@ -6119,6 +6120,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
                     const unit = ds.kind === 'heal' ? 'HP' : 'obrażeń';
                     let line = forced ? `🎲 ${forced.join(' + ')}` : `🎲 ${ds.notation}`;
                     if (ds.modifier) line += ` ${ds.modifier > 0 ? '+' : '−'} ${Math.abs(ds.modifier)}`;
+                    if (ds.armorReduction) line += ` − ${ds.armorReduction} Pancerz`;
                     if (ds.multiplier && ds.multiplier > 1) line += ` ×${ds.multiplier}`;
                     resultTot.innerHTML = `${line}  =  <strong>${total}</strong> ${unit}`;
                 }
