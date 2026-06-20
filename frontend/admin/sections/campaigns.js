@@ -942,6 +942,19 @@ function filterTableGeneric(input, tableId, nameClass) {
                     if (r.meta.enemy_key||r.meta.enemy_name) metaBits.push(_esc(r.meta.enemy_name||r.meta.enemy_key));
                     if (r.meta.round!=null) metaBits.push('r'+r.meta.round);
                   }
+                  // #853: damage rows — pokazuj kalkulację zbroi w Szczegółach
+                  let dmgCalc = '';
+                  if (r.roll_type === 'damage' && r.meta && r.total != null) {
+                    const arm = Number(r.meta.armor_reduction || 0);
+                    const fin = r.total;
+                    if (r.meta.nat20_ignored_armor) {
+                      dmgCalc = ` <span style="color:var(--gold,#f59e0b);font-size:0.7rem">| ${fin} dmg ⚡NAT20</span>`;
+                    } else if (arm > 0) {
+                      dmgCalc = ` <span style="color:var(--t3);font-size:0.7rem">| ${fin + arm} − ${arm} (zbroja) = ${fin} dmg</span>`;
+                    } else {
+                      dmgCalc = ` <span style="color:var(--t3);font-size:0.7rem">| ${fin} dmg</span>`;
+                    }
+                  }
                   return `<tr>
                     <td style="text-align:left">${TYPE_LABEL[r.roll_type]||_esc(r.roll_type)}</td>
                     <td style="text-align:center;font-family:monospace">${_esc(String(raw))}${r.notation?` <span style="color:var(--t3)">${_esc(r.notation)}</span>`:''}</td>
@@ -949,7 +962,7 @@ function filterTableGeneric(input, tableId, nameClass) {
                     <td style="text-align:center;font-family:monospace;font-weight:700">${r.total ?? '—'}</td>
                     <td style="text-align:center;font-family:monospace">${r.dc ?? '—'}</td>
                     <td style="text-align:left;color:${OUT_COLOR(r.outcome)};font-weight:600">${_esc(r.outcome||'—')}</td>
-                    <td style="text-align:left;color:var(--t3);font-size:0.72rem">${metaBits.join(' · ')}</td>
+                    <td style="text-align:left;color:var(--t3);font-size:0.72rem">${metaBits.join(' · ')}${dmgCalc}</td>
                   </tr>`;
                 }).join('')}</tbody>
               </table>`;

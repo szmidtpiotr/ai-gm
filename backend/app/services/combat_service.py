@@ -4738,7 +4738,10 @@ def resolve_attack(
                         total=dmg,
                         outcome="crit_success" if player_nat20 else "hit",
                         meta={"weapon_key": out.get("weapon_key"), "enemy_key": card_key,
-                              "round": int(row["round"] or 1)},
+                              "round": int(row["round"] or 1),
+                              "armor_reduction": out.get("armor_reduction", 0),
+                              "nat20_ignored_armor": bool(player_nat20),
+                              "margin_damage": out.get("margin_damage_bonus", 0)},
                     )
                 except Exception:
                     pass
@@ -5447,6 +5450,28 @@ def resolve_attack(
                     if save_res.get("saved") and save_res.get("hp"):
                         next_hp = int(save_res["hp"])
             _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), int(row["round"] or 1), out)
+            # #853: strukturalny rejestr — obrażenia wroga na graczu
+            try:
+                from app.services.dice_log_service import record_dice_roll as _rec_roll
+                _rec_roll(
+                    campaign_id=campaign_id,
+                    roll_type="damage",
+                    character_id=ch_id,
+                    combat_id=int(row["id"]),
+                    actor=str(enemy.get("enemy_key") or "enemy"),
+                    notation=str(enemy.get("damage_dice") or "1d6"),
+                    raw_rolls=[],
+                    total=int(out.get("damage", 0)),
+                    outcome="crit_success" if raw == 20 else "hit",
+                    meta={"enemy_key": str(enemy.get("enemy_key") or "enemy"),
+                          "enemy_name": out.get("enemy_name"),
+                          "round": int(row["round"] or 1),
+                          "armor_reduction": out.get("armor_reduction", 0),
+                          "nat20_ignored_armor": bool(raw == 20),
+                          "margin_damage": out.get("margin_damage_bonus", 0)},
+                )
+            except Exception:
+                pass
             # #761: rejestr zmiany HP gracza (cios wroga)
             if next_hp != prev:
                 try:
