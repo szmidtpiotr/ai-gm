@@ -4,6 +4,92 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.0 — 2026-06-20 — Admin Panel Mobile (M0–M5) + redesign obrony walki + dual-wield/amunicja + FAZA LB (lochy onboarding) + audyt kampanii
+
+### Added
+
+**Redesign modelu obrony walki (#826) — zmiana zablokowanej mechaniki (za zgodą)**
+- Jeden rzut obronny na trafienie (koniec double jeopardy). Pancerz (`ac_base`/AC) = **redukcja obrażeń**, nie próg trafienia: `armor = max(0, ac_base − 10)`, min 1 dmg/trafienie, Nat 20 ignoruje pancerz
+- Margines ataku → obrażenia: `+1 dmg` za każde pełne 5 pkt nadwyżki; Nat 20 ×2 osobno. Symetryczny gracz↔wróg
+- Helpery `apply_defense_model` / `compute_enemy_attack_hit` w `combat_service.py`; wartości startowe strojone w Sandboxie (`MARGIN_DAMAGE_STEP`, `MARGIN_DAMAGE_BONUS`, `ARMOR_REDUCTION_OFFSET`). Supersedes #753, pokrywa #744
+- Karta ataku wroga pokazuje pasywny unik (d20+ZRC) zamiast vs AC (#828); kalkulacja redukcji pancerza widoczna w karcie obrażeń (#851, #853)
+
+**Walka — nowe systemy**
+- **Dual-wield (#598)**: mechanika walki dwoma broniami + dokumentacja CZĘŚĆ AB
+- **Amunicja + regeneracja po walce (#764, #765)**: system amunicji + post-combat recovery
+- **Atak z zaskoczenia (#780)**: sneak attack + bramka intencji po zdobyciu przewagi
+- **Nowoczesne kości 3D (#829)**: `@3d-dice/dice-box-threejs` dla rzutów walki + fallback 2D (Stage 2 damage); modal uniku wroga w rzutach (#719), reveal lootu bossa (#720)
+- **Przełącznik narracji walki**: gracz + globalny switch admina; konfigurator stylu kości w adminie z live-preview (#850)
+- Combat Sandbox w `/admin/` wywołuje prawdziwy silnik walki (#727); serwer domyka turę po ataku gracza (#848)
+
+**Admin Panel Mobile (milestone #9, fazy M0–M5)** — pełna responsywność @390px
+- M0: guard layout-viewport (#830), szuflada nawigacji hamburger + 18 sekcji (#831), card-view tabel + scroll/sticky hybryda (#832), formularze 2→1-col + touch-targety 44px (#833), hex mapa SVG scaling + edit (#834)
+- M1: scroll zakładek + card-view dla Overview/Push (#835), Campaigns modal (#836), Zgłoszenia (#837), Gracze (#838), System (#839)
+- M2–M4: card-view tabel — Zawartość (#854), Świat (#855), Mechaniki (#856), Lochy (#843), Kuźnia (#844)
+- M5: touch-targety ≥44px (#845), pełna obsługa dotykowa hex mapy — pinch-zoom/pan/tap (#846); spec milestone w `docs`
+
+**FAZA LB — lochy onboarding + głębsze + balans solo lvl1**
+- Rest-on-cleared-tile (#735): realne leczenie na oczyszczonym kafelku + flaga heal%/charges per loch (backend + frontend pill/przycisk)
+- Soft-init: bohater pierwszy w turn_order w 1. walce runu (#736)
+- Lochy seedowe: `krypta_probna` onboarding (#737, tile_count=3, boss ~18HP, rest 100%), `katakumby_mroku` głębszy (#738, min_level=3), boss `undead_champion`
+- Egzekwowanie `min_level` lochów — 403 + lock w pickerze (#739)
+- Balans solo lvl1: ease-in budżetu pierwszych komnat (#733), sustain drop na zwycięstwie (#729, #732), watchdog nakładki kości (#730), honor `cooldown_hours=0` (#269e2a8)
+
+**FAZA L17/L20 — kontent lochów + portrety**
+- Nowe kategorie kafli (60 tiles każda): jaskinie, goblińskie tunele (#723), ruiny twierdzy, nawiedzony zamek; per-category base_prompt + generic seeder; piloty `jaskinia_probna`, `goblin_probna`
+- L20: persystencja + display portretów wrogów/NPC w walce gracza (modal + init-chip) (#692, #724); portrety nieumarłych krypty (#725)
+- 91 nowych kafli (aigm_00571–00660) + 642 kafle batch + sync archmap overlay
+
+**Monitor kampanii + instrumentacja (live-debug)**
+- Zakładki w monitorze: 🎯 Questy+XP (#779), 🗓 Zdarzenia game_events per-kampania (#781), rejestr `dice_rolls` + API + MCP tool (#754)
+- Instrumentacja narracyjna: `game_events` + `turn_decisions` zapisywane (#777); czytniki MCP + `state_changes` + confidence (#760, #761, #762)
+- `QUEST_COMPLETE` flipuje status questa + przyznaje XP (#776); kontrakt time-skip LLM — `time_advance_minutes`/`advance_to_time_of_day` (#758)
+
+**Kontent i admin**
+- Builder efektu on-use konsumabli — `damage_enemy` + `apply_condition(target=enemy)` (#771)
+- Generacja obrazów NPC (parytet z wrogami: batch, config, galeria, persystencja promptu); batch portretów wrogów
+- Admin Bohaterowie: katalog zbroi + usuwanie bohatera; raport bug z załącznikiem screenshot; przeciągalny FAB 🐞 (#668)
+
+**Tooling / proces**
+- `mass-implement` v2 — config-driven, drop-in, tryb LIST + numeracja fix_list (1..n)
+- Auto-sync `fix_list.md` z kolumną TO DO board; przejście systemu zadań na GitHub issues+milestones (Plan board)
+- Skill `game-smoke` (full-mode playtest); STATUS.md/KOMENDY.md captain-log; ledger `frontend_design.md` F-NN dla zmian w `frontend/front/`
+
+### Fixed
+
+**Combat-gate (wstrzykiwanie walki przez LLM)**
+- Ujednolicona bramka startu walki: negacja + obecność w scenie + przyjazny NPC + reverse-inject (#535, #596, #534, #520); source-aware target validation (#774). 30/30 testów
+
+**Loch**
+- Backtrack z komnaty zagadki nie ustawia `cleared=True` (#847); panel zagadki widoczny po rozwiązaniu (#745); resolve string-key zagadki w GET dungeon-run (#721); zagadki blokują ruch naprzód (#722)
+- Boss zawsze w najgłębszej komnacie (#759); minimapa odwrócona oś Y N=góra (#718); pojedyncza narracja wejścia (#740); `scene_enemies` czyszczone przy zmianie lokacji non-combat (#825)
+- Backend re-linkuje bohatera po wyjściu z lochu — kampania nie znika z listy (#752); relink nie porywa cudzej kampanii (#767); abandon z modala resume czyści run + cooldown właściwemu bohaterowi (#699)
+
+**Sklep / ekonomia**
+- Blokada sklepu w trybie lochu + refresh ekwipunku po kupnie/sprzedaży (#742); posiłek w karczmie 2GP zamiast 5GP nocleg (#751); regex trade-intent z granicami słów (#766); akceptacja `item_type=gear` w buy handler (#783); pieniężny `grant_item` (mieszek monet) → `grant_gold` (#775)
+
+**Ekwipunek / przedmioty**
+- Inventory pokazuje nazwę narracyjnego itemu zamiast klucza (#757); podział sekcji wg używalności `can_use` (#770); slot `hands` dla rękawic (#743); zbroja admin-added widoczna w doll (#778); Rogue dostaje startowe itemy (#749)
+- Kreator skilli — budżet netto, obniżenie zwraca punkt (#747)
+
+**Kampania / postać**
+- Twardy guard przejęcia cudzej kampanii (same-user też) (#767, #49476d7); wskrzeszenie reaktywuje zakończoną kampanię (#647); dedup questów wg podobieństwa celu + inject aktywnych questów do LLM (#756)
+- Skill keyword: `udaję` (idiom ruchu) false-matchował Oszustwo → Stealth (#763)
+
+**Lokacja**
+- Preferuj canonical lokacje w fuzzy match dla `move` (#522); `**markdown**` zamiast surowego `<strong>` w prozie podróży (#643); blok ŚWIAT nie nadpisuje sceny wnętrza sub-lokacji (#750); desync tury walki UI↔backend (#701, #700)
+
+**Mobile / inne**
+- Streaming narration nie wycieka tagów mechaniki (#755); spell heal OOC pokazuje animację kości (#653, #90fe15f); SmartEntry obsługuje spells + clear `_loaded` na re-init (#852)
+
+### Assets
+- 91 kafli lochów (aigm_00571–00660) + 642 kafle batch (2026-06-17) + portrety wrogów/NPC
+
+### Removed
+- Trial graphify (werdykt SKIP — agent nawiguje przez Bash grep, tool-hook nigdy nie odpala)
+
+---
+
 ## v1.4.0 — 2026-06-16 — FAZA L (lochy kafelkowe) + FAZA O (observability + archmap) + fixy walki i lokacji
 
 ### Added
