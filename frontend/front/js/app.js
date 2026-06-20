@@ -13214,6 +13214,95 @@ function closeDungeonMap() {
     document.getElementById('dungeon-map-overlay')?.setAttribute('hidden', '');
 }
 
+// #741: przeciąganie D-pada lochu + zapamiętanie pozycji.
+// Klucz localStorage: 'dungeonNavPos' = {left, top} w px (lewy-górny róg navu).
+const _DPAD_POS_KEY = 'dungeonNavPos';
+const _DPAD_DRAG_THRESHOLD = 6; // px — poniżej to tap (mapa/kierunek), powyżej to przeciąganie
+
+function _clampDpadPos(left, top, w, h) {
+    const m = 4; // margines od krawędzi
+    const maxL = Math.max(m, window.innerWidth - w - m);
+    const maxT = Math.max(m, window.innerHeight - h - m);
+    return { left: Math.min(Math.max(m, left), maxL), top: Math.min(Math.max(m, top), maxT) };
+}
+
+function _applyDpadPos(nav, left, top) {
+    // Przejście z right/bottom na left/top — sterujemy lewym-górnym rogiem.
+    nav.style.left = left + 'px';
+    nav.style.top = top + 'px';
+    nav.style.right = 'auto';
+    nav.style.bottom = 'auto';
+}
+
+function _restoreDpadPos(nav) {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(_DPAD_POS_KEY) || 'null'); } catch (_) { saved = null; }
+    if (!saved || typeof saved.left !== 'number' || typeof saved.top !== 'number') return;
+    const r = nav.getBoundingClientRect();
+    const w = r.width || 80, h = r.height || 200;
+    const { left, top } = _clampDpadPos(saved.left, saved.top, w, h);
+    _applyDpadPos(nav, left, top);
+}
+
+function initDpadDrag() {
+    const nav = document.getElementById('dungeon-nav');
+    if (!nav || nav._dpadDragInit) return;
+    nav._dpadDragInit = true;
+    const handle = nav.querySelector('.dungeon-nav__dirs');
+    if (!handle) return;
+
+    // Odtwórz zapisaną pozycję, gdy nav staje się widoczny (jest hidden poza lochem).
+    _restoreDpadPos(nav);
+
+    let startX = 0, startY = 0, baseLeft = 0, baseTop = 0, dragging = false, suppressClick = false;
+
+    handle.addEventListener('pointerdown', (e) => {
+        // Tylko główny przycisk/dotyk; ignoruj jeśli nav ukryty.
+        if (e.button != null && e.button !== 0) return;
+        const r = nav.getBoundingClientRect();
+        baseLeft = r.left; baseTop = r.top;
+        startX = e.clientX; startY = e.clientY;
+        dragging = false;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onMove = (ev) => {
+            const dx = ev.clientX - startX, dy = ev.clientY - startY;
+            if (!dragging && Math.hypot(dx, dy) < _DPAD_DRAG_THRESHOLD) return; // jeszcze tap
+            if (!dragging) { dragging = true; nav.classList.add('is-dragging'); }
+            const r2 = nav.getBoundingClientRect();
+            const { left, top } = _clampDpadPos(baseLeft + dx, baseTop + dy, r2.width, r2.height);
+            _applyDpadPos(nav, left, top);
+        };
+        const onUp = () => {
+            handle.removeEventListener('pointermove', onMove);
+            handle.removeEventListener('pointerup', onUp);
+            handle.removeEventListener('pointercancel', onUp);
+            try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+            nav.classList.remove('is-dragging');
+            if (dragging) {
+                // Zapisz pozycję; zablokuj kliknięcie, które inaczej odpaliłoby kierunek/mapę.
+                const r2 = nav.getBoundingClientRect();
+                try { localStorage.setItem(_DPAD_POS_KEY, JSON.stringify({ left: r2.left, top: r2.top })); } catch (_) {}
+                suppressClick = true;
+                setTimeout(() => { suppressClick = false; }, 0);
+            }
+        };
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+    });
+
+    // Po przeciągnięciu połknij kliknięcie (tap vs drag) — w fazie capture, przed handlerami przycisków.
+    nav.addEventListener('click', (e) => {
+        if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+    }, true);
+
+    // Po zmianie rozmiaru okna utrzymaj nav w widoku.
+    window.addEventListener('resize', () => {
+        if (nav.style.left) _restoreDpadPos(nav);
+    });
+}
+
 function initDungeon() {
     document.getElementById('dungeon-picker-btn')?.addEventListener('click', openDungeonPicker);
     document.getElementById('dungeon-picker-close')?.addEventListener('click', () => {
@@ -13253,6 +13342,12 @@ function initDungeon() {
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
+
+    // #741: środkowy ⊕ D-pada otwiera mapę lochu (skrót pod kciukiem, jak ikona 🗺 w HUD).
+    document.getElementById('dungeon-nav-center')?.addEventListener('click', () => openDungeonMap());
+
+    // #741: D-pad lochu da się przeciągnąć po ekranie; pozycja zapamiętana w localStorage.
+    initDpadDrag();
 
     // L12b (#694): tile image popup — close on ✕ or tap outside box
     document.getElementById('dungeon-tile-modal-close')?.addEventListener('click', closeTileImageModal);

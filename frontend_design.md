@@ -231,6 +231,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-72 | Voice | `voice.js`: TTS (GET `/voice/tts`), STT (WS `/voice/stt` + MediaRecorder, auto-stop na ciszy), toggles w localStorage, health/config check | — |
 | F-73 | PWA | meta tagi, theme-color, apple-mobile-web-app, push (`#enable-push-btn`), service worker (poza scope `front/`), `sendBeacon` na unload | — |
 | F-74 | Client logging | `clog.js`: RUM — page load, click `[data-clog]`, errory, unload beacon, session ID, batch flush 2.5s → POST `/api/client-logs` | — |
+| F-75 | D-pad lochu | `#dungeon-nav` (L12): krzyżak kierunków N/W/E/S + akcje (skrzynia/zagadka/odpoczynek). #741: przeciągany palcem (pointer events, próg 6px tap-vs-drag), pozycja zapamiętana w `localStorage.dungeonNavPos`; środek ⊕ otwiera mapę lochu (`openDungeonMap`, jak ikona 🗺 — F-37) | — |
 
 ---
 

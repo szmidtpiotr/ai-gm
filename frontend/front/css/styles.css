@@ -7844,7 +7844,11 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dungeon-nav__dirs { display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: linear-gradient(180deg, #211608 0%, #1a1206 100%);
   border: 1px solid #5a3518; border-radius: 12px; padding: 8px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
+  box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+  /* #741: D-pad da się złapać i przeciągnąć — touch-action none, by gest nie scrollował strony. */
+  cursor: grab; touch-action: none; }
+.dungeon-nav.is-dragging .dungeon-nav__dirs { cursor: grabbing; }
+.dungeon-nav.is-dragging { transition: none; user-select: none; }
 .dungeon-nav__mid-row { display: flex; gap: 4px; align-items: center; }
 .dungeon-nav__dir { width: 42px; height: 42px; border-radius: 8px;
   background: #2a1c0c; border: 1px solid #5a3518; color: #e09030;
@@ -7854,8 +7858,10 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dungeon-nav__dir[hidden] { display: none; }
 .dungeon-nav__dir:hover:not(:disabled) { background: #3a2810; }
 .dungeon-nav__dir:active:not(:disabled) { transform: scale(0.92); }
-.dungeon-nav__dir--center { background: transparent; border-color: #3a2510;
-  color: #6a5040; cursor: default; }
+/* #741: środek ⊕ to teraz aktywny skrót do mapy lochu (nie martwa ozdoba). */
+.dungeon-nav__dir--center { background: #2a1c0c; border-color: #5a3518;
+  color: #e09030; cursor: pointer; }
+.dungeon-nav__dir--center:hover { background: #3a2810; }
 .dungeon-nav__actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .dungeon-nav__action { background: #c9751a; border: none; border-radius: 8px;
   color: #0d0904; font-weight: 700; font-size: 0.8rem; padding: 8px 12px;
