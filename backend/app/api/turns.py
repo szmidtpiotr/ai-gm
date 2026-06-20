@@ -5917,8 +5917,15 @@ def create_turn_stream(
                 return
 
             # ── Skip-narrative fast path (player toggle or global admin flag) ──
-            _skip_narrative = payload.skip_narrative or _get_skip_combat_narrative_global()
-            if _skip_narrative and user_text_val.startswith(COMBAT_ROLL_CTX_PREFIX):
+            # Double-gated: BOTH input_type must be 'combat_roll' AND text must carry the
+            # combat-roll prefix. Prevents global flag from accidentally silencing regular
+            # narrative turns if somehow the prefix check is bypassed.
+            _is_combat_roll = (
+                payload.input_type == "combat_roll"
+                and user_text_val.startswith(COMBAT_ROLL_CTX_PREFIX)
+            )
+            _skip_narrative = (payload.skip_narrative or _get_skip_combat_narrative_global()) and _is_combat_roll
+            if _skip_narrative:
                 clean_text = _build_combat_narrative_stub(user_text_val)
                 save_conn = get_db()
                 try:
