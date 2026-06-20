@@ -2159,6 +2159,40 @@
     }
 
     /* ══════════════════════════════════════════════════════════
+       M1 — PLAYERS MOBILE (#838)  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      /* 1. Card-view: override global min-width:560px so cards fill 390px viewport */
+      .data-table--cards table {
+        min-width: 0;
+        width: 100%;
+      }
+
+      /* 2. Players section header: wrap "Nowe konto" button below heading if needed */
+      #section-players .section-header {
+        flex-wrap: wrap;
+      }
+
+      /* 3. Player drawer tabs: allow horizontal scroll — 4 tabs in 351px (90vw @ 390px) */
+      .pdrawer-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0 12px;
+      }
+      .pdrawer-tabs::-webkit-scrollbar { display: none; }
+      .pdrawer-tab {
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+
+      /* 4. Player drawer body: tighter padding on narrow screens */
+      .pdrawer-body {
+        padding: 12px;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════
        M1 — BUGREPORTS MOBILE (#837)  (max-width: 768px)
        ══════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {
