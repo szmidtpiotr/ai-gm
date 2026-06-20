@@ -1538,6 +1538,7 @@ def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
                stats_json,
                tier,
                loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award,
+               COALESCE(attacks_per_turn, 1) AS attacks_per_turn,
                image_url
         FROM game_config_enemies
         WHERE key = ?
@@ -3895,6 +3896,11 @@ def initiate_combat(
                     "dex_modifier": int(er["dex_modifier"] or 0),
                     "damage_dice": _dmg_dice,
                     "damage_stat": "STR",
+                    # #864: ożyw martwe pole — wróg z attacks_per_turn>1 atakuje N razy/turę
+                    # (pętla w resolve_enemy_followup_attacks). Default 1 = zero regresji.
+                    "attacks_per_turn": int(
+                        (er["attacks_per_turn"] if "attacks_per_turn" in er.keys() else 1) or 1
+                    ),
                     "initiative_roll": init_e,
                     "conditions": [],
                     "loot_table_key": er["loot_table_key"],
@@ -5955,6 +5961,90 @@ def resolve_offhand_followup(campaign_id: int) -> dict[str, Any] | None:
     return resolve_attack(
         campaign_id, None, attacker="player", raw_d20=off_raw, weapon_override=off_row,
     )
+
+
+def resolve_enemy_followup_attacks(campaign_id: int) -> list[dict[str, Any]]:
+    """#864 — dodatkowe ataki wroga w TEJ SAMEJ turze, gdy ``attacks_per_turn`` > 1.
+
+    Wołane PO pierwszym ataku wroga, PRZED ``advance_turn`` (wszystkie ciosy = jedna tura).
+    Pętla reużywa istniejącą ścieżkę ``resolve_attack(attacker='enemy')`` (rzut + #826 redukcja
+    + okno reakcji gracza per cios). Każdy cios = osobny wpis w ``combat_turns`` (robi to
+    ``resolve_attack``).
+
+    RE-ENTRANT: liczbę wykonanych ciosów trzyma marker ``mattack_marker`` (runda+id wroga)
+    z licznikiem ``mattack_done`` na combatancie wroga — dzięki temu można wołać tę funkcję
+    ponownie po rozliczeniu okna reakcji (``resolve_reaction``) i dokończyć resztę ciosów.
+
+    Przerywa, gdy: gracz padł (brak dobijania trupa), walka skończona, otwarte okno reakcji
+    (pauza — wznawia ``resolve_reaction``), bieżąca tura przestała należeć do tego wroga
+    (ścieżka szarży/detekcji sama zaawansowała turę), albo wykonano już N ciosów.
+
+    Zwraca listę wyników kolejnych ataków (pusta gdy brak multi-attack lub przerwano od razu)."""
+    results: list[dict[str, Any]] = []
+    while True:
+        with _conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+                (campaign_id,),
+            ).fetchone()
+            if not row:
+                break
+            cur = str(row["current_turn"] or "").strip()
+            if not cur or cur == "player":
+                break  # tura już zaawansowana / nie należy do wroga
+            combatants: list[dict] = json.loads(row["combatants"] or "[]")
+            enemy = _find_combatant(combatants, cur)
+            if not enemy or enemy.get("type") != "enemy":
+                break
+            n = int(enemy.get("attacks_per_turn") or 1)
+            if n <= 1:
+                break  # brak multi-attack → zero zmian względem dziś
+            # nie dobijamy powalonego gracza
+            p = _find_combatant(combatants, "player")
+            if not p or int(p.get("hp_current", 0) or 0) <= 0:
+                break
+            marker = f"{int(row['round'] or 1)}:{cur}"
+            if str(enemy.get("mattack_marker") or "") == marker:
+                done = int(enemy.get("mattack_done") or 0)
+            else:
+                done = 0
+            # pierwszy atak wykonano POZA tą funkcją (endpoint/resolve_reaction) — liczy się jako 1
+            if done < 1:
+                done = 1
+            if done >= n:
+                break
+            # zapis markera+licznika PRZED ciosem → przetrwa ewentualną pauzę okna reakcji
+            enemy["mattack_marker"] = marker
+            enemy["mattack_done"] = done
+            _persist_combatants(conn, row, combatants)
+            conn.commit()
+
+        res = resolve_attack(campaign_id, 0, attacker="enemy")
+        results.append(res)
+
+        # zlicz ten cios jako wykonany (nawet przy otwartym oknie reakcji — cios padł)
+        with _conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+                (campaign_id,),
+            ).fetchone()
+            if row:
+                cur2 = str(row["current_turn"] or "").strip()
+                combatants2: list[dict] = json.loads(row["combatants"] or "[]")
+                enemy2 = _find_combatant(combatants2, cur2)
+                if enemy2 and enemy2.get("type") == "enemy":
+                    enemy2["mattack_done"] = int(enemy2.get("mattack_done") or 1) + 1
+                    _persist_combatants(conn, row, combatants2)
+                    conn.commit()
+
+        if res.get("reaction_window"):
+            break  # pauza — resztę ciosów dokończy resolve_reaction
+        if res.get("player_incapacitated"):
+            break  # gracz padł w trakcie — nie dobijamy
+        snap = res.get("combat_state") or load_combat_snapshot(campaign_id)
+        if not snap or snap.get("status") != "active":
+            break
+    return results
 
 
 def resolve_enemy_attack(

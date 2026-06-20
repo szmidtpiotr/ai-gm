@@ -180,6 +180,22 @@ def post_resolve_reaction(campaign_id: int, body: dict | None = None):
         res = combat.resolve_reaction(campaign_id, choice)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # #864: po rozliczeniu okna reakcji wróg z attacks_per_turn>1 dokańcza pozostałe ciosy
+    # tej samej tury PRZED advance_turn. Jeśli kolejny cios znów otworzy okno → pauza ponownie.
+    extras = combat.resolve_enemy_followup_attacks(campaign_id)
+    if extras:
+        res["multiattack"] = extras
+        last = extras[-1]
+        for _k in ("combat_state", "player_hp_remaining", "player_incapacitated",
+                   "reaction_window", "reaction_options", "enemy_name"):
+            if _k in last:
+                res[_k] = last[_k]
+        if last.get("reaction_window"):
+            res["advance_turn"] = "awaiting_reaction"
+            res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+            return res
+
     snap = combat.load_combat_snapshot(campaign_id)
     if snap and snap.get("status") == "active":
         try:
@@ -198,6 +214,19 @@ def post_enemy_turn(campaign_id: int):
         res = combat.resolve_attack(campaign_id, 0, attacker="enemy")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # #864: multi-attack — wróg z attacks_per_turn>1 wykonuje resztę ciosów w tej samej
+    # turze, PRZED advance_turn (analogicznie do off-hand gracza w #598). Pomijamy, gdy
+    # pierwszy cios otworzył okno reakcji (pauza — resztę dokończy resolve-reaction).
+    if not res.get("reaction_window"):
+        extras = combat.resolve_enemy_followup_attacks(campaign_id)
+        if extras:
+            res["multiattack"] = extras
+            last = extras[-1]
+            for _k in ("combat_state", "player_hp_remaining", "player_incapacitated",
+                       "reaction_window", "reaction_options", "enemy_name"):
+                if _k in last:
+                    res[_k] = last[_k]
 
     # SF10 (#633): okno reakcji wstrzymuje turę — NIE zaawansowuj, dopóki gracz nie
     # rozliczy reakcji (resolve-reaction zrobi advance_turn). Zwróć stan z otwartym oknem.
