@@ -2054,6 +2054,19 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ══════════════════════════════════════════════════════════
+       M1 — SECTION TABS SCROLL  (max-width: 768px)
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .section-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-shrink: 0;
+      }
+      .section-tabs::-webkit-scrollbar { display: none; }
+    }
+
+    /* ══════════════════════════════════════════════════════════
        M0-4 — MOBILE FORMS + TOUCH TARGETS  (max-width: 768px)
        ══════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {

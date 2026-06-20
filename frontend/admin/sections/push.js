@@ -41,11 +41,11 @@ async function _loadPush() {
           : `<span style="color:var(--t3)">⬜ Brak</span>`;
         const lastSub = r.last_subscribed_at ? new Date(r.last_subscribed_at).toLocaleString('pl-PL') : '—';
         return `<tr>
-          <td><b>${r.username}</b>${r.display_name ? '<br><span style="color:var(--t3);font-size:12px">'+r.display_name+'</span>' : ''}</td>
-          <td>${statusBadge}</td>
-          <td style="text-align:center">${r.subscription_count}</td>
-          <td style="font-size:12px;color:var(--t3)">${lastSub}</td>
-          <td style="display:flex;gap:6px;align-items:center">
+          <td data-label="Gracz"><b>${r.username}</b>${r.display_name ? '<br><span style="color:var(--t3);font-size:12px">'+r.display_name+'</span>' : ''}</td>
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Subskrypcji" style="text-align:center">${r.subscription_count}</td>
+          <td data-label="Ostatnia rej." style="font-size:12px;color:var(--t3)">${lastSub}</td>
+          <td data-label="Akcja" style="display:flex;gap:6px;align-items:center">
             ${hasSub ? `<button class="btn btn-secondary btn-sm" onclick="_quickTestPush(${r.user_id},'${r.username}')">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}
             ${hasSub ? `<button class="btn btn-sm" style="background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);color:var(--red,#e53935)" onclick="_revokePushSubscription(${r.user_id},'${r.username}')" title="Usuń subskrypcję — gracz będzie pytany o zgodę ponownie">✕ Usuń</button>` : ''}
           </td>
@@ -181,7 +181,7 @@ export async function init(panel) {
 
       <!-- Subscriptions table -->
       <div class="card" style="overflow:hidden">
-        <div class="table-wrap" style="overflow-x:auto">
+        <div class="table-wrap data-table--cards" style="overflow-x:auto">
           <table class="data-table" id="push-table">
             <thead><tr>
               <th>Gracz</th>

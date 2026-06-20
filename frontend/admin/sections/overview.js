@@ -171,7 +171,7 @@ export async function init(panel) {
         if (!rows.length) {
           econHost.innerHTML = '<div style="color:var(--t3);text-align:center;font-size:0.82rem">Brak ruchów złota w ostatnich 7 dniach.</div>';
         } else {
-          econHost.innerHTML = `<table class="data-table" style="font-size:0.82rem">
+          econHost.innerHTML = `<div class="data-table--scroll"><table class="data-table" style="font-size:0.82rem">
             <thead><tr><th>Źródło</th><th style="text-align:right">Wpływy</th><th style="text-align:right">Wydatki</th><th style="text-align:right">Bilans</th><th style="text-align:right">Liczba</th></tr></thead>
             <tbody>${rows.map(r => `<tr>
               <td>${esc(SRC_LABELS[r.source] || r.source)}</td>
@@ -186,7 +186,7 @@ export async function init(panel) {
               <td style="text-align:right;color:var(--red,#ef4444)">-${econ.total_expense}</td>
               <td style="text-align:right">${econ.net >= 0 ? '+' : ''}${econ.net}</td>
               <td></td>
-            </tr></tbody></table>`;
+            </tr></tbody></table></div>`;
         }
       }
     } catch (e) {
