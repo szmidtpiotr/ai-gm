@@ -909,9 +909,9 @@ def move_through_door(campaign_id: int, character_id: int, direction: str) -> di
             allowed, reason = check_exit_conditions(tile_for_check, character_id)
             if not allowed:
                 return {"ok": False, "blocked": True, "reason": reason}
-
-        # Mark current node as cleared on exit
-        nodes[current_node_id]["cleared"] = True
+            # #847: mark cleared only on forward moves (exit conditions verified and passed).
+            # Backtracking must not clear riddle/combat rooms that haven't been resolved.
+            nodes[current_node_id]["cleared"] = True
 
         # Move character to target node
         nodes[target_node_id]["visited"] = True
