@@ -690,7 +690,6 @@ function filterTableGeneric(input, tableId, nameClass) {
         const overlay_hexes = hexes.filter(h => h.has_overlay || h.discovered || h.campaign_label);
         const svgHtml = _renderAdminHexMap(hexes, hexTypes, currentHex);
         panel.innerHTML = `
-          <div class="mobile-edit-notice">📱 Edycja hexów niedostępna na mobile — przejdź na desktop aby edytować mapę.</div>
           <div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">${hexes.length} heksów · ${overlay_hexes.length} z nakładką · <span style="color:var(--t3)">Kliknij hex aby edytować</span></div>
           ${svgHtml}
           <div style="margin-top:8px;font-size:0.72rem;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
@@ -702,14 +701,65 @@ function filterTableGeneric(input, tableId, nameClass) {
         hexes.forEach(h => { hexData[`${h.q},${h.r}`] = h; });
         const svgWrap = panel.querySelector('#admin-hex-map-svg-wrap');
         if (svgWrap) {
-          if (window.innerWidth <= 768) svgWrap.dataset.mobileReadonly = 'true';
+          // Desktop click to edit
           svgWrap.addEventListener('click', e => {
-            if (svgWrap.dataset.mobileReadonly) return;
             const g = e.target.closest('g[data-q]');
             if (!g) return;
             const q = parseInt(g.dataset.q), r = parseInt(g.dataset.r);
             _showHexEditModal({ campId, q, r, hex: hexData[`${q},${r}`] || {} });
           });
+          // Touch: pinch-zoom + 1-finger pan + tap-to-edit (M5)
+          const svgEl = svgWrap.querySelector('svg');
+          if (svgEl && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+            svgWrap.style.overflow = 'hidden';
+            svgWrap.style.touchAction = 'none';
+            svgEl.style.transformOrigin = '0 0';
+            let camZ = 1, camX = 0, camY = 0, camTs = null;
+            const applyT = () => { svgEl.style.transform = `translate(${camX}px,${camY}px) scale(${camZ})`; };
+            svgWrap.addEventListener('touchstart', (e) => {
+              e.preventDefault();
+              if (e.touches.length === 1) {
+                camTs = { type: 'pan', x: e.touches[0].clientX, y: e.touches[0].clientY,
+                  px: camX, py: camY, moved: false };
+              } else if (e.touches.length === 2) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                const rect = svgWrap.getBoundingClientRect();
+                camTs = { type: 'pinch', dist: Math.hypot(dx, dy), zoom: camZ, px: camX, py: camY,
+                  midX: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+                  midY: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top };
+              }
+            }, { passive: false });
+            svgWrap.addEventListener('touchmove', (e) => {
+              e.preventDefault();
+              if (!camTs) return;
+              if (camTs.type === 'pan' && e.touches.length === 1) {
+                const dx = e.touches[0].clientX - camTs.x;
+                const dy = e.touches[0].clientY - camTs.y;
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) camTs.moved = true;
+                camX = camTs.px + dx; camY = camTs.py + dy; applyT();
+              } else if (camTs.type === 'pinch' && e.touches.length === 2) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                const nz = Math.max(0.3, Math.min(6, camTs.zoom * (Math.hypot(dx, dy) / camTs.dist)));
+                camX = camTs.midX - (camTs.midX - camTs.px) * (nz / camTs.zoom);
+                camY = camTs.midY - (camTs.midY - camTs.py) * (nz / camTs.zoom);
+                camZ = nz; applyT();
+              }
+            }, { passive: false });
+            svgWrap.addEventListener('touchend', (e) => {
+              if (camTs?.type === 'pan' && !camTs.moved) {
+                const t = e.changedTouches[0];
+                const el = document.elementFromPoint(t.clientX, t.clientY);
+                const g = el?.closest('g[data-q]');
+                if (g) {
+                  const q = parseInt(g.dataset.q), r = parseInt(g.dataset.r);
+                  _showHexEditModal({ campId, q, r, hex: hexData[`${q},${r}`] || {} });
+                }
+              }
+              camTs = null;
+            });
+          }
         }
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
     }

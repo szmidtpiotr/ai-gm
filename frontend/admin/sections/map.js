@@ -1173,11 +1173,8 @@ const _ROW_REGISTRY = {
     }
 
     svg.innerHTML = html;
-    const _wbRoot = document.getElementById('wb-root');
-    if (!_wbRoot?.dataset.mobileReadonly) {
-      svg.querySelectorAll('.whx,.whg').forEach(el => el.addEventListener('click', _wbOnHexClick));
-      svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
-    }
+    svg.querySelectorAll('.whx,.whg').forEach(el => el.addEventListener('click', _wbOnHexClick));
+    svg.querySelectorAll('.wloc-marker').forEach(el => el.addEventListener('click', _wbOnLocMarkerClick));
     const zl = document.getElementById('wb-zoom-label');
     if (zl) zl.textContent = `Zoom: ${Math.round(_wbZoom * 100)}%`;
   }
@@ -1565,18 +1562,6 @@ const _ROW_REGISTRY = {
     const svg = document.getElementById('wb-svg');
     if (!svg) return;
 
-    // #834 — Mobile: show read-only notice and block hex edit interactions
-    if (window.innerWidth <= 768) {
-      const wbRoot = document.getElementById('wb-root');
-      if (wbRoot && !wbRoot.querySelector('.mobile-edit-notice')) {
-        const note = document.createElement('div');
-        note.className = 'mobile-edit-notice';
-        note.textContent = '📱 Edycja hexów niedostępna na mobile — przejdź na desktop aby edytować mapę.';
-        wbRoot.prepend(note);
-        wbRoot.dataset.mobileReadonly = 'true';
-      }
-    }
-
     _wbHexes = {}; _wbTeleports = []; _wbLocations = {}; _wbSelected = null;
     _wbZoom = 1; _wbPan = { x: 400, y: 280 }; _wbDrawingTp = null;
     _wbUndoStack = []; _wbPainting = false; _wbStroke = null;
@@ -1652,6 +1637,56 @@ const _ROW_REGISTRY = {
           if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
           e.preventDefault(); _wbUndo();
         }
+      });
+      // Touch: pinch-zoom + 1-finger pan + tap-to-edit (M5)
+      let _wbTs = null;
+      svg.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+          _wbTs = { type: 'pan', x: e.touches[0].clientX, y: e.touches[0].clientY,
+            px: _wbPan.x, py: _wbPan.y, moved: false };
+        } else if (e.touches.length === 2) {
+          const dx = e.touches[1].clientX - e.touches[0].clientX;
+          const dy = e.touches[1].clientY - e.touches[0].clientY;
+          const rect = svg.getBoundingClientRect();
+          _wbTs = { type: 'pinch', dist: Math.hypot(dx, dy), zoom: _wbZoom,
+            px: _wbPan.x, py: _wbPan.y,
+            midX: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+            midY: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top };
+        }
+      }, { passive: false });
+      svg.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!_wbTs) return;
+        if (_wbTs.type === 'pan' && e.touches.length === 1) {
+          const dx = e.touches[0].clientX - _wbTs.x;
+          const dy = e.touches[0].clientY - _wbTs.y;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _wbTs.moved = true;
+          _wbPan = { x: _wbTs.px + dx, y: _wbTs.py + dy };
+          _wbRender();
+        } else if (_wbTs.type === 'pinch' && e.touches.length === 2) {
+          const dx = e.touches[1].clientX - e.touches[0].clientX;
+          const dy = e.touches[1].clientY - e.touches[0].clientY;
+          const dist = Math.hypot(dx, dy);
+          const nz = Math.max(0.12, Math.min(5, _wbTs.zoom * (dist / _wbTs.dist)));
+          _wbPan.x = _wbTs.midX - (_wbTs.midX - _wbTs.px) * (nz / _wbTs.zoom);
+          _wbPan.y = _wbTs.midY - (_wbTs.midY - _wbTs.py) * (nz / _wbTs.zoom);
+          _wbZoom = nz;
+          _wbRender();
+        }
+      }, { passive: false });
+      svg.addEventListener('touchend', (e) => {
+        if (_wbTs?.type === 'pan' && !_wbTs.moved) {
+          const t = e.changedTouches[0];
+          const el = document.elementFromPoint(t.clientX, t.clientY);
+          if (el) {
+            if (el.classList.contains('whx') || el.classList.contains('whg'))
+              _wbOnHexClick({ target: el });
+            else if (el.classList.contains('wloc-marker'))
+              _wbOnLocMarkerClick({ target: el });
+          }
+        }
+        _wbTs = null;
       });
       svg._wbDragWired = true;
     }
