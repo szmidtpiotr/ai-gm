@@ -282,16 +282,16 @@ async function _loadWeapons() {
       const enc = encodeURIComponent(JSON.stringify(w));
       return `<tr data-key="${_esc(w.key)}" data-rjson="${enc}">
         <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(w.key)}</td>
-        <td class="td-sticky td-name" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(w.label||w.key)}</td>
-        <td>${typeBadge(w.weapon_type)}</td>
-        <td class="td-mono">${_esc(dmg)}</td>
-        <td class="td-muted">${_esc(rng)}</td>
+        <td class="td-sticky td-name" data-label="Nazwa" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(w.label||w.key)}</td>
+        <td data-label="Typ">${typeBadge(w.weapon_type)}</td>
+        <td class="td-mono" data-label="Obrażenia">${_esc(dmg)}</td>
+        <td class="td-muted" data-label="Zasięg">${_esc(rng)}</td>
         <td class="detail-col td-muted">${_esc(w.weapon_slot||'—')}</td>
         <td class="detail-col">${yesNo(w.two_handed)}</td>
         <td class="detail-col">${yesNo(w.finesse)}</td>
-        <td class="td-mono">${w.weight_kg!=null?w.weight_kg+' kg':'—'}</td>
-        <td class="td-mono">${w.value_gp!=null?w.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${_starsNum(w)}">${_stars(w)}</td>
+        <td class="td-mono" data-label="Waga">${w.weight_kg!=null?w.weight_kg+' kg':'—'}</td>
+        <td class="td-mono" data-label="Cena">${w.value_gp!=null?w.value_gp+' sz':'—'}</td>
+        <td data-sort-val="${_starsNum(w)}" data-label="Rzadkość">${_stars(w)}</td>
         <td class="detail-col">${w.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${w.is_locked?'🔒':''}</span></td>
         <td class="detail-col"><span style="font-size:0.72rem;color:var(--t3)">${w.template_id?'📖 #'+w.template_id:'—'}</span></td>
@@ -319,14 +319,14 @@ async function _loadArmor() {
       const enc = encodeURIComponent(JSON.stringify(it));
       return `<tr data-key="${_esc(it.key)}" data-rjson="${enc}">
         <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(it.key)}</td>
-        <td class="td-sticky td-name" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(it.label||it.key)}</td>
-        <td><span class="badge badge-slate">${_esc(it.item_type||'—')}</span></td>
-        <td class="td-mono">${it.ac_bonus!=null?'+'+it.ac_bonus+' AC':'—'}</td>
-        <td class="td-muted">—</td>
+        <td class="td-sticky td-name" data-label="Nazwa" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(it.label||it.key)}</td>
+        <td data-label="Typ"><span class="badge badge-slate">${_esc(it.item_type||'—')}</span></td>
+        <td class="td-mono" data-label="AC">${it.ac_bonus!=null?'+'+it.ac_bonus+' AC':'—'}</td>
+        <td class="td-muted" data-label="Pokrycie">—</td>
         <td class="detail-col td-muted">${_esc(it.armor_coverage||'—')}</td>
-        <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
-        <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${_starsNum(it)}">${_stars(it)}</td>
+        <td class="td-mono" data-label="Waga">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
+        <td class="td-mono" data-label="Cena">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
+        <td data-sort-val="${_starsNum(it)}" data-label="Rzadkość">${_stars(it)}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
@@ -356,13 +356,13 @@ async function _loadItems() {
       const fxJson = it.effect_json ? (typeof it.effect_json === 'string' ? it.effect_json : JSON.stringify(it.effect_json)) : '';
       return `<tr data-key="${_esc(it.key)}" data-rjson="${enc}">
         <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(it.key)}</td>
-        <td class="td-sticky td-name" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(it.label||it.key)}</td>
-        <td><span class="badge ${t.c}">${_esc(t.l)}</span></td>
-        <td class="td-muted">${_esc((it.description||'').slice(0,55))||'—'}</td>
+        <td class="td-sticky td-name" data-label="Nazwa" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(it.label||it.key)}</td>
+        <td data-label="Typ"><span class="badge ${t.c}">${_esc(t.l)}</span></td>
+        <td class="td-muted" data-label="Opis">${_esc((it.description||'').slice(0,55))||'—'}</td>
         <td class="detail-col td-mono" style="font-size:0.68rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(fxJson)}">${_esc(fxJson||'—')}</td>
-        <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
-        <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td data-sort-val="${_starsNum(it)}">${_stars(it)}</td>
+        <td class="td-mono" data-label="Waga">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
+        <td class="td-mono" data-label="Cena">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
+        <td data-sort-val="${_starsNum(it)}" data-label="Rzadkość">${_stars(it)}</td>
         <td class="detail-col td-muted" style="font-size:0.72rem">${_esc(it.created_by||'—')}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
@@ -392,14 +392,14 @@ async function _loadConsumables() {
       const enc = encodeURIComponent(JSON.stringify(c));
       return `<tr data-key="${_esc(c.key)}" data-rjson="${enc}">
         <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(c.key)}</td>
-        <td class="td-sticky td-name" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(c.label||c.key)}</td>
-        <td>${effBadge(c.effect_type)}</td>
-        <td class="td-muted">${_esc(eff)}</td>
-        <td class="td-muted">${c.charges?c.charges+'× użycie':'Natychmiastowy'}</td>
+        <td class="td-sticky td-name" data-label="Nazwa" style="cursor:pointer" onclick='window._contentViewRec(${JSON.stringify(enc)})'>${_esc(c.label||c.key)}</td>
+        <td data-label="Efekt">${effBadge(c.effect_type)}</td>
+        <td class="td-muted" data-label="Formuła">${_esc(eff)}</td>
+        <td class="td-muted" data-label="Użycia">${c.charges?c.charges+'× użycie':'Natychmiastowy'}</td>
         <td class="detail-col td-mono">${c.charges??'—'}</td>
-        <td class="td-mono">—</td>
-        <td class="td-mono">${c.base_price!=null?c.base_price+' sz':'—'}</td>
-        <td data-sort-val="${_starsNum(c)}">${_stars(c)}</td>
+        <td class="td-mono" data-label="Waga">—</td>
+        <td class="td-mono" data-label="Cena">${c.base_price!=null?c.base_price+' sz':'—'}</td>
+        <td data-sort-val="${_starsNum(c)}" data-label="Rzadkość">${_stars(c)}</td>
         <td class="detail-col">${c.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${c.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
@@ -647,11 +647,11 @@ async function _loadAffixes() {
       }).join(' ') || '<span class="td-muted">—</span>';
       const enc = encodeURIComponent(JSON.stringify(a));
       return `<tr data-key="${_esc(a.key)}" data-rjson="${enc}">
-        <td class="td-sticky td-mono td-name" style="cursor:pointer" onclick="window._contentAffixEdit('${enc}')">${_esc(a.key)}</td>
-        <td>${_esc(a.name)}</td>
-        <td>${tierBadge(a.tier||1)}</td>
-        <td><span class="badge badge-slate">${_esc(a.allowed_item_types||'weapon')}</span></td>
-        <td style="padding:4px 8px">${effectSummary}</td>
+        <td class="td-sticky td-mono td-name" data-label="Klucz" style="cursor:pointer" onclick="window._contentAffixEdit('${enc}')">${_esc(a.key)}</td>
+        <td data-label="Nazwa">${_esc(a.name)}</td>
+        <td data-label="Tier">${tierBadge(a.tier||1)}</td>
+        <td data-label="Typ"><span class="badge badge-slate">${_esc(a.allowed_item_types||'weapon')}</span></td>
+        <td data-label="Efekty" style="padding:4px 8px">${effectSummary}</td>
         <td class="td-actions">
           <button class="btn-icon" title="Edytuj" onclick="window._contentAffixEdit('${enc}')">✎</button>
           <button class="btn-icon danger" title="Usuń" onclick="window._contentAffixDelete('${_esc(a.key)}',this)">✕</button>
@@ -768,11 +768,11 @@ async function _loadLootTables() {
     const items = Array.isArray(data) ? data : (data.items || []);
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak tabel łupów</td></tr>`; return; }
     tbody.innerHTML = items.map(lt => `<tr>
-      <td class="td-sticky td-mono td-name">${_esc(lt.key)}</td>
-      <td>${_esc(lt.label||'—')}</td>
-      <td class="td-mono">${lt.gold_min??'—'}</td>
-      <td class="td-mono">${lt.gold_max??'—'}</td>
-      <td style="text-align:center">${lt.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
+      <td class="td-sticky td-mono td-name" data-label="Klucz">${_esc(lt.key)}</td>
+      <td data-label="Nazwa">${_esc(lt.label||'—')}</td>
+      <td class="td-mono" data-label="Złoto min">${lt.gold_min??'—'}</td>
+      <td class="td-mono" data-label="Złoto max">${lt.gold_max??'—'}</td>
+      <td data-label="Aktywna" style="text-align:center">${lt.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
       <td class="td-actions">
         <button class="btn btn-sm btn-secondary" onclick="window._contentOpenLootEntries('${_esc(lt.key)}','${_esc(lt.label||lt.key)}')">Wpisy</button>
         <button class="btn-icon danger" title="Usuń" onclick="window._contentDeleteLootTable('${_esc(lt.key)}',this)">✕</button>
@@ -794,18 +794,18 @@ async function _loadSpells() {
     const schoolBadge = s => ({magic_bolt:'badge-blue',mend_wounds:'badge-green',arcane_shield:'badge-slate',sleep:'badge-amber',burning_arc:'badge-red',drain_life:'badge-red',chain_lightning:'badge-blue',stone_skin:'badge-slate',fireball:'badge-red'}[s]||'badge-blue');
     tbody.innerHTML = items.map(sp => `<tr>
       <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(sp.key)}</td>
-      <td class="td-sticky td-name">${_esc(sp.label||sp.key)}</td>
-      <td><span class="badge ${schoolBadge(sp.key)}">${_esc(sp.spell_type||'magiczny')}</span></td>
-      <td class="td-mono" style="text-align:center">${sp.tier??'—'}</td>
-      <td class="td-mono" style="text-align:center">${sp.mana_cost??'—'}</td>
-      <td class="td-mono">${sp.damage_die||'—'}</td>
-      <td class="td-mono">${sp.heal_die||'—'}</td>
+      <td class="td-sticky td-name" data-label="Nazwa">${_esc(sp.label||sp.key)}</td>
+      <td data-label="Szkoła"><span class="badge ${schoolBadge(sp.key)}">${_esc(sp.spell_type||'magiczny')}</span></td>
+      <td class="td-mono" data-label="Tier" style="text-align:center">${sp.tier??'—'}</td>
+      <td class="td-mono" data-label="Mana" style="text-align:center">${sp.mana_cost??'—'}</td>
+      <td class="td-mono" data-label="Obrażenia">${sp.damage_die||'—'}</td>
+      <td class="td-mono" data-label="Leczenie">${sp.heal_die||'—'}</td>
       <td class="detail-col td-muted">${_esc(sp.effect_stat||'—')}</td>
       <td class="detail-col td-mono">${sp.range_m!=null?sp.range_m+' m':'—'}</td>
       <td class="detail-col td-mono">${sp.aoe_radius_m!=null?sp.aoe_radius_m+' m':'—'}</td>
-      <td class="td-muted" style="font-size:0.75rem">${_esc(sp.target_zone||'single')}</td>
+      <td class="td-muted" data-label="Strefa" style="font-size:0.75rem">${_esc(sp.target_zone||'single')}</td>
       <td class="detail-col td-muted" style="font-size:0.72rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(sp.description||'')}">${_esc((sp.description||'').slice(0,40)||'—')}</td>
-      <td style="text-align:center">${sp.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
+      <td data-label="Aktywny" style="text-align:center">${sp.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
       <td class="td-actions">
         <button class="btn-icon" title="Edytuj" onclick="window._contentEditSpell('${_esc(sp.key)}')">✎</button>
         <button class="btn-icon danger" title="Usuń" onclick="window._contentDeleteSpell('${_esc(sp.key)}',this)">✕</button>
@@ -1489,7 +1489,7 @@ function _sectionHtml() {
           <button class="btn-toggle-details" data-details-for="weapons-table">Szczegóły</button>
         </div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="weapons-table">
           <thead><tr>
             <th class="detail-col"><div class="th-inner">Klucz</div></th>
@@ -1519,7 +1519,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj zbroi…" data-filter-for="armor-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="armor-table">Szczegóły</button></div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="armor-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Typ</th>
@@ -1538,7 +1538,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj przedmiotów…" data-filter-for="items-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="items-table">Szczegóły</button></div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="items-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Typ</th>
@@ -1557,7 +1557,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj konsumabli…" data-filter-for="consumables-table"></div>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="consumables-table">Szczegóły</button></div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="consumables-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Efekt</th>
@@ -1575,7 +1575,7 @@ function _sectionHtml() {
       <div class="toolbar">
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj tabel łupów…" data-filter-for="loot-table"></div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="loot-table">
           <thead><tr>
             <th class="td-sticky">Klucz</th><th>Nazwa</th>
@@ -1594,7 +1594,7 @@ function _sectionHtml() {
         <button class="btn btn-primary btn-sm" id="add-spell-btn">+ Czar</button>
         <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="spells-table">Szczegóły</button></div>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="spells-table">
           <thead><tr>
             <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th><th>Szkoła</th>
@@ -1615,7 +1615,7 @@ function _sectionHtml() {
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj afiksów…" data-filter-for="affixes-table"></div>
         <button class="btn btn-primary btn-sm" id="add-affix-btn">+ Afiks</button>
       </div>
-      <div class="data-table--scroll table-wrap">
+      <div class="data-table--cards table-wrap">
         <table class="data-table" id="affixes-table">
           <thead><tr>
             <th class="td-sticky">Klucz</th><th>Nazwa</th><th style="width:60px">Tier</th>
