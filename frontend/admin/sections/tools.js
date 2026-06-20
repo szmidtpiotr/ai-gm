@@ -1031,30 +1031,83 @@ function _csRenderCombat() {
     </div>`;
 }
 
+function _csRollD20() { return 1 + Math.floor(Math.random() * 20); }
+
+// #727: akcje walki muszą wywoływać PRAWDZIWY silnik walki (jak /admin2/), nie tylko
+// przesuwać wskaźnik tury. Wcześniej wszystkie akcje szły na /sandbox/advance-turn,
+// więc HP nikomu nie spadało — walka była no-opem z poziomu /admin/.
 async function _csAction(kind) {
   if (!_csState.combatState) return;
   if (_csState.busy) return;
   _csState.busy = true;
   try {
-    const body = { campaign_id: _csState.campaignId, character_id: _csState.characterId, action: kind };
-    const d = await apiFetch('/api/admin/sandbox/advance-turn', { method:'POST', body: JSON.stringify(body) });
-    _csState.combatState = d.combat_state || d;
-    _csLog(`▶ ${kind}: tura ${d.current_turn ?? '?'}`);
+    if (kind === 'move') {
+      // Zmiana strefy (zbliż się / cofnij). Może nie zużyć tury (przyśpieszenie).
+      const d = await apiFetch(`/api/campaigns/${_csState.campaignId}/combat/zone-change`, { method: 'POST' });
+      _csState.combatState = d.combat_state || _csState.combatState;
+      _csLog(`👣 Strefa: ${d.from ?? '?'} → ${d.to ?? '?'}${d.extra_action_used ? ' (darmowa akcja)' : ''}`);
+      _csRenderCombat();
+      await _csRefreshSheet();
+      _csMaybeEnemyTurn();
+      return;
+    }
+    // Atak gracza — resolve-attack faktycznie nalicza obrażenia.
+    const d20 = _csRollD20();
+    const res = await apiFetch(`/api/campaigns/${_csState.campaignId}/combat/resolve-attack`, {
+      method: 'POST', body: JSON.stringify({ roll_result: d20, raw_d20: d20, attacker: 'player' }),
+    });
+    _csState.combatState = res.combat_state || _csState.combatState;
+    if (res.blocked) _csLog(`⛔ Blokada: ${res.message || res.block_reason || '?'}`);
+    else if (res.hit) _csLog(`⚔ Trafienie! ${res.damage || 0} obrażeń → ${res.target_name || 'wróg'} (rzut ${d20})`);
+    else _csLog(`✗ Pudło (rzut ${d20})${res.player_nat1 ? ' — Nat 1!' : ''}`);
+    // resolve-attack NIE przesuwa tury (w grze robi to narracja). Sandbox bez narracji
+    // przesuwa ją jawnie, chyba że akcja zablokowana / brak many (tura zostaje przy graczu).
+    const consumed = !res.blocked && !res.mana_insufficient
+      && _csState.combatState && _csState.combatState.status === 'active';
+    if (consumed) {
+      const adv = await apiFetch('/api/admin/sandbox/advance-turn', {
+        method: 'POST', body: JSON.stringify({ campaign_id: _csState.campaignId }),
+      });
+      if (adv.combat_state) _csState.combatState = adv.combat_state;
+    }
+    if (_csState.combatState?.status === 'ended') _csLog(`⏹ Walka: ${_csState.combatState.ended_reason || 'koniec'}`);
     _csRenderCombat();
     await _csRefreshSheet();
+    _csMaybeEnemyTurn();
   } catch(e) { _csLog('✗ '+e.message); showToast(e.message, 'error'); }
   finally { _csState.busy = false; }
 }
 
 async function _csEnemyTurn() {
   if (!_csState.combatState) return;
+  if (_csState.busy) return;
+  _csState.busy = true;
   try {
-    const d = await apiFetch('/api/admin/sandbox/advance-turn', { method:'POST', body: JSON.stringify({ campaign_id: _csState.campaignId }) });
-    _csState.combatState = d.combat_state || d;
-    _csLog(`▶ Tura wroga: tura ${d.current_turn ?? '?'}`);
+    const res = await apiFetch(`/api/campaigns/${_csState.campaignId}/combat/enemy-turn`, { method: 'POST' });
+    _csState.combatState = res.combat_state || _csState.combatState;
+    if (res.zone_change) _csLog(`[Wróg] ${res.enemy_name || '?'} szarżuje (${res.zone_change.from} → ${res.zone_change.to})`);
+    else if (res.hit) _csLog(`[Wróg] ${res.enemy_name || '?'} trafia za ${res.damage || 0} (rzut ${res.raw_d20 ?? '?'})`);
+    else if (res.blocked) _csLog(`[Wróg] zablokowany — ${res.message || '?'}`);
+    else if (res.enemy_name) _csLog(`[Wróg] ${res.enemy_name} pudłuje (rzut ${res.raw_d20 ?? '?'})`);
+    if (_csState.combatState?.status === 'ended') _csLog(`⏹ Walka: ${_csState.combatState.ended_reason || 'koniec'}`);
     _csRenderCombat();
     await _csRefreshSheet();
+    _csMaybeEnemyTurn();
   } catch(e) { _csLog('✗ '+e.message); }
+  finally { _csState.busy = false; }
+}
+
+// Auto-łańcuch tur wrogów: gdy aktywna tura nie należy do gracza, odpal turę wroga.
+function _csMaybeEnemyTurn() {
+  const cs = _csState.combatState;
+  if (!cs || cs.status !== 'active') return;
+  if (String(cs.current_turn) === 'player') return;
+  setTimeout(() => {
+    const cur = _csState.combatState;
+    if (cur && cur.status === 'active' && String(cur.current_turn) !== 'player' && !_csState.busy) {
+      _csEnemyTurn();
+    }
+  }, 750);
 }
 
 async function _csResetHero() {
