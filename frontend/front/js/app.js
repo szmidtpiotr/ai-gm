@@ -10918,6 +10918,11 @@ function initEventListeners() {
     elements.btnCombatBlock?.addEventListener('click', handleCombatBlock);
     elements.btnCombatWrestle?.addEventListener('click', handleCombatWrestle);
     document.getElementById('combat-spell-btn')?.addEventListener('click', openSpellPicker);
+    document.getElementById('combat-item-btn')?.addEventListener('click', openConsumablePicker);  // #859
+    document.getElementById('consumable-picker-close')?.addEventListener('click', closeConsumablePicker);  // #859
+    document.getElementById('consumable-picker-overlay')?.addEventListener('click', e => {
+        if (e.target === document.getElementById('consumable-picker-overlay')) closeConsumablePicker();
+    });
     // SF1 (#619): pasek „Akcja" otwiera bottom sheet; tło/Esc/wybór pozycji zamyka.
     elements.btnCombatAction?.addEventListener('click', openCombatSheet);
     elements.combatActionSheetBackdrop?.addEventListener('click', closeCombatSheet);
@@ -12035,6 +12040,84 @@ async function openSpellPicker() {
 
 function closeSpellPicker() {
     document.getElementById('spell-picker-overlay')?.setAttribute('hidden', '');
+}
+
+// ── #859: użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka ──
+// Backend (POST /inventory/{id}/use) leczy i synchronizuje HP do active_combat.
+// Akcja darmowa — NIE przesuwa tury (turn-cost = out of scope, patrz #859).
+async function openConsumablePicker() {
+    if (!combatActive || lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Nie twoja tura.', true); return;
+    }
+    if (combatBusy || enemyTurnInFlight) return;
+    const overlay = document.getElementById('consumable-picker-overlay');
+    const list = document.getElementById('consumable-picker-list');
+    if (!overlay || !list || !characterData?.id) return;
+
+    overlay.removeAttribute('hidden');
+    list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Ładowanie plecaka…</div>';
+
+    try {
+        const resp = await fetch(`/api/inventory/${characterData.id}`).then(r => r.json());
+        const items = Array.isArray(resp?.data) ? resp.data : [];
+        // ta sama reguła co w plecaku (#764): konsumpcyjne z flagą can_use
+        const usable = items.filter(it => String(it.item_type || '').toLowerCase() === 'consumable' && it.can_use === true);
+        if (!usable.length) {
+            list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Brak przedmiotów do użycia w plecaku.</div>';
+            return;
+        }
+        list.innerHTML = usable.map(it => {
+            const qty = (it.quantity || 1) > 1 ? `<span class="spell-pick-cost">×${it.quantity}</span>` : '';
+            return `<button class="spell-pick-btn" data-inventory-id="${it.id}">
+                <span class="spell-pick-icon">🧪</span>
+                <span class="spell-pick-name">${escapeHtml(it.label || it.key || '?')}</span>
+                ${qty}
+            </button>`;
+        }).join('');
+
+        list.querySelectorAll('.spell-pick-btn:not(:disabled)').forEach(btn => {
+            btn.addEventListener('click', () => {
+                closeConsumablePicker();
+                handleCombatUseItem(parseInt(btn.dataset.inventoryId, 10));
+            });
+        });
+    } catch {
+        list.innerHTML = '<div style="padding:12px;color:#f87171;font-size:0.8rem">Błąd ładowania plecaka.</div>';
+    }
+}
+
+function closeConsumablePicker() {
+    document.getElementById('consumable-picker-overlay')?.setAttribute('hidden', '');
+}
+
+async function handleCombatUseItem(inventoryId) {
+    if (!inventoryId || !characterData?.id) return;
+    if (!combatActive || combatBusy || enemyTurnInFlight) return;
+    setCombatMsg('Używam przedmiotu…');
+    try {
+        const r = await fetch(`/api/inventory/${characterData.id}/use`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inventory_id: inventoryId }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || 'błąd użycia');
+
+        const st = data.character_state || {};
+        const label = data.item?.label || 'przedmiot';
+        const hpLine = (st.current_hp != null) ? ` — HP ${st.current_hp}/${st.max_hp ?? '?'}` : '';
+        appendMessage({ role: 'system', content: `🧪 Użyto: ${label}${hpLine}.`, created_at: new Date() });
+        scrollToBottom();
+        showToast(`Użyto: ${label}`, 'success');
+
+        await refreshCharacterData();
+        await pollCombatState();  // re-sync HUD walki (HP zsynchronizowane do active_combat przez backend)
+    } catch (err) {
+        console.error('[combat] use item failed:', err);
+        showToast(err?.message || 'Nie udało się użyć przedmiotu', 'error');
+    } finally {
+        setCombatMsg('');
+    }
 }
 
 async function castSpellOutOfCombat(spellKey) {

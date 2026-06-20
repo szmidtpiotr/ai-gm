@@ -907,6 +907,21 @@
               <span class="combat-btn__armed" hidden>⚡ uzbrojony do następnego ataku</span>
             </span>
           </button>
+          <!-- SF (#859): użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka.
+               Backend (use_inventory_item) NIE przesuwa tury → akcja darmowa (↺ za darmo). -->
+          <button type="button" class="combat-btn combat-btn--item" id="combat-item-btn" data-clog="combat_item_button">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 2h6M10 2v4M14 2v4M8 6h8l1 11a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z"/><path d="M7.5 13h9"/>
+            </svg>
+            <span class="combat-btn__body">
+              <span class="combat-btn__head">
+                <span class="combat-btn__label">Mikstura</span>
+                <span class="combat-btn__cost combat-btn__cost--reaction">↺ za darmo</span>
+              </span>
+              <span class="combat-btn__desc">Użyj mikstury lub przedmiotu z plecaka</span>
+              <span class="combat-btn__reason" hidden>Brak przedmiotów do użycia</span>
+            </span>
+          </button>
           <!-- S17 (#612): zapasy — akcja bojowa (test STR vs STR), wymaga zwarcia; konsumuje turę -->
           <button type="button" class="combat-btn combat-btn--wrestle" id="combat-wrestle-btn" data-clog="combat_wrestle_button">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -944,6 +959,17 @@
           <button type="button" class="spell-picker-close" id="spell-picker-close">✕</button>
         </div>
         <div id="spell-picker-list" class="spell-picker-list"></div>
+      </div>
+    </div>
+
+    <!-- Consumable Picker (#859 — użyj mikstury/przedmiotu w walce, mirror spell-picker) -->
+    <div id="consumable-picker-overlay" class="spell-picker-overlay" hidden>
+      <div class="spell-picker-box">
+        <div class="spell-picker-header">
+          <span class="spell-picker-title">🧪 Wybierz przedmiot</span>
+          <button type="button" class="spell-picker-close" id="consumable-picker-close">✕</button>
+        </div>
+        <div id="consumable-picker-list" class="spell-picker-list"></div>
       </div>
     </div>
 
@@ -1957,7 +1983,7 @@
        Replaces the flaky 2015 dice.js for combat rolls; supports predetermined results (1d20@15). -->
   <script src="./vendor/dice-box-threejs/dice-box-threejs.umd.js?v=0.0.12"></script>
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
-  <script src="./js/app.js?v=741-dpad-drag-2026-06-20"></script>
+  <script src="./js/app.js?v=859-combat-use-item-2026-06-20"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
