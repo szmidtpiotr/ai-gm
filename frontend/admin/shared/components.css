@@ -2292,3 +2292,43 @@
       /* 6. Szelf zapisanych pomysłów — tekst hint mniejszy */
       .forge-ideas-shelf-header { padding: 8px 10px; }
     }
+
+    /* ══════════════════════════════════════════════════════════
+       M4 — POLISH: Touch targets ≥44px (#845)  (max-width: 768px)
+       Hamburger, drawer nav-items, stab tabs, btn-sm
+       ══════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+
+      /* 1. Hamburger — navigation trigger: currently 26×30px, needs ≥44px */
+      .hamburger {
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+        gap: 5px;
+      }
+
+      /* 2. Drawer nav-items — full-width buttons in mobile drawer: currently 30px */
+      .nav-item {
+        min-height: 44px;
+        padding: 10px 12px;
+      }
+
+      /* 3. Stab sub-section tabs — currently 34px, needs ≥44px */
+      .stab {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+      }
+
+      /* 4. Small secondary action buttons (btn-sm): currently 22px */
+      .btn-sm {
+        min-height: 44px;
+        padding: 6px 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
