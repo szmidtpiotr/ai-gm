@@ -446,6 +446,8 @@ RAW_MIGRATIONS = [
     "ALTER TABLE campaign_members ADD COLUMN character_id INTEGER",
     # G5 (#789) — initiative_roll per action for conflict resolution ordering
     "ALTER TABLE campaign_round_actions ADD COLUMN initiative_roll INTEGER NOT NULL DEFAULT 0",
+    # G19 (#800) — Spectators: policy on campaigns
+    "ALTER TABLE campaigns ADD COLUMN spectator_policy TEXT NOT NULL DEFAULT 'none'",
 ]
 
 

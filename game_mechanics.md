@@ -2942,7 +2942,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | Wybór postaci przy zaproszeniu + bohater w dwóch trybach (rozwój wspólny / stan per kampania) | ✅ zbudowane (#784 G16) — `character_campaign_state`, `campaign_state_service.py`, `_save_char_sheet` |
 | Powalenie / ocucenie / kara za wipe (10/20/30%) | ❌ do zbudowania |
 | Streszczenia piętrowe rund MP | ❌ do zbudowania |
-| Widzowie (rola, widoczność publiczna, podpowiedzi za podwójną zgodą) | ❌ do zbudowania |
+| Widzowie (rola, widoczność publiczna, podpowiedzi za podwójną zgodą) | ✅ backend (#800 G19) — `role='spectator'`, `spectator_policy`, `campaign_spectator_mutes`, filtr publiczny w party_chat; UI panelu widza poza zakresem (osobne FE) |
 | Eksport-książka (Bielik na .170, offline) | 🟡 prototyp CLI gotowy (#547): `book_export_service.py`, Bielik 11B na .170, pilot 3 rozdz. OK; UI/modal w FAZIE G |
 | Vote-to-kick ręczny (większość pozostałych; 2-os = host sam) | ❌ do zbudowania |
 | Handel między graczami | 📝 notatka na przyszłość |

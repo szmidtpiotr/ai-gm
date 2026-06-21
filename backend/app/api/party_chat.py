@@ -37,50 +37,56 @@ def get_party_chat(
     conn = _db()
     try:
         member = conn.execute(
-            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            "SELECT role FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
             (campaign_id, uid),
         ).fetchone()
         if not member:
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
 
-        # Resolve caller's character name (needed to show whispers addressed to them)
-        # 1. Most recent submitted action (most reliable in-game name)
-        caller_char = conn.execute(
-            "SELECT character_name FROM campaign_round_actions "
-            "WHERE campaign_id=? AND user_id=? "
-            "ORDER BY submitted_at DESC LIMIT 1",
-            (campaign_id, uid),
-        ).fetchone()
-        caller_char_name = caller_char["character_name"] if caller_char else None
-
-        # 2. Fallback: character assigned to this user for this campaign
-        if not caller_char_name:
-            char_row = conn.execute(
-                "SELECT c.name FROM characters c "
-                "JOIN campaign_members cm ON cm.character_id = c.id "
-                "WHERE cm.campaign_id=? AND cm.user_id=? AND cm.status='accepted' LIMIT 1",
+        # G19 #800 — spectators see only public messages (no whispers, no private notes)
+        is_spectator = member["role"] == "spectator"
+        if is_spectator:
+            whisper_filter = "whisper_to IS NULL"
+            params_extra: tuple = ()
+        else:
+            # Resolve caller's character name (needed to show whispers addressed to them)
+            # 1. Most recent submitted action (most reliable in-game name)
+            caller_char = conn.execute(
+                "SELECT character_name FROM campaign_round_actions "
+                "WHERE campaign_id=? AND user_id=? "
+                "ORDER BY submitted_at DESC LIMIT 1",
                 (campaign_id, uid),
             ).fetchone()
-            caller_char_name = char_row["name"] if char_row else None
+            caller_char_name = caller_char["character_name"] if caller_char else None
 
-        # 3. Fallback: any character owned by this user active in this campaign
-        if not caller_char_name:
-            char_row = conn.execute(
-                "SELECT name FROM characters WHERE user_id=? AND campaign_id=? LIMIT 1",
-                (uid, campaign_id),
-            ).fetchone()
-            caller_char_name = char_row["name"] if char_row else None
+            # 2. Fallback: character assigned to this user for this campaign
+            if not caller_char_name:
+                char_row = conn.execute(
+                    "SELECT c.name FROM characters c "
+                    "JOIN campaign_members cm ON cm.character_id = c.id "
+                    "WHERE cm.campaign_id=? AND cm.user_id=? AND cm.status='accepted' LIMIT 1",
+                    (campaign_id, uid),
+                ).fetchone()
+                caller_char_name = char_row["name"] if char_row else None
 
-        # 4. Broadest fallback: any character owned by this user (handles new players with no actions yet)
-        if not caller_char_name:
-            char_row = conn.execute(
-                "SELECT name FROM characters WHERE user_id=? ORDER BY id DESC LIMIT 1",
-                (uid,),
-            ).fetchone()
-            caller_char_name = char_row["name"] if char_row else None
+            # 3. Fallback: any character owned by this user active in this campaign
+            if not caller_char_name:
+                char_row = conn.execute(
+                    "SELECT name FROM characters WHERE user_id=? AND campaign_id=? LIMIT 1",
+                    (uid, campaign_id),
+                ).fetchone()
+                caller_char_name = char_row["name"] if char_row else None
 
-        whisper_filter = "(whisper_to IS NULL OR user_id=? OR whisper_to=?)"
-        params_extra = (uid, caller_char_name or "")
+            # 4. Broadest fallback: any character owned by this user (handles new players with no actions yet)
+            if not caller_char_name:
+                char_row = conn.execute(
+                    "SELECT name FROM characters WHERE user_id=? ORDER BY id DESC LIMIT 1",
+                    (uid,),
+                ).fetchone()
+                caller_char_name = char_row["name"] if char_row else None
+
+            whisper_filter = "(whisper_to IS NULL OR user_id=? OR whisper_to=?)"
+            params_extra = (uid, caller_char_name or "")
 
         if since_id:
             rows = conn.execute(
@@ -132,11 +138,35 @@ def post_party_chat(
     conn = _db()
     try:
         member = conn.execute(
-            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            "SELECT role FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
             (campaign_id, uid),
         ).fetchone()
         if not member:
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
+
+        # G19 #800 — spectator hint guard: whisper from spectator requires policy + no mute
+        if member["role"] == "spectator" and req.whisper_to:
+            camp = conn.execute(
+                "SELECT spectator_policy FROM campaigns WHERE id=?", (campaign_id,)
+            ).fetchone()
+            if not camp or camp["spectator_policy"] != "watch_hint":
+                raise HTTPException(status_code=403, detail="Spectator hints not allowed (policy)")
+
+            # Resolve target player's user_id from their character name
+            target_action = conn.execute(
+                "SELECT user_id FROM campaign_round_actions WHERE campaign_id=? AND character_name=? "
+                "ORDER BY submitted_at DESC LIMIT 1",
+                (campaign_id, req.whisper_to),
+            ).fetchone()
+            if target_action:
+                target_uid = int(target_action["user_id"])
+                muted = conn.execute(
+                    "SELECT 1 FROM campaign_spectator_mutes "
+                    "WHERE campaign_id=? AND user_id_player=? AND user_id_spectator=?",
+                    (campaign_id, target_uid, uid),
+                ).fetchone()
+                if muted:
+                    raise HTTPException(status_code=403, detail="Spectator muted by this player")
 
         row = conn.execute(
             "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to) "

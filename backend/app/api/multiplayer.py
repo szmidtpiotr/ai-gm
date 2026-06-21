@@ -342,6 +342,7 @@ def join_via_link(
 
 class AcceptInviteReq(BaseModel):
     character_id: Optional[int] = None
+    as_spectator: bool = False
 
 
 @router.post("/multiplayer/campaigns/{campaign_id}/accept")
@@ -360,6 +361,16 @@ def accept_invite(
         ).fetchone()
         if not member:
             raise HTTPException(status_code=404, detail="Not invited to this lobby")
+
+        # G19 #800 — spectator path: role='spectator', no character required
+        if body.as_spectator:
+            conn.execute(
+                "UPDATE campaign_members SET status='accepted', role='spectator', character_id=NULL "
+                "WHERE campaign_id=? AND user_id=?",
+                (campaign_id, uid),
+            )
+            conn.commit()
+            return {"status": "accepted", "role": "spectator"}
 
         character_id = body.character_id
         if character_id is not None:
@@ -414,6 +425,106 @@ def accept_invite(
                 daemon=True,
             ).start()
         return {"status": "accepted"}
+    finally:
+        conn.close()
+
+
+# G19 #800 — Spectator policy (host only)
+
+class SpectatorPolicyReq(BaseModel):
+    policy: str  # 'none' | 'watch' | 'watch_hint'
+
+
+@router.patch("/multiplayer/campaigns/{campaign_id}/spectator-policy")
+def set_spectator_policy(
+    campaign_id: int,
+    body: SpectatorPolicyReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    if body.policy not in ("none", "watch", "watch_hint"):
+        raise HTTPException(status_code=400, detail="policy must be 'none', 'watch', or 'watch_hint'")
+    conn = _db()
+    try:
+        camp = conn.execute(
+            "SELECT host_user_id FROM campaigns WHERE id=? AND mode='multiplayer'",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if camp["host_user_id"] != uid:
+            raise HTTPException(status_code=403, detail="Only host can change spectator policy")
+        conn.execute(
+            "UPDATE campaigns SET spectator_policy=? WHERE id=?",
+            (body.policy, campaign_id),
+        )
+        conn.commit()
+        return {"spectator_policy": body.policy}
+    finally:
+        conn.close()
+
+
+# G19 #800 — Per-player spectator mute
+
+class SpectatorMuteReq(BaseModel):
+    spectator_user_id: int
+
+
+@router.post("/multiplayer/campaigns/{campaign_id}/spectator-mute", status_code=201)
+def mute_spectator(
+    campaign_id: int,
+    body: SpectatorMuteReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        player_ok = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted' AND role!='spectator'",
+            (campaign_id, uid),
+        ).fetchone()
+        if not player_ok:
+            raise HTTPException(status_code=403, detail="Only active players can mute spectators")
+        spectator_ok = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted' AND role='spectator'",
+            (campaign_id, body.spectator_user_id),
+        ).fetchone()
+        if not spectator_ok:
+            raise HTTPException(status_code=404, detail="Spectator not found in this campaign")
+        conn.execute(
+            "INSERT OR IGNORE INTO campaign_spectator_mutes (campaign_id, user_id_player, user_id_spectator) VALUES (?, ?, ?)",
+            (campaign_id, uid, body.spectator_user_id),
+        )
+        conn.commit()
+        return {"muted": body.spectator_user_id}
+    finally:
+        conn.close()
+
+
+@router.delete("/multiplayer/campaigns/{campaign_id}/spectator-mute/{spectator_user_id}")
+def unmute_spectator(
+    campaign_id: int,
+    spectator_user_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        player_ok = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, uid),
+        ).fetchone()
+        if not player_ok:
+            raise HTTPException(status_code=403, detail="Not a member of this campaign")
+        conn.execute(
+            "DELETE FROM campaign_spectator_mutes WHERE campaign_id=? AND user_id_player=? AND user_id_spectator=?",
+            (campaign_id, uid, spectator_user_id),
+        )
+        conn.commit()
+        return {"unmuted": spectator_user_id}
     finally:
         conn.close()
 
