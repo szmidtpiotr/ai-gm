@@ -14,7 +14,7 @@ Format: `- [ ] #NNN — krótki tytuł` · `(dep: #MMM)` = zależność (rób PO
 
 **Poza zakresem (NIE implementuj):** issue `(design)` bez rozstrzygniętej decyzji A/B → GATE; `[BLOCKED]` bez odblokowania → GATE; feature z P4 bez wyraźnej prośby Piotra.
 
-**Multiplayer G1–G6 (#785–#790, sekcja PMP — autoryzowane 2026-06-21):** decyzje projektowe SĄ rozstrzygnięte (w treści issue + `game_mechanics.md` CZĘŚĆ AC, tab. G). NIE traktuj jako `(design)` GATE — wdrażaj wg analizy w issue. Fundament istnieje: `backend/app/services/multiplayer_round_service.py`, `backend/app/api/multiplayer.py`, tabele `campaign_rounds`/`campaign_round_actions`/`campaign_members`. Zależności: G1→G2→G3, G4→G5/G6 (B1 World State done). Testy MP backendowe → pytest (symuluj 2–4 graczy), nie wymagają realnego LLM dla logiki rund/timera/kicka.
+**Multiplayer Faza 5 — G16 + G1–G19 (#784, #785–#790, #791–#800, sekcja PMP — autoryzowane 2026-06-21):** decyzje projektowe SĄ rozstrzygnięte (PEŁNA „Analiza wdrożeniowa" w treści każdego issue + `game_mechanics.md` CZĘŚĆ AC, tab. G). NIE traktuj jako `(design)` GATE — wdrażaj wg analizy w issue. Fundament istnieje: `backend/app/services/multiplayer_round_service.py`, `backend/app/api/multiplayer.py`, tabele `campaign_rounds`/`campaign_round_actions`/`campaign_members`. Kolejność/zależności (topo, rosnąco po #): G16(#784) → G1(#785) → G2(#786) → G3(#787) → G4(#788) → G5(#789)/G6(#790) → G7(#791, dep G16) → G8(#792, dep #788) → G9(#793, dep #791+#785) → G17(#794, dep #791) → G10(#795) → G18(#796) → G11(#797, dep #786) → G12(#798, dep #788) → G13(#799) → G19(#800). Testy MP backendowe → pytest (symuluj 2–4 graczy), nie wymagają realnego LLM dla logiki rund/timera/kicka/walki.
 
 **Wyjątki pipeline:** brak — wszystkie FIX idą pełnym pipeline (/tdd → /code-review → /playwright-test-report).
 
@@ -172,14 +172,25 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 59. #845 — [MOBILE][M4] Polish + regresja na realnym urządzeniu (Moto G32)
 - [ ] 60. #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja)
 
-### PMP — Multiplayer Faza 5 (G1–G6) — wdrażanie autoryzowane 2026-06-21 (decyzje rozstrzygnięte, NIE gate)
-Fundament MP istnieje (`multiplayer_round_service.py`, `api/multiplayer.py`, `campaign_rounds`/`campaign_round_actions`/`campaign_members`). Każdy issue ma pełną analizę (Cel/Pliki/Akceptacja/Decyzje). Kolejność = zależności: G1→G2→G3, G4→G5, G4→G6 (B1 World State = done).
-- [ ] 61. #785 — G1 — Timer enforcement: background sweep ~30s w main.py domyka rundy po deadline (placeholder `[BRAK AKCJI]`)
-- [ ] 62. #786 — G2 — Absencja: licznik ostrzeżeń + reset po powrocie; 3 → propozycja vote-kick `(dep: #785)`
-- [ ] 63. #787 — G3 — Vote-to-kick ręczny (większość; host niewyrzucalny; 2-os host sam) + zastępstwo `(dep: #786)`
-- [ ] 64. #788 — G4 — World State integracja MP: jeden żeton drużyny, współdzielony stan `(dep: B1 ✅)`
-- [ ] 65. #789 — G5 — Conflict resolution: inicjatywa = kolejność; „Cel już martwy/zabrany" `(dep: #788)`
-- [ ] 66. #790 — G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą; remis → host) `(dep: #788)`
+### PMP — Multiplayer Faza 5 (G16 + G1–G19) — wdrażanie autoryzowane 2026-06-21 (decyzje rozstrzygnięte, NIE gate)
+Fundament MP istnieje (`multiplayer_round_service.py`, `api/multiplayer.py`, `campaign_rounds`/`campaign_round_actions`/`campaign_members`). Każdy issue ma pełną „Analizę wdrożeniową" (Cel/Pliki/Akceptacja/Decyzje). Kolejność = topo zależności (rosnąco po #): G16→G1→G2→G3→G4→G5/G6→G7→G8→G9→G17→G10→G18→G11→G12→G13→G19.
+- [ ] 61. #784 — G16 — Wybór postaci przy zaproszeniu + bohater w wielu kampaniach naraz (stan HP/kondycje per kampania) — fundament walki MP
+- [ ] 62. #785 — G1 — Timer enforcement: background sweep ~30s w main.py domyka rundy po deadline (placeholder `[BRAK AKCJI]`)
+- [ ] 63. #786 — G2 — Absencja: licznik ostrzeżeń + reset po powrocie; 3 → propozycja vote-kick `(dep: #785)`
+- [ ] 64. #787 — G3 — Vote-to-kick ręczny (większość; host niewyrzucalny; 2-os host sam) + zastępstwo `(dep: #786)`
+- [ ] 65. #788 — G4 — World State integracja MP: jeden żeton drużyny, współdzielony stan `(dep: B1 ✅)`
+- [ ] 66. #789 — G5 — Conflict resolution: inicjatywa = kolejność; „Cel już martwy/zabrany" `(dep: #788)`
+- [ ] 67. #790 — G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą; remis → host) `(dep: #788)`
+- [ ] 68. #791 — G7 — Walka MP: sekwencyjny turn_order ludzi jako osobnych aktorów `player:{character_id}` `(dep: #784)`
+- [ ] 69. #792 — G8 — Rzuty dwustopniowe: per-gracz `resolve_roll` po przejściu bramki rundy `(dep: #788)`
+- [ ] 70. #793 — G9 — Timer walki skrócony (2 min) + push „Twoja kolej" per tura `(dep: #791, #785)`
+- [ ] 71. #794 — G17 — Powalenie zamiast śmierci + kara wipe (10/20/30% złota wg śr. poziomu) `(dep: #791)`
+- [ ] 72. #795 — G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo `(dep: Faza1 loot ✅)`
+- [ ] 73. #796 — G18 — Streszczenia piętrowe rund MP (layer 1 po domknięciu rundy)
+- [ ] 74. #797 — G11 — Catch-up po powrocie: streszczenie pominiętych rund + reset ostrzeżeń `(dep: #786)`
+- [ ] 75. #798 — G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny `(dep: #788)`
+- [ ] 76. #799 — G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
+- [ ] 77. #800 — G19 — Widzowie: `role='spectator'` z `character_id=NULL`
 
 ---
 
