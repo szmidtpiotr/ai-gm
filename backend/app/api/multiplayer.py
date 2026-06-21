@@ -462,14 +462,8 @@ def kick_player(
         ).fetchone()
         if not camp or camp["host_user_id"] != uid:
             raise HTTPException(status_code=403, detail="Only host can kick players")
-        if camp["lobby_status"] != "open":
-            raise HTTPException(status_code=400, detail="Cannot kick after game started")
-        conn.execute(
-            "UPDATE campaign_members SET status='removed' WHERE campaign_id=? AND user_id=?",
-            (campaign_id, target_user_id),
-        )
-        conn.commit()
-        return {"removed": target_user_id}
+        _execute_kick(conn, campaign_id, target_user_id)
+        return {"kicked": target_user_id}
     finally:
         conn.close()
 
