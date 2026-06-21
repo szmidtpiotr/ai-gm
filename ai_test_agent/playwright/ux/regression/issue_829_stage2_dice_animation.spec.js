@@ -16,14 +16,14 @@ test("REGRESSION #829 — backend health and Stage 2 API contract", async ({ pag
   expect(body.status, "backend status must be 'ok'").toBe("ok");
 });
 
-test("REGRESSION #829 — combat dice use modern 3D lib (dice-box-threejs) with 2D fallback", async ({ page }) => {
-  // The legacy 2015 dice.js never reliably repainted its SECOND throw (combat damage)
-  // on player devices. Replaced with @3d-dice/dice-box-threejs (THREE r143 + Cannon-ES,
-  // self-contained UMD) which uses ONE persistent canvas/context for all rolls — the
-  // old context-churn failure mode is structurally gone. Predetermined notation
-  // ('2d6@3,5') lands each die on the backend's exact result. 2D dice remain the
-  // automatic fallback when WebGL/init fails. Verified live: real two-stage flow
-  // rendered both d20 and damage into a single canvas, landing on forced values.
+test("REGRESSION #829 — combat dice RECREATE box+container per roll (mirror admin)", async ({ page }) => {
+  // Recydywa (2026-06-21): a REUSED dice-box-threejs singleton re-rolls into an already-settled
+  // canvas; the mobile compositor never repaints it, so only the FIRST 3D roll of a session is
+  // visible (every later attack/damage roll is blank). Proven on the buggy phone: admin
+  // _previewDiceRoll renders a dozen rolls in a row there because it DESTROYS the container +
+  // WebGL context and rebuilds the box per roll. The combat path now mirrors that: rollDiceVisual
+  // builds a fresh #dice3d-container + new box every roll. Predetermined notation ('2d6@3,5') still
+  // lands each die on the backend's exact result; 2D dice remain the automatic fallback.
 
   // Vendored UMD library must be served.
   const lib = await page.request.get("/vendor/dice-box-threejs/dice-box-threejs.umd.js");
@@ -35,9 +35,15 @@ test("REGRESSION #829 — combat dice use modern 3D lib (dice-box-threejs) with 
   const r = await page.request.get("/js/app.js");
   const src = await r.text();
 
-  // Combat dice routed through the 3D wrapper, with init + predetermined notation.
+  // Combat dice routed through the wrapper that recreates the box per roll.
   expect(src.includes("function rollDiceVisual"), "missing rollDiceVisual wrapper").toBeTruthy();
-  expect(src.includes("ensureDice3D"), "missing ensureDice3D (3D engine bootstrap)").toBeTruthy();
+  expect(src.includes("RECREATE-PER-ROLL"), "missing recreate-per-roll strategy marker (#829 recydywa)").toBeTruthy();
+  expect(src.includes("function buildDice3DBox"), "missing buildDice3DBox() — fresh box per roll").toBeTruthy();
+  // The singleton-reuse early-return that caused blank later rolls must be GONE.
+  expect(
+    src.includes("if (_dice3d) return _dice3d"),
+    "singleton-reuse early-return still present — later rolls would stay blank on mobile"
+  ).toBeFalsy();
   expect(
     src.includes("_dice3d.initialize()"),
     "must await the async initialize() — roll before init throws 'renderer undefined'"

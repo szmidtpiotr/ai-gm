@@ -5972,14 +5972,28 @@ async function _fetchDice3DConfig() {
     } catch (_e) {}
 }
 
-// Build the 3D dice box (once) and kick off its ASYNC initialize() (loads themes /
-// builds the WebGL scene). Returns the box immediately; readiness is `_dice3dInit`.
-function ensureDice3D() {
+// #829 RECREATE-PER-ROLL: build a BRAND-NEW dice box + fresh #dice3d-container for THIS roll.
+// A reused singleton re-rolls into an already-settled canvas; the mobile compositor never
+// repaints it, so only the first 3D roll of a session shows (every later attack/damage roll is
+// blank). Admin _previewDiceRoll (system.js) renders a dozen rolls in a row on the SAME phone
+// precisely because it destroys the container + WebGL context and rebuilds the box each time.
+// We mirror that here: remove the old container, createElement a fresh one, new Ctor. initialize()
+// reloads assets but they're browser-cached after the first roll → cheap. Returns the box (init
+// promise on `_dice3dInit`) or null if the lib/container is unavailable.
+function buildDice3DBox() {
     if (_dice3dFailed) return null;
-    if (_dice3d) return _dice3d;
     const Ctor = window['dice-box-threejs'];
-    const el = document.getElementById('dice3d-container');
-    if (typeof Ctor !== 'function' || !el) { _dice3dFailed = true; return null; }
+    const overlay = document.getElementById('dice-overlay');
+    if (typeof Ctor !== 'function' || !overlay) { _dice3dFailed = true; return null; }
+    // Destroy the previous container (clears its canvas + WebGL context), then mount a fresh one
+    // right after the legacy #dice-container so stacking/CSS stays identical to the static markup.
+    const old = document.getElementById('dice3d-container');
+    if (old) { try { old.remove(); } catch (_e) {} }
+    const el = document.createElement('div');
+    el.id = 'dice3d-container';
+    const legacy = document.getElementById('dice-container');
+    if (legacy && legacy.parentNode === overlay) overlay.insertBefore(el, legacy.nextSibling);
+    else overlay.appendChild(el);
     // #850: merge admin config over defaults; admin may override colorset/texture/physics
     const rc = _dice3dRemoteConfig || {};
     const cc = rc.customColorset || {};
@@ -6017,27 +6031,32 @@ function ensureDice3D() {
     return _dice3d;
 }
 
-// Pre-warm the 3D engine so the first combat roll isn't delayed by asset loading.
-function prewarmDice3D() { try { ensureDice3D(); } catch (_e) {} }
+// Pre-warm the 3D engine so the first combat roll isn't delayed by asset loading. With
+// recreate-per-roll the first real roll rebuilds the box anyway, but this primes the browser
+// asset cache (textures/lib) so that rebuild is cheap.
+function prewarmDice3D() { try { buildDice3DBox(); } catch (_e) {} }
 
-// Clear any settled 3D dice (called on overlay close / before next roll).
+// Clear any settled 3D dice (called on overlay close). With recreate-per-roll the next roll
+// rebuilds the container outright, so this just wipes the currently-settled dice.
 function clearDice3D() {
     if (!_dice3d) return;
     try { if (typeof _dice3d.clearDice === 'function') _dice3d.clearDice(); else if (typeof _dice3d.clear === 'function') _dice3d.clear(); } catch (_e) {}
 }
 
 // Roll `notation` (e.g. '1d20', '2d6') landing on `forced` (per-die results from the
-// backend) and call `onComplete` once the dice settle. Tries the modern 3D dice first;
-// on ANY failure (lib missing, init/roll error, or stall) falls back to the reliable 2D
-// dice so the player ALWAYS sees a roll. `kind` ('attack'|'damage'|'heal') steers the 2D look.
+// backend) and call `onComplete` once the dice settle. Builds a FRESH 3D box for this roll
+// (recreate-per-roll, see buildDice3DBox); on ANY failure (lib missing, init/roll error, or
+// stall) falls back to the reliable 2D dice so the player ALWAYS sees a roll.
+// `kind` ('attack'|'damage'|'heal') steers the 2D look.
 function rollDiceVisual(notation, forced, kind, onComplete) {
     let _done = false;
     const finish = () => { if (_done) return; _done = true; onComplete(); };
     const el2d = document.getElementById('dice-container');
     const fallback2d = () => { if (_done) return; play2dDiceRoll(el2d, { notation, rolls: forced, kind }, forced, finish); };
 
-    const box = ensureDice3D();
+    const box = buildDice3DBox();   // #829 RECREATE-PER-ROLL — fresh box + container every roll
     if (!box) { fallback2d(); return; }
+    const initPromise = _dice3dInit;
 
     // Predetermined notation lands each die on the backend's exact result: "2d6@3,5".
     const predet = (Array.isArray(forced) && forced.length)
@@ -6048,16 +6067,16 @@ function rollDiceVisual(notation, forced, kind, onComplete) {
     // for asset loading (~1-2s) on top of the ~2.5s animation.
     const backstop = setTimeout(finish, 9000);
 
-    _dice3dInit.then(() => {
-        if (!_dice3d || _dice3d.initialized !== true) throw new Error('dice3d not initialized');
-        clearDice3D();
-        _dice3d.onRollComplete = () => { clearTimeout(backstop); setTimeout(finish, 550); };
-        const p = _dice3d.roll(predet);
+    initPromise.then(() => {
+        if (!box || box.initialized !== true) throw new Error('dice3d not initialized');
+        box.onRollComplete = () => { clearTimeout(backstop); setTimeout(finish, 550); };
+        const p = box.roll(predet);
         // roll() may also return a promise; swallow its rejection (onRollComplete drives us).
         if (p && typeof p.catch === 'function') p.catch(() => {});
     }).catch((_e) => {
         clearTimeout(backstop);
-        _dice3dFailed = true;
+        // A roll failure is per-instance with recreate-per-roll; don't latch _dice3dFailed
+        // (that would force every later roll to 2D). Just fall back for THIS roll.
         window.clog?.warn?.('dice3d_roll_failed', { error: String(_e && _e.message || _e) });
         fallback2d();
     });
@@ -6168,47 +6187,10 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             setTimeout(go, delay);
         };
 
-        // Throw `notation` and land on `forced` (array of per-die results, or null
-        // to let the lib roll freely). Calls onComplete after the dice settle.
-        const throwDice = (notation, forced, onComplete) => {
-            // #730: guard the settle phase. If the 3D dice library's settle callback
-            // never fires (WebGL stalled/lost context), `onComplete` would never run →
-            // the „Rzucam k20…" veil hangs forever, dimming the screen and blocking all
-            // controls until reload. A one-shot `finish` + hard timeout guarantees the
-            // roll always advances to the result card and the overlay can close.
-            let _settled = false;
-            const finish = () => { if (_settled) return; _settled = true; onComplete(); };
-            requestAnimationFrame(() => {
-                if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
-                    finish(); return;
-                }
-                try {
-                    // #829: REUSE the one live dice_box across both stages. The earlier
-                    // attempts all broke Stage 2 (the damage roll) on the SECOND throw:
-                    //   • reinit(container) — rebuilds camera/desk, paints blank
-                    //   • new dice_box() / forceContextLoss()+dispose() — tears down and
-                    //     recreates the WebGL context in the same frame as the next throw;
-                    //     the new context reports healthy (isContextLost()===false) but
-                    //     paints NOTHING, so the die stays invisible until the 4s backstop.
-                    // Verified in a real browser: the only thing that renders Stage 2 is
-                    // keeping the SAME context that already drew Stage 1 and re-rolling into
-                    // it. So just clear the settled dice and reset the roll flags — no
-                    // reinit, no recreate, no context churn. `running = false` stops a stale
-                    // Stage-1 animation loop if it advanced via backstop rather than settle.
-                    if (!_diceBox) {
-                        _diceBox = new DICE.dice_box(container);
-                    } else {
-                        try { _diceBox.clear(); } catch (_e) {}
-                        _diceBox.rolling = false;
-                        _diceBox.running = false;
-                    }
-                    _diceBox.setDice(notation);
-                } catch (_e) { finish(); return; }
-                // Backstop: force-advance if the dice never report settling.
-                setTimeout(finish, 4000);
-                _diceBox.start_throw(() => forced, () => setTimeout(finish, 400));
-            });
-        };
+        // #829 (recydywa): the old inner `throwDice` (legacy DICE.dice_box reuse) was removed —
+        // it was dead code (both stages route through rollDiceVisual / dice-box-threejs) and its
+        // "reuse the same context" comment misled three earlier fix attempts. Combat dice now
+        // recreate the box per roll (see buildDice3DBox / rollDiceVisual above).
 
         // ── Stage 2: damage / heal ──────────────────────────────────────────
         const runDamageStage = () => {
