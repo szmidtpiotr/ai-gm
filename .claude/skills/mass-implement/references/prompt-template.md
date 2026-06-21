@@ -30,6 +30,9 @@ Trzymaj się ich bezwzględnie (środowisko, mechaniki zablokowane, zasady commi
 4. **Wdróż** zgodnie z pipeline projektu: {PIPELINE}.
    Pierwszy krok pipeline (np. /tdd) w trybie auto — bez pytań pośrednich.
    Stosuj wyjątki TDD wskazane w ZAKRES (kontent/batch/playtest, jeśli są).
+   **⚠ Commit utrwalający ZARAZ po GREEN** (gdy testy przechodzą), ZANIM ruszysz
+   code-review/playwright. Praca ma być w gicie nawet gdyby sesja skończyła się
+   później — nigdy nie zostawiaj zielonego kodu niezacommitowanego.
 
 5. **Wykonaj „Acceptance"** z opisu zadania (test / sandbox / ręcznie na środowisku).
 
@@ -48,6 +51,17 @@ Trzymaj się ich bezwzględnie (środowisko, mechaniki zablokowane, zasady commi
 - Nie zmieniaj zablokowanej mechaniki bez decyzji właściciela.
 - Żadnych destrukcyjnych migracji (legacy zostaje; seedy nieaktywne; created_by='seed').
 - Jedno zadanie na sesję. Nie zamykaj issue.
+- **NIGDY nie kończ sesji bez (1) commita zrobionej pracy i (2) markera MASS_STATUS
+  w ostatniej linii.** To absolutny priorytet — ważniejszy niż dokończenie ostatniego
+  kroku pipeline.
+
+## DOMKNIĘCIE — kolejność na koniec (nie pomiń):
+1. Commit kodu na `{BRANCH}` (jeśli jeszcze nie zrobiony w kroku 4).
+2. Issue: komentarz „fix + SHA", label `needs-testing` (NIE zamykaj).
+3. Marker `MASS_STATUS: …` jako OSTATNIA linia outputu.
+> Jeśli orientujesz się, że budżet tur się kończy — przerwij bieżący krok i wykonaj
+> te 3 punkty NATYCHMIAST. Lepiej domknięty commit+marker niż perfekcyjny code-review
+> bez markera (orchestrator bez markera wstrzymuje całą serię).
 
 ## MARKER — ostatnia linia outputu, dokładnie jeden:
 - `MASS_STATUS: DONE`          — wdrożone, testy zielone, lista zaktualizowana

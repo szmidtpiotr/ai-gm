@@ -50,6 +50,17 @@ RUN_REMOTE="$(cfg '.run_host.remote_root')"
 
 STATE_DIR="$SKILL_DIR/.runs"; mkdir -p "$STATE_DIR"
 
+# Did the child land a commit referencing this issue? Used as a fallback truth
+# source when a child finishes its work but exits before printing the marker.
+commit_exists() {
+  local n="$1"
+  if [ "$RUN_TYPE" = "ssh" ] && [ -n "$RUN_HOST" ]; then
+    ssh "$RUN_HOST" "cd '$RUN_REMOTE' && sudo -u '${RUN_GITUSER:-piotrszmidt}' git log --oneline -25 --grep '(#$n)'" 2>/dev/null | grep -q .
+  else
+    git -C "$ROOT" log --oneline -25 --grep "(#$n)" 2>/dev/null | grep -q .
+  fi
+}
+
 # ── Args ─────────────────────────────────────────────────────────────────────
 # Allow "faza X [sel]" with FAZA as a separate leading word: /mass-implement faza S
 case "${1:-}" in [Ff][Aa][Zz][AaĄą]) shift ;; esac
@@ -314,7 +325,18 @@ $(fill "$BASE_TEMPLATE" "$tid")"
   rc=$?
 
   status=$(grep -oE 'MASS_STATUS: (DONE-ALREADY|DONE|GATE|ERROR)[^\n]*' "$child_log" | tail -1)
-  [ -z "$status" ] && status="MASS_STATUS: ERROR — brak markera (rc=$rc); zobacz $child_log"
+  # Marker missing? A child can finish its work (commit landed) yet exit before
+  # printing the final marker. Trust the commit: if one referencing (#NNN) exists
+  # AND the session ended cleanly (rc=0), treat as DONE and keep going. Otherwise
+  # STOP — a missing marker with no commit is a genuine failure.
+  if [ -z "$status" ]; then
+    num=$(echo "$tid" | grep -oE '[0-9]+' | head -1)
+    if [ "$rc" = 0 ] && commit_exists "$num"; then
+      status="MASS_STATUS: DONE (marker-miss — commit (#$num) wykryty na $BRANCH)"
+    else
+      status="MASS_STATUS: ERROR — brak markera i brak commita (#$num) (rc=$rc); zobacz $child_log"
+    fi
+  fi
   echo "  $tid -> $status" | tee -a "$RUN_LOG"
   echo "$tid | $sess_name | $uuid | $status | $child_log" >> "$SUMMARY"
 
