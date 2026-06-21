@@ -4809,6 +4809,20 @@ def _ensure_active_voice_host(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_absence_warnings_column(conn: sqlite3.Connection) -> None:
+    """#786 G2 — absence warnings counter per campaign member."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_members ADD COLUMN absence_warnings INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4913,6 +4927,7 @@ def run_admin_migrations() -> None:
         _ensure_warrior_shared_heal_858(conn)  # #858
         _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
+        _ensure_absence_warnings_column(conn)  # #786 G2
     finally:
         conn.close()
 

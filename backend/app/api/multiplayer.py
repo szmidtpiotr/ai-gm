@@ -157,12 +157,15 @@ def get_lobby(
             raise HTTPException(status_code=404, detail="Lobby not found")
 
         members = conn.execute(
-            """SELECT m.user_id, u.username, u.display_name, m.role, m.status, m.character_id
+            """SELECT m.user_id, u.username, u.display_name, m.role, m.status, m.character_id,
+                      COALESCE(m.absence_warnings, 0) as absence_warnings
                FROM campaign_members m JOIN users u ON u.id=m.user_id
                WHERE m.campaign_id=?""",
             (campaign_id,),
         ).fetchall()
 
+        accepted = [m for m in members if m["status"] == "accepted"]
+        vote_kick_suggested = any(int(m["absence_warnings"]) >= 3 for m in accepted)
         return {
             "campaign_id": campaign_id,
             "title": camp["title"],
@@ -181,10 +184,12 @@ def get_lobby(
                     "role": m["role"],
                     "status": m["status"],
                     "character_id": m["character_id"],
+                    "absence_warnings": int(m["absence_warnings"]),
                 }
                 for m in members
             ],
-            "accepted_count": sum(1 for m in members if m["status"] == "accepted"),
+            "accepted_count": len(accepted),
+            "vote_kick_suggested": vote_kick_suggested,
         }
     finally:
         conn.close()

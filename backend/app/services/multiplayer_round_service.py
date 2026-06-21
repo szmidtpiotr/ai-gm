@@ -165,6 +165,10 @@ def submit_action(
             """,
             (round_id, campaign_id, user_id, character_id, character_name, action_text),
         )
+        conn.execute(
+            "UPDATE campaign_members SET absence_warnings = 0 WHERE campaign_id=? AND user_id=?",
+            (campaign_id, user_id),
+        )
         conn.commit()
 
         submitted = int(conn.execute(
@@ -310,6 +314,14 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             host_note = camp_row["host_note"]
             conn.execute("UPDATE campaigns SET host_note=NULL WHERE id=?", (campaign_id,))
             conn.commit()
+        # G2 #786 — absence warnings per player
+        warnings_rows = conn.execute(
+            "SELECT user_id, COALESCE(absence_warnings, 0) as absence_warnings "
+            "FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+            (campaign_id,),
+        ).fetchall()
+        warnings_by_player = {int(r["user_id"]): int(r["absence_warnings"]) for r in warnings_rows}
+        vote_kick_suggested = any(w >= 3 for w in warnings_by_player.values())
         return {
             "round_id": round_id,
             "round_number": int(row["round_number"]),
@@ -320,6 +332,8 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             "my_submitted": my_action is not None,
             "my_action": my_action["action_text"] if my_action else None,
             "host_note": host_note,
+            "absence_warnings_by_player": warnings_by_player,
+            "vote_kick_suggested": vote_kick_suggested,
         }
     finally:
         conn.close()
@@ -464,6 +478,11 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
                    (round_id, campaign_id, user_id, character_id, character_name, action_text)
                    VALUES (?, ?, ?, ?, ?, '[BRAK AKCJI]')""",
                 (round_id, campaign_id, m["user_id"], char_id, char_name),
+            )
+            conn.execute(
+                "UPDATE campaign_members SET absence_warnings = absence_warnings + 1 "
+                "WHERE campaign_id=? AND user_id=?",
+                (campaign_id, m["user_id"]),
             )
 
         conn.execute(

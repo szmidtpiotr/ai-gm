@@ -49,6 +49,7 @@ def _make_test_db(tmp_path):
             status TEXT NOT NULL DEFAULT 'accepted',
             character_id INTEGER,
             joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            absence_warnings INTEGER NOT NULL DEFAULT 0,
             UNIQUE(campaign_id, user_id)
         );
         CREATE TABLE IF NOT EXISTS characters (
