@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Księga Zasad</title>
+<style>
+  :root{
+    --ink:#e9ddc2;
+    --ink-dim:#b3a282;
+    --gold:#c9a24b;
+    --gold-soft:#8a7233;
+    --blood:#86302f;
+    --bg:#15110c;
+    --bg-panel:#1d1812;
+    --bg-box:#241d14;
+    --line:#3a2f20;
+    --crit:#c9a24b;
+    --fail:#9b4a3a;
+    --say-gm:#9ccb7a;       /* dialog MG / NPC — zielony */
+    --say-pc:#7fb2e6;        /* dialog gracza — niebieski */
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:radial-gradient(1200px 600px at 50% -10%, #241b10 0%, transparent 60%), var(--bg);
+    color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    font-size:19px;line-height:1.74;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:240px 1fr;gap:48px}
+  @media(max-width:880px){.wrap{grid-template-columns:1fr;gap:0}.toc{display:none}}
+
+  /* ── Spis treści ── */
+  .toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:40px 0;border-right:1px solid var(--line)}
+  .toc h4{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);margin:0 0 14px}
+  .toc .lead{list-style:none;margin:0 0 10px;padding:0}
+  .toc .lead a{color:var(--ink-dim);text-decoration:none;display:block;padding:5px 8px 5px 36px;border-radius:4px;font-size:15px}
+  .toc .lead a:hover,.toc .lead.active a{background:var(--bg-panel);color:var(--gold)}
+  .toc ol{list-style:none;margin:0;padding:0;counter-reset:ch}
+  .toc ol li{counter-increment:ch;margin:0 0 4px;font-size:15px}
+  .toc ol li a{color:var(--ink-dim);text-decoration:none;display:flex;gap:10px;padding:5px 8px;border-radius:4px}
+  .toc ol li a:before{content:counter(ch,upper-roman);color:var(--gold-soft);min-width:26px;text-align:right;font-variant-numeric:tabular-nums}
+  .toc ol li a:hover{background:var(--bg-panel);color:var(--ink)}
+  .toc ol li.active a{color:var(--gold);background:var(--bg-panel)}
+  .toc li.soon a{opacity:.4;cursor:default;font-style:italic}
+  .toc li.soon a:hover{background:none;color:var(--ink-dim)}
+
+  /* ── Treść ── */
+  main{padding:56px 0 120px;min-width:0}
+  .eyebrow{font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold-soft);text-align:center;margin:0 0 6px}
+  .booktitle{text-align:center;font-size:15px;letter-spacing:.5em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 40px}
+  h1{font-size:clamp(34px,6vw,56px);line-height:1.05;margin:0 0 8px;text-align:center;font-weight:600;color:var(--ink)}
+  h1 .num{display:block;font-size:14px;letter-spacing:.4em;color:var(--blood);text-transform:uppercase;margin-bottom:14px}
+  .subtitle{text-align:center;color:var(--ink-dim);font-style:italic;font-size:21px;margin:0 0 6px}
+  .rule{border:0;height:24px;margin:34px auto 40px;max-width:340px;background:linear-gradient(var(--gold-soft),var(--gold-soft)) no-repeat center/100% 1px;position:relative}
+  .rule:before{content:"❖";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--bg);padding:0 16px;color:var(--gold);font-size:18px}
+  .section-divider{margin:96px 0 0;border-top:1px solid var(--line)}
+
+  h2{font-size:30px;margin:58px 0 12px;color:var(--ink);font-weight:600;border-bottom:1px solid var(--line);padding-bottom:8px}
+  h3{font-size:21px;margin:34px 0 8px;color:var(--gold);font-weight:600}
+
+  p{margin:0 0 18px}
+  .lede{font-size:21px;color:var(--ink)}
+  .dropcap:first-letter{float:left;font-size:78px;line-height:.72;padding:9px 13px 0 0;color:var(--blood);font-weight:700;font-family:Georgia,serif}
+  em{color:#f2e8cf;font-style:italic}
+  strong{color:#fff;font-weight:600}
+
+  /* ── Ilustracje ── */
+  figure.illus{margin:36px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0e0b07;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  figure.illus img{width:100%;display:block}
+  figure.illus figcaption{padding:11px 18px;font-size:14px;color:var(--ink-dim);font-style:italic;border-top:1px solid var(--line);text-align:center;font-family:"Iowan Old Style",Georgia,serif}
+  .hero{margin:0 0 40px;border:1px solid var(--gold-soft);border-radius:8px;overflow:hidden;position:relative;box-shadow:0 14px 40px rgba(0,0,0,.55)}
+  .hero img{width:100%;display:block}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:40px 24px 18px;text-align:center;
+    background:linear-gradient(transparent,rgba(10,8,5,.92));color:var(--ink);font-style:italic;font-size:17px}
+
+  /* ── Dymki (tooltips) ── */
+  .gloss{color:var(--gold);cursor:help;position:relative;border-bottom:1px dotted var(--gold-soft);white-space:nowrap}
+  .gloss .tip{visibility:hidden;opacity:0;position:absolute;left:50%;bottom:calc(100% + 12px);transform:translateX(-50%) translateY(4px);width:300px;max-width:78vw;z-index:40;background:#0f0c08;border:1px solid var(--gold-soft);border-radius:7px;padding:13px 16px;color:var(--ink);font-size:15px;line-height:1.55;white-space:normal;font-family:"Iowan Old Style",Georgia,serif;font-style:normal;box-shadow:0 14px 34px rgba(0,0,0,.6);transition:opacity .14s ease,transform .14s ease;text-align:left}
+  .gloss .tip b{color:var(--gold);font-weight:600}
+  .gloss .tip:after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:7px solid transparent;border-top-color:var(--gold-soft)}
+  .gloss:hover .tip,.gloss:focus .tip,.gloss.tip-open .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+  .gloss .tip-h{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-soft);font-family:sans-serif;margin-bottom:5px}
+
+  /* formuła */
+  .formula{background:var(--bg-box);border:1px solid var(--line);border-left:3px solid var(--gold);padding:22px 26px;margin:26px 0;text-align:center;border-radius:3px;font-size:20px}
+  .formula b{color:var(--gold);font-weight:600}
+  .formula .ge{color:var(--blood);font-weight:700;padding:0 6px}
+  .formula small{display:block;margin-top:10px;color:var(--ink-dim);font-size:14px;font-style:italic}
+
+  /* ── Scena narracyjna ── */
+  .scene{margin:30px 0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:linear-gradient(180deg,#1c1610,#181208)}
+  .scene-h{background:#0f0c08;padding:9px 20px;font-family:sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);border-bottom:1px solid var(--line)}
+  .scene-b{padding:22px 26px}
+  .scene-b p{margin:0 0 14px;font-size:18px}
+  .narr{color:var(--ink)}
+
+  /* ── Dialogi — zawsze kursywa, własna linia, kolor wg mówiącego ── */
+  .say{display:block;font-style:italic;margin:16px 0;padding:8px 0 8px 18px;border-left:2px solid;line-height:1.6;font-size:18px}
+  .say .who{display:block;font-style:normal;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-family:sans-serif;margin-bottom:3px;opacity:.75}
+  .say-gm{color:var(--say-gm);border-color:#4a6b32}
+  .say-gm .who{color:#7fa356}
+  .say-pc{color:var(--say-pc);border-color:#35567e}
+  .say-pc .who{color:#5d8cbf}
+
+  /* karta rzutu */
+  .roll{background:#0e0b07;border:1px solid var(--gold-soft);border-radius:6px;padding:16px 20px;margin:16px 0 4px;position:relative}
+  .roll .rh{font-family:sans-serif;font-size:11px;letter-spacing:.2em;color:var(--gold);margin-bottom:10px}
+  .roll .rh:before{content:"⚄ ";font-size:14px}
+  .roll .math{font-family:"DejaVu Sans Mono",monospace;font-size:16px;color:var(--ink);background:#070503;border:1px solid var(--line);border-radius:4px;padding:11px 14px;margin:0 0 12px;letter-spacing:.02em}
+  .roll .math b{color:var(--gold)}
+  .roll .math .die{color:#fff;background:#2a2114;border:1px solid var(--gold-soft);border-radius:4px;padding:1px 8px;font-weight:700}
+  .roll .out{font-style:italic;margin:0;font-size:16px}
+  .roll .out.win{color:#cbb36a}
+  .roll .out.lose{color:#c79a82}
+  .roll .out b{font-style:normal}
+
+  /* sidebar */
+  .aside{background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:16px 20px;margin:26px 0;font-size:16px;color:var(--ink-dim)}
+  .aside h4{margin:0 0 6px;color:var(--gold);font-size:13px;letter-spacing:.16em;text-transform:uppercase;font-family:sans-serif}
+  .aside p{margin:0}
+
+  /* tabela */
+  table{width:100%;border-collapse:collapse;margin:24px 0;font-size:17px}
+  caption{caption-side:top;text-align:left;color:var(--ink-dim);font-style:italic;margin-bottom:10px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line)}
+  thead th{color:var(--gold-soft);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-family:sans-serif;font-weight:600;border-bottom:1px solid var(--gold-soft)}
+  td.dc{font-family:monospace;color:var(--gold);font-weight:700;font-size:19px;text-align:center;width:90px}
+  tbody tr:hover{background:rgba(201,162,75,.05)}
+
+  /* stopnie */
+  .degrees{display:grid;gap:12px;margin:24px 0}
+  .deg{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:baseline;padding:12px 16px;border:1px solid var(--line);border-radius:4px;background:var(--bg-panel)}
+  .deg .lbl{font-weight:700;font-size:15px}
+  .deg.cs{border-left:3px solid var(--crit)} .deg.cs .lbl{color:var(--crit)}
+  .deg.s{border-left:3px solid #6f8a4a} .deg.s .lbl{color:#9bb56a}
+  .deg.f{border-left:3px solid #8a6a3a} .deg.f .lbl{color:#c39a5e}
+  .deg.cf{border-left:3px solid var(--fail)} .deg.cf .lbl{color:#c07a64}
+  .deg .txt{font-size:16px;color:var(--ink-dim)}
+  .deg .txt b{color:var(--ink)}
+  @media(max-width:560px){.deg{grid-template-columns:1fr;gap:4px}}
+
+  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:14px;font-style:italic;text-align:center}
+  .draft{display:inline-block;margin-bottom:20px;font-family:sans-serif;font-style:normal;font-size:11px;letter-spacing:.2em;color:var(--gold-soft);border:1px solid var(--gold-soft);padding:4px 12px;border-radius:99px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="toc">
+    <h4>Spis treści</h4>
+    <ul class="lead active"><li><a href="#wstep">Wstęp · Opowieść</a></li></ul>
+    <ol>
+      <li class="active"><a href="#r1">Test umiejętności</a></li>
+      <li class="soon"><a>Siedem cech</a></li>
+      <li class="soon"><a>Umiejętności i biegłość</a></li>
+      <li class="soon"><a>Walka</a></li>
+      <li class="soon"><a>Rany i śmierć</a></li>
+      <li class="soon"><a>Stany i kondycje</a></li>
+      <li class="soon"><a>Magia uczonego</a></li>
+      <li class="soon"><a>Złoto i ekwipunek</a></li>
+      <li class="soon"><a>Odpoczynek i rozwój</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- ════════════════ WSTĘP ════════════════ -->
+    <section id="wstep">
+      <p class="eyebrow">Zanim padnie pierwsza kość</p>
+      <p class="booktitle">Księga Zasad</p>
+      <h1><span class="num">Wstęp</span>Człowiek, którego nie powiesili</h1>
+      <p class="subtitle">Opowieść wprowadzająca w świat</p>
+      <hr class="rule">
+
+      <figure class="hero">
+        <img src="img/intro-street.png" alt="Zaułek nocą, dwie postacie we mgle, w tle szubienica">
+        <div class="cap">Miasto nie pyta, skąd przyszedłeś. Pyta tylko, czy masz czym zapłacić.</div>
+      </figure>
+
+      <p class="lede dropcap">Świat, do którego wchodzisz, jest stary, mokry i nieżyczliwy. Imperium trzyma
+      się kupą strachu i podatków; na jego skraju, gdzie kończą się brukowane drogi, prawo jest tym, co
+      zdoła wyegzekwować najbliższy człowiek z mieczem. W miastach śmierdzi dymem i rybą, a w zaułkach
+      ginie się za mniej niż bochenek chleba. To nie jest kraina herosów w lśniących zbrojach. To
+      kraina ludzi, którzy próbują dożyć do rana — i czasem, raz na jakiś czas, zrobić coś, co ma
+      znaczenie.</p>
+
+      <p>Żeby pokazać ci, jak wygląda życie w tym świecie, opowiem ci o pewnym złodzieju. Nazywał się
+      <strong>Mizel</strong>, i zaczynał dokładnie tam, gdzie kończy większość jemu podobnych: z
+      powrozem na szyi.</p>
+
+      <h3>Chłopiec z rynsztoka</h3>
+      <p>Mizel nie pamiętał matki ani domu. Pamiętał za to dachy — śliskie od deszczu gonty, po których
+      umiał biegać, zanim nauczył się czytać. Wychowały go ulice portowego miasta: zimne, gwarne i
+      bezlitosne. Kradł, bo to było jedyne rzemiosło, jakie mu pokazano, i był w nim dobry — zbyt dobry,
+      by przejść niezauważonym. Pewnej nocy zaciasnęła się na nim obława strażników, a tydzień później
+      stał już na zbitym z desek podeście, patrząc, jak kat sprawdza węzeł.</p>
+
+      <figure class="illus">
+        <img src="img/intro-gallows.png" alt="Młody złodziej z powrozem na szyi na szubienicy, wokół postacie w kapturach">
+        <figcaption>Stryczek na rynku to nie kara. To przedstawienie — a tłum lubi przedstawienia.</figcaption>
+      </figure>
+
+      <p>Powieszono by go tamtej nocy, gdyby nie ludzie w ciemnych habitach, którzy rozsunęli tłum bez
+      słowa. Bracia z pewnego zakonu — cisi, uprzejmi, o spojrzeniach, które niczego nie zdradzały —
+      zapłacili katu i zdjęli chłopca z szubienicy, jakby kupowali wół na targu. Nie zrobili tego z
+      litości. Zrobili to, bo widzieli, ile wart jest człowiek, który potrafi wejść tam, gdzie nikt inny
+      nie wejdzie.</p>
+
+      <h3>Nauka w cieniu</h3>
+      <p>Zakon dał Mizelowi dach, strawę i imię, którego nikt nie ścigał. Dał mu też mistrzów — i przez
+      kilka lat chłopiec z rynsztoka stał się czymś więcej niż drobnym rzezimieszkiem. Nauczono go
+      otwierać zamki, których inni nie umieli nawet nazwać; chodzić tak cicho, że własny cień zostawał
+      w tyle; czytać twarze i kłamać tak, by kłamstwo brzmiało cieplej niż prawda. Mówiono mu, że służy
+      wyższej sprawie.</p>
+
+      <figure class="illus">
+        <img src="img/intro-order.png" alt="Wnętrze kamiennego klasztoru, postacie w kapturach wokół stołu w blasku świec">
+        <figcaption>Uczyli go, że kradnie dla dobra. Długo nie pytał, czyjego.</figcaption>
+      </figure>
+
+      <p>Dopiero później zrozumiał, po co naprawdę go wyszkolono. To, co bracia nazywali „wyższą sprawą",
+      cuchnęło tak samo jak zaułki, z których go wyciągnięto — tyle że ubrane było w święte słowa i
+      pieczęcie. Widział, co robili z tym, co dla nich wykradał. Widział ludzi, którzy znikali. I pewnej
+      nocy — tej samej, w której zrozumie się o jeden raz za dużo — spakował swoje wytrychy i wyszedł za
+      bramę, nie oglądając się za siebie.</p>
+
+      <figure class="illus">
+        <img src="img/intro-departure.png" alt="Samotna postać w pelerynie odchodzi drogą od bramy klasztoru o świcie">
+        <figcaption>Za bramą czekał ten sam zimny świat. Tym razem szedł w niego z wyboru.</figcaption>
+      </figure>
+
+      <p>Tak zaczyna się większość historii w tej grze: nie od proroctwa, lecz od decyzji. Mizel umiał
+      tyle samo zła co dobra — i właśnie dlatego jego wybory coś znaczyły. Postanowił obrócić swoje
+      rzemiosło ku ludziom, którym nikt nie pomagał: tym z rynsztoka, z których sam pochodził. Świat nie
+      stał się przez to ani odrobinę łaskawszy. Ale teraz miał w nim kogoś, kto się nie poddał.</p>
+
+      <p><strong>Twoja postać zacznie podobnie</strong> — z przeszłością, blizną i jednym powodem, by
+      ruszyć dalej. To, co wydarzy się potem, nie jest zapisane. Rozstrzygną to twoje decyzje, słowa,
+      które wypowiesz przy stole — i kość, która zadecyduje, gdy stawka będzie zbyt wysoka, by pewność
+      była możliwa. Jak działa ta kość, dowiesz się na następnej stronie.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ I ════════════════ -->
+    <section id="r1">
+      <p class="eyebrow">Rozdział pierwszy</p>
+      <h1><span class="num">I · Mechanika</span>Test umiejętności</h1>
+      <p class="subtitle">Serce każdej niepewnej chwili</p>
+      <hr class="rule">
+
+      <p class="lede dropcap">Większość tego, co robisz w tej grze, udaje się bez żadnego rzutu. Przejdziesz
+      przez izbę, dobędziesz miecza, zapytasz karczmarza o drogę — a Mistrz Gry po prostu opowie, co się
+      dzieje, i gra toczy się dalej. Kość budzi się dopiero wtedy, gdy splatają się dwie rzeczy naraz:
+      <em>coś jest dla ciebie naprawdę ważne</em> i <em>wynik nie jest pewny</em>. Wspinasz się po
+      oblodzonym murze nad przepaścią. Próbujesz spojrzeć w oczy strażnikowi i skłamać tak, by ci
+      uwierzył. Łapiesz spadającą latarnię, zanim podpali stodołę. W takich chwilach — i tylko w
+      takich — sięgasz po kość.</p>
+
+      <p>Wszystkie one rozstrzygają się w jeden sposób. Rzucasz
+      <span class="gloss" tabindex="0">k20<span class="tip"><span class="tip-h">k20</span>Kość
+      dwudziestościenna — jedyna kość, którą rozstrzygasz testy. Daje wynik od 1 do 20, każdy równie
+      prawdopodobny.</span></span>, dorzucasz do niej to, w czym jesteś dobry, i porównujesz sumę z
+      <span class="gloss" tabindex="0">Progiem Trudności<span class="tip"><span class="tip-h">Próg Trudności (PT)</span>Liczba,
+      którą musisz osiągnąć. Im trudniejsze zadanie, tym wyższa. <b>8</b> łatwe · <b>12</b> średnie ·
+      <b>16</b> trudne · <b>20</b> ekstremalne · <b>24+</b> legendarne.</span></span>, który ustala Mistrz
+      Gry. Dorównasz progowi lub go przekroczysz — udaje się. Nie dorównasz — nie wychodzi. To jedna
+      reguła; nauczysz się jej raz i poniesie cię przez całą grę.</p>
+
+      <div class="formula">
+        <b>k20</b> + modyfikator cechy + ranga umiejętności + premia z biegłości
+        <span class="ge">≥</span> <b>PT</b>
+        <small>Zdajesz test, gdy suma rzutu i premii dorówna Progowi Trudności albo go przekroczy.</small>
+      </div>
+
+      <p>Zanim rozłożymy te premie na czynniki, zobaczmy regułę w działaniu — bo dopiero przy stole
+      nabiera ona ciała.</p>
+
+      <!-- SCENA 1 -->
+      <div class="scene">
+        <div class="scene-h">Scena · Most celny nad Reiką</div>
+        <div class="scene-b">
+          <p class="narr">Deszcz bębni o deski mostu. Po drugiej stronie szlabanu stoi celnik w
+          przemoczonej pelerynie, jedną dłoń trzymając na trzonku halabardy.</p>
+
+          <span class="say say-gm"><span class="who">Celnik</span>Myto — pięć złotych albo zawracaj,
+          wędrowcze. Most zamknięty po zmroku, a noc blisko.</span>
+
+          <p class="narr">Mierzy cię wzrokiem od zabłoconych butów po kaptur. W sakiewce masz dwie
+          monety, a za plecami żadnej drogi w bok.</p>
+
+          <span class="say say-pc"><span class="who">Gracz</span>Patrzę mu prosto w oczy i mówię
+          spokojnie: jadę z pilnym listem do garnizonu, a komendant nie będzie łaskaw dla człowieka,
+          który zatrzymał mnie w deszczu.</span>
+
+          <p class="narr">To blef — nie masz żadnego listu. Próbujesz go <strong>przekonać</strong>
+          tonem pewności i groźbą wiszącą w tle. Celnik mruży oczy; widać, że się waha. Mistrz Gry
+          uznaje, że człowiek jest nieufny, ale zmęczony i niechętny kłopotom — ustala próg
+          <span class="gloss" tabindex="0">Średni (12)<span class="tip"><span class="tip-h">Próg Trudności</span>Średni
+          = <b>12</b>. Typowe wyzwanie dla wprawnej osoby; tu: nieufny, lecz zmęczony strażnik.</span></span>.
+          Rzucasz na Perswazję.</p>
+
+          <div class="roll">
+            <div class="rh">Test Perswazji · cecha Charyzma</div>
+            <p class="math"><span class="die">k20 = 13</span> + 2
+              <span style="color:#8a7233">(Charyzma 14)</span> + 1
+              <span style="color:#8a7233">(Perswazja, ranga 1)</span> = <b>16</b> &nbsp;vs&nbsp; PT 12
+              &nbsp;→&nbsp; margines <b>+4</b></p>
+            <p class="out win"><b>Sukces.</b> Celnik prycha, ale unosi szlaban.</p>
+          </div>
+
+          <span class="say say-gm"><span class="who">Celnik</span>Jedź. I powiedz komendantowi, że Hauke
+          wpuścił cię bez myta — może raz wspomni o mnie dobrym słowem.</span>
+
+          <p class="narr" style="margin-top:14px">Nie uwierzył do końca — lecz uznał, że ryzyko kłopotu
+          nie jest warte dwóch złotych, których i tak przy tobie nie dostrzegł. Gdyby rzut wypadł o
+          kilka oczek gorzej, historia potoczyłaby się inaczej — i właśnie o to chodzi. Kość nie mówi
+          „tak" albo „nie". Mówi, w którą stronę przechyli się scena.</p>
+        </div>
+      </div>
+
+      <h2>Z czego składa się twój wynik</h2>
+      <p>Do surowego rzutu kością dokładasz trzy liczby. Każda opowiada inną część prawdy o tym, jak twoja
+      postać radzi sobie akurat z <em>tym</em> zadaniem: ile ma wrodzonego talentu, ile wyćwiczonej
+      wprawy i czy doszła już do prawdziwego mistrzostwa.</p>
+
+      <h3>Modyfikator cechy — wrodzony talent</h3>
+      <p>Każdą postać opisuje siedem <span class="gloss" tabindex="0">cech<span class="tip"><span class="tip-h">Siedem cech</span>Siła,
+      Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma i Szczęście. 10 to ludzka przeciętność.
+      Szczegóły w rozdziale II.</span></span>: Siła, Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma
+      i Szczęście. Wartość 10 to zwykła ludzka średnia. Do rzutu nie dopisujesz jednak samej wartości,
+      lecz <span class="gloss" tabindex="0">modyfikator<span class="tip"><span class="tip-h">Modyfikator cechy</span>= (cecha
+      − 10) ÷ 2, zaokrąglone w dół. Cecha <b>14 → +2</b>, <b>10 → +0</b>, <b>8 → −1</b>, <b>18 →
+      +4</b>.</span></span> — to, o ile twoja postać odstaje od przeciętności:</p>
+
+      <div class="formula" style="font-size:18px">
+        modyfikator = ( wartość cechy − 10 ) ÷ 2 &nbsp;<small style="display:inline;margin:0">(zaokrąglone w dół)</small>
+      </div>
+
+      <p>Charyzma 14 daje więc <strong>+2</strong>, przeciętna 10 daje <strong>+0</strong>, a niezgrabna
+      8 to <strong>−1</strong>. Mistrz Gry wskazuje, która cecha rządzi danym testem — i często zależy to
+      od tego, <em>jak</em> opiszesz swoje działanie. Wyważasz drzwi ramieniem? Siła. Otwierasz je
+      wytrychem? Zręczność. Przekonujesz strażnika ciepłym słowem albo cichą groźbą? Charyzma. To dlatego
+      warto mówić, <em>w jaki sposób</em> coś robisz — z opisu wynika reszta.</p>
+
+      <h3>Ranga umiejętności — wyuczona wprawa</h3>
+      <p>Tam, gdzie cecha mówi o talencie danym od urodzenia,
+      <span class="gloss" tabindex="0">ranga umiejętności<span class="tip"><span class="tip-h">Ranga umiejętności</span>Poziom
+      wyćwiczenia konkretnej umiejętności (Skradanie, Perswazja, Medycyna…), zwykle <b>1–3</b>. Dodawana
+      wprost do rzutu: ranga 2 → <b>+2</b>.</span></span> mówi o latach ćwiczeń. Skradanie, Perswazja,
+      Wiedza Tajemna, Medycyna — każdej uczysz się osobno i każda ma swoją rangę, zwykle od 1 do 3. Rangę
+      dopisujesz do rzutu wprost: kto ma w Skradaniu rangę 2, dolicza <strong>+2</strong>. Im dłużej
+      szlifujesz dane rzemiosło, tym pewniejsza twoja dłoń.</p>
+
+      <h3>Premia z biegłości — pieczęć mistrzostwa</h3>
+      <p>Gdy ranga w umiejętności sięga <strong>3</strong>, przekraczasz granicę między „umiem to" a
+      <em>mistrzostwem</em>. Od tej chwili każdy test tą umiejętnością niesie dodatkową
+      <span class="gloss" tabindex="0">premię z biegłości +2<span class="tip"><span class="tip-h">Premia z biegłości</span>Dodatkowe
+      <b>+2</b> doliczane automatycznie, gdy twoja ranga w umiejętności osiąga 3. Nagroda za prawdziwą
+      specjalizację.</span></span>. To nagroda za głębię, nie szerokość — powód, dla którego opłaca się
+      doprowadzić jedno rzemiosło do perfekcji, zamiast liznąć dziesięciu po wierzchu. Mistrz złodziei z
+      rangą 3 w Skradaniu dolicza do rzutu rangę <em>i</em> premię: razem <strong>+5</strong>, zanim
+      jeszcze doda swoją Zręczność.</p>
+
+      <hr class="rule">
+
+      <h2>Próg Trudności</h2>
+      <p>Zanim padnie kość, Mistrz Gry ustala
+      <span class="gloss" tabindex="0">próg<span class="tip"><span class="tip-h">Próg Trudności (PT)</span>Liczba
+      do pokonania. Wynika z okoliczności — nie zgadujesz jej. Patrz skala obok.</span></span> — liczbę,
+      którą musisz osiągnąć. Nie wymyśla jej z powietrza; wyrasta ona z okoliczności. Oto skala, na
+      której wspiera się cała gra:</p>
+
+      <table>
+        <caption>Skala Progów Trudności (PT)</caption>
+        <thead><tr><th>PT</th><th>Trudność</th><th>Kiedy</th></tr></thead>
+        <tbody>
+          <tr><td class="dc">8</td><td>Łatwe</td><td>Sprzyjające warunki, właściwe narzędzie, spokój.</td></tr>
+          <tr><td class="dc">12</td><td>Średnie</td><td>Typowe wyzwanie dla wprawnej osoby.</td></tr>
+          <tr><td class="dc">16</td><td>Trudne</td><td>Pośpiech, ciemność, brak narzędzi, presja.</td></tr>
+          <tr><td class="dc">20</td><td>Ekstremalne</td><td>Na granicy ludzkich możliwości.</td></tr>
+          <tr><td class="dc">24+</td><td>Legendarne</td><td>Czyny, o których śpiewa się pieśni.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="aside">
+        <h4>Sprawiedliwy próg</h4>
+        <p>Dobry Mistrz Gry dobiera trudność do twojej postaci i twoich narzędzi. Bohater 1. poziomu z
+        dobrym wytrychem otwiera prosty zamek przy progu Łatwym lub Średnim — nie Trudnym. Szesnastka i
+        wyżej należy do chwil, gdy naprawdę wszystko sprzysięga się przeciwko tobie: ciemność, pośpiech,
+        drżące ręce. Rutyna nie powinna być karą.</p>
+      </div>
+
+      <h2>Jak czytać wynik</h2>
+      <p>Rzuć, dodaj premie, porównaj z progiem. Ale wynik to nie tylko „udało się" albo „nie". Liczy się
+      <span class="gloss" tabindex="0">margines<span class="tip"><span class="tip-h">Margines</span>Różnica:
+      twój wynik − PT. Decyduje, <b>jak bardzo</b> się udało (lub nie). +5 i więcej → krytyk; −5 i mniej →
+      krytyczna porażka.</span></span> — o ile twój wynik pobił próg albo do niego nie dosięgnął. To on
+      rozstrzyga, czy sukces jest gładki czy spektakularny, a porażka drobna czy katastrofalna. Każdy
+      test umiejętności kończy się na jednym z czterech stopni:</p>
+
+      <div class="degrees">
+        <div class="deg cs"><span class="lbl">Sukces krytyczny</span>
+          <span class="txt"><b>Naturalna 20, albo margines +5 i więcej.</b> Udaje się wspaniale — efekt
+          wzmocniony, dodatkowa korzyść, obraz, który zapamiętasz.</span></div>
+        <div class="deg s"><span class="lbl">Sukces</span>
+          <span class="txt"><b>Margines od 0 do +4.</b> Robisz to, co zamierzałeś — czysto, bez fajerwerków.</span></div>
+        <div class="deg f"><span class="lbl">Porażka</span>
+          <span class="txt"><b>Margines od −1 do −4.</b> Nie wyszło, lecz bez katastrofy. Fabuła toczy się
+          dalej, zwykle w mniej wygodną stronę — <em>porażka pcha historię naprzód</em>.</span></div>
+        <div class="deg cf"><span class="lbl">Porażka krytyczna</span>
+          <span class="txt"><b>Naturalna 1, albo margines −5 i gorzej.</b> Nie dość, że się nie udało —
+          dochodzi komplikacja. Pęka wytrych, alarmuje się straż, osuwa kamień pod stopą.</span></div>
+      </div>
+
+      <p>Dwa wyniki na kości mają moc absolutną, niezależną od premii i progu.
+      <span class="gloss" tabindex="0">Naturalna 20<span class="tip"><span class="tip-h">Naturalna 20</span>Sama
+      kość pokazuje 20 — zawsze sukces krytyczny, choćby próg był wysoki. „Naturalna", bo liczy się goła
+      kość, przed premiami.</span></span> — sama kość pokazuje dwadzieścia — to zawsze sukces krytyczny.
+      <span class="gloss" tabindex="0">Naturalna 1<span class="tip"><span class="tip-h">Naturalna 1</span>Sama
+      kość pokazuje 1 — zawsze porażka krytyczna z komplikacją, niezależnie od premii.</span></span> to
+      zawsze porażka krytyczna. Choćby próg był śmiesznie niski albo niebotyczny — goła kość ma ostatnie
+      słowo.</p>
+
+      <div class="aside">
+        <h4>Bez liczb przy stole</h4>
+        <p>Te progi i marginesy to maszyneria pod maską. Przy stole Mistrz Gry nie wyrecytuje ci „margines
+        +6, sukces krytyczny" — opowie, jak <em>bezszelestnie wtapiasz się w cień, a strażnik mija cię o
+        krok, nic nie przeczuwając</em>. Liczby liczy system; ty słyszysz historię.</p>
+      </div>
+
+      <hr class="rule">
+
+      <h2>Kość w ferworze walki</h2>
+      <p>Ta sama reguła nie znika, gdy dobywasz broni. W walce wymiana ciosów ma własne, dokładniejsze
+      zasady — opisuje je <span class="gloss" tabindex="0">rozdział o Walce<span class="tip"><span class="tip-h">Rozdział IV — Walka</span>Trafienia
+      i obrażenia rządzą się osobnymi regułami: naturalna 20 podwaja obrażenia, a margines nie wpływa na
+      same ataki. Tu pokazujemy <b>test umiejętności w środku walki</b>.</span></span> — lecz w wirze
+      starcia wciąż raz po raz robisz coś, co jest <em>testem umiejętności</em>: odskakujesz, łapiesz
+      równowagę, wspinasz się, gasisz płomień na rękawie. Takie chwile rozstrzygasz dokładnie tak, jak
+      nauczyłeś się przed chwilą.</p>
+
+      <!-- SCENA 2 — walka -->
+      <div class="scene">
+        <div class="scene-h">Scena · Skraj boru, o zmierzchu</div>
+        <div class="scene-b">
+          <p class="narr">Pierwszy wilk pada od twojego cięcia, lecz drugi już jest w powietrzu — kłębek
+          mokrej sierści i kłów, mierzący prosto w twoje gardło. Nie zdążysz znów zamachnąć się mieczem.
+          Masz ułamek chwili, by zejść z linii skoku.</p>
+
+          <span class="say say-pc"><span class="who">Gracz</span>Rzucam się w bok, w mokre paprocie, byle
+          zejść mu z drogi!</span>
+
+          <p class="narr">To <strong>unik</strong> — gwałtowny, instynktowny ruch całego ciała. Liczy
+          się tu czysta zwinność, więc Mistrz Gry wzywa
+          <span class="gloss" tabindex="0">rzut obronny Zręczności<span class="tip"><span class="tip-h">Rzut obronny</span>Test
+          cechy, gdy coś dzieje się <b>tobie</b> i musisz tego uniknąć (skok bestii, pułapka, podmuch
+          ognia). Liczysz k20 + modyfikator samej cechy, bez umiejętności.</span></span>. Bestia jest
+          szybka — próg <span class="gloss" tabindex="0">Trudny (16)<span class="tip"><span class="tip-h">Próg Trudności</span>Trudny
+          = <b>16</b>. Wysoka poprzeczka: zwinny, rozpędzony drapieżnik.</span></span>.</p>
+
+          <div class="roll">
+            <div class="rh">Rzut obronny · Zręczność</div>
+            <p class="math"><span class="die">k20 = 17</span> + 2
+              <span style="color:#8a7233">(Zręczność 15)</span> = <b>19</b> &nbsp;vs&nbsp; PT 16
+              &nbsp;→&nbsp; margines <b>+3</b></p>
+            <p class="out win"><b>Sukces.</b> Kły kłapią o próżnię tam, gdzie mgnienie wcześniej było
+            twoje gardło. Lądujesz na ramieniu w błocie, wilk przelatuje nad tobą i ląduje niezgrabnie —
+            na moment odsłaniając bok. Przewaga wraca do ciebie.</p>
+          </div>
+
+          <p class="narr">A gdyby na kości padła
+          <span class="gloss" tabindex="0">naturalna 1<span class="tip"><span class="tip-h">Naturalna 1</span>Goła
+          jedynka — zawsze porażka krytyczna. Nieważne, jak wysoka Zręczność.</span></span>? Nie po
+          prostu „nie zdążasz" — noga grzęźnie w korzeniu, tracisz równowagę, a wilk wbija się w ciebie
+          całym ciężarem. Porażka krytyczna nie odbiera tylko sukcesu; <em>dorzuca nieszczęście</em>.</p>
+        </div>
+      </div>
+
+      <p>Dwie sceny, dwa różne testy — rozmowa na moście i skok o włos od kłów — a pod spodem ta sama,
+      jedyna reguła: kość, premie, próg, margines. Opanuj ją tutaj, a będzie ci służyć w każdej
+      niepewnej chwili tego mrocznego świata: od targu na rynku po ostatni cios w ciemnej krypcie.</p>
+
+      <footer>
+        <span class="draft">Fragment próbny · Wstęp + Rozdział I</span><br>
+        Księga Zasad — wersja robocza. Kolejne rozdziały w przygotowaniu.
+      </footer>
+    </section>
+  </main>
+</div>
+
+<script>
+  // Dymki na dotyk (mobile): tap otwiera, tap poza zamyka. Hover działa bez JS.
+  document.addEventListener('click', function(e){
+    var g = e.target.closest('.gloss');
+    document.querySelectorAll('.gloss.tip-open').forEach(function(el){ if(el!==g) el.classList.remove('tip-open'); });
+    if(g){ g.classList.toggle('tip-open'); }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape') document.querySelectorAll('.gloss.tip-open').forEach(function(el){el.classList.remove('tip-open');});
+  });
+</script>
+</body>
+</html>

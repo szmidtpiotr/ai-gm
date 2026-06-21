@@ -78,3 +78,8 @@ temp-img/
 .playwright-mcp/
 mag-game-screen*.png
 .GitHubBoard/
+
+# sshfs temp artifacts (open-but-deleted files on .61 mount)
+.fuse_hidden*
+# WFRP reference docs — agent read-only data, not repo content
+docs/WFRP_4ed_Core.*

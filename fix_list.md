@@ -101,84 +101,85 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [x] 6. #722 — Zagadka do pominięcia (puste exit_conditions) — engine auto-gate z riddle_key lub backfill [wdrożone 56dde19]
 - [x] 7. #721 — Zagadka: brak treści + panel pod belką — _resolve_run_riddles w GET /dungeon-run + z-index + pole text [wdrożone 01cda5f]
 - [x] 8. #745 — Panel zagadki nie znika po rozwiązaniu — hasRiddle checks riddle.solved + failed_permanently [wdrożone 8a35c22]
+- [ ] 9. 8b. #866 — **MP** Zaproszenie przez link `/?join=TOKEN` kieruje na login zamiast rejestracji + token bez konsumenta — fix routingu player-UI (app.js checkUrlRouting + consumePendingJoin); blokuje onboarding MP
 
 ### P1 — Wysoki wpływ, częste, deterministyczne (quick wins)
-- [x] 9. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0] [wdrożone 870a692]
-- [x] 10. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
-- [x] 11. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
-- [x] 12. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
-- [x] 13. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData [commit 7985e46]
-- [ ] 14. #740 — Podwójna narracja wstępna lochu — LLM_OPEN + room_narrative nakładają się
-- [ ] 15. #751 — Przepłata za posiłek (2 vs 5 GP) — dodaj usługę tavern_meal + reguła cena↔klucz
-- [ ] 16. #746 — Angielskie nazwy łupów w modalu walki — JOIN po label z DB w _preview_loot_from_roll_items
-- [ ] 17. #757 — Inventory pokazuje klucz zamiast nazwy — narracyjny item też do game_items + dymek opisu
-- [x] 18. #749 — Rogue bez wyposażenia na start — dodaj "rogue" do whitelist starter items [wdrożone 2036bf9]
-- [ ] 19. #748 — Whisper STT nieaktywny — voice_hosts is_active=1 (one-liner)
-- [ ] 20. #734 — Brak użycia mikstury w walce (przeżywalność w lochu) — akcja „użyj mikstury" w starciu
-- [ ] 21. #728 — Krypta cooldown=0 nadal pokazuje timeout (20.2h)
+- [x] 10. #766 — Sklep otwiera się na zwykłe deklaracje (skUPiam/przygLADam) — trade regex granice słów + usuń fallback keys[0] [wdrożone 870a692]
+- [x] 11. #755 — Wyciek tagów (QUEST_SUGGEST/NPC_MEMORY) do gracza — front stripMechanicTags (stream + finalize) [wdrożone 5597f51]
+- [x] 12. #756 — Duplikacja questów co turę — inject aktywne questy do promptu + reguła anty-dup + dedup po celu
+- [x] 13. #750 — LLM gubi kontekst wnętrza (ŚWIAT nadpisuje karczmę) — gate imperatywu dla interior sub-location [wdrożone 13bcb80]
+- [x] 14. #742 — Sklep w lochu + brak odświeżenia ekwipunku po zakupie — guard dungeon-mode + refreshCharacterData [commit 7985e46]
+- [ ] 15. #740 — Podwójna narracja wstępna lochu — LLM_OPEN + room_narrative nakładają się
+- [ ] 16. #751 — Przepłata za posiłek (2 vs 5 GP) — dodaj usługę tavern_meal + reguła cena↔klucz
+- [ ] 17. #746 — Angielskie nazwy łupów w modalu walki — JOIN po label z DB w _preview_loot_from_roll_items
+- [ ] 18. #757 — Inventory pokazuje klucz zamiast nazwy — narracyjny item też do game_items + dymek opisu
+- [x] 19. #749 — Rogue bez wyposażenia na start — dodaj "rogue" do whitelist starter items [wdrożone 2036bf9]
+- [ ] 20. #748 — Whisper STT nieaktywny — voice_hosts is_active=1 (one-liner)
+- [ ] 21. #734 — Brak użycia mikstury w walce (przeżywalność w lochu) — akcja „użyj mikstury" w starciu
+- [ ] 22. #728 — Krypta cooldown=0 nadal pokazuje timeout (20.2h)
 
 ### P2 — Design: STOP po Twoją decyzję A/B zanim wdrożę
-- [x] 22. #763 — Ruch zignorowany + zły test (Oszustwo zamiast Skradania) — prompt skill-select `(dep: #750)` [wdrożone 1a263b1]
-- [ ] 23. #733 — L18 pierwsza komnata za trudna solo lvl1 — limit liczby/sumy PŻ wrogów `(design — balans)`
-- [ ] 24. #747 — Kreator: obniżenie skilla zużywa punkt budżetu (Math.abs) `(design A/B)`
-- [ ] 25. #753 — Unik double jeopardy + dodge poza pulą losowania `(design — unik zastępuje AC / niższy DC / pula)`
-- [ ] 26. #744 — Wojownik z tarczą nie może blokować (shield_block rank≥1) `(design)`
+- [x] 23. #763 — Ruch zignorowany + zły test (Oszustwo zamiast Skradania) — prompt skill-select `(dep: #750)` [wdrożone 1a263b1]
+- [ ] 24. #733 — L18 pierwsza komnata za trudna solo lvl1 — limit liczby/sumy PŻ wrogów `(design — balans)`
+- [ ] 25. #747 — Kreator: obniżenie skilla zużywa punkt budżetu (Math.abs) `(design A/B)`
+- [ ] 26. #753 — Unik double jeopardy + dodge poza pulą losowania `(design — unik zastępuje AC / niższy DC / pula)`
+- [ ] 27. #744 — Wojownik z tarczą nie może blokować (shield_block rank≥1) `(design)`
 
 ### P3 — In Review: sprawdź komentarze (mógł być zatwierdzony → zaznacz [x])
-- [x] 27. #719 — L-fix: modal kości pokaż test uniku wroga `[IN REVIEW]` [wdrożone cefb46d]
-- [x] 28. #720 — L-fix: brak popupu „co wypadło z bossa" `[IN REVIEW]` [wdrożone 3028497]
-- [ ] 29. #724 — L20b: portrety wrogów/NPC u gracza `[IN REVIEW]`
+- [x] 28. #719 — L-fix: modal kości pokaż test uniku wroga `[IN REVIEW]` [wdrożone cefb46d]
+- [x] 29. #720 — L-fix: brak popupu „co wypadło z bossa" `[IN REVIEW]` [wdrożone 3028497]
+- [ ] 30. #724 — L20b: portrety wrogów/NPC u gracza `[IN REVIEW]`
 
 ### P4 — Feature (wdrażać TYLKO na moją wyraźną prośbę)
-- [ ] 30. #764 — System amunicji (strzały/bełty + start 20 + odejmowanie przy ataku dystansowym)
-- [ ] 31. #765 — Odzyskiwanie amunicji (40% + pill) `(dep: #764)`
-- [ ] 32. #741 — Loch D-pad: przeciąganie + środkowy ⊕ otwiera mapę
-- [ ] 33. 32b. #770 — Ekwipunek: podział sekcji wg używalności (góra używalne/zużywalne, dół nieużywalne) — mały front, sparowany z #757
-- [ ] 34. 32c. #771 — Konsumable on-use effect builder + `damage_enemy` + `apply_condition(target)`; migracja 14 itemów (Woda Święcona, mikstury siły) `(dep: #757)` — decyzje: stat_buff→apply_condition, holy_water→apply on enemy, migracja od razu
-- [ ] 35. #738 — LB4 głębszy loch katakumby_mroku (przenosi #733/#734)
-- [ ] 36. #659 — B11 AoE multi-target maga
-- [ ] 37. #635 — SF6 karta rzutu hazardu
-- [ ] 38. #598 — Walka dwoma broniami (dual-wield)
-- [ ] 39. #547 — G20 eksport kampanii do książki
-- [ ] 40. #593 — Web Push pełny stack
-- [ ] 41. #602 — Niezawodne powiadomienia (wielokanałowe)
+- [ ] 31. #764 — System amunicji (strzały/bełty + start 20 + odejmowanie przy ataku dystansowym)
+- [ ] 32. #765 — Odzyskiwanie amunicji (40% + pill) `(dep: #764)`
+- [ ] 33. #741 — Loch D-pad: przeciąganie + środkowy ⊕ otwiera mapę
+- [ ] 34. 32b. #770 — Ekwipunek: podział sekcji wg używalności (góra używalne/zużywalne, dół nieużywalne) — mały front, sparowany z #757
+- [ ] 35. 32c. #771 — Konsumable on-use effect builder + `damage_enemy` + `apply_condition(target)`; migracja 14 itemów (Woda Święcona, mikstury siły) `(dep: #757)` — decyzje: stat_buff→apply_condition, holy_water→apply on enemy, migracja od razu
+- [ ] 36. #738 — LB4 głębszy loch katakumby_mroku (przenosi #733/#734)
+- [ ] 37. #659 — B11 AoE multi-target maga
+- [ ] 38. #635 — SF6 karta rzutu hazardu
+- [ ] 39. #598 — Walka dwoma broniami (dual-wield)
+- [ ] 40. #547 — G20 eksport kampanii do książki
+- [ ] 41. #593 — Web Push pełny stack
+- [ ] 42. #602 — Niezawodne powiadomienia (wielokanałowe)
 
 ### P5 — Zablokowane / narzędzia / minor (najpierw odblokuj lub niski priorytet)
-- [ ] 42. #516 — `[BLOCKED]` SMOKE P1: brak tabeli character_rentals (F13 migracja) — najpierw odblokować
-- [ ] 43. #727 — Combat Sandbox setup HTTP 500 (narzędzie admin, nie gracz)
-- [ ] 44. #653 — Brak wizualizacji rzutu dla zaklęć leczących poza walką (minor)
+- [ ] 43. #516 — `[BLOCKED]` SMOKE P1: brak tabeli character_rentals (F13 migracja) — najpierw odblokować
+- [ ] 44. #727 — Combat Sandbox setup HTTP 500 (narzędzie admin, nie gracz)
+- [ ] 45. #653 — Brak wizualizacji rzutu dla zaklęć leczących poza walką (minor)
 
 ### PM — Admin Panel Mobile M0 (prereq #830 ✅, #831 ✅ wdrożone)
-- [x] 45. #832 — [MOBILE][M0-3] Tabele — hybryda C: `.data-table--cards` (card-view) + `.data-table--scroll` (sticky) [commit 96183cf]
-- [x] 46. #833 — [MOBILE][M0-4] Formularze 2-col→1-col `<768px` + touch-targety 44px [commit 72d5847]
-- [x] 47. #834 — [MOBILE][M0-5] Hex mapa — podgląd skalowany + blokada edycji z notką [commit 8500d6d]
+- [x] 46. #832 — [MOBILE][M0-3] Tabele — hybryda C: `.data-table--cards` (card-view) + `.data-table--scroll` (sticky) [commit 96183cf]
+- [x] 47. #833 — [MOBILE][M0-4] Formularze 2-col→1-col `<768px` + touch-targety 44px [commit 72d5847]
+- [x] 48. #834 — [MOBILE][M0-5] Hex mapa — podgląd skalowany + blokada edycji z notką [commit 8500d6d]
 
 ### PM — Admin Panel Mobile M1 (dep: M0 ✅)
-- [ ] 48. #835 — [MOBILE][M1] Sekcja: Przegląd/Zaproszenia/Push (lekkie, w biegu)
-- [ ] 49. #836 — [MOBILE][M1] Sekcja: Kampanie (lista + przegląd) na mobile
-- [ ] 50. #837 — [MOBILE][M1] Sekcja: Zgłoszenia (bug reports) na mobile
-- [ ] 51. #838 — [MOBILE][M1] Sekcja: Gracze + ustawienia LLM na mobile
-- [ ] 52. #839 — [MOBILE][M1] Sekcja: System (toggle ustawień/presetów) na mobile
+- [ ] 49. #835 — [MOBILE][M1] Sekcja: Przegląd/Zaproszenia/Push (lekkie, w biegu)
+- [ ] 50. #836 — [MOBILE][M1] Sekcja: Kampanie (lista + przegląd) na mobile
+- [ ] 51. #837 — [MOBILE][M1] Sekcja: Zgłoszenia (bug reports) na mobile
+- [ ] 52. #838 — [MOBILE][M1] Sekcja: Gracze + ustawienia LLM na mobile
+- [ ] 53. #839 — [MOBILE][M1] Sekcja: System (toggle ustawień/presetów) na mobile
 
 ### PM — Admin Panel Mobile M2 (dep: M0 ✅, M1 w toku)
-- [ ] 53. #840 — [MOBILE][M2] Sekcja: Zawartość (8 tabel: bronie/pancerze/przedmioty/...) na mobile
-- [ ] 54. #841 — [MOBILE][M2] Sekcja: Świat (NPC/wrogowie/loot/oczekujące) na mobile
-- [ ] 55. #842 — [MOBILE][M2] Sekcja: Mechanika na mobile
-- [ ] 56. #843 — [MOBILE][M2] Sekcja: Lochy (seeds + runs) na mobile
+- [ ] 54. #840 — [MOBILE][M2] Sekcja: Zawartość (8 tabel: bronie/pancerze/przedmioty/...) na mobile
+- [ ] 55. #841 — [MOBILE][M2] Sekcja: Świat (NPC/wrogowie/loot/oczekujące) na mobile
+- [ ] 56. #842 — [MOBILE][M2] Sekcja: Mechanika na mobile
+- [ ] 57. #843 — [MOBILE][M2] Sekcja: Lochy (seeds + runs) na mobile
 
 ### PM — Admin Panel Mobile M3–M5
-- [ ] 57. #844 — [MOBILE][M3] Sekcja: Kuźnia (forge.js, 194K) na mobile
-- [ ] 58. #845 — [MOBILE][M4] Polish + regresja na realnym urządzeniu (Moto G32)
-- [ ] 59. #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja)
+- [ ] 58. #844 — [MOBILE][M3] Sekcja: Kuźnia (forge.js, 194K) na mobile
+- [ ] 59. #845 — [MOBILE][M4] Polish + regresja na realnym urządzeniu (Moto G32)
+- [ ] 60. #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja)
 
 ### PMP — Multiplayer Faza 5 (G1–G6) — wdrażanie autoryzowane 2026-06-21 (decyzje rozstrzygnięte, NIE gate)
 Fundament MP istnieje (`multiplayer_round_service.py`, `api/multiplayer.py`, `campaign_rounds`/`campaign_round_actions`/`campaign_members`). Każdy issue ma pełną analizę (Cel/Pliki/Akceptacja/Decyzje). Kolejność = zależności: G1→G2→G3, G4→G5, G4→G6 (B1 World State = done).
-- [ ] 60. #785 — G1 — Timer enforcement: background sweep ~30s w main.py domyka rundy po deadline (placeholder `[BRAK AKCJI]`)
-- [ ] 61. #786 — G2 — Absencja: licznik ostrzeżeń + reset po powrocie; 3 → propozycja vote-kick `(dep: #785)`
-- [ ] 62. #787 — G3 — Vote-to-kick ręczny (większość; host niewyrzucalny; 2-os host sam) + zastępstwo `(dep: #786)`
-- [ ] 63. #788 — G4 — World State integracja MP: jeden żeton drużyny, współdzielony stan `(dep: B1 ✅)`
-- [ ] 64. #789 — G5 — Conflict resolution: inicjatywa = kolejność; „Cel już martwy/zabrany" `(dep: #788)`
-- [ ] 65. #790 — G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą; remis → host) `(dep: #788)`
+- [ ] 61. #785 — G1 — Timer enforcement: background sweep ~30s w main.py domyka rundy po deadline (placeholder `[BRAK AKCJI]`)
+- [ ] 62. #786 — G2 — Absencja: licznik ostrzeżeń + reset po powrocie; 3 → propozycja vote-kick `(dep: #785)`
+- [ ] 63. #787 — G3 — Vote-to-kick ręczny (większość; host niewyrzucalny; 2-os host sam) + zastępstwo `(dep: #786)`
+- [ ] 64. #788 — G4 — World State integracja MP: jeden żeton drużyny, współdzielony stan `(dep: B1 ✅)`
+- [ ] 65. #789 — G5 — Conflict resolution: inicjatywa = kolejność; „Cel już martwy/zabrany" `(dep: #788)`
+- [ ] 66. #790 — G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą; remis → host) `(dep: #788)`
 
 ---
 
