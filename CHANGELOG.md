@@ -4,6 +4,42 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.1 — 2026-06-21 — Multiplayer FAZA 5 (G1–G6) + zaproszenia przez link (#866) + dopięcie walki (dual-wield/grapple/akcje) + fixy lochów
+
+### Added
+
+**Multiplayer — FAZA 5, runy G1–G6 (#785–#790)**
+- G1 (#785): wymuszanie timera rund — sweep wygasłych rund + migracje DB
+- G2 (#786): licznik ostrzeżeń o nieobecności gracza
+- G3 (#787): ręczny vote-to-kick w multiplayer
+- G4 (#788): współdzielony world state dla rund MP
+- G5 (#789): rozwiązywanie konfliktów wg kolejności inicjatywy
+- G6 (#790): głosowanie drużyny nad ruchem po heksach
+
+**Zaproszenia do kampanii MP przez link (#866)**
+- `/?join=TOKEN` kieruje niezalogowanego na rejestrację (nie login) z notką o zaproszeniu
+- `consumePendingJoin()` — token przeżywa w localStorage, konsumowany po logowaniu/weryfikacji email → auto-dołączenie do kampanii
+- `APP_BASE_URL` ustawiony dla DEV i PROD — linki w mailach (invite/verify/reset) były `http:///` (pusty host)
+
+**Walka — dopięcie systemów**
+- #859: przycisk „Użyj mikstury/przedmiotu" w pasku akcji walki
+- #858: bandaż = uniwersalne leczenie w walce (class-agnostic)
+- #861: render dual-wield w UI walki — drugi cios off-hand + badge parowania
+- #863: reguły off-hand equip — lekkie bronie either-hand + tarcze, blok dwuręcznych
+- #864: ożywione pole `attacks_per_turn` — wróg N>1 atakuje N razy/turę
+- #773: mechanika obezwładnienia (grapple) poza walką — bramka + kondycja „schwytany"
+- #719: regression guards dla modala uniku (opposed dodge)
+
+**Lochy**
+- #741: D-pad lochu przeciągany + zapamiętana pozycja + środek ⊕ otwiera mapę
+
+### Fixed
+- #865: rozwijanie kluczy riddle przy wejściu do lochu (symetria z resume)
+- #860: blokada short/long rest podczas aktywnej walki
+- #746: polskie etykiety łupu w modalu walki + komunikat o złocie
+
+---
+
 ## v1.5.0 — 2026-06-20 — Admin Panel Mobile (M0–M5) + redesign obrony walki + dual-wield/amunicja + FAZA LB (lochy onboarding) + audyt kampanii
 
 ### Added
