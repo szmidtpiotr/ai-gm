@@ -340,9 +340,14 @@ def join_via_link(
         conn.close()
 
 
+class AcceptInviteReq(BaseModel):
+    character_id: Optional[int] = None
+
+
 @router.post("/multiplayer/campaigns/{campaign_id}/accept")
 def accept_invite(
     campaign_id: int,
+    body: AcceptInviteReq = AcceptInviteReq(),
     authorization: Optional[str] = Header(None),
     user_id: Optional[int] = Query(None),
 ):
@@ -355,10 +360,37 @@ def accept_invite(
         ).fetchone()
         if not member:
             raise HTTPException(status_code=404, detail="Not invited to this lobby")
-        conn.execute(
-            "UPDATE campaign_members SET status='accepted' WHERE campaign_id=? AND user_id=?",
-            (campaign_id, uid),
-        )
+
+        character_id = body.character_id
+        if character_id is not None:
+            # Validate character belongs to this user
+            char = conn.execute(
+                "SELECT id, sheet_json FROM characters WHERE id=? AND user_id=?",
+                (character_id, uid),
+            ).fetchone()
+            if not char:
+                raise HTTPException(status_code=400, detail="Character not found or doesn't belong to you")
+            # Check not already in this campaign as a different member
+            already = conn.execute(
+                "SELECT 1 FROM campaign_members WHERE campaign_id=? AND character_id=? AND user_id!=?",
+                (campaign_id, character_id, uid),
+            ).fetchone()
+            if already:
+                raise HTTPException(status_code=409, detail="This character is already in this campaign under a different player")
+            conn.execute(
+                "UPDATE campaign_members SET status='accepted', character_id=? WHERE campaign_id=? AND user_id=?",
+                (character_id, campaign_id, uid),
+            )
+            # Create per-campaign battle state row
+            from app.services.campaign_state_service import create_initial_state
+            import json as _json
+            sheet = _json.loads(char["sheet_json"] or "{}")
+            create_initial_state(conn, campaign_id=campaign_id, character_id=character_id, sheet=sheet)
+        else:
+            conn.execute(
+                "UPDATE campaign_members SET status='accepted' WHERE campaign_id=? AND user_id=?",
+                (campaign_id, uid),
+            )
         camp = conn.execute(
             "SELECT title, lobby_status FROM campaigns WHERE id=?", (campaign_id,)
         ).fetchone()

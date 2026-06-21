@@ -34,6 +34,34 @@ COMBAT_DB_PATH = "/data/ai_gm.db"
 
 logger = get_logger(__name__)
 
+# G16 (#784): per-campaign HP/mana isolation for multiplayer
+_MP_STATE_FIELDS = frozenset(("current_hp", "current_mana", "conditions"))
+
+
+def _save_char_sheet(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int, sheet: dict
+) -> None:
+    """Write character sheet to DB, routing battle-state fields to CCS for MP campaigns.
+
+    For multiplayer campaigns: HP/mana/conditions go to character_campaign_state;
+    sheet_json is written WITHOUT those fields so solo campaigns are unaffected.
+    For solo campaigns: write full sheet_json (unchanged behaviour).
+    """
+    from app.services.campaign_state_service import is_mp_campaign, save_battle_state
+
+    if is_mp_campaign(conn, campaign_id):
+        save_battle_state(conn, campaign_id, int(character_id), sheet)
+        dev_sheet = {k: v for k, v in sheet.items() if k not in _MP_STATE_FIELDS}
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(dev_sheet, ensure_ascii=False), int(character_id)),
+        )
+    else:
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+        )
+
 
 def _log_dice_roll_combat_resolve(
     *,
@@ -1863,10 +1891,7 @@ def _resolve_effect_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
         conn.commit()
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
@@ -1882,10 +1907,7 @@ def _resolve_effect_spell_in_combat(
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
         conn.commit()
         out["hit"] = False
         out["condition_applied"] = False
@@ -1907,10 +1929,7 @@ def _resolve_effect_spell_in_combat(
             cur = int(sheet.get("current_mana", 0) or 0)
             mx = int(sheet.get("max_mana", 0) or 0)
             sheet["current_mana"] = min(mx, cur + refund) if mx > 0 else cur + refund
-            conn.execute(
-                "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-            )
+            _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
             conn.commit()
         out["mana_refund"] = refund
         out["condition_applied"] = False
@@ -2014,10 +2033,7 @@ def _resolve_defense_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
     # effect_json (pula absorpcji) — osobny fetch, by detekcja nie selektowała kolumny,
     # której mogą nie mieć izolowane fikstury testowe (real schema zawsze ją ma).
@@ -2113,10 +2129,7 @@ def _resolve_heal_spell_in_combat(
             )
             out["combat_state"] = _row_to_combat_dict(row)
             return out
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
     heal_die_row = conn.execute(
         "SELECT heal_die FROM game_config_spells WHERE key = ? AND is_active = 1",
@@ -2140,10 +2153,7 @@ def _resolve_heal_spell_in_combat(
     if p:
         p["hp_current"] = int(sheet.get("current_hp") or p.get("hp_current", 0))
 
-    conn.execute(
-        "UPDATE characters SET sheet_json = ? WHERE id = ?",
-        (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-    )
+    _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
     out["hit"] = True
     out["healed"] = heal_result["healed"]
@@ -2244,10 +2254,7 @@ def _resolve_aoe_spell_in_combat(
             return out
         out["mana_spent"] = mana_cost
         out["mana_after"] = _new_mana
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
     player_raw = int(raw_d20) if raw_d20 is not None else None
     player_nat1 = player_raw == 1
@@ -2264,10 +2271,7 @@ def _resolve_aoe_spell_in_combat(
         out["hit"] = False
         out["damage"] = 0
         out["aoe_hits"] = []
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-        )
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
         _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
         conn.commit()
         cid = int(row["id"])
@@ -2508,7 +2512,7 @@ def _resolve_aoe_spell_in_combat(
             loot_pool=loot_pool_accum,
         )
         conn.commit()
-        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory")
+        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory", campaign_id=campaign_id)
         # Oznacz hex cleared
         try:
             gs_hex = conn.execute(
@@ -2822,10 +2826,7 @@ def remove_condition_from_character(
                 if len(kept) != len(conds):
                     removed += len(conds) - len(kept)
                     sheet["conditions"] = kept
-                    conn.execute(
-                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                        (json.dumps(sheet, ensure_ascii=False), int(character_id)),
-                    )
+                    _save_char_sheet(conn, campaign_id, int(character_id), sheet)
     except Exception:
         pass
 
@@ -2950,10 +2951,7 @@ def add_condition_to_character(
                 if not any(str(c.get("key") or "").strip().lower() == key_lo for c in conds):
                     conds.append(dict(entry))
                     sheet["conditions"] = conds
-                    conn.execute(
-                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                        (json.dumps(sheet, ensure_ascii=False), int(character_id)),
-                    )
+                    _save_char_sheet(conn, campaign_id, int(character_id), sheet)
                     added += 1
     except Exception:
         pass
@@ -3296,6 +3294,9 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                 sheet = parse_character_sheet(ch_row["sheet_json"])
                 if not isinstance(sheet, dict):
                     sheet = {}
+                else:
+                    from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov_etc
+                    _ov_etc(conn, campaign_id, int(row["character_id"]), sheet)
 
         source_conditions = actor.get("conditions") or []
         conditions: list[dict[str, Any]] = []
@@ -3616,10 +3617,7 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                     }
                 )
             sheet["conditions"] = stripped_conditions
-            conn.execute(
-                "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-            )
+            _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
 
         if events:
             combat_id = int(row["id"])
@@ -3852,6 +3850,8 @@ def initiate_combat(
             raise ValueError("character not found")
 
         sheet = parse_character_sheet(ch["sheet_json"])
+        from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov_sc
+        _ov_sc(conn, campaign_id, int(character_id), sheet)
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
         dex_mod = _stat_mod(sheet, "DEX")
@@ -4504,6 +4504,8 @@ def resolve_attack(
             raise ValueError("character missing")
 
         sheet = parse_character_sheet(character["sheet_json"])
+        from app.services.campaign_state_service import overlay_sheet_from_campaign_state
+        overlay_sheet_from_campaign_state(conn, campaign_id, ch_id, sheet)
         out: dict[str, Any] = {"attacker": attacker, "hit": False}
 
         if attacker == "player":
@@ -4833,10 +4835,7 @@ def resolve_attack(
                 )
                 if not _mana_ok:
                     _persist_combatants(conn, row, combatants)
-                    conn.execute(
-                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                        (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-                    )
+                    _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
                     conn.commit()
                     return {
                         "attacker": attacker,
@@ -4853,10 +4852,7 @@ def resolve_attack(
                 out["mana_spent"] = _spell_mana_cost
                 out["mana_after"] = _new_mana
                 # Persist mana deduction immediately
-                conn.execute(
-                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                    (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-                )
+                _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
             # ─────────────────────────────────────────────────────────────────
 
             if hit:
@@ -5222,7 +5218,7 @@ def resolve_attack(
                         )
                         conn.commit()
                         # Scholar mana regen on victory: max(1, INT_mod * 2)
-                        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory")
+                        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory", campaign_id=campaign_id)
                         # Mark current hex encounter as cleared for this campaign
                         try:
                             gs_hex = conn.execute(
@@ -5308,10 +5304,7 @@ def resolve_attack(
                 _miscast = resolve_miscast(sheet, enemy, conn)
                 out["miscast"] = _miscast
                 out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
-                conn.execute(
-                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                    (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
-                )
+                _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
             # ─────────────────────────────────────────────────────────────────
 
             if _is_spell and _mana_ok:
@@ -5720,10 +5713,7 @@ def resolve_attack(
             out["player_hp_remaining"] = next_hp
             incap = next_hp <= 0
             out["player_incapacitated"] = incap
-            conn.execute(
-                "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                (json.dumps(sheet, ensure_ascii=False), ch_id),
-            )
+            _save_char_sheet(conn, campaign_id, ch_id, sheet)
         else:
             out["damage"] = 0
             out["player_hp_remaining"] = int(p.get("hp_current", 0) or 0)
@@ -5866,6 +5856,8 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         if not character:
             raise ValueError("character missing")
         sheet = parse_character_sheet(character["sheet_json"])
+        from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov_react
+        _ov_react(conn, campaign_id, ch_id, sheet)
 
         attack_roll = int(pending.get("attack_roll") or 0)
         round_n = int(pending.get("round") or row["round"] or 1)
@@ -5943,10 +5935,7 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         out["player_hp_remaining"] = next_hp
         incap = next_hp <= 0
         out["player_incapacitated"] = incap
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), ch_id),
-        )
+        _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
         cid = int(row["id"])
         # log reakcji (unik/blok) — Sandbox/UI pokazuje test i wynik
@@ -6675,7 +6664,8 @@ def advance_turn(
 
 
 def _scholar_restore_mana_after_combat(
-    conn: sqlite3.Connection, character_id: int, sheet: dict, reason: str
+    conn: sqlite3.Connection, character_id: int, sheet: dict, reason: str,
+    campaign_id: int | None = None,
 ) -> None:
     """Layer 2 balance fix: Scholar recovers mana after each combat (victory or flee)."""
     try:
@@ -6691,10 +6681,13 @@ def _scholar_restore_mana_after_combat(
         restore = max(1, int_mod * 2)
         new_mana = min(maximum, current + restore)
         sheet["current_mana"] = new_mana
-        conn.execute(
-            "UPDATE characters SET sheet_json = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), int(character_id)),
-        )
+        if campaign_id is not None:
+            _save_char_sheet(conn, campaign_id, int(character_id), sheet)
+        else:
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+            )
         conn.commit()
         logger.info("scholar_mana_restored_after_combat",
                     character_id=character_id, restored=new_mana - current,
@@ -6734,7 +6727,7 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
                 ).fetchone()
                 if ch_row:
                     _sh = json.loads(ch_row["sheet_json"] or "{}")
-                    _scholar_restore_mana_after_combat(conn, char_id, _sh, "fled")
+                    _scholar_restore_mana_after_combat(conn, char_id, _sh, "fled", campaign_id=campaign_id)
             except Exception:
                 pass
 

@@ -4867,6 +4867,60 @@ def _ensure_party_hex_columns(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _ensure_character_campaign_state(conn: sqlite3.Connection) -> None:
+    """#784 G16 — per-campaign battle state (HP/mana/conditions) for MP isolation."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS character_campaign_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id INTEGER NOT NULL,
+            campaign_id INTEGER NOT NULL,
+            current_hp INTEGER NOT NULL DEFAULT 0,
+            max_hp INTEGER NOT NULL DEFAULT 0,
+            current_mana INTEGER NOT NULL DEFAULT 0,
+            max_mana INTEGER NOT NULL DEFAULT 0,
+            conditions_json TEXT NOT NULL DEFAULT '[]',
+            position_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(character_id, campaign_id)
+        )
+    """)
+    conn.commit()
+
+
+def _backfill_character_campaign_state(conn: sqlite3.Connection) -> None:
+    """#784 G16 — backfill CCS rows for existing characters in multiplayer campaigns."""
+    rows = conn.execute("""
+        SELECT cm.character_id, cm.campaign_id, c.sheet_json
+        FROM campaign_members cm
+        JOIN campaigns ca ON ca.id = cm.campaign_id AND ca.mode = 'multiplayer'
+        JOIN characters c ON c.id = cm.character_id
+        WHERE cm.character_id IS NOT NULL AND cm.status = 'accepted'
+    """).fetchall()
+    for row in rows:
+        try:
+            sheet = json.loads(row["sheet_json"] or "{}")
+            conditions = sheet.get("conditions")
+            if not isinstance(conditions, list):
+                conditions = []
+            conn.execute(
+                """INSERT OR IGNORE INTO character_campaign_state
+                       (character_id, campaign_id, current_hp, max_hp, current_mana, max_mana, conditions_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    int(row["character_id"]),
+                    int(row["campaign_id"]),
+                    int(sheet.get("current_hp") or 0),
+                    int(sheet.get("max_hp") or 0),
+                    int(sheet.get("current_mana") or 0),
+                    int(sheet.get("max_mana") or 0),
+                    json.dumps(conditions, ensure_ascii=False),
+                ),
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4971,6 +5025,8 @@ def run_admin_migrations() -> None:
         _ensure_warrior_shared_heal_858(conn)  # #858
         _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
+        _ensure_character_campaign_state(conn)  # #784 G16
+        _backfill_character_campaign_state(conn)  # #784 G16
         _ensure_absence_warnings_column(conn)  # #786 G2
         _ensure_kick_votes_table(conn)  # #787 G3
         _ensure_move_votes_table(conn)  # #790 G6
