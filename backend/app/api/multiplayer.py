@@ -1026,8 +1026,14 @@ def submit_round_action(
     user_id: Optional[int] = Query(None),
 ):
     uid = resolve_authed_user_id(authorization, user_id)
-    if not body.action_text.strip():
+    stripped = body.action_text.strip()
+    if not stripped:
         raise HTTPException(status_code=400, detail="action_text cannot be empty")
+    if len(stripped) > svc._MAX_ACTION_TEXT_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action_text too long (max {svc._MAX_ACTION_TEXT_LEN} chars)",
+        )
 
     result = svc.submit_action(
         campaign_id=campaign_id,
