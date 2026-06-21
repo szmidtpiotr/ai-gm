@@ -198,6 +198,9 @@ _MP_CHAPTER_SUMMARY_PROMPT = (
 _CHAPTER_THRESHOLD = 10
 
 
+# G23 #804 — action texts that count as "absent" for catchup / recap detection
+_ABSENT_ACTION_MARKERS = {"[BRAK AKCJI]", "[AUTOPILOT — postać trzyma pozycję]"}
+
 # G30 (#801) — retry constants (patchable in tests)
 _NARRATOR_MAX_RETRIES = 3
 _NARRATOR_RETRY_BACKOFF_S = 1.0
@@ -1084,11 +1087,13 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (round_id, campaign_id, m["user_id"], char_id, char_name, action_text),
             )
-            conn.execute(
-                "UPDATE campaign_members SET absence_warnings = absence_warnings + 1 "
-                "WHERE campaign_id=? AND user_id=?",
-                (campaign_id, m["user_id"]),
-            )
+            # G22 (#803) — autopilot opt-in: consent means voluntary absence, no warning penalty
+            if not int(m.get("autopilot_consent", 0)):
+                conn.execute(
+                    "UPDATE campaign_members SET absence_warnings = absence_warnings + 1 "
+                    "WHERE campaign_id=? AND user_id=?",
+                    (campaign_id, m["user_id"]),
+                )
             # G22 (#803) — auto-handoff: absent host after >= 2 consecutive misses
             updated = conn.execute(
                 "SELECT absence_warnings FROM campaign_members WHERE campaign_id=? AND user_id=?",
@@ -1311,7 +1316,7 @@ def get_catchup(campaign_id: int, user_id: int) -> dict:
                 "SELECT action_text FROM campaign_round_actions WHERE round_id=? AND user_id=?",
                 (int(r["id"]), user_id),
             ).fetchone()
-            was_present = action is not None and action["action_text"] != "[BRAK AKCJI]"
+            was_present = action is not None and action["action_text"] not in _ABSENT_ACTION_MARKERS
             presence.append((r, was_present))
 
         # Find tail: all rounds after last presence index
@@ -1364,7 +1369,7 @@ def get_away_recap(campaign_id: int, user_id: int) -> dict:
             (campaign_id, user_id),
         ).fetchone()
         if not member or int(member["absence_warnings"]) == 0:
-            return {"missed_rounds": [], "summary_line": "", "has_recap": False}
+            return {"missed_rounds": [], "summary_line": "", "has_recap": False, "absence_warnings_reset": False}
     finally:
         conn.close()
     result = get_catchup(campaign_id, user_id)

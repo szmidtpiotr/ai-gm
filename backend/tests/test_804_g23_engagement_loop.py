@@ -309,3 +309,56 @@ def test_no_prev_round_all_go_to_not_hooked(tmp_path, monkeypatch):
     priority = _compute_priority(svc, campaign_id=1, char_names=["Alice", "Bob"])
     assert set(priority) == {"Alice", "Bob"}
     assert len(priority) == 2
+
+
+# ── Tests: code-review fixes ──────────────────────────────────────────────────
+
+
+def test_early_return_has_absence_warnings_reset_key(tmp_path, monkeypatch):
+    """Early return (no warnings) must include absence_warnings_reset key for consistent shape."""
+    db_path, conn = _make_test_db(tmp_path)
+    _seed(conn, campaign_id=1, users=[(10, "alice")])
+    # absence_warnings = 0 by default → early return path
+    svc = _load_svc(monkeypatch, db_path)
+    result = svc.get_away_recap(campaign_id=1, user_id=10)
+    assert "absence_warnings_reset" in result
+    assert result["absence_warnings_reset"] is False
+
+
+def test_autopilot_rounds_count_as_missed_for_recap(tmp_path, monkeypatch):
+    """Autopilot action [AUTOPILOT — ...] must count as 'absent' in catchup presence check."""
+    db_path, conn = _make_test_db(tmp_path)
+    _seed(conn, campaign_id=1, users=[(10, "alice"), (20, "bob")])
+    conn.execute(
+        "UPDATE campaign_members SET absence_warnings=2, autopilot_consent=1 "
+        "WHERE campaign_id=1 AND user_id=10"
+    )
+    # Alice's rounds filled by autopilot sweep
+    _insert_done_round(conn, 1, 1,
+        {"narrative": "R1.", "player_notes": {}},
+        [
+            (10, "Alice", "[AUTOPILOT — postać trzyma pozycję]"),
+            (20, "Bob", "Bob atakuje"),
+        ],
+    )
+    _insert_done_round(conn, 1, 2,
+        {"narrative": "R2.", "player_notes": {}},
+        [
+            (10, "Alice", "[AUTOPILOT — postać trzyma pozycję]"),
+            (20, "Bob", "Bob szuka"),
+        ],
+    )
+    conn.commit()
+    svc = _load_svc(monkeypatch, db_path)
+    result = svc.get_away_recap(campaign_id=1, user_id=10)
+    # Autopilot rounds should appear as missed (player was genuinely absent)
+    assert result["has_recap"] is True
+    assert len(result["missed_rounds"]) == 2
+
+
+def test_absent_markers_module_constant_includes_autopilot(tmp_path, monkeypatch):
+    """_ABSENT_ACTION_MARKERS module constant must include both absent text variants."""
+    db_path, _ = _make_test_db(tmp_path)
+    svc = _load_svc(monkeypatch, db_path)
+    assert "[BRAK AKCJI]" in svc._ABSENT_ACTION_MARKERS
+    assert "[AUTOPILOT — postać trzyma pozycję]" in svc._ABSENT_ACTION_MARKERS
