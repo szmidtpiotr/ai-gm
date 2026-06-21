@@ -4362,6 +4362,298 @@ def _b14_is_mass_spell(spell_k: str) -> bool:
     return k.startswith("mass_") or k.startswith("group_")
 
 
+# ── B15 (#821) — Summony jako kombatant-towarzysz ─────────────────────────────
+# Decyzja projektowa (#821): auto-atak najbliższego wroga; 1 aktywny summon
+# (nowy zastępuje starego); czas życia = lifetime_rounds z effect_json (default 3)
+# + znika po śmierci; gdy gracz pada → summon znika; shadow_clone = stały profil.
+# Wszystkie liczby = wartości STARTOWE (Numbers Policy), strojone w Sandboxie.
+
+_B15_DEFAULT_LIFETIME = 3
+_B15_DEFAULT_HP = 8
+_B15_DEFAULT_ATTACK_BONUS = 2
+_B15_DEFAULT_DAMAGE_DIE = "1d6"
+_B15_SUMMON_ID = "summon:1"  # limit 1 aktywny → stały id
+
+
+def _b15_is_summon(comb: dict | None) -> bool:
+    """True jeśli combatant jest przywołanym towarzyszem (type=='summon')."""
+    return bool(comb) and str((comb or {}).get("type") or "") == "summon"
+
+
+def _b15_summon_combatants(combatants: list[dict]) -> list[dict]:
+    """Wszystkie summony w walce (żywe i martwe — do sprzątania)."""
+    return [c for c in combatants if _b15_is_summon(c)]
+
+
+def _b15_parse_summon_profile(spell_row: Any) -> dict[str, Any]:
+    """Profil towarzysza z `effect_json` czaru (z fallbackami startowymi)."""
+    prof: dict[str, Any] = {}
+    raw = None
+    try:
+        if "effect_json" in spell_row.keys():
+            raw = spell_row["effect_json"]
+    except Exception:
+        raw = None
+    if raw:
+        try:
+            prof = json.loads(raw) or {}
+        except Exception:
+            prof = {}
+    _ab = prof.get("attack_bonus")
+    return {
+        "hp": int(prof.get("hp") or _B15_DEFAULT_HP),
+        "attack_bonus": int(_ab if _ab is not None else _B15_DEFAULT_ATTACK_BONUS),
+        "damage_die": str(prof.get("damage_die") or _B15_DEFAULT_DAMAGE_DIE),
+        "lifetime_rounds": int(prof.get("lifetime_rounds") or _B15_DEFAULT_LIFETIME),
+        "zone": str(prof.get("zone") or ZONE_ENGAGED),
+        "name": str(prof.get("name") or "").strip(),
+    }
+
+
+def _b15_persist_with_turn_order(
+    conn: sqlite3.Connection, row: sqlite3.Row,
+    combatants: list[dict], turn_order: list[str],
+) -> None:
+    """B15: zapis combatants ORAZ turn_order — summon dołącza/odłącza się w trakcie walki
+    (zwykły `_persist_combatants` nie rusza turn_order, więc tu osobny helper)."""
+    conn.execute(
+        """
+        UPDATE active_combat
+        SET combatants = ?, turn_order = ?, updated_at = ?
+        WHERE campaign_id = ?
+        """,
+        (
+            json.dumps(combatants, ensure_ascii=False),
+            json.dumps(turn_order, ensure_ascii=False),
+            _now_iso(),
+            row["campaign_id"],
+        ),
+    )
+
+
+def _b15_pick_summon_target(combatants: list[dict], summon: dict) -> dict | None:
+    """Cel auto-ataku summona: najbliższy żywy WRÓG (preferuj tę samą strefę)."""
+    enemies = [
+        c for c in combatants
+        if c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0
+    ]
+    if not enemies:
+        return None
+    s_zone = str(summon.get("zone") or ZONE_ENGAGED)
+    same_zone = [c for c in enemies if str(c.get("zone") or ZONE_ENGAGED) == s_zone]
+    return (same_zone or enemies)[0]
+
+
+def _resolve_summon_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    spell_row, out: dict[str, Any], *, caster_comb_id: str = "player",
+) -> dict[str, Any]:
+    """B15 (#821): czar PRZYWOŁANIA w aktywnej walce.
+
+    Odejmuje manę, czyta profil z `effect_json`, usuwa poprzedni summon (limit 1),
+    wstawia nowego kombatanta `type=='summon'` do combatants I do turn_order zaraz za
+    rzucającym, persystuje oba pola. Tura summona (auto-atak) → :func:`resolve_summon_turn`.
+    """
+    from app.services import spell_service
+
+    spell_k = str(spell_row["key"])
+    label = str(spell_row["label"] or spell_k)
+    mana_cost = int(spell_row["mana_cost"] or 0)
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_summon"
+    out["spell_type"] = "summon"
+    out["damage"] = 0
+
+    if mana_cost > 0:
+        _mana_ok, _ = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+
+    prof = _b15_parse_summon_profile(spell_row)
+    order: list[str] = json.loads(row["turn_order"] or "[]")
+
+    # Limit 1 aktywny — usuń poprzednie summony z combatants I turn_order.
+    old_ids = {str(c.get("id")) for c in _b15_summon_combatants(combatants)}
+    if old_ids:
+        combatants[:] = [c for c in combatants if str(c.get("id")) not in old_ids]
+        order = [t for t in order if str(t) not in old_ids]
+
+    summon_name = prof["name"] or label
+    summon = {
+        "id": _B15_SUMMON_ID,
+        "type": "summon",
+        "owner_id": str(caster_comb_id),
+        "summon_key": spell_k,
+        "name": summon_name,
+        "hp_current": prof["hp"],
+        "hp_max": prof["hp"],
+        "defense": 10,
+        "attack_bonus": prof["attack_bonus"],
+        "damage_dice": prof["damage_die"],
+        "damage_stat": "STR",
+        "lifetime_remaining": prof["lifetime_rounds"],
+        "conditions": [],
+        "zone": prof["zone"],
+        "stats": {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10},
+    }
+    combatants.append(summon)
+
+    # Wstaw do kolejki zaraz za rzucającym (zadziała szybko, idealnie w tej rundzie).
+    order_str = [str(t) for t in order]
+    if str(caster_comb_id) in order_str:
+        order.insert(order_str.index(str(caster_comb_id)) + 1, _B15_SUMMON_ID)
+    else:
+        order.append(_B15_SUMMON_ID)
+
+    _b15_persist_with_turn_order(conn, row, combatants, order)
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn, combat_id=cid, campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor=str(caster_comb_id), event_type="summon",
+        roll_value=None, damage=0, hp_after=prof["hp"],
+        target_id=_B15_SUMMON_ID, target_name=summon_name, hit=True,
+        narrative=json.dumps(
+            {"spell_key": spell_k, "spell_label": label, "summon_id": _B15_SUMMON_ID,
+             "hp": prof["hp"], "lifetime_rounds": prof["lifetime_rounds"],
+             "mana_cost": mana_cost}, ensure_ascii=False,
+        ),
+    )
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+    conn.commit()
+
+    out["hit"] = True
+    out["summon"] = {
+        "id": _B15_SUMMON_ID, "name": summon_name, "hp": prof["hp"],
+        "lifetime_rounds": prof["lifetime_rounds"], "zone": prof["zone"],
+    }
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+    out["message"] = (
+        f"Przywołujesz {summon_name} ({prof['hp']} HP) — staje u twego boku "
+        f"na {prof['lifetime_rounds']} rund."
+    )
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def resolve_summon_turn(campaign_id: int) -> dict[str, Any]:
+    """B15 (#821) — tura summona: auto-atak najbliższego żywego wroga.
+
+    Czas życia: ``lifetime_remaining`` spada o 1 po akcji; gdy wchodzi z 0 → summon znika.
+    Gdy gracz nie żyje → summon znika (``owner_down``). Brak wrogów → tura jałowa, ale
+    licznik życia i tak spada. Wzorzec ataku skopiowany z forced-behavior AI wroga."""
+    out: dict[str, Any] = {"actor": "summon"}
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        order: list[str] = json.loads(row["turn_order"] or "[]")
+        cur = str(row["current_turn"])
+        summon = _find_combatant(combatants, cur)
+        if not _b15_is_summon(summon):
+            raise ValueError("current turn is not a summon")
+        out["summon_id"] = cur
+        out["summon_name"] = str(summon.get("name") or "Towarzysz")
+
+        def _vanish(reason: str) -> dict[str, Any]:
+            new_combatants = [c for c in combatants if str(c.get("id")) != cur]
+            new_order = [t for t in order if str(t) != cur]
+            _b15_persist_with_turn_order(conn, row, new_combatants, new_order)
+            conn.commit()
+            out["hit"] = False
+            out["damage"] = 0
+            out["vanished"] = True
+            out["vanish_reason"] = reason
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
+
+        # Gracz padł → summon znika (decyzja #821).
+        if _find_active_player_combatant(combatants) is None:
+            return _vanish("owner_down")
+        # Czas życia wygasł → summon znika bez akcji.
+        if int(summon.get("lifetime_remaining", 0) or 0) <= 0:
+            return _vanish("expired")
+
+        _ensure_zones(combatants)
+        target = _b15_pick_summon_target(combatants, summon)
+        if target is None:
+            # Brak żywych wrogów — tura jałowa; licznik i tak spada.
+            summon["lifetime_remaining"] = int(summon.get("lifetime_remaining", 0) or 0) - 1
+            out["hit"] = False
+            out["damage"] = 0
+            out["no_target"] = True
+            out["lifetime_remaining"] = summon["lifetime_remaining"]
+            _persist_combatants(conn, row, combatants)
+            conn.commit()
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
+
+        raw_b = roll_d20()
+        atk_b = int(summon.get("attack_bonus") or 0)
+        attack_roll_b = raw_b + atk_b
+        tgt_ac = int(target.get("defense", 10) or 10)
+        hit_b = raw_b == 20 or (raw_b != 1 and attack_roll_b >= tgt_ac)
+        dmg_b = 0
+        if hit_b:
+            dmg_b = roll_damage_dice((summon.get("damage_dice") or "1d6").strip().lower(), 0)
+            target["hp_current"] = max(0, int(target.get("hp_current", 0) or 0) - dmg_b)
+
+        # Czas życia spada PO akcji (lifetime_rounds rund = tyle ataków).
+        summon["lifetime_remaining"] = int(summon.get("lifetime_remaining", 0) or 0) - 1
+
+        out["hit"] = bool(hit_b)
+        out["damage"] = int(dmg_b)
+        out["attack_roll"] = int(attack_roll_b)
+        out["raw_d20"] = int(raw_b)
+        out["target_id"] = str(target.get("id"))
+        out["target_name"] = str(target.get("name") or target.get("id"))
+        out["target_hp_remaining"] = int(target.get("hp_current", 0) or 0)
+        out["target_incapacitated"] = int(target.get("hp_current", 0) or 0) <= 0
+        out["lifetime_remaining"] = summon["lifetime_remaining"]
+
+        cid = int(row["id"])
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor="summon", event_type="summon_attack",
+            roll_value=int(attack_roll_b), damage=int(dmg_b),
+            hp_after=int(target.get("hp_current", 0) or 0),
+            target_id=str(target.get("id")), target_name=out["target_name"], hit=bool(hit_b),
+            narrative=json.dumps(
+                {"summon_id": cur, "summon_name": out["summon_name"],
+                 "attack_roll": int(attack_roll_b), "raw_d20": int(raw_b),
+                 "damage": int(dmg_b), "hit": bool(hit_b)}, ensure_ascii=False,
+            ),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+        return out
+
+
 # ── G17 (#794) — Knockdown helpers ───────────────────────────────────────────
 
 def _find_active_player_combatant(combatants: list[dict]) -> dict | None:
@@ -5203,6 +5495,20 @@ def resolve_attack(
                         caster_comb_id=_player_comb_id,
                         requested_target_id=_b14_req_target,
                         mass=_b14_is_mass_spell(str(_heal_row["key"])),
+                    )
+            # ── B15 (#821): czar PRZYWOŁANIA (summon) — dodaj towarzysza-kombatanta ──
+            # Wykrywamy PRZED ścieżką ataku: summon nie atakuje wroga rzutem gracza,
+            # tylko wstawia nowego kombatanta type=='summon' do walki (własna tura niżej).
+            if spell_key:
+                _sum_row = conn.execute(
+                    "SELECT key, label, spell_type, mana_cost, tier, effect_json "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _sum_row and str(_sum_row["spell_type"] or "").strip().lower() == "summon":
+                    return _resolve_summon_spell_in_combat(
+                        conn, row, campaign_id, ch_id, sheet, combatants, _sum_row, out,
+                        caster_comb_id=_player_comb_id,
                     )
             # ─────────────────────────────────────────────────────────────────
 

@@ -248,6 +248,28 @@ def post_enemy_turn(campaign_id: int):
     return res
 
 
+@router.post("/campaigns/{campaign_id}/combat/summon-turn")
+def post_summon_turn(campaign_id: int):
+    """B15 (#821) — przetwórz turę summona (auto-atak najbliższego wroga), potem
+    zaawansuj kolejkę. Frontend woła ten endpoint, gdy current_turn zaczyna się od
+    'summon:' (analogicznie do /enemy-turn dla wrogów)."""
+    try:
+        res = combat.resolve_summon_turn(campaign_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    snap = combat.load_combat_snapshot(campaign_id)
+    if snap and snap.get("status") == "active":
+        try:
+            res["advance_turn"] = combat.advance_turn(campaign_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    else:
+        res["advance_turn"] = "ended"
+    res["combat_state"] = combat.load_combat_snapshot(campaign_id)
+    return res
+
+
 @router.post("/campaigns/{campaign_id}/combat/flee")
 def post_flee(campaign_id: int):
     """

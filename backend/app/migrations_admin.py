@@ -2802,6 +2802,32 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-spells-b10-mage-absorb")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── B15 (#821): czary PRZYWOŁANIA — summon jako kombatant-towarzysz ────────
+    # Decyzja projektowa (Piotr 2026-06-21): auto-atak najbliższego wroga; 1 aktywny
+    # summon (nowy zastępuje starego); czas życia = lifetime_rounds z effect_json
+    # (+ znika po śmierci); gdy gracz pada → summon znika; shadow_clone = STAŁY profil
+    # (NIE kopiuje statów/ekwipunku gracza — osobny backlog). spell_type='summon';
+    # silnik (_resolve_summon_spell_in_combat) czyta profil z effect_json. MUSI biec
+    # PO v2-spells-effect-json-col (kolumna effect_json). Wartości = STARTOWE (Numbers
+    # Policy), strojone w Sandboxie. target_zone='ally' = metadane UI (informacyjne).
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, target_zone, aoe, description, effect_json) VALUES
+        ('summon_familiar',  'Przywołaj Chowańca',  2, 3, 'summon', 'ally', 0,
+         'Mag przywołuje magicznego chowańca, który walczy u jego boku — atakuje najbliższego wroga w swojej turze.',
+         '{\"hp\":8,\"attack_bonus\":2,\"damage_die\":\"1d6\",\"lifetime_rounds\":3,\"zone\":\"engaged\"}'),
+        ('summon_elemental', 'Przywołaj Żywiołaka', 3, 5, 'summon', 'ally', 0,
+         'Mag wzywa żywiołaka — potężnego towarzysza bojowego, który razi wrogów we własnej turze.',
+         '{\"hp\":16,\"attack_bonus\":4,\"damage_die\":\"1d8\",\"lifetime_rounds\":4,\"zone\":\"engaged\"}'),
+        ('animate_dead',     'Ożywienie Zmarłych',  4, 5, 'summon', 'ally', 0,
+         'Nekromanta podnosi szkielet do walki — bezduszny sługa atakuje wrogów, póki nie rozsypie się w proch.',
+         '{\"hp\":12,\"attack_bonus\":3,\"damage_die\":\"1d6\",\"lifetime_rounds\":4,\"zone\":\"engaged\"}'),
+        ('shadow_clone',     'Cień-Klon',           5, 6, 'summon', 'ally', 0,
+         'Mag tworzy cienistą kopię siebie, która walczy obok niego (stały profil bojowy).',
+         '{\"hp\":14,\"attack_bonus\":5,\"damage_die\":\"1d8\",\"lifetime_rounds\":3,\"zone\":\"engaged\"}')
+    """, "v2-spells-b15-summons")
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── Knowledge Book (tips shown during travel/rest) ───────────────────────
     _exec("""
         ALTER TABLE character_spells ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0
