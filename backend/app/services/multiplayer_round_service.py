@@ -1076,11 +1076,11 @@ def submit_mp_combat_action(
     After the player's action, enemy actors in turn_order are auto-resolved immediately
     until the next human player slot is reached.
 
-    action_type: 'attack' | 'spell' | 'defense'
+    action_type: 'attack' | 'spell' | 'defense' | 'revive'
     """
     from app.services.combat_service import (
         get_active_combat, advance_turn, apply_mp_default_defense,
-        resolve_attack,
+        resolve_attack, revive_knocked_mp_player,
     )
 
     actor_id = f"player:{character_id}"
@@ -1092,7 +1092,31 @@ def submit_mp_combat_action(
 
     enemy_results: list[dict] = []
 
-    if action_type == "defense":
+    if action_type == "revive":
+        # G17 (#794): companion revive — target_id must be "player:N"
+        if not target_id or not str(target_id).startswith("player:"):
+            raise ValueError("revive action requires target_id='player:N'")
+        try:
+            tchar_id = int(str(target_id).split(":")[1])
+        except (ValueError, IndexError):
+            raise ValueError(f"invalid target_id for revive: {target_id}")
+        revive_result = revive_knocked_mp_player(campaign_id, tchar_id)
+        if not revive_result:
+            raise ValueError(f"target {target_id} is not knocked or not in combat")
+        advance_turn(campaign_id)
+        final_snap = get_active_combat(campaign_id)
+        next_turn = (final_snap or {}).get("current_turn", "") if final_snap else ""
+        if next_turn and (final_snap or {}).get("status") == "active":
+            try:
+                _push_combat_turn(campaign_id, str(next_turn))
+            except Exception as e:
+                logger.warning("push_revive_advance_failed", error=str(e)[:100])
+        return {
+            "player_result": revive_result,
+            "enemy_results": [],
+            "combat_state": final_snap,
+        }
+    elif action_type == "defense":
         result = apply_mp_default_defense(campaign_id, character_id)
         player_result = result
     else:

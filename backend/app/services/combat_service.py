@@ -4077,6 +4077,39 @@ def _find_combatant(combatants: list[dict], cid: str) -> dict | None:
     return None
 
 
+# ── G17 (#794) — Knockdown helpers ───────────────────────────────────────────
+
+def _find_active_player_combatant(combatants: list[dict]) -> dict | None:
+    """G17: first non-knocked, hp>0 player combatant ('player' or 'player:N')."""
+    for c in combatants:
+        cid = str(c.get("id") or "")
+        if cid != "player" and not cid.startswith("player:"):
+            continue
+        if int(c.get("hp_current", 0) or 0) <= 0:
+            continue
+        if c.get("knocked"):
+            continue
+        return c
+    return None
+
+
+def _all_players_knocked(combatants: list[dict]) -> bool:
+    """G17: True when every player combatant has hp<=0 (knocked or dead)."""
+    players = [
+        c for c in combatants
+        if str(c.get("id") or "") == "player" or str(c.get("id") or "").startswith("player:")
+    ]
+    return bool(players) and all(int(c.get("hp_current", 0) or 0) <= 0 for c in players)
+
+
+def _is_mp_combat(combatants: list[dict]) -> bool:
+    """G17: True if this is MP combat (players use 'player:N' ids)."""
+    return any(
+        str(c.get("id") or "").startswith("player:") and c.get("type") == "player"
+        for c in combatants
+    )
+
+
 # ── G7 (#791) — Multiplayer combat helpers ────────────────────────────────────
 
 def _mp_player_char_id(actor_id: str) -> int | None:
@@ -5660,7 +5693,7 @@ def resolve_attack(
 
         # ── Zone AI: melee enemy in different zone charges instead of attacking ──
         _ensure_zones(combatants)
-        player_c = _find_combatant(combatants, "player") or {}
+        player_c = _find_active_player_combatant(combatants) or {}
 
         # ── S19 (#614): gracz z kondycją hidden jest UNTARGETABLE — wróg nie może go zaatakować.
         # Zamiast ataku próbuje wykryć: rzut WIS (staty wroga z S2) vs detect_dc (z effect_json hidden).
@@ -5746,9 +5779,25 @@ def resolve_attack(
         )
         attack_roll = raw + atk_b + wp
         out["wound_penalty"] = wp
-        p = _find_combatant(combatants, "player")
+        # G17 (#794): use first active (non-knocked) player; reload sheet for MP target
+        p = _find_active_player_combatant(combatants)
         if not p:
-            raise ValueError("player combatant missing")
+            # All players knocked — enemy has no valid target; advance turn
+            _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+            conn.commit()
+            advance_turn(campaign_id)
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
+        _target_mp_ch_id = _mp_player_char_id(str(p.get("id") or ""))
+        if _target_mp_ch_id is not None and _target_mp_ch_id != ch_id:
+            ch_id = _target_mp_ch_id
+            _tchar = conn.execute(
+                "SELECT id, sheet_json FROM characters WHERE id=?", (ch_id,)
+            ).fetchone()
+            if _tchar:
+                sheet = parse_character_sheet(_tchar["sheet_json"])
+                from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov_cs
+                _ov_cs(conn, campaign_id, ch_id, sheet)
         pac = int(p.get("defense", _player_ac_from_sheet(sheet)))
         p["defense"] = pac  # przechowujemy BAZOWĄ obronę (bez parowania)
         # #598: parowanie (cięższa main + druga broń w off) → +obrona dla TEGO ciosu,
@@ -6041,9 +6090,15 @@ def resolve_attack(
         out["combat_state"] = load_combat_snapshot(campaign_id)
 
     if attacker == "enemy" and out.get("player_incapacitated"):
-        end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
-        out["defeated_by"] = out.get("enemy_name")
-        out["combat_state"] = load_combat_snapshot(campaign_id)
+        _snap_chk = load_combat_snapshot(campaign_id)
+        _combatants_chk: list[dict] = (_snap_chk or {}).get("combatants") or []
+        if _is_mp_combat(_combatants_chk):
+            # G17 (#794): MP — knocked, not dead
+            _handle_mp_player_knocked(campaign_id, out)
+        else:
+            end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
+            out["defeated_by"] = out.get("enemy_name")
+            out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
 
 
@@ -6199,9 +6254,15 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         out["combat_state"] = load_combat_snapshot(campaign_id)
 
     if out.get("player_incapacitated"):
-        end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
-        out["defeated_by"] = out.get("enemy_name")
-        out["combat_state"] = load_combat_snapshot(campaign_id)
+        _snap_chk2 = load_combat_snapshot(campaign_id)
+        _combatants_chk2: list[dict] = (_snap_chk2 or {}).get("combatants") or []
+        if _is_mp_combat(_combatants_chk2):
+            # G17 (#794): MP — knocked, not dead
+            _handle_mp_player_knocked(campaign_id, out)
+        else:
+            end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
+            out["defeated_by"] = out.get("enemy_name")
+            out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
 
 
@@ -6796,6 +6857,139 @@ def is_combat_active(conn: sqlite3.Connection | None, campaign_id: int) -> bool:
     return get_active_combat(campaign_id) is not None
 
 
+# ── G17 (#794) — MP knockdown / wipe / revive ────────────────────────────────
+
+def _handle_mp_player_knocked(campaign_id: int, out: dict) -> None:
+    """G17: Mark the incapacitated player as knocked in MP; advance turn; check wipe."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id=? AND status='active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        for c in combatants:
+            cid = str(c.get("id") or "")
+            if (cid == "player" or cid.startswith("player:")) and int(c.get("hp_current", 0) or 0) <= 0:
+                c["knocked"] = True
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+    out["player_knocked"] = True
+    out["player_incapacitated"] = False
+    advance_turn(campaign_id)
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+
+
+def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any) -> None:
+    """G17: Wipe — gold penalty + revive at 50% HP; end combat 'wipe'.
+
+    Penalty table (avg party level): 1-3 → 10%, 4-7 → 20%, 8+ → 30%.
+    Players with < 50 gold are exempt. Items/XP/levels untouched.
+    """
+    from app.services.economy_service import change_gold
+
+    player_combs = [
+        c for c in combatants
+        if str(c.get("id") or "") == "player" or str(c.get("id") or "").startswith("player:")
+    ]
+
+    # Avg level
+    levels: list[int] = []
+    for c in player_combs:
+        cid = _mp_player_char_id(str(c.get("id") or ""))
+        char_id = cid if cid is not None else (
+            int(row["character_id"]) if row else None
+        )
+        if char_id:
+            try:
+                ch = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id=?", (char_id,)
+                ).fetchone()
+                if ch:
+                    lvl = int((parse_character_sheet(ch["sheet_json"]) or {}).get("level") or 1)
+                    levels.append(max(1, lvl))
+            except Exception:
+                levels.append(1)
+    avg_level = int(sum(levels) / len(levels)) if levels else 1
+    if avg_level <= 3:
+        pct = 0.10
+    elif avg_level <= 7:
+        pct = 0.20
+    else:
+        pct = 0.30
+
+    _GOLD_THRESHOLD = 50
+
+    for c in player_combs:
+        cid = _mp_player_char_id(str(c.get("id") or ""))
+        char_id = cid if cid is not None else (
+            int(row["character_id"]) if row else None
+        )
+        # Revive at 50% HP
+        max_hp = int(c.get("hp_max") or 1)
+        revival_hp = max(1, int(max_hp * 0.50))
+        c["hp_current"] = revival_hp
+        c["knocked"] = False
+
+        if char_id:
+            # Sync revival HP to campaign_character_state so post-combat turns see correct HP
+            try:
+                ch_row = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id=?", (char_id,)
+                ).fetchone()
+                if ch_row:
+                    wipe_sheet = parse_character_sheet(ch_row["sheet_json"])
+                    from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov
+                    _ov(conn, campaign_id, char_id, wipe_sheet)
+                    wipe_sheet["current_hp"] = revival_hp
+                    _save_char_sheet(conn, campaign_id, char_id, wipe_sheet)
+            except Exception:
+                pass
+
+            # Gold penalty (skip if < threshold)
+            try:
+                gr = conn.execute("SELECT gold_gp FROM characters WHERE id=?", (char_id,)).fetchone()
+                if gr:
+                    gold = int(gr["gold_gp"] or 0)
+                    if gold >= _GOLD_THRESHOLD:
+                        penalty = max(1, int(gold * pct))
+                        change_gold(conn, char_id, -penalty, "wipe_penalty", campaign_id=campaign_id)
+            except Exception:
+                pass
+
+    _persist_combatants(conn, row, combatants)
+    conn.execute(
+        "UPDATE active_combat SET status='ended', ended_reason='wipe', updated_at=? WHERE campaign_id=?",
+        (_now_iso(), campaign_id),
+    )
+    conn.commit()
+
+
+def revive_knocked_mp_player(campaign_id: int, target_char_id: int) -> dict[str, Any] | None:
+    """G17: Revive a knocked MP player to ~25% HP. Called on companion 'revive' action."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id=? AND status='active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return None
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        target_actor_id = f"player:{target_char_id}"
+        target = _find_combatant(combatants, target_actor_id)
+        if not target:
+            return None
+        if not target.get("knocked"):
+            return None
+        max_hp = int(target.get("hp_max") or 1)
+        target["hp_current"] = max(1, int(max_hp * 0.25))
+        target["knocked"] = False
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+    return {"revived": target_actor_id, "hp_restored": target["hp_current"]}
+
+
 def _advance_turn_impl(campaign_id: int) -> str:
     with _conn() as conn:
         row = conn.execute(
@@ -6807,7 +7001,16 @@ def _advance_turn_impl(campaign_id: int) -> str:
 
         combatants: list[dict] = json.loads(row["combatants"] or "[]")
         order: list[str] = json.loads(row["turn_order"] or "[]")
+        _is_mp = _is_mp_combat(combatants)
+
         if _all_enemies_dead(combatants):
+            # G17 (#794): auto-revive knocked players at 1 HP before victory
+            if _is_mp:
+                for c in combatants:
+                    cid = str(c.get("id") or "")
+                    if (cid == "player" or cid.startswith("player:")) and c.get("knocked"):
+                        c["knocked"] = False
+                        c["hp_current"] = max(1, c.get("hp_current") or 1)
             _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason="victory")
             conn.commit()
             # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
@@ -6823,12 +7026,24 @@ def _advance_turn_impl(campaign_id: int) -> str:
                 pass
             return "ended"
 
+        # G17 (#794): in MP, check wipe BEFORE building living list
+        if _is_mp and _all_players_knocked(combatants):
+            _apply_mp_wipe(campaign_id, conn, combatants, row)
+            try:
+                set_world_state_flags(campaign_id, scene_enemies=[])
+            except Exception:
+                pass
+            return "wipe"
+
+        # Build living: skip hp<=0 actors AND knocked players
         living: list[str] = []
         for tid in order:
             c = _find_combatant(combatants, tid)
             if not c:
                 continue
             if int(c.get("hp_current", 0) or 0) <= 0:
+                continue
+            if c.get("knocked"):
                 continue
             living.append(tid)
 
