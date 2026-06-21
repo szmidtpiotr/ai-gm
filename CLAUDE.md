@@ -221,6 +221,7 @@ Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 
 - Frontend change: edit under `frontend/` → verify in browser at `https://aigm-dev.studio-colorbox.com/` → check console.
 - JS version strings in imports (`?v=N`) must be bumped when a shared module changes to bust browser cache.
 - **Player-UI ledger:** any change under `frontend/front/` (new/changed screen, modal, gameplay component, or system) → add or update the matching `F-NN` entry in `frontend_design.md` (Section 7, Feature Ledger), per the convention in Section 9. Keeps the redesign target 1:1 with the live player UI.
+- **Księga Zasad ledger (living document):** any change that alters **player-facing rules/mechanics** (new/changed skill, spell, condition, combat rule, stat/DC change) → update the living Rules Book `frontend/front/rules/index.html` (served at `/rules/`) in the **same PR**. Checklist: chapter prose + example · test/entry card · gloss tooltip on new terms + "Pełny opis →" link · TOC entry + anchor `id` · illustration via Juggernaut-XL on `.170` if a scene/skill/spell. The Księga **describes, never defines** — source of truth stays `backend/prompts/system_prompt.txt`, `game_mechanics.md`, engine code, `game_config_*`. Skip when the change does not touch player rules. Per issue #868.
 
 ### Implementation record issues (mandatory)
 
