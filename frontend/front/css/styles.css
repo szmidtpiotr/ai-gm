@@ -9047,6 +9047,12 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: #6ad08a;
 }
 
+.auth-msg--info {
+  background: rgba(90, 140, 200, 0.12);
+  border: 1px solid rgba(90, 140, 200, 0.3);
+  color: #8ab4e8;
+}
+
 .auth-countdown {
   font-size: var(--font-size-xs);
   color: var(--text-muted);

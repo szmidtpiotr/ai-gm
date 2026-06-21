@@ -515,6 +515,7 @@ async function handleLogin(e) {
                     if (flags?.visual_theme) _applyTheme(flags.visual_theme);
                 } catch (_) {}
             }
+            if (await consumePendingJoin()) return;
             if (!response.onboarded_at) {
                 showOnboardingCinematic();
             } else {
@@ -687,6 +688,7 @@ async function autoVerifyEmail(token) {
         }
         showToast('Email potwierdzony! Witaj w AI-GM.', 'success');
         await loadHeroes();
+        if (await consumePendingJoin()) return;
         if (!resp.onboarded_at) {
             showOnboardingCinematic();
         } else {
@@ -828,7 +830,40 @@ function checkUrlRouting() {
             return true;
         }
     }
+    const joinToken = params.get('join');
+    if (joinToken) {
+        localStorage.setItem('pendingJoinToken', joinToken);
+        history.replaceState({}, '', window.location.pathname);
+        if (!localStorage.getItem('token')) {
+            const notice = document.getElementById('register-mp-join-notice');
+            if (notice) notice.hidden = false;
+            showScreen('register');
+            return true;
+        }
+        // logged in — fall through; init() will call consumePendingJoin()
+        return false;
+    }
     return false;
+}
+
+async function consumePendingJoin() {
+    const token = localStorage.getItem('pendingJoinToken');
+    if (!token) return false;
+    localStorage.removeItem('pendingJoinToken');
+    try {
+        const resp = await apiRequest('GET', `/multiplayer/join/${token}`);
+        showToast(`Dołączyłeś do kampanii: ${resp.title || ''}`, 'success');
+        await loadCampaigns();
+        showScreen('campaigns');
+        return true;
+    } catch (e) {
+        const status = e?.status || 0;
+        if (status === 410) showToast('Link zaproszenia wygasł lub został już użyty', 'warning');
+        else if (status === 400) showToast('Lobby jest pełne lub już wystartowało', 'warning');
+        else if (status === 404) showToast('Link zaproszenia jest nieprawidłowy', 'error');
+        else showToast('Nie udało się dołączyć do kampanii', 'error');
+        return false;
+    }
 }
 
 function checkAuth() {
@@ -11507,6 +11542,7 @@ async function init() {
         if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
         await loadHeroes();
         if (!authToken) return; // handleSessionExpired fired during loadHeroes
+        if (await consumePendingJoin()) return;
         if (await tryRestoreSession()) return;
         if (!authToken) return; // handleSessionExpired fired during tryRestoreSession
         showScreen('heroes');
