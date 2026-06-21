@@ -1152,7 +1152,7 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
                 (round_id, campaign_id, m["user_id"], char_id, char_name, action_text),
             )
             # G22 (#803) — autopilot opt-in: consent means voluntary absence, no warning penalty
-            if not int(m.get("autopilot_consent", 0)):
+            if not int(m["autopilot_consent"]):
                 conn.execute(
                     "UPDATE campaign_members SET absence_warnings = absence_warnings + 1 "
                     "WHERE campaign_id=? AND user_id=?",

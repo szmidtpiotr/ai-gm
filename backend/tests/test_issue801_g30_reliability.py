@@ -40,7 +40,8 @@ def _fresh_db(tmp_path):
         CREATE TABLE campaign_members (
             id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,
             character_id INTEGER, status TEXT DEFAULT 'accepted',
-            absence_warnings INTEGER DEFAULT 0, pending_intro INTEGER DEFAULT 0
+            absence_warnings INTEGER DEFAULT 0, pending_intro INTEGER DEFAULT 0,
+            autopilot_consent INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE campaign_rounds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
