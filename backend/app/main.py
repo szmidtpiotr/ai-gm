@@ -443,6 +443,8 @@ RAW_MIGRATIONS = [
     # Multiplayer columns on campaign_members
     "ALTER TABLE campaign_members ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'",
     "ALTER TABLE campaign_members ADD COLUMN character_id INTEGER",
+    # G5 (#789) — initiative_roll per action for conflict resolution ordering
+    "ALTER TABLE campaign_round_actions ADD COLUMN initiative_roll INTEGER NOT NULL DEFAULT 0",
 ]
 
 

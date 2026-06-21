@@ -79,6 +79,7 @@ def _make_test_db(tmp_path):
             character_name TEXT NOT NULL,
             action_text TEXT NOT NULL,
             submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            initiative_roll INTEGER NOT NULL DEFAULT 0,
             UNIQUE(round_id, user_id)
         );
     """)

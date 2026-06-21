@@ -8,6 +8,8 @@ Flow:
 """
 
 import json
+import random
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -17,6 +19,75 @@ from app.core.logging import get_logger
 from app.services import llm_service
 
 logger = get_logger(__name__)
+
+
+# G5 #789 — injectable dice function for testability
+def _d20() -> int:
+    return random.randint(1, 20)
+
+
+def _roll_initiative(character_id: int, conn: sqlite3.Connection) -> int:
+    """G5 #789: Roll d20 + DEX modifier from character sheet."""
+    dex_mod = 0
+    if character_id:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id=?", (character_id,)
+        ).fetchone()
+        if row and row["sheet_json"]:
+            try:
+                sheet = json.loads(row["sheet_json"])
+                stats = sheet.get("stats") or {}
+                dex = int(stats.get("DEX", 10))
+                dex_mod = (dex - 10) // 2
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+    return _d20() + dex_mod
+
+
+def resolve_initiative_conflicts(
+    actions: list, scene_enemies: list
+) -> list:
+    """G5 #789: Sort actions by initiative_roll DESC; detect enemy-targeting conflicts.
+
+    When multiple players' actions mention the same scene enemy, the highest-initiative
+    player claims it. Lower-initiative players targeting the same enemy get
+    conflict_note='Cel już martwy'. Does not mutate the input list or dicts.
+    Returns a new sorted list.
+    """
+    sorted_actions = sorted(
+        [dict(a) for a in actions],
+        key=lambda a: (a.get("initiative_roll", 0),),
+        reverse=True,
+    )
+
+    # Build deduplicated enemy name variants for matching
+    _seen_names: set = set()
+    enemy_names: list = []
+    for e in (scene_enemies or []):
+        for field in ("name", "key"):
+            v = (e.get(field) or "").strip().lower()
+            if v and len(v) > 2 and v not in _seen_names:
+                _seen_names.add(v)
+                enemy_names.append(v)
+
+    claimed: dict = {}  # lowercase enemy name → user_id of first claimant
+
+    for action in sorted_actions:
+        text = (action.get("action_text") or "").lower()
+        conflict_note = None
+
+        for name in enemy_names:
+            if name not in text:
+                continue
+            if name in claimed:
+                conflict_note = "Cel już martwy"
+                break
+            claimed[name] = action.get("user_id", 0)
+
+        if conflict_note:
+            action["conflict_note"] = conflict_note
+
+    return sorted_actions
 
 _MULTIPLAYER_SYSTEM_PROMPT = """Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym świecie fantasy.
 Odpowiadasz WYŁĄCZNIE po polsku.
@@ -30,13 +101,22 @@ Prowadzisz grupę graczy (2–4 osoby) w TRYBIE MULTIPLAYER. Wszystkie zasady so
 - Każdego gracza adresuj po imieniu jego postaci.
 - Akcje wszystkich graczy w rundzie dzieją się RÓWNOCZEŚNIE — narruj je jako jedną spójną scenę.
 
+### INICJATYWA I KOLEJNOŚĆ ROZSTRZYGANIA (G5)
+- Akcje graczy są podane W KOLEJNOŚCI inicjatywy (wyższa = pierwsza; numer przed imieniem).
+- Gracz z wyższą inicjatywą działa PIERWSZY — jego akcja rozstrzyga się jako pierwsza.
+- Jeśli akcja gracza ma marker [KONFLIKT: Cel już martwy], ten gracz dotarł za późno.
+  → Wstaw do player_notes dla tego gracza komunikat: "Cel już martwy — Twoja postać była za wolna".
+  → Narruj że cel już nie żyje zanim bohater zdążył zaatakować.
+  → NIE stosuj efektów ataku do martwego wroga (brak podwójnych obrażeń).
+- [KONFLIKT: Cel już zabrany] — przedmiot/cel zniknął zanim gracz dotarł.
+  → Wstaw do player_notes: "Cel już zabrany — ktoś był szybszy".
+
 ### JEDNOCZESNOŚĆ AKCJI
-- Wszyscy gracze w rundzie działają w tym samym momencie.
-- Nie ma kolejki — narruj jakby wszyscy ruszyli jednocześnie.
+- Akcje graczy w rundzie rozstrzygają się w kolejności inicjatywy, ale narruj je jako płynną scenę.
+- Każdy gracz ma swój moment — narruj ich działania jako jedną spójną scenę, nie serial wydarażeń.
 - Jeśli akcje graczy są SPRZECZNE (jeden atakuje NPC którego drugi chce przekonać słowami):
-  → Najpierw opisz co każdy próbuje zrobić.
-  → Następnie rozstrzygnij konflikt logicznie (przemoc wyklucza dialog w tej rundzie).
-  → Narruj naturalną konsekwencję konfliktu.
+  → Wyższy init ma pierwszeństwo — jego akcja narzuca rzeczywistość dla pozostałych.
+  → Narruj naturalną konsekwencję konfliktu inicjatyw.
 
 ### FORMAT ODPOWIEDZI
 Odpowiedź MUSI być poprawnym JSON:
@@ -153,17 +233,21 @@ def submit_action(
             round_id = int(round_row["id"])
             prev_status = round_row["status"]
 
+        # G5 #789 — roll initiative before storing action
+        initiative = _roll_initiative(character_id, conn)
+
         conn.execute(
             """
             INSERT INTO campaign_round_actions
-                (round_id, campaign_id, user_id, character_id, character_name, action_text)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative_roll)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(round_id, user_id) DO UPDATE SET
                 action_text = excluded.action_text,
                 character_name = excluded.character_name,
-                submitted_at = datetime('now')
+                submitted_at = datetime('now'),
+                initiative_roll = excluded.initiative_roll
             """,
-            (round_id, campaign_id, user_id, character_id, character_name, action_text),
+            (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative),
         )
         conn.execute(
             "UPDATE campaign_members SET absence_warnings = 0 WHERE campaign_id=? AND user_id=?",
@@ -211,7 +295,8 @@ def trigger_narration(round_id: int) -> None:
         round_number = int(row["round_number"])
 
         actions = conn.execute(
-            "SELECT character_name, action_text FROM campaign_round_actions WHERE round_id = ? ORDER BY submitted_at",
+            "SELECT character_name, action_text, user_id, initiative_roll "
+            "FROM campaign_round_actions WHERE round_id = ? ORDER BY submitted_at",
             (round_id,),
         ).fetchall()
     finally:
@@ -222,15 +307,16 @@ def trigger_narration(round_id: int) -> None:
 
     # G4 #788 — include shared world state context so LLM knows current scene state
     ws_context = ""
+    scene_enemies: list = []
     try:
         from app.services.world_state_service import get_world_state_flags
         ws = get_world_state_flags(campaign_id)
         parts = []
-        enemies = ws.get("scene_enemies") or []
+        scene_enemies = ws.get("scene_enemies") or []
         npcs = ws.get("scene_npcs") or []
         quests = ws.get("active_quests") or []
-        if enemies:
-            names = [e.get("name", e.get("key", "?")) for e in enemies]
+        if scene_enemies:
+            names = [e.get("name", e.get("key", "?")) for e in scene_enemies]
             parts.append(f"Wrogowie w scenie: {', '.join(names)}")
         if npcs:
             names = [n.get("name", n.get("key", "?")) for n in npcs]
@@ -242,11 +328,29 @@ def trigger_narration(round_id: int) -> None:
     except Exception as e:
         logger.warning("mp_world_state_context_failed", round_id=round_id, error=str(e)[:100])
 
-    actions_block = "\n".join(
-        f"{a['character_name']}: \"{a['action_text']}\"" for a in actions
-    )
+    # G5 #789 — sort by initiative, detect conflicts
+    action_dicts = [
+        {
+            "user_id": int(a["user_id"]),
+            "character_name": a["character_name"],
+            "action_text": a["action_text"],
+            "initiative_roll": int(a["initiative_roll"]),
+        }
+        for a in actions
+    ]
+    resolved_actions = resolve_initiative_conflicts(action_dicts, scene_enemies)
+
+    # Build initiative-ordered actions block with conflict markers
+    action_lines = []
+    for i, a in enumerate(resolved_actions, 1):
+        line = f"{i}. {a['character_name']} (inicjatywa {a['initiative_roll']}): \"{a['action_text']}\""
+        if a.get("conflict_note"):
+            line += f" [KONFLIKT: {a['conflict_note']}]"
+        action_lines.append(line)
+
+    actions_block = "\n".join(action_lines)
     user_msg = (
-        f"[RUNDA {round_number} — AKCJE GRACZY — wszyscy działają jednocześnie]\n\n"
+        f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
         f"{ws_context}"
         f"{actions_block}"
     )
@@ -283,6 +387,15 @@ def trigger_narration(round_id: int) -> None:
             "roll_cues": [],
             "player_notes": {},
         }
+
+    # G5 #789 — merge backend conflict notes into player_notes so they reach the player
+    # regardless of whether LLM noticed the conflict
+    for action in resolved_actions:
+        if action.get("conflict_note"):
+            char = action["character_name"]
+            existing = parsed.get("player_notes", {}).get(char, "")
+            if not existing:
+                parsed.setdefault("player_notes", {})[char] = action["conflict_note"]
 
     conn = _db()
     try:
