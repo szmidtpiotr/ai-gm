@@ -96,3 +96,8 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/803#issuecomment-4763551201
 - Werdykt ✅ — 4/4 API checks PASS, kolumna autopilot_consent w DB potwierdzona, 6/6 pytest GREEN
 - Uwaga: test_both_consent_levels_increment_warnings zaktualizowany (commit a5e1b408) — design zmieniony przez #804: autopilot=1 NIE podbija warnings
+
+## G29 #810 — Ochrona promptu przed injection
+- Wdrożone commit fcd8394d — _sanitize_action_text() + delimitery <<AKCJA_GRACZA>> + reguła G29 w system prompt + _MAX_ACTION_TEXT_LEN=1000
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/810#issuecomment-4763690903
+- Werdykt ✅ — 12/12 pytest GREEN, API 400 dla >1000 znaków, 200 dla normalnego tekstu, backend zdrowy po rebuild
