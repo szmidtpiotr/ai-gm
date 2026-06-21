@@ -17,6 +17,7 @@ from typing import Optional
 from app.core.db_runtime import resolve_db_path
 from app.core.logging import get_logger
 from app.services import llm_service
+from app.services.dice import parse_character_sheet, resolve_roll
 
 logger = get_logger(__name__)
 
@@ -89,6 +90,29 @@ def resolve_initiative_conflicts(
 
     return sorted_actions
 
+# G8 (#792) — Pass 1: planner LLM decides which tests are needed (returns JSON array, no narrative)
+_MP_PLANNER_PROMPT = """Jesteś planistą testów umiejętności dla sesji RPG.
+Na podstawie akcji graczy zdecyduj, które testy umiejętności są potrzebne w tej rundzie.
+
+Odpowiedz WYŁĄCZNIE poprawnym JSON array (bez dodatkowego tekstu, bez markdown):
+[
+  {"character_name": "ImiéPostaci", "test": "stealth", "dc": 12}
+]
+
+Nazwy kanoniczne testów (używaj wyłącznie tych):
+stealth, athletics, awareness, persuasion, intimidation, medicine, survival, lore,
+investigation, arcana, alchemy, melee_attack, ranged_attack, spell_attack,
+fortitude_save, reflex_save, willpower_save, arcane_save, death_save.
+
+Skala DC: easy=8, medium=12, hard=16, extreme=20, legendary=24+
+
+Zasady:
+- Uwzględnij tylko postaci, których akcje WYRAŹNIE wymagają rzutu (fizyczna trudność, przekonywanie, skradanie itp.).
+- Akcje narracyjne (rozmowa bez perswazji, ruch po otwartym terenie) → brak testu.
+- Odpowiedź MUSI być samym JSON array. Jeśli brak testów → odpowiedz [].
+"""
+
+# G8 (#792) — Pass 2: narrator LLM receives roll results as immutable facts
 _MULTIPLAYER_SYSTEM_PROMPT = """Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym świecie fantasy.
 Odpowiadasz WYŁĄCZNIE po polsku.
 
@@ -118,21 +142,24 @@ Prowadzisz grupę graczy (2–4 osoby) w TRYBIE MULTIPLAYER. Wszystkie zasady so
   → Wyższy init ma pierwszeństwo — jego akcja narzuca rzeczywistość dla pozostałych.
   → Narruj naturalną konsekwencję konfliktu inicjatyw.
 
+### WYNIKI RZUTÓW — FAKTY NIENARUSZALNE (G8)
+Jeśli w wiadomości użytkownika widzisz sekcję [WYNIKI RZUTÓW]:
+- Te wyniki są OBLICZONE PRZEZ KOD — nie możesz ich zmienić ani odwrócić.
+- Sukces pozostaje sukcesem, porażka pozostaje porażką — nawet jeśli narracyjnie wolałbyś inaczej.
+- Wstaw każdy wynik rzutu do narracji w formacie: 🎲 <Umiejętność>: <suma> vs DC <dc> ✓/✗
+  Przykłady: "🎲 Skradanie: 14 vs DC 12 ✓", "🎲 Perswazja: 8 vs DC 16 ✗"
+- Nat 20 = krytyczny sukces (napisz to wprost). Nat 1 = krytyczna porażka (napisz to wprost).
+
 ### FORMAT ODPOWIEDZI
 Odpowiedź MUSI być poprawnym JSON:
 {
-  "narrative": "Narracja całej rundy w 3. osobie. Opis akcji wszystkich graczy i ich wyników.",
-  "roll_cues": [
-    {"player": "nazwa_postaci", "skill": "Nazwa umiejętności", "dc": 12, "reason": "krótki powód"}
-  ],
+  "narrative": "Narracja całej rundy w 3. osobie. Zawiera 🎲 linie dla każdego rzutu.",
   "player_notes": {
     "nazwa_postaci": "Prywatna informacja tylko dla tego gracza"
   }
 }
 
-- "roll_cues" — lista rzutów których potrzebuje GM. Puste [] jeśli nie ma.
 - "player_notes" — prywatne notatki per gracz. Pomiń klucz jeśli brak prywatnej informacji.
-- Jeśli akcja gracza wymaga rzutu — uwzględnij w roll_cues, nie blokuj narracji.
 
 ### STYL
 - Max 5 akapitów na narrację zbiorową.
@@ -282,6 +309,48 @@ def submit_action(
         conn.close()
 
 
+def _llm_call(driver, cfg: dict, system_prompt: str, user_msg: str) -> str:
+    return driver.generate_chat(
+        base_url=cfg["base_url"],
+        model=cfg["model"],
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        api_key=cfg.get("api_key", ""),
+    )
+
+
+def _parse_json_response(raw: str) -> dict | list:
+    clean = raw.strip()
+    if clean.startswith("```"):
+        clean = clean.split("\n", 1)[1]
+        clean = clean.rsplit("```", 1)[0].strip()
+    return json.loads(clean)
+
+
+def _load_character_sheet(char_id: int, conn: sqlite3.Connection) -> dict:
+    row = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id=?", (char_id,)
+    ).fetchone()
+    if not row:
+        return {}
+    return parse_character_sheet(row["sheet_json"])
+
+
+def _format_roll_fact_line(fact: dict) -> str:
+    verdict = "✓" if fact.get("success") else "✗"
+    if fact.get("is_nat20"):
+        verdict = "✓ KRYTYCZNY SUKCES"
+    elif fact.get("is_nat1"):
+        verdict = "✗ KRYTYCZNA PORAŻKA"
+    return (
+        f"{fact['character_name']} / {fact['test']}: "
+        f"k20={fact['raw']}, mod={fact['modifier']:+d}, suma {fact['total']} "
+        f"vs DC {fact['dc']} → {verdict}"
+    )
+
+
 def trigger_narration(round_id: int) -> None:
     conn = _db()
     try:
@@ -295,10 +364,18 @@ def trigger_narration(round_id: int) -> None:
         round_number = int(row["round_number"])
 
         actions = conn.execute(
-            "SELECT character_name, action_text, user_id, initiative_roll "
+            "SELECT character_name, action_text, user_id, initiative_roll, character_id "
             "FROM campaign_round_actions WHERE round_id = ? ORDER BY submitted_at",
             (round_id,),
         ).fetchall()
+
+        # G8 #792 — preload character sheets for skill rolls
+        char_sheets: dict[str, dict] = {}
+        for a in actions:
+            char_name = a["character_name"]
+            char_id = int(a["character_id"]) if a["character_id"] else 0
+            if char_id and char_name not in char_sheets:
+                char_sheets[char_name] = _load_character_sheet(char_id, conn)
     finally:
         conn.close()
 
@@ -349,7 +426,7 @@ def trigger_narration(round_id: int) -> None:
         action_lines.append(line)
 
     actions_block = "\n".join(action_lines)
-    user_msg = (
+    actions_header = (
         f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
         f"{ws_context}"
         f"{actions_block}"
@@ -365,15 +442,56 @@ def trigger_narration(round_id: int) -> None:
         else:
             driver = llm_service.OllamaDriver()
 
-        raw = driver.generate_chat(
-            base_url=cfg["base_url"],
-            model=cfg["model"],
-            messages=[
-                {"role": "system", "content": _MULTIPLAYER_SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            api_key=cfg.get("api_key", ""),
-        )
+        # G8 #792 — Pass 1: planner decides which skill tests are needed
+        planner_raw = _llm_call(driver, cfg, _MP_PLANNER_PROMPT, actions_header)
+        try:
+            planned_tests = _parse_json_response(planner_raw)
+            if not isinstance(planned_tests, list):
+                planned_tests = []
+        except Exception as e:
+            logger.warning("mp_planner_parse_failed", round_id=round_id, error=str(e)[:100])
+            planned_tests = []
+
+        # G8 #792 — Roll code: resolve each planned test with the locked formula
+        roll_facts: list[dict] = []
+        for entry in planned_tests:
+            if not isinstance(entry, dict):
+                continue
+            char_name = entry.get("character_name", "")
+            test_name = entry.get("test", "")
+            dc = entry.get("dc")
+            sheet = char_sheets.get(char_name, {})
+            try:
+                dc_int = int(dc) if dc is not None else None
+                result = resolve_roll(sheet, test_name, dc=dc_int)
+                fact = {
+                    "character_name": char_name,
+                    "test": result["test"],
+                    "raw": result["raw"],
+                    "modifier": result["modifier"],
+                    "total": result["total"],
+                    "dc": dc_int,
+                    "success": result["success"],
+                    "is_nat20": result["is_nat20"],
+                    "is_nat1": result["is_nat1"],
+                }
+                roll_facts.append(fact)
+            except Exception as e:
+                logger.warning(
+                    "mp_roll_failed", char=char_name, test=test_name,
+                    round_id=round_id, error=str(e)[:100]
+                )
+
+        # G8 #792 — Pass 2: narrator receives roll results as immutable facts
+        narrator_user = actions_header
+        if roll_facts:
+            lines = [_format_roll_fact_line(f) for f in roll_facts]
+            narrator_user += (
+                "\n\n[WYNIKI RZUTÓW — FAKTY NIENARUSZALNE (rzucone przez kod)]\n"
+                + "\n".join(lines)
+            )
+
+        raw = _llm_call(driver, cfg, _MULTIPLAYER_SYSTEM_PROMPT, narrator_user)
 
         clean = raw.strip()
         if clean.startswith("```"):
@@ -387,6 +505,10 @@ def trigger_narration(round_id: int) -> None:
             "roll_cues": [],
             "player_notes": {},
         }
+        roll_facts = []
+
+    # G8 #792 — store roll_facts alongside narrative so frontend can display them
+    parsed["roll_facts"] = roll_facts
 
     # G5 #789 — merge backend conflict notes into player_notes so they reach the player
     # regardless of whether LLM noticed the conflict
@@ -556,11 +678,17 @@ def get_round_narration(campaign_id: int, user_id: int) -> Optional[dict]:
             "WHERE round_id=? ORDER BY submitted_at",
             (round_id,),
         ).fetchall()
+        # G8 #792 — filter roll_facts to show only this player's rolls
+        all_roll_facts = data.get("roll_facts", [])
+        my_roll_facts = [
+            f for f in all_roll_facts if f.get("character_name") == character_name
+        ] if character_name else []
         return {
             "round_id": round_id,
             "round_number": int(row["round_number"]),
             "narrative": data.get("narrative", ""),
             "roll_cues": data.get("roll_cues", []),
+            "roll_facts": my_roll_facts,
             "my_note": my_note,
             "actions": [{"character_name": a["character_name"], "action_text": a["action_text"]} for a in actions],
         }
