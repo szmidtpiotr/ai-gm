@@ -992,6 +992,22 @@ def submit_round_action(
     return result
 
 
+@router.delete("/campaigns/{campaign_id}/round/action")
+def withdraw_round_action(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    """G24 (#805) — player withdraws (deletes) their action from the current collecting round."""
+    uid = resolve_authed_user_id(authorization, user_id)
+    result = svc.withdraw_action(campaign_id=campaign_id, user_id=uid)
+    if result.get("error") == "round_closed":
+        raise HTTPException(status_code=409, detail=result["detail"])
+    if result.get("error") == "no_active_round":
+        raise HTTPException(status_code=404, detail=result["detail"])
+    return result
+
+
 @router.get("/campaigns/{campaign_id}/round/status")
 def get_round_status(
     campaign_id: int,

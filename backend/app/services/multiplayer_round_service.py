@@ -301,14 +301,29 @@ def submit_action(
 ) -> dict:
     conn = _db()
     try:
-        # Accept both collecting AND narrating rounds (prevents phantom new rounds on re-edit races)
+        # G24 (#805): only 'collecting' rounds accept edits; narrating/done → block
         round_row = conn.execute(
-            "SELECT * FROM campaign_rounds WHERE campaign_id = ? AND status IN ('collecting', 'narrating') "
+            "SELECT * FROM campaign_rounds WHERE campaign_id = ? "
             "ORDER BY round_number DESC LIMIT 1",
             (campaign_id,),
         ).fetchone()
 
         just_transitioned = False
+        if round_row and round_row["status"] != "collecting":
+            submitted = int(conn.execute(
+                "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
+                (int(round_row["id"]),),
+            ).fetchone()["cnt"])
+            total = _get_campaign_member_count(campaign_id, conn)
+            return {
+                "round_id": int(round_row["id"]),
+                "status": round_row["status"],
+                "submitted": submitted,
+                "total": total,
+                "error": "round_closed",
+                "detail": "runda już domknięta",
+            }
+
         if not round_row:
             last = conn.execute(
                 "SELECT MAX(round_number) as mx FROM campaign_rounds WHERE campaign_id = ?",
@@ -411,6 +426,55 @@ def submit_action(
             "submitted": submitted,
             "total": total,
             "just_transitioned": just_transitioned,
+        }
+    finally:
+        conn.close()
+
+
+def withdraw_action(campaign_id: int, user_id: int) -> dict:
+    """G24 (#805) — delete player's action from the current collecting round.
+
+    Returns error='round_closed' if round is past collecting, or
+    error='no_active_round' if no round exists.
+    """
+    conn = _db()
+    try:
+        round_row = conn.execute(
+            "SELECT * FROM campaign_rounds WHERE campaign_id = ? "
+            "ORDER BY round_number DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+
+        if not round_row:
+            return {"error": "no_active_round", "detail": "brak aktywnej rundy"}
+
+        if round_row["status"] != "collecting":
+            return {
+                "round_id": int(round_row["id"]),
+                "status": round_row["status"],
+                "error": "round_closed",
+                "detail": "runda już domknięta — wycofanie niemożliwe",
+            }
+
+        round_id = int(round_row["id"])
+        conn.execute(
+            "DELETE FROM campaign_round_actions WHERE round_id=? AND user_id=?",
+            (round_id, user_id),
+        )
+        conn.commit()
+
+        submitted = int(conn.execute(
+            "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
+            (round_id,),
+        ).fetchone()["cnt"])
+        total = _get_campaign_member_count(campaign_id, conn)
+
+        return {
+            "round_id": round_id,
+            "status": "collecting",
+            "submitted": submitted,
+            "total": total,
+            "withdrawn": True,
         }
     finally:
         conn.close()
