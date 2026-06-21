@@ -12,6 +12,7 @@ from app.core.jwt_auth import require_current_user
 from app.core.logging import get_logger
 from app.services.push_notification_service import (
     delete_subscription,
+    get_diagnostics,
     get_vapid_public_key,
     save_subscription,
 )
@@ -43,6 +44,13 @@ def vapid_public_key():
     if not key:
         raise HTTPException(status_code=503, detail="Push notifications not configured")
     return {"publicKey": key}
+
+
+@router.get("/push/diagnostics")
+def push_diagnostics():
+    """Unauthenticated server-readiness check for the player-UI push panel.
+    Exposes config presence/lengths/bools only — no secret material (#593)."""
+    return get_diagnostics()
 
 
 @router.post("/users/push-subscription", status_code=201)

@@ -13854,12 +13854,43 @@ async function _registerServiceWorker() {
     }
 }
 
+// #593 round 4 — every enable attempt records a step trail so a failure is
+// VISIBLE on screen (and in window.__pushDiag) instead of needing a remote
+// debugging round. _pushDiagPush(step, ok, detail).
+window.__pushDiag = [];
+function _pushDiagReset() { window.__pushDiag = []; _pushDiagRender(); }
+function _pushDiagPush(step, ok, detail) {
+    window.__pushDiag.push({ step, ok, detail: detail || '' });
+    _pushDiagRender();
+}
+function _pushDiagRender() {
+    const el = document.getElementById('push-diag');
+    if (!el) return;
+    el.innerHTML = window.__pushDiag.map(d =>
+        `<li>${d.ok === true ? '✅' : d.ok === false ? '❌' : '⏳'} ${d.step}` +
+        (d.detail ? ` — <span style="color:var(--t3)">${String(d.detail).replace(/</g, '&lt;')}</span>` : '') +
+        `</li>`
+    ).join('');
+}
+
 async function enablePushNotifications() {
     const btn = document.getElementById('enable-push-btn');
+    _pushDiagReset();
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        _pushDiagPush('Wsparcie przeglądarki', false, 'brak serviceWorker/PushManager/Notification');
         _setPushStatus('Twoja przeglądarka nie obsługuje powiadomień push.');
         return;
     }
+    _pushDiagPush('Wsparcie przeglądarki', true, '');
+
+    // Must be logged in — the subscription is saved against the player's account.
+    // Without a JWT the browser would subscribe but the POST 401s → silent 0 rows.
+    if (!localStorage.getItem('aigm_access_token')) {
+        _pushDiagPush('Zalogowany', false, 'brak tokenu — zaloguj się i spróbuj ponownie');
+        _setPushStatus('Musisz być zalogowany, aby włączyć powiadomienia.');
+        return;
+    }
+    _pushDiagPush('Zalogowany', true, '');
 
     // CRITICAL (#593): requestPermission() MUST run synchronously inside the click
     // gesture — BEFORE any `await`. An await first consumes the user-activation and
@@ -13867,7 +13898,9 @@ async function enablePushNotifications() {
     let permPromise;
     if (Notification.permission === 'granted') {
         permPromise = Promise.resolve('granted');
+        _pushDiagPush('Zgoda przeglądarki', true, 'już przyznana');
     } else if (Notification.permission === 'denied') {
+        _pushDiagPush('Zgoda przeglądarki', false, 'ZABLOKOWANA — odblokuj w 🔒 obok adresu, odśwież');
         _setPushStatus(
             '⛔ Powiadomienia są ZABLOKOWANE dla tej strony — przeglądarka nie pokaże już pytania. ' +
             'Odblokuj ręcznie: Desktop → kliknij 🔒/⚙ obok adresu → „Powiadomienia" → Zezwól (lub Resetuj), odśwież. ' +
@@ -13882,43 +13915,88 @@ async function enablePushNotifications() {
     try {
         const perm = await permPromise;
         if (perm !== 'granted') {
+            _pushDiagPush('Zgoda przeglądarki', false, 'odpowiedź: ' + perm);
             _setPushStatus('Nie udzielono zgody na powiadomienia.');
             return;
         }
+        if (Notification.permission === 'granted') _pushDiagPush('Zgoda przeglądarki', true, 'przyznana');
+        // Server readiness — surfaces a misconfigured server half on screen.
+        const diag = await apiRequest('GET', '/push/diagnostics').catch(() => null);
+        if (diag) _pushDiagPush('Serwer gotowy', !!diag.configured && !!diag.pywebpush_installed && !!diag.private_key_loadable,
+            `configured=${diag.configured}, pywebpush=${diag.pywebpush_installed}, klucz_ok=${diag.private_key_loadable}`);
         // VAPID public key from backend
         const vapid = await apiRequest('GET', '/push/vapid-public-key').catch(() => null);
         if (!vapid || !vapid.publicKey) {
+            _pushDiagPush('Klucz VAPID', false, 'serwer nie zwrócił klucza');
             _setPushStatus('Zgoda udzielona, ale serwer nie ma kluczy VAPID (push nieskonfigurowany).');
             return;
         }
+        _pushDiagPush('Klucz VAPID', true, vapid.publicKey.slice(0, 12) + '…');
         // register SW + subscribe
         const reg = await _registerServiceWorker();
-        if (!reg) { _setPushStatus('Nie udało się zarejestrować service workera.'); return; }
+        if (!reg) { _pushDiagPush('Service worker', false, 'rejestracja nieudana'); _setPushStatus('Nie udało się zarejestrować service workera.'); return; }
         await navigator.serviceWorker.ready;
+        _pushDiagPush('Service worker', true, 'scope ' + reg.scope);
         // A subscription created with a DIFFERENT applicationServerKey (e.g. an old/
         // broken VAPID key from a previous attempt) makes subscribe() throw
         // InvalidStateError. Drop any stale subscription first so the current key applies.
         const existing = await reg.pushManager.getSubscription();
         if (existing) { try { await existing.unsubscribe(); } catch (e) { /* ignore */ } }
-        const sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: _urlBase64ToUint8Array(vapid.publicKey),
-        });
+        let sub;
+        try {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: _urlBase64ToUint8Array(vapid.publicKey),
+            });
+        } catch (e) {
+            _pushDiagPush('Subskrypcja push', false, (e && e.name ? e.name + ': ' : '') + (e && e.message || e));
+            throw e;
+        }
+        _pushDiagPush('Subskrypcja push', true, sub.endpoint.slice(0, 40) + '…');
         // persist subscription on backend
         const json = sub.toJSON();
-        await apiRequest('POST', '/users/push-subscription', {
-            endpoint: json.endpoint,
-            keys: json.keys,
-        });
+        try {
+            await apiRequest('POST', '/users/push-subscription', {
+                endpoint: json.endpoint,
+                keys: json.keys,
+            });
+        } catch (e) {
+            _pushDiagPush('Zapis na serwer', false, (e && e.status ? 'HTTP ' + e.status + ': ' : '') + (e && e.message || e));
+            throw e;
+        }
+        _pushDiagPush('Zapis na serwer', true, 'zapisano — urządzenie widoczne w admin → Push');
         _setPushStatus('✓ Powiadomienia włączone na tym urządzeniu.');
         if (btn) btn.textContent = 'Powiadomienia włączone ✓';
         // Immediate local proof so the user sees a real notification right away.
         try { await reg.showNotification('AI-GM', { body: '🔔 Powiadomienia włączone — będziesz dostawać info o swojej turze.', icon: '/front/icon-192.png' }); } catch (e) { /* ignore */ }
     } catch (e) {
         console.error('[push] enable failed', e);
-        _setPushStatus('Błąd włączania powiadomień: ' + (e.message || e));
+        _setPushStatus('Błąd włączania powiadomień: ' + (e.message || e) + ' — patrz 🩺 Diagnostyka poniżej.');
     } finally {
         if (btn) btn.disabled = false;
+    }
+}
+
+// Read-only diagnostics: inspects current state WITHOUT requesting permission or
+// subscribing — so the user can run it any time and report exactly what's wrong.
+async function runPushDiagnostics() {
+    _pushDiagReset();
+    const sw = 'serviceWorker' in navigator, pm = 'PushManager' in window, nt = 'Notification' in window;
+    _pushDiagPush('Wsparcie przeglądarki', sw && pm && nt, `SW=${sw} Push=${pm} Notif=${nt}`);
+    _pushDiagPush('Bezpieczny kontekst (HTTPS)', window.isSecureContext, location.origin);
+    _pushDiagPush('Zalogowany', !!localStorage.getItem('aigm_access_token'), '');
+    if (nt) _pushDiagPush('Zgoda przeglądarki', Notification.permission === 'granted',
+        Notification.permission + (Notification.permission === 'denied' ? ' — odblokuj w 🔒 obok adresu' : ''));
+    const diag = await apiRequest('GET', '/push/diagnostics').catch(() => null);
+    if (diag) _pushDiagPush('Serwer gotowy', !!diag.configured && !!diag.pywebpush_installed && !!diag.private_key_loadable,
+        `configured=${diag.configured}, pywebpush=${diag.pywebpush_installed}, klucz_ok=${diag.private_key_loadable}, pub_len=${diag.public_key_len}`);
+    else _pushDiagPush('Serwer gotowy', false, '/api/push/diagnostics nieosiągalny');
+    if (sw) {
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            const ex = reg ? await reg.pushManager.getSubscription() : null;
+            _pushDiagPush('Istniejąca subskrypcja', !!ex, ex ? ex.endpoint.slice(0, 40) + '…' : 'brak (kliknij „Włącz")');
+        } catch (e) { _pushDiagPush('Istniejąca subskrypcja', false, e && e.message || e); }
     }
 }
 
@@ -13927,6 +14005,11 @@ function initWebPush() {
     if (btn && !btn._wired) {
         btn._wired = true;
         btn.addEventListener('click', enablePushNotifications);
+    }
+    const diagBtn = document.getElementById('push-diag-btn');
+    if (diagBtn && !diagBtn._wired) {
+        diagBtn._wired = true;
+        diagBtn.addEventListener('click', runPushDiagnostics);
     }
     // Pre-register the SW on load (non-gesture, allowed) so it's ready when the
     // user clicks — keeps the in-gesture path short.

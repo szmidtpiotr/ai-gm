@@ -28,6 +28,36 @@ def get_vapid_public_key() -> str:
     return _VAPID_PUBLIC_KEY
 
 
+def get_diagnostics() -> dict:
+    """Server-side push readiness — safe to expose unauthenticated.
+
+    Reports presence/length/loadability of config, NEVER the raw key material,
+    so the player-UI diagnostics panel can show whether the *server* half of the
+    chain is healthy (#593 round 4 — end the blind remote-debug loop)."""
+    import importlib.util
+
+    priv = _VAPID_PRIVATE_KEY
+    pub = _VAPID_PUBLIC_KEY
+    pywebpush_installed = importlib.util.find_spec("pywebpush") is not None
+    private_key_loadable = False
+    if priv:
+        try:
+            from py_vapid import Vapid01
+
+            Vapid01.from_raw(priv.encode())
+            private_key_loadable = True
+        except Exception:
+            private_key_loadable = False
+    return {
+        "configured": _is_configured(),
+        "public_key_len": len(pub),
+        "private_key_len": len(priv),
+        "private_key_loadable": private_key_loadable,
+        "has_email": bool(_VAPID_EMAIL),
+        "pywebpush_installed": pywebpush_installed,
+    }
+
+
 def _is_configured() -> bool:
     return bool(_VAPID_PRIVATE_KEY and _VAPID_PUBLIC_KEY)
 

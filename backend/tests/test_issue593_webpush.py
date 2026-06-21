@@ -55,3 +55,41 @@ def test_configured_vapid_private_key_is_loadable():
     from py_vapid import Vapid01
     # raw base64url scalar format used by send_push — must not raise
     Vapid01.from_raw(priv.encode())
+
+
+# ─── Round 4: server-readiness diagnostics (end the blind remote-debug loop) ──
+
+def test_get_diagnostics_reports_server_readiness(monkeypatch):
+    """#593: a single call must report whether the server can actually push —
+    so the on-screen panel can show config status instead of us guessing."""
+    monkeypatch.setattr(pns, "_VAPID_PRIVATE_KEY", "x" * 43)
+    monkeypatch.setattr(pns, "_VAPID_PUBLIC_KEY", "y" * 87)
+    monkeypatch.setattr(pns, "_VAPID_EMAIL", "mailto:a@b.c")
+    d = pns.get_diagnostics()
+    assert d["configured"] is True
+    assert d["public_key_len"] == 87
+    assert d["private_key_len"] == 43
+    assert d["has_email"] is True
+    assert d["pywebpush_installed"] is True
+    assert "private_key_loadable" in d  # may be False for the dummy key — key is presence
+
+
+def test_diagnostics_never_leaks_secrets(monkeypatch):
+    """Diagnostics is an UNAUTHENTICATED endpoint — it must expose lengths/bools,
+    never the raw private key material."""
+    monkeypatch.setattr(pns, "_VAPID_PRIVATE_KEY", "supersecretprivkey")
+    d = pns.get_diagnostics()
+    assert "supersecretprivkey" not in str(d)
+
+
+def test_diagnostics_endpoint_returns_200():
+    """#593: GET /api/push/diagnostics must be reachable for the UI panel."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as c:
+        r = c.get("/api/push/diagnostics")
+        assert r.status_code == 200
+        body = r.json()
+        assert "configured" in body
+        assert "pywebpush_installed" in body
