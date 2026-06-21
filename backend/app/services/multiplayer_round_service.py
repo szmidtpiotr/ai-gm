@@ -411,6 +411,73 @@ def get_round_narration(campaign_id: int, user_id: int) -> Optional[dict]:
         conn.close()
 
 
+def sweep_expired_rounds() -> None:
+    """Close expired collecting rounds; insert [BRAK AKCJI] for missing players.
+
+    Idempotent: only touches status='collecting' rounds whose deadline has passed.
+    """
+    conn = _db()
+    try:
+        expired = conn.execute(
+            "SELECT id, campaign_id FROM campaign_rounds "
+            "WHERE status='collecting' AND datetime(deadline) < datetime('now')"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for row in expired:
+        round_id = int(row["id"])
+        campaign_id = int(row["campaign_id"])
+        try:
+            _close_expired_round(round_id, campaign_id)
+        except Exception as e:
+            logger.error("sweep_close_failed", round_id=round_id, error=str(e)[:200])
+
+
+def _close_expired_round(round_id: int, campaign_id: int) -> None:
+    import threading
+
+    conn = _db()
+    try:
+        r = conn.execute(
+            "SELECT status FROM campaign_rounds WHERE id=?", (round_id,)
+        ).fetchone()
+        if not r or r["status"] != "collecting":
+            return
+
+        missing = conn.execute(
+            """SELECT m.user_id, c.id as char_id, c.name as char_name
+               FROM campaign_members m
+               LEFT JOIN characters c ON c.campaign_id=m.campaign_id AND c.user_id=m.user_id
+               WHERE m.campaign_id=? AND m.status='accepted'
+               AND m.user_id NOT IN (
+                   SELECT user_id FROM campaign_round_actions WHERE round_id=?
+               )""",
+            (campaign_id, round_id),
+        ).fetchall()
+
+        for m in missing:
+            char_id = m["char_id"] or 0
+            char_name = m["char_name"] or f"Gracz{m['user_id']}"
+            conn.execute(
+                """INSERT OR IGNORE INTO campaign_round_actions
+                   (round_id, campaign_id, user_id, character_id, character_name, action_text)
+                   VALUES (?, ?, ?, ?, ?, '[BRAK AKCJI]')""",
+                (round_id, campaign_id, m["user_id"], char_id, char_name),
+            )
+
+        conn.execute(
+            "UPDATE campaign_rounds SET status='narrating', closed_at=datetime('now') WHERE id=?",
+            (round_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info("sweep_round_closed", round_id=round_id, campaign_id=campaign_id)
+    threading.Thread(target=trigger_narration, args=(round_id,), daemon=True).start()
+
+
 def get_rounds_history(campaign_id: int, user_id: int) -> list:
     """Return all completed rounds with actions + narration for full chat restore."""
     conn = _db()

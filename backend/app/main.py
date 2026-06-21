@@ -403,6 +403,46 @@ RAW_MIGRATIONS = [
     " WHERE (label IS NULL OR TRIM(label) = '')"
     " AND item_key LIKE 'narrative_item_%'"
     " AND item_key IN (SELECT key FROM game_config_items)",
+    # G1 (#785) — Multiplayer round tables + missing columns on campaigns/campaign_members.
+    # campaign_rounds: tracks one collecting→narrating→done round per MP campaign.
+    # campaign_round_actions: one row per player per round (UNIQUE round_id, user_id).
+    """CREATE TABLE IF NOT EXISTS campaign_rounds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        round_number INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'collecting',
+        deadline TEXT,
+        closed_at TEXT,
+        narrative_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS campaign_round_actions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        round_id INTEGER NOT NULL,
+        campaign_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        character_id INTEGER,
+        character_name TEXT NOT NULL,
+        action_text TEXT NOT NULL,
+        submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(round_id, user_id),
+        FOREIGN KEY (round_id) REFERENCES campaign_rounds(id)
+    )""",
+    # Indexes for sweep query performance
+    "CREATE INDEX IF NOT EXISTS idx_campaign_rounds_status ON campaign_rounds(status, deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_campaign_round_actions_round ON campaign_round_actions(round_id, user_id)",
+    # Multiplayer columns on campaigns (already present for multiplayer.py to work)
+    "ALTER TABLE campaigns ADD COLUMN round_timer_minutes INTEGER NOT NULL DEFAULT 1440",
+    "ALTER TABLE campaigns ADD COLUMN round_timer_hours INTEGER NOT NULL DEFAULT 24",
+    "ALTER TABLE campaigns ADD COLUMN max_players INTEGER NOT NULL DEFAULT 4",
+    "ALTER TABLE campaigns ADD COLUMN host_user_id INTEGER",
+    "ALTER TABLE campaigns ADD COLUMN lobby_status TEXT NOT NULL DEFAULT 'open'",
+    "ALTER TABLE campaigns ADD COLUMN host_note TEXT",
+    "ALTER TABLE campaigns ADD COLUMN template_id INTEGER",
+    # Multiplayer columns on campaign_members
+    "ALTER TABLE campaign_members ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'",
+    "ALTER TABLE campaign_members ADD COLUMN character_id INTEGER",
 ]
 
 
@@ -534,8 +574,28 @@ async def lifespan(app: FastAPI):
             _backfill_terrain_tags()
         except Exception:
             pass
+    # G1 (#785) — background sweep: close MP rounds past deadline every 30s.
+    async def _mp_sweep_loop() -> None:
+        import asyncio as _asyncio
+        while True:
+            try:
+                from app.services.multiplayer_round_service import sweep_expired_rounds
+                await _asyncio.to_thread(sweep_expired_rounds)
+            except Exception as _e:
+                logger.warning("mp_sweep_error", error=str(_e)[:200])
+            await _asyncio.sleep(30)
+
+    import asyncio as _asyncio
+    _sweep_task = _asyncio.create_task(_mp_sweep_loop())
+
     yield
-    # Shutdown (nothing needed)
+
+    # Shutdown
+    _sweep_task.cancel()
+    try:
+        await _sweep_task
+    except _asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
