@@ -137,7 +137,7 @@
       { key: 'world',      label: 'Świat',      ico: '⊕' },
       { key: 'map',        label: 'Mapa',       ico: '🗺' },
       { key: 'mechanics',  label: 'Mechanika',  ico: '⚙' },
-      { key: 'game-mechanics', label: 'Zasady Gry', ico: '📖' },
+      { key: 'game-mechanics', label: 'Księga Zasad', ico: '📖' },
       { key: 'dungeons',   label: 'Lochy',      ico: '⛓' },
       { key: 'forge',      label: 'Kuźnia',     ico: '⚒' },
       { key: 'invites',    label: 'Zaproszenia',ico: '✉' },
@@ -225,7 +225,7 @@
       panelRoot.appendChild(section);
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js?v=57`);
+        const mod = await import(`./sections/${key}.js?v=58`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(section);
           // Auto-enhance tables already in DOM after init (sort + resize + filter — #591)

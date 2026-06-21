@@ -6,60 +6,113 @@
 <title>Księga Zasad</title>
 <style>
   :root{
-    --ink:#e9ddc2;
-    --ink-dim:#b3a282;
-    --gold:#c9a24b;
-    --gold-soft:#8a7233;
-    --blood:#86302f;
-    --bg:#15110c;
-    --bg-panel:#1d1812;
-    --bg-box:#241d14;
-    --line:#3a2f20;
-    --crit:#c9a24b;
-    --fail:#9b4a3a;
-    --say-gm:#9ccb7a;       /* dialog MG / NPC — zielony */
-    --say-pc:#7fb2e6;        /* dialog gracza — niebieski */
+    --ink:#e9ddc2; --ink-dim:#b3a282; --gold:#c9a24b; --gold-soft:#8a7233;
+    --blood:#86302f; --bg:#15110c; --bg-panel:#1d1812; --bg-box:#241d14;
+    --line:#3a2f20; --crit:#c9a24b; --fail:#9b4a3a;
+    --say-gm:#9ccb7a; --say-pc:#7fb2e6;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{
-    margin:0;
-    background:radial-gradient(1200px 600px at 50% -10%, #241b10 0%, transparent 60%), var(--bg);
-    color:var(--ink);
-    font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
-    font-size:19px;line-height:1.74;-webkit-font-smoothing:antialiased;
-  }
-  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:240px 1fr;gap:48px}
-  @media(max-width:880px){.wrap{grid-template-columns:1fr;gap:0}.toc{display:none}}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%, #241b10 0%, transparent 60%), var(--bg);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;font-size:19px;line-height:1.74;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:256px 1fr;gap:48px}
 
-  /* ── Spis treści ── */
-  .toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:40px 0;border-right:1px solid var(--line)}
-  .toc h4{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);margin:0 0 14px}
-  .toc .lead{list-style:none;margin:0 0 10px;padding:0}
-  .toc .lead a{color:var(--ink-dim);text-decoration:none;display:block;padding:5px 8px 5px 36px;border-radius:4px;font-size:15px}
-  .toc .lead a:hover,.toc .lead.active a{background:var(--bg-panel);color:var(--gold)}
-  .toc ol{list-style:none;margin:0;padding:0;counter-reset:ch}
-  .toc ol li{counter-increment:ch;margin:0 0 4px;font-size:15px}
-  .toc ol li a{color:var(--ink-dim);text-decoration:none;display:flex;gap:10px;padding:5px 8px;border-radius:4px}
-  .toc ol li a:before{content:counter(ch,upper-roman);color:var(--gold-soft);min-width:26px;text-align:right;font-variant-numeric:tabular-nums}
-  .toc ol li a:hover{background:var(--bg-panel);color:var(--ink)}
-  .toc ol li.active a{color:var(--gold);background:var(--bg-panel)}
-  .toc li.soon a{opacity:.4;cursor:default;font-style:italic}
-  .toc li.soon a:hover{background:none;color:var(--ink-dim)}
+  /* ── Pasek górny + backdrop (mobile) ── */
+  .topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;z-index:300;align-items:center;gap:12px;padding:0 12px;background:#15110c;border-bottom:1px solid var(--gold-soft)}
+  .topbar .menu-btn{display:flex;align-items:center;justify-content:center;width:44px;height:40px;border-radius:8px;background:#1d1812;border:1px solid var(--gold-soft);color:var(--gold);font-size:20px;cursor:pointer;flex:0 0 auto}
+  .topbar .topbar-t{font-family:sans-serif;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--gold-soft)}
+  .toc-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:150}
+
+  /* skala czcionki (A− / A+) — zoom skaluje px treści; menu zostaje */
+  main{zoom:var(--book-zoom,1)}
+  .fontctl{display:flex;align-items:center;gap:6px;margin:0 2px 12px}
+  .fontctl button{flex:0 0 auto;width:34px;height:32px;border-radius:7px;background:#0e0b07;border:1px solid var(--line);color:var(--gold);font-family:Georgia,serif;cursor:pointer;line-height:1}
+  .fontctl button:hover{border-color:var(--gold-soft)}
+  .fontctl .am{font-size:13px} .fontctl .ap{font-size:18px}
+  .fontctl .lbl{font-family:sans-serif;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-soft);margin-right:auto}
+
+  /* wyniki wyszukiwania */
+  .toc-results{display:none}
+  .toc.searching .toc-tree{display:none}
+  .toc.searching .toc-results{display:block}
+  .toc-res{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:8px 9px;cursor:pointer;color:var(--ink);font-family:inherit}
+  .toc-res:hover{background:var(--bg-panel)}
+  .toc-res .rl{display:block;font-size:14.5px;color:var(--ink)}
+  .toc-res .rc{display:block;font-size:11px;letter-spacing:.06em;color:var(--gold-soft);font-family:sans-serif;margin-top:1px}
+  .toc-res mark{background:rgba(201,162,75,.28);color:#fff;border-radius:2px;padding:0 1px}
+  .toc-nores{display:none;padding:12px 9px;color:var(--ink-dim);font-style:italic;font-size:14px}
+  .toc.searching.empty .toc-nores{display:block}
+
+  /* ── Edytor admina — pływający przycisk (FAB) ── */
+  .ed-fab{display:none;position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:400;
+    width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--gold);color:#1a130a;font-size:25px;line-height:1;
+    align-items:center;justify-content:center;
+    box-shadow:0 10px 26px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.35),0 0 0 4px rgba(201,162,75,.18)}
+  body.is-admin .ed-fab{display:flex}
+  .ed-fab:active{transform:scale(.94)}
+  .ed-fab.on{background:#5a8a35;color:#fff;box-shadow:0 10px 26px rgba(0,0,0,.6),0 0 0 4px rgba(90,138,53,.28)}
+  body.editing [data-eb]{outline:1px dashed rgba(201,162,75,.45);outline-offset:3px;border-radius:2px;cursor:text}
+  body.editing [data-eb]:focus{outline:2px solid var(--gold);background:rgba(201,162,75,.06)}
+  [data-eb].ed-saved{animation:edflash 1.1s ease}
+  @keyframes edflash{0%{background:rgba(120,160,70,.28)}100%{background:transparent}}
+  .ed-toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(6px);z-index:500;
+    background:#100c08;border:1px solid var(--gold-soft);color:var(--ink);font-family:sans-serif;font-size:13px;padding:7px 14px;border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:80vw}
+  .ed-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ── Tryb podstron (jeden rozdział na raz) ── */
+  .section-divider{display:none}
+  main>section{display:none}
+  main>section.is-active{display:block}
+  .chap-nav{display:flex;gap:12px;margin:54px 0 0;padding-top:22px;border-top:1px solid var(--line)}
+  .chap-nav a{flex:1 1 0;min-width:0;color:var(--ink);text-decoration:none;font-family:"Iowan Old Style",Georgia,serif;font-size:16px;background:var(--bg-panel);border:1px solid var(--line);border-radius:9px;padding:12px 16px}
+  .chap-nav a:hover{border-color:var(--gold-soft)}
+  .chap-nav a.next{text-align:right}
+  .chap-nav a.disabled{visibility:hidden}
+  .chap-nav .nl{display:block;font-family:sans-serif;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-soft);margin-bottom:3px}
+
+  /* ── Menu (TOC) ── */
+  .toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:30px 0;border-right:1px solid var(--line)}
+  .toc h4{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);margin:0 0 12px;padding:0 8px}
+  .toc-search{width:calc(100% - 4px);margin:0 2px 14px;padding:9px 12px;background:#0e0b07;border:1px solid var(--line);border-radius:7px;color:var(--ink);font-family:inherit;font-size:14px}
+  .toc-search::placeholder{color:#7a6c52}
+  .toc-search:focus{outline:none;border-color:var(--gold-soft)}
+  .toc-tree{list-style:none;margin:0;padding:0}
+  .chap{margin:0 0 1px}
+  .chap-h{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;color:var(--ink-dim);font-family:inherit;font-size:15px;padding:8px;border-radius:6px;cursor:pointer}
+  .chap-h:hover{background:var(--bg-panel);color:var(--ink)}
+  .chap-h .rn{color:var(--gold-soft);min-width:22px;text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+  .chap-h .ttl{flex:1 1 auto}
+  .chap-h .caret{color:var(--gold-soft);font-size:10px;transition:transform .2s;opacity:.8}
+  .chap.open>.chap-h .caret{transform:rotate(90deg)}
+  .chap.open>.chap-h{color:var(--gold)}
+  .chap.soon>.chap-h{opacity:.4;cursor:default;font-style:italic}
+  .chap.soon>.chap-h .caret{display:none}
+  .subs{list-style:none;margin:0;padding:0;overflow:hidden;max-height:0;transition:max-height .26s ease}
+  .chap.open>.subs{max-height:520px}
+  .subs a{display:block;padding:6px 8px 6px 40px;color:var(--ink-dim);text-decoration:none;font-size:13.5px;border-radius:6px;line-height:1.35}
+  .subs a:hover{background:var(--bg-panel);color:var(--ink)}
+  .subs a.active{color:var(--gold);background:var(--bg-panel)}
+  .toc-empty{display:none;padding:14px 10px;color:var(--ink-dim);font-style:italic;font-size:14px}
+  .toc.no-results .toc-empty{display:block}
+  .is-hidden{display:none!important}
 
   /* ── Treść ── */
   main{padding:56px 0 120px;min-width:0}
+  section::after{content:"";display:table;clear:both}
   .eyebrow{font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold-soft);text-align:center;margin:0 0 6px}
   .booktitle{text-align:center;font-size:15px;letter-spacing:.5em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 40px}
-  h1{font-size:clamp(34px,6vw,56px);line-height:1.05;margin:0 0 8px;text-align:center;font-weight:600;color:var(--ink)}
+  h1{font-size:clamp(32px,6vw,56px);line-height:1.05;margin:0 0 8px;text-align:center;font-weight:600;color:var(--ink)}
   h1 .num{display:block;font-size:14px;letter-spacing:.4em;color:var(--blood);text-transform:uppercase;margin-bottom:14px}
   .subtitle{text-align:center;color:var(--ink-dim);font-style:italic;font-size:21px;margin:0 0 6px}
-  .rule{border:0;height:24px;margin:34px auto 40px;max-width:340px;background:linear-gradient(var(--gold-soft),var(--gold-soft)) no-repeat center/100% 1px;position:relative}
+  .rule{border:0;height:24px;margin:34px auto 40px;max-width:340px;background:linear-gradient(var(--gold-soft),var(--gold-soft)) no-repeat center/100% 1px;position:relative;clear:both}
   .rule:before{content:"❖";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--bg);padding:0 16px;color:var(--gold);font-size:18px}
-  .section-divider{margin:96px 0 0;border-top:1px solid var(--line)}
+  .section-divider{margin:96px 0 0;border-top:1px solid var(--line);clear:both}
 
+  h2,h3{clear:both;scroll-margin-top:80px}
+  section{scroll-margin-top:80px}
   h2{font-size:30px;margin:58px 0 12px;color:var(--ink);font-weight:600;border-bottom:1px solid var(--line);padding-bottom:8px}
   h3{font-size:21px;margin:34px 0 8px;color:var(--gold);font-weight:600}
+  .scene,.formula,.degrees,table,.aside,.test{clear:both}
 
   p{margin:0 0 18px}
   .lede{font-size:21px;color:var(--ink)}
@@ -67,22 +120,29 @@
   em{color:#f2e8cf;font-style:italic}
   strong{color:#fff;font-weight:600}
 
-  /* ── Ilustracje ── */
-  figure.illus{margin:36px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0e0b07;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  /* ── Ilustracje wcięte w tekst ── */
+  figure.illus{width:43%;max-width:430px;margin:8px 0 16px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0e0b07;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  figure.illus.right{float:right;margin-left:30px}
+  figure.illus.left{float:left;margin-right:30px}
   figure.illus img{width:100%;display:block}
-  figure.illus figcaption{padding:11px 18px;font-size:14px;color:var(--ink-dim);font-style:italic;border-top:1px solid var(--line);text-align:center;font-family:"Iowan Old Style",Georgia,serif}
+  figure.illus figcaption{padding:9px 14px;font-size:13.5px;color:var(--ink-dim);font-style:italic;border-top:1px solid var(--line);text-align:center;font-family:"Iowan Old Style",Georgia,serif;line-height:1.45}
+
   .hero{margin:0 0 40px;border:1px solid var(--gold-soft);border-radius:8px;overflow:hidden;position:relative;box-shadow:0 14px 40px rgba(0,0,0,.55)}
   .hero img{width:100%;display:block}
-  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:40px 24px 18px;text-align:center;
-    background:linear-gradient(transparent,rgba(10,8,5,.92));color:var(--ink);font-style:italic;font-size:17px}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:46px 20px 18px;text-align:center;background:linear-gradient(transparent,rgba(10,8,5,.94));color:var(--ink);font-style:italic;font-size:17px}
 
-  /* ── Dymki (tooltips) ── */
+  /* ── Dymki ── */
   .gloss{color:var(--gold);cursor:help;position:relative;border-bottom:1px dotted var(--gold-soft);white-space:nowrap}
-  .gloss .tip{visibility:hidden;opacity:0;position:absolute;left:50%;bottom:calc(100% + 12px);transform:translateX(-50%) translateY(4px);width:300px;max-width:78vw;z-index:40;background:#0f0c08;border:1px solid var(--gold-soft);border-radius:7px;padding:13px 16px;color:var(--ink);font-size:15px;line-height:1.55;white-space:normal;font-family:"Iowan Old Style",Georgia,serif;font-style:normal;box-shadow:0 14px 34px rgba(0,0,0,.6);transition:opacity .14s ease,transform .14s ease;text-align:left}
+  .gloss .tip{visibility:hidden;opacity:0;position:fixed;left:0;top:0;width:300px;max-width:92vw;z-index:600;background:#100c08;border:1px solid var(--gold-soft);border-radius:8px;padding:14px 16px 13px;color:var(--ink);font-size:15px;line-height:1.55;white-space:normal;font-family:"Iowan Old Style",Georgia,serif;font-style:normal;box-shadow:0 16px 36px rgba(0,0,0,.7);transition:opacity .14s ease;text-align:left}
   .gloss .tip b{color:var(--gold);font-weight:600}
-  .gloss .tip:after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:7px solid transparent;border-top-color:var(--gold-soft)}
-  .gloss:hover .tip,.gloss:focus .tip,.gloss.tip-open .tip{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+  .gloss .tip:after{content:"";position:absolute;top:100%;left:var(--arrow-x,150px);transform:translateX(-50%);border:7px solid transparent;border-top-color:var(--gold-soft)}
+  .gloss .tip.below:after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--gold-soft)}
+  .gloss:hover .tip,.gloss:focus .tip,.gloss.tip-open .tip{visibility:visible;opacity:1}
   .gloss .tip-h{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-soft);font-family:sans-serif;margin-bottom:5px}
+  .gloss .more{display:block;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-family:sans-serif;font-size:12.5px;letter-spacing:.05em;color:var(--gold-soft);text-decoration:none}
+  .gloss .more:hover{color:var(--gold)}
+  .gloss .more:after{content:" →"}
+  .gloss .more.soon:before{content:"Pełny opis · ";opacity:.7}
 
   /* formuła */
   .formula{background:var(--bg-box);border:1px solid var(--line);border-left:3px solid var(--gold);padding:22px 26px;margin:26px 0;text-align:center;border-radius:3px;font-size:20px}
@@ -90,14 +150,15 @@
   .formula .ge{color:var(--blood);font-weight:700;padding:0 6px}
   .formula small{display:block;margin-top:10px;color:var(--ink-dim);font-size:14px;font-style:italic}
 
-  /* ── Scena narracyjna ── */
-  .scene{margin:30px 0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:linear-gradient(180deg,#1c1610,#181208)}
-  .scene-h{background:#0f0c08;padding:9px 20px;font-family:sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);border-bottom:1px solid var(--line)}
-  .scene-b{padding:22px 26px}
+  /* ── Scena ── */
+  .scene{margin:30px 0;border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,#1c1610,#181208)}
+  .scene-h{background:#0f0c08;padding:9px 20px;font-family:sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-soft);border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+  .scene-img{display:block;width:100%;border-bottom:1px solid var(--line)}
+  .scene-b{padding:22px 26px;border-radius:0 0 8px 8px}
   .scene-b p{margin:0 0 14px;font-size:18px}
   .narr{color:var(--ink)}
 
-  /* ── Dialogi — zawsze kursywa, własna linia, kolor wg mówiącego ── */
+  /* ── Dialogi ── */
   .say{display:block;font-style:italic;margin:16px 0;padding:8px 0 8px 18px;border-left:2px solid;line-height:1.6;font-size:18px}
   .say .who{display:block;font-style:normal;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-family:sans-serif;margin-bottom:3px;opacity:.75}
   .say-gm{color:var(--say-gm);border-color:#4a6b32}
@@ -105,22 +166,52 @@
   .say-pc{color:var(--say-pc);border-color:#35567e}
   .say-pc .who{color:#5d8cbf}
 
-  /* karta rzutu */
-  .roll{background:#0e0b07;border:1px solid var(--gold-soft);border-radius:6px;padding:16px 20px;margin:16px 0 4px;position:relative}
-  .roll .rh{font-family:sans-serif;font-size:11px;letter-spacing:.2em;color:var(--gold);margin-bottom:10px}
-  .roll .rh:before{content:"⚄ ";font-size:14px}
-  .roll .math{font-family:"DejaVu Sans Mono",monospace;font-size:16px;color:var(--ink);background:#070503;border:1px solid var(--line);border-radius:4px;padding:11px 14px;margin:0 0 12px;letter-spacing:.02em}
-  .roll .math b{color:var(--gold)}
-  .roll .math .die{color:#fff;background:#2a2114;border:1px solid var(--gold-soft);border-radius:4px;padding:1px 8px;font-weight:700}
-  .roll .out{font-style:italic;margin:0;font-size:16px}
-  .roll .out.win{color:#cbb36a}
-  .roll .out.lose{color:#c79a82}
-  .roll .out b{font-style:normal}
+  /* ── Karta testu ── */
+  .test{margin:22px 0;border:1px solid var(--gold-soft);border-radius:10px;background:#100c08}
+  .test-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 18px;background:#070503;border-bottom:1px solid var(--line);font-family:sans-serif;font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);border-radius:10px 10px 0 0}
+  .test-h .r{color:var(--ink-dim);text-transform:none;letter-spacing:.02em}
+  .test-h .gloss{color:var(--gold)}
+  .test-rows{padding:14px 18px 8px}
+  .test-row{display:flex;align-items:baseline;gap:12px;padding:5px 0;font-size:17px;color:var(--ink-dim)}
+  .test-row .n{flex:0 0 auto}
+  .test-row .dots{flex:1 1 auto;border-bottom:1px dotted #4a3d28;transform:translateY(-4px)}
+  .test-row .v{flex:0 0 auto;font-family:"DejaVu Sans Mono",monospace;font-weight:700;color:var(--gold);font-size:17px;min-width:48px;text-align:right}
+  .test-row .v.die{color:#fff;background:#2a2114;border:1px solid var(--gold-soft);border-radius:5px;padding:1px 10px;min-width:0}
+  .test-sum{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 18px;border-top:1px solid var(--line);background:#0b0805;font-size:18px;color:var(--ink)}
+  .test-sum b{color:#fff;font-size:21px;font-family:"DejaVu Sans Mono",monospace}
+  .test-sum .cmp{color:var(--blood);font-weight:700;font-size:20px}
+  .test-sum .margin{margin-left:auto;font-family:sans-serif;font-size:13px;letter-spacing:.06em;border:1px solid var(--gold-soft);border-radius:99px;padding:4px 13px;color:var(--gold);white-space:nowrap}
+  .test-out{padding:13px 18px;font-size:17px;border-top:1px solid var(--line);border-radius:0 0 10px 10px}
+  .test-out .verdict{font-family:sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;margin-right:8px;padding:2px 9px;border-radius:5px}
+  .test-out.ok{color:#cdddb0;background:rgba(120,160,70,.08)}
+  .test-out.ok .verdict{background:#3c5226;color:#d6e9b4}
+  .test-out.bad{color:#e3b6a4;background:rgba(160,70,50,.09)}
+  .test-out.bad .verdict{background:#5a2a20;color:#f0c4b2}
+  .test-out i{color:inherit;opacity:.95}
 
   /* sidebar */
   .aside{background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:16px 20px;margin:26px 0;font-size:16px;color:var(--ink-dim)}
   .aside h4{margin:0 0 6px;color:var(--gold);font-size:13px;letter-spacing:.16em;text-transform:uppercase;font-family:sans-serif}
   .aside p{margin:0}
+
+  /* ── Wpisy katalogu (umiejętności / czary) ── */
+  .entry-grid{display:grid;gap:14px;margin:20px 0}
+  @media(min-width:760px){.entry-grid.two{grid-template-columns:1fr 1fr}}
+  .entry{border:1px solid var(--line);border-radius:8px;background:var(--bg-panel);padding:15px 18px}
+  .entry h4{margin:0 0 7px;font-size:18px;color:var(--gold);font-weight:600;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .entry h4 .badge{font-family:sans-serif;font-size:10.5px;letter-spacing:.07em;color:var(--gold-soft);border:1px solid var(--gold-soft);border-radius:5px;padding:2px 7px;text-transform:uppercase}
+  .entry h4 .badge.dmg{color:#d49a82;border-color:#7d4634}
+  .entry h4 .badge.heal{color:#9bb56a;border-color:#4a6b32}
+  .entry h4 .badge.mana{color:#7fb2e6;border-color:#35567e}
+  .entry>p{margin:0 0 9px;font-size:16px;line-height:1.62;color:var(--ink)}
+  .entry .ex{font-size:15px;color:var(--ink-dim);font-style:italic;border-left:2px solid var(--gold-soft);padding:2px 0 2px 12px;margin:0}
+  .entry .ex .pc{color:var(--say-pc);font-style:normal;font-weight:600}
+  .entry .ex .roll-inline{font-family:"DejaVu Sans Mono",monospace;font-style:normal;color:var(--gold);font-size:14px}
+  .entry-img{width:100%;border-radius:7px;border:1px solid var(--line);display:block;margin:0 0 12px}
+  .stat-band{display:flex;align-items:center;gap:12px;margin:40px 0 6px;padding:8px 0;border-bottom:1px solid var(--gold-soft)}
+  .stat-band .sb-t{font-size:22px;color:var(--gold);font-weight:600}
+  .stat-band .sb-s{font-family:sans-serif;font-size:12px;letter-spacing:.12em;color:var(--gold-soft);text-transform:uppercase}
+  .tier-band{margin:36px 0 4px;font-family:sans-serif;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-soft);border-left:3px solid var(--gold);padding:4px 0 4px 12px}
 
   /* tabela */
   table{width:100%;border-collapse:collapse;margin:24px 0;font-size:17px}
@@ -140,106 +231,318 @@
   .deg.cf{border-left:3px solid var(--fail)} .deg.cf .lbl{color:#c07a64}
   .deg .txt{font-size:16px;color:var(--ink-dim)}
   .deg .txt b{color:var(--ink)}
-  @media(max-width:560px){.deg{grid-template-columns:1fr;gap:4px}}
 
-  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:14px;font-style:italic;text-align:center}
+  footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:14px;font-style:italic;text-align:center;clear:both}
   .draft{display:inline-block;margin-bottom:20px;font-family:sans-serif;font-style:normal;font-size:11px;letter-spacing:.2em;color:var(--gold-soft);border:1px solid var(--gold-soft);padding:4px 12px;border-radius:99px;text-transform:uppercase}
+
+  /* ════ MOBILE ════ */
+  @media(max-width:880px){
+    .wrap{grid-template-columns:1fr;gap:0;padding:0 18px}
+    .topbar{display:flex}
+    .toc{position:fixed;top:0;left:0;width:300px;max-width:86vw;height:100vh;z-index:160;background:#15110c;border-right:1px solid var(--gold-soft);transform:translateX(-105%);transition:transform .26s ease;padding:66px 14px 30px;box-shadow:14px 0 40px rgba(0,0,0,.5)}
+    body.drawer-open .toc{transform:translateX(0)}
+    body.drawer-open .toc-backdrop{display:block}
+    main{padding-top:66px}
+    figure.illus,figure.illus.left,figure.illus.right{float:none;width:100%;max-width:none;margin:22px 0}
+    body{font-size:16px;line-height:1.66}
+    .lede{font-size:17.5px}
+    .scene-b{padding:18px 16px}
+    .scene-b p{font-size:16px}
+    p{font-size:16px}
+    h2{font-size:25px}
+    h3{font-size:19px}
+    .entry>p{font-size:15px}
+    .test-row{flex-wrap:wrap;font-size:15px}
+    .test-sum .margin{margin-left:0}
+    .deg{grid-template-columns:1fr;gap:4px}
+    .hero .cap{font-size:13.5px;padding:30px 14px 14px}
+  }
+  @media(max-width:560px){
+    h1{font-size:28px}
+    .booktitle{letter-spacing:.32em}
+    .gloss .tip{width:240px}
+    .dropcap:first-letter{font-size:62px}
+  }
 </style>
 </head>
 <body>
+<header class="topbar"><button class="menu-btn" id="menuBtn" aria-label="Otwórz menu">☰</button><span class="topbar-t">Księga Zasad</span></header>
+<div class="toc-backdrop" id="backdrop"></div>
+
 <div class="wrap">
 
-  <nav class="toc">
+  <nav class="toc" id="toc">
     <h4>Spis treści</h4>
-    <ul class="lead active"><li><a href="#wstep">Wstęp · Opowieść</a></li></ul>
-    <ol>
-      <li class="active"><a href="#r1">Test umiejętności</a></li>
-      <li class="soon"><a>Siedem cech</a></li>
-      <li class="soon"><a>Umiejętności i biegłość</a></li>
-      <li class="soon"><a>Walka</a></li>
-      <li class="soon"><a>Rany i śmierć</a></li>
-      <li class="soon"><a>Stany i kondycje</a></li>
-      <li class="soon"><a>Magia uczonego</a></li>
-      <li class="soon"><a>Złoto i ekwipunek</a></li>
-      <li class="soon"><a>Odpoczynek i rozwój</a></li>
-    </ol>
+    <div class="fontctl">
+      <span class="lbl">Rozmiar</span>
+      <button type="button" id="fsDown" class="am" aria-label="Zmniejsz czcionkę">A−</button>
+      <button type="button" id="fsReset" aria-label="Domyślny rozmiar">A</button>
+      <button type="button" id="fsUp" class="ap" aria-label="Powiększ czcionkę">A+</button>
+    </div>
+    <input type="search" class="toc-search" id="tocSearch" placeholder="Szukaj w zasadach…" autocomplete="off">
+    <div class="toc-results" id="tocResults"></div>
+    <div class="toc-nores">Brak wyników.</div>
+    <ul class="toc-tree" id="tocTree">
+      <li class="chap open">
+        <button class="chap-h"><span class="rn">✦</span><span class="ttl">Wstęp · Opowieść</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#wstep">Wprowadzenie</a></li>
+          <li><a href="#w-gospoda">Gospoda na skraju błota</a></li>
+          <li><a href="#w-sygnet">Człowiek z sygnetem</a></li>
+          <li><a href="#w-noc">Nocna robota pod kapliczką</a></li>
+          <li><a href="#w-gardlo">Nóż do gardła</a></li>
+          <li><a href="#w-powrot">Powrót i zapłata</a></li>
+        </ul>
+      </li>
+      <li class="chap open">
+        <button class="chap-h"><span class="rn">I</span><span class="ttl">Test umiejętności</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r1">Wprowadzenie</a></li>
+          <li><a href="#r1-sklad">Z czego składa się wynik</a></li>
+          <li><a href="#r1-prog">Próg Trudności</a></li>
+          <li><a href="#r1-wynik">Jak czytać wynik</a></li>
+          <li><a href="#r1-walka">Kość w ferworze walki</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">II</span><span class="ttl">Siedem cech</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r2">Wprowadzenie</a></li>
+          <li><a href="#r2-lista">Czym rządzi każda cecha</a></li>
+          <li><a href="#r2-klasy">Trzy archetypy</a></li>
+          <li><a href="#r2-zycie">Punkty życia i mana</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">III</span><span class="ttl">Umiejętności i biegłość</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r3">Wprowadzenie</a></li>
+          <li><a href="#r3-ranga">Ranga i biegłość</a></li>
+          <li><a href="#r3-jak">Jak wybrać cechę</a></li>
+          <li><a href="#r3-dex">Katalog · Zręczność</a></li>
+          <li><a href="#r3-str">Katalog · Siła</a></li>
+          <li><a href="#r3-wis">Katalog · Mądrość</a></li>
+          <li><a href="#r3-int">Katalog · Inteligencja</a></li>
+          <li><a href="#r3-cha">Katalog · Charyzma</a></li>
+          <li><a href="#r3-con">Katalog · Kondycja</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">IV</span><span class="ttl">Walka</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r4">Wprowadzenie</a></li>
+          <li><a href="#r4-runda">Przebieg rundy</a></li>
+          <li><a href="#r4-init">Inicjatywa</a></li>
+          <li><a href="#r4-atak">Trafienie i unik</a></li>
+          <li><a href="#r4-obrona">Pancerz i obrażenia</a></li>
+          <li><a href="#r4-obrona2">Gdy wróg uderza w ciebie</a></li>
+          <li><a href="#r4-strefy">Zwarcie i dystans</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">V</span><span class="ttl">Rany i śmierć</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r5">Wprowadzenie</a></li>
+          <li><a href="#r5-rany">Stopnie ran</a></li>
+          <li><a href="#r5-zero">Gdy HP spada do zera</a></li>
+          <li><a href="#r5-rzuty">Rzuty na śmierć</a></li>
+          <li><a href="#r5-wskrz">Śmierć i wskrzeszenie</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">VI</span><span class="ttl">Stany i kondycje</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r6">Wprowadzenie</a></li>
+          <li><a href="#r6-rodzaje">Trzy rodzaje stanów</a></li>
+          <li><a href="#r6-dot">Rany w czasie</a></li>
+          <li><a href="#r6-kontrola">Utrata kontroli</a></li>
+          <li><a href="#r6-bufy">Wzmocnienia</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">VII</span><span class="ttl">Magia uczonego</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r7">Wprowadzenie</a></li>
+          <li><a href="#r7-mana">Mana</a></li>
+          <li><a href="#r7-rzut">Jak rzucasz czar</a></li>
+          <li><a href="#r7-ksiega">Księga czarów</a></li>
+          <li><a href="#r7-nauka">Nauka i rangi</a></li>
+          <li><a href="#r7-miscast">Miscast i krytyk</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">VIII</span><span class="ttl">Złoto i ekwipunek</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r8">Wprowadzenie</a></li>
+          <li><a href="#r8-uslugi">Usługi i ceny</a></li>
+          <li><a href="#r8-targ">Targowanie</a></li>
+          <li><a href="#r8-hazard">Hazard</a></li>
+          <li><a href="#r8-trwalosc">Trwałość i naprawa</a></li>
+          <li><a href="#r8-rzemioslo">Rzemiosło i łup</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">IX</span><span class="ttl">Odpoczynek i rozwój</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r9">Wprowadzenie</a></li>
+          <li><a href="#r9-odpoczynek">Krótki i długi odpoczynek</a></li>
+          <li><a href="#r9-xp">Doświadczenie</a></li>
+          <li><a href="#r9-rozwoj">Wydawanie PD</a></li>
+          <li><a href="#r9-poziomy">Progi poziomów</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="toc-empty">Brak wyników.</div>
   </nav>
 
   <main>
     <!-- ════════════════ WSTĘP ════════════════ -->
     <section id="wstep">
-      <p class="eyebrow">Zanim padnie pierwsza kość</p>
+      <p class="eyebrow">Kampania · Pierwsze Kroki</p>
       <p class="booktitle">Księga Zasad</p>
-      <h1><span class="num">Wstęp</span>Człowiek, którego nie powiesili</h1>
-      <p class="subtitle">Opowieść wprowadzająca w świat</p>
+      <h1><span class="num">Wstęp</span>Pod Złamanym Rogiem</h1>
+      <p class="subtitle">Pełna opowieść wprowadzająca w świat</p>
       <hr class="rule">
 
       <figure class="hero">
-        <img src="img/intro-street.png" alt="Zaułek nocą, dwie postacie we mgle, w tle szubienica">
+        <img src="img/cover-town.png" alt="Zabłocone miasteczko o zmroku, gospoda z ciepłym światłem w oknach">
         <div class="cap">Miasto nie pyta, skąd przyszedłeś. Pyta tylko, czy masz czym zapłacić.</div>
       </figure>
 
       <p class="lede dropcap">Świat, do którego wchodzisz, jest stary, mokry i nieżyczliwy. Imperium trzyma
       się kupą strachu i podatków; na jego skraju, gdzie kończą się brukowane drogi, prawo jest tym, co
-      zdoła wyegzekwować najbliższy człowiek z mieczem. W miastach śmierdzi dymem i rybą, a w zaułkach
-      ginie się za mniej niż bochenek chleba. To nie jest kraina herosów w lśniących zbrojach. To
-      kraina ludzi, którzy próbują dożyć do rana — i czasem, raz na jakiś czas, zrobić coś, co ma
-      znaczenie.</p>
+      zdoła wyegzekwować najbliższy człowiek z mieczem. To nie kraina herosów w lśniących zbrojach —
+      lecz ludzi, którzy próbują dożyć do rana i czasem, raz na jakiś czas, zrobić coś, co ma znaczenie.
+      Najlepiej pokaże ci to pewien złodziej imieniem <strong>Mizel</strong> — i jego pierwsza noc w
+      pewnym zabłoconym miasteczku, od progu gospody aż po świt.</p>
 
-      <p>Żeby pokazać ci, jak wygląda życie w tym świecie, opowiem ci o pewnym złodzieju. Nazywał się
-      <strong>Mizel</strong>, i zaczynał dokładnie tam, gdzie kończy większość jemu podobnych: z
-      powrozem na szyi.</p>
+      <p>Mizel nie pamiętał matki ani domu — tylko dachy, śliskie od deszczu gonty portowego miasta, po
+      których biegał, zanim nauczył się czytać. Złodziejskie rzemiosło było jedynym, jakie mu pokazano,
+      i był w nim zbyt dobry, by przejść niezauważonym; raz nawet stał już na szafocie z powrozem na
+      szyi, nim wykupili go ludzie, którzy potrzebowali jego rąk. Tego, czego później od niego chcieli,
+      nie udźwignął — i odszedł. Teraz wędrował sam, sprzedając swoje umiejętności tym, którzy płacili,
+      i pomagając tym, którym zapłacić nie było czym. Tej historii nie pisze już jednak przeszłość.
+      Zaczyna się tu, na rozjeżdżonej drodze, u progu gospody.</p>
 
-      <h3>Chłopiec z rynsztoka</h3>
-      <p>Mizel nie pamiętał matki ani domu. Pamiętał za to dachy — śliskie od deszczu gonty, po których
-      umiał biegać, zanim nauczył się czytać. Wychowały go ulice portowego miasta: zimne, gwarne i
-      bezlitosne. Kradł, bo to było jedyne rzemiosło, jakie mu pokazano, i był w nim dobry — zbyt dobry,
-      by przejść niezauważonym. Pewnej nocy zaciasnęła się na nim obława strażników, a tydzień później
-      stał już na zbitym z desek podeście, patrząc, jak kat sprawdza węzeł.</p>
-
-      <figure class="illus">
-        <img src="img/intro-gallows.png" alt="Młody złodziej z powrozem na szyi na szubienicy, wokół postacie w kapturach">
-        <figcaption>Stryczek na rynku to nie kara. To przedstawienie — a tłum lubi przedstawienia.</figcaption>
+      <h3 id="w-gospoda">Gospoda na skraju błota</h3>
+      <figure class="illus right">
+        <img src="img/inn-marta.png" alt="Wnętrze ciasnej karczmy, karczmarka za ladą w ciepłym świetle">
+        <figcaption>Marta nalewa piwo i mierzy gości wzrokiem — w takim miejscu jedno bez drugiego nie istnieje.</figcaption>
       </figure>
+      <p>Wieczór osiadł na kamieniach jak sadza, gdy Mizel stanął pod przekrzywionym szyldem gospody
+      „Pod Złamanym Rogiem", na skraju małego, zabłoconego miasteczka. Z okapów wciąż kapała woda, a
+      ulicę rozorały koła wozów. Ze środka sączyło się ciepłe, miodowe światło i zapach mokrej słomy,
+      torfowego dymu i kwaśnego piwa; obok studni leżało przewrócone wiadro, jakby ktoś porzucił je w
+      pośpiechu.</p>
 
-      <p>Powieszono by go tamtej nocy, gdyby nie ludzie w ciemnych habitach, którzy rozsunęli tłum bez
-      słowa. Bracia z pewnego zakonu — cisi, uprzejmi, o spojrzeniach, które niczego nie zdradzały —
-      zapłacili katu i zdjęli chłopca z szubienicy, jakby kupowali wół na targu. Nie zrobili tego z
-      litości. Zrobili to, bo widzieli, ile wart jest człowiek, który potrafi wejść tam, gdzie nikt inny
-      nie wejdzie.</p>
+      <p>W izbie o niskim stropie kilku górników mówiło ciszej, niż wypada w karczmie, jakby każdy
+      nasłuchiwał cudzych słów bardziej niż własnych. Za ladą stała barczysta kobieta o spracowanych
+      dłoniach — Marta — i jednym spojrzeniem oceniała, czy nowy gość zapłaci bez targu. Mizel zamówił
+      strawę i piwo, a gdy padła cena, położył dwie monety bez słowa.</p>
 
-      <h3>Nauka w cieniu</h3>
-      <p>Zakon dał Mizelowi dach, strawę i imię, którego nikt nie ścigał. Dał mu też mistrzów — i przez
-      kilka lat chłopiec z rynsztoka stał się czymś więcej niż drobnym rzezimieszkiem. Nauczono go
-      otwierać zamki, których inni nie umieli nawet nazwać; chodzić tak cicho, że własny cień zostawał
-      w tyle; czytać twarze i kłamać tak, by kłamstwo brzmiało cieplej niż prawda. Mówiono mu, że służy
-      wyższej sprawie.</p>
+      <span class="say say-gm"><span class="who">Marta</span>Przynajmniej umiesz płacić bez gadania.
+      Ludzie, co wpadają tu z samymi pytaniami, zwykle kończą z pustymi rękami albo zębami na podłodze.</span>
 
-      <figure class="illus">
-        <img src="img/intro-order.png" alt="Wnętrze kamiennego klasztoru, postacie w kapturach wokół stołu w blasku świec">
-        <figcaption>Uczyli go, że kradnie dla dobra. Długo nie pytał, czyjego.</figcaption>
+      <p>Gulasz był gęsty i tłusty, piwo cierpkie i chłodne. Lecz wzrok Mizela raz po raz wracał w kąt
+      izby — najciemniejszy skrawek sali, odcięty od reszty jak studnia bez dna.</p>
+
+      <h3 id="w-sygnet">Człowiek z sygnetem</h3>
+      <figure class="illus left">
+        <img src="img/patron-corner.png" alt="Zakapturzony mężczyzna przy stole w kącie, świeca, dłoń z sygnetem">
+        <figcaption>Dłoń przy kubku była szczupła, blada i bez odcisków. To nie był człowiek, który pracuje rękami.</figcaption>
       </figure>
+      <p>W kącie siedział zakapturzony mężczyzna. Mizel przeniósł miskę i kufel na stół naprzeciw niego
+      i usiadł, nieproszony. Spod kaptura widać było tylko skrawek wychudzonego policzka, cienką linię
+      ust i dłoń przy kubku — szczupłą, bladą, pozbawioną odcisków człowieka pracy. Na palcu raz po raz
+      błyskał sygnet, by zaraz zniknąć w cieniu.</p>
 
-      <p>Dopiero później zrozumiał, po co naprawdę go wyszkolono. To, co bracia nazywali „wyższą sprawą",
-      cuchnęło tak samo jak zaułki, z których go wyciągnięto — tyle że ubrane było w święte słowa i
-      pieczęcie. Widział, co robili z tym, co dla nich wykradał. Widział ludzi, którzy znikali. I pewnej
-      nocy — tej samej, w której zrozumie się o jeden raz za dużo — spakował swoje wytrychy i wyszedł za
-      bramę, nie oglądając się za siebie.</p>
+      <p>Rozmowa toczyła się ostrożnie, jak pojedynek na słowa — żaden z nich nie chciał odsłonić się
+      pierwszy. W końcu człowiek z sygnetem przeszedł do rzeczy: była robota. Coś trzeba było
+      <em>odebrać</em>, cicho i bez smrodu.</p>
 
-      <figure class="illus">
-        <img src="img/intro-departure.png" alt="Samotna postać w pelerynie odchodzi drogą od bramy klasztoru o świcie">
-        <figcaption>Za bramą czekał ten sam zimny świat. Tym razem szedł w niego z wyboru.</figcaption>
+      <span class="say say-gm"><span class="who">Zleceniodawca</span>Dziesięć złotych po wykonaniu.
+      Teraz dostajesz tylko zlecenie i okazję. Po zmroku pod kapliczką — nie wcześniej.</span>
+
+      <figure class="illus right">
+        <img src="img/forge.png" alt="Wiejska kuźnia o zmroku, żar w palenisku">
+        <figcaption>Kuźnia Wujka — żelazo, gwoździe, naprawy. Wszystko, czego trzeba, nim ruszy się w noc.</figcaption>
       </figure>
+      <p>Mizel znał ludzi, którzy znikają, gdy przychodzi płacić. Nie zamierzał ruszać w noc na samą
+      obietnicę cienia w kapturze — zażądał, by zapłata trafiła z góry do rąk Marty, jako zastaw.
+      Mężczyzna patrzył na niego dłuższą chwilę, wystukując palcem suchy rytm o blat, ważąc jego
+      bezczelność — i rozsądek. W końcu skinął: jeśli Mizel nie wróci do świtu, dług przepada; jeśli
+      wróci, Marta odda mu zapłatę z nawiązką.</p>
 
-      <p>Tak zaczyna się większość historii w tej grze: nie od proroctwa, lecz od decyzji. Mizel umiał
-      tyle samo zła co dobra — i właśnie dlatego jego wybory coś znaczyły. Postanowił obrócić swoje
-      rzemiosło ku ludziom, którym nikt nie pomagał: tym z rynsztoka, z których sam pochodził. Świat nie
-      stał się przez to ani odrobinę łaskawszy. Ale teraz miał w nim kogoś, kto się nie poddał.</p>
+      <p>Pergamin został po stronie Mizela; sygnet mignął i znikł w cieniu. Zanim wyruszył, złodziej
+      wypytał jeszcze Martę o miejscowy kram — <em>Kuźnię Wujka</em> przy głównej drodze, gdzie
+      sprzedawano żelazo, gwoździe i naprawy — i dokupił, czego brakowało mu na nocną wyprawę. Potem
+      czekał, aż światło za oknami zacznie gasnąć.</p>
 
-      <p><strong>Twoja postać zacznie podobnie</strong> — z przeszłością, blizną i jednym powodem, by
-      ruszyć dalej. To, co wydarzy się potem, nie jest zapisane. Rozstrzygną to twoje decyzje, słowa,
-      które wypowiesz przy stole — i kość, która zadecyduje, gdy stawka będzie zbyt wysoka, by pewność
-      była możliwa. Jak działa ta kość, dowiesz się na następnej stronie.</p>
+      <h3 id="w-noc">Nocna robota pod kapliczką</h3>
+      <figure class="illus left">
+        <img src="img/kapliczka-night.png" alt="Kamienna kapliczka w nocnym lesie, świece, zbliżająca się postać">
+        <figcaption>Mądry złodziej nie staje tam, gdzie kazano mu stanąć. Najpierw patrzy — z cienia.</figcaption>
+      </figure>
+      <p>Miasteczko po zmroku tonęło w błocie i ciszy. Mizel nie poszedł jednak prosto pod kapliczkę,
+      jak mu kazano — to byłby błąd, który kończy się nożem w plecach. Zamiast tego okrążył miejsce od
+      lasu i przykucnął nisko między mokrymi pniami, tam gdzie mech tłumił każdy ruch, i pozwolił, by
+      noc zrobiła z niego kolejny ciemny kształt. Wstrzymał oddech, odciął zmysły od chłodu w palcach i
+      wilgoci w bucie, aż został tylko las — i ten jeden obcy dźwięk, który do nocy nie należał.</p>
+
+      <p>Z ukrycia dojrzał dwóch ludzi. Jeden z nożem w dłoni czaił się przy ścieżce, drugi stał nieco
+      dalej, wyraźnie czekając na kuriera, którego miał spotkać. Pułapka albo nieufność — w tym świecie
+      to często to samo. Mizel zaczął się skradać: przenosił ciężar ciała powoli, jakby stąpał po
+      cienkim lodzie, zsuwając się między pniami o kilka kroków bliżej, aż nożownik znalazł się niemal
+      na wyciągnięcie ręki, całą uwagę wbijając w człowieka przy ścieżce — nie w ciemność za plecami.</p>
+
+      <h3 id="w-gardlo">Nóż do gardła</h3>
+      <figure class="illus right">
+        <img src="img/kapliczka-grab.png" alt="Zakapturzony złodziej z dobytym sztyletem w mroku pod kapliczką">
+        <figcaption>Cisza pęka w jednej brutalnej chwili. Teraz wszystko zależy od tego, kto pierwszy przejmie przewagę.</figcaption>
+      </figure>
+      <p>Mizel wypadł z cienia nisko i gwałtownie. Nożownik dopiero zaczynał odwracać głowę, gdy złodziej
+      wszedł mu za plecy, zarzucił ramię na szyję i przycisnął ostrze tuż pod żuchwą. Ciało mężczyzny
+      natychmiast stwardniało ze strachu; jego dłoń z nożem zawisła odciągnięta na bok, a oddech urwał
+      się w świszczącym wciągnięciu powietrza. Wystarczyłby najmniejszy nacisk, by skóra puściła.</p>
+
+      <span class="say say-pc"><span class="who">Mizel</span>Drgnij mocniej, a nóż sam poderżnie ci
+      gardło. Nie wiem, kim jesteście, i mam to w nosie. Mam tylko dostarczyć wiadomość — i tyle zrobię.</span>
+
+      <p>Drugi mężczyzna mrużył oczy w ciemności, ważąc, czy warto ryzykować życie wspólnika. Lecz Mizel
+      nie przyszedł zabijać — przyszedł odebrać. Schylił się po <strong>żelazny medalion</strong>,
+      cięższy, niż wskazywałby jego rozmiar, a pergamin zostawił tam, gdzie padł. Potem zelżył nacisk
+      ostrza; nożownik wciągnął powietrze jak topielec wynurzony spod czarnej wody i runął kolanami w
+      mokre liście.</p>
+
+      <span class="say say-pc"><span class="who">Mizel</span>Dobiliśmy targu, więc nasze drogi się
+      rozchodzą. Pamiętaj tylko: tak łatwo, jak was dziś podszedłem, znajdę was drugi raz.</span>
+
+      <p>Nikt nie ruszył za nim, gdy znikał między pniami. W tym świecie groźba wypowiedziana spokojnie
+      waży więcej niż krzyk — a obaj wiedzieli już, że nie rzucał słów na wiatr.</p>
+
+      <h3 id="w-powrot">Powrót i zapłata</h3>
+      <p>Do gospody „Pod Złamanym Rogiem" Mizel wrócił przed świtem, z błotem na nogawkach i zimnym
+      żelazem medalionu w kieszeni. Najpierw uspokoił Martę — nie po to przeszedł całą noc, by skończyć
+      w burdzie tuż przed metą — a potem usiadł naprzeciw zakapturzonego i rzucił mu na blat zawiniątko.</p>
+
+      <span class="say say-pc"><span class="who">Mizel</span>W obu przypadkach się myliłeś.</span>
+
+      <p>Mężczyzna nie sięgnął po medalion od razu; najpierw spojrzał na pakunek, potem na Mizela, jakby
+      próbował dosłyszeć to, czego złodziej nie powiedział. Płomień świecy drgnął między nimi — a potem
+      zapłata przeszła z rąk Marty do kieszeni Mizela, ciężka i prawdziwa. Złodziej dopił piwo, skinął
+      głową na pożegnanie i rzucił od niechcenia, że może kiedyś jeszcze przydadzą się sobie nawzajem.</p>
+
+      <p>Wynajął od Marty pokój na górze, położył się w ubraniu, z dłonią blisko noża bardziej z
+      przyzwyczajenia niż z rozsądku, i pozwolił, by zmęczenie wreszcie go dogoniło. Rankiem zszedł do
+      głównej sali z zebranymi rzeczami — nieco bogatszy, wciąż żywy, gotów na to, co przyniesie droga.
+      <strong>Świat nie stał się przez tę jedną noc ani odrobinę łaskawszy. Ale Mizel przetrwał ją — i
+      zarobił.</strong></p>
+
+      <p>To są właśnie <em>pierwsze kroki</em>: nie wielka legenda, lecz jedna przeżyta noc, w której
+      każda decyzja coś znaczyła. <strong>Twoja postać zacznie podobnie</strong> — w jakiejś gospodzie,
+      przy jakimś stole, z jednym powodem, by ruszyć dalej. Co zdarzy się potem, nie jest zapisane.
+      Rozstrzygną to twoje wybory, słowa, które wypowiesz przy stole — i kość, gdy stawka będzie zbyt
+      wysoka, by pewność była możliwa. Jak działa ta kość, dowiesz się na następnej stronie.</p>
     </section>
 
     <hr class="section-divider">
@@ -256,7 +559,7 @@
       dzieje, i gra toczy się dalej. Kość budzi się dopiero wtedy, gdy splatają się dwie rzeczy naraz:
       <em>coś jest dla ciebie naprawdę ważne</em> i <em>wynik nie jest pewny</em>. Wspinasz się po
       oblodzonym murze nad przepaścią. Próbujesz spojrzeć w oczy strażnikowi i skłamać tak, by ci
-      uwierzył. Łapiesz spadającą latarnię, zanim podpali stodołę. W takich chwilach — i tylko w
+      uwierzył. Schodzisz z drogi nożowi, który wyrósł z ciemności. W takich chwilach — i tylko w
       takich — sięgasz po kość.</p>
 
       <p>Wszystkie one rozstrzygają się w jeden sposób. Rzucasz
@@ -265,9 +568,9 @@
       prawdopodobny.</span></span>, dorzucasz do niej to, w czym jesteś dobry, i porównujesz sumę z
       <span class="gloss" tabindex="0">Progiem Trudności<span class="tip"><span class="tip-h">Próg Trudności (PT)</span>Liczba,
       którą musisz osiągnąć. Im trudniejsze zadanie, tym wyższa. <b>8</b> łatwe · <b>12</b> średnie ·
-      <b>16</b> trudne · <b>20</b> ekstremalne · <b>24+</b> legendarne.</span></span>, który ustala Mistrz
-      Gry. Dorównasz progowi lub go przekroczysz — udaje się. Nie dorównasz — nie wychodzi. To jedna
-      reguła; nauczysz się jej raz i poniesie cię przez całą grę.</p>
+      <b>16</b> trudne · <b>20</b> ekstremalne · <b>24+</b> legendarne.</span></span>, który ustala
+      Mistrz Gry. Dorównasz progowi lub go przekroczysz — udaje się. Nie dorównasz — nie wychodzi. To
+      jedna reguła; nauczysz się jej raz i poniesie cię przez całą grę.</p>
 
       <div class="formula">
         <b>k20</b> + modyfikator cechy + ranga umiejętności + premia z biegłości
@@ -276,11 +579,13 @@
       </div>
 
       <p>Zanim rozłożymy te premie na czynniki, zobaczmy regułę w działaniu — bo dopiero przy stole
-      nabiera ona ciała.</p>
+      nabiera ona ciała. Wyobraź sobie podróżnika, którego od celu dzieli już tylko jeden zamknięty
+      most — i celnik, którego nie da się ominąć.</p>
 
-      <!-- SCENA 1 -->
+      <!-- SCENA 1 — most -->
       <div class="scene">
         <div class="scene-h">Scena · Most celny nad Reiką</div>
+        <img class="scene-img" src="img/scene-bridge.png" alt="Podróżny na deszczowym moście w blasku latarni">
         <div class="scene-b">
           <p class="narr">Deszcz bębni o deski mostu. Po drugiej stronie szlabanu stoi celnik w
           przemoczonej pelerynie, jedną dłoń trzymając na trzonku halabardy.</p>
@@ -296,19 +601,26 @@
           który zatrzymał mnie w deszczu.</span>
 
           <p class="narr">To blef — nie masz żadnego listu. Próbujesz go <strong>przekonać</strong>
-          tonem pewności i groźbą wiszącą w tle. Celnik mruży oczy; widać, że się waha. Mistrz Gry
-          uznaje, że człowiek jest nieufny, ale zmęczony i niechętny kłopotom — ustala próg
+          tonem pewności i groźbą wiszącą w tle. Test opiera się na
+          <span class="gloss" tabindex="0">Charyzmie<span class="tip"><span class="tip-h">Charyzma (CHA)</span>Wrodzony
+          dar przekonywania, uroku i panowania nad rozmową. Rządzi umiejętnościami: Perswazja, Oszustwo,
+          Zastraszanie.<a class="more soon" href="#" onclick="return false">Charyzma</a></span></span>;
+          celnik jest nieufny, lecz zmęczony — Mistrz Gry ustala próg
           <span class="gloss" tabindex="0">Średni (12)<span class="tip"><span class="tip-h">Próg Trudności</span>Średni
-          = <b>12</b>. Typowe wyzwanie dla wprawnej osoby; tu: nieufny, lecz zmęczony strażnik.</span></span>.
-          Rzucasz na Perswazję.</p>
+          = <b>12</b>. Typowe wyzwanie; tu: nieufny, lecz zmęczony strażnik.</span></span>.</p>
 
-          <div class="roll">
-            <div class="rh">Test Perswazji · cecha Charyzma</div>
-            <p class="math"><span class="die">k20 = 13</span> + 2
-              <span style="color:#8a7233">(Charyzma 14)</span> + 1
-              <span style="color:#8a7233">(Perswazja, ranga 1)</span> = <b>16</b> &nbsp;vs&nbsp; PT 12
-              &nbsp;→&nbsp; margines <b>+4</b></p>
-            <p class="out win"><b>Sukces.</b> Celnik prycha, ale unosi szlaban.</p>
+          <div class="test">
+            <div class="test-h"><span>Test Perswazji</span><span class="r">cecha:
+              <span class="gloss" tabindex="0">Charyzma<span class="tip"><span class="tip-h">Charyzma (CHA)</span>Dar
+              przekonywania i uroku. Modyfikator z Charyzmy dolicza się do testów rozmowy.<a class="more soon" href="#" onclick="return false">Charyzma</a></span></span></span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20</span><span class="dots"></span><span class="v die">13</span></div>
+              <div class="test-row"><span class="n">Modyfikator Charyzmy (14)</span><span class="dots"></span><span class="v">+2</span></div>
+              <div class="test-row"><span class="n">Perswazja · ranga 1</span><span class="dots"></span><span class="v">+1</span></div>
+            </div>
+            <div class="test-sum">Wynik <b>16</b> <span class="cmp">≥</span> Próg <b>12</b>
+              <span class="margin">margines +4</span></div>
+            <div class="test-out ok"><span class="verdict">Sukces</span><i>Celnik prycha, ale unosi szlaban.</i></div>
           </div>
 
           <span class="say say-gm"><span class="who">Celnik</span>Jedź. I powiedz komendantowi, że Hauke
@@ -316,20 +628,22 @@
 
           <p class="narr" style="margin-top:14px">Nie uwierzył do końca — lecz uznał, że ryzyko kłopotu
           nie jest warte dwóch złotych, których i tak przy tobie nie dostrzegł. Gdyby rzut wypadł o
-          kilka oczek gorzej, historia potoczyłaby się inaczej — i właśnie o to chodzi. Kość nie mówi
-          „tak" albo „nie". Mówi, w którą stronę przechyli się scena.</p>
+          kilka oczek gorzej, historia potoczyłaby się inaczej. Kość nie mówi „tak" albo „nie". Mówi, w
+          którą stronę przechyli się scena.</p>
         </div>
       </div>
 
-      <h2>Z czego składa się twój wynik</h2>
-      <p>Do surowego rzutu kością dokładasz trzy liczby. Każda opowiada inną część prawdy o tym, jak twoja
-      postać radzi sobie akurat z <em>tym</em> zadaniem: ile ma wrodzonego talentu, ile wyćwiczonej
-      wprawy i czy doszła już do prawdziwego mistrzostwa.</p>
+      <h2 id="r1-sklad">Z czego składa się twój wynik</h2>
+      <p>Do surowego rzutu kością dokładasz trzy liczby. Każda opowiada inną część prawdy o tym, jak
+      twoja postać radzi sobie akurat z <em>tym</em> zadaniem: ile ma wrodzonego talentu, ile
+      wyćwiczonej wprawy i czy doszła już do prawdziwego mistrzostwa.</p>
 
       <h3>Modyfikator cechy — wrodzony talent</h3>
       <p>Każdą postać opisuje siedem <span class="gloss" tabindex="0">cech<span class="tip"><span class="tip-h">Siedem cech</span>Siła,
-      Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma i Szczęście. 10 to ludzka przeciętność.
-      Szczegóły w rozdziale II.</span></span>: Siła, Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma
+      Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma i Szczęście. 10 to ludzka przeciętność.<a class="more soon" href="#" onclick="return false">Siedem cech</a></span></span>:
+      Siła, Zręczność, Kondycja, Inteligencja, Mądrość,
+      <span class="gloss" tabindex="0">Charyzma<span class="tip"><span class="tip-h">Charyzma (CHA)</span>Dar
+      przekonywania, uroku i dowodzenia. Rządzi Perswazją, Oszustwem i Zastraszaniem.<a class="more soon" href="#" onclick="return false">Charyzma</a></span></span>
       i Szczęście. Wartość 10 to zwykła ludzka średnia. Do rzutu nie dopisujesz jednak samej wartości,
       lecz <span class="gloss" tabindex="0">modyfikator<span class="tip"><span class="tip-h">Modyfikator cechy</span>= (cecha
       − 10) ÷ 2, zaokrąglone w dół. Cecha <b>14 → +2</b>, <b>10 → +0</b>, <b>8 → −1</b>, <b>18 →
@@ -340,19 +654,22 @@
       </div>
 
       <p>Charyzma 14 daje więc <strong>+2</strong>, przeciętna 10 daje <strong>+0</strong>, a niezgrabna
-      8 to <strong>−1</strong>. Mistrz Gry wskazuje, która cecha rządzi danym testem — i często zależy to
-      od tego, <em>jak</em> opiszesz swoje działanie. Wyważasz drzwi ramieniem? Siła. Otwierasz je
-      wytrychem? Zręczność. Przekonujesz strażnika ciepłym słowem albo cichą groźbą? Charyzma. To dlatego
-      warto mówić, <em>w jaki sposób</em> coś robisz — z opisu wynika reszta.</p>
+      8 to <strong>−1</strong>. Mistrz Gry wskazuje, która cecha rządzi danym testem — i często zależy
+      to od tego, <em>jak</em> opiszesz swoje działanie. Wyważasz drzwi ramieniem? Siła. Otwierasz je
+      wytrychem?
+      <span class="gloss" tabindex="0">Zręczność<span class="tip"><span class="tip-h">Zręczność (DEX)</span>Zwinność,
+      refleks i precyzja dłoni. Rządzi Skradaniem, Akrobatyką, otwieraniem zamków i unikami.<a class="more soon" href="#" onclick="return false">Zręczność</a></span></span>.
+      Przekonujesz strażnika ciepłym słowem albo cichą groźbą? Charyzma. To dlatego warto mówić,
+      <em>w jaki sposób</em> coś robisz — z opisu wynika reszta.</p>
 
       <h3>Ranga umiejętności — wyuczona wprawa</h3>
       <p>Tam, gdzie cecha mówi o talencie danym od urodzenia,
       <span class="gloss" tabindex="0">ranga umiejętności<span class="tip"><span class="tip-h">Ranga umiejętności</span>Poziom
       wyćwiczenia konkretnej umiejętności (Skradanie, Perswazja, Medycyna…), zwykle <b>1–3</b>. Dodawana
-      wprost do rzutu: ranga 2 → <b>+2</b>.</span></span> mówi o latach ćwiczeń. Skradanie, Perswazja,
-      Wiedza Tajemna, Medycyna — każdej uczysz się osobno i każda ma swoją rangę, zwykle od 1 do 3. Rangę
-      dopisujesz do rzutu wprost: kto ma w Skradaniu rangę 2, dolicza <strong>+2</strong>. Im dłużej
-      szlifujesz dane rzemiosło, tym pewniejsza twoja dłoń.</p>
+      wprost do rzutu: ranga 2 → <b>+2</b>.<a class="more soon" href="#" onclick="return false">Umiejętności</a></span></span>
+      mówi o latach ćwiczeń. Skradanie, Perswazja, Wiedza Tajemna, Medycyna — każdej uczysz się osobno i
+      każda ma swoją rangę, zwykle od 1 do 3. Rangę dopisujesz do rzutu wprost: kto ma w Skradaniu rangę
+      2, dolicza <strong>+2</strong>. Im dłużej szlifujesz dane rzemiosło, tym pewniejsza twoja dłoń.</p>
 
       <h3>Premia z biegłości — pieczęć mistrzostwa</h3>
       <p>Gdy ranga w umiejętności sięga <strong>3</strong>, przekraczasz granicę między „umiem to" a
@@ -366,10 +683,10 @@
 
       <hr class="rule">
 
-      <h2>Próg Trudności</h2>
+      <h2 id="r1-prog">Próg Trudności</h2>
       <p>Zanim padnie kość, Mistrz Gry ustala
       <span class="gloss" tabindex="0">próg<span class="tip"><span class="tip-h">Próg Trudności (PT)</span>Liczba
-      do pokonania. Wynika z okoliczności — nie zgadujesz jej. Patrz skala obok.</span></span> — liczbę,
+      do pokonania. Wynika z okoliczności — nie zgadujesz jej. Patrz skala niżej.</span></span> — liczbę,
       którą musisz osiągnąć. Nie wymyśla jej z powietrza; wyrasta ona z okoliczności. Oto skala, na
       której wspiera się cała gra:</p>
 
@@ -393,7 +710,7 @@
         drżące ręce. Rutyna nie powinna być karą.</p>
       </div>
 
-      <h2>Jak czytać wynik</h2>
+      <h2 id="r1-wynik">Jak czytać wynik</h2>
       <p>Rzuć, dodaj premie, porównaj z progiem. Ale wynik to nie tylko „udało się" albo „nie". Liczy się
       <span class="gloss" tabindex="0">margines<span class="tip"><span class="tip-h">Margines</span>Różnica:
       twój wynik − PT. Decyduje, <b>jak bardzo</b> się udało (lub nie). +5 i więcej → krytyk; −5 i mniej →
@@ -433,18 +750,19 @@
 
       <hr class="rule">
 
-      <h2>Kość w ferworze walki</h2>
+      <h2 id="r1-walka">Kość w ferworze walki</h2>
       <p>Ta sama reguła nie znika, gdy dobywasz broni. W walce wymiana ciosów ma własne, dokładniejsze
       zasady — opisuje je <span class="gloss" tabindex="0">rozdział o Walce<span class="tip"><span class="tip-h">Rozdział IV — Walka</span>Trafienia
       i obrażenia rządzą się osobnymi regułami: naturalna 20 podwaja obrażenia, a margines nie wpływa na
-      same ataki. Tu pokazujemy <b>test umiejętności w środku walki</b>.</span></span> — lecz w wirze
-      starcia wciąż raz po raz robisz coś, co jest <em>testem umiejętności</em>: odskakujesz, łapiesz
-      równowagę, wspinasz się, gasisz płomień na rękawie. Takie chwile rozstrzygasz dokładnie tak, jak
-      nauczyłeś się przed chwilą.</p>
+      same ataki. Tu pokazujemy <b>test umiejętności w środku walki</b>.<a class="more soon" href="#" onclick="return false">Walka</a></span></span>
+      — lecz w wirze starcia wciąż raz po raz robisz coś, co jest <em>testem umiejętności</em>:
+      odskakujesz, łapiesz równowagę, wspinasz się, gasisz płomień na rękawie. Takie chwile rozstrzygasz
+      dokładnie tak, jak nauczyłeś się przed chwilą.</p>
 
-      <!-- SCENA 2 — walka -->
+      <!-- SCENA 2 — wilk -->
       <div class="scene">
         <div class="scene-h">Scena · Skraj boru, o zmierzchu</div>
+        <img class="scene-img" src="img/scene-wolf.png" alt="Wilk w skoku, postać uchyla się w paprociach">
         <div class="scene-b">
           <p class="narr">Pierwszy wilk pada od twojego cięcia, lecz drugi już jest w powietrzu — kłębek
           mokrej sierści i kłów, mierzący prosto w twoje gardło. Nie zdążysz znów zamachnąć się mieczem.
@@ -461,14 +779,18 @@
           szybka — próg <span class="gloss" tabindex="0">Trudny (16)<span class="tip"><span class="tip-h">Próg Trudności</span>Trudny
           = <b>16</b>. Wysoka poprzeczka: zwinny, rozpędzony drapieżnik.</span></span>.</p>
 
-          <div class="roll">
-            <div class="rh">Rzut obronny · Zręczność</div>
-            <p class="math"><span class="die">k20 = 17</span> + 2
-              <span style="color:#8a7233">(Zręczność 15)</span> = <b>19</b> &nbsp;vs&nbsp; PT 16
-              &nbsp;→&nbsp; margines <b>+3</b></p>
-            <p class="out win"><b>Sukces.</b> Kły kłapią o próżnię tam, gdzie mgnienie wcześniej było
-            twoje gardło. Lądujesz na ramieniu w błocie, wilk przelatuje nad tobą i ląduje niezgrabnie —
-            na moment odsłaniając bok. Przewaga wraca do ciebie.</p>
+          <div class="test">
+            <div class="test-h"><span>Rzut obronny</span><span class="r">cecha:
+              <span class="gloss" tabindex="0">Zręczność<span class="tip"><span class="tip-h">Zręczność (DEX)</span>Zwinność
+              i refleks. Modyfikator z Zręczności decyduje o unikach i akrobatyce.<a class="more soon" href="#" onclick="return false">Zręczność</a></span></span></span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20</span><span class="dots"></span><span class="v die">17</span></div>
+              <div class="test-row"><span class="n">Modyfikator Zręczności (15)</span><span class="dots"></span><span class="v">+2</span></div>
+            </div>
+            <div class="test-sum">Wynik <b>19</b> <span class="cmp">≥</span> Próg <b>16</b>
+              <span class="margin">margines +3</span></div>
+            <div class="test-out ok"><span class="verdict">Sukces</span><i>Kły kłapią o próżnię tam, gdzie
+            mgnienie wcześniej było twoje gardło — wilk ląduje niezgrabnie, odsłaniając bok.</i></div>
           </div>
 
           <p class="narr">A gdyby na kości padła
@@ -482,25 +804,1342 @@
       <p>Dwie sceny, dwa różne testy — rozmowa na moście i skok o włos od kłów — a pod spodem ta sama,
       jedyna reguła: kość, premie, próg, margines. Opanuj ją tutaj, a będzie ci służyć w każdej
       niepewnej chwili tego mrocznego świata: od targu na rynku po ostatni cios w ciemnej krypcie.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ II — SIEDEM CECH ════════════════ -->
+    <section id="r2">
+      <p class="eyebrow">Rozdział drugi</p>
+      <h1><span class="num">II · Postać</span>Siedem cech</h1>
+      <p class="subtitle">Z czego ulepiona jest twoja postać</p>
+      <hr class="rule">
+
+      <p class="lede dropcap">Zanim twoja postać cokolwiek zrobi, opisuje ją siedem liczb. To one mówią,
+      czy z natury jesteś silny czy zwinny, bystry czy ujmujący — i to z nich bierze się
+      <span class="gloss" tabindex="0">modyfikator<span class="tip"><span class="tip-h">Modyfikator cechy</span>=
+      (cecha − 10) ÷ 2, w dół. Wartość <b>10</b> to ludzka średnia (+0). 14 → +2, 8 → −1, 18 → +4.</span></span>,
+      który dokładasz do każdego rzutu. Cecha o wartości <strong>10</strong> to zwykła ludzka średnia;
+      wszystko powyżej to dar, wszystko poniżej — ułomność.</p>
+
+      <figure class="illus right">
+        <img src="img/ch-cechy.png" alt="Troje towarzyszy przy ognisku: wojownik, łotrzyk, uczony">
+        <figcaption>Wojownik, łotrzyk i uczony — te same siedem liczb, trzy zupełnie różne sposoby na przetrwanie.</figcaption>
+      </figure>
+      <p>Cech nie wybierasz przy każdym teście samodzielnie — robi to Mistrz Gry, dopasowując właściwą do
+      tego, <em>co</em> i <em>jak</em> próbujesz zrobić. Wyważasz drzwi? Siła. Wymykasz się strażnikowi?
+      Zręczność. Rozszyfrowujesz starą inskrypcję? Inteligencja. Ta sama scena potrafi wezwać różne cechy
+      zależnie od tego, jak ją rozegrasz — dlatego zawsze warto opisać swoje podejście.</p>
+
+      <h2 id="r2-lista">Czym rządzi każda cecha</h2>
+      <p>Oto wszystkie siedem cech, jedna po drugiej — co oznacza wysoka wartość, jakie testy się o nią
+      opierają i kiedy Mistrz Gry po nią sięgnie.</p>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Siła <span class="badge">STR</span></h4>
+          <p>Tężyzna mięśni i siła ciosu. Napędza Atak i obrażenia bronią siłową, Atletykę, Wspinaczkę i wyważanie. Wysoka Siła to wojownik, który rozłupuje tarcze; niska — uczony, który nie udźwignie własnego plecaka.</p>
+          <p class="ex"><span class="pc">„Naprę ramieniem na zaryglowane wrota."</span> Test Atletyki (Siła).</p></div>
+        <div class="entry"><h4>Zręczność <span class="badge">DEX</span></h4>
+          <p>Zwinność, refleks i precyzja dłoni. Rządzi Skradaniem, Unikiem, Otwieraniem zamków, Akrobatyką oraz Inicjatywą — kto działa pierwszy w walce. Cecha numer jeden łotrzyka.</p>
+          <p class="ex"><span class="pc">„Wymykam się strażnikowi bocznym przejściem."</span> Test Skradania (Zręczność).</p></div>
+        <div class="entry"><h4>Kondycja <span class="badge">CON</span></h4>
+          <p>Wytrzymałość ciała. Bezpośrednio napędza <strong>punkty życia</strong> (rośną z każdym poziomem o modyfikator CON) oraz opór wobec trucizn, chorób, zimna i wysiłku. Cicha cecha, która decyduje, jak długo żyjesz.</p>
+          <p class="ex"><span class="pc">„Zaciskam zęby i brnę dalej mimo trucizny."</span> Test Wytrzymałości (Kondycja).</p></div>
+        <div class="entry"><h4>Inteligencja <span class="badge">INT</span></h4>
+          <p>Wiedza i rozumowanie. Cecha <em>wszystkich czarów uczonego</em> — i ich celności, i puli many — a do tego Wiedzy, Arkanów, Dochodzenia i Alchemii.</p>
+          <p class="ex"><span class="pc">„Odczytuję runy na zwoju."</span> Test Arkanów (Inteligencja).</p></div>
+        <div class="entry"><h4>Mądrość <span class="badge">WIS</span></h4>
+          <p>Czujność i intuicja. Rządzi Spostrzegawczością, Przetrwaniem, Medycyną, Tropieniem i czytaniem ludzi (Wnikliwość). To także <em>odporność</em>, którą rzucasz, gdy ktoś próbuje cię oczarować, uśpić czy przekląć.</p>
+          <p class="ex"><span class="pc">„Przeszukuję podłogę pod kątem pułapek."</span> Test Spostrzegawczości (Mądrość).</p></div>
+        <div class="entry"><h4>Charyzma <span class="badge">CHA</span></h4>
+          <p>Siła wpływu na ludzi. Rządzi Perswazją, Oszustwem, Zastraszaniem i Targowaniem — a także ceną, jaką dostaniesz u kupca. Cecha tych, którzy rozwiązują problemy słowem zamiast stalą.</p>
+          <p class="ex"><span class="pc">„Przekonuję celnika, że jadę z pilnym listem."</span> Test Perswazji (Charyzma).</p></div>
+        <div class="entry"><h4>Szczęście <span class="badge">LCK</span></h4>
+          <p>Ślepy traf wpleciony w los postaci. Wpływa na jakość łupów, losowe zdarzenia i te chwile, gdy wszystko zależy od kaprysu fortuny. Ulubiona druga cecha łotrzyka.</p>
+          <p class="ex"><span class="pc">„Przetrząsam kieszenie pokonanego — coś cennego?"</span> Wysokie Szczęście poprawia łup.</p></div>
+      </div>
+
+      <h2 id="r2-klasy">Trzy archetypy</h2>
+      <p>Te same siedem cech układa się w trzy zupełnie różne drogi. Wybór archetypu to wybór tego, na
+      co stawiasz: pięść, cień czy słowo zaklęcia. Każdy ma inną bazę punktów życia i inne cechy
+      wiodące.</p>
+
+      <h3>Wojownik — pan stali</h3>
+      <figure class="illus left" style="width:210px"><img src="img/arch-warrior.png" alt="Portret pokiereszowanego wojownika z mieczem"><figcaption>Tam, gdzie inni szukają wyjścia, wojownik szuka celu.</figcaption></figure>
+      <p><strong>Cechy wiodące: Siła i Kondycja. HP bazowe: 10</strong> — najtwardszy z trójki. Wojownik
+      to mistrz walki wręcz: każdy jego cios niesie dodatkowe obrażenia z Siły, a wysoka Kondycja daje mu
+      największą pulę życia w drużynie. Sięga po ciężką broń i tarczę, stoi w pierwszym szeregu i znosi
+      ciosy, które innych powaliłyby od razu. Cena? <em>Nie rzuca czarów</em> — jego odpowiedzią na każdy
+      problem jest stal.</p>
+      <p class="ex" style="border-left:2px solid var(--gold-soft);padding-left:12px;color:var(--ink-dim);font-style:italic">Gra nim ten, kto chce rozwiązywać sytuacje wprost i przetrwać najcięższe starcia.</p>
+
+      <h3>Łotrzyk — cień z ostrzem</h3>
+      <figure class="illus right" style="width:210px"><img src="img/arch-rogue.png" alt="Portret zakapturzonego łotrzyka ze sztyletem"><figcaption>Najlepszy cios to ten, którego wróg nigdy nie zobaczył.</figcaption></figure>
+      <p><strong>Cechy wiodące: Zręczność i Szczęście. HP bazowe: 8</strong> — średnia wytrzymałość,
+      ogromna wszechstronność. Łotrzyk włada <em>największą liczbą umiejętności</em> ze wszystkich
+      archetypów: skrada się, otwiera zamki, opróżnia kieszenie i bije z zaskoczenia, zadając wtedy
+      premiowe obrażenia. To właśnie archetyp <strong>Mizela</strong> ze Wstępu. Słabszy w otwartej walce
+      niż wojownik, lecz potrafi jej w ogóle uniknąć — albo rozstrzygnąć ją jednym cichym ciosem, zanim
+      się zacznie.</p>
+      <p class="ex" style="border-left:2px solid var(--gold-soft);padding-left:12px;color:var(--ink-dim);font-style:italic">Gra nim ten, kto woli spryt i podstęp od czołowego natarcia.</p>
+
+      <h3>Uczony — władca many</h3>
+      <figure class="illus left" style="width:210px"><img src="img/arch-scholar.png" alt="Portret uczonego ze świecącą księgą"><figcaption>Jedno właściwe słowo potrafi zmienić więcej niż sto ciosów.</figcaption></figure>
+      <p><strong>Cechy wiodące: Inteligencja i Mądrość. HP bazowe: 6</strong> — najkruchszy z trójki, lecz
+      jedyny, który włada <span class="gloss" tabindex="0">maną<span class="tip"><span class="tip-h">Mana</span>Zasób
+      czarów uczonego: <b>8 + modyfikator INT × poziom</b>. Tylko uczony nią dysponuje. Szczegóły w
+      rozdziale VII.<a class="more soon" href="#" onclick="return false">Magia uczonego</a></span></span>
+      i czarami. Garść zaklęć pozwala mu spopielić grupę wrogów, uśpić strażnika albo zasklepić ranę
+      towarzysza. Musi jednak trzymać się z dala od zwarcia — kilka mocnych ciosów i pada. Uczony to
+      potęga kupiona za kruchość.</p>
+      <p class="ex" style="border-left:2px solid var(--gold-soft);padding-left:12px;color:var(--ink-dim);font-style:italic">Gra nim ten, kto chce odmieniać bieg walki z dystansu — i lubi ryzyko.</p>
+
+      <h2 id="r2-zycie">Punkty życia i mana — wzór</h2>
+      <p>Twoja wytrzymałość rośnie z poziomem. <strong>Punkty życia = HP bazowe archetypu + modyfikator
+      Kondycji × poziom.</strong> Mana uczonego liczy się analogicznie z Inteligencji.</p>
+      <table>
+        <caption>Przykład — postacie na 3. poziomie z Kondycją 14 (mod +2)</caption>
+        <thead><tr><th>Archetyp</th><th>Wzór HP</th><th>Razem HP</th></tr></thead>
+        <tbody>
+          <tr><td>Wojownik</td><td>10 + 2 × 3</td><td class="dc">16</td></tr>
+          <tr><td>Łotrzyk</td><td>8 + 2 × 3</td><td class="dc">14</td></tr>
+          <tr><td>Uczony</td><td>6 + 2 × 3</td><td class="dc">12</td></tr>
+        </tbody>
+      </table>
+      <p>Dlatego nawet kruchy uczony z wysoką Kondycją przeżyje dłużej, niż się wydaje — a wojownik, który
+      zaniedbał CON, pada szybciej, niż przystoi jego sławie. Uczony na 3. poziomie z Inteligencją 16
+      (mod +3) ma do tego <strong>8 + 3 × 3 = 17 many</strong> na czary.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ III — UMIEJĘTNOŚCI ════════════════ -->
+    <section id="r3">
+      <p class="eyebrow">Rozdział trzeci</p>
+      <h1><span class="num">III · Postać</span>Umiejętności i biegłość</h1>
+      <p class="subtitle">Wyuczona wprawa, której nie da wrodzony talent</p>
+      <hr class="rule">
+
+      <figure class="illus right">
+        <img src="img/ch-skills.png" alt="Dłonie łotrzyka otwierające zamek wytrychem przy świecy">
+        <figcaption>Cecha mówi, jak pewną masz dłoń. Umiejętność mówi, ile razy robiłeś już to samo w ciemności.</figcaption>
+      </figure>
+      <p class="lede dropcap">Cecha to wrodzony talent; <strong>umiejętność</strong> to lata ćwiczeń.
+      Dwie postaci o tej samej Zręczności otworzą ten sam zamek zupełnie inaczej, jeśli jedna spędziła
+      młodość na wyłamywaniu zamków, a druga widzi wytrych pierwszy raz w życiu. Postać włada
+      czterdziestoma jeden umiejętnościami — bojowymi, łotrzykowskimi, towarzyskimi, uczonymi i
+      rzemieślniczymi — i każdą trenuje osobno. Ten rozdział opisuje je wszystkie, jedna po drugiej, z
+      przykładami, byś nigdy nie musiał zgadywać, której użyć.</p>
+
+      <h2 id="r3-ranga">Ranga i biegłość — krok po kroku</h2>
+      <p>Każda umiejętność, którą znasz, ma <span class="gloss" tabindex="0">rangę<span class="tip"><span class="tip-h">Ranga umiejętności</span>Poziom
+      wyćwiczenia, od 1 do 3. Dodawana wprost do rzutu.</span></span> od 1 do 3, którą dopisujesz wprost do
+      rzutu: ranga 2 w Skradaniu to równe <strong>+2</strong>. Umiejętności, której nie znasz, też możesz
+      spróbować — rzucasz wtedy z samym modyfikatorem cechy, bez bonusu rangi (i często z wyższym progiem,
+      bo działasz na ślepo).</p>
+      <p>Gdy ranga sięgnie <strong>3</strong>, przekraczasz próg <em>mistrzostwa</em> i zyskujesz dodatkową
+      <span class="gloss" tabindex="0">premię z biegłości +2<span class="tip"><span class="tip-h">Premia z biegłości</span>Dodatkowe
+      <b>+2</b>, gdy ranga umiejętności osiąga 3. Nagroda za specjalizację.</span></span>. Prześledźmy to
+      na liczbach, bo to jeden z najważniejszych progów w grze:</p>
+      <table>
+        <caption>Łotrzyk z Zręcznością 16 (mod +3) skrada się — jak rośnie jego rzut</caption>
+        <thead><tr><th>Ranga Skradania</th><th>Co dolicza</th><th>Łączny bonus</th></tr></thead>
+        <tbody>
+          <tr><td>brak (nieuczony)</td><td>tylko +3 z Zręczności</td><td class="dc">+3</td></tr>
+          <tr><td>ranga 1</td><td>+3 ZRĘ, +1 ranga</td><td class="dc">+4</td></tr>
+          <tr><td>ranga 2</td><td>+3 ZRĘ, +2 ranga</td><td class="dc">+5</td></tr>
+          <tr><td>ranga 3</td><td>+3 ZRĘ, +3 ranga, <b>+2 biegłość</b></td><td class="dc" style="color:#9bb56a">+8</td></tr>
+        </tbody>
+      </table>
+      <p>Skok z rangi 2 na 3 daje aż <strong>+3</strong> do rzutu — to dlatego specjalizacja popłaca:
+      lepiej doprowadzić jedno rzemiosło do perfekcji niż liznąć dziesięciu po wierzchu.</p>
+
+      <h2 id="r3-jak">Jak Mistrz Gry wybiera cechę i umiejętność</h2>
+      <p>Nie wybierasz testu z listy — deklarujesz <em>działanie</em>, a Mistrz Gry tłumaczy je na
+      umiejętność i cechę. Klucz jest prosty: <strong>opisz, co i jak robisz</strong>, a reszta wynika
+      sama. Ta sama scena potrafi wezwać różne testy zależnie od podejścia:</p>
+      <div class="aside">
+        <h4>Jedne drzwi, trzy różne testy</h4>
+        <p>Chcesz dostać się za zaryglowane drzwi. <span style="color:var(--say-pc)">„Wyważam je
+        ramieniem"</span> → Atletyka (Siła). <span style="color:var(--say-pc)">„Podważam zamek
+        wytrychem"</span> → Otwieranie zamków (Zręczność). <span style="color:var(--say-pc)">„Wmawiam
+        strażnikowi, że mam prawo wejść"</span> → Oszustwo (Charyzma). Trzy drogi do tego samego progu —
+        i to ty wybierasz, którą pójdziesz, samym opisem.</p>
+      </div>
+      <p>Część umiejętności silnik rozpoznaje nawet po słowach kluczowych: powiedz „<em>skradam się</em>",
+      a wezwie Skradanie; „<em>bandażuję ranę</em>" — Medycynę; „<em>blefuję</em>" — Oszustwo. Dlatego mów
+      konkretnie: opis nie jest ozdobą, lecz częścią mechaniki.</p>
+
+      <!-- ── KATALOG ── -->
+      <h2 id="r3-katalog">Katalog wszystkich umiejętności</h2>
+      <p>Poniżej każda z czterdziestu jeden umiejętności, pogrupowana wedle cechy, która nią rządzi.
+      Przy każdej znajdziesz, do czego służy i przykład użycia przy stole.</p>
+
+      <!-- DEX -->
+      <div class="stat-band" id="r3-dex"><span class="sb-t">Zręczność</span><span class="sb-s">DEX · zwinność, refleks, precyzja dłoni</span></div>
+      <figure class="illus right"><img src="img/skl-stealth.png" alt="Łotrzyk skrada się w cieniu obok strażnika"><figcaption>Skradanie — sztuka bycia tam, gdzie nikt cię nie szuka.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Skradanie <span class="badge">DEX</span></h4>
+          <p>Poruszanie się bezszelestnie i pozostawanie poza polem widzenia. Najważniejsza umiejętność łotrzyka — pozwala minąć straż, podejść wroga niezauważonym i uderzyć z zaskoczenia.</p>
+          <p class="ex"><span class="pc">„Przemykam wzdłuż muru, trzymając się cienia."</span> Sukces (PT 8 wobec znudzonej straży) — strażnik mija cię o krok.</p></div>
+        <div class="entry"><h4>Otwieranie zamków <span class="badge">DEX</span></h4>
+          <p>Podważanie zamków wytrychem lub improwizowanym narzędziem. Z właściwym kluczem rzut nie jest potrzebny — drzwi otwierają się same.</p>
+          <p class="ex"><span class="pc">„Wsuwam wytrych i wymacuję zapadki."</span> Prosty zamek to PT 12; krytyczna porażka łamie wytrych w środku.</p></div>
+        <div class="entry"><h4>Akrobatyka <span class="badge">DEX</span></h4>
+          <p>Utrzymanie równowagi, salta, przeciskanie się i lądowanie po upadku. Pozwala przejść po wąskiej belce czy zamortyzować skok z wysokości.</p>
+          <p class="ex"><span class="pc">„Skaczę z dachu na sąsiedni i przetaczam się przy lądowaniu."</span> Sukces zmniejsza obrażenia od upadku.</p></div>
+        <div class="entry"><h4>Unik <span class="badge">DEX</span></h4>
+          <p>Bojowa reakcja: zejście z linii ciosu. To unik obrońcy decyduje, czy atakujący w ogóle trafia (rozdział IV).</p>
+          <p class="ex"><span class="pc">„Odskakuję spod topora."</span> <span class="roll-inline">k20 + ZRĘ</span> przeciw atakowi wroga.</p></div>
+        <div class="entry"><h4>Inicjatywa <span class="badge">DEX</span></h4>
+          <p>Szybkość reakcji na początku starcia. Wyższy wynik oznacza, że działasz przed wrogiem.</p>
+          <p class="ex"><span class="roll-inline">k20 + ZRĘ</span> raz na walkę; kto wyrzuci więcej, rusza pierwszy.</p></div>
+        <div class="entry"><h4>Kieszonkostwo <span class="badge">DEX</span></h4>
+          <p>Niepostrzeżone wyjmowanie sakiewek, kluczy i drobiazgów — albo podrzucanie ich komuś.</p>
+          <p class="ex"><span class="pc">„Ocieram się o kupca i sięgam po jego mieszek."</span> Porażka = kupiec łapie cię za rękę.</p></div>
+        <div class="entry"><h4>Walka dwoma broniami <span class="badge">DEX</span></h4>
+          <p>Sprawne władanie bronią w obu dłoniach naraz, pozwalające na dodatkowy cios kosztem celności.</p>
+          <p class="ex"><span class="pc">„Tnę sztyletem, a drugim od razu dźgam."</span> Wyższa ranga zmniejsza karę za drugi atak.</p></div>
+        <div class="entry"><h4>Jeździectwo <span class="badge">DEX</span></h4>
+          <p>Panowanie nad wierzchowcem w galopie, w walce i w trudnym terenie.</p>
+          <p class="ex"><span class="pc">„Spinam konia i przeskakuję przez powalony pień."</span> Porażka — wierzchowiec staje dęba.</p></div>
+      </div>
+
+      <!-- STR -->
+      <div class="stat-band" id="r3-str"><span class="sb-t">Siła</span><span class="sb-s">STR · mięśnie, atak siłowy, tężyzna</span></div>
+      <figure class="illus left"><img src="img/skl-climb.png" alt="Postać wspina się po mokrej skale"><figcaption>Wspinaczka — gdy jedyna droga prowadzi w górę, po śliskim kamieniu.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Atak <span class="badge">STR</span></h4>
+          <p>Trafianie wroga bronią białą w zwarciu. Podstawowa umiejętność wojownika; wprost przekłada się na celność ciosu.</p>
+          <p class="ex"><span class="roll-inline">k20 + SIŁ + ranga</span> przeciw unikowi wroga (rozdział IV).</p></div>
+        <div class="entry"><h4>Atletyka <span class="badge">STR</span></h4>
+          <p>Ogólna tężyzna: bieg, skok, dźwiganie, wyważanie, mocowanie się z przeszkodą.</p>
+          <p class="ex"><span class="pc">„Naprę ramieniem na zaryglowane wrota."</span> Solidne wrota to PT 16.</p></div>
+        <div class="entry"><h4>Broń dwuręczna <span class="badge">STR</span></h4>
+          <p>Władanie ciężką bronią oburącz — mieczami, toporami, młotami. Wyższa ranga to mocniejszy zamach.</p>
+          <p class="ex"><span class="pc">„Biorę zamach dwuręcznym toporem."</span> Większe kości obrażeń kosztem szybkości.</p></div>
+        <div class="entry"><h4>Wspinaczka <span class="badge">STR</span></h4>
+          <p>Pokonywanie pionowych przeszkód: murów, skał, lin. Mokra lub krucha powierzchnia podnosi próg.</p>
+          <p class="ex"><span class="pc">„Wspinam się po oblodzonym murze."</span> PT 16; krytyczna porażka = upadek i obrażenia.</p></div>
+        <div class="entry"><h4>Blok Tarczą <span class="badge">STR</span></h4>
+          <p>Bojowa reakcja: zastawienie się tarczą, by pochłonąć cios. Skuteczny blok zmniejsza obrażenia trafienia.</p>
+          <p class="ex"><span class="pc">„Zasłaniam się tarczą przed ciosem maczugi."</span> Udany blok ścina część obrażeń.</p></div>
+        <div class="entry"><h4>Zapasy <span class="badge">STR</span></h4>
+          <p>Chwyty, obalenia i unieruchamianie przeciwnika bez broni — przydatne, gdy chcesz pojmać, nie zabić.</p>
+          <p class="ex"><span class="pc">„Łapię go w pół i przyduszam do ziemi."</span> Przeciwstawny test Siły.</p></div>
+        <div class="entry"><h4>Pływanie <span class="badge">STR</span></h4>
+          <p>Utrzymanie się na wodzie i płynięcie wbrew prądowi, w ubraniu lub zbroi.</p>
+          <p class="ex"><span class="pc">„Rzucam się w nurt i płynę do drugiego brzegu."</span> Wartki prąd lub zbroja podnoszą próg.</p></div>
+      </div>
+
+      <!-- WIS -->
+      <div class="stat-band" id="r3-wis"><span class="sb-t">Mądrość</span><span class="sb-s">WIS · czujność, intuicja, opieka</span></div>
+      <figure class="illus right"><img src="img/skl-medicine.png" alt="Postać opatruje ranę towarzysza przy latarni"><figcaption>Medycyna — między raną a śmiercią często stoi tylko czysty bandaż i pewna ręka.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Spostrzegawczość <span class="badge">WIS</span></h4>
+          <p>Aktywne wypatrywanie ukrytych rzeczy: pułapek, sekretnych drzwi, zaczajonej osoby. Zwykłe „rozglądam się" nie wymaga rzutu — Spostrzegawczość budzi się, gdy <em>szukasz</em> czegoś konkretnego.</p>
+          <p class="ex"><span class="pc">„Przeszukuję podłogę pod kątem pułapek."</span> Ukryty mechanizm to PT 14.</p></div>
+        <div class="entry"><h4>Medycyna <span class="badge">WIS</span></h4>
+          <p>Opatrywanie ran, tamowanie krwotoków, stabilizowanie konających. Udany test zatrzymuje krwotok bez magii.</p>
+          <p class="ex"><span class="pc">„Bandażuję rozciętą rękę towarzysza."</span> Krwotok przerywa test Medycyny PT 16.</p></div>
+        <div class="entry"><h4>Przetrwanie <span class="badge">WIS</span></h4>
+          <p>Radzenie sobie w dziczy: szukanie drogi, wody, schronienia, rozpalanie ognia w deszczu.</p>
+          <p class="ex"><span class="pc">„Szukam suchego miejsca na obóz przed burzą."</span> Sukces daje bezpieczny odpoczynek.</p></div>
+        <div class="entry"><h4>Wnikliwość <span class="badge">WIS</span></h4>
+          <p>Czytanie ludzi: wyczucie kłamstwa, ukrytych intencji, prawdziwych emocji za maską.</p>
+          <p class="ex"><span class="pc">„Wpatruję się w kupca — czy mówi prawdę?"</span> Przeciwstawny test z jego Oszustwem.</p></div>
+        <div class="entry"><h4>Tropienie <span class="badge">WIS</span></h4>
+          <p>Odczytywanie śladów: tropów, odcisków, złamanych gałązek, krwi na liściach.</p>
+          <p class="ex"><span class="pc">„Klękam i badam ślady w błocie — ilu ich było?"</span> Świeży trop to PT 12.</p></div>
+        <div class="entry"><h4>Teologia <span class="badge">WIS</span></h4>
+          <p>Wiedza o bóstwach, kultach, rytuałach i świętościach. Bywa kluczem do zdjęcia klątwy.</p>
+          <p class="ex"><span class="pc">„Rozpoznaję symbol nad ołtarzem — czyj to kult?"</span></p></div>
+        <div class="entry"><h4>Wiedza o naturze <span class="badge">WIS</span></h4>
+          <p>Znajomość zwierząt, roślin, ziół i bestii — co jest jadalne, co trujące, a co śmiertelnie groźne.</p>
+          <p class="ex"><span class="pc">„Czy te jagody można jeść?"</span> Sukces oszczędza ci nocy spędzonej nad rynsztokiem.</p></div>
+        <div class="entry"><h4>Wyczucie magii <span class="badge">WIS</span></h4>
+          <p>Przeczucie obecności czarów i splamionych miejsc — mrowienie karku tam, gdzie wisi zaklęcie.</p>
+          <p class="ex"><span class="pc">„Czy w tej komnacie wisi jakaś magia?"</span></p></div>
+      </div>
+
+      <!-- INT -->
+      <div class="stat-band" id="r3-int"><span class="sb-t">Inteligencja</span><span class="sb-s">INT · wiedza, rozumowanie, rzemiosło</span></div>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Wiedza <span class="badge">INT</span></h4>
+          <p>Ogólna erudycja o historii, rodach, miejscach i wydarzeniach. Przypomnienie sobie istotnego faktu w porę.</p>
+          <p class="ex"><span class="pc">„Czy słyszałem kiedyś o tym herbie?"</span> Mroczna wiedza to PT 16.</p></div>
+        <div class="entry"><h4>Arkana <span class="badge">INT</span></h4>
+          <p>Wiedza o magii, czarach, runach i splocie tajemnych sił. Rozszyfrowanie magicznej inskrypcji albo natury klątwy.</p>
+          <p class="ex"><span class="pc">„Odczytuję runy na zwoju."</span></p></div>
+        <div class="entry"><h4>Dochodzenie <span class="badge">INT</span></h4>
+          <p>Logiczne łączenie poszlak: wnioskowanie z dowodów, dostrzeganie sprzeczności, rekonstrukcja zdarzeń.</p>
+          <p class="ex"><span class="pc">„Składam fakty: kto był tu przed nami i po co?"</span></p></div>
+        <div class="entry"><h4>Alchemia <span class="badge">INT</span></h4>
+          <p>Warzenie mikstur, identyfikacja eliksirów i trucizn, mieszanie składników w użyteczne specyfiki.</p>
+          <p class="ex"><span class="pc">„Próbuję sporządzić miksturę leczniczą z ziół."</span></p></div>
+        <div class="entry"><h4>Rzemiosło <span class="badge">INT</span></h4>
+          <p>Wytwarzanie i naprawa przedmiotów — od grotów po proste mechanizmy. Wsparcie dla kowala i majsterkowicza.</p>
+          <p class="ex"><span class="pc">„Klecę z desek i gwoździ prowizoryczną drabinę."</span></p></div>
+        <div class="entry"><h4>Języki obce <span class="badge">INT</span></h4>
+          <p>Rozumienie i mówienie w obcych mowach, odczytywanie cudzoziemskich pism.</p>
+          <p class="ex"><span class="pc">„Czy rozumiem, co krzyczą ci najemnicy?"</span></p></div>
+        <div class="entry"><h4>Żeglarstwo <span class="badge">INT</span></h4>
+          <p>Prowadzenie łodzi i statku: żagle, ster, nawigacja, czytanie pogody i prądów.</p>
+          <p class="ex"><span class="pc">„Staram się utrzymać kurs mimo sztormu."</span></p></div>
+      </div>
+
+      <!-- CHA -->
+      <div class="stat-band" id="r3-cha"><span class="sb-t">Charyzma</span><span class="sb-s">CHA · wpływ, urok, panowanie nad rozmową</span></div>
+      <figure class="illus left"><img src="img/skl-persuasion.png" alt="Dwie postacie przy stole, jedna przekonuje drugą"><figcaption>Perswazja — czasem najtrudniejszy zamek otwiera się na słowo, nie na wytrych.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Perswazja <span class="badge">CHA</span></h4>
+          <p>Przekonywanie szczerą rozmową, logiką i ciepłem. Skłonienie kogoś, by zrobił to, czego chcesz, bez gróźb.</p>
+          <p class="ex"><span class="pc">„Tłumaczę strażnikowi spokojnie, że pomoc leży w jego interesie."</span> PT 12 wobec nieufnego, lecz rozsądnego rozmówcy.</p></div>
+        <div class="entry"><h4>Oszustwo <span class="badge">CHA</span></h4>
+          <p>Kłamanie z przekonaniem, blef, podszywanie się — gdy AKTYWNIE mijasz się z prawdą w rozmowie.</p>
+          <p class="ex"><span class="pc">„Wmawiam mu, że przysłał mnie sam burmistrz."</span> Przeciwstawne z Wnikliwością celu.</p></div>
+        <div class="entry"><h4>Zastraszanie <span class="badge">CHA</span></h4>
+          <p>Wymuszanie groźbą, postawą lub przewagą. Skuteczne zwłaszcza, gdy masz w garści realny atut.</p>
+          <p class="ex"><span class="pc">„Z nożem przy gardle żądam, by się poddał."</span> Przewaga obniża próg.</p></div>
+        <div class="entry"><h4>Czar osobisty <span class="badge">CHA</span></h4>
+          <p>Zjednywanie sympatii i robienie dobrego wrażenia — pierwsze wrażenie, które otwiera drzwi.</p>
+          <p class="ex"><span class="pc">„Staram się oczarować szynkarkę żartem."</span></p></div>
+        <div class="entry"><h4>Targowanie <span class="badge">CHA</span></h4>
+          <p>Negocjowanie cen u kupca. Udany test daje jednorazową zniżkę; krytyczna porażka obraża handlarza (rozdział VIII).</p>
+          <p class="ex"><span class="pc">„Za drogo — opuść trochę, a wezmę dwa."</span> Przeciwstawny test z kupcem.</p></div>
+        <div class="entry"><h4>Gra w kości <span class="badge">CHA</span></h4>
+          <p>Hazard przy stole: kości, karty, zakłady. Można grać uczciwie albo próbować szczęścia na granicy oszustwa.</p>
+          <p class="ex"><span class="pc">„Stawiam dziesięć złotych na następny rzut."</span> PT 12 wśród amatorów (rozdział VIII).</p></div>
+        <div class="entry"><h4>Plotkowanie <span class="badge">CHA</span></h4>
+          <p>Wyciąganie informacji w karczmie, na rynku, przy kuflu. Sztuka słuchania i rozwiązywania języków.</p>
+          <p class="ex"><span class="pc">„Stawiam kolejkę i wypytuję o ostatnie zniknięcia."</span></p></div>
+        <div class="entry"><h4>Przekupstwo <span class="badge">CHA</span></h4>
+          <p>Wręczenie łapówki tak, by została przyjęta — i nie obróciła się przeciw tobie.</p>
+          <p class="ex"><span class="pc">„Wsuwam strażnikowi monetę i mrugam porozumiewawczo."</span></p></div>
+        <div class="entry"><h4>Przebranie <span class="badge">CHA</span></h4>
+          <p>Zmiana wyglądu i zachowania, by uchodzić za kogoś innego — sługę, kupca, strażnika.</p>
+          <p class="ex"><span class="pc">„Wkładam pelerynę straży i udaję wartownika."</span></p></div>
+        <div class="entry"><h4>Przesłuchanie <span class="badge">CHA</span></h4>
+          <p>Wydobywanie prawdy z opornego jeńca naciskiem, groźbą lub przebiegłością.</p>
+          <p class="ex"><span class="pc">„Pochylam się nad związanym i pytam ostatni raz."</span></p></div>
+      </div>
+
+      <!-- CON -->
+      <div class="stat-band" id="r3-con"><span class="sb-t">Kondycja</span><span class="sb-s">CON · wytrzymałość ciała</span></div>
+      <div class="entry-grid">
+        <div class="entry"><h4>Wytrzymałość <span class="badge">CON</span></h4>
+          <p>Opór ciała wobec wysiłku, trucizn, chorób, zimna i głodu. Test Wytrzymałości decyduje, czy zniesiesz to, co innych powala — forsowny marsz, dawkę jadu, mroźną noc bez ognia.</p>
+          <p class="ex"><span class="pc">„Zaciskam zęby i idę dalej mimo wyczerpania."</span> Porażka dokłada poziom wyczerpania (rozdział VI).</p></div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ IV — WALKA ════════════════ -->
+    <section id="r4">
+      <p class="eyebrow">Rozdział czwarty</p>
+      <h1><span class="num">IV · Mechanika</span>Walka</h1>
+      <p class="subtitle">Gdy słowa się kończą, a kość mówi dalej</p>
+      <hr class="rule">
+
+      <figure class="hero">
+        <img src="img/ch-walka.png" alt="Wojownik z tarczą ściera się z orkiem w lochu">
+        <div class="cap">W walce kość pada częściej i szybciej — lecz reguła pod spodem się nie zmienia.</div>
+      </figure>
+
+      <p class="lede dropcap">Walka to seria szybkich tur. Każda strona działa po kolei, a w swojej turze
+      atakuje, rzuca czar, zmienia pozycję albo robi coś sprytnego. Trafienie i obrażenia mają tu własne,
+      dokładniejsze reguły niż zwykły test umiejętności — ale wciąż opierają się na tej samej kości k20.</p>
+
+      <h2 id="r4-runda">Przebieg rundy — krok po kroku</h2>
+      <p>Każde starcie przechodzi przez te same etapy. Zanim rozłożymy je na czynniki, oto cała pętla
+      walki w pięciu krokach:</p>
+      <div class="entry-grid two">
+        <div class="entry"><h4>1 · Inicjatywa</h4>
+          <p>Na samym początku każdy rzuca <span class="roll-inline">k20 + ZRĘ</span>. Ustala to kolejność tur na całe starcie.</p></div>
+        <div class="entry"><h4>2 · Twoja tura</h4>
+          <p>W swojej turze robisz jedną rzecz: atakujesz, rzucasz czar, zmieniasz strefę albo działasz sprytnie. Potem kolej następnego.</p></div>
+        <div class="entry"><h4>3 · Trafienie</h4>
+          <p>Atak to rzut przeciw <em>unikowi</em> celu. Pancerz nie chroni przed trafieniem — chroni przed raną.</p></div>
+        <div class="entry"><h4>4 · Obrażenia</h4>
+          <p>Po trafieniu liczysz kości broni + cechę, odejmujesz pancerz, dorzucasz premię z marginesu. Wynik schodzi z HP.</p></div>
+        <div class="entry"><h4>5 · Koniec walki</h4>
+          <p>Trwa, aż jedna strona padnie albo ucieknie. HP wroga do zera = pokonany; twoje do zera = rzuty na śmierć (rozdział V).</p></div>
+      </div>
+
+      <h2 id="r4-init">Inicjatywa</h2>
+      <p>Na początku starcia każdy rzuca <span class="gloss" tabindex="0">inicjatywę<span class="tip"><span class="tip-h">Inicjatywa</span>k20
+      + modyfikator Zręczności, raz na starcie. Wyższy wynik działa pierwszy; przy remisie pierwszeństwo
+      ma bohater.</span></span>: <strong>k20 + modyfikator Zręczności</strong>. Kto wyrzuci więcej, działa
+      pierwszy; przy remisie pierwszeństwo ma bohater. Zaskoczenie wroga (udane skradanie przed walką)
+      potrafi odwrócić tę kolejność na twoją korzyść.</p>
+
+      <h2 id="r4-atak">Trafienie i unik</h2>
+      <p>Atak to <strong>jeden</strong> rzut przeciwstawny: twój atak (k20 + modyfikator + ranga +
+      biegłość) kontra <span class="gloss" tabindex="0">unik obrońcy<span class="tip"><span class="tip-h">Unik</span>k20
+      + modyfikator Zręczności obrońcy. Trafiasz, gdy twój atak przebije unik. Przy remisie wygrywa
+      obrońca.</span></span> (k20 + jego Zręczność). Trafiasz, gdy twój wynik <em>przebije</em> unik —
+      przy remisie wygrywa obrońca. Dwie liczby na kości rządzą jednak ponad wszystkim:</p>
+      <div class="degrees">
+        <div class="deg cs"><span class="lbl">Naturalna 20</span>
+          <span class="txt"><b>Automatyczne trafienie.</b> Nie da się go uniknąć, <em>podwaja obrażenia</em>
+          i <em>ignoruje pancerz</em>. Cios z zaskoczenia podwaja niezależnie — razem nawet ×4.</span></div>
+        <div class="deg cf"><span class="lbl">Naturalna 1</span>
+          <span class="txt"><b>Automatyczne pudło.</b> Choćby wróg był tuż przed tobą — ostrze tnie powietrze.</span></div>
+      </div>
+      <p>To ważna zmiana wobec starszych systemów: <strong>pancerz nie jest progiem trafienia</strong>.
+      O tym, czy trafiasz, decyduje wyłącznie unik. Pancerz wkracza dopiero przy obrażeniach.</p>
+
+      <h2 id="r4-obrona">Pancerz i obrażenia</h2>
+      <p>Gdy już trafisz, liczysz obrażenia: <strong>kości broni + modyfikator cechy</strong>. Potem
+      wchodzą dwie reguły, które czynią walkę dotkliwą i przewidywalną zarazem:</p>
+      <table>
+        <caption>Od trafienia do rany</caption>
+        <thead><tr><th>Reguła</th><th>Jak działa</th></tr></thead>
+        <tbody>
+          <tr><td><span class="gloss" tabindex="0">Pancerz = redukcja<span class="tip"><span class="tip-h">Pancerz jako redukcja</span>Pancerz
+            odejmuje obrażenia, nie blokuje trafień. Wartość = <b>AC − 10</b>. Zawsze przechodzi min. <b>1</b>
+            obrażenie. Naturalna 20 ignoruje pancerz.</span></span></td>
+            <td>Pancerz odejmuje od obrażeń wartość <strong>(AC − 10)</strong>. Zawsze przechodzi co
+            najmniej <strong>1</strong> punkt. Naturalna 20 pomija pancerz w całości.</td></tr>
+          <tr><td><span class="gloss" tabindex="0">Margines = obrażenia<span class="tip"><span class="tip-h">Premia z marginesu</span>Za
+            każde pełne <b>5</b> punktów, o które atak przebił obronę celu, <b>+1</b> obrażenie. Czysty
+            cios boli bardziej niż ledwie udany.</span></span></td>
+            <td>Za każde pełne <strong>5</strong> punktów, o które twój atak przebił obronę celu,
+            dorzucasz <strong>+1</strong> obrażenie. Im pewniejszy cios, tym głębsza rana.</td></tr>
+        </tbody>
+      </table>
+      <p>Ta sama maszyneria działa <em>symetrycznie</em> — dokładnie tak samo, gdy to wróg uderza w
+      ciebie. Żadnych podwójnych testów obrony: jeden rzut rozstrzyga trafienie, a reszta to już
+      odliczanie krwi.</p>
+
+      <h2 id="r4-strefy">Zwarcie i dystans</h2>
+      <figure class="illus right"><img src="img/combat-ranged.png" alt="Wojownik szarżuje na łucznika trzymającego dystans"><figcaption>Łucznik trzyma dystans, wojownik musi go pokonać. Strefa decyduje, kto i kiedy może uderzyć.</figcaption></figure>
+      <p>Pole walki dzieli się na dwie <span class="gloss" tabindex="0">strefy<span class="tip"><span class="tip-h">Strefy walki</span>Każdy
+      walczący jest w <b>zwarciu</b> albo na <b>dystansie</b>. Wojownik zaczyna w zwarciu, uczony na
+      dystansie. Broń biała sięga tylko własnej strefy.</span></span>: <strong>zwarcie</strong> (twarzą
+      w twarz, na długość ostrza) i <strong>dystans</strong> (kilka–kilkanaście kroków dalej). Wojownik
+      zaczyna w zwarciu, uczony na dystansie, a wrogowie — wedle swojej natury: łucznik, kusznik czy mag
+      trzyma dystans, zbir czy wilk rwie do zwarcia.</p>
+      <p>Reguła jest prosta i twarda: <strong>broń biała sięga tylko własnej strefy</strong>. Jeśli cel
+      jest w innej strefie niż ty, twój cios mieczem zostaje <em>zablokowany bez stracenia tury</em> —
+      gra powie ci wprost, że musisz się najpierw zbliżyć. Łuk, proca i czar nie znają tego ograniczenia
+      — rażą w każdej strefie. Stąd dwie kluczowe akcje pozycji:</p>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Zbliż się / Cofnij się</h4>
+          <p>Akcja zmiany strefy. Poświęcasz na nią turę (nie atakujesz), za to przechodzisz do zwarcia z wrogiem — albo wycofujesz się na dystans, by uciec spod topora.</p>
+          <p class="ex"><span class="pc">„Doskakuję do łucznika, zanim zdąży napiąć cięciwę."</span></p></div>
+        <div class="entry"><h4>Doskok wroga</h4>
+          <p>Wróg z bronią białą, który jest w złej strefie, nie atakuje na ślepo — poświęca całą turę na zbliżenie się do ciebie. To twoja okazja, by go ostrzelać, zanim dopadnie.</p>
+          <p class="ex">Zbir rzuca się przez izbę — masz jedną turę przewagi.</p></div>
+      </div>
+
+      <!-- przykład walki -->
+      <div class="scene">
+        <div class="scene-h">Przykład · Cios wojownika</div>
+        <div class="scene-b">
+          <p class="narr">Wojownik (Siła 16, modyfikator +3, ranga Ataku 2) tnie orka mieczem. Orkowa
+          obrona to 12, a jego pancerz — skórznia o AC 13.</p>
+          <div class="test">
+            <div class="test-h"><span>Atak bronią</span><span class="r">cecha:
+              <span class="gloss" tabindex="0">Siła<span class="tip"><span class="tip-h">Siła (STR)</span>Napędza
+              atak i obrażenia bronią siłową.<a class="more soon" href="#" onclick="return false">Siła</a></span></span></span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20</span><span class="dots"></span><span class="v die">15</span></div>
+              <div class="test-row"><span class="n">Modyfikator Siły (16)</span><span class="dots"></span><span class="v">+3</span></div>
+              <div class="test-row"><span class="n">Atak · ranga 2</span><span class="dots"></span><span class="v">+2</span></div>
+            </div>
+            <div class="test-sum">Atak <b>20</b> <span class="cmp">vs</span> obrona <b>12</b>
+              <span class="margin">margines +8</span></div>
+            <div class="test-out ok"><span class="verdict">Trafienie</span><i>Miecz 1d8 = 6, +3 Siły = 9.
+            Margines +8 → +1 obrażenie. Razem 10. Pancerz orka (13−10=3) pochłania 3. <b>Rana: 7.</b></i></div>
+          </div>
+          <p class="narr" style="margin-top:14px">Gdyby na kości padła <strong>naturalna 20</strong>,
+          obrażenia najpierw uległyby podwojeniu, a pancerz w ogóle by nie zadziałał — cios przeszedłby
+          jak przez papier.</p>
+        </div>
+      </div>
+
+      <h2 id="r4-obrona2">Gdy to wróg uderza w ciebie</h2>
+      <figure class="illus left"><img src="img/combat-block.png" alt="Wojownik blokuje cios topora tarczą"><figcaption>Ta sama matematyka, druga strona ostrza — twój pancerz i tarcza ścinają cudze ciosy.</figcaption></figure>
+      <p>Cała powyższa maszyneria działa <strong>symetrycznie</strong>. Gdy wróg atakuje, to <em>on</em>
+      rzuca k20 + swój modyfikator przeciw <em>twojemu</em> unikowi, a twój pancerz redukuje obrażenia
+      dokładnie tak samo. Żadnych osobnych zasad dla potworów — jeden model dla wszystkich.</p>
+      <div class="scene">
+        <div class="scene-h">Przykład · Cios orka w bohatera</div>
+        <div class="scene-b">
+          <p class="narr">Teraz ork kontruje. Twój unik to 14, a nosisz kolczugę o AC 14 (redukcja 4).</p>
+          <div class="test">
+            <div class="test-h"><span>Atak wroga</span><span class="r">obrońca: ty</span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20 orka</span><span class="dots"></span><span class="v die">16</span></div>
+              <div class="test-row"><span class="n">Modyfikator Siły orka</span><span class="dots"></span><span class="v">+3</span></div>
+            </div>
+            <div class="test-sum">Atak <b>19</b> <span class="cmp">vs</span> twój unik <b>14</b>
+              <span class="margin">margines +5</span></div>
+            <div class="test-out bad"><span class="verdict">Trafienie</span><i>Topór 1d10 = 7, +3 Siły = 10.
+            Margines +5 → +1 obrażenie. Razem 11. Twój pancerz (14−10=4) pochłania 4. <b>Tracisz 7 HP.</b></i></div>
+          </div>
+          <p class="narr" style="margin-top:14px">Gdybyś zdążył przed ciosem podnieść tarczę (udany
+          <strong>Blok Tarczą</strong>) albo wycofać się na dystans, część tych obrażeń w ogóle by do
+          ciebie nie dotarła. W walce liczy się nie tylko to, jak mocno bijesz — ale i ile zdołasz znieść.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ V — RANY I ŚMIERĆ ════════════════ -->
+    <section id="r5">
+      <p class="eyebrow">Rozdział piąty</p>
+      <h1><span class="num">V · Mechanika</span>Rany i śmierć</h1>
+      <p class="subtitle">Cena, którą płaci ciało</p>
+      <hr class="rule">
+
+      <figure class="illus right">
+        <img src="img/ch-rany.png" alt="Ranny wojownik klęczy, trzymając się za bok">
+        <figcaption>W tym świecie rany bolą jeszcze długo po tym, jak ucichnie szczęk stali.</figcaption>
+      </figure>
+      <p class="lede dropcap">Twoje <span class="gloss" tabindex="0">punkty życia<span class="tip"><span class="tip-h">Punkty życia (HP)</span>HP
+      bazowe archetypu (Wojownik 10 / Łotrzyk 8 / Uczony 6) + modyfikator Kondycji × poziom.</span></span>
+      to nie tylko licznik. Im niżej spadają, tym ciężej walczyć — ból i wstrząs odbierają pewność dłoni,
+      a każda kolejna rana ciąży na rzutach.</p>
+
+      <h2 id="r5-rany">Stopnie ran</h2>
+      <p>W miarę jak topnieje twoje HP, popadasz w coraz gorszy stan, a Mistrz Gry dolicza karę do twoich
+      testów. Ta sama drabina dotyczy wrogów — ranny przeciwnik też walczy słabiej.</p>
+      <table>
+        <caption>Drabina ran wedle pozostałego HP</caption>
+        <thead><tr><th>Pozostałe HP</th><th>Stan</th><th>Kara</th></tr></thead>
+        <tbody>
+          <tr><td>powyżej 75%</td><td>Zdrowy</td><td class="dc" style="color:#9bb56a">0</td></tr>
+          <tr><td>75–50%</td><td>Ranny</td><td class="dc">−1</td></tr>
+          <tr><td>50–25%</td><td>Ciężko ranny</td><td class="dc">−2</td></tr>
+          <tr><td>25–10%</td><td>Poważnie ranny</td><td class="dc">−4</td></tr>
+          <tr><td>poniżej 10%</td><td>Na skraju śmierci</td><td class="dc" style="color:#c07a64">−4</td></tr>
+        </tbody>
+      </table>
+      <p>Niektóre rany krwawią dalej, nieproszone. <span class="gloss" tabindex="0">Krwotok<span class="tip"><span class="tip-h">Krwotok</span>Narastające
+      obrażenia co turę (1k4, rosnące co 3 nieleczone tury). Zdejmuje go udany test Medycyny (PT 16) albo
+      magia.</span></span> z głębokiej rany odbiera HP co turę i z czasem narasta — nieopatrzony potrafi
+      sam zaprowadzić cię nad krawędź. Bandaż (test Medycyny) albo czar leczenia przerywa to w porę.</p>
+
+      <h2 id="r5-zero">Gdy HP spada do zera</h2>
+      <p>Zero punktów życia to <em>nie</em> automatyczna śmierć. To moment, w którym padasz i zaczynają
+      się <strong>rzuty na śmierć</strong>. Obowiązuje przy tym żelazna, niepodważalna zasada tego świata:</p>
+      <div class="aside">
+        <h4>Bohater nie ginie od samej narracji</h4>
+        <p>Dopóki masz choć 1 punkt życia — żyjesz, kropka. Śmierci nie wywoła żaden opis, nastrój ani
+        dramatyczna chwila. Przesądza ją wyłącznie mechanika: spadek HP do zera w walce albo seria
+        nieudanych rzutów na śmierć. To gwarancja, że nie zginiesz „dla efektu".</p>
+      </div>
+
+      <h2 id="r5-rzuty">Rzuty na śmierć</h2>
+      <p>Leżąc na ziemi z zerem HP, walczysz o życie czystą kością k20 (bez modyfikatorów), a próg rośnie
+      z każdym kolejnym omdleniem w tym samym starciu:</p>
+      <table>
+        <caption>Wspinająca się drabina rzutów na śmierć</caption>
+        <thead><tr><th>Który raz</th><th>Próg</th></tr></thead>
+        <tbody>
+          <tr><td>Pierwszy</td><td class="dc">10</td></tr>
+          <tr><td>Drugi</td><td class="dc">13</td></tr>
+          <tr><td>Trzeci</td><td class="dc">16</td></tr>
+          <tr><td>Czwarty i dalej</td><td class="dc">19</td></tr>
+        </tbody>
+      </table>
+      <p>Każda <strong>porażka</strong> to jedna kreska (naturalna 1 — dwie). <strong>Trzy porażki</strong>
+      i bohater umiera; kampania dobiega końca, a postaci przypada <em>epitafium</em>. Naturalna 20 ratuje
+      cię z miejsca, stawiając z powrotem na nogi. Co ważne — drabina progów jest <em>per starcie</em>:
+      każde kolejne omdlenie w tej samej walce podnosi poprzeczkę, więc bohater wielokrotnie wracający do
+      przytomności jest coraz bliżej śmierci.</p>
+
+      <div class="scene">
+        <div class="scene-h">Przykład · Walka o ostatni oddech</div>
+        <img class="scene-img" src="img/death-save.png" alt="Powalony bohater, towarzysz klęczy przy nim">
+        <div class="scene-b">
+          <p class="narr">Cios maczugi sprowadza twoje HP do zera. Padasz w błoto. To pierwsze omdlenie w
+          tym starciu, więc próg rzutu na śmierć wynosi <strong>10</strong>.</p>
+          <div class="test">
+            <div class="test-h"><span>Rzut na śmierć</span><span class="r">czysta k20, bez modyfikatorów</span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20</span><span class="dots"></span><span class="v die">7</span></div>
+            </div>
+            <div class="test-sum">Wynik <b>7</b> <span class="cmp">&lt;</span> Próg <b>10</b>
+              <span class="margin">1. porażka</span></div>
+            <div class="test-out bad"><span class="verdict">Porażka</span><i>Pierwsza kreska z trzech.
+            Świat ciemnieje, lecz wciąż walczysz. Jeszcze dwie takie i koniec.</i></div>
+          </div>
+          <p class="narr" style="margin-top:14px">Gdyby towarzysz zdążył dobiec i zdać test
+          <strong>Medycyny</strong> albo rzucić czar leczenia, postawiłby cię z powrotem na nogi i
+          przerwał odliczanie. W tym świecie różnica między bohaterem a kolejnym imieniem na grobie to
+          często jedna pewna ręka w odpowiedniej chwili.</p>
+        </div>
+      </div>
+
+      <h2 id="r5-wskrz">Śmierć i wskrzeszenie</h2>
+      <p>Śmierć nie wymazuje twojego dorobku — złoto i doświadczenie pozostają w kronice; po prostu
+      zamyka opowieść postaci, a Mistrz Gry układa jej <em>epitafium</em>. Niektóre światy oferują jednak
+      <span class="gloss" tabindex="0">wskrzeszenie<span class="tip"><span class="tip-h">Wskrzeszenie</span>Opcjonalna
+      zasada (domyślnie wyłączona). Przywraca bohatera z połową maksymalnego HP — za cenę utraty części
+      PD, złota albo przedmiotu, zależnie od ustawień świata.</span></span> — opcjonalną łaskę, domyślnie
+      wyłączoną. Tam, gdzie jest dostępna, przywraca bohatera z połową maksymalnego HP, lecz zawsze za
+      cenę: utratą części doświadczenia, garści złota albo cennego przedmiotu. Śmierci w tym świecie nie
+      da się cofnąć za darmo.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ VI — STANY ════════════════ -->
+    <section id="r6">
+      <p class="eyebrow">Rozdział szósty</p>
+      <h1><span class="num">VI · Mechanika</span>Stany i kondycje</h1>
+      <p class="subtitle">Ogień, trucizna, strach i szał</p>
+      <hr class="rule">
+
+      <figure class="illus right">
+        <img src="img/ch-stany.png" alt="Wojownik ogarnięty bojowym szałem, iskry wokół">
+        <figcaption>Niektóre stany cię niszczą. Inne — czynią groźnym aż do chwili, gdy cię zgubią.</figcaption>
+      </figure>
+      <p class="lede dropcap">Walka i magia nakładają na ciała <strong>stany</strong> — od płonącego
+      rękawa po ślepą furię. Każdy stan ma swoją mechanikę: ile odbiera, jak długo trwa i co go zdejmuje.
+      Część rozstrzyga się sama, część czeka, aż coś ją przerwie.</p>
+
+      <h2 id="r6-rodzaje">Trzy rodzaje stanów</h2>
+      <div class="degrees">
+        <div class="deg cf"><span class="lbl">Rany w czasie</span>
+          <span class="txt"><b>Odbierają HP co turę.</b> Krwawienie, Płonięcie, Podpalenie, Krwotok. Tykają,
+          dopóki nie miną albo ich nie przerwiesz (woda, bandaż, czar).</span></div>
+        <div class="deg f"><span class="lbl">Utrata kontroli</span>
+          <span class="txt"><b>Odbierają wybór.</b> Panika zmusza do ucieczki, Berserk — do ataku na
+          najbliższego (nawet sojusznika), Dezorientacja losuje twój ruch kością k4.</span></div>
+        <div class="deg cs"><span class="lbl">Wzmocnienia</span>
+          <span class="txt"><b>Działają na twoją korzyść.</b> Furia, Przyśpieszenie, Błogosławieństwo,
+          Natchnienie, Ukrycie — potęga, która zwykle ma swoją cenę.</span></div>
+      </div>
+      <p>Wiele wzmocnień to miecz obosieczny. <span class="gloss" tabindex="0">Furia<span class="tip"><span class="tip-h">Furia</span>+2
+      Siły i +3 obrażeń w zwarciu, odporność na spowolnienie — lecz po wygaśnięciu bohater pada z
+      wyczerpania, a ogłuszenie ją przerywa.</span></span> daje wojownikowi moc, po której przychodzi
+      wyczerpanie; <span class="gloss" tabindex="0">Przyśpieszenie<span class="tip"><span class="tip-h">Przyśpieszenie</span>+2
+      Zręczności i dodatkowa akcja ruchu przez 3 tury — po czym dopada cię wyczerpanie.</span></span>
+      dorzuca akcję, lecz kończy się tym samym. Potęga w tym świecie rzadko bywa darmowa.</p>
+
+      <h2 id="r6-lista">Katalog stanów</h2>
+      <p>Pełny katalog liczy ponad dwadzieścia stanów. Oto najważniejsze, pogrupowane wedle trzech
+      rodzajów. Przy każdym: co robi i co go zdejmuje. Pamiętaj — wszystkie liczby liczy silnik; ty
+      słyszysz w narracji tylko skutek.</p>
+
+      <div class="tier-band" id="r6-dot">Rany w czasie · tykają co turę</div>
+      <figure class="illus right"><img src="img/stan-fire.png" alt="Postać objęta płomieniami"><figcaption>Podpalenie — ogień nie pyta o pancerz; trzeba go ugasić, zanim strawi wszystko.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Podpalenie <span class="badge dmg">2k6 / turę</span></h4>
+          <p>Ciało stanęło w ogniu: 2k6 obrażeń co turę oraz −2 do Siły i Zręczności. Najgroźniejsza z ran w czasie.</p>
+          <p class="ex">Zdejmuje: udany rzut <strong>Zręczności</strong> (PT 12), skok do wody, czar.</p></div>
+        <div class="entry"><h4>Krwotok <span class="badge dmg">1k4, rośnie</span></h4>
+          <p>Głęboka, krwawiąca rana: 1k4 co turę, narastająco co kilka nieopatrzonych tur. Nieleczony sam zaprowadzi nad krawędź.</p>
+          <p class="ex">Zdejmuje: test <strong>Medycyny</strong> (PT 16) albo magia leczenia.</p></div>
+        <div class="entry"><h4>Trucizna <span class="badge dmg">co turę</span></h4>
+          <p>Jad sączy się w żyłach, odbierając HP co turę przez czas trwania. Czyni rany trwalszymi niż jeden cios.</p>
+          <p class="ex">Zdejmuje: czas, antidotum, silny rzut Kondycji.</p></div>
+      </div>
+
+      <div class="tier-band" id="r6-kontrola">Utrata kontroli · odbierają wybór</div>
+      <figure class="illus left"><img src="img/stan-frost.png" alt="Postać zamrożona w lodzie"><figcaption>Zamrożenie i sen wyłączają wroga równie skutecznie jak ostrze — czasem skuteczniej.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Ogłuszenie</h4>
+          <p>Zmysły gasną na chwilę — tracisz najbliższą turę. Krótkie, lecz w walce bezcenne.</p>
+          <p class="ex">Zdejmuje: mija samo po 1 turze.</p></div>
+        <div class="entry"><h4>Panika</h4>
+          <p>Strach przejmuje stery: silnik zmusza cię (lub wroga) do ucieczki z walki, zamiast ataku.</p>
+          <p class="ex">Zdejmuje: rzut <strong>Mądrości</strong> (PT 14).</p></div>
+        <div class="entry"><h4>Berserk</h4>
+          <p>Ślepy szał: cel atakuje <em>najbliższego</em>, choćby sojusznika; +3 atak i obrażenia, ale −3 do obrony. W odróżnieniu od Furii — bez panowania nad sobą.</p>
+          <p class="ex">Zdejmuje: rzut <strong>Mądrości</strong>; brak wrogów w pobliżu.</p></div>
+        <div class="entry"><h4>Zamęt</h4>
+          <p>Chaos w głowie: na początku tury silnik losuje (k4) zachowanie — stanie, uderzy przypadkowo, ucieknie albo zadziała normalnie.</p>
+          <p class="ex">Zdejmuje: upływ czasu trwania.</p></div>
+        <div class="entry"><h4>Sen</h4>
+          <p>Magiczny sen wyłącza wroga całkowicie, póki czegoś nie zbudzi (cios, hałas). Potężna kontrola uczonego.</p>
+          <p class="ex">Zdejmuje: obrażenia, koniec działania czaru.</p></div>
+        <div class="entry"><h4>Spowolnienie / Zamrożenie</h4>
+          <p>Mróz krępuje ruchy (spowolnienie) lub całkiem unieruchamia (zamrożenie), odbierając akcje i pogarszając obronę.</p>
+          <p class="ex">Zdejmuje: upływ czasu, ciepło, ogień.</p></div>
+      </div>
+
+      <div class="tier-band" id="r6-zle">Klątwy i osłabienia</div>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Klątwa</h4>
+          <p>Mroczne fatum: −2 do <em>wszystkich</em> testów, a raz na scenę silnik przerabia twój udany rzut na gorszy („zły omen").</p>
+          <p class="ex">Zdejmuje: rytuał (Teologia / Arkana), święte miejsce.</p></div>
+        <div class="entry"><h4>Wyczerpanie</h4>
+          <p>Stan <em>stackowalny</em>: każdy poziom to kara do cech; drugi poziom oznacza omdlenie. Cena marszu bez odpoczynku i wygasłych szałów.</p>
+          <p class="ex">Zdejmuje: odpoczynek (rozdział IX).</p></div>
+      </div>
+
+      <div class="tier-band" id="r6-bufy">Wzmocnienia · potęga za cenę</div>
+      <figure class="illus right"><img src="img/stan-bless.png" alt="Wojownik w złotym świetle błogosławieństwa"><figcaption>Błogosławieństwo — raz na scenę cudem wyrywa bohatera spod kosy.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Furia <span class="badge heal">+2 SIŁ / +3 obr.</span></h4>
+          <p>Świadomy szał wojownika: +2 Siły, +3 obrażeń w zwarciu, odporność na spowolnienie. Lecz po wygaśnięciu pada z wyczerpania, a ogłuszenie ją przerywa.</p>
+          <p class="ex">Cena: wyczerpanie po zakończeniu.</p></div>
+        <div class="entry"><h4>Przyśpieszenie <span class="badge heal">+2 ZRĘ</span></h4>
+          <p>Magiczny pośpiech: +2 Zręczności i dodatkowa akcja ruchu przez 3 tury. Po wygaśnięciu — wyczerpanie.</p>
+          <p class="ex">Cena: wyczerpanie po wygaśnięciu.</p></div>
+        <div class="entry"><h4>Błogosławieństwo <span class="badge heal">+2 obrona</span></h4>
+          <p>Opieka bóstwa: +2 do testów obronnych, a raz na scenę, gdy cios miałby cię powalić, silnik rzuca Kondycję i przy sukcesie zostawia cię na 1 HP.</p>
+          <p class="ex">Trwa do końca sceny.</p></div>
+        <div class="entry"><h4>Natchnienie</h4>
+          <p>Pewność ducha po czyjejś zachęcie czy modlitwie: +2 do Charyzmy i Mądrości oraz jeden przerzut nieudanego testu.</p>
+          <p class="ex">Przerzutem sterujesz sam, raz.</p></div>
+        <div class="entry"><h4>Ukrycie</h4>
+          <p>Wtopiłeś się w cień: wrogowie nie mogą cię atakować, póki cię nie wykryją (ich rzut Mądrości), a twój pierwszy cios z ukrycia zadaje +2k6 obrażeń zasadzki.</p>
+          <p class="ex">Kończy je: twój atak albo wykrycie przez wroga.</p></div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ VII — MAGIA ════════════════ -->
+    <section id="r7">
+      <p class="eyebrow">Rozdział siódmy</p>
+      <h1><span class="num">VII · Uczony</span>Magia uczonego</h1>
+      <p class="subtitle">Moc, która liczy się w manie i ryzyku</p>
+      <hr class="rule">
+
+      <figure class="hero">
+        <img src="img/ch-magia.png" alt="Uczony rzuca czar, kula arkanicznego światła w dłoni">
+        <div class="cap">Każde zaklęcie to transakcja: mana w zamian za moc, a czasem życie za błąd.</div>
+      </figure>
+
+      <p class="lede dropcap">Tylko <strong>uczony</strong> włada magią — i tylko on dźwiga jej ciężar.
+      Tam, gdzie wojownik ufa stali, uczony ufa wiedzy zapisanej w grymuarach: dwudziestu sześciu zaklęć,
+      które potrafią spopielić wroga, zasklepić ranę, uśpić świadomość albo wyssać życie. Ten rozdział
+      opisuje je wszystkie, co do jednego — z kosztem, kością i przykładem rzucenia.</p>
+
+      <h2 id="r7-mana">Mana — paliwo czarów</h2>
+      <p>Twój zapas <span class="gloss" tabindex="0">many<span class="tip"><span class="tip-h">Mana</span>=
+      8 + modyfikator INT × poziom. Każdy czar pobiera koszt z góry. Odnawia się w pełni po długim
+      odpoczynku.</span></span> to <strong>8 + modyfikator Inteligencji × poziom</strong>. Uczony na 3.
+      poziomie z Inteligencją 16 (mod +3) ma więc <strong>8 + 3 × 3 = 17 many</strong>. Każde zaklęcie
+      pobiera swój koszt z góry — bez wystarczającej many po prostu go nie rzucisz. Mana odnawia się do
+      pełna po długim odpoczynku (rozdział IX); krótki odpoczynek jej <em>nie</em> przywraca, więc każdy
+      czar w lochu trzeba liczyć.</p>
+
+      <h2 id="r7-rzut">Jak rzucasz czar</h2>
+      <p>Czary dzielą się na cztery rodzaje, a każdy rozstrzyga się trochę inaczej. Wspólny mianownik:
+      płacisz manę, potem rzucasz — i wszystkie używają twojej <strong>Inteligencji</strong> jako cechy.</p>
+      <div class="degrees">
+        <div class="deg cf"><span class="lbl">Atakujący</span>
+          <span class="txt"><b>k20 + INT przeciw unikowi wroga</b>, zupełnie jak cios bronią. Trafienie zadaje
+          obrażenia z kości czaru. Nat 20 podwaja, nat 1 to miscast.</span></div>
+        <div class="deg s"><span class="lbl">Leczniczy</span>
+          <span class="txt"><b>Bez rzutu na trafienie</b> — po prostu rzucasz kość leczenia i odzyskujesz tyle HP.</span></div>
+        <div class="deg cs"><span class="lbl">Obronny</span>
+          <span class="txt"><b>Nakłada na ciebie ochronę</b>: dodatkowy pancerz albo pulę, która pochłonie najbliższe ciosy.</span></div>
+        <div class="deg f"><span class="lbl">Kontrolujący</span>
+          <span class="txt"><b>Rzut przeciw odporności celu</b> (jego Mądrość). Sukces nakłada stan (sen, klątwa, trucizna). Gdy cel się oprze, część many wraca.</span></div>
+      </div>
+
+      <div class="scene">
+        <div class="scene-h">Przykład · Ognisty Pocisk</div>
+        <div class="scene-b">
+          <p class="narr">Uczony (Inteligencja 16, mod +3) ciska Ognisty Pocisk w zbira. Płaci 2 many,
+          a obrona zbira to 12.</p>
+          <div class="test">
+            <div class="test-h"><span>Czar atakujący</span><span class="r">cecha:
+              <span class="gloss" tabindex="0">Inteligencja<span class="tip"><span class="tip-h">Inteligencja (INT)</span>Cecha
+              wszystkich czarów uczonego — i celności, i many.<a class="more soon" href="#" onclick="return false">Inteligencja</a></span></span></span></div>
+            <div class="test-rows">
+              <div class="test-row"><span class="n">Rzut k20</span><span class="dots"></span><span class="v die">14</span></div>
+              <div class="test-row"><span class="n">Modyfikator Inteligencji (16)</span><span class="dots"></span><span class="v">+3</span></div>
+            </div>
+            <div class="test-sum">Atak <b>17</b> <span class="cmp">vs</span> obrona <b>12</b>
+              <span class="margin">koszt 2 many</span></div>
+            <div class="test-out ok"><span class="verdict">Trafienie</span><i>Ognisty Pocisk 1k8 = 6 obrażeń.
+            Płomień może dodatkowo podpalić cel. Zostaje ci 15 many.</i></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KSIĘGA CZARÓW ── -->
+      <h2 id="r7-ksiega">Księga czarów</h2>
+      <p>Wszystkie dwadzieścia sześć zaklęć, wedle pięciu tierów mocy. Każdy wpis podaje tier, koszt many,
+      kość i działanie. Uczony zaczyna, znając kilka czarów 1. tieru; reszty uczy się z czasem.</p>
+
+      <div class="tier-band">Tier 1 · podstawy sztuki</div>
+      <figure class="illus right"><img src="img/spl-fire.png" alt="Mag ciska ognisty pocisk"><figcaption>Ognisty Pocisk — pierwszy czar, którego uczy się niemal każdy adept.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Ognisty Pocisk <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge dmg">1k8</span></h4>
+          <p>Skupiona kula ognia ciśnięta w cel; przy trafieniu może go <em>podpalić</em>, dokładając obrażenia w kolejnych turach. Niezawodny czar otwierający.</p>
+          <p class="ex">Atakujący — <span class="roll-inline">k20 + INT</span> przeciw unikowi.</p></div>
+        <div class="entry"><h4>Błysk Magiczny <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge dmg">2k6</span></h4>
+          <p>Strumień czystej magicznej energii — bez żywiołu, więc trudny do uodpornienia. Najwyższe obrażenia spośród czarów 1. tieru.</p>
+          <p class="ex">Atakujący, sięga celu w każdej strefie.</p></div>
+        <div class="entry"><h4>Mroźna Strzała <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge dmg">1k8</span></h4>
+          <p>Lodowaty bełt rani i może <em>spowolnić</em> trafionego, odbierając mu rozpęd w następnej turze.</p>
+          <p class="ex">Atakujący; trafienie bywa też spowolnieniem.</p></div>
+        <div class="entry"><h4>Plusk Kwasu <span class="badge">T1</span><span class="badge mana">1 many</span><span class="badge dmg">1k6</span></h4>
+          <p>Fala parzącej cieczy żre cel i jego zbroję. Tani czar na pobliskiego wroga, gdy oszczędzasz manę.</p>
+          <p class="ex">Atakujący, tylko cel w pobliżu.</p></div>
+        <div class="entry"><h4>Mroźny Uchwyt <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge">stan</span></h4>
+          <p>Przenikliwy mróz krępuje ruchy celu, nakładając <em>spowolnienie</em> na dwie tury. Kontrola bez obrażeń.</p>
+          <p class="ex">Kontrolujący — rzut przeciw Mądrości celu.</p></div>
+        <div class="entry"><h4>Leczniczy Dotyk <span class="badge">T1</span><span class="badge mana">1 many</span><span class="badge heal">1k6</span></h4>
+          <p>Strumień kojącej energii zamyka rany rzucającego. Tani, szybki opatrunek w środku walki.</p>
+          <p class="ex">Leczniczy — bez rzutu, po prostu odzyskujesz HP.</p></div>
+        <div class="entry"><h4>Rana Uleczona <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge heal">2k6</span></h4>
+          <p>Mocniejsze leczenie — dwie kości HP za dwie many. Podstawowe zaklęcie ratujące życie.</p>
+          <p class="ex">Leczniczy, bez rzutu na trafienie.</p></div>
+        <div class="entry"><h4>Tarcza Arkan <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge">obrona</span></h4>
+          <p>Migocząca tarcza zwiększa twój pancerz na czas trwania, ścinając obrażenia każdego ciosu.</p>
+          <p class="ex">Obronny — nakładasz na siebie.</p></div>
+        <div class="entry"><h4>Żelazna Straż <span class="badge">T1</span><span class="badge mana">2 many</span><span class="badge">obrona</span></h4>
+          <p>Niewidoczne pole pochłania w całości <em>najbliższe</em> trafienie. Idealne tuż przed spodziewanym ciosem.</p>
+          <p class="ex">Obronny — absorbuje jeden cios.</p></div>
+        <div class="entry"><h4>Magiczne Światło <span class="badge">T1</span><span class="badge mana">0 many</span><span class="badge">narracja</span></h4>
+          <p>Unosząca się kula światła rozjaśnia ciemność jak pochodnia. Darmowy, lecz bez wartości bojowej.</p>
+          <p class="ex">Narracyjny — bez kości i bez kosztu.</p></div>
+        <div class="entry"><h4>Wykrycie Magii <span class="badge">T1</span><span class="badge mana">1 many</span><span class="badge">narracja</span></h4>
+          <p>Trzecie oko ujawnia aurę magiczną wokół przedmiotów i istot — co jest zaklęte, co przeklęte.</p>
+          <p class="ex">Narracyjny — odsłania to, co ukryte przed wzrokiem.</p></div>
+      </div>
+
+      <div class="tier-band">Tier 2 · żywioły i kontrola</div>
+      <figure class="illus left"><img src="img/spl-sleep.png" alt="Mag zsyła sen na wroga"><figcaption>Sen — czasem najgroźniejszy cios to taki, który w ogóle nie krwawi.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Piorunowy Grot <span class="badge">T2</span><span class="badge mana">3 many</span><span class="badge dmg">2k6</span></h4>
+          <p>Naładowany elektrycznie pocisk razi cel energią. Solidne obrażenia na średnim koszcie.</p>
+          <p class="ex">Atakujący, sięga w każdej strefie.</p></div>
+        <div class="entry"><h4>Lodowa Lanca <span class="badge">T2</span><span class="badge mana">3 many</span><span class="badge dmg">2k8</span></h4>
+          <p>Ciężka kolumna lodu przeszywa cel impetem tarana. Przy krytyku <em>zamraża</em> trafionego.</p>
+          <p class="ex">Atakujący; nat 20 dorzuca zamrożenie.</p></div>
+        <div class="entry"><h4>Pałająca Ścieżka <span class="badge">T2</span><span class="badge mana">4 many</span><span class="badge dmg">1k6</span></h4>
+          <p>Łuk ognia trafia <em>wszystkich</em> wrogów naraz. Pierwszy czar obszarowy uczonego.</p>
+          <p class="ex">Atakujący obszarowy — kość obrażeń na każdego wroga.</p></div>
+        <div class="entry"><h4>Sen <span class="badge">T2</span><span class="badge mana">3 many</span><span class="badge">stan</span></h4>
+          <p>Wpędza wroga w magiczny sen, wyłączając go ze starcia, póki czegoś nie zbudzi. Potężna kontrola.</p>
+          <p class="ex">Kontrolujący — rzut przeciw Mądrości celu.</p></div>
+        <div class="entry"><h4>Oślepienie <span class="badge">T2</span><span class="badge mana">3 many</span><span class="badge">stan</span></h4>
+          <p>Fala oślepiającego światła odbiera celowi wzrok na dwie tury — jego ataki stają się bezładne.</p>
+          <p class="ex">Kontrolujący — przeciw Mądrości celu.</p></div>
+        <div class="entry"><h4>Klątwa <span class="badge">T2</span><span class="badge mana">2 many</span><span class="badge">stan</span></h4>
+          <p>Mroczna klątwa osłabia ducha celu: <em>−2 do wszystkich jego testów</em> i zły omen wiszący nad nim przez trzy tury.</p>
+          <p class="ex">Kontrolujący — przeciw Mądrości celu.</p></div>
+        <div class="entry"><h4>Trujący Dotyk <span class="badge">T2</span><span class="badge mana">2 many</span><span class="badge dmg">1k4</span></h4>
+          <p>Magiczna trucizna na dłoni zatruwa wroga w zwarciu — rana tyka co turę przez trzy tury.</p>
+          <p class="ex">Kontrolujący w zwarciu; nakłada zatrucie.</p></div>
+        <div class="entry"><h4>Zbroja Maga <span class="badge">T2</span><span class="badge mana">3 many</span><span class="badge">obrona</span></h4>
+          <p>Warstwa zmaterializowanej energii pochłania nadchodzące obrażenia jak druga skóra — większa pula niż Żelazna Straż.</p>
+          <p class="ex">Obronny — pula absorpcji na siebie.</p></div>
+      </div>
+
+      <div class="tier-band">Tier 3 · mroczna potęga</div>
+      <figure class="illus right"><img src="img/spl-drain.png" alt="Mag wysysa życie z wroga"><figcaption>Wysysanie Życia — cudza krew staje się twoim zdrowiem.</figcaption></figure>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Wysysanie Życia <span class="badge">T3</span><span class="badge mana">3 many</span><span class="badge dmg">2k8</span></h4>
+          <p>Wysysa siły witalne wroga w zwarciu i <em>leczy rzucającego</em> o część zadanych obrażeń. Cios i opatrunek w jednym.</p>
+          <p class="ex">Atakujący w zwarciu; leczy maga przy trafieniu.</p></div>
+        <div class="entry"><h4>Uderzenie Inferno <span class="badge">T3</span><span class="badge mana">4 many</span><span class="badge dmg">3k6</span></h4>
+          <p>Skupiony żar piekielnego ognia wybucha w jednym punkcie. Najwyższe obrażenia pojedynczego celu na tym tierze.</p>
+          <p class="ex">Atakujący — potężny cios w jeden cel.</p></div>
+        <div class="entry"><h4>Zamęt <span class="badge">T3</span><span class="badge mana">3 many</span><span class="badge">stan</span></h4>
+          <p>Chaotyczne obrazy dezorientują cel: silnik losuje co turę jego działanie — stanie, zaatakuje przypadkowo albo ucieknie.</p>
+          <p class="ex">Kontrolujący — przeciw Mądrości celu.</p></div>
+      </div>
+
+      <div class="tier-band">Tier 4 · mistrzostwo</div>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Łańcuch Błyskawic <span class="badge">T4</span><span class="badge mana">5 many</span><span class="badge dmg">2k6</span></h4>
+          <p>Błyskawica skacze kolejno przez maksymalnie <em>trzech</em> wrogów, raniąc każdego. Pogromca grup.</p>
+          <p class="ex">Atakujący obszarowy — odbija się między celami.</p></div>
+        <div class="entry"><h4>Piorun Ogłuszenia <span class="badge">T4</span><span class="badge mana">4 many</span><span class="badge dmg">1k6</span></h4>
+          <p>Skondensowana kula energii rani i <em>ogłusza</em> cel, odbierając mu najbliższą turę. Kontrola z premią obrażeń.</p>
+          <p class="ex">Kontrolujący — przeciw Mądrości; ogłusza przy sukcesie.</p></div>
+        <div class="entry"><h4>Kamienna Skóra <span class="badge">T4</span><span class="badge mana">4 many</span><span class="badge">obrona</span></h4>
+          <p>Skóra twardnieje jak kamień, drastycznie zmniejszając obrażenia przez trzy tury. Najlepsza obrona uczonego.</p>
+          <p class="ex">Obronny — silna redukcja na siebie.</p></div>
+      </div>
+
+      <div class="tier-band">Tier 5 · legenda</div>
+      <figure class="illus left"><img src="img/spl-fireball.png" alt="Eksplozja kuli ognia pochłania wrogów"><figcaption>Kula Ognia — zaklęcie, o którym ostrzegają całe miasta.</figcaption></figure>
+      <div class="entry-grid">
+        <div class="entry"><h4>Kula Ognia <span class="badge">T5</span><span class="badge mana">6 many</span><span class="badge dmg">3k6</span></h4>
+          <p>Ognista eksplozja niszczy <em>wszystkich</em> wrogów wokół punktu uderzenia. Najpotężniejszy czar w księdze — i najdroższy. Jeden dobry rzut potrafi zakończyć całą walkę, lecz pochłania niemal całą manę niskopoziomowego maga.</p>
+          <p class="ex">Atakujący obszarowy — 3k6 każdemu wrogowi w zasięgu wybuchu.</p></div>
+      </div>
+
+      <h2 id="r7-nauka">Nauka czarów i rangi</h2>
+      <p>Uczony zaczyna, znając kilka czarów 1. tieru, a kolejnych uczy się przez całą grę. Wyższe tiery
+      odblokowujesz z poziomem — tier <strong>T</strong> wymaga poziomu <strong>2T−1</strong> (tier 2 od
+      3. poziomu, tier 3 od 5. i tak dalej). Same czary i ich
+      <span class="gloss" tabindex="0">rangi<span class="tip"><span class="tip-h">Rangi czaru</span>Każdy
+      czar ma 3 rangi. Wyższa = mocniejsza kość, dłuższy efekt albo tańszy rzut.</span></span> zdobywasz na
+      dwa sposoby: <strong>kupując je za doświadczenie</strong> (nowy czar 75 PD, ranga 2 — 50 PD, ranga 3
+      — 100 PD; rozdział IX) albo po prostu rzucając dany czar wystarczająco często — wprawa sama wynosi go
+      na wyższą rangę. Wyższa ranga oznacza mocniejszą kość obrażeń, dłuższy czas trwania stanu lub niższy
+      koszt many.</p>
+
+      <h2 id="r7-miscast">Miscast i krytyk</h2>
+      <p>Magia bywa kapryśna. <strong>Naturalna 1</strong> na rzucie czaru to
+      <span class="gloss" tabindex="0">miscast<span class="tip"><span class="tip-h">Miscast</span>Nieudane
+      zaklęcie obraca się przeciw rzucającemu — tym groźniej, im wyższy poziom maga.</span></span> —
+      zaklęcie wymyka się spod kontroli, a skutek jest tym groźniejszy, im potężniejszy mag:</p>
+      <table>
+        <caption>Skutki miscastu wedle poziomu rzucającego</caption>
+        <thead><tr><th>Poziom</th><th>Skutek</th></tr></thead>
+        <tbody>
+          <tr><td>1–2</td><td>oszołomienie (tracisz panowanie nad turą)</td></tr>
+          <tr><td>3–4</td><td>1k4 obrażeń od własnego czaru</td></tr>
+          <tr><td>5–7</td><td>1k6 obrażeń + ogłuszenie</td></tr>
+          <tr><td>8+</td><td>1k8 + ogłuszenie + dziki efekt uboczny</td></tr>
+        </tbody>
+      </table>
+      <p>Po drugiej stronie kości leży chwała. <strong>Naturalna 20</strong> podwaja obrażenia czaru i
+      dorzuca losowy bonus (rzut k6): samo podwojenie, dodatkowe ogłuszenie, odrzucenie wroga w inną
+      strefę albo podpalenie. Magia, jak i stal, najmocniej bije w skrajnościach kości — z tą różnicą, że
+      magowi nieudany rzut potrafi przypalić własne palce.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ VIII — ZŁOTO ════════════════ -->
+    <section id="r8">
+      <p class="eyebrow">Rozdział ósmy</p>
+      <h1><span class="num">VIII · Świat</span>Złoto i ekwipunek</h1>
+      <p class="subtitle">Czym płaci się za przetrwanie</p>
+      <hr class="rule">
+
+      <figure class="illus right">
+        <img src="img/ch-zloto.png" alt="Lada kupca pełna broni, mikstur i złota">
+        <figcaption>W tym świecie obowiązuje jedna waluta i jedna prawda: wszystko ma swoją cenę.</figcaption>
+      </figure>
+      <p class="lede dropcap">W tym świecie liczy się jedna waluta: <strong>złote monety (GP)</strong>.
+      Bez srebrników, bez miedziaków — tylko złoto. Za nie kupisz nocleg, leczenie, naprawę miecza i
+      milczenie właściwych ludzi. Większość cen jest stała i pochodzi z ksiąg świata, nie z humoru
+      kupca.</p>
+
+      <h2 id="r8-uslugi">Usługi i ceny</h2>
+      <table>
+        <caption>Cennik podstawowych usług</caption>
+        <thead><tr><th>Usługa</th><th>Cena</th></tr></thead>
+        <tbody>
+          <tr><td>Posiłek w karczmie</td><td class="dc">2 GP</td></tr>
+          <tr><td>Napój</td><td class="dc">1 GP</td></tr>
+          <tr><td>Nocleg (pokój + strawa)</td><td class="dc">5 GP</td></tr>
+          <tr><td>Luksusowy pokój</td><td class="dc">20 GP</td></tr>
+          <tr><td>Uzdrowiciel — lekkie rany</td><td class="dc">10 GP</td></tr>
+          <tr><td>Uzdrowiciel — ciężkie rany</td><td class="dc">50 GP</td></tr>
+          <tr><td>Kowal — naprawa</td><td class="dc">15 GP</td></tr>
+          <tr><td>Posłaniec / Przewodnik (dzień)</td><td class="dc">8 / 12 GP</td></tr>
+        </tbody>
+      </table>
+      <p>Kupno i sprzedaż mają stałą regułę: <strong>sprzedajesz za połowę</strong> wartości przedmiotu,
+      kupujesz za pełną cenę. Twoja <strong>Charyzma</strong> przesuwa obie granice — wysoka utarguje
+      lepszy kurs w obie strony, niska każe ci dopłacać.</p>
+
+      <h2 id="r8-targ">Targowanie</h2>
+      <figure class="illus right"><img src="img/zloto-haggle.png" alt="Bohater targuje się z kupcem nad ladą pełną towarów"><figcaption>Dobry targ potrafi obniżyć cenę o dwie piąte — zły zamyka kram na resztę wieczoru.</figcaption></figure>
+      <p>Cena nie zawsze jest ostateczna. Gdy zaczynasz <span class="gloss" tabindex="0">targować się<span class="tip"><span class="tip-h">Targowanie</span>Przeciwstawny
+      test Charyzmy z kupcem. Zniżka jednorazowa na najbliższą transakcję. Krytyczna porażka obraża kupca
+      i blokuje dalsze targi.</span></span>, toczysz przeciwstawny test Charyzmy z kupcem. Wynik daje
+      jednorazową zniżkę na najbliższą transakcję:</p>
+      <table>
+        <caption>Wynik targu</caption>
+        <thead><tr><th>Wynik testu</th><th>Efekt</th></tr></thead>
+        <tbody>
+          <tr><td>Sukces krytyczny</td><td class="dc" style="color:#9bb56a">−40%</td></tr>
+          <tr><td>Sukces</td><td class="dc" style="color:#9bb56a">−15%</td></tr>
+          <tr><td>Porażka</td><td class="dc">0%</td></tr>
+          <tr><td>Porażka krytyczna</td><td class="dc" style="color:#c07a64">+10% i kupiec obrażony</td></tr>
+        </tbody>
+      </table>
+      <p>Krytyczna porażka jest podwójnie bolesna: nie dość, że cena rośnie, to kupiec się obraża i
+      <em>zamyka dalsze negocjacje</em> tego dnia. Targuj się, gdy masz w czym — wysoka Charyzma albo
+      realny atut.</p>
+
+      <h2 id="r8-hazard">Hazard</h2>
+      <p>Przy karczmianym stole kusi gra o złoto. Deklarujesz <span class="gloss" tabindex="0">stawkę<span class="tip"><span class="tip-h">Hazard</span>Stawiasz
+      złoto, rzucasz przeciw progowi (12 amatorzy / 20 zawodowcy) lub przeciw graczowi (CHA). Wygrana
+      podwaja stawkę; krytyczna porażka = oskarżenie o oszustwo. Maks. kilka gier na scenę.</span></span>
+      i toczysz test — przeciw progowi <strong>12</strong> wśród amatorów albo <strong>20</strong> wśród
+      zawodowców (lub przeciwstawnie z konkretnym graczem, na Charyzmę).</p>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Wygrana <span class="badge heal">+ stawka</span></h4>
+          <p>Sukces podwaja postawione złoto (sukces krytyczny — jeszcze hojniej). Postawiłeś 10 GP, wracasz z 20.</p>
+          <p class="ex"><span class="pc">„Stawiam dziesięć złotych na następny rzut kości."</span></p></div>
+        <div class="entry"><h4>Przegrana <span class="badge dmg">− stawka</span></h4>
+          <p>Porażka zabiera stawkę. Krytyczna porażka dorzuca oskarżenie o oszustwo — i scenę robi się nagle bardzo nieprzyjemna.</p>
+          <p class="ex">Limit kilku gier na scenę pilnuje silnik.</p></div>
+      </div>
+
+      <h2 id="r8-trwalosc">Trwałość i naprawa</h2>
+      <p>Broń i pancerz <span class="gloss" tabindex="0">zużywają się<span class="tip"><span class="tip-h">Trwałość</span>Ekwipunek
+      traci trwałość w boju. Przy zerze działa z karą (broń −atak, pancerz −AC), póki kowal go nie
+      naprawi.</span></span> w boju — każdy cios zadany i otrzymany ujmuje im trwałości. Gdy spadnie do
+      zera, sprzęt działa z dotkliwą karą (miecz tnie słabiej, pancerz mniej chroni), póki nie oddasz go
+      kowalowi. Im lepszy przedmiot, tym więcej wytrzymuje i tym drożej kosztuje naprawa za punkt:</p>
+      <table>
+        <caption>Trwałość i koszt naprawy wedle tieru przedmiotu</caption>
+        <thead><tr><th>Tier</th><th>Pełna trwałość</th><th>Naprawa (za punkt)</th></tr></thead>
+        <tbody>
+          <tr><td>T1 (pospolity)</td><td class="dc">100</td><td class="dc">20 GP</td></tr>
+          <tr><td>T2 (dobry)</td><td class="dc">150</td><td class="dc">50 GP</td></tr>
+          <tr><td>T3 (mistrzowski)</td><td class="dc">200</td><td class="dc">100 GP</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="r8-rzemioslo">Rzemiosło i łup</h2>
+      <p>Zdolny rzemieślnik potrafi więcej niż naprawiać. Za odpowiednio większą garść złota nałoży na
+      przedmiot <strong>magiczne właściwości</strong> (afiksy), przerzuci je na inne albo
+      <strong>podbije tier</strong> sprzętu:</p>
+      <table>
+        <caption>Usługi rzemieślnika (orientacyjnie)</caption>
+        <thead><tr><th>Usługa</th><th>T1</th><th>T2</th><th>T3</th></tr></thead>
+        <tbody>
+          <tr><td>Nałożenie właściwości</td><td class="dc">150</td><td class="dc">500</td><td class="dc">1200</td></tr>
+          <tr><td>Przerzut właściwości</td><td class="dc">200</td><td class="dc">650</td><td class="dc">1500</td></tr>
+          <tr><td>Podbicie tieru</td><td class="dc" colspan="3">T1→T2: 350 GP &nbsp;·&nbsp; T2→T3: 700 GP</td></tr>
+        </tbody>
+      </table>
+      <p>Sam <strong>łup</strong> zdejmujesz z pokonanych wrogów. Każdy przeciwnik ma własną tabelę
+      łupów, a szansa na konkretny przedmiot to jego <em>waga</em> w tej tabeli (waga 30 = 30%
+      szansy). Złoto z wroga losuje się osobno, z jego własnego widełka. Wysokie Szczęście pochyla te
+      losowania na twoją korzyść — dlatego łotrzyk tak ceni tę cechę.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ IX — ODPOCZYNEK ════════════════ -->
+    <section id="r9">
+      <p class="eyebrow">Rozdział dziewiąty</p>
+      <h1><span class="num">IX · Świat</span>Odpoczynek i rozwój</h1>
+      <p class="subtitle">Jak goją się rany i rośnie legenda</p>
+      <hr class="rule">
+
+      <figure class="hero">
+        <img src="img/ch-odpoczynek.png" alt="Drużyna odpoczywa przy ognisku w lesie nocą">
+        <div class="cap">Przy ognisku leczą się rany — i dopiero tutaj nauka z drogi staje się siłą.</div>
+      </figure>
+
+      <p class="lede dropcap">Żaden bohater nie przejdzie świata bez wytchnienia. Odpoczynek leczy ciało,
+      a zdobyte doświadczenie zamienia się w realną moc dopiero wtedy, gdy usiądziesz przy ogniu i pozwolisz
+      jej wybrzmieć. Jedno i drugie wymaga jednak <strong>bezpiecznego miejsca</strong> — w środku walki
+      nie odpoczniesz.</p>
+
+      <h2 id="r9-odpoczynek">Krótki i długi odpoczynek</h2>
+      <div class="degrees">
+        <div class="deg s"><span class="lbl">Krótki odpoczynek</span>
+          <span class="txt"><b>Leczy 1k6 + modyfikator Kondycji HP.</b> Najwyżej dwa razy między długimi
+          odpoczynkami. Zajmuje około godziny.</span></div>
+        <div class="deg cs"><span class="lbl">Długi odpoczynek</span>
+          <span class="txt"><b>Pełne HP i pełna mana.</b> Zdejmuje wyczerpanie, zeruje rzuty na śmierć i —
+          co najważniejsze — <em>odblokowuje zdobyte doświadczenie</em>. Trwa około ośmiu godzin.</span></div>
+      </div>
+      <p>To celowa decyzja: punkty doświadczenia zbierasz przez całą przygodę, ale <strong>wydać</strong>
+      możesz je dopiero po długim odpoczynku. Rozwój postaci to chwila zadumy przy ogniu, nie odruch w
+      ferworze walki.</p>
+
+      <h2 id="r9-xp">Doświadczenie</h2>
+      <figure class="illus right"><img src="img/levelup.png" alt="Bohater ćwiczy przy ognisku pod gwiazdami"><figcaption>Każda przeżyta noc czegoś uczy — ale dopiero przy ogniu nauka staje się siłą.</figcaption></figure>
+      <p><span class="gloss" tabindex="0">Punkty doświadczenia<span class="tip"><span class="tip-h">Doświadczenie (PD / XP)</span>Zbierasz
+      je przez całą grę do puli „oczekującej", a po długim odpoczynku przechodzi do puli, którą możesz
+      wydać.</span></span> (PD) zdobywasz niemal za wszystko, co popycha opowieść naprzód — od pokonanych
+      wrogów po samo udane przejście trudnego testu:</p>
+      <table>
+        <caption>Skąd bierze się doświadczenie</caption>
+        <thead><tr><th>Źródło</th><th>PD</th></tr></thead>
+        <tbody>
+          <tr><td>Pokonany słaby wróg</td><td class="dc">3</td></tr>
+          <tr><td>Pokonany zwykły wróg</td><td class="dc">8</td></tr>
+          <tr><td>Pokonany elitarny wróg</td><td class="dc">30</td></tr>
+          <tr><td>Pokonany boss</td><td class="dc">70</td></tr>
+          <tr><td>Domknięty wątek sceny (beat)</td><td class="dc">30</td></tr>
+          <tr><td>Ukończony quest poboczny</td><td class="dc">40</td></tr>
+          <tr><td>Oczyszczony loch</td><td class="dc">75</td></tr>
+          <tr><td>Zakończona kampania</td><td class="dc">200</td></tr>
+          <tr><td>Pierwsze odwiedziny miejsca</td><td class="dc">15</td></tr>
+          <tr><td>Pierwsza rozmowa z NPC / odkrycie</td><td class="dc">5 / 10</td></tr>
+          <tr><td>Udany trudny test (DC 12–15 / 16–19 / 20+)</td><td class="dc">3 / 8 / 15</td></tr>
+        </tbody>
+      </table>
+      <p>Jest jednak haczyk: zdobyte PD trafia do puli <em>oczekującej</em> i staje się
+      <strong>możliwe do wydania dopiero po długim odpoczynku</strong>. Dopóki nie prześpisz nocy przy
+      ogniu, cała nauka z drogi pozostaje surowa.</p>
+
+      <h2 id="r9-rozwoj">Wydawanie PD</h2>
+      <p>Rozwój to <strong>wydawanie</strong> doświadczenia — dotyczy wszystkich archetypów, nie tylko
+      maga. Przy ogniu możesz zamienić zebrane PD na:</p>
+      <table>
+        <caption>Na co wydasz doświadczenie</caption>
+        <thead><tr><th>Zakup</th><th>Koszt PD</th></tr></thead>
+        <tbody>
+          <tr><td>Ranga umiejętności (R1 / R2 / R3)</td><td class="dc">100 / 75 / 150</td></tr>
+          <tr><td>+1 do cechy (rośnie z jej wartością)</td><td class="dc">50–400</td></tr>
+          <tr><td>Nowy czar / ranga czaru (uczony)</td><td class="dc">75 / 50–100</td></tr>
+        </tbody>
+      </table>
+      <p>Każdy zakup ma znaczenie. <strong>Ranga umiejętności</strong> kosztuje 100 / 75 / 150 PD (skok na
+      rangę 3 daje przecież aż +3 do rzutu — patrz rozdział III). <strong>+1 do cechy</strong> kosztuje
+      tym więcej, im wyższa już jest, a podnieść można ją najwyżej raz na poziom. Co istotne: gdy
+      podbijasz <strong>Kondycję</strong>, gra od razu przelicza twoje maksymalne HP w górę.</p>
+
+      <div class="scene">
+        <div class="scene-h">Przykład · Noc rozwoju</div>
+        <div class="scene-b">
+          <p class="narr">Wracasz do gospody z 180 PD w puli oczekującej i sypiasz noc — długi
+          odpoczynek odblokowuje doświadczenie. Przy porannym ogniu wydajesz je:</p>
+          <p class="ex" style="border-left:2px solid var(--gold-soft);padding-left:12px;color:var(--ink-dim);font-style:italic">Skradanie z rangi 2 na 3 — <span class="roll-inline">150 PD</span>. Zyskujesz rangę 3 <em>i</em> premię z biegłości: odtąd do każdego skradania dolicza się o +3 więcej niż dotąd. Zostaje 30 PD na później.</p>
+          <p class="narr">Gdybyś zamiast tego dorzucił +1 do Kondycji (z 12 na 13), twój modyfikator CON
+          podskoczyłby, a gra natychmiast doliczyłaby HP za każdy posiadany poziom. Rozwój to wybór:
+          mistrzostwo w jednym rzemiośle albo twardsza skóra.</p>
+        </div>
+      </div>
+
+      <h2 id="r9-poziomy">Progi poziomów</h2>
+      <p>Twój <strong>poziom</strong> rośnie sam wraz z sumą całego zdobytego doświadczenia — niezależnie
+      od tego, co wydajesz. Każdy poziom zwiększa pulę HP o modyfikator Kondycji (i many o modyfikator
+      Inteligencji u uczonego) oraz odblokowuje wyższe tiery czarów. Oto drabina progów:</p>
+      <table>
+        <caption>Łączne PD wymagane do kolejnych poziomów</caption>
+        <thead><tr><th>Poziom</th><th>Łączne PD</th><th>Poziom</th><th>Łączne PD</th></tr></thead>
+        <tbody>
+          <tr><td>2</td><td class="dc">100</td><td>7</td><td class="dc">1350</td></tr>
+          <tr><td>3</td><td class="dc">250</td><td>8</td><td class="dc">1750</td></tr>
+          <tr><td>4</td><td class="dc">450</td><td>9</td><td class="dc">2200</td></tr>
+          <tr><td>5</td><td class="dc">700</td><td>10</td><td class="dc">2700</td></tr>
+          <tr><td>6</td><td class="dc">1000</td><td>—</td><td class="dc">—</td></tr>
+        </tbody>
+      </table>
+      <p>Progi rosną nieliniowo — każdy kolejny poziom kosztuje więcej niż poprzedni. Tak właśnie z
+      przeżytych nocy, jednej po drugiej, rodzi się legenda — albo kolejne imię na bezimiennym grobie.</p>
 
       <footer>
-        <span class="draft">Fragment próbny · Wstęp + Rozdział I</span><br>
-        Księga Zasad — wersja robocza. Kolejne rozdziały w przygotowaniu.
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–IX</span><br>
+        Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
       </footer>
     </section>
   </main>
 </div>
 
+<button type="button" class="ed-fab" id="edFab" aria-label="Tryb edycji" title="Tryb edycji">✎</button>
+<div class="ed-toast" id="edToast"></div>
+
 <script>
-  // Dymki na dotyk (mobile): tap otwiera, tap poza zamyka. Hover działa bez JS.
+  // ── Edytor treści dla admina (tylko zalogowany admin) ──
+  (function(){
+    var API='/api', SEL='p,h2,h3,h4,figcaption,caption,.say,.subtitle,.cap';
+    var idMap={};
+    document.querySelectorAll('main section[id]').forEach(function(sec){
+      var i=0;
+      sec.querySelectorAll(SEL).forEach(function(el){
+        var id=sec.id+':'+(i++); el.setAttribute('data-eb', id); idMap[id]=el;
+      });
+    });
+    // zastosuj zapisane poprawki (publicznie)
+    fetch(API+'/rules/content').then(function(r){return r.ok?r.json():{};}).then(function(ov){
+      Object.keys(ov||{}).forEach(function(id){ if(idMap[id]) idMap[id].innerHTML=ov[id]; });
+    }).catch(function(){});
+    // tryb edycji tylko dla admina
+    var token=null; try{ token=localStorage.getItem('aigm_admin_token'); }catch(e){}
+    if(!token) return;
+    fetch(API+'/admin/verify',{headers:{Authorization:'Bearer '+token}})
+      .then(function(r){ if(r.ok) enableEditor(); }).catch(function(){});
+    function enableEditor(){
+      document.body.classList.add('is-admin');                 // pokazuje pływający przycisk (FAB)
+      var fab=document.getElementById('edFab'), toast=document.getElementById('edToast'),
+          editing=false, toastT;
+      function status(msg){
+        if(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(function(){toast.classList.remove('show');},1800); }
+        else toast.classList.remove('show');
+      }
+      function toggle(){
+        editing=!editing; document.body.classList.toggle('editing', editing);
+        fab.classList.toggle('on', editing); fab.textContent=editing?'✓':'✎';
+        fab.title=editing?'Edycja włączona — kliknij, by wyłączyć':'Tryb edycji';
+        Object.keys(idMap).forEach(function(id){ idMap[id].contentEditable = editing?'true':'false'; });
+        status(editing ? 'Tryb edycji — klikaj tekst i pisz, zapis po wyjściu z pola' : 'Edycja wyłączona');
+      }
+      fab.addEventListener('click', toggle);
+      Object.keys(idMap).forEach(function(id){
+        var el=idMap[id];
+        el.addEventListener('focus', function(){ el.__orig=el.innerHTML; });
+        el.addEventListener('blur', function(){
+          if(!editing || el.innerHTML===el.__orig) return;
+          status('Zapisywanie…');
+          fetch(API+'/admin/rules/content',{method:'PUT',
+            headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+            body:JSON.stringify({block_id:id, html:el.innerHTML})})
+            .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+            .then(function(d){ el.innerHTML=d.html; el.classList.remove('ed-saved'); void el.offsetWidth; el.classList.add('ed-saved'); status('Zapisano ✓'); })
+            .catch(function(){ status('Błąd zapisu'); });
+        });
+      });
+    }
+  })();
+
+  // ── Dymki: pozycjonowanie w obrębie ekranu (fixed + clamp) ──
+  function positionTip(g){
+    var tip=g.querySelector('.tip'); if(!tip) return;
+    var gr=g.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight, pad=8;
+    var tw=Math.min(tip.offsetWidth, vw-2*pad), th=tip.offsetHeight, center=gr.left+gr.width/2;
+    var left=Math.max(pad, Math.min(center - tw/2, vw - pad - tw));
+    var below=false, top=gr.top - th - 10;
+    if(top < pad){ top=gr.bottom + 10; below=true; }              // brak miejsca u góry → pod słowem
+    top=Math.max(pad, Math.min(top, vh - th - pad));
+    tip.classList.toggle('below', below);
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+    var ax=Math.max(left+14, Math.min(center, left+tw-14)) - left; // strzałka celuje w słowo
+    tip.style.setProperty('--arrow-x', ax+'px');
+  }
+  // hover (desktop) + focus klawiaturą
+  document.addEventListener('mouseover', function(e){ var g=e.target.closest&&e.target.closest('.gloss'); if(g) positionTip(g); });
+  document.addEventListener('focusin', function(e){ var g=e.target.closest&&e.target.closest('.gloss'); if(g) positionTip(g); });
+  // tap (mobile)
   document.addEventListener('click', function(e){
     var g = e.target.closest('.gloss');
     document.querySelectorAll('.gloss.tip-open').forEach(function(el){ if(el!==g) el.classList.remove('tip-open'); });
-    if(g){ g.classList.toggle('tip-open'); }
+    if(g && !e.target.closest('.more')){ g.classList.toggle('tip-open'); if(g.classList.contains('tip-open')) positionTip(g); }
   });
+  // przewinięcie zamyka otwarty dymek (fixed nie przykleja się do słowa przy scrollu)
+  window.addEventListener('scroll', function(){ document.querySelectorAll('.gloss.tip-open').forEach(function(el){el.classList.remove('tip-open');}); }, {passive:true});
   document.addEventListener('keydown', function(e){
-    if(e.key==='Escape') document.querySelectorAll('.gloss.tip-open').forEach(function(el){el.classList.remove('tip-open');});
+    if(e.key==='Escape') document.querySelectorAll('.gloss.tip-open,.toc').forEach(function(el){el.classList.remove('tip-open');});
   });
+
+  // ── Menu: szuflada mobilna ──
+  var body=document.body, btn=document.getElementById('menuBtn'), backdrop=document.getElementById('backdrop');
+  function closeDrawer(){ body.classList.remove('drawer-open'); }
+  btn.addEventListener('click', function(){ body.classList.toggle('drawer-open'); });
+  backdrop.addEventListener('click', closeDrawer);
+
+  // ── Router podstron: jeden rozdział na raz ──
+  function chapterOf(id){ var el=document.getElementById(id); var s=el&&el.closest('main>section[id]'); return s?s.id:null; }
+  var chaps=[];
+  document.querySelectorAll('.toc .chap').forEach(function(c){
+    if(c.classList.contains('soon')) return;
+    var first=c.querySelector('.subs a'); if(!first) return;
+    var entry=first.getAttribute('href').slice(1), sec=chapterOf(entry);
+    if(sec) chaps.push({sec:sec, entry:entry, label:c.querySelector('.ttl').textContent.trim(), el:c});
+  });
+  // przyciski Poprzedni / Następny w każdym rozdziale
+  chaps.forEach(function(ch,i){
+    var sec=document.getElementById(ch.sec); if(!sec) return;
+    var nav=document.createElement('div'); nav.className='chap-nav';
+    var p=chaps[i-1], n=chaps[i+1];
+    nav.innerHTML =
+      (p?'<a href="#'+p.entry+'"><span class="nl">‹ Poprzedni</span>'+p.label+'</a>':'<a class="disabled"></a>')+
+      (n?'<a class="next" href="#'+n.entry+'"><span class="nl">Następny ›</span>'+n.label+'</a>':'<a class="next disabled"></a>');
+    var ft=sec.querySelector('footer');
+    if(ft) sec.insertBefore(nav, ft); else sec.appendChild(nav);
+  });
+  function showChapter(secId, subId){
+    document.querySelectorAll('main>section').forEach(function(s){ s.classList.toggle('is-active', s.id===secId); });
+    chaps.forEach(function(ch){ ch.el.classList.toggle('open', ch.sec===secId); });
+    document.querySelectorAll('.subs a.active').forEach(function(x){x.classList.remove('active');});
+    if(typeof linkFor!=='undefined' && linkFor[subId||secId]) linkFor[subId||secId].classList.add('active');
+    if(subId && subId!==secId){ var t=document.getElementById(subId); if(t){ t.scrollIntoView({block:'start'}); return; } }
+    window.scrollTo(0,0);
+  }
+  function route(){
+    var h=(location.hash||'').slice(1), sec=h?chapterOf(h):null;
+    if(!sec) sec=chaps.length?chaps[0].sec:null;
+    if(sec) showChapter(sec, h);
+  }
+  window.addEventListener('hashchange', route);
+  document.querySelectorAll('.chap-h').forEach(function(h){
+    h.addEventListener('click', function(){
+      var chap=h.parentElement; if(chap.classList.contains('soon')) return;
+      var first=chap.querySelector('.subs a'); if(first){ location.hash=first.getAttribute('href'); }
+      if(window.innerWidth<=880) closeDrawer();
+    });
+  });
+  document.querySelectorAll('.subs a').forEach(function(a){
+    a.addEventListener('click', function(){ if(window.innerWidth<=880) closeDrawer(); });
+  });
+
+  // ── Skala czcionki (A− / A / A+) ──
+  (function(){
+    var root=document.documentElement, LS='ksiega-zoom', steps=[0.8,0.9,1.0,1.15,1.3,1.5];
+    var z=parseFloat(localStorage.getItem(LS)); if(!(steps.indexOf(z)>=0)) z=1.0;
+    function apply(){ root.style.setProperty('--book-zoom',z); try{localStorage.setItem(LS,z);}catch(e){} }
+    function step(d){ var i=steps.indexOf(z); i=Math.max(0,Math.min(steps.length-1,i+d)); z=steps[i]; apply(); }
+    apply();
+    document.getElementById('fsDown').addEventListener('click',function(){step(-1);});
+    document.getElementById('fsUp').addEventListener('click',function(){step(1);});
+    document.getElementById('fsReset').addEventListener('click',function(){z=1.0;apply();});
+  })();
+
+  // ── Wyszukiwarka (luźne dopasowanie + indeks treści) ──
+  var search=document.getElementById('tocSearch'), toc=document.getElementById('toc'),
+      results=document.getElementById('tocResults');
+  function norm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  function wordMatch(qw,tw){
+    if(qw===tw) return true;
+    if(tw.indexOf(qw)===0 || qw.indexOf(tw)===0) return true;   // jeden prefiksem drugiego: "unik"↔"uniki", "czar"↔"czary"
+    var n=Math.min(qw.length,tw.length); if(n<5) return false;
+    var i=0; while(i<n && qw[i]===tw[i]) i++;
+    return i>=4 && i>=n-1;        // wspólny rdzeń ≥4 znaki i pokrywa prawie całe krótsze słowo
+  }
+  function matchText(q,text){
+    var nt=norm(text), qs=norm(q).split(/\s+/).filter(Boolean), ts=nt.split(/\s+/).filter(Boolean);
+    return qs.every(function(qw){ return nt.indexOf(qw)>=0 || ts.some(function(tw){return wordMatch(qw,tw);}); });
+  }
+  function esc(s){ return s.replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];}); }
+  // mapa: id sekcji → nazwa rozdziału (z TOC)
+  var secChap={};
+  document.querySelectorAll('.chap').forEach(function(c){
+    if(c.classList.contains('soon')) return;
+    var chap=c.querySelector('.ttl').textContent.trim(), first=c.querySelector('.subs a');
+    if(first){ var t=document.getElementById(first.getAttribute('href').slice(1)), sec=t&&t.closest('section'); if(sec) secChap[sec.id]=chap; }
+  });
+  function entryName(h){ var t=''; for(var n=h.firstChild;n;n=n.nextSibling){ if(n.nodeType===3) t+=n.textContent; else if(n.nodeType===1 && !(n.classList&&n.classList.contains('badge'))) t+=n.textContent; } return t.replace(/\s+/g,' ').trim(); }
+  // budowa indeksu: podrozdziały TOC + karty (umiejętności/czary/stany)
+  var index=[];
+  document.querySelectorAll('.chap').forEach(function(c){
+    if(c.classList.contains('soon')) return;
+    var chap=c.querySelector('.ttl').textContent.trim();
+    c.querySelectorAll('.subs a').forEach(function(a){
+      index.push({label:a.textContent.trim(), chapter:chap, targetId:a.getAttribute('href').slice(1)});
+    });
+  });
+  document.querySelectorAll('main .entry h4').forEach(function(h){
+    var sec=h.closest('section'), nm=entryName(h);
+    if(nm) index.push({label:nm, chapter:(sec&&secChap[sec.id])||'', el:h});
+  });
+  function render(q){
+    if(!q){ toc.classList.remove('searching','empty'); results.innerHTML=''; return; }
+    var seen={}, hits=index.filter(function(it){
+      var k=it.label+'|'+it.chapter; if(seen[k]) return false; if(!matchText(q,it.label)) return false; seen[k]=1; return true;
+    }).slice(0,50);
+    results.innerHTML='';
+    hits.forEach(function(it){
+      var b=document.createElement('button'); b.type='button'; b.className='toc-res';
+      b.innerHTML='<span class="rl">'+esc(it.label)+'</span>'+(it.chapter?'<span class="rc">'+esc(it.chapter)+'</span>':'');
+      b.addEventListener('click', function(){
+        if(it.targetId){ if(location.hash==='#'+it.targetId) route(); else location.hash='#'+it.targetId; }
+        else if(it.el){ var sec=it.el.closest('main>section[id]'); if(sec) showChapter(sec.id); it.el.scrollIntoView({block:'start'}); }
+        if(window.innerWidth<=880) closeDrawer();
+      });
+      results.appendChild(b);
+    });
+    toc.classList.add('searching'); toc.classList.toggle('empty', hits.length===0);
+  }
+  search.addEventListener('input', function(){ render(search.value.trim()); });
+
+  // ── Scrollspy: podświetl aktywny podrozdział ──
+  var linkFor={}; document.querySelectorAll('.subs a').forEach(function(a){ linkFor[a.getAttribute('href').slice(1)]=a; });
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        var a=linkFor[en.target.id]; if(!a) return;
+        document.querySelectorAll('.subs a.active').forEach(function(x){x.classList.remove('active');});
+        a.classList.add('active');
+        var chap=a.closest('.chap'); if(chap && !chap.classList.contains('open')) chap.classList.add('open');
+      }
+    });
+  },{rootMargin:'-40% 0px -55% 0px'});
+  Object.keys(linkFor).forEach(function(id){ var el=document.getElementById(id); if(el) obs.observe(el); });
+
+  // start: pokaż rozdział wg adresu (lub pierwszy)
+  route();
 </script>
 </body>
 </html>
