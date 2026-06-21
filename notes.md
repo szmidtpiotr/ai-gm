@@ -83,6 +83,11 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - `mass-implement` — jedzie wyłącznie z issues (LIST), FAZA-mode/notes odstaw.
 
 
+## G21 #802 — Online Presence (last_seen heartbeat + members[].online)
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/802#issuecomment-4763531114
+- Werdykt ✅ — backend OK, members[].online w /round/status, last_seen heartbeat działa, complete_push_sent w DB
+- Dodatkowa poprawka commit 08a7e0ac: Playwright spec untracked + autopilot_consent w test schema (10/10 pytest GREEN)
+
 ## G5 #789 — MP Conflict Resolution (initiative_roll)
 - Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/789#issuecomment-4763459059
 - Werdykt ✅ — backend OK, kolumna w DB, 7/7 pytest GREEN (fix schematu testowego commit a938ea4f)
