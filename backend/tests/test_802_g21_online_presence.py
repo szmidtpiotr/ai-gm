@@ -48,6 +48,7 @@ _SCHEMA = """
         absence_warnings INTEGER NOT NULL DEFAULT 0,
         pending_intro INTEGER NOT NULL DEFAULT 0,
         last_seen TEXT,
+        autopilot_consent INTEGER NOT NULL DEFAULT 0,
         UNIQUE(campaign_id, user_id)
     );
     CREATE TABLE IF NOT EXISTS characters (
