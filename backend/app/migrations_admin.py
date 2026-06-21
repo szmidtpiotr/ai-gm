@@ -1154,6 +1154,30 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_loot_entries ADD COLUMN game_item_key TEXT",
     # #764: ammunition link — ranged weapon → required ammo consumable key
     "ALTER TABLE game_config_weapons ADD COLUMN ammo_key TEXT",
+    # #602 N0/N2 — multichannel notification prefs + delivery log.
+    # player_notify_prefs = per-player opt-in (telegram > web_push > email),
+    # notify_delivery_log = per-attempt audit for the unified notify() dispatcher.
+    # DDL mirrored in notification_service.SCHEMA_SQL (keep in sync).
+    """
+    CREATE TABLE IF NOT EXISTS player_notify_prefs (
+        user_id           INTEGER PRIMARY KEY,
+        web_push_enabled  INTEGER NOT NULL DEFAULT 0,
+        telegram_chat_id  TEXT,
+        email             TEXT,
+        channel_order     TEXT NOT NULL DEFAULT 'telegram,web_push,email',
+        updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS notify_delivery_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL,
+        event      TEXT NOT NULL,
+        channel    TEXT NOT NULL,
+        status     TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [

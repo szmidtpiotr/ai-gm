@@ -79,6 +79,7 @@ from app.routers.admin_images import router as admin_images_router
 from app.routers.bug_report import router as bug_report_router
 from app.routers.world_state_history import router as world_state_history_router
 from app.routers.push_notifications import router as push_notifications_router
+from app.routers.notify_prefs import router as notify_prefs_router
 from app.routers.seen_mechanics import router as seen_mechanics_router
 from app.routers.game_mechanics import router as game_mechanics_router
 from app.routers.db_lint import router as db_lint_router
@@ -703,6 +704,7 @@ app.include_router(admin_images_router)
 app.include_router(bug_report_router, prefix="/api")
 app.include_router(world_state_history_router, prefix="/api")
 app.include_router(push_notifications_router, prefix="/api")
+app.include_router(notify_prefs_router, prefix="/api")
 app.include_router(seen_mechanics_router, prefix="/api")
 app.include_router(multiplayer_router, prefix="/api")
 app.include_router(party_chat_router, prefix="/api")
