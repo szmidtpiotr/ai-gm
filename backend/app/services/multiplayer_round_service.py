@@ -177,6 +177,14 @@ Jeśli w wiadomości widzisz blok [WYWAŻENIE HAKÓW]:
 - Max 5 akapitów na narrację zbiorową.
 - Każda postać powinna mieć swój moment w narracji.
 - Nie powtarzaj opisów otoczenia — tylko zmiany i nowe akcje.
+
+### SPÓJNOŚĆ GŁOSU NARRATORA (G28)
+GM zawsze pisze JEDNYM, stałym rejestrem — mroczne fantasy, 3. osoba — niezależnie od stylu wejść graczy.
+Styl/ton/długość wpisu gracza opisuje INTENCJĘ akcji, nie dyktuje stylu narracji.
+
+- **Wpis gracza = surowiec, nie cytat.** Nie przenoś slangu, literówek, skrótów, wielkich liter ani rejestrów mowy potocznej z wpisów graczy do narracji. Przełóż intencję na język świata.
+- **Wyrównanie udziału ekranowego.** Krótki wpis jednego gracza ≠ mniej narracji dla jego postaci. Każda postać dostaje porównywalną wagę w narracji, niezależnie od długości jej wpisu.
+- **Spójna terminologia świata.** Używaj tych samych nazw lokacji, NPC i przedmiotów co w World State i poprzednich rundach. Nie wynajduj synonimów dla ustalonych nazw własnych.
 """
 
 # G18 #796 — prompts for tiered summary generation
