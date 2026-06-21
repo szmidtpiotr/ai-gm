@@ -12721,8 +12721,11 @@ function updateDungeonNav(run) {
     }
 }
 
-async function _dungeonMove(direction) {
-    if (!_dungeonCampaignId || !characterData?.id) return;
+// #869: `opts.silent` suppresses intermediate narrative/auto-map during a multi-step
+// auto-walk. Returns { ok, stop, reason } so the walker knows when to hand control back.
+async function _dungeonMove(direction, opts = {}) {
+    if (!_dungeonCampaignId || !characterData?.id) return { ok: false, stop: true };
+    const silent = !!opts.silent;
     // Disable all dir buttons during request
     document.querySelectorAll('[data-dungeon-dir]').forEach(b => b.disabled = true);
     try {
@@ -12734,12 +12737,14 @@ async function _dungeonMove(direction) {
 
         if (!resp.ok) {
             showToast(resp.reason || `Brak drzwi ${direction}`, 'warning');
-            return;
+            return { ok: false, stop: true, reason: resp.reason };
         }
 
         if (resp.dungeon_run) _activeDungeonRun = resp.dungeon_run;
 
-        if (resp.narrative) {
+        // #869: during auto-walk, intermediate (cleared) tiles render no narrative —
+        // only the final tile shows its full description (set below when !silent).
+        if (resp.narrative && !silent) {
             appendMessage({ role: 'assistant', content: resp.narrative, created_at: new Date() });
             scrollToBottom();
         }
@@ -12752,7 +12757,8 @@ async function _dungeonMove(direction) {
             if (resp.node) _activeDungeonRun.graph.nodes[resp.node_id] = resp.node;
         }
 
-        if (resp.completed || _activeDungeonRun?.completed) {
+        const completed = !!(resp.completed || _activeDungeonRun?.completed);
+        if (completed) {
             _showDungeonComplete(resp);
         } else {
             updateDungeonHUD();
@@ -12760,12 +12766,15 @@ async function _dungeonMove(direction) {
             // the move lands on a combat tile (else it overlaps the combat controls)
             // and drops the stale chest/riddle button from the previous room.
             updateDungeonNav(_activeDungeonRun);
-            // Auto-open map on first move
-            const visitedCount = Object.values(_activeDungeonRun?.graph?.nodes || {}).filter(n => n.visited).length;
-            if (visitedCount === 2) openDungeonMap(true);
+            // Auto-open map on first move (#869: not mid auto-walk — map stays closed)
+            if (!silent) {
+                const visitedCount = Object.values(_activeDungeonRun?.graph?.nodes || {}).filter(n => n.visited).length;
+                if (visitedCount === 2) openDungeonMap(true);
+            }
         }
 
         // If combat started, refresh combat state
+        const combatStarted = !!(resp.combat && !resp.combat.error);
         if (resp.combat) {
             const campResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}`);
             if (campResp?.campaign) {
@@ -12773,10 +12782,30 @@ async function _dungeonMove(direction) {
                 await loadCombatState();
             }
         }
+
+        // #869: hand control back to the player when the tile holds an unresolved event
+        // (combat / riddle / dungeon complete) — auto-walk must never barrel through danger.
+        const content = resp.content || {};
+        const pendingRiddle = !resp.is_cleared && !!content.riddle;
+        const stop = combatStarted || pendingRiddle || completed;
+        return { ok: true, stop, reason: resp.reason };
     } catch (err) {
         showToast(err.message || 'Błąd ruchu', 'error');
+        return { ok: false, stop: true, reason: err.message };
     } finally {
         document.querySelectorAll('[data-dungeon-dir]').forEach(b => b.disabled = false);
+    }
+}
+
+// #869: walk a BFS-computed direction sequence one tile at a time. Awaits each step
+// (each may trigger combat/riddle/content) and STOPS the moment a step reports `stop`
+// (blocked door, combat, riddle, or run complete) — control returns to the player.
+async function _dungeonAutoWalk(directions) {
+    if (!Array.isArray(directions) || !directions.length) return;
+    for (let i = 0; i < directions.length; i++) {
+        const isLast = i === directions.length - 1;
+        const res = await _dungeonMove(directions[i], { silent: !isLast });
+        if (!res || res.stop) break;
     }
 }
 
@@ -13105,6 +13134,42 @@ const _DIR_OFFSET = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 
 // Pan/zoom state for dungeon map overlay
 const _dmap = { zoom: 1, pan: { x: 0, y: 0 }, dragging: false, lastX: 0, lastY: 0 };
+
+// #869: BFS over OPEN doors → shortest list of directions (N|S|E|W) from `fromNodeId`
+// to `toNodeId`. Routes ONLY through ODKRYTE (visited) tiles — never into fog (`?`):
+// the destination itself must be visited, and every intermediate hop must be visited.
+// Returns [] when from===to, or null when no known path exists. Exposed on window so
+// the click-to-move handler (and regression test #869) can reuse it.
+function dungeonBfsPath(nodes, fromNodeId, toNodeId) {
+    if (!nodes || !fromNodeId || !toNodeId) return null;
+    if (fromNodeId === toNodeId) return [];
+    const target = nodes[toNodeId];
+    if (!target || !target.visited) return null;   // never route into the unknown
+    const prev = { [fromNodeId]: null };            // nodeId -> { from, dir } | null (start)
+    const queue = [fromNodeId];
+    while (queue.length) {
+        const cur = queue.shift();
+        const node = nodes[cur];
+        if (!node) continue;
+        for (const [dir, nbId] of Object.entries(node.doors_open || {})) {
+            if (!nbId || nbId in prev) continue;
+            const nb = nodes[nbId];
+            if (!nb) continue;
+            // intermediate hops must be known; only the destination may be the target
+            if (nbId !== toNodeId && !nb.visited) continue;
+            prev[nbId] = { from: cur, dir };
+            if (nbId === toNodeId) {
+                const path = [];
+                let n = toNodeId;
+                while (prev[n]) { path.unshift(prev[n].dir); n = prev[n].from; }
+                return path;
+            }
+            queue.push(nbId);
+        }
+    }
+    return null;
+}
+if (typeof window !== 'undefined') window.dungeonBfsPath = dungeonBfsPath;
 
 function renderDungeonMap(run) {
     const svg = document.getElementById('dmap-svg');
@@ -13617,22 +13682,44 @@ function initDungeon() {
             const minRow = positions2.length ? Math.min(...positions2.map(p => p[1])) : 0;
             const maxRow = positions2.length ? Math.max(...positions2.map(p => p[1])) : 0;
 
-            let closestDir = null;
+            // #869: identify the clicked TILE (closest tile center within S px), then
+            // pathfind to it — not just the closest adjacent door.
+            let clickedId = null;
             let closestDist = 9999;
-            for (const [dir, targetId] of Object.entries(currentNode.doors_open || {})) {
-                const tn = nodes[targetId];
+            for (const nid of drawIds) {
+                const tn = nodes[nid];
                 if (!tn?.position) continue;
                 const tx = PAD + (tn.position[0] - minCol) * STEP + S / 2;
                 const ty = PAD + (maxRow - tn.position[1]) * STEP + S / 2;
                 const dist = Math.hypot(clickSvgX - tx, clickSvgY - ty);
                 if (dist < closestDist && dist < S) {
-                    closestDist = dist; closestDir = dir;
+                    closestDist = dist; clickedId = nid;
                 }
             }
-            if (closestDir) {
+            if (!clickedId || clickedId === currentNodeId) return;
+
+            // Multi-step: BFS through KNOWN (visited) tiles to the clicked destination.
+            const path = dungeonBfsPath(nodes, currentNodeId, clickedId);
+            if (path && path.length) {
                 closeDungeonMap();
-                _dungeonMove(closestDir);
+                _dungeonAutoWalk(path);
+                return;
             }
+
+            // Not reachable via known tiles. If the clicked tile is a direct fog
+            // neighbour, allow the single discovering step (legacy 1-step behaviour).
+            let directDir = null;
+            for (const [dir, targetId] of Object.entries(currentNode.doors_open || {})) {
+                if (targetId === clickedId) { directDir = dir; break; }
+            }
+            if (directDir) {
+                closeDungeonMap();
+                _dungeonMove(directDir);
+                return;
+            }
+
+            // Unknown / unreachable tile (fog beyond reach) → no-op with hint.
+            showToast('Nieodkryte — kliknij sąsiedni kafel, aby zbadać', 'info');
         });
     }
 
