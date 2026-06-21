@@ -677,3 +677,141 @@ def get_rounds_history(campaign_id: int, user_id: int) -> list:
         return result
     finally:
         conn.close()
+
+
+# ── G6 #790 — Party hex-move voting ───────────────────────────────────────────
+
+def _resolve_move_votes(campaign_id: int, conn: sqlite3.Connection) -> Optional[dict]:
+    """Count votes; return winner dict or None if tie can't be broken.
+
+    Rules:
+    - Hex with most votes wins (majority).
+    - Tie → host's vote decides.
+    - Clears votes + updates campaigns.party_hex_q/r on resolution.
+    """
+    camp = conn.execute(
+        "SELECT host_user_id FROM campaigns WHERE id=?", (campaign_id,)
+    ).fetchone()
+    host_id = int(camp["host_user_id"]) if camp else 0
+
+    votes = conn.execute(
+        "SELECT user_id, target_q, target_r FROM campaign_move_votes WHERE campaign_id=?",
+        (campaign_id,),
+    ).fetchall()
+
+    counts: dict = {}
+    host_vote: Optional[tuple] = None
+    for v in votes:
+        key = (int(v["target_q"]), int(v["target_r"]))
+        counts[key] = counts.get(key, 0) + 1
+        if int(v["user_id"]) == host_id:
+            host_vote = key
+
+    if not counts:
+        return None
+
+    max_votes = max(counts.values())
+    leaders = [k for k, c in counts.items() if c == max_votes]
+
+    if len(leaders) == 1:
+        winner_q, winner_r = leaders[0]
+    else:
+        # Tie → host's vote decides
+        if host_vote and host_vote in leaders:
+            winner_q, winner_r = host_vote
+        else:
+            # Host didn't vote for a tied hex — pick first tied hex (fallback)
+            winner_q, winner_r = leaders[0]
+
+    conn.execute(
+        "UPDATE campaigns SET party_hex_q=?, party_hex_r=? WHERE id=?",
+        (winner_q, winner_r, campaign_id),
+    )
+    conn.execute(
+        "DELETE FROM campaign_move_votes WHERE campaign_id=?", (campaign_id,)
+    )
+    conn.commit()
+    return {"winner_q": winner_q, "winner_r": winner_r}
+
+
+def submit_move_vote(campaign_id: int, user_id: int, target_q: int, target_r: int) -> dict:
+    """Submit (or replace) a player's hex-move vote.
+
+    Returns current voting state. When all accepted members have voted, resolves
+    immediately and returns resolved=True with winner coords.
+    """
+    conn = _db()
+    try:
+        camp = conn.execute(
+            "SELECT host_user_id FROM campaigns WHERE id=? AND mode='multiplayer'",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        member = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, user_id),
+        ).fetchone()
+        if not member:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="Not an active member of this campaign")
+
+        conn.execute(
+            """INSERT INTO campaign_move_votes (campaign_id, user_id, target_q, target_r)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(campaign_id, user_id) DO UPDATE SET target_q=excluded.target_q,
+               target_r=excluded.target_r, voted_at=datetime('now')""",
+            (campaign_id, user_id, target_q, target_r),
+        )
+        conn.commit()
+
+        total = int(conn.execute(
+            "SELECT COUNT(*) FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+            (campaign_id,),
+        ).fetchone()[0])
+        cast = int(conn.execute(
+            "SELECT COUNT(*) FROM campaign_move_votes WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0])
+
+        if cast >= total:
+            result = _resolve_move_votes(campaign_id, conn)
+            if result:
+                return {"resolved": True, "winner_q": result["winner_q"], "winner_r": result["winner_r"],
+                        "votes_cast": cast, "total_players": total}
+
+        return {"resolved": False, "votes_cast": cast, "total_players": total}
+    finally:
+        conn.close()
+
+
+def get_move_vote_status(campaign_id: int) -> dict:
+    """Return current vote tallies for a campaign (without revealing individual choices)."""
+    conn = _db()
+    try:
+        total = int(conn.execute(
+            "SELECT COUNT(*) FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+            (campaign_id,),
+        ).fetchone()[0])
+        cast = int(conn.execute(
+            "SELECT COUNT(*) FROM campaign_move_votes WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0])
+
+        camp = conn.execute(
+            "SELECT party_hex_q, party_hex_r FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+        party_q = camp["party_hex_q"] if camp else None
+        party_r = camp["party_hex_r"] if camp else None
+
+        return {
+            "resolved": False,
+            "votes_cast": cast,
+            "total_players": total,
+            "party_hex_q": party_q,
+            "party_hex_r": party_r,
+        }
+    finally:
+        conn.close()

@@ -4838,6 +4838,35 @@ def _ensure_kick_votes_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_move_votes_table(conn: sqlite3.Connection) -> None:
+    """#790 G6 — campaign_move_votes table for party hex-move voting."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS campaign_move_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            target_q INTEGER NOT NULL,
+            target_r INTEGER NOT NULL,
+            voted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(campaign_id, user_id)
+        )
+    """)
+    conn.commit()
+
+
+def _ensure_party_hex_columns(conn: sqlite3.Connection) -> None:
+    """#790 G6 — party_hex_q/r on campaigns table tracks shared team position."""
+    for col, typ in [("party_hex_q", "INTEGER"), ("party_hex_r", "INTEGER")]:
+        try:
+            conn.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {typ} DEFAULT NULL")
+            conn.commit()
+        except Exception as e:
+            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                pass
+            else:
+                raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4944,6 +4973,8 @@ def run_admin_migrations() -> None:
         _ensure_active_voice_host(conn)  # #748
         _ensure_absence_warnings_column(conn)  # #786 G2
         _ensure_kick_votes_table(conn)  # #787 G3
+        _ensure_move_votes_table(conn)  # #790 G6
+        _ensure_party_hex_columns(conn)  # #790 G6
     finally:
         conn.close()
 

@@ -915,3 +915,31 @@ def get_rounds_history(
     uid = resolve_authed_user_id(authorization, user_id)
     rounds = svc.get_rounds_history(campaign_id, uid)
     return {"rounds": rounds}
+
+
+# ── G6 #790 — Party hex-move voting ───────────────────────────────────────────
+
+class MoveVoteReq(BaseModel):
+    target_q: int
+    target_r: int
+
+
+@router.post("/campaigns/{campaign_id}/move-vote")
+def submit_move_vote(
+    campaign_id: int,
+    body: MoveVoteReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    return svc.submit_move_vote(campaign_id, uid, body.target_q, body.target_r)
+
+
+@router.get("/campaigns/{campaign_id}/move-vote")
+def get_move_vote_status(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    resolve_authed_user_id(authorization, user_id)
+    return svc.get_move_vote_status(campaign_id)
