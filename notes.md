@@ -82,3 +82,7 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - `/tdd` — wywalić krok „update notes.md" (zostaje update ISSUE).
 - `mass-implement` — jedzie wyłącznie z issues (LIST), FAZA-mode/notes odstaw.
 
+
+## G5 #789 — MP Conflict Resolution (initiative_roll)
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/789#issuecomment-4763459059
+- Werdykt ✅ — backend OK, kolumna w DB, 7/7 pytest GREEN (fix schematu testowego commit a938ea4f)
