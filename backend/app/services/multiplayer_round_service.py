@@ -220,11 +220,34 @@ def trigger_narration(round_id: int) -> None:
     if not actions:
         return
 
+    # G4 #788 — include shared world state context so LLM knows current scene state
+    ws_context = ""
+    try:
+        from app.services.world_state_service import get_world_state_flags
+        ws = get_world_state_flags(campaign_id)
+        parts = []
+        enemies = ws.get("scene_enemies") or []
+        npcs = ws.get("scene_npcs") or []
+        quests = ws.get("active_quests") or []
+        if enemies:
+            names = [e.get("name", e.get("key", "?")) for e in enemies]
+            parts.append(f"Wrogowie w scenie: {', '.join(names)}")
+        if npcs:
+            names = [n.get("name", n.get("key", "?")) for n in npcs]
+            parts.append(f"NPC w scenie: {', '.join(names)}")
+        if quests:
+            parts.append(f"Aktywne questy: {', '.join(str(q) for q in quests)}")
+        if parts:
+            ws_context = "[STAN ŚWIATA]\n" + "\n".join(parts) + "\n\n"
+    except Exception as e:
+        logger.warning("mp_world_state_context_failed", round_id=round_id, error=str(e)[:100])
+
     actions_block = "\n".join(
         f"{a['character_name']}: \"{a['action_text']}\"" for a in actions
     )
     user_msg = (
         f"[RUNDA {round_number} — AKCJE GRACZY — wszyscy działają jednocześnie]\n\n"
+        f"{ws_context}"
         f"{actions_block}"
     )
 
@@ -272,6 +295,13 @@ def trigger_narration(round_id: int) -> None:
         conn.close()
 
     logger.info("multiplayer_narration_done", round_id=round_id, campaign_id=campaign_id)
+
+    # G4 #788 — persist shared world state snapshot after narration (one token per campaign)
+    try:
+        from app.services.world_state_service import auto_save_snapshot
+        auto_save_snapshot(campaign_id, source="mp_round")
+    except Exception as e:
+        logger.warning("mp_world_state_snapshot_failed", campaign_id=campaign_id, error=str(e)[:100])
 
     try:
         from app.services.push_notification_service import send_push_to_campaign_players
