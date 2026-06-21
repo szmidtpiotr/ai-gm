@@ -91,3 +91,8 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 ## G5 #789 — MP Conflict Resolution (initiative_roll)
 - Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/789#issuecomment-4763459059
 - Werdykt ✅ — backend OK, kolumna w DB, 7/7 pytest GREEN (fix schematu testowego commit a938ea4f)
+
+## G22 #803 — Drabina nieobecności: autopilot opt-in + auto-handoff hosta
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/803#issuecomment-4763551201
+- Werdykt ✅ — 4/4 API checks PASS, kolumna autopilot_consent w DB potwierdzona, 6/6 pytest GREEN
+- Uwaga: test_both_consent_levels_increment_warnings zaktualizowany (commit a5e1b408) — design zmieniony przez #804: autopilot=1 NIE podbija warnings
