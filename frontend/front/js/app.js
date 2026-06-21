@@ -13136,15 +13136,15 @@ const _DIR_OFFSET = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 const _dmap = { zoom: 1, pan: { x: 0, y: 0 }, dragging: false, lastX: 0, lastY: 0 };
 
 // #869: BFS over OPEN doors → shortest list of directions (N|S|E|W) from `fromNodeId`
-// to `toNodeId`. Routes ONLY through ODKRYTE (visited) tiles — never into fog (`?`):
-// the destination itself must be visited, and every intermediate hop must be visited.
-// Returns [] when from===to, or null when no known path exists. Exposed on window so
-// the click-to-move handler (and regression test #869) can reuse it.
+// to `toNodeId`. INTERMEDIATE hops only through ODKRYTE (visited) tiles; the DESTINATION
+// may be a first-layer fog tile (border of known area) — its final hop is the discovering
+// step (mirrors a manual d-pad press into fog). Deep fog (route would pass THROUGH an
+// unknown tile) stays unreachable → null. Returns [] when from===to. Exposed on window
+// so the click-to-move handler (and regression test #869) can reuse it.
 function dungeonBfsPath(nodes, fromNodeId, toNodeId) {
     if (!nodes || !fromNodeId || !toNodeId) return null;
     if (fromNodeId === toNodeId) return [];
-    const target = nodes[toNodeId];
-    if (!target || !target.visited) return null;   // never route into the unknown
+    if (!nodes[toNodeId]) return null;
     const prev = { [fromNodeId]: null };            // nodeId -> { from, dir } | null (start)
     const queue = [fromNodeId];
     while (queue.length) {
