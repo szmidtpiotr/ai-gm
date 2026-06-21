@@ -5329,20 +5329,49 @@ def resolve_attack(
                         try:
                             from app.services.loot_service import (
                                 apply_character_gold_delta,
+                                distribute_mp_loot,
+                                grant_loot_to_character,
                                 roll_gold_drop,
                                 roll_loot,
                             )
-
-                            loot_items = roll_loot(ek)
                             _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
-                            if loot_items:
-                                loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
-                            else:
+
+                            # G10 (#795): MP path — each player gets own class-filtered roll;
+                            # gold split equally. Solo path unchanged.
+                            if _is_mp_combat(combatants):
+                                mp_result = distribute_mp_loot(campaign_id, ek)
                                 loot = []
-                            gold_drop = int(roll_gold_drop(ek) or 0)
-                            if gold_drop > 0:
-                                apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
-                            out["gold_drop"] = max(0, gold_drop)
+                                gold_drop = mp_result.get("total_gold", 0)
+                                out["gold_drop"] = max(0, gold_drop)
+                                out["mp_loot"] = {}
+                                for _cid, _pdata in mp_result.get("per_player", {}).items():
+                                    _cid_int = int(_cid)
+                                    _ploot = _pdata.get("loot") or []
+                                    _pgold = int(_pdata.get("gold") or 0)
+                                    if _pgold > 0:
+                                        apply_character_gold_delta(_cid_int, _pgold, reason="combat_loot_mp")
+                                    if _ploot:
+                                        try:
+                                            grant_loot_to_character(
+                                                _cid_int, _ploot,
+                                                source="loot",
+                                                loot_tier=_enemy_loot_tier,
+                                            )
+                                        except Exception:
+                                            pass
+                                    out["mp_loot"][_cid_int] = {"gold": _pgold, "items": _ploot}
+                                    loot.extend(_ploot)
+                            else:
+                                # Solo path — unchanged
+                                loot_items = roll_loot(ek)
+                                if loot_items:
+                                    loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
+                                else:
+                                    loot = []
+                                gold_drop = int(roll_gold_drop(ek) or 0)
+                                if gold_drop > 0:
+                                    apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
+                                out["gold_drop"] = max(0, gold_drop)
                             # #754: strukturalny rejestr — loot + złoto (ścieżka pojedynczego ubicia)
                             try:
                                 from app.services.dice_log_service import record_dice_roll as _rec_roll

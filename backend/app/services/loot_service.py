@@ -14,6 +14,17 @@ from app.services.effect_json_migration import legacy_effect_fields_from_json
 
 LOOT_DB_PATH = "/data/ai_gm.db"
 
+# G10 (#795) — MP loot scaling flag (sandbox-tunable, starting value).
+# Multiplied into each loot entry's drop chance in roll_loot_for_class.
+# 1.0 = no scaling; lower = sparser drops for MP balance tuning.
+MP_LOOT_WEIGHT_SCALE: float = 1.0
+
+# G10 (#795) — archetype → allowed_classes mapping.
+# Character archetypes ('rogue') may differ from weapon class tags ('ranger').
+_ARCHETYPE_CLASS_ALIASES: dict[str, str] = {
+    "rogue": "ranger",
+}
+
 logger = get_logger(__name__)
 
 _SLOT_VALUES = {
@@ -549,6 +560,134 @@ def roll_loot(enemy_key: str) -> list[dict]:
             }
         )
     return rolled
+
+
+def roll_loot_for_class(enemy_key: str, archetype: str) -> list[dict]:
+    """G10 (#795) — Roll loot for a specific player archetype.
+
+    Like roll_loot() but weapons are filtered by allowed_classes:
+    - If the weapon's allowed_classes list is empty → everyone can receive it.
+    - If the weapon's allowed_classes list is non-empty → archetype (or its alias)
+      must appear in it; otherwise the entry is skipped.
+    - Non-weapon entries (consumables, items) pass through without filtering.
+
+    MP_LOOT_WEIGHT_SCALE is applied to each entry's chance before rolling.
+    """
+    ek = str(enemy_key or "").strip()
+    arch = str(archetype or "").strip().lower()
+    # Map archetype name to weapon-class tag (e.g. 'rogue' → 'ranger')
+    arch_class = _ARCHETYPE_CLASS_ALIASES.get(arch, arch)
+
+    if not ek:
+        return []
+    with _conn() as conn:
+        enemy = conn.execute(
+            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
+            (ek,),
+        ).fetchone()
+        if not enemy or not enemy["loot_table_key"]:
+            return []
+        table_key = str(enemy["loot_table_key"])
+        entries = conn.execute(
+            """
+            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max,
+                   w.allowed_classes
+            FROM game_config_loot_entries e
+            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+            LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
+            WHERE e.loot_table_key = ? AND t.is_active = 1
+            ORDER BY e.id ASC
+            """,
+            (table_key,),
+        ).fetchall()
+    if not entries:
+        return []
+
+    rolled: list[dict] = []
+    for e in entries:
+        weapon_key = e["weapon_key"]
+        if weapon_key:
+            # Apply class filter for weapons
+            raw_ac = e["allowed_classes"]
+            try:
+                ac_list: list[str] = json.loads(raw_ac or "[]") if raw_ac else []
+            except Exception:
+                ac_list = []
+            if ac_list and arch_class not in ac_list and arch not in ac_list:
+                continue  # weapon not for this class
+
+        weight = max(0, min(100, int(e["weight"] or 0)))
+        chance = float(weight / 100.0) * float(MP_LOOT_WEIGHT_SCALE)
+        if random.random() > chance:
+            continue
+
+        qmin = max(1, int(e["qty_min"] or 1))
+        qmax = max(qmin, int(e["qty_max"] or qmin))
+        qty = random.randint(qmin, qmax)
+        rolled.append(
+            {
+                "item_key": e["item_key"],
+                "weapon_key": weapon_key,
+                "consumable_key": e["consumable_key"],
+                "quantity": qty,
+            }
+        )
+    return rolled
+
+
+def distribute_mp_loot(campaign_id: int, enemy_key: str) -> dict:
+    """G10 (#795) — Distribute loot and gold to all accepted campaign members.
+
+    Each member gets an independent roll from roll_loot_for_class() filtered
+    by their character archetype.  Gold from roll_gold_drop() is split equally
+    among n members; the remainder (gold % n) is distributed one coin at a time
+    starting from the first member so no gold is lost.
+
+    Returns:
+        {
+            "per_player": {
+                <character_id>: {"loot": [...], "gold": <int>}
+            },
+            "total_gold": <int>,
+        }
+    """
+    ek = str(enemy_key or "").strip()
+    if not ek:
+        return {"per_player": {}, "total_gold": 0}
+
+    with _conn() as conn:
+        members = conn.execute(
+            """
+            SELECT cm.character_id, c.sheet_json
+            FROM campaign_members cm
+            JOIN characters c ON c.id = cm.character_id
+            WHERE cm.campaign_id = ? AND cm.status = 'accepted' AND cm.character_id IS NOT NULL
+            ORDER BY cm.id ASC
+            """,
+            (int(campaign_id),),
+        ).fetchall()
+
+    if not members:
+        return {"per_player": {}, "total_gold": 0}
+
+    n = len(members)
+    total_gold = int(roll_gold_drop(ek) or 0)
+    base_share = total_gold // n
+    remainder = total_gold % n
+
+    per_player: dict[int, dict] = {}
+    for idx, m in enumerate(members):
+        cid = int(m["character_id"])
+        try:
+            sheet = json.loads(m["sheet_json"] or "{}")
+        except Exception:
+            sheet = {}
+        arch = str(sheet.get("archetype") or "").strip().lower()
+        loot_items = roll_loot_for_class(ek, arch)
+        gold_share = base_share + (1 if idx < remainder else 0)
+        per_player[cid] = {"loot": loot_items, "gold": gold_share}
+
+    return {"per_player": per_player, "total_gold": total_gold}
 
 
 def roll_gold_drop(enemy_key: str) -> int:
