@@ -16,9 +16,10 @@
       "renumber_script": "scripts/renumber_fix_list.sh"
     }
   },
-  "_note": "FAZA mode (notes.md sections) removed 2026-06-19 — tasks live as GitHub issues+milestones. LIST mode (fix_list.md = auto-synced issue board mirror) is the sole source.",
+  "_note": "Tasks live as GitHub issues+milestones. PREFERRED: MILESTONE mode — '/mass-implement @Multiplayer [#799|799-810]' reads tasks straight from GitHub (gh issue list --milestone), skipping gate/later/blocked/deferred labels + '(later)' titles, NEVER skipping 'backlog' (default To-Do). fix_list.md is now only the MASS-ZAKRES instruction carrier (child.zakres_file), no longer a task source — kills the milestone→fix_list mirror drift. LIST mode kept legacy.",
   "child": {
     "spec_files": ["CLAUDE.md", "game_mechanics.md"],
-    "pipeline": ["/tdd", "/code-review", "/playwright-test-report"]
+    "pipeline": ["/tdd", "/code-review", "/playwright-test-report"],
+    "zakres_file": "fix_list.md"
   }
 }

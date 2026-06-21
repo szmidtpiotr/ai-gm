@@ -6,9 +6,13 @@
 # + the inline ZAKRES block in the task doc. Spawns ONE real, named, resumable
 # `claude` session per task, sequentially.
 #
-# Usage: orchestrate.sh <file> [selector] [--list]
+# Usage: orchestrate.sh <file|@milestone|fazaToken> [selector] [--list]
+#   MILESTONE mode: arg1 = "@Name" / "milestone:Name"; tasks straight from GitHub
+#                   (gh issue list --milestone), in number/dep order, skipping
+#                   gate/later/blocked. fix_list is NOT a task source here.
 #   FAZA mode: <file> contains a "FAZA X" token; tasks from config.checklists.faza.file
 #   LIST mode: otherwise; tasks from config.checklists.list.file
+#   selector (milestone): #799 | 799-810 | 799 | empty
 #   --list: print the plan and exit (spawn nothing)
 #
 # Preflight (fail-loud, not silent-wrong):
@@ -54,22 +58,32 @@ for a in "$@"; do [ "$a" = "--list" ] && LIST_ONLY=1; done
 [ "$SELECTOR_ARG" = "--list" ] && SELECTOR_ARG=""
 [ -n "$FILE_ARG" ] || { echo "FATAL: brak pliku. Uzycie: orchestrate.sh <plik> [selektor] [--list]" >&2; exit 2; }
 
-# arg1 may be a FILE (a list like fix_list.md, or a legacy prompt carrying a "FAZA X" token)
-# OR a bare FAZA token: "L", "SF", "FAZA L", "faza:L".
-FILE=""; FAZA_PREFIX=""
-if [ -f "$FILE_ARG" ]; then FILE="$FILE_ARG"
+# arg1 may be:
+#   MILESTONE token: "@Multiplayer" / "milestone:Multiplayer" — tasks come straight
+#                    from GitHub (gh issue list --milestone), NOT from any file.
+#   FILE: a list like fix_list.md, or a legacy prompt carrying a "FAZA X" token
+#   bare FAZA token: "L", "SF", "FAZA L", "faza:L".
+FILE=""; FAZA_PREFIX=""; MILESTONE_NAME=""
+case "$FILE_ARG" in
+  @*)          MILESTONE_NAME="${FILE_ARG#@}" ;;
+  milestone:*) MILESTONE_NAME="${FILE_ARG#milestone:}" ;;
+esac
+if [ -n "$MILESTONE_NAME" ]; then :   # milestone mode — no file needed
+elif [ -f "$FILE_ARG" ]; then FILE="$FILE_ARG"
 elif [ -f "$ROOT/$FILE_ARG" ]; then FILE="$ROOT/$FILE_ARG"
 else
   tok=$(echo "$FILE_ARG" | sed -E 's/^[Ff][Aa][Zz][AaĄą][: ]*//')
   if echo "$tok" | grep -qE '^[A-Z]{1,3}$'; then FAZA_PREFIX="$tok"
-  else echo "FATAL: '$FILE_ARG' to nie plik ani token fazy (np. L, SF, 'FAZA L')." >&2; exit 2; fi
+  else echo "FATAL: '$FILE_ARG' to nie plik, token fazy (L, SF, 'FAZA L') ani milestone (@Nazwa)." >&2; exit 2; fi
 fi
 
 # ── Mode detection ───────────────────────────────────────────────────────────
-if [ -z "$FAZA_PREFIX" ] && [ -n "$FILE" ]; then
+if [ -z "$MILESTONE_NAME" ] && [ -z "$FAZA_PREFIX" ] && [ -n "$FILE" ]; then
   FAZA_PREFIX=$(grep -oE 'FAZ[AĄ] [A-Z]{1,3}' "$FILE" 2>/dev/null | head -1 | sed -E 's/.* //')
 fi
-if [ -n "$FAZA_PREFIX" ]; then MODE="FAZA"; else MODE="LIST"; fi
+if [ -n "$MILESTONE_NAME" ]; then MODE="MILESTONE"
+elif [ -n "$FAZA_PREFIX" ]; then MODE="FAZA"
+else MODE="LIST"; fi
 
 # ── Preflight: refuse on structural corruption ───────────────────────────────
 preflight_refuse() {
@@ -85,7 +99,13 @@ preflight_refuse() {
 PLAN=(); declare -A PLAN_LABEL; SKIPPED=()
 
 # Determine which checklist file holds the task statuses for this mode.
-if [ "$MODE" = "FAZA" ]; then
+if [ "$MODE" = "MILESTONE" ]; then
+  # Tasks come from GitHub; the only file we touch is the ZAKRES carrier (static
+  # instructions, NOT a task list) — defaults to the list checklist file.
+  PREFIX="$(jq -r '.checklists.list.id_prefix // "FIX"' "$CONFIG")"
+  ZAKRES_REL="$(jq -r '.child.zakres_file // .checklists.list.file // empty' "$CONFIG")"
+  CL_FILE="$ROOT/${ZAKRES_REL}"
+elif [ "$MODE" = "FAZA" ]; then
   CL_FILE="$ROOT/$(jq -r '.checklists.faza.file' "$CONFIG")"
   SECTION_PREFIX="$(jq -r '.checklists.faza.section_prefix // "## FAZA"' "$CONFIG")"
   ID_PAT="$(jq -r '.checklists.faza.id_pattern // "{PREFIX}[0-9]+[a-z]?"' "$CONFIG" | sed "s/{PREFIX}/$FAZA_PREFIX/")"
@@ -96,20 +116,78 @@ else
   PREFIX="$(jq -r '.checklists.list.id_prefix // "FIX"' "$CONFIG")"
   RENUM="$(jq -r '.checklists.list.renumber_script // empty' "$CONFIG")"
 fi
-[ -f "$CL_FILE" ] || { echo "FATAL: brak pliku checklisty $CL_FILE (z configu)" >&2; exit 2; }
+[ -f "$CL_FILE" ] || { echo "FATAL: brak pliku checklisty/ZAKRES $CL_FILE (z configu)" >&2; exit 2; }
 preflight_refuse "$CL_FILE"
 [ -n "$FILE" ] && [ "$FILE" != "$CL_FILE" ] && preflight_refuse "$FILE"
 
 echo "=== mass-implement v2 ($MODE) ==="
 echo "Repo     : $ROOT"
-echo "Plik     : $FILE"
-echo "Checklist: $CL_FILE"
-echo "Selektor : ${SELECTOR_ARG:-(wszystkie niezaznaczone)}"
+[ "$MODE" = "MILESTONE" ] && echo "Milestone: $MILESTONE_NAME (GitHub $GITHUB)" || echo "Plik     : $FILE"
+echo "ZAKRES   : $CL_FILE"
+echo "Selektor : ${SELECTOR_ARG:-(wszystkie otwarte/niezaznaczone)}"
 echo "Tryb     : $( [ "$LIST_ONLY" = 1 ] && echo LIST || echo RUN )"
 echo
 
 # ── Parse tasks ──────────────────────────────────────────────────────────────
-if [ "$MODE" = "FAZA" ]; then
+if [ "$MODE" = "MILESTONE" ]; then
+  command -v gh >/dev/null || { echo "FATAL: brak 'gh' (tryb milestone wymaga GitHub CLI)" >&2; exit 2; }
+  gh auth status >/dev/null 2>&1 || { echo "FATAL: gh nieuwierzytelniony — 'gh auth login'" >&2; exit 2; }
+  [ -n "$GH_OWNER" ] || { echo "FATAL: brak github.owner w configu" >&2; exit 2; }
+
+  # Optional numeric selector: "#799" (jedno), "799-810" (zakres), "799" (jedno).
+  selone=""; smin=""; smax=""
+  case "$SELECTOR_ARG" in
+    "") ;;
+    \#[0-9]*)       selone=${SELECTOR_ARG#\#} ;;
+    [0-9]*-[0-9]*)  smin=${SELECTOR_ARG%-*}; smax=${SELECTOR_ARG#*-} ;;
+    [0-9]*)         selone="$SELECTOR_ARG" ;;
+    *) echo "FATAL: selektor milestone: '#799' | '799-810' | '799' | puste" >&2; exit 2 ;;
+  esac
+
+  # Resolve a partial token ("Multiplayer") to the exact milestone title
+  # ("Multiplayer (Faza 5)") so the caller need not type the parenthetical.
+  MS_JSON=$(gh api "repos/$GITHUB/milestones?state=all&per_page=100" 2>/dev/null) \
+    || { echo "FATAL: nie mogę pobrać listy milestone'ów z $GITHUB" >&2; exit 2; }
+  MS_EXACT=$(echo "$MS_JSON" | jq -r --arg q "$MILESTONE_NAME" '
+    [ .[] | select(.title|ascii_downcase|contains($q|ascii_downcase)) ] | (.[0].title // empty)')
+  if [ -z "$MS_EXACT" ]; then
+    echo "FATAL: brak milestone pasującego do '$MILESTONE_NAME'. Dostępne:" >&2
+    echo "$MS_JSON" | jq -r '.[] | "  • \(.title)"' >&2
+    exit 2
+  fi
+  [ "$MS_EXACT" != "$MILESTONE_NAME" ] && echo "Milestone rozpoznany: '$MILESTONE_NAME' → '$MS_EXACT'"
+  MILESTONE_NAME="$MS_EXACT"
+
+  # Pull open issues for the milestone, sorted ascending by number (= dependency
+  # order: issues are numbered in topo order). gate/later/blocked are skipped hard.
+  rows=$(gh issue list --repo "$GITHUB" --milestone "$MILESTONE_NAME" --state open \
+           --limit 300 --json number,title,labels \
+           --jq 'sort_by(.number)[] | "\(.number)\t\(.title)\t\([.labels[].name]|join(","))"' 2>/dev/null) \
+    || { echo "FATAL: 'gh issue list' nie powiodło się (milestone '$MILESTONE_NAME', repo $GITHUB)" >&2; exit 2; }
+  [ -z "$rows" ] && { echo "FATAL: brak OTWARTYCH issue w milestone '$MILESTONE_NAME'" >&2; exit 2; }
+
+  while IFS=$'\t' read -r num title labels; do
+    [ -z "$num" ] && continue
+    if [ -n "$selone" ]; then [ "$num" = "$selone" ] || continue; fi
+    if [ -n "$smin" ]; then { [ "$num" -ge "$smin" ] && [ "$num" -le "$smax" ]; } || continue; fi
+    # Skip only EXPLICIT gate signals — never `backlog` (that is the repo's default
+    # To-Do state, not a gate). Two sources, both deterministic:
+    #   • label: gate / later / blocked / deferred
+    #   • title convention: "(later)" or a leading "later —"
+    skipwhy=""
+    if echo ",$labels," | grep -qiE ',(gate|later|blocked|deferred),'; then
+      skipwhy="label:$(echo ",$labels," | grep -oiE '(gate|later|blocked|deferred)' | head -1)"
+    elif echo "$title" | grep -qiE '\(later\)|^later[[:space:]]*[—-]'; then
+      skipwhy="tytuł:later"
+    fi
+    if [ -n "$skipwhy" ]; then
+      echo "  [-] #$num  ($skipwhy — pomijam): ${title:0:48}"; continue
+    fi
+    tid="${PREFIX}${num}"; PLAN+=("$tid"); PLAN_LABEL[$tid]="#$num  ${title:0:48}"
+    echo "  [ ] #$num  -> w planie: ${title:0:48}"
+  done <<< "$rows"
+
+elif [ "$MODE" = "FAZA" ]; then
   SECTION=$(awk -v p="$SECTION_PREFIX $FAZA_PREFIX" '
     index($0, p)==1 {f=1; next}
     /^## / && f {exit}

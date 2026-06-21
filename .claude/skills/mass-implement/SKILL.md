@@ -36,13 +36,23 @@ on success, **STOPS on a gate**. Config-driven and project-agnostic.
 ## Invocation
 
 ```
-/mass-implement <file|faza-token> [selector] [--list]
+/mass-implement <@milestone|file|faza-token> [selector] [--list]
 /mass-implement --init        # first-time setup in a new project
 ```
 
+- **MILESTONE mode** (preferred — GitHub is the single source of truth) — arg1 is
+  `@Name` or `milestone:Name`; a partial name resolves to the full milestone title
+  (`@Multiplayer` → `Multiplayer (Faza 5)`). Tasks come **straight from GitHub**
+  (`gh issue list --milestone`), open issues only, in ascending number order
+  (= dependency order). Skips issues labelled `gate`/`later`/`blocked`/`deferred`
+  or whose title carries `(later)` / leading `later —`. **Never** skips `backlog`
+  (that is the repo's default To-Do state). `fix_list.md` is NOT a task source here —
+  it only carries the static `MASS-ZAKRES` instruction block. Selector: omitted (all
+  actionable) · `#799` (one issue) · `799-810` (number range).
 - **LIST mode** — `<file>` is a task list (e.g. `fix_list.md`). Selector: omitted (all
   unchecked) · `#767` (one issue) · `P0` (a `### P0` section) · `5` (global index) · `3-7`
-  (index range).
+  (index range). *Legacy — prefer MILESTONE mode; mirroring milestone→fix_list is the
+  drift the new mode removes.*
 - **FAZA mode** — `<file>` carries a `FAZA X` token, OR pass a **bare token**: `L`, `SF`,
   `faza B`. Selector: `L6-L10` · `L6` · `6-10` · `6` · omitted. Tasks read from the faza
   section of the configured checklist.
@@ -110,4 +120,7 @@ spec↔code contradiction / unmet hard dep) · `ERROR — <reason>`. Orchestrato
 /mass-implement fix_list.md #743        # just issue #743
 /mass-implement L L6-L10                # faza L, tasks 6..10 (bare token)
 /mass-implement faza SF --list          # preview all unchecked SF tasks
+/mass-implement @Multiplayer --list     # MILESTONE mode: preview all actionable
+/mass-implement @Multiplayer 799-810    # milestone Multiplayer, issues #799..810
+/mass-implement milestone:FIX #748      # milestone "Bugi i poprawki (FIX)", one issue
 ```
