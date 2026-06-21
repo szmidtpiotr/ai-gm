@@ -240,7 +240,7 @@ await browser.close();
 - [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
 - [x] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB) [#796](https://github.com/szmidtpiotr/ai-gm/issues/796) — wdrożone 2026-06-21, pytest 10/10 ✅, raport: https://github.com/szmidtpiotr/ai-gm/issues/796#issuecomment-4762460274
 - [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
-- [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
+- [x] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny [#798](https://github.com/szmidtpiotr/ai-gm/issues/798) — wdrożone 2026-06-21, pytest 6/6 ✅, raport: https://github.com/szmidtpiotr/ai-gm/issues/798#issuecomment-4762595465
 - [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
 - [ ] G19 — Widzowie: rola bez postaci, widzą tylko treści publiczne; podpowiedzi /whisper za podwójną zgodą (ustawienie hosta + mute per gracz); LLM nigdy nie widzi
 - [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
