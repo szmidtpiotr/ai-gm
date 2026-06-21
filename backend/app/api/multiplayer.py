@@ -509,6 +509,108 @@ def kick_player(
         conn.close()
 
 
+def _execute_kick(conn: sqlite3.Connection, campaign_id: int, target_user_id: int) -> None:
+    """#787 G3 — mark player as kicked, free their hero, clean up pending votes."""
+    conn.execute(
+        "UPDATE campaign_members SET status='kicked' WHERE campaign_id=? AND user_id=?",
+        (campaign_id, target_user_id),
+    )
+    conn.execute(
+        "UPDATE characters SET campaign_id=NULL, status='idle' WHERE campaign_id=? AND user_id=?",
+        (campaign_id, target_user_id),
+    )
+    conn.execute(
+        "DELETE FROM campaign_kick_votes WHERE campaign_id=? AND target_user_id=?",
+        (campaign_id, target_user_id),
+    )
+    conn.commit()
+
+
+class KickVoteReq(BaseModel):
+    target_user_id: int
+
+
+@router.post("/multiplayer/campaigns/{campaign_id}/kick-vote")
+def vote_to_kick(
+    campaign_id: int,
+    body: KickVoteReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        camp = conn.execute(
+            "SELECT host_user_id FROM campaigns WHERE id=? AND mode='multiplayer'",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        host_id = camp["host_user_id"]
+
+        if body.target_user_id == host_id:
+            raise HTTPException(status_code=403, detail="Host cannot be kicked")
+
+        if uid == body.target_user_id:
+            raise HTTPException(status_code=400, detail="Cannot vote to kick yourself")
+
+        voter_ok = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, uid),
+        ).fetchone()
+        if not voter_ok:
+            raise HTTPException(status_code=403, detail="Not an active member of this campaign")
+
+        target_ok = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, body.target_user_id),
+        ).fetchone()
+        if not target_ok:
+            raise HTTPException(status_code=404, detail="Target player not found in this campaign")
+
+        others_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM campaign_members "
+            "WHERE campaign_id=? AND status='accepted' AND user_id!=?",
+            (campaign_id, body.target_user_id),
+        ).fetchone()["cnt"]
+
+        # 2-person game: only host can kick, immediately
+        if others_count == 1:
+            if uid != host_id:
+                raise HTTPException(status_code=403, detail="Only host can kick in a 2-player game")
+            _execute_kick(conn, campaign_id, body.target_user_id)
+            return {"kicked": True, "target_user_id": body.target_user_id, "votes": 1, "required": 1}
+
+        conn.execute(
+            "INSERT OR IGNORE INTO campaign_kick_votes "
+            "(campaign_id, target_user_id, voter_user_id) VALUES (?, ?, ?)",
+            (campaign_id, body.target_user_id, uid),
+        )
+        conn.commit()
+
+        vote_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM campaign_kick_votes "
+            "WHERE campaign_id=? AND target_user_id=?",
+            (campaign_id, body.target_user_id),
+        ).fetchone()["cnt"]
+
+        required = (others_count // 2) + 1
+        kicked = vote_count >= required
+
+        if kicked:
+            _execute_kick(conn, campaign_id, body.target_user_id)
+
+        return {
+            "kicked": kicked,
+            "target_user_id": body.target_user_id,
+            "votes": vote_count,
+            "required": required,
+        }
+    finally:
+        conn.close()
+
+
 @router.post("/multiplayer/campaigns/{campaign_id}/start")
 def start_lobby(
     campaign_id: int,

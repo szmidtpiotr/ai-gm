@@ -4823,6 +4823,21 @@ def _ensure_absence_warnings_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_kick_votes_table(conn: sqlite3.Connection) -> None:
+    """#787 G3 — campaign_kick_votes table for vote-to-kick mechanic."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS campaign_kick_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL,
+            target_user_id INTEGER NOT NULL,
+            voter_user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(campaign_id, target_user_id, voter_user_id)
+        )
+    """)
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -4928,6 +4943,7 @@ def run_admin_migrations() -> None:
         _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
         _ensure_absence_warnings_column(conn)  # #786 G2
+        _ensure_kick_votes_table(conn)  # #787 G3
     finally:
         conn.close()
 
