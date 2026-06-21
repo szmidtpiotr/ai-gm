@@ -221,6 +221,36 @@ def _skill_known_in_catalog(skill_key: str) -> bool:
     return bool(alt and alt in keys)
 
 
+CATCHUP_XP_MULTIPLIER = 1.5  # G26 #807: starting value, tune after playtest
+
+
+def _apply_catchup_multiplier(
+    conn: sqlite3.Connection, character_id: int, campaign_id: int, amount: int
+) -> int:
+    """G26 #807 — ×1.5 XP for players lagging below party max-1 level in MP campaigns."""
+    try:
+        party_rows = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE campaign_id = ? AND is_active = 1",
+            (campaign_id,),
+        ).fetchall()
+        if len(party_rows) < 2:
+            return amount
+        levels = []
+        char_level = 1
+        for row in party_rows:
+            sheet = json.loads(row["sheet_json"] or "{}")
+            lvl = max(1, int(sheet.get("level") or 1))
+            levels.append(lvl)
+            if row["id"] == character_id:
+                char_level = lvl
+        catchup_threshold = max(1, max(levels) - 1)
+        if char_level < catchup_threshold:
+            return round(amount * CATCHUP_XP_MULTIPLIER)
+        return amount
+    except Exception:
+        return amount
+
+
 def grant_pending_xp(
     conn: sqlite3.Connection,
     character_id: int,
@@ -236,6 +266,7 @@ def grant_pending_xp(
 
     Also increments xp_lifetime_earned for level calculations and writes an
     audit row to character_xp_grants.
+    G26 #807: applies catch-up ×1.5 multiplier for lagging players in MP campaigns.
     """
     if amount <= 0:
         return {"granted": 0}
@@ -245,6 +276,8 @@ def grant_pending_xp(
     ).fetchone()
     if not row:
         return {"granted": 0}
+
+    amount = _apply_catchup_multiplier(conn, character_id, campaign_id, amount)
 
     sheet = parse_character_sheet(row["sheet_json"])
     pending = int(sheet.get("pending_xp") or 0) + amount

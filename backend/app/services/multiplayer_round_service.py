@@ -1416,14 +1416,16 @@ def build_onboarding_summary(campaign_id: int) -> str:
         history_parts.append(f"[Runda {s['round_from']}] {s['text']}")
 
     member_parts: list = []
+    member_levels: list[int] = []
     for m in members:
         char_name = m["char_name"] or m["display_name"] or m["username"]
         try:
             sheet = json.loads(m["sheet_json"] or "{}")
             archetype = sheet.get("archetype", "")
-            level = sheet.get("level", 1)
+            level = int(sheet.get("level") or 1)
         except Exception:
             archetype, level = "", 1
+        member_levels.append(level)
         desc = f"- {char_name}"
         if archetype:
             desc += f" ({archetype} L{level})"
@@ -1455,6 +1457,19 @@ def build_onboarding_summary(campaign_id: int) -> str:
         user_msg += "\n\n[DRUŻYNA — brak danych]"
     if stake_parts:
         user_msg += "\n\n[BIEŻĄCY CEL]\n" + "\n".join(stake_parts)
+
+    # G26 #807 — level gap info for onboarding
+    if len(member_levels) >= 2:
+        min_lvl = min(member_levels)
+        max_lvl = max(member_levels)
+        scaling_lvl = max(1, max_lvl - 1)
+        user_msg += (
+            f"\n\n[POZIOMY DRUŻYNY]\n"
+            f"Gracze są na poziomach {min_lvl}–{max_lvl}. "
+            f"Spotkania skalują się do ~{scaling_lvl}. "
+            f"Jeśli Twój bohater jest poniżej poz. {scaling_lvl}, "
+            f"dostajesz bonus XP (×1.5) aż do nadgonienia reszty drużyny."
+        )
 
     cfg = llm_service.get_effective_config()
     provider = cfg["provider"]

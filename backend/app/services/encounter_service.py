@@ -362,20 +362,37 @@ def _parse_tags(raw) -> list[str]:
     return [t.strip().lower() for t in str(raw).split(",") if t.strip()]
 
 
-def _hero_level_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int:
-    """Poziom aktywnego bohatera kampanii (sheet_json.level), domyślnie 1."""
+def _party_levels_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> list[int]:
+    """G26 #807 — Levels of all active heroes in campaign."""
     try:
-        row = conn.execute(
-            "SELECT sheet_json FROM characters WHERE campaign_id = ? AND is_active = 1 "
-            "ORDER BY id DESC LIMIT 1",
+        rows = conn.execute(
+            "SELECT sheet_json FROM characters WHERE campaign_id = ? AND is_active = 1",
             (campaign_id,),
-        ).fetchone()
-        if not row:
-            return 1
-        sheet = json.loads(row["sheet_json"] or "{}")
-        return max(1, int(sheet.get("level") or 1))
+        ).fetchall()
+        levels = []
+        for row in rows:
+            try:
+                sheet = json.loads(row["sheet_json"] or "{}")
+                levels.append(max(1, int(sheet.get("level") or 1)))
+            except Exception:
+                levels.append(1)
+        return levels or [1]
     except Exception:
+        return [1]
+
+
+def _party_scaling_level(levels: list[int]) -> int:
+    """G26 #807 — Party scaling level: max-1 for MP (2+ heroes), solo level for solo."""
+    if not levels:
         return 1
+    if len(levels) >= 2:
+        return max(1, max(levels) - 1)
+    return levels[0]
+
+
+def _hero_level_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int:
+    """G26 #807 — Party scaling level: max-1 for MP (2+ heroes), solo level for solo."""
+    return _party_scaling_level(_party_levels_for_campaign(conn, campaign_id))
 
 
 def match_encounter_templates(
