@@ -11,6 +11,7 @@ import json
 import random
 import re
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -191,10 +192,42 @@ _MP_CHAPTER_SUMMARY_PROMPT = (
 _CHAPTER_THRESHOLD = 10
 
 
+# G30 (#801) — retry constants (patchable in tests)
+_NARRATOR_MAX_RETRIES = 3
+_NARRATOR_RETRY_BACKOFF_S = 1.0
+
+# G30 (#801) — valid round state transitions (centralised machine)
+_VALID_TRANSITIONS: dict = {
+    "collecting": {"narrating"},
+    "narrating": {"done"},
+    "done": set(),
+}
+
+
 def _db() -> sqlite3.Connection:
-    conn = sqlite3.connect(resolve_db_path())
+    conn = sqlite3.connect(resolve_db_path(), timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+def _transition_round(
+    conn: sqlite3.Connection, round_id: int, expected_from: str, to_status: str
+) -> bool:
+    """Validate and atomically apply a round state transition.
+
+    Returns True if the row was updated, False if it was already past expected_from.
+    Raises ValueError on invalid (forbidden) transition.
+    """
+    allowed = _VALID_TRANSITIONS.get(expected_from, set())
+    if to_status not in allowed:
+        raise ValueError(f"Invalid round transition: {expected_from} → {to_status}")
+    cur = conn.execute(
+        "UPDATE campaign_rounds SET status=? WHERE id=? AND status=?",
+        (to_status, round_id, expected_from),
+    )
+    return cur.rowcount == 1
 
 
 def _get_campaign_member_count(campaign_id: int, conn: sqlite3.Connection) -> int:
@@ -213,8 +246,10 @@ def _get_round_timer_minutes(campaign_id: int, conn: sqlite3.Connection) -> int:
     return int(row["t"]) if row else 1440
 
 
-def _make_deadline(timer_minutes: int) -> str:
-    return (datetime.now(timezone.utc) + timedelta(minutes=timer_minutes)).isoformat()
+def _make_deadline(timer_minutes: int, now: Optional[datetime] = None) -> str:
+    if now is None:
+        now = datetime.now(timezone.utc)
+    return (now + timedelta(minutes=timer_minutes)).isoformat()
 
 
 def get_or_create_current_round(campaign_id: int) -> dict:
@@ -253,6 +288,7 @@ def submit_action(
     character_id: int,
     character_name: str,
     action_text: str,
+    client_action_id: Optional[str] = None,
 ) -> dict:
     conn = _db()
     try:
@@ -283,21 +319,42 @@ def submit_action(
             round_id = int(round_row["id"])
             prev_status = round_row["status"]
 
+        # G30 (#801) — client_action_id idempotency: same UUID = no-op (first write wins)
+        if client_action_id:
+            existing = conn.execute(
+                "SELECT id FROM campaign_round_actions WHERE client_action_id=?",
+                (client_action_id,),
+            ).fetchone()
+            if existing:
+                submitted = int(conn.execute(
+                    "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
+                    (round_id,),
+                ).fetchone()["cnt"])
+                total = _get_campaign_member_count(campaign_id, conn)
+                return {
+                    "round_id": round_id,
+                    "status": prev_status,
+                    "submitted": submitted,
+                    "total": total,
+                    "just_transitioned": False,
+                }
+
         # G5 #789 — roll initiative before storing action
         initiative = _roll_initiative(character_id, conn)
 
         conn.execute(
             """
             INSERT INTO campaign_round_actions
-                (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative_roll)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative_roll, client_action_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(round_id, user_id) DO UPDATE SET
                 action_text = excluded.action_text,
                 character_name = excluded.character_name,
                 submitted_at = datetime('now'),
-                initiative_roll = excluded.initiative_roll
+                initiative_roll = excluded.initiative_roll,
+                client_action_id = excluded.client_action_id
             """,
-            (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative),
+            (round_id, campaign_id, user_id, character_id, character_name, action_text, initiative, client_action_id),
         )
         conn.execute(
             "UPDATE campaign_members SET absence_warnings = 0 WHERE campaign_id=? AND user_id=?",
@@ -313,13 +370,16 @@ def submit_action(
 
         status = prev_status  # preserve narrating if already set
         if prev_status == "collecting" and total > 0 and submitted >= total:
-            conn.execute(
-                "UPDATE campaign_rounds SET status='narrating', closed_at=datetime('now') WHERE id=?",
-                (round_id,),
-            )
+            # G30 (#801) — use validated state machine for transition
+            transitioned = _transition_round(conn, round_id, "collecting", "narrating")
+            if transitioned:
+                conn.execute(
+                    "UPDATE campaign_rounds SET closed_at=datetime('now') WHERE id=?",
+                    (round_id,),
+                )
             conn.commit()
             status = "narrating"
-            just_transitioned = True
+            just_transitioned = transitioned
 
         return {
             "round_id": round_id,
@@ -504,6 +564,11 @@ def trigger_narration(round_id: int) -> None:
         + f"{actions_block}"
     )
 
+    # G30 (#801) — LLM narration with retry; no local garbage fallback on failure
+    parsed: Optional[dict] = None
+    roll_facts: list[dict] = []
+    last_err: Optional[Exception] = None
+
     try:
         cfg = llm_service.get_effective_config()
         provider = cfg["provider"]
@@ -513,66 +578,107 @@ def trigger_narration(round_id: int) -> None:
             driver = llm_service.AzureDriver()
         else:
             driver = llm_service.OllamaDriver()
-
-        # G8 #792 — Pass 1: planner decides which skill tests are needed
-        planner_raw = _llm_call(driver, cfg, _MP_PLANNER_PROMPT, actions_header)
+    except Exception as e:
+        logger.error("multiplayer_narration_config_failed", round_id=round_id, error=str(e)[:200])
+        conn = _db()
         try:
-            planned_tests = _parse_json_response(planner_raw)
-            if not isinstance(planned_tests, list):
-                planned_tests = []
-        except Exception as e:
-            logger.warning("mp_planner_parse_failed", round_id=round_id, error=str(e)[:100])
-            planned_tests = []
+            conn.execute(
+                "UPDATE campaign_rounds SET narrative_json=? WHERE id=? AND status='narrating'",
+                (json.dumps({"narrative": "", "narrative_error": f"LLM config failed: {str(e)[:200]}", "player_notes": {}}, ensure_ascii=False), round_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return
 
-        # G8 #792 — Roll code: resolve each planned test with the locked formula
-        roll_facts: list[dict] = []
-        for entry in planned_tests:
-            if not isinstance(entry, dict):
-                continue
-            char_name = entry.get("character_name", "")
-            test_name = entry.get("test", "")
-            dc = entry.get("dc")
-            sheet = char_sheets.get(char_name, {})
+    for attempt in range(_NARRATOR_MAX_RETRIES):
+        try:
+            # G8 #792 — Pass 1: planner decides which skill tests are needed
+            planner_raw = _llm_call(driver, cfg, _MP_PLANNER_PROMPT, actions_header)
             try:
-                dc_int = int(dc) if dc is not None else None
-                result = resolve_roll(sheet, test_name, dc=dc_int)
-                fact = {
-                    "character_name": char_name,
-                    "test": result["test"],
-                    "raw": result["raw"],
-                    "modifier": result["modifier"],
-                    "total": result["total"],
-                    "dc": dc_int,
-                    "success": result["success"],
-                    "is_nat20": result["is_nat20"],
-                    "is_nat1": result["is_nat1"],
-                }
-                roll_facts.append(fact)
+                planned_tests = _parse_json_response(planner_raw)
+                if not isinstance(planned_tests, list):
+                    planned_tests = []
             except Exception as e:
-                logger.warning(
-                    "mp_roll_failed", char=char_name, test=test_name,
-                    round_id=round_id, error=str(e)[:100]
+                logger.warning("mp_planner_parse_failed", round_id=round_id, error=str(e)[:100])
+                planned_tests = []
+
+            # G8 #792 — Roll code: resolve each planned test with the locked formula
+            roll_facts = []
+            for entry in planned_tests:
+                if not isinstance(entry, dict):
+                    continue
+                char_name = entry.get("character_name", "")
+                test_name = entry.get("test", "")
+                dc = entry.get("dc")
+                sheet = char_sheets.get(char_name, {})
+                try:
+                    dc_int = int(dc) if dc is not None else None
+                    result = resolve_roll(sheet, test_name, dc=dc_int)
+                    fact = {
+                        "character_name": char_name,
+                        "test": result["test"],
+                        "raw": result["raw"],
+                        "modifier": result["modifier"],
+                        "total": result["total"],
+                        "dc": dc_int,
+                        "success": result["success"],
+                        "is_nat20": result["is_nat20"],
+                        "is_nat1": result["is_nat1"],
+                    }
+                    roll_facts.append(fact)
+                except Exception as e:
+                    logger.warning(
+                        "mp_roll_failed", char=char_name, test=test_name,
+                        round_id=round_id, error=str(e)[:100]
+                    )
+
+            # G8 #792 — Pass 2: narrator receives roll results as immutable facts
+            narrator_user = actions_header
+            if roll_facts:
+                lines = [_format_roll_fact_line(f) for f in roll_facts]
+                narrator_user += (
+                    "\n\n[WYNIKI RZUTÓW — FAKTY NIENARUSZALNE (rzucone przez kod)]\n"
+                    + "\n".join(lines)
                 )
 
-        # G8 #792 — Pass 2: narrator receives roll results as immutable facts
-        narrator_user = actions_header
-        if roll_facts:
-            lines = [_format_roll_fact_line(f) for f in roll_facts]
-            narrator_user += (
-                "\n\n[WYNIKI RZUTÓW — FAKTY NIENARUSZALNE (rzucone przez kod)]\n"
-                + "\n".join(lines)
+            raw = _llm_call(driver, cfg, _MULTIPLAYER_SYSTEM_PROMPT, narrator_user)
+            parsed = _parse_json_response(raw)
+            last_err = None
+            break  # success
+        except Exception as e:
+            last_err = e
+            logger.warning(
+                "multiplayer_narration_retry",
+                round_id=round_id,
+                attempt=attempt + 1,
+                max=_NARRATOR_MAX_RETRIES,
+                error=str(e)[:200],
             )
+            if attempt < _NARRATOR_MAX_RETRIES - 1:
+                time.sleep(_NARRATOR_RETRY_BACKOFF_S * (2 ** attempt))
 
-        raw = _llm_call(driver, cfg, _MULTIPLAYER_SYSTEM_PROMPT, narrator_user)
-        parsed = _parse_json_response(raw)
-    except Exception as e:
-        logger.error("multiplayer_narration_failed", round_id=round_id, error=str(e)[:200])
-        parsed = {
-            "narrative": "Coś poszło nie tak z narracją — spróbuj ponownie.",
-            "roll_cues": [],
-            "player_notes": {},
-        }
-        roll_facts = []
+    if last_err is not None or parsed is None:
+        logger.error(
+            "multiplayer_narration_failed_all_retries",
+            round_id=round_id,
+            retries=_NARRATOR_MAX_RETRIES,
+            error=str(last_err)[:200] if last_err else "no_parsed",
+        )
+        conn = _db()
+        try:
+            conn.execute(
+                "UPDATE campaign_rounds SET narrative_json=? WHERE id=? AND status='narrating'",
+                (json.dumps({
+                    "narrative": "",
+                    "narrative_error": f"LLM narration failed after {_NARRATOR_MAX_RETRIES} retries: {str(last_err)[:200]}",
+                    "player_notes": {},
+                }, ensure_ascii=False), round_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return
 
     # G8 #792 — store roll_facts alongside narrative so frontend can display them
     parsed["roll_facts"] = roll_facts
@@ -588,8 +694,10 @@ def trigger_narration(round_id: int) -> None:
 
     conn = _db()
     try:
+        # G30 (#801) — use validated state machine for narrating → done transition
+        _transition_round(conn, round_id, "narrating", "done")
         conn.execute(
-            "UPDATE campaign_rounds SET status='done', narrative_json=? WHERE id=?",
+            "UPDATE campaign_rounds SET narrative_json=? WHERE id=?",
             (json.dumps(parsed, ensure_ascii=False), round_id),
         )
         # G12 #798 — clear pending_intro flags only for the snapshot captured at narration start
@@ -786,11 +894,23 @@ def sweep_expired_rounds() -> None:
 
     Idempotent: only touches status='collecting' rounds whose deadline has passed.
     """
+    force_sweep()
+
+
+def force_sweep(now: Optional[datetime] = None) -> None:
+    """Close expired collecting rounds using an injectable clock.
+
+    G30 (#801) — `now` param makes sweep fully testable without real sleep.
+    If now is None, uses datetime.now(timezone.utc) (production default).
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
     conn = _db()
     try:
         expired = conn.execute(
             "SELECT id, campaign_id FROM campaign_rounds "
-            "WHERE status='collecting' AND datetime(deadline) < datetime('now')"
+            "WHERE status='collecting' AND datetime(deadline) < datetime(?)",
+            (now.isoformat(),),
         ).fetchall()
     finally:
         conn.close()
@@ -801,7 +921,7 @@ def sweep_expired_rounds() -> None:
         try:
             _close_expired_round(round_id, campaign_id)
         except Exception as e:
-            logger.error("sweep_close_failed", round_id=round_id, error=str(e)[:200])
+            logger.error("force_sweep_close_failed", round_id=round_id, error=str(e)[:200])
 
 
 def _close_expired_round(round_id: int, campaign_id: int) -> None:
@@ -841,8 +961,10 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
                 (campaign_id, m["user_id"]),
             )
 
+        # G30 (#801) — use validated state machine for transition
+        _transition_round(conn, round_id, "collecting", "narrating")
         conn.execute(
-            "UPDATE campaign_rounds SET status='narrating', closed_at=datetime('now') WHERE id=?",
+            "UPDATE campaign_rounds SET closed_at=datetime('now') WHERE id=?",
             (round_id,),
         )
         conn.commit()

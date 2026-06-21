@@ -448,6 +448,9 @@ RAW_MIGRATIONS = [
     "ALTER TABLE campaign_round_actions ADD COLUMN initiative_roll INTEGER NOT NULL DEFAULT 0",
     # G19 (#800) — Spectators: policy on campaigns
     "ALTER TABLE campaigns ADD COLUMN spectator_policy TEXT NOT NULL DEFAULT 'none'",
+    # G30 (#801) — client_action_id for request-level idempotency
+    "ALTER TABLE campaign_round_actions ADD COLUMN client_action_id TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_round_action_client_id ON campaign_round_actions(client_action_id) WHERE client_action_id IS NOT NULL",
 ]
 
 

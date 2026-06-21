@@ -919,6 +919,7 @@ class SubmitActionReq(BaseModel):
     action_text: str
     character_id: int
     character_name: str
+    client_action_id: Optional[str] = None
 
 
 @router.post("/campaigns/{campaign_id}/round/submit")
@@ -938,6 +939,7 @@ def submit_round_action(
         character_id=body.character_id,
         character_name=body.character_name,
         action_text=body.action_text.strip(),
+        client_action_id=body.client_action_id,
     )
 
     if result.get("just_transitioned"):
