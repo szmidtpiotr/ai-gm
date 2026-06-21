@@ -18,8 +18,13 @@ from app.core.db_runtime import resolve_db_path
 from app.core.logging import get_logger
 from app.services import llm_service
 from app.services.dice import parse_character_sheet, resolve_roll
+from app.services.push_notification_service import send_push, send_push_to_campaign_players
+from app.services.combat_service import apply_mp_default_defense
 
 logger = get_logger(__name__)
+
+# G9 (#793) — short combat turn timer; separate from narrative round timer (starting value, strojenie w G15)
+COMBAT_TURN_TIMER_MINUTES = 2
 
 
 # G5 #789 — injectable dice function for testability
@@ -952,6 +957,76 @@ def get_move_vote_status(campaign_id: int) -> dict:
         conn.close()
 
 
+# ── G9 (#793) — Combat turn timer + push ────────────────────────────────────
+
+def _push_combat_turn(campaign_id: int, actor_id: str) -> None:
+    """G9 (#793) — Set 2-min deadline on active_combat; push 'Twoja kolej' to player owner.
+
+    Always updates combat_turn_deadline regardless of actor type.
+    Only sends push when actor_id starts with 'player:'.
+    """
+    deadline = _make_deadline(COMBAT_TURN_TIMER_MINUTES)
+    conn = _db()
+    try:
+        conn.execute(
+            "UPDATE active_combat SET combat_turn_deadline=? WHERE campaign_id=? AND status='active'",
+            (deadline, campaign_id),
+        )
+        conn.commit()
+        if not actor_id.startswith("player:"):
+            return
+        char_id = int(actor_id.split(":")[1])
+        row = conn.execute(
+            "SELECT user_id FROM characters WHERE id=?", (char_id,)
+        ).fetchone()
+        if not row:
+            return
+        user_id = int(row["user_id"])
+    finally:
+        conn.close()
+
+    try:
+        send_push(
+            user_id,
+            "Twoja kolej!",
+            "Czas na Twoją akcję bojową.",
+            url="/",
+        )
+    except Exception as e:
+        logger.warning("push_combat_turn_failed", campaign_id=campaign_id, error=str(e)[:100])
+
+
+def sweep_expired_combat_turns() -> None:
+    """G9 (#793) — Apply default defense to expired player turns in MP combat.
+
+    Runs in background sweep every 30s alongside sweep_expired_rounds.
+    Idempotent: only touches status='active' combats with expired player deadlines.
+    """
+    conn = _db()
+    try:
+        rows = conn.execute(
+            "SELECT campaign_id, current_turn FROM active_combat "
+            "WHERE status='active' "
+            "AND current_turn LIKE 'player:%' "
+            "AND combat_turn_deadline IS NOT NULL "
+            "AND datetime(combat_turn_deadline) < datetime('now')"
+        ).fetchall()
+        expired = [(int(r["campaign_id"]), str(r["current_turn"])) for r in rows]
+    finally:
+        conn.close()
+
+    for campaign_id, actor_id in expired:
+        try:
+            char_id = int(actor_id.split(":")[1])
+            result = apply_mp_default_defense(campaign_id, char_id)
+            new_state = (result or {}).get("combat_state")
+            new_turn = (new_state or {}).get("current_turn") if new_state else None
+            if new_turn:
+                _push_combat_turn(campaign_id, str(new_turn))
+        except Exception as e:
+            logger.error("sweep_combat_turn_failed", campaign_id=campaign_id, error=str(e)[:200])
+
+
 # ── G7 (#791) — MP Combat ────────────────────────────────────────────────────
 
 def start_mp_combat(campaign_id: int, enemy_keys: list) -> dict:
@@ -975,7 +1050,15 @@ def start_mp_combat(campaign_id: int, enemy_keys: list) -> dict:
         raise ValueError("no characters in campaign for MP combat")
 
     from app.services.combat_service import initiate_combat_mp
-    return initiate_combat_mp(campaign_id, character_ids, list(enemy_keys))
+    result = initiate_combat_mp(campaign_id, character_ids, list(enemy_keys))
+    # G9 (#793) — push + set deadline for the initial actor if it is a player
+    initial_turn = (result or {}).get("current_turn", "")
+    if initial_turn:
+        try:
+            _push_combat_turn(campaign_id, str(initial_turn))
+        except Exception as e:
+            logger.warning("push_combat_start_failed", error=str(e)[:100])
+    return result
 
 
 def submit_mp_combat_action(
@@ -1046,6 +1129,13 @@ def submit_mp_combat_action(
             advance_turn(campaign_id)
 
     final_snap = get_active_combat(campaign_id)
+    # G9 (#793) — push + set 2-min deadline for the next player's turn
+    next_turn = (final_snap or {}).get("current_turn", "") if final_snap else ""
+    if next_turn and (final_snap or {}).get("status") == "active":
+        try:
+            _push_combat_turn(campaign_id, str(next_turn))
+        except Exception as e:
+            logger.warning("push_combat_advance_failed", error=str(e)[:100])
     return {
         "player_result": player_result,
         "enemy_results": enemy_results,

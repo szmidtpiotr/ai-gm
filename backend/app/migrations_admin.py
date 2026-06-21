@@ -4867,6 +4867,18 @@ def _ensure_party_hex_columns(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _ensure_combat_turn_deadline_column(conn: sqlite3.Connection) -> None:
+    """#793 G9 — combat_turn_deadline on active_combat for short 2-min combat turn timer."""
+    try:
+        conn.execute("ALTER TABLE active_combat ADD COLUMN combat_turn_deadline TEXT DEFAULT NULL")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def _ensure_character_campaign_state(conn: sqlite3.Connection) -> None:
     """#784 G16 — per-campaign battle state (HP/mana/conditions) for MP isolation."""
     conn.execute("""
@@ -5031,6 +5043,7 @@ def run_admin_migrations() -> None:
         _ensure_kick_votes_table(conn)  # #787 G3
         _ensure_move_votes_table(conn)  # #790 G6
         _ensure_party_hex_columns(conn)  # #790 G6
+        _ensure_combat_turn_deadline_column(conn)  # #793 G9
     finally:
         conn.close()
 

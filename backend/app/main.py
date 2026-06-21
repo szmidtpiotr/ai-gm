@@ -52,6 +52,7 @@ from app.api.party_chat import router as party_chat_router
 from app.migrations_admin import run_admin_migrations
 from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
+from app.routers.rules_content import router as rules_content_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
 from app.routers.rest_sandbox import router as rest_sandbox_router
@@ -576,13 +577,17 @@ async def lifespan(app: FastAPI):
             _backfill_terrain_tags()
         except Exception:
             pass
-    # G1 (#785) — background sweep: close MP rounds past deadline every 30s.
+    # G1 (#785) + G9 (#793) — background sweep every 30s: expired narrative rounds + combat turns.
     async def _mp_sweep_loop() -> None:
         import asyncio as _asyncio
         while True:
             try:
-                from app.services.multiplayer_round_service import sweep_expired_rounds
+                from app.services.multiplayer_round_service import (
+                    sweep_expired_rounds,
+                    sweep_expired_combat_turns,
+                )
                 await _asyncio.to_thread(sweep_expired_rounds)
+                await _asyncio.to_thread(sweep_expired_combat_turns)
             except Exception as _e:
                 logger.warning("mp_sweep_error", error=str(_e)[:200])
             await _asyncio.sleep(30)
@@ -663,6 +668,7 @@ app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(version_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(rules_content_router)  # already prefixed with /api internally
 app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(sandbox_router, prefix="/api")
