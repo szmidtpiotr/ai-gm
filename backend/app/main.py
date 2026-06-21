@@ -452,6 +452,10 @@ RAW_MIGRATIONS = [
     # G30 (#801) — client_action_id for request-level idempotency
     "ALTER TABLE campaign_round_actions ADD COLUMN client_action_id TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_round_action_client_id ON campaign_round_actions(client_action_id) WHERE client_action_id IS NOT NULL",
+    # G27 (#808) — team quiet window (silence hours + IANA timezone)
+    "ALTER TABLE campaigns ADD COLUMN quiet_start TEXT",
+    "ALTER TABLE campaigns ADD COLUMN quiet_end TEXT",
+    "ALTER TABLE campaigns ADD COLUMN team_tz TEXT",
 ]
 
 

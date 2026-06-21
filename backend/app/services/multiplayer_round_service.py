@@ -1101,22 +1101,29 @@ def force_sweep(now: Optional[datetime] = None) -> None:
 
     G30 (#801) — `now` param makes sweep fully testable without real sleep.
     If now is None, uses datetime.now(timezone.utc) (production default).
+    G27 (#808) — rounds are skipped (not closed) when campaign is in quiet window.
     """
     if now is None:
         now = datetime.now(timezone.utc)
     conn = _db()
     try:
         expired = conn.execute(
-            "SELECT id, campaign_id FROM campaign_rounds "
-            "WHERE status='collecting' AND datetime(deadline) < datetime(?)",
+            """SELECT cr.id, cr.campaign_id, c.quiet_start, c.quiet_end, c.team_tz
+               FROM campaign_rounds cr
+               JOIN campaigns c ON c.id = cr.campaign_id
+               WHERE cr.status='collecting' AND datetime(cr.deadline) < datetime(?)""",
             (now.isoformat(),),
         ).fetchall()
     finally:
         conn.close()
 
+    from app.services.quiet_window import _in_quiet_window
     for row in expired:
         round_id = int(row["id"])
         campaign_id = int(row["campaign_id"])
+        if _in_quiet_window(now, row["quiet_start"], row["quiet_end"], row["team_tz"]):
+            logger.info("sweep_quiet_window_skip", round_id=round_id, campaign_id=campaign_id)
+            continue
         try:
             _close_expired_round(round_id, campaign_id)
         except Exception as e:
@@ -1403,7 +1410,8 @@ def build_onboarding_summary(campaign_id: int) -> str:
         ).fetchall()
 
         camp = conn.execute(
-            "SELECT COALESCE(gm_plan_json, '{}') AS gm_plan_json FROM campaigns WHERE id=?",
+            "SELECT COALESCE(gm_plan_json, '{}') AS gm_plan_json, "
+            "quiet_start, quiet_end, team_tz FROM campaigns WHERE id=?",
             (campaign_id,),
         ).fetchone()
     finally:
@@ -1469,6 +1477,15 @@ def build_onboarding_summary(campaign_id: int) -> str:
             f"Spotkania skalują się do ~{scaling_lvl}. "
             f"Jeśli Twój bohater jest poniżej poz. {scaling_lvl}, "
             f"dostajesz bonus XP (×1.5) aż do nadgonienia reszty drużyny."
+        )
+
+    # G27 (#808) — include quiet window info for onboarding player
+    if camp and camp["quiet_start"] and camp["quiet_end"] and camp["team_tz"]:
+        user_msg += (
+            f"\n\n[OKNO CISZY DRUŻYNY]\n"
+            f"Drużyna nie gra i nie dostaje powiadomień między "
+            f"{camp['quiet_start']} a {camp['quiet_end']} ({camp['team_tz']}). "
+            f"W tych godzinach runda nie zamknie się automatycznie."
         )
 
     cfg = llm_service.get_effective_config()

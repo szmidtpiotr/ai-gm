@@ -194,14 +194,25 @@ def send_push_to_campaign_players(
     url: str = "/",
     exclude_user_id: Optional[int] = None,
 ) -> None:
+    from datetime import datetime, timezone as _tz
     conn = _db()
     try:
         rows = conn.execute(
             "SELECT user_id FROM campaign_members WHERE campaign_id = ? AND status = 'accepted'",
             (campaign_id,),
         ).fetchall()
+        # G27 (#808) — suppress all pushes during campaign quiet window
+        camp = conn.execute(
+            "SELECT quiet_start, quiet_end, team_tz FROM campaigns WHERE id=?",
+            (campaign_id,),
+        ).fetchone()
     finally:
         conn.close()
+
+    from app.services.quiet_window import _in_quiet_window
+    if camp and _in_quiet_window(datetime.now(_tz.utc), camp["quiet_start"], camp["quiet_end"], camp["team_tz"]):
+        logger.info("push_quiet_window_suppressed", campaign_id=campaign_id, title=title)
+        return
 
     for row in rows:
         uid = int(row["user_id"])
