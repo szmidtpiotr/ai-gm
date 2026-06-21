@@ -196,7 +196,7 @@ def test_with_consent_gets_autopilot(tmp_path, monkeypatch):
 
 
 def test_both_consent_levels_increment_warnings(tmp_path, monkeypatch):
-    """Zarówno brak akcji jak i autopilot podbijają absence_warnings o 1."""
+    """consent=0 podbija absence_warnings; consent=1 (autopilot) NIE podbija (per #804 design)."""
     db_path, conn = _make_test_db(tmp_path)
     # host_id=101 consent=0, other_id=102 consent=1 — both miss the round
     _setup_2player_campaign(conn, camp_id=1, host_id=101, other_id=102, host_consent=0)
@@ -210,15 +210,24 @@ def test_both_consent_levels_increment_warnings(tmp_path, monkeypatch):
 
     check = sqlite3.connect(db_path)
     check.row_factory = sqlite3.Row
-    for uid in [101, 102]:
-        row = check.execute(
-            "SELECT absence_warnings FROM campaign_members WHERE campaign_id=1 AND user_id=?",
-            (uid,),
-        ).fetchone()
-        assert row is not None
-        assert int(row["absence_warnings"]) == 1, (
-            f"user {uid} should have 1 absence_warning after missing round"
-        )
+
+    # consent=0: no action → penalty
+    row_101 = check.execute(
+        "SELECT absence_warnings FROM campaign_members WHERE campaign_id=1 AND user_id=101",
+    ).fetchone()
+    assert row_101 is not None
+    assert int(row_101["absence_warnings"]) == 1, (
+        f"user 101 (consent=0) should have 1 absence_warning, got {row_101['absence_warnings']}"
+    )
+
+    # consent=1: autopilot → no penalty (opt-in means voluntary hold, per #804 design change)
+    row_102 = check.execute(
+        "SELECT absence_warnings FROM campaign_members WHERE campaign_id=1 AND user_id=102",
+    ).fetchone()
+    assert row_102 is not None
+    assert int(row_102["absence_warnings"]) == 0, (
+        f"user 102 (consent=1) should have 0 absence_warnings (autopilot exempts from penalty), got {row_102['absence_warnings']}"
+    )
     check.close()
 
 
