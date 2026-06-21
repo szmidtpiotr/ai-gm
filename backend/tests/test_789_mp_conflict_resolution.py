@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS campaign_rounds (
     deadline TEXT,
     closed_at TEXT,
     narrative_json TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    complete_push_sent INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS campaign_round_actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,8 +74,10 @@ CREATE TABLE IF NOT EXISTS campaign_round_actions (
     action_text TEXT NOT NULL,
     submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
     initiative_roll INTEGER NOT NULL DEFAULT 0,
+    client_action_id TEXT,
     UNIQUE(round_id, user_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_round_action_client_id ON campaign_round_actions(client_action_id) WHERE client_action_id IS NOT NULL;
 """
 
 
