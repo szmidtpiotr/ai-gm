@@ -339,15 +339,21 @@ def _load_character_sheet(char_id: int, conn: sqlite3.Connection) -> dict:
 
 
 def _format_roll_fact_line(fact: dict) -> str:
-    verdict = "✓" if fact.get("success") else "✗"
     if fact.get("is_nat20"):
         verdict = "✓ KRYTYCZNY SUKCES"
     elif fact.get("is_nat1"):
         verdict = "✗ KRYTYCZNA PORAŻKA"
+    elif fact.get("success") is True:
+        verdict = "✓"
+    elif fact.get("success") is False:
+        verdict = "✗"
+    else:
+        verdict = "—"  # no DC set; indeterminate
+    dc_part = f"vs DC {fact['dc']} " if fact.get("dc") is not None else ""
     return (
         f"{fact['character_name']} / {fact['test']}: "
         f"k20={fact['raw']}, mod={fact['modifier']:+d}, suma {fact['total']} "
-        f"vs DC {fact['dc']} → {verdict}"
+        f"{dc_part}→ {verdict}"
     )
 
 
@@ -492,12 +498,7 @@ def trigger_narration(round_id: int) -> None:
             )
 
         raw = _llm_call(driver, cfg, _MULTIPLAYER_SYSTEM_PROMPT, narrator_user)
-
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1]
-            clean = clean.rsplit("```", 1)[0].strip()
-        parsed = json.loads(clean)
+        parsed = _parse_json_response(raw)
     except Exception as e:
         logger.error("multiplayer_narration_failed", round_id=round_id, error=str(e)[:200])
         parsed = {
@@ -795,12 +796,18 @@ def get_rounds_history(campaign_id: int, user_id: int) -> list:
             my_note = None
             if char_name and data.get("player_notes"):
                 my_note = data["player_notes"].get(char_name)
+            # G8 #792 — include this player's roll_facts for chat restore
+            all_roll_facts = data.get("roll_facts", [])
+            my_roll_facts = [
+                f for f in all_roll_facts if f.get("character_name") == char_name
+            ] if char_name else []
             result.append({
                 "round_id": round_id,
                 "round_number": int(r["round_number"]),
                 "narrative": data.get("narrative", ""),
                 "actions": [{"character_name": a["character_name"], "action_text": a["action_text"]} for a in actions],
                 "my_note": my_note,
+                "roll_facts": my_roll_facts,
             })
         return result
     finally:
