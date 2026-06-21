@@ -2138,15 +2138,19 @@ def _apply_absorption(p: dict, dmg: int, out: dict[str, Any]) -> int:
 
 def _resolve_defense_spell_in_combat(
     conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
-    spell_row, out: dict[str, Any],
+    spell_row, out: dict[str, Any], *,
+    caster_comb_id: str = "player", requested_target_id: str | None = None,
+    mass: bool = False,
 ) -> dict[str, Any]:
-    """B10 (#657): czar OBRONNY (ward_of_iron/mage_armor) w aktywnej walce.
+    """B10 (#657) + B14 (#820): czar OBRONNY (tarcza absorpcji) w aktywnej walce.
 
-    Nakłada pulę absorpcji (temp-HP) na combatanta gracza:
-      • odejmij PEŁNĄ manę (tarcza nie „pudłuje" — brak zwrotu); za mało → blocked
-      • `absorb_hp` = wartość czaru (NIE stackuje — re-cast = świeża pula)
-      • ZERO obrażeń wrogowi; tury NIE zaawansowujemy (parytet z atakiem/efektem)
-    Pula żyje na combatancie (combat-scoped) — znika po walce, nie brudzi sheet_json.
+    Nakłada pulę absorpcji (temp-HP). Cel:
+      • mass=True (`group_*`/`mass_*`) → wszyscy żywi przyjaźni kombatanci
+      • requested_target_id = żywy sojusznik → ten WSKAZANY sojusznik
+      • inaczej → rzucający (self-buff; ścieżka single-player niezmieniona)
+    Reguły: odejmij PEŁNĄ manę (tarcza nie „pudłuje"); za mało → blocked;
+    `absorb_hp` = wartość czaru (NIE stackuje — re-cast = świeża pula);
+    ZERO obrażeń wrogowi; tury NIE zaawansowujemy. Pula combat-scoped.
     """
     from app.services import spell_service
 
@@ -2188,61 +2192,148 @@ def _resolve_defense_spell_in_combat(
         {"key": spell_k, "tier": int(spell_row["tier"] or 1),
          "effect_json": (_ej_row["effect_json"] if _ej_row else None)},
     )
-    p = _find_combatant(combatants, "player")
-    if not p:
-        raise ValueError("player combatant missing")
-    p["absorb_hp"] = absorb  # NIE stackuje — świeża pula = wartość czaru
 
+    # ── B14: ustal cele tarczy ────────────────────────────────────────────────
+    if mass:
+        targets = _b14_friendly_combatants(combatants)
+    else:
+        rt = (
+            _find_combatant(combatants, str(requested_target_id))
+            if requested_target_id else None
+        )
+        if _b14_is_friendly(rt):
+            targets = [rt]
+        else:
+            targets = [
+                c for c in (
+                    _find_combatant(combatants, caster_comb_id),
+                    _find_combatant(combatants, "player"),
+                ) if c
+            ][:1]
+    if not targets:
+        raise ValueError("player combatant missing")
+
+    cid = int(row["id"])
+    shield_targets: list[dict[str, Any]] = []
+    for comb in targets:
+        comb["absorb_hp"] = absorb  # NIE stackuje — świeża pula = wartość czaru
+        shield_targets.append({"target_id": str(comb.get("id")), "name": comb.get("name"),
+                               "absorb": absorb})
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor=str(caster_comb_id), event_type="spell_defense",
+            roll_value=None, damage=0, hp_after=int(comb.get("hp_current", 0) or 0),
+            target_id=str(comb.get("id")), target_name=str(comb.get("name") or "Bohater"),
+            hit=True,
+            narrative=json.dumps(
+                {"spell_key": spell_k, "spell_label": label, "absorb": absorb,
+                 "mana_cost": mana_cost, "mass": bool(mass)},
+                ensure_ascii=False,
+            ),
+        )
+
+    primary = targets[0]
     out["hit"] = True
     out["absorb_granted"] = absorb
     out["absorb_hp"] = absorb
+    out["shield_targets"] = shield_targets
+    out["target_id"] = str(primary.get("id"))
+    out["mass"] = bool(mass)
     out["current_mana"] = int(sheet.get("current_mana", 0))
-    out["message"] = (
-        f"Rzucasz {label} — magiczna tarcza pochłonie {absorb} obrażeń."
-    )
+    if mass:
+        out["message"] = (
+            f"Rzucasz {label} — tarcza ({absorb}) chroni całą drużynę "
+            f"({len(shield_targets)} sojuszników)."
+        )
+    elif str(primary.get("id") or "") != str(caster_comb_id):
+        out["message"] = (
+            f"Rzucasz {label} na {primary.get('name') or 'sojusznika'} — "
+            f"magiczna tarcza pochłonie {absorb} obrażeń."
+        )
+    else:
+        out["message"] = (
+            f"Rzucasz {label} — magiczna tarcza pochłonie {absorb} obrażeń."
+        )
 
     try:
         spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
     except Exception:
         pass
 
-    cid = int(row["id"])
-    log_combat_turn(
-        conn,
-        combat_id=cid,
-        campaign_id=campaign_id,
-        turn_number=_next_combat_log_sequence(conn, cid),
-        actor="player",
-        event_type="spell_defense",
-        roll_value=None,
-        damage=0,
-        hp_after=int(p.get("hp_current", 0) or 0),
-        target_id="player",
-        target_name=str(p.get("name") or "Bohater"),
-        hit=True,
-        narrative=json.dumps(
-            {"spell_key": spell_k, "spell_label": label, "absorb": absorb,
-             "mana_cost": mana_cost},
-            ensure_ascii=False,
-        ),
-    )
     _persist_combatants(conn, row, combatants)
     conn.commit()
     out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
 
 
+def _b14_heal_one_combatant(conn, row, campaign_id, comb, spell_stats, *,
+                            caster_sheet=None, caster_chid=None):
+    """B14 (#820): wylecz JEDNEGO przyjaznego combatanta. Zwraca dict z wynikiem.
+
+    Dla rzucającego (caster_chid) reużywa już wczytany `caster_sheet` (mana zdjęta);
+    dla sojusznika wczytuje jego arkusz z DB. HP combatanta jest źródłem prawdy w walce —
+    synchronizujemy z nim arkusz przed leczeniem i zapisujemy zarówno combatant, jak i sheet.
+    """
+    from app.services import spell_service
+    tid = str(comb.get("id"))
+    tchid = _b14_comb_char_id(tid, row)
+
+    if caster_chid is not None and tchid == caster_chid and caster_sheet is not None:
+        tsheet = caster_sheet
+    else:
+        tchar = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE id = ?", (tchid,),
+        ).fetchone()
+        tsheet = parse_character_sheet(tchar["sheet_json"]) if tchar else {}
+        try:
+            from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov
+            _ov(conn, campaign_id, tchid, tsheet)
+        except Exception:
+            pass
+
+    # Combat HP authoritative → zsynchronizuj arkusz przed leczeniem
+    tsheet["current_hp"] = int(comb.get("hp_current", tsheet.get("current_hp", 0)) or 0)
+    tsheet["max_hp"] = int(
+        comb.get("hp_max", tsheet.get("max_hp", tsheet.get("current_hp", 0))) or 0
+    )
+    hp_before = int(tsheet["current_hp"])
+    res = spell_service.resolve_mend_wounds(tsheet, spell_stats)
+    comb["hp_current"] = int(tsheet.get("current_hp", hp_before))
+    _save_char_sheet(conn, campaign_id, tchid, tsheet)
+
+    try:
+        from app.services.state_log_service import record_state_change as _rec_state
+        if int(res.get("hp_after") or hp_before) != hp_before:
+            _rec_state(campaign_id=campaign_id, resource="hp", character_id=tchid,
+                       combat_id=int(row["id"]), before_val=hp_before,
+                       after_val=int(res.get("hp_after") or hp_before),
+                       cause="heal", meta={"healed": res.get("healed")})
+    except Exception:
+        pass
+
+    return {
+        "target_id": tid, "name": comb.get("name"),
+        "healed": res["healed"], "hp_after": res["hp_after"],
+        "heal_die": res.get("heal_die"), "heal_rolls": res.get("heal_rolls"),
+        "heal_modifier": res.get("heal_modifier"),
+    }
+
+
 def _resolve_heal_spell_in_combat(
     conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
-    spell_row, out: dict[str, Any],
+    spell_row, out: dict[str, Any], *,
+    caster_comb_id: str = "player", requested_target_id: str | None = None,
+    mass: bool = False,
 ) -> dict[str, Any]:
-    """B13 (#663): czar LECZĄCY (minor_heal) w aktywnej walce.
+    """B13 (#663) + B14 (#820): czar LECZĄCY w aktywnej walce.
 
-    Leczy gracza (nie atakuje wroga):
-      • odejmij PEŁNĄ manę; za mało → blocked
-      • roll heal_die + INT_mod → +HP gracza (cap max_hp)
-      • aktualizuje sheet_json + combatant hp_current
-      • log spell_heal, advance turn
+    Cel leczenia:
+      • mass=True (`group_*`/`mass_*`) → WSZYSCY żywi przyjaźni kombatanci
+      • requested_target_id = żywy sojusznik → ten WSKAZANY sojusznik
+      • inaczej → rzucający (self-cast; ścieżka single-player niezmieniona)
+    Procedura: odejmij PEŁNĄ manę raz; roll heal_die + INT_mod per cel (cap max_hp);
+    aktualizuj sheet_json + combatant hp_current; log spell_heal per cel.
     """
     from app.services import spell_service
 
@@ -2279,64 +2370,85 @@ def _resolve_heal_spell_in_combat(
         (spell_k,),
     ).fetchone()
     spell_stats = {"heal_die": (heal_die_row["heal_die"] if heal_die_row else None) or "1d6"}
-    _hp_before_heal = int(sheet.get("current_hp") or 0)
-    heal_result = spell_service.resolve_mend_wounds(sheet, spell_stats)
-    # #761: rejestr leczenia (HP w górę)
-    try:
-        from app.services.state_log_service import record_state_change as _rec_state
-        _hp_after_heal = int(heal_result.get("hp_after") or _hp_before_heal)
-        if _hp_after_heal != _hp_before_heal:
-            _rec_state(campaign_id=campaign_id, resource="hp", character_id=row["character_id"],
-                       combat_id=int(row["id"]), before_val=_hp_before_heal, after_val=_hp_after_heal,
-                       cause="heal", meta={"spell": "mend_wounds", "healed": heal_result.get("healed")})
-    except Exception:
-        pass
 
-    p = _find_combatant(combatants, "player")
-    if p:
-        p["hp_current"] = int(sheet.get("current_hp") or p.get("hp_current", 0))
+    # ── B14: ustal cele leczenia ──────────────────────────────────────────────
+    caster_chid = _b14_comb_char_id(caster_comb_id, row)
+    if mass:
+        targets = _b14_friendly_combatants(combatants)
+    else:
+        rt = (
+            _find_combatant(combatants, str(requested_target_id))
+            if requested_target_id else None
+        )
+        if _b14_is_friendly(rt):
+            targets = [rt]
+        else:
+            targets = [
+                c for c in (
+                    _find_combatant(combatants, caster_comb_id),
+                    _find_combatant(combatants, "player"),
+                ) if c
+            ][:1]
 
-    _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
-
-    out["hit"] = True
-    out["healed"] = heal_result["healed"]
-    out["heal_amount"] = heal_result["healed"]
-    out["heal_die"] = heal_result.get("heal_die")
-    out["heal_rolls"] = heal_result.get("heal_rolls")
-    out["heal_modifier"] = heal_result.get("heal_modifier")
-    out["hp_after"] = heal_result["hp_after"]
-    out["current_mana"] = int(sheet.get("current_mana", 0))
-    out["message"] = (
-        f"Rzucasz {label} — leczysz {heal_result['healed']} HP "
-        f"(masz teraz {heal_result['hp_after']} HP)."
-    )
+    cid = int(row["id"])
+    heal_targets: list[dict[str, Any]] = []
+    for comb in targets:
+        r = _b14_heal_one_combatant(
+            conn, row, campaign_id, comb, spell_stats,
+            caster_sheet=sheet, caster_chid=caster_chid,
+        )
+        heal_targets.append(r)
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid),
+            actor=str(caster_comb_id), event_type="spell_heal",
+            roll_value=None, damage=0, hp_after=int(r["hp_after"]),
+            target_id=str(r["target_id"]), target_name=str(r.get("name") or "Bohater"),
+            hit=True,
+            narrative=json.dumps(
+                {"spell_key": spell_k, "spell_label": label,
+                 "healed": r["healed"], "hp_after": r["hp_after"],
+                 "mana_cost": mana_cost, "mass": bool(mass)},
+                ensure_ascii=False,
+            ),
+        )
 
     try:
         spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
     except Exception:
         pass
 
-    cid = int(row["id"])
-    log_combat_turn(
-        conn,
-        combat_id=cid,
-        campaign_id=campaign_id,
-        turn_number=_next_combat_log_sequence(conn, cid),
-        actor="player",
-        event_type="spell_heal",
-        roll_value=None,
-        damage=0,
-        hp_after=int(heal_result["hp_after"]),
-        target_id="player",
-        target_name=str(p.get("name") if p else "Bohater"),
-        hit=True,
-        narrative=json.dumps(
-            {"spell_key": spell_k, "spell_label": label,
-             "healed": heal_result["healed"], "hp_after": heal_result["hp_after"],
-             "mana_cost": mana_cost},
-            ensure_ascii=False,
-        ),
-    )
+    primary = heal_targets[0] if heal_targets else {
+        "healed": 0, "hp_after": 0, "target_id": None,
+        "heal_die": spell_stats["heal_die"], "heal_rolls": None, "heal_modifier": None,
+    }
+    out["hit"] = True
+    out["healed"] = primary["healed"]
+    out["heal_amount"] = primary["healed"]
+    out["heal_die"] = primary.get("heal_die")
+    out["heal_rolls"] = primary.get("heal_rolls")
+    out["heal_modifier"] = primary.get("heal_modifier")
+    out["hp_after"] = primary["hp_after"]
+    out["heal_targets"] = heal_targets
+    out["target_id"] = primary.get("target_id")
+    out["mass"] = bool(mass)
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+    if mass:
+        out["message"] = (
+            f"Rzucasz {label} — leczysz całą drużynę "
+            f"({len(heal_targets)} sojuszników)."
+        )
+    elif str(primary.get("target_id") or "") not in ("", str(caster_comb_id)):
+        out["message"] = (
+            f"Rzucasz {label} na {primary.get('name') or 'sojusznika'} — "
+            f"leczysz {primary['healed']} HP (ma teraz {primary['hp_after']} HP)."
+        )
+    else:
+        out["message"] = (
+            f"Rzucasz {label} — leczysz {primary['healed']} HP "
+            f"(masz teraz {primary['hp_after']} HP)."
+        )
+
     _persist_combatants(conn, row, combatants)
     conn.commit()
     out["combat_state"] = load_combat_snapshot(campaign_id)
@@ -4220,6 +4332,36 @@ def _find_combatant(combatants: list[dict], cid: str) -> dict | None:
     return None
 
 
+# ── B14 (#820) — Ally-target support spells (heal/shield + mass_*/group_*) ─────
+
+def _b14_is_friendly(comb: dict | None) -> bool:
+    """True jeśli combatant jest przyjaznym slotem gracza ('player' lub 'player:N')."""
+    if not comb:
+        return False
+    cid = str(comb.get("id") or "")
+    return cid == "player" or cid.startswith("player:")
+
+
+def _b14_friendly_combatants(combatants: list[dict]) -> list[dict]:
+    """Wszyscy żywi przyjaźni kombatanci (cel `mass_*`/`group_*`)."""
+    return [
+        c for c in combatants
+        if _b14_is_friendly(c) and int(c.get("hp_current", 0) or 0) > 0
+    ]
+
+
+def _b14_comb_char_id(comb_id: str, row: Any) -> int:
+    """character_id dla przyjaznego combatanta: 'player:N'→N, 'player'→row.character_id."""
+    chid = _mp_player_char_id(str(comb_id))
+    return chid if chid is not None else int(row["character_id"])
+
+
+def _b14_is_mass_spell(spell_k: str) -> bool:
+    """Wariant grupowy rozpoznawany po prefiksie klucza (`mass_`/`group_`) — bez migracji."""
+    k = str(spell_k or "").strip().lower()
+    return k.startswith("mass_") or k.startswith("group_")
+
+
 # ── G17 (#794) — Knockdown helpers ───────────────────────────────────────────
 
 def _find_active_player_combatant(combatants: list[dict]) -> dict | None:
@@ -4914,6 +5056,10 @@ def resolve_attack(
         # G7 (#791): MP players use 'player:N' as combatant id; solo uses 'player'
         _player_comb_id = str(attacker) if _mp_ch_id is not None else "player"
 
+        # B14 (#820): zapamiętaj cel WSKAZANY przez gracza zanim _select_player_target
+        # nadpisze go celem-wrogiem (czary wsparcia kierują na przyjazny slot).
+        _b14_req_target = str(target_id) if target_id is not None else None
+
         if attacker == "player" or _mp_ch_id is not None:
             living = _living_enemy_ids(combatants)
             if not living:
@@ -5023,6 +5169,9 @@ def resolve_attack(
                 if _def_row and str(_def_row["spell_type"] or "").strip().lower() == "defense":
                     return _resolve_defense_spell_in_combat(
                         conn, row, campaign_id, ch_id, sheet, combatants, _def_row, out,
+                        caster_comb_id=_player_comb_id,
+                        requested_target_id=_b14_req_target,
+                        mass=_b14_is_mass_spell(str(_def_row["key"])),
                     )
 
             # ── B11 (#659): czar AoE (attack_aoe) — multi-target ──────────────
@@ -5051,6 +5200,9 @@ def resolve_attack(
                 if _heal_row and str(_heal_row["spell_type"] or "").strip().lower() == "heal":
                     return _resolve_heal_spell_in_combat(
                         conn, row, campaign_id, ch_id, sheet, combatants, _heal_row, out,
+                        caster_comb_id=_player_comb_id,
+                        requested_target_id=_b14_req_target,
+                        mass=_b14_is_mass_spell(str(_heal_row["key"])),
                     )
             # ─────────────────────────────────────────────────────────────────
 

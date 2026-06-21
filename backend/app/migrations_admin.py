@@ -2743,6 +2743,23 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('mass_fear',    'Fala Strachu', 3, 4, 'effect_aoe', NULL, NULL, 'WIS', 'feared',  2, 'any', 1, 'Fala pierwotnego strachu obejmuje wszystkich wrogów na polu — każdy broni się osobno (INT maga vs WIS). Przegrani wpadają w panikę (feared) i uciekają.', NULL, NULL)
     """, "v2-spells-b17-cha-control")
 
+    # ── B14 (#820): czary na SOJUSZNIKA (heal/tarcza single-ally + warianty grupowe) ──
+    # Soft-gate zdjęty przez G7 (#791): MP wstawia żywych sojuszników do turn_order jako
+    # 'player:{id}'. Silnik kieruje efekt wsparcia na WSKAZANY przyjazny slot (target_id)
+    # albo na CAŁĄ przyjazną stronę przy kluczu `group_*`/`mass_*` (wykrywany po prefiksie).
+    # Reużycie istniejących ścieżek: heal → _resolve_heal_spell_in_combat; tarcza absorpcji
+    # → _resolve_defense_spell_in_combat. effect_json niesie absorb (schemat B10, reuse).
+    # target_zone='ally'/'all_allies' = metadane modelu celowania (informacyjne dla UI).
+    # POZA ZAKRESEM (kolejne issue): haste/stoneskin_ally jako buff-kondycje na sojuszniku —
+    # dzisiejsza ścieżka 'effect' robi pojedynek przeciwny na WROGU; przyjazny buff bez rzutu
+    # wymaga nowej gałęzi (no-save friendly condition). Tu seedujemy tylko to, co silnik liczy.
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, effect_json, rank2_json, rank3_json) VALUES
+        ('group_heal',         'Leczenie Grupowe', 3, 4, 'heal',    NULL, '2d6', NULL, NULL, 1, 'all_allies', 0, 'Fala kojącej energii leczy wszystkich żywych sojuszników w drużynie jednocześnie.', NULL, NULL, NULL),
+        ('divine_shield_ally', 'Tarcza Bóstwa',    3, 3, 'defense', NULL, NULL,  NULL, NULL, 1, 'ally',       0, 'Mag otacza wybranego sojusznika świętą tarczą pochłaniającą obrażenia (absorpcja).', '{\"absorb\":6}', NULL, NULL)
+    """, "v2-spells-b14-ally-target")
+
     # ── FAZA B / B8 (#655): startowy zestaw maga L1 = fire_bolt + minor_heal +
     # ward_of_iron + detect_magic (atak/heal/obrona/utility, 4× tier 1). Dosiej
     # ten zestaw WSZYSTKIM istniejącym scholarom — NIE-destrukcyjnie (INSERT OR
