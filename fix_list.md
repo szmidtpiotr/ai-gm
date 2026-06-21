@@ -14,6 +14,8 @@ Format: `- [ ] #NNN — krótki tytuł` · `(dep: #MMM)` = zależność (rób PO
 
 **Poza zakresem (NIE implementuj):** issue `(design)` bez rozstrzygniętej decyzji A/B → GATE; `[BLOCKED]` bez odblokowania → GATE; feature z P4 bez wyraźnej prośby Piotra.
 
+**Multiplayer G1–G6 (#785–#790, sekcja PMP — autoryzowane 2026-06-21):** decyzje projektowe SĄ rozstrzygnięte (w treści issue + `game_mechanics.md` CZĘŚĆ AC, tab. G). NIE traktuj jako `(design)` GATE — wdrażaj wg analizy w issue. Fundament istnieje: `backend/app/services/multiplayer_round_service.py`, `backend/app/api/multiplayer.py`, tabele `campaign_rounds`/`campaign_round_actions`/`campaign_members`. Zależności: G1→G2→G3, G4→G5/G6 (B1 World State done). Testy MP backendowe → pytest (symuluj 2–4 graczy), nie wymagają realnego LLM dla logiki rund/timera/kicka.
+
 **Wyjątki pipeline:** brak — wszystkie FIX idą pełnym pipeline (/tdd → /code-review → /playwright-test-report).
 
 **Testy:** na Demo (user_id=1). NIGDY na Mizelu (char 999420 — postać Piotra, read-only). Backend/walkę → test lub Combat Sandbox; flow gracza → /game-test-player lub ręcznie na DEV.
@@ -168,6 +170,15 @@ Flagi: `(dep: #N)` rób PO prereq · `(design)` STOP po decyzję A/B Piotra · `
 - [ ] 57. #844 — [MOBILE][M3] Sekcja: Kuźnia (forge.js, 194K) na mobile
 - [ ] 58. #845 — [MOBILE][M4] Polish + regresja na realnym urządzeniu (Moto G32)
 - [ ] 59. #846 — [MOBILE][M5] Hex mapa — pełna obsługa dotykowa (pinch-zoom/pan/tap edycja)
+
+### PMP — Multiplayer Faza 5 (G1–G6) — wdrażanie autoryzowane 2026-06-21 (decyzje rozstrzygnięte, NIE gate)
+Fundament MP istnieje (`multiplayer_round_service.py`, `api/multiplayer.py`, `campaign_rounds`/`campaign_round_actions`/`campaign_members`). Każdy issue ma pełną analizę (Cel/Pliki/Akceptacja/Decyzje). Kolejność = zależności: G1→G2→G3, G4→G5, G4→G6 (B1 World State = done).
+- [ ] 60. #785 — G1 — Timer enforcement: background sweep ~30s w main.py domyka rundy po deadline (placeholder `[BRAK AKCJI]`)
+- [ ] 61. #786 — G2 — Absencja: licznik ostrzeżeń + reset po powrocie; 3 → propozycja vote-kick `(dep: #785)`
+- [ ] 62. #787 — G3 — Vote-to-kick ręczny (większość; host niewyrzucalny; 2-os host sam) + zastępstwo `(dep: #786)`
+- [ ] 63. #788 — G4 — World State integracja MP: jeden żeton drużyny, współdzielony stan `(dep: B1 ✅)`
+- [ ] 64. #789 — G5 — Conflict resolution: inicjatywa = kolejność; „Cel już martwy/zabrany" `(dep: #788)`
+- [ ] 65. #790 — G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą; remis → host) `(dep: #788)`
 
 ---
 
