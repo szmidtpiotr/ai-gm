@@ -158,7 +158,8 @@ def get_lobby(
 
         members = conn.execute(
             """SELECT m.user_id, u.username, u.display_name, m.role, m.status, m.character_id,
-                      COALESCE(m.absence_warnings, 0) as absence_warnings
+                      COALESCE(m.absence_warnings, 0) as absence_warnings,
+                      COALESCE(m.autopilot_consent, 0) as autopilot_consent
                FROM campaign_members m JOIN users u ON u.id=m.user_id
                WHERE m.campaign_id=?""",
             (campaign_id,),
@@ -191,6 +192,7 @@ def get_lobby(
                     "status": m["status"],
                     "character_id": m["character_id"],
                     "absence_warnings": int(m["absence_warnings"]),
+                    "autopilot_consent": bool(int(m["autopilot_consent"])),
                 }
                 for m in members
             ],
@@ -467,6 +469,38 @@ def set_spectator_policy(
         )
         conn.commit()
         return {"spectator_policy": body.policy}
+    finally:
+        conn.close()
+
+
+# G22 #803 — Autopilot consent (per-player opt-in for safe hold action on absence)
+
+class AutopilotConsentReq(BaseModel):
+    consent: bool
+
+
+@router.patch("/multiplayer/campaigns/{campaign_id}/autopilot")
+def set_autopilot_consent(
+    campaign_id: int,
+    body: AutopilotConsentReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        member = conn.execute(
+            "SELECT 1 FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, uid),
+        ).fetchone()
+        if not member:
+            raise HTTPException(status_code=403, detail="Not a member of this campaign")
+        conn.execute(
+            "UPDATE campaign_members SET autopilot_consent=? WHERE campaign_id=? AND user_id=?",
+            (1 if body.consent else 0, campaign_id, uid),
+        )
+        conn.commit()
+        return {"autopilot_consent": body.consent}
     finally:
         conn.close()
 

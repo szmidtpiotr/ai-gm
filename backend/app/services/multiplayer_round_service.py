@@ -860,6 +860,46 @@ def all_present_submitted(round_id: int, campaign_id: int, conn: sqlite3.Connect
     return online_ids.issubset(submitted_ids)
 
 
+def _promote_next_host(
+    campaign_id: int,
+    leaving_user_id: int,
+    conn: sqlite3.Connection,
+    host_note: str = "Zostałeś nowym Mistrzem Gry tej kampanii! Poprzedni gospodarz był nieobecny zbyt długo.",
+) -> dict:
+    """Transfer host to the next accepted member (excluding leaving_user_id).
+
+    G22 (#803) — shared helper for leave_campaign and sweep auto-handoff.
+    Does NOT commit; caller must commit. Returns {"new_host_id": int|None, "new_host_name": str|None}.
+    """
+    camp = conn.execute(
+        "SELECT host_user_id FROM campaigns WHERE id=?", (campaign_id,)
+    ).fetchone()
+    new_host_id = None
+    new_host_name = None
+    if camp and int(camp["host_user_id"]) == leaving_user_id:
+        next_member = conn.execute(
+            """SELECT m.user_id, u.display_name, u.username
+               FROM campaign_members m
+               JOIN users u ON u.id = m.user_id
+               WHERE m.campaign_id=? AND m.user_id!=? AND m.status='accepted'
+               ORDER BY m.id ASC LIMIT 1""",
+            (campaign_id, leaving_user_id),
+        ).fetchone()
+        if next_member:
+            new_host_id = int(next_member["user_id"])
+            new_host_name = next_member["display_name"] or next_member["username"]
+            conn.execute(
+                "UPDATE campaigns SET host_user_id=?, host_note=? WHERE id=?",
+                (new_host_id, host_note, campaign_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE campaigns SET status='inactive' WHERE id=?",
+                (campaign_id,),
+            )
+    return {"new_host_id": new_host_id, "new_host_name": new_host_name}
+
+
 def leave_campaign(campaign_id: int, user_id: int) -> dict:
     conn = _db()
     try:
@@ -867,32 +907,14 @@ def leave_campaign(campaign_id: int, user_id: int) -> dict:
             "UPDATE campaign_members SET status='left' WHERE campaign_id=? AND user_id=?",
             (campaign_id, user_id),
         )
-        camp = conn.execute(
-            "SELECT host_user_id FROM campaigns WHERE id=?", (campaign_id,)
-        ).fetchone()
-        new_host_id = None
-        new_host_name = None
-        if camp and int(camp["host_user_id"]) == user_id:
-            next_member = conn.execute(
-                """SELECT m.user_id, u.display_name, u.username
-                   FROM campaign_members m
-                   JOIN users u ON u.id = m.user_id
-                   WHERE m.campaign_id=? AND m.user_id!=? AND m.status='accepted'
-                   ORDER BY m.id ASC LIMIT 1""",
-                (campaign_id, user_id),
-            ).fetchone()
-            if next_member:
-                new_host_id = int(next_member["user_id"])
-                new_host_name = next_member["display_name"] or next_member["username"]
-                conn.execute(
-                    "UPDATE campaigns SET host_user_id=?, host_note=? WHERE id=?",
-                    (new_host_id, "Zostałeś nowym Mistrzem Gry tej kampanii! Poprzedni gospodarz opuścił sesję.", campaign_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE campaigns SET status='inactive' WHERE id=?",
-                    (campaign_id,),
-                )
+        result = _promote_next_host(
+            campaign_id,
+            user_id,
+            conn,
+            host_note="Zostałeś nowym Mistrzem Gry tej kampanii! Poprzedni gospodarz opuścił sesję.",
+        )
+        new_host_id = result["new_host_id"]
+        new_host_name = result["new_host_name"]
         conn.commit()
         try:
             from app.services.push_notification_service import send_push_to_campaign_players
@@ -999,7 +1021,8 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
             return
 
         missing = conn.execute(
-            """SELECT m.user_id, c.id as char_id, c.name as char_name
+            """SELECT m.user_id, c.id as char_id, c.name as char_name,
+                      COALESCE(m.autopilot_consent, 0) as autopilot_consent
                FROM campaign_members m
                LEFT JOIN characters c ON c.campaign_id=m.campaign_id AND c.user_id=m.user_id
                WHERE m.campaign_id=? AND m.status='accepted'
@@ -1012,17 +1035,30 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
         for m in missing:
             char_id = m["char_id"] or 0
             char_name = m["char_name"] or f"Gracz{m['user_id']}"
+            # G22 (#803) — autopilot branch: consent=1 → safe hold action; 0 → passive marker
+            action_text = (
+                "[AUTOPILOT — postać trzyma pozycję]"
+                if int(m["autopilot_consent"])
+                else "[BRAK AKCJI]"
+            )
             conn.execute(
                 """INSERT OR IGNORE INTO campaign_round_actions
                    (round_id, campaign_id, user_id, character_id, character_name, action_text)
-                   VALUES (?, ?, ?, ?, ?, '[BRAK AKCJI]')""",
-                (round_id, campaign_id, m["user_id"], char_id, char_name),
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (round_id, campaign_id, m["user_id"], char_id, char_name, action_text),
             )
             conn.execute(
                 "UPDATE campaign_members SET absence_warnings = absence_warnings + 1 "
                 "WHERE campaign_id=? AND user_id=?",
                 (campaign_id, m["user_id"]),
             )
+            # G22 (#803) — auto-handoff: absent host after >= 2 consecutive misses
+            updated = conn.execute(
+                "SELECT absence_warnings FROM campaign_members WHERE campaign_id=? AND user_id=?",
+                (campaign_id, int(m["user_id"])),
+            ).fetchone()
+            if updated and int(updated["absence_warnings"]) >= 2:
+                _promote_next_host(campaign_id, int(m["user_id"]), conn)
 
         # G30 (#801) — use validated state machine for transition
         _transition_round(conn, round_id, "collecting", "narrating")

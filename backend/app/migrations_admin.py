@@ -4905,6 +4905,20 @@ def _ensure_complete_push_sent_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_autopilot_consent_column(conn: sqlite3.Connection) -> None:
+    """#803 G22 — autopilot opt-in flag on campaign_members (0=bierny/default, 1=autopilot)."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_members ADD COLUMN autopilot_consent INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def _ensure_pending_intro_column(conn: sqlite3.Connection) -> None:
     """#798 G12 — pending_intro flag on campaign_members for narrative late-joiner introduction."""
     try:
@@ -5087,6 +5101,7 @@ def run_admin_migrations() -> None:
         _ensure_pending_intro_column(conn)  # #798 G12
         _ensure_last_seen_column(conn)  # #802 G21
         _ensure_complete_push_sent_column(conn)  # #802 G21
+        _ensure_autopilot_consent_column(conn)  # #803 G22
     finally:
         conn.close()
 
