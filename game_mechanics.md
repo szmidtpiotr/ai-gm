@@ -1059,7 +1059,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | G11 | Catch-up po powrocie (narracje pominiętych rund + sprasowane podsumowanie) | G2 |
 | G12 | Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny | G4 |
 | G13 | Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów | — |
-| G16 | Wybór postaci przy zaproszeniu + bohater w wielu kampaniach (rozwój wspólny / stan per kampania) | — |
+| G16 | Wybór postaci przy zaproszeniu + bohater w wielu kampaniach (rozwój wspólny / stan per kampania) | — | ✅ #784 `character_campaign_state` + `_save_char_sheet` + `campaign_state_service.py` |
 | G17 | Powalenie zamiast śmierci + kara wipe 10/20/30% wg poziomu (próg 50 zł, 50% HP, bezpieczny hex) | G7 |
 | G18 | Streszczenia piętrowe rund MP (warstwy 0/1/2 w DB) | — |
 | G19 | Widzowie: rola bez postaci, treści publiczne, podpowiedzi za podwójną zgodą (host + mute gracza) | — |
@@ -2939,7 +2939,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | Drużyna jako jeden żeton + catch-up po powrocie | ⚠️ historia jest, jeden-żeton/catch-up do zbudowania |
 | Konflikt współdzielonego World State | ❌ do zaprojektowania |
 | Loot per-gracz klasowy + złoto dzielone | ❌ do zbudowania |
-| Wybór postaci przy zaproszeniu + bohater w dwóch trybach (rozwój wspólny / stan per kampania) | ❌ do zbudowania (G16 — fundament modelu danych) |
+| Wybór postaci przy zaproszeniu + bohater w dwóch trybach (rozwój wspólny / stan per kampania) | ✅ zbudowane (#784 G16) — `character_campaign_state`, `campaign_state_service.py`, `_save_char_sheet` |
 | Powalenie / ocucenie / kara za wipe (10/20/30%) | ❌ do zbudowania |
 | Streszczenia piętrowe rund MP | ❌ do zbudowania |
 | Widzowie (rola, widoczność publiczna, podpowiedzi za podwójną zgodą) | ❌ do zbudowania |
@@ -3091,7 +3091,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | G11 | Catch-up po powrocie (narracje pominiętych rund + sprasowane podsumowanie) | G2 |
 | G12 | Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny | G4 |
 | G13 | Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów | — |
-| G16 | Wybór postaci przy akceptacji zaproszenia + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/umiejętności/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych | — |
+| G16 | Wybór postaci przy akceptacji zaproszenia + bohater w wielu kampaniach naraz (rozwój wspólny: poziom/XP/staty/umiejętności/złoto/ekwipunek; stan per kampania: HP/mana/kondycje/pozycja) — fundament modelu danych | — | ✅ #784 |
 | G17 | Powalenie zamiast śmierci: ocucenie (~25% HP), auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny, próg 50 złota, przebudzenie 50% HP w bezpiecznym hexie | G7 |
 | G18 | Streszczenia piętrowe rund MP (warstwy 0/1/2 w DB; kontekst narracji = rozdziały + streszczenia + świeże rundy) | — |
 | G19 | Widzowie: rola bez postaci, widoczność tylko publiczna, podpowiedzi `/whisper` za podwójną zgodą (ustawienie hosta + mute per gracz), zero dostępu LLM | — |
