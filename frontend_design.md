@@ -195,7 +195,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-34 | Picker lochów | tryb lochu | lista lochów, loading | — |
 | F-35 | Zagadka lochu | wejście do pokoju-zagadki | treść, podpowiedź, input, submit | — |
 | F-36 | Modal kafelka lochu | pierwsze wejście / klik mapy (L12b) | obraz kafelka + nazwa | — |
-| F-37 | Mapa lochu (overlay) | przycisk mapy w lochu | SVG: nieznane/aktualne/oczyszczone kafelki | — |
+| F-37 | Mapa lochu (overlay) | przycisk mapy w lochu | SVG: nieznane/aktualne/oczyszczone kafelki. #869: klik w odkryty kafel = pathfinding (BFS `dungeonBfsPath` po otwartych drzwiach, tylko visited) → auto-marsz sekwencyjny (`_dungeonAutoWalk`), narracja pośrednich tłumiona, stop na walce/zagadce/bossie/blokadzie; klik w mgłę no-op poza bezpośrednim sąsiadem (1 krok) | — |
 | F-38 | Ukończenie lochu | loch oczyszczony | łup, cooldown, "Wyjdź" | — |
 | F-39 | Śmierć w lochu (L13) | śmierć w lochu | checkpoint restore, kara XP, cooldown | — |
 | F-40 | Porzucenie lochu (L13) | próba porzucenia | potwierdzenie + info restore/cooldown | — |
