@@ -194,6 +194,16 @@ _MP_CHAPTER_SUMMARY_PROMPT = (
     "Zwróć TYLKO tekst streszczenia — bez JSON, bez markdown, bez nagłówków."
 )
 
+# G25 #806 — onboarding summary prompt for late joiners
+_MP_ONBOARDING_PROMPT = (
+    "Jesteś archiwistą kampanii RPG. Na podstawie historii i składu drużyny "
+    "napisz KRÓTKIE powitanie dla nowego gracza w 3 blokach (po polsku):\n"
+    "**Co było:** (2-3 zdania o dotychczasowej historii kampanii)\n"
+    "**Kto jest kim:** (jedna linia na postać: imię i krótka rola/archetype)\n"
+    "**Jaka stawka:** (1-2 zdania o bieżącym celu lub zagrożeniu)\n"
+    "Zwróć TYLKO tekst — z powyższymi nagłówkami, bez JSON, bez innych komentarzy."
+)
+
 # G18 #796 — number of layer-1 summaries needed before a chapter is created
 _CHAPTER_THRESHOLD = 10
 
@@ -1346,6 +1356,116 @@ def assemble_narration_context(campaign_id: int) -> str:
             parts.append("[HISTORIA — OSTATNIE RUNDY]\n\n" + "\n\n".join(raw_parts))
 
     return "\n\n---\n\n".join(parts) if parts else ""
+
+
+# ── G25 #806 — Onboarding summary for late joiners ────────────────────────────
+
+def build_onboarding_summary(campaign_id: int) -> str:
+    """G25 #806 — Build a 3-block onboarding summary for a player joining an active campaign.
+
+    Uses G18 layers (chapters layer=2 + summaries layer=1) to produce:
+    "Co było / Kto jest kim / Jaka stawka" via a single LLM call.
+
+    Returns "" when no G18 layers exist — G12 pending_intro handles the narrative intro instead.
+    """
+    conn = _db()
+    try:
+        has_layers = conn.execute(
+            "SELECT COUNT(*) FROM campaign_round_summaries WHERE campaign_id=? AND layer IN (1, 2)",
+            (campaign_id,),
+        ).fetchone()[0]
+
+        if not has_layers:
+            return ""
+
+        chapters = conn.execute(
+            "SELECT round_from, round_to, text FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=2 ORDER BY round_from",
+            (campaign_id,),
+        ).fetchall()
+
+        last_chapter_round = int(chapters[-1]["round_to"]) if chapters else 0
+
+        summaries = conn.execute(
+            "SELECT round_from, text FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=1 AND round_from>? ORDER BY round_from DESC LIMIT 3",
+            (campaign_id, last_chapter_round),
+        ).fetchall()
+
+        members = conn.execute(
+            """SELECT m.user_id, m.role, u.display_name, u.username,
+                      c.name AS char_name, c.sheet_json
+               FROM campaign_members m
+               JOIN users u ON u.id = m.user_id
+               LEFT JOIN characters c ON c.id = m.character_id
+               WHERE m.campaign_id=? AND m.status='accepted' AND m.role!='spectator'""",
+            (campaign_id,),
+        ).fetchall()
+
+        camp = conn.execute(
+            "SELECT COALESCE(gm_plan_json, '{}') AS gm_plan_json FROM campaigns WHERE id=?",
+            (campaign_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    history_parts: list = []
+    for c in chapters:
+        history_parts.append(f"[Rozdział rund {c['round_from']}–{c['round_to']}]\n{c['text']}")
+    for s in reversed(list(summaries)):
+        history_parts.append(f"[Runda {s['round_from']}] {s['text']}")
+
+    member_parts: list = []
+    for m in members:
+        char_name = m["char_name"] or m["display_name"] or m["username"]
+        try:
+            sheet = json.loads(m["sheet_json"] or "{}")
+            archetype = sheet.get("archetype", "")
+            level = sheet.get("level", 1)
+        except Exception:
+            archetype, level = "", 1
+        desc = f"- {char_name}"
+        if archetype:
+            desc += f" ({archetype} L{level})"
+        member_parts.append(desc)
+
+    stake_parts: list = []
+    try:
+        plan = json.loads(camp["gm_plan_json"]) if camp and camp["gm_plan_json"] else {}
+        for arc in plan.get("arcs", []):
+            if arc.get("status") == "active":
+                goal = arc.get("goal") or arc.get("description", "")
+                if goal:
+                    stake_parts.append(goal)
+                    break
+        if not stake_parts:
+            scene_goal = plan.get("current_scene_goal", "") or plan.get("goal", "")
+            if scene_goal:
+                stake_parts.append(scene_goal)
+    except Exception:
+        pass
+
+    user_msg = (
+        "[HISTORIA KAMPANII]\n" + "\n\n".join(history_parts)
+        if history_parts else "[HISTORIA — brak streszczeń]"
+    )
+    if member_parts:
+        user_msg += "\n\n[DRUŻYNA]\n" + "\n".join(member_parts)
+    else:
+        user_msg += "\n\n[DRUŻYNA — brak danych]"
+    if stake_parts:
+        user_msg += "\n\n[BIEŻĄCY CEL]\n" + "\n".join(stake_parts)
+
+    cfg = llm_service.get_effective_config()
+    provider = cfg["provider"]
+    if provider == "openai":
+        driver = llm_service.OpenAIDriver()
+    elif provider == "azure":
+        driver = llm_service.AzureDriver()
+    else:
+        driver = llm_service.OllamaDriver()
+
+    return _llm_call(driver, cfg, _MP_ONBOARDING_PROMPT, user_msg).strip()
 
 
 # ── G11 #797 — Catch-up po powrocie ──────────────────────────────────────────

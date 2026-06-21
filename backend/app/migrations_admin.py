@@ -5051,6 +5051,20 @@ def _ensure_pending_intro_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_onboarding_summary_column(conn: sqlite3.Connection) -> None:
+    """#806 G25 — onboarding_summary on campaign_members for late-joiner context summary."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_members ADD COLUMN onboarding_summary TEXT"
+        )
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def _ensure_character_campaign_state(conn: sqlite3.Connection) -> None:
     """#784 G16 — per-campaign battle state (HP/mana/conditions) for MP isolation."""
     conn.execute("""
@@ -5220,6 +5234,7 @@ def run_admin_migrations() -> None:
         _ensure_last_seen_column(conn)  # #802 G21
         _ensure_complete_push_sent_column(conn)  # #802 G21
         _ensure_autopilot_consent_column(conn)  # #803 G22
+        _ensure_onboarding_summary_column(conn)  # #806 G25
     finally:
         conn.close()
 

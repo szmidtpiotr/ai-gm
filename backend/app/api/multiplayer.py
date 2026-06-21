@@ -348,6 +348,25 @@ def join_via_link(
         conn.close()
 
 
+def _build_and_store_onboarding(campaign_id: int, user_id: int) -> None:
+    """G25 #806 — Background task: build onboarding summary and store in campaign_members."""
+    try:
+        from app.services.multiplayer_round_service import build_onboarding_summary
+        summary = build_onboarding_summary(campaign_id)
+        if summary:
+            conn = _db()
+            try:
+                conn.execute(
+                    "UPDATE campaign_members SET onboarding_summary=? WHERE campaign_id=? AND user_id=?",
+                    (summary, campaign_id, user_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass  # Non-critical: G12 pending_intro still provides narrative intro
+
+
 class AcceptInviteReq(BaseModel):
     character_id: Optional[int] = None
     as_spectator: bool = False
@@ -432,7 +451,44 @@ def accept_invite(
                 kwargs={"url": "/", "exclude_user_id": uid},
                 daemon=True,
             ).start()
+        # G25 #806 — build onboarding summary in background for late joiners with character
+        if camp and camp["lobby_status"] == "started" and character_id is not None:
+            threading.Thread(
+                target=_build_and_store_onboarding,
+                args=(campaign_id, uid),
+                daemon=True,
+            ).start()
         return {"status": "accepted"}
+    finally:
+        conn.close()
+
+
+# G25 #806 — Onboarding summary retrieval (one-time, cleared after read)
+
+@router.get("/multiplayer/campaigns/{campaign_id}/onboarding-summary")
+def get_onboarding_summary(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    """G25 #806 — Return the stored onboarding summary for the current user, then clear it (one-time use)."""
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        row = conn.execute(
+            "SELECT onboarding_summary FROM campaign_members WHERE campaign_id=? AND user_id=? AND status='accepted'",
+            (campaign_id, uid),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Not a member of this campaign")
+        summary = row["onboarding_summary"]
+        if summary:
+            conn.execute(
+                "UPDATE campaign_members SET onboarding_summary=NULL WHERE campaign_id=? AND user_id=?",
+                (campaign_id, uid),
+            )
+            conn.commit()
+        return {"campaign_id": campaign_id, "onboarding_summary": summary}
     finally:
         conn.close()
 
