@@ -1279,6 +1279,75 @@ def _try_shield_block_reaction(
     }
 
 
+# ─── B16 (#822): system reakcji czarów (mirror_image / blink / globe_invulnerability).
+# MVP = STAN PREWENCYJNY: czar rzucony WCZEŚNIEJ zapisuje stan na combatancie; stan
+# auto-odpala się przy NASTĘPNYM trafieniu wroga, w punkcie PRZED obrażeniami —
+# wcześniej niż okno dodge/block (negujący cios czar pomija okno reakcji). Bez
+# prawdziwego interrupt-window między turami (poza zakresem MVP).
+
+def _roll_d100() -> int:
+    """Rzut d100 (1–100) — szansa pudła `blink`. Wydzielony, by testy mogły monkeypatchować."""
+    return random.randint(1, 100)
+
+
+def _try_spell_reaction(
+    p: dict[str, Any],
+    round_n: int,
+    out: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Auto-wyzwalana czar-reakcja PRZED aplikacją obrażeń. Wołane gdy cios wroga TRAFIŁ.
+
+    Priorytet rozstrzygania: ``globe_invulnerability`` > ``mirror_image`` > ``blink``.
+    Zwraca dict ``{"type","negated":True,...}`` gdy cios ZNEGOWANY (obrażenia → 0) i zapisuje
+    go do ``out["spell_reaction"]``; zwraca ``None`` gdy żaden stan nie znegował ciosu (silnik
+    idzie normalną ścieżką dodge/block/obrażeń). Mutuje stan na combatancie:
+      • ``globe_invulnerability`` (``until_round``) — N rund nietykalności, BEZ zużycia ładunku;
+        po wygaśnięciu rund klucz usuwany.
+      • ``mirror_image`` (``charges``) — każdy cios zużywa 1 ładunek; pula 0 → klucz usuwany.
+      • ``blink`` (``miss_chance``/``until_round``) — d100 ≤ miss_chance → pudło (0 dmg); trwa do
+        końca rund (kolejne ciosy też losują); po wygaśnięciu rund klucz usuwany.
+    """
+    # 1) globe_invulnerability — okno N rund nietykalności (najwyższy priorytet)
+    globe = p.get("globe_invulnerability")
+    if isinstance(globe, dict):
+        if int(round_n) <= int(globe.get("until_round") or 0):
+            sr = {"type": "globe_invulnerability", "negated": True,
+                  "until_round": int(globe.get("until_round") or 0)}
+            out["spell_reaction"] = sr
+            return sr
+        p.pop("globe_invulnerability", None)  # wygasło
+
+    # 2) mirror_image — pula ładunków anulowania (każdy cios = -1 ładunek)
+    mi = p.get("mirror_image")
+    if isinstance(mi, dict):
+        charges = int(mi.get("charges") or 0)
+        if charges > 0:
+            charges -= 1
+            if charges > 0:
+                mi["charges"] = charges
+            else:
+                p.pop("mirror_image", None)
+            sr = {"type": "mirror_image", "negated": True, "charges_remaining": charges}
+            out["spell_reaction"] = sr
+            return sr
+        p.pop("mirror_image", None)  # pusta pula
+
+    # 3) blink — % szansy pudła przez N rund
+    bl = p.get("blink")
+    if isinstance(bl, dict):
+        if int(round_n) <= int(bl.get("until_round") or 0):
+            chance = int(bl.get("miss_chance") or 0)
+            roll = _roll_d100()
+            blinked = roll <= chance
+            sr = {"type": "blink", "negated": bool(blinked), "roll": int(roll),
+                  "miss_chance": chance, "until_round": int(bl.get("until_round") or 0)}
+            out["spell_reaction"] = sr
+            return sr if blinked else None
+        p.pop("blink", None)  # wygasło
+
+    return None
+
+
 # ─── S14 (#609): condition_immunity + broken_by — odporność na kondycje. Prymityw raz, kondycja danymi.
 
 def _condition_immunity_keys(conditions: list[dict[str, Any]]) -> set[str]:
@@ -2260,6 +2329,124 @@ def _resolve_defense_spell_in_combat(
         spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
     except Exception:
         pass
+
+    _persist_combatants(conn, row, combatants)
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
+def _resolve_reaction_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    spell_row, out: dict[str, Any], *, caster_comb_id: str = "player",
+) -> dict[str, Any]:
+    """B16 (#822): czar REAKCJI (mirror_image / blink / globe_invulnerability) w walce.
+
+    Self-buff PREWENCYJNY: zapisuje stan na combatancie rzucającego; stan auto-odpala się
+    przy następnym trafieniu wroga (``_try_spell_reaction``). Profil reakcji czytany z
+    ``effect_json.reaction``. Reguły (parytet z B10): pełna mana zdjęta (reakcja nie „pudłuje"),
+    za mało many → blocked; ZERO obrażeń wrogowi; tury NIE zaawansowujemy. Stan combat-scoped,
+    NIE stackuje (re-cast = świeży stan).
+    """
+    from app.services import spell_service
+
+    spell_k = str(spell_row["key"])
+    label = str(spell_row["label"] or spell_k)
+    mana_cost = int(spell_row["mana_cost"] or 0)
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_reaction"
+    out["spell_type"] = "reaction"
+    out["damage"] = 0  # reakcja nie zadaje obrażeń
+
+    # Profil reakcji z effect_json (osobny fetch — izolowane fikstury mogą nie mieć kolumny).
+    _ej_row = conn.execute(
+        "SELECT effect_json FROM game_config_spells WHERE key = ? AND is_active = 1",
+        (spell_k,),
+    ).fetchone()
+    try:
+        profile = json.loads(_ej_row["effect_json"]) if _ej_row and _ej_row["effect_json"] else {}
+    except (TypeError, ValueError):
+        profile = {}
+    rtype = str(profile.get("reaction") or "").strip().lower()
+
+    if rtype not in ("mirror_image", "blink", "globe", "globe_invulnerability"):
+        # Nieznany profil reakcji — łagodne odbicie, tura nietknięta (zero pustego stanu).
+        out["hit"] = False
+        out["blocked"] = True
+        out["block_reason"] = "unsupported_reaction"
+        out["message"] = f"Czar „{label}” nie jest jeszcze wspierany w walce."
+        out["combat_state"] = _row_to_combat_dict(row)
+        return out
+
+    # Mana z góry (pełny koszt; reakcja nie „pudłuje"). Darmowy czar (0) pomija kontrolę.
+    if mana_cost > 0:
+        _mana_ok, _ = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+
+    p = _find_combatant(combatants, caster_comb_id) or _find_combatant(combatants, "player")
+    if not p:
+        raise ValueError("player combatant missing")
+
+    round_n = int(row["round"] or 1)
+    if rtype == "mirror_image":
+        charges = max(1, int(profile.get("charges") or 3))
+        p["mirror_image"] = {"charges": charges}  # NIE stackuje — świeża pula
+        state = {"type": "mirror_image", "charges": charges}
+        msg = (f"Rzucasz {label} — {charges} iluzorycznych kopii odciąga ciosy "
+               f"(każde trafienie zużywa jedną kopię).")
+    elif rtype == "blink":
+        rounds = max(1, int(profile.get("rounds") or 3))
+        chance = max(0, min(100, int(profile.get("miss_chance") or 50)))
+        p["blink"] = {"miss_chance": chance, "until_round": round_n + rounds - 1}
+        state = {"type": "blink", "miss_chance": chance, "rounds": rounds}
+        msg = (f"Rzucasz {label} — migoczesz między płaszczyznami: {chance}% szansy, "
+               f"że cios przejdzie przez pustkę, przez {rounds} rund.")
+    else:  # globe / globe_invulnerability
+        rounds = max(1, int(profile.get("rounds") or 2))
+        p["globe_invulnerability"] = {"until_round": round_n + rounds - 1}
+        state = {"type": "globe_invulnerability", "rounds": rounds}
+        msg = f"Rzucasz {label} — kula nietykalności chroni cię przez {rounds} rund."
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn, combat_id=cid, campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor=str(caster_comb_id), event_type="spell_reaction",
+        roll_value=None, damage=0, hp_after=int(p.get("hp_current", 0) or 0),
+        target_id=str(p.get("id")), target_name=str(p.get("name") or "Bohater"),
+        hit=True,
+        narrative=json.dumps(
+            {"spell_key": spell_k, "spell_label": label, "mana_cost": mana_cost, **state},
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    out["hit"] = True
+    out["reaction_state"] = state
+    out["target_id"] = str(p.get("id"))
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+    out["message"] = msg
 
     _persist_combatants(conn, row, combatants)
     conn.commit()
@@ -5466,6 +5653,21 @@ def resolve_attack(
                         mass=_b14_is_mass_spell(str(_def_row["key"])),
                     )
 
+            # ── B16 (#822): czar REAKCJI (mirror_image/blink/globe) — stan prewencyjny ──
+            # Self-buff: zapisuje stan auto-wyzwalany przy następnym trafieniu wroga
+            # (_try_spell_reaction). Wykrywany PRZED ścieżką ataku (inaczej wpadał w fallback).
+            if spell_key:
+                _react_row = conn.execute(
+                    "SELECT key, label, spell_type, mana_cost, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _react_row and str(_react_row["spell_type"] or "").strip().lower() == "reaction":
+                    return _resolve_reaction_spell_in_combat(
+                        conn, row, campaign_id, ch_id, sheet, combatants, _react_row, out,
+                        caster_comb_id=_player_comb_id,
+                    )
+
             # ── B11 (#659): czar AoE (attack_aoe) — multi-target ──────────────
             # Wykrywamy PRZED ścieżką ST ataku: czar AoE uderza w WSZYSTKICH żywych
             # wrogów (aoe=1) lub maks 3 (aoe=0, chain). Reużywa tego samego d20.
@@ -6532,6 +6734,14 @@ def resolve_attack(
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
             # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
             dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+            # B16 (#822): czar-reakcja (mirror_image/blink/globe) — auto-wyzwalany stan PRZED
+            # obrażeniami, wcześniej niż okno dodge/block. Negujący cios (iluzja zjada cios /
+            # blink pudło / globe nietykalność) zeruje obrażenia i POMIJA okno reakcji
+            # (jedna reakcja/rundę). Nie-negujący blink → None → normalna ścieżka dodge/block.
+            _b16 = _try_spell_reaction(p, int(row["round"] or 1), out)
+            _b16_negated = bool(_b16 and _b16.get("negated"))
+            if _b16_negated:
+                dmg = 0
             # SF10 (#633): MODEL REAKTYWNY. Gdy gracz ma dostępną reakcję (skill/tarcza,
             # niezużytą w rundzie), NIE naliczamy obrażeń — otwieramy OKNO REAKCJI: zapisujemy
             # `pending_reaction` na combatancie i PAUZUJEMY (frontend pokaże modal Przyjmij/
@@ -6539,7 +6749,7 @@ def resolve_attack(
             # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
             _round_now = int(row["round"] or 1)
             _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
-            if _opts and not p.get("pending_reaction"):
+            if _opts and not p.get("pending_reaction") and not _b16_negated:
                 p["pending_reaction"] = {
                     "damage": int(dmg),
                     "attack_roll": int(attack_roll),
@@ -6572,21 +6782,23 @@ def resolve_attack(
                 return out
             # S15 (#610): okno reakcji — unik PRZED aplikacją obrażeń. Rzut ataku wroga już
             # rozliczony (nat 20/nat 1 nietknięte); reakcja działa tylko na obrażenia po trafieniu.
-            _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
-            if _dodge is not None:
-                out["reaction"] = _dodge
-                if _dodge.get("dodged"):
-                    dmg = 0
-            else:
-                # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
-                # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
-                # nietknięty. Crit-fail bije durability tarczy (hook czyta character_inventory).
-                _block = _try_shield_block_reaction(
-                    conn, ch_id, p, sheet, attack_roll, int(row["round"] or 1), dmg)
-                if _block is not None:
-                    out["reaction"] = _block
-                    if _block.get("available"):
-                        dmg = int(_block.get("damage_after", dmg))
+            # B16: pominięte gdy czar-reakcja już znegował cios (jedna reakcja/rundę).
+            if not _b16_negated:
+                _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
+                if _dodge is not None:
+                    out["reaction"] = _dodge
+                    if _dodge.get("dodged"):
+                        dmg = 0
+                else:
+                    # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
+                    # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
+                    # nietknięty. Crit-fail bije durability tarczy (hook czyta character_inventory).
+                    _block = _try_shield_block_reaction(
+                        conn, ch_id, p, sheet, attack_roll, int(row["round"] or 1), dmg)
+                    if _block is not None:
+                        out["reaction"] = _block
+                        if _block.get("available"):
+                            dmg = int(_block.get("damage_after", dmg))
             # #826: margines→dmg + pancerz=redukcja na obrażeniach wroga (po uniku/bloku,
             # przed absorpcją/HP). Obrona gracza = pac (AC) — już nie próg trafienia. Nat 20 wroga
             # pomija pancerz. Symetria z player→enemy (ten sam apply_defense_model).

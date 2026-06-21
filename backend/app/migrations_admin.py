@@ -2828,6 +2828,31 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-spells-b15-summons")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── B16 (#822): czary REAKCJI — stan prewencyjny auto-wyzwalany przy trafieniu ──
+    # Decyzja akceptacji #1 (MVP): STAN prewencyjny (reuse szkieletu S15/B10), NIE
+    # interrupt-window między turami (poza zakresem). spell_type='reaction'; silnik
+    # (_resolve_reaction_spell_in_combat) zapisuje stan na combatancie gracza, a
+    # _try_spell_reaction odpala go PRZED obrażeniami, wcześniej niż dodge/block.
+    # Profil reakcji w effect_json.reaction. Wartości = STARTOWE (Numbers Policy),
+    # strojone w Sandboxie. target_zone='self'. MUSI biec PO v2-spells-effect-json-col.
+    #  • mirror_image (T2) — N ŁADUNKÓW anulowania (każdy cios -1 ładunek → 0 dmg)
+    #  • blink (T3)        — % szansy pudła przez N rund (d100 ≤ miss_chance → 0 dmg)
+    #  • globe_invulnerability (T5) — N rund nietykalności (każdy cios → 0 dmg)
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, target_zone, aoe, description, effect_json) VALUES
+        ('mirror_image', 'Lustrzane Odbicie', 2, 3, 'reaction', 'self', 0,
+         'Mag tworzy iluzoryczne kopie siebie — kolejne ciosy trafiają w obrazy zamiast w maga (pula ładunków anulowania).',
+         '{\"reaction\":\"mirror_image\",\"charges\":3}'),
+        ('blink', 'Migotanie', 3, 4, 'reaction', 'self', 0,
+         'Mag migocze między płaszczyznami — przez kilka rund każdy cios ma szansę przejść przez pustkę (% pudła).',
+         '{\"reaction\":\"blink\",\"miss_chance\":50,\"rounds\":3}'),
+        ('globe_invulnerability', 'Kula Niewrażliwości', 5, 6, 'reaction', 'self', 0,
+         'Mag otacza się kulą absolutnej nietykalności — przez kilka rund żadne obrażenia go nie dosięgną.',
+         '{\"reaction\":\"globe_invulnerability\",\"rounds\":2}')
+    """, "v2-spells-b16-reactions")
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── Knowledge Book (tips shown during travel/rest) ───────────────────────
     _exec("""
         ALTER TABLE character_spells ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0
