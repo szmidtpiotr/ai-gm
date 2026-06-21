@@ -27,6 +27,9 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
+      # #866 — public base URL for email links (invite / verify / reset).
+      # Without it invite_link is relative → mail clients render http:///register (empty host).
+      - APP_BASE_URL=${APP_BASE_URL:-https://aigm.studio-colorbox.com}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm.db}
       - ADMIN_IMPORT_BACKUP_DIR=${ADMIN_IMPORT_BACKUP_DIR:-/backups/imports}
     extra_hosts:
