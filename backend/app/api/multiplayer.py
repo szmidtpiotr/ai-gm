@@ -949,6 +949,18 @@ def get_rounds_history(
     return {"rounds": rounds}
 
 
+# ── G11 #797 — Catch-up po powrocie ──────────────────────────────────────────
+
+@router.get("/campaigns/{campaign_id}/catchup")
+def get_catchup(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    return svc.get_catchup(campaign_id, uid)
+
+
 # ── G6 #790 — Party hex-move voting ───────────────────────────────────────────
 
 class MoveVoteReq(BaseModel):

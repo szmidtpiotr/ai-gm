@@ -978,6 +978,77 @@ def assemble_narration_context(campaign_id: int) -> str:
     return "\n\n---\n\n".join(parts) if parts else ""
 
 
+# ── G11 #797 — Catch-up po powrocie ──────────────────────────────────────────
+
+def get_catchup(campaign_id: int, user_id: int) -> dict:
+    """G11 #797 — Return tail of missed rounds since last presence + reset absence warnings.
+
+    Missed rounds = tail of done rounds where player had no action or '[BRAK AKCJI]'.
+    Resets absence_warnings to 0 for this player on retrieval.
+    Returns: {missed_rounds: [...], summary_line: str, absence_warnings_reset: bool}
+    """
+    conn = _db()
+    try:
+        rounds = conn.execute(
+            "SELECT id, round_number, narrative_json FROM campaign_rounds "
+            "WHERE campaign_id=? AND status='done' ORDER BY round_number",
+            (campaign_id,),
+        ).fetchall()
+
+        if not rounds:
+            conn.execute(
+                "UPDATE campaign_members SET absence_warnings = 0 WHERE campaign_id=? AND user_id=?",
+                (campaign_id, user_id),
+            )
+            conn.commit()
+            return {"missed_rounds": [], "summary_line": "", "absence_warnings_reset": True}
+
+        # Determine presence per round
+        presence = []
+        for r in rounds:
+            action = conn.execute(
+                "SELECT action_text FROM campaign_round_actions WHERE round_id=? AND user_id=?",
+                (int(r["id"]), user_id),
+            ).fetchone()
+            was_present = action is not None and action["action_text"] != "[BRAK AKCJI]"
+            presence.append((r, was_present))
+
+        # Find tail: all rounds after last presence index
+        last_present_idx = -1
+        for i, (_r, present) in enumerate(presence):
+            if present:
+                last_present_idx = i
+
+        missed = []
+        for i in range(last_present_idx + 1, len(presence)):
+            r, _present = presence[i]
+            if not r["narrative_json"]:
+                continue
+            data = json.loads(r["narrative_json"])
+            missed.append({
+                "round_id": int(r["id"]),
+                "round_number": int(r["round_number"]),
+                "narrative": data.get("narrative", ""),
+            })
+
+        if missed:
+            count = len(missed)
+            nums = ", ".join(str(rd["round_number"]) for rd in missed)
+            word = "rundę" if count == 1 else "rundy" if count < 5 else "rund"
+            summary_line = f"Pod twoją nieobecność rozegrano {count} {word} ({nums})."
+        else:
+            summary_line = ""
+
+        conn.execute(
+            "UPDATE campaign_members SET absence_warnings = 0 WHERE campaign_id=? AND user_id=?",
+            (campaign_id, user_id),
+        )
+        conn.commit()
+        return {"missed_rounds": missed, "summary_line": summary_line, "absence_warnings_reset": True}
+    finally:
+        conn.close()
+
+
 def get_rounds_history(campaign_id: int, user_id: int) -> list:
     """Return all completed rounds with actions + narration for full chat restore."""
     conn = _db()
