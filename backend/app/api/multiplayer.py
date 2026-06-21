@@ -397,23 +397,15 @@ def accept_invite(
         joining_name = conn.execute(
             "SELECT display_name, username FROM users WHERE id=?", (uid,)
         ).fetchone()
-        existing = conn.execute(
-            """SELECT u.display_name, u.username FROM campaign_members m
-               JOIN users u ON u.id = m.user_id
-               WHERE m.campaign_id=? AND m.user_id!=? AND m.status='accepted'""",
-            (campaign_id, uid),
-        ).fetchall()
+        # G12 #798 — mark late joiner for intro only when character is already selected
+        if camp and camp["lobby_status"] == "started" and character_id is not None:
+            conn.execute(
+                "UPDATE campaign_members SET pending_intro=1 WHERE campaign_id=? AND user_id=?",
+                (campaign_id, uid),
+            )
         conn.commit()
-        # Fire arrival narration if joining a started campaign
         if camp and camp["lobby_status"] == "started" and joining_name:
             new_name = joining_name["display_name"] or joining_name["username"]
-            existing_names = [(r["display_name"] or r["username"]) for r in existing]
-            campaign_title = camp["title"]
-            threading.Thread(
-                target=_narrate_arrival,
-                args=(campaign_id, new_name, existing_names, campaign_title),
-                daemon=True,
-            ).start()
             from app.services.push_notification_service import send_push_to_campaign_players
             threading.Thread(
                 target=send_push_to_campaign_players,
@@ -424,65 +416,6 @@ def accept_invite(
         return {"status": "accepted"}
     finally:
         conn.close()
-
-
-_ARRIVAL_SYSTEM = (
-    "Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym świecie fantasy. "
-    "Odpowiadasz WYŁĄCZNIE po polsku. Narruj w TRZECIEJ osobie. "
-    'Odpowiedź MUSI być poprawnym JSON: {"narrative": "narracja przybycia postaci"}'
-)
-
-
-def _narrate_arrival(campaign_id: int, new_player: str, existing: list, title: str) -> None:
-    from app.services import llm_service
-
-    others = ", ".join(existing) if existing else "grupą podróżnych"
-    user_msg = (
-        f"Kampania: {title}\n"
-        f"Drużyna w grze: {others}\n"
-        f"Dołącza nowy gracz: {new_player}\n\n"
-        "Napisz krótką narrację (2-3 zdania) opisującą jak ta postać dołącza do drużyny — "
-        "przypadkowe spotkanie na drodze, w karczmie, otwarcie celi więziennej, wspólna ucieczka itp. "
-        "Narruj naturalnie, jakby to był zbieg okoliczności lub przeznaczenie."
-    )
-    try:
-        cfg = llm_service.get_effective_config()
-        provider = cfg["provider"]
-        if provider == "openai":
-            driver = llm_service.OpenAIDriver()
-        elif provider == "azure":
-            driver = llm_service.AzureDriver()
-        else:
-            driver = llm_service.OllamaDriver()
-        raw = driver.generate_chat(
-            base_url=cfg["base_url"],
-            model=cfg["model"],
-            messages=[
-                {"role": "system", "content": _ARRIVAL_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
-            api_key=cfg.get("api_key", ""),
-        )
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        parsed = json.loads(clean)
-    except Exception as e:
-        logger.error("arrival_narration_failed", campaign_id=campaign_id, error=str(e)[:200])
-        parsed = {"narrative": f"{new_player} dołącza do drużyny, gotowy na nadchodzące przygody."}
-
-    conn = _db()
-    try:
-        conn.execute(
-            """INSERT OR IGNORE INTO campaign_rounds (campaign_id, round_number, status, narrative_json, closed_at)
-               VALUES (?, (SELECT COALESCE(MAX(round_number), 0)+1 FROM campaign_rounds WHERE campaign_id=?),
-                       'done', ?, datetime('now'))""",
-            (campaign_id, campaign_id, json.dumps(parsed, ensure_ascii=False)),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    logger.info("arrival_narration_done", campaign_id=campaign_id, new_player=new_player)
 
 
 @router.post("/multiplayer/campaigns/{campaign_id}/leave")

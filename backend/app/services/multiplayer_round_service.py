@@ -405,6 +405,16 @@ def trigger_narration(round_id: int) -> None:
             char_id = int(a["character_id"]) if a["character_id"] else 0
             if char_id and char_name not in char_sheets:
                 char_sheets[char_name] = _load_character_sheet(char_id, conn)
+
+        # G12 #798 — load late joiners that need narrative introduction this round
+        # user_id captured here so the clear is scoped exactly to this snapshot (no race with later joiners)
+        pending_intro_rows = conn.execute(
+            """SELECT m.user_id, c.name as char_name, c.sheet_json
+               FROM campaign_members m
+               JOIN characters c ON c.id = m.character_id
+               WHERE m.campaign_id=? AND m.pending_intro=1 AND m.status='accepted'""",
+            (campaign_id,),
+        ).fetchall()
     finally:
         conn.close()
 
@@ -463,10 +473,34 @@ def trigger_narration(round_id: int) -> None:
         logger.warning("mp_assemble_context_failed", campaign_id=campaign_id, error=str(e)[:100])
         history_ctx = ""
 
+    # G12 #798 — build one-time late joiner cue for LLM narrator
+    intro_block = ""
+    if pending_intro_rows:
+        intro_names = []
+        for p in pending_intro_rows:
+            archetype = ""
+            try:
+                sheet = json.loads(p["sheet_json"] or "{}")
+                archetype = sheet.get("archetype", "")
+            except Exception:
+                pass
+            desc = p["char_name"]
+            if archetype:
+                desc += f" ({archetype})"
+            intro_names.append(desc)
+        intro_block = (
+            "[NOWY CZŁONEK DRUŻYNY]\n"
+            "Do drużyny właśnie dołącza: " + ", ".join(intro_names) + ". "
+            "Wprowadź tę postać fabularnie do narracji tej rundy — "
+            "np. spotkanie na trakcie, w karczmie, lub szczęśliwy zbieg okoliczności. "
+            "Wpleć dołączenie naturalnie, nie przerywając narracji akcji.\n\n"
+        )
+
     actions_header = (
         (f"{history_ctx}\n\n" if history_ctx else "")
         + f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
         + f"{ws_context}"
+        + f"{intro_block}"
         + f"{actions_block}"
     )
 
@@ -558,6 +592,15 @@ def trigger_narration(round_id: int) -> None:
             "UPDATE campaign_rounds SET status='done', narrative_json=? WHERE id=?",
             (json.dumps(parsed, ensure_ascii=False), round_id),
         )
+        # G12 #798 — clear pending_intro flags only for the snapshot captured at narration start
+        # (scoped by user_id to avoid wiping later joiners who joined during the LLM call)
+        if pending_intro_rows:
+            intro_user_ids = [int(r["user_id"]) for r in pending_intro_rows]
+            placeholders = ",".join("?" * len(intro_user_ids))
+            conn.execute(
+                f"UPDATE campaign_members SET pending_intro=0 WHERE campaign_id=? AND user_id IN ({placeholders})",
+                [campaign_id] + intro_user_ids,
+            )
         conn.commit()
     finally:
         conn.close()

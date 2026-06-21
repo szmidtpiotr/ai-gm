@@ -4879,6 +4879,20 @@ def _ensure_combat_turn_deadline_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_pending_intro_column(conn: sqlite3.Connection) -> None:
+    """#798 G12 — pending_intro flag on campaign_members for narrative late-joiner introduction."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_members ADD COLUMN pending_intro INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def _ensure_character_campaign_state(conn: sqlite3.Connection) -> None:
     """#784 G16 — per-campaign battle state (HP/mana/conditions) for MP isolation."""
     conn.execute("""
@@ -5044,6 +5058,7 @@ def run_admin_migrations() -> None:
         _ensure_move_votes_table(conn)  # #790 G6
         _ensure_party_hex_columns(conn)  # #790 G6
         _ensure_combat_turn_deadline_column(conn)  # #793 G9
+        _ensure_pending_intro_column(conn)  # #798 G12
     finally:
         conn.close()
 
