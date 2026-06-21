@@ -238,7 +238,7 @@ await browser.close();
 - [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
 - [ ] G17 — Powalenie zamiast śmierci: ocucenie ~25% HP, auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny (próg 50 zł, przebudzenie 50% HP w bezpiecznym hexie; nigdy przedmioty/XP)
 - [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
-- [ ] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB)
+- [x] G18 — Streszczenia piętrowe rund MP (świeże rundy → streszczenia rund → rozdziały co ~10 rund; w DB) [#796](https://github.com/szmidtpiotr/ai-gm/issues/796) — wdrożone 2026-06-21, pytest 10/10 ✅, raport: https://github.com/szmidtpiotr/ai-gm/issues/796#issuecomment-4762460274
 - [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
 - [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
 - [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów

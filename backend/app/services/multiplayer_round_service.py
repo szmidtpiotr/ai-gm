@@ -172,6 +172,24 @@ Odpowiedź MUSI być poprawnym JSON:
 - Nie powtarzaj opisów otoczenia — tylko zmiany i nowe akcje.
 """
 
+# G18 #796 — prompts for tiered summary generation
+_MP_ROUND_SUMMARY_PROMPT = (
+    "Jesteś archiwistą kampanii RPG. Na podstawie akcji graczy i narracji GM "
+    "napisz KRÓTKIE streszczenie rundy (2–4 zdania, po polsku): kto co zrobił, "
+    "jaki był efekt, co zmieniło się w świecie. "
+    "Zwróć TYLKO tekst streszczenia — bez JSON, bez markdown, bez nagłówków."
+)
+
+_MP_CHAPTER_SUMMARY_PROMPT = (
+    "Jesteś archiwistą kampanii RPG. Poniżej podano streszczenia kolejnych rund. "
+    "Napisz streszczenie rozdziału (4–6 zdań, po polsku): wspólny wątek, "
+    "kluczowe momenty, zmiany w świecie i postaciach. "
+    "Zwróć TYLKO tekst streszczenia — bez JSON, bez markdown, bez nagłówków."
+)
+
+# G18 #796 — number of layer-1 summaries needed before a chapter is created
+_CHAPTER_THRESHOLD = 10
+
 
 def _db() -> sqlite3.Connection:
     conn = sqlite3.connect(resolve_db_path())
@@ -437,10 +455,19 @@ def trigger_narration(round_id: int) -> None:
         action_lines.append(line)
 
     actions_block = "\n".join(action_lines)
+
+    # G18 #796 — prepend layered history so LLM gets compact context regardless of round count
+    try:
+        history_ctx = assemble_narration_context(campaign_id)
+    except Exception as e:
+        logger.warning("mp_assemble_context_failed", campaign_id=campaign_id, error=str(e)[:100])
+        history_ctx = ""
+
     actions_header = (
-        f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
-        f"{ws_context}"
-        f"{actions_block}"
+        (f"{history_ctx}\n\n" if history_ctx else "")
+        + f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
+        + f"{ws_context}"
+        + f"{actions_block}"
     )
 
     try:
@@ -536,6 +563,15 @@ def trigger_narration(round_id: int) -> None:
         conn.close()
 
     logger.info("multiplayer_narration_done", round_id=round_id, campaign_id=campaign_id)
+
+    # G18 #796 — generate layer-1 summary for this round in background
+    narrative_text = parsed.get("narrative", "")
+    import threading as _threading
+    _threading.Thread(
+        target=_generate_round_summary_layer1,
+        args=(campaign_id, round_id, round_number, narrative_text, actions_block),
+        daemon=True,
+    ).start()
 
     # G4 #788 — persist shared world state snapshot after narration (one token per campaign)
     try:
@@ -772,6 +808,174 @@ def _close_expired_round(round_id: int, campaign_id: int) -> None:
 
     logger.info("sweep_round_closed", round_id=round_id, campaign_id=campaign_id)
     threading.Thread(target=trigger_narration, args=(round_id,), daemon=True).start()
+
+
+# ── G18 #796 — Tiered MP round summaries ─────────────────────────────────────
+
+def _generate_round_summary_layer1(
+    campaign_id: int,
+    round_id: int,
+    round_number: int,
+    narrative: str,
+    actions_block: str,
+) -> None:
+    """Generate and persist a layer-1 summary for a just-closed round (background-safe)."""
+    try:
+        cfg = llm_service.get_effective_config()
+        provider = cfg["provider"]
+        if provider == "openai":
+            driver = llm_service.OpenAIDriver()
+        elif provider == "azure":
+            driver = llm_service.AzureDriver()
+        else:
+            driver = llm_service.OllamaDriver()
+
+        user_msg = (
+            f"[RUNDA {round_number} — AKCJE GRACZY]\n{actions_block}"
+            f"\n\n[NARRACJA GM]\n{narrative}"
+        )
+        text = _llm_call(driver, cfg, _MP_ROUND_SUMMARY_PROMPT, user_msg).strip()
+
+        conn = _db()
+        try:
+            conn.execute(
+                "INSERT INTO campaign_round_summaries "
+                "(campaign_id, layer, round_from, round_to, text) VALUES (?, 1, ?, ?, ?)",
+                (campaign_id, round_number, round_number, text),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        maybe_roll_chapter(campaign_id)
+    except Exception as e:
+        logger.warning(
+            "mp_round_summary_layer1_failed",
+            campaign_id=campaign_id,
+            round_id=round_id,
+            error=str(e)[:200],
+        )
+
+
+def maybe_roll_chapter(campaign_id: int) -> None:
+    """Compress ≥_CHAPTER_THRESHOLD uncovered layer-1 summaries into a layer-2 chapter."""
+    conn = _db()
+    try:
+        last_chapter = conn.execute(
+            "SELECT MAX(round_to) AS last_round FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=2",
+            (campaign_id,),
+        ).fetchone()
+        last_chapter_round = int(last_chapter["last_round"]) if last_chapter and last_chapter["last_round"] else 0
+
+        uncovered = conn.execute(
+            "SELECT id, round_from, round_to, text FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=1 AND round_from > ? ORDER BY round_from",
+            (campaign_id, last_chapter_round),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if len(uncovered) < _CHAPTER_THRESHOLD:
+        return
+
+    batch = list(uncovered)[:_CHAPTER_THRESHOLD]
+    round_from = int(batch[0]["round_from"])
+    round_to = int(batch[-1]["round_to"])
+    combined = "\n\n".join(f"[Runda {r['round_from']}] {r['text']}" for r in batch)
+
+    try:
+        cfg = llm_service.get_effective_config()
+        provider = cfg["provider"]
+        if provider == "openai":
+            driver = llm_service.OpenAIDriver()
+        elif provider == "azure":
+            driver = llm_service.AzureDriver()
+        else:
+            driver = llm_service.OllamaDriver()
+
+        chapter_text = _llm_call(driver, cfg, _MP_CHAPTER_SUMMARY_PROMPT, combined).strip()
+    except Exception as e:
+        logger.warning(
+            "mp_chapter_summary_failed",
+            campaign_id=campaign_id,
+            round_from=round_from,
+            round_to=round_to,
+            error=str(e)[:200],
+        )
+        return
+
+    conn = _db()
+    try:
+        conn.execute(
+            "INSERT INTO campaign_round_summaries "
+            "(campaign_id, layer, round_from, round_to, text) VALUES (?, 2, ?, ?, ?)",
+            (campaign_id, round_from, round_to, chapter_text),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def assemble_narration_context(campaign_id: int) -> str:
+    """Return layered history string: chapters (layer 2) → summaries (layer 1) → last 3 raw rounds (layer 0).
+
+    Called at the start of trigger_narration so the LLM gets compact history
+    regardless of how many rounds have accumulated.
+    """
+    conn = _db()
+    try:
+        chapters = conn.execute(
+            "SELECT round_from, round_to, text FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=2 ORDER BY round_from",
+            (campaign_id,),
+        ).fetchall()
+
+        last_chapter_round = int(chapters[-1]["round_to"]) if chapters else 0
+
+        summaries = conn.execute(
+            "SELECT round_from, text FROM campaign_round_summaries "
+            "WHERE campaign_id=? AND layer=1 AND round_from > ? ORDER BY round_from",
+            (campaign_id, last_chapter_round),
+        ).fetchall()
+
+        raw_rounds = conn.execute(
+            "SELECT round_number, narrative_json FROM campaign_rounds "
+            "WHERE campaign_id=? AND status='done' ORDER BY round_number DESC LIMIT 3",
+            (campaign_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    parts = []
+
+    if chapters:
+        chapter_parts = [
+            f"[Rozdział rund {c['round_from']}–{c['round_to']}]\n{c['text']}"
+            for c in chapters
+        ]
+        parts.append("[HISTORIA — ROZDZIAŁY]\n" + "\n\n".join(chapter_parts))
+
+    if summaries:
+        summary_parts = [f"[Runda {s['round_from']}] {s['text']}" for s in summaries]
+        parts.append("[HISTORIA — STRESZCZENIA RUND]\n" + "\n".join(summary_parts))
+
+    if raw_rounds:
+        raw_parts = []
+        for r in reversed(list(raw_rounds)):
+            if not r["narrative_json"]:
+                continue
+            try:
+                data = json.loads(r["narrative_json"])
+                narrative = data.get("narrative", "")
+                if narrative:
+                    raw_parts.append(f"[Runda {r['round_number']} — narracja]\n{narrative}")
+            except Exception:
+                pass
+        if raw_parts:
+            parts.append("[HISTORIA — OSTATNIE RUNDY]\n\n" + "\n\n".join(raw_parts))
+
+    return "\n\n---\n\n".join(parts) if parts else ""
 
 
 def get_rounds_history(campaign_id: int, user_id: int) -> list:
