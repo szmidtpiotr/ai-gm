@@ -815,3 +815,104 @@ def get_move_vote_status(campaign_id: int) -> dict:
         }
     finally:
         conn.close()
+
+
+# ── G7 (#791) — MP Combat ────────────────────────────────────────────────────
+
+def start_mp_combat(campaign_id: int, enemy_keys: list) -> dict:
+    """G7 (#791) — Start MP combat for all campaign members.
+
+    Collects character_ids of all accepted members with a character, then delegates
+    to combat_service.initiate_combat_mp which builds the full sequential turn_order.
+    """
+    conn = _db()
+    try:
+        rows = conn.execute(
+            "SELECT character_id FROM campaign_members "
+            "WHERE campaign_id=? AND status='accepted' AND character_id IS NOT NULL",
+            (campaign_id,),
+        ).fetchall()
+        character_ids = [int(r["character_id"]) for r in rows]
+    finally:
+        conn.close()
+
+    if not character_ids:
+        raise ValueError("no characters in campaign for MP combat")
+
+    from app.services.combat_service import initiate_combat_mp
+    return initiate_combat_mp(campaign_id, character_ids, list(enemy_keys))
+
+
+def submit_mp_combat_action(
+    campaign_id: int,
+    user_id: int,
+    character_id: int,
+    action_type: str,
+    target_id: str | None = None,
+    spell_key: str | None = None,
+    raw_d20: int | None = None,
+    roll_result: int | None = None,
+) -> dict:
+    """G7 (#791) — Player submits a combat action in MP sequential combat.
+
+    After the player's action, enemy actors in turn_order are auto-resolved immediately
+    until the next human player slot is reached.
+
+    action_type: 'attack' | 'spell' | 'defense'
+    """
+    from app.services.combat_service import (
+        get_active_combat, advance_turn, apply_mp_default_defense,
+        resolve_attack,
+    )
+
+    actor_id = f"player:{character_id}"
+    snap = get_active_combat(campaign_id)
+    if not snap:
+        raise ValueError("no active combat for campaign")
+    if snap["current_turn"] != actor_id:
+        raise ValueError(f"not {actor_id}'s turn (current: {snap['current_turn']})")
+
+    enemy_results: list[dict] = []
+
+    if action_type == "defense":
+        result = apply_mp_default_defense(campaign_id, character_id)
+        player_result = result
+    else:
+        result = resolve_attack(
+            campaign_id=campaign_id,
+            roll_result=roll_result,
+            attacker=actor_id,
+            raw_d20=raw_d20,
+            spell_key=spell_key,
+            target_id=target_id,
+        )
+        player_result = result
+        # Advance turn after player action (unless already advanced via loot/end)
+        current_snap = get_active_combat(campaign_id)
+        if current_snap and current_snap["status"] == "active" and current_snap["current_turn"] == actor_id:
+            advance_turn(campaign_id)
+
+    # Auto-resolve enemy/NPC turns immediately until next human player turn
+    MAX_AUTO = 20
+    for _ in range(MAX_AUTO):
+        current_snap = get_active_combat(campaign_id)
+        if not current_snap or current_snap["status"] != "active":
+            break
+        cur = str(current_snap["current_turn"])
+        # Stop at any human player slot
+        if cur.startswith("player:"):
+            break
+        # Enemy turn — auto resolve
+        enemy_r = resolve_attack(campaign_id, 0, attacker="enemy")
+        enemy_results.append(enemy_r)
+        # Advance to next turn (resolve_attack doesn't advance for enemies)
+        snap_after = get_active_combat(campaign_id)
+        if snap_after and snap_after["status"] == "active" and snap_after["current_turn"] == cur:
+            advance_turn(campaign_id)
+
+    final_snap = get_active_combat(campaign_id)
+    return {
+        "player_result": player_result,
+        "enemy_results": enemy_results,
+        "combat_state": final_snap,
+    }

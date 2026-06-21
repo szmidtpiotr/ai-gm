@@ -4077,6 +4077,227 @@ def _find_combatant(combatants: list[dict], cid: str) -> dict | None:
     return None
 
 
+# ── G7 (#791) — Multiplayer combat helpers ────────────────────────────────────
+
+def _mp_player_char_id(actor_id: str) -> int | None:
+    """Extract character_id from 'player:N' format. Returns None for plain 'player'."""
+    if not isinstance(actor_id, str) or not actor_id.startswith("player:"):
+        return None
+    try:
+        return int(actor_id.split(":", 1)[1])
+    except (ValueError, IndexError):
+        return None
+
+
+def initiate_combat_mp(
+    campaign_id: int,
+    character_ids: list[int],
+    enemy_keys: list[str],
+) -> dict[str, Any]:
+    """G7 (#791) — Start MP combat with all players in turn_order as 'player:{character_id}'.
+
+    Each player gets a separate combatant slot with their own HP/stats from sheet.
+    active_combat.character_id stores character_ids[0] for schema compatibility.
+    """
+    if not character_ids:
+        raise ValueError("character_ids required for MP combat")
+    if not enemy_keys:
+        raise ValueError("enemy_keys required")
+
+    with _conn() as conn:
+        camp = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not camp:
+            raise ValueError("campaign not found")
+
+        combatants: list[dict[str, Any]] = []
+        turn_slots: list[tuple[str, int, int]] = []
+
+        # Build player combatants
+        for idx, ch_id in enumerate(character_ids):
+            ch = conn.execute(
+                "SELECT id, name, sheet_json FROM characters WHERE id = ?",
+                (ch_id,),
+            ).fetchone()
+            if not ch:
+                logger.warning("mp_combat_character_missing", character_id=ch_id)
+                continue
+
+            sheet = parse_character_sheet(ch["sheet_json"])
+            from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov_sc
+            _ov_sc(conn, campaign_id, int(ch_id), sheet)
+
+            hp_cur, hp_max = _player_hp_pair(sheet)
+            ac = _player_ac_from_sheet(sheet)
+            dex_mod = _stat_mod(sheet, "DEX")
+            init_roll = roll_d20() + dex_mod
+            ability_stats = _ability_stats_seven(sheet)
+
+            # Apply weapon AC bonus (same as solo)
+            _wrow = resolve_sheet_weapon(conn, sheet, int(ch_id))
+            _wac = _weapon_ac_bonus(_wrow)
+            if _wac:
+                ac += _wac
+            _aac = _inventory_affix_ac_bonus(conn, int(ch_id))
+            if _aac:
+                ac += _aac
+
+            actor_id = f"player:{ch_id}"
+            combatants.append({
+                "id": actor_id,
+                "type": "player",
+                "name": (ch["name"] or "Hero").strip(),
+                "hp_current": hp_cur,
+                "hp_max": hp_max,
+                "defense": ac,
+                "stats": ability_stats,
+                "initiative_roll": init_roll,
+                "conditions": _sheet_conditions(sheet),
+                "zone": _default_zone_for_player(sheet),
+            })
+            # Tie-break: lower list index wins (first player in list wins ties)
+            turn_slots.append((actor_id, init_roll, idx))
+
+        if not combatants:
+            raise ValueError("no valid characters for MP combat")
+
+        primary_ch_id = character_ids[0]
+
+        # Build enemy combatants (same logic as initiate_combat)
+        resolved_enemies: list[tuple[str, sqlite3.Row]] = []
+        for ek in enemy_keys:
+            er = _fetch_enemy_row(conn, ek)
+            if not er:
+                er = _create_pending_combat_enemy(conn, ek)
+                if not er:
+                    continue
+            resolved_enemies.append((ek, er))
+
+        if not resolved_enemies:
+            raise ValueError("no valid enemy keys after filtering")
+
+        e_idx = 0
+        for ek, er in resolved_enemies:
+            e_idx += 1
+            slug = _enemy_slug(ek, e_idx)
+            hp_max_e = int(er["hp_base"] or 1)
+            ac_e = int(er["ac_base"] or 10)
+            atk = int(er["attack_bonus"] or 0)
+            dmg_dice = str(er["damage_die"] or "1d6").strip().lower()
+            dex_e_mod = int(er["dex_modifier"] or 0)
+            init_e = roll_d20() + dex_e_mod
+            xp_e = int(er["xp_award"] or 0) if "xp_award" in er.keys() else 0
+            combatants.append({
+                "id": slug,
+                "type": "enemy",
+                "enemy_key": er["key"],
+                "name": (er["label"] or er["key"]).strip(),
+                "hp_current": hp_max_e,
+                "hp_max": hp_max_e,
+                "defense": ac_e,
+                "attack_bonus": atk,
+                "dex_modifier": dex_e_mod,
+                "damage_dice": dmg_dice,
+                "damage_stat": "STR",
+                "attacks_per_turn": int((er["attacks_per_turn"] if "attacks_per_turn" in er.keys() else 1) or 1),
+                "initiative_roll": init_e,
+                "conditions": [],
+                "loot_table_key": er["loot_table_key"],
+                "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
+                "xp_award": xp_e,
+                "tier": str(er["tier"] or "standard"),
+                "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
+                "zone": _default_zone_for_enemy(er["key"], er["label"]),
+                "skills": _parse_enemy_skills(er["skills_json"]),
+                "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
+                "image_url": er["image_url"] if "image_url" in er.keys() else None,
+            })
+            turn_slots.append((slug, init_e, 1000 + e_idx))
+
+        # Sort by initiative DESC; among equal, players before enemies
+        turn_slots.sort(key=lambda t: (-t[1], t[2]))
+        turn_order = [t[0] for t in turn_slots]
+        current = turn_order[0] if turn_order else f"player:{primary_ch_id}"
+
+        conn.execute("DELETE FROM active_combat WHERE campaign_id = ?", (campaign_id,))
+        _save_combat_row(
+            conn,
+            campaign_id,
+            character_id=primary_ch_id,
+            round_n=1,
+            turn_order=turn_order,
+            current_turn=current,
+            combatants=combatants,
+            status="active",
+        )
+        conn.commit()
+
+        id_row = conn.execute("SELECT id FROM active_combat WHERE campaign_id = ?", (campaign_id,)).fetchone()
+        if id_row:
+            combat_id_int = int(id_row["id"])
+            log_combat_turn(conn, combat_id=combat_id_int, campaign_id=campaign_id,
+                            turn_number=0.0, actor="system", event_type="start",
+                            narrative=f"Walka MP rozpoczęta. Gracze: {len(combatants) - len(resolved_enemies)}, "
+                                      f"wrogowie: {', '.join(k for k, _ in resolved_enemies)}")
+            for actor_id, init_total, _tie in turn_slots:
+                tn = _next_combat_log_sequence(conn, combat_id_int)
+                log_combat_turn(conn, combat_id=combat_id_int, campaign_id=campaign_id,
+                                turn_number=tn, actor=str(actor_id), event_type="initiative",
+                                roll_value=int(init_total),
+                                narrative=f"Inicjatywa MP: {actor_id} → {int(init_total)}")
+        conn.commit()
+
+    out = get_active_combat(campaign_id)
+    if not out:
+        raise RuntimeError("failed to load MP combat after insert")
+
+    logger.info("mp_combat_start", campaign_id=campaign_id,
+                players=character_ids, enemies=[k for k, _ in resolved_enemies])
+    return out
+
+
+def apply_mp_default_defense(campaign_id: int, character_id: int) -> dict[str, Any]:
+    """G7 (#791) — Timeout action: player defends in place, turn advances.
+
+    Hero stays in initiative order and can still take damage from enemies on their turn.
+    This prevents the anti-exploit 'go AFK to avoid dying'.
+    """
+    actor_id = f"player:{character_id}"
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != actor_id:
+            raise ValueError(f"not {actor_id}'s turn (current: {row['current_turn']})")
+
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        p = _find_combatant(combatants, actor_id)
+        if not p:
+            raise ValueError(f"combatant {actor_id} not found")
+
+        combat_id_int = int(row["id"])
+        tn = _next_combat_log_sequence(conn, combat_id_int)
+        log_combat_turn(
+            conn,
+            combat_id=combat_id_int,
+            campaign_id=campaign_id,
+            turn_number=tn,
+            actor=actor_id,
+            event_type="defense",
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id=actor_id,
+            target_name=str(p.get("name") or "Bohater"),
+            hit=False,
+            narrative=json.dumps({"action": "default_defense", "reason": "timeout"}, ensure_ascii=False),
+        )
+        conn.commit()
+
+    advance_turn(campaign_id)
+    return {"ok": True, "actor": actor_id, "combat_state": get_active_combat(campaign_id)}
+
+
 def _living_enemy_ids(combatants: list[dict]) -> list[str]:
     out = []
     for c in combatants:
@@ -4496,6 +4717,12 @@ def resolve_attack(
         combatants: list[dict] = json.loads(row["combatants"] or "[]")
         loot_pool_accum: list[dict[str, Any]] = _read_loot_pool_from_row(row)
         ch_id = int(row["character_id"])
+
+        # G7 (#791): MP player — attacker="player:N" → use that character's sheet
+        _mp_ch_id = _mp_player_char_id(str(attacker))
+        if _mp_ch_id is not None:
+            ch_id = _mp_ch_id
+
         character = conn.execute(
             "SELECT id, sheet_json FROM characters WHERE id = ?",
             (ch_id,),
@@ -4508,7 +4735,10 @@ def resolve_attack(
         overlay_sheet_from_campaign_state(conn, campaign_id, ch_id, sheet)
         out: dict[str, Any] = {"attacker": attacker, "hit": False}
 
-        if attacker == "player":
+        # G7 (#791): MP players use 'player:N' as combatant id; solo uses 'player'
+        _player_comb_id = str(attacker) if _mp_ch_id is not None else "player"
+
+        if attacker == "player" or _mp_ch_id is not None:
             living = _living_enemy_ids(combatants)
             if not living:
                 out["message"] = "no living enemies"
@@ -4517,7 +4747,7 @@ def resolve_attack(
 
             # ── Zone gating: prefer same-zone targets for melee, any-zone for ranged ──
             _ensure_zones(combatants)
-            p_zone = str((_find_combatant(combatants, "player") or {}).get("zone") or ZONE_ENGAGED)
+            p_zone = str((_find_combatant(combatants, _player_comb_id) or {}).get("zone") or ZONE_ENGAGED)
             _resolved_weapon_for_zone = (
                 "spell" if spell_key else (
                     "spell" if str(sheet.get("archetype") or "").strip().lower() == "scholar"
@@ -4897,7 +5127,7 @@ def resolve_attack(
                 _flat_bonus += _inventory_affix_damage_bonus(conn, ch_id)
                 # S14 (#609): kondycje gracza z stat_target `damage_bonus` (np. rage +3) doliczają
                 # płaski bonus do obrażeń (post-mnożnik, jak gear — nie podwajany na cricie).
-                _pc_for_dmg = _find_combatant(combatants, "player")
+                _pc_for_dmg = _find_combatant(combatants, _player_comb_id)
                 if _pc_for_dmg is not None:
                     _flat_bonus += _combatant_stat_modifier(_pc_for_dmg, sheet=None, stat="damage_bonus")
                 if _flat_bonus:
@@ -4972,7 +5202,7 @@ def resolve_attack(
                 # F1 (#461) + F2 (#495): heal_on_hit from weapon effect_json and affixes
                 _heal = _weapon_heal_on_hit(wrow) + _inventory_affix_heal_on_hit(conn, ch_id)
                 if _heal:
-                    _pc = _find_combatant(combatants, "player")
+                    _pc = _find_combatant(combatants, _player_comb_id)
                     if _pc is not None:
                         _pc_max = int(_pc.get("hp_max", 0) or 0)
                         _pc_cur = int(_pc.get("hp_current", 0) or 0)
@@ -5292,7 +5522,7 @@ def resolve_attack(
                 out["loot"] = []
                 out["gold_drop"] = 0
                 # S19 (#614): nawet nieudany atak demaskuje — zdejmij hidden (brak bonusu na pudle).
-                _pc_miss = _find_combatant(combatants, "player")
+                _pc_miss = _find_combatant(combatants, _player_comb_id)
                 if _pc_miss is not None:
                     _hidden_miss = _hidden_conditions(_pc_miss)
                     if _hidden_miss:

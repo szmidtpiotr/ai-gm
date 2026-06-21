@@ -975,3 +975,58 @@ def get_move_vote_status(
 ):
     resolve_authed_user_id(authorization, user_id)
     return svc.get_move_vote_status(campaign_id)
+
+
+# ── G7 (#791) — MP Combat endpoints ─────────────────────────────────────────
+
+
+class MpCombatStartReq(BaseModel):
+    enemy_keys: list
+
+
+class MpCombatActionReq(BaseModel):
+    action_type: str  # 'attack' | 'spell' | 'defense'
+    character_id: int
+    target_id: Optional[str] = None
+    spell_key: Optional[str] = None
+    raw_d20: Optional[int] = None
+    roll_result: Optional[int] = None
+
+
+@router.post("/campaigns/{campaign_id}/combat/start")
+def start_mp_combat(
+    campaign_id: int,
+    body: MpCombatStartReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    """G7 (#791) — Start sequential MP combat for all campaign members."""
+    uid = resolve_authed_user_id(authorization, user_id)
+    try:
+        return svc.start_mp_combat(campaign_id, body.enemy_keys)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/campaigns/{campaign_id}/combat/action")
+def submit_mp_combat_action(
+    campaign_id: int,
+    body: MpCombatActionReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    """G7 (#791) — Player submits combat action (attack/spell/defense). Enemies auto-resolve after."""
+    uid = resolve_authed_user_id(authorization, user_id)
+    try:
+        return svc.submit_mp_combat_action(
+            campaign_id=campaign_id,
+            user_id=uid,
+            character_id=body.character_id,
+            action_type=body.action_type,
+            target_id=body.target_id,
+            spell_key=body.spell_key,
+            raw_d20=body.raw_d20,
+            roll_result=body.roll_result,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
