@@ -5532,7 +5532,7 @@ Pokrycie ról po adopcji: **atak ST** (fire/frost/ice/inferno), **atak AoE** (ac
 | DoT / over-time | ⚠️ częściowo (kondycje FAZY S) | mapuj na kondycje (Faza 1) |
 | AoE multi-target | ✅ **B11 [#659] wdrożone (2026-06-15)** — `_resolve_aoe_spell_in_combat`: 1×d20 vs cel główny, hit→kość dmg per cel; aoe=1=wszyscy żywi, aoe=0=maks 3 (chain) | burning_arc/chain_lightning/fireball działają |
 | Ally-target (group_heal, haste…) | ❌ solo = brak sojuszników | ⛔ Faza 2 — wymaga MP/towarzyszy (FAZA 5) |
-| Summon (elemental, familiar…) | ❌ brak kombatanta-towarzysza | ⛔ Faza 2 — duża dobudowa silnika |
+| Summon (elemental, familiar…) | ✅ **B15 [#821] wdrożone (2026-06-21)** — `_resolve_summon_spell_in_combat` wstawia kombatanta `type=='summon'` do combatants I do turn_order (seam `_b15_persist_with_turn_order`); `resolve_summon_turn` auto-atakuje najbliższego wroga, tyka lifetime, znika po wygaśnięciu / śmierci / gdy gracz padnie | summon_familiar/elemental/animate_dead/shadow_clone; profil (hp/atk/kość/lifetime_rounds/zone) w `effect_json`; 1 aktywny (nowy zastępuje); `_all_enemies_dead` bez zmian (ignoruje summony). Endpoint `POST /combat/summon-turn`. **Out of scope:** wsparcie celujące w summona (B14), reakcje (B16), summony wroga, AI taktyczna, shadow_clone kopiujący gracza. Frontend wiring = follow-up. Liczby = startowe (Sandbox-tunable). |
 | Reakcje (blink, mirror redirect) | ❌ brak okna reakcji | ⛔ Faza 2 — system reakcji |
 
 ### AK.6 — Decyzje do potwierdzenia (NIE zapomnieć)
