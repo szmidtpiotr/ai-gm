@@ -1041,6 +1041,18 @@ def get_catchup(
     return svc.get_catchup(campaign_id, uid)
 
 
+# ── G23 #804 — Away recap (pętla zaangażowania) ───────────────────────────────
+
+@router.get("/campaigns/{campaign_id}/away-recap")
+def get_away_recap(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    return svc.get_away_recap(campaign_id, uid)
+
+
 # ── G6 #790 — Party hex-move voting ───────────────────────────────────────────
 
 class MoveVoteReq(BaseModel):

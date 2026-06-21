@@ -167,6 +167,12 @@ Odpowiedź MUSI być poprawnym JSON:
 
 - "player_notes" — prywatne notatki per gracz. Pomiń klucz jeśli brak prywatnej informacji.
 
+### PĘTLA ZAANGAŻOWANIA — WYWAŻENIE HAKÓW (G23)
+Jeśli w wiadomości widzisz blok [WYWAŻENIE HAKÓW]:
+- Każdy obecny gracz MUSI dostać "hak" fabularny w tej rundzie — moment, pytanie, zjawisko skierowane do jego postaci.
+- Nie pomijaj nikogo dwie rundy z rzędu.
+- Gracz wymieniony na początku listy priorytetów nie miał haka w poprzedniej rundzie — daj mu wyraźniejszy, bezpośredni moment w narracji.
+
 ### STYL
 - Max 5 akapitów na narrację zbiorową.
 - Każda postać powinna mieć swój moment w narracji.
@@ -571,10 +577,41 @@ def trigger_narration(round_id: int) -> None:
             "Wpleć dołączenie naturalnie, nie przerywając narracji akcji.\n\n"
         )
 
+    # G23 #804 — hook balance: sort chars by previous-round hook presence, least-recent first
+    hook_block = ""
+    try:
+        conn_hook = _db()
+        try:
+            prev_round = conn_hook.execute(
+                "SELECT narrative_json FROM campaign_rounds "
+                "WHERE campaign_id=? AND status='done' ORDER BY round_number DESC LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            prev_notes_keys: set = set()
+            if prev_round and prev_round["narrative_json"]:
+                prev_data = json.loads(prev_round["narrative_json"])
+                prev_notes_keys = set(prev_data.get("player_notes", {}).keys())
+        finally:
+            conn_hook.close()
+        char_names = [a["character_name"] for a in actions]
+        not_hooked = [n for n in char_names if n not in prev_notes_keys]
+        was_hooked = [n for n in char_names if n in prev_notes_keys]
+        priority_list = not_hooked + was_hooked
+        if priority_list:
+            hook_block = (
+                "[WYWAŻENIE HAKÓW — G23]\n"
+                f"Priorytet haków (od najpilniejszego): {', '.join(priority_list)}. "
+                "Każdy gracz musi dostać hak fabularny w tej rundzie. "
+                "Gracz na początku listy nie miał haka w poprzedniej rundzie — daj mu wyraźniejszy moment.\n\n"
+            )
+    except Exception as e:
+        logger.warning("mp_hook_balance_failed", round_id=round_id, error=str(e)[:100])
+
     actions_header = (
         (f"{history_ctx}\n\n" if history_ctx else "")
         + f"[RUNDA {round_number} — AKCJE GRACZY — kolejność wg inicjatywy]\n\n"
         + f"{ws_context}"
+        + f"{hook_block}"
         + f"{intro_block}"
         + f"{actions_block}"
     )
@@ -1311,6 +1348,28 @@ def get_catchup(campaign_id: int, user_id: int) -> dict:
         return {"missed_rounds": missed, "summary_line": summary_line, "absence_warnings_reset": True}
     finally:
         conn.close()
+
+
+def get_away_recap(campaign_id: int, user_id: int) -> dict:
+    """G23 #804 — Return missed-rounds recap if player returning after absence; mark read.
+
+    Returns {missed_rounds, summary_line, has_recap, absence_warnings_reset}.
+    Empty result (has_recap=False) when player was present entire time or already read recap.
+    Reading resets absence_warnings via get_catchup.
+    """
+    conn = _db()
+    try:
+        member = conn.execute(
+            "SELECT absence_warnings FROM campaign_members WHERE campaign_id=? AND user_id=?",
+            (campaign_id, user_id),
+        ).fetchone()
+        if not member or int(member["absence_warnings"]) == 0:
+            return {"missed_rounds": [], "summary_line": "", "has_recap": False}
+    finally:
+        conn.close()
+    result = get_catchup(campaign_id, user_id)
+    result["has_recap"] = len(result.get("missed_rounds", [])) > 0
+    return result
 
 
 def get_rounds_history(campaign_id: int, user_id: int) -> list:
