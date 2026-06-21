@@ -246,7 +246,7 @@ await browser.close();
 - [ ] G30 — ⚙️ FUNDAMENT (przed mechaniką MP): niezawodność + współbieżność — WAL+busy_timeout+serializacja zapisów rundy (kolejka/lock per kampania), idempotencja client_action_id (UUID UNIQUE), maszyna stanu rundy collecting→resolving→narrated (atomowa), wstrzykiwalny czas + admin force-sweep, retry narratora na OpenAI (NIGDY lokalny fallback) + komunikat błędu edytowalny z admina
 - [ ] G21 — Obecność online (kto teraz w grze) + push "drużyna w komplecie online"; ładnie ograne wizualnie
 - [ ] G22 — Drabina nieobecności: [BRAK AKCJI] → bierna/wleczona (próg rund) → autopilot AI (za zgodą gracza, default ON, info w onboardingu) → powrót; auto-handoff hosta przy jego nieobecności
-- [ ] G23 — Pętla zaangażowania: wyważone haki na końcu rundy (gdy scena uzasadnia, nie co rundę) + "co się stało póki cię nie było" przy powrocie
+- [x] G23 — Pętla zaangażowania: wyważone haki na końcu rundy (gdy scena uzasadnia, nie co rundę) + "co się stało póki cię nie było" przy powrocie — przetestowane /playwright-test-report 2026-06-21, raport: https://github.com/szmidtpiotr/ai-gm/issues/804#issuecomment-4762927963, werdykt ✅
 - [ ] G24 — Edycja/wycofanie akcji do domknięcia rundy (stan collecting); akcje warunkowe = później
 - [ ] G25 — Onboarding do trwającej kampanii: auto-streszczenie "co było / kto jest kim / jaka stawka" (reużywa G18); rozszerza G12
 - [ ] G26 — Skalowanie rozjechanych poziomów drużyny (miękkie podbicie słabszych per kampania) + info w onboardingu
