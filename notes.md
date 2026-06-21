@@ -234,7 +234,7 @@ await browser.close();
 - [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
 - [ ] G6 — Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą); remis rozstrzyga host (zmiana 2026-06-12)
 - [ ] G7 — Walka MP — reuse silnika turowego solo; brak reakcji w 2 min = akcja domyślna (obrona)
-- [ ] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓")
+- [x] G8 — Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami ("🎲 Zwinność: 14 vs DC 12 ✓") — #792 przetestowane /playwright-test-report 2026-06-21, raport: https://github.com/szmidtpiotr/ai-gm/issues/792#issuecomment-4762239515, werdykt ✅
 - [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
 - [ ] G17 — Powalenie zamiast śmierci: ocucenie ~25% HP, auto-wstanie po wygranej; wipe = kara złota 10/20/30% wg śr. poziomu drużyny (próg 50 zł, przebudzenie 50% HP w bezpiecznym hexie; nigdy przedmioty/XP)
 - [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
