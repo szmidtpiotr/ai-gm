@@ -381,6 +381,21 @@ def submit_action(
             status = "narrating"
             just_transitioned = transitioned
 
+        # G21 (#802) — push "Drużyna w komplecie" once per round on full submit
+        if just_transitioned:
+            conn.execute(
+                "UPDATE campaign_rounds SET complete_push_sent=1 WHERE id=? AND complete_push_sent=0",
+                (round_id,),
+            )
+            if conn.execute("SELECT changes() as c").fetchone()["c"] > 0:
+                conn.commit()
+                import threading as _th
+                _th.Thread(
+                    target=send_push_to_campaign_players,
+                    args=(campaign_id, "Drużyna w komplecie", "Wszyscy oddali akcje — runda rusza!", "/"),
+                    daemon=True,
+                ).start()
+
         return {
             "round_id": round_id,
             "status": status,
@@ -753,6 +768,12 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
         if not row:
             return None
         round_id = int(row["id"])
+        # G21 (#802) — heartbeat: update last_seen for the polling user
+        conn.execute(
+            "UPDATE campaign_members SET last_seen=datetime('now') WHERE campaign_id=? AND user_id=?",
+            (campaign_id, user_id),
+        )
+        conn.commit()
         submitted = int(conn.execute(
             "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id = ?",
             (round_id,),
@@ -773,13 +794,29 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             conn.execute("UPDATE campaigns SET host_note=NULL WHERE id=?", (campaign_id,))
             conn.commit()
         # G2 #786 — absence warnings per player
-        warnings_rows = conn.execute(
-            "SELECT user_id, COALESCE(absence_warnings, 0) as absence_warnings "
-            "FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+        # G21 (#802) — members list with online flag (last_seen within 60s threshold)
+        members_rows = conn.execute(
+            """SELECT m.user_id, u.username, COALESCE(u.display_name, u.username) as display_name,
+                      COALESCE(m.absence_warnings, 0) as absence_warnings,
+                      CASE WHEN m.last_seen IS NOT NULL
+                                AND datetime(m.last_seen) > datetime('now', '-60 seconds')
+                           THEN 1 ELSE 0 END as online
+               FROM campaign_members m
+               JOIN users u ON u.id = m.user_id
+               WHERE m.campaign_id=? AND m.status='accepted'""",
             (campaign_id,),
         ).fetchall()
-        warnings_by_player = {int(r["user_id"]): int(r["absence_warnings"]) for r in warnings_rows}
+        warnings_by_player = {int(r["user_id"]): int(r["absence_warnings"]) for r in members_rows}
         vote_kick_suggested = any(w >= 3 for w in warnings_by_player.values())
+        members = [
+            {
+                "user_id": int(r["user_id"]),
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "online": bool(r["online"]),
+            }
+            for r in members_rows
+        ]
         return {
             "round_id": round_id,
             "round_number": int(row["round_number"]),
@@ -792,9 +829,35 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             "host_note": host_note,
             "absence_warnings_by_player": warnings_by_player,
             "vote_kick_suggested": vote_kick_suggested,
+            "members": members,
         }
     finally:
         conn.close()
+
+
+def all_present_submitted(round_id: int, campaign_id: int, conn: sqlite3.Connection) -> bool:
+    """G21 (#802) — True when every online member has a real (non-placeholder) action.
+
+    Online = last_seen within the past 60 seconds. If no members are online, returns True
+    (no blocker — offline-only state doesn't block narration).
+    """
+    online = conn.execute(
+        """SELECT user_id FROM campaign_members
+           WHERE campaign_id=? AND status='accepted'
+             AND last_seen IS NOT NULL
+             AND datetime(last_seen) > datetime('now', '-60 seconds')""",
+        (campaign_id,),
+    ).fetchall()
+    if not online:
+        return True
+    online_ids = {int(r["user_id"]) for r in online}
+    submitted = conn.execute(
+        """SELECT user_id FROM campaign_round_actions
+           WHERE round_id=? AND action_text != '[BRAK AKCJI]'""",
+        (round_id,),
+    ).fetchall()
+    submitted_ids = {int(r["user_id"]) for r in submitted}
+    return online_ids.issubset(submitted_ids)
 
 
 def leave_campaign(campaign_id: int, user_id: int) -> dict:

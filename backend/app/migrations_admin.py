@@ -4879,6 +4879,32 @@ def _ensure_combat_turn_deadline_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_last_seen_column(conn: sqlite3.Connection) -> None:
+    """#802 G21 — last_seen heartbeat on campaign_members; NULL = never polled."""
+    try:
+        conn.execute("ALTER TABLE campaign_members ADD COLUMN last_seen TEXT")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
+def _ensure_complete_push_sent_column(conn: sqlite3.Connection) -> None:
+    """#802 G21 — idempotency flag for 'Drużyna w komplecie' push on campaign_rounds."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_rounds ADD COLUMN complete_push_sent INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
 def _ensure_pending_intro_column(conn: sqlite3.Connection) -> None:
     """#798 G12 — pending_intro flag on campaign_members for narrative late-joiner introduction."""
     try:
@@ -5059,6 +5085,8 @@ def run_admin_migrations() -> None:
         _ensure_party_hex_columns(conn)  # #790 G6
         _ensure_combat_turn_deadline_column(conn)  # #793 G9
         _ensure_pending_intro_column(conn)  # #798 G12
+        _ensure_last_seen_column(conn)  # #802 G21
+        _ensure_complete_push_sent_column(conn)  # #802 G21
     finally:
         conn.close()
 

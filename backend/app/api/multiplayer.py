@@ -164,6 +164,12 @@ def get_lobby(
             (campaign_id,),
         ).fetchall()
 
+        # G21 (#802) — heartbeat: update last_seen for polling user
+        conn.execute(
+            "UPDATE campaign_members SET last_seen=datetime('now') WHERE campaign_id=? AND user_id=?",
+            (campaign_id, uid),
+        )
+        conn.commit()
         accepted = [m for m in members if m["status"] == "accepted"]
         vote_kick_suggested = any(int(m["absence_warnings"]) >= 3 for m in accepted)
         return {
