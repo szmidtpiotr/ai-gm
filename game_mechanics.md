@@ -1052,7 +1052,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | G4 | World State integracja MP (jeden żeton drużyny, współdzielony stan) | B1 |
 | G5 | Conflict resolution: inicjatywa jako kolejność; feedback "Cel już martwy/zabrany"; reużywa turn_order | G4 |
 | G6 | Ruch drużyny: głosowanie hex (host bez veta nad zgodną wolą); **remis rozstrzyga host** (zmiana 2026-06-12) | G4 |
-| G7 | Walka MP — reuse silnika turowego solo (ludzie w turn_order, sekwencyjnie); timeout = obrona | Faza 1 walka, G16 |
+| G7 | Walka MP — reuse silnika turowego solo (ludzie w turn_order, sekwencyjnie); timeout = obrona | Faza 1 walka, G16 | ✅ #791 `initiate_combat_mp` + `apply_mp_default_defense` + `resolve_attack` extended + endpoints `/combat/start` `/combat/action` |
 | G8 | Rzuty dwustopniowe: LLM planuje testy → kod rzuca → LLM narruje z wynikami | G4 |
 | G9 | Timer walki skrócony (2 min) + push "Twoja kolej" per tura | G7 |
 | G10 | Loot per-gracz z filtrem klasy + złoto dzielone równo | Faza 1 loot, F2 |
@@ -3084,7 +3084,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | G3 | Vote-to-kick ręczny: większość pozostałych graczy (wyrzucany bez głosu), host niewyrzucalny, 2-os = host wyrzuca sam; zaproszenie zastępstwa w trakcie kampanii (narracja dołączenia już działa) | G2 |
 | G4 | Integracja World State z rundą MP (jeden żeton drużyny, współdzielony stan) | Faza 0 |
 | G5 | Conflict resolution World State: gracze składają akcje jednocześnie (okno czasowe), backend przetwarza wg inicjatywy (wyższa init = pierwsza). Gracz z niższą init dostaje feedback gdy stan świata się zmienił ("Cel już martwy", "Przedmiot już zabrany"). Reużywa `turn_order` z combat_service. | G4 |
-| G7 | Walka w MP — reuse silnika turowego solo, ludzie w `turn_order`, sekwencyjnie; brak reakcji w 2 min = akcja domyślna (obrona) | Faza 1 (walka), G16 |
+| G7 | Walka w MP — reuse silnika turowego solo, ludzie w `turn_order`, sekwencyjnie; brak reakcji w 2 min = akcja domyślna (obrona) | Faza 1 (walka), G16 | ✅ #791 |
 | G8 | Rzuty dwustopniowe w rundzie: LLM planuje testy → kod rzuca (formuła solo) → LLM narruje z wynikami; gracz widzi "🎲 Zwinność: 14 vs DC 12 ✓" | G4 |
 | G9 | Timer walki skrócony (2 min) + push "Twoja kolej" per tura | G7 |
 | G10 | Loot per-gracz z filtrem klasy + złoto dzielone równo | Faza 1 (loot), afiksy |
