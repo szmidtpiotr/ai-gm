@@ -1468,6 +1468,17 @@ ADMIN_SEEDS = [
     VALUES
     ('berserk', 'Berserk', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"behavior_override","behavior":"attack_nearest","expires":"duration_rounds:6"},{"type":"static_stat_modifier","stat":"attack_bonus","value":3},{"type":"static_stat_modifier","stat":"damage_bonus","value":3},{"type":"static_stat_modifier","stat":"ac","value":-3},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}', 'Niekontrolowany szał bojowy — postać atakuje najbliższy cel NIEZALEŻNIE od frakcji (też sojuszników). +3 do ataków i obrażeń, -3 AC. Na początku tury rzut WIS DC 14 odzyskuje kontrolę. Trwa do 6 rund lub brak wrogów w zasięgu. Różni się od kontrolowanej furii (rage).', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
     """,
+    # ── B17 (#823) — kondycja `feared` (strach): wyzwalana przez mass_fear (czar CHA-na-INT, D3).
+    # Decyzja D3 (Piotr 2026-06-21): czary maga wchodzą na INT, spójnie z resztą D-spell.
+    # `feared` = behavior_override flee (wymuszona ucieczka, jak panicked S18) + WIS -3 + rzut WIS DC 14
+    # na początku tury zrywa strach. `charmed` zostaje LITE (FAZA S — bez twardego zakazu) — B17 ją tylko
+    # wyzwala (charm_person). Liczby = wartości startowe (Numbers Policy → tuning po playteście B13).
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('feared', 'Przerażony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"WIS","value":-3},{"type":"behavior_override","behavior":"flee"},{"type":"periodic_save","stat":"WIS","value":14,"tick":"start_turn","expires":"save_success"}]}', 'Postać ogarnięta strachem — WIS -3, wymuszona ucieczka (zmiana strefy na dystans / oddalenie). Udany rzut WIS DC 14 na początku tury przezwycięża strach. Wyzwalane przez czar mass_fear.', 1, 0, NULL, NULL, datetime('now'), datetime('now'))
+    """,
     # S19 (#614) FAZA S — prymitywy `untargetable` + `ambush_bonus` + kondycja `hidden`.
     # Liczby = wartości startowe (Numbers Policy → tuning po S20). granted_by = ODWROTNOŚĆ cure
     # (udany SKILL_TEST stealth DC 14 nakłada hidden); detect_dc = WIS save wroga przy poszukiwaniu.
@@ -2716,6 +2727,21 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('stun_bolt',       'Piorun Ogłuszenia',   4, 4, 'effect',    '1d6', NULL,  'WIS', 'stunned',  1, 'any',     0, 'Skondensowana kula energii ogłusza zmysły celu — stunned.',                   NULL, NULL),
         ('detect_magic',    'Wykrycie Magii',      1, 1, 'narrative', NULL,  NULL,  NULL,  NULL,       0, 'self',    0, 'Trzecie oko rzucającego widzi aurę magiczną wokół przedmiotów i istot.',      NULL, NULL)
     """, "v2-spells-faza-b-seed")
+
+    # ── B17 (#823): czary kontroli umysłu — charm_person (ST) + mass_fear (AoE) ──
+    # Decyzja D3 (Piotr 2026-06-21): czary maga wchodzą na INT, spójnie z resztą D-spell (NIE CHA).
+    # Silnik liczy INT_mod w pojedynku przeciwnym (resolve_spell_opposed_save) — seed = czyste dane.
+    #  • charm_person: spell_type='effect' (reużycie _resolve_effect_spell_in_combat) → kondycja `charmed`
+    #    (LITE z FAZY S — B17 ją tylko wyzwala). Pojedynek INT vs WIS celu.
+    #  • mass_fear: spell_type='effect_aoe' (NOWA gałąź B17) → kondycja `feared` na WSZYSTKICH wrogach,
+    #    pojedynek INT vs WIS per wróg; mana pełna, bez zwrotu. aoe=1.
+    # effect_stat='WIS' = stat OBRONY celu (umysł). Tier/mana = wartości startowe (Numbers Policy).
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, rank2_json, rank3_json) VALUES
+        ('charm_person', 'Zauroczenie',  2, 3, 'effect',     NULL, NULL, 'WIS', 'charmed', 3, 'any', 0, 'Mag zniewala umysł pojedynczego wroga — oczarowany (charmed) traci ostrość osądu wobec rzucającego. Pojedynek INT maga vs WIS celu.', NULL, NULL),
+        ('mass_fear',    'Fala Strachu', 3, 4, 'effect_aoe', NULL, NULL, 'WIS', 'feared',  2, 'any', 1, 'Fala pierwotnego strachu obejmuje wszystkich wrogów na polu — każdy broni się osobno (INT maga vs WIS). Przegrani wpadają w panikę (feared) i uciekają.', NULL, NULL)
+    """, "v2-spells-b17-cha-control")
 
     # ── FAZA B / B8 (#655): startowy zestaw maga L1 = fire_bolt + minor_heal +
     # ward_of_iron + detect_magic (atak/heal/obrona/utility, 4× tier 1). Dosiej

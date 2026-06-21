@@ -1972,6 +1972,149 @@ def _resolve_effect_spell_in_combat(
     return out
 
 
+def _resolve_aoe_effect_spell_in_combat(
+    conn, row, campaign_id: int, ch_id: int, sheet: dict, combatants: list,
+    enemy: dict, target_id, spell_row, raw_d20, out: dict[str, Any],
+) -> dict[str, Any]:
+    """B17 (#823): czar kontroli OBSZAROWY (mass_fear) — kondycja na WSZYSTKICH żywych wrogach.
+
+    Casting stat = INT (decyzja D3, 2026-06-21: czary maga spójnie na INT, nie CHA). Model D-spell:
+    pojedynek przeciwny `d20+INT_mod (mag)` vs `d20+stat_obrony (cel)` rozstrzygany OSOBNO per wróg
+    (`spell_service.resolve_spell_opposed_save`, stat obrony wg kondycji — WIS umysł / CON ciało):
+      • łapie na wrogu → kondycja nałożona (reużycie `_build_condition_entry` + `apply_condition_gate`)
+      • opór           → ten wróg bez kondycji
+      • Nat 1          → miscast (cała mana, zero kondycji)
+    Mana = pełny koszt z góry, BEZ zwrotu (czar obszarowy płaci jak attack_aoe, niezależnie od trafień).
+    Zero obrażeń (to czar kontroli). Operuje na dict-ach combatantów wprost (nie po enemy_key) —
+    poprawnie celuje wielu wrogów o TYM SAMYM kluczu. Tury nie zaawansowujemy (parytet z effect ST).
+    """
+    from app.services import spell_service
+
+    condition_key = str(spell_row["effect_type"] or "").strip().lower()
+    mana_cost = int(spell_row["mana_cost"] or 0)
+    label = str(spell_row["label"] or spell_row["key"])
+    spell_k = str(spell_row["key"])
+
+    out["weapon_key"] = spell_k
+    out["weapon_label"] = label
+    out["weapon_type"] = "spell"
+    out["attack_test"] = "spell_effect_aoe"
+    out["spell_type"] = "effect_aoe"
+    out["condition_key"] = condition_key
+    out["target_id"] = target_id
+    out["target_name"] = str(enemy.get("name") or "") or None
+    out["enemy_key"] = str(enemy.get("enemy_key") or "")
+    out["damage"] = 0  # czar kontroli nie zadaje obrażeń
+
+    # Mana pełny koszt z góry (AoE nie zwraca — jak attack_aoe).
+    if mana_cost > 0:
+        _mana_ok, _new_mana = spell_service.check_and_deduct_mana(
+            sheet, mana_cost, campaign_id=campaign_id,
+            character_id=row["character_id"], combat_id=int(row["id"]))
+        if not _mana_ok:
+            out["hit"] = False
+            out["blocked"] = True
+            out["mana_insufficient"] = True
+            out["current_mana"] = int(sheet.get("current_mana", 0))
+            out["message"] = (
+                f"Brak many! Potrzebujesz {mana_cost} many, "
+                f"masz {int(sheet.get('current_mana', 0))}."
+            )
+            out["combat_state"] = _row_to_combat_dict(row)
+            return out
+        out["mana_spent"] = mana_cost
+        out["mana_after"] = _new_mana
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        conn.commit()
+
+    player_raw = int(raw_d20) if raw_d20 is not None else None
+    out["player_raw_d20"] = player_raw
+    out["player_nat1"] = (player_raw == 1)
+
+    # Nat 1 → miscast (pełna mana, brak kondycji na nikim).
+    if player_raw == 1:
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        out["miscast"] = _miscast
+        out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
+        _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
+        conn.commit()
+        out["hit"] = False
+        out["condition_applied"] = False
+        out["aoe_effect_hits"] = []
+        out["current_mana"] = int(sheet.get("current_mana", 0))
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+        return out
+
+    # Pojedynek per żywy wróg → kondycja tym, którzy przegrali save.
+    cond_entry = _build_condition_entry(conn, condition_key, applied_at="spell_aoe_effect")
+    effect_json = cond_entry.get("effect_json") if cond_entry else None
+    aoe_hits: list[dict[str, Any]] = []
+    any_applied = False
+    for c in combatants:
+        if not isinstance(c, dict) or c.get("type") == "player":
+            continue
+        if int(c.get("hp_current", 0) or 0) <= 0:
+            continue
+        tgt_stats = c.get("stats") if isinstance(c.get("stats"), dict) else {}
+        save = spell_service.resolve_spell_opposed_save(sheet, tgt_stats, condition_key)
+        landed = bool(save.get("landed")) and cond_entry is not None
+        applied = False
+        if landed:
+            conds = c.get("conditions")
+            if not isinstance(conds, list):
+                conds = []
+            # S14 (#609): bramka immunitetu/broken_by PRZED dopisaniem (mutuje conds w miejscu).
+            allowed, _gate = apply_condition_gate(conds, condition_key, effect_json)
+            c["conditions"] = conds
+            already = any(
+                isinstance(x, dict) and str(x.get("key", "")).lower() == condition_key
+                for x in conds
+            )
+            if allowed and not already:
+                conds.append(dict(cond_entry))
+                applied = True
+            if applied or already:
+                any_applied = True
+        aoe_hits.append({
+            "target_id": str(c.get("id") or ""),
+            "target_name": str(c.get("name") or c.get("enemy_key") or "Wróg"),
+            "landed": landed,
+            "condition_applied": applied,
+            "save_stat": save.get("save_stat"),
+        })
+
+    _persist_combatants(conn, row, combatants)
+    conn.commit()
+    out["aoe_effect_hits"] = aoe_hits
+    out["condition_applied"] = any_applied
+    out["hit"] = any_applied
+    out["current_mana"] = int(sheet.get("current_mana", 0))
+
+    # Progresja rangi czaru — udane rzucenie liczy się jak użycie (jak czary effect/attack).
+    try:
+        spell_service.record_spell_use(int(row["character_id"]), spell_k, conn)
+    except Exception:
+        pass
+
+    cid = int(row["id"])
+    log_combat_turn(
+        conn, combat_id=cid, campaign_id=campaign_id,
+        turn_number=_next_combat_log_sequence(conn, cid),
+        actor="player", event_type="spell_aoe_effect",
+        roll_value=player_raw, damage=0,
+        hp_after=int(enemy.get("hp_current", 0) or 0),
+        target_id=target_id, target_name=str(enemy.get("name") or "") or None,
+        hit=bool(any_applied),
+        narrative=json.dumps({
+            "spell_key": spell_k, "spell_label": label, "condition": condition_key,
+            "hits": [h["target_id"] for h in aoe_hits if h["condition_applied"]],
+        }, ensure_ascii=False),
+    )
+    conn.commit()
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
 def _apply_absorption(p: dict, dmg: int, out: dict[str, Any]) -> int:
     """B10 (#657): pula absorpcji (temp-HP tarczy) pochłania obrażenia PRZED HP.
 
@@ -4835,6 +4978,35 @@ def resolve_attack(
                     out["block_reason"] = "unsupported_effect"
                     out["message"] = (
                         f"Czar „{_eff_row['label']}” nie jest jeszcze wspierany w walce."
+                    )
+                    out["combat_state"] = _row_to_combat_dict(row)
+                    return out
+
+            # ── B17 (#823): czar kontroli OBSZAROWY (mass_fear) — kondycja na WSZYSTKICH wrogach ──
+            # Wykrywamy PRZED attack_aoe: spell_type='effect_aoe' nakłada kondycję FAZY S pojedynkiem
+            # przeciwnym INT per wróg (decyzja D3 — casting INT), zamiast zadawać obrażenia.
+            if spell_key:
+                _eaoe_row = conn.execute(
+                    "SELECT key, label, spell_type, effect_type, effect_duration, mana_cost, tier "
+                    "FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if _eaoe_row and str(_eaoe_row["spell_type"] or "").strip().lower() == "effect_aoe":
+                    _cond_k = str(_eaoe_row["effect_type"] or "").strip().lower()
+                    _has_cond = conn.execute(
+                        "SELECT 1 FROM game_config_conditions WHERE key = ? AND is_active = 1",
+                        (_cond_k,),
+                    ).fetchone()
+                    if _has_cond:
+                        return _resolve_aoe_effect_spell_in_combat(
+                            conn, row, campaign_id, ch_id, sheet, combatants,
+                            enemy, target_id, _eaoe_row, raw_d20, out,
+                        )
+                    out["hit"] = False
+                    out["blocked"] = True
+                    out["block_reason"] = "unsupported_effect"
+                    out["message"] = (
+                        f"Czar „{_eaoe_row['label']}” nie jest jeszcze wspierany w walce."
                     )
                     out["combat_state"] = _row_to_combat_dict(row)
                     return out
