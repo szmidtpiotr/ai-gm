@@ -147,6 +147,28 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .mech h4{font-family:var(--font-disp);color:var(--ink);font-size:16px;margin:10px 0 6px}
 .mech p{color:var(--ink-dim);font-size:13px}
 
+/* FAQ — akordeon */
+.faq-list{max-width:760px;margin:0 auto}
+.faq-item{border:1px solid var(--line);border-radius:4px;margin-bottom:12px;background:var(--panel);overflow:hidden}
+.faq-q{width:100%;text-align:left;padding:19px 24px;font-family:var(--font-disp);color:var(--ink);font-size:16px;cursor:pointer;background:none;border:none;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.faq-q:hover{color:var(--gold)}
+.faq-q .chev{color:var(--gold);transition:transform .25s;flex:0 0 auto}
+.faq-item.open .faq-q .chev{transform:rotate(180deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.faq-item.open .faq-a{max-height:320px}
+.faq-a p{padding:0 24px 20px;color:var(--ink-dim);font-size:15px;line-height:1.6}
+
+/* roadmapa */
+.roadmap{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px}
+.road-col{border:1px solid var(--line);border-radius:4px;padding:26px 24px;background:var(--panel)}
+.road-col h3{font-family:var(--font-disp);font-size:18px;margin-bottom:16px;letter-spacing:.5px}
+.road-col.s0 h3{color:#7bbf6a} .road-col.s1 h3{color:var(--gold)} .road-col.s2 h3{color:var(--ink-dim)}
+.road-col ul{list-style:none}
+.road-col li{padding:7px 0 7px 24px;position:relative;color:var(--ink-dim);font-size:14px;line-height:1.5}
+.road-col.s0 li::before{content:"✓";position:absolute;left:0;color:#7bbf6a}
+.road-col.s1 li::before{content:"◔";position:absolute;left:0;color:var(--gold)}
+.road-col.s2 li::before{content:"○";position:absolute;left:0;color:var(--ink-dim)}
+
 /* changelog (data-driven, W6) */
 .changelog{max-width:760px;margin:0 auto}
 .cl-item{border-left:2px solid var(--line);padding:0 0 30px 28px;position:relative}
@@ -168,7 +190,7 @@ footer .brand{display:inline-block;margin-bottom:14px}
 
 /* ---------- RESPONSIVE ---------- */
 @media(max-width:860px){
-  .cards,.krainy,.mechs,.napiecia,.loop,.vs{grid-template-columns:1fr}
+  .cards,.krainy,.mechs,.napiecia,.loop,.vs,.roadmap{grid-template-columns:1fr}
   .krainy,.loop{grid-template-columns:1fr 1fr}
   .vs-col.good{border-left:none;border-top:1px solid var(--line)}
   .mechs{grid-template-columns:1fr 1fr}

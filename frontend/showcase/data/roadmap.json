@@ -1,0 +1,25 @@
+{
+  "kolumny": [
+    { "status": "Gotowe", "items": [
+      "Silnik kości k20, cechy i biegłości",
+      "Walka strefowa (zwarcie/dystans, pancerz, obrażenia)",
+      "Magia uczonego — mana, rangi zaklęć, miscast",
+      "Lochy kafelkowe z proceduralnymi mapami",
+      "Tryb multiplayer — wspólne sesje",
+      "Żywa Księga Zasad zgodna z silnikiem"
+    ]},
+    { "status": "W toku", "items": [
+      "Balans klas i strojenie liczb w Sandboxie",
+      "Strona-wizytówka projektu (ta, którą czytasz)",
+      "Refaktor i porządkowanie silnika",
+      "Panel mobilny administracji"
+    ]},
+    { "status": "Planowane", "items": [
+      "Głos postaci i lektor (TTS) oraz generacja obrazów offline",
+      "Nieludzkie ludy — krasnoludy, elfy jako żywe frakcje",
+      "Mapa świata z wieloma krainami (rozszerzenia w stylu DLC)",
+      "Eksport przygody jako książka",
+      "Konto wspólne dla strony i gry"
+    ]}
+  ]
+}

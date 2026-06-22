@@ -113,6 +113,36 @@
       .catch(() => { /* fallback statyczny zostaje */ });
   }
 
+  // --- FAQ + roadmapa (W12 → data/faq.json, data/roadmap.json) ---
+  const faqRoot = document.getElementById('faq-list');
+  if (faqRoot) {
+    faqRoot.addEventListener('click', e => {
+      const q = e.target.closest('.faq-q');
+      if (q) q.closest('.faq-item').classList.toggle('open');
+    });
+    fetch('data/faq.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => {
+        if (Array.isArray(d.faq) && d.faq.length) {
+          faqRoot.innerHTML = d.faq.map(f => `
+            <div class="faq-item"><button class="faq-q">${escapeHtml(f.q)}<span class="chev">▾</span></button>
+            <div class="faq-a"><p>${escapeHtml(f.a)}</p></div></div>`).join('');
+        }
+      }).catch(() => { /* fallback statyczny zostaje */ });
+  }
+  const roadRoot = document.getElementById('roadmap-list');
+  if (roadRoot) {
+    fetch('data/roadmap.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => {
+        if (Array.isArray(d.kolumny) && d.kolumny.length) {
+          roadRoot.innerHTML = d.kolumny.map((c, i) => `
+            <div class="road-col s${i}"><h3>${escapeHtml(c.status)}</h3>
+            <ul>${(c.items || []).map(it => `<li>${escapeHtml(it)}</li>`).join('')}</ul></div>`).join('');
+        }
+      }).catch(() => { /* fallback statyczny zostaje */ });
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
