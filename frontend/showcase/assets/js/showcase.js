@@ -87,6 +87,32 @@
       .catch(() => { /* fallback stubs zostają */ });
   }
 
+  // --- data-driven świat (W4 → data/swiat.json) ---
+  const krainyRoot = document.getElementById('krainy-list');
+  if (krainyRoot) {
+    fetch('data/swiat.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        const intro = document.getElementById('swiat-intro');
+        if (intro && data.intro) intro.textContent = data.intro;
+        if (Array.isArray(data.krainy) && data.krainy.length) {
+          krainyRoot.innerHTML = data.krainy.map(k => `
+            <div class="kraina reveal">
+              ${k.img ? `<div class="thumb"><img src="${escapeHtml(k.img)}" alt="${escapeHtml(k.name || '')}" onerror="this.closest('.thumb').remove()"></div>` : ''}
+              <div class="body"><h3>${escapeHtml(k.name || '')}</h3><span class="ktag">${escapeHtml(k.tag || '')}</span><p>${escapeHtml(k.desc || '')}</p></div>
+            </div>`).join('');
+        }
+        const rdzen = document.getElementById('rdzen-block');
+        if (rdzen && data.rdzen) rdzen.innerHTML = `<h3>${escapeHtml(data.rdzen.title || '')}</h3><p>${escapeHtml(data.rdzen.body || '')}</p>`;
+        const nap = document.getElementById('napiecia-list');
+        if (nap && Array.isArray(data.napiecia) && data.napiecia.length) {
+          nap.innerHTML = data.napiecia.map(n => `<div class="napiecie reveal"><h4>${escapeHtml(n.title || '')}</h4><p>${escapeHtml(n.body || '')}</p></div>`).join('');
+        }
+        document.querySelectorAll('#swiat .reveal').forEach(el => revealer.observe(el));
+      })
+      .catch(() => { /* fallback statyczny zostaje */ });
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
