@@ -74,6 +74,33 @@ const _HTML = `
           </div>
           <div class="preset-grid" id="sys-preset-grid"></div>
         </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-header">
+            <span class="card-title">🛠 LLM treści (offline)</span>
+            <span class="card-count" id="cl-status">—</span>
+          </div>
+          <p style="font-size:0.78rem;color:var(--t3,#888);padding:4px 0 8px">
+            Generowanie treści w adminie (Kreator AI / Smart Entry) może iść na lokalny
+            model (np. Ollama na .170) — taniej, a szybkość przy tworzeniu treści nie gra roli.
+            Narracja gry graczom zostaje na aktywnym presecie powyżej.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:10px;max-width:520px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem">
+              <input type="checkbox" id="cl-enabled" /> Włącz lokalne AI do treści
+            </label>
+            <label style="font-size:0.78rem;color:var(--t3,#888)">Adres (base URL)
+              <input type="text" id="cl-base-url" placeholder="http://192.168.1.170:11434"
+                     style="width:100%;margin-top:3px;padding:6px;font-size:0.82rem" />
+            </label>
+            <label style="font-size:0.78rem;color:var(--t3,#888)">Model
+              <input type="text" id="cl-model" placeholder="gemma4:12b"
+                     style="width:100%;margin-top:3px;padding:6px;font-size:0.82rem" />
+            </label>
+            <div>
+              <button class="btn btn-sm btn-primary" onclick="sysSaveContentLlm(this)">Zapisz</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Database tab -->
@@ -785,11 +812,44 @@ async function _loadSysLlm() {
         }).join('');
       }
     }
+    await _loadContentLlm();
   } catch(e) {
     console.warn('_loadSysLlm', e.message);
     const grid = document.getElementById('sys-preset-grid');
     if (grid) grid.innerHTML = `<div style="padding:16px;color:var(--red,#e55)">${_esc(e.message)}</div>`;
   }
+}
+
+// #919 (H4b) — content/offline LLM profile (osobne od presetu rozgrywki).
+async function _loadContentLlm() {
+  try {
+    const r = await apiFetch('/api/settings/content-llm');
+    const d = (r && r.data) || {};
+    const en = document.getElementById('cl-enabled');
+    const bu = document.getElementById('cl-base-url');
+    const md = document.getElementById('cl-model');
+    const st = document.getElementById('cl-status');
+    if (en) en.checked = !!d.enabled;
+    if (bu) bu.value = d.base_url || '';
+    if (md) md.value = d.model || '';
+    if (st) st.textContent = d.enabled ? `● ${_esc(d.provider || 'ollama')} ${_esc(d.model || '')}` : 'wyłączone';
+  } catch(e) { console.warn('_loadContentLlm', e.message); }
+}
+
+async function sysSaveContentLlm(btn) {
+  const body = {
+    enabled: document.getElementById('cl-enabled')?.checked || false,
+    base_url: (document.getElementById('cl-base-url')?.value || '').trim(),
+    model: (document.getElementById('cl-model')?.value || '').trim(),
+  };
+  if (btn) btn.disabled = true;
+  try {
+    await apiFetch('/api/settings/content-llm', { method: 'PATCH', body: JSON.stringify(body) });
+    showToast('Zapisano profil LLM treści', 'success');
+    await _loadContentLlm();
+  } catch(e) {
+    showToast('Błąd zapisu: ' + e.message, 'error');
+  } finally { if (btn) btn.disabled = false; }
 }
 
 async function activatePreset(presetId, btn) {
@@ -2225,5 +2285,6 @@ export async function init(panel) {
     _pingImageGen, _refreshImageGenModels,
     togglePromptEdit, setTone, saveGameModes,
     _saveDiceConfig, _resetDiceConfig, _previewDiceRoll,
+    sysSaveContentLlm,
   });
 }

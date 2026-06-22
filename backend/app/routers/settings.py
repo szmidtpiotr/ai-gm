@@ -12,9 +12,15 @@ from app.services.llm_admin_service import (
     clear_global_llm_override,
     delete_llm_preset,
     get_admin_llm_settings_snapshot,
+    get_content_llm_profile,
     save_llm_preset,
+    set_content_llm_profile,
 )
-from app.services.llm_service import get_default_config
+from app.services.llm_service import (
+    content_llm_enabled,
+    get_default_config,
+    resolve_content_llm_config,
+)
 from app.services.summary_settings_service import read_summary_settings, upsert_summary_settings
 from app.services.ui_panel_settings import get_ui_panels_merged, merge_ui_panels_patch
 from app.services.user_llm_settings import (
@@ -110,6 +116,48 @@ def patch_story_gravity_settings(
     from app.services.story_gravity_service import set_story_gravity_config
     patch = {k: v for k, v in req.model_dump().items() if v is not None}
     return {"ok": True, "data": set_story_gravity_config(**patch)}
+
+
+# ── Content/offline LLM profile (#919, H4b) ─────────────────────────────────
+class ContentLlmPatchReq(BaseModel):
+    enabled: bool | None = None
+    provider: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    # null/blank = keep existing key
+    api_key: str | None = None
+
+
+def _content_llm_view() -> dict:
+    """Effective content-gen LLM profile for the admin panel: what generation will
+    actually use (DB > env > default) + whether the toggle is on + whether a row is stored."""
+    eff = resolve_content_llm_config()
+    stored = get_content_llm_profile()  # masked, or None
+    api_key = str(eff.get("api_key") or "")
+    masked = (f"{api_key[:6]}..." if len(api_key) > 6 else f"{api_key}...") if api_key else ""
+    return {
+        "enabled": content_llm_enabled(),
+        "provider": eff["provider"],
+        "base_url": eff["base_url"],
+        "model": eff["model"],
+        "api_key": masked,
+        "api_key_set": bool(api_key),
+        "stored": stored is not None,
+    }
+
+
+@router.get("/settings/content-llm")
+def get_content_llm_settings(_: None = Depends(_require_admin_bearer)):
+    return {"ok": True, "data": _content_llm_view()}
+
+
+@router.patch("/settings/content-llm")
+def patch_content_llm_settings(
+    req: ContentLlmPatchReq, _: None = Depends(_require_admin_bearer)
+):
+    patch = {k: v for k, v in req.model_dump().items() if v is not None}
+    set_content_llm_profile(**patch)
+    return {"ok": True, "data": _content_llm_view()}
 
 
 class LlmSettingsReq(BaseModel):

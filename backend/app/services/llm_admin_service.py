@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
@@ -83,6 +84,82 @@ def _set_active_global_preset_id(conn: sqlite3.Connection, preset_id: int | None
         """,
         (ACTIVE_PRESET_META_KEY, str(int(preset_id))),
     )
+
+
+# ── Content/offline LLM profile (#919, H4b) ─────────────────────────────────
+# Persisted admin toggle for the content-gen profile introduced in #818. Stored
+# as one JSON row in game_config_meta (no migration). Read by llm_service's
+# resolve_content_llm_config()/content_llm_enabled() with priority DB > env >
+# default. Independent of the gameplay preset — never touches _runtime_config.
+CONTENT_LLM_META_KEY = "content_llm_profile"
+_CONTENT_LLM_FIELDS = ("enabled", "provider", "base_url", "model", "api_key")
+
+
+def get_content_llm_profile_raw() -> dict[str, Any] | None:
+    """Stored content LLM profile (api_key in clear) or None if never set.
+
+    Used by the resolver — needs the real key. Endpoint/UI use the masked variant.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ? LIMIT 1",
+            (CONTENT_LLM_META_KEY,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    try:
+        data = json.loads(row["value"] or "{}")
+    except (ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def get_content_llm_profile() -> dict[str, Any] | None:
+    """Stored content LLM profile with api_key masked (endpoint/UI), or None."""
+    data = get_content_llm_profile_raw()
+    if data is None:
+        return None
+    masked = dict(data)
+    masked["api_key"] = _mask_api_key(str(data.get("api_key") or ""))
+    masked["api_key_set"] = bool(str(data.get("api_key") or "").strip())
+    return masked
+
+
+def set_content_llm_profile(**patch: Any) -> dict[str, Any]:
+    """Upsert the content LLM profile (#919). Empty/blank api_key keeps the existing
+    one. Returns the stored profile with api_key masked."""
+    current = get_content_llm_profile_raw() or {}
+    for key, value in patch.items():
+        if key not in _CONTENT_LLM_FIELDS or value is None:
+            continue
+        if key == "api_key" and not str(value).strip():
+            continue  # blank = keep existing key
+        if key == "enabled":
+            current[key] = bool(value)
+        else:
+            current[key] = str(value).strip()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO game_config_meta (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (CONTENT_LLM_META_KEY, json.dumps(current)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    masked = dict(current)
+    masked["api_key"] = _mask_api_key(str(current.get("api_key") or ""))
+    masked["api_key_set"] = bool(str(current.get("api_key") or "").strip())
+    return masked
 
 
 def list_llm_presets(*, mask_api_key: bool = True) -> list[dict[str, Any]]:

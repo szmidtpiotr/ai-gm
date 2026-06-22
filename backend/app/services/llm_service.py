@@ -80,29 +80,54 @@ CONTENT_LLM_DEFAULT_BASE_URL = "http://192.168.1.170:11434"
 CONTENT_LLM_DEFAULT_MODEL = "gemma4:12b"
 
 
-def content_llm_enabled() -> bool:
-    """Whether admin content-gen should use the offline profile (default ON).
+def _stored_content_profile() -> dict[str, Any] | None:
+    """Persisted content LLM profile from DB (#919) or None. Lazy import avoids the
+    llm_admin_service ↔ llm_service import cycle; defensive on any DB error."""
+    try:
+        from app.services.llm_admin_service import get_content_llm_profile_raw
 
-    Set ``CONTENT_LLM_ENABLED=0`` to fall back to the active gameplay preset.
+        return get_content_llm_profile_raw()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("content_llm_profile_read_failed", error=str(exc))
+        return None
+
+
+def content_llm_enabled() -> bool:
+    """Whether admin content-gen should use the offline profile.
+
+    Priority: persisted DB toggle (#919) → env ``CONTENT_LLM_ENABLED`` → default ON.
+    Set the DB toggle off (admin panel) or ``CONTENT_LLM_ENABLED=0`` to fall back
+    to the active gameplay preset.
     """
+    stored = _stored_content_profile()
+    if stored is not None and "enabled" in stored:
+        return bool(stored.get("enabled"))
     return (os.getenv("CONTENT_LLM_ENABLED", "1") or "1").strip().lower() not in (
         "0", "false", "no", "off",
     )
 
 
 def resolve_content_llm_config() -> dict[str, str]:
-    """Offline/content-gen LLM profile, independent of the gameplay preset (#818).
+    """Offline/content-gen LLM profile, independent of the gameplay preset (#818/#919).
 
-    Sourced only from CONTENT_LLM_* env with a local-Ollama (.170) default, so
-    admin content generation runs locally while player narration keeps using the
-    active gameplay preset. The returned dict is meant to be handed to
+    Priority per field: persisted DB profile (admin panel) → CONTENT_LLM_* env →
+    local-Ollama (.170) default. Admin content generation runs locally while player
+    narration keeps the active gameplay preset. The returned dict is handed to
     :func:`generate_chat` as ``llm_config`` — it does NOT touch ``_runtime_config``.
     """
+    stored = _stored_content_profile() or {}
+
+    def _pick(key: str, env_var: str, default: str) -> str:
+        val = str(stored.get(key) or "").strip()
+        if val:
+            return val
+        return (os.getenv(env_var, "") or default).strip()
+
     return {
-        "provider": (os.getenv("CONTENT_LLM_PROVIDER", "") or "ollama").strip().lower(),
-        "base_url": (os.getenv("CONTENT_LLM_BASE_URL", "") or CONTENT_LLM_DEFAULT_BASE_URL).strip(),
-        "model": (os.getenv("CONTENT_LLM_MODEL", "") or CONTENT_LLM_DEFAULT_MODEL).strip(),
-        "api_key": (os.getenv("CONTENT_LLM_API_KEY", "") or "").strip(),
+        "provider": _pick("provider", "CONTENT_LLM_PROVIDER", "ollama").lower(),
+        "base_url": _pick("base_url", "CONTENT_LLM_BASE_URL", CONTENT_LLM_DEFAULT_BASE_URL),
+        "model": _pick("model", "CONTENT_LLM_MODEL", CONTENT_LLM_DEFAULT_MODEL),
+        "api_key": _pick("api_key", "CONTENT_LLM_API_KEY", ""),
     }
 
 
