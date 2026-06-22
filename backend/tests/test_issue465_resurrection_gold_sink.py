@@ -8,6 +8,7 @@ Acceptance criteria:
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -27,9 +28,7 @@ def db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             resurrection_uses_remaining INTEGER

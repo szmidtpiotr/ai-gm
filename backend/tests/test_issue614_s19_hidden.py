@@ -29,6 +29,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service as cs
 from app.services import skill_service as ss
@@ -113,18 +114,13 @@ def _schema_sql() -> str:
       name TEXT, system_id TEXT, sheet_json TEXT);
     INSERT INTO characters (id,campaign_id,user_id,name,system_id,sheet_json)
       VALUES (1,1,1,'Aldric','fantasy','{sj}');
-    CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT, damage_die TEXT,
-      linked_stat TEXT, allowed_classes TEXT DEFAULT 'rogue', weapon_type TEXT DEFAULT 'melee', is_active INTEGER DEFAULT 1);
+    {table_sql("game_config_weapons")}
     INSERT INTO game_config_weapons (key,label,damage_die,linked_stat,allowed_classes,weapon_type)
       VALUES ('dagger','Sztylet','1d4','DEX','rogue','melee');
-    CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER, ac_base INTEGER,
-      attack_bonus INTEGER, dex_modifier INTEGER DEFAULT 0, damage_die TEXT, tier TEXT DEFAULT 'standard',
-      xp_award INTEGER DEFAULT 0, description TEXT, is_active INTEGER DEFAULT 1,
-      loot_table_key TEXT, drop_chance REAL DEFAULT 0.0, skills_json TEXT, stats_json TEXT);
+    {table_sql("game_config_enemies")}
     INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,dex_modifier,damage_die,drop_chance,skills_json,stats_json)
       VALUES ('bandit','Bandit',40,8,2,0,'1d6',0.0,'{{}}','{{"WIS":10}}');
-    CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-      description TEXT, is_active INTEGER DEFAULT 1, stackable INTEGER NOT NULL DEFAULT 0);
+    {table_sql("game_config_conditions")}
     INSERT INTO game_config_conditions (key,label,effect_json,description,is_active,stackable)
       VALUES ('hidden','Ukryty','{j(HIDDEN)}','Ukrycie.',1,0);
     CREATE TABLE active_combat (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER UNIQUE,
@@ -287,7 +283,7 @@ class TestGrantViaSkill:
         conn.executescript(f"""
             CREATE TABLE characters (id INTEGER PRIMARY KEY, sheet_json TEXT);
             INSERT INTO characters (id, sheet_json) VALUES (1, '{{"conditions":[]}}');
-            CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, effect_json TEXT, is_active INTEGER DEFAULT 1);
+            """ + table_sql("game_config_conditions") + f"""
             INSERT INTO game_config_conditions (key, effect_json, is_active)
               VALUES ('hidden', '{json.dumps(HIDDEN).replace("'", "''")}', 1);
         """)

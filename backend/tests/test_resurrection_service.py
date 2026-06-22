@@ -6,6 +6,7 @@ Covers all 5 cost modes, force-bypass, uses_remaining decrement,
 full state reset, and gold-journal integrity.
 """
 
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import pytest
@@ -27,11 +28,7 @@ def db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             username TEXT,
@@ -90,17 +87,9 @@ def db():
             dungeon_key TEXT,
             cooldown_until TEXT
         );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT,
-            effect_json TEXT, ac_bonus INTEGER DEFAULT 0
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT,
-            effect_type TEXT
-        );
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_consumables") + """
 
         -- Seeds
         INSERT INTO users (id, username) VALUES (1, 'tester');

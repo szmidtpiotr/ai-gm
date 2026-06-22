@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as ls
 
@@ -33,26 +34,8 @@ def _schema_sql() -> str:
     );
     INSERT INTO characters (id, name) VALUES (1, 'Hero');
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      armor_coverage TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT,
-      linked_stat TEXT,
-      weapon_type TEXT,
-      weapon_slot TEXT NOT NULL DEFAULT 'main_hand',
-      two_handed INTEGER NOT NULL DEFAULT 0,
-      finesse INTEGER NOT NULL DEFAULT 0,
-      range_m INTEGER,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_items") + """
+    """ + table_sql("game_config_weapons") + """
     CREATE TABLE character_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -65,11 +48,11 @@ def _schema_sql() -> str:
     );
 
     -- Bronie testowe
-    INSERT INTO game_config_weapons (key, label, weapon_slot, two_handed, finesse) VALUES
-      ('longsword',  'Długi Miecz', 'either',        0, 0),  -- ciężka 'either'
-      ('dagger',     'Sztylet',     'either',        0, 1),  -- lekka 'either' (finesse)
-      ('greataxe',   'Topór 2H',    'two_handed',    1, 0),  -- dwuręczna
-      ('buckler',    'Buklerz',     'off_hand_only', 0, 0);  -- broń-tarcza off_hand_only
+    INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, weapon_slot, two_handed, finesse) VALUES
+      ('longsword',  'Długi Miecz', '1d8', 'STR', 'either',        0, 0),  -- ciężka 'either'
+      ('dagger',     'Sztylet',     '1d4', 'DEX', 'either',        0, 1),  -- lekka 'either' (finesse)
+      ('greataxe',   'Topór 2H',    '1d12','STR', 'two_handed',    1, 0),  -- dwuręczna
+      ('buckler',    'Buklerz',     '1d4', 'STR', 'off_hand_only', 0, 0);  -- broń-tarcza off_hand_only
 
     -- Tarcza jako pancerz (off_hand)
     INSERT INTO game_config_items (key, label, item_type, armor_coverage) VALUES

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service as cs
 from app.services.weapon_rules import (
@@ -24,16 +25,7 @@ def _weapon_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            damage_die TEXT NOT NULL,
-            linked_stat TEXT NOT NULL,
-            weapon_type TEXT NOT NULL DEFAULT 'melee',
-            two_handed INTEGER NOT NULL DEFAULT 0,
-            finesse INTEGER NOT NULL DEFAULT 0,
-            range_m REAL
-        );
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons
             (key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m)
         VALUES
@@ -147,42 +139,11 @@ def test_combat_resolve_attack_returns_weapon_based_attack_roll(_d20, _dmg, tmp_
           1, 1, 1, 'Aldric', 'fantasy',
           '{"stats":{"STR":12,"DEX":16,"INT":10},"skills":{"ranged_attack":2},"current_hp":20,"max_hp":20,"defense":{"base":15},"equipped_weapon":"shortbow"}'
         );
-        CREATE TABLE game_config_weapons (
-          key TEXT PRIMARY KEY,
-          label TEXT NOT NULL,
-          damage_die TEXT NOT NULL,
-          linked_stat TEXT NOT NULL,
-          allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-          weapon_type TEXT NOT NULL DEFAULT 'melee',
-          two_handed INTEGER NOT NULL DEFAULT 0,
-          finesse INTEGER NOT NULL DEFAULT 0,
-          range_m REAL,
-          is_active INTEGER NOT NULL DEFAULT 1,
-          locked_at TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons
           (key, label, damage_die, linked_stat, allowed_classes, weapon_type, two_handed, finesse, range_m)
         VALUES ('shortbow', 'Shortbow', '1d6', 'DEX', 'warrior', 'ranged', 0, 0, 90);
-        CREATE TABLE game_config_enemies (
-          key TEXT PRIMARY KEY,
-          label TEXT NOT NULL,
-          hp_base INTEGER NOT NULL,
-          ac_base INTEGER NOT NULL,
-          attack_bonus INTEGER NOT NULL,
-          dex_modifier INTEGER NOT NULL DEFAULT 0,
-          damage_die TEXT NOT NULL,
-          tier TEXT DEFAULT 'standard',
-          xp_award INTEGER NOT NULL DEFAULT 0,
-          description TEXT,
-          is_active INTEGER NOT NULL DEFAULT 1,
-          locked_at TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          loot_table_key TEXT,
-          drop_chance REAL NOT NULL DEFAULT 1.0
-        );
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies
           (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
         VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', NULL, 0.0);
@@ -345,44 +306,13 @@ def test_combat_uses_inventory_main_hand_when_sheet_has_no_equipped_weapon(_d20,
         );
         INSERT INTO character_inventory (character_id, weapon_key, quantity, equipped, slot)
         VALUES (1, 'shortbow', 1, 1, 'main_hand');
-        CREATE TABLE game_config_weapons (
-          key TEXT PRIMARY KEY,
-          label TEXT NOT NULL,
-          damage_die TEXT NOT NULL,
-          linked_stat TEXT NOT NULL,
-          allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-          weapon_type TEXT NOT NULL DEFAULT 'melee',
-          two_handed INTEGER NOT NULL DEFAULT 0,
-          finesse INTEGER NOT NULL DEFAULT 0,
-          range_m REAL,
-          is_active INTEGER NOT NULL DEFAULT 1,
-          locked_at TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons
           (key, label, damage_die, linked_stat, allowed_classes, weapon_type, two_handed, finesse, range_m)
         VALUES
           ('club', 'Club', '1d4', 'STR', 'warrior', 'melee', 0, 0, NULL),
           ('shortbow', 'Shortbow', '1d6', 'DEX', 'warrior', 'ranged', 0, 0, 90);
-        CREATE TABLE game_config_enemies (
-          key TEXT PRIMARY KEY,
-          label TEXT NOT NULL,
-          hp_base INTEGER NOT NULL,
-          ac_base INTEGER NOT NULL,
-          attack_bonus INTEGER NOT NULL,
-          dex_modifier INTEGER NOT NULL DEFAULT 0,
-          damage_die TEXT NOT NULL,
-          tier TEXT DEFAULT 'standard',
-          xp_award INTEGER NOT NULL DEFAULT 0,
-          description TEXT,
-          is_active INTEGER NOT NULL DEFAULT 1,
-          locked_at TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          loot_table_key TEXT,
-          drop_chance REAL NOT NULL DEFAULT 1.0
-        );
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies
           (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
         VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', NULL, 0.0);

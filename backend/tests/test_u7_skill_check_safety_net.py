@@ -18,6 +18,7 @@ import os
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 @pytest.fixture
@@ -38,14 +39,7 @@ def mem_db():
             campaign_id INTEGER NOT NULL,
             session_flags TEXT DEFAULT '{}'
         );
-        CREATE TABLE game_config_skill_risk_categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category_key TEXT NOT NULL UNIQUE,
-            skill_key TEXT NOT NULL,
-            default_dc INTEGER NOT NULL DEFAULT 12,
-            keywords TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1
-        );
+        """ + table_sql("game_config_skill_risk_categories") + """
         INSERT INTO game_config_skill_risk_categories
             (category_key, skill_key, default_dc, keywords, enabled) VALUES
             ('stealth', 'stealth', 12, 'skrad,przekrad,niepostrzeżenie,kryję,chowam,ukrywam,przemykam,cichaczem', 1),

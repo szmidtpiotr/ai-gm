@@ -10,6 +10,7 @@ Result: Gate walki widzi niepustą listę wrogów → blokuje każdą akcję po 
 Fix: po każdym _persist_combatants_and_maybe_end(status="ended") wywołać
 set_world_state_flags(campaign_id, scene_enemies=[]).
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import unittest
@@ -69,50 +70,16 @@ def _schema_sql() -> str:
       '{"archetype":"warrior","stats":{"STR":14,"DEX":12,"CON":12,"INT":10,"WIS":10,"CHA":10,"LCK":10},"current_hp":20,"max_hp":20,"defense":{"base":15},"equipped_weapon":"sword"}'
     );
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL,
-      allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      weapon_type TEXT NOT NULL DEFAULT 'melee',
-      attack_bonus INTEGER NOT NULL DEFAULT 0,
-      damage_bonus INTEGER NOT NULL DEFAULT 0,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_weapons") + """
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes, weapon_type)
     VALUES ('sword', 'Sword', '1d8', 'STR', 'warrior', 'melee');
 
-    CREATE TABLE game_config_enemies (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      hp_base INTEGER NOT NULL,
-      ac_base INTEGER NOT NULL,
-      attack_bonus INTEGER NOT NULL,
-      dex_modifier INTEGER NOT NULL DEFAULT 0,
-      damage_die TEXT NOT NULL DEFAULT '1d6',
-      tier TEXT NOT NULL DEFAULT 'standard',
-      xp_award INTEGER NOT NULL DEFAULT 0,
-      description TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      skills_json TEXT,
-      loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 0.0,
-      loot_tier TEXT DEFAULT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_enemies") + """
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
     VALUES ('bandit', 'Bandit', 1, 1, 0, 0, '1d4', NULL, 0.0);
 
-    CREATE TABLE IF NOT EXISTS game_config_meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
+    """ + table_sql("game_config_meta") + """
 
     CREATE TABLE IF NOT EXISTS active_combat (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -205,12 +172,7 @@ def _schema_sql() -> str:
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS game_config_conditions (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_conditions") + """
     """
 
 

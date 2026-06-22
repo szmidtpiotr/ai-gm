@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service as cs
 from app.services import loot_service as ls
@@ -61,62 +62,14 @@ def _schema_sql() -> str:
       '{"stats":{"STR":14,"DEX":12,"CON":12,"INT":10,"WIS":10,"CHA":10},"current_hp":20,"max_hp":20,"defense":{"base":15},"equipped_weapon":"sword_iron"}'
     );
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL,
-      allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_weapons") + """
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes, is_active)
     VALUES ('sword_iron', 'Iron Sword', '1d8', 'STR', 'warrior', 1);
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      description TEXT NOT NULL DEFAULT '',
-      value_gp INTEGER NOT NULL DEFAULT 0,
-      weight REAL NOT NULL DEFAULT 0.0,
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_consumables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      effect_type TEXT NOT NULL DEFAULT 'misc',
-      effect_dice TEXT,
-      effect_bonus INTEGER NOT NULL DEFAULT 0,
-      effect_target TEXT NOT NULL DEFAULT 'self',
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      charges INTEGER NOT NULL DEFAULT 1,
-      base_price INTEGER NOT NULL DEFAULT 0,
-      note TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_items") + """
+    """ + table_sql("game_config_consumables") + """
 
-    CREATE TABLE IF NOT EXISTS game_config_enemies (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      hp_base INTEGER NOT NULL,
-      ac_base INTEGER NOT NULL,
-      attack_bonus INTEGER NOT NULL,
-      dex_modifier INTEGER NOT NULL DEFAULT 0,
-      damage_die TEXT NOT NULL,
-      description TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 1.0
-    );
+    """ + table_sql("game_config_enemies") + """
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
     VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', 'bandit_loot', 1.0);

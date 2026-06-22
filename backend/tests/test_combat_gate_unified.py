@@ -17,6 +17,7 @@ import sqlite3
 import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 
 def _make_db():
@@ -29,11 +30,7 @@ def _make_db():
             scene_enemies  TEXT NOT NULL DEFAULT '[]',
             scene_npcs     TEXT NOT NULL DEFAULT '[]'
         );
-        CREATE TABLE game_config_enemies (
-            key       TEXT PRIMARY KEY,
-            label     TEXT,
-            is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE campaign_known_npcs (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             campaign_id INTEGER NOT NULL,

@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 os.environ.setdefault("AIGM_E2E_LITE", "1")
 
 import pytest
@@ -34,10 +35,7 @@ def _make_db(tmp_path, suffix=""):
             is_active INTEGER NOT NULL DEFAULT 1,
             sheet_json TEXT NOT NULL DEFAULT '{}'
         );
-        CREATE TABLE IF NOT EXISTS game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE IF NOT EXISTS character_xp_grants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             character_id INTEGER,

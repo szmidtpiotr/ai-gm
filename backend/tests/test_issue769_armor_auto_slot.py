@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as ls
 
@@ -26,19 +27,7 @@ CREATE TABLE characters (
 );
 INSERT INTO characters VALUES (1, 'Eldric', 100);
 
-CREATE TABLE game_config_items (
-  key TEXT PRIMARY KEY,
-  label TEXT NOT NULL,
-  item_type TEXT NOT NULL DEFAULT 'misc',
-  description TEXT NOT NULL DEFAULT '',
-  value_gp INTEGER NOT NULL DEFAULT 0,
-  weight REAL NOT NULL DEFAULT 0.0,
-  weight_kg REAL NOT NULL DEFAULT 0.0,
-  effect_json TEXT,
-  armor_coverage TEXT,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  item_data TEXT
-);
+""" + table_sql("game_config_items") + """
 INSERT INTO game_config_items (key, label, item_type, armor_coverage) VALUES
   ('leather_gloves', 'Skórzane rękawice', 'armor', 'hands'),
   ('leather_armor',  'Skórzana zbroja',   'armor', 'torso'),
@@ -46,15 +35,8 @@ INSERT INTO game_config_items (key, label, item_type, armor_coverage) VALUES
   ('arm_guard',      'Naramiennik',       'armor', 'limb_arm'),
   ('leather_boots',  'Skórzane buty',     'armor', 'feet');
 
-CREATE TABLE game_config_weapons (
-  key TEXT PRIMARY KEY, label TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  weapon_slot TEXT, damage_dice TEXT, weight_kg REAL DEFAULT 0
-);
-CREATE TABLE game_config_consumables (
-  key TEXT PRIMARY KEY, label TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 1
-);
+""" + table_sql("game_config_weapons") + """
+""" + table_sql("game_config_consumables") + """
 
 CREATE TABLE character_inventory (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

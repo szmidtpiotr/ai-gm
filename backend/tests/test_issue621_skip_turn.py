@@ -16,6 +16,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service as cs
 
@@ -37,14 +38,10 @@ def _schema_sql() -> str:
       system_id TEXT, sheet_json TEXT);
     INSERT INTO characters (id,campaign_id,user_id,name,system_id,sheet_json)
       VALUES (1,1,1,'Aldric','fantasy','{psj}');
-    CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT, damage_die TEXT, linked_stat TEXT,
-      allowed_classes TEXT DEFAULT 'warrior', is_active INTEGER DEFAULT 1);
+    {table_sql("game_config_weapons")}
     INSERT INTO game_config_weapons (key,label,damage_die,linked_stat,allowed_classes)
       VALUES ('sword','Sword','1d8','STR','warrior');
-    CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER, ac_base INTEGER,
-      attack_bonus INTEGER, dex_modifier INTEGER DEFAULT 0, damage_die TEXT, tier TEXT DEFAULT 'standard',
-      xp_award INTEGER DEFAULT 0, description TEXT, is_active INTEGER DEFAULT 1, loot_table_key TEXT,
-      drop_chance REAL DEFAULT 0.0, skills_json TEXT, stats_json TEXT);
+    {table_sql("game_config_enemies")}
     INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,dex_modifier,damage_die,drop_chance,skills_json)
       VALUES ('bandit','Bandit',12,13,3,1,'1d8',0.0,'{{}}');
     CREATE TABLE active_combat (id INTEGER PRIMARY KEY, campaign_id INTEGER UNIQUE, character_id INTEGER,

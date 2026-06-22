@@ -14,6 +14,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -35,15 +36,7 @@ def db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_hidden_traits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            label TEXT NOT NULL,
-            description TEXT,
-            trigger_keywords TEXT,
-            effect_json TEXT,
-            is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_hidden_traits") + """
         INSERT INTO game_config_hidden_traits (key, label, description, trigger_keywords, effect_json, is_active)
         VALUES
           ('berserker_rage', 'Szał Berserkera',

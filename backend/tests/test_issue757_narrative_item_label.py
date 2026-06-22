@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as ls
 
@@ -27,13 +28,7 @@ def _schema_sql() -> str:
     CREATE TABLE characters (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);
     INSERT INTO characters (id, name) VALUES (1, 'Mizel');
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      description TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_items") + """
     CREATE TABLE game_items (
       key TEXT PRIMARY KEY,
       label TEXT NOT NULL,

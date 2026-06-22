@@ -10,6 +10,7 @@ import sys
 from unittest.mock import patch
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 os.environ.setdefault("AIGM_E2E_LITE", "1")
 
 import pytest
@@ -103,38 +104,11 @@ def _schema_sql() -> str:
     INSERT INTO character_campaign_state (character_id, campaign_id, current_hp, max_hp)
     VALUES (1, 1, 20, 20), (2, 1, 18, 18);
 
-    CREATE TABLE IF NOT EXISTS game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL DEFAULT 'STR',
-      allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      weapon_type TEXT NOT NULL DEFAULT 'melee',
-      attack_bonus INTEGER NOT NULL DEFAULT 0,
-      damage_bonus INTEGER NOT NULL DEFAULT 0
-    );
+    """ + table_sql("game_config_weapons") + """
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes)
     VALUES ('sword', 'Miecz', '1d8', 'STR', 'warrior');
 
-    CREATE TABLE IF NOT EXISTS game_config_enemies (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      hp_base INTEGER NOT NULL DEFAULT 10,
-      ac_base INTEGER NOT NULL DEFAULT 12,
-      attack_bonus INTEGER NOT NULL DEFAULT 2,
-      dex_modifier INTEGER NOT NULL DEFAULT 0,
-      damage_die TEXT NOT NULL DEFAULT '1d6',
-      tier TEXT DEFAULT 'standard',
-      xp_award INTEGER NOT NULL DEFAULT 10,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      skills_json TEXT,
-      stats_json TEXT,
-      loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 1.0,
-      attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-      image_url TEXT
-    );
+    """ + table_sql("game_config_enemies") + """
     INSERT INTO game_config_enemies (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, image_url)
     VALUES ('goblin', 'Goblin', 8, 12, 2, 1, '1d6', NULL);
 
@@ -175,16 +149,9 @@ def _schema_sql() -> str:
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS game_config_conditions (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL DEFAULT '',
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_conditions") + """
 
-    CREATE TABLE IF NOT EXISTS game_config_skills (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL DEFAULT ''
-    );
+    """ + table_sql("game_config_skills") + """
 
     CREATE TABLE IF NOT EXISTS character_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,15 +163,7 @@ def _schema_sql() -> str:
       equipped INTEGER NOT NULL DEFAULT 0
     );
 
-    CREATE TABLE IF NOT EXISTS game_config_spells (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL DEFAULT '',
-      spell_type TEXT NOT NULL DEFAULT 'attack',
-      damage_die TEXT NOT NULL DEFAULT '1d6',
-      mana_cost INTEGER NOT NULL DEFAULT 2,
-      tier INTEGER NOT NULL DEFAULT 1,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_spells") + """
 
     CREATE TABLE IF NOT EXISTS campaign_turns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

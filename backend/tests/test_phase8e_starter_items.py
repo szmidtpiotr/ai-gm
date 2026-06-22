@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api import characters as characters_api
 from app.api import inventory as inventory_api
@@ -56,48 +57,18 @@ def _schema_sql() -> str:
       gold_gp INTEGER NOT NULL DEFAULT 0
     );
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL,
-      allowed_classes TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_weapons") + """
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes, is_active) VALUES
       ('shortsword', 'Shortsword', 'd6', 'STR', '["warrior"]', 1),
       ('wooden_shield', 'Shield', 'd4', 'STR', '["warrior"]', 1),
       ('shortbow', 'Shortbow', 'd6', 'DEX', '["warrior","ranger"]', 1),
       ('quarterstaff', 'Staff', 'd6', 'STR', '["scholar"]', 1);
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      description TEXT NOT NULL DEFAULT '',
-      value_gp INTEGER NOT NULL DEFAULT 0,
-      weight REAL NOT NULL DEFAULT 0.0,
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_items") + """
     INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
     VALUES ('leatherarmor', 'Leather', 'armor', 'armor', 10, 0, 5, 1);
 
-    CREATE TABLE game_config_consumables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      effect_type TEXT NOT NULL DEFAULT 'misc',
-      effect_dice TEXT,
-      effect_bonus INTEGER NOT NULL DEFAULT 0,
-      effect_target TEXT NOT NULL DEFAULT 'self',
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      charges INTEGER NOT NULL DEFAULT 1,
-      base_price INTEGER NOT NULL DEFAULT 0,
-      note TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
+    """ + table_sql("game_config_consumables") + """
     INSERT INTO game_config_consumables (key, label, is_active)
     VALUES ('health_potion_small', 'HP', 1), ('mana_potion', 'Mana', 1);
 
@@ -118,17 +89,7 @@ def _schema_sql() -> str:
       approved INTEGER DEFAULT 1
     );
 
-    CREATE TABLE game_config_archetypes (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      description TEXT,
-      starter_items_json TEXT NOT NULL DEFAULT '[]',
-      starter_gold_gp INTEGER NOT NULL DEFAULT 0,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_archetypes") + """
     INSERT INTO game_config_archetypes (key, label, description, starter_items_json, starter_gold_gp, is_active)
     VALUES
     ('warrior', 'W', 'x',

@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api import characters as characters_mod
 from app.main import app
@@ -20,17 +21,8 @@ def _seed_db(path: str) -> None:
     try:
         conn.executescript(
             """
-            CREATE TABLE game_config_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-            CREATE TABLE game_config_stats (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                description TEXT,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                locked_at TEXT
-            );
+            """ + table_sql("game_config_meta") + """
+            """ + table_sql("game_config_stats") + """
             INSERT INTO game_config_stats (key, label, sort_order) VALUES
                 ('str', 'Siła', 1),
                 ('dex', 'Zręczność', 2);

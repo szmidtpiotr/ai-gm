@@ -1,6 +1,7 @@
 """
 Tests for Combat V2 Service — Phase 05 Tasks 14-19
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import pytest
@@ -28,15 +29,7 @@ def db():
         CREATE TABLE characters (
             id INTEGER PRIMARY KEY, sheet_json TEXT DEFAULT '{}'
         );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT,
-            dex_modifier INTEGER DEFAULT 0,
-            attack_bonus INTEGER DEFAULT 2,
-            damage_die TEXT DEFAULT 'd6',
-            damage_bonus INTEGER DEFAULT 0,
-            fear_aura INTEGER DEFAULT 0,
-            fear_dc INTEGER DEFAULT 12
-        );
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE enemy_behavior_profiles (
             enemy_key TEXT PRIMARY KEY,
             default_action TEXT DEFAULT 'attack_player',
@@ -60,9 +53,7 @@ def db():
             character_id INTEGER, item_key TEXT,
             weapon_key TEXT, equipped INTEGER DEFAULT 0
         );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, item_type TEXT, ac_bonus INTEGER DEFAULT 0
-        );
+        """ + table_sql("game_config_items") + """
         CREATE TABLE active_combat (
             id INTEGER PRIMARY KEY,
             campaign_id INTEGER, status TEXT DEFAULT 'active',
@@ -71,8 +62,8 @@ def db():
         );
 
         INSERT INTO characters VALUES (1, '{"stats":{"DEX":12,"STR":14,"CON":10},"current_hp":12,"max_hp":12}');
-        INSERT INTO game_config_enemies VALUES ('goblin', 'Goblin', 1, 2, 'd6', 0, 0, 12);
-        INSERT INTO game_config_enemies VALUES ('vampire', 'Vampire', 2, 4, 'd8', 2, 1, 16);
+        INSERT INTO game_config_enemies (key, label, dex_modifier, attack_bonus, damage_die, damage_bonus, fear_aura, fear_dc) VALUES ('goblin', 'Goblin', 1, 2, '1d6', 0, 0, 12);
+        INSERT INTO game_config_enemies (key, label, dex_modifier, attack_bonus, damage_die, damage_bonus, fear_aura, fear_dc) VALUES ('vampire', 'Vampire', 2, 4, '1d8', 2, 1, 16);
         INSERT INTO enemy_behavior_profiles VALUES ('goblin','attack_player',25,NULL,3,'','',0,0);
         INSERT INTO enemy_behavior_profiles VALUES ('vampire','attack_player',0,'drain_life',3,'','',1,16);
     """)

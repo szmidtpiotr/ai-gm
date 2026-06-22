@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services.weapon_rules import (
     PARRY_DEFENSE_BONUS,
@@ -52,12 +53,7 @@ def _inv_db() -> sqlite3.Connection:
             equipped INTEGER DEFAULT 0,
             slot TEXT
         );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT NOT NULL,
-            linked_stat TEXT NOT NULL, weapon_type TEXT NOT NULL DEFAULT 'melee',
-            two_handed INTEGER NOT NULL DEFAULT 0, finesse INTEGER NOT NULL DEFAULT 0,
-            range_m REAL
-        );
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons (key,label,damage_die,linked_stat,weapon_type,two_handed,finesse)
         VALUES ('dagger','Sztylet','1d4','DEX','melee',0,1),
                ('shortsword','Short Sword','1d6','STR','melee',0,0),

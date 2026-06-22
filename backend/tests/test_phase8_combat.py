@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 if "httpx" not in sys.modules:
     from unittest.mock import MagicMock
@@ -90,50 +91,16 @@ def _schema_sql() -> str:
       '{"stats":{"STR":14,"DEX":12,"CON":12,"INT":10,"WIS":10,"CHA":10},"current_hp":20,"max_hp":20,"defense":{"base":15},"equipped_weapon":"sword"}'
     );
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL,
-      allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_weapons") + """
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes)
     VALUES ('sword', 'Sword', '1d8', 'STR', 'warrior');
 
-    CREATE TABLE game_config_enemies (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      hp_base INTEGER NOT NULL,
-      ac_base INTEGER NOT NULL,
-      attack_bonus INTEGER NOT NULL,
-      dex_modifier INTEGER NOT NULL DEFAULT 0,
-      damage_die TEXT NOT NULL,
-      tier TEXT DEFAULT 'standard',
-      xp_award INTEGER NOT NULL DEFAULT 0,
-      description TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      skills_json TEXT,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 1.0,
-      attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-      stats_json TEXT,
-      image_url TEXT
-    );
+    """ + table_sql("game_config_enemies") + """
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, skills_json, loot_table_key, drop_chance)
     VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', '{}', NULL, 0.0);
 
-    CREATE TABLE IF NOT EXISTS game_config_meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
+    """ + table_sql("game_config_meta") + """
 
     CREATE TABLE IF NOT EXISTS active_combat (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,7 +164,7 @@ def _schema_sql() -> str:
 
 class TestPhase8Combat(unittest.TestCase):
     def setUp(self):
-        self._tmp = Path(__file__).resolve().parent / "_phase8_combat_test.db"
+        self._tmp = Path("/tmp") / "_phase8_combat_test.db"
         if self._tmp.exists():
             self._tmp.unlink()
         conn = sqlite3.connect(str(self._tmp))
@@ -205,10 +172,15 @@ class TestPhase8Combat(unittest.TestCase):
         conn.close()
         self._p_db = patch.object(cs, "COMBAT_DB_PATH", str(self._tmp))
         self._p_admin = patch.object(admin_config, "DB_PATH", str(self._tmp))
+        # Full schema allows _create_pending_combat_enemy to succeed, auto-creating unknown keys.
+        # Patch it out to preserve pre-migration behavior: unknown keys are silently skipped.
+        self._p_pending = patch("app.services.combat_service._create_pending_combat_enemy", return_value=None)
         self._p_db.start()
         self._p_admin.start()
+        self._p_pending.start()
 
     def tearDown(self):
+        self._p_pending.stop()
         self._p_admin.stop()
         self._p_db.stop()
         if self._tmp.exists():

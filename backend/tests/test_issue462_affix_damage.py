@@ -19,6 +19,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 if "httpx" not in sys.modules:
     from unittest.mock import MagicMock
@@ -63,16 +64,7 @@ def _schema_sql() -> str:
       '{"stats":{"STR":14,"DEX":12,"CON":12,"INT":10,"WIS":10,"CHA":10},"current_hp":20,"max_hp":20,"defense":{"base":15},"equipped_weapon":"plain_sword"}'
     );
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT NOT NULL,
-      linked_stat TEXT NOT NULL, allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      is_active INTEGER NOT NULL DEFAULT 1, weapon_type TEXT NOT NULL DEFAULT 'melee',
-      two_handed INTEGER NOT NULL DEFAULT 0, finesse INTEGER NOT NULL DEFAULT 0,
-      range_m INTEGER, locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      effect_json TEXT
-    );
+    """ + table_sql("game_config_weapons") + """
     -- Plain weapon, NO own effect_json — the bonus comes purely from the affix.
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, effect_json)
     VALUES ('plain_sword', 'Plain Sword', '1d8', 'STR', NULL);
@@ -95,36 +87,19 @@ def _schema_sql() -> str:
     VALUES (1, 'plain_sword', 1, 'main_hand', '["sharp"]');
 
     -- F2: affix catalog. 'sharp' grants flat damage_bonus +3 via typed Effect Object.
-    CREATE TABLE game_config_affixes (
-      key TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      tier INTEGER NOT NULL DEFAULT 1,
-      allowed_item_types TEXT NOT NULL DEFAULT 'weapon',
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    """ + table_sql("game_config_affixes") + """
     INSERT INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json)
     VALUES (
       'sharp', 'Ostry', 1, 'weapon',
       '{"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":3}]}'
     );
 
-    CREATE TABLE game_config_enemies (
-      key TEXT PRIMARY KEY, label TEXT NOT NULL, hp_base INTEGER NOT NULL,
-      ac_base INTEGER NOT NULL, attack_bonus INTEGER NOT NULL,
-      dex_modifier INTEGER NOT NULL DEFAULT 0, damage_die TEXT NOT NULL,
-      tier TEXT DEFAULT 'standard', xp_award INTEGER NOT NULL DEFAULT 0,
-      description TEXT, is_active INTEGER NOT NULL DEFAULT 1, skills_json TEXT,
-      locked_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      loot_table_key TEXT, drop_chance REAL NOT NULL DEFAULT 1.0
-    );
+    """ + table_sql("game_config_enemies") + """
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, skills_json, loot_table_key, drop_chance)
     VALUES ('dummy', 'Dummy', 50, 10, 0, 0, '1d4', '{}', NULL, 0.0);
 
-    CREATE TABLE IF NOT EXISTS game_config_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    """ + table_sql("game_config_meta") + """
 
     CREATE TABLE IF NOT EXISTS active_combat (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

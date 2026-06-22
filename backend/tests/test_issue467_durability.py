@@ -12,6 +12,7 @@ Acceptance:
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -60,27 +61,16 @@ def db():
             game_clock_day INTEGER DEFAULT 1,
             reverted_at TEXT
         );
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY,
-            rarity INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY,
-            rarity INTEGER NOT NULL DEFAULT 1,
-            ac_bonus INTEGER DEFAULT 0
-        );
+        """ + table_sql("game_config_meta") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
 
         -- Weapon and armor config
-        INSERT INTO game_config_weapons VALUES ('sword', 1);
-        INSERT INTO game_config_weapons VALUES ('longsword', 2);
-        INSERT INTO game_config_weapons VALUES ('enchanted_blade', 3);
-        INSERT INTO game_config_items VALUES ('leather_armor', 1, 2);
-        INSERT INTO game_config_items VALUES ('chainmail', 2, 4);
+        INSERT INTO game_config_weapons (key, rarity) VALUES ('sword', 1);
+        INSERT INTO game_config_weapons (key, rarity) VALUES ('longsword', 2);
+        INSERT INTO game_config_weapons (key, rarity) VALUES ('enchanted_blade', 3);
+        INSERT INTO game_config_items (key, rarity, ac_bonus) VALUES ('leather_armor', 1, 2);
+        INSERT INTO game_config_items (key, rarity, ac_bonus) VALUES ('chainmail', 2, 4);
 
         -- Character with 1000 gold
         INSERT INTO characters VALUES (1, 1000);

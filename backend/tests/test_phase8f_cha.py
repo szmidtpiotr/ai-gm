@@ -1,6 +1,7 @@
 """Phase 8F-3 — CHA-based sell ratio in shop service."""
 
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import sqlite3
 
@@ -36,30 +37,9 @@ def _seed_db(path: str, cha: int, item_value: int = 10) -> None:
                 quantity INTEGER NOT NULL DEFAULT 1,
                 source TEXT
             );
-            CREATE TABLE game_config_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                label TEXT,
-                description TEXT,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE game_config_weapons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                label TEXT,
-                description TEXT,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE game_config_consumables (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                label TEXT,
-                description TEXT,
-                base_price INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_items") + """
+            """ + table_sql("game_config_weapons") + """
+            """ + table_sql("game_config_consumables") + """
             """
         )
         sheet = (
