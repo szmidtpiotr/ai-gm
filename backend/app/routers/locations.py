@@ -24,6 +24,16 @@ def require_admin_token(authorization: str | None = Header(default=None)) -> Non
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
 
+def is_test_location_key(key: str | None) -> bool:
+    """Czy klucz to atrapa z fixtureów testowych (prefix 'test_loc').
+
+    Łapie zarówno 'test_loc_<ts>' (fixture phase8d), jak i 'test_location_<ts>'.
+    Takie lokacje (#941) nigdy nie mogą być canonical/world-eligible — inaczej
+    generator świata wstawia je do realnych kampanii ('Updated Label Test').
+    """
+    return bool(key) and key.strip().lower().startswith("test_loc")
+
+
 # ============================================================================
 # Pydantic Models
 # ============================================================================
@@ -262,7 +272,10 @@ async def create_location(
                     status_code=404,
                     detail=f"Parent lokalizacja o ID {data.parent_id} nie istnieje lub jest nieaktywna"
                 )
-        
+
+        # #941 — atrapy testowe nigdy nie są world-eligible (nie wpadają do puli generacji świata)
+        canonical_flag = bool(data.canonical) and not is_test_location_key(key)
+
         # Konwertuj listy na JSON
         enemy_keys_json = json.dumps(data.enemy_keys) if data.enemy_keys else "[]"
         npc_keys_json = json.dumps(data.npc_keys) if data.npc_keys else "[]"
@@ -290,7 +303,7 @@ async def create_location(
                 data.location_subtype,
                 data.biome,
                 data.tier,
-                1 if data.canonical else 0,
+                1 if canonical_flag else 0,
                 data.source_campaign_id,
             )
         )
@@ -392,10 +405,13 @@ async def update_location(
         # Nie pozwalamy zmieniać parent_id (struktura drzewa immutable)
         # ani key (to jest identyfikator)
         
+        # #941 — PUT też nie może przywrócić canonical atrapie testowej (test PUT-uje label)
+        canonical_flag = bool(data.canonical) and not is_test_location_key(key)
+
         # Konwertuj listy na JSON
         enemy_keys_json = json.dumps(data.enemy_keys) if data.enemy_keys else "[]"
         npc_keys_json = json.dumps(data.npc_keys) if data.npc_keys else "[]"
-        
+
         # Aktualizuj lokalizację
         conn.execute(
             """
@@ -423,7 +439,7 @@ async def update_location(
                 data.location_subtype,
                 data.biome,
                 data.tier,
-                1 if data.canonical else 0,
+                1 if canonical_flag else 0,
                 key,
             )
         )

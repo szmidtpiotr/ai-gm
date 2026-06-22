@@ -46,9 +46,14 @@ def test_location(admin_token):
         headers={"Authorization": f"Bearer {admin_token}"}
     )
 
-    if resp.status_code == 201:
-        return resp.json()
-    return None
+    created = resp.json() if resp.status_code == 201 else None
+    # #941 — yield + teardown: atrapa 'test_loc_*' znika twardo z bazy (soft-delete → force purge),
+    # żeby nie zostawić żadnego wiersza w żywej DB DEV.
+    yield created
+    if created:
+        h = {"Authorization": f"Bearer {admin_token}"}
+        client.delete(f"/api/locations/{created['key']}", headers=h)
+        client.delete(f"/api/locations/{created['key']}?force=true", headers=h)
 
 
 class TestGetLocations:
