@@ -664,6 +664,102 @@
     </footer>
   </div>
 
+  <!-- CREATE LOBBY SCREEN (#922 GF2) -->
+  <div id="create-lobby-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" id="create-lobby-back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <span class="header__icon">⚔️</span>
+        <h1 class="header__title">Utwórz Lobby</h1>
+      </div>
+      <div class="header__right"></div>
+    </header>
+
+    <main class="wizard-content">
+      <!-- Mode selection -->
+      <div class="lf-section">
+        <div class="lf-section__label">Tryb kampanii</div>
+        <div class="lf-tiles">
+          <button type="button" class="lf-tile lf-tile--on" id="lobby-mode-ai"
+                  onclick="setLobbyMode('ai')">
+            <span class="lf-tile__icon">🤖</span>
+            <span class="lf-tile__label">AI</span>
+            <span class="lf-tile__hint">Narracja generowana</span>
+          </button>
+          <button type="button" class="lf-tile" id="lobby-mode-prebuilt"
+                  onclick="setLobbyMode('prebuilt')">
+            <span class="lf-tile__icon">📖</span>
+            <span class="lf-tile__label">Gotowa</span>
+            <span class="lf-tile__hint">Wybrany scenariusz</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Session name (hidden in prebuilt mode) -->
+      <div class="lf-section" id="lobby-name-section">
+        <div class="lf-section__label">Nazwa sesji</div>
+        <div class="form-field">
+          <input type="text" id="lobby-title" placeholder="np. Wyprawa do Mrocznego Lasu…" maxlength="60" autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Template section (hidden in AI mode) -->
+      <div class="lf-section" id="lobby-template-section" style="display:none">
+        <div class="lf-section__label">Wybierz przygodę</div>
+        <div id="lobby-template-list" class="lf-tpl-list">
+          <div style="opacity:.5;font-size:13px;padding:8px 0">Ładowanie szablonów…</div>
+        </div>
+        <div id="lobby-tpl-summary" class="lf-tpl-summary" style="display:none"></div>
+      </div>
+
+      <!-- Timer -->
+      <div class="lf-section">
+        <div class="lf-section__label">Timer rundy <span id="lobby-timer-hint" class="lf-timer-hint">1 440 min</span></div>
+        <div class="lf-chips">
+          <button type="button" class="lf-chip" data-minutes="60"  onclick="setLobbyTimer(60)">1 h</button>
+          <button type="button" class="lf-chip" data-minutes="360" onclick="setLobbyTimer(360)">6 h</button>
+          <button type="button" class="lf-chip lf-chip--on" data-minutes="1440" onclick="setLobbyTimer(1440)">24 h</button>
+          <button type="button" class="lf-chip" data-minutes="4320" onclick="setLobbyTimer(4320)">3 dni</button>
+        </div>
+        <div class="form-field" style="margin-top:8px">
+          <input type="number" id="lobby-timer" value="1440" min="1" max="4320"
+                 oninput="updateLobbyTimerHint()" style="max-width:160px">
+          <span class="form-field__counter">minut (1–4320)</span>
+        </div>
+      </div>
+
+      <!-- Max players -->
+      <div class="lf-section">
+        <div class="lf-section__label">Maksimum graczy</div>
+        <div class="lf-tiles lf-tiles--sm">
+          <button type="button" class="lf-tile lf-tile--sm" data-players="2" onclick="setLobbyMaxPlayers(2)">2</button>
+          <button type="button" class="lf-tile lf-tile--sm" data-players="3" onclick="setLobbyMaxPlayers(3)">3</button>
+          <button type="button" class="lf-tile lf-tile--sm lf-tile--on" data-players="4" onclick="setLobbyMaxPlayers(4)">4</button>
+          <button type="button" class="lf-tile lf-tile--sm" data-players="6" onclick="setLobbyMaxPlayers(6)">6</button>
+        </div>
+        <select id="lobby-max-players" style="display:none" aria-hidden="true">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+        </select>
+      </div>
+
+      <!-- Error + Create button -->
+      <div id="create-lobby-error" class="lf-error" style="display:none"></div>
+
+      <button type="button" class="lf-create-btn" onclick="createLobby()">
+        <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+        Utwórz Lobby
+        <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+      </button>
+    </main>
+  </div>
+
   <!-- GAME SCREEN -->
   <div id="game-screen" class="screen">
     <header class="header header--game">

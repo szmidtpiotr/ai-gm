@@ -10094,3 +10094,75 @@ body[data-theme="classic"] {
 .ammo-recover-pill__btn--go:hover:not(:disabled) { background: rgba(86,160,108,0.3); }
 .ammo-recover-pill__btn--go:disabled { opacity: 0.6; cursor: default; }
 .ammo-recover-pill__btn--skip:hover { border-color: #6b8ab0; }
+
+/* ── Lobby Form (GF2 #922) — create-lobby-screen ───────────────────────── */
+.lf-section { margin-bottom: 20px; }
+.lf-section__label {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent, #c9a54a);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+}
+.lf-timer-hint { font-weight: 400; opacity: 0.7; text-transform: none; letter-spacing: 0; }
+
+/* Tiles (mode + max-players) */
+.lf-tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+.lf-tiles--sm { gap: 8px; }
+.lf-tile {
+  flex: 1; min-width: 80px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  padding: 12px 8px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04); color: var(--text-primary, #ece6d8);
+  transition: border-color 0.15s, background 0.15s;
+}
+.lf-tile--sm { flex: 0 0 52px; min-width: unset; font-size: 1rem; font-weight: 700; padding: 10px 6px; }
+.lf-tile--on { border-color: var(--accent, #c9a54a); background: rgba(201,165,74,0.12); }
+.lf-tile:hover:not(.lf-tile--on) { border-color: rgba(201,165,74,0.4); background: rgba(201,165,74,0.06); }
+.lf-tile__icon { font-size: 1.3rem; }
+.lf-tile__label { font-weight: 700; font-size: 0.9rem; }
+.lf-tile__hint { font-size: 0.72rem; opacity: 0.6; }
+
+/* Chips (timer presets) */
+.lf-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.lf-chip {
+  padding: 5px 12px; border-radius: 20px; cursor: pointer; font-size: 0.82rem;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04);
+  color: var(--text-primary, #ece6d8); transition: border-color 0.12s, background 0.12s;
+}
+.lf-chip--on { border-color: var(--accent, #c9a54a); background: rgba(201,165,74,0.12); color: var(--accent, #c9a54a); font-weight: 700; }
+.lf-chip:hover:not(.lf-chip--on) { border-color: rgba(201,165,74,0.4); }
+
+/* Template list */
+.lf-tpl-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.lf-tpl-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; border-radius: 9px; cursor: pointer; text-align: left;
+  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+  color: var(--text-primary, #ece6d8); transition: border-color 0.12s, background 0.12s;
+}
+.lf-tpl-card--on { border-color: var(--accent, #c9a54a); background: rgba(201,165,74,0.10); }
+.lf-tpl-card:hover:not(.lf-tpl-card--on) { border-color: rgba(201,165,74,0.35); }
+.lf-tpl-card__title { font-weight: 600; font-size: 0.9rem; }
+.lf-tpl-card__diff { font-size: 0.75rem; color: var(--accent, #c9a54a); opacity: 0.8; white-space: nowrap; }
+.lf-tpl-summary { margin-top: 8px; font-size: 0.82rem; opacity: 0.75; line-height: 1.4; padding: 8px 10px; border-left: 2px solid var(--accent-dark, #a8893d); }
+
+/* Error */
+.lf-error {
+  padding: 10px 12px; border-radius: 9px; font-size: 0.88rem;
+  background: rgba(192,88,74,0.12); border: 1px solid rgba(192,88,74,0.4);
+  color: #e88; margin-bottom: 12px;
+}
+
+/* Create button */
+.lf-create-btn {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; padding: 16px; border-radius: 12px; cursor: pointer;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em;
+  border: 1px solid var(--accent, #c9a54a);
+  background: linear-gradient(180deg, rgba(201,165,74,0.18), rgba(201,165,74,0.08));
+  color: var(--accent, #c9a54a);
+  box-shadow: 0 0 20px rgba(201,165,74,0.15); transition: background 0.15s, box-shadow 0.15s;
+}
+.lf-create-btn:hover:not(:disabled) { background: linear-gradient(180deg, rgba(201,165,74,0.28), rgba(201,165,74,0.14)); box-shadow: 0 0 28px rgba(201,165,74,0.25); }
+.lf-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.lf-create-btn__ornament { font-size: 0.75rem; opacity: 0.6; }
