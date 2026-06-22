@@ -1,26 +1,71 @@
 {
-  "intro": "Świat stygnie po upadku Pradawnych. Pod ziemią leży pęknięty Rdzeń — pradawne źródło mocy, z którego przeciekają magia, nieumarli i groza. Korona trzyma porządek strachem i podatkami, lecz prawdziwie rządzi ukryta Rada Czterech, a świątynia Światła toczy cichą wojnę z kultami czczącymi to, co śpi pod światem. To heroic-dark: mrok jest tłem i przeciwnikiem, nie wyrokiem — a ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić.",
-  "krainy": [
-    { "name": "Koronne Niziny", "tag": "Rdzeń cywilizacji", "img": "assets/img/kraina-koronne-niziny.webp",
-      "desc": "Serce królestwa: stolica Vilnograd, gildie kupieckie, świątynia Światła. Najbezpieczniej w świecie — i najwięcej noży w plecach. Jawnie rządzi Korona, w cieniu Rada Czterech." },
-    { "name": "Kresy", "tag": "Pogranicze i wsie", "img": "assets/img/kraina-kresy.webp",
-      "desc": "Twierdza Strażyn strzeże traktu od dwustu lat. Tu zaczyna się większość historii — zwykli ludzie na granicy mroku, drobne zlecenia, które urastają do czegoś większego. Gospoda „Pod Złamanym Rogiem” to pierwsze schronienie bohatera." },
-    { "name": "Czarnobór", "tag": "Las i bagno", "img": "assets/img/kraina-czarnobor.webp",
-      "desc": "Dzicz, w której znika się bez śladu. Bór Zmarłych, Bagienna Knieja, Trzęsawiska Mgieł — cienie wstają po zmroku, a Rdzeń jest tu blisko powierzchni. W głębi żyją skryte leśne elfy." },
-    { "name": "Siwe Granie", "tag": "Północ i mróz", "img": "assets/img/kraina-siwe-granie.webp",
-      "desc": "Surowa północ: lód, siarka, wymarłe kopalnie. Krasnoludy odeszły z Kopalni Czarnego Hutmana — dowierciły się do żyły Rdzenia i obudziły coś, co stuka do dziś. Przed czym uciekły?" },
-    { "name": "Wybrzeże Łez", "tag": "Morze i bezprawie", "img": "assets/img/kraina-wybrzeze-lez.webp",
-      "desc": "Morze jako żywioł i grób. Piraci, przemytnicy, Zatoka Topielców bez prawa. Sztormy łamią statki, a coś dużego porusza się pod falami — może Pradawny, nim morze go pochłonęło." },
-    { "name": "Martwe Pustkowia", "tag": "Ruiny Pradawnych", "img": "assets/img/kraina-martwe-pustkowia.webp",
-      "desc": "Serce metafizyki świata. Tu Rdzeń jest najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi. Świątynia Pradawnych — „wnętrze martwego boga” — to pęknięcie nad samym Rdzeniem. Główne pole dla lochów." }
-  ],
-  "rdzen": {
-    "title": "Rdzeń Pradawnych",
-    "body": "W tym świecie bogowie nie są dowiedzeni — czci się ich, lecz nikt ich nie widział. Prawdziwe źródło magii i grozy to Rdzeń: pradawne, pęknięte źródło mocy z czasów przed człowiekiem. Pradawni nauczyli się z niego czerpać i to ich zniszczyło. Z pęknięć przeciekają nieumarli, demony i dzika magia. Arkana Uczonego to ostrożne czerpanie z tego samego źródła — dlatego miscast bywa groźny. Jeden mechanizm tłumaczy całą fantastykę świata."
+ "intro": "Świat stygnie po upadku Pradawnych. Pod ziemią leży pęknięty Rdzeń — pradawne źródło mocy, z którego przeciekają magia, nieumarli i groza. Korona trzyma porządek strachem i podatkami, lecz prawdziwie rządzi ukryta Rada Czterech, a świątynia Światła toczy cichą wojnę z kultami czczącymi to, co śpi pod światem. To heroic-dark: mrok jest tłem i przeciwnikiem, nie wyrokiem — a ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić.",
+ "krainy": [
+  {
+   "name": "Kresy",
+   "tag": "Pogranicze i wsie",
+   "img": "assets/img/kraina-kresy.webp",
+   "desc": "Twierdza Strażyn strzeże traktu od dwustu lat. Tu zaczyna się większość historii — zwykli ludzie na granicy mroku, drobne zlecenia, które urastają do czegoś większego. Gospoda „Pod Złamanym Rogiem” to pierwsze schronienie bohatera.",
+   "anchor": "kraina-kresy",
+   "available": true
   },
-  "napiecia": [
-    { "title": "Cywilizacja vs mrok", "body": "Wspólny, podskórny wróg wszystkich: nieumarli i demony rosnące w siłę przy pęknięciach Rdzenia. Powinien zjednoczyć ludzi — ale nie zjednacza." },
-    { "title": "Korona vs Rada Czterech", "body": "Jawna władza króla (miecz, podatki) kontra ukryta władza pieniądza. Każda intryga miejska ciągnie za jeden z tych sznurków." },
-    { "title": "Światło vs kulty Rdzenia", "body": "Ci, co łatają pęknięcia, kontra ci, co je rozdzierają — wierząc, że pod spodem czeka moc albo bóg. Wojna o dusze pogranicza." }
-  ]
+  {
+   "name": "Koronne Niziny",
+   "tag": "Rdzeń cywilizacji",
+   "img": "assets/img/kraina-koronne-niziny.webp",
+   "desc": "Serce królestwa: stolica Vilnograd, gildie kupieckie, świątynia Światła. Najbezpieczniej w świecie — i najwięcej noży w plecach. Jawnie rządzi Korona, w cieniu Rada Czterech.",
+   "anchor": "kraina-niziny",
+   "available": false
+  },
+  {
+   "name": "Czarnobór",
+   "tag": "Las i bagno",
+   "img": "assets/img/kraina-czarnobor.webp",
+   "desc": "Dzicz, w której znika się bez śladu. Bór Zmarłych, Bagienna Knieja, Trzęsawiska Mgieł — cienie wstają po zmroku, a Rdzeń jest tu blisko powierzchni. W głębi żyją skryte leśne elfy.",
+   "anchor": "kraina-czarnobor",
+   "available": false
+  },
+  {
+   "name": "Siwe Granie",
+   "tag": "Północ i mróz",
+   "img": "assets/img/kraina-siwe-granie.webp",
+   "desc": "Surowa północ: lód, siarka, wymarłe kopalnie. Krasnoludy odeszły z Kopalni Czarnego Hutmana — dowierciły się do żyły Rdzenia i obudziły coś, co stuka do dziś. Przed czym uciekły?",
+   "anchor": "kraina-granie",
+   "available": false
+  },
+  {
+   "name": "Wybrzeże Łez",
+   "tag": "Morze i bezprawie",
+   "img": "assets/img/kraina-wybrzeze-lez.webp",
+   "desc": "Morze jako żywioł i grób. Piraci, przemytnicy, Zatoka Topielców bez prawa. Sztormy łamią statki, a coś dużego porusza się pod falami — może Pradawny, nim morze go pochłonęło.",
+   "anchor": "kraina-wybrzeze",
+   "available": false
+  },
+  {
+   "name": "Martwe Pustkowia",
+   "tag": "Ruiny Pradawnych",
+   "img": "assets/img/kraina-martwe-pustkowia.webp",
+   "desc": "Serce metafizyki świata. Tu Rdzeń jest najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi. Świątynia Pradawnych — „wnętrze martwego boga” — to pęknięcie nad samym Rdzeniem. Główne pole dla lochów.",
+   "anchor": "kraina-pustkowia",
+   "available": false
+  }
+ ],
+ "rdzen": {
+  "title": "Rdzeń Pradawnych",
+  "body": "W tym świecie bogowie nie są dowiedzeni — czci się ich, lecz nikt ich nie widział. Prawdziwe źródło magii i grozy to Rdzeń: pradawne, pęknięte źródło mocy z czasów przed człowiekiem. Pradawni nauczyli się z niego czerpać i to ich zniszczyło. Z pęknięć przeciekają nieumarli, demony i dzika magia. Arkana Uczonego to ostrożne czerpanie z tego samego źródła — dlatego miscast bywa groźny. Jeden mechanizm tłumaczy całą fantastykę świata."
+ },
+ "napiecia": [
+  {
+   "title": "Cywilizacja vs mrok",
+   "body": "Wspólny, podskórny wróg wszystkich: nieumarli i demony rosnące w siłę przy pęknięciach Rdzenia. Powinien zjednoczyć ludzi — ale nie zjednacza."
+  },
+  {
+   "title": "Korona vs Rada Czterech",
+   "body": "Jawna władza króla (miecz, podatki) kontra ukryta władza pieniądza. Każda intryga miejska ciągnie za jeden z tych sznurków."
+  },
+  {
+   "title": "Światło vs kulty Rdzenia",
+   "body": "Ci, co łatają pęknięcia, kontra ci, co je rozdzierają — wierząc, że pod spodem czeka moc albo bóg. Wojna o dusze pogranicza."
+  }
+ ]
 }

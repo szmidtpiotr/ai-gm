@@ -96,11 +96,15 @@
         const intro = document.getElementById('swiat-intro');
         if (intro && data.intro) intro.textContent = data.intro;
         if (Array.isArray(data.krainy) && data.krainy.length) {
-          krainyRoot.innerHTML = data.krainy.map(k => `
-            <div class="kraina reveal">
-              ${k.img ? `<div class="thumb"><img src="${escapeHtml(k.img)}" alt="${escapeHtml(k.name || '')}" onerror="this.closest('.thumb').remove()"></div>` : ''}
+          krainyRoot.innerHTML = data.krainy.map(k => {
+            const locked = k.available === false;
+            const href = k.anchor ? `swiat.html#${k.anchor}` : 'swiat.html';
+            return `
+            <a class="kraina reveal${locked ? ' locked' : ''}" href="${escapeHtml(href)}">
+              ${k.img ? `<div class="thumb"><img src="${escapeHtml(k.img)}" alt="${escapeHtml(k.name || '')}" onerror="this.closest('.thumb').remove()">${locked ? '<span class="lock-badge">wkrótce</span>' : '<span class="play-badge">grywalne</span>'}</div>` : ''}
               <div class="body"><h3>${escapeHtml(k.name || '')}</h3><span class="ktag">${escapeHtml(k.tag || '')}</span><p>${escapeHtml(k.desc || '')}</p></div>
-            </div>`).join('');
+            </a>`;
+          }).join('');
         }
         const rdzen = document.getElementById('rdzen-block');
         if (rdzen && data.rdzen) rdzen.innerHTML = `<h3>${escapeHtml(data.rdzen.title || '')}</h3><p>${escapeHtml(data.rdzen.body || '')}</p>`;

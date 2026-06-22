@@ -103,6 +103,12 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .kraina .thumb{height:150px;overflow:hidden;background:var(--bg2)}
 .kraina .thumb img{width:100%;height:100%;object-fit:cover;opacity:.9;transition:.4s}
 .kraina:hover .thumb img{opacity:1;transform:scale(1.05)}
+.kraina .thumb{position:relative}
+.lock-badge,.play-badge{position:absolute;top:8px;right:8px;font-family:var(--font-ui);font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:600;padding:3px 9px;border-radius:20px;z-index:2}
+.lock-badge{background:rgba(10,9,8,.82);color:var(--ink-dim);border:1px solid var(--line)}
+.play-badge{background:var(--gold);color:#1a1206;border:1px solid var(--gold-lt)}
+.kraina.locked{filter:grayscale(.85) brightness(.72);opacity:.8}
+.kraina.locked:hover{filter:grayscale(.35) brightness(.9);opacity:1}
 .kraina .body{padding:18px 20px 22px}
 .kraina .body h3{font-family:var(--font-disp);color:var(--gold);font-size:19px;margin:0}
 .kraina .body .ktag{display:block;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:13px;margin:2px 0 10px}
