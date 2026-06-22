@@ -38,9 +38,13 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
     var(--bg);
   background-size:cover;background-position:center}
 .hero.has-bg{background:
-    linear-gradient(180deg, rgba(10,9,8,.55), rgba(10,9,8,.82)),
-    var(--hero-img) center/cover no-repeat, var(--bg)}
-.hero::before{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 180px 40px rgba(0,0,0,.7)}
+    linear-gradient(180deg, rgba(10,9,8,.50) 0%, rgba(10,9,8,.28) 38%, rgba(10,9,8,.55) 72%, rgba(10,9,8,.88) 100%),
+    var(--hero-img) center/cover no-repeat, var(--bg);
+  min-height:78vh;display:flex;align-items:center}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 130px 28px rgba(0,0,0,.5)}
+/* czytelność tytułu na jaśniejszym tle */
+.hero.has-bg h1{text-shadow:0 2px 22px rgba(0,0,0,.85),0 2px 30px var(--gold-glow)}
+.hero.has-bg p.sub{text-shadow:0 1px 10px rgba(0,0,0,.9);color:var(--ink)}
 .hero .wrap{position:relative;z-index:2}
 .hero h1{font-family:var(--font-disp);font-weight:900;font-size:clamp(40px,7vw,82px);line-height:1.04;letter-spacing:1px;margin-top:24px;
   background:linear-gradient(180deg,#f3e6c4,#c9a54a 60%,#8a6f2f);-webkit-background-clip:text;background-clip:text;color:transparent;
@@ -57,7 +61,13 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ---------- SECTION SHELL ---------- */
-.sect{padding:90px 0;border-bottom:1px solid var(--line)}
+.sect{padding:90px 0;border-bottom:1px solid var(--line);position:relative}
+/* tło sekcji (art jako subtelna tekstura pod ciemnym overlayem; JS dodaje .has-bg tylko gdy obraz się wczyta) */
+.sect.has-bg{background:
+    linear-gradient(rgba(10,9,8,.88), rgba(10,9,8,.93)),
+    var(--sect-img) center/cover no-repeat fixed, var(--bg)}
+.sect.has-bg .card,.sect.has-bg .mech,.sect.has-bg .kraina{backdrop-filter:blur(2px)}
+@media(max-width:860px){ .sect.has-bg{background-attachment:scroll} }
 .sect-head{text-align:center;margin-bottom:54px}
 .sect-head .k{font-family:var(--font-flavor);font-style:italic;color:var(--blood);letter-spacing:3px}
 .sect-head h2{font-family:var(--font-disp);font-weight:700;font-size:34px;color:var(--ink);margin-top:8px}
@@ -75,7 +85,9 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .card .link{display:inline-block;margin-top:18px;font-family:var(--font-flavor);font-style:italic;color:var(--gold)}
 
 /* historia — timeline */
+.hist-intro{max-width:720px;margin:0 auto 40px;text-align:center;font-family:var(--font-flavor);font-style:italic;font-size:19px;color:var(--ink-dim)}
 .timeline{max-width:760px;margin:0 auto;border-left:2px solid var(--line);padding-left:34px}
+.tl-item p+p{margin-top:10px}
 .tl-item{position:relative;padding-bottom:38px}
 .tl-item::before{content:"";position:absolute;left:-43px;top:4px;width:14px;height:14px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 4px var(--bg),0 0 14px var(--gold-glow)}
 .tl-item h3{font-family:var(--font-disp);color:var(--ink);font-size:20px}

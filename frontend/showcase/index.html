@@ -21,10 +21,10 @@
 <nav><div class="wrap">
   <a class="brand" href="#top">AI·GM<small>MISTRZ GRY</small></a>
   <div class="nav-links">
-    <a href="#historia">Historia</a>
     <a href="#swiat">Świat</a>
     <a href="#ksiega">Księga Zasad</a>
-    <a href="#changelog">Co nowego</a>
+    <a href="#historia">Historia</a>
+    <a href="changelog.html">Co nowego</a>
   </div>
   <a class="nav-cta" href="/">ZAGRAJ</a>
   <button class="nav-toggle" aria-label="Menu">☰</button>
@@ -49,24 +49,12 @@
     <a class="card reveal" href="#historia"><div class="num">I</div><h3>Historia powstawania</h3><p>Droga od jednego pomysłu do żywego silnika gry — szczerze, o przełomach i decyzjach.</p><span class="link">Czytaj kronikę →</span></a>
     <a class="card reveal" href="#swiat"><div class="num">II</div><h3>Świat</h3><p>Heroic-dark kraina: sześć regionów, frakcje, pradawny Rdzeń i legendy do odkrycia.</p><span class="link">Wejdź do świata →</span></a>
     <a class="card reveal" href="#ksiega"><div class="num">III</div><h3>Księga Zasad</h3><p>Żywy dokument mechanik: rzuty, walka strefowa, magia uczonego, warunki i DC.</p><span class="link">Otwórz księgę →</span></a>
-    <a class="card reveal" href="#changelog"><div class="num">IV</div><h3>Co nowego</h3><p>Changelog napisany po ludzku — opowieść o tym, jak gra rośnie z tygodnia na tydzień.</p><span class="link">Zobacz zmiany →</span></a>
-  </div>
-</div></section>
-
-<!-- HISTORIA (treść: #904 / W3) -->
-<section class="sect" id="historia"><div class="wrap">
-  <div class="sect-head reveal"><div class="k">~ kronika ~</div><h2>Historia powstawania</h2>
-    <p>Jak z jednego pomysłu narodził się żywy silnik gry. (Pełna kronika — w przygotowaniu, #904.)</p></div>
-  <div class="timeline">
-    <div class="tl-item reveal"><div class="when">Początek</div><h3>Iskra</h3><p>Pomysł: Mistrz Gry, który nigdy nie śpi i prowadzi prawdziwą grę, nie tylko rozmowę.</p></div>
-    <div class="tl-item reveal"><div class="when">Fundamenty</div><h3>Silnik kości i walki</h3><p>Realne d20, cechy, walka strefowa — gra z systemami, nie wrapper na czacie.</p></div>
-    <div class="tl-item reveal"><div class="when">Rozwój</div><h3>Magia, lochy, multiplayer</h3><p>Magia uczonego, lochy kafelkowe, wspólne sesje — świat zaczął żyć.</p></div>
-    <div class="tl-item reveal"><div class="when">Dziś</div><h3>Żywa Księga i świat-kanon</h3><p>Interaktywna Księga Zasad i spójne lore heroic-dark świata.</p></div>
+    <a class="card reveal" href="changelog.html"><div class="num">IV</div><h3>Co nowego</h3><p>Changelog napisany po ludzku — opowieść o tym, jak gra rośnie z tygodnia na tydzień.</p><span class="link">Zobacz zmiany →</span></a>
   </div>
 </div></section>
 
 <!-- ŚWIAT (treść: #905 / W4, art: #908 / W7) -->
-<section class="sect" id="swiat"><div class="wrap">
+<section class="sect" id="swiat" data-sect-bg="assets/img/bg-divider.webp"><div class="wrap">
   <div class="sect-head reveal"><div class="k">~ jeden kontynent, sześć krain ~</div><h2>Świat</h2>
     <p>Świat stygnie po upadku Pradawnych. Magia, nieumarli i groza przeciekają z pękniętego Rdzenia pod ziemią — a ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić.</p></div>
   <div class="krainy">
@@ -80,7 +68,7 @@
 </div></section>
 
 <!-- KSIĘGA (#906 / W5) -->
-<section class="sect" id="ksiega"><div class="wrap">
+<section class="sect" id="ksiega" data-sect-bg="assets/img/bg-arcane.webp"><div class="wrap">
   <div class="sect-head reveal"><div class="k">~ żywy dokument ~</div><h2>Księga Zasad</h2>
     <p>To nie chatbot — to gra z prawdziwymi systemami. Księga Zasad jest żywa: zawsze zgodna z silnikiem gry.</p></div>
   <div class="mechs">
@@ -92,12 +80,15 @@
   <div style="text-align:center"><a class="btn btn-gold" href="/rules/">Otwórz pełną Księgę Zasad →</a></div>
 </div></section>
 
-<!-- CO NOWEGO (data-driven, #907/#914) -->
-<section class="sect" id="changelog"><div class="wrap">
-  <div class="sect-head reveal"><div class="k">~ kronika zmian ~</div><h2>Co nowego</h2>
-    <p>Jak gra rośnie — po ludzku, bez numerów wersji i żargonu.</p></div>
-  <div class="changelog" id="changelog-list">
-    <p class="placeholder">Kronika zmian wczytuje się z danych gry… (generator: #907)</p>
+<!-- HISTORIA POWSTAWANIA (na dole; data-driven #904 / W3) -->
+<section class="sect" id="historia" data-sect-bg="assets/img/bg-tavern.webp"><div class="wrap">
+  <div class="sect-head reveal"><div class="k">~ kronika ~</div><h2>Historia powstawania</h2>
+    <p>Droga od jednego pomysłu do żywego silnika gry — jak zmieniała się idea i podejście do mechaniki.</p></div>
+  <div class="timeline" id="historia-list">
+    <div class="tl-item reveal"><div class="when">Początek</div><h3>Iskra</h3><p>Pomysł: Mistrz Gry, który nigdy nie śpi i prowadzi prawdziwą grę, nie tylko rozmowę.</p></div>
+    <div class="tl-item reveal"><div class="when">Fundamenty</div><h3>Silnik kości i walki</h3><p>Realne d20, cechy, walka strefowa — gra z systemami, nie wrapper na czacie.</p></div>
+    <div class="tl-item reveal"><div class="when">Rozwój</div><h3>Magia, lochy, multiplayer</h3><p>Magia uczonego, lochy kafelkowe, wspólne sesje — świat zaczął żyć.</p></div>
+    <div class="tl-item reveal"><div class="when">Dziś</div><h3>Żywa Księga i świat-kanon</h3><p>Interaktywna Księga Zasad i spójne lore heroic-dark świata.</p></div>
   </div>
 </div></section>
 

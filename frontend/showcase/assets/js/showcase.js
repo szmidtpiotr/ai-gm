@@ -34,12 +34,14 @@
   }, { threshold: 0.12 });
   document.querySelectorAll('.reveal').forEach(el => revealer.observe(el));
 
-  // --- hero background (graceful: only apply if image loads) ---
+  // --- backgrounds (graceful: apply only if image loads) ---
   const hero = document.querySelector('.hero[data-bg]');
-  if (hero) {
-    const src = hero.getAttribute('data-bg');
+  if (hero) applyBg(hero, hero.getAttribute('data-bg'), '--hero-img');
+  document.querySelectorAll('.sect[data-sect-bg]').forEach(s => applyBg(s, s.getAttribute('data-sect-bg'), '--sect-img'));
+  function applyBg(el, src, varName) {
+    if (!src) return;
     const img = new Image();
-    img.onload = () => { hero.style.setProperty('--hero-img', `url('${src}')`); hero.classList.add('has-bg'); };
+    img.onload = () => { el.style.setProperty(varName, `url('${src}')`); el.classList.add('has-bg'); };
     img.src = src;
   }
 
@@ -60,6 +62,26 @@
         clRoot.querySelectorAll('.reveal').forEach(el => revealer.observe(el));
       })
       .catch(() => { /* placeholder text stays */ });
+  }
+
+  // --- data-driven historia (W3 → data/historia.json) ---
+  const hRoot = document.getElementById('historia-list');
+  if (hRoot) {
+    fetch('data/historia.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        const stages = data.stages || [];
+        if (!stages.length) return;
+        const intro = data.intro ? `<p class="hist-intro reveal">${escapeHtml(data.intro)}</p>` : '';
+        hRoot.innerHTML = intro + stages.map(s => `
+          <div class="tl-item reveal">
+            <div class="when">${escapeHtml(s.when || '')}</div>
+            <h3>${escapeHtml(s.title || '')}</h3>
+            ${String(s.body || '').split(/\n\n+/).map(p => `<p>${escapeHtml(p.trim())}</p>`).join('')}
+          </div>`).join('');
+        hRoot.querySelectorAll('.reveal').forEach(el => revealer.observe(el));
+      })
+      .catch(() => { /* fallback stubs zostają */ });
   }
 
   function escapeHtml(s) {
