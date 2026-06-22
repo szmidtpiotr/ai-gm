@@ -3354,6 +3354,1082 @@ def export_session(campaign_id: int):
 
 
 # ---------------------------------------------------------------------------
+# create_turn helpers (R1.5 — extracted for line-count reduction)
+# ---------------------------------------------------------------------------
+
+def _ct_roll_and_death_save(conn, campaign_id, payload, character, text, turn_id):
+    """Handle /roll command parsing, XS9/10/11 XP grants, death save processing.
+
+    Returns: (roll_result_data, roll_result_message, user_text_stored, death_response_or_None)
+    If player died: death_response_or_None is the full response dict that create_turn should return.
+    Otherwise: death_response_or_None is None, continue with narrative.
+    """
+    roll_request = parse_roll_command(text)
+    roll_result_message = None
+    roll_result_data = None
+    user_text_stored = text
+    if roll_request:
+        if not is_slash_command_enabled("/roll"):
+            raise HTTPException(
+                status_code=403,
+                detail="Komenda /roll jest wyłączona przez administratora.",
+            )
+        character_sheet = parse_character_sheet(character["sheet_json"])
+        if roll_request.get("skill") == "death_save":
+            hp_chk = _sheet_current_hp(character_sheet)
+            if hp_chk is not None and hp_chk > 0:
+                logger.warning(
+                    "death_save_rejected",
+                    character_id=payload.character_id,
+                    hp=hp_chk,
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nieprawidłowy rzut: death_save przy HP > 0",
+                )
+        if is_attack_test(roll_request.get("skill")):
+            weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
+            raw_roll = roll_request.get("raw_roll")
+            roll_result = resolve_attack_roll_for_weapon(
+                character_sheet,
+                raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
+                weapon_row=weapon_row,
+            )
+            roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
+            if roll_result["dc"] is not None:
+                roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
+        else:
+            roll_result = resolve_roll(
+                character_sheet=character_sheet,
+                test_name=roll_request["skill"],
+                raw_roll=roll_request.get("raw_roll"),
+                dc=resolve_dc_for_roll(roll_request.get("dc")),
+            )
+        roll_result_data = roll_result
+        roll_result_message = format_roll_for_llm(roll_result)
+        user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(
+            build_roll_card_payload(
+                roll_result,
+                character_name=(character["name"] or "Bohater"),
+                replay_command=text.strip(),
+            ),
+            ensure_ascii=False,
+        )
+
+    # XS9/XS10/XS11: pending XP for successful skill check by DC range
+    if (roll_result_data and roll_result_data.get("success")
+            and roll_result_data.get("test") != "death_save"):
+        _dc_val = roll_result_data.get("dc")
+        if _dc_val and int(_dc_val) >= 12:
+            try:
+                from app.services.xp_sources import grant_skill_dc_success
+                _tn9 = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                    (campaign_id,),
+                ).fetchone()[0]
+                grant_skill_dc_success(conn, int(payload.character_id), campaign_id, int(_dc_val), _tn9)
+                conn.commit()
+            except Exception:
+                pass
+
+    if roll_result_data and roll_result_data.get("test") == "death_save":
+        sheet_dict = parse_character_sheet(character["sheet_json"])
+        new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
+        conn.execute(
+            """
+            UPDATE characters SET sheet_json = ?
+            WHERE id = ? AND campaign_id = ?
+            """,
+            (
+                json.dumps(new_sheet, ensure_ascii=False),
+                payload.character_id,
+                campaign_id,
+            ),
+        )
+        conn.commit()
+        # XS14: grant pending XP when player survives a death save
+        if not died_here:
+            try:
+                from app.services.xp_sources import grant_death_save_survived
+                _tn14 = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                    (campaign_id,),
+                ).fetchone()[0]
+                grant_death_save_survived(conn, int(payload.character_id), campaign_id, _tn14)
+                conn.commit()
+            except Exception:
+                pass
+        character = get_character_or_404(conn, campaign_id, payload.character_id)
+        if died_here:
+            loc = (character["location"] or "unknown place").strip()
+            dr = f"Failed three death saves ({loc})"
+            epitaph = end_solo_campaign_on_death(
+                conn,
+                campaign_id=campaign_id,
+                character_row=character,
+                death_reason=dr,
+            )
+            # J2: write history row + queue chapter summary generation
+            try:
+                from app.services.chapter_summary_service import close_campaign_with_summary
+                _ch_sheet = json.loads(character["sheet_json"] or "{}")
+                _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
+                _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                _ch_turns = conn.execute(
+                    "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                    (campaign_id,),
+                ).fetchone()[0]
+                close_campaign_with_summary(
+                    conn,
+                    campaign_id=campaign_id,
+                    character_id=int(payload.character_id),
+                    outcome="death",
+                    user_id=int(character["user_id"]),
+                    xp_earned=_ch_xp,
+                    gold_at_end=_ch_gold,
+                    turns_count=int(_ch_turns or 0),
+                )
+            except Exception as _j2_err:
+                logger.warning("j2_death_history_failed", error=str(_j2_err))
+            user_line = user_text_stored if roll_request else (roll_result_message or text)
+            log = create_turn_log(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                user_text=user_line,
+                assistant_text=epitaph,
+                route="narrative",
+            )
+            log_narrative_turn_structured(
+                route="narrative",
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                turn_row=log,
+                user_text=user_line,
+                assistant_text=epitaph,
+            )
+            death_response = {
+                "id": log["id"],
+                "campaign_id": log["campaign_id"],
+                "turn_number": log["turn_number"],
+                "created_at": log["created_at"],
+                "route": "narrative",
+                "result": {"message": epitaph},
+                "campaign_ended": True,
+                "turn_id": turn_id,
+            }
+            return roll_result_data, roll_result_message, user_text_stored, death_response
+
+    return roll_result_data, roll_result_message, user_text_stored, None
+
+
+def _ct_inline_commands(conn, campaign_id, payload, campaign, character, text, turn_id):
+    """Handle all slash commands (route='command' block).
+
+    Returns: response dict (all paths return).
+    NOTE: caller is responsible for the outer `if text.startswith('/') and not roll_request:` guard.
+    """
+    route = "command"
+    cmd = text.split(" ", 1)[0].lower()
+    _is_admin_user = False
+    try:
+        _u_row = conn.execute(
+            "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+            (character["user_id"],),
+        ).fetchone()
+        _is_admin_user = bool(_u_row and int(_u_row["is_admin"] or 0))
+    except Exception:
+        pass
+    sk_dispatch = slash_registry_key_for_dispatch(text, is_admin=_is_admin_user)
+    # Alias support: rewrite cmd + text to canonical first-token so the
+    # per-command branches below (cmd == '/mem', etc.) match. The user's
+    # original text remains in user_text for logging.
+    if sk_dispatch:
+        _canon = sk_dispatch.split(" ", 1)[0].lower()
+        if _canon != cmd:
+            rest = text[len(cmd):]
+            text = _canon + rest
+            cmd = _canon
+    if (
+        sk_dispatch
+        and not is_slash_command_enabled(sk_dispatch)
+        and cmd not in ("/atak", "/walka")
+    ):
+        token = sk_dispatch.split()[0].lstrip("/") or "cmd"
+        result = {
+            "command": token,
+            "disabled": True,
+            "message": "Ta komenda została wyłączona przez administratora.",
+        }
+        log = create_turn_log(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            user_text=text,
+            assistant_text=json.dumps(result, ensure_ascii=False),
+            route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # /help
+    if cmd == "/help":
+        result = {
+            "command": "help",
+            "commands": get_public_help_command_texts(),
+        }
+        log = create_turn_log(
+            conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+            user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # /name
+    if cmd == "/name":
+        new_name = text[5:].strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Character name is required")
+        conn.execute(
+            "UPDATE characters SET name = ? WHERE id = ? AND campaign_id = ?",
+            (new_name, payload.character_id, campaign_id),
+        )
+        conn.commit()
+        result = {"command": "name", "character_name": new_name}
+        log = create_turn_log(
+            conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+            user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # /quest, /export, /move — handled by turn_commands module
+    _tc_result = _handle_turn_command(
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=payload.character_id,
+        text=text,
+        cmd=cmd,
+        turn_id=turn_id,
+        create_turn_log=create_turn_log,
+        _with_turn_trace=_with_turn_trace,
+    )
+    if _tc_result is not None:
+        return _tc_result
+
+    # /sheet
+    if cmd == "/sheet":
+        result = {
+            "command": "sheet",
+            "character": {
+                "id": character["id"],
+                "name": character["name"],
+                "campaign_id": character["campaign_id"],
+                "user_id": character["user_id"],
+                "system_id": character["system_id"],
+                "sheet_json": character["sheet_json"],
+                "location": character["location"],
+                "is_active": character["is_active"],
+                "created_at": character["created_at"],
+            },
+        }
+        log = create_turn_log(
+            conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+            user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # /history
+    if cmd == "/history":
+        rows = conn.execute(
+            """
+            SELECT turn_number, user_text, assistant_text, created_at
+            FROM campaign_turns
+            WHERE campaign_id = ?
+            ORDER BY turn_number DESC
+            LIMIT 10
+            """,
+            (campaign_id,),
+        ).fetchall()
+        history = [
+            {
+                "turn": r["turn_number"],
+                "player": r["user_text"],
+                "gm": r["assistant_text"],
+                "at": r["created_at"],
+            }
+            for r in reversed(rows)
+        ]
+        result = {"command": "history", "turns": history}
+        log = create_turn_log(
+            conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+            user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # /helpme — OOC advisor (route=helpme; nie wchodzi do kontekstu narracji)
+    if cmd == "/helpme":
+        topic = re.sub(r"^/helpme\s*", "", text, count=1, flags=re.I).strip()
+        owner_id = int(campaign["owner_user_id"])
+        llm_owner = get_user_llm_settings_full(owner_id)
+        model_h = resolve_model_name(
+            requested_model=payload.engine,
+            campaign_model=campaign["model_id"],
+            llm_config=llm_owner,
+        )
+        try:
+            out = run_helpme_advisor(
+                conn=conn,
+                campaign=campaign,
+                character=character,
+                topic=topic,
+                user_id=owner_id,
+                model=model_h,
+            )
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from None
+        msg = (out.get("message") or "").strip()
+        if not msg:
+            raise HTTPException(status_code=502, detail="Empty /helpme response")
+        log = create_turn_log(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            user_text=text.strip(),
+            assistant_text=msg,
+            route="helpme",
+        )
+        return {
+            "id": log["id"],
+            "campaign_id": log["campaign_id"],
+            "turn_number": log["turn_number"],
+            "created_at": log["created_at"],
+            "route": "helpme",
+            "ooc": True,
+            "result": {"message": msg},
+            "turn_id": turn_id,
+        }
+
+    # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
+    if cmd in ("/atak", "/walka"):
+        result = _atak_command_response_for_api(campaign_id)
+        log = create_turn_log(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            user_text=text,
+            assistant_text=json.dumps(result, ensure_ascii=False),
+            route=route,
+        )
+        return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+    # Unknown command
+    result = {"command": cmd, "message": f"Unknown command '{cmd}'. Type /help for a list."}
+    log = create_turn_log(
+        conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+        user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+    )
+    return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+
+def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, roll_request,
+                 user_text_stored, _u30_move_executed, _risky_intent_match, route, turn_id):
+    """Handle everything after the LLM call: tag processing, persisting, building out dict.
+
+    Returns: out dict (the final response).
+    """
+    _skill_pending_narrator = None  # set if narrator embeds [SKILL_TEST]/[TRAP] tag
+
+    assistant_text = (result.get("message") or "").strip()
+    if not assistant_text:
+        raise HTTPException(status_code=500, detail="Empty narrative response")
+
+    # Snapshot hex before location intent (for hex_enter encounter trigger)
+    _hex_before_enc = _snapshot_hex(conn, campaign_id)
+
+    assistant_text = _process_location_intent(
+        conn=conn,
+        campaign_id=campaign_id,
+        assistant_response=assistant_text,
+    )
+
+    # Hex-enter encounter trigger: fire when current_hex changed
+    _check_hex_enter_trigger(conn, campaign_id, _hex_before_enc)
+
+    # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
+    _char_sh = json.loads(character["sheet_json"] or "{}")
+    assistant_text, _skill_pending_narrator = _intercept_narrator_skill_tags(
+        assistant_text=assistant_text,
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=payload.character_id,
+        character_sheet=_char_sh,
+    )
+
+    # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
+    _u7_forced = _apply_u7_safety_net(
+        conn=conn,
+        campaign_id=campaign_id,
+        character=character,
+        assistant_text=assistant_text,
+        risky_intent_match=_risky_intent_match,
+        skill_pending_narrator=_skill_pending_narrator,
+        commit_pending_skill_test_fn=_commit_pending_skill_test,
+    )
+    if _u7_forced is not None:
+        _skill_pending_narrator = _u7_forced
+
+    from app.services import combat_service as _cs
+
+    combat_before = _cs.get_active_combat(campaign_id)
+    combat_was_active = bool(combat_before) and str(
+        combat_before.get("current_turn") or ""
+    ) == "player"
+
+    clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
+    # [DUNGEON_CLEAR:key] — strip tag and record completion
+    _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, payload.character_id, clean_assistant)
+    clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
+    # Stage 3 Z4 — [APPLY_CONDITION:zaskoczony:enemy_key] from stealth-success narration
+    try:
+        from app.services.combat_service import apply_condition_to_combatant
+        from app.services.llm_tag_parser import (
+            get_rejection_correction as _ac_corr,
+            log_tag_error as _ac_lte,
+        )
+        _ac_invalid = False
+        for _ac in APPLY_CONDITION_RE.finditer(clean_assistant):
+            _cond_key = _ac.group(1).strip()
+            _enemy_ref = _ac.group(2).strip()
+            _ac_res = apply_condition_to_combatant(campaign_id, _enemy_ref, _cond_key)
+            logger.info("apply_condition_tag", campaign_id=campaign_id,
+                        condition=_cond_key, enemy_ref=_enemy_ref, result=_ac_res)
+            # S8 (#603): nieznany klucz kondycji → invalid_reference (U5/U6)
+            if isinstance(_ac_res, dict) and _ac_res.get("reason") == "invalid_reference":
+                _ac_invalid = True
+                _ac_tn = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                    (campaign_id,),
+                ).fetchone()[0]
+                _ac_lte(conn, campaign_id, _ac_tn, _ac.group(0), "invalid_reference")
+        clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
+        if _ac_invalid:
+            _ac_fix = _ac_corr("APPLY_CONDITION")
+            if _ac_fix:
+                _ac_narr, _ac_pjson = _extract_narrative_for_cues(clean_assistant)
+                clean_assistant = _repack_narrative(
+                    clean_assistant, _ac_narr.rstrip() + "\n\n" + _ac_fix, _ac_pjson)
+    except Exception as _ac_err:
+        logger.warning("apply_condition_tag_error", error=str(_ac_err))
+        clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
+    clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
+    _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
+    (
+        _narrative_for_cues,
+        grant_item_labels,
+        grant_gold_amount,
+        open_shop_npc_key,
+        grant_item_descriptions,
+    ) = extract_grant_cues(_narrative_for_cues)
+    # Also check top-level grant_item in parsed JSON — extract_grant_cues only sees
+    # the plain narrative text and can't find fields in the outer JSON object.
+    if isinstance(_parsed_json, dict):
+        _raw_gi_json = _parsed_json.get("grant_item")
+        _entries_json: list = (_raw_gi_json if isinstance(_raw_gi_json, list) else [_raw_gi_json]) if _raw_gi_json else []
+        for _x in _entries_json:
+            _entry = _parse_grant_item_entry(_x)
+            if _entry and _entry[0] not in grant_item_labels:
+                grant_item_labels.append(_entry[0])
+                grant_item_descriptions[_entry[0]] = _entry[1]
+    grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
+    clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
+    # Inject _debug into assistant JSON for frontend debug block
+    _mr = result.get("mechanic_result") if isinstance(result, dict) else None
+    if _mr and isinstance(_mr, dict):
+        try:
+            _dbg_payload = {k: _mr[k] for k in ("roll", "total", "dc", "outcome", "action_type") if k in _mr}
+            _ca_parsed = json.loads(_strip_json_code_fence(clean_assistant))
+            if isinstance(_ca_parsed, dict):
+                _ca_parsed["_debug"] = _dbg_payload
+                clean_assistant = json.dumps(_ca_parsed, ensure_ascii=False)
+        except Exception:
+            pass
+    validate_roll_cue_name(clean_assistant.strip())
+
+    # ── roll_cue skill test intercept ─────────────────────────────────────
+    # When narrator emits roll_cue:"Roll Arcana d20" (not an attack), convert
+    # it to skill_test_pending so the Roll Popup appears.
+    # Issue #53 fix 3: when LLM emits plain text (no JSON envelope), scan the
+    # narrative tail for a trailing "Roll <skill> d20" line — same intercept
+    # path, just sourced from raw text instead of the parsed JSON field.
+    # K2 guard: suppress LLM-emitted roll_cue when player asked a question —
+    # questions cannot be action attempts even if the LLM hallucinates a roll.
+    _raw_cue = ""
+    if _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
+        _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
+    elif not _parsed_json and not _skill_pending_narrator:
+        import re as _rc_re_pre
+        _tail_text = (clean_assistant or "").rstrip()
+        # Take the last non-empty line and check if it matches Roll <skill> d20
+        for _line in reversed(_tail_text.splitlines()):
+            _line_s = _line.strip()
+            if not _line_s:
+                continue
+            if _rc_re_pre.match(r"^Roll\s+.+?\s+d\d+$", _line_s, _rc_re_pre.IGNORECASE):
+                _raw_cue = _line_s
+                logger.info("roll_cue_plain_text_fallback", cue=_raw_cue)
+            break  # only inspect the last non-empty line
+    if (_parsed_json or _raw_cue) and not _skill_pending_narrator:
+        if _raw_cue:
+            import re as _rc_re
+            _cm = _rc_re.match(r"^Roll (.+?) d\d+$", _raw_cue, _rc_re.IGNORECASE)
+            if _cm:
+                _cue_name = _cm.group(1).strip()
+                _canonical = resolve_test_name(_cue_name)
+                # Fallback 1: custom skill by exact key match
+                if _canonical is None:
+                    _norm_cue = _cue_name.lower().replace(" ", "_")
+                    try:
+                        _cue_db = conn.execute(
+                            "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
+                            (_norm_cue,),
+                        ).fetchone()
+                        if _cue_db:
+                            _canonical = _norm_cue
+                    except Exception:
+                        pass
+                # Fallback 2: check trigger_keywords — admin-defined keywords that
+                # deterministically override whatever skill the LLM picked.
+                # Both player text and keywords are normalized to ASCII so that
+                # Polish chars (ń→n, ć→c, ę→e, ó→o, ą→a, ł→l, ś→s, ź/ż→z) match.
+                try:
+                    _txt_norm = _normalize_pl(text or "")
+                    # Same combat-class exclusion as the pre-LLM scan above.
+                    _kw_rows = conn.execute(
+                        "SELECT key, trigger_keywords FROM game_config_skills "
+                        "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
+                        "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
+                    ).fetchall()
+                    for _kr in _kw_rows:
+                        _raw_kws = (_kr["trigger_keywords"] or "").replace(",", " ")
+                        # K2 fix: exact word boundary, same as pre-LLM scanner
+                        _kws = [k.strip().lower().translate(_PL_NORMALIZE)
+                                for k in _raw_kws.split()
+                                if k.strip() and len(k.strip()) >= 5]
+                        if any(_kw_matches(kw, _txt_norm) for kw in _kws):
+                            _canonical = _kr["key"]
+                            break
+                except Exception as _kw_err:
+                    logger.warning("trigger_keywords_error: %s", str(_kw_err))
+                logger.info("skill_test_canonical_resolved",
+                            cue=_cue_name, canonical=_canonical, txt_norm=_txt_norm[:40])
+                if _canonical and not is_attack_test(_canonical) and not _is_combat_class_skill(_canonical):
+                    # It's a non-combat skill — show Roll Popup. Combat-class
+                    # skills (attack/ranged_attack/two_handed/...) skip this path;
+                    # they belong in real combat resolution, not phantom skill tests.
+                    from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                    import uuid as _uuid3
+                    _char_sh2 = json.loads(character["sheet_json"] or "{}")
+                    _sk2 = _canonical
+                    _skill_pending_narrator = {
+                        "skill_test_id": f"st-{_uuid3.uuid4().hex[:8]}",
+                        "skill_key": _sk2,
+                        "skill_label": _skill_label(_sk2),
+                        "counter": _get_counter(conn, _sk2),
+                        "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2),
+                    }
+                    # Store in session
+                    try:
+                        _gs3 = conn.execute(
+                            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                            (campaign_id,),
+                        ).fetchone()
+                        if _gs3:
+                            _sf3 = json.loads(_gs3["session_flags"] or "{}")
+                            _sf3 = _commit_pending_skill_test(_skill_pending_narrator, _sf3)
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                (json.dumps(_sf3, ensure_ascii=False), campaign_id),
+                            )
+                            conn.commit()
+                    except Exception as _e3:
+                        logger.warning("roll_cue_session_store_error: %s", str(_e3))
+
+    # T10: Process [CREATE_LOCATION/NPC/ENEMY] tags → pending_review queue
+    try:
+        process_create_tags(assistant_text or "", conn, campaign_id)
+    except Exception as _pct_err:
+        logger.warning("process_create_tags_error", error=str(_pct_err))
+
+    # XS1/XS2-XS8/XS12/XS15/XS6: narrative tag XP sources
+    try:
+        import re as _xs_re
+        from app.services.xp_sources import (
+            process_narrative_xp_tags,
+            grant_first_location_visit,
+            grant_first_npc_talk,
+            grant_session_start,
+            grant_beat_complete,
+        )
+        from app.services.narrative_state_service import strip_narrative_tags
+        _xp_char_id = int(payload.character_id)
+        _xp_turn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        _xp_total = 0
+        # XS15: session start bonus — checked before this turn is written
+        _xp_total += grant_session_start(conn, _xp_char_id, campaign_id, _xp_turn)
+        # XS6: first NPC dialogue
+        _dlg_m = _xs_re.match(r"^DIALOGUE:(.+)$", text.strip(), _xs_re.I)
+        if _dlg_m:
+            _xp_total += grant_first_npc_talk(
+                conn, _xp_char_id, campaign_id, _dlg_m.group(1).strip(), _xp_turn
+            )
+        # XS1: [BEAT_COMPLETE:key] tag in narrative
+        for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
+            _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
+        # E6 (#421): [ARC_ADVANCE:key] tag — jump the active GM-plan arc
+        try:
+            from app.services.campaign_plan_runtime import parse_arc_advance_tags as _paat, advance_arc as _adv_arc
+            for _arc_key in _paat(assistant_text or ""):
+                _adv_arc(campaign_id, _arc_key, conn)
+        except Exception as _arc_err:
+            logger.warning("arc_advance_error", error=str(_arc_err))
+        # XS2-XS4/XS7-XS8/XS12: bulk narrative tag parser
+        _tag_r = process_narrative_xp_tags(
+            assistant_text or "", conn, _xp_char_id, campaign_id, _xp_turn
+        )
+        _xp_total += _tag_r["total_granted"]
+        # XS5: first macro-location visit
+        _loc_r5 = conn.execute(
+            "SELECT gl.key FROM game_sessions gs "
+            "JOIN game_locations gl ON gl.id = gs.current_location_id "
+            "WHERE gs.campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if _loc_r5:
+            _xp_total += grant_first_location_visit(
+                conn, _xp_char_id, campaign_id, _loc_r5["key"], _xp_turn
+            )
+        # HF-11 (#553): talk_to_npc beat auto-complete in the live narrative tor
+        # (process_v2_turn's DIALOGUE hook is never reached). Detect NPC engagement
+        # from the button DIALOGUE key or a free-text scene-NPC keyword match.
+        try:
+            from app.services.campaign_plan_runtime import auto_complete_talk_to_npc
+            _dlg_key = _dlg_m.group(1).strip() if _dlg_m else None
+            _loc_key_for_beat = _loc_r5["key"] if _loc_r5 else None
+            auto_complete_talk_to_npc(
+                campaign_id, text, _loc_key_for_beat, _dlg_key, _xp_turn, conn
+            )
+        except Exception as _b11_err:
+            logger.warning("talk_beat_autocomplete_error", error=str(_b11_err))
+        if _xp_total:
+            conn.commit()
+    except Exception as _xs_err:
+        logger.warning("narrative_xp_hooks_error", error=str(_xs_err))
+
+    # Strip GM-only directive tags from player-visible text after XP processing
+    try:
+        from app.services.narrative_state_service import strip_narrative_tags as _strip_tags
+        _narrative_part, _parsed_part = _extract_narrative_for_cues(clean_assistant)
+        _stripped = _strip_tags(_narrative_part)
+        clean_assistant = _repack_narrative(clean_assistant, _stripped, _parsed_part)
+    except Exception as _strip_err:
+        logger.warning("narrative_tag_strip_error", error=str(_strip_err))
+
+    # U30.4 (#578): anti-desync guard — flag when the narrator claims travel but no
+    # mechanical move happened this turn. Records `travel_narrated_without_move`.
+    try:
+        from app.services.turn_pipeline import guard_travel_desync as _u30_guard
+        _u30_guard_narr, _ = _extract_narrative_for_cues(clean_assistant)
+        _u30_guard_turn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        _u30_guard(conn, campaign_id, _u30_guard_narr, _u30_move_executed, _u30_guard_turn)
+    except Exception as _u30_guard_err:
+        logger.warning("u30_desync_guard_error", error=str(_u30_guard_err))
+
+    # C10: parse QUEST_SUGGEST tags → active_quests, strip from narrative (non-streaming path)
+    try:
+        from app.services.quest_suggest_parser import parse_quest_suggest as _pqs_ns, strip_quest_suggest_tags as _sqs_ns
+        from app.services.world_state_service import get_world_state_flags as _gwsf_ns, set_world_state_flags as _swsf_ns
+        from app.services.quest_persist_service import persist_quest_to_character_quests as _pqdb_ns
+        _narr_qs_ns, _pjson_qs_ns = _extract_narrative_for_cues(clean_assistant)
+        _new_quests_ns = _pqs_ns(_narr_qs_ns)
+        if _new_quests_ns:
+            _existing_ns = _gwsf_ns(campaign_id).get("active_quests", [])
+            _seen_ns = {q.get("title", "") for q in _existing_ns}
+            _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
+            if _to_add_ns:
+                _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
+                # HF-2: persist to character_quests for /quest command and stats
+                for _q_ns in _to_add_ns:
+                    _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns)
+        clean_assistant = _repack_narrative(clean_assistant, _sqs_ns(_narr_qs_ns), _pjson_qs_ns)
+    except Exception as _qse_ns:
+        logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
+
+    # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
+    try:
+        from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
+        _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
+        _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id)
+        clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
+    except Exception as _sg_ns_err:
+        logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
+
+    # U6 (#530): pre-check grant_item_labels — items going to pending get narration correction
+    try:
+        from app.services.llm_tag_parser import (
+            get_rejection_correction as _u6_corr,
+            log_tag_error as _u6_lte,
+            save_rejected_tags as _u6_srt,
+            clear_rejected_tags as _u6_crt,
+            find_unknown_tags as _u6_fut,
+        )
+        _u6_turn_n = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        _u6_rejected: list = []
+        # Decision 2026-06-12 (Piotr): pending-item flow is ACCEPTED behaviour
+        # (item reaches inventory, admin reviews later) — NOT a tag error.
+        # No llm_tag_errors entry, no last_rejected_tags signal to the LLM.
+        # Narration correction only for trivial junk (a quest key must stay uncorrected).
+        for _u6_gil in grant_item_labels:
+            _u6_resolved = _resolve_grant_catalog_item(conn, _u6_gil)
+            if not _u6_resolved and not _is_weapon_label(_u6_gil) \
+                    and _is_trivial_item_label(_u6_gil):
+                _u6_fix = _u6_corr("GRANT_ITEM")
+                if _u6_fix:
+                    # Append correction inside the narrative field (not the raw JSON wrapper)
+                    _u6_narr, _u6_pjson = _extract_narrative_for_cues(clean_assistant)
+                    _u6_narr_fixed = _u6_narr.rstrip() + "\n\n" + _u6_fix
+                    clean_assistant = _repack_narrative(clean_assistant, _u6_narr_fixed, _u6_pjson)
+        for _u6_utag in _u6_fut(clean_assistant):
+            _u6_lte(conn, campaign_id, _u6_turn_n, _u6_utag, "unknown_tag")
+            _u6_rejected.append(f"unknown:{_u6_utag}")
+        conn.commit()
+        if _u6_rejected:
+            _u6_srt(conn, campaign_id, _u6_rejected)
+        else:
+            _u6_crt(conn, campaign_id)
+    except Exception as _u6_err:
+        logger.warning("u6_rejection_correction_error", error=str(_u6_err))
+
+    log = _persist_narrative_turn(
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=payload.character_id,
+        user_text=user_text_stored if roll_request else text,
+        assistant_text=clean_assistant,
+        route=route,
+        create_turn_log_fn=create_turn_log,
+        log_narrative_fn=log_narrative_turn_structured,
+    )
+    for _gil in grant_item_labels:
+        _gil_desc = grant_item_descriptions.get(_gil)
+        _resolved = _resolve_grant_catalog_item(conn, _gil)
+        if _resolved:
+            from app.services.loot_service import grant_loot_to_character
+            grant_loot_to_character(int(payload.character_id),
+                                    [{"item_key": _resolved["item_key"], "quantity": 1}],
+                                    source="gm_grant_item")
+            logger.info("grant_item_catalog", character_id=payload.character_id,
+                        item_key=_resolved["item_key"], label=_gil)
+        elif _is_weapon_label(_gil):
+            _grant_narrative_weapon(conn, campaign_id=campaign_id,
+                                    character_id=payload.character_id, label=_gil, source="gm")
+        else:
+            # D1 (#376) — unknown item → pending_review catalog entry + admin queue
+            _grant_pending_item(conn, campaign_id=campaign_id,
+                                character_id=payload.character_id,
+                                label=_gil, source="gm", description=_gil_desc)
+    if grant_item_labels:
+        conn.commit()
+        from app.services.event_logger import write_game_event as _wge_j
+        for _ge_lbl_j in grant_item_labels:
+            try:
+                _wge_j("item_grant", campaign_id, payload.character_id,
+                       character.get("user_id"),
+                       {"item_label": _ge_lbl_j, "source": "gm_grant_item"},
+                       conn=conn)
+                conn.commit()
+            except Exception:
+                pass
+    if grant_gold_amount is not None:
+        new_total = apply_grant_gold_to_character(
+            conn,
+            character_id=payload.character_id,
+            amount=grant_gold_amount,
+        )
+        conn.commit()
+        logger.info(
+            "grant_gold_applied",
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            amount=grant_gold_amount,
+            new_total_gp=new_total,
+        )
+        try:
+            from app.services.event_logger import write_game_event as _wge_j2
+            _wge_j2("gold_grant", campaign_id, payload.character_id,
+                    character.get("user_id"),
+                    {"amount": grant_gold_amount, "new_total_gp": new_total},
+                    conn=conn)
+            conn.commit()
+        except Exception:
+            pass
+
+    # N-turns encounter trigger: every 5 peaceful turns since last combat
+    try:
+        # D7 (#382) — interwał z configu (admin3-editable), default 20 (był 5 — za często).
+        try:
+            from app.services.encounter_config_service import get_encounter_config as _get_enc_cfg
+            _n_turns_interval = int(_get_enc_cfg().get("n_turns_interval", 20))
+        except Exception:
+            _n_turns_interval = 20
+        _last_combat_turn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=? AND route='combat'",
+            (campaign_id,),
+        ).fetchone()[0]
+        _peaceful_since = conn.execute(
+            "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id=? AND turn_number > ? AND route != 'combat'",
+            (campaign_id, _last_combat_turn),
+        ).fetchone()[0]
+        if _peaceful_since > 0 and _peaceful_since % _n_turns_interval == 0:
+            from app.services.encounter_service import maybe_inject_encounter as _mie2
+            _gs_nturn = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_nturn:
+                _sf_nturn = json.loads(_gs_nturn["session_flags"] or "{}")
+                _hex_nturn = _sf_nturn.get("current_hex")
+                _mie2(
+                    conn, campaign_id, "n_turns",
+                    q=int(_hex_nturn.get("q", 0)) if _hex_nturn else None,
+                    r=int(_hex_nturn.get("r", 0)) if _hex_nturn else None,
+                )
+    except Exception as _n_enc_err:
+        logger.warning("n_turns_encounter_trigger_error", error=str(_n_enc_err))
+
+    # F8 (#468) + U24 (#574): robbery counterplay — kara z możliwością reakcji.
+    #   Tura 1 (warning): sygnał ostrzegawczy w narracji, złoto nietknięte.
+    #   Tura 2 (defense): rzut obronny d20+stat vs DC wg poziomu; sukces = brak
+    #   straty, porażka = 20% (apply_robbery). Sukces LUB porażka konsumuje
+    #   limit 1/24h (record_robbery_trigger). Próg biedy i limit 24h egzekwuje
+    #   iniekcja (encounter_service) — tu rozstrzygamy już dopuszczony napad.
+    try:
+        from app.services.robbery_service import (
+            is_robbery_encounter, apply_robbery as _apply_rob,
+            robbery_defense_dc, roll_robbery_defense, record_robbery_trigger,
+            DEFAULT_DEFENSE_STAT,
+        )
+        _gs_rob = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+        ).fetchone()
+        if _gs_rob:
+            _sf_rob = json.loads(_gs_rob["session_flags"] or "{}")
+            _enc_rob = _sf_rob.get("active_encounter")
+            if is_robbery_encounter(_enc_rob):
+                if str(_enc_rob.get("robbery_state") or "") != "warned":
+                    # ── Tura ostrzeżenia: zasiej sygnał, NIE zabieraj złota ──
+                    _enc_rob["robbery_state"] = "warned"
+                    _sf_rob["active_encounter"] = _enc_rob
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                        (json.dumps(_sf_rob, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+                    _warn_hint = (
+                        "Masz nieprzyjemne wrażenie, że ktoś cię obserwuje — "
+                        "w tłumie/cieniu czai się ktoś, kto wypatruje twojej sakiewki. "
+                        "Bądź czujny w następnej chwili."
+                    )
+                    clean_assistant = (clean_assistant or "") + f"\n\n*{_warn_hint}*"
+                    logger.info("robbery_warning_emitted", campaign_id=campaign_id,
+                                char_id=payload.character_id)
+                else:
+                    # ── Tura rozstrzygnięcia: rzut obronny ──
+                    _stat = str(_enc_rob.get("defense_stat") or DEFAULT_DEFENSE_STAT)
+                    _lvl = 1
+                    try:
+                        _ch_row = conn.execute(
+                            "SELECT sheet_json FROM characters WHERE id=?", (payload.character_id,)
+                        ).fetchone()
+                        if _ch_row:
+                            _lvl = max(1, int((json.loads(_ch_row["sheet_json"] or "{}")).get("level") or 1))
+                    except Exception:
+                        _lvl = 1
+                    _dc = robbery_defense_dc(_lvl)
+                    _def = roll_robbery_defense(conn, payload.character_id, _stat, _dc)
+                    _sf_rob.pop("active_encounter", None)
+                    record_robbery_trigger(_sf_rob)  # konsumuje limit 1/24h
+                    if _def["success"]:
+                        _rob_result = {"ok": True, "defended": True, "defense": _def}
+                        _rob_hint = (
+                            f"Zauważyłeś zagrożenie w porę ({_stat} {_def['total']} ≥ {_dc}) "
+                            f"i udało ci się uniknąć napadu — twoja sakiewka jest bezpieczna."
+                        )
+                    else:
+                        _steal = _apply_rob(conn, payload.character_id)
+                        _rob_result = {"ok": True, "defended": False, "defense": _def, "steal": _steal}
+                        _rob_hint = _steal.get("narrative_hint", "") if _steal.get("ok") else ""
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                        (json.dumps(_sf_rob, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+                    if _rob_hint:
+                        clean_assistant = (clean_assistant or "") + f"\n\n*{_rob_hint}*"
+                    logger.info("robbery_encounter_resolved", campaign_id=campaign_id,
+                                char_id=payload.character_id, result=_rob_result)
+    except Exception as _rob_err:
+        logger.warning("robbery_encounter_error", error=str(_rob_err))
+
+    # Issue #135 — inject [COMBAT_START] when player declared attack but
+    # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
+    assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
+
+    new_combat = _maybe_start_combat_from_gm_tag(
+        campaign_id, payload.character_id, assistant_text,
+        turn_log_id=log.get("id") if log else None,
+        turn_number=log.get("turn_number", 0) if log else 0,
+    )
+    combat_extra = None
+    if combat_was_active and not new_combat:
+        combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+
+    # Extract travel_hint from JSON field (preferred) or legacy [TRAVEL_HINT:] tag
+    import re as _re
+    _travel_hint_label: str | None = None
+    if isinstance(_parsed_json, dict):
+        _th = _parsed_json.get("travel_hint")
+        if _th and isinstance(_th, str):
+            _travel_hint_label = _th.strip()
+    if not _travel_hint_label:
+        _travel_hint_match = _re.search(r'\[TRAVEL_HINT:([^\]]+)\]', clean_assistant or '')
+        if _travel_hint_match:
+            _travel_hint_label = _travel_hint_match.group(1).strip()
+            clean_assistant = _re.sub(r'\s*\[TRAVEL_HINT:[^\]]+\]', '', clean_assistant).strip()
+
+    result_out = (
+        {**result, "message": clean_assistant} if isinstance(result, dict) else result
+    )
+
+    # ── T33: Build suggested actions for hybrid input UI ─────────────────
+    _suggested_actions: list[dict] = []
+    try:
+        _sf_for_sa = {}
+        _gs_for_sa = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if _gs_for_sa:
+            _sf_for_sa = json.loads(_gs_for_sa["session_flags"] or "{}")
+        _game_state_for_sa = _sf_for_sa.get("state", "NARRATIVE")
+        # If combat just started, use COMBAT state
+        if new_combat:
+            _game_state_for_sa = "COMBAT"
+        # Parse LLM-suggested actions from GM JSON if present
+        _llm_suggested: list[dict] | None = None
+        if isinstance(_parsed_json, dict):
+            _raw_llm_sa = _parsed_json.get("suggested_actions")
+            if isinstance(_raw_llm_sa, list):
+                _llm_suggested = _raw_llm_sa
+        _suggested_actions = build_suggested_actions(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            game_state=_game_state_for_sa,
+            session_flags=_sf_for_sa,
+            llm_suggested=_llm_suggested,
+            travel_hint=_travel_hint_label,
+        )
+    except Exception as _sa_err:
+        logger.warning("suggested_actions_build_error", error=str(_sa_err))
+
+    # U32: travel escalation level (0=none, 1=highlight pills, 2=banner)
+    _turns_stale = int(_sf_for_sa.get("turns_at_location", 0) or 0)
+    _travel_escalation_level = 2 if _turns_stale >= 10 else (1 if _turns_stale >= 5 else 0)
+
+    # L13c (#689): inside an active tile dungeon — no overworld travel UI.
+    # Suppress the anti-stuck travel banner and drop travel-type suggested
+    # actions; dungeon movement is via the D-pad / tile actions only.
+    _drun_sa = (_sf_for_sa.get("dungeon_run") or {})
+    if (_drun_sa.get("system") == "tiles_v2"
+            and not _drun_sa.get("completed") and not _drun_sa.get("failed")):
+        _travel_escalation_level = 0
+        _suggested_actions = [
+            a for a in _suggested_actions
+            if isinstance(a, dict) and a.get("type") != "travel"
+        ]
+
+    out: dict = {
+        "id": log["id"],
+        "campaign_id": log["campaign_id"],
+        "turn_number": log["turn_number"],
+        "created_at": log["created_at"],
+        "route": "narrative",
+        "result": result_out,
+        "prose": clean_assistant,
+        "turn_id": turn_id,
+        "suggested_actions": _suggested_actions,
+        "travel_escalation_level": _travel_escalation_level,
+    }
+    if _skill_pending_narrator:
+        out["skill_test_pending"] = _skill_pending_narrator
+    if new_combat is not None:
+        out["combat_state"] = new_combat
+    if combat_extra:
+        out.update(combat_extra)
+    if _should_emit_open_shop_in_mode(open_shop_npc_key, campaign["mode"]):
+        out["open_shop"] = open_shop_npc_key
+    # Hex travel signal: frontend uses this to auto-update map pin
+    if _hex_after_enc and _hex_before_enc and _hex_after_enc != _hex_before_enc:
+        out["hex_changed"] = {"from": _hex_before_enc, "to": _hex_after_enc}
+    if _dungeon_clear_result:
+        out["dungeon_cleared"] = _dungeon_clear_result
+
+    # #773 (1A) — deklaracja obezwładnienia poza walką → bramka intencji (#780)
+    # zamiast cichego COMBAT_START. Agresywna deklaracja non-lethal („obezwładniam",
+    # „przyciskam do ściany") nie wybucha śmiertelną walką — silnik STOP i pyta gracza.
+    if new_combat is None and not combat_was_active and _subdue_intent(text):
+        try:
+            from app.services.combat_service import build_advantage_gate
+            _sub_gate = build_advantage_gate("grapple")
+            if _sub_gate:
+                out["advantage_gate"] = _sub_gate
+        except Exception as _sub_err:
+            logger.warning("subdue_gate_build_error", error=str(_sub_err))
+
+    # B5: auto-save World State snapshot after each narrative turn
+    try:
+        from app.services.world_state_service import auto_save_snapshot as _ws_snap, get_world_state_flags as _gwsf_out
+        _ws_snap(campaign_id)
+        out["active_quests"] = _gwsf_out(campaign_id).get("active_quests", [])
+    except Exception as _ws_err:
+        logger.warning("world_state_snapshot_error", error=str(_ws_err))
+
+    # E25 + U20 (#572): inject onboarding cards for first-time mechanic triggers
+    try:
+        # U20: signal NPC dialogue this turn so the crafter card can trigger
+        try:
+            _dlg_seen = bool(locals().get("_dlg_m"))
+            _txt_norm = _normalize_pl(text or "")
+            if _dlg_seen or any(d in _txt_norm for d in _COMPOUND_DIALOGUE_MARKERS):
+                out["npc_dialogue"] = True
+        except Exception:
+            pass
+        from app.services.onboarding_service import inject_onboarding_to_out as _ob_inject
+        _ob_inject(out, user_id=int(character["user_id"]), conn=conn, character=character)
+    except Exception as _ob_err:
+        logger.warning("onboarding_injection_error", error=str(_ob_err))
+        out.setdefault("onboarding_cards", [])
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # POST turn (non-streaming)
 # ---------------------------------------------------------------------------
 
@@ -3486,364 +4562,30 @@ def create_turn(
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
+        roll_result_data, roll_result_message, user_text_stored, _death_resp = _ct_roll_and_death_save(
+            conn=conn,
+            campaign_id=campaign_id,
+            payload=payload,
+            character=character,
+            text=text,
+            turn_id=turn_id,
+        )
+        if _death_resp is not None:
+            return _death_resp
         roll_request = parse_roll_command(text)
-        roll_result_message = None
-        roll_result_data = None
-        user_text_stored = text
-        if roll_request:
-            if not is_slash_command_enabled("/roll"):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Komenda /roll jest wyłączona przez administratora.",
-                )
-            character_sheet = parse_character_sheet(character["sheet_json"])
-            if roll_request.get("skill") == "death_save":
-                hp_chk = _sheet_current_hp(character_sheet)
-                if hp_chk is not None and hp_chk > 0:
-                    logger.warning(
-                        "death_save_rejected",
-                        character_id=payload.character_id,
-                        hp=hp_chk,
-                    )
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Nieprawidłowy rzut: death_save przy HP > 0",
-                    )
-            if is_attack_test(roll_request.get("skill")):
-                weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
-                raw_roll = roll_request.get("raw_roll")
-                roll_result = resolve_attack_roll_for_weapon(
-                    character_sheet,
-                    raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
-                    weapon_row=weapon_row,
-                )
-                roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
-                if roll_result["dc"] is not None:
-                    roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
-            else:
-                roll_result = resolve_roll(
-                    character_sheet=character_sheet,
-                    test_name=roll_request["skill"],
-                    raw_roll=roll_request.get("raw_roll"),
-                    dc=resolve_dc_for_roll(roll_request.get("dc")),
-                )
-            roll_result_data = roll_result
-            roll_result_message = format_roll_for_llm(roll_result)
-            user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(
-                build_roll_card_payload(
-                    roll_result,
-                    character_name=(character["name"] or "Bohater"),
-                    replay_command=text.strip(),
-                ),
-                ensure_ascii=False,
-            )
-
-        # XS9/XS10/XS11: pending XP for successful skill check by DC range
-        if (roll_result_data and roll_result_data.get("success")
-                and roll_result_data.get("test") != "death_save"):
-            _dc_val = roll_result_data.get("dc")
-            if _dc_val and int(_dc_val) >= 12:
-                try:
-                    from app.services.xp_sources import grant_skill_dc_success
-                    _tn9 = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    grant_skill_dc_success(conn, int(payload.character_id), campaign_id, int(_dc_val), _tn9)
-                    conn.commit()
-                except Exception:
-                    pass
-
-        if roll_result_data and roll_result_data.get("test") == "death_save":
-            sheet_dict = parse_character_sheet(character["sheet_json"])
-            new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
-            conn.execute(
-                """
-                UPDATE characters SET sheet_json = ?
-                WHERE id = ? AND campaign_id = ?
-                """,
-                (
-                    json.dumps(new_sheet, ensure_ascii=False),
-                    payload.character_id,
-                    campaign_id,
-                ),
-            )
-            conn.commit()
-            # XS14: grant pending XP when player survives a death save
-            if not died_here:
-                try:
-                    from app.services.xp_sources import grant_death_save_survived
-                    _tn14 = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    grant_death_save_survived(conn, int(payload.character_id), campaign_id, _tn14)
-                    conn.commit()
-                except Exception:
-                    pass
-            character = get_character_or_404(conn, campaign_id, payload.character_id)
-            if died_here:
-                loc = (character["location"] or "unknown place").strip()
-                dr = f"Failed three death saves ({loc})"
-                epitaph = end_solo_campaign_on_death(
-                    conn,
-                    campaign_id=campaign_id,
-                    character_row=character,
-                    death_reason=dr,
-                )
-                # J2: write history row + queue chapter summary generation
-                try:
-                    from app.services.chapter_summary_service import close_campaign_with_summary
-                    _ch_sheet = json.loads(character["sheet_json"] or "{}")
-                    _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
-                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
-                    _ch_turns = conn.execute(
-                        "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    close_campaign_with_summary(
-                        conn,
-                        campaign_id=campaign_id,
-                        character_id=int(payload.character_id),
-                        outcome="death",
-                        user_id=int(character["user_id"]),
-                        xp_earned=_ch_xp,
-                        gold_at_end=_ch_gold,
-                        turns_count=int(_ch_turns or 0),
-                    )
-                except Exception as _j2_err:
-                    logger.warning("j2_death_history_failed", error=str(_j2_err))
-                user_line = user_text_stored if roll_request else (roll_result_message or text)
-                log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=user_line,
-                    assistant_text=epitaph,
-                    route="narrative",
-                )
-                log_narrative_turn_structured(
-                    route="narrative",
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    turn_row=log,
-                    user_text=user_line,
-                    assistant_text=epitaph,
-                )
-                return {
-                    "id": log["id"],
-                    "campaign_id": log["campaign_id"],
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
-                    "route": "narrative",
-                    "result": {"message": epitaph},
-                    "campaign_ended": True,
-                    "turn_id": turn_id,
-                }
 
         if text.startswith("/") and not roll_request:
-            route = "command"
-            cmd = text.split(" ", 1)[0].lower()
-            _is_admin_user = False
-            try:
-                _u_row = conn.execute(
-                    "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
-                    (character["user_id"],),
-                ).fetchone()
-                _is_admin_user = bool(_u_row and int(_u_row["is_admin"] or 0))
-            except Exception:
-                pass
-            sk_dispatch = slash_registry_key_for_dispatch(text, is_admin=_is_admin_user)
-            # Alias support: rewrite cmd + text to canonical first-token so the
-            # per-command branches below (cmd == '/mem', etc.) match. The user's
-            # original text remains in user_text for logging.
-            if sk_dispatch:
-                _canon = sk_dispatch.split(" ", 1)[0].lower()
-                if _canon != cmd:
-                    rest = text[len(cmd):]
-                    text = _canon + rest
-                    cmd = _canon
-            if (
-                sk_dispatch
-                and not is_slash_command_enabled(sk_dispatch)
-                and cmd not in ("/atak", "/walka")
-            ):
-                token = sk_dispatch.split()[0].lstrip("/") or "cmd"
-                result = {
-                    "command": token,
-                    "disabled": True,
-                    "message": "Ta komenda została wyłączona przez administratora.",
-                }
-                log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
-                    route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /help
-            if cmd == "/help":
-                result = {
-                    "command": "help",
-                    "commands": get_public_help_command_texts(),
-                }
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /name
-            if cmd == "/name":
-                new_name = text[5:].strip()
-                if not new_name:
-                    raise HTTPException(status_code=400, detail="Character name is required")
-                conn.execute(
-                    "UPDATE characters SET name = ? WHERE id = ? AND campaign_id = ?",
-                    (new_name, payload.character_id, campaign_id),
-                )
-                conn.commit()
-                result = {"command": "name", "character_name": new_name}
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /quest, /export, /move — handled by turn_commands module
-            _tc_result = _handle_turn_command(
+            return _ct_inline_commands(
                 conn=conn,
                 campaign_id=campaign_id,
-                character_id=payload.character_id,
+                payload=payload,
+                campaign=campaign,
+                character=character,
                 text=text,
-                cmd=cmd,
                 turn_id=turn_id,
-                create_turn_log=create_turn_log,
-                _with_turn_trace=_with_turn_trace,
             )
-            if _tc_result is not None:
-                return _tc_result
-
-            # /sheet
-            if cmd == "/sheet":
-                result = {
-                    "command": "sheet",
-                    "character": {
-                        "id": character["id"],
-                        "name": character["name"],
-                        "campaign_id": character["campaign_id"],
-                        "user_id": character["user_id"],
-                        "system_id": character["system_id"],
-                        "sheet_json": character["sheet_json"],
-                        "location": character["location"],
-                        "is_active": character["is_active"],
-                        "created_at": character["created_at"],
-                    },
-                }
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /history
-            if cmd == "/history":
-                rows = conn.execute(
-                    """
-                    SELECT turn_number, user_text, assistant_text, created_at
-                    FROM campaign_turns
-                    WHERE campaign_id = ?
-                    ORDER BY turn_number DESC
-                    LIMIT 10
-                    """,
-                    (campaign_id,),
-                ).fetchall()
-                history = [
-                    {
-                        "turn": r["turn_number"],
-                        "player": r["user_text"],
-                        "gm": r["assistant_text"],
-                        "at": r["created_at"],
-                    }
-                    for r in reversed(rows)
-                ]
-                result = {"command": "history", "turns": history}
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /helpme — OOC advisor (route=helpme; nie wchodzi do kontekstu narracji)
-            if cmd == "/helpme":
-                topic = re.sub(r"^/helpme\s*", "", text, count=1, flags=re.I).strip()
-                owner_id = int(campaign["owner_user_id"])
-                llm_owner = get_user_llm_settings_full(owner_id)
-                model_h = resolve_model_name(
-                    requested_model=payload.engine,
-                    campaign_model=campaign["model_id"],
-                    llm_config=llm_owner,
-                )
-                try:
-                    out = run_helpme_advisor(
-                        conn=conn,
-                        campaign=campaign,
-                        character=character,
-                        topic=topic,
-                        user_id=owner_id,
-                        model=model_h,
-                    )
-                except RuntimeError as e:
-                    raise HTTPException(status_code=502, detail=str(e)) from None
-                msg = (out.get("message") or "").strip()
-                if not msg:
-                    raise HTTPException(status_code=502, detail="Empty /helpme response")
-                log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text.strip(),
-                    assistant_text=msg,
-                    route="helpme",
-                )
-                return {
-                    "id": log["id"],
-                    "campaign_id": log["campaign_id"],
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
-                    "route": "helpme",
-                    "ooc": True,
-                    "result": {"message": msg},
-                    "turn_id": turn_id,
-                }
-
-            # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
-            if cmd in ("/atak", "/walka"):
-                result = _atak_command_response_for_api(campaign_id)
-                log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
-                    route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # Unknown command
-            result = {"command": cmd, "message": f"Unknown command '{cmd}'. Type /help for a list."}
-            log = create_turn_log(
-                conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-            )
-            return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
-
-        _skill_pending_narrator = None  # set if narrator embeds [SKILL_TEST]/[TRAP] tag
 
         # ── Skill routing (R1.2 — #872) ─────────────────────────────────────
         _skill_result = _route_skill_turn(
@@ -3935,696 +4677,21 @@ def create_turn(
             extra_system=_u30_system_fact,
         )
 
-        assistant_text = (result.get("message") or "").strip()
-        if not assistant_text:
-            raise HTTPException(status_code=500, detail="Empty narrative response")
-
-        # Snapshot hex before location intent (for hex_enter encounter trigger)
-        _hex_before_enc = _snapshot_hex(conn, campaign_id)
-
-        assistant_text = _process_location_intent(
+        return _ct_post_llm(
             conn=conn,
             campaign_id=campaign_id,
-            assistant_response=assistant_text,
-        )
-
-        # Hex-enter encounter trigger: fire when current_hex changed
-        _check_hex_enter_trigger(conn, campaign_id, _hex_before_enc)
-
-        # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
-        _char_sh = json.loads(character["sheet_json"] or "{}")
-        assistant_text, _skill_pending_narrator = _intercept_narrator_skill_tags(
-            assistant_text=assistant_text,
-            conn=conn,
-            campaign_id=campaign_id,
-            character_id=payload.character_id,
-            character_sheet=_char_sh,
-        )
-
-        # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
-        _u7_forced = _apply_u7_safety_net(
-            conn=conn,
-            campaign_id=campaign_id,
+            payload=payload,
+            campaign=campaign,
             character=character,
-            assistant_text=assistant_text,
-            risky_intent_match=_risky_intent_match,
-            skill_pending_narrator=_skill_pending_narrator,
-            commit_pending_skill_test_fn=_commit_pending_skill_test,
-        )
-        if _u7_forced is not None:
-            _skill_pending_narrator = _u7_forced
-
-        from app.services import combat_service as _cs
-
-        combat_before = _cs.get_active_combat(campaign_id)
-        combat_was_active = bool(combat_before) and str(
-            combat_before.get("current_turn") or ""
-        ) == "player"
-
-        clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
-        # [DUNGEON_CLEAR:key] — strip tag and record completion
-        _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, payload.character_id, clean_assistant)
-        clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
-        # Stage 3 Z4 — [APPLY_CONDITION:zaskoczony:enemy_key] from stealth-success narration
-        try:
-            from app.services.combat_service import apply_condition_to_combatant
-            from app.services.llm_tag_parser import (
-                get_rejection_correction as _ac_corr,
-                log_tag_error as _ac_lte,
-            )
-            _ac_invalid = False
-            for _ac in APPLY_CONDITION_RE.finditer(clean_assistant):
-                _cond_key = _ac.group(1).strip()
-                _enemy_ref = _ac.group(2).strip()
-                _ac_res = apply_condition_to_combatant(campaign_id, _enemy_ref, _cond_key)
-                logger.info("apply_condition_tag", campaign_id=campaign_id,
-                            condition=_cond_key, enemy_ref=_enemy_ref, result=_ac_res)
-                # S8 (#603): nieznany klucz kondycji → invalid_reference (U5/U6)
-                if isinstance(_ac_res, dict) and _ac_res.get("reason") == "invalid_reference":
-                    _ac_invalid = True
-                    _ac_tn = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    _ac_lte(conn, campaign_id, _ac_tn, _ac.group(0), "invalid_reference")
-            clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
-            if _ac_invalid:
-                _ac_fix = _ac_corr("APPLY_CONDITION")
-                if _ac_fix:
-                    _ac_narr, _ac_pjson = _extract_narrative_for_cues(clean_assistant)
-                    clean_assistant = _repack_narrative(
-                        clean_assistant, _ac_narr.rstrip() + "\n\n" + _ac_fix, _ac_pjson)
-        except Exception as _ac_err:
-            logger.warning("apply_condition_tag_error", error=str(_ac_err))
-            clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
-        clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
-        _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
-        (
-            _narrative_for_cues,
-            grant_item_labels,
-            grant_gold_amount,
-            open_shop_npc_key,
-            grant_item_descriptions,
-        ) = extract_grant_cues(_narrative_for_cues)
-        # Also check top-level grant_item in parsed JSON — extract_grant_cues only sees
-        # the plain narrative text and can't find fields in the outer JSON object.
-        if isinstance(_parsed_json, dict):
-            _raw_gi_json = _parsed_json.get("grant_item")
-            _entries_json: list = (_raw_gi_json if isinstance(_raw_gi_json, list) else [_raw_gi_json]) if _raw_gi_json else []
-            for _x in _entries_json:
-                _entry = _parse_grant_item_entry(_x)
-                if _entry and _entry[0] not in grant_item_labels:
-                    grant_item_labels.append(_entry[0])
-                    grant_item_descriptions[_entry[0]] = _entry[1]
-        grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
-        clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
-        # Inject _debug into assistant JSON for frontend debug block
-        _mr = result.get("mechanic_result") if isinstance(result, dict) else None
-        if _mr and isinstance(_mr, dict):
-            try:
-                _dbg_payload = {k: _mr[k] for k in ("roll", "total", "dc", "outcome", "action_type") if k in _mr}
-                _ca_parsed = json.loads(_strip_json_code_fence(clean_assistant))
-                if isinstance(_ca_parsed, dict):
-                    _ca_parsed["_debug"] = _dbg_payload
-                    clean_assistant = json.dumps(_ca_parsed, ensure_ascii=False)
-            except Exception:
-                pass
-        validate_roll_cue_name(clean_assistant.strip())
-
-        # ── roll_cue skill test intercept ─────────────────────────────────────
-        # When narrator emits roll_cue:"Roll Arcana d20" (not an attack), convert
-        # it to skill_test_pending so the Roll Popup appears.
-        # Issue #53 fix 3: when LLM emits plain text (no JSON envelope), scan the
-        # narrative tail for a trailing "Roll <skill> d20" line — same intercept
-        # path, just sourced from raw text instead of the parsed JSON field.
-        # K2 guard: suppress LLM-emitted roll_cue when player asked a question —
-        # questions cannot be action attempts even if the LLM hallucinates a roll.
-        _raw_cue = ""
-        if _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
-            _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
-        elif not _parsed_json and not _skill_pending_narrator:
-            import re as _rc_re_pre
-            _tail_text = (clean_assistant or "").rstrip()
-            # Take the last non-empty line and check if it matches Roll <skill> d20
-            for _line in reversed(_tail_text.splitlines()):
-                _line_s = _line.strip()
-                if not _line_s:
-                    continue
-                if _rc_re_pre.match(r"^Roll\s+.+?\s+d\d+$", _line_s, _rc_re_pre.IGNORECASE):
-                    _raw_cue = _line_s
-                    logger.info("roll_cue_plain_text_fallback", cue=_raw_cue)
-                break  # only inspect the last non-empty line
-        if (_parsed_json or _raw_cue) and not _skill_pending_narrator:
-            if _raw_cue:
-                import re as _rc_re
-                _cm = _rc_re.match(r"^Roll (.+?) d\d+$", _raw_cue, _rc_re.IGNORECASE)
-                if _cm:
-                    _cue_name = _cm.group(1).strip()
-                    _canonical = resolve_test_name(_cue_name)
-                    # Fallback 1: custom skill by exact key match
-                    if _canonical is None:
-                        _norm_cue = _cue_name.lower().replace(" ", "_")
-                        try:
-                            _cue_db = conn.execute(
-                                "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
-                                (_norm_cue,),
-                            ).fetchone()
-                            if _cue_db:
-                                _canonical = _norm_cue
-                        except Exception:
-                            pass
-                    # Fallback 2: check trigger_keywords — admin-defined keywords that
-                    # deterministically override whatever skill the LLM picked.
-                    # Both player text and keywords are normalized to ASCII so that
-                    # Polish chars (ń→n, ć→c, ę→e, ó→o, ą→a, ł→l, ś→s, ź/ż→z) match.
-                    try:
-                        _txt_norm = _normalize_pl(text or "")
-                        # Same combat-class exclusion as the pre-LLM scan above.
-                        _kw_rows = conn.execute(
-                            "SELECT key, trigger_keywords FROM game_config_skills "
-                            "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
-                            "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
-                        ).fetchall()
-                        for _kr in _kw_rows:
-                            _raw_kws = (_kr["trigger_keywords"] or "").replace(",", " ")
-                            # K2 fix: exact word boundary, same as pre-LLM scanner
-                            _kws = [k.strip().lower().translate(_PL_NORMALIZE)
-                                    for k in _raw_kws.split()
-                                    if k.strip() and len(k.strip()) >= 5]
-                            if any(_kw_matches(kw, _txt_norm) for kw in _kws):
-                                _canonical = _kr["key"]
-                                break
-                    except Exception as _kw_err:
-                        logger.warning("trigger_keywords_error: %s", str(_kw_err))
-                    logger.info("skill_test_canonical_resolved",
-                                cue=_cue_name, canonical=_canonical, txt_norm=_txt_norm[:40])
-                    if _canonical and not is_attack_test(_canonical) and not _is_combat_class_skill(_canonical):
-                        # It's a non-combat skill — show Roll Popup. Combat-class
-                        # skills (attack/ranged_attack/two_handed/...) skip this path;
-                        # they belong in real combat resolution, not phantom skill tests.
-                        from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
-                        import uuid as _uuid3
-                        _char_sh2 = json.loads(character["sheet_json"] or "{}")
-                        _sk2 = _canonical
-                        _skill_pending_narrator = {
-                            "skill_test_id": f"st-{_uuid3.uuid4().hex[:8]}",
-                            "skill_key": _sk2,
-                            "skill_label": _skill_label(_sk2),
-                            "counter": _get_counter(conn, _sk2),
-                            "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2),
-                        }
-                        # Store in session
-                        try:
-                            _gs3 = conn.execute(
-                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                                (campaign_id,),
-                            ).fetchone()
-                            if _gs3:
-                                _sf3 = json.loads(_gs3["session_flags"] or "{}")
-                                _sf3 = _commit_pending_skill_test(_skill_pending_narrator, _sf3)
-                                conn.execute(
-                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-                                    (json.dumps(_sf3, ensure_ascii=False), campaign_id),
-                                )
-                                conn.commit()
-                        except Exception as _e3:
-                            logger.warning("roll_cue_session_store_error: %s", str(_e3))
-
-        # T10: Process [CREATE_LOCATION/NPC/ENEMY] tags → pending_review queue
-        try:
-            process_create_tags(assistant_text or "", conn, campaign_id)
-        except Exception as _pct_err:
-            logger.warning("process_create_tags_error", error=str(_pct_err))
-
-        # XS1/XS2-XS8/XS12/XS15/XS6: narrative tag XP sources
-        try:
-            import re as _xs_re
-            from app.services.xp_sources import (
-                process_narrative_xp_tags,
-                grant_first_location_visit,
-                grant_first_npc_talk,
-                grant_session_start,
-                grant_beat_complete,
-            )
-            from app.services.narrative_state_service import strip_narrative_tags
-            _xp_char_id = int(payload.character_id)
-            _xp_turn = conn.execute(
-                "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
-                (campaign_id,),
-            ).fetchone()[0]
-            _xp_total = 0
-            # XS15: session start bonus — checked before this turn is written
-            _xp_total += grant_session_start(conn, _xp_char_id, campaign_id, _xp_turn)
-            # XS6: first NPC dialogue
-            _dlg_m = _xs_re.match(r"^DIALOGUE:(.+)$", text.strip(), _xs_re.I)
-            if _dlg_m:
-                _xp_total += grant_first_npc_talk(
-                    conn, _xp_char_id, campaign_id, _dlg_m.group(1).strip(), _xp_turn
-                )
-            # XS1: [BEAT_COMPLETE:key] tag in narrative
-            for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
-                _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
-            # E6 (#421): [ARC_ADVANCE:key] tag — jump the active GM-plan arc
-            try:
-                from app.services.campaign_plan_runtime import parse_arc_advance_tags as _paat, advance_arc as _adv_arc
-                for _arc_key in _paat(assistant_text or ""):
-                    _adv_arc(campaign_id, _arc_key, conn)
-            except Exception as _arc_err:
-                logger.warning("arc_advance_error", error=str(_arc_err))
-            # XS2-XS4/XS7-XS8/XS12: bulk narrative tag parser
-            _tag_r = process_narrative_xp_tags(
-                assistant_text or "", conn, _xp_char_id, campaign_id, _xp_turn
-            )
-            _xp_total += _tag_r["total_granted"]
-            # XS5: first macro-location visit
-            _loc_r5 = conn.execute(
-                "SELECT gl.key FROM game_sessions gs "
-                "JOIN game_locations gl ON gl.id = gs.current_location_id "
-                "WHERE gs.campaign_id = ? LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if _loc_r5:
-                _xp_total += grant_first_location_visit(
-                    conn, _xp_char_id, campaign_id, _loc_r5["key"], _xp_turn
-                )
-            # HF-11 (#553): talk_to_npc beat auto-complete in the live narrative tor
-            # (process_v2_turn's DIALOGUE hook is never reached). Detect NPC engagement
-            # from the button DIALOGUE key or a free-text scene-NPC keyword match.
-            try:
-                from app.services.campaign_plan_runtime import auto_complete_talk_to_npc
-                _dlg_key = _dlg_m.group(1).strip() if _dlg_m else None
-                _loc_key_for_beat = _loc_r5["key"] if _loc_r5 else None
-                auto_complete_talk_to_npc(
-                    campaign_id, text, _loc_key_for_beat, _dlg_key, _xp_turn, conn
-                )
-            except Exception as _b11_err:
-                logger.warning("talk_beat_autocomplete_error", error=str(_b11_err))
-            if _xp_total:
-                conn.commit()
-        except Exception as _xs_err:
-            logger.warning("narrative_xp_hooks_error", error=str(_xs_err))
-
-        # Strip GM-only directive tags from player-visible text after XP processing
-        try:
-            from app.services.narrative_state_service import strip_narrative_tags as _strip_tags
-            _narrative_part, _parsed_part = _extract_narrative_for_cues(clean_assistant)
-            _stripped = _strip_tags(_narrative_part)
-            clean_assistant = _repack_narrative(clean_assistant, _stripped, _parsed_part)
-        except Exception as _strip_err:
-            logger.warning("narrative_tag_strip_error", error=str(_strip_err))
-
-        # U30.4 (#578): anti-desync guard — flag when the narrator claims travel but no
-        # mechanical move happened this turn. Records `travel_narrated_without_move`.
-        try:
-            from app.services.turn_pipeline import guard_travel_desync as _u30_guard
-            _u30_guard_narr, _ = _extract_narrative_for_cues(clean_assistant)
-            _u30_guard_turn = conn.execute(
-                "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
-                (campaign_id,),
-            ).fetchone()[0]
-            _u30_guard(conn, campaign_id, _u30_guard_narr, _u30_move_executed, _u30_guard_turn)
-        except Exception as _u30_guard_err:
-            logger.warning("u30_desync_guard_error", error=str(_u30_guard_err))
-
-        # C10: parse QUEST_SUGGEST tags → active_quests, strip from narrative (non-streaming path)
-        try:
-            from app.services.quest_suggest_parser import parse_quest_suggest as _pqs_ns, strip_quest_suggest_tags as _sqs_ns
-            from app.services.world_state_service import get_world_state_flags as _gwsf_ns, set_world_state_flags as _swsf_ns
-            from app.services.quest_persist_service import persist_quest_to_character_quests as _pqdb_ns
-            _narr_qs_ns, _pjson_qs_ns = _extract_narrative_for_cues(clean_assistant)
-            _new_quests_ns = _pqs_ns(_narr_qs_ns)
-            if _new_quests_ns:
-                _existing_ns = _gwsf_ns(campaign_id).get("active_quests", [])
-                _seen_ns = {q.get("title", "") for q in _existing_ns}
-                _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
-                if _to_add_ns:
-                    _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
-                    # HF-2: persist to character_quests for /quest command and stats
-                    for _q_ns in _to_add_ns:
-                        _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns)
-            clean_assistant = _repack_narrative(clean_assistant, _sqs_ns(_narr_qs_ns), _pjson_qs_ns)
-        except Exception as _qse_ns:
-            logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
-
-        # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
-        try:
-            from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
-            _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
-            _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id)
-            clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
-        except Exception as _sg_ns_err:
-            logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
-
-        # U6 (#530): pre-check grant_item_labels — items going to pending get narration correction
-        try:
-            from app.services.llm_tag_parser import (
-                get_rejection_correction as _u6_corr,
-                log_tag_error as _u6_lte,
-                save_rejected_tags as _u6_srt,
-                clear_rejected_tags as _u6_crt,
-                find_unknown_tags as _u6_fut,
-            )
-            _u6_turn_n = conn.execute(
-                "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
-                (campaign_id,),
-            ).fetchone()[0]
-            _u6_rejected: list = []
-            # Decision 2026-06-12 (Piotr): pending-item flow is ACCEPTED behaviour
-            # (item reaches inventory, admin reviews later) — NOT a tag error.
-            # No llm_tag_errors entry, no last_rejected_tags signal to the LLM.
-            # Narration correction only for trivial junk (a quest key must stay uncorrected).
-            for _u6_gil in grant_item_labels:
-                _u6_resolved = _resolve_grant_catalog_item(conn, _u6_gil)
-                if not _u6_resolved and not _is_weapon_label(_u6_gil) \
-                        and _is_trivial_item_label(_u6_gil):
-                    _u6_fix = _u6_corr("GRANT_ITEM")
-                    if _u6_fix:
-                        # Append correction inside the narrative field (not the raw JSON wrapper)
-                        _u6_narr, _u6_pjson = _extract_narrative_for_cues(clean_assistant)
-                        _u6_narr_fixed = _u6_narr.rstrip() + "\n\n" + _u6_fix
-                        clean_assistant = _repack_narrative(clean_assistant, _u6_narr_fixed, _u6_pjson)
-            for _u6_utag in _u6_fut(clean_assistant):
-                _u6_lte(conn, campaign_id, _u6_turn_n, _u6_utag, "unknown_tag")
-                _u6_rejected.append(f"unknown:{_u6_utag}")
-            conn.commit()
-            if _u6_rejected:
-                _u6_srt(conn, campaign_id, _u6_rejected)
-            else:
-                _u6_crt(conn, campaign_id)
-        except Exception as _u6_err:
-            logger.warning("u6_rejection_correction_error", error=str(_u6_err))
-
-        log = _persist_narrative_turn(
-            conn=conn,
-            campaign_id=campaign_id,
-            character_id=payload.character_id,
-            user_text=user_text_stored if roll_request else text,
-            assistant_text=clean_assistant,
+            text=text,
+            result=result,
+            roll_request=roll_request,
+            user_text_stored=user_text_stored if roll_request else text,
+            _u30_move_executed=_u30_move_executed,
+            _risky_intent_match=_risky_intent_match,
             route=route,
-            create_turn_log_fn=create_turn_log,
-            log_narrative_fn=log_narrative_turn_structured,
+            turn_id=turn_id,
         )
-        for _gil in grant_item_labels:
-            _gil_desc = grant_item_descriptions.get(_gil)
-            _resolved = _resolve_grant_catalog_item(conn, _gil)
-            if _resolved:
-                from app.services.loot_service import grant_loot_to_character
-                grant_loot_to_character(int(payload.character_id),
-                                        [{"item_key": _resolved["item_key"], "quantity": 1}],
-                                        source="gm_grant_item")
-                logger.info("grant_item_catalog", character_id=payload.character_id,
-                            item_key=_resolved["item_key"], label=_gil)
-            elif _is_weapon_label(_gil):
-                _grant_narrative_weapon(conn, campaign_id=campaign_id,
-                                        character_id=payload.character_id, label=_gil, source="gm")
-            else:
-                # D1 (#376) — unknown item → pending_review catalog entry + admin queue
-                _grant_pending_item(conn, campaign_id=campaign_id,
-                                    character_id=payload.character_id,
-                                    label=_gil, source="gm", description=_gil_desc)
-        if grant_item_labels:
-            conn.commit()
-            from app.services.event_logger import write_game_event as _wge_j
-            for _ge_lbl_j in grant_item_labels:
-                try:
-                    _wge_j("item_grant", campaign_id, payload.character_id,
-                           character.get("user_id"),
-                           {"item_label": _ge_lbl_j, "source": "gm_grant_item"},
-                           conn=conn)
-                    conn.commit()
-                except Exception:
-                    pass
-        if grant_gold_amount is not None:
-            new_total = apply_grant_gold_to_character(
-                conn,
-                character_id=payload.character_id,
-                amount=grant_gold_amount,
-            )
-            conn.commit()
-            logger.info(
-                "grant_gold_applied",
-                campaign_id=campaign_id,
-                character_id=payload.character_id,
-                amount=grant_gold_amount,
-                new_total_gp=new_total,
-            )
-            try:
-                from app.services.event_logger import write_game_event as _wge_j2
-                _wge_j2("gold_grant", campaign_id, payload.character_id,
-                        character.get("user_id"),
-                        {"amount": grant_gold_amount, "new_total_gp": new_total},
-                        conn=conn)
-                conn.commit()
-            except Exception:
-                pass
-
-        # N-turns encounter trigger: every 5 peaceful turns since last combat
-        try:
-            # D7 (#382) — interwał z configu (admin3-editable), default 20 (był 5 — za często).
-            try:
-                from app.services.encounter_config_service import get_encounter_config as _get_enc_cfg
-                _n_turns_interval = int(_get_enc_cfg().get("n_turns_interval", 20))
-            except Exception:
-                _n_turns_interval = 20
-            _last_combat_turn = conn.execute(
-                "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=? AND route='combat'",
-                (campaign_id,),
-            ).fetchone()[0]
-            _peaceful_since = conn.execute(
-                "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id=? AND turn_number > ? AND route != 'combat'",
-                (campaign_id, _last_combat_turn),
-            ).fetchone()[0]
-            if _peaceful_since > 0 and _peaceful_since % _n_turns_interval == 0:
-                from app.services.encounter_service import maybe_inject_encounter as _mie2
-                _gs_nturn = conn.execute(
-                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
-                ).fetchone()
-                if _gs_nturn:
-                    _sf_nturn = json.loads(_gs_nturn["session_flags"] or "{}")
-                    _hex_nturn = _sf_nturn.get("current_hex")
-                    _mie2(
-                        conn, campaign_id, "n_turns",
-                        q=int(_hex_nturn.get("q", 0)) if _hex_nturn else None,
-                        r=int(_hex_nturn.get("r", 0)) if _hex_nturn else None,
-                    )
-        except Exception as _n_enc_err:
-            logger.warning("n_turns_encounter_trigger_error", error=str(_n_enc_err))
-
-        # F8 (#468) + U24 (#574): robbery counterplay — kara z możliwością reakcji.
-        #   Tura 1 (warning): sygnał ostrzegawczy w narracji, złoto nietknięte.
-        #   Tura 2 (defense): rzut obronny d20+stat vs DC wg poziomu; sukces = brak
-        #   straty, porażka = 20% (apply_robbery). Sukces LUB porażka konsumuje
-        #   limit 1/24h (record_robbery_trigger). Próg biedy i limit 24h egzekwuje
-        #   iniekcja (encounter_service) — tu rozstrzygamy już dopuszczony napad.
-        try:
-            from app.services.robbery_service import (
-                is_robbery_encounter, apply_robbery as _apply_rob,
-                robbery_defense_dc, roll_robbery_defense, record_robbery_trigger,
-                DEFAULT_DEFENSE_STAT,
-            )
-            _gs_rob = conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
-            ).fetchone()
-            if _gs_rob:
-                _sf_rob = json.loads(_gs_rob["session_flags"] or "{}")
-                _enc_rob = _sf_rob.get("active_encounter")
-                if is_robbery_encounter(_enc_rob):
-                    if str(_enc_rob.get("robbery_state") or "") != "warned":
-                        # ── Tura ostrzeżenia: zasiej sygnał, NIE zabieraj złota ──
-                        _enc_rob["robbery_state"] = "warned"
-                        _sf_rob["active_encounter"] = _enc_rob
-                        conn.execute(
-                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
-                            (json.dumps(_sf_rob, ensure_ascii=False), campaign_id),
-                        )
-                        conn.commit()
-                        _warn_hint = (
-                            "Masz nieprzyjemne wrażenie, że ktoś cię obserwuje — "
-                            "w tłumie/cieniu czai się ktoś, kto wypatruje twojej sakiewki. "
-                            "Bądź czujny w następnej chwili."
-                        )
-                        clean_assistant = (clean_assistant or "") + f"\n\n*{_warn_hint}*"
-                        logger.info("robbery_warning_emitted", campaign_id=campaign_id,
-                                    char_id=payload.character_id)
-                    else:
-                        # ── Tura rozstrzygnięcia: rzut obronny ──
-                        _stat = str(_enc_rob.get("defense_stat") or DEFAULT_DEFENSE_STAT)
-                        _lvl = 1
-                        try:
-                            _ch_row = conn.execute(
-                                "SELECT sheet_json FROM characters WHERE id=?", (payload.character_id,)
-                            ).fetchone()
-                            if _ch_row:
-                                _lvl = max(1, int((json.loads(_ch_row["sheet_json"] or "{}")).get("level") or 1))
-                        except Exception:
-                            _lvl = 1
-                        _dc = robbery_defense_dc(_lvl)
-                        _def = roll_robbery_defense(conn, payload.character_id, _stat, _dc)
-                        _sf_rob.pop("active_encounter", None)
-                        record_robbery_trigger(_sf_rob)  # konsumuje limit 1/24h
-                        if _def["success"]:
-                            _rob_result = {"ok": True, "defended": True, "defense": _def}
-                            _rob_hint = (
-                                f"Zauważyłeś zagrożenie w porę ({_stat} {_def['total']} ≥ {_dc}) "
-                                f"i udało ci się uniknąć napadu — twoja sakiewka jest bezpieczna."
-                            )
-                        else:
-                            _steal = _apply_rob(conn, payload.character_id)
-                            _rob_result = {"ok": True, "defended": False, "defense": _def, "steal": _steal}
-                            _rob_hint = _steal.get("narrative_hint", "") if _steal.get("ok") else ""
-                        conn.execute(
-                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
-                            (json.dumps(_sf_rob, ensure_ascii=False), campaign_id),
-                        )
-                        conn.commit()
-                        if _rob_hint:
-                            clean_assistant = (clean_assistant or "") + f"\n\n*{_rob_hint}*"
-                        logger.info("robbery_encounter_resolved", campaign_id=campaign_id,
-                                    char_id=payload.character_id, result=_rob_result)
-        except Exception as _rob_err:
-            logger.warning("robbery_encounter_error", error=str(_rob_err))
-
-        # Issue #135 — inject [COMBAT_START] when player declared attack but
-        # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
-        assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
-
-        new_combat = _maybe_start_combat_from_gm_tag(
-            campaign_id, payload.character_id, assistant_text,
-            turn_log_id=log.get("id") if log else None,
-            turn_number=log.get("turn_number", 0) if log else 0,
-        )
-        combat_extra = None
-        if combat_was_active and not new_combat:
-            combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
-
-        # Extract travel_hint from JSON field (preferred) or legacy [TRAVEL_HINT:] tag
-        import re as _re
-        _travel_hint_label: str | None = None
-        if isinstance(_parsed_json, dict):
-            _th = _parsed_json.get("travel_hint")
-            if _th and isinstance(_th, str):
-                _travel_hint_label = _th.strip()
-        if not _travel_hint_label:
-            _travel_hint_match = _re.search(r'\[TRAVEL_HINT:([^\]]+)\]', clean_assistant or '')
-            if _travel_hint_match:
-                _travel_hint_label = _travel_hint_match.group(1).strip()
-                clean_assistant = _re.sub(r'\s*\[TRAVEL_HINT:[^\]]+\]', '', clean_assistant).strip()
-
-        result_out = (
-            {**result, "message": clean_assistant} if isinstance(result, dict) else result
-        )
-
-        # ── T33: Build suggested actions for hybrid input UI ─────────────────
-        _suggested_actions: list[dict] = []
-        try:
-            _sf_for_sa = {}
-            _gs_for_sa = conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if _gs_for_sa:
-                _sf_for_sa = json.loads(_gs_for_sa["session_flags"] or "{}")
-            _game_state_for_sa = _sf_for_sa.get("state", "NARRATIVE")
-            # If combat just started, use COMBAT state
-            if new_combat:
-                _game_state_for_sa = "COMBAT"
-            # Parse LLM-suggested actions from GM JSON if present
-            _llm_suggested: list[dict] | None = None
-            if isinstance(_parsed_json, dict):
-                _raw_llm_sa = _parsed_json.get("suggested_actions")
-                if isinstance(_raw_llm_sa, list):
-                    _llm_suggested = _raw_llm_sa
-            _suggested_actions = build_suggested_actions(
-                conn=conn,
-                campaign_id=campaign_id,
-                character_id=payload.character_id,
-                game_state=_game_state_for_sa,
-                session_flags=_sf_for_sa,
-                llm_suggested=_llm_suggested,
-                travel_hint=_travel_hint_label,
-            )
-        except Exception as _sa_err:
-            logger.warning("suggested_actions_build_error", error=str(_sa_err))
-
-        # U32: travel escalation level (0=none, 1=highlight pills, 2=banner)
-        _turns_stale = int(_sf_for_sa.get("turns_at_location", 0) or 0)
-        _travel_escalation_level = 2 if _turns_stale >= 10 else (1 if _turns_stale >= 5 else 0)
-
-        # L13c (#689): inside an active tile dungeon — no overworld travel UI.
-        # Suppress the anti-stuck travel banner and drop travel-type suggested
-        # actions; dungeon movement is via the D-pad / tile actions only.
-        _drun_sa = (_sf_for_sa.get("dungeon_run") or {})
-        if (_drun_sa.get("system") == "tiles_v2"
-                and not _drun_sa.get("completed") and not _drun_sa.get("failed")):
-            _travel_escalation_level = 0
-            _suggested_actions = [
-                a for a in _suggested_actions
-                if isinstance(a, dict) and a.get("type") != "travel"
-            ]
-
-        out: dict = {
-            "id": log["id"],
-            "campaign_id": log["campaign_id"],
-            "turn_number": log["turn_number"],
-            "created_at": log["created_at"],
-            "route": "narrative",
-            "result": result_out,
-            "prose": clean_assistant,
-            "turn_id": turn_id,
-            "suggested_actions": _suggested_actions,
-            "travel_escalation_level": _travel_escalation_level,
-        }
-        if _skill_pending_narrator:
-            out["skill_test_pending"] = _skill_pending_narrator
-        if new_combat is not None:
-            out["combat_state"] = new_combat
-        if combat_extra:
-            out.update(combat_extra)
-        if _should_emit_open_shop_in_mode(open_shop_npc_key, campaign["mode"]):
-            out["open_shop"] = open_shop_npc_key
-        # Hex travel signal: frontend uses this to auto-update map pin
-        if _hex_after_enc and _hex_before_enc and _hex_after_enc != _hex_before_enc:
-            out["hex_changed"] = {"from": _hex_before_enc, "to": _hex_after_enc}
-        if _dungeon_clear_result:
-            out["dungeon_cleared"] = _dungeon_clear_result
-
-        # #773 (1A) — deklaracja obezwładnienia poza walką → bramka intencji (#780)
-        # zamiast cichego COMBAT_START. Agresywna deklaracja non-lethal („obezwładniam",
-        # „przyciskam do ściany") nie wybucha śmiertelną walką — silnik STOP i pyta gracza.
-        if new_combat is None and not combat_was_active and _subdue_intent(text):
-            try:
-                from app.services.combat_service import build_advantage_gate
-                _sub_gate = build_advantage_gate("grapple")
-                if _sub_gate:
-                    out["advantage_gate"] = _sub_gate
-            except Exception as _sub_err:
-                logger.warning("subdue_gate_build_error", error=str(_sub_err))
-
-        # B5: auto-save World State snapshot after each narrative turn
-        try:
-            from app.services.world_state_service import auto_save_snapshot as _ws_snap, get_world_state_flags as _gwsf_out
-            _ws_snap(campaign_id)
-            out["active_quests"] = _gwsf_out(campaign_id).get("active_quests", [])
-        except Exception as _ws_err:
-            logger.warning("world_state_snapshot_error", error=str(_ws_err))
-
-        # E25 + U20 (#572): inject onboarding cards for first-time mechanic triggers
-        try:
-            # U20: signal NPC dialogue this turn so the crafter card can trigger
-            try:
-                _dlg_seen = bool(locals().get("_dlg_m"))
-                _txt_norm = _normalize_pl(text or "")
-                if _dlg_seen or any(d in _txt_norm for d in _COMPOUND_DIALOGUE_MARKERS):
-                    out["npc_dialogue"] = True
-            except Exception:
-                pass
-            from app.services.onboarding_service import inject_onboarding_to_out as _ob_inject
-            _ob_inject(out, user_id=int(character["user_id"]), conn=conn, character=character)
-        except Exception as _ob_err:
-            logger.warning("onboarding_injection_error", error=str(_ob_err))
-            out.setdefault("onboarding_cards", [])
-
-        return out
 
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -5582,21 +5649,15 @@ def create_turn_stream(
                     )
                 save_conn = get_db()
                 try:
-                    stream_log = create_turn_log(
+                    stream_log = _persist_narrative_turn(
                         conn=save_conn,
                         campaign_id=campaign_id_val,
                         character_id=character_id_val,
                         user_text=user_text_val,
                         assistant_text=persisted_assistant_text,
                         route="narrative",
-                    )
-                    log_narrative_turn_structured(
-                        route="narrative",
-                        campaign_id=campaign_id_val,
-                        character_id=character_id_val,
-                        turn_row=stream_log,
-                        user_text=user_text_val,
-                        assistant_text=clean_text,
+                        create_turn_log_fn=create_turn_log,
+                        log_narrative_fn=log_narrative_turn_structured,
                     )
                     # ── Streaming: [SKILL_TEST] tag + roll_cue intercept ──────────
                     # The non-streaming path calls intercept_skill_test_tag here.
