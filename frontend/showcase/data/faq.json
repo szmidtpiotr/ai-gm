@@ -2,10 +2,10 @@
   "faq": [
     { "q": "Czym właściwie jest AI-GM?", "a": "Mrocznym fantasy RPG, w którym Mistrza Gry zastępuje sztuczna inteligencja. To pełna gra z systemami — kości, walka, magia, rozwój postaci — a nie zwykła rozmowa z chatbotem." },
     { "q": "Czy to po polsku?", "a": "Tak. Cała narracja, mechaniki i interfejs są po polsku. Świat i klimat budowane są pod polskiego gracza." },
-    { "q": "Czy muszę mieć własny klucz do AI?", "a": "Możesz grać na własnym kluczu LLM (pełna kontrola i prywatność) albo skorzystać z hostowanej wersji. Ustawienia modelu są po Twojej stronie." },
+    { "q": "Czy muszę mieć własny klucz do AI?", "a": "Możesz grać korzystając z własnego konta u dostawcy AI (wtedy ty kontrolujesz koszty i dane) albo skorzystać z gotowej, hostowanej wersji gry — bez konfiguracji." },
     { "q": "Gram sam czy z innymi?", "a": "Jedno i drugie. Możesz prowadzić solową przygodę albo zaprosić znajomych do wspólnej sesji multiplayer — ten sam bohater działa w obu trybach." },
     { "q": "Czy zagram na telefonie?", "a": "Tak. Interfejs jest responsywny i działa w przeglądarce na telefonie, tablecie i komputerze." },
-    { "q": "Czy moje wybory naprawdę coś zmieniają?", "a": "Tak. Maszyna Stanu Świata pilnuje spójności — to, co zrobisz, zostaje zapamiętane i wpływa na świat, walkę, ekwipunek i dalszą historię. AI nie zmyśla wyniku — rozstrzygają kości i reguły." },
+    { "q": "Czy moje wybory naprawdę coś zmieniają?", "a": "Tak. Gra zapamiętuje każdą twoją decyzję — postacie, które spotkałeś, miejsca, które odwiedziłeś, i skutki twoich wyborów. Świat reaguje na to, co zrobiłeś." },
     { "q": "Ile to kosztuje?", "a": "Projekt jest w aktywnym rozwoju. Na własnym kluczu LLM grasz na koszt swojego dostawcy AI; szczegóły modelu hostowanego pojawią się tutaj, gdy dojrzeją." }
   ]
 }

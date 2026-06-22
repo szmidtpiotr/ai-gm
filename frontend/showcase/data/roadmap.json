@@ -9,13 +9,13 @@
       "Żywa Księga Zasad zgodna z silnikiem"
     ]},
     { "status": "W toku", "items": [
-      "Balans klas i strojenie liczb w Sandboxie",
+      "Balansowanie klas i dopracowywanie liczb",
       "Strona-wizytówka projektu (ta, którą czytasz)",
-      "Refaktor i porządkowanie silnika",
+      "Porządkowanie i optymalizacja silnika gry",
       "Panel mobilny administracji"
     ]},
     { "status": "Planowane", "items": [
-      "Głos postaci i lektor (TTS) oraz generacja obrazów offline",
+      "Głos postaci i lektor oraz generowanie ilustracji do przygód",
       "Nieludzkie ludy — krasnoludy, elfy jako żywe frakcje",
       "Mapa świata z wieloma krainami (rozszerzenia w stylu DLC)",
       "Eksport przygody jako książka",
