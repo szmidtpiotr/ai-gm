@@ -134,7 +134,74 @@ JOBS = {
         ),
         "darken": 0.22,
     },
+    # --- NEW section backgrounds (#908, second batch) ---
+    "hero-bg-2": {
+        "size": HERO,
+        "prompt": (
+            "an epic open glowing grimoire on a stone altar of knowledge in vast ancient ruins, "
+            "brilliant golden runic light and sparks rising and swirling from its pages into the "
+            "dark, broken cathedral arches and toppled columns around it, warm gold radiance "
+            "pushing back drifting silver mist, a magnificent solemn shaft of light from above, "
+            "awe and wonder, grander and a touch brighter than a tomb, but the upper third and "
+            "center kept in deep shadow and empty dark space for overlaid title text, vignette, "
+        ),
+        # lighter than hero-bg (0.42) so the 'wow' reads, but top still drops to black via prompt
+        "darken": 0.28,
+    },
+    "bg-tavern": {
+        "size": WIDE,
+        "prompt": (
+            "the warm dim interior of a dark fantasy tavern called Pod Zlamanym Rogiem, heavy "
+            "old timber beams and worn wooden tables, flickering candlelight and a low hearth "
+            "fire glow, pewter tankards and a broken drinking horn on the bar, deep shadowy "
+            "corners, smoke and dust in the air, cozy yet faintly menacing, a few hooded "
+            "patrons in silhouette, amber and gold firelight against near-black shadow, "
+        ),
+        "darken": 0.3,
+    },
+    "bg-battle": {
+        "size": WIDE,
+        "prompt": (
+            "a dramatic dark fantasy battle scene, a lone armored warrior with raised sword "
+            "facing a towering shadowy undead figure, sparks and embers flying, clashing steel "
+            "and a burst of cold light between them, dust and mist swirling, dynamic tense "
+            "composition, deep blacks with fierce gold and pale-blue highlights on the figures, "
+            "ominous and cinematic, lots of dark atmosphere around the edges, "
+        ),
+        "darken": 0.3,
+    },
+    "bg-arcane": {
+        "size": WIDE,
+        "prompt": (
+            "the dim arcane study of a Scholar mage, towering shelves of ancient leather books "
+            "and scrolls, glowing blue-gold runes hovering and carved into a stone wall, a "
+            "jagged glowing fissure of the broken Core leaking arcane light, an open spellbook "
+            "and burning candles on a cluttered desk, dust motes in shafts of light, mysterious "
+            "and scholarly, deep shadow with cold blue and warm gold magical glow, "
+        ),
+        "darken": 0.3,
+    },
+    "bg-divider": {
+        "size": WIDE,
+        "prompt": (
+            "a wide sweeping panorama of heroic-dark fantasy wilderness at dusk, rolling misty "
+            "hills layered into the distance, a far-off ruined fortress silhouette on a ridge "
+            "catching faint gold light, low fog filling the valleys, a vast moody overcast sky, "
+            "lonely and atmospheric, muted sepia and ash tones with a thin band of gold horizon "
+            "light, calm but foreboding, empty and panoramic, "
+        ),
+        "darken": 0.32,
+    },
 }
+
+# Convenience set: the second-batch section backgrounds (--only new).
+NEW_BATCH = (
+    "hero-bg-2",
+    "bg-tavern",
+    "bg-battle",
+    "bg-arcane",
+    "bg-divider",
+)
 
 
 def gen(prompt: str, size, steps: int) -> bytes:
@@ -181,7 +248,13 @@ def main() -> None:
 
     jobs = JOBS
     if args.only:
-        want = {k.strip() for k in args.only.split(",")}
+        want = set()
+        for k in args.only.split(","):
+            k = k.strip()
+            if k == "new":
+                want.update(NEW_BATCH)
+            else:
+                want.add(k)
         jobs = {k: v for k, v in JOBS.items() if k in want}
 
     print(f"Showcase ART generator — {len(jobs)} job(s), steps={args.steps}")
