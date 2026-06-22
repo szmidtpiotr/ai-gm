@@ -12087,9 +12087,9 @@ function closeSpellPicker() {
     document.getElementById('spell-picker-overlay')?.setAttribute('hidden', '');
 }
 
-// ── #859: użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka ──
-// Backend (POST /inventory/{id}/use) leczy i synchronizuje HP do active_combat.
-// Akcja darmowa — NIE przesuwa tury (turn-cost = out of scope, patrz #859).
+// ── #859/#734: użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka ──
+// #734: użycie to AKCJA — handleCombatUseItem woła /combat/use-consumable (leczy + KONSUMUJE turę).
+// Domyka pętlę sustain #732: drop → wypij w groźnej walce kosztem tury (taktyczna decyzja).
 async function openConsumablePicker() {
     if (!combatActive || lastCombatState?.current_turn !== 'player') {
         setCombatMsg('Nie twoja tura.', true); return;
@@ -12136,11 +12136,15 @@ function closeConsumablePicker() {
 }
 
 async function handleCombatUseItem(inventoryId) {
-    if (!inventoryId || !characterData?.id) return;
+    // #734: użycie mikstury w walce to AKCJA — konsumuje turę (endpoint /combat/use-consumable).
+    // Backend leczy sheet, syncuje PŻ do active_combat i przesuwa turę → po akcji może ruszyć wróg.
+    if (!inventoryId || !characterData?.id || !currentCampaignId) return;
     if (!combatActive || combatBusy || enemyTurnInFlight) return;
+    if (lastCombatState?.current_turn !== 'player') { setCombatMsg('Nie twoja tura.', true); return; }
+    combatBusy = true; playerActionFetchActive = true;  // #700
     setCombatMsg('Używam przedmiotu…');
     try {
-        const r = await fetch(`/api/inventory/${characterData.id}/use`, {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/use-consumable`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inventory_id: inventoryId }),
@@ -12148,20 +12152,28 @@ async function handleCombatUseItem(inventoryId) {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.detail || 'błąd użycia');
 
-        const st = data.character_state || {};
-        const label = data.item?.label || 'przedmiot';
+        const cs = data.combat_state;
+        const use = data.use_result || {};
+        const st = use.character_state || {};
+        const label = use.item?.label || 'przedmiot';
         const hpLine = (st.current_hp != null) ? ` — HP ${st.current_hp}/${st.max_hp ?? '?'}` : '';
         appendMessage({ role: 'system', content: `🧪 Użyto: ${label}${hpLine}.`, created_at: new Date() });
         scrollToBottom();
         showToast(`Użyto: ${label}`, 'success');
 
+        if (cs) { lastCombatState = cs; renderCombatUI(cs); }
         await refreshCharacterData();
-        await pollCombatState();  // re-sync HUD walki (HP zsynchronizowane do active_combat przez backend)
+        // Tura zużyta — jeśli teraz ruch wroga, dopnij turę przeciwnika.
+        if (cs && cs.current_turn !== 'player' && cs.status === 'active') {
+            await pollCombatState();
+        }
     } catch (err) {
         console.error('[combat] use item failed:', err);
         showToast(err?.message || 'Nie udało się użyć przedmiotu', 'error');
     } finally {
+        combatBusy = false; playerActionFetchActive = false;  // #700
         setCombatMsg('');
+        if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
 

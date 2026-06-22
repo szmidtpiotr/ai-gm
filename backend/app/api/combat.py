@@ -145,6 +145,23 @@ def post_zone_change(campaign_id: int):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+class UseConsumableRequest(BaseModel):
+    inventory_id: int
+
+
+@router.post("/campaigns/{campaign_id}/combat/use-consumable")
+def post_use_consumable(campaign_id: int, body: UseConsumableRequest):
+    """#734 — Player drinks a healing consumable from the backpack as a combat action.
+    Heals (PŻ rośnie) + consumes the turn. Domyka pętlę sustain #732."""
+    try:
+        return combat.use_consumable_in_combat(campaign_id, body.inventory_id)
+    except ValueError as e:
+        msg = str(e).lower()
+        if "inventory entry not found" in msg or "character not found" in msg:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/campaigns/{campaign_id}/combat/wrestling")
 def post_wrestling(campaign_id: int, body: dict | None = None):
     """S17 — Zapasy: akcja bojowa, test przeciwny STR vs STR. Sukces nakłada kondycję na

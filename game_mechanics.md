@@ -3468,7 +3468,7 @@ grind loch / walka → złoto + przedmioty
 - Mikstury (HP/mana), zwoje, bomby — zużywane w walce, odkupowane w sklepie. Katalog konsumpcji już istnieje.
 - Warunek działania: walki muszą być na tyle groźne, by mikstury były realnie potrzebne (inaczej nikt nie kupuje). Wiąże się z balansem walki + limitem darmowego leczenia (krótki odpoczynek już ograniczony do 2×).
 
-> ⚠️ **ROZJAZD SPEC↔GRA (2026-06-17, `/playwright-test-report` L18):** spec zakłada mikstury „zużywane w walce", ale UI walki (pasek Akcja) oferuje TYLKO „Cofnij się" i „Zapasy" — **brak użycia mikstury/konsumpcji w trakcie starcia**. Sustain drop (#732) i kupione mikstury są używalne tylko poza walką (plecak), więc nie ratują przed bursta. Naprawa: **#734**. Raport: [#733](https://github.com/szmidtpiotr/ai-gm/issues/733#issuecomment-4732883886).
+> ✅ **ROZJAZD SPEC↔GRA ZAMKNIĘTY (#734, 2026-06-22):** mikstury są teraz używalne **w trakcie walki** jako akcja. Pasek Akcja → **Mikstura** otwiera picker konsumpcyjnych z plecaka; wypicie leczy PŻ i **KONSUMUJE turę** (endpoint `POST /api/campaigns/{id}/combat/use-consumable` → `combat_service.use_consumable_in_combat`, deleguje do `loot_service.use_inventory_item` + `advance_turn`). Domyka pętlę sustain #732 (drop → wypij w groźnej walce kosztem tury = taktyczna decyzja). Wcześniejszy wariant #859 (użycie darmowe) zastąpiony turą zgodnie ze spec. Raport pierwotny: [#733](https://github.com/szmidtpiotr/ai-gm/issues/733#issuecomment-4732883886).
 - Powtarzalny dren proporcjonalny do trudności gry.
 
 ### Sink 3 — Wskrzeszenie ON + naprawy (trwałość)

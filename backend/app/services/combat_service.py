@@ -7398,6 +7398,71 @@ def change_player_zone(campaign_id: int) -> dict[str, Any]:
     }
 
 
+def use_consumable_in_combat(campaign_id: int, inventory_id: int) -> dict[str, Any]:
+    """#734 — Gracz używa leczniczej (lub innej usable) mikstury z plecaka jako AKCJI walki.
+
+    Domyka pętlę sustain #732: drop → wypij w groźnej walce. Delegacja do
+    ``loot_service.use_inventory_item`` (leczy sheet, zmniejsza stack i syncuje PŻ do
+    ``active_combat``), log zdarzenia ``use_item`` w combat_turns, po czym KONSUMUJE turę.
+
+    Wymaga aktywnej walki i tury gracza. Poza walką / poza turą → ValueError.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("consumable use only on player's turn")
+        character_id = int(row["character_id"])
+        combat_id = int(row["id"])
+
+    # Faktyczna konsumpcja: leczenie + dekrement stacka + sync PŻ do active_combat.
+    from app.services import loot_service
+    use_result = loot_service.use_inventory_item(character_id, int(inventory_id))
+
+    # Log zdarzenia + odczyt PŻ po wyleczeniu (sync już zapisał combatants).
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        combatants: list[dict] = json.loads(row["combatants"] or "[]") if row else []
+        p = _find_combatant(combatants, "player")
+        hp_after = int((p or {}).get("hp_current", 0) or 0)
+        item = use_result.get("item") or {}
+        tn = _next_combat_log_sequence(conn, combat_id)
+        log_combat_turn(
+            conn,
+            combat_id=combat_id,
+            campaign_id=campaign_id,
+            turn_number=tn,
+            actor="player",
+            event_type="use_item",
+            roll_value=None,
+            damage=None,
+            hp_after=hp_after,
+            target_id="player",
+            target_name=str((p or {}).get("name") or "Bohater"),
+            hit=None,
+            narrative=json.dumps(
+                {"item": item.get("key"), "label": item.get("label"),
+                 "effects": use_result.get("effects_applied")},
+                ensure_ascii=False,
+            ),
+        )
+        conn.commit()
+
+    advance_turn(campaign_id)
+    return {
+        "ok": True,
+        "use_result": use_result,
+        "combat_state": load_combat_snapshot(campaign_id),
+    }
+
+
 # ─── S17 (#612): Wrestling — akcja bojowa, opposed STR vs STR, wynik → kondycja.
 
 def _apply_skill_outcome_conditions(

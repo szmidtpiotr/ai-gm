@@ -911,8 +911,8 @@
               <span class="combat-btn__armed" hidden>⚡ uzbrojony do następnego ataku</span>
             </span>
           </button>
-          <!-- SF (#859): użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka.
-               Backend (use_inventory_item) NIE przesuwa tury → akcja darmowa (↺ za darmo). -->
+          <!-- SF (#859/#734): użyj mikstury/przedmiotu w walce — quick-picker konsumpcyjnych z plecaka.
+               #734: użycie to AKCJA (/combat/use-consumable) → leczy + KONSUMUJE turę (⏳ tura). -->
           <button type="button" class="combat-btn combat-btn--item" id="combat-item-btn" data-clog="combat_item_button">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 2h6M10 2v4M14 2v4M8 6h8l1 11a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z"/><path d="M7.5 13h9"/>
@@ -920,7 +920,7 @@
             <span class="combat-btn__body">
               <span class="combat-btn__head">
                 <span class="combat-btn__label">Mikstura</span>
-                <span class="combat-btn__cost combat-btn__cost--reaction">↺ za darmo</span>
+                <span class="combat-btn__cost combat-btn__cost--action">⏳ tura</span>
               </span>
               <span class="combat-btn__desc">Użyj mikstury lub przedmiotu z plecaka</span>
               <span class="combat-btn__reason" hidden>Brak przedmiotów do użycia</span>
@@ -1992,7 +1992,7 @@
        Replaces the flaky 2015 dice.js for combat rolls; supports predetermined results (1d20@15). -->
   <script src="./vendor/dice-box-threejs/dice-box-threejs.umd.js?v=0.0.12"></script>
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
-  <script src="./js/app.js?v=593e-push-diag-2026-06-21"></script>
+  <script src="./js/app.js?v=734-combat-potion-2026-06-22"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
