@@ -38,9 +38,145 @@ async function _syncAdvCardsFromModes() {
     }
 }
 
+// GF5 (#925) — MP sections: invites / lobbies / active games
+async function _loadMpSections() {
+    try {
+        const [invRes, lobRes, gameRes] = await Promise.all([
+            apiRequest('GET', '/multiplayer/my-invites').catch(() => ({ invites: [] })),
+            apiRequest('GET', '/multiplayer/my-lobbies').catch(() => ({ lobbies: [] })),
+            apiRequest('GET', '/multiplayer/my-active-games').catch(() => ({ games: [] })),
+        ]);
+        _renderMpInvites(invRes.invites || []);
+        _renderMpLobbies(lobRes.lobbies || []);
+        _renderMpActiveGames(gameRes.games || []);
+    } catch (e) {
+        console.warn('[MP] Could not load MP sections:', e);
+    }
+}
+
+function _renderMpInvites(invites) {
+    const section = document.getElementById('mp-invites-section');
+    const list = document.getElementById('mp-invites-list');
+    if (!section || !list) return;
+    if (!invites.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    list.innerHTML = invites.map(inv => `
+        <div class="campaign-card" style="margin-bottom:10px;cursor:default">
+            <div class="campaign-card__icon"><span>📨</span></div>
+            <div class="campaign-card__content">
+                <h3>${escapeHtml(inv.title || 'Gra wieloosobowa')}</h3>
+                <p>Zaprosił: ${escapeHtml(inv.host_username || '?')} · Timer: ${inv.round_timer_hours ? Math.round(inv.round_timer_hours * 60) + ' min' : '—'}</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:90px">
+                <button class="mp-invite-accept" data-id="${inv.campaign_id}" style="padding:6px 10px;border-radius:8px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50;cursor:pointer;font-size:.8rem">Akceptuj</button>
+                <button class="mp-invite-decline" data-id="${inv.campaign_id}" style="padding:6px 10px;border-radius:8px;background:rgba(229,57,53,.1);border:1px solid rgba(229,57,53,.3);color:#e57373;cursor:pointer;font-size:.8rem">Odrzuć</button>
+            </div>
+        </div>`).join('');
+    list.querySelectorAll('.mp-invite-accept').forEach(btn => {
+        btn.addEventListener('click', () => _acceptMpInvite(Number(btn.dataset.id)));
+    });
+    list.querySelectorAll('.mp-invite-decline').forEach(btn => {
+        btn.addEventListener('click', () => _declineMpInvite(Number(btn.dataset.id)));
+    });
+}
+
+async function _acceptMpInvite(campaignId) {
+    if (!currentHero?.id) {
+        showToast('Najpierw wybierz bohatera, aby dołączyć do gry wieloosobowej.', 'info', 3000);
+        return;
+    }
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/accept`, {
+            character_id: currentHero.id,
+        });
+        showToast('Dołączyłeś do lobby!', 'success', 2500);
+        if (typeof _showLobbyScreen === 'function') {
+            _showLobbyScreen(campaignId);
+        } else {
+            await _loadMpSections();
+        }
+    } catch (e) {
+        showToast(e.message || 'Błąd akceptacji zaproszenia', 'error');
+    }
+}
+
+async function _declineMpInvite(campaignId) {
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/decline`);
+        showToast('Zaproszenie odrzucone.', 'info', 2000);
+        await _loadMpSections();
+    } catch (e) {
+        showToast(e.message || 'Błąd odrzucania zaproszenia', 'error');
+    }
+}
+
+function _renderMpLobbies(lobbies) {
+    const section = document.getElementById('mp-lobbies-section');
+    const list = document.getElementById('mp-lobbies-list');
+    if (!section || !list) return;
+    if (!lobbies.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    list.innerHTML = lobbies.map(lob => `
+        <div class="campaign-card" style="margin-bottom:10px;cursor:default">
+            <div class="campaign-card__icon"><span>🏠</span></div>
+            <div class="campaign-card__content">
+                <h3>${escapeHtml(lob.title || 'Lobby')}</h3>
+                <p>Gracze: ${lob.accepted_count || 1} / ${lob.max_players || '?'} · Host: ${escapeHtml(lob.host_username || '?')}</p>
+            </div>
+            <button class="mp-lobby-return" data-id="${lob.campaign_id}" style="padding:8px 14px;border-radius:8px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f5b342;cursor:pointer;font-size:.8rem;white-space:nowrap">Wróć do lobby</button>
+        </div>`).join('');
+    list.querySelectorAll('.mp-lobby-return').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (typeof _showLobbyScreen === 'function') {
+                _showLobbyScreen(Number(btn.dataset.id));
+            } else {
+                showToast('Lobby niedostępne — odśwież stronę.', 'error');
+            }
+        });
+    });
+}
+
+function _renderMpActiveGames(games) {
+    const section = document.getElementById('mp-games-section');
+    const list = document.getElementById('mp-games-list');
+    if (!section || !list) return;
+    if (!games.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    list.innerHTML = games.map(g => `
+        <div class="campaign-card" style="margin-bottom:10px;cursor:default">
+            <div class="campaign-card__icon"><span>⚔️</span></div>
+            <div class="campaign-card__content">
+                <h3>${escapeHtml(g.title || 'Gra wieloosobowa')}</h3>
+                <p>Gracze: ${g.player_count || '?'} · Host: ${escapeHtml(g.host_username || '?')}</p>
+            </div>
+            <button class="mp-game-join" data-id="${g.campaign_id}" data-timer="${g.round_timer_hours || 24}" style="padding:8px 14px;border-radius:8px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50;cursor:pointer;font-size:.8rem;white-space:nowrap">Dołącz</button>
+        </div>`).join('');
+    list.querySelectorAll('.mp-game-join').forEach(btn => {
+        btn.addEventListener('click', () => _joinMpActiveGame(Number(btn.dataset.id), Number(btn.dataset.timer)));
+    });
+}
+
+async function _joinMpActiveGame(campaignId, timerHours) {
+    if (!currentHero?.id) {
+        showToast('Najpierw wybierz bohatera, aby dołączyć do gry.', 'info', 3000);
+        return;
+    }
+    try {
+        const campResp = await apiRequest('GET', `/campaigns/${campaignId}`);
+        const camp = campResp.campaign || campResp;
+        currentCampaignId = campaignId;
+        currentCampaign = camp;
+        characterData = currentHero;
+        await enterGame(camp);
+    } catch (e) {
+        showToast(e.message || 'Błąd dołączania do gry', 'error');
+    }
+}
+
 async function loadCampaigns() {
     console.log('[Campaigns] Loading for user:', currentUser?.id);
     _syncAdvCardsFromModes();
+    _loadMpSections();
     // #400 — admin-only entry to the campaign spectator/resume browser.
     try {
         const adminBtn = document.getElementById('heroes-admin-btn');
