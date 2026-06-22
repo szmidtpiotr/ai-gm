@@ -591,6 +591,13 @@
     window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers) };
 })();
 
+// GF4 (#924) — router from hub: open create-lobby-screen with default AI mode
+function openMultiplayerLobby() {
+    document.getElementById('campaign-modes-hub')?.remove();
+    setLobbyMode('ai');
+    if (typeof showScreen === 'function') showScreen('create-lobby-screen');
+}
+
 async function inviteFromGame() {
     const input = document.getElementById('game-invite-username');
     const msgEl = document.getElementById('game-invite-msg');
