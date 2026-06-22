@@ -15,7 +15,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
-from app.services.llm_service import generate_chat
+from app.services.llm_service import (
+    content_llm_enabled,
+    generate_chat,
+    resolve_content_llm_config,
+)
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -853,7 +857,13 @@ def smart_entry_message(
     messages = [{"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT_V2}] + session["history"][-10:]
 
     try:
-        raw_reply = generate_chat(messages=messages)
+        # #818 (H4): content generation runs on the offline/local profile (.170),
+        # separate from the live-gameplay preset. Falls back to the global preset
+        # when CONTENT_LLM_ENABLED=0.
+        _content_cfg = resolve_content_llm_config() if content_llm_enabled() else None
+        raw_reply = generate_chat(
+            messages=messages, llm_config=_content_cfg, call_type="smart_entry"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
 

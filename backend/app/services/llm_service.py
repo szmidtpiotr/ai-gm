@@ -70,6 +70,42 @@ def _provider_canonical_base_url(provider: str) -> str:
     return ""
 
 
+# ── Content/offline LLM profile (#818, H4) ──────────────────────────────────
+# Admin content generation (Smart Entry / AI Kreator / Forge) runs on a LOCAL
+# Ollama box (.170) — cheap, latency irrelevant — SEPARATE from the live-gameplay
+# preset (player narration stays on the configured, usually paid-cloud, preset).
+# Resolved purely from CONTENT_LLM_* env so it never depends on, mutates, or leaks
+# into the gameplay runtime. Pass the result as ``llm_config`` to generate_chat.
+CONTENT_LLM_DEFAULT_BASE_URL = "http://192.168.1.170:11434"
+CONTENT_LLM_DEFAULT_MODEL = "gemma4:12b"
+
+
+def content_llm_enabled() -> bool:
+    """Whether admin content-gen should use the offline profile (default ON).
+
+    Set ``CONTENT_LLM_ENABLED=0`` to fall back to the active gameplay preset.
+    """
+    return (os.getenv("CONTENT_LLM_ENABLED", "1") or "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def resolve_content_llm_config() -> dict[str, str]:
+    """Offline/content-gen LLM profile, independent of the gameplay preset (#818).
+
+    Sourced only from CONTENT_LLM_* env with a local-Ollama (.170) default, so
+    admin content generation runs locally while player narration keeps using the
+    active gameplay preset. The returned dict is meant to be handed to
+    :func:`generate_chat` as ``llm_config`` — it does NOT touch ``_runtime_config``.
+    """
+    return {
+        "provider": (os.getenv("CONTENT_LLM_PROVIDER", "") or "ollama").strip().lower(),
+        "base_url": (os.getenv("CONTENT_LLM_BASE_URL", "") or CONTENT_LLM_DEFAULT_BASE_URL).strip(),
+        "model": (os.getenv("CONTENT_LLM_MODEL", "") or CONTENT_LLM_DEFAULT_MODEL).strip(),
+        "api_key": (os.getenv("CONTENT_LLM_API_KEY", "") or "").strip(),
+    }
+
+
 def set_runtime_config(provider: str, base_url: str, model: str, api_key: str) -> None:
     _runtime_config["provider"] = (provider or "").strip().lower()
     _runtime_config["base_url"] = (base_url or "").strip()
