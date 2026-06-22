@@ -69,11 +69,15 @@ function _renderMpInvites(invites) {
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;min-width:90px">
                 <button class="mp-invite-accept" data-id="${inv.campaign_id}" style="padding:6px 10px;border-radius:8px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50;cursor:pointer;font-size:.8rem">Akceptuj</button>
+                <button class="mp-invite-spectate" data-id="${inv.campaign_id}" style="padding:6px 10px;border-radius:8px;background:rgba(100,100,255,.1);border:1px solid rgba(100,100,255,.3);color:#9b9bff;cursor:pointer;font-size:.8rem">👁 Jako widz</button>
                 <button class="mp-invite-decline" data-id="${inv.campaign_id}" style="padding:6px 10px;border-radius:8px;background:rgba(229,57,53,.1);border:1px solid rgba(229,57,53,.3);color:#e57373;cursor:pointer;font-size:.8rem">Odrzuć</button>
             </div>
         </div>`).join('');
     list.querySelectorAll('.mp-invite-accept').forEach(btn => {
         btn.addEventListener('click', () => _acceptMpInvite(Number(btn.dataset.id)));
+    });
+    list.querySelectorAll('.mp-invite-spectate').forEach(btn => {
+        btn.addEventListener('click', () => _acceptMpInviteAsSpectator(Number(btn.dataset.id)));
     });
     list.querySelectorAll('.mp-invite-decline').forEach(btn => {
         btn.addEventListener('click', () => _declineMpInvite(Number(btn.dataset.id)));
@@ -97,6 +101,23 @@ async function _acceptMpInvite(campaignId) {
         }
     } catch (e) {
         showToast(e.message || 'Błąd akceptacji zaproszenia', 'error');
+    }
+}
+
+// GF6 (#926) — join as spectator (no character required)
+async function _acceptMpInviteAsSpectator(campaignId) {
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/accept`, {
+            as_spectator: true,
+        });
+        showToast('Dołączyłeś jako widz!', 'success', 2500);
+        if (typeof _showLobbyScreen === 'function') {
+            _showLobbyScreen(campaignId);
+        } else {
+            await _loadMpSections();
+        }
+    } catch (e) {
+        showToast(e.message || 'Błąd dołączania jako widz', 'error');
     }
 }
 
@@ -142,22 +163,34 @@ function _renderMpActiveGames(games) {
     if (!section || !list) return;
     if (!games.length) { section.style.display = 'none'; return; }
     section.style.display = '';
-    list.innerHTML = games.map(g => `
+    list.innerHTML = games.map(g => {
+        const isSpectator = g.role === 'spectator';
+        const icon = isSpectator ? '👁' : '⚔️';
+        const spectatorBadge = isSpectator
+            ? '<span style="font-size:10px;background:rgba(100,100,255,.15);border:1px solid rgba(100,100,255,.3);color:#9b9bff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle">WIDZ</span>'
+            : '';
+        const btnLabel = isSpectator ? '👁 Oglądaj' : 'Dołącz';
+        const btnColor = isSpectator
+            ? 'background:rgba(100,100,255,.1);border:1px solid rgba(100,100,255,.3);color:#9b9bff'
+            : 'background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50';
+        return `
         <div class="campaign-card" style="margin-bottom:10px;cursor:default">
-            <div class="campaign-card__icon"><span>⚔️</span></div>
+            <div class="campaign-card__icon"><span>${icon}</span></div>
             <div class="campaign-card__content">
-                <h3>${escapeHtml(g.title || 'Gra wieloosobowa')}</h3>
+                <h3>${escapeHtml(g.title || 'Gra wieloosobowa')}${spectatorBadge}</h3>
                 <p>Gracze: ${g.player_count || '?'} · Host: ${escapeHtml(g.host_username || '?')}</p>
             </div>
-            <button class="mp-game-join" data-id="${g.campaign_id}" data-timer="${g.round_timer_hours || 24}" style="padding:8px 14px;border-radius:8px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50;cursor:pointer;font-size:.8rem;white-space:nowrap">Dołącz</button>
-        </div>`).join('');
+            <button class="mp-game-join" data-id="${g.campaign_id}" data-timer="${g.round_timer_hours || 24}" data-role="${g.role || 'player'}" style="padding:8px 14px;border-radius:8px;${btnColor};cursor:pointer;font-size:.8rem;white-space:nowrap">${btnLabel}</button>
+        </div>`;
+    }).join('');
     list.querySelectorAll('.mp-game-join').forEach(btn => {
-        btn.addEventListener('click', () => _joinMpActiveGame(Number(btn.dataset.id), Number(btn.dataset.timer)));
+        btn.addEventListener('click', () => _joinMpActiveGame(Number(btn.dataset.id), Number(btn.dataset.timer), btn.dataset.role));
     });
 }
 
-async function _joinMpActiveGame(campaignId, timerHours) {
-    if (!currentHero?.id) {
+async function _joinMpActiveGame(campaignId, timerHours, role) {
+    const isSpectator = role === 'spectator';
+    if (!isSpectator && !currentHero?.id) {
         showToast('Najpierw wybierz bohatera, aby dołączyć do gry.', 'info', 3000);
         return;
     }
@@ -166,10 +199,45 @@ async function _joinMpActiveGame(campaignId, timerHours) {
         const camp = campResp.campaign || campResp;
         currentCampaignId = campaignId;
         currentCampaign = camp;
-        characterData = currentHero;
-        await enterGame(camp);
+        if (isSpectator) {
+            await _enterGameAsSpectator(camp, timerHours);
+        } else {
+            characterData = currentHero;
+            await enterGame(camp);
+        }
     } catch (e) {
         showToast(e.message || 'Błąd dołączania do gry', 'error');
+    }
+}
+
+// GF6 (#926) — spectator game view: load history read-only, activate MP UI in spectator mode
+async function _enterGameAsSpectator(camp, timerHours) {
+    characterData = null;
+    if (typeof showScreen === 'function') showScreen('game');
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+
+    // Load public turn history
+    try {
+        const response = await apiRequest('GET', `/campaigns/${camp.id}/turns`);
+        const turns = response.turns || (Array.isArray(response) ? response : []);
+        for (const turn of turns) {
+            if (turn.assistant_text) {
+                const parsed = typeof parseGmFull === 'function' ? parseGmFull(turn.assistant_text) : { narrative: turn.assistant_text };
+                if (parsed.narrative && parsed.narrative.trim()) {
+                    if (typeof appendMessage === 'function') {
+                        appendMessage({ role: 'assistant', content: parsed.narrative, created_at: turn.created_at, turn_number: turn.turn_number }, { autoSpeak: false });
+                    }
+                }
+            }
+        }
+    } catch (_) {}
+
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+
+    // Activate multiplayer UI in spectator mode (no character, no action submission)
+    const timerMin = (timerHours || 24) * 60;
+    if (window.multiplayerUI && typeof window.multiplayerUI.activate === 'function') {
+        await window.multiplayerUI.activate(camp.id, null, 'Widz', false, timerMin, true);
     }
 }
 

@@ -1,7 +1,8 @@
 // Multiplayer round UI — manages round submission, polling, and narration display.
 // Activated when campaign.mode === 'multiplayer'.
 // Uses the normal composer — injects a status bar, disables send when waiting.
-// Exposes window.multiplayerUI = { activate, deactivate, isActive, handleSubmit, leave }
+// GF6 (#926): supports spectator mode (isSpectator=true) — read-only, no action submission.
+// Exposes window.multiplayerUI = { activate, deactivate, isActive, handleSubmit, leave, isSpectator }
 
 (function () {
     let _campaignId = null;
@@ -13,6 +14,7 @@
     let _sendEnabled = true;
     let _currentActionBubble = null;
     let _isHost = false;
+    let _isSpectator = false;
     let _campaignTimerMinutes = 1440;
     let _currentDeadline = null;
     let _countdownInterval = null;
@@ -125,18 +127,26 @@
 
     function _onInputEvent() { _syncSendBtn(); }
 
-    function _injectStatusBar() {
+    function _injectStatusBar(spectator = false) {
         if (document.getElementById('mp-status-bar')) return;
         const composer = document.getElementById('composer');
         if (!composer) return;
         const bar = document.createElement('div');
         bar.id = 'mp-status-bar';
-        bar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px 4px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(124,77,255,.07)';
-        bar.innerHTML = `
-            <span class="mp-bar-timer" style="font-weight:700;font-size:15px;font-family:'Cinzel',serif;color:var(--accent,#c9a54a);min-width:60px;letter-spacing:.02em">—:—:—</span>
-            <span class="mp-bar-count" style="opacity:.65;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:99px;font-size:11px"></span>
-            <span class="mp-bar-state" style="opacity:.65;flex:1;font-size:11px"></span>
-        `;
+        const bgColor = spectator ? 'rgba(100,100,255,.07)' : 'rgba(124,77,255,.07)';
+        bar.style.cssText = `display:flex;align-items:center;gap:8px;padding:5px 12px 4px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.07);background:${bgColor}`;
+        if (spectator) {
+            bar.innerHTML = `
+                <span style="font-weight:700;font-size:13px;font-family:'Cinzel',serif;color:#9b9bff;letter-spacing:.05em">👁 WIDZ</span>
+                <span class="mp-bar-state" style="opacity:.65;flex:1;font-size:11px">Tryb obserwatora — tylko odczyt</span>
+            `;
+        } else {
+            bar.innerHTML = `
+                <span class="mp-bar-timer" style="font-weight:700;font-size:15px;font-family:'Cinzel',serif;color:var(--accent,#c9a54a);min-width:60px;letter-spacing:.02em">—:—:—</span>
+                <span class="mp-bar-count" style="opacity:.65;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:99px;font-size:11px"></span>
+                <span class="mp-bar-state" style="opacity:.65;flex:1;font-size:11px"></span>
+            `;
+        }
         composer.insertBefore(bar, composer.firstChild);
     }
 
@@ -452,6 +462,13 @@
         const text = inp.value.trim();
         if (!text) return;
 
+        // GF6: spectators can only send party chat (e.g. /whisper), not game actions
+        if (_isSpectator) {
+            await _sendPartyMessage(text);
+            inp.value = '';
+            return;
+        }
+
         _stopPolling(); // prevent concurrent poll during submit
         inp.value = '';
         _appendUserAction(text); // show immediately as chat bubble
@@ -483,54 +500,62 @@
         }
     }
 
-    async function activate(campaignId, characterId, characterName, isHost = false, timerMinutes = 1440) {
+    // GF6 (#926): isSpectator=true → read-only mode, no action submission, no round polling
+    async function activate(campaignId, characterId, characterName, isHost = false, timerMinutes = 1440, isSpectator = false) {
         _campaignId = campaignId;
         _characterId = characterId;
         _characterName = characterName;
         _active = true;
         _lastShownRoundId = null;
-        _sendEnabled = true;
+        _sendEnabled = !isSpectator;
         _isHost = isHost;
+        _isSpectator = isSpectator;
         _campaignTimerMinutes = timerMinutes;
 
         const inp = _input();
         if (inp) { inp.removeEventListener('input', _onInputEvent); inp.addEventListener('input', _onInputEvent); }
 
-        _injectStatusBar();
+        _injectStatusBar(isSpectator);
         _hideNote();
         const mpSection = document.getElementById('mp-multiplayer-section');
         if (mpSection) mpSection.style.display = '';
         const mpTimerSection = document.getElementById('mp-timer-section');
         if (mpTimerSection) {
-            mpTimerSection.style.display = _isHost ? '' : 'none';
-            if (_isHost) {
-                const inp = document.getElementById('mp-timer-input');
-                if (inp) { inp.value = _campaignTimerMinutes; updateMpTimerHint(); }
-            }
+            mpTimerSection.style.display = (_isHost && !isSpectator) ? '' : 'none';
         }
 
-        // Load full round history (all completed rounds with all player actions)
-        try {
-            const hist = await _apiFetch(`/campaigns/${_campaignId}/rounds/history`);
-            if (!_active) return;
-            for (const round of (hist.rounds || [])) {
-                _appendRound(round);
-                _lastShownRoundId = round.round_id;
+        if (isSpectator) {
+            // Spectator: disable composer, set hint, open party chat for /whisper support
+            _setComposerState(false, 'Widz — wpisz /whisper <postać> <tekst> aby podpowiedzieć');
+            const btn = _sendBtn();
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '';
+                // Re-enable for /whisper (party chat send, not action submit)
             }
-        } catch (_) {}
+        } else {
+            // Normal player: load round history + start polling
+            try {
+                const hist = await _apiFetch(`/campaigns/${_campaignId}/rounds/history`);
+                if (!_active) return;
+                for (const round of (hist.rounds || [])) {
+                    _appendRound(round);
+                    _lastShownRoundId = round.round_id;
+                }
+            } catch (_) {}
 
-        // Restore current round's submitted action if still collecting
-        try {
-            const s = await _apiFetch(`/campaigns/${_campaignId}/round/status`);
-            if (!_active) return;
-            if (s.my_submitted && s.my_action && s.status === 'collecting') {
-                _appendUserAction(s.my_action);
-                const i = _input();
-                if (i && !i.value.trim()) i.value = s.my_action;
-            }
-        } catch (_) {}
+            try {
+                const s = await _apiFetch(`/campaigns/${_campaignId}/round/status`);
+                if (!_active) return;
+                if (s.my_submitted && s.my_action && s.status === 'collecting') {
+                    _appendUserAction(s.my_action);
+                    const i = _input();
+                    if (i && !i.value.trim()) i.value = s.my_action;
+                }
+            } catch (_) {}
 
-        _poll();
+            _poll();
+        }
 
         const chatPanel = document.getElementById('party-chat-panel');
         if (chatPanel) chatPanel.hidden = false;
@@ -561,6 +586,7 @@
         _characterName = null;
         _currentActionBubble = null;
         _sendEnabled = true;
+        _isSpectator = false;
 
         const inp = _input();
         if (inp) { inp.removeEventListener('input', _onInputEvent); inp.placeholder = 'Co robisz? Możesz pisać swobodnie...'; }
@@ -576,7 +602,10 @@
     }
 
     async function leave() {
-        if (!confirm('Opuścić grę multiplayer? Twoja akcja w bieżącej rundzie zostanie zachowana.')) return;
+        const leaveMsg = _isSpectator
+            ? 'Zakończyć obserwację?'
+            : 'Opuścić grę multiplayer? Twoja akcja w bieżącej rundzie zostanie zachowana.';
+        if (!confirm(leaveMsg)) return;
         try {
             await _apiFetch(`/multiplayer/campaigns/${_campaignId}/leave`, { method: 'POST' });
         } catch (e) {
@@ -588,7 +617,7 @@
         }
     }
 
-    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers) };
+    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers), isSpectator: () => _isSpectator };
 })();
 
 // GF4 (#924) — router from hub: open create-lobby-screen with default AI mode
