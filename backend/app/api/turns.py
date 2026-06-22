@@ -57,6 +57,17 @@ from app.services.turn.turn_skill_router import (
     _commit_pending_skill_test,
     route_skill_turn as _route_skill_turn,
 )
+from app.services.turn.turn_gate import check_gate_and_record as _check_gate_and_record
+from app.services.turn.turn_intent import (
+    detect_risky_intent as _detect_risky_intent_turn,
+    snapshot_hex as _snapshot_hex,
+    check_hex_enter_trigger as _check_hex_enter_trigger,
+    apply_u7_safety_net as _apply_u7_safety_net,
+)
+from app.services.turn.turn_gambling import (
+    apply_gamble_outcome_in_skill_resolution as _apply_gamble_in_skill,
+    build_gamble_narrator_ctx as _build_gamble_narrator_ctx,
+)
 from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
 from app.services.world_service import process_create_tags, get_current_location_info
 from app.services.suggested_actions import build_suggested_actions
@@ -3879,49 +3890,21 @@ def create_turn(
             logger.info("structured_action_converted", original=text, converted=narrative_text)
 
         # ── B3: Gate Mechanic — validate against World State before LLM ─────
-        if not roll_request:
-            try:
-                from app.services.gate_service import validate_action as _gate_validate
-                _gate_result = _gate_validate(campaign_id, narrative_text)
-                if not _gate_result.allowed:
-                    logger.info(
-                        "gate_blocked",
-                        campaign_id=campaign_id,
-                        reason=_gate_result.reason,
-                        action_preview=narrative_text[:60],
-                    )
-                    _record_turn_decision_safe(
-                        campaign_id, payload.character_id, narrative_text,
-                        route="blocked", gate_blocked=True, gate_reason=_gate_result.reason,
-                        handler="gate", conn=conn,
-                    )
-                    return _with_turn_trace(
-                        {
-                            "blocked": True,
-                            "feedback": _gate_result.feedback,
-                            "reason": _gate_result.reason,
-                        },
-                        turn_id,
-                    )
-            except Exception as _gate_err:
-                logger.warning("gate_check_error", error=str(_gate_err))
-                # Gate errors must never break the game — fall through to LLM
-            # #762: decyzja silnika — tura przepuszczona przez gate (intent + route narracyjny)
-            if not roll_request:
-                _record_turn_decision_safe(
-                    campaign_id, payload.character_id, narrative_text,
-                    route="narrative", gate_blocked=False, gate_reason=None,
-                    handler="narrative", conn=conn,
-                )
+        _gate_blocked_response = _check_gate_and_record(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            narrative_text=narrative_text,
+            roll_request=roll_request,
+            turn_id=turn_id,
+            record_turn_decision_fn=_record_turn_decision_safe,
+            with_turn_trace_fn=_with_turn_trace,
+        )
+        if _gate_blocked_response is not None:
+            return _gate_blocked_response
 
         # ── U7: detect risky intent before LLM ───────────────────────────────
-        _risky_intent_match = None
-        if not roll_request:
-            try:
-                from app.services.game_engine import _detect_risky_intent as _u7_detect
-                _risky_intent_match = _u7_detect(conn, narrative_text)
-            except Exception as _ri_err:
-                logger.warning("risky_intent_detect_error", error=str(_ri_err))
+        _risky_intent_match = _detect_risky_intent_turn(conn, narrative_text, roll_request)
 
         # U30 (#578): directional-move fast-path on the JSON tor — parity with
         # create_turn_stream. Resolve travel mechanically BEFORE the LLM so "idę na północ"
@@ -3958,16 +3941,7 @@ def create_turn(
             raise HTTPException(status_code=500, detail="Empty narrative response")
 
         # Snapshot hex before location intent (for hex_enter encounter trigger)
-        _hex_before_enc = None
-        try:
-            _gs_pre_enc = conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
-            ).fetchone()
-            if _gs_pre_enc:
-                _sf_pre_enc = json.loads(_gs_pre_enc["session_flags"] or "{}")
-                _hex_before_enc = _sf_pre_enc.get("current_hex")
-        except Exception:
-            _hex_before_enc = None
+        _hex_before_enc = _snapshot_hex(conn, campaign_id)
 
         assistant_text = _process_location_intent(
             conn=conn,
@@ -3976,23 +3950,7 @@ def create_turn(
         )
 
         # Hex-enter encounter trigger: fire when current_hex changed
-        _hex_after_enc = None
-        try:
-            _gs_post_enc = conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
-            ).fetchone()
-            if _gs_post_enc:
-                _sf_post_enc = json.loads(_gs_post_enc["session_flags"] or "{}")
-                _hex_after_enc = _sf_post_enc.get("current_hex")
-                if _hex_after_enc and _hex_after_enc != _hex_before_enc:
-                    from app.services.encounter_service import maybe_inject_encounter as _mie
-                    _mie(
-                        conn, campaign_id, "hex_enter",
-                        q=int(_hex_after_enc.get("q", 0)),
-                        r=int(_hex_after_enc.get("r", 0)),
-                    )
-        except Exception as _enc_trigger_err:
-            logger.warning("hex_enter_encounter_trigger_error", error=str(_enc_trigger_err))
+        _check_hex_enter_trigger(conn, campaign_id, _hex_before_enc)
 
         # ── [SKILL_TEST:] / [TRAP:] tag interception ─────────────────────────
         _skill_pending_narrator = None
@@ -4033,48 +3991,17 @@ def create_turn(
             logger.warning("skill_tag_intercept_error: %s", str(_se))
 
         # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
-        if _risky_intent_match and not _skill_pending_narrator:
-            try:
-                from app.services.llm_tag_parser import skill_check_safety_net as _u7_sn
-                from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
-                import uuid as _uuid_u7
-                _gs_u7 = conn.execute(
-                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
-                    (campaign_id,),
-                ).fetchone()
-                _existing_pending_u7 = None
-                if _gs_u7:
-                    _existing_pending_u7 = json.loads(_gs_u7["session_flags"] or "{}").get("pending_skill_test")
-                _forced = _u7_sn(
-                    llm_response=assistant_text,
-                    risky_intent=_risky_intent_match,
-                    existing_pending=_existing_pending_u7,
-                    conn=conn,
-                    campaign_id=campaign_id,
-                )
-                if _forced:
-                    _char_sh_u7 = json.loads(character["sheet_json"] or "{}")
-                    _skill_key_u7 = _forced["skill_key"]
-                    _pending_u7 = {
-                        "skill_test_id": f"st-{_uuid_u7.uuid4().hex[:8]}",
-                        "skill_key": _skill_key_u7,
-                        "skill_label": _skill_label(_skill_key_u7),
-                        "counter": _get_counter(conn, _skill_key_u7),
-                        "modifier_breakdown": calc_skill_modifier_info(_char_sh_u7, _skill_key_u7),
-                        "dc": _forced["dc"],
-                        "source": "safety_net",
-                    }
-                    if _gs_u7:
-                        _sf_u7 = json.loads(_gs_u7["session_flags"] or "{}")
-                        _sf_u7 = _commit_pending_skill_test(_pending_u7, _sf_u7)
-                        conn.execute(
-                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
-                            (json.dumps(_sf_u7, ensure_ascii=False), campaign_id),
-                        )
-                        conn.commit()
-                    _skill_pending_narrator = _pending_u7
-            except Exception as _u7_err:
-                logger.warning("u7_safety_net_error", error=str(_u7_err))
+        _u7_forced = _apply_u7_safety_net(
+            conn=conn,
+            campaign_id=campaign_id,
+            character=character,
+            assistant_text=assistant_text,
+            risky_intent_match=_risky_intent_match,
+            skill_pending_narrator=_skill_pending_narrator,
+            commit_pending_skill_test_fn=_commit_pending_skill_test,
+        )
+        if _u7_forced is not None:
+            _skill_pending_narrator = _u7_forced
 
         from app.services import combat_service as _cs
 
@@ -6414,32 +6341,14 @@ def resolve_skill_test_endpoint(
         # S7 (#601) — gamble → przepływ złota wg stopnia testu (S1). Stawka z pending
         # (zwalidowana przy intercepcie), złoto przez change_gold (U26). LLM narruje,
         # mechanika liczy (CZĘŚĆ 10). Krytyczna porażka → oskarżenie o oszustwo.
-        _gamble_summary = None
-        if str(pending.get("skill_key", "")).lower() == "gamble":
-            try:
-                from app.services import gamble_service as _gbl
-                from app.services.economy_service import change_gold as _chg
-                _stake = int((pending.get("gamble") or {}).get("stake", 0) or 0)
-                _loc_key = ""
-                try:
-                    _loc = get_current_location_info(conn, campaign_id)
-                    _loc_key = str((_loc or {}).get("key") or "")
-                except Exception:
-                    _loc_key = ""
-                _gamble_summary = _gbl.apply_gamble_outcome(
-                    session_flags, result.get("outcome", "FAILURE"), _stake, _loc_key
-                )
-                _delta = int(_gamble_summary.get("delta", 0) or 0)
-                if _delta:
-                    _chg(conn, payload.character_id, _delta, "gamble",
-                         campaign_id=campaign_id,
-                         meta={"stake": _stake, "outcome": result.get("outcome")},
-                         allow_negative=False)
-                logger.info("gamble_outcome_applied", campaign_id=campaign_id,
-                            stake=_stake, delta=_delta,
-                            cheat=_gamble_summary.get("cheat_accused"))
-            except Exception as _gbl_err:
-                logger.warning("gamble_outcome_error", error=str(_gbl_err))
+        _gamble_summary = _apply_gamble_in_skill(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            pending=pending,
+            session_flags=session_flags,
+            result=result,
+        )
 
         # S10 (#605) — deklaratywna ścieżka cure: udany SKILL_TEST oznaczony
         # cures_condition (z katalogu, np. medicine→hemorrhage) zdejmuje kondycję
@@ -6487,15 +6396,7 @@ def resolve_skill_test_endpoint(
 
         # S7 (#601): gamble result feeds the narrator the gold flow (mechanika
         # already moved the gold via change_gold). Crit-fail → cheating accusation.
-        if _gamble_summary is not None:
-            _stake_g = int(_gamble_summary.get("stake", 0) or 0)
-            _delta_g = int(_gamble_summary.get("delta", 0) or 0)
-            if _delta_g > 0:
-                skill_ctx += f"\n[HAZARD] Gracz wygrał {_delta_g} zł (stawka {_stake_g} zł). Opisz triumf przy stole — BEZ podawania liczb."
-            else:
-                skill_ctx += f"\n[HAZARD] Gracz przegrał {abs(_delta_g)} zł (stawka {_stake_g} zł). Opisz przegraną — BEZ podawania liczb."
-            if _gamble_summary.get("cheat_accused"):
-                skill_ctx += "\n[HAZARD] Padło oskarżenie o oszustwo — inni gracze/karczmarz patrzą na bohatera podejrzliwie; wprowadź to napięcie do narracji."
+        skill_ctx += _build_gamble_narrator_ctx(_gamble_summary)
 
         # S11 (#606) — zły omen klątwy: udany test przerzucony na gorszy. Narrator dostaje
         # sygnał, by oddać złowrogi traf losu (BEZ podawania liczb/kości).
