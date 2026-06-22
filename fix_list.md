@@ -20,6 +20,13 @@ Format: `- [ ] #NNN — krótki tytuł` · `(dep: #MMM)` = zależność (rób PO
 
 **Testy:** na Demo (user_id=1). NIGDY na Mizelu (char 999420 — postać Piotra, read-only). Backend/walkę → test lub Combat Sandbox; flow gracza → /game-test-player lub ręcznie na DEV.
 
+**Test-infra / gate — #928–#931 (918-A1..A3 + B, autoryzowane 2026-06-22):** to zadania na infrastrukturze testów, NIE feature/gameplay. Reżim:
+- **Pipeline = pytest only.** `/playwright-test-report` NIE dotyczy (brak endpointu/UI/runtime). Weryfikacja: test issue zielony + (A2) baseline-diff PASS-count przed/po na migrowanych plikach.
+- **#929 (A2):** przepinaj `backend/tests/*` na `backend/tests/_fixtures_schema.py` (z #928). Batch combat→spells→characters. Po batchu baseline-diff: liczba PASS nie spada. NIE zmieniaj asercji testów — tylko źródło schematu. Rozszerzaj helper o brakujące tabele wg realnego schematu (PRAGMA), guard z #928 pilnuje pokrycia.
+- **#930 (A3):** izolacja testów zależnych od kolejności — fixture autouse resetujący współdzielony stan (`_runtime_config`, patche `COMBAT_DB_PATH`). NIE zmieniaj logiki testowanej, tylko setup/teardown.
+- **#931 (B):** **NIE uruchamiać przez mass-implement** — edytuje samą maszynerię mass-implement (self-collision). Robione standalone, gdy żaden orchestrator nie biegnie.
+- **Brak destrukcji DB**, guard #928 musi zostać zielony po każdej zmianie.
+
 **Refaktor monolitów — Faza R (#871–#882, milestone „Refaktor monolitów (Faza R)", autoryzowane 2026-06-22):** to NIE są bugfixy ani featury — to **czysty refaktor strukturalny**. ŻELAZNE zasady, łamią pełny pipeline powyżej:
 - **CZYSTY EXTRACT, ZERO ZMIAN ZACHOWANIA.** Przenosisz kod 1:1 do nowych funkcji/plików. NIE zmieniasz formuł, liczb, DC, kolejności rozliczeń, treści narracji ani żadnej logiki. Diff ma być WYŁĄCZNIE strukturalny (przeniesienie + wywołanie).
 - **LOCKED game mechanics.** `combat_service.py` i `turns.py` to zablokowana mechanika (`game_mechanics.md` CZĘŚĆ AB, #826, `backend/prompts/system_prompt.txt`). Pod ŻADNYM pozorem nie „ulepszaj", nie poprawiaj przy okazji, nie refaktoruj liczb. Jeśli kusi optymalizacja — NIE, to osobne issue. Widzisz realny bug przy okazji → zapisz w komentarzu issue, NIE naprawiaj.
