@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.logging import bind_context, configure_logging, get_logger, reset_request_context
+import app.core.metrics  # noqa: F401 — registers domain Prometheus metrics at startup (G31 #811)
 from app.db import get_session, init_db
 from app.models import Game, Message
 from app.services.dice import build_gm_dice_breakdown, parse_character_sheet

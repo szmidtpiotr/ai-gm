@@ -899,6 +899,13 @@ def trigger_narration(round_id: int) -> None:
 
     logger.info("multiplayer_narration_done", round_id=round_id, campaign_id=campaign_id)
 
+    # G31 #811 — round retention metric: count completions per round_number
+    try:
+        from app.core.metrics import mp_round_completed_total
+        mp_round_completed_total.labels(round_number=str(round_number)).inc()
+    except Exception:
+        pass  # never block narration flow on metric emission failure
+
     # G18 #796 — generate layer-1 summary for this round in background
     narrative_text = parsed.get("narrative", "")
     import threading as _threading
