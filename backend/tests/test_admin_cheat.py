@@ -44,6 +44,22 @@ def _seed_schema(db_path: str) -> None:
               ended_reason TEXT
             );
 
+            CREATE TABLE game_config_weapons (
+              key TEXT PRIMARY KEY,
+              label TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE game_config_items (
+              key TEXT PRIMARY KEY,
+              label TEXT NOT NULL DEFAULT '',
+              item_type TEXT NOT NULL DEFAULT 'misc'
+            );
+
+            CREATE TABLE game_config_consumables (
+              key TEXT PRIMARY KEY,
+              label TEXT NOT NULL DEFAULT ''
+            );
+
             INSERT INTO characters(id, campaign_id, location, sheet_json, gold_gp)
             VALUES (
               1,
@@ -156,7 +172,7 @@ def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
     try:
         conn.execute(
             """
-            CREATE TABLE game_config_weapons (
+            CREATE TABLE IF NOT EXISTS game_config_weapons (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT ''
             )
@@ -201,12 +217,12 @@ def test_add_item_prefers_consumable_catalog_over_wrong_items_row(client_with_au
     try:
         conn.executescript(
             """
-            CREATE TABLE game_config_items (
+            CREATE TABLE IF NOT EXISTS game_config_items (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT '',
                 item_type TEXT NOT NULL DEFAULT 'misc'
             );
-            CREATE TABLE game_config_consumables (
+            CREATE TABLE IF NOT EXISTS game_config_consumables (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT ''
             );
@@ -249,12 +265,12 @@ def test_add_item_prefers_consumable_key_when_items_catalog_marks_consumable(cli
     try:
         conn.executescript(
             """
-            CREATE TABLE game_config_items (
+            CREATE TABLE IF NOT EXISTS game_config_items (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT '',
                 item_type TEXT NOT NULL DEFAULT 'misc'
             );
-            CREATE TABLE game_config_consumables (
+            CREATE TABLE IF NOT EXISTS game_config_consumables (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT ''
             );
@@ -296,7 +312,7 @@ def test_add_item_respects_explicit_consumable_hint(client_with_auth):
     try:
         conn.executescript(
             """
-            CREATE TABLE game_config_items (
+            CREATE TABLE IF NOT EXISTS game_config_items (
                 key TEXT PRIMARY KEY,
                 label TEXT NOT NULL DEFAULT '',
                 item_type TEXT NOT NULL DEFAULT 'misc'
