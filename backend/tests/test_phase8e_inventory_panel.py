@@ -10,6 +10,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _fixtures_schema as fx
 
 from app.api import inventory as inventory_api
 from app.services import loot_service as ls
@@ -24,27 +27,6 @@ def _schema_sql() -> str:
     );
     INSERT INTO characters (id, name, gold_gp) VALUES (1, 'Hero', 25);
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      description TEXT NOT NULL DEFAULT '',
-      value_gp INTEGER NOT NULL DEFAULT 0,
-      weight REAL NOT NULL DEFAULT 0.0,
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_consumables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
     CREATE TABLE character_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -64,11 +46,11 @@ def _schema_sql() -> str:
       )
     );
 
-    INSERT INTO game_config_weapons (key, label, is_active) VALUES
-      ('sword_a', 'Sword A', 1),
-      ('sword_b', 'Sword B', 1);
-    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
-    VALUES ('leather1', 'Leather', 'armor', 'x', 10, 0, 5, 1);
+    INSERT INTO game_config_weapons (key, label, is_active, weapon_slot, finesse) VALUES
+      ('sword_a', 'Sword A', 1, 'main_hand', 0),
+      ('sword_b', 'Sword B', 1, 'either', 1);
+    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight_kg, is_active)
+    VALUES ('leather1', 'Leather', 'armor', 'x', 10, 5, 1);
 
     INSERT INTO character_inventory (character_id, weapon_key, quantity, equipped, slot, source)
     VALUES (1, 'sword_a', 1, 1, 'main_hand', 'start');
@@ -91,6 +73,7 @@ class TestPhase8eInventoryPanel(unittest.TestCase):
         if self._tmp.exists():
             self._tmp.unlink()
         conn = sqlite3.connect(str(self._tmp))
+        fx.create_tables(conn, "game_config_items", "game_config_weapons", "game_config_consumables")
         conn.executescript(_schema_sql())
         conn.close()
         self._p = patch.object(ls, "LOOT_DB_PATH", str(self._tmp))

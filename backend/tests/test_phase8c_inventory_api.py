@@ -10,6 +10,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _fixtures_schema as fx
 
 from app.api.inventory import router as inventory_router
 from app.services import loot_service as ls
@@ -23,27 +26,6 @@ def _schema_sql() -> str:
     );
     INSERT INTO characters (id, name) VALUES (1, 'Hero');
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      description TEXT NOT NULL DEFAULT '',
-      value_gp INTEGER NOT NULL DEFAULT 0,
-      weight REAL NOT NULL DEFAULT 0.0,
-      weight_kg REAL NOT NULL DEFAULT 0.0,
-      effect_json TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_consumables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
     CREATE TABLE character_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -63,8 +45,8 @@ def _schema_sql() -> str:
       )
     );
 
-    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
-    VALUES ('rope', 'Rope', 'misc', 'simple rope', 5, 1.0, 1.0, 1);
+    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight_kg, is_active)
+    VALUES ('rope', 'Rope', 'misc', 'simple rope', 5, 1.0, 1);
     INSERT INTO game_config_weapons (key, label, is_active) VALUES ('shortsword', 'Short Sword', 1);
     INSERT INTO game_config_consumables (key, label, is_active) VALUES ('potion_small', 'Small Potion', 1);
 
@@ -81,6 +63,7 @@ class TestInventoryApi(unittest.TestCase):
         if self._tmp.exists():
             self._tmp.unlink()
         conn = sqlite3.connect(str(self._tmp))
+        fx.create_tables(conn, "game_config_items", "game_config_weapons", "game_config_consumables")
         conn.executescript(_schema_sql())
         conn.close()
 
@@ -173,8 +156,8 @@ class TestInventoryApi(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO game_config_items
-                (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
-                VALUES ('armor_test_plate', 'Test Plate', 'armor', 'heavy', 100, 0, 15.0, 1)
+                (key, label, item_type, description, value_gp, weight_kg, is_active)
+                VALUES ('armor_test_plate', 'Test Plate', 'armor', 'heavy', 100, 15.0, 1)
                 """
             )
             conn.commit()

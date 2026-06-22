@@ -1,4 +1,9 @@
 import sqlite3
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 
 from fastapi.testclient import TestClient
 
@@ -10,6 +15,7 @@ from app.services import admin_config
 def _seed_db(path: str) -> None:
     conn = sqlite3.connect(path)
     try:
+        fx.create_tables(conn, "game_config_enemies", "game_config_loot_tables", "game_config_conditions")
         conn.executescript(
             """
             CREATE TABLE admin_audit_log (
@@ -20,37 +26,6 @@ def _seed_db(path: str) -> None:
                 old_values TEXT,
                 new_values TEXT,
                 performed_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            CREATE TABLE game_config_loot_tables (
-                key TEXT PRIMARY KEY
-            );
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY
-            );
-            CREATE TABLE game_config_enemies (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                hp_base INTEGER NOT NULL,
-                ac_base INTEGER NOT NULL,
-                attack_bonus INTEGER NOT NULL,
-                dex_modifier INTEGER NOT NULL DEFAULT 0,
-                damage_die TEXT NOT NULL,
-                tier TEXT NOT NULL DEFAULT 'standard',
-                attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-                damage_bonus INTEGER NOT NULL DEFAULT 0,
-                damage_type TEXT NOT NULL DEFAULT 'physical',
-                xp_award INTEGER NOT NULL DEFAULT 0,
-                conditions_immune TEXT,
-                skills_json TEXT,
-                stats_json TEXT,
-                loot_table_key TEXT,
-                drop_chance REAL NOT NULL DEFAULT 1.0,
-                note TEXT,
-                description TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             """
         )

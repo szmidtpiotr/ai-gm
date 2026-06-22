@@ -1,4 +1,9 @@
 import sqlite3
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 
 from fastapi.testclient import TestClient
 
@@ -10,6 +15,7 @@ from app.services import admin_config
 def _seed_db(path: str) -> None:
     conn = sqlite3.connect(path)
     try:
+        fx.create_tables(conn, "game_config_stats", "game_config_weapons")
         conn.executescript(
             """
             CREATE TABLE admin_audit_log (
@@ -21,33 +27,7 @@ def _seed_db(path: str) -> None:
                 new_values TEXT,
                 performed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-            CREATE TABLE game_config_stats (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL
-            );
             INSERT INTO game_config_stats (key, label) VALUES ('STR', 'Strength'), ('DEX', 'Dexterity');
-            CREATE TABLE game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                damage_die TEXT NOT NULL,
-                weapon_type TEXT NOT NULL DEFAULT 'melee',
-                linked_stat TEXT NOT NULL,
-                allowed_classes TEXT NOT NULL,
-                two_handed INTEGER NOT NULL DEFAULT 0,
-                finesse INTEGER NOT NULL DEFAULT 0,
-                range_m INTEGER,
-                targeting TEXT NOT NULL DEFAULT 'single',
-                aoe_radius_m REAL,
-                magic_school TEXT,
-                weight_kg REAL NOT NULL DEFAULT 0.0,
-                description TEXT NOT NULL DEFAULT '',
-                note TEXT,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
             """
         )
         conn.commit()

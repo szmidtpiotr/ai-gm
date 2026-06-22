@@ -2077,7 +2077,7 @@ def list_config_items(item_type: str | None = None) -> list[dict]:
         if t:
             rows = conn.execute(
                 """
-                SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+                SELECT key, label, item_type, description, value_gp, weight_kg, effect_json, is_active
                 FROM game_config_items
                 WHERE item_type = ?
                 ORDER BY label COLLATE NOCASE ASC, key ASC
@@ -2087,7 +2087,7 @@ def list_config_items(item_type: str | None = None) -> list[dict]:
         else:
             rows = conn.execute(
                 """
-                SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+                SELECT key, label, item_type, description, value_gp, weight_kg, effect_json, is_active
                 FROM game_config_items
                 ORDER BY label COLLATE NOCASE ASC, key ASC
                 """
@@ -2099,7 +2099,6 @@ def list_config_items(item_type: str | None = None) -> list[dict]:
             "item_type": r["item_type"],
             "description": r["description"],
             "value_gp": int(r["value_gp"] or 0),
-            "weight": float(r["weight"] or 0.0),
             "weight_kg": float(r["weight_kg"] or 0.0),
             "effect_json": r["effect_json"],
             "is_active": bool(r["is_active"]),
@@ -2156,7 +2155,7 @@ def get_config_item(key: str) -> dict | None:
     with _conn() as conn:
         row = conn.execute(
             """
-            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+            SELECT key, label, item_type, description, value_gp, weight_kg, effect_json, is_active
             FROM game_config_items
             WHERE key = ?
             """,
@@ -2170,7 +2169,6 @@ def get_config_item(key: str) -> dict | None:
         "item_type": row["item_type"],
         "description": row["description"],
         "value_gp": int(row["value_gp"] or 0),
-        "weight": float(row["weight"] or 0.0),
         "weight_kg": float(row["weight_kg"] or 0.0),
         "effect_json": row["effect_json"],
         "is_active": bool(row["is_active"]),
