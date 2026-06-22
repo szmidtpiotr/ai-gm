@@ -416,3 +416,52 @@ def end_combat(payload: dict = Body(...)) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="campaign_id required")
     combat.end_combat(cid, reason)
     return {"ok": True}
+
+
+# ── G15 #813 — MP balance flags (sandbox-tunable) ────────────────────────────
+
+@router.get("/mp-balance")
+def get_mp_balance() -> dict[str, Any]:
+    """G15: Return all MP balance flags. Values are starting values for playtest."""
+    from app.services import mp_balance as mb
+    return {
+        "wipe_gold_pct_by_level": dict(mb.WIPE_GOLD_PCT_BY_LEVEL),
+        "wipe_gold_floor": mb.WIPE_GOLD_FLOOR,
+        "wipe_hp_pct": mb.WIPE_HP_PCT,
+        "mp_difficulty_scale_by_count": {str(k): v for k, v in mb.MP_DIFFICULTY_SCALE_BY_COUNT.items()},
+        "mp_loot_scale_by_count": {str(k): v for k, v in mb.MP_LOOT_SCALE_BY_COUNT.items()},
+    }
+
+
+@router.patch("/mp-balance")
+def patch_mp_balance(body: dict = Body(...)) -> dict[str, Any]:
+    """G15: Update MP balance flags at runtime (session-scoped, resets on restart).
+
+    Accepted keys: wipe_gold_pct_by_level, wipe_gold_floor, wipe_hp_pct,
+    mp_difficulty_scale_by_count, mp_loot_scale_by_count.
+    """
+    import sys
+    mb = sys.modules.get("app.services.mp_balance")
+    if mb is None:
+        from app.services import mp_balance as mb  # type: ignore[assignment]
+    updated: list[str] = []
+    if "wipe_gold_pct_by_level" in body:
+        mb.WIPE_GOLD_PCT_BY_LEVEL.update(body["wipe_gold_pct_by_level"])
+        updated.append("wipe_gold_pct_by_level")
+    if "wipe_gold_floor" in body:
+        mb.WIPE_GOLD_FLOOR = int(body["wipe_gold_floor"])
+        updated.append("wipe_gold_floor")
+    if "wipe_hp_pct" in body:
+        mb.WIPE_HP_PCT = float(body["wipe_hp_pct"])
+        updated.append("wipe_hp_pct")
+    if "mp_difficulty_scale_by_count" in body:
+        mb.MP_DIFFICULTY_SCALE_BY_COUNT.update(
+            {int(k): float(v) for k, v in body["mp_difficulty_scale_by_count"].items()}
+        )
+        updated.append("mp_difficulty_scale_by_count")
+    if "mp_loot_scale_by_count" in body:
+        mb.MP_LOOT_SCALE_BY_COUNT.update(
+            {int(k): float(v) for k, v in body["mp_loot_scale_by_count"].items()}
+        )
+        updated.append("mp_loot_scale_by_count")
+    return {"ok": True, "updated": updated}

@@ -7753,19 +7753,20 @@ def _handle_mp_player_knocked(campaign_id: int, out: dict) -> None:
 
 
 def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any) -> None:
-    """G17: Wipe — gold penalty + revive at 50% HP; end combat 'wipe'.
+    """G17: Wipe — gold penalty + revive; end combat 'wipe'.
 
-    Penalty table (avg party level): 1-3 → 10%, 4-7 → 20%, 8+ → 30%.
-    Players with < 50 gold are exempt. Items/XP/levels untouched.
+    Penalty table and revival HP controlled by mp_balance flags (G15 #813).
+    Players with < WIPE_GOLD_FLOOR gold are exempt. Items/XP/levels untouched.
     """
     from app.services.economy_service import change_gold
+    from app.services import mp_balance as _mb
 
     player_combs = [
         c for c in combatants
         if str(c.get("id") or "") == "player" or str(c.get("id") or "").startswith("player:")
     ]
 
-    # Avg level
+    # Avg level → wipe gold penalty %
     levels: list[int] = []
     for c in player_combs:
         cid = _mp_player_char_id(str(c.get("id") or ""))
@@ -7783,23 +7784,18 @@ def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any
             except Exception:
                 levels.append(1)
     avg_level = int(sum(levels) / len(levels)) if levels else 1
-    if avg_level <= 3:
-        pct = 0.10
-    elif avg_level <= 7:
-        pct = 0.20
-    else:
-        pct = 0.30
-
-    _GOLD_THRESHOLD = 50
+    pct = _mb.get_wipe_gold_pct(avg_level)
+    gold_floor = int(_mb.WIPE_GOLD_FLOOR)
+    hp_pct = float(_mb.WIPE_HP_PCT)
 
     for c in player_combs:
         cid = _mp_player_char_id(str(c.get("id") or ""))
         char_id = cid if cid is not None else (
             int(row["character_id"]) if row else None
         )
-        # Revive at 50% HP
+        # Revive at WIPE_HP_PCT of max HP
         max_hp = int(c.get("hp_max") or 1)
-        revival_hp = max(1, int(max_hp * 0.50))
+        revival_hp = max(1, int(max_hp * hp_pct))
         c["hp_current"] = revival_hp
         c["knocked"] = False
 
@@ -7818,12 +7814,12 @@ def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any
             except Exception:
                 pass
 
-            # Gold penalty (skip if < threshold)
+            # Gold penalty (skip if below floor)
             try:
                 gr = conn.execute("SELECT gold_gp FROM characters WHERE id=?", (char_id,)).fetchone()
                 if gr:
                     gold = int(gr["gold_gp"] or 0)
-                    if gold >= _GOLD_THRESHOLD:
+                    if gold >= gold_floor:
                         penalty = max(1, int(gold * pct))
                         change_gold(conn, char_id, -penalty, "wipe_penalty", campaign_id=campaign_id)
             except Exception:
