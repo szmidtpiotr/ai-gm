@@ -48,6 +48,11 @@ from app.services.user_llm_settings import get_user_llm_settings_full
 from app.services.location_config_service import get_bool_flag
 from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
 from app.services.location_validator import validate_move, log_integrity_violation
+from app.services.turn.turn_commands import (
+    HANDLED_COMMANDS as _TURN_HANDLED_COMMANDS,
+    _export_session_to_file,
+    handle as _handle_turn_command,
+)
 from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
 from app.services.world_service import process_create_tags, get_current_location_info
 from app.services.suggested_actions import build_suggested_actions
@@ -3084,47 +3089,6 @@ def create_turn_log(
 # Helper: export session to text file
 # ---------------------------------------------------------------------------
 
-def _export_session_to_file(conn: sqlite3.Connection, campaign_id: int) -> str:
-    """Writes all turns for campaign_id to /data/exports/campaign_<id>_<ts>.txt"""
-    import time
-
-    rows = conn.execute(
-        """
-        SELECT turn_number, user_text, assistant_text, created_at
-        FROM campaign_turns
-        WHERE campaign_id = ?
-        ORDER BY turn_number ASC
-        """,
-        (campaign_id,),
-    ).fetchall()
-
-    campaign = conn.execute(
-        "SELECT title, system_id FROM campaigns WHERE id = ?",
-        (campaign_id,),
-    ).fetchone()
-
-    export_dir = "/data/exports"
-    os.makedirs(export_dir, exist_ok=True)
-    ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
-    filename = f"{export_dir}/campaign_{campaign_id}_{ts}.txt"
-
-    with open(filename, "w", encoding="utf-8") as f:
-        title = campaign["title"] if campaign else f"Campaign {campaign_id}"
-        system = campaign["system_id"] if campaign else "unknown"
-        f.write(f"=== {title} [{system}] ===\n")
-        f.write(f"Exported: {ts}\n")
-        f.write("=" * 60 + "\n\n")
-
-        for row in rows:
-            f.write(f"[Turn {row['turn_number']}] {row['created_at']}\n")
-            f.write(f"PLAYER: {row['user_text']}\n")
-            if row["assistant_text"]:
-                f.write(f"GM:     {row['assistant_text']}\n")
-            f.write("\n")
-
-    return filename
-
-
 # ---------------------------------------------------------------------------
 # GET turns list
 # ---------------------------------------------------------------------------
@@ -3752,52 +3716,21 @@ def create_turn(
                 )
                 return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
-            # /sheet
-            # /quest — list player's active quests + short narrative
-            if cmd == "/quest":
-                quest_rows = []
-                try:
-                    quest_rows = conn.execute(
-                        """
-                        SELECT id, quest_type, title, narrative, status, created_turn
-                        FROM character_quests
-                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
-                        ORDER BY created_turn DESC, id DESC
-                        """,
-                        (payload.character_id, campaign_id),
-                    ).fetchall()
-                except Exception:
-                    quest_rows = []
-                quests = []
-                for r in quest_rows:
-                    narrative_str = str(r["narrative"] or "").strip()
-                    if len(narrative_str) > 220:
-                        narrative_str = narrative_str[:217].rstrip() + "…"
-                    quests.append({
-                        "id": int(r["id"]),
-                        "type": str(r["quest_type"] or "main"),
-                        "title": str(r["title"] or ""),
-                        "narrative": narrative_str,
-                        "created_turn": r["created_turn"],
-                    })
-                if quests:
-                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
-                    for q in quests:
-                        type_badge = "⚔" if q["type"] == "main" else "•"
-                        lines.append(f"{type_badge} **{q['title']}**")
-                        if q["narrative"]:
-                            lines.append(f"  {q['narrative']}")
-                        lines.append("")
-                    message = "\n".join(lines).rstrip()
-                else:
-                    message = "📜 Brak aktywnych zadań."
-                result = {"command": "quest", "quests": quests, "message": message}
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+            # /quest, /export, /move — handled by turn_commands module
+            _tc_result = _handle_turn_command(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                text=text,
+                cmd=cmd,
+                turn_id=turn_id,
+                create_turn_log=create_turn_log,
+                _with_turn_trace=_with_turn_trace,
+            )
+            if _tc_result is not None:
+                return _tc_result
 
+            # /sheet
             if cmd == "/sheet":
                 result = {
                     "command": "sheet",
@@ -3889,84 +3822,6 @@ def create_turn(
                     "result": {"message": msg},
                     "turn_id": turn_id,
                 }
-
-            # /export
-            if cmd == "/export":
-                filepath = _export_session_to_file(conn, campaign_id)
-                result = {"command": "export", "file": filepath}
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-
-            # /move — zmiana lokalizacji (Phase 8D)
-            if cmd == "/move":
-                target_location = text[5:].strip()  # Usuń "/move "
-                if not target_location:
-                    raise HTTPException(status_code=400, detail="Podaj nazwę lokalizacji: /move [nazwa]")
-                
-                # Sprawdź czy Location Integrity jest włączone
-                if not get_bool_flag("location_integrity_enabled", campaign_id, default=True):
-                    # System wyłączony — prosta zmiana bez walidacji
-                    result = {"command": "move", "location": target_location, "mode": "bypass"}
-                    log = create_turn_log(
-                        conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                        user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
-                    )
-                    return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-                
-                # Walidacja przez Location Validator
-                from dataclasses import dataclass
-                
-                intent = LocationIntent(action="move", target_label=target_location)
-                result = validate_move(campaign_id, intent)
-                
-                if result.allowed:
-                    # Aktualizuj lokalizację w sesji
-                    if result.resolved_location_id:
-                        conn.execute(
-                            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
-                            (result.resolved_location_id, campaign_id)
-                        )
-                        conn.commit()
-                        
-                        # Pobierz nazwę nowej lokalizacji
-                        loc_row = conn.execute(
-                            "SELECT label FROM game_locations WHERE id = ?",
-                            (result.resolved_location_id,)
-                        ).fetchone()
-                        loc_name = loc_row["label"] if loc_row else target_location
-                    else:
-                        loc_name = target_location
-                    
-                    response_msg = f"Przenosisz się do: {loc_name}"
-                    if result.is_new_location:
-                        response_msg += " (nowa lokalizacja utworzona)"
-                    
-                    result_data = {
-                        "command": "move",
-                        "location": loc_name,
-                        "allowed": True,
-                        "is_new": result.is_new_location
-                    }
-                else:
-                    # Blokada — loguj próbę
-                    log_integrity_violation(campaign_id, intent, result.block_reason or "Nieznany powód")
-                    
-                    response_msg = f"Nie możesz się tam przenieść: {result.block_reason}"
-                    result_data = {
-                        "command": "move",
-                        "location": target_location,
-                        "allowed": False,
-                        "reason": result.block_reason
-                    }
-                
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=response_msg, route=route,
-                )
-                return _with_turn_trace({**log, "route": "command", "result": result_data}, turn_id)
 
             # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
             if cmd in ("/atak", "/walka"):
@@ -5544,63 +5399,30 @@ def create_turn_stream(
                     headers=stream_headers,
                 )
 
-            # /quest — list player's active quests
-            if cmd == "/quest":
-                route_cmd = "command"
-                quest_rows = []
-                try:
-                    quest_rows = conn.execute(
-                        """
-                        SELECT id, quest_type, title, narrative, status, created_turn
-                        FROM character_quests
-                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
-                        ORDER BY created_turn DESC, id DESC
-                        """,
-                        (payload.character_id, campaign_id),
-                    ).fetchall()
-                except Exception:
-                    quest_rows = []
-                quests = []
-                for r in quest_rows:
-                    narr = str(r["narrative"] or "").strip()
-                    if len(narr) > 220:
-                        narr = narr[:217].rstrip() + "…"
-                    quests.append({
-                        "id": int(r["id"]),
-                        "type": str(r["quest_type"] or "main"),
-                        "title": str(r["title"] or ""),
-                        "narrative": narr,
-                        "created_turn": r["created_turn"],
-                    })
-                if quests:
-                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
-                    for q in quests:
-                        type_badge = "⚔" if q["type"] == "main" else "•"
-                        lines.append(f"{type_badge} **{q['title']}**")
-                        if q["narrative"]:
-                            lines.append(f"  {q['narrative']}")
-                        lines.append("")
-                    message = "\n".join(lines).rstrip()
-                else:
-                    message = "📜 Brak aktywnych zadań."
-                result = {"command": "quest", "quests": quests, "message": message}
-                log = create_turn_log(
-                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
-                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False),
-                    route=route_cmd,
+            # /quest, /export, /move — handled by turn_commands module
+            if cmd in _TURN_HANDLED_COMMANDS:
+                _tc_stream_result = _handle_turn_command(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    text=text,
+                    cmd=cmd,
+                    turn_id=turn_id,
+                    create_turn_log=create_turn_log,
+                    _with_turn_trace=_with_turn_trace,
                 )
-                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
-                outer_json = json.dumps(outer, ensure_ascii=False)
+                if _tc_stream_result is not None:
+                    _tc_outer_json = json.dumps(_tc_stream_result, ensure_ascii=False)
 
-                def quest_cmd_stream():
-                    yield f"data: [CMD_JSON]{outer_json}\n\n"
-                    yield "data: [DONE]\n\n"
+                    def _tc_cmd_stream():
+                        yield f"data: [CMD_JSON]{_tc_outer_json}\n\n"
+                        yield "data: [DONE]\n\n"
 
-                return StreamingResponse(
-                    quest_cmd_stream(),
-                    media_type="text/event-stream",
-                    headers=stream_headers,
-                )
+                    return StreamingResponse(
+                        _tc_cmd_stream(),
+                        media_type="text/event-stream",
+                        headers=stream_headers,
+                    )
 
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
