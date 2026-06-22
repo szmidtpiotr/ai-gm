@@ -2947,6 +2947,7 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | Vote-to-kick ręczny (większość pozostałych; 2-os = host sam) | ❌ do zbudowania |
 | Handel między graczami | 📝 notatka na przyszłość |
 | Skalowanie mniej-graczy=lepszy-loot | 📝 notatka, brak formuły |
+| **Wejście gracza do MP (frontend)** | ❌ luka — `multiplayer_ui.js` nieładowany, brak ekranów `create-lobby`/`lobby`, brak `openMultiplayerLobby()` + listy „moje lobby/zaproszenia". Zadania **GF1–GF7** (audyt 2026-06-22). Backend + JS-logika gotowe, brak warstwy wejścia |
 
 ### Poprawki po radzie LLM Council (sesja 2026-06-12, część 2)
 
@@ -3111,6 +3112,22 @@ Opcja na później (poza pilotem): suwak wierności — **kronika** / **powieś�
 | G15 (later) | Skalowanie trudność/loot wg liczby graczy; strojenie kar wipe (10/20/30%, próg 50 zł, 50% HP) | playtest |
 | later | Role graczy (asymetryczne uprawnienia) — otwarte pytanie do rewizji; nadawanie: auto wg klasy / host / głosowanie (do rozstrzygnięcia) | — |
 | later | Regulamin gry oparty o polskie prawo (poza MP v1) | — |
+
+### FAZA G — Frontend (wejście gracza do MP) — DOPISANE 2026-06-22
+
+> **Kontekst (audyt 2026-06-22):** backend MP = 100% gotowy (30+ endpointów `multiplayer.py`/`party_chat.py`, 7 tabel, serwisy rund/walki/widzów; taski G1–G31 ✅). Logika frontendu też w większości napisana: `frontend/front/js/multiplayer_ui.js` (1050+ linii) ma `createLobby`, `_showLobbyScreen`, `_renderLobby`, `inviteByUsername`, `generateInviteLink`, `joinViaToken`, `startLobby`, `kickPlayer`, in-game rundy (`multiplayerUI.activate`) + czat party. **ALE cała ta warstwa jest nieosiągalna** — brakuje 3 ogniw wejścia + listy powrotu. Gracz widzi tylko kafelek „Multiplayer — Wkrótce" w hubie trybów; klik → `openMultiplayerLobby()` UNDEFINED → toast → ślepy zaułek.
+>
+> **Włącznik istnieje:** admin `system → Tryby gry → Multiplayer` PATCH-uje flagę `multiplayer_enabled` (`/api/admin/game-modes`). `/campaign-modes` czyta ją (`campaign_modes_service.py:31`), hub renderuje kafelek klikalny gdy `available=true`, inaczej „Wkrótce". Gating gotowy — **nic do dobudowania po stronie admina**, wystarczy włączyć flagę żeby kafelek ożył. Po domknięciu GF1–GF5 włączenie flagi = pełny przepływ.
+
+| # | Zadanie | Zależy od | Status |
+|---|---------|-----------|--------|
+| GF1 | Załadować `multiplayer_ui.js` w `frontend/front/index.html` (`<script src=".../multiplayer_ui.js?v=N">`, bump wersji) — **bez tego WSZYSTKIE funkcje MP są undefined w runtime**, łącznie z in-game rundami i czatem | — | ❌ skrypt nie wpięty |
+| GF2 | Ekran `#create-lobby-screen` w HTML — tryb (AI / gotowa kampania), nazwa sesji, timer rundy, max graczy, przycisk „Utwórz Lobby". **IDs muszą zgadzać się z JS:** `lobby-timer`, `lobby-max-players`, `lobby-title`, `.lf-create-btn`, `create-lobby-error` (czytane w `createLobby()` linie 773–812) | GF1 | ❌ div nie istnieje |
+| GF3 | Ekran `#lobby-screen` w HTML — sloty członków, sekcja zaproszeń (username + link), przycisk Start (host), wyjście. Renderowany przez istniejące `_renderLobby(data)` (linie 861–926) | GF1 | ❌ div nie istnieje |
+| GF4 | Funkcja `openMultiplayerLobby()` — router z huba trybów (`campaigns.js:342` już ją woła): pokaż `create-lobby-screen`, init trybu (`setLobbyMode('ai')`) | GF2 | ❌ niezdefiniowana |
+| GF5 | Sekcja „Moje lobby / Aktywne gry MP / Zaproszenia" na ekranie kampanii — backend G1 gotowy (`/multiplayer/my-lobbies`, `/my-active-games`, `/my-invites`). Wejście z powrotem do otwartego lobby + akceptacja zaproszenia z wyborem postaci (G16, `/accept`). Bez tego zaproszony gracz nie ma jak dołączyć | GF1 | ❌ brak UI |
+| GF6 | Panel widza (spectator) FE — dołączenie jako widz, widoczność publiczna, `/whisper` za zgodą. Backend G19 gotowy (`spectator-policy`, mute, filtr publiczny). Niższy priorytet, można osobno | GF1, G19 | ❌ brak UI |
+| GF7 | Weryfikacja E2E po włączeniu flagi: kafelek klikalny → create → invite → start → runda → walka → czat działa od początku do końca na DEV | GF1–GF5 | ⬜ |
 
 ---
 
