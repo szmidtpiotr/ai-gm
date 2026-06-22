@@ -119,6 +119,27 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .napiecie h4{font-family:var(--font-disp);color:var(--ink);font-size:16px;margin-bottom:8px}
 .napiecie p{color:var(--ink-dim);font-size:14px}
 
+/* jak się gra — pętla */
+.loop{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;counter-reset:step}
+.step{position:relative;border:1px solid var(--line);border-radius:4px;padding:26px 22px;background:var(--panel)}
+.step::before{counter-increment:step;content:counter(step);position:absolute;top:-16px;left:22px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--font-disp);font-weight:700;color:#1a1206;background:linear-gradient(180deg,var(--gold-lt),var(--gold-dk));box-shadow:0 4px 14px var(--gold-glow)}
+.step h4{font-family:var(--font-disp);color:var(--ink);font-size:17px;margin:12px 0 8px}
+.step p{color:var(--ink-dim);font-size:14px}
+
+/* differentiator — to nie chatbot */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:0;max-width:880px;margin:56px auto 0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vs-col{padding:34px 30px}
+.vs-col.bad{background:var(--bg2)}
+.vs-col.good{background:linear-gradient(180deg,rgba(201,165,74,.06),transparent);border-left:1px solid var(--line)}
+.vs-col h4{font-family:var(--font-disp);font-size:17px;margin-bottom:16px;letter-spacing:.5px}
+.vs-col.bad h4{color:var(--ink-dim)}
+.vs-col.good h4{color:var(--gold)}
+.vs-col ul{list-style:none}
+.vs-col li{padding:7px 0 7px 26px;position:relative;color:var(--ink-dim);font-size:14.5px}
+.vs-col.bad li::before{content:"✕";position:absolute;left:0;color:var(--blood)}
+.vs-col.good li::before{content:"✓";position:absolute;left:0;color:var(--gold)}
+.vs-col.good li{color:var(--ink)}
+
 /* ksiega — mechanic teasers */
 .mechs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px}
 .mech{border:1px solid var(--line);border-radius:4px;padding:22px;background:var(--panel);text-align:center}
@@ -147,8 +168,9 @@ footer .brand{display:inline-block;margin-bottom:14px}
 
 /* ---------- RESPONSIVE ---------- */
 @media(max-width:860px){
-  .cards,.krainy,.mechs,.napiecia{grid-template-columns:1fr}
-  .krainy{grid-template-columns:1fr 1fr}
+  .cards,.krainy,.mechs,.napiecia,.loop,.vs{grid-template-columns:1fr}
+  .krainy,.loop{grid-template-columns:1fr 1fr}
+  .vs-col.good{border-left:none;border-top:1px solid var(--line)}
   .mechs{grid-template-columns:1fr 1fr}
   .nav-toggle{display:block}
   .nav-links{position:fixed;inset:70px 0 auto 0;flex-direction:column;gap:0;background:var(--bg2);border-bottom:1px solid var(--line);padding:0;max-height:0;overflow:hidden;transition:max-height .3s}
