@@ -101,3 +101,9 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - Wdrożone commit fcd8394d — _sanitize_action_text() + delimitery <<AKCJA_GRACZA>> + reguła G29 w system prompt + _MAX_ACTION_TEXT_LEN=1000
 - Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/810#issuecomment-4763690903
 - Werdykt ✅ — 12/12 pytest GREEN, API 400 dla >1000 znaków, 200 dla normalnego tekstu, backend zdrowy po rebuild
+
+## G15 #813 — Centralne flagi balansu MP (mp_balance.py) + strojenie kar wipe
+- Wdrożone commit 5b9c11a7 — nowy moduł mp_balance.py, refaktor _apply_mp_wipe, GET+PATCH /api/admin/sandbox/mp-balance
+- 20 pytest GREEN
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/813#issuecomment-4763767233
+- Werdykt ✅ — GET zwraca poprawne domyślne wartości (10/20/30%, floor=50, HP=0.5, scale=1.0), PATCH aktualizuje natychmiast (session-scoped)
