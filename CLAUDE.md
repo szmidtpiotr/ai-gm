@@ -213,6 +213,14 @@ Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 
 - Pre-import auto-backups on config import → `./backups/imports/`. Retention: 30 days, ≥3 older, capped at 10.
 - Key tables: `game_config_weapons`, `game_config_items`, `game_config_consumables`, `game_config_enemies`, `game_config_skills`, `game_config_stats`, `campaign_ideas`, `campaign_turns`, `campaigns`, `characters`, `users`.
 
+### World map ownership (`world_hexes`, map_level=0) — PIOTR-OWNED, do not edit without approval
+
+- **Canonical source of truth = `docs/world/world_map_seed.json`** (git-committed; a commit = Piotr's approval). The DB table `world_hexes` (overworld, `map_level=0`) is a *derived cache* seeded from this file.
+- **Do NOT wipe, reset, migrate or edit `world_hexes` (map_level=0)** as part of unrelated work. It is the Kresy world map and is owned by Piotr. If a task seems to require touching it, ask first.
+- **Restore after an accidental wipe:** `python3 scripts/seed_world_map.py` (on `.61`) — idempotent, seeds only if empty; `--force` overwrites from the seed file. Also runs automatically at the end of `scripts/deploy_dev.sh`.
+- **Persist Piotr's in-game edits (admin→Mapa):** `python3 scripts/snapshot_world_map.py` (on `.61`) dumps current `world_hexes` → `world_map_seed.json`, then **commit the file**. Only a committed snapshot is permanent and survives DB wipes.
+- Base map generator (design artifact, separate from the seed): `scripts/generate_kresy_map.py` → `docs/world/kresy_map.json`. See map import / future-krainy work in issue #933.
+
 ## Conventions
 
 - Commit messages: include phase number when relevant. Polish or English fine.

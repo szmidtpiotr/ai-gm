@@ -26,6 +26,8 @@ echo "⏳ [4/4] Healthcheck dev (max 60s)..."
 for i in $(seq 1 12); do
   if curl -sf http://localhost:8100/api/healthz > /dev/null; then
     echo "✅ Dev deployment zakończony!"
+    echo "🗺  Seed mapy świata (Kresy) — odtworzy z docs/world/world_map_seed.json jeśli world_hexes puste..."
+    python3 scripts/seed_world_map.py || true
     echo "   Dev: http://localhost:3002"
     exit 0
   fi
