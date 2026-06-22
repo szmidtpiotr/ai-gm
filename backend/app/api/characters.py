@@ -821,6 +821,185 @@ def _pick_random_start_location(conn: sqlite3.Connection) -> str:
     return row["label"] if row else "nieznane miejsce"
 
 
+# ── R3.3: extracted helpers for create_character / finalize_character_sheet ───
+
+
+def _finalize_resolve_new_stats(sheet: dict, req) -> dict:
+    """Validate stat_overrides from FinalizeSheetRequest and return the merged
+    stats dict (SIX_CORE_STATS + LCK) ready to write back to sheet["stats"]."""
+    archetype = str(sheet.get("archetype") or "warrior").strip().lower()
+    raw_stats = dict(sheet.get("stats") or {})
+    bases = _core_bases_from_stored_stats(raw_stats, archetype)
+    sum_target = sum(bases[k] for k in SIX_CORE_STATS)
+
+    merged = dict(bases)
+    if req.stat_overrides:
+        for key, val in req.stat_overrides.items():
+            sk = _normalize_stat_override_key(str(key))
+            if sk is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown stat key in stat_overrides: {key!r}. "
+                    f"Use STR/DEX/CON/INT/WIS/CHA/LCK.",
+                )
+            if sk not in SIX_CORE_STATS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"stat_overrides supports STR/DEX/CON/INT/WIS/CHA/LCK, not {sk!r}.",
+                )
+            try:
+                merged[sk] = int(val)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"stat value for {sk!r} must be an integer.",
+                ) from None
+
+    merged_sum = sum(merged[k] for k in SIX_CORE_STATS)
+    if merged_sum != sum_target:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Stat redistribution must keep the same total as current rolled bases ({sum_target}); "
+                f"got {merged_sum}."
+            ),
+        )
+    for k in SIX_CORE_STATS:
+        v = merged[k]
+        if v < STAT_ROLL_MIN or v > STAT_ROLL_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{k} must be between {STAT_ROLL_MIN} and {STAT_ROLL_MAX} (before class bonuses); "
+                    f"got {v}."
+                ),
+            )
+
+    lck = int(raw_stats.get("LCK", raw_stats.get("lck", 10)))
+    new_stats_input = {k: merged[k] for k in SIX_CORE_STATS}
+    new_stats_input["LCK"] = lck
+    return new_stats_input
+
+
+def _apply_identity_overrides(rebuilt: dict, io) -> None:
+    """Apply IdentityOverrideIn fields to rebuilt["identity"] in place."""
+    _ensure_identity_block(rebuilt)
+    if io.appearance is not None:
+        rebuilt["identity"]["appearance"] = io.appearance
+    if io.personality is not None:
+        rebuilt["identity"]["personality"] = io.personality
+    if io.bonds is not None:
+        rebuilt["identity"]["bonds"] = io.bonds
+    if io.weaknesses is not None:
+        rebuilt["identity"]["weaknesses"] = io.weaknesses
+    if io.flaw is not None:
+        rebuilt["identity"]["flaw"] = io.flaw
+    if io.secret is not None:
+        rebuilt["identity"]["secret"] = io.secret
+    if io.bond is not None and io.bonds is None:
+        rebuilt["identity"]["bonds"] = [
+            {"description": io.bond, "type": "ideal"}
+        ]
+
+
+def _grant_starter_loadout_with_gold(
+    character_id: int,
+    archetype_key: str | None,
+    conn: sqlite3.Connection,
+) -> None:
+    """Grant archetype starter items + gold and auto-equip. Caller must guard
+    against double-grant (check inventory first) if needed."""
+    if not archetype_key:
+        return
+    arch_row = conn.execute(
+        """
+        SELECT starter_items_json, starter_gold_gp
+        FROM game_config_archetypes
+        WHERE key = ? AND (is_active = 1 OR is_active IS NULL)
+        """,
+        (archetype_key,),
+    ).fetchone()
+    if not arch_row:
+        return
+    raw_json = arch_row["starter_items_json"] or "[]"
+    try:
+        starter_items = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+    except Exception:
+        starter_items = []
+    if isinstance(starter_items, list) and starter_items:
+        grant_loot_to_character(character_id, starter_items, source="start")
+        _auto_equip_first_weapon_and_armor(character_id, conn)
+    ggp = int(arch_row["starter_gold_gp"] or 0)
+    if ggp > 0:
+        conn.execute(
+            "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
+            (ggp, character_id),
+        )
+        try:
+            from app.services.economy_service import journal_gold_delta
+            journal_gold_delta(conn, character_id, ggp, "starter_gold")
+        except Exception:
+            pass
+        conn.commit()
+
+
+def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
+    """Roll stats and skills, build the initial character sheet.
+    Returns (created_sheet, archetype, starter_archetype_key)."""
+    base_sheet = dict(req.sheet_json or {})
+    requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
+    starter_archetype_key = (
+        requested_archetype if requested_archetype in ("warrior", "scholar", "rogue") else None
+    )
+    archetype = starter_archetype_key or "warrior"
+    base_sheet["archetype"] = archetype
+    base_sheet["stats"] = {
+        k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
+        for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+    }
+    skills_rolled = roll_creation_skills(archetype)
+    base_sheet["skills"] = skills_rolled
+    base_sheet["skills_at_creation"] = dict(skills_rolled)
+    created_sheet = _build_character_sheet(
+        base_sheet,
+        archetype,
+        apply_archetype_skill_minimums=False,
+    )
+    created_sheet["skills_at_creation"] = dict(skills_rolled)
+    created_sheet.setdefault("narrative_items", [])
+    return created_sheet, archetype, starter_archetype_key
+
+
+def _build_char_summary(
+    name: str,
+    archetype: str,
+    stats: dict,
+    skills: dict,
+    hp,
+    mana: int,
+    background: str,
+    location: str,
+) -> str:
+    """Build the character summary string used in GM plan and opening scene prompts."""
+    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+    stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
+    skill_lines = (
+        ", ".join(
+            f"{k}:{v}" for k, v in skills.items() if isinstance(v, (int, float)) and v > 0
+        )
+        if skills
+        else ""
+    )
+    return (
+        f"Postać: {name}, Archetyp: {archetype_label}, HP: {hp}"
+        + (f", Mana: {mana}" if mana else "")
+        + (f", Statystyki: {stat_lines}" if stat_lines else "")
+        + (f", Umiejętności: {skill_lines}" if skill_lines else "")
+        + (f", Tło: {background}" if background else "")
+        + f", Lokalizacja startowa: {location}."
+    )
+
+
 # ── Task 42: Character-first flow endpoints ───────────────────────────────────
 
 @router.get("/characters")
@@ -1965,52 +2144,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         archetype = "warrior"
     sheet["archetype"] = archetype
 
-    raw_stats = dict(sheet.get("stats") or {})
-    bases = _core_bases_from_stored_stats(raw_stats, archetype)
-    sum_target = sum(bases[k] for k in SIX_CORE_STATS)
-
-    merged = dict(bases)
-    if req.stat_overrides:
-        for key, val in req.stat_overrides.items():
-            sk = _normalize_stat_override_key(str(key))
-            if sk is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unknown stat key in stat_overrides: {key!r}. "
-                    f"Use STR/DEX/CON/INT/WIS/CHA/LCK.",
-                )
-            if sk not in SIX_CORE_STATS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"stat_overrides supports STR/DEX/CON/INT/WIS/CHA/LCK, not {sk!r}.",
-                )
-            try:
-                merged[sk] = int(val)
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"stat value for {sk!r} must be an integer.",
-                ) from None
-
-    merged_sum = sum(merged[k] for k in SIX_CORE_STATS)
-    if merged_sum != sum_target:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Stat redistribution must keep the same total as current rolled bases ({sum_target}); "
-                f"got {merged_sum}."
-            ),
-        )
-    for k in SIX_CORE_STATS:
-        v = merged[k]
-        if v < STAT_ROLL_MIN or v > STAT_ROLL_MAX:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{k} must be between {STAT_ROLL_MIN} and {STAT_ROLL_MAX} (before class bonuses); "
-                    f"got {v}."
-                ),
-            )
+    new_stats = _finalize_resolve_new_stats(sheet, req)
 
     skills_sheet = {k: int(v) for k, v in (sheet.get("skills") or {}).items()}
     orig_snapshot = sheet.get("skills_at_creation")
@@ -2020,14 +2154,9 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         skills_orig = {k: int(skills_sheet.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
 
     skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
-
     _validate_creation_skills_after_swap(skills_orig, skills_after, req.skill_slot_current)
 
-    lck = int(raw_stats.get("LCK", raw_stats.get("lck", 10)))
-    new_stats_input = {k: merged[k] for k in SIX_CORE_STATS}
-    new_stats_input["LCK"] = lck
-
-    sheet["stats"] = new_stats_input
+    sheet["stats"] = new_stats
     sheet["skills"] = skills_after
 
     rebuilt = _build_character_sheet(
@@ -2037,26 +2166,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     )
 
     if req.identity_overrides is not None:
-        _ensure_identity_block(rebuilt)
-        io = req.identity_overrides
-        if io.appearance is not None:
-            rebuilt["identity"]["appearance"] = io.appearance
-        if io.personality is not None:
-            rebuilt["identity"]["personality"] = io.personality
-        # V2: structured bonds and weaknesses
-        if io.bonds is not None:
-            rebuilt["identity"]["bonds"] = io.bonds
-        if io.weaknesses is not None:
-            rebuilt["identity"]["weaknesses"] = io.weaknesses
-        # Legacy V1 fields (backward compat)
-        if io.flaw is not None:
-            rebuilt["identity"]["flaw"] = io.flaw
-        if io.secret is not None:
-            rebuilt["identity"]["secret"] = io.secret
-        if io.bond is not None and io.bonds is None:
-            rebuilt["identity"]["bonds"] = [
-                {"description": io.bond, "type": "ideal"}
-            ]
+        _apply_identity_overrides(rebuilt, req.identity_overrides)
 
     conn.execute(
         """
@@ -2077,31 +2187,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         ).fetchone()
         if not already_has_items:
             arch_key = str(rebuilt.get("archetype", "warrior")).strip().lower()
-            arch_row = conn.execute(
-                "SELECT starter_items_json, starter_gold_gp FROM game_config_archetypes WHERE key = ?",
-                (arch_key,),
-            ).fetchone()
-            if arch_row:
-                raw_items = arch_row["starter_items_json"] or "[]"
-                try:
-                    starter_items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items
-                except Exception:
-                    starter_items = []
-                if isinstance(starter_items, list) and starter_items:
-                    grant_loot_to_character(character_id, starter_items, source="start")
-                    _auto_equip_first_weapon_and_armor(character_id, conn)
-                ggp = int(arch_row["starter_gold_gp"] or 0)
-                if ggp > 0:
-                    conn.execute(
-                        "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
-                        (ggp, character_id),
-                    )
-                    try:
-                        from app.services.economy_service import journal_gold_delta
-                        journal_gold_delta(conn, character_id, ggp, "starter_gold")
-                    except Exception:
-                        pass
-                    conn.commit()
+            _grant_starter_loadout_with_gold(character_id, arch_key, conn)
     except Exception as e:
         logger.warning("[finalize_sheet] starter items grant failed (non-fatal): %s", str(e))
 
@@ -2140,7 +2226,6 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     identity_block = rebuilt.get("identity") or {}
                     has_v2_identity = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
 
-                    archetype = str(rebuilt.get("archetype", "warrior")).strip().lower()
                     name = str(char_row["name"] or "Bohater")
                     stats = rebuilt.get("stats") or {}
                     skills = rebuilt.get("skills") or {}
@@ -2156,19 +2241,8 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                         location = _pick_random_start_location(conn)
                     _start_location_override = location
                     background = str(rebuilt.get("background") or "").strip()
-                    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
-                    stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
-                    skill_lines = ", ".join(
-                        f"{k}:{v}" for k, v in skills.items()
-                        if isinstance(v, (int, float)) and v > 0
-                    ) if skills else ""
-                    char_summary = (
-                        f"Postać: {name}, Archetyp: {archetype_label}, HP: {hp}"
-                        + (f", Mana: {mana}" if mana else "")
-                        + (f", Statystyki: {stat_lines}" if stat_lines else "")
-                        + (f", Umiejętności: {skill_lines}" if skill_lines else "")
-                        + (f", Tło: {background}" if background else "")
-                        + f", Lokalizacja startowa: {location}."
+                    char_summary = _build_char_summary(
+                        name, archetype, stats, skills, hp, mana, background, location
                     )
 
                     if has_v2_identity:
@@ -2436,31 +2510,9 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
             detail=f"system_id mismatch: campaign uses '{campaign['system_id']}'"
         )
 
-    base_sheet = dict(req.sheet_json or {})
-    requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    # Starter pack + gold come only from DB rows for warrior/scholar; unknown types
-    # still create a valid sheet (defaults to warrior stats) but get no starter loot.
-    starter_archetype_key = requested_archetype if requested_archetype in ("warrior", "scholar", "rogue") else None
-    archetype = starter_archetype_key or "warrior"
-    base_sheet["archetype"] = archetype
-    # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
-    # The wizard requires every pre-bonus stat to be in that range; clamping ensures
-    # the player never opens step 2 with a stat that can't satisfy the confirm check.
-    base_sheet["stats"] = {
-        k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
-        for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
-    }
-    skills_rolled = roll_creation_skills(archetype)
-    base_sheet["skills"] = skills_rolled
-    base_sheet["skills_at_creation"] = dict(skills_rolled)
-
-    created_sheet = _build_character_sheet(
-        base_sheet,
-        archetype,
-        apply_archetype_skill_minimums=False,
-    )
-    created_sheet["skills_at_creation"] = dict(skills_rolled)
-    created_sheet.setdefault("narrative_items", [])
+    # Roll 4d6 drop-lowest stats, roll skills, build initial sheet
+    # (starter pack + gold come only from DB rows for warrior/scholar/rogue)
+    created_sheet, archetype, starter_archetype_key = _create_roll_initial_sheet(req)
 
     cur.execute(
         """
@@ -2483,39 +2535,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     session_id = _ensure_game_session(conn, campaign_id)
 
     try:
-        arch_row = (
-            conn.execute(
-                """
-                SELECT starter_items_json, starter_gold_gp
-                FROM game_config_archetypes
-                WHERE key = ? AND (is_active = 1 OR is_active IS NULL)
-                """,
-                (starter_archetype_key,),
-            ).fetchone()
-            if starter_archetype_key
-            else None
-        )
-        if arch_row:
-            raw_json = arch_row["starter_items_json"] or "[]"
-            try:
-                starter_items = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
-            except json.JSONDecodeError:
-                starter_items = []
-            if isinstance(starter_items, list) and starter_items:
-                grant_loot_to_character(character_id, starter_items, source="start")
-                _auto_equip_first_weapon_and_armor(character_id, conn)
-            ggp = int(arch_row["starter_gold_gp"] or 0)
-            if ggp > 0:
-                conn.execute(
-                    "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
-                    (ggp, character_id),
-                )
-                try:
-                    from app.services.economy_service import journal_gold_delta
-                    journal_gold_delta(conn, character_id, ggp, "starter_gold")
-                except Exception:
-                    pass
-                conn.commit()
+        _grant_starter_loadout_with_gold(character_id, starter_archetype_key, conn)
     except Exception as e:
         logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
@@ -2534,31 +2554,14 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         except Exception as e:
             logger.warning("[create_character] scholar starting spells failed (non-fatal): %s", str(e))
 
-    sheet = created_sheet or {}
-    archetype = str(sheet.get("archetype", "warrior")).strip().lower()
     name = (req.name or "").strip() or "Bohater"
-    stats = sheet.get("stats", {}) or {}
-    skills = sheet.get("skills", {}) or {}
-    hp = sheet.get("max_hp", "?")
-    mana = sheet.get("max_mana", 0)
+    stats = created_sheet.get("stats", {}) or {}
+    skills = created_sheet.get("skills", {}) or {}
+    hp = created_sheet.get("max_hp", "?")
+    mana = created_sheet.get("max_mana", 0)
     location = req.location or "nieznane miejsce"
-    background = str(sheet.get("background") or "").strip()
-
-    stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
-    skill_lines = ", ".join(
-        f"{k}:{v}" for k, v in skills.items() if isinstance(v, (int, float)) and v > 0
-    ) if skills else ""
-    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
-
-    char_summary = (
-        f"Postać: {name}, Archetyp: {archetype_label}, "
-        f"HP: {hp}"
-        + (f", Mana: {mana}" if mana else "")
-        + (f", Statystyki: {stat_lines}" if stat_lines else "")
-        + (f", Umiejętności: {skill_lines}" if skill_lines else "")
-        + (f", Tło: {background}" if background else "")
-        + f", Lokalizacja startowa: {location}."
-    )
+    background = str(created_sheet.get("background") or "").strip()
+    char_summary = _build_char_summary(name, archetype, stats, skills, hp, mana, background, location)
 
     model = str(campaign["model_id"] or "").strip() or "gemma3:1b"
     settings_conn = sqlite3.connect(DB_PATH)
