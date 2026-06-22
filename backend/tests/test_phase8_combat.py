@@ -121,7 +121,10 @@ def _schema_sql() -> str:
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 1.0
+      drop_chance REAL NOT NULL DEFAULT 1.0,
+      attacks_per_turn INTEGER NOT NULL DEFAULT 1,
+      stats_json TEXT,
+      image_url TEXT
     );
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, skills_json, loot_table_key, drop_chance)

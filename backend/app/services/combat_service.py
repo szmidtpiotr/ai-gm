@@ -7212,6 +7212,7 @@ def _resolve_enemy_attack_turn(
     _persist_combatants(conn, row, combatants)
     conn.commit()
     out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
 
 
 def resolve_attack(
