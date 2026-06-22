@@ -216,23 +216,53 @@ def main():
     (ROOT / "docs/world").mkdir(parents=True, exist_ok=True)
     (ROOT / "docs/world/kresy_map.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # ── PODGLĄD PNG (PIL) ──
+    # ── PODGLĄD PNG (PIL) — z etykietami osad i legendą ──
     try:
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFont
     except ImportError:
         print("PIL brak — pomijam PNG; JSON zapisany."); return
-    S = 15  # rozmiar heksa
+    S = 16  # rozmiar heksa
     hw = S * math.sqrt(3); vh = S * 1.5
-    img_w = int(hw * (W + 1)); img_h = int(vh * H + S)
+    legend_h = 132
+    img_w = int(hw * (W + 1)); img_h = int(vh * H + S + legend_h)
     im = Image.new("RGB", (img_w, img_h), (10, 9, 8)); dr = ImageDraw.Draw(im)
+    def font(sz):
+        for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+            try: return ImageFont.truetype(p, sz)
+            except Exception: pass
+        return ImageFont.load_default()
+    f_lbl = font(13); f_leg = font(13); f_title = font(22)
+    def center(q, r):
+        return hw * (q + 0.5 + (0.5 if r % 2 else 0)) + 4, vh * r + S + 4
     for (q, r), h in hexes.items():
-        cx = hw * (q + 0.5 + (0.5 if r % 2 else 0)) + 4
-        cy = vh * r + S + 4
-        pts_poly = [(cx + S*math.sin(math.pi/3*i), cy + S*math.cos(math.pi/3*i)) for i in range(6)]
-        col = COLORS.get(h["hex_type"], (80, 80, 80))
-        dr.polygon(pts_poly, fill=col, outline=(20, 18, 15))
-        if h["hex_type"] in ("city", "town", "village", "ruins"):
-            dr.ellipse([cx-4, cy-4, cx+4, cy+4], fill=(245, 225, 150), outline=(20,18,15))
+        cx, cy = center(q, r)
+        poly = [(cx + S*math.sin(math.pi/3*i), cy + S*math.cos(math.pi/3*i)) for i in range(6)]
+        dr.polygon(poly, fill=COLORS.get(h["hex_type"], (80,80,80)), outline=(22,20,16))
+    # osady: marker + etykieta z tłem
+    def text_w(s, fnt):
+        try: return dr.textlength(s, font=fnt)
+        except Exception: return len(s)*7
+    for k, p in placed.items():
+        cx, cy = center(*p)
+        lab = (hexes[p]["label"] or "").replace(" (zgliszcza)", "")
+        dr.ellipse([cx-5, cy-5, cx+5, cy+5], fill=(245,225,150), outline=(20,18,15))
+        tw = text_w(lab, f_lbl); tx = cx + 9; ty = cy - 7
+        if tx + tw > img_w - 6: tx = cx - 9 - tw
+        dr.rectangle([tx-3, ty-2, tx+tw+3, ty+15], fill=(10,9,8))
+        dr.text((tx, ty), lab, fill=(240,222,150), font=f_lbl)
+    # legenda
+    ly = int(vh * H + S + 8)
+    dr.text((10, ly-2), "KRESY — mapa krainy", fill=(201,165,74), font=f_title)
+    items = [("plains","równiny"),("forest","las (Czarnobór)"),("hills","wzgórza"),
+             ("mountain","góry (Siwe Granie)"),("snow","śnieg"),("swamp","bagno"),
+             ("water","woda / morze"),("coast","wybrzeże"),("river","rzeka"),
+             ("road","trakt"),("town","osada"),("ruins","ruiny")]
+    lx = 10; lyy = ly + 34; col_w = 220
+    for i, (t, name) in enumerate(items):
+        cxx = lx + (i % 6) * col_w; cyy = lyy + (i // 6) * 30
+        dr.rectangle([cxx, cyy, cxx+22, cyy+18], fill=COLORS.get(t,(80,80,80)), outline=(40,36,28))
+        dr.text((cxx+30, cyy+2), name, fill=(200,190,170), font=f_leg)
     im.save(ROOT / "temp-img/kresy_map.png")
 
     counts = {}
