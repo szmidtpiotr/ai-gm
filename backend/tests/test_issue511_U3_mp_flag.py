@@ -87,10 +87,10 @@ def test_other_modes_not_affected_by_mp_flag():
         f"tryb 'nowa' powinien być dostępny niezależnie od flagi MP, got: {nowa['available']}"
 
 
-def test_all_five_modes_returned():
-    """API zawsze zwraca 5 trybów (nawet gdy disabled)."""
+def test_all_four_modes_returned():
+    """API zawsze zwraca 4 tryby (L9: usunięto proceduralny loch; L10: loch_kafelki→loch)."""
     conn = _conn_with_flags({})
     modes = get_available_modes(conn)
     keys = [m["key"] for m in modes]
-    assert len(modes) == 5, f"oczekiwano 5 trybów, got: {len(modes)}"
+    assert len(modes) == 4, f"oczekiwano 4 tryby, got: {len(modes)}"
     assert "multiplayer" in keys, "brak trybu 'multiplayer' w liście"

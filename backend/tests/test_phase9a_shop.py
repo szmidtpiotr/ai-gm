@@ -182,9 +182,9 @@ def test_extract_grant_cues_parses_open_shop_and_strips_line():
     from app.api.turns import extract_grant_cues
 
     text = "Aldric rozkłada towary na ladzie.\nOpen Shop merchant_aldric"
-    clean, item, gold, open_shop = extract_grant_cues(text)
+    clean, item, gold, open_shop, _ = extract_grant_cues(text)
     assert clean == "Aldric rozkłada towary na ladzie."
-    assert item is None
+    assert item == []
     assert gold is None
     assert open_shop == "merchant_aldric"
 
@@ -198,7 +198,7 @@ def test_open_shop_cue_detected_in_json_narrative():
         ensure_ascii=False,
     )
     narrative, parsed = _extract_narrative_for_cues(raw)
-    clean, _, _, shop_key = extract_grant_cues(narrative)
+    clean, _, _, shop_key, _ = extract_grant_cues(narrative)
     result = _repack_narrative(raw, clean, parsed)
 
     assert shop_key == "merchant_aldric"
@@ -231,7 +231,7 @@ def test_grant_gold_cue_detected_in_json_narrative():
         ensure_ascii=False,
     )
     narrative, parsed = _extract_narrative_for_cues(raw)
-    clean, _, gold, _ = extract_grant_cues(narrative)
+    clean, _, gold, _, _ = extract_grant_cues(narrative)
     assert gold == 50
     assert "Grant Gold" not in json.loads(_repack_narrative(raw, clean, parsed))["narrative"]
 

@@ -90,7 +90,7 @@ def _combat_db(tmp_path, *, mana=10, max_mana=10, player_absorb=None):
         player["absorb_hp"] = player_absorb
     enemy = {
         "id": "goblin", "type": "enemy", "enemy_key": "goblin", "name": "Goblin",
-        "hp_current": 20, "hp_max": 20, "defense": 10, "attack_bonus": 0,
+        "hp_current": 20, "hp_max": 20, "defense": 10, "attack_bonus": 1,
         "damage_dice": "1d6", "zone": "ranged", "conditions": [],
         "stats": {"STR": 10, "DEX": 10, "CON": 10, "INT": 7, "WIS": 8, "CHA": 8},
     }
@@ -137,9 +137,10 @@ def _combat_db(tmp_path, *, mana=10, max_mana=10, player_absorb=None):
         CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
           ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, dex_modifier INTEGER,
           skills_json TEXT, stats_json TEXT, tier TEXT, loot_table_key TEXT,
-          drop_chance REAL, xp_award INTEGER);
+          drop_chance REAL, xp_award INTEGER, attacks_per_turn INTEGER DEFAULT 1,
+          image_url TEXT);
         INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,skills_json,stats_json,tier,loot_table_key,drop_chance,xp_award)
-          VALUES ('goblin','Goblin',20,10,0,'1d6',0,NULL,NULL,'minion',NULL,0,10);
+          VALUES ('goblin','Goblin',20,10,1,'1d6',0,NULL,NULL,'minion',NULL,0,10);
         """)
         conn.commit()
     finally:
@@ -211,7 +212,12 @@ def test_recast_shield_does_not_stack(tmp_path):
 
 
 def test_enemy_attack_soaks_absorb_before_hp(tmp_path):
-    """Wróg trafia za 4: pula 6→2, HP gracza bez zmian (12)."""
+    """Wróg trafia: pula pochłania całość, HP gracza bez zmian (12).
+
+    attack_bonus=1 → attack_roll=19, player_evasion=18 → hit, margin=1.
+    #826 margin model: base roll=4 + margin_bonus=1 = 5 total damage.
+    absorb_hp=6 soaks 5 → absorb_hp=1, damage_to_hp=0, HP=12.
+    """
     db = _combat_db(tmp_path, mana=10, player_absorb=6)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)), \
          patch.object(combat_service, "roll_d20", lambda *a, **k: 18), \
@@ -222,10 +228,10 @@ def test_enemy_attack_soaks_absorb_before_hp(tmp_path):
         conn.commit(); conn.close()
         out = combat_service.resolve_attack(1, None, attacker="enemy", raw_d20=None)
     assert out.get("hit") is True
-    assert int(out.get("absorbed") or 0) == 4
+    assert int(out.get("absorbed") or 0) == 5        # 4 base + 1 margin (#826)
     assert int(out.get("damage") or 0) == 0          # całość pochłonięta
     assert int(out.get("player_hp_remaining") or 0) == 12   # HP nietknięte
-    assert _player_combatant(db).get("absorb_hp") == 2
+    assert _player_combatant(db).get("absorb_hp") == 1      # 6 - 5 = 1
 
 
 # ─── Backward compatibility ──────────────────────────────────────────────────

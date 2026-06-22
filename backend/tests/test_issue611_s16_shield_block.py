@@ -289,14 +289,18 @@ def test_resolve_attack_block_critfail_hits_durability(tmp_path, monkeypatch):
 
 
 def test_resolve_attack_no_shield_no_reaction(tmp_path, monkeypatch):
-    """Gate tarczy: deklaracja bloku bez założonej tarczy → reakcja niedostępna, normalne obrażenia."""
+    """Gate tarczy: deklaracja bloku bez założonej tarczy → reakcja niedostępna, normalne obrażenia.
+
+    #826 margin-damage model: roll=14, attack_bonus=10 → attack_roll=24, defense=10,
+    margin=14, +2 extra dmg (floor(14/5)). Base roll=6 + margin 2 = 8 total.
+    """
     db = _combat_db(tmp_path, declared="shield_block", skill_rank=2, shield=False)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 14)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction") is None or out["reaction"].get("available") is not True
-    assert out["damage"] == 6
+    assert out["damage"] == 8  # 6 base + 2 margin (#826)
 
 
 def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
@@ -313,7 +317,11 @@ def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
 # ─── SF10: okno reakcji → take = pełne obrażenia ──────────────────────────────
 
 def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
-    """SF10: okno reakcji (skill+tarcza) → resolve_reaction('take') → pełne obrażenia."""
+    """SF10: okno reakcji (skill+tarcza) → resolve_reaction('take') → pełne obrażenia.
+
+    #826 margin-damage model: roll=18, attack_bonus=10 → attack_roll=28, defense=10,
+    margin=18, +3 extra dmg (floor(18/5)). Base roll=6 + margin 3 = 9 total.
+    """
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
@@ -321,4 +329,4 @@ def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win.get("reaction_window") is True
         out = combat_service.resolve_reaction(1, "take")
-    assert out["damage"] == 6
+    assert out["damage"] == 9  # 6 base + 3 margin (#826)

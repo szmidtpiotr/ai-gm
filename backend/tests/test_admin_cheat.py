@@ -258,8 +258,8 @@ def test_add_item_prefers_consumable_catalog_over_wrong_items_row(client_with_au
     assert row[2] is None
 
 
-def test_add_item_prefers_consumable_key_when_items_catalog_marks_consumable(client_with_auth):
-    """Same key in items (item_type=consumable) + consumables → inventory must use consumable_key."""
+def test_add_item_uses_item_key_for_consumables_8h(client_with_auth):
+    """8H: consumables catalog → item_key column (consumable_key is legacy-only for old rows)."""
     client, db_path = client_with_auth
     conn = sqlite3.connect(db_path)
     try:
@@ -301,12 +301,12 @@ def test_add_item_prefers_consumable_key_when_items_catalog_marks_consumable(cli
         ).fetchone()
     finally:
         conn.close()
-    assert row[0] is None
+    assert row[0] == "g_test_potion"  # item_key (8H: consumables → item_key)
     assert row[1] is None
-    assert row[2] == "g_test_potion"
+    assert row[2] is None  # consumable_key unused for new rows
 
 
-def test_add_item_respects_explicit_consumable_hint(client_with_auth):
+def test_add_item_explicit_consumable_hint_uses_item_key_8h(client_with_auth):
     client, db_path = client_with_auth
     conn = sqlite3.connect(db_path)
     try:
@@ -342,9 +342,9 @@ def test_add_item_respects_explicit_consumable_hint(client_with_auth):
         ).fetchone()
     finally:
         conn.close()
-    assert row[0] is None
+    assert row[0] == "only_item_potion"  # item_key (8H: consumables → item_key)
     assert row[1] is None
-    assert row[2] == "only_item_potion"
+    assert row[2] is None  # consumable_key unused for new rows
 
 
 def test_remove_item(client_with_auth):

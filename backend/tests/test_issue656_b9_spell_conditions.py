@@ -129,7 +129,7 @@ def _combat_db(tmp_path, *, int_stat=16, enemy_con=8, enemy_wis=8, mana=10, max_
           ('cursed','Przeklęty','{{"effects":[{{"type":"static_stat_modifier","stat":"LCK","value":-2}}]}}',1,0);
         CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, label TEXT, spell_type TEXT,
           effect_type TEXT, effect_stat TEXT, effect_duration INTEGER, mana_cost INTEGER,
-          tier INTEGER, damage_die TEXT, is_active INTEGER DEFAULT 1);
+          tier INTEGER, damage_die TEXT, effect_json TEXT, is_active INTEGER DEFAULT 1);
         INSERT INTO game_config_spells (key,label,spell_type,effect_type,effect_stat,effect_duration,mana_cost,tier,damage_die) VALUES
           ('frost_grip','Lodowy Uścisk','effect','slowed','WIS',2,2,1,NULL),
           ('hex','Klątwa','effect','cursed','WIS',3,2,2,NULL),
@@ -140,7 +140,8 @@ def _combat_db(tmp_path, *, int_stat=16, enemy_con=8, enemy_wis=8, mana=10, max_
         CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
           ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, dex_modifier INTEGER,
           skills_json TEXT, stats_json TEXT, tier TEXT, loot_table_key TEXT,
-          drop_chance REAL, xp_award INTEGER);
+          drop_chance REAL, xp_award INTEGER, attacks_per_turn INTEGER DEFAULT 1,
+          image_url TEXT);
         INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,skills_json,stats_json,tier,loot_table_key,drop_chance,xp_award)
           VALUES ('goblin','Goblin',20,10,0,'1d6',0,NULL,NULL,'minion',NULL,0,10);
         """)

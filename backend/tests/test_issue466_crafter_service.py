@@ -107,10 +107,10 @@ def test_apply_costs_correct():
 
 
 def test_reroll_costs_correct():
-    """Reroll costs: T1=100, T2=350, T3=700."""
-    assert REROLL_COSTS[1] == 100
-    assert REROLL_COSTS[2] == 350
-    assert REROLL_COSTS[3] == 700
+    """Reroll costs: T1=200, T2=650, T3=1500 (updated after cost rebalance)."""
+    assert REROLL_COSTS[1] == 200
+    assert REROLL_COSTS[2] == 650
+    assert REROLL_COSTS[3] == 1500
 
 
 def test_upgrade_costs_correct():
@@ -189,15 +189,15 @@ def test_reroll_affix_replaces_key(db):
 
 
 def test_reroll_affix_deducts_t1_cost(db):
-    """Rerolling T1 affix deducts 100 gold."""
+    """Rerolling T1 affix deducts 200 gold."""
     reroll_affix(db, 1, 2, affix_key="sharp")
-    assert _get_gold(db) == 2000 - 100
+    assert _get_gold(db) == 2000 - 200
 
 
-def test_reroll_affix_t2_costs_350(db):
-    """Rerolling T2 affix deducts 350 gold."""
+def test_reroll_affix_t2_costs_650(db):
+    """Rerolling T2 affix deducts 650 gold."""
     reroll_affix(db, 1, 3, affix_key="keen")  # inv_id=3: mace with ['keen'] T2
-    assert _get_gold(db) == 2000 - 350
+    assert _get_gold(db) == 2000 - 650
 
 
 def test_reroll_nonexistent_affix(db):

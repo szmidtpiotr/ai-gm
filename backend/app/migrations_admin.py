@@ -2579,6 +2579,19 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
 
     # ── New tables ────────────────────────────────────────────────────────
 
+    # campaign_members lives in main.py RAW_MIGRATIONS but ALTER TABLE helpers in this
+    # file reference it. CREATE IF NOT EXISTS so standalone run_admin_migrations() works (#943).
+    _exec("""
+        CREATE TABLE IF NOT EXISTS campaign_members (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            role        TEXT NOT NULL DEFAULT 'player',
+            joined_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(campaign_id, user_id)
+        )
+    """, "v2-campaign-members-baseline")
+
     _exec("""
         CREATE TABLE IF NOT EXISTS action_log (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2767,6 +2780,12 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('mass_fear',    'Fala Strachu', 3, 4, 'effect_aoe', NULL, NULL, 'WIS', 'feared',  2, 'any', 1, 'Fala pierwotnego strachu obejmuje wszystkich wrogów na polu — każdy broni się osobno (INT maga vs WIS). Przegrani wpadają w panikę (feared) i uciekają.', NULL, NULL)
     """, "v2-spells-b17-cha-control")
 
+    # effect_json column needed by B14 INSERT below (and B10 UPDATEs further down).
+    # Must precede any INSERT that references this column — moved here from B10 block (#943).
+    _exec("""
+        ALTER TABLE game_config_spells ADD COLUMN effect_json TEXT
+    """, "v2-spells-effect-json-col")
+
     # ── B14 (#820): czary na SOJUSZNIKA (heal/tarcza single-ally + warianty grupowe) ──
     # Soft-gate zdjęty przez G7 (#791): MP wstawia żywych sojuszników do turn_order jako
     # 'player:{id}'. Silnik kieruje efekt wsparcia na WSKAZANY przyjazny slot (target_id)
@@ -2809,11 +2828,8 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # ward_of_iron/mage_armor dostają effect_json.absorb — ile obrażeń wroga pula
     # pochłonie, zanim spadnie HP. Wartości startowe (Numbers Policy): ward 6 (T1),
     # mage 10 (T2); płaskie, NIE stackują, combat-scoped. NIE-destrukcyjne.
-    # Silnik czyta to przez spell_service.defense_absorb_amount. Kolumna effect_json
-    # NIE istniała na game_config_spells — najpierw ją dodajemy (idempotentnie).
-    _exec("""
-        ALTER TABLE game_config_spells ADD COLUMN effect_json TEXT
-    """, "v2-spells-effect-json-col")
+    # Silnik czyta to przez spell_service.defense_absorb_amount.
+    # Kolumna effect_json dodana wcześniej (przed B14) — tylko UPDATEy poniżej.
     _exec("""
         UPDATE game_config_spells SET effect_json = '{"absorb":6}'
         WHERE key = 'ward_of_iron'
@@ -3488,6 +3504,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         WHERE placement_mode IS NULL
         AND hex_type IN ('plains','forest','hills','mountains','swamp')
     """, "v2-hex-placement-biome")
+    # spawn_weight column must exist before the UPDATEs below (#943).
+    _exec("ALTER TABLE hex_type_config ADD COLUMN spawn_weight INTEGER NOT NULL DEFAULT 0",
+          "v2-hex-spawn-weight-col")
     # dungeon/castle were spawn_weight 0 (never generated) — give them a small presence.
     _exec("UPDATE hex_type_config SET spawn_weight = 2 WHERE hex_type = 'dungeon' AND spawn_weight = 0",
           "v2-hex-dungeon-weight")
@@ -4935,7 +4954,7 @@ def _ensure_absence_warnings_column(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -4979,7 +4998,7 @@ def _ensure_party_hex_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {typ} DEFAULT NULL")
             conn.commit()
         except Exception as e:
-            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
                 pass
             else:
                 raise
@@ -4991,7 +5010,7 @@ def _ensure_combat_turn_deadline_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE active_combat ADD COLUMN combat_turn_deadline TEXT DEFAULT NULL")
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5003,7 +5022,7 @@ def _ensure_last_seen_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE campaign_members ADD COLUMN last_seen TEXT")
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5017,7 +5036,7 @@ def _ensure_complete_push_sent_column(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5031,7 +5050,7 @@ def _ensure_autopilot_consent_column(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5045,7 +5064,7 @@ def _ensure_pending_intro_column(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5059,7 +5078,7 @@ def _ensure_onboarding_summary_column(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
     except Exception as e:
-        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower() or "no such table" in str(e).lower():
             pass
         else:
             raise
@@ -5087,13 +5106,17 @@ def _ensure_character_campaign_state(conn: sqlite3.Connection) -> None:
 
 def _backfill_character_campaign_state(conn: sqlite3.Connection) -> None:
     """#784 G16 — backfill CCS rows for existing characters in multiplayer campaigns."""
-    rows = conn.execute("""
-        SELECT cm.character_id, cm.campaign_id, c.sheet_json
-        FROM campaign_members cm
-        JOIN campaigns ca ON ca.id = cm.campaign_id AND ca.mode = 'multiplayer'
-        JOIN characters c ON c.id = cm.character_id
-        WHERE cm.character_id IS NOT NULL AND cm.status = 'accepted'
-    """).fetchall()
+    try:
+        rows = conn.execute("""
+            SELECT cm.character_id, cm.campaign_id, c.sheet_json
+            FROM campaign_members cm
+            JOIN campaigns ca ON ca.id = cm.campaign_id AND ca.mode = 'multiplayer'
+            JOIN characters c ON c.id = cm.character_id
+            WHERE cm.character_id IS NOT NULL AND cm.status = 'accepted'
+        """).fetchall()
+    except sqlite3.OperationalError:
+        # campaign_members not yet created (RAW_MIGRATIONS run separately from admin migrations)
+        return
     for row in rows:
         try:
             sheet = json.loads(row["sheet_json"] or "{}")
