@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import _fixtures_schema as fx
 from app.services import loot_service as ls
 
 
@@ -19,44 +20,6 @@ def _schema_sql() -> str:
     );
     INSERT INTO characters (id, name) VALUES (1, 'Hero');
 
-    CREATE TABLE game_config_items (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      item_type TEXT NOT NULL DEFAULT 'misc',
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_consumables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_loot_tables (
-      key TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      gold_min INTEGER NOT NULL DEFAULT 0,
-      gold_max INTEGER NOT NULL DEFAULT 0,
-      is_active INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_loot_entries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      loot_table_key TEXT NOT NULL,
-      item_key TEXT,
-      consumable_key TEXT,
-      weapon_key TEXT,
-      weight INTEGER NOT NULL DEFAULT 10,
-      qty_min INTEGER NOT NULL DEFAULT 1,
-      qty_max INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE TABLE game_config_enemies (
-      key TEXT PRIMARY KEY,
-      loot_table_key TEXT,
-      drop_chance REAL NOT NULL DEFAULT 1.0
-    );
     CREATE TABLE character_inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
@@ -69,6 +32,11 @@ def _schema_sql() -> str:
       acquired_at TEXT NOT NULL DEFAULT (datetime('now')),
       source TEXT,
       meta_json TEXT,
+      label TEXT,
+      durability_max INTEGER,
+      durability_current INTEGER,
+      game_item_key TEXT,
+      affixes_json TEXT,
       CONSTRAINT inv_xor CHECK (
         (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END +
          CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END +
@@ -101,6 +69,15 @@ class TestLootService(unittest.TestCase):
         if self._tmp.exists():
             self._tmp.unlink()
         conn = sqlite3.connect(str(self._tmp))
+        fx.create_tables(
+            conn,
+            "game_config_items",
+            "game_config_weapons",
+            "game_config_consumables",
+            "game_config_loot_tables",
+            "game_config_loot_entries",
+            "game_config_enemies",
+        )
         conn.executescript(_schema_sql())
         conn.close()
         self._p_db = patch.object(ls, "LOOT_DB_PATH", str(self._tmp))
