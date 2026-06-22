@@ -45,6 +45,7 @@ def _init_admin_db_without_effect_columns(path: Path) -> None:
                 weight_kg REAL NOT NULL DEFAULT 0.0,
                 allowed_classes TEXT NOT NULL DEFAULT '[]',
                 ac_bonus INTEGER NOT NULL DEFAULT 0,
+                armor_coverage TEXT DEFAULT 'torso',
                 charges INTEGER NOT NULL DEFAULT 1,
                 effect_json TEXT,
                 ai_generated INTEGER NOT NULL DEFAULT 0,
@@ -113,6 +114,7 @@ def _init_loot_db_without_effect_columns(path: Path) -> None:
                 effect_dice TEXT,
                 effect_bonus INTEGER NOT NULL DEFAULT 0,
                 effect_target TEXT NOT NULL DEFAULT 'self',
+                effect_json TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1
             );
 

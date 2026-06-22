@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _fixtures_schema as fx
 
 from app.services import admin_config as admin_cfg
 from app.services import admin_config_transfer as transfer_mod
@@ -16,6 +19,7 @@ from app.services import admin_config_transfer as transfer_mod
 def _init_admin_db(path: Path) -> None:
     conn = sqlite3.connect(str(path))
     try:
+        fx.create_tables(conn, 'game_config_items', 'game_config_conditions')
         conn.executescript(
             """
             CREATE TABLE admin_audit_log (
@@ -26,43 +30,6 @@ def _init_admin_db(path: Path) -> None:
                 old_values TEXT,
                 new_values TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                stackable INTEGER NOT NULL DEFAULT 0,
-                auto_remove TEXT,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                item_type TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                weight_kg REAL NOT NULL DEFAULT 0.0,
-                allowed_classes TEXT NOT NULL DEFAULT '[]',
-                ac_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_target TEXT NOT NULL DEFAULT 'self',
-                charges INTEGER NOT NULL DEFAULT 1,
-                effect_json TEXT,
-                ai_generated INTEGER NOT NULL DEFAULT 0,
-                approved INTEGER NOT NULL DEFAULT 1,
-                note TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             """
         )

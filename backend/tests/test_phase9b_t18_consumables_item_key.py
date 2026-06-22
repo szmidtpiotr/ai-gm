@@ -37,6 +37,7 @@ def _seed_db(path: Path) -> None:
                 item_type TEXT NOT NULL DEFAULT 'misc',
                 description TEXT NOT NULL DEFAULT '',
                 value_gp INTEGER NOT NULL DEFAULT 0,
+                price_gp INTEGER DEFAULT NULL,
                 weight REAL NOT NULL DEFAULT 0.0,
                 weight_kg REAL NOT NULL DEFAULT 0.0,
                 effect_type TEXT,
@@ -45,6 +46,8 @@ def _seed_db(path: Path) -> None:
                 effect_target TEXT NOT NULL DEFAULT 'self',
                 charges INTEGER NOT NULL DEFAULT 1,
                 effect_json TEXT,
+                min_level INTEGER DEFAULT 1,
+                location_tags TEXT,
                 approved INTEGER NOT NULL DEFAULT 1,
                 is_active INTEGER NOT NULL DEFAULT 1
             );
@@ -70,10 +73,14 @@ def _seed_db(path: Path) -> None:
                 label TEXT NOT NULL,
                 description TEXT,
                 base_price INTEGER NOT NULL DEFAULT 0,
+                price_gp INTEGER DEFAULT NULL,
                 effect_type TEXT,
                 effect_dice TEXT,
                 effect_bonus INTEGER NOT NULL DEFAULT 0,
                 effect_target TEXT NOT NULL DEFAULT 'self',
+                effect_json TEXT,
+                min_level INTEGER DEFAULT 1,
+                location_tags TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1
             );
 
@@ -104,8 +111,30 @@ def _seed_db(path: Path) -> None:
                 label TEXT,
                 npc_type TEXT,
                 is_shop INTEGER NOT NULL DEFAULT 0,
+                is_crafter INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 shop_inventory_json TEXT
+            );
+
+            CREATE TABLE game_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                description TEXT DEFAULT '',
+                price_gp REAL DEFAULT 0,
+                effect_json TEXT DEFAULT NULL,
+                equip_slot TEXT DEFAULT NULL,
+                rarity INTEGER DEFAULT 1,
+                min_level INTEGER DEFAULT 1,
+                location_tags TEXT DEFAULT '[]',
+                created_by TEXT DEFAULT 'seed',
+                approved INTEGER DEFAULT 1,
+                is_active INTEGER DEFAULT 1,
+                weapon_data TEXT DEFAULT '{}',
+                item_data TEXT DEFAULT '{}',
+                weight_kg REAL DEFAULT 0,
+                note TEXT DEFAULT NULL
             );
             """
         )

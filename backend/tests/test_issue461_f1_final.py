@@ -12,6 +12,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _fixtures_schema as fx
 
 if "httpx" not in sys.modules:
     from unittest.mock import MagicMock
@@ -57,6 +60,7 @@ def _make_db(
     })
 
     conn = sqlite3.connect(tmp_path)
+    fx.create_tables(conn, 'game_config_weapons', 'game_config_enemies', 'game_config_meta')
     conn.executescript(f"""
     CREATE TABLE users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,40 +94,13 @@ def _make_db(
     INSERT INTO characters (id, campaign_id, user_id, name, system_id, sheet_json)
     VALUES (1, 1, 1, 'Hero', 'fantasy', '{sheet}');
 
-    CREATE TABLE game_config_weapons (
-      key TEXT PRIMARY KEY, label TEXT NOT NULL,
-      damage_die TEXT NOT NULL, linked_stat TEXT NOT NULL,
-      allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      weapon_type TEXT NOT NULL DEFAULT 'melee',
-      two_handed INTEGER NOT NULL DEFAULT 0,
-      finesse INTEGER NOT NULL DEFAULT 0,
-      range_m INTEGER, locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      effect_json TEXT
-    );
     INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, effect_json)
     VALUES ('plain_sword', 'Plain Sword', '1d8', 'STR', NULL);
     {extra_weapon_sql}
 
-    CREATE TABLE game_config_enemies (
-      key TEXT PRIMARY KEY, label TEXT NOT NULL,
-      hp_base INTEGER NOT NULL, ac_base INTEGER NOT NULL,
-      attack_bonus INTEGER NOT NULL, dex_modifier INTEGER NOT NULL DEFAULT 0,
-      damage_die TEXT NOT NULL, tier TEXT DEFAULT 'standard',
-      xp_award INTEGER NOT NULL DEFAULT 0, description TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1, skills_json TEXT,
-      locked_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      loot_table_key TEXT, drop_chance REAL NOT NULL DEFAULT 1.0
-    );
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, skills_json, loot_table_key, drop_chance)
     VALUES ('dummy', 'Dummy', 50, 10, 0, 0, '1d4', '{{}}', NULL, 0.0);
-
-    CREATE TABLE IF NOT EXISTS game_config_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
     CREATE TABLE IF NOT EXISTS active_combat (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

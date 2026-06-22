@@ -96,6 +96,11 @@ def _minimal_schema(conn: sqlite3.Connection) -> None:
             slot TEXT,
             acquired_at TEXT,
             meta_json TEXT,
+            label TEXT,
+            durability_max INTEGER,
+            durability_current INTEGER,
+            game_item_key TEXT,
+            affixes_json TEXT,
             CONSTRAINT inv_xor CHECK (
                 (CASE WHEN item_key       IS NOT NULL THEN 1 ELSE 0 END +
                  CASE WHEN weapon_key     IS NOT NULL THEN 1 ELSE 0 END +
