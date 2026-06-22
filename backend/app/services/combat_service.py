@@ -5646,6 +5646,206 @@ def _attack_try_reaction(
     return dmg, _dodge, _block, None
 
 
+def _attack_compute_damage(
+    weapon_row,
+    sheet: dict,
+    enemy: dict,
+    combatants: list[dict],
+    player_comb_id: str,
+    player_nat20: bool,
+    player_raw,
+    _surprise_fx: dict,
+    roll_result: int,
+    conn,
+    ch_id: int,
+    campaign_id: int,
+    row,
+    card_key: str,
+    out: dict,
+) -> int:
+    """Crit ×2, surprise ×2, gear flat bonus, S14 conditions, armor reduction, dice log.
+
+    Mutates out (damage_die, damage_rolls, damage_stat, damage_modifier, damage_multiplier,
+    damage_bonus, ambush_bonus, sneak_attack, margin_damage_bonus, armor_reduction, damage).
+    Returns final dmg after defense model.
+    """
+    # U2 (#510): weapon wears down when player lands a hit
+    try:
+        from app.services.durability_service import decrement_weapon_durability_on_attack as _decr_wpn
+        _decr_wpn(conn, ch_id)
+    except Exception as _dur_err:
+        logger.warning("weapon_durability_decrement_error", error=str(_dur_err))
+    wrow = weapon_row
+    die = "1d6"
+    stat = "STR"
+    if wrow:
+        die = str(wrow.get("damage_die") or "1d6").strip().lower()
+        stat = str(
+            (out.get("attack_roll") or {}).get("damage_stat")
+            or wrow.get("linked_stat")
+            or "STR"
+        ).upper()
+    mod = _stat_mod(sheet, stat)
+    # #661: roll detailed so the response carries the individual die
+    # results (damage_rolls) for the frontend NdX damage animation.
+    _dmg_detail = roll_dice_detailed(die)
+    dmg = max(0, sum(_dmg_detail["rolls"]) + mod) if _dmg_detail["rolls"] else max(0, mod)
+    out["damage_die"] = _dmg_detail["die"] or die
+    out["damage_rolls"] = _dmg_detail["rolls"]
+    out["damage_stat"] = stat
+    out["damage_modifier"] = mod
+    # Stage 3 Z2/Z6: ×2 on crit, ×2 on surprise → ×4 if both
+    _dmg_mult = 1
+    if player_nat20:
+        _dmg_mult *= 2
+    if _surprise_fx.get("first_hit_doubled"):
+        _dmg_mult *= 2
+    if _dmg_mult > 1:
+        dmg = dmg * _dmg_mult
+        out["damage_multiplier"] = _dmg_mult
+    # F1 (#461) + F2 (#462): flat damage_bonus from weapon effect_json
+    # and from affixes on the equipped weapon instance (added once,
+    # post-multiplier — gear bonus is flat, not doubled on crit)
+    _flat_bonus = _weapon_flat_damage_bonus(wrow)
+    _flat_bonus += _inventory_affix_damage_bonus(conn, ch_id)
+    # S14 (#609): kondycje gracza z stat_target `damage_bonus` (np. rage +3) doliczają
+    # płaski bonus do obrażeń (post-mnożnik, jak gear — nie podwajany na cricie).
+    _pc_for_dmg = _find_combatant(combatants, player_comb_id)
+    if _pc_for_dmg is not None:
+        _flat_bonus += _combatant_stat_modifier(_pc_for_dmg, sheet=None, stat="damage_bonus")
+    if _flat_bonus:
+        dmg += _flat_bonus
+        out["damage_bonus"] = _flat_bonus
+    # S19 (#614): zasadzka — pierwszy atak z ukrycia (ambush_bonus) dolicza +Nk6 RAZ
+    # jako oddzielny add PO mnożniku (jak gear — nie podwajany na cricie/nat20). Rzut
+    # ataku gracza (nat 20/nat 1) NIETKNIĘTY. Atak zdejmuje hidden (demaskuje).
+    if _pc_for_dmg is not None:
+        _hidden = _hidden_conditions(_pc_for_dmg)
+        # burst (#780): unifikacja — sneak die / zasadzka palą się gdy gracz
+        # `hidden` LUB gdy cel `zaskoczony` (otwarcie ze skradania, bez hidden).
+        _fire_burst = _should_fire_burst(enemy, player_hidden=bool(_hidden))
+        if _hidden:
+            _ambush = _roll_ambush_bonus(_hidden)
+            if _ambush:
+                dmg += _ambush
+                out["ambush_bonus"] = _ambush
+        # B4 (#645) + D3 (#780): łotrzyk — sneak attack PONAD ambush, oddzielny
+        # add PO mnożniku (jak ambush/gear — NIE podwajany na cricie/nat20).
+        # Cecha klasy: rzut tylko dla rogue (inni → 0). Pali się też przy
+        # otwarciu ze skradania (cel zaskoczony), nie tylko gdy gracz hidden.
+        if _fire_burst:
+            _sneak = _sneak_attack_bonus(sheet)
+            if _sneak:
+                dmg += _sneak
+                out["sneak_attack"] = _sneak
+        if _hidden:
+            _remove_combatant_conditions(_pc_for_dmg, _hidden)
+    # #826: margines→dmg + pancerz=redukcja (po wszystkich bonusach, przed HP).
+    # Obrona celu = `ac_base` wroga (już nie próg trafienia — to liczy unik d20+DEX).
+    # Nat 20 pomija pancerz (×2 obrażeń policzone wyżej, osobno).
+    if dmg > 0:
+        _dm826 = apply_defense_model(
+            dmg, roll_result, int(enemy.get("defense", 0) or 0),
+            ignore_armor=bool(player_nat20),
+        )
+        if _dm826["margin_bonus"]:
+            out["margin_damage_bonus"] = _dm826["margin_bonus"]
+        if _dm826["armor_reduction"]:
+            out["armor_reduction"] = _dm826["armor_reduction"]
+        dmg = _dm826["final"]
+    out["damage"] = dmg
+    # #754: strukturalny rejestr — obrażenia gracza (per-kość)
+    try:
+        from app.services.dice_log_service import record_dice_roll as _rec_roll
+        _rec_roll(
+            campaign_id=campaign_id,
+            roll_type="damage",
+            character_id=ch_id,
+            combat_id=int(row["id"]),
+            actor="player",
+            notation=str(out.get("damage_die") or die),
+            raw_rolls=_dmg_detail.get("rolls") or [],
+            modifiers={"stat_mod": mod, "stat": stat,
+                       "multiplier": out.get("damage_multiplier", 1),
+                       "flat_bonus": out.get("damage_bonus", 0)},
+            total=dmg,
+            outcome="crit_success" if player_nat20 else "hit",
+            meta={"weapon_key": out.get("weapon_key"), "enemy_key": card_key,
+                  "round": int(row["round"] or 1),
+                  "armor_reduction": out.get("armor_reduction", 0),
+                  "nat20_ignored_armor": bool(player_nat20),
+                  "margin_damage": out.get("margin_damage_bonus", 0)},
+        )
+    except Exception:
+        pass
+    return dmg
+
+
+def _attack_apply_effects(
+    weapon_row,
+    sheet: dict,
+    enemy: dict,
+    combatants: list[dict],
+    player_comb_id: str,
+    player_raw,
+    _surprise_fx: dict,
+    conn,
+    ch_id: int,
+    out: dict,
+    dmg: int,
+) -> int:
+    """Apply computed damage to enemy HP, heal_on_hit, clear consumed conditions, weapon effects.
+
+    Mutates enemy (hp_current, conditions) and out (target_hp_remaining, heal_on_hit,
+    consumed_conditions, weapon_effect_narrative, weapon_conditions_applied, damage).
+    Returns dmg (may increase from extra_damage weapon effects).
+    """
+    wrow = weapon_row
+    prev_hp = int(enemy.get("hp_current", 0) or 0)
+    next_hp = max(0, prev_hp - dmg)
+    enemy["hp_current"] = next_hp
+    out["target_hp_remaining"] = next_hp
+    # F1 (#461) + F2 (#495): heal_on_hit from weapon effect_json and affixes
+    _heal = _weapon_heal_on_hit(wrow) + _inventory_affix_heal_on_hit(conn, ch_id)
+    if _heal:
+        _pc = _find_combatant(combatants, player_comb_id)
+        if _pc is not None:
+            _pc_max = int(_pc.get("hp_max", 0) or 0)
+            _pc_cur = int(_pc.get("hp_current", 0) or 0)
+            _pc["hp_current"] = min(_pc_max, _pc_cur + _heal) if _pc_max > 0 else _pc_cur + _heal
+            out["heal_on_hit"] = _heal
+    # Stage 3 Z3: clear `zaskoczony` (or any consumed condition) after damage
+    if _surprise_fx.get("consumed_keys"):
+        _clear_consumed_conditions(enemy, _surprise_fx["consumed_keys"])
+        out["consumed_conditions"] = _surprise_fx["consumed_keys"]
+
+    # ── Weapon effect_json (extra damage, save-or-condition) ──────
+    _wfx = _apply_weapon_effects(
+        wrow, sheet, enemy, is_crit=(player_raw == 20), conn=conn
+    )
+    if _wfx.get("extra_damage"):
+        _extra = int(_wfx["extra_damage"])
+        enemy["hp_current"] = max(0, int(enemy.get("hp_current", 0) or 0) - _extra)
+        dmg += _extra
+        out["damage"] = dmg
+        out["target_hp_remaining"] = int(enemy.get("hp_current", 0) or 0)
+    if _wfx.get("weapon_effect_narrative"):
+        out["weapon_effect_narrative"] = _wfx["weapon_effect_narrative"]
+    if _wfx.get("conditions_applied"):
+        out["weapon_conditions_applied"] = _wfx["conditions_applied"]
+    # F1 (#461): typed apply_condition Effects (gear_bonus schema)
+    _f1_conds = _weapon_apply_conditions(wrow, enemy, conn)
+    if _f1_conds:
+        _prev_conds = list(out.get("weapon_conditions_applied") or [])
+        out["weapon_conditions_applied"] = _prev_conds + _f1_conds
+    # F2 (#495): apply_condition from affixes on equipped weapon instance
+    _a_conds = _inventory_affix_apply_conditions(conn, ch_id, enemy)
+    if _a_conds:
+        _prev_conds = list(out.get("weapon_conditions_applied") or [])
+        out["weapon_conditions_applied"] = _prev_conds + _a_conds
+    return dmg
+
+
 def resolve_attack(
     campaign_id: int,
     roll_result: int | None,
@@ -6095,157 +6295,15 @@ def resolve_attack(
             # ─────────────────────────────────────────────────────────────────
 
             if hit:
-                # U2 (#510): weapon wears down when player lands a hit
-                try:
-                    from app.services.durability_service import decrement_weapon_durability_on_attack as _decr_wpn
-                    _decr_wpn(conn, ch_id)
-                except Exception as _dur_err:
-                    logger.warning("weapon_durability_decrement_error", error=str(_dur_err))
-                wrow = weapon_row
-                die = "1d6"
-                stat = "STR"
-                if wrow:
-                    die = str(wrow.get("damage_die") or "1d6").strip().lower()
-                    stat = str(
-                        (attack_roll or {}).get("damage_stat")
-                        or wrow.get("linked_stat")
-                        or "STR"
-                    ).upper()
-                mod = _stat_mod(sheet, stat)
-                # #661: roll detailed so the response carries the individual die
-                # results (damage_rolls) for the frontend NdX damage animation.
-                _dmg_detail = roll_dice_detailed(die)
-                dmg = max(0, sum(_dmg_detail["rolls"]) + mod) if _dmg_detail["rolls"] else max(0, mod)
-                out["damage_die"] = _dmg_detail["die"] or die
-                out["damage_rolls"] = _dmg_detail["rolls"]
-                out["damage_stat"] = stat
-                out["damage_modifier"] = mod
-                # Stage 3 Z2/Z6: ×2 on crit, ×2 on surprise → ×4 if both
-                _dmg_mult = 1
-                if player_nat20:
-                    _dmg_mult *= 2
-                if _surprise_fx.get("first_hit_doubled"):
-                    _dmg_mult *= 2
-                if _dmg_mult > 1:
-                    dmg = dmg * _dmg_mult
-                    out["damage_multiplier"] = _dmg_mult
-                # F1 (#461) + F2 (#462): flat damage_bonus from weapon effect_json
-                # and from affixes on the equipped weapon instance (added once,
-                # post-multiplier — gear bonus is flat, not doubled on crit)
-                _flat_bonus = _weapon_flat_damage_bonus(wrow)
-                _flat_bonus += _inventory_affix_damage_bonus(conn, ch_id)
-                # S14 (#609): kondycje gracza z stat_target `damage_bonus` (np. rage +3) doliczają
-                # płaski bonus do obrażeń (post-mnożnik, jak gear — nie podwajany na cricie).
-                _pc_for_dmg = _find_combatant(combatants, _player_comb_id)
-                if _pc_for_dmg is not None:
-                    _flat_bonus += _combatant_stat_modifier(_pc_for_dmg, sheet=None, stat="damage_bonus")
-                if _flat_bonus:
-                    dmg += _flat_bonus
-                    out["damage_bonus"] = _flat_bonus
-                # S19 (#614): zasadzka — pierwszy atak z ukrycia (ambush_bonus) dolicza +Nk6 RAZ
-                # jako oddzielny add PO mnożniku (jak gear — nie podwajany na cricie/nat20). Rzut
-                # ataku gracza (nat 20/nat 1) NIETKNIĘTY. Atak zdejmuje hidden (demaskuje).
-                if _pc_for_dmg is not None:
-                    _hidden = _hidden_conditions(_pc_for_dmg)
-                    # burst (#780): unifikacja — sneak die / zasadzka palą się gdy gracz
-                    # `hidden` LUB gdy cel `zaskoczony` (otwarcie ze skradania, bez hidden).
-                    _fire_burst = _should_fire_burst(enemy, player_hidden=bool(_hidden))
-                    if _hidden:
-                        _ambush = _roll_ambush_bonus(_hidden)
-                        if _ambush:
-                            dmg += _ambush
-                            out["ambush_bonus"] = _ambush
-                    # B4 (#645) + D3 (#780): łotrzyk — sneak attack PONAD ambush, oddzielny
-                    # add PO mnożniku (jak ambush/gear — NIE podwajany na cricie/nat20).
-                    # Cecha klasy: rzut tylko dla rogue (inni → 0). Pali się też przy
-                    # otwarciu ze skradania (cel zaskoczony), nie tylko gdy gracz hidden.
-                    if _fire_burst:
-                        _sneak = _sneak_attack_bonus(sheet)
-                        if _sneak:
-                            dmg += _sneak
-                            out["sneak_attack"] = _sneak
-                    if _hidden:
-                        _remove_combatant_conditions(_pc_for_dmg, _hidden)
-                # #826: margines→dmg + pancerz=redukcja (po wszystkich bonusach, przed HP).
-                # Obrona celu = `ac_base` wroga (już nie próg trafienia — to liczy unik d20+DEX).
-                # Nat 20 pomija pancerz (×2 obrażeń policzone wyżej, osobno).
-                if dmg > 0:
-                    _dm826 = apply_defense_model(
-                        dmg, int(roll_result or 0), int(enemy.get("defense", 0) or 0),
-                        ignore_armor=bool(player_nat20),
-                    )
-                    if _dm826["margin_bonus"]:
-                        out["margin_damage_bonus"] = _dm826["margin_bonus"]
-                    if _dm826["armor_reduction"]:
-                        out["armor_reduction"] = _dm826["armor_reduction"]
-                    dmg = _dm826["final"]
-                out["damage"] = dmg
-                # #754: strukturalny rejestr — obrażenia gracza (per-kość)
-                try:
-                    from app.services.dice_log_service import record_dice_roll as _rec_roll
-                    _rec_roll(
-                        campaign_id=campaign_id,
-                        roll_type="damage",
-                        character_id=ch_id,
-                        combat_id=int(row["id"]),
-                        actor="player",
-                        notation=str(out.get("damage_die") or die),
-                        raw_rolls=_dmg_detail.get("rolls") or [],
-                        modifiers={"stat_mod": mod, "stat": stat,
-                                   "multiplier": out.get("damage_multiplier", 1),
-                                   "flat_bonus": out.get("damage_bonus", 0)},
-                        total=dmg,
-                        outcome="crit_success" if player_nat20 else "hit",
-                        meta={"weapon_key": out.get("weapon_key"), "enemy_key": card_key,
-                              "round": int(row["round"] or 1),
-                              "armor_reduction": out.get("armor_reduction", 0),
-                              "nat20_ignored_armor": bool(player_nat20),
-                              "margin_damage": out.get("margin_damage_bonus", 0)},
-                    )
-                except Exception:
-                    pass
-                prev_hp = int(enemy.get("hp_current", 0) or 0)
-                next_hp = max(0, prev_hp - dmg)
-                enemy["hp_current"] = next_hp
-                out["target_hp_remaining"] = next_hp
-                # F1 (#461) + F2 (#495): heal_on_hit from weapon effect_json and affixes
-                _heal = _weapon_heal_on_hit(wrow) + _inventory_affix_heal_on_hit(conn, ch_id)
-                if _heal:
-                    _pc = _find_combatant(combatants, _player_comb_id)
-                    if _pc is not None:
-                        _pc_max = int(_pc.get("hp_max", 0) or 0)
-                        _pc_cur = int(_pc.get("hp_current", 0) or 0)
-                        _pc["hp_current"] = min(_pc_max, _pc_cur + _heal) if _pc_max > 0 else _pc_cur + _heal
-                        out["heal_on_hit"] = _heal
-                # Stage 3 Z3: clear `zaskoczony` (or any consumed condition) after damage
-                if _surprise_fx.get("consumed_keys"):
-                    _clear_consumed_conditions(enemy, _surprise_fx["consumed_keys"])
-                    out["consumed_conditions"] = _surprise_fx["consumed_keys"]
-
-                # ── Weapon effect_json (extra damage, save-or-condition) ──────
-                _wfx = _apply_weapon_effects(
-                    wrow, sheet, enemy, is_crit=(player_raw == 20), conn=conn
+                dmg = _attack_compute_damage(
+                    weapon_row, sheet, enemy, combatants, _player_comb_id,
+                    bool(player_nat20), player_raw, _surprise_fx, int(roll_result or 0),
+                    conn, ch_id, campaign_id, row, card_key, out,
                 )
-                if _wfx.get("extra_damage"):
-                    _extra = int(_wfx["extra_damage"])
-                    enemy["hp_current"] = max(0, int(enemy.get("hp_current", 0) or 0) - _extra)
-                    dmg += _extra
-                    out["damage"] = dmg
-                    out["target_hp_remaining"] = int(enemy.get("hp_current", 0) or 0)
-                if _wfx.get("weapon_effect_narrative"):
-                    out["weapon_effect_narrative"] = _wfx["weapon_effect_narrative"]
-                if _wfx.get("conditions_applied"):
-                    out["weapon_conditions_applied"] = _wfx["conditions_applied"]
-                # F1 (#461): typed apply_condition Effects (gear_bonus schema)
-                _f1_conds = _weapon_apply_conditions(wrow, enemy, conn)
-                if _f1_conds:
-                    _prev_conds = list(out.get("weapon_conditions_applied") or [])
-                    out["weapon_conditions_applied"] = _prev_conds + _f1_conds
-                # F2 (#495): apply_condition from affixes on equipped weapon instance
-                _a_conds = _inventory_affix_apply_conditions(conn, ch_id, enemy)
-                if _a_conds:
-                    _prev_conds = list(out.get("weapon_conditions_applied") or [])
-                    out["weapon_conditions_applied"] = _prev_conds + _a_conds
+                dmg = _attack_apply_effects(
+                    weapon_row, sheet, enemy, combatants, _player_comb_id,
+                    player_raw, _surprise_fx, conn, ch_id, out, dmg,
+                )
                 # ─────────────────────────────────────────────────────────────
 
                 dead = int(enemy.get("hp_current", 0) or 0) <= 0
