@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Świat — AI-GM</title>
-<meta name="description" content="Kodeks świata AI-GM: heroic-dark kraina po upadku Pradawnych. Sześć krain, pęknięty Rdzeń, frakcje, ludy, archetypy, historia i legendy.">
+<title>Świat — AI-GM · Księga Świata</title>
+<meta name="description" content="Księga Świata AI-GM: heroic-dark kraina po upadku Pradawnych. Gazetteer sześciu krain, osady, frakcje, ludy, pęknięty Rdzeń, historia i legendy — do poczytania dla graczy.">
 <link rel="canonical" href="https://aigm-dev.studio-colorbox.com/showcase/swiat.html">
 <link rel="icon" href="/front/icon-192.png">
 <meta name="theme-color" content="#0a0908">
-<meta property="og:title" content="Świat — AI-GM">
-<meta property="og:description" content="Heroic-dark kraina po upadku Pradawnych. Sześć krain, pęknięty Rdzeń, frakcje, ludy, legendy.">
+<meta property="og:title" content="Świat — AI-GM · Księga Świata">
+<meta property="og:description" content="Heroic-dark kraina po upadku Pradawnych. Gazetteer sześciu krain, osady, frakcje, ludy, pęknięty Rdzeń, historia i legendy.">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="pl_PL">
 <meta property="og:url" content="https://aigm-dev.studio-colorbox.com/showcase/swiat.html">
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/showcase.css?v=8">
+<link rel="stylesheet" href="assets/css/showcase.css?v=9">
 </head>
 <body>
 
@@ -36,101 +36,661 @@
 </div></nav>
 
 <header class="hero" data-bg="assets/img/kraina-martwe-pustkowia.webp" style="min-height:auto;padding:96px 0 76px"><div class="wrap">
-  <div class="eyebrow">— kodeks świata —</div>
+  <div class="eyebrow">— księga świata —</div>
   <h1 style="font-size:clamp(36px,6vw,66px)">Świat</h1>
-  <p class="sub">Heroic-dark kraina, która stygnie po upadku Pradawnych — gdzie mrok jest tłem i przeciwnikiem, nie wyrokiem.</p>
+  <p class="sub">Heroic-dark kraina, która stygnie po upadku Pradawnych — gdzie mrok jest tłem i przeciwnikiem, nie wyrokiem. Oto kodeks do poczytania, nim ruszysz w drogę.</p>
 </div></header>
 
-<!-- TON -->
-<section class="sect"><div class="wrap">
+<!-- ================= WSTĘP DO ŚWIATA ================= -->
+<section class="sect" id="wstep"><div class="wrap">
   <div class="prose">
-    <p class="lead">Świat jest stary, mokry i nieżyczliwy. Korona trzyma się strachem i podatkami, a mrok przecieka z pradawnych ruin. Ale to nie kraina beznadziei: bohater realnie może przechylić szalę — ocalić wieś, złamać klątwę, odsłonić spisek. Nadzieja jest krucha i kosztowna, lecz prawdziwa.</p>
+    <p class="lead">Świat jest stary, mokry i nieżyczliwy. Imperium trzyma się strachem i podatkami, mrok przecieka z pradawnych ruin, a na pograniczu prawo sięga tak daleko, jak miecz najbliższego człowieka.</p>
+    <p>Lecz to <strong>nie</strong> kraina beznadziei. W przeciwieństwie do czystego grimdarku tutaj bohater realnie <strong>może zmienić los</strong>: ocalić wieś, złamać klątwę, odsłonić spisek, zatrzymać kult. Mrok jest tłem i przeciwnikiem — nie wyrokiem. Każda przygoda to jeden odzyskany skrawek światła w świecie, który o nim zapomniał. Nadzieja jest krucha i kosztowna, ale prawdziwa, a sprawczość bohatera realna.</p>
+    <p>Pod tym wszystkim — pod traktami, polami, ruinami i lodem — leży <strong>Rdzeń Pradawnych</strong>: pierwotne źródło mocy, którego nadużycie popękało granicę między światem żywych a tym, co za nią. Z tych pęknięć przecieka wszystko, co świat ma najgorszego. Korona rządzi strachem, lecz prawdziwie rządzi ukryta Rada Czterech; Świątynia Światła toczy cichą wojnę z kultami, które czczą to, co śpi pod światem. A pod tym wszystkim, w pękniętym Rdzeniu, budzi się coś, czego żadna ze stron nie powstrzyma sama.</p>
+    <p>Ty jesteś jednym z niewielu, którzy mogą jeszcze coś zmienić — najemnik, uczony albo złodziej, który postanowił, że tej nocy mrok się nie posunie dalej.</p>
   </div>
 </div></section>
 
-<!-- GEOGRAFIA -->
-<section class="sect"><div class="wrap">
-  <div class="sect-head"><div class="k">~ jeden kontynent ~</div><h2>Sześć krain</h2>
-    <p>Wszystkie przygody dzieją się w tej samej krainie — lore nawarstwia się z każdą sesją.</p></div>
-  <div class="krainy">
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-koronne-niziny.webp" alt="Koronne Niziny" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Koronne Niziny</h3><span class="ktag">Rdzeń cywilizacji</span><p class="long">Porządek, handel, podatki i intrygi. Stolica Vilnograd, kupieckie Volhynia, Klasztor Iskry serca świątyni Światła. Najbezpieczniej w świecie — i najwięcej noży w plecach. Jawnie rządzi Korona, w cieniu Rada Czterech.</p></div></div>
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-kresy.webp" alt="Kresy" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Kresy</h3><span class="ktag">Pogranicze i wsie</span><p class="long">Zwykli ludzie na granicy mroku. Twierdza Strażyn strzeże traktu od dwustu lat; wsie Brzezino i Wolanka, Most Czarnej Rzeki, gospoda „Pod Złamanym Rogiem". Tu zaczyna się większość historii — drobne zlecenia, które urastają do czegoś większego.</p></div></div>
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-czarnobor.webp" alt="Czarnobór" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Czarnobór</h3><span class="ktag">Las i bagno</span><p class="long">Dzicz, w której znika się bez śladu. Bór Zmarłych o pniach czarnych jak smoła, Bagienna Knieja, Trzęsawiska Mgieł z utopcami, bezkresny Step Wilków. Cienie wstają po zmroku, a Rdzeń jest tu blisko powierzchni. W głębi żyją skryte leśne elfy.</p></div></div>
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-siwe-granie.webp" alt="Siwe Granie" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Siwe Granie</h3><span class="ktag">Północ i mróz</span><p class="long">Surowa północ: lód, siarka, wymarłe kopalnie. Krzyż Gór, Lodowy Pas zwany Tronem Białej Bogini, wulkaniczne Czarne Skały. Z Kopalni Czarnego Hutmana krasnoludy odeszły dwadzieścia lat temu — dowierciły się do żyły Rdzenia i obudziły coś, co stuka do dziś.</p></div></div>
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-wybrzeze-lez.webp" alt="Wybrzeże Łez" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Wybrzeże Łez</h3><span class="ktag">Morze i bezprawie</span><p class="long">Morze jako żywioł i grób. Smolisty port Czarnogród, piracka Zatoka Topielców bez prawa, brzeg, gdzie sztormy łamią statki. Przemytnicy, kontrabanda — i coś dużego, co porusza się pod falami. Może Pradawny, nim morze go pochłonęło.</p></div></div>
-    <div class="kraina"><div class="thumb"><img src="assets/img/kraina-martwe-pustkowia.webp" alt="Martwe Pustkowia" onerror="this.closest('.thumb').remove()"></div><div class="body"><h3>Martwe Pustkowia</h3><span class="ktag">Ruiny Pradawnych</span><p class="long">Serce metafizyki świata. Biała równina soli, Świątynia Pradawnych zwana „wnętrzem martwego boga", Krypta Krwawego Hrabiego, Twierdza Bezimiennego, z której nikt nie wrócił. Tu Rdzeń jest najpłytszy, ruiny najliczniejsze, nieumarli najgęstsi.</p></div></div>
-  </div>
+<!-- ================= SPIS TREŚCI ================= -->
+<section class="sect" id="spis"><div class="wrap">
+  <nav class="gaz-toc" aria-label="Spis treści Księgi Świata">
+    <h2>Spis treści</h2>
+    <p class="toc-sub">Księga jest długa — skacz, gdzie chcesz.</p>
+    <ol>
+      <li><a href="#kraina-kresy">Kresy — pogranicze i wsie</a></li>
+      <li><a href="#kraina-niziny">Koronne Niziny — rdzeń cywilizacji</a></li>
+      <li><a href="#kraina-czarnobor">Czarnobór — las i bagno</a></li>
+      <li><a href="#kraina-granie">Siwe Granie — północ i mróz</a></li>
+      <li><a href="#kraina-wybrzeze">Wybrzeże Łez — morze i bezprawie</a></li>
+      <li><a href="#kraina-pustkowia">Martwe Pustkowia — ruiny Pradawnych</a></li>
+      <li><a href="#rdzen">Rdzeń i wiara — co śpi pod światem</a></li>
+      <li><a href="#frakcje">Frakcje — siły, które ciągną za sznurki</a></li>
+      <li><a href="#ludy">Ludy świata</a></li>
+      <li><a href="#historia">Historia świata — epoki</a></li>
+      <li><a href="#legendy">Legendy i haki</a></li>
+    </ol>
+  </nav>
 </div></section>
 
-<!-- METAFIZYKA -->
-<section class="sect"><div class="wrap">
-  <div class="sect-head"><div class="k">~ co śpi pod światem ~</div><h2>Rdzeń i wiara</h2></div>
+<!-- ================= KRESY (najpełniej) ================= -->
+<section class="sect gaz-anchor" id="kraina-kresy"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina I ~</div><h2>Kresy</h2><p>Pogranicze i wsie — tu zaczyna się większość historii.</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-kresy.webp')">
+      <div class="rh-inner">
+        <div class="rk">— wschodnia marchia —</div>
+        <h3>Kresy</h3>
+        <span class="rtag">Tam, gdzie kończy się prawo Korony, a zaczyna las</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">Kresy to nie kraina bohaterów. To kraina ludzi, którzy chcieliby dożyć żniw.</p>
+      <p>Trakt biegnie tędy ze wschodu ku Koronnym Nizinom, a wraz z nim ciągną kupcy, poborcy, zbiegowie i ci, którzy woleliby, żeby ich nie znaleziono. Wsie są małe, drewniane i nieufne; między nimi rozciąga się las, który nocą oddaje swoich zmarłych. Korona trzyma tu jedną twierdzę — Strażyn — i wmawia sobie, że to wystarczy. Nie wystarcza. Podatki rosną, garnizony się kurczą, a gdy z Boru Zmarłych przestają wracać drwale, sołtys nie pisze do króla. Sołtys czeka na kogoś takiego jak ty.</p>
+      <p>To najpełniej opisana kraina świata — i miejsce, gdzie najczęściej budzi się nowy bohater. Drobne zlecenie tutaj — zaginiony człowiek, dziwne stukanie, spalona wieś — ma paskudny zwyczaj urastania do czegoś znacznie większego.</p>
+    </div>
+  </div>
+
+  <figure class="gaz-map">
+    <img src="assets/img/kresy-map.png" alt="Mapa Kresów — 50×50 hex" loading="lazy">
+    <figcaption>Mapa Kresów — góry i śniegi Siwych Grani na północy, las Czarnoboru na wschodzie, morze ku Wybrzeżu Łez na południowym zachodzie, a pośród równin trakt łączący osady. Mapa generowana proceduralnie z logiką terenu, rzek i dróg.</figcaption>
+  </figure>
+
+  <article class="gaz-entry major gaz-anchor">
+    <h4>Strażyn <span class="ekind">· twierdza graniczna</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> miasteczko-twierdza <span class="sep">·</span> <b>Władca:</b> Komendant Bożena Groźna (z ramienia Korony) <span class="sep">·</span> <b>Ludność:</b> ~400 (z czego setka żołnierzy)<br>
+      <b>Utrzymanie:</b> żołd, myto z traktu, zaopatrzenie garnizonu <span class="sep">·</span> <b>Garnizon:</b> setka regularnego wojska, mury kamienne, wieża obserwacyjna <span class="sep">·</span> <b>Cechy szczególne:</b> strzeże traktu od dwustu lat przed wschodnimi barbarzyńcami
+    </div>
+    <div class="gaz-prose">
+      <p>Kamienna twierdza wbita w pogranicze niczym ostrzegawczy palec. Z wieży strażackiej widać równinę na pięć mil w każdą stronę — i to dobrze, bo z tamtej strony nie przychodzi nic dobrego. W koszarach pachnie potem, smarem do broni i palącymi się świecami; w kantynie żołnierskiej piwo jest proste, jedzenie sycące, a plotki świeże. Felczer Bolesław w lazarecie leczy rany metodami nieco brutalniejszymi niż klasztorne, ale skutecznymi.</p>
+      <p>Komendant Groźna szuka wiarygodnych ludzi do rozpoznania aktywności za granicą — robót, których regularne wojsko nie może albo nie chce wykonać. Kuźnik Władysław naostrzy i naprawi oręż wojskowy, choć o fanaberie nie pyta.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Komendant Groźna</b> potrzebuje kogoś dyskretnego do zwiadu za granicą — żołnierza posłać nie może, bo to byłaby już wojna.</li>
+        <li>Strażnicy szepczą, że na wschodnim odcinku traktu od trzech nocy nie wraca żaden patrol — i nikt nie chce iść czwarty.</li>
+        <li>W lochach twierdzy siedzi jeniec, który twierdzi, że barbarzyńcy nie napierają — uciekają przed czymś z głębi stepu.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Brzezino <span class="ekind">· wioska drwali</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> wieś <span class="sep">·</span> <b>Władca:</b> Sołtys Benedykt <span class="sep">·</span> <b>Ludność:</b> ~60<br>
+      <b>Utrzymanie:</b> wyrąb drewna, tartak Starego Jerzego <span class="sep">·</span> <b>Obrona:</b> żadna prócz siekier <span class="sep">·</span> <b>Cechy szczególne:</b> leży na skraju Boru Zmarłych
+    </div>
+    <div class="gaz-prose">
+      <p>Pół tuzina chat z brzozowego drewna w sercu lasu — tylko zapach żywicy zdradza, że ktoś tu mieszka. Wodny tartak pracuje od świtu do zmierzchu, a na Świętej Polance drwale modlą się o bezpieczny powrót z lasu. Modlitwy ostatnio nie pomagają. W miejscowej karczmie „Pod Czarnym Krukiem" rządzi Marta, która wie więcej, niż mówi. Zielarka Agata zbiera zioła na skraju Boru i zna remedium na większość leśnych dolegliwości — oraz kilka trucizn.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Sołtys Benedykt</b> traci drwali — ludzie wchodzą w Bór Zmarłych i nie wracają. Płaci każdemu, kto ich odnajdzie albo przyniesie wieść.</li>
+        <li>Stary Jerzy z tartaku przysięga, że słyszał, jak ktoś rąbie drewno głęboko w borze — w nocy, gdy nikogo tam nie ma.</li>
+        <li>Marta przyjmie pod swój dach każdego za sztukę srebra i nie zapyta o imię — co bywa pociechą i pułapką naraz.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Wolanka <span class="ekind">· wioska górnicza</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> wieś <span class="sep">·</span> <b>Władca:</b> rada starszych, faktycznie Starszy Konrad <span class="sep">·</span> <b>Ludność:</b> ~90<br>
+      <b>Utrzymanie:</b> kopalnia żelaza, kuźnia <span class="sep">·</span> <b>Obrona:</b> górnicze kilofy <span class="sep">·</span> <b>Cechy szczególne:</b> wcięta w stok góry, blisko Siwych Grani
+    </div>
+    <div class="gaz-prose">
+      <p>Wioska wcięta w stok góry, gdzie wszyscy schodzą do sztolni przed świtem. W szynku górniczym pijani ludzie płaczą o sztolniach i kobietach; w Kuźni Wujka płomień nie wygasł od trzech pokoleń. Grubas Miron wykuje narzędzie albo i miecz, a Zofia Górska zna każde górskie zioło i leczniczy kamień. Kościół Świętego Floriana codziennie odprawia modlitwę za tych pod ziemią — coraz częściej za tych, którzy już nie wyjdą.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Starszy Konrad</b> zna każdy korytarz Czarnego Hutmana w Grani i szuka kogoś, kto wyjaśni, co grasuje w głębinach.</li>
+        <li>W Kopalni Głównej z dołu dochodzą dziwne dźwięki — górnicy mówią o stukaniu, które odpowiada na ich własne.</li>
+        <li>Kilku górników odeszło na noc do starej kopalni krasnoludów w górach i nie wrócili; rodziny boją się prosić Konrada wprost.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Most Czarnej Rzeki <span class="ekind">· osada poborców</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> osada przy moście <span class="sep">·</span> <b>Władca:</b> poborca myta Pius <span class="sep">·</span> <b>Ludność:</b> ~40<br>
+      <b>Utrzymanie:</b> myto, komora celna, karczma <span class="sep">·</span> <b>Obrona:</b> wartownia z trzema strażnikami <span class="sep">·</span> <b>Cechy szczególne:</b> jedyna przeprawa przez Czarną Rzekę na wiele mil
+    </div>
+    <div class="gaz-prose">
+      <p>Drewniany most, którego strzeże garstka karczmarzy i poborców — każdy podróżny zostawia tu monetę, czy chce, czy nie. W komorze celnej Pius zna każdą sztuczkę przemytników, bo sam niejedną wymyślił. W karczmie „Pod Lipinkami" z widokiem na rzekę gulasz rybny stoi na ogniu dzień i noc. Most to wąskie gardło Kresów: kto je kontroluje, wie, kto i z czym przejeżdża.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Poborca Pius za odpowiednią monetę „nie zauważy" pewnego ładunku — albo wskaże, kto wozi coś, czego wozić nie powinien.</li>
+        <li>Strażnicy mostowi twierdzą, że woda w Czarnej Rzece od miesiąca niesie rzeczy, które powinny tonąć, a płyną pod prąd.</li>
+        <li>Mówi się, że w nurcie pod mostem osiadły dawne rody kowali, których mrok z gór zaczął właśnie wypierać w dół rzeki.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Cieszowice <span class="ekind">· spokojna wieś</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> wieś <span class="sep">·</span> <b>Władca:</b> Sołtys Wiktor <span class="sep">·</span> <b>Ludność:</b> ~70 (dwadzieścia domów)<br>
+      <b>Utrzymanie:</b> miód pitny, rolnictwo, pszczelarstwo <span class="sep">·</span> <b>Obrona:</b> brak <span class="sep">·</span> <b>Cechy szczególne:</b> jeden kapłan, słynie z miodu i z kradzieży kur
+    </div>
+    <div class="gaz-prose">
+      <p>Najspokojniejsza wieś Kresów — albo była nią do niedawna. Drewniana kapliczka Świętej Anny stoi nad świecami za zmarłych, karczmarz Bartek „Pod Lipą" warzy najlepszy miód w okolicy, a Babcia Marta leczy ziołami i zaklęciami, w które sama nie wierzy, lecz które działają. Wyschnięta studnia w środku wsi ma złą sławę: mówią, że sto lat temu utonęło w niej dziecko.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Sołtys Wiktor</b> ma niepokój w oczach: „coś niepokoi wioskę od tygodni", a nie umie powiedzieć, co.</li>
+        <li>Babcia Marta przyznaje pół-szeptem, że jej zaklęcia zaczęły działać <em>za dobrze</em> — jakby ktoś inny im pomagał.</li>
+        <li>Dzieci bawią się przy starej studni i wracają, nucąc piosenkę, której nikt ich nie nauczył.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Zgliszcza <span class="ekind">· spalona wieś</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> ruina (dawniej wieś) <span class="sep">·</span> <b>Władca:</b> nikt — obozowisko ocalałych <span class="sep">·</span> <b>Ludność:</b> ~30 ocalałych<br>
+      <b>Utrzymanie:</b> nic; żebrzą, plądrują pogorzelisko <span class="sep">·</span> <b>Obrona:</b> rozpacz <span class="sep">·</span> <b>Cechy szczególne:</b> spalona rok temu; masowy grób 41 ofiar
+    </div>
+    <div class="gaz-prose">
+      <p>Po pożarze sprzed roku zostały tylko kominy sterczące jak czarne zęby. Pół tuzina rodzin mieszka w prowizorycznych chatach z desek, w wiecznym czuwaniu — jedni próbują odbudować, inni przeklinają to miejsce i zostają tylko dlatego, że nie mają dokąd pójść. Wypalony kościół stracił dzwon; leży połamany w nawie. Świeżo wykopany masowy grób mieści czterdzieści jeden krzyży. Nikt nie mówi głośno, co naprawdę spaliło Zgliszcza.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Ocalali liczą czterdzieści jeden grobów, ale spis dusz mówił o czterdziestu dwóch mieszkańcach. Kogo brakuje — i czy na pewno zginął?</li>
+        <li>Nocą nad pogorzeliskiem widać światło, jakby ktoś zapalał świece w kościele bez dachu.</li>
+        <li>Jeden z ocalałych szepcze, że ogień nie przyszedł z zewnątrz — wyszedł z piwnicy pod kościołem.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Karczma Pod Trzema Krukami <span class="ekind">· karczma na rozstaju</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> samotna karczma <span class="sep">·</span> <b>Władca:</b> karczmarz Bartłomiej Kruk <span class="sep">·</span> <b>Ludność:</b> wędrowna<br>
+      <b>Utrzymanie:</b> wyszynk, pięć pokoi, stajnia na 20 koni <span class="sep">·</span> <b>Obrona:</b> reputacja i krzepa <span class="sep">·</span> <b>Cechy szczególne:</b> punkt zborny kupców, najemników i tych, których nie chcą znaleźć
+    </div>
+    <div class="gaz-prose">
+      <p>Samotna karczma na skrzyżowaniu traktów — w wielkiej izbie pali się ognisko nawet w lipcu, a przy dziesięciu stołach siedzą ci, którzy z różnych powodów woleliby nie siedzieć w mieście. Bartłomiej Kruk wie wszystko o każdym, kto przejeżdżał przez rozstaj; informacje sprzedaje za piwo, a milczenie za srebro. Stary giermek w stajni pamięta każdego konia i każdą twarz.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Bartłomiej Kruk</b> to żywy spis pogranicza — kto kogo szuka, kto zniknął, kto płaci. Pierwszy przystanek po każdą wieść.</li>
+        <li>Ktoś zostawił u Kruka zalakowaną przesyłkę „dla człowieka z sygnetem" — i nie wrócił po nią od tygodnia.</li>
+        <li>W jednym z pięciu pokoi od trzech dni nie otwierają się drzwi, a gość zapłacił z góry za miesiąc.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Gospoda „Pod Złamanym Rogiem" <span class="ekind">· pierwsze schronienie</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> gospoda <span class="sep">·</span> <b>Władca:</b> Marta, karczmarka <span class="sep">·</span> <b>Ludność:</b> garstka stałych bywalców<br>
+      <b>Utrzymanie:</b> wyszynk, nocleg, plotki <span class="sep">·</span> <b>Obrona:</b> dobre słowo Marty <span class="sep">·</span> <b>Cechy szczególne:</b> próg większości bohaterskich historii świata
+    </div>
+    <div class="gaz-prose">
+      <p>Dla wielu bohaterów świat zaczyna się właśnie tutaj — przy stole, kuflu i karczmarce, która zna wszystkie plotki, a zdradza tylko te, które ci pomogą. „Pod Złamanym Rogiem" to nie miejsce wielkiej historii, tylko ciepły kąt, z którego się w nią wyrusza. Marta widziała już niejednego śmiałka, który wszedł tu zmęczony drogą, a wyszedł, by ocalić wieś — albo zginąć w lesie. Rzadko myli się co do tego, kto będzie który.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Marta</b> ma robotę „akurat dla kogoś takiego jak ty" — zawsze. Czasem drobną, czasem taką, która zmienia los pogranicza.</li>
+        <li>Gość przy kątowym stole pyta o drogę do miejsca, którego nie ma na żadnej mapie — i płaci złotem za samo wskazanie kierunku.</li>
+        <li>Marta poznaje sygnet, którego nie powinna znać, i milknie, gdy go zobaczy na czyjejś dłoni.</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= KORONNE NIZINY ================= -->
+<section class="sect gaz-anchor" id="kraina-niziny"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina II ~</div><h2>Koronne Niziny</h2><p>Rdzeń cywilizacji — porządek, handel, podatki i noże w plecach.</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-koronne-niziny.webp')">
+      <div class="rh-inner">
+        <div class="rk">— złota dolina —</div>
+        <h3>Koronne Niziny</h3>
+        <span class="rtag">Najbezpieczniej w świecie — i najwięcej noży w plecach</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">Tu jawnie rządzi Korona, a w cieniu Rada Czterech.</p>
+      <p>Żyzne niziny, brukowane trakty, miasta o szarych dachach i czarnych dymach z dzielnic rzemieślniczych. To najbezpieczniejszy zakątek świata — bestii się tu nie boi, bo straż w niebieskich pelerynach patroluje bramy o każdej godzinie. Boi się czego innego: poborcy, donosu, długu, sygnetu, który pojawi się na czyjejś dłoni nie w porę. Gildie kupieckie płacą za szlaki i za to, by konkurencja nie dożyła kontraktu. Świątynia Światła błogosławi z marmurowych wnętrz. A nad wszystkim wisi pytanie, na które nikt nie zna odpowiedzi: kim naprawdę jest Rada Czterech?</p>
+      <p class="gaz-soonnote">🔵 W stolicy istnieje tolerowana kupiecka enklawa krasnoludów — kantory, jubilerstwo, lichwa. Dziś w grze NPC są wyłącznie ludźmi; nieludzie dojdą w przyszłych rozszerzeniach.</p>
+    </div>
+  </div>
+
+  <article class="gaz-entry major gaz-anchor">
+    <h4>Vilnograd <span class="ekind">· stolica królestwa</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> miasto (stolica) <span class="sep">·</span> <b>Władca:</b> Król (jawnie) / Rada Czterech (faktycznie) <span class="sep">·</span> <b>Ludność:</b> ~30 000<br>
+      <b>Utrzymanie:</b> handel, rzemiosło, podatki, dwór <span class="sep">·</span> <b>Garnizon:</b> straż królewska, mury obronne, Zamek Królewski z trzech wież czarnego granitu <span class="sep">·</span> <b>Cechy szczególne:</b> Świątynia Światła, gildie, Dzielnica Łotrów
+    </div>
+    <div class="gaz-prose">
+      <p>Wielka, kamienna stolica o szarych dachach i czarnych dymach nad dzielnicami rzemieślniczymi. Na Rynku Głównym, przy fontannie z czterema kamiennymi gryfami, kupcy krzyczą ceny w pół tuzinie języków. Marmurowa Świątynia Światła rzuca o świcie tęczowe smugi przez witraże; Archiwiusz Dobromił, kronikarz królewski, zna historię każdego rodu i każdej ruiny. W tawernie „Pod Złotą Koroną" pije się wino z południa — jeśli stać cię na izbę.</p>
+      <p>Pod tym porządkiem żyje trzecie miasto: <strong>Dzielnica Łotrów</strong>, gdzie nawet straż nie wchodzi po zmroku, a każdy róg może kryć nóż w plecach. To świat zleceń z sygnetem, robót dla gildii i dla tych, którzy rządzą zza tronu.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Sekret Rady Czterech:</b> kim są mecenasi rządzący zza tronu — i czy któryś z nich już sięgnął po Rdzeń? Główny hak intrygi politycznej świata.</li>
+        <li>W Dzielnicy Łotrów krąży zlecenie z nieznanym sygnetem; płaca jest absurdalnie wysoka, a cel — zbyt dobrze strzeżony, by to była zwykła robota.</li>
+        <li>Archiwiusz Dobromił szuka kogoś, kto wyniesie pewien tom z biblioteki, której oficjalnie nie ma — i nie zapyta dlaczego.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Volhynia <span class="ekind">· miasto kupieckie</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> miasto <span class="sep">·</span> <b>Władca:</b> Gildia Kupiecka (gildmistrz Brat Aleksy Złotnik) <span class="sep">·</span> <b>Ludność:</b> ~12 000<br>
+      <b>Utrzymanie:</b> handel tranzytowy, składy, arena walk <span class="sep">·</span> <b>Obrona:</b> straż gildyjna, najemnicy <span class="sep">·</span> <b>Cechy szczególne:</b> skrzyżowanie czterech głównych traktów
+    </div>
+    <div class="gaz-prose">
+      <p>Skrzyżowanie czterech głównych traktów, gdzie kupcy wszystkich nacji śpią jeden na drugim, a magazyny pękają od towaru. Na Wielkim Targowisku stoi sto namiotów i krzyczy tysiąc gardeł — kupisz tu wszystko, a połowa może być fałszywa. W Gildii Kupieckiej, pałacu ze strażą, próg przekroczy tylko członek albo bogaty gość. Na drewnianej Arenie Walk najemnicy biją się o złoto i sławę, a krew lała się tam jak wino.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Brat Aleksy Złotnik</b> płaci dobrze za wieści o nowych szlakach — i jeszcze lepiej za wyeliminowanie konkurencji.</li>
+        <li>Na Arenie pojawił się gladiator, którego ciosy nie zostawiają śladów, a przeciwnicy padają, nim ich dotknie.</li>
+        <li>Wdowa Aldona, aptekarka, prowadzi dyskretny handel truciznami; ktoś zamówił u niej dawkę „na całą salę".</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Klasztor Iskry <span class="ekind">· serce Świątyni Światła</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> klasztor-twierdza wiary <span class="sep">·</span> <b>Władca:</b> przeorysza Matka Urszula <span class="sep">·</span> <b>Ludność:</b> ~300 mnichów i pielgrzymów<br>
+      <b>Utrzymanie:</b> jałmużna, pielgrzymki, dziesięcina <span class="sep">·</span> <b>Obrona:</b> białe mury, wiara, zakonni bracia <span class="sep">·</span> <b>Cechy szczególne:</b> Iskra Wieczna w ołtarzu; biblioteka dziesiątek tysięcy ksiąg
+    </div>
+    <div class="gaz-prose">
+      <p>Białe mury widoczne z dwudziestu mil; mnisi w szarych habitach modlą się dzień i noc, a wieże sięgają chmur. W Wielkiej Kaplicy pochodnie się nie palą — światło daje sama Iskra Wieczna w ołtarzu. Brat Kazimierz leczy rany i sprzedaje mikstury, mówi mało, wie dużo. Brat Tomasz Kronikarz płaci za każdy artefakt z dawnych czasów. W krypcie założyciela czasem słychać szept — mnisi nazywają go błogosławieństwem.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Matka Urszula</b> przyjmie rannych i pielgrzymów — lecz w zamian zażąda pomocy w „świętym zadaniu", którego sama nie chce nazwać.</li>
+        <li><b>Brat Tomasz</b> zapłaci za każdą relikwię Pradawnych — idealny pretekst do wyprawy w ruiny Martwych Pustkowi.</li>
+        <li>Szept z krypty założyciela jest ostatnio głośniejszy i nie zawsze brzmi jak modlitwa. Biblioteka ma księgi, których Matka Urszula nie pozwala dotykać.</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= CZARNOBÓR ================= -->
+<section class="sect gaz-anchor" id="kraina-czarnobor"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina III ~</div><h2>Czarnobór</h2><p>Las i bagno — dzicz, w której znika się bez śladu.</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-czarnobor.webp')">
+      <div class="rh-inner">
+        <div class="rk">— knieja zmarłych —</div>
+        <h3>Czarnobór</h3>
+        <span class="rtag">Cienie wstają po zmroku — i nie wszystkie były kiedyś ludźmi</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">Tu Rdzeń jest blisko powierzchni, a las pamięta więcej niż żywi.</p>
+      <p>Pnie czarne jak smoła, liście szepczące imiona zmarłych, bagna pod białą mgłą, w której gubi się trakt i człowiek. Czarnobór to dom bestii i utopców, miejsce, gdzie cmentarze mają świeże groby, choć nikt ich nie kopie. Wieśniacy z Kresów obchodzą go z daleka, a ci, którzy weń wchodzą po drewno, grzyby albo skróty, nie zawsze wracają. W głębi, gdzie pęknięcia Rdzenia sięgają najgłębiej, żyją skryci strażnicy starych granic — wiedzą, gdzie jest najgorzej, lecz rzadko dzielą się wiedzą.</p>
+      <p class="gaz-soonnote">🔵 Pełna mapa Czarnoboru i jego leśnych elfów to przyszłe rozszerzenie — na razie poznajesz kluczowe miejsca i ich grozę.</p>
+    </div>
+  </div>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Bór Zmarłych / Las Czarnych Drzew <span class="ekind">· las nawiedzony</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> nawiedzona puszcza <span class="sep">·</span> <b>Władca:</b> brak — rządzą umarli <span class="sep">·</span> <b>Zagrożenie:</b> wysokie<br>
+      <b>Cechy szczególne:</b> po zmroku z ziemi wstają cienie; pnie czarne jak smoła, liście szepczą imiona zmarłych
+    </div>
+    <div class="gaz-prose">
+      <p>Las, którego żywi nie nocują. Przy drodze stoi cmentarz z pochyłymi nagrobkami, a jeden grób jest zawsze świeży, choć nikt go nie kopie. Głębiej kryją się Leśna Kostnica pełna kości i Zapomniany Kościół, którego ołtarz nadal coś przyjmuje. Pod Złamanym Dębem, przepołowionym piorunem, świeci w szczelinie coś zielonego; w Grobowcu Kniazia, zarosłym brzozami, leży ten, o którym mówią, że wstaje po pełni. To stąd nie wracają drwale z Brzezina.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Cmentarz przy drodze ma zawsze jeden świeży grób — odkop go, a przekonasz się, co go napełnia.</li>
+        <li>Zielony blask w Złamanym Dębie to ślad pękniętego Rdzenia płytkiego pod korzeniami — i magnes dla nieumarłych.</li>
+        <li>Wiedźma Jaga z krzywej chaty na kurzych palach pomoże — za cenę, której nie powiesz nikomu.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Trzęsawiska Mgieł i Bagienna Knieja <span class="ekind">· mokradła</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> bagna i trzęsawiska <span class="sep">·</span> <b>Władca:</b> utopce i mgła <span class="sep">·</span> <b>Zagrożenie:</b> wysokie<br>
+      <b>Cechy szczególne:</b> biała mgła pożera wędrowców, którzy zboczą z gościńca; drzewa rosną w wodzie
+    </div>
+    <div class="gaz-prose">
+      <p>Bezkresne bagna pod białą mgłą, gdzie giną ci, co zeszli z gościńca, a komary wysysają krew szybciej niż utopce. Na Drzewie Powieszonych wciąż wiszą postronki — niektóre świeże. W zatopionej Chacie Topielców po południu widać cienie rodziny. Na palach stoi chatka zielarki Miry, która wie wszystko o ziołach, a przy Pradawnym Kamieniu z runami modlili się druidzi z czasów, których nikt nie pamięta. Pustelnik z chaty na palach widzi w mgle więcej, niż mówi.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Postronki na Drzewie Powieszonych przybywają same — kogo wiesza mgła i za jaką zbrodnię?</li>
+        <li>Zielarka Mira wymieni miksturę na pewne ziele, które rośnie tylko na Wyspie Topielca pośrodku bagna.</li>
+        <li>Runy na Pradawnym Kamieniu zaczęły świecić — ktoś (albo coś) na nowo odprawia tu modły do Rdzenia.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Step Wilków <span class="ekind">· bezkresny step</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> step graniczny <span class="sep">·</span> <b>Władca:</b> watahy i koczownicy <span class="sep">·</span> <b>Zagrożenie:</b> umiarkowane–wysokie<br>
+      <b>Cechy szczególne:</b> trakt biegnie przezeń pięćdziesiąt mil; po zmroku słychać tylko wycie watah
+    </div>
+    <div class="gaz-prose">
+      <p>Bezkres traw, gdzie po zmroku słychać tylko wilki, a trakt ciągnie się pięćdziesiąt mil bez schronienia. Stoi tu opuszczona królewska strażownica, której dach jakimś cudem jeszcze trzyma, oraz Kurhan Chana — wielka mogiła barbarzyńskiego wodza, nieotwarta z rozsądku. Koczownicy w namiotach są gościnni, póki ich nie obrazisz. Łowczy Oleg śledzi bestie tygodniami i płaci za świeże tropy.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Łowczy Oleg</b> tropi watahę, która zachowuje się nie jak wilki — okrąża obozy, jakby coś planowała.</li>
+        <li>Koczownicy nie chcą zbliżać się do Kurhanu Chana; mówią, że ziemia nad nim ostatnio drży.</li>
+        <li>Barbarzyńcy ze wschodu coraz częściej szukają schronienia po tej stronie stepu — przed czym uciekają?</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= SIWE GRANIE ================= -->
+<section class="sect gaz-anchor" id="kraina-granie"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina IV ~</div><h2>Siwe Granie</h2><p>Północ i mróz — wymarłe kopalnie i pytanie: przed czym uciekły krasnoludy?</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-siwe-granie.webp')">
+      <div class="rh-inner">
+        <div class="rk">— tron białej bogini —</div>
+        <h3>Siwe Granie</h3>
+        <span class="rtag">Lód, siarka i ślad ludu, który odszedł</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">Tutaj krasnoludy odeszły — i został po nich ślad, i pytanie.</p>
+      <p>Surowa północ: najwyższe pasmo świata, zawsze w śniegu, wulkaniczne skały cuchnące siarką, lodowce ze szczelinami głębokimi na pół mili. Tubylcy nazywają Lodowy Pas „Tronem Białej Bogini" i mówią, że kto wejdzie najwyżej, usłyszy jej głos. Niegdyś żyły tu krasnoludy — górskie hołdy i kowalskie miasta-fortece pod szczytami. Większość rozproszyła się w dół, do Kresów i stolicy. Z Kopalni Czarnego Hutmana odeszli dwadzieścia lat temu, bo wiercąc w głąb góry trafili na żyłę Rdzenia i obudzili coś, co stuka do dziś.</p>
+      <p class="gaz-soonnote">🔵 Siwe Granie to ojczyzna krasnoludów — frakcja w lore, jeszcze nie w mechanice. Pełna mapa północy dojdzie później.</p>
+    </div>
+  </div>
+
+  <article class="gaz-entry major gaz-anchor">
+    <h4>Kopalnia Czarnego Hutmana <span class="ekind">· przeklęta kopalnia srebra</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> opuszczona kopalnia <span class="sep">·</span> <b>Władca:</b> nikt — porzucona przez krasnoludy <span class="sep">·</span> <b>Zagrożenie:</b> bardzo wysokie<br>
+      <b>Cechy szczególne:</b> krasnoludy odeszły 20 lat temu; w Sercu Kopalni pulsuje czarny kryształ; coś wciąż stuka
+    </div>
+    <div class="gaz-prose">
+      <p>Brama z dębu obita żelazem — zamknięta od wewnątrz. W Sztolni Srebrnej stare lampy nadal się palą, choć nikt ich nie zapala; w zalanych korytarzach na dole coś pływa, i nie jest człowiekiem. W Komnacie Brygadzisty pamiętnik leży otwarty na ostatniej stronie. A w Sercu Kopalni, wielkiej komnacie, pulsuje światłem czarny kryształ — żyła Rdzenia, którą krasnoludy odsłoniły o jeden cios kilofa za dużo.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Przed czym uciekły krasnoludy?</b> Pamiętnik brygadzisty kończy się w pół zdania — ostatnia strona zna odpowiedź.</li>
+        <li>Stukanie z głębi odpowiada na stukanie z powierzchni. Czy to echo — czy ktoś czeka, by go usłyszano?</li>
+        <li>Czarny kryształ w Sercu Kopalni pulsuje coraz szybciej; górnicy z Wolanki w dole słyszą jego rytm w swoich snach.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Krzyż Gór i Lodowy Pas <span class="ekind">· dachy świata</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> najwyższe pasma <span class="sep">·</span> <b>Władca:</b> mróz, samotni mnisi i szamani <span class="sep">·</span> <b>Zagrożenie:</b> wysokie (żywioł)<br>
+      <b>Cechy szczególne:</b> Klasztor Szczytu (mnisi nie schodzą od 30 lat); Lodowy Pas zwany Tronem Białej Bogini
+    </div>
+    <div class="gaz-prose">
+      <p>Krzyż Gór to najwyższe pasmo królestwa — szczyty zawsze w śniegu, gdzie wchodzą tylko najtwardsi. Wbity w skałę Klasztor Szczytu od trzydziestu lat nie schodzi w doliny; w Jaskini Smoka opalone ściany świadczą o lokatorze, którego dziś nie ma — może na zawsze. Na dalekiej północy Lodowy Pas tonie w wiecznej zimie; szaman Bjorn w lodowym iglu rozmawia z duchami zimy, a echa w kryształowych komnatach nigdy nie cichną.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Tron Białej Bogini:</b> kto wejdzie najwyżej w Lodowy Pas, usłyszy jej głos. Czy to śpiąca Pradawna, czy fragment świadomości Rdzenia w lodzie?</li>
+        <li>Mnisi z Klasztoru Szczytu zamilkli — od trzydziestu lat ani jeden nie zszedł, a ostatni pielgrzym wrócił bez słów.</li>
+        <li>Szaman Bjorn ostrzega, że „coś zimnego" przeniosło się z gór bliżej dolin i woła ludzkimi głosami.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Czarne Skały <span class="ekind">· wulkan i kult ognia</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> stożek wulkaniczny <span class="sep">·</span> <b>Władca:</b> kult Czerwonego Ognia <span class="sep">·</span> <b>Zagrożenie:</b> wysokie<br>
+      <b>Cechy szczególne:</b> popiół, siarka, nawet trawa nie rośnie; z Dymiącego Krateru ludzie słyszą głosy
+    </div>
+    <div class="gaz-prose">
+      <p>Wulkaniczny stożek pokryty popiołem, gdzie powietrze cuchnie siarką, a z Dymiącego Krateru unoszą się szare obłoki — niektórzy słyszą stamtąd głosy. W mrocznej Świątyni Ognia kult Czerwonego Ognia modli się o erupcję, a w kamiennej krypcie pochowano złego kapłana, którego pierścień podobno otwiera bramy piekła.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Kult Czerwonego Ognia twierdzi, że erupcja „oczyści świat" — i robi wszystko, by ją przyspieszyć.</li>
+        <li>Pierścień z Grobowca Kapłana to relikt, którego szukają i Świątynia Światła, i kulty Rdzenia.</li>
+        <li>Głosy z krateru znają imiona tych, którzy ich słuchają. Wabią po jednym.</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= WYBRZEŻE ŁEZ ================= -->
+<section class="sect gaz-anchor" id="kraina-wybrzeze"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina V ~</div><h2>Wybrzeże Łez</h2><p>Morze i bezprawie — i coś dużego pod falami.</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-wybrzeze-lez.webp')">
+      <div class="rh-inner">
+        <div class="rk">— sól i sztorm —</div>
+        <h3>Wybrzeże Łez</h3>
+        <span class="rtag">Morze jako żywioł i grób</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">Po każdym sztormie wybrzeże oddaje ciała — i czasem coś, co nie było człowiekiem.</p>
+      <p>Smoliste porty, czarne galery, kontrabanda i piractwo. Sztormy łamią statki o skały, a fale niosą ku brzegowi to, czego nie zdołały zatrzymać. Tu prawo Korony kończy się na linii przyboju: dalej rządzi szabla, dług u kapitana i Rada Piracka. A pod tym wszystkim, w głębinie, porusza się coś dużego — być może Pradawny, którego pochłonęło morze, nim świat zdążył go zapamiętać.</p>
+      <p class="gaz-soonnote">🔵 Dalekomorskie ludy i pełna mapa wybrzeża to przyszłe rozszerzenie.</p>
+    </div>
+  </div>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Czarnogród <span class="ekind">· smolisty port</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> miasto portowe <span class="sep">·</span> <b>Władca:</b> nominalnie Korona, faktycznie kupcy i przemytnicy <span class="sep">·</span> <b>Ludność:</b> ~8 000<br>
+      <b>Utrzymanie:</b> handel morski, kontrabanda, połów <span class="sep">·</span> <b>Obrona:</b> milicja portowa, kapitanowie <span class="sep">·</span> <b>Cechy szczególne:</b> Czarny Targ kupisz wszystko; Latarnia Topielców
+    </div>
+    <div class="gaz-prose">
+      <p>Smolisty port pełen wraków, dziwnych ryb i kontrabandy; w mgliste poranki widać tylko maszty kołyszące się w rytm fal. Na Czarnym Targu pod molem kupisz wszystko — od trucizny po rzeczy, których kupować się nie godzi. W karczmie „Pod Topielcem", najgorszej i najtańszej w mieście, najmiesz przemytnika albo pożegnasz się z życiem. Ruda Magda naprawi broń bez pytań o ślady krwi. Stara Latarnia Topielców jest opuszczona — lecz nocą zapala się sama i wciąga statki na rafy.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Latarnia Topielców zapala się sama — kto albo co stoi nocą na jej szczycie z ogniem?</li>
+        <li>Kapitan Jacek Smolny ma mapę każdego ukrytego klifu i zatopionej łodzi na tym wybrzeżu — i komuś bardzo na niej zależy.</li>
+        <li>Na Czarnym Targu pojawił się towar „z głębin", którego sprzedawca boi się dotykać gołą ręką.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Zatoka Topielców <span class="ekind">· pirackie miasto bez prawa</span></h4>
+    <div class="gaz-stats">
+      <b>Wielkość:</b> miasto-twierdza na wyspie <span class="sep">·</span> <b>Władca:</b> Rada Piracka (pięciu kapitanów) <span class="sep">·</span> <b>Ludność:</b> ~5 000 zbrojnych<br>
+      <b>Utrzymanie:</b> łupy, okup, handel niewolnikami <span class="sep">·</span> <b>Obrona:</b> czarne galery, każdy nosi broń <span class="sep">·</span> <b>Cechy szczególne:</b> bez prawa, bez podatków, bez litości
+    </div>
+    <div class="gaz-prose">
+      <p>Pirackie miasto-twierdza na wyspie: bez prawa, bez podatków, bez litości — każdy nosi tu broń, a spór załatwia się szabelką, nie słowem. W Karczmie Kapitańskiej spotykają się kapitanowie, w pirackich dokach niewolnicy i desperaci remontują czarne galery, a w Jaskiniach Skarbów kapitanowie chowają zdobycze za pułapkami i klątwami. O losie wyspy decyduje pięciu ludzi z Rady Pirackiej, których słowo jest tu prawem.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Dziadek Florian</b> z zatoki widział „coś dużego" pod wodą i szuka śmiałka, który sprawdzi jego słowa. Możliwy ślad pochłoniętego Pradawnego.</li>
+        <li>Jeden z pięciu kapitanów Rady zaginął na morzu — i jego fotel jest właśnie do wzięcia dla kogoś dość bezwzględnego.</li>
+        <li>W Jaskiniach Skarbów jedna klątwa zaczęła „przeciekać" — zdobycze wracają do właścicieli jako nieumarli.</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= MARTWE PUSTKOWIA ================= -->
+<section class="sect gaz-anchor" id="kraina-pustkowia"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kraina VI ~</div><h2>Martwe Pustkowia</h2><p>Ruiny Pradawnych — serce metafizyki świata.</p></div>
+
+  <div class="gaz-region">
+    <div class="gaz-region-head" style="--region-img:url('assets/img/kraina-martwe-pustkowia.webp')">
+      <div class="rh-inner">
+        <div class="rk">— solna cisza —</div>
+        <h3>Martwe Pustkowia</h3>
+        <span class="rtag">Tu Rdzeń jest najpłytszy, a nieumarli najgęstsi</span>
+      </div>
+    </div>
+    <div class="gaz-region-intro">
+      <p class="lead">To kraina umarłych ludów — i miejsce, gdzie kończy się każda kosmiczna stawka świata.</p>
+      <p>Biała równina soli, na której słońce odbija się tak, że bolą oczy, a wody nie ma na sto mil. Tu ruin Pradawnych jest najwięcej, Rdzeń leży najpłycej pod powierzchnią, a nieumarli zlatują się jak ćmy do pęknięcia. To główne pole dla wypraw w głąb — dla tych, którzy plądrują grobowce dla relikwii albo szukają odpowiedzi, czego Pradawni dotknęli, że przestali istnieć. Większość nie wraca. Ci, którzy wracają, nie są już całkiem sobą.</p>
+      <p class="gaz-soonnote">🔵 Pełna mapa pustkowi rozrasta się wraz z nowymi lochami i kampaniami.</p>
+    </div>
+  </div>
+
+  <article class="gaz-entry major gaz-anchor">
+    <h4>Świątynia Pradawnych <span class="ekind">· „wnętrze martwego boga"</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> pradawna świątynia nad Rdzeniem <span class="sep">·</span> <b>Władca:</b> samotność i to, co śpi pod spodem <span class="sep">·</span> <b>Zagrożenie:</b> ekstremalne<br>
+      <b>Cechy szczególne:</b> architektura jak wnętrze martwego boga; pęknięcie nad samym Rdzeniem
+    </div>
+    <div class="gaz-prose">
+      <p>Świątynia istot z czasów przed-ludzkich — jej architektura przypomina wnętrze martwego boga. Dziwna Brama z nieznanego metalu otwiera się tylko, gdy się ją „uważnie zaprosi". W komnacie kapłanów wielkie skamieniałe figury śledzą wędrowca oczami, a podziemna rzeka czarnej wody płynie w obu kierunkach naraz. W sercu stoi czarny ołtarz w kształcie spirali — i wciąż przyjmuje świeże ofiary. To tutaj Rdzeń leży najpłycej; to źródło, które zniszczyło Pradawnych. Ktoś — kult albo członek Rady Czterech — może chcieć je obudzić.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li><b>Oś końcowej stawki świata:</b> obudzenie Rdzenia pod Świątynią to ostateczny cel kultów — i koniec wszystkiego, jeśli im się powiedzie.</li>
+        <li>Dziwna Brama otwiera się na właściwe słowa — kto je zna i skąd je wziął?</li>
+        <li>Świeże ofiary na spiralnym ołtarzu oznaczają, że ktoś już tu bywa regularnie. Czyja to droga przez pustkowie?</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Krypta Krwawego Hrabiego <span class="ekind">· siedziba wampira</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> krypta pod ruiną zamku <span class="sep">·</span> <b>Władca:</b> Krwawy Hrabia (wampir) <span class="sep">·</span> <b>Zagrożenie:</b> bardzo wysokie<br>
+      <b>Cechy szczególne:</b> cuchnie krwią mimo wieków; echo szepta w obcym języku
+    </div>
+    <div class="gaz-prose">
+      <p>Krypta wampira-hrabiego pod ruiną zamku — cuchnie krwią pomimo wieków, a w mroku echo niesie szept w obcym języku. W przedsionku mozaika krwawego krzyża strzeże pułapek, w Sali Krwawych Uczt na stole dla pięćdziesięciu osób wciąż stoją pełne kielichy, a w komnatach służących pomniejsi nieumarli bywają jeszcze świadomi — i głodni. W głównej komnacie czeka czarny sarkofag z odsuniętym wiekiem. Hrabia był niegdyś rycerzem Korony; jego klątwa to ostrzeżenie, co spotyka tych, którzy targują się z Rdzeniem.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>Krwawy Hrabia był rycerzem Korony — jego upadek może być kluczem do tego, jak Rdzeń łamie nawet najlepszych.</li>
+        <li>Pełne kielichy w Sali Uczt nie wysychają od wieków. Kto je napełnia — i na czyją cześć?</li>
+        <li>Niektórzy słudzy są jeszcze świadomi i błagają o uwolnienie. Niektórzy tylko udają.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gaz-entry gaz-anchor">
+    <h4>Twierdza Bezimiennego <span class="ekind">· zamek-mit</span></h4>
+    <div class="gaz-stats">
+      <b>Typ:</b> przeklęty zamek na klifie <span class="sep">·</span> <b>Władca:</b> nikt żywy <span class="sep">·</span> <b>Zagrożenie:</b> ekstremalne<br>
+      <b>Cechy szczególne:</b> mury nienaruszone, lecz „nikt z tych, co weszli, nie wrócił"; tron z kości, korona wciąż na siedzeniu
+    </div>
+    <div class="gaz-prose">
+      <p>Zamek na klifie, opuszczony po klątwie — mury są nienaruszone, ale nikt z tych, co weszli, nie wrócił. Na pustym dziedzińcu fontanna pełna krwi nigdy nie wysycha. W lochach szkielety mają cele zamknięte od <em>wewnątrz</em>. W Zakazanej Bibliotece tysiące ksiąg o ciemnej magii ruszają się same, a w Sali Tronowej na tronie z kości nadal leży korona — czeka. To czołowy dungeon-mit świata.</p>
+    </div>
+    <div class="gaz-hooks">
+      <div class="hk-label">Plotki i haki</div>
+      <ul>
+        <li>„Nikt z tych, co weszli, nie wrócił" — a jednak ktoś musiał wynieść stąd opowieść. Skąd ją mamy?</li>
+        <li>Cele w lochach zamknięto od środka. Co tam więziono, że samo się zaryglowało — i przed czym?</li>
+        <li>Korona na tronie z kości to relikt, którego pragnie Rada Czterech. Kto po nią sięgnie, sięga po klątwę.</li>
+      </ul>
+    </div>
+  </article>
+</div></section>
+
+<!-- ================= RDZEŃ I WIARA ================= -->
+<section class="sect gaz-anchor" id="rdzen"><div class="wrap">
+  <div class="sect-head"><div class="k">~ co śpi pod światem ~</div><h2>Rdzeń i wiara</h2><p>Jeden mechanizm tłumaczy całą fantastykę tego świata.</p></div>
   <div class="lore-block"><h3>Rdzeń Pradawnych</h3>
-    <p>Pod światem leży Rdzeń — pradawne, pierwotne źródło mocy z czasów przed człowiekiem. Pradawni nauczyli się z niego czerpać i to ich zniszczyło, pękając granicę między światem żywych a tym, co za nią. Z pęknięć przecieka wszystko najgorsze: nieumarli, demony, dzika magia. Arkana Uczonego to ostrożne czerpanie z tego samego źródła — dlatego miscast bywa groźny. Jeden mechanizm tłumaczy całą fantastykę świata.</p></div>
+    <p>Pod światem leży Rdzeń — pradawne, pierwotne źródło mocy z czasów przed człowiekiem. Pradawni nauczyli się z niego czerpać i to ich zniszczyło, pękając granicę między światem żywych a tym, co za nią. Z pęknięć przecieka wszystko najgorsze: nieumarli, demony, dzika magia. Arkana Uczonego to ostrożne, okruchowe czerpanie z tego samego źródła — dlatego miscast bywa groźny: to chwila, gdy pęknięcie odgryza się magowi. Jeden mechanizm tłumaczy ruiny pełne umarłych, klątwy i „wnętrze martwego boga".</p></div>
   <div class="prose" style="margin-top:36px">
-    <p><strong>Bogowie nie są dowiedzeni.</strong> Czci się ich, lecz nikt ich nie widział. <strong>Światło</strong> to wiara państwowa — świątynia leczy, błogosławi, „łata" pęknięcia rzeczywistości. <strong>Kulty Rdzenia</strong> robią odwrotnie: poszerzają pęknięcia, wierząc, że za nimi czeka moc, wieczność albo bóg. Wojna o dusze pogranicza to w istocie wojna o to, kto kontroluje dostęp do Rdzenia.</p>
+    <p><strong>Bogowie nie są dowiedzeni.</strong> Gra nigdy nie pokazuje boga, który realnie działa. Czci się ich, lecz nikt ich nie widział. To, co ludzie nazywają „cudem" albo „klątwą", ma jedno prawdziwe źródło — Rdzeń.</p>
+    <p><strong>Światło</strong> to wiara państwowa: świątynia leczy, błogosławi, „łata" pęknięcia rzeczywistości. Czy stoi za nią bóg, czy wyuczony sposób uspokajania Rdzenia — gra nie rozstrzyga. Działa, bo ludzie wierzą i bo ktoś dawno temu odkrył, jak to robić.</p>
+    <p><strong>Kulty Rdzenia</strong> robią odwrotnie: tam, gdzie Światło pęknięcia łata, kulty je <em>poszerzają</em> — bo wierzą, że za nimi czeka moc, wieczność albo bóg. Ich „nekrotyczna moc płynąca przez symbol boga" to w istocie bezpośrednie sięgnięcie do Rdzenia.</p>
+    <p>Skrót dla pamięci: <strong>Światło</strong> = ci, co łatają pęknięty świat. <strong>Kulty</strong> = ci, co je rozdzierają. <strong>Rdzeń</strong> = to, co pod spodem — niedowiedzione i głodne.</p>
   </div>
 </div></section>
 
-<!-- FRAKCJE -->
-<section class="sect"><div class="wrap">
-  <div class="sect-head"><div class="k">~ siły świata ~</div><h2>Frakcje</h2></div>
+<!-- ================= FRAKCJE ================= -->
+<section class="sect gaz-anchor" id="frakcje"><div class="wrap">
+  <div class="sect-head"><div class="k">~ siły świata ~</div><h2>Frakcje</h2><p>Jedna kosmiczna oś, dwa ludzkie konflikty — wszystkie ciągną za te same sznurki.</p></div>
+  <div class="napiecia">
+    <div class="napiecie"><h4>Kosmiczne</h4><p>Cywilizacja kontra mrok przeciekający z Rdzenia. Wspólny, podskórny wróg wszystkich — który powinien zjednoczyć ludzi, lecz nie jednoczy, bo zżerają ich dwa inne spory.</p></div>
+    <div class="napiecie"><h4>Polityczne</h4><p>Korona kontra Rada Czterech. Jawna władza miecza i podatków przeciw ukrytej władzy pieniądza. Każda intryga, każdy zleceniodawca z sygnetem ciągnie jeden z tych sznurków.</p></div>
+    <div class="napiecie"><h4>Religijne</h4><p>Świątynia Światła kontra kulty Rdzenia. Ci, co łatają pęknięcia, przeciw tym, co je rozdzierają. Wojna o dusze pogranicza — i o to, kto kontroluje dostęp do Rdzenia.</p></div>
+  </div>
+  <div class="codex-grid" style="margin-top:40px">
+    <div class="codex-card"><h4>Korona / Imperium</h4><p>Król w Vilnogradzie, straż królewska (Kapitan Henryk Miecław), twierdze graniczne (Komendant Bożena Groźna). Trzyma się strachem i podatkami; nie stać jej już na armie wszędzie — dlatego nastała era najemników.</p></div>
+    <div class="codex-card"><h4>Rada Czterech</h4><p>Anonimowi mecenasi — prawdziwa władza za tronem. Pieniądz, intryga, zleceniodawcy z sygnetem. Kim są? Czy któryś już sięgnął po Rdzeń? Główna oś intrygi świata.</p></div>
+    <div class="codex-card"><h4>Świątynia Światła</h4><p>Wiara dominująca; Klasztor Iskry (Matka Urszula, Brat Kazimierz, Brat Tomasz Kronikarz). Błogosławieństwo, święte światło, leczenie. Łata pęknięcia i trzyma Rdzeń w ryzach.</p></div>
+    <div class="codex-card"><h4>Gildie kupieckie</h4><p>Volhynia i Vilnograd; gildmistrz Brat Aleksy Złotnik. Płacą za szlaki, eskorty i eliminację konkurencji. Pieniądz, który ciągnie za sznurek Rady.</p></div>
+    <div class="codex-card"><h4>Dzielnica złodziei</h4><p>Trzecia, nieformalna siła stolicy. Świat zleceń z sygnetem: roboty dla Rady albo gildii. Przemytnicy, szpiedzy, ostrza do wynajęcia.</p></div>
+    <div class="codex-card"><h4>Kulty Rdzenia / Mroku</h4><p>Mroczni kapłani, czarodzieje, kultiści. Przyzywają demony, rozdzierają pęknięcia, sięgają po nekrotyczną moc — wierząc, że pod spodem czeka moc albo bóg.</p></div>
+    <div class="codex-card"><h4>Plaga nieumarłych</h4><p>Lisze, wampiry (Mistrz Wampirów, Krwawy Hrabia), ghule, widma. Nie „lud", lecz przeciek z Rdzenia — najgęstszy w ruinach Martwych Pustkowi i w Borze Zmarłych.</p></div>
+    <div class="codex-card"><h4>Piractwo i bezprawie</h4><p>Zatoka Topielców jako miasto-twierdza bez prawa; Rada Piracka pięciu kapitanów. Łupy, okup, kontrabanda — i to, co fale wyrzucają na brzeg.</p></div>
+    <div class="codex-card"><h4>Dzicz i bestie</h4><p>Orkowie (Wódz Orków, szamani), gobliny, trolle, wilkołaki, harpie. Dzicz na rubieżach cywilizacji — nie frakcja, lecz odwieczne zagrożenie dzikich krain.</p></div>
+  </div>
+</div></section>
+
+<!-- ================= LUDY ================= -->
+<section class="sect gaz-anchor" id="ludy"><div class="wrap">
+  <div class="sect-head"><div class="k">~ kto zamieszkuje świat ~</div><h2>Ludy świata</h2>
+    <p>Świat jest przede wszystkim ludzką historią o trzymaniu światła. Frakcje nieludzkie to kanon lore — do gry wejdą w przyszłych rozszerzeniach.</p></div>
   <div class="codex-grid">
-    <div class="codex-card"><h4>Korona / Imperium</h4><p>Król w Vilnogradzie, straż królewska, twierdze graniczne. Trzyma się strachem i podatkami; nie stać jej już na armie wszędzie.</p></div>
-    <div class="codex-card"><h4>Rada Czterech</h4><p>Anonimowi mecenasi — prawdziwa władza za tronem. Pieniądz, intryga, zleceniodawcy z sygnetem.</p></div>
-    <div class="codex-card"><h4>Świątynia Światła</h4><p>Wiara dominująca. Błogosławieństwo, święte światło, leczenie. Łata pęknięcia i trzyma Rdzeń w ryzach.</p></div>
-    <div class="codex-card"><h4>Gildie kupieckie</h4><p>Volhynia i Vilnograd. Płacą za szlaki, eskorty i eliminację konkurencji.</p></div>
-    <div class="codex-card"><h4>Dzielnica złodziei</h4><p>Trzecia, nieformalna siła stolicy. Świat Mizela: roboty na zlecenie Rady albo gildii.</p></div>
-    <div class="codex-card"><h4>Kulty Rdzenia</h4><p>Czczą to, co śpi pod światem. Przyzywają demony, rozdzierają pęknięcia, sięgają po nekrotyczną moc.</p></div>
-    <div class="codex-card"><h4>Plaga nieumarłych</h4><p>Lisze, wampiry, ghule, widma. Nie „lud", lecz przeciek z Rdzenia, najgęstszy w ruinach.</p></div>
-    <div class="codex-card"><h4>Piractwo i dzicz</h4><p>Zatoka Topielców bez prawa; orkowie, gobliny, trolle, wilkołaki na rubieżach cywilizacji.</p></div>
+    <div class="codex-card"><h4>Ludzie</h4><p>Dominujący lud świata: Imperium, Korona, świątynia, gildie, kulty, piraci, najemnicy. Każdy znany bohater i przyjazny NPC — Marta, Henryk Miecław, Matka Urszula, Starszy Konrad — jest człowiekiem. Heroic-dark to przede wszystkim ludzka opowieść.</p></div>
+    <div class="codex-card"><h4>Krasnoludy <span class="soon">wkrótce</span></h4><p>Górski lud kowali i górników z Siwych Grani. Odeszli z Czarnego Hutmana, gdy dowiercili się do żyły Rdzenia. Rozproszeni: kupiecka enklawa w stolicy, osiadłe rody we wsiach górniczych, hołdy trwające wyżej w górach.</p></div>
+    <div class="codex-card"><h4>Elfy <span class="soon">wkrótce</span></h4><p>Leśne elfy — skryci, nieufni strażnicy starych granic w głębi Czarnoboru, znający mapę pęknięć Rdzenia. Mroczne elfy (już w grze jako wrogowie) to te, które dawno uległy Rdzeniowi i czczą pęknięcia.</p></div>
+    <div class="codex-card"><h4>Ludy dalekomorskie <span class="soon">wkrótce</span></h4><p>Wyspiarscy żeglarze i najemnicy nie-ludzkiej krwi z Wybrzeża Łez. Rzadcy i egzotyczni — przestrzeń na przyszłe rozszerzenia.</p></div>
+    <div class="codex-card"><h4>Bestie i dzicz</h4><p>Orkowie, gobliny, trolle, wilkołaki, harpie, jaszczuroludzie — dzicz, nie cywilizowane frakcje. Zagrożenie dzikich krain, nie partnerzy do rozmowy.</p></div>
+    <div class="codex-card"><h4>Nieumarli</h4><p>Lisze, wampiry, ghule, widma. Nie „lud", lecz przeciek z Rdzenia — najgęstszy tam, gdzie pęknięcie sięga powierzchni. Nie żyją; trwają.</p></div>
   </div>
 </div></section>
 
-<!-- LUDY -->
-<section class="sect"><div class="wrap">
-  <div class="sect-head"><div class="k">~ kto zamieszkuje świat ~</div><h2>Ludy</h2>
-    <p>Świat jest przede wszystkim ludzką historią o trzymaniu światła. Nieludzkie frakcje to kanon lore — do gry wejdą w przyszłych rozszerzeniach.</p></div>
-  <div class="codex-grid">
-    <div class="codex-card"><h4>Ludzie</h4><p>Dominujący lud: Imperium, Korona, świątynia, gildie, kulty, piraci, najemnicy. Każdy znany bohater świata jest człowiekiem.</p></div>
-    <div class="codex-card"><h4>Krasnoludy <span class="soon">wkrótce</span></h4><p>Górski lud kowali i górników z Siwych Grani. Odeszli z Czarnego Hutmana, gdy dowiercili się do żyły Rdzenia. Rozproszeni po krainach.</p></div>
-    <div class="codex-card"><h4>Elfy <span class="soon">wkrótce</span></h4><p>Leśne elfy — skryci strażnicy starych granic w Czarnoborze. Mroczne elfy uległy dawno Rdzeniowi i czczą pęknięcia.</p></div>
-    <div class="codex-card"><h4>Ludy dalekomorskie <span class="soon">wkrótce</span></h4><p>Wyspiarscy żeglarze i najemnicy nie-ludzkiej krwi z Wybrzeża Łez. Rzadcy i egzotyczni.</p></div>
-  </div>
-</div></section>
-
-<!-- ARCHETYPY -->
-<section class="sect"><div class="wrap">
-  <div class="sect-head"><div class="k">~ kim jesteś ~</div><h2>Archetypy w świecie</h2></div>
-  <div class="codex-grid">
-    <div class="codex-card"><h4>⚔️ Wojownik</h4><p>Najemnik i straż pogranicza. W świecie, gdzie miecz jest towarem, to weterani twierdz i eskorta karawan. Zwykły człowiek z bronią, który tej nocy staje między wsią a tym, co z lasu.</p></div>
-    <div class="codex-card"><h4>✨ Uczony</h4><p>Ten, który tknął zakazaną wiedzę Rdzenia. Magia nie jest darem bogów — to okruchowe czerpanie z pękniętego źródła. Mana to pojemność bezpiecznego kontaktu; miscast to chwila, gdy pęknięcie odgryza się magowi.</p></div>
-    <div class="codex-card"><h4>🗡️ Łotrzyk</h4><p>Półświatek i dzielnica złodziei Vilnogradu. Przemytnicy, szpiedzy, ostrza do wynajęcia. Często jedyny, który wejdzie tam, gdzie miecz i magia zawiodą — i wyjdzie z czymś, co ratuje więcej niż własną skórę.</p></div>
-  </div>
-</div></section>
-
-<!-- HISTORIA ŚWIATA -->
-<section class="sect"><div class="wrap">
+<!-- ================= HISTORIA ŚWIATA ================= -->
+<section class="sect gaz-anchor" id="historia"><div class="wrap">
   <div class="sect-head"><div class="k">~ epoki ~</div><h2>Historia świata</h2></div>
+  <p class="hist-intro">Pięć epok od pierwszego grzechu po dzisiejszy zmierzch — i moment, w którym do tej opowieści wkraczasz ty.</p>
   <div class="timeline">
-    <div class="tl-item"><div class="when">Przed człowiekiem</div><h3>Epoka Pradawnych</h3><p>Zaawansowana, przed-ludzka cywilizacja opanowała moc Rdzenia — i to ją zniszczyło. Zostały ruiny pełne pułapek i nieumarłych.</p></div>
-    <div class="tl-item"><div class="when">Grzech pierworodny</div><h3>Wielkie Pęknięcie</h3><p>Nadużycie Rdzenia popękało granicę między światem żywych a tym, co za nią. Odtąd mrok, nieumarli i groza przeciekają tam, gdzie Rdzeń jest płytki.</p></div>
-    <div class="tl-item"><div class="when">Wzlot ludzi</div><h3>Era Latarni</h3><p>Ludzkie Imperium wzniosło się jako latarnia porządku. Powstała Korona i świątynia Światła — instytucja, której zadaniem jest łatać pęknięcia.</p></div>
-    <div class="tl-item"><div class="when">Dwa wieki</div><h3>Wojny graniczne</h3><p>Strażyn strzeże traktu od dwustu lat przed wschodnimi barbarzyńcami. Era twardych granic.</p></div>
-    <div class="tl-item"><div class="when">Teraźniejszość</div><h3>Zmierzch Latarni</h3><p>Imperium słabnie, podatki rosną, granice się cofają. Wsie palone, kopalnie porzucane, Bór Zmarłych rośnie. Nastała era bohaterów-najemników — moment, w którym zaczynasz grać.</p></div>
+    <div class="tl-item"><div class="when">Przed człowiekiem</div><h3>Epoka Pradawnych</h3><p>Zaawansowana, przed-ludzka cywilizacja opanowała moc Rdzenia — i to ją zniszczyło. Zostały ruiny pełne pułapek i nieumarłych, a po samych Pradawnych — być może Rdzeń ich przemienił — nie został żaden lud, tylko architektura przypominająca wnętrze martwego boga.</p></div>
+    <div class="tl-item"><div class="when">Grzech pierworodny</div><h3>Wielkie Pęknięcie</h3><p>Nadużycie Rdzenia popękało granicę między światem żywych a tym, co za nią. Odtąd mrok, nieumarli i groza przeciekają wszędzie, gdzie Rdzeń leży płytko. To „grzech pierworodny" świata — rana, której nikt nie umie zasklepić.</p></div>
+    <div class="tl-item"><div class="when">Wzlot ludzi</div><h3>Era Latarni</h3><p>Ludzkie Imperium wzniosło się jako latarnia porządku po Pęknięciu. Powstała Korona w Vilnogradzie i Świątynia Światła — instytucja, której zadaniem jest łatać pęknięcia i trzymać Rdzeń w ryzach. Krasnoludy i elfy przeżywały w tej erze własne, równoległe dzieje.</p></div>
+    <div class="tl-item"><div class="when">Dwa wieki</div><h3>Wojny graniczne</h3><p>Strażyn strzeże traktu od dwustu lat przed wschodnimi barbarzyńcami. Era twardych granic, garnizonów i myta — porządek kupiony krwią pogranicza, który teraz zaczyna pękać.</p></div>
+    <div class="tl-item"><div class="when">Teraźniejszość</div><h3>Zmierzch Latarni</h3><p>Imperium słabnie, podatki rosną, granice się cofają. Wsie palone (Zgliszcza — rok temu), kopalnie porzucane (Czarny Hutman — krasnoludy odeszły dwadzieścia lat temu), Bór Zmarłych się rozrasta. Korony nie stać już na armie wszędzie — dlatego nastała era bohaterów-najemników. To moment, w którym zaczynasz grać: jeden człowiek może jeszcze przechylić szalę.</p></div>
   </div>
 </div></section>
 
-<!-- LEGENDY -->
-<section class="sect" style="border-bottom:none"><div class="wrap">
-  <div class="sect-head"><div class="k">~ tajemnice ~</div><h2>Legendy i haki</h2></div>
+<!-- ================= LEGENDY ================= -->
+<section class="sect gaz-anchor" id="legendy" style="border-bottom:none"><div class="wrap">
+  <div class="sect-head"><div class="k">~ tajemnice ~</div><h2>Legendy i haki</h2><p>Mity, które spinają świat — i czekają, aż ktoś sprawdzi, ile w nich prawdy.</p></div>
   <div class="codex-grid">
-    <div class="codex-card"><h4>Tron Białej Bogini</h4><p>Czy to śpiąca Pradawna, czy fragment świadomości Rdzenia uwięziony w lodzie? Kto wejdzie najwyżej, usłyszy jej głos.</p></div>
+    <div class="codex-card"><h4>Tron Białej Bogini</h4><p>Czy to śpiąca Pradawna, czy fragment świadomości Rdzenia uwięziony w lodzie Lodowego Pasu? Kto wejdzie najwyżej, usłyszy jej głos.</p></div>
     <div class="codex-card"><h4>Krwawy Hrabia</h4><p>Wampir był niegdyś rycerzem Korony. Jego klątwa to ostrzeżenie, co spotyka tych, którzy targują się z Rdzeniem.</p></div>
-    <div class="codex-card"><h4>Twierdza Bezimiennego</h4><p>„Nikt z tych, co weszli, nie wrócił." Czołowy dungeon-mit świata.</p></div>
-    <div class="codex-card"><h4>Sekret Rady Czterech</h4><p>Kim są mecenasi rządzący zza tronu? Czy któryś z nich już sięgnął po Rdzeń?</p></div>
-    <div class="codex-card"><h4>Rdzeń pod Świątynią Pradawnych</h4><p>„Wnętrze martwego boga" — źródło, które zniszczyło Pradawnych. Ktoś może chcieć je obudzić. Oś końcowej stawki świata.</p></div>
-    <div class="codex-card"><h4>Przed czym uciekły krasnoludy?</h4><p>Coś stuka w martwym Czarnym Hutmanie. Hak łączący przyszłą frakcję krasnoludów z metafizyką Rdzenia.</p></div>
+    <div class="codex-card"><h4>Twierdza Bezimiennego</h4><p>„Nikt z tych, co weszli, nie wrócił." Czołowy dungeon-mit świata — i cele zamknięte od wewnątrz.</p></div>
+    <div class="codex-card"><h4>Sekret Rady Czterech</h4><p>Kim są mecenasi rządzący zza tronu? Czy któryś z nich już sięgnął po Rdzeń? Główny hak intrygi politycznej.</p></div>
+    <div class="codex-card"><h4>Rdzeń pod Świątynią Pradawnych</h4><p>„Wnętrze martwego boga" — źródło, które zniszczyło Pradawnych. Ktoś może chcieć je obudzić. Oś końcowej, kosmicznej stawki świata.</p></div>
+    <div class="codex-card"><h4>Przed czym uciekły krasnoludy?</h4><p>Coś wciąż stuka w martwym Czarnym Hutmanie. Hak łączący przyszłą frakcję krasnoludów z metafizyką Rdzenia.</p></div>
+    <div class="codex-card"><h4>Coś dużego pod falami</h4><p>Dziadek Florian z Zatoki Topielców widział to na własne oczy. Możliwy ślad Pradawnego, którego pochłonęło morze.</p></div>
+    <div class="codex-card"><h4>Latarnia, co zapala się sama</h4><p>Opuszczona Latarnia Topielców w Czarnogrodzie nocą wabi statki na rafy. Kto stoi na jej szczycie z ogniem?</p></div>
+    <div class="codex-card"><h4>Czterdziesty drugi mieszkaniec</h4><p>W Zgliszczach wykopano czterdzieści jeden grobów, lecz spis dusz mówił o czterdziestu dwóch. Kogo brakuje — i czy na pewno zginął?</p></div>
   </div>
   <div style="text-align:center;margin-top:46px">
     <a class="btn btn-gold" href="/">Wyrusz w ten świat →</a>
@@ -141,9 +701,9 @@
 <footer><div class="wrap">
   <div class="brand">AI·GM</div>
   <div><span class="tag">HEROIC-DARK</span><span class="tag">POLSKA NARRACJA</span><span class="tag">JEDEN ŚWIAT</span></div>
-  <p style="margin-top:18px">Świat opisany w kanonie lore. Rozwijany wraz z grą. © 2026</p>
+  <p style="margin-top:18px">Księga Świata opisana w kanonie lore. Rozwijana wraz z grą. © 2026</p>
 </div></footer>
 
-<script src="assets/js/showcase.js?v=8"></script>
+<script src="assets/js/showcase.js?v=9"></script>
 </body>
 </html>

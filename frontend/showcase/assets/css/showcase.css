@@ -148,6 +148,11 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .mech h4{font-family:var(--font-disp);color:var(--ink);font-size:16px;margin:10px 0 6px}
 .mech p{color:var(--ink-dim);font-size:13px}
 
+/* mapa krainy w księdze */
+.gaz-map{max-width:900px;margin:36px auto 8px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--bg2)}
+.gaz-map img{width:100%;display:block}
+.gaz-map figcaption{padding:14px 22px;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;line-height:1.5;border-top:1px solid var(--line)}
+
 /* kodeks świata (swiat.html) */
 .prose{max-width:760px;margin:0 auto;color:var(--ink-dim);font-size:16px;line-height:1.75}
 .prose p{margin-bottom:16px}
@@ -216,3 +221,53 @@ footer .brand{display:inline-block;margin-bottom:14px}
 }
 @media(max-width:520px){ .krainy,.mechs{grid-template-columns:1fr} }
 @media(prefers-reduced-motion:reduce){ html{scroll-behavior:auto} .reveal{transition:none;opacity:1;transform:none} }
+
+/* ============================================================
+   GAZETTEER — księga świata (swiat.html, styl WFRP)
+   ============================================================ */
+
+/* spis treści */
+.gaz-toc{max-width:860px;margin:0 auto;border:1px solid var(--line);border-radius:4px;background:linear-gradient(180deg,var(--panel),var(--bg2));padding:30px 34px;position:relative}
+.gaz-toc::after{content:"";position:absolute;inset:9px;border:1px solid rgba(201,165,74,.10);border-radius:2px;pointer-events:none}
+.gaz-toc h2{font-family:var(--font-disp);color:var(--gold);font-size:20px;letter-spacing:1px;text-align:center;margin-bottom:6px}
+.gaz-toc .toc-sub{text-align:center;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;margin-bottom:22px}
+.gaz-toc ol{list-style:none;counter-reset:toc;columns:2;column-gap:40px}
+.gaz-toc li{counter-increment:toc;padding:6px 0;break-inside:avoid}
+.gaz-toc li a{color:var(--ink-dim);font-size:15px;display:flex;gap:10px;align-items:baseline;transition:color .15s}
+.gaz-toc li a::before{content:counter(toc,upper-roman) ".";font-family:var(--font-disp);color:var(--gold-dk);font-size:13px;min-width:30px}
+.gaz-toc li a:hover{color:var(--gold)}
+@media(max-width:680px){ .gaz-toc ol{columns:1} }
+
+/* region — przegraj krainy: nagłówek z obrazem + proza wprowadzająca */
+.gaz-region{max-width:880px;margin:0 auto 30px}
+.gaz-region-head{position:relative;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:26px;min-height:180px;display:flex;align-items:flex-end;
+  background:linear-gradient(180deg,rgba(10,9,8,.30),rgba(10,9,8,.92)),var(--region-img) center/cover no-repeat,var(--bg2)}
+.gaz-region-head .rh-inner{padding:26px 30px;position:relative;z-index:2}
+.gaz-region-head .rk{font-family:var(--font-flavor);font-style:italic;color:var(--gold);letter-spacing:2px;font-size:13px}
+.gaz-region-head h3{font-family:var(--font-disp);font-weight:900;font-size:30px;color:var(--ink);text-shadow:0 2px 18px rgba(0,0,0,.85);margin-top:4px}
+.gaz-region-head .rtag{display:block;font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;margin-top:2px}
+.gaz-region-intro{max-width:760px;margin:0 auto;color:var(--ink-dim);font-size:16px;line-height:1.75}
+.gaz-region-intro p{margin-bottom:14px}
+.gaz-region-intro .lead{font-family:var(--font-flavor);font-style:italic;font-size:18px;color:var(--ink)}
+.gaz-soonnote{font-family:var(--font-flavor);font-style:italic;color:var(--say-pc);font-size:14px;border-left:2px solid rgba(127,178,230,.4);padding:4px 0 4px 14px;margin-top:8px}
+
+/* gazetteer entry — osada jako mini-statblok + proza + plotki */
+.gaz-entry{max-width:820px;margin:0 auto 22px;border:1px solid var(--line);border-radius:4px;background:var(--panel);padding:26px 30px;position:relative;transition:.2s}
+.gaz-entry:hover{border-color:var(--gold-dk)}
+.gaz-entry.major{border-left:3px solid var(--gold-dk)}
+.gaz-entry h4{font-family:var(--font-disp);color:var(--gold);font-size:21px;margin:0 0 4px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.gaz-entry h4 .ekind{font-family:var(--font-flavor);font-style:italic;color:var(--ink-dim);font-size:14px;letter-spacing:1px}
+.gaz-stats{font-size:13.5px;color:var(--ink-dim);line-height:1.9;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin:12px 0 16px}
+.gaz-stats b{color:var(--gold-lt);font-weight:600;font-family:var(--font-ui)}
+.gaz-stats .sep{color:var(--line);margin:0 6px}
+.gaz-entry .gaz-prose{color:var(--ink-dim);font-size:15px;line-height:1.7}
+.gaz-entry .gaz-prose p{margin-bottom:12px}
+.gaz-hooks{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+.gaz-hooks .hk-label{font-family:var(--font-disp);color:var(--blood);font-size:13px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+.gaz-hooks ul{list-style:none}
+.gaz-hooks li{position:relative;padding:5px 0 5px 22px;color:var(--ink-dim);font-size:14px;line-height:1.5}
+.gaz-hooks li::before{content:"◆";position:absolute;left:0;top:5px;color:var(--gold-dk);font-size:9px}
+.gaz-hooks li b{color:var(--ink);font-weight:600;font-family:var(--font-ui)}
+
+/* sub-anchor offset pod sticky nav */
+.gaz-anchor{scroll-margin-top:84px}
