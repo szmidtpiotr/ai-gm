@@ -19,6 +19,15 @@ Format: `- [ ] #NNN — krótki tytuł` · `(dep: #MMM)` = zależność (rób PO
 **Wyjątki pipeline:** brak — wszystkie FIX idą pełnym pipeline (/tdd → /code-review → /playwright-test-report).
 
 **Testy:** na Demo (user_id=1). NIGDY na Mizelu (char 999420 — postać Piotra, read-only). Backend/walkę → test lub Combat Sandbox; flow gracza → /game-test-player lub ręcznie na DEV.
+
+**Refaktor monolitów — Faza R (#871–#882, milestone „Refaktor monolitów (Faza R)", autoryzowane 2026-06-22):** to NIE są bugfixy ani featury — to **czysty refaktor strukturalny**. ŻELAZNE zasady, łamią pełny pipeline powyżej:
+- **CZYSTY EXTRACT, ZERO ZMIAN ZACHOWANIA.** Przenosisz kod 1:1 do nowych funkcji/plików. NIE zmieniasz formuł, liczb, DC, kolejności rozliczeń, treści narracji ani żadnej logiki. Diff ma być WYŁĄCZNIE strukturalny (przeniesienie + wywołanie).
+- **LOCKED game mechanics.** `combat_service.py` i `turns.py` to zablokowana mechanika (`game_mechanics.md` CZĘŚĆ AB, #826, `backend/prompts/system_prompt.txt`). Pod ŻADNYM pozorem nie „ulepszaj", nie poprawiaj przy okazji, nie refaktoruj liczb. Jeśli kusi optymalizacja — NIE, to osobne issue. Widzisz realny bug przy okazji → zapisz w komentarzu issue, NIE naprawiaj.
+- **Pipeline dla Fazy R:** `/tdd` NIE (nie piszemy nowych testów na extract). Zamiast tego: (1) uruchom ISTNIEJĄCE testy PRZED zmianą i zapisz wynik, (2) zrób extract, (3) uruchom te same testy PO — muszą dać IDENTYCZNY wynik. Backend: `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_phase8_combat.py` + powiązane `test_*`. `/playwright-test-report` NIE dotyczy (poza #882 app.js → tam smoke gry w przeglądarce: login→hero→kampania→tura→walka, konsola czysta). Gdy test PO ≠ test PRZED → **GATE** (zmieniłeś zachowanie, nie zgadujesz — stop).
+- **Kolejność TWARDA (zależności):** R1: #871→#872→#873→#874→#875 SEKWENCYJNIE (każdy buduje na poprzednim; kolejność torów w create_turn krytyczna — #616). R2: #876→#877→#878 SEKWENCYJNIE. R3 (#879/#880/#881) i R4 (#882) niezależne. mass-implement leci rosnąco po # = poprawna kolejność.
+- **#882 (app.js):** bump `?v=N` w importach (cache-bust). Po podziale gra w przeglądarce musi działać identycznie.
+- **Commit:** propose only, NIE push (DEV develop, working tree). Każde zadanie = osobny commit z ref do issue.
+- **Parent #870** to issue-parasol (task-lista) — NIE implementuj go jako zadania; jeśli trafi do kolejki → tick + DONE-ALREADY.
 <!-- MASS-ZAKRES:END -->
 
 > **Auto-sync z kolumną TO DO (ClaudeCodeUI Issues Board):** `bash scripts/sync_fix_list_from_board.sh`
