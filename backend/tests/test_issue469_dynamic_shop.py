@@ -75,6 +75,7 @@ def _make_db():
             npc_type TEXT NOT NULL DEFAULT 'neutral',
             is_shop INTEGER NOT NULL DEFAULT 0,
             is_active INTEGER NOT NULL DEFAULT 1,
+            is_crafter INTEGER NOT NULL DEFAULT 0,
             shop_inventory_json TEXT NOT NULL DEFAULT '[]'
         );
         CREATE TABLE character_inventory (

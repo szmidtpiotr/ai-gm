@@ -90,7 +90,7 @@ def _make_db():
         CREATE TABLE characters (id INTEGER PRIMARY KEY, gold_gp INTEGER DEFAULT 0, sheet_json TEXT DEFAULT '{}');
         CREATE TABLE npcs (
             id INTEGER PRIMARY KEY, key TEXT NOT NULL, label TEXT NOT NULL, npc_type TEXT DEFAULT 'neutral',
-            is_shop INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, shop_inventory_json TEXT DEFAULT '[]'
+            is_shop INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, is_crafter INTEGER DEFAULT 0, shop_inventory_json TEXT DEFAULT '[]'
         );
         CREATE TABLE character_inventory (
             id INTEGER PRIMARY KEY, character_id INTEGER NOT NULL, item_key TEXT, weapon_key TEXT,
