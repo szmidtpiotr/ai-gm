@@ -91,7 +91,10 @@ def _schema_sql(player_conditions: list[dict] | None = None) -> str:
       is_active INTEGER NOT NULL DEFAULT 1,
       loot_table_key TEXT,
       drop_chance REAL NOT NULL DEFAULT 0.0,
-      skills_json TEXT
+      skills_json TEXT,
+      attacks_per_turn INTEGER NOT NULL DEFAULT 1,
+      stats_json TEXT,
+      image_url TEXT
     );
     INSERT INTO game_config_enemies
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, drop_chance, skills_json)
