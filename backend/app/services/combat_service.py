@@ -3694,6 +3694,297 @@ def _log_combat_end_event(conn: sqlite3.Connection, row: sqlite3.Row, reason: st
         )
 
 
+# ---------------------------------------------------------------------------
+# R3.1 (#879): evaluate_current_turn_conditions — per-effect-type helpers
+# ---------------------------------------------------------------------------
+
+
+def _tick_periodic_save(
+    condition: dict,
+    effect: dict,
+    effect_idx: int,
+    actor: dict,
+    sheet: "dict[str, Any] | None",
+    marker: str,
+    key: str,
+    label: str,
+) -> "tuple[bool, list[dict[str, Any]], bool, bool]":
+    """Returns (remove_condition, new_events, runtime_changed, conditions_changed)."""
+    tick = str(effect.get("tick") or "").strip().lower()
+    if tick not in {"start_turn", "each_round"}:
+        return False, [], False, False
+    state = _condition_effect_state(condition, effect_idx)
+    if str(state.get("last_turn_marker") or "") == marker:
+        return False, [], False, False
+    state["last_turn_marker"] = marker
+
+    stat_key = str(effect.get("stat") or "").strip().upper() or None
+    modifier = _combatant_stat_modifier(actor, sheet=sheet, stat=stat_key)
+    # S13 (#608): +2 defensywny (derived stat 'save', np. blessed) dolicza się do
+    # rzutów obronnych (periodic_save). Data-driven — żaden if key == "blessed".
+    modifier += _combatant_stat_modifier(actor, sheet=sheet, stat="save")
+    raw_roll = int(roll_d20())
+    dc_value = resolve_dc_for_roll(effect.get("dc_key") or effect.get("value"))
+    dc_final = int(dc_value or 0)
+    total = int(raw_roll) + int(modifier)
+    success = raw_roll == 20 or (raw_roll != 1 and total >= dc_final)
+    state["last_raw_roll"] = int(raw_roll)
+    state["last_total"] = int(total)
+    state["last_dc"] = int(dc_final)
+    state["last_success"] = bool(success)
+
+    new_events: list[dict[str, Any]] = [
+        {
+            "type": "periodic_save",
+            "condition_key": key,
+            "condition_label": label,
+            "stat": stat_key,
+            "raw_roll": int(raw_roll),
+            "modifier": int(modifier),
+            "total": int(total),
+            "dc": int(dc_final),
+            "success": bool(success),
+        }
+    ]
+
+    remove_condition = False
+    expires = str(effect.get("expires") or "").strip().lower()
+    duration_rounds = _condition_duration_rounds(expires)
+    if duration_rounds is not None:
+        remaining = state.get("remaining_rounds")
+        if not isinstance(remaining, int) or remaining < 1:
+            remaining = duration_rounds
+        remaining -= 1
+        state["remaining_rounds"] = remaining
+        if remaining <= 0:
+            remove_condition = True
+
+    if success and expires == "save_success":
+        remove_condition = True
+
+    if remove_condition:
+        new_events.append(
+            {
+                "type": "condition_removed",
+                "condition_key": key,
+                "condition_label": label,
+                "reason": "save_success" if success and expires == "save_success" else "duration_expired",
+            }
+        )
+
+    return remove_condition, new_events, True, remove_condition
+
+
+def _tick_duration_countdown(
+    condition: dict,
+    marker: str,
+    key: str,
+    label: str,
+) -> "tuple[bool, list[dict[str, Any]], bool, bool]":
+    """Returns (remove_condition, new_events, runtime_changed, conditions_changed)."""
+    dur = condition.get("duration_rounds")
+    if not isinstance(dur, int) or dur <= 0:
+        return False, [], False, False
+    leg_state = _condition_effect_state(condition, "duration_tick")
+    if str(leg_state.get("last_turn_marker") or "") == marker:
+        return False, [], False, False
+    leg_state["last_turn_marker"] = marker
+    condition["duration_rounds"] = dur - 1
+    remove_condition = condition["duration_rounds"] <= 0
+    new_events: list[dict[str, Any]] = []
+    if remove_condition:
+        new_events.append(
+            {
+                "type": "condition_removed",
+                "condition_key": key,
+                "condition_label": label,
+            }
+        )
+    return remove_condition, new_events, True, remove_condition
+
+
+def _tick_block_action(key: str, label: str) -> "tuple[bool, list[dict[str, Any]]]":
+    """Returns (blocked, new_events)."""
+    return True, [{"type": "block_action", "condition_key": key, "condition_label": label}]
+
+
+def _tick_skip_turn(
+    effect: dict,
+    key: str,
+    label: str,
+) -> "tuple[bool, list[dict[str, Any]]]":
+    """Returns (blocked, new_events)."""
+    try:
+        chance = float(effect.get("chance", 1.0))
+    except (TypeError, ValueError):
+        chance = 1.0
+    if chance >= 1.0 or random.random() < chance:
+        return True, [
+            {
+                "type": "block_action",
+                "condition_key": key,
+                "condition_label": label,
+                "via": "skip_turn",
+            }
+        ]
+    return False, []
+
+
+def _tick_stacking_levels(
+    condition: dict,
+    effect: dict,
+    actor: dict,
+    key: str,
+    label: str,
+) -> "tuple[bool, list[dict[str, Any]]]":
+    """Returns (blocked, new_events)."""
+    level = _condition_level(condition)
+    thresholds = effect.get("threshold_effects")
+    if not isinstance(thresholds, dict):
+        return False, []
+    blocked = False
+    new_events: list[dict[str, Any]] = []
+    for thr_key, thr_eff in thresholds.items():
+        try:
+            thr = int(thr_key)
+        except (TypeError, ValueError):
+            continue
+        if level < thr or not isinstance(thr_eff, dict):
+            continue
+        if str(thr_eff.get("type") or "").strip().lower() == "block_action":
+            blocked = True
+            new_events.append(
+                {"type": "block_action", "condition_key": key, "condition_label": label}
+            )
+    return blocked, new_events
+
+
+def _tick_dot(
+    condition: dict,
+    effect: dict,
+    effect_idx: int,
+    actor: dict,
+    marker: str,
+    key: str,
+    label: str,
+) -> "tuple[list[dict[str, Any]], bool, bool]":
+    """Returns (new_events, conditions_changed, runtime_changed). Mutates actor hp_current."""
+    tick = str(effect.get("tick") or "start_turn").strip().lower()
+    if tick not in {"start_turn", "each_round"}:
+        return [], False, False
+    dstate = _condition_effect_state(condition, f"dot_{effect_idx}")
+    if str(dstate.get("last_turn_marker") or "") == marker:
+        return [], False, False
+    dstate["last_turn_marker"] = marker
+    raw_val = effect.get("value")
+    dmg = int(raw_val) if isinstance(raw_val, (int, float)) else roll_damage_dice(str(raw_val or "1d4"))
+    if dmg <= 0:
+        return [], False, True
+    prev_hp = int(actor.get("hp_current", 0) or 0)
+    actor["hp_current"] = max(0, prev_hp - dmg)
+    return (
+        [
+            {
+                "type": "condition_damage",
+                "condition_key": key,
+                "condition_label": label,
+                "damage": dmg,
+                "damage_type": str(effect.get("damage_type") or "physical"),
+                "hp_after": int(actor.get("hp_current", 0)),
+            }
+        ],
+        True,
+        True,
+    )
+
+
+def _tick_escalating_dot(
+    condition: dict,
+    effect: dict,
+    effect_idx: int,
+    actor: dict,
+    marker: str,
+    key: str,
+    label: str,
+) -> "tuple[list[dict[str, Any]], bool, bool]":
+    """Returns (new_events, conditions_changed, runtime_changed). Mutates actor hp_current."""
+    tick = str(effect.get("tick") or "start_turn").strip().lower()
+    if tick not in {"start_turn", "each_round"}:
+        return [], False, False
+    estate = _condition_effect_state(condition, f"edot_{effect_idx}")
+    if str(estate.get("last_turn_marker") or "") == marker:
+        return [], False, False
+    estate["last_turn_marker"] = marker
+    ticks_done = int(estate.get("ticks", 0) or 0)
+    dmg = _escalating_dot_damage(effect, ticks_done)
+    estate["ticks"] = ticks_done + 1
+    if dmg <= 0:
+        return [], False, True
+    prev_hp = int(actor.get("hp_current", 0) or 0)
+    actor["hp_current"] = max(0, prev_hp - dmg)
+    return (
+        [
+            {
+                "type": "condition_damage",
+                "condition_key": key,
+                "condition_label": label,
+                "damage": dmg,
+                "damage_type": str(effect.get("damage_type") or "physical"),
+                "hp_after": int(actor.get("hp_current", 0)),
+            }
+        ],
+        True,
+        True,
+    )
+
+
+def _tick_legacy(
+    condition: dict,
+    actor: dict,
+    marker: str,
+    key: str,
+    label: str,
+) -> "tuple[bool, list[dict[str, Any]], bool, bool]":
+    """Returns (blocked, new_events, conditions_changed, runtime_changed). Mutates actor hp_current."""
+    legacy = _decode_effect_json(condition.get("effect_json"))
+    if not isinstance(legacy, dict):
+        return False, [], False, False
+    leg_state = _condition_effect_state(condition, "legacy_tick")
+    if str(leg_state.get("last_turn_marker") or "") == marker:
+        return False, [], False, False
+    leg_state["last_turn_marker"] = marker
+
+    new_events: list[dict[str, Any]] = []
+    blocked = False
+    conditions_changed = False
+
+    if legacy.get("skip_turn"):
+        blocked = True
+        new_events.append(
+            {"type": "block_action", "condition_key": key, "condition_label": label}
+        )
+
+    dpt = legacy.get("damage_per_turn")
+    if dpt and isinstance(dpt, (int, float)) and dpt > 0:
+        dmg = int(dpt)
+        prev_hp = int(actor.get("hp_current", 0) or 0)
+        actor["hp_current"] = max(0, prev_hp - dmg)
+        dtype = str(legacy.get("damage_type") or "physical")
+        new_events.append(
+            {
+                "type": "condition_damage",
+                "condition_key": key,
+                "condition_label": label,
+                "damage": dmg,
+                "damage_type": dtype,
+                "hp_after": int(actor.get("hp_current", 0)),
+            }
+        )
+        conditions_changed = True
+
+    return blocked, new_events, conditions_changed, True
+
+
 def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
     """
     T24: process runtime `effect_json` condition effects for the actor whose turn is active.
@@ -3765,87 +4056,23 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                 effect_type = str(effect.get("type") or "").strip().lower()
                 if effect_type != "periodic_save":
                     continue
-                tick = str(effect.get("tick") or "").strip().lower()
-                if tick not in {"start_turn", "each_round"}:
-                    continue
-                state = _condition_effect_state(condition, effect_idx)
-                if str(state.get("last_turn_marker") or "") == marker:
-                    continue
-                state["last_turn_marker"] = marker
-                runtime_changed = True
-
-                stat_key = str(effect.get("stat") or "").strip().upper() or None
-                modifier = _combatant_stat_modifier(actor, sheet=sheet, stat=stat_key)
-                # S13 (#608): +2 defensywny (derived stat 'save', np. blessed) dolicza się do
-                # rzutów obronnych (periodic_save). Data-driven — żaden if key == "blessed".
-                modifier += _combatant_stat_modifier(actor, sheet=sheet, stat="save")
-                raw_roll = int(roll_d20())
-                dc_value = resolve_dc_for_roll(effect.get("dc_key") or effect.get("value"))
-                dc_final = int(dc_value or 0)
-                total = int(raw_roll) + int(modifier)
-                success = raw_roll == 20 or (raw_roll != 1 and total >= dc_final)
-                state["last_raw_roll"] = int(raw_roll)
-                state["last_total"] = int(total)
-                state["last_dc"] = int(dc_final)
-                state["last_success"] = bool(success)
-
-                events.append(
-                    {
-                        "type": "periodic_save",
-                        "condition_key": key,
-                        "condition_label": label,
-                        "stat": stat_key,
-                        "raw_roll": int(raw_roll),
-                        "modifier": int(modifier),
-                        "total": int(total),
-                        "dc": int(dc_final),
-                        "success": bool(success),
-                    }
+                rm, evts, rt, cc = _tick_periodic_save(
+                    condition, effect, effect_idx, actor, sheet, marker, key, label
                 )
-
-                expires = str(effect.get("expires") or "").strip().lower()
-                duration_rounds = _condition_duration_rounds(expires)
-                if duration_rounds is not None:
-                    remaining = state.get("remaining_rounds")
-                    if not isinstance(remaining, int) or remaining < 1:
-                        remaining = duration_rounds
-                    remaining -= 1
-                    state["remaining_rounds"] = remaining
-                    runtime_changed = True
-                    if remaining <= 0:
-                        remove_condition = True
-
-                if success and expires == "save_success":
+                events.extend(evts)
+                runtime_changed = runtime_changed or rt
+                conditions_changed = conditions_changed or cc
+                if rm:
                     remove_condition = True
-
-                if remove_condition:
-                    events.append(
-                        {
-                            "type": "condition_removed",
-                            "condition_key": key,
-                            "condition_label": label,
-                            "reason": "save_success" if success and expires == "save_success" else "duration_expired",
-                        }
-                    )
-                    conditions_changed = True
                     break
 
             # Duration countdown (for conditions applied via weapon effect_json)
-            dur = condition.get("duration_rounds")
-            if isinstance(dur, int) and dur > 0:
-                leg_state = _condition_effect_state(condition, "duration_tick")
-                if str(leg_state.get("last_turn_marker") or "") != marker:
-                    leg_state["last_turn_marker"] = marker
-                    runtime_changed = True
-                    condition["duration_rounds"] = dur - 1
-                    if condition["duration_rounds"] <= 0:
-                        remove_condition = True
-                        events.append({
-                            "type": "condition_removed",
-                            "condition_key": key,
-                            "condition_label": label,
-                        })
-                        conditions_changed = True
+            rm, evts, rt, cc = _tick_duration_countdown(condition, marker, key, label)
+            events.extend(evts)
+            runtime_changed = runtime_changed or rt
+            conditions_changed = conditions_changed or cc
+            if rm:
+                remove_condition = True
 
             if remove_condition:
                 # S12 (#607): kondycja wygasła → zbierz on_expire_apply (np. hasted → exhausted 1).
@@ -3865,148 +4092,56 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
             for effect in effects:
                 effect_type = str(effect.get("type") or "").strip().lower()
                 if effect_type == "block_action":
-                    blocked = True
-                    events.append(
-                        {
-                            "type": "block_action",
-                            "condition_key": key,
-                            "condition_label": label,
-                        }
-                    )
+                    blk, evts = _tick_block_action(key, label)
+                    blocked = blocked or blk
+                    events.extend(evts)
                 elif effect_type == "skip_turn":
                     # #621: strukturalny skip_turn (slowed/stunned). Honoruj `chance`
                     # (domyślnie 1.0 = zawsze pomija, jak stunned); slowed=0.5 losuje co turę.
                     # Czas trwania ogarnia osobny mechanizm wygasania kondycji — nie duplikuj.
-                    try:
-                        chance = float(effect.get("chance", 1.0))
-                    except (TypeError, ValueError):
-                        chance = 1.0
-                    if chance >= 1.0 or random.random() < chance:
-                        blocked = True
-                        events.append(
-                            {
-                                "type": "block_action",
-                                "condition_key": key,
-                                "condition_label": label,
-                                "via": "skip_turn",
-                            }
-                        )
+                    blk, evts = _tick_skip_turn(effect, key, label)
+                    blocked = blocked or blk
+                    events.extend(evts)
 
             # S9 (#604): stacking_levels — progi (threshold_effects) odpalają się,
             # gdy runtime poziom kondycji ≥ próg (np. exhausted poziom 2 → omdlenie).
             for effect in effects:
                 if str(effect.get("type") or "").strip().lower() != "stacking_levels":
                     continue
-                level = _condition_level(condition)
-                thresholds = effect.get("threshold_effects")
-                if not isinstance(thresholds, dict):
-                    continue
-                for thr_key, thr_eff in thresholds.items():
-                    try:
-                        thr = int(thr_key)
-                    except (TypeError, ValueError):
-                        continue
-                    if level < thr or not isinstance(thr_eff, dict):
-                        continue
-                    if str(thr_eff.get("type") or "").strip().lower() == "block_action":
-                        blocked = True
-                        events.append({
-                            "type": "block_action",
-                            "condition_key": key,
-                            "condition_label": label,
-                        })
+                blk, evts = _tick_stacking_levels(condition, effect, actor, key, label)
+                blocked = blocked or blk
+                events.extend(evts)
 
             # S8 (#603): `dot` — damage-over-time po kości (np. on_fire 2d6/turę).
             # Schema-zgodny prymityw; tyka raz na turę aktora (dedup po markerze).
             for effect_idx, effect in enumerate(effects):
                 if str(effect.get("type") or "").strip().lower() != "dot":
                     continue
-                tick = str(effect.get("tick") or "start_turn").strip().lower()
-                if tick not in {"start_turn", "each_round"}:
-                    continue
-                dstate = _condition_effect_state(condition, f"dot_{effect_idx}")
-                if str(dstate.get("last_turn_marker") or "") == marker:
-                    continue
-                dstate["last_turn_marker"] = marker
-                runtime_changed = True
-                raw_val = effect.get("value")
-                dmg = int(raw_val) if isinstance(raw_val, (int, float)) else roll_damage_dice(str(raw_val or "1d4"))
-                if dmg > 0:
-                    prev_hp = int(actor.get("hp_current", 0) or 0)
-                    actor["hp_current"] = max(0, prev_hp - dmg)
-                    events.append({
-                        "type": "condition_damage",
-                        "condition_key": key,
-                        "condition_label": label,
-                        "damage": dmg,
-                        "damage_type": str(effect.get("damage_type") or "physical"),
-                        "hp_after": int(actor.get("hp_current", 0)),
-                    })
-                    conditions_changed = True
+                evts, cc, rt = _tick_dot(condition, effect, effect_idx, actor, marker, key, label)
+                events.extend(evts)
+                conditions_changed = conditions_changed or cc
+                runtime_changed = runtime_changed or rt
 
             # S10 (#605): `escalating_dot` — DOT narastający w czasie (hemorrhage 1d4/turę,
             # +1d4 co 3 tury). Licznik tyknięć w effect_state przeżywa między rundami.
             for effect_idx, effect in enumerate(effects):
                 if str(effect.get("type") or "").strip().lower() != "escalating_dot":
                     continue
-                tick = str(effect.get("tick") or "start_turn").strip().lower()
-                if tick not in {"start_turn", "each_round"}:
-                    continue
-                estate = _condition_effect_state(condition, f"edot_{effect_idx}")
-                if str(estate.get("last_turn_marker") or "") == marker:
-                    continue
-                estate["last_turn_marker"] = marker
-                ticks_done = int(estate.get("ticks", 0) or 0)
-                dmg = _escalating_dot_damage(effect, ticks_done)
-                estate["ticks"] = ticks_done + 1
-                runtime_changed = True
-                if dmg > 0:
-                    prev_hp = int(actor.get("hp_current", 0) or 0)
-                    actor["hp_current"] = max(0, prev_hp - dmg)
-                    events.append({
-                        "type": "condition_damage",
-                        "condition_key": key,
-                        "condition_label": label,
-                        "damage": dmg,
-                        "damage_type": str(effect.get("damage_type") or "physical"),
-                        "hp_after": int(actor.get("hp_current", 0)),
-                    })
-                    conditions_changed = True
+                evts, cc, rt = _tick_escalating_dot(
+                    condition, effect, effect_idx, actor, marker, key, label
+                )
+                events.extend(evts)
+                conditions_changed = conditions_changed or cc
+                runtime_changed = runtime_changed or rt
 
             # Legacy condition format: skip_turn and damage_per_turn
             # (game_config_conditions uses {"skip_turn":true,"damage_per_turn":N,...})
             if not effects:
-                legacy = _decode_effect_json(condition.get("effect_json"))
-                if isinstance(legacy, dict):
-                    leg_state = _condition_effect_state(condition, "legacy_tick")
-                    already_ticked = str(leg_state.get("last_turn_marker") or "") == marker
-                    if not already_ticked:
-                        leg_state["last_turn_marker"] = marker
-                        runtime_changed = True
-
-                        if legacy.get("skip_turn"):
-                            blocked = True
-                            events.append({
-                                "type": "block_action",
-                                "condition_key": key,
-                                "condition_label": label,
-                            })
-
-                        dpt = legacy.get("damage_per_turn")
-                        if dpt and isinstance(dpt, (int, float)) and dpt > 0:
-                            dmg = int(dpt)
-                            prev_hp = int(actor.get("hp_current", 0) or 0)
-                            actor["hp_current"] = max(0, prev_hp - dmg)
-                            dtype = str(legacy.get("damage_type") or "physical")
-                            events.append({
-                                "type": "condition_damage",
-                                "condition_key": key,
-                                "condition_label": label,
-                                "damage": dmg,
-                                "damage_type": dtype,
-                                "hp_after": int(actor.get("hp_current", 0)),
-                            })
-                            conditions_changed = True
+                blk, evts, cc, rt = _tick_legacy(condition, actor, marker, key, label)
+                blocked = blocked or blk
+                events.extend(evts)
+                conditions_changed = conditions_changed or cc
+                runtime_changed = runtime_changed or rt
 
             next_conditions.append(condition)
 
