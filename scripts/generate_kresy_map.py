@@ -26,7 +26,7 @@ COLORS = {
     "plains":  (150, 156, 92), "hills": (138, 122, 74), "mountain": (110, 104, 96),
     "forest":  (60, 92, 64),   "river": (66, 120, 158), "road": (150, 116, 64),
     "ruins":   (120, 96, 70),  "city": (210, 180, 90),  "town": (200, 160, 70),
-    "village": (196, 150, 80), "snow": (210, 214, 220),
+    "village": (196, 150, 80), "snow": (210, 214, 220), "bridge": (180, 130, 70),
 }
 
 def smooth(grid, passes=3):
@@ -75,15 +75,19 @@ def main():
     moist = gen_field(rng)
 
     # gradienty regionalne (Kresy = pogranicze): góry na płn (Siwe Granie),
-    # las/bagno na wsch (Czarnobór), woda w narożniku pd-zach (ku Wybrzeżu), rdzeń = równiny
+    # las na wsch (Czarnobór), MORZE w narożniku pd-zach (ku Wybrzeżu Łez).
+    # Spadek N(wysoko)->SW(nisko) tworzy DRENAŻ — rzeki naturalnie spływają do morza.
     for r in range(H):
         for q in range(W):
             ny = r / (H-1); nx = q / (W-1)
-            north = (1.0 - ny) ** 1.7            # mocne, skupione na północy
-            east  = nx ** 1.3
-            sw    = max(0.0, (1-nx)*0.6 + ny*0.6 - 0.82)
-            elev[r][q] = elev[r][q]*0.50 + north*0.58 - sw*0.6
-            moist[r][q] = moist[r][q]*0.55 + east*0.44 + sw*0.25
+            north = (1.0 - ny) ** 1.5                       # góry na północy
+            swdist = math.hypot(nx - 0.0, ny - 1.0)         # dystans od narożnika SW
+            sea = max(0.0, 0.40 - swdist)                   # basen morski w SW
+            east = nx ** 1.3
+            elev[r][q] = elev[r][q]*0.42 + north*0.45 - ny*0.10 - sea*1.6
+            if ny < 0.14:                                   # pasmo Siwych Grani na płn (wąskie, strome)
+                elev[r][q] += (0.14 - ny) * 2.8
+            moist[r][q] = moist[r][q]*0.52 + east*0.42 + sea*0.4
 
     def classify(e, m):
         if e < 0.15: return "water"
@@ -99,40 +103,58 @@ def main():
     for r in range(H):
         for q in range(W):
             hexes[(q, r)] = {"q": q, "r": r, "hex_type": classify(elev[r][q], moist[r][q]),
-                             "label": None, "location_key": None}
+                             "label": None, "location_key": None,
+                             "encounter_chance": 0.15, "atmosphere": None}
 
-    # ── RZEKI: źródła w górach, spływ do najniższego sąsiada aż do wody/krawędzi ──
+    # ── RZEKI: źródła w górach, spływ DO MORZA (SW). Z lokalnego minimum uciekamy
+    #    krokiem ku narożnikowi SW, więc rzeki zawsze docierają do wody. ──
+    sw_corner = (0, H-1)
     mountains = [(q, r) for (q, r) in hexes if hexes[(q, r)]["hex_type"] in ("mountain", "snow")]
     rng.shuffle(mountains)
     river_hexes = set()
     main_river_path = []
-    for si, src in enumerate(mountains[:5]):
-        cur = src; path = []; steps = 0
-        while steps < 200:
+    for si, src in enumerate(mountains[:8]):
+        cur = src; path = []; steps = 0; visited = {cur}
+        while steps < 300:
             steps += 1
-            nbrs = neighbors(*cur)
+            nbrs = [n for n in neighbors(*cur) if n not in visited]
             if not nbrs: break
             cur_e = elev[cur[1]][cur[0]]
             lower = min(nbrs, key=lambda n: elev[n[1]][n[0]])
-            if elev[lower[1]][lower[0]] >= cur_e:  # lokalne minimum -> stop
-                break
+            if elev[lower[1]][lower[0]] >= cur_e:           # lokalne minimum
+                lower = min(nbrs, key=lambda n: axial_dist(n, sw_corner))  # uciekaj ku morzu
             t = hexes[lower]["hex_type"]
-            if t in ("water",): path.append(lower); break
+            if t == "water":                                # dotarliśmy do morza
+                path.append(lower); break
             if t not in ("mountain", "snow", "city", "town", "village"):
                 hexes[lower]["hex_type"] = "river"; river_hexes.add(lower)
-            path.append(lower); cur = lower
+            visited.add(lower); path.append(lower); cur = lower
         if len(path) > len(main_river_path):
             main_river_path = path
 
-    # ── OSADY (lore Kresów) sadzone na pasujących heksach blisko docelowej strefy ──
+    # ── OSADY: duży, zaludniony teren — miasta + gęsta sieć wsi/przysiółków,
+    #    także na obrzeżach. Nazwy z lore gry + przysiółki dopełniające. ──
     settlements = [
+        # lore (gra)
         ("warowny_straz", "Strażyn",                 "town",    0.70, 0.42, ("plains","hills")),
+        ("vilnograd_targ","Targowa Wola",            "town",    0.30, 0.42, ("plains",)),
         ("pod_zlamanym_rogiem", "Pod Złamanym Rogiem","village", 0.50, 0.52, ("plains",)),
-        ("brzezino",      "Brzezino",                 "village", 0.80, 0.60, ("plains","forest")),
-        ("wolanka",       "Wolanka",                  "village", 0.40, 0.24, ("hills","plains")),
-        ("cieszowice",    "Cieszowice",               "village", 0.28, 0.56, ("plains",)),
+        ("brzezino",      "Brzezino",                 "village", 0.80, 0.58, ("plains","forest")),
+        ("wolanka",       "Wolanka",                  "village", 0.42, 0.22, ("hills","plains")),
+        ("cieszowice",    "Cieszowice",               "village", 0.24, 0.58, ("plains",)),
         ("karczma_kruki", "Karczma Pod Trzema Krukami","village",0.46, 0.70, ("plains",)),
-        ("zgliszcza",     "Zgliszcza (zgliszcza)",    "ruins",   0.74, 0.76, ("plains","forest")),
+        ("zgliszcza",     "Zgliszcza (zgliszcza)",    "ruins",   0.76, 0.74, ("plains","forest")),
+        # przysiółki dopełniające teren (obrzeża + środek)
+        ("debno",     "Dębno",      "village", 0.14, 0.30, ("plains","hills")),
+        ("olszany",   "Olszany",    "village", 0.16, 0.74, ("plains",)),
+        ("kamionka",  "Kamionka",   "village", 0.58, 0.18, ("hills","plains")),
+        ("rudnik",    "Rudnik",     "village", 0.74, 0.22, ("hills","forest")),
+        ("borowiec",  "Borowiec",   "village", 0.88, 0.44, ("forest","plains")),
+        ("solanka",   "Solanka",    "village", 0.20, 0.88, ("coast","plains")),
+        ("przewoz",   "Przewóz",    "village", 0.40, 0.84, ("plains","coast")),
+        ("grabina",   "Grabina",    "village", 0.62, 0.62, ("plains","forest")),
+        ("zalesie",   "Zalesie",    "village", 0.86, 0.70, ("forest",)),
+        ("kobyla",    "Kobyla Łąka","village", 0.34, 0.34, ("plains",)),
     ]
     placed = {}
     used = set()
@@ -142,13 +164,17 @@ def main():
         for (q, r), h in hexes.items():
             if (q, r) in used: continue
             if h["hex_type"] in ("water","river","mountain","snow"): continue
+            # odstęp od już postawionych osad — nie kupować się
+            near = min((math.hypot(q-uq, r-ur) for (uq, ur) in used), default=99)
+            if near < 4: continue
             d = math.hypot(q-cx, r-cy)
             pref = 0 if h["hex_type"] in prefer else 6
             cand.append((d+pref, (q, r)))
         cand.sort()
-        return cand[0][1]
+        return cand[0][1] if cand else None
     for key, name, typ, tx, ty, prefer in settlements:
         pos = best_hex(tx, ty, prefer)
+        if pos is None: continue
         used.add(pos)
         hexes[pos]["hex_type"] = typ
         hexes[pos]["label"] = name
@@ -189,14 +215,21 @@ def main():
         _, a, b = best
         edges.append((a, b)); in_tree.add(b)
 
+    # MOST (bridge): nowy teren tam, gdzie trakt krzyżuje rzekę — punkt myta/straży,
+    # podwyższony encounter (strażnicy, pobór podatków).
+    bridge_names = ["Most Czarnej Rzeki", "Stary Most", "Most Graniczny",
+                    "Most Poborców", "Kamienny Most", "Most na Bystrzycy"]
     bridges = []
     for a, b in edges:
         for hx in astar(a, b):
             t = hexes[hx]["hex_type"]
             if t == "river":
-                hexes[hx]["hex_type"] = "town" if False else "road"
-                hexes[hx]["label"] = hexes[hx]["label"] or "Most Czarnej Rzeki"
-                hexes[hx]["location_key"] = hexes[hx]["location_key"] or "most_czarnej_rzeki"
+                nm = bridge_names[len(bridges) % len(bridge_names)]
+                hexes[hx]["hex_type"] = "bridge"
+                hexes[hx]["label"] = hexes[hx]["label"] or nm
+                hexes[hx]["location_key"] = hexes[hx]["location_key"] or ("most_%d" % (len(bridges)+1))
+                hexes[hx]["encounter_chance"] = 0.45
+                hexes[hx]["atmosphere"] = "Strażnicy mostu pobierają myto; podróżni czekają w kolejce, a poborca liczy monety."
                 bridges.append(hx)
             elif t in ("plains","hills","forest","coast","swamp"):
                 hexes[hx]["hex_type"] = "road"
@@ -251,13 +284,22 @@ def main():
         if tx + tw > img_w - 6: tx = cx - 9 - tw
         dr.rectangle([tx-3, ty-2, tx+tw+3, ty+15], fill=(10,9,8))
         dr.text((tx, ty), lab, fill=(240,222,150), font=f_lbl)
+    # mosty: marker (kwadrat) + mała etykieta
+    for hx in bridges:
+        cx, cy = center(*hx)
+        dr.rectangle([cx-4, cy-4, cx+4, cy+4], fill=(210,150,80), outline=(20,18,15))
+        lab = hexes[hx]["label"] or "Most"
+        tw = text_w(lab, f_lbl); tx = cx - tw/2; ty = cy + 9   # pod markerem (mniej kolizji)
+        tx = max(4, min(tx, img_w - tw - 6))
+        dr.rectangle([tx-3, ty-2, tx+tw+3, ty+15], fill=(10,9,8))
+        dr.text((tx, ty), lab, fill=(225,180,120), font=f_lbl)
     # legenda
     ly = int(vh * H + S + 8)
     dr.text((10, ly-2), "KRESY — mapa krainy", fill=(201,165,74), font=f_title)
     items = [("plains","równiny"),("forest","las (Czarnobór)"),("hills","wzgórza"),
              ("mountain","góry (Siwe Granie)"),("snow","śnieg"),("swamp","bagno"),
              ("water","woda / morze"),("coast","wybrzeże"),("river","rzeka"),
-             ("road","trakt"),("town","osada"),("ruins","ruiny")]
+             ("road","trakt"),("bridge","most / przeprawa"),("town","osada / ruiny")]
     lx = 10; lyy = ly + 34; col_w = 220
     for i, (t, name) in enumerate(items):
         cxx = lx + (i % 6) * col_w; cyy = lyy + (i // 6) * 30
