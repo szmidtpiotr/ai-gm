@@ -68,6 +68,11 @@ from app.services.turn.turn_gambling import (
     apply_gamble_outcome_in_skill_resolution as _apply_gamble_in_skill,
     build_gamble_narrator_ctx as _build_gamble_narrator_ctx,
 )
+from app.services.turn.turn_tags import (
+    is_combat_class_skill as _is_combat_class_skill,
+    intercept_narrator_skill_tags as _intercept_narrator_skill_tags,
+    persist_narrative_turn as _persist_narrative_turn,
+)
 from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
 from app.services.world_service import process_create_tags, get_current_location_info
 from app.services.suggested_actions import build_suggested_actions
@@ -85,13 +90,7 @@ DB_PATH = "/data/ai_gm.db"
 # intent must route through the intent parser → combat_start (or be a no-op
 # in NARRATIVE state), never through skill_test.
 # (Issue #20 + two_handed/initiative audit regression.)
-_COMBAT_CLASS_SKILLS = frozenset({
-    "attack", "ranged_attack", "two_handed", "melee_attack", "spell_attack",
-    "initiative",
-})
-
-def _is_combat_class_skill(skill_key: str | None) -> bool:
-    return str(skill_key or "").strip().lower() in _COMBAT_CLASS_SKILLS
+# _COMBAT_CLASS_SKILLS and _is_combat_class_skill moved to turn_tags.py (R1.4)
 logger = get_logger(__name__)
 
 
@@ -3952,43 +3951,15 @@ def create_turn(
         # Hex-enter encounter trigger: fire when current_hex changed
         _check_hex_enter_trigger(conn, campaign_id, _hex_before_enc)
 
-        # ── [SKILL_TEST:] / [TRAP:] tag interception ─────────────────────────
-        _skill_pending_narrator = None
-        try:
-            from app.services.skill_service import intercept_skill_test_tag, intercept_trap_tag, calc_skill_modifier_info
-            import uuid as _uuid2
-            _char_sh = json.loads(character["sheet_json"] or "{}")
-            assistant_text, _skill_pending_narrator = intercept_skill_test_tag(
-                assistant_text, conn, campaign_id, payload.character_id
-            )
-            if not _skill_pending_narrator:
-                assistant_text, _skill_pending_narrator = intercept_trap_tag(
-                    assistant_text, conn, campaign_id, payload.character_id, _char_sh
-                )
-            # Drop the pending test if the narrator hallucinated a combat-class
-            # skill outside actual combat (the user typed "uderzam toporem", LLM
-            # picked two_handed, but no enemy exists). Same guard as the keyword
-            # scans above.
-            if _skill_pending_narrator and _is_combat_class_skill(_skill_pending_narrator.get("skill_key")):
-                logger.info("combat_class_skill_test_suppressed",
-                            skill=_skill_pending_narrator.get("skill_key"),
-                            source="narrator_tag")
-                _skill_pending_narrator = None
-            if _skill_pending_narrator:
-                gs_row2 = conn.execute(
-                    "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                    (campaign_id,),
-                ).fetchone()
-                if gs_row2:
-                    _sf2 = json.loads(gs_row2["session_flags"] or "{}")
-                    _sf2 = _commit_pending_skill_test(_skill_pending_narrator, _sf2)
-                    conn.execute(
-                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-                        (json.dumps(_sf2, ensure_ascii=False), campaign_id),
-                    )
-                    conn.commit()
-        except Exception as _se:
-            logger.warning("skill_tag_intercept_error: %s", str(_se))
+        # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
+        _char_sh = json.loads(character["sheet_json"] or "{}")
+        assistant_text, _skill_pending_narrator = _intercept_narrator_skill_tags(
+            assistant_text=assistant_text,
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            character_sheet=_char_sh,
+        )
 
         # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
         _u7_forced = _apply_u7_safety_net(
@@ -4343,21 +4314,15 @@ def create_turn(
         except Exception as _u6_err:
             logger.warning("u6_rejection_correction_error", error=str(_u6_err))
 
-        log = create_turn_log(
+        log = _persist_narrative_turn(
             conn=conn,
             campaign_id=campaign_id,
             character_id=payload.character_id,
             user_text=user_text_stored if roll_request else text,
             assistant_text=clean_assistant,
             route=route,
-        )
-        log_narrative_turn_structured(
-            route=route,
-            campaign_id=campaign_id,
-            character_id=payload.character_id,
-            turn_row=log,
-            user_text=user_text_stored if roll_request else text,
-            assistant_text=clean_assistant,
+            create_turn_log_fn=create_turn_log,
+            log_narrative_fn=log_narrative_turn_structured,
         )
         for _gil in grant_item_labels:
             _gil_desc = grant_item_descriptions.get(_gil)
