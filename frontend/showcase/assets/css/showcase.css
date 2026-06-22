@@ -13,6 +13,7 @@
 html{scroll-behavior:smooth;scroll-padding-top:84px}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);line-height:1.65;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:2px}
 img{max-width:100%;display:block}
 .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
 .eyebrow{font-family:var(--font-flavor);font-style:italic;color:var(--gold);letter-spacing:4px;font-size:15px}

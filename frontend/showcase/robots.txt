@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /showcase/
+Sitemap: https://aigm-dev.studio-colorbox.com/showcase/sitemap.xml
