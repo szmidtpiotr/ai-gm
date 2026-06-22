@@ -17,4 +17,10 @@
 **Wyjątki pipeline:** [np. „L14–L17 = kontent/batch bez TDD; L13c/L19 = playtest przez /game-smoke-dungeon, bez issue"]
 
 **Twarde zależności:** [np. „#595 musi być gotowe; jeśli nie → GATE"]
+
+**Refaktory — baseline-diff (#918-B):** [Wypełnij jeśli zadania w tej fazie to REFAKTORY (extract, split, rename bez zmiany zachowania). Wymagana procedura:
+1. `docker-cp` SOURCE pliki PRE-commit do kontenera → uruchom pytest (baseline: zapamiętaj liczbę failów).
+2. Wprowadź zmianę → `docker-cp` nowych plików → uruchom pytest.
+3. Liczba failów po zmianie ≤ baseline → OK. Wzrost → GATE.
+Pomiń dla feature/bugfix (tam wystarczy `--build` przed pytest).]
 <!-- MASS-ZAKRES:END -->

@@ -30,6 +30,16 @@ Trzymaj się ich bezwzględnie (środowisko, mechaniki zablokowane, zasady commi
 4. **Wdróż** zgodnie z pipeline projektu: {PIPELINE}.
    Pierwszy krok pipeline (np. /tdd) w trybie auto — bez pytań pośrednich.
    Stosuj wyjątki TDD wskazane w ZAKRES (kontent/batch/playtest, jeśli są).
+
+   **⚠ Backend baked — wymagane `--build` przed pytest (#918-B):**
+   Kod backendu jest wpieczony w obraz Docker. `docker exec pytest` bez `--build` testuje
+   STARY obraz — zmiana kodu niewidoczna, gate ślepy. Przed pierwszym pytest w tym zadaniu:
+   ```bash
+   # SSH na hosta wskazanego w ZAKRES/CLAUDE.md:
+   docker compose -f docker-compose.dev.yml up -d --build backend 2>&1 | tail -5
+   ```
+   Refaktory (wiele plików): patrz wymaganie **baseline-diff** w ZAKRES.
+
    **⚠ Commit utrwalający ZARAZ po GREEN** (gdy testy przechodzą), ZANIM ruszysz
    code-review/playwright. Praca ma być w gicie nawet gdyby sesja skończyła się
    później — nigdy nie zostawiaj zielonego kodu niezacommitowanego.
