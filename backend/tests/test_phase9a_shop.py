@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
+from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 
 
 def _seed_minimal_shop_db(path: str) -> None:
     conn = sqlite3.connect(path)
     try:
+        # game_config_* przez helper (#928 — pełny schemat z price_gp/etc.)
+        fx.create_tables(conn, "game_config_weapons", "game_config_items", "game_config_consumables")
         conn.executescript(
             """
             CREATE TABLE characters (
@@ -24,7 +31,31 @@ def _seed_minimal_shop_db(path: str) -> None:
                 npc_type TEXT,
                 is_shop INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
+                is_crafter INTEGER NOT NULL DEFAULT 0,
                 shop_inventory_json TEXT
+            );
+            CREATE TABLE game_items (
+                id INTEGER PRIMARY KEY,
+                key TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                description TEXT DEFAULT '',
+                price_gp REAL DEFAULT 0,
+                effect_json TEXT DEFAULT NULL,
+                equip_slot TEXT DEFAULT NULL,
+                rarity INTEGER DEFAULT 1,
+                min_level INTEGER DEFAULT 1,
+                location_tags TEXT DEFAULT '[]',
+                created_by TEXT DEFAULT 'seed',
+                approved INTEGER DEFAULT 1,
+                is_active INTEGER DEFAULT 1,
+                weapon_data TEXT DEFAULT '{}',
+                item_data TEXT DEFAULT '{}',
+                weight_kg REAL DEFAULT 0,
+                note TEXT DEFAULT NULL,
+                locked_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE character_inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,35 +64,16 @@ def _seed_minimal_shop_db(path: str) -> None:
                 weapon_key TEXT,
                 consumable_key TEXT,
                 quantity INTEGER NOT NULL DEFAULT 1,
-                source TEXT,
                 equipped INTEGER NOT NULL DEFAULT 0,
                 slot TEXT,
-                acquired_at TEXT,
-                meta_json TEXT
-            );
-            CREATE TABLE game_config_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
+                acquired_at TEXT DEFAULT (datetime('now')),
+                source TEXT,
+                meta_json TEXT,
                 label TEXT,
-                description TEXT,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE game_config_weapons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                label TEXT,
-                description TEXT,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE game_config_consumables (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                key TEXT UNIQUE,
-                label TEXT,
-                description TEXT,
-                base_price INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
+                durability_max INTEGER,
+                durability_current INTEGER,
+                game_item_key TEXT,
+                affixes_json TEXT
             );
             """
         )

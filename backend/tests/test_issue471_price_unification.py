@@ -16,6 +16,29 @@ def _make_db() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS game_items (
+            id INTEGER PRIMARY KEY,
+            key TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            description TEXT DEFAULT '',
+            price_gp REAL DEFAULT 0,
+            effect_json TEXT DEFAULT NULL,
+            equip_slot TEXT DEFAULT NULL,
+            rarity INTEGER DEFAULT 1,
+            min_level INTEGER DEFAULT 1,
+            location_tags TEXT DEFAULT '[]',
+            created_by TEXT DEFAULT 'seed',
+            approved INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
+            weapon_data TEXT DEFAULT '{}',
+            item_data TEXT DEFAULT '{}',
+            weight_kg REAL DEFAULT 0,
+            note TEXT DEFAULT NULL,
+            locked_at TEXT DEFAULT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE game_config_weapons (
             key TEXT PRIMARY KEY,
             label TEXT NOT NULL DEFAULT '',

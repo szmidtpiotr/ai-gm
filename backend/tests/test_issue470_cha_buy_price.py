@@ -2,8 +2,11 @@
 import sqlite3
 import sys
 import os
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 
 import math
 import pytest
@@ -67,25 +70,31 @@ def test_buy_price_min_1_for_priced_item():
 def _make_db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    # game_config_* przez helper (#928 — pełny schemat z price_gp/etc.)
+    fx.create_tables(conn, "game_config_weapons", "game_config_items", "game_config_consumables")
     conn.executescript("""
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT DEFAULT '1d6',
-            linked_stat TEXT DEFAULT 'STR', allowed_classes TEXT DEFAULT '[]',
-            is_active INTEGER DEFAULT 1, description TEXT DEFAULT '', weapon_type TEXT DEFAULT 'melee',
-            two_handed INTEGER DEFAULT 0, finesse INTEGER DEFAULT 0, weight_kg REAL DEFAULT 0.0,
-            value_gp INTEGER DEFAULT 0, approved INTEGER DEFAULT 1, rarity INTEGER DEFAULT 1,
-            min_level INTEGER DEFAULT 1, location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, item_type TEXT DEFAULT 'misc',
-            description TEXT DEFAULT '', value_gp INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
-            approved INTEGER DEFAULT 1, rarity INTEGER DEFAULT 1, allowed_classes TEXT DEFAULT '[]',
-            min_level INTEGER DEFAULT 1, location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT DEFAULT '',
-            base_price INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, approved INTEGER DEFAULT 1,
-            rarity INTEGER DEFAULT 1, min_level INTEGER DEFAULT 1, location_tags TEXT DEFAULT NULL
+        CREATE TABLE IF NOT EXISTS game_items (
+            id INTEGER PRIMARY KEY,
+            key TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            description TEXT DEFAULT '',
+            price_gp REAL DEFAULT 0,
+            effect_json TEXT DEFAULT NULL,
+            equip_slot TEXT DEFAULT NULL,
+            rarity INTEGER DEFAULT 1,
+            min_level INTEGER DEFAULT 1,
+            location_tags TEXT DEFAULT '[]',
+            created_by TEXT DEFAULT 'seed',
+            approved INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
+            weapon_data TEXT DEFAULT '{}',
+            item_data TEXT DEFAULT '{}',
+            weight_kg REAL DEFAULT 0,
+            note TEXT DEFAULT NULL,
+            locked_at TEXT DEFAULT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE characters (id INTEGER PRIMARY KEY, gold_gp INTEGER DEFAULT 0, sheet_json TEXT DEFAULT '{}');
         CREATE TABLE npcs (
@@ -98,8 +107,8 @@ def _make_db():
         );
 
         INSERT INTO game_config_weapons (key, label, value_gp) VALUES ('sword_basic', 'Miecz', 100);
-        INSERT INTO npcs VALUES (1, 'blacksmith', 'Kowal', 'merchant', 1, 1,
-            '[{"type":"weapon","key":"sword_basic"}]');
+        INSERT INTO npcs (id, key, label, npc_type, is_shop, is_active, is_crafter, shop_inventory_json) VALUES
+            (1, 'blacksmith', 'Kowal', 'merchant', 1, 1, 0, '[{"type":"weapon","key":"sword_basic"}]');
         -- high CHA char (18)
         INSERT INTO characters VALUES (1, 1000, '{"level": 3, "stats": {"CHA": 18}}');
         -- neutral CHA char (10)

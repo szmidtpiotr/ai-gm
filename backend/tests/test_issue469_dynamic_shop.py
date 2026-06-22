@@ -3,8 +3,11 @@ import json
 import sqlite3
 import sys
 import os
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 
 import pytest
 from app.services.shop_service import (
@@ -20,48 +23,31 @@ def _make_db():
     """In-memory DB with minimal schema for shop + level/location tests."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    # game_config_* przez helper (#928 — pełny schemat z price_gp/min_level/etc.)
+    fx.create_tables(conn, "game_config_weapons", "game_config_items", "game_config_consumables")
     conn.executescript("""
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            damage_die TEXT NOT NULL DEFAULT '1d6',
-            linked_stat TEXT NOT NULL DEFAULT 'STR',
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            is_active INTEGER NOT NULL DEFAULT 1,
-            description TEXT NOT NULL DEFAULT '',
-            weapon_type TEXT NOT NULL DEFAULT 'melee',
-            two_handed INTEGER NOT NULL DEFAULT 0,
-            finesse INTEGER NOT NULL DEFAULT 0,
-            weight_kg REAL NOT NULL DEFAULT 0.0,
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            approved INTEGER NOT NULL DEFAULT 1,
-            rarity INTEGER NOT NULL DEFAULT 1,
+        CREATE TABLE IF NOT EXISTS game_items (
+            id INTEGER PRIMARY KEY,
+            key TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            description TEXT DEFAULT '',
+            price_gp REAL DEFAULT 0,
+            effect_json TEXT DEFAULT NULL,
+            equip_slot TEXT DEFAULT NULL,
+            rarity INTEGER DEFAULT 1,
             min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT NOT NULL DEFAULT '',
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1,
-            rarity INTEGER NOT NULL DEFAULT 1,
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            base_price INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1,
-            rarity INTEGER NOT NULL DEFAULT 1,
-            min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
+            location_tags TEXT DEFAULT '[]',
+            created_by TEXT DEFAULT 'seed',
+            approved INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
+            weapon_data TEXT DEFAULT '{}',
+            item_data TEXT DEFAULT '{}',
+            weight_kg REAL DEFAULT 0,
+            note TEXT DEFAULT NULL,
+            locked_at TEXT DEFAULT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE characters (
             id INTEGER PRIMARY KEY,
@@ -90,22 +76,19 @@ def _make_db():
         );
 
         -- Weapons: one basic (level 1, everywhere), one high-level, one city-only
-        INSERT INTO game_config_weapons VALUES
-            ('sword_basic', 'Miecz zwykły', '1d6', 'STR', '[]', 1, 'Tani miecz', 'melee',
-             0, 0, 1.5, 50, 1, 1, 1, NULL),
-            ('sword_elite', 'Miecz elitarny', '1d10', 'STR', '[]', 1, 'Miecz dla weteranów', 'melee',
-             0, 0, 2.0, 500, 1, 3, 10, NULL),
-            ('sword_city', 'Miecz miejski', '1d8', 'STR', '[]', 1, 'Sprzedawany tylko w mieście', 'melee',
-             0, 0, 2.0, 200, 1, 2, 1, '["city","town"]');
+        INSERT INTO game_config_weapons (key, label, damage_die, linked_stat, allowed_classes, is_active, description, weapon_type, two_handed, finesse, weight_kg, value_gp, approved, rarity, min_level, location_tags) VALUES
+            ('sword_basic', 'Miecz zwykły', '1d6', 'STR', '[]', 1, 'Tani miecz', 'melee', 0, 0, 1.5, 50, 1, 1, 1, NULL),
+            ('sword_elite', 'Miecz elitarny', '1d10', 'STR', '[]', 1, 'Miecz dla weteranów', 'melee', 0, 0, 2.0, 500, 1, 3, 10, NULL),
+            ('sword_city', 'Miecz miejski', '1d8', 'STR', '[]', 1, 'Sprzedawany tylko w mieście', 'melee', 0, 0, 2.0, 200, 1, 2, 1, '["city","town"]');
 
         -- Consumable: basic (everywhere), forest-only
-        INSERT INTO game_config_consumables VALUES
+        INSERT INTO game_config_consumables (key, label, description, base_price, is_active, approved, rarity, min_level, location_tags) VALUES
             ('potion_heal', 'Mikstura leczenia', 'Leczy 2k6+2 HP', 30, 1, 1, 1, 1, NULL),
             ('herb_forest', 'Zioło leśne', 'Tylko w lesie dostępne', 15, 1, 1, 1, 1, '["forest","wilderness"]');
 
         -- Shop NPC selling all items
-        INSERT INTO npcs VALUES
-            (1, 'blacksmith', 'Kowal', 'merchant', 1, 1,
+        INSERT INTO npcs (id, key, label, npc_type, is_shop, is_active, is_crafter, shop_inventory_json) VALUES
+            (1, 'blacksmith', 'Kowal', 'merchant', 1, 1, 0,
              '[{"type":"weapon","key":"sword_basic"},{"type":"weapon","key":"sword_elite"},{"type":"weapon","key":"sword_city"},{"type":"consumable","key":"potion_heal"},{"type":"consumable","key":"herb_forest"}]');
 
         -- Character: level 3
