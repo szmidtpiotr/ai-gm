@@ -148,6 +148,19 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .mech h4{font-family:var(--font-disp);color:var(--ink);font-size:16px;margin:10px 0 6px}
 .mech p{color:var(--ink-dim);font-size:13px}
 
+/* kodeks świata (swiat.html) */
+.prose{max-width:760px;margin:0 auto;color:var(--ink-dim);font-size:16px;line-height:1.75}
+.prose p{margin-bottom:16px}
+.prose .lead{font-family:var(--font-flavor);font-style:italic;font-size:19px;color:var(--ink)}
+.codex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.codex-card{border:1px solid var(--line);border-radius:4px;padding:24px;background:var(--panel);transition:.2s}
+.codex-card:hover{border-color:var(--gold-dk)}
+.codex-card h4{font-family:var(--font-disp);color:var(--gold);font-size:17px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.codex-card p{color:var(--ink-dim);font-size:14px;line-height:1.55}
+.soon{font-family:var(--font-ui);font-size:10px;letter-spacing:1px;color:var(--say-pc);border:1px solid rgba(127,178,230,.4);border-radius:20px;padding:2px 8px;font-weight:600;text-transform:uppercase}
+.kraina .body p.long{font-size:14px}
+@media(max-width:860px){ .codex-grid{grid-template-columns:1fr} }
+
 /* FAQ — akordeon */
 .faq-list{max-width:760px;margin:0 auto}
 .faq-item{border:1px solid var(--line);border-radius:4px;margin-bottom:12px;background:var(--panel);overflow:hidden}
