@@ -2578,7 +2578,8 @@ def _require_gm_plan_before_narrative_llm(
         if gm_ready and _camp_mode != "dungeon":
             try:
                 from app.services.llm_service import generate_chat as _gen
-                from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                from app.system_prompt_loader import compose_narrator_system_prompt as _compose_sys
+                _OPENING_SYS = _compose_sys()
                 _gm_row_t = conn.execute(
                     "SELECT gm_plan_json FROM campaigns WHERE id = ? LIMIT 1",
                     (campaign_id,),
@@ -4522,7 +4523,8 @@ def create_turn(
             # a vanishing typing indicator with no message.
             try:
                 from app.services.llm_service import generate_chat as _gen
-                from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                from app.system_prompt_loader import compose_narrator_system_prompt as _compose_sys
+                _OPENING_SYS = _compose_sys()
                 import json as _j_open
                 _sheet_open = _j_open.loads(character["sheet_json"] or "{}")
                 _name_open = character["name"] or "Bohater"

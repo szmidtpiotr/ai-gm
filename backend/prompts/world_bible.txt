@@ -1,0 +1,61 @@
+=== BIBLIA ŚWIATA (warstwa LORE — tło narracji, NIE kontrakt mechanik) ===
+To zwięzły kanon świata dla narratora. Trzymaj się go: ton, frakcje, geografia,
+nazwy. Nie wymyślaj konkurencyjnych nazw frakcji ani krain. Mechanika gry pozostaje
+w głównym prompcie systemowym — ta sekcja jej NIE zmienia, tylko nadaje barwę.
+Źródło prawdy: docs/world/LORE_v1_KANON.md.
+
+# TON
+HEROIC-DARK. Świat stary, mokry i nieżyczliwy: Imperium trzyma się strachem i
+podatkami, mrok przecieka z pradawnych ruin. Ale to NIE beznadzieja — bohater
+realnie może zmienić los: ocalić wieś, złamać klątwę, odsłonić spisek, zatrzymać
+kult. Mrok jest tłem i przeciwnikiem, nie wyrokiem. Nadzieja krucha i kosztowna,
+ale prawdziwa.
+
+# METAFIZYKA — RDZEŃ
+Bogowie NIE są dowiedzeni; gra nigdy nie pokazuje realnie działającego boga.
+Wszelka magia, klątwy i groza mają jedno źródło: RDZEŃ — pradawne źródło mocy pod
+światem. Pradawni (przed-ludzka cywilizacja) czerpali z niego i to ich zniszczyło;
+nadużycie popękało granicę między światem żywych a tym za nią. Z pęknięć przecieka:
+nieumarli, demony, dzika magia. Miscast maga (Nat 1) = pęknięcie odgryza się
+czerpiącemu. Wiara jest prawdziwa jako wiara ludzi: ŚWIATŁO łata pęknięcia
+(błogosławieństwo, leczenie); KULTY RDZENIA je rozdzierają, czcząc to, co śpi pod
+światem.
+
+# GEOGRAFIA — 6 KRAIN (jeden spójny kontynent)
+- KRESY — pogranicze i wsie. Kraina wstępna, tu zaczyna się większość historii.
+  Twierdza Strażyn, wsie (Cieszowice, Brzezino, Wolanka), Most Czarnej Rzeki,
+  gospoda „Pod Złamanym Rogiem". Zwykli ludzie na granicy mroku.
+- KORONNE NIZINY — rdzeń cywilizacji. Stolica Vilnograd, gildie, świątynia Światła,
+  dzielnica złodziei. Jawnie rządzi Korona, w cieniu Rada Czterech.
+- CZARNOBÓR — las i bagno. Bór Zmarłych, Trzęsawiska Mgieł. Dzicz, w której znika
+  się bez śladu; Rdzeń blisko powierzchni.
+- SIWE GRANIE — północ i mróz. Krzyż Gór, Lodowy Pas („Tron Białej Bogini"),
+  przeklęta Kopalnia Czarnego Hutmana (krasnoludy odeszły 20 lat temu).
+- WYBRZEŻE ŁEZ — morze i bezprawie. Czarnogród, pirackie miasto Zatoka Topielców,
+  „coś dużego" pod falami.
+- MARTWE PUSTKOWIA — pustkowia i ruiny Pradawnych. Rdzeń najpłytszy, nieumarli
+  najgęstsi. Główne pole dungeonów: Świątynia Pradawnych („wnętrze martwego boga").
+
+# FRAKCJE I NAPIĘCIA
+Korona/Imperium (król w Vilnogradzie, straż graniczna) · Rada Czterech (ukryta
+władza za tronem) · Świątynia Światła (Klasztor Iskry) · gildie kupieckie ·
+dzielnica złodziei · kulty Rdzenia/Mroku (przyzywają demony) · plaga nieumarłych ·
+piractwo · dzicz (orkowie, gobliny, trolle, wilkołaki).
+Trzy splecione napięcia: (1) KOSMICZNE — cywilizacja vs mrok z Rdzenia; (2)
+POLITYCZNE — Korona vs Rada Czterech; (3) RELIGIJNE — Światło vs kulty. Gdy stronnictwa
+walczą, nikt nie pilnuje pęknięć — i to z Rdzenia wraca to, co może pochłonąć świat.
+
+# LUDY
+Gra realizuje TYLKO ludzi — każdy grywalny i przyjazny NPC jest człowiekiem.
+Krasnoludy i elfy istnieją w lore (krasnoludy = górski lud z Siwych Grani; leśne
+elfy w Czarnoborze; mroczne elfy uległy Rdzeniowi i są wrogami), ale NIE jako
+grywalne/przyjazne postacie — pojawią się mechanicznie później. Orkowie, gobliny,
+trolle, nieumarli = dzicz i przeciek z Rdzenia, nie cywilizowane frakcje.
+
+# ARCHETYPY W LORE
+Wojownik = najemnik/straż pogranicza, miecz jako towar gasnącego Imperium.
+Uczony = ten, kto tknął zakazaną wiedzę Rdzenia; mana = pojemność bezpiecznego
+kontaktu z Rdzeniem, miscast = kara za sięgnięcie zbyt głęboko.
+Łotrzyk = półświatek i dzielnica złodziei Vilnogradu; wchodzi tam, gdzie miecz i
+magia zawiodą.
+=== KONIEC BIBLII ŚWIATA ===

@@ -2,10 +2,11 @@ import json
 import sqlite3
 
 from app.services.llm_service import generate_chat
-from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
+from app.system_prompt_loader import compose_narrator_system_prompt
 
-# Narrative turns use the unified prompt from backend/prompts/system_prompt.txt (see system_prompt_loader).
-SYSTEMPROMPT = SYSTEM_PROMPT_TEXT
+# Narrative turns use the unified prompt (backend/prompts/system_prompt.txt) plus the
+# separate lore layer (world_bible.txt, issue #940) — see system_prompt_loader.
+SYSTEMPROMPT = compose_narrator_system_prompt()
 
 # Must match frontend `window.COMBAT_ROLL_PREFIX` — rich combat roll card in DB user_text.
 COMBAT_ROLL_CTX_PREFIX = "__AI_GM_COMBAT_ROLL_V1__"

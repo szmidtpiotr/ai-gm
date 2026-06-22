@@ -24,7 +24,7 @@ from app.services.gm_plan_generation_service import generate_initial_gm_plan_wit
 from app.services.llm_service import generate_chat
 from app.services.admin_config import list_skills
 from app.services.user_llm_settings import get_user_llm_settings_full
-from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
+from app.system_prompt_loader import compose_narrator_system_prompt
 from app.services.location_intent_parser import parse as parse_location_intent
 from app.services.location_validator import persist_ai_generated_location
 
@@ -789,8 +789,9 @@ def _dict_to_identity_preview(data: dict) -> GeneratedIdentityPreview:
     )
 
 
-# Opening scene uses the same unified prompt as narrative turns and /api/gm/chat (fantasy).
-OPENING_SYSTEM_PROMPT = SYSTEM_PROMPT_TEXT
+# Opening scene uses the same unified prompt as narrative turns and /api/gm/chat (fantasy),
+# plus the separate lore layer (world_bible.txt, issue #940).
+OPENING_SYSTEM_PROMPT = compose_narrator_system_prompt()
 
 
 def _pick_random_start_location(conn: sqlite3.Connection) -> str:
