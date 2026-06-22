@@ -2642,6 +2642,135 @@ def _resolve_heal_spell_in_combat(
     return out
 
 
+def _resolve_aoe_single_target(
+    conn: Any, row: Any, campaign_id: int, ch_id: int,
+    tgt: dict, enemy: dict,
+    damage_die: str, int_mod: int, player_nat20: bool,
+    loot_pool_accum: list[dict[str, Any]], out: dict[str, Any],
+) -> dict[str, Any]:
+    """Rozlicza jeden cel AoE: damage, death, loot, XP, log. Zwraca hit_info."""
+    _aoe_detail = roll_dice_detailed(damage_die)
+    dmg = max(0, sum(_aoe_detail["rolls"]) + int_mod) if _aoe_detail["rolls"] else max(0, int_mod)
+    if player_nat20:
+        dmg *= 2
+    prev_hp = int(tgt.get("hp_current", 0) or 0)
+    next_hp = max(0, prev_hp - dmg)
+    tgt["hp_current"] = next_hp
+    dead = next_hp <= 0
+    if dead:
+        tgt["dead"] = True
+
+    tgt_id = str(tgt.get("id") or "")
+    tgt_name = str(tgt.get("name") or tgt.get("enemy_key") or "Wróg")
+    hit_info: dict[str, Any] = {
+        "target_id": tgt_id,
+        "target_name": tgt_name,
+        "damage": dmg,
+        "hp_remaining": next_hp,
+        "dead": dead,
+        "gold_drop": 0,
+        "loot": [],
+    }
+
+    if tgt is enemy:
+        out["damage"] = dmg
+        out["damage_die"] = _aoe_detail["die"] or damage_die
+        out["damage_rolls"] = _aoe_detail["rolls"]
+        out["damage_modifier"] = int_mod
+        out["target_hp_remaining"] = next_hp
+        out["enemy_dead"] = dead
+
+    if dead:
+        ek = str(tgt.get("enemy_key") or "")
+        # U25 (#575): flaga boss kill (pity timer afiksów)
+        if str(tgt.get("tier") or "").strip().lower() == "boss":
+            try:
+                conn.execute(
+                    "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
+                    (campaign_id,),
+                )
+            except Exception:
+                pass
+        # Loot + złoto
+        if ek and ch_id:
+            try:
+                from app.services.loot_service import (
+                    apply_character_gold_delta, roll_gold_drop, roll_loot,
+                )
+                _loot_tier = str(tgt.get("loot_tier") or "") or None
+                loot_items = roll_loot(ek)
+                tgt_loot = (
+                    _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
+                    if loot_items else []
+                )
+                gold = int(roll_gold_drop(ek) or 0)
+                if gold > 0:
+                    apply_character_gold_delta(ch_id, gold, reason="combat_loot")
+                hit_info["gold_drop"] = gold
+                hit_info["loot"] = tgt_loot
+                loot_pool_accum.extend(tgt_loot)
+                # #754: strukturalny rejestr — loot + złoto
+                try:
+                    from app.services.dice_log_service import record_dice_roll as _rec_roll
+                    _rec_roll(
+                        campaign_id=campaign_id, roll_type="gold",
+                        character_id=ch_id, combat_id=int(row["id"]),
+                        actor=ek, total=gold, outcome="drop",
+                        meta={"enemy_key": ek, "loot_tier": _loot_tier},
+                    )
+                    if tgt_loot:
+                        _rec_roll(
+                            campaign_id=campaign_id, roll_type="loot",
+                            character_id=ch_id, combat_id=int(row["id"]),
+                            actor=ek, total=len(tgt_loot), outcome="drop",
+                            meta={"enemy_key": ek, "items": tgt_loot},
+                        )
+                except Exception:
+                    pass
+            except Exception as _loot_e:
+                logger.warning("aoe_loot_error", error=str(_loot_e), enemy_key=ek)
+        # XP
+        try:
+            from app.services import xp_service
+            raw_award = int(tgt.get("xp_award") or 0)
+            xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
+                conn, catalog_xp_award=raw_award,
+                tier=str(tgt.get("tier") or "") or None,
+            )
+            if xpa > 0 and ch_id:
+                xp_service.grant_character_xp(
+                    conn, ch_id, xpa, reason="enemy_defeat",
+                    meta={"enemy_key": ek, "xp_source": xp_src},
+                )
+            hit_info["xp_granted"] = xpa
+        except Exception:
+            pass
+        # Beat completion (#550)
+        try:
+            from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+            _beat_label = str(tgt.get("name") or tgt.get("enemy_key") or "")
+            if _beat_label:
+                _tn_beat = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id = ?",
+                    (campaign_id,),
+                ).fetchone()[0]
+                auto_complete_beats_by_event(campaign_id, "kill_enemy", _beat_label, _tn_beat, conn)
+        except Exception:
+            pass
+        # Death log
+        cid_d = int(row["id"])
+        log_combat_turn(
+            conn, combat_id=cid_d, campaign_id=campaign_id,
+            turn_number=_next_combat_log_sequence(conn, cid_d),
+            actor=tgt_id, event_type="death", roll_value=None,
+            damage=dmg, hp_after=next_hp,
+            target_id=tgt_id, target_name=tgt_name, hit=None,
+            narrative=f"{tgt_name} pada — wróg nie żyje.",
+        )
+
+    return hit_info
+
+
 def _resolve_aoe_spell_in_combat(
     conn: Any, row: Any, campaign_id: int, ch_id: int, sheet: dict,
     combatants: list[dict], enemy: dict, target_id: Any, spell_row: Any,
@@ -2791,132 +2920,18 @@ def _resolve_aoe_spell_in_combat(
     # 5. Rzuć damage na każdy cel (osobna kość, ten sam die, INT mod)
     int_mod = _stat_mod(sheet, "INT")
     aoe_hits: list[dict[str, Any]] = []
-    primary_damage = 0
-    _xp_total = 0
 
     for tgt in targets:
-        # #661: detailed roll → expose primary target's dice for damage animation
-        _aoe_detail = roll_dice_detailed(damage_die)
-        dmg = max(0, sum(_aoe_detail["rolls"]) + int_mod) if _aoe_detail["rolls"] else max(0, int_mod)
-        if player_nat20:
-            dmg *= 2
-        prev_hp = int(tgt.get("hp_current", 0) or 0)
-        next_hp = max(0, prev_hp - dmg)
-        tgt["hp_current"] = next_hp
-        dead = next_hp <= 0
-        if dead:
-            tgt["dead"] = True
-
-        tgt_id = str(tgt.get("id") or "")
-        tgt_name = str(tgt.get("name") or tgt.get("enemy_key") or "Wróg")
-        hit_info: dict[str, Any] = {
-            "target_id": tgt_id,
-            "target_name": tgt_name,
-            "damage": dmg,
-            "hp_remaining": next_hp,
-            "dead": dead,
-            "gold_drop": 0,
-            "loot": [],
-        }
+        hit_info = _resolve_aoe_single_target(
+            conn, row, campaign_id, ch_id,
+            tgt, enemy,
+            damage_die, int_mod, player_nat20,
+            loot_pool_accum, out,
+        )
         aoe_hits.append(hit_info)
 
-        if tgt is enemy:   # cel główny → standardowe klucze out{}
-            primary_damage = dmg
-            out["damage"] = dmg
-            out["damage_die"] = _aoe_detail["die"] or damage_die
-            out["damage_rolls"] = _aoe_detail["rolls"]
-            out["damage_modifier"] = int_mod
-            out["target_hp_remaining"] = next_hp
-            out["enemy_dead"] = dead
-
-        if dead:
-            ek = str(tgt.get("enemy_key") or "")
-            # U25 (#575): flaga boss kill (pity timer afiksów)
-            if str(tgt.get("tier") or "").strip().lower() == "boss":
-                try:
-                    conn.execute(
-                        "UPDATE active_combat SET boss_defeated = 1 WHERE campaign_id = ?",
-                        (campaign_id,),
-                    )
-                except Exception:
-                    pass
-            # Loot + złoto
-            if ek and ch_id:
-                try:
-                    from app.services.loot_service import (
-                        apply_character_gold_delta, roll_gold_drop, roll_loot,
-                    )
-                    _loot_tier = str(tgt.get("loot_tier") or "") or None
-                    loot_items = roll_loot(ek)
-                    tgt_loot = (
-                        _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
-                        if loot_items else []
-                    )
-                    gold = int(roll_gold_drop(ek) or 0)
-                    if gold > 0:
-                        apply_character_gold_delta(ch_id, gold, reason="combat_loot")
-                    hit_info["gold_drop"] = gold
-                    hit_info["loot"] = tgt_loot
-                    loot_pool_accum.extend(tgt_loot)
-                    # #754: strukturalny rejestr — loot + złoto
-                    try:
-                        from app.services.dice_log_service import record_dice_roll as _rec_roll
-                        _rec_roll(
-                            campaign_id=campaign_id, roll_type="gold",
-                            character_id=ch_id, combat_id=int(row["id"]),
-                            actor=ek, total=gold, outcome="drop",
-                            meta={"enemy_key": ek, "loot_tier": _loot_tier},
-                        )
-                        if tgt_loot:
-                            _rec_roll(
-                                campaign_id=campaign_id, roll_type="loot",
-                                character_id=ch_id, combat_id=int(row["id"]),
-                                actor=ek, total=len(tgt_loot), outcome="drop",
-                                meta={"enemy_key": ek, "items": tgt_loot},
-                            )
-                    except Exception:
-                        pass
-                except Exception as _loot_e:
-                    logger.warning("aoe_loot_error", error=str(_loot_e), enemy_key=ek)
-            # XP
-            try:
-                from app.services import xp_service
-                raw_award = int(tgt.get("xp_award") or 0)
-                xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
-                    conn, catalog_xp_award=raw_award,
-                    tier=str(tgt.get("tier") or "") or None,
-                )
-                if xpa > 0 and ch_id:
-                    xp_service.grant_character_xp(
-                        conn, ch_id, xpa, reason="enemy_defeat",
-                        meta={"enemy_key": ek, "xp_source": xp_src},
-                    )
-                hit_info["xp_granted"] = xpa
-                _xp_total += int(xpa or 0)
-            except Exception:
-                pass
-            # Beat completion (#550)
-            try:
-                from app.services.campaign_plan_runtime import auto_complete_beats_by_event
-                _beat_label = str(tgt.get("name") or tgt.get("enemy_key") or "")
-                if _beat_label:
-                    _tn_beat = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id = ?",
-                        (campaign_id,),
-                    ).fetchone()[0]
-                    auto_complete_beats_by_event(campaign_id, "kill_enemy", _beat_label, _tn_beat, conn)
-            except Exception:
-                pass
-            # Death log
-            cid_d = int(row["id"])
-            log_combat_turn(
-                conn, combat_id=cid_d, campaign_id=campaign_id,
-                turn_number=_next_combat_log_sequence(conn, cid_d),
-                actor=tgt_id, event_type="death", roll_value=None,
-                damage=dmg, hp_after=next_hp,
-                target_id=tgt_id, target_name=tgt_name, hit=None,
-                narrative=f"{tgt_name} pada — wróg nie żyje.",
-            )
+    primary_damage = int(out.get("damage", 0))
+    _xp_total = sum(int(h.get("xp_granted") or 0) for h in aoe_hits)
 
     out["aoe_hits"] = aoe_hits
     out["aoe_targets"] = len(aoe_hits)
