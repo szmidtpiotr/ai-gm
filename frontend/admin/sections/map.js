@@ -1535,6 +1535,17 @@ const _ROW_REGISTRY = {
     }
     const undoBtn = document.getElementById('wb-undo');
     if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
+    const saveBtn = document.getElementById('wb-save-canon');
+    if (saveBtn) saveBtn.onclick = async () => {
+      if (!confirm('Zapisać bieżącą mapę jako KANON?\n\nStanie się bazą odtwarzaną po każdym resecie/wipe DB. Nadpisze poprzedni zapis.')) return;
+      const orig = saveBtn.textContent; saveBtn.disabled = true; saveBtn.textContent = '💾 Zapisuję…';
+      try {
+        const res = await apiFetch('/api/admin/world/map/snapshot', { method: 'POST' });
+        _showToast(`Mapa zapisana jako kanon (${res.count} heksów). Przeżyje reset DB.`, 'success');
+      } catch (e) {
+        _showToast('Błąd zapisu mapy: ' + (e && e.message ? e.message : e), 'error');
+      } finally { saveBtn.disabled = false; saveBtn.textContent = orig; }
+    };
   }
 
   function _wbCenter() {
@@ -2222,6 +2233,9 @@ function _sectionHtml() {
               </div>
               <div style="padding:2px 6px 2px">
                 <button id="wb-undo" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
+              </div>
+              <div style="padding:0 6px 4px">
+                <button id="wb-save-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#c9a54a;color:#1a1206;border:1px solid #c9a54a;font-weight:700" title="Zapisz bieżącą mapę jako kanon — trwałe, przeżywa reset/wipe DB">💾 Zapisz mapę (kanon)</button>
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>

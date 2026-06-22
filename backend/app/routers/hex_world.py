@@ -5,6 +5,7 @@ Admin endpoints for the hex grid world map.
 from __future__ import annotations
 
 import json
+import os
 import random
 import sqlite3
 from typing import Any, Optional
@@ -98,6 +99,42 @@ def get_world_map(authorization: str | None = Header(default=None)):
         ).fetchall()]
 
         return {"hexes": hexes, "teleport_connections": teleports}
+    finally:
+        conn.close()
+
+
+@router.post("/map/snapshot")
+def snapshot_world_map(authorization: str | None = Header(default=None)):
+    """Zapisz bieżącą mapę świata (world_hexes, map_level=0) → /data/world_map_seed.json.
+
+    /data jest bind-mountem na hoście (./data-dev), więc plik jest TRWAŁY i przeżywa
+    czyszczenie/rebuild DB — scripts/seed_world_map.py odtwarza z niego mapę. To czyni
+    edycje admina kanonem (Piotr-owned)."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT q, r, hex_type, label, atmosphere, encounter_chance "
+            "FROM world_hexes WHERE map_level = 0 ORDER BY r, q"
+        ).fetchall()
+        hexes = [dict(x) for x in rows]
+        if len(hexes) < 50:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Mapa wygląda na niezainicjalizowaną ({len(hexes)} heks.) — odmawiam nadpisania kanonu. "
+                       f"Najpierw przywróć mapę (seed_world_map.py).")
+        data = {
+            "name": "Kresy",
+            "note": "KANON mapy świata (world_hexes map_level=0). Zapisane z admin→Mapa. "
+                    "Źródło prawdy dla scripts/seed_world_map.py.",
+            "w": 50, "h": 50, "hexes": hexes,
+        }
+        out = "/data/world_map_seed.json"
+        tmp = out + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, out)
+        return {"ok": True, "count": len(hexes), "path": out}
     finally:
         conn.close()
 

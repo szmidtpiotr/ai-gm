@@ -12,7 +12,10 @@ import json, subprocess, sys, argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SEED = ROOT / "docs/world/world_map_seed.json"
+# Priorytet: data-dev (zapis przyciskiem admina, najświeższe edycje Piotra) -> docs/world (kanon w git).
+_DATA_SEED = ROOT / "data-dev" / "world_map_seed.json"
+_GIT_SEED = ROOT / "docs/world/world_map_seed.json"
+SEED = _DATA_SEED if _DATA_SEED.exists() else _GIT_SEED
 
 def dexec(container, sql, piped=False):
     cmd = ["docker", "exec"] + (["-i"] if piped else []) + [container, "sqlite3", "/data/ai_gm.db"]
