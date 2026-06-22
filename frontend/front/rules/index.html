@@ -21,6 +21,21 @@
   @media(max-width:720px){ .wizbar{padding:8px 12px;min-height:0} .wizbar nav{gap:14px;font-size:12px} .wizbar .wb-brand{font-size:18px} }
   /* nagłówki Cinzel — spójne z wizytówką */
   h1,h2,h3,h4{font-family:"Cinzel",Georgia,serif}
+  /* dropdown rozdziałów Księgi w belce */
+  .wb-dd{position:relative}
+  .wb-ddbtn{background:none;border:0;color:var(--ink-dim);font-family:"Cinzel",Georgia,serif;font-size:14px;letter-spacing:.5px;cursor:pointer;padding:6px 0;border-bottom:2px solid transparent;transition:color .2s}
+  .wb-ddbtn.wb-here,.wb-ddbtn:hover{color:var(--gold);border-color:var(--gold-soft)}
+  .wb-ddmenu{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);min-width:300px;max-width:92vw;max-height:74vh;overflow:auto;background:#15110c;border:1px solid var(--line);border-radius:8px;padding:10px 8px;display:none;z-index:340;box-shadow:0 18px 44px rgba(0,0,0,.65)}
+  .wb-dd.open .wb-ddmenu{display:block}
+  .wb-ddmenu .wb-grp{font-family:"Cinzel",Georgia,serif;color:var(--gold);font-size:12px;letter-spacing:1px;text-transform:uppercase;padding:10px 10px 4px;border-top:1px solid var(--line);margin-top:4px}
+  .wb-ddmenu .wb-grp:first-child{border-top:0;margin-top:0}
+  .wb-ddmenu ul{list-style:none;margin:0 0 4px;padding:0}
+  .wb-ddmenu a{display:block;padding:6px 12px;color:var(--ink-dim);font-family:"Inter",sans-serif;font-size:13.5px;line-height:1.4;text-decoration:none;border-radius:5px}
+  .wb-ddmenu a:hover{background:var(--bg-box);color:var(--gold)}
+  @media(max-width:720px){ .wb-ddmenu{left:auto;right:0;transform:none} }
+  /* sticky TOC sidebar pod belką + kotwice nie chowają się pod belką */
+  html{scroll-padding-top:86px}
+  @media(min-width:721px){ .toc{top:74px !important;height:calc(100vh - 74px) !important} }
   :root{
     --ink:#e8e4dc; --ink-dim:#b3a282; --gold:#c9a54a; --gold-soft:#a8893d;
     --blood:#86302f; --bg:#0a0908; --bg-panel:#1a1612; --bg-box:#221e19;
@@ -287,11 +302,35 @@
   <nav>
     <a href="/showcase/#jak-gra">Jak się gra</a>
     <a href="/showcase/swiat.html">Świat</a>
-    <a class="wb-here" href="/rules/">Księga Zasad</a>
+    <div class="wb-dd" id="wbDD">
+      <button class="wb-ddbtn wb-here" id="wbDDbtn" aria-expanded="false" aria-haspopup="true">Księga Zasad ▾</button>
+      <div class="wb-ddmenu" id="wbChapters" role="menu"></div>
+    </div>
     <a href="/showcase/changelog.html">Co nowego</a>
     <a class="wb-play" href="/">ZAGRAJ</a>
   </nav>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  var tree=document.getElementById('tocTree'), menu=document.getElementById('wbChapters'),
+      dd=document.getElementById('wbDD'), btn=document.getElementById('wbDDbtn');
+  if(!tree||!menu||!dd||!btn) return;
+  var html='';
+  tree.querySelectorAll(':scope > li.chap').forEach(function(ch){
+    var ttl=(ch.querySelector('.chap-h .ttl')||{}).textContent||'';
+    html+='<div class="wb-grp">'+ttl+'</div><ul>';
+    ch.querySelectorAll('.subs > li > a').forEach(function(a){
+      html+='<li><a href="'+a.getAttribute('href')+'">'+a.textContent+'</a></li>';
+    });
+    html+='</ul>';
+  });
+  menu.innerHTML=html;
+  function close(){ dd.classList.remove('open'); btn.setAttribute('aria-expanded','false'); }
+  btn.addEventListener('click',function(e){ e.stopPropagation(); var o=dd.classList.toggle('open'); btn.setAttribute('aria-expanded',o?'true':'false'); });
+  menu.addEventListener('click',function(e){ if(e.target.closest('a')) close(); });
+  document.addEventListener('click',function(e){ if(!dd.contains(e.target)) close(); });
+});
+</script>
 <header class="topbar"><button class="menu-btn" id="menuBtn" aria-label="Otwórz menu">☰</button><span class="topbar-t">Księga Zasad</span></header>
 <div class="toc-backdrop" id="backdrop"></div>
 
