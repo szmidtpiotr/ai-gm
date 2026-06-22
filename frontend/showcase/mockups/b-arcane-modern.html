@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-GM — wariant B: Arcane Modern</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0908; --bg2:#0f0d0b; --glass:rgba(26,22,18,.55);
+    --gold:#c9a54a; --gold-lt:#e7cd86; --ink:#e8e4dc; --ink-dim:#8f877a; --line:rgba(201,165,74,.18);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;line-height:1.65;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1220px;margin:0 auto;padding:0 32px}
+
+  /* ambient orbs */
+  .orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:.5;z-index:0;pointer-events:none}
+  .orb.a{width:520px;height:520px;background:radial-gradient(circle,#c9a54a55,transparent 70%);top:-160px;right:-120px}
+  .orb.b{width:480px;height:480px;background:radial-gradient(circle,#86302f44,transparent 70%);top:380px;left:-160px}
+  .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;
+    background-image:linear-gradient(rgba(201,165,74,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(201,165,74,.04) 1px,transparent 1px);
+    background-size:54px 54px;
+    -webkit-mask:radial-gradient(ellipse 70% 60% at 50% 30%, #000, transparent)}
+  .content{position:relative;z-index:1}
+
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);background:rgba(10,9,8,.6);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:74px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:18px;letter-spacing:.5px}
+  .sigil{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--gold),#7a5f24);display:grid;place-items:center;font-family:'Cinzel';font-weight:900;color:#1a1206;box-shadow:0 0 20px rgba(201,165,74,.4)}
+  .nav-links{display:flex;gap:34px;font-size:14.5px;color:var(--ink-dim)}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-cta{font-weight:600;font-size:14px;padding:10px 22px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#a8893d);color:#1a1206;box-shadow:0 4px 20px rgba(201,165,74,.3)}
+
+  .hero{padding:140px 0 110px;text-align:center}
+  .pill{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-dim);border:1px solid var(--line);padding:7px 16px;border-radius:30px;background:var(--glass);margin-bottom:34px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:#6fcf6f;box-shadow:0 0 10px #6fcf6f}
+  .hero h1{font-family:'Cinzel',serif;font-weight:900;font-size:clamp(46px,8vw,96px);line-height:1.02;letter-spacing:-1px}
+  .hero h1 .glow{background:linear-gradient(180deg,var(--gold-lt),var(--gold) 55%,#8a6f2f);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{max-width:620px;margin:30px auto 0;font-size:20px;color:var(--ink-dim);font-weight:300}
+  .hero-cta{display:flex;gap:16px;justify-content:center;margin-top:42px}
+  .btn{font-weight:600;font-size:15.5px;padding:16px 32px;border-radius:12px;transition:.22s}
+  .btn-p{background:linear-gradient(135deg,var(--gold-lt),var(--gold));color:#1a1206;box-shadow:0 8px 30px rgba(201,165,74,.3)}
+  .btn-p:hover{transform:translateY(-2px);box-shadow:0 12px 38px rgba(201,165,74,.42)}
+  .btn-s{border:1px solid var(--line);background:var(--glass);color:var(--ink)}
+  .btn-s:hover{border-color:var(--gold)}
+  .stats{display:flex;gap:48px;justify-content:center;margin-top:70px;flex-wrap:wrap}
+  .stat .n{font-family:'Cinzel';font-size:34px;font-weight:800;color:var(--gold)}
+  .stat .l{font-size:13px;color:var(--ink-dim);letter-spacing:1px;text-transform:uppercase}
+
+  .sect{padding:80px 0}
+  .sect-head{margin-bottom:48px}
+  .sect-head .k{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--gold)}
+  .sect-head h2{font-family:'Cinzel';font-weight:800;font-size:38px;margin-top:10px}
+  .bento{display:grid;grid-template-columns:1.4fr 1fr 1fr;grid-auto-rows:200px;gap:20px}
+  .b{position:relative;border:1px solid var(--line);border-radius:18px;padding:28px;background:var(--glass);backdrop-filter:blur(8px);overflow:hidden;transition:.25s}
+  .b:hover{border-color:var(--gold);transform:translateY(-4px)}
+  .b.big{grid-row:span 2}
+  .b .ic{font-size:26px;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(201,165,74,.5))}
+  .b h3{font-family:'Cinzel';font-size:21px;font-weight:700;margin-bottom:8px}
+  .b p{color:var(--ink-dim);font-size:14.5px}
+  .b .arr{position:absolute;bottom:22px;right:24px;color:var(--gold);font-size:20px;opacity:.6}
+  .b::before{content:"";position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(201,165,74,.12),transparent 70%)}
+
+  footer{border-top:1px solid var(--line);padding:54px 0;text-align:center;color:var(--ink-dim);font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div><div class="grid-bg"></div>
+<div class="content">
+<nav><div class="wrap">
+  <div class="brand"><div class="sigil">Æ</div> AI-GM</div>
+  <div class="nav-links"><a>Historia</a><a>Świat</a><a>Księga Zasad</a><a>Co nowego</a></div>
+  <a class="nav-cta">Zagraj teraz</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="pill"><span class="dot"></span> Mistrz Gry napędzany AI · narracja po polsku</div>
+  <h1>Każda decyzja<br><span class="glow">zmienia opowieść</span></h1>
+  <p class="sub">RPG, w którym sztuczna inteligencja prowadzi grę w czasie rzeczywistym — walka, kości, magia i świat reagujący na to, kim postanawiasz być.</p>
+  <div class="hero-cta">
+    <a class="btn btn-p">Rozpocznij przygodę</a>
+    <a class="btn btn-s">Poznaj świat</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n">7</div><div class="l">cech bohatera</div></div>
+    <div class="stat"><div class="n">∞</div><div class="l">możliwych historii</div></div>
+    <div class="stat"><div class="n">d20</div><div class="l">silnik kości</div></div>
+    <div class="stat"><div class="n">9</div><div class="l">zaklęć maga</div></div>
+  </div>
+</div></header>
+
+<section class="sect"><div class="wrap">
+  <div class="sect-head"><div class="k">Odkryj projekt</div><h2>Cztery działy, jeden świat</h2></div>
+  <div class="bento">
+    <div class="b big"><div class="ic">🗺️</div><h3>Świat</h3><p>Atlas miejsc, frakcji i legend. Mapa heksowa, lokacje, bogowie — pełne lore świata, w którym toczą się kampanie.</p><span class="arr">→</span></div>
+    <div class="b"><div class="ic">📜</div><h3>Historia powstawania</h3><p>Szczera kronika projektu — od pomysłu do silnika.</p><span class="arr">→</span></div>
+    <div class="b"><div class="ic">⚔️</div><h3>Księga Zasad</h3><p>Żywy dokument mechanik, zawsze zgodny z grą.</p><span class="arr">→</span></div>
+    <div class="b"><div class="ic">✨</div><h3>Co nowego</h3><p>Changelog po ludzku — bez wersji, sama opowieść.</p><span class="arr">→</span></div>
+    <div class="b"><div class="ic">🎲</div><h3>Jak się gra</h3><p>Rzut, walka strefowa, odpoczynek, XP — w pigułce.</p><span class="arr">→</span></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">AI-GM · zbudowane na FastAPI + SQLite + LLM · narracja po polsku · © 2026</div></footer>
+</div>
+</body>
+</html>

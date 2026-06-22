@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-GM — wariant C: Cartographer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IM+Fell+English:ital@0;1&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --parch:#e7d8b4; --parch-dk:#d8c49a; --ink:#2c2113; --ink-soft:#5a4a30;
+    --gold:#8a6f2f; --blood:#7a2a26; --bg:#11100c; --line:#bda87e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;line-height:1.66;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 30px}
+
+  /* paper texture */
+  .paper{
+    background:
+      radial-gradient(circle at 20% 20%, rgba(255,255,255,.18), transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(120,90,40,.12), transparent 55%),
+      repeating-linear-gradient(38deg, rgba(120,90,40,.03) 0 2px, transparent 2px 5px),
+      var(--parch);
+  }
+  nav{position:sticky;top:0;z-index:50;background:rgba(231,216,180,.92);backdrop-filter:blur(6px);border-bottom:2px solid var(--ink)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .brand{font-family:'Cinzel',serif;font-weight:800;font-size:21px;letter-spacing:2px;color:var(--ink)}
+  .brand b{color:var(--blood)}
+  .nav-links{display:flex;gap:30px;font-family:'IM Fell English',serif;font-size:17px;color:var(--ink-soft)}
+  .nav-links a:hover{color:var(--blood)}
+  .nav-cta{font-family:'Cinzel';font-weight:700;font-size:12px;letter-spacing:1.5px;padding:11px 22px;background:var(--ink);color:var(--parch);border-radius:1px}
+  .nav-cta:hover{background:var(--blood)}
+
+  /* hero with compass + map lines */
+  .hero{position:relative;padding:96px 0 84px;overflow:hidden}
+  .hero .wrap{position:relative;z-index:2}
+  .maplines{position:absolute;inset:0;z-index:1;opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 78px, rgba(90,74,48,.18) 78px 79px),
+      repeating-linear-gradient(90deg, transparent 0 78px, rgba(90,74,48,.18) 78px 79px);
+    -webkit-mask:radial-gradient(ellipse 80% 90% at 70% 50%, #000, transparent 80%)}
+  .compass{position:absolute;right:4%;top:50%;transform:translateY(-50%);width:340px;height:340px;z-index:1;opacity:.85}
+  .hero-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:center}
+  .eyebrow{font-family:'IM Fell English',serif;font-style:italic;font-size:18px;color:var(--blood);letter-spacing:1px}
+  .hero h1{font-family:'Cinzel',serif;font-weight:800;font-size:clamp(38px,6vw,66px);line-height:1.06;color:var(--ink);margin:12px 0 6px}
+  .rule{width:120px;height:3px;background:var(--ink);margin:22px 0}
+  .hero p{font-family:'IM Fell English',serif;font-size:21px;color:var(--ink-soft);max-width:480px}
+  .hero-cta{display:flex;gap:16px;margin-top:34px}
+  .btn{font-family:'Cinzel';font-weight:700;font-size:14px;letter-spacing:1px;padding:15px 28px;border-radius:1px;transition:.2s}
+  .btn-ink{background:var(--ink);color:var(--parch)}
+  .btn-ink:hover{background:var(--blood)}
+  .btn-out{border:2px solid var(--ink);color:var(--ink)}
+  .btn-out:hover{background:var(--ink);color:var(--parch)}
+
+  /* index of chapters — like an atlas table of contents */
+  .sect{background:var(--bg);color:var(--parch);padding:90px 0}
+  .sect h2{font-family:'Cinzel';font-weight:800;font-size:32px;text-align:center;color:var(--parch);margin-bottom:8px}
+  .sect .sub{text-align:center;font-family:'IM Fell English';font-style:italic;color:#b8a47c;margin-bottom:50px;font-size:18px}
+  .toc{max-width:760px;margin:0 auto;border-top:1px solid #4a3f2a}
+  .toc-row{display:grid;grid-template-columns:46px 1fr auto;align-items:baseline;gap:18px;padding:26px 6px;border-bottom:1px solid #4a3f2a;transition:.2s}
+  .toc-row:hover{background:rgba(231,216,180,.05);padding-left:16px}
+  .toc-row .ro{font-family:'Cinzel';font-size:20px;color:var(--gold)}
+  .toc-row h3{font-family:'Cinzel';font-size:22px;color:var(--parch)}
+  .toc-row p{font-family:'IM Fell English';font-size:17px;color:#9c8c68;margin-top:5px}
+  .toc-row .pg{font-family:'IM Fell English';font-style:italic;color:var(--gold);font-size:16px}
+  .leader{border-bottom:1px dotted #5a4f38}
+
+  footer{background:var(--parch);padding:40px 0;text-align:center;font-family:'IM Fell English';font-size:15px;color:var(--ink-soft);border-top:3px double var(--ink)}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <div class="brand">AI·<b>GM</b></div>
+  <div class="nav-links"><a>Historia</a><a>Świat</a><a>Księga Zasad</a><a>Co nowego</a></div>
+  <a class="nav-cta">ZAGRAJ</a>
+</div></nav>
+
+<header class="hero paper">
+  <div class="maplines"></div>
+  <svg class="compass" viewBox="0 0 200 200" fill="none" stroke="#5a4a30" stroke-width="1.2">
+    <circle cx="100" cy="100" r="92" stroke-width="2"/>
+    <circle cx="100" cy="100" r="70"/>
+    <circle cx="100" cy="100" r="6" fill="#7a2a26" stroke="none"/>
+    <polygon points="100,14 110,100 100,90 90,100" fill="#7a2a26" stroke="none"/>
+    <polygon points="100,186 110,110 100,120 90,110" fill="#2c2113" stroke="none"/>
+    <polygon points="14,100 100,90 90,100 100,110" fill="#5a4a30" stroke="none"/>
+    <polygon points="186,100 110,90 120,100 110,110" fill="#5a4a30" stroke="none"/>
+    <text x="100" y="36" text-anchor="middle" font-family="Cinzel" font-size="13" fill="#2c2113" stroke="none">N</text>
+  </svg>
+  <div class="wrap"><div class="hero-grid"><div>
+    <div class="eyebrow">Kroniki świata AI-GM</div>
+    <h1>Atlas<br>nieopowiedzianych<br>przygód</h1>
+    <div class="rule"></div>
+    <p>Mroczne fantasy RPG, w którym Mistrzem Gry jest sztuczna inteligencja. Otwórz mapę — świat czeka, aż go zapiszesz.</p>
+    <div class="hero-cta">
+      <a class="btn btn-ink">Wyrusz w drogę</a>
+      <a class="btn btn-out">Przeglądaj atlas</a>
+    </div>
+  </div></div></div>
+</header>
+
+<section class="sect"><div class="wrap">
+  <h2>Spis treści</h2>
+  <div class="sub">~ cztery karty tego tomu ~</div>
+  <div class="toc">
+    <div class="toc-row"><span class="ro">I</span><div><h3>Historia powstawania</h3><p>Jak z jednego pomysłu narodził się żywy silnik gry.</p></div><span class="pg">karta I</span></div>
+    <div class="toc-row"><span class="ro">II</span><div><h3>Świat</h3><p>Geografia, frakcje, bogowie i legendy — pełne lore.</p></div><span class="pg">karta XII</span></div>
+    <div class="toc-row"><span class="ro">III</span><div><h3>Księga Zasad</h3><p>Żywy dokument mechanik, wierny silnikowi gry.</p></div><span class="pg">karta XL</span></div>
+    <div class="toc-row"><span class="ro">IV</span><div><h3>Co nowego</h3><p>Kronika zmian spisana ludzkim językiem.</p></div><span class="pg">karta XCIX</span></div>
+  </div>
+</div></section>
+
+<footer class="">AI-GM · spisane na FastAPI, SQLite i LLM · narracja po polsku · Anno MMXXVI</footer>
+</body>
+</html>
