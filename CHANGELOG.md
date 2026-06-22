@@ -4,10 +4,7 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
-## v1.6.0 — 2026-06-22 — Multiplayer FAZA 5 dokończona (G7–G31) + czary maga B14–B17 (siatka 26→34) + interaktywna Księga Zasad + pathfinding lochów
-
-> **Status: PRZYGOTOWANY do przyszłego prod update** — 69 commitów `develop` ponad `main`.
-> Wersja i data finalizowane przy faktycznym deployu (`/prod-update`).
+## v1.5.2 — 2026-06-22 — Multiplayer FAZA 5 dokończona (G7–G31) + czary maga B14–B17 (siatka 26→34) + interaktywna Księga Zasad + pathfinding lochów
 
 ### Added
 
