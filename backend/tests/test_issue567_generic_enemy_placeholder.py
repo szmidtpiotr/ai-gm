@@ -10,6 +10,9 @@ import sys
 sys.path.insert(0, "/app")
 
 import sqlite3
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _fixtures_schema as fx
 import app.api.turns as turns
 
 
@@ -19,7 +22,7 @@ def _ctx_conn(enemies):
     conn.row_factory = sqlite3.Row
     conn.execute("CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT)")
     conn.execute("CREATE TABLE campaign_turns (id INTEGER PRIMARY KEY, campaign_id INTEGER, assistant_text TEXT)")
-    conn.execute("CREATE TABLE game_config_enemies (key TEXT, label TEXT, is_active INTEGER DEFAULT 1)")
+    conn.executescript(fx.enemies_table_sql())
     conn.executemany("INSERT INTO game_config_enemies (key,label,is_active) VALUES (?,?,1)", enemies)
     conn.commit()
     return conn

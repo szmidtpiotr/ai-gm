@@ -34,6 +34,7 @@ def _schema(conn: sqlite3.Connection) -> None:
           dex_modifier INTEGER NOT NULL DEFAULT 0,
           skills_json TEXT,
           stats_json TEXT,
+          image_url TEXT,
           review_status TEXT NOT NULL DEFAULT 'permanent'
         );
         INSERT INTO game_config_enemies
