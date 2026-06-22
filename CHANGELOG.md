@@ -4,6 +4,62 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.6.0 — 2026-06-22 — Multiplayer FAZA 5 dokończona (G7–G31) + czary maga B14–B17 (siatka 26→34) + interaktywna Księga Zasad + pathfinding lochów
+
+> **Status: PRZYGOTOWANY do przyszłego prod update** — 69 commitów `develop` ponad `main`.
+> Wersja i data finalizowane przy faktycznym deployu (`/prod-update`).
+
+### Added
+
+**Multiplayer — FAZA 5 dokończona, runy G7–G31 (#791–#813, #784)**
+- G16 (#784): `character_campaign_state` — izolacja HP/mana per-kampania (bohater w wielu MP naraz)
+- G7 (#791): sekwencyjny silnik walki dla multiplayer
+- G8 (#792): rzuty dwustopniowe w rundzie MP (planer → kod → narrator)
+- G9 (#793): timer walki 2 min + push „Twoja kolej" per tura
+- G17 (#794): powalenie zamiast śmierci w walce MP
+- G10 (#795): loot per-gracz z filtrem klasy + złoto dzielone równo
+- G18 (#796): warstwowe podsumowania rund MP (layer 0/1/2)
+- G11 (#797): catch-up po powrocie (missed rounds + reset nieobecności)
+- G12 (#798): spóźnialscy — start z niepełnym składem + narracyjne wprowadzenie
+- G13 (#799): kick → bohater do `idle` z zachowaniem XP/złota/ekwipunku
+- G19 (#800): widzowie (spectators) — backend + policy/mute/mute routes
+- G30 (#801): twardość rund — WAL + idempotencja + state-machine + retry + `force_sweep`
+- G21 (#802): heartbeat `last_seen` + flaga online + push „Drużyna w komplecie"
+- G22 (#803): drabina nieobecności — autopilot opt-in + auto-handoff hosta
+- G23 (#804): pętla zaangażowania — wyważone haki + away-recap dla wracających
+- G24 (#805): blokada edycji po zamknięciu rundy + `withdraw_action`
+- G25 (#806): onboarding-podsumowanie dla późnych dołączeń do aktywnej kampanii
+- G26 (#807): skalowanie poziomu drużyny (max-1) + catch-up XP ×1.5
+- G27 (#808): cicha pora drużyny (zawieszenie sweepu + wyciszenie pushy)
+- G28 (#809): reguły spójności głosu narratora w prompt systemowym MP
+- G29 (#810): ochrona przed prompt-injection w akcjach graczy MP
+- G31 (#811): metryka Prometheus `mp_round_completed_total` (retencja rund)
+- G15 (#813): scentralizowane flagi balansu MP (`mp_balance.py`)
+
+**Czary maga — system B (#820–#823, #868) — siatka czarów 26 → 34**
+- B14 (#820): czary na sojusznika — heal/tarcza single-ally + warianty `group_*`/`mass_*`
+- B15 (#821): summony jako kombatant-towarzysz
+- B16 (#822): system reakcji czarów — `mirror_image`/`blink`/`globe_invulnerability`
+- B17 (#823): czary kontroli umysłu — `charm_person` + `mass_fear` (D3: INT)
+
+**Interaktywna Księga Zasad `/rules/` (#868)**
+- Rozdziały + podstrony + edycja z poziomu admina; konwencja „aktualizuj /rules/ w tym samym PR" przy zmianach reguł gracza
+
+**Lochy**
+- #869: mapa lochu — klik w kafel = pathfinding (BFS) sekwencja ruchów; trasowanie do pierwszego kafla mgły (granicznego)
+
+**Powiadomienia**
+- N2 (#602): zunifikowany multichannel dispatcher `notify()`
+- #593: diagnostyka push — ślad kroków na ekranie + endpoint gotowości serwera
+
+### Fixed
+- #734: mikstura w środku walki = akcja zużywająca turę
+- #829: walka 3D dice — odtwarzanie box+container per rzut (mirror panelu admina)
+- #728: dungeon cooldown=0 respektowany (brak nieaktualnego timera)
+- #720: popup ujawnienia łupu bossa
+
+---
+
 ## v1.5.1 — 2026-06-21 — Multiplayer FAZA 5 (G1–G6) + zaproszenia przez link (#866) + dopięcie walki (dual-wield/grapple/akcje) + fixy lochów
 
 ### Added
