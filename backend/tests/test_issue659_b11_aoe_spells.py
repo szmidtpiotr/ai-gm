@@ -25,7 +25,9 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import _fixtures_schema as fx  # noqa: E402
 from app.services import combat_service
 
 
@@ -80,8 +82,9 @@ def _combat_db(tmp_path, *, mana=12, max_mana=12, n_enemies=3, enemy_hp=8):
     sj = json.dumps(sheet, ensure_ascii=False).replace("'", "''")
     conn = sqlite3.connect(str(db))
     try:
+        fx.create_tables(conn, "game_config_conditions", "game_config_spells", "game_config_enemies")
         conn.executescript(f"""
-        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active');
+        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active', mode TEXT);
         INSERT INTO campaigns (id,title) VALUES (1,'B11');
         CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,
           name TEXT, system_id TEXT, sheet_json TEXT);
@@ -97,11 +100,6 @@ def _combat_db(tmp_path, *, mana=12, max_mana=12, n_enemies=3, enemy_hp=8):
           turn_number REAL, actor TEXT, event_type TEXT, roll_value INTEGER, damage INTEGER, hp_after INTEGER,
           target_id TEXT, target_name TEXT, hit INTEGER, narrative TEXT,
           created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
-        CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-          is_active INTEGER DEFAULT 1, stackable INTEGER DEFAULT 0);
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, label TEXT, spell_type TEXT,
-          effect_type TEXT, effect_stat TEXT, effect_duration INTEGER, mana_cost INTEGER,
-          tier INTEGER, damage_die TEXT, aoe INTEGER DEFAULT 0, effect_json TEXT, is_active INTEGER DEFAULT 1);
         INSERT INTO game_config_spells (key,label,spell_type,effect_type,effect_stat,effect_duration,mana_cost,tier,damage_die,aoe,effect_json) VALUES
           ('burning_arc','Pałająca Ścieżka','attack_aoe',NULL,NULL,1,4,2,'1d6',1,NULL),
           ('chain_lightning','Łańcuch Błyskawic','attack_aoe',NULL,NULL,1,5,4,'2d6',0,NULL),
@@ -109,10 +107,6 @@ def _combat_db(tmp_path, *, mana=12, max_mana=12, n_enemies=3, enemy_hp=8):
           ('fire_bolt','Ognisty Pocisk','attack',NULL,NULL,1,2,1,'1d8',0,NULL);
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1,
           learned_at_level INTEGER DEFAULT 1);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
-          ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, dex_modifier INTEGER,
-          skills_json TEXT, stats_json TEXT, tier TEXT, loot_table_key TEXT,
-          drop_chance REAL, xp_award INTEGER);
         INSERT INTO game_config_enemies (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,skills_json,stats_json,tier,loot_table_key,drop_chance,xp_award)
           VALUES ('goblin','Goblin',8,8,0,'1d6',0,NULL,NULL,'minion',NULL,0,10);
         """)
