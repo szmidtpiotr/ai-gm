@@ -34,16 +34,22 @@ def _admin_token() -> str:
 
 def test_is_test_location_key_recognizes_fixture_keys():
     """Klucz z prefiksem 'test_loc_' to atrapa fixtureowa → True."""
+    # prefix 'test_'
     assert is_test_location_key("test_loc_1718900000.123") is True
-    assert is_test_location_key("test_loc_") is True
-    assert is_test_location_key("test_location_17821482") is True  # wariant 'test_location_'
-    assert is_test_location_key("TEST_LOC_42") is True  # case-insensitive
+    assert is_test_location_key("test_location_17821482") is True
+    assert is_test_location_key("test_city_val") is True
+    assert is_test_location_key("TEST_FLOW_42") is True  # case-insensitive
+    # sufiks time.time() — atrapy parent_/child_ bez prefiksu 'test_'
+    assert is_test_location_key("parent_immut_1782108133.1654") is True
+    assert is_test_location_key("child_del_1782106957.6099145") is True
+    assert is_test_location_key("parent_2_1782108148.988266") is True
 
 
 def test_is_test_location_key_passes_real_keys():
-    """Prawdziwe lokacje świata → False (nie ruszamy ich)."""
+    """Prawdziwe lokacje świata (polskie slugi) → False (nie ruszamy ich)."""
     assert is_test_location_key("karczma_pod_lwem") is False
-    assert is_test_location_key("test_dummy") is False  # 'test_' ale nie 'test_loc'
+    assert is_test_location_key("plac_centralny") is False
+    assert is_test_location_key("las_szeptow") is False
     assert is_test_location_key(None) is False
     assert is_test_location_key("") is False
 

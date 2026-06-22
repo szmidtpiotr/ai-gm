@@ -24,14 +24,24 @@ def require_admin_token(authorization: str | None = Header(default=None)) -> Non
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
 
-def is_test_location_key(key: str | None) -> bool:
-    """Czy klucz to atrapa z fixtureów testowych (prefix 'test_loc').
+# Sufiks time.time() z fixtureów pytest, np. 'parent_immut_1782108133.1654'.
+# To wspólny podpis WSZYSTKICH atrap testowych (test_loc_, parent_, child_, ...).
+_TEST_KEY_TS_RE = re.compile(r"_\d{9,}\.\d+$")
 
-    Łapie zarówno 'test_loc_<ts>' (fixture phase8d), jak i 'test_location_<ts>'.
-    Takie lokacje (#941) nigdy nie mogą być canonical/world-eligible — inaczej
-    generator świata wstawia je do realnych kampanii ('Updated Label Test').
+
+def is_test_location_key(key: str | None) -> bool:
+    """Czy klucz to atrapa z fixtureów testowych — nigdy nie world-eligible (#941).
+
+    Łapie dwa wzorce testów (`backend/tests/test_phase8d_api_http.py`):
+      • prefix 'test_' (np. test_loc_*, test_city_val, test_flow_*),
+      • sufiks time.time() '_<unix>.<frac>' (parent_immut_*, child_del_*, parent_2_* itd.).
+    Realne lokacje świata to polskie slugi (karczma_, plac_, las_) — żaden nie ma
+    takiego sufiksu ani prefiksu 'test_', więc guard ich nie dotyka.
     """
-    return bool(key) and key.strip().lower().startswith("test_loc")
+    if not key:
+        return False
+    k = key.strip().lower()
+    return k.startswith("test_") or bool(_TEST_KEY_TS_RE.search(k))
 
 
 # ============================================================================
