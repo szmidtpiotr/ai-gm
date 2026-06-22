@@ -47,7 +47,7 @@ def _combat_db(tmp_path, *, player_hp=5, max_hp=8, mana=5, max_mana=9):
     conn = sqlite3.connect(str(db))
     try:
         conn.executescript(f"""
-        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active');
+        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active', mode TEXT);
         INSERT INTO campaigns (id,title) VALUES (1,'B13');
         CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,
           name TEXT, system_id TEXT, sheet_json TEXT);

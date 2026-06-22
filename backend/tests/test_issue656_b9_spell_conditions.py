@@ -106,7 +106,7 @@ def _combat_db(tmp_path, *, int_stat=16, enemy_con=8, enemy_wis=8, mana=10, max_
     conn = sqlite3.connect(str(db))
     try:
         conn.executescript(f"""
-        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active');
+        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active', mode TEXT);
         INSERT INTO campaigns (id,title) VALUES (1,'B9');
         CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,
           name TEXT, system_id TEXT, sheet_json TEXT);

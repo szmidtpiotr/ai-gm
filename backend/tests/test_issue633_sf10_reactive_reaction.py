@@ -52,7 +52,7 @@ def _combat_db(tmp_path, *, dodge_rank=0, shield_block_rank=0, shield=False,
     conn = sqlite3.connect(str(db))
     try:
         conn.executescript(f"""
-        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active');
+        CREATE TABLE campaigns (id INTEGER PRIMARY KEY, title TEXT, status TEXT DEFAULT 'active', mode TEXT);
         INSERT INTO campaigns (id,title) VALUES (1,'SF10');
         CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,
           name TEXT, system_id TEXT, sheet_json TEXT);
