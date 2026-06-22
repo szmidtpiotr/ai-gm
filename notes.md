@@ -107,3 +107,9 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - 20 pytest GREEN
 - Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/813#issuecomment-4763767233
 - Werdykt ✅ — GET zwraca poprawne domyślne wartości (10/20/30%, floor=50, HP=0.5, scale=1.0), PATCH aktualizuje natychmiast (session-scoped)
+
+## GF7 #927 — E2E Multiplayer flow (test-only)
+- Przetestowane /playwright-test-report 2026-06-22, raport: https://github.com/szmidtpiotr/ai-gm/issues/927#issuecomment-4768142376
+- Werdykt ⚠️ — backend generuje narrację, polling lobby działa, invite-by-username działa
+- Znalezione bugi: #934 (brak kafelka MP), #935 (zły klucz showScreen), #936 (createLobby 500 model_id), #938 (brak migracji campaign_invites+party_messages), #939 (brak HTML czatu party + enterGame nie aktywuje MP UI)
+- Priorytet napraw: #934→#935→#936 (blokują wejście do MP) → #938→#939 (blokują czat)
