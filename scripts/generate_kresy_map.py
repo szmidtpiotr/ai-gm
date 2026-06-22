@@ -50,17 +50,19 @@ def gen_field(rng):
     g = [[rng.random() for _ in range(W)] for _ in range(H)]
     return smooth(g, 4)
 
-def neighbors(q, r):
-    # offset even-r
-    if r % 2 == 0:
-        d = [(1,0),(-1,0),(0,-1),(-1,-1),(0,1),(-1,1)]
-    else:
-        d = [(1,0),(-1,0),(1,-1),(0,-1),(1,1),(0,1)]
+# Gra renderuje flat-top axial (x=1.5q, y=√3(q/2+r)). Generujemy na prostokącie
+# (col,row), ale SĄSIEDZTWO liczymy w axialu gry (odd-q offset) — by rzeki/drogi
+# były ciągłe i by eksport dał PROSTOKĄT, nie romb.
+_AX_DIRS = [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
+def off2ax(col, row): return (col, row - (col - (col & 1)) // 2)
+def ax2off(q, r):     return (q, r + (q - (q & 1)) // 2)
+def neighbors(col, row):
+    q, r = off2ax(col, row)
     out = []
-    for dq, dr in d:
-        nq, nr = q+dq, r+dr
-        if 0 <= nq < W and 0 <= nr < H:
-            out.append((nq, nr))
+    for dq, dr in _AX_DIRS:
+        nc, nr = ax2off(q+dq, r+dr)
+        if 0 <= nc < W and 0 <= nr < H:
+            out.append((nc, nr))
     return out
 
 def axial_dist(a, b):
@@ -279,9 +281,12 @@ def main():
            "note": "Seed mapy do PRZYSZŁEGO importu do world_hexes; teraz nie importowane (backend gry pauzowany).",
            "hexes": [h for h in hexes.values() if h["hex_type"] != "plains" or h["label"]]
                     + [h for h in hexes.values() if h["hex_type"] == "plains" and not h["label"]],
-           "settlements": [{"key": k, "q": p[0], "r": p[1], "label": hexes[p]["label"], "type": hexes[p]["hex_type"]} for k, p in placed.items()]}
-    # pełny dump wszystkich heksów (nadpisz powyższy skrót — chcemy komplet 2500)
-    out["hexes"] = list(hexes.values())
+           "settlements": [{"key": k, "q": off2ax(*p)[0], "r": off2ax(*p)[1], "label": hexes[p]["label"], "type": hexes[p]["hex_type"]} for k, p in placed.items()]}
+    # pełny dump wszystkich heksów w AXIAL (gra renderuje flat-top axial -> prostokąt)
+    def ax_hex(h):
+        aq, ar = off2ax(h["q"], h["r"])
+        return {**h, "q": aq, "r": ar}
+    out["hexes"] = [ax_hex(h) for h in hexes.values()]
     (ROOT / "docs/world").mkdir(parents=True, exist_ok=True)
     (ROOT / "docs/world/kresy_map.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 
