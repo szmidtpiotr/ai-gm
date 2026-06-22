@@ -40,9 +40,12 @@
   document.querySelectorAll('.sect[data-sect-bg]').forEach(s => applyBg(s, s.getAttribute('data-sect-bg'), '--sect-img'));
   function applyBg(el, src, varName) {
     if (!src) return;
+    // Ścieżka ABSOLUTNA — relatywny url() w CSS-var rozwiązuje się względem pliku CSS,
+    // nie dokumentu, co dawało /assets/css/assets/img/... => 404.
+    const abs = new URL(src, document.baseURI).href;
     const img = new Image();
-    img.onload = () => { el.style.setProperty(varName, `url('${src}')`); el.classList.add('has-bg'); };
-    img.src = src;
+    img.onload = () => { el.style.setProperty(varName, `url("${abs}")`); el.classList.add('has-bg'); };
+    img.src = abs;
   }
 
   // --- data-driven changelog (W6 generator → data/changelog.json) ---
