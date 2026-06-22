@@ -5472,6 +5472,180 @@ def recover_combat_ammo(
     }
 
 
+def _attack_target_select(
+    combatants: list[dict],
+    _player_comb_id: str,
+    spell_key: str | None,
+    sheet: dict,
+    conn,
+    ch_id: int,
+    row,
+    target_id: str | None,
+    out: dict,
+) -> tuple[str | None, dict | None, dict | None]:
+    """Zone gating + target selection for player attack path.
+
+    Returns (target_id, enemy, early_return).
+    If early_return is not None the caller must return it immediately.
+    """
+    living = _living_enemy_ids(combatants)
+    if not living:
+        out["message"] = "no living enemies"
+        out["combat_state"] = _row_to_combat_dict(row)
+        return None, None, out
+
+    # ── Zone gating: prefer same-zone targets for melee, any-zone for ranged ──
+    _ensure_zones(combatants)
+    p_zone = str((_find_combatant(combatants, _player_comb_id) or {}).get("zone") or ZONE_ENGAGED)
+    _resolved_weapon_for_zone = (
+        "spell" if spell_key else (
+            "spell" if str(sheet.get("archetype") or "").strip().lower() == "scholar"
+            else str((resolve_sheet_weapon(conn, sheet, ch_id) or {}).get("weapon_type") or "melee").lower()
+        )
+    )
+    _melee = _resolved_weapon_for_zone == "melee"
+
+    order = json.loads(row["turn_order"] or "[]")
+    target_id, _block_reason = _select_player_target(
+        combatants, order, living, p_zone, _melee, requested_target_id=target_id,
+    )
+    if _block_reason == "out_of_range":
+        out["hit"] = False
+        out["blocked"] = True
+        out["block_reason"] = "out_of_range"
+        out["message"] = "Cele są poza zasięgiem walki wręcz. Zbliż się lub użyj broni dystansowej."
+        out["combat_state"] = _row_to_combat_dict(row)
+        return None, None, out
+
+    enemy = _find_combatant(combatants, target_id)
+    if not enemy:
+        raise ValueError("enemy combatant missing")
+
+    return target_id, enemy, None
+
+
+def _attack_resolve_defense(
+    attack_roll: int,
+    raw: int,
+    pac: int,
+    conn,
+    ch_id: int,
+    p: dict,
+    sheet: dict,
+    row,
+    enemy: dict,
+    out: dict,
+) -> bool:
+    """Hit determination for enemy attack path.
+
+    Uses compute_enemy_attack_hit or reaction-window shortcut.
+    Mutates out (hit, attack_roll, raw_d20, enemy_name, target_ac).
+    Returns hit bool.
+    """
+    _round_now826 = int(row["round"] or 1)
+    if _reaction_options(conn, ch_id, p, sheet, _round_now826):
+        hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
+        out["target_evasion"] = None
+    else:
+        _player_dex_mod = _stat_mod(sheet, "DEX")
+        _ev_raw = roll_d20()
+        _ev_total = int(_ev_raw) + int(_player_dex_mod)
+        hit = compute_enemy_attack_hit(attack_roll, raw, _ev_total)
+        out["player_evasion"] = {"raw": int(_ev_raw), "dex_mod": int(_player_dex_mod),
+                                 "total": _ev_total}
+    out["hit"] = hit
+    out["attack_roll"] = attack_roll
+    out["raw_d20"] = raw
+    out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+    out["target_ac"] = pac
+    return hit
+
+
+def _attack_try_reaction(
+    p: dict,
+    row,
+    out: dict,
+    conn,
+    ch_id: int,
+    sheet: dict,
+    attack_roll: int,
+    raw: int,
+    enemy: dict,
+    combatants: list[dict],
+    campaign_id: int,
+    dmg: int,
+) -> tuple[int, dict | None, dict | None, dict | None]:
+    """B16 spell-reaction + reaction window + S15/S16 dodge/block for enemy attack path.
+
+    Returns (dmg_after, _dodge, _block, early_return).
+    If early_return is not None the caller must return it immediately.
+    """
+    _b16 = _try_spell_reaction(p, int(row["round"] or 1), out)
+    _b16_negated = bool(_b16 and _b16.get("negated"))
+    if _b16_negated:
+        dmg = 0
+    # SF10 (#633): MODEL REAKTYWNY. Gdy gracz ma dostępną reakcję (skill/tarcza,
+    # niezużytą w rundzie), NIE naliczamy obrażeń — otwieramy OKNO REAKCJI: zapisujemy
+    # `pending_reaction` na combatancie i PAUZUJEMY (frontend pokaże modal Przyjmij/
+    # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
+    # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
+    _round_now = int(row["round"] or 1)
+    _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
+    if _opts and not p.get("pending_reaction") and not _b16_negated:
+        p["pending_reaction"] = {
+            "damage": int(dmg),
+            "attack_roll": int(attack_roll),
+            "round": _round_now,
+            "options": _opts,
+            "nat20": bool(raw == 20),  # #826: Nat 20 pomija pancerz przy rozliczeniu reakcji
+            "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
+        }
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
+            actor="enemy", event_type="attack", roll_value=int(attack_roll),
+            damage=0, hp_after=int(p.get("hp_current", 0) or 0),
+            target_id="player", target_name=str(p.get("name") or "Gracz"),
+            hit=True,
+            narrative=json.dumps({
+                "raw_d20": int(raw), "attack_roll": int(attack_roll),
+                "target_ac": int(out.get("target_ac") or 0), "reaction_window": True, "options": _opts,
+                "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
+            }, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+        out["hit"] = True
+        out["reaction_window"] = True
+        out["reaction_options"] = _opts
+        out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg")
+        out["combat_state"] = load_combat_snapshot(campaign_id)
+        return dmg, None, None, out
+    # S15 (#610): okno reakcji — unik PRZED aplikacją obrażeń. Rzut ataku wroga już
+    # rozliczony (nat 20/nat 1 nietknięte); reakcja działa tylko na obrażenia po trafieniu.
+    # B16: pominięte gdy czar-reakcja już znegował cios (jedna reakcja/rundę).
+    _dodge: dict | None = None
+    _block: dict | None = None
+    if not _b16_negated:
+        _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
+        if _dodge is not None:
+            out["reaction"] = _dodge
+            if _dodge.get("dodged"):
+                dmg = 0
+        else:
+            # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
+            # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
+            # nietknięty. Crit-fail bije durability tarczy (hook czyta character_inventory).
+            _block = _try_shield_block_reaction(
+                conn, ch_id, p, sheet, attack_roll, int(row["round"] or 1), dmg)
+            if _block is not None:
+                out["reaction"] = _block
+                if _block.get("available"):
+                    dmg = int(_block.get("damage_after", dmg))
+    return dmg, _dodge, _block, None
+
+
 def resolve_attack(
     campaign_id: int,
     roll_result: int | None,
@@ -5540,41 +5714,11 @@ def resolve_attack(
         _b14_req_target = str(target_id) if target_id is not None else None
 
         if attacker == "player" or _mp_ch_id is not None:
-            living = _living_enemy_ids(combatants)
-            if not living:
-                out["message"] = "no living enemies"
-                out["combat_state"] = _row_to_combat_dict(row)
-                return out
-
-            # ── Zone gating: prefer same-zone targets for melee, any-zone for ranged ──
-            _ensure_zones(combatants)
-            p_zone = str((_find_combatant(combatants, _player_comb_id) or {}).get("zone") or ZONE_ENGAGED)
-            _resolved_weapon_for_zone = (
-                "spell" if spell_key else (
-                    "spell" if str(sheet.get("archetype") or "").strip().lower() == "scholar"
-                    else str((resolve_sheet_weapon(conn, sheet, ch_id) or {}).get("weapon_type") or "melee").lower()
-                )
+            target_id, enemy, _tgt_early = _attack_target_select(
+                combatants, _player_comb_id, spell_key, sheet, conn, ch_id, row, target_id, out,
             )
-            _melee = _resolved_weapon_for_zone == "melee"
-
-            order = json.loads(row["turn_order"] or "[]")
-            # #595: honoruj cel wskazany przez gracza (target_id) gdy to żywy wróg; melee
-            # dalej bramkowane strefą (out_of_range). Helper utrzymuje stare auto-wybieranie
-            # gdy brak/zły cel.
-            target_id, _block_reason = _select_player_target(
-                combatants, order, living, p_zone, _melee, requested_target_id=target_id,
-            )
-            if _block_reason == "out_of_range":
-                out["hit"] = False
-                out["blocked"] = True
-                out["block_reason"] = "out_of_range"
-                out["message"] = "Cele są poza zasięgiem walki wręcz. Zbliż się lub użyj broni dystansowej."
-                out["combat_state"] = _row_to_combat_dict(row)
-                return out
-
-            enemy = _find_combatant(combatants, target_id)
-            if not enemy:
-                raise ValueError("enemy combatant missing")
+            if _tgt_early is not None:
+                return _tgt_early
 
             # ── B9 (#656): czar NIE-atakujący (kondycja) — pojedynek INT vs WIS/CON, NIE unik ──
             # Wykrywamy PRZED ścieżką ataku/obrażeń: czar `effect` w walce nakłada kondycję
@@ -6675,22 +6819,7 @@ def resolve_attack(
         #  • gracz ma reakcję (dodge/shield + tarcza) → cios dosięga, jedyny test = OKNO REAKCJI
         #    (rozliczane w resolve_reaction / _try_dodge_reaction poniżej); AC pominięte.
         #  • brak reakcji → pojedynczy pasywny unik d20+DEX (symetria z wrogiem).
-        _round_now826 = int(row["round"] or 1)
-        if _reaction_options(conn, ch_id, p, sheet, _round_now826):
-            hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
-            out["target_evasion"] = None
-        else:
-            _player_dex_mod = _stat_mod(sheet, "DEX")
-            _ev_raw = roll_d20()
-            _ev_total = int(_ev_raw) + int(_player_dex_mod)
-            hit = compute_enemy_attack_hit(attack_roll, raw, _ev_total)
-            out["player_evasion"] = {"raw": int(_ev_raw), "dex_mod": int(_player_dex_mod),
-                                     "total": _ev_total}
-        out["hit"] = hit
-        out["attack_roll"] = attack_roll
-        out["raw_d20"] = raw
-        out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
-        out["target_ac"] = pac
+        hit = _attack_resolve_defense(attack_roll, raw, pac, conn, ch_id, p, sheet, row, enemy, out)
 
         _log_dice_roll_combat_resolve(
             source="combat_enemy",
@@ -6734,71 +6863,11 @@ def resolve_attack(
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
             # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
             dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
-            # B16 (#822): czar-reakcja (mirror_image/blink/globe) — auto-wyzwalany stan PRZED
-            # obrażeniami, wcześniej niż okno dodge/block. Negujący cios (iluzja zjada cios /
-            # blink pudło / globe nietykalność) zeruje obrażenia i POMIJA okno reakcji
-            # (jedna reakcja/rundę). Nie-negujący blink → None → normalna ścieżka dodge/block.
-            _b16 = _try_spell_reaction(p, int(row["round"] or 1), out)
-            _b16_negated = bool(_b16 and _b16.get("negated"))
-            if _b16_negated:
-                dmg = 0
-            # SF10 (#633): MODEL REAKTYWNY. Gdy gracz ma dostępną reakcję (skill/tarcza,
-            # niezużytą w rundzie), NIE naliczamy obrażeń — otwieramy OKNO REAKCJI: zapisujemy
-            # `pending_reaction` na combatancie i PAUZUJEMY (frontend pokaże modal Przyjmij/
-            # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
-            # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
-            _round_now = int(row["round"] or 1)
-            _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
-            if _opts and not p.get("pending_reaction") and not _b16_negated:
-                p["pending_reaction"] = {
-                    "damage": int(dmg),
-                    "attack_roll": int(attack_roll),
-                    "round": _round_now,
-                    "options": _opts,
-                    "nat20": bool(raw == 20),  # #826: Nat 20 pomija pancerz przy rozliczeniu reakcji
-                    "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
-                }
-                cid = int(row["id"])
-                tn = _next_combat_log_sequence(conn, cid)
-                log_combat_turn(
-                    conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn,
-                    actor="enemy", event_type="attack", roll_value=int(attack_roll),
-                    damage=0, hp_after=int(p.get("hp_current", 0) or 0),
-                    target_id="player", target_name=str(p.get("name") or "Gracz"),
-                    hit=True,
-                    narrative=json.dumps({
-                        "raw_d20": int(raw), "attack_roll": int(attack_roll),
-                        "target_ac": int(pac), "reaction_window": True, "options": _opts,
-                        "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
-                    }, ensure_ascii=False),
-                )
-                _persist_combatants(conn, row, combatants)
-                conn.commit()
-                out["hit"] = True
-                out["reaction_window"] = True
-                out["reaction_options"] = _opts
-                out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg")
-                out["combat_state"] = load_combat_snapshot(campaign_id)
-                return out
-            # S15 (#610): okno reakcji — unik PRZED aplikacją obrażeń. Rzut ataku wroga już
-            # rozliczony (nat 20/nat 1 nietknięte); reakcja działa tylko na obrażenia po trafieniu.
-            # B16: pominięte gdy czar-reakcja już znegował cios (jedna reakcja/rundę).
-            if not _b16_negated:
-                _dodge = _try_dodge_reaction(p, sheet, attack_roll, int(row["round"] or 1))
-                if _dodge is not None:
-                    out["reaction"] = _dodge
-                    if _dodge.get("dodged"):
-                        dmg = 0
-                else:
-                    # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
-                    # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
-                    # nietknięty. Crit-fail bije durability tarczy (hook czyta character_inventory).
-                    _block = _try_shield_block_reaction(
-                        conn, ch_id, p, sheet, attack_roll, int(row["round"] or 1), dmg)
-                    if _block is not None:
-                        out["reaction"] = _block
-                        if _block.get("available"):
-                            dmg = int(_block.get("damage_after", dmg))
+            dmg, _dodge, _block, _react_early = _attack_try_reaction(
+                p, row, out, conn, ch_id, sheet, attack_roll, raw, enemy, combatants, campaign_id, dmg,
+            )
+            if _react_early is not None:
+                return _react_early
             # #826: margines→dmg + pancerz=redukcja na obrażeniach wroga (po uniku/bloku,
             # przed absorpcją/HP). Obrona gracza = pac (AC) — już nie próg trafienia. Nat 20 wroga
             # pomija pancerz. Symetria z player→enemy (ten sam apply_defense_model).
