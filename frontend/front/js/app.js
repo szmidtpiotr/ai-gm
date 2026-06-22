@@ -55,7 +55,9 @@ const screens = {
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
     characterWizard: document.getElementById('character-wizard-screen'),
-    game: document.getElementById('game-screen')
+    game: document.getElementById('game-screen'),
+    'create-lobby': document.getElementById('create-lobby-screen'),
+    'lobby-screen': document.getElementById('lobby-screen')
 };
 
 const elements = {

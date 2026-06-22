@@ -760,6 +760,75 @@
     </main>
   </div>
 
+  <!-- LOBBY SCREEN (#923 GF3) -->
+  <div id="lobby-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" onclick="leaveMpLobbyFromScreen()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <span class="header__icon">⚔️</span>
+        <h1 class="header__title" id="lobby-screen-title">Lobby</h1>
+      </div>
+      <div class="header__right"></div>
+    </header>
+
+    <main class="wizard-content">
+      <!-- Subtitle: timer + max players -->
+      <p id="lobby-screen-subtitle" class="lf-section__label" style="text-align:center;margin-bottom:12px"></p>
+
+      <!-- Party slots -->
+      <div class="lf-section">
+        <div class="lf-section__label">Skład drużyny</div>
+        <div id="lobby-members-list"></div>
+      </div>
+
+      <!-- Invite section (host only) -->
+      <div id="lobby-invite-section" class="lf-section" style="display:none">
+        <div class="lf-section__label">Zaproś gracza</div>
+        <div class="form-field" style="display:flex;gap:8px">
+          <input type="text" id="lobby-invite-username" placeholder="nazwa użytkownika…" autocomplete="off" style="flex:1">
+          <button type="button" class="btn btn--primary" onclick="inviteByUsername()">Zaproś</button>
+        </div>
+        <div style="margin-top:8px">
+          <button type="button" class="btn btn--secondary btn--full" onclick="generateInviteLink()">🔗 Generuj link zaproszenia</button>
+        </div>
+        <div id="lobby-invite-link-box" style="display:none;margin-top:8px">
+          <div class="form-field" style="display:flex;gap:8px;align-items:center">
+            <span id="lobby-invite-link-text" style="flex:1;font-size:12px;word-break:break-all;opacity:.8"></span>
+            <button type="button" class="btn btn--secondary" onclick="copyInviteLink()">Kopiuj</button>
+          </div>
+        </div>
+        <div id="lobby-invite-msg" style="margin-top:6px;font-size:13px"></div>
+      </div>
+
+      <!-- Guest section (non-host) -->
+      <div id="lobby-guest-section" class="lf-section" style="display:none">
+        <div class="lf-section__label">Dołącz przez link</div>
+        <div class="form-field" style="display:flex;gap:8px">
+          <input type="text" id="lobby-join-token-input" placeholder="token zaproszenia…" autocomplete="off" style="flex:1">
+          <button type="button" class="btn btn--primary" onclick="joinViaToken()">Dołącz</button>
+        </div>
+        <div id="lobby-join-msg" style="margin-top:6px;font-size:13px"></div>
+      </div>
+
+      <!-- Join link section (hidden for now) -->
+      <div id="lobby-join-link-section" class="lf-section" style="display:none"></div>
+
+      <!-- Start section (host only) -->
+      <div id="lobby-start-section" class="lf-section" style="display:none">
+        <p id="lobby-start-hint" class="lf-section__label" style="text-align:center;margin-bottom:8px"></p>
+        <button type="button" class="lf-create-btn" id="lobby-start-btn" onclick="startLobby()" disabled>
+          <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+          Rozpocznij grę
+          <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+        </button>
+      </div>
+    </main>
+  </div>
+
   <!-- GAME SCREEN -->
   <div id="game-screen" class="screen">
     <header class="header header--game">
