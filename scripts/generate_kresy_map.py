@@ -27,6 +27,8 @@ COLORS = {
     "forest":  (60, 92, 64),   "river": (66, 120, 158), "road": (150, 116, 64),
     "ruins":   (120, 96, 70),  "city": (210, 180, 90),  "town": (200, 160, 70),
     "village": (196, 150, 80), "snow": (210, 214, 220), "bridge": (180, 130, 70),
+    "sea": (40, 78, 110), "lake": (62, 108, 150), "tundra": (158, 166, 148),
+    "heath": (140, 110, 116),
 }
 
 def smooth(grid, passes=3):
@@ -73,36 +75,46 @@ def main():
 
     elev = gen_field(rng)
     moist = gen_field(rng)
+    # pole wariacji (patchowe) — różnicuje równiny na zagajniki/wrzosowiska/pofalowania.
+    # Normalizacja do 0..1, żeby progi patchy realnie strzelały.
+    var = smooth([[rng.random() for _ in range(W)] for _ in range(H)], 1)
+    vlo = min(min(row) for row in var); vhi = max(max(row) for row in var)
+    if vhi > vlo:
+        var = [[(v - vlo) / (vhi - vlo) for v in row] for row in var]
 
     # gradienty regionalne (Kresy = pogranicze): góry na płn (Siwe Granie),
-    # las na wsch (Czarnobór), MORZE w narożniku pd-zach (ku Wybrzeżu Łez).
-    # Spadek N(wysoko)->SW(nisko) tworzy DRENAŻ — rzeki naturalnie spływają do morza.
+    # las na wsch (Czarnobór), MAŁA zatoka morska w pd-zach (brak grywalności na morzu — walor wizualny).
     for r in range(H):
         for q in range(W):
             ny = r / (H-1); nx = q / (W-1)
-            north = (1.0 - ny) ** 1.5                       # góry na północy
-            swdist = math.hypot(nx - 0.0, ny - 1.0)         # dystans od narożnika SW
-            sea = max(0.0, 0.40 - swdist)                   # basen morski w SW
+            north = (1.0 - ny) ** 1.5
+            swdist = math.hypot(nx - 0.0, ny - 1.0)
+            sea = max(0.0, 0.24 - swdist)                   # MAŁA zatoka (było 0.40)
             east = nx ** 1.3
-            elev[r][q] = elev[r][q]*0.42 + north*0.45 - ny*0.10 - sea*1.6
-            if ny < 0.14:                                   # pasmo Siwych Grani na płn (wąskie, strome)
-                elev[r][q] += (0.14 - ny) * 2.8
-            moist[r][q] = moist[r][q]*0.52 + east*0.42 + sea*0.4
+            elev[r][q] = elev[r][q]*0.44 + north*0.45 - ny*0.08 - sea*1.5
+            if ny < 0.13:                                   # pasmo Siwych Grani (wąskie, strome)
+                elev[r][q] += (0.13 - ny) * 2.8
+            moist[r][q] = moist[r][q]*0.50 + east*0.40 + sea*0.35
 
-    def classify(e, m):
-        if e < 0.15: return "water"
-        if e < 0.21: return "coast" if m < 0.5 else "swamp"
+    def classify(e, m, v):
+        if e < 0.12: return "sea"                           # mała zatoka
+        if e < 0.17: return "coast" if m < 0.5 else "swamp"
         if e > 0.86: return "snow"
-        if e > 0.74: return "mountain"
-        if e > 0.60: return "hills"
-        if m > 0.64: return "swamp" if e < 0.32 else "forest"
+        if e > 0.73: return "mountain"
+        if e > 0.66: return "tundra"                        # zimne przedgórze pod Siwymi Graniami
+        if e > 0.58: return "hills"
+        if m > 0.64: return "swamp" if e < 0.34 else "forest"
         if m > 0.52: return "forest"
+        if v > 0.70: return "forest"                        # zagajniki śród równin
+        if v > 0.58 and e > 0.46: return "hills"            # pofalowania
+        if v < 0.30: return "heath" if m < 0.5 else "swamp" # wrzosowiska / mokradła
+        if v < 0.40 and m < 0.4: return "heath"
         return "plains"
 
     hexes = {}
     for r in range(H):
         for q in range(W):
-            hexes[(q, r)] = {"q": q, "r": r, "hex_type": classify(elev[r][q], moist[r][q]),
+            hexes[(q, r)] = {"q": q, "r": r, "hex_type": classify(elev[r][q], moist[r][q], var[r][q]),
                              "label": None, "location_key": None,
                              "encounter_chance": 0.15, "atmosphere": None}
 
@@ -124,13 +136,36 @@ def main():
             if elev[lower[1]][lower[0]] >= cur_e:           # lokalne minimum
                 lower = min(nbrs, key=lambda n: axial_dist(n, sw_corner))  # uciekaj ku morzu
             t = hexes[lower]["hex_type"]
-            if t == "water":                                # dotarliśmy do morza
+            if t in ("sea", "lake"):                         # dotarliśmy do wody
                 path.append(lower); break
             if t not in ("mountain", "snow", "city", "town", "village"):
                 hexes[lower]["hex_type"] = "river"; river_hexes.add(lower)
             visited.add(lower); path.append(lower); cur = lower
+        # jeśli rzeka nie dotarła do morza — kończy małym jeziorem (river-fed)
+        if path:
+            end = path[-1]
+            if hexes[end]["hex_type"] not in ("sea", "lake"):
+                hexes[end]["hex_type"] = "lake"
+                for nb in neighbors(*end):
+                    if hexes[nb]["hex_type"] == "river" and rng.random() < 0.5:
+                        hexes[nb]["hex_type"] = "lake"
         if len(path) > len(main_river_path):
             main_river_path = path
+
+    # ── JEZIORA śródlądowe (walor wizualny) w nisko położonych zagłębieniach ──
+    low = sorted([(q, r) for (q, r), h in hexes.items() if h["hex_type"] in ("plains", "heath", "swamp")],
+                 key=lambda p: elev[p[1]][p[0]])
+    lake_seeds = []
+    for p in low:
+        if elev[p[1]][p[0]] > 0.33: break
+        if all(axial_dist(p, s) > 9 for s in lake_seeds):
+            lake_seeds.append(p)
+        if len(lake_seeds) >= 3: break
+    for s in lake_seeds:
+        hexes[s]["hex_type"] = "lake"
+        for nb in neighbors(*s):
+            if hexes[nb]["hex_type"] in ("plains", "heath", "swamp") and rng.random() < 0.6:
+                hexes[nb]["hex_type"] = "lake"
 
     # ── OSADY: duży, zaludniony teren — miasta + gęsta sieć wsi/przysiółków,
     #    także na obrzeżach. Nazwy z lore gry + przysiółki dopełniające. ──
@@ -163,7 +198,7 @@ def main():
         cand = []
         for (q, r), h in hexes.items():
             if (q, r) in used: continue
-            if h["hex_type"] in ("water","river","mountain","snow"): continue
+            if h["hex_type"] in ("water","sea","lake","river","mountain","snow","tundra"): continue
             # odstęp od już postawionych osad — nie kupować się
             near = min((math.hypot(q-uq, r-ur) for (uq, ur) in used), default=99)
             if near < 4: continue
@@ -183,7 +218,8 @@ def main():
 
     # ── DROGI: trakt łączący osady (MST po A*) ──
     COST = {"plains":1,"hills":3,"forest":4,"coast":3,"swamp":7,"river":8,
-            "mountain":20,"snow":25,"water":999,"road":1,
+            "mountain":20,"snow":25,"water":999,"sea":999,"lake":999,
+            "tundra":6,"heath":2,"road":1,
             "city":1,"town":1,"village":1,"ruins":2}
     def astar(start, goal):
         pq = [(0, start)]; came = {start: None}; g = {start: 0}
@@ -296,10 +332,11 @@ def main():
     # legenda
     ly = int(vh * H + S + 8)
     dr.text((10, ly-2), "KRESY — mapa krainy", fill=(201,165,74), font=f_title)
-    items = [("plains","równiny"),("forest","las (Czarnobór)"),("hills","wzgórza"),
-             ("mountain","góry (Siwe Granie)"),("snow","śnieg"),("swamp","bagno"),
-             ("water","woda / morze"),("coast","wybrzeże"),("river","rzeka"),
-             ("road","trakt"),("bridge","most / przeprawa"),("town","osada / ruiny")]
+    items = [("plains","równiny"),("forest","las / zagajniki"),("hills","wzgórza"),
+             ("heath","wrzosowiska"),("tundra","tundra"),("mountain","góry (Siwe Granie)"),
+             ("snow","śnieg"),("swamp","bagno"),("sea","morze (zatoka)"),
+             ("lake","jezioro"),("coast","wybrzeże"),("river","rzeka"),
+             ("road","trakt"),("bridge","most"),("town","osada / ruiny")]
     lx = 10; lyy = ly + 34; col_w = 220
     for i, (t, name) in enumerate(items):
         cxx = lx + (i % 6) * col_w; cyy = lyy + (i // 6) * 30
