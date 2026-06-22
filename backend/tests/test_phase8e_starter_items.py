@@ -65,8 +65,8 @@ def _schema_sql() -> str:
       ('quarterstaff', 'Staff', 'd6', 'STR', '["scholar"]', 1);
 
     """ + table_sql("game_config_items") + """
-    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
-    VALUES ('leatherarmor', 'Leather', 'armor', 'armor', 10, 0, 5, 1);
+    INSERT INTO game_config_items (key, label, item_type, description, value_gp, weight_kg, is_active)
+    VALUES ('leatherarmor', 'Leather', 'armor', 'armor', 10, 5, 1);
 
     """ + table_sql("game_config_consumables") + """
     INSERT INTO game_config_consumables (key, label, is_active)
