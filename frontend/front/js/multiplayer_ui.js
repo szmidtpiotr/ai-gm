@@ -244,50 +244,43 @@
         try { localStorage.setItem('aigm_chat_minimized', _minimized ? '1' : '0'); } catch {}
     }
 
+    function _restorePosition(panel) {
+        try {
+            localStorage.removeItem('aigm_chat_left');   // clean up stale key from v1
+            const savedTop = localStorage.getItem('aigm_chat_top');
+            if (savedTop) {
+                const clamped = Math.max(10, Math.min(window.innerHeight - 120, parseInt(savedTop)));
+                panel.style.bottom = 'auto';
+                panel.style.top = clamped + 'px';
+            } else {
+                panel.style.top = '';
+                panel.style.bottom = '';   // fall back to CSS default: bottom: 80px
+            }
+        } catch {}
+    }
+
     function _initDrag(panel) {
         if (!panel || panel._dragInitialized) return;
         panel._dragInitialized = true;
         const header = panel.querySelector('.party-chat-panel__header');
         if (!header) return;
 
-        // Restore saved position
-        try {
-            const sl = localStorage.getItem('aigm_chat_left');
-            const st = localStorage.getItem('aigm_chat_top');
-            if (sl && st) {
-                panel.style.right = 'auto';
-                panel.style.bottom = 'auto';
-                panel.style.left = sl;
-                panel.style.top = st;
-                panel.classList.add('party-chat-panel--floating');
-            }
-        } catch {}
-
         header.addEventListener('pointerdown', e => {
             if (e.target.closest('button')) return;
-            const rect = panel.getBoundingClientRect();
-            const startX = e.clientX, startY = e.clientY;
-            const startLeft = rect.left, startTop = rect.top;
-            panel.style.right = 'auto';
+            const startY = e.clientY;
+            const startTop = panel.getBoundingClientRect().top;
             panel.style.bottom = 'auto';
-            panel.style.left = startLeft + 'px';
             panel.style.top = startTop + 'px';
-            panel.classList.add('party-chat-panel--floating');
             header.style.cursor = 'grabbing';
             e.preventDefault();
 
             function onMove(ev) {
-                const newLeft = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, startLeft + ev.clientX - startX));
-                const newTop = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, startTop + ev.clientY - startY));
-                panel.style.left = newLeft + 'px';
+                const newTop = Math.max(10, Math.min(window.innerHeight - 120, startTop + ev.clientY - startY));
                 panel.style.top = newTop + 'px';
             }
             function onUp() {
                 header.style.cursor = '';
-                try {
-                    localStorage.setItem('aigm_chat_left', panel.style.left);
-                    localStorage.setItem('aigm_chat_top', panel.style.top);
-                } catch {}
+                try { localStorage.setItem('aigm_chat_top', panel.style.top); } catch {}
                 document.removeEventListener('pointermove', onMove);
                 document.removeEventListener('pointerup', onUp);
             }
@@ -627,10 +620,8 @@
         if (chatPanel) {
             chatPanel.hidden = false;
             _initDrag(chatPanel);
-            // Restore minimized state from previous session
-            try {
-                _minimized = localStorage.getItem('aigm_chat_minimized') === '1';
-            } catch { _minimized = false; }
+            _restorePosition(chatPanel);
+            try { _minimized = localStorage.getItem('aigm_chat_minimized') === '1'; } catch { _minimized = false; }
             chatPanel.classList.toggle('party-chat-panel--minimized', _minimized);
         }
 
@@ -651,7 +642,11 @@
         _minimized = false;
         _sessionPlayers.clear();
         const chatPanel = document.getElementById('party-chat-panel');
-        if (chatPanel) chatPanel.hidden = true;
+        if (chatPanel) {
+            chatPanel.hidden = true;
+            chatPanel.classList.remove('party-chat-panel--minimized', 'party-chat-panel--floating');
+            chatPanel.style.left = '';
+        }
         const chatContainer = _chatMessages();
         if (chatContainer) chatContainer.innerHTML = '';
         _currentRoundNumber = null;

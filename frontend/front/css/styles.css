@@ -10178,6 +10178,8 @@ body[data-theme="classic"] {
   display: flex; flex-direction: column; overflow: hidden;
   font-size: 0.88rem;
 }
+/* Safari UA sheet doesn't !important [hidden], so display:flex would win — force hide. */
+.party-chat-panel[hidden] { display: none !important; }
 .party-chat-panel__header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.07);
@@ -10205,13 +10207,11 @@ body[data-theme="classic"] {
   color: rgba(255,120,120,0.8); cursor: pointer; font-size: 0.75rem; padding: 3px 8px;
 }
 .mp-leave-btn:hover { border-color: rgba(255,60,60,0.7); color: #ff6060; }
-/* #950 — Draggable panel (when moved from right edge) */
-.party-chat-panel--floating {
-  border-right: 1px solid rgba(201,165,74,0.25);
-  border-radius: 12px;
+/* #950 — Minimized to right-edge icon */
+.party-chat-panel--minimized {
+  width: auto !important; overflow: visible;
+  left: auto !important; right: 0 !important;
 }
-/* #950 — Minimized to floating icon */
-.party-chat-panel--minimized { width: auto !important; overflow: visible; }
 .party-chat-panel--minimized .mp-multiplayer-section,
 .party-chat-panel--minimized #mp-chat-body,
 .party-chat-panel--minimized #multiplayer-private-note,

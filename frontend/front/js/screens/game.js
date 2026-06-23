@@ -81,6 +81,14 @@ async function enterGame(campaign, opts = {}) {
     // activate() is called separately only for MP — without this, the panel stays
     // visible (sticky state) if the player visited MP earlier in the same browser session.
     window.multiplayerUI?.deactivate?.();
+    // Belt-and-suspenders: directly clean up in case display:flex overrides [hidden] (Safari)
+    // or deactivate() ran before the DOM element existed.
+    const _cp = document.getElementById('party-chat-panel');
+    if (_cp) {
+        _cp.hidden = true;
+        _cp.classList.remove('party-chat-panel--minimized', 'party-chat-panel--floating');
+        _cp.style.left = '';
+    }
 
     // Persist session so F5 restores to this exact state
     try {
