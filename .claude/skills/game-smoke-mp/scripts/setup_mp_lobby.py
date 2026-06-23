@@ -54,6 +54,8 @@ def main() -> int:
     p.add_argument("--title", default="#MP-smoke")
     p.add_argument("--timer", type=int, default=1, help="round_timer_minutes (default 1)")
     p.add_argument("--users-json", default="")
+    p.add_argument("--no-start", action="store_true",
+                   help="build + invite + accept but DON'T start — leaves an open lobby (for UI lobby-screen tests)")
     args = p.parse_args()
 
     users = load_users(args.count, args.spectator, args.users_json)
@@ -105,12 +107,16 @@ def main() -> int:
             members_out.append({"username": u["username"], "user_id": u["user_id"],
                                 "hero_id": u["hero_id"], "role": u["role"], "accepted": True})
 
-        # Start the game (host only).
-        st, b = api_post(f"/api/multiplayer/campaigns/{cid}/start", user_id=host["user_id"], timeout=30)
-        if st != 200:
-            print(json.dumps({"error": f"start failed {st}: {b}"}))
-            return 2
-        lobby_status = "started"
+        if args.no_start:
+            # Leave the lobby open (UI lobby-screen / kick / #954 tests start from here).
+            lobby_status = "open"
+        else:
+            # Start the game (host only).
+            st, b = api_post(f"/api/multiplayer/campaigns/{cid}/start", user_id=host["user_id"], timeout=30)
+            if st != 200:
+                print(json.dumps({"error": f"start failed {st}: {b}"}))
+                return 2
+            lobby_status = "started"
     else:
         # Already started — rebuild member list from DB.
         rows = db_query(
