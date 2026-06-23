@@ -44,13 +44,30 @@ gh issue list --repo szmidtpiotr/ai-gm --label review --state open --limit 300 \
 
 Pogrupuj wynik wg milestone, policz issue per milestone.
 
-## Krok 0.5 — ZAPYTAJ które milestony testować (OBOWIĄZKOWE)
+## Krok 0.5 — ZAPYTAJ o zakres i konfigurację agentów (OBOWIĄZKOWE)
 
-Przed jakimkolwiek testem użyj `AskUserQuestion` (multiSelect) — pokaż listę milestonów
-z liczbą issue `review` w każdym. Domyślnie odznacz wykluczone (Admin Mobile / Faza R / Faza 6),
-ale i tak je pokaż. User wybiera zakres tej sesji.
+Przed jakimkolwiek testem użyj `AskUserQuestion` z **trzema pytaniami naraz**:
 
-Po wyborze: odejmij niewybrane, podziel resztę na grupy (patrz niżej).
+**Pytanie 1 — Milestony** (multiSelect):
+Pokaż listę milestonów z liczbą issue `review` w każdym. Domyślnie odznacz wykluczone
+(Admin Mobile / Faza R / Faza 6), ale i tak je pokaż.
+
+**Pytanie 2 — Model subagentów** (singleSelect):
+| Opcja | Kiedy |
+|---|---|
+| `haiku` (szybki, tani) | proste Playwright checks, triage read-only |
+| `sonnet` (domyślny) | standardowe testy gry, game-smoke |
+| `opus` (najsilniejszy) | złożone scenariusze MP, niejednoznaczne przypadki |
+
+**Pytanie 3 — Effort subagentów** (singleSelect):
+| Opcja | Kiedy |
+|---|---|
+| `low` | triage, read-only checks |
+| `medium` (domyślny) | standardowe testy |
+| `high` | trudne scenariusze (MP, G-tasks, skomplikowane bugi) |
+
+Zapamiętaj wybrany model i effort — przekazuj je do każdego Agent() call jako `model:` i `effort:`.
+Po wyborze: odejmij niewybrane milestony, podziel resztę na grupy (patrz niżej).
 Jeśli lista różni się od poprzedniej sesji — zaktualizuj grupy przed startem.
 
 ## Model wykonania — osobna sesja per przebieg
