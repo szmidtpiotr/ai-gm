@@ -33,6 +33,33 @@ async function _syncAdvCardsFromModes() {
             dungeonBtn.disabled = !avail;
             dungeonBtn.classList.toggle('adv-card--disabled', !avail);
         }
+
+        const mpBtn = document.getElementById('mp-btn');
+        if (mpBtn && modes.multiplayer) {
+            const avail = modes.multiplayer.available;
+            mpBtn.disabled = !avail;
+            mpBtn.classList.toggle('adv-card--disabled', !avail);
+            const tag = mpBtn.querySelector('.adv-card__tag');
+            const arrow = mpBtn.querySelector('.adv-card__arrow');
+            if (avail) {
+                if (tag) tag.remove();
+                if (!mpBtn.querySelector('.adv-card__arrow')) {
+                    const a = document.createElement('span');
+                    a.className = 'adv-card__arrow';
+                    a.textContent = '›';
+                    mpBtn.appendChild(a);
+                }
+            } else {
+                if (arrow) arrow.remove();
+                if (tag) tag.textContent = 'Wkrótce';
+            }
+            if (!mpBtn.__wiredMp) {
+                mpBtn.__wiredMp = true;
+                mpBtn.addEventListener('click', () => {
+                    if (!mpBtn.disabled && typeof openMultiplayerLobby === 'function') openMultiplayerLobby();
+                });
+            }
+        }
     } catch(e) {
         console.warn('[AdvCards] Could not sync game modes:', e);
     }
