@@ -5,10 +5,10 @@ Model: sonnet | Effort: medium
 ## Dashboard
 | Milestone | Łącznie | ✅ Zamknięte | ❌ Fail/Bug | ⏭ SKIP | 💬 Komentarz |
 |---|---|---|---|---|---|
-| Bugi i poprawki (FIX) | 34 | 27 | 0 | 1 | 5 |
-| **Łącznie** | **34** | **27** | **0** | **1** | **5** |
+| Bugi i poprawki (FIX) | 34 | 29 | 0 | 1 | 5 |
+| **Łącznie** | **34** | **29** | **0** | **1** | **5** |
 
-> FIX-A (15): 11 zamknięte, 5 komentarze, 1 skip. FIX-B (7): 7 zamknięte. FIX-C (9): 9 zamknięte. FIX-D kolejne.
+> FIX DONE: A(15): 11✅ 5💬 1⏭ · B(7): 7✅ · C(9): 9✅ · D(2): 2✅ · Łącznie: 29/34 zamknięte.
 
 ## Plan — grupy testowe (FIX)
 
@@ -41,12 +41,12 @@ Model: sonnet | Effort: medium
 | #825 | World State — wrogowie cały czas | ✅ ZAMKNIĘTE | Wstrzyknięci wrogowie → zmiana lokacji → scene_enemies=[] |
 | #826 | Model obrony walki | 💬 KOMENTARZ | 19/19 pytest GREEN; 3 kryteria feel/Sandbox czekają na Piotra |
 | #829 | Animacja kostki Stage 2 | ✅ ZAMKNIĘTE | Playwright: Stage1(d20) + Stage2(obrażenia) animowane — Nat20: 7 obrażeń |
-| #847 | Loch: zagadka ukryta po cofnięciu | ⏳ | FIX-D |
+| #847 | Loch: zagadka ukryta po cofnięciu | ✅ ZAMKNIĘTE | cleared=True w if not visited; panel zagadki widoczny po powrocie |
 | #849 | Combat narrative toggle | ✅ ZAMKNIĘTE | Toggle gracza + global admin widoczne i działają |
 | #850 | Admin dice style configurator | ✅ ZAMKNIĘTE | Panel Kostki z live preview + zapis zweryfikowany |
 | #852 | Tabela Czary utknięta na Ładowanie… | ✅ ZAMKNIĘTE | _loaded.clear() działa; 37 czarów po każdej wizycie |
 | #853 | Tabela Rzuty brak obrażeń po redukcji | ✅ ZAMKNIĘTE | Kalkulacja armor_reduction widoczna w Rzuty |
-| #865 | Modal zagadki klucz zamiast treści | ⏳ | FIX-D |
+| #865 | Modal zagadki klucz zamiast treści | ✅ ZAMKNIĘTE | _resolve_run_riddles() w enter endpoint; riddle zwraca dict z text |
 | #866 | Link /?join=TOKEN → login zamiast rejestracji | 💬 KOMENTARZ | Kod deployed OK; Playwright miał stały token — test w prawdziwym incognito potrzebny |
 | #896 | Flash starego tła logowania | ✅ ZAMKNIĘTE | --bg-screen-login:none w CSS; brak FOUC |
 | #897 | Niespójne ikony dolnego paska | ✅ ZAMKNIĘTE | SVG zamiast emoji w pasku nawigacji |
