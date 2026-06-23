@@ -25,6 +25,7 @@
     let _chatOpen = false;
     let _chatUnread = 0;
     let _chatPollTimer = null;
+    let _minimized = false;
     let _sessionPlayers = new Set(); // character names seen in this session (excludes self)
 
     const POLL_WAITING_MS = 2000;
@@ -231,7 +232,72 @@
         _chatPollTimer = null;
     }
 
+    function minimizePartyChat() {
+        _minimized = !_minimized;
+        const panel = document.getElementById('party-chat-panel');
+        if (!panel) return;
+        panel.classList.toggle('party-chat-panel--minimized', _minimized);
+        if (!_minimized) {
+            _chatUnread = 0;
+            _updateChatBadge();
+        }
+        try { localStorage.setItem('aigm_chat_minimized', _minimized ? '1' : '0'); } catch {}
+    }
+
+    function _initDrag(panel) {
+        if (!panel || panel._dragInitialized) return;
+        panel._dragInitialized = true;
+        const header = panel.querySelector('.party-chat-panel__header');
+        if (!header) return;
+
+        // Restore saved position
+        try {
+            const sl = localStorage.getItem('aigm_chat_left');
+            const st = localStorage.getItem('aigm_chat_top');
+            if (sl && st) {
+                panel.style.right = 'auto';
+                panel.style.bottom = 'auto';
+                panel.style.left = sl;
+                panel.style.top = st;
+                panel.classList.add('party-chat-panel--floating');
+            }
+        } catch {}
+
+        header.addEventListener('pointerdown', e => {
+            if (e.target.closest('button')) return;
+            const rect = panel.getBoundingClientRect();
+            const startX = e.clientX, startY = e.clientY;
+            const startLeft = rect.left, startTop = rect.top;
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.left = startLeft + 'px';
+            panel.style.top = startTop + 'px';
+            panel.classList.add('party-chat-panel--floating');
+            header.style.cursor = 'grabbing';
+            e.preventDefault();
+
+            function onMove(ev) {
+                const newLeft = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, startLeft + ev.clientX - startX));
+                const newTop = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, startTop + ev.clientY - startY));
+                panel.style.left = newLeft + 'px';
+                panel.style.top = newTop + 'px';
+            }
+            function onUp() {
+                header.style.cursor = '';
+                try {
+                    localStorage.setItem('aigm_chat_left', panel.style.left);
+                    localStorage.setItem('aigm_chat_top', panel.style.top);
+                } catch {}
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+            }
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+        });
+    }
+
     function togglePartyChat() {
+        if (_minimized) { minimizePartyChat(); return; }
         _chatOpen = !_chatOpen;
         const body = document.getElementById('mp-chat-body');
         const toggle = document.querySelector('.mp-chat-panel__toggle');
@@ -558,7 +624,15 @@
         }
 
         const chatPanel = document.getElementById('party-chat-panel');
-        if (chatPanel) chatPanel.hidden = false;
+        if (chatPanel) {
+            chatPanel.hidden = false;
+            _initDrag(chatPanel);
+            // Restore minimized state from previous session
+            try {
+                _minimized = localStorage.getItem('aigm_chat_minimized') === '1';
+            } catch { _minimized = false; }
+            chatPanel.classList.toggle('party-chat-panel--minimized', _minimized);
+        }
 
         _chatLastId = 0;
         _chatUnread = 0;
@@ -574,6 +648,7 @@
         _chatLastId = 0;
         _chatUnread = 0;
         _chatOpen = false;
+        _minimized = false;
         _sessionPlayers.clear();
         const chatPanel = document.getElementById('party-chat-panel');
         if (chatPanel) chatPanel.hidden = true;
@@ -617,7 +692,7 @@
         }
     }
 
-    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers), isSpectator: () => _isSpectator };
+    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, minimizePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers), isSpectator: () => _isSpectator };
 })();
 
 // GF4 (#924) — router from hub: open create-lobby-screen with default AI mode

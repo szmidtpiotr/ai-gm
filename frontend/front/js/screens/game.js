@@ -77,6 +77,11 @@ function applyTimeOfDayOverlay(period) {
 }
 
 async function enterGame(campaign, opts = {}) {
+    // #950: Clear party chat panel before entering any game type (single/dungeon).
+    // activate() is called separately only for MP — without this, the panel stays
+    // visible (sticky state) if the player visited MP earlier in the same browser session.
+    window.multiplayerUI?.deactivate?.();
+
     // Persist session so F5 restores to this exact state
     try {
         if (currentHero?.id) localStorage.setItem('aigm_hero_id', currentHero.id);
