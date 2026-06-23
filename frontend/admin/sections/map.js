@@ -1546,6 +1546,28 @@ const _ROW_REGISTRY = {
         _showToast('Błąd zapisu mapy: ' + (e && e.message ? e.message : e), 'error');
       } finally { saveBtn.disabled = false; saveBtn.textContent = orig; }
     };
+    const restoreBtn = document.getElementById('wb-restore-canon');
+    if (restoreBtn) restoreBtn.onclick = async () => {
+      if (!confirm('Wczytać mapę z KANONU?\n\nNadpisze bieżącą mapę świata wersją ostatnio zapisaną jako kanon. Tej operacji nie można cofnąć.')) return;
+      const orig = restoreBtn.textContent; restoreBtn.disabled = true; restoreBtn.textContent = '📂 Wczytuję…';
+      try {
+        const res = await apiFetch('/api/admin/world/map/restore', { method: 'POST' });
+        _showToast(`Mapa odtworzona z kanonu (${res.count} heksów).`, 'success');
+        await _wbLoadHexes();
+        _wbRender();
+      } catch (e) {
+        _showToast('Błąd wczytywania mapy: ' + (e && e.message ? e.message : e), 'error');
+      } finally { restoreBtn.disabled = false; restoreBtn.textContent = orig; }
+    };
+  }
+
+  async function _wbLoadHexes() {
+    const m = await apiFetch('/api/admin/world/map');
+    _wbHexes = {};
+    for (const h of (m.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
+    _wbTeleports = m.teleport_connections || [];
+    _wbUndoStack = [];
+    _wbUpdateUndoBtn();
   }
 
   function _wbCenter() {
@@ -2234,8 +2256,11 @@ function _sectionHtml() {
               <div style="padding:2px 6px 2px">
                 <button id="wb-undo" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
               </div>
-              <div style="padding:0 6px 4px">
+              <div style="padding:0 6px 2px">
                 <button id="wb-save-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#c9a54a;color:#1a1206;border:1px solid #c9a54a;font-weight:700" title="Zapisz bieżącą mapę jako kanon — trwałe, przeżywa reset/wipe DB">💾 Zapisz mapę (kanon)</button>
+              </div>
+              <div style="padding:0 6px 4px">
+                <button id="wb-restore-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#2a4a2a;color:#a8d4a8;border:1px solid #4a7a4a;font-weight:700" title="Wczytaj mapę z ostatnio zapisanego kanonu — nadpisze bieżącą mapę">📂 Wczytaj mapę (z kanonu)</button>
               </div>
               <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>

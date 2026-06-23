@@ -139,6 +139,52 @@ def snapshot_world_map(authorization: str | None = Header(default=None)):
         conn.close()
 
 
+@router.post("/map/restore")
+def restore_world_map(authorization: str | None = Header(default=None)):
+    """Wczytaj mapę świata z pliku kanon → world_hexes (map_level=0).
+
+    Czyta /data/world_map_seed.json (zapisany przez /map/snapshot), usuwa obecne
+    heksy map_level=0 i wstawia z pliku. Symetryczny do /map/snapshot."""
+    _require_admin(authorization)
+    seed_path = "/data/world_map_seed.json"
+    if not os.path.exists(seed_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Brak pliku kanon (/data/world_map_seed.json). Najpierw zapisz mapę przyciskiem 'Zapisz mapę (kanon)'.",
+        )
+    with open(seed_path, encoding="utf-8") as f:
+        data = json.load(f)
+    hexes = data.get("hexes", [])
+    if not hexes:
+        raise HTTPException(status_code=409, detail="Plik kanon nie zawiera heksów.")
+    conn = _get_db()
+    try:
+        conn.execute("BEGIN")
+        conn.execute("DELETE FROM world_hexes WHERE map_level = 0")
+        cols = "(q, r, hex_type, label, atmosphere, encounter_chance, encounter_pool, created_by_gm, is_active, map_level)"
+        chunk = 200
+        for i in range(0, len(hexes), chunk):
+            batch = hexes[i:i + chunk]
+            placeholders = ",".join(["(?,?,?,?,?,?,?,?,?,?)"] * len(batch))
+            params: list[Any] = []
+            for h in batch:
+                params.extend([
+                    h["q"], h["r"], h.get("hex_type", "plains"),
+                    h.get("label"), h.get("atmosphere"),
+                    h.get("encounter_chance", 0.15),
+                    json.dumps(h.get("encounter_pool", [])),
+                    0, 1, 0,
+                ])
+            conn.execute(f"INSERT INTO world_hexes {cols} VALUES {placeholders}", params)
+        conn.execute("COMMIT")
+        return {"ok": True, "count": len(hexes), "source": seed_path}
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.close()
+
+
 @router.get("/hex-types")
 def get_hex_types(authorization: str | None = Header(default=None)):
     """Terrain type config — for admin painting palette."""
