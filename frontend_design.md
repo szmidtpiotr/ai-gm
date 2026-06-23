@@ -56,7 +56,7 @@ PRIORYTET URZĄDZEŃ: 70% użytkowników to mobile, 30% desktop. Projektuj MOBIL
 
 Dla KAŻDEGO z 3–4 kierunków pokaż te 3 kluczowe ekrany (niosą 90% charakteru UI):
   1. EKRAN GRY (narracja) — strumień wiadomości czatu: dymki gracza, dymki Mistrza Gry (GM), dymki systemowe; nagłówek z paskiem HP (i many dla maga); pole wpisywania akcji u dołu (composer) z przyciskiem mikrofonu (voice) i wysyłania.
-  2. EKRAN WALKI (combat) — baner walki z dwiema strefami: ZWARCIE (melee) i DYSTANS (ranged); wrogowie jako chipy z paskiem HP w odpowiedniej strefie; licznik rundy; wskaźnik czyja tura; przyciski akcji (Atak / Akcja / Zbliż się).
+  2. EKRAN WALKI (combat) — kompaktowy baner walki (#967, Wariant D): każdy uczestnik to jedna linia z inline paskiem HP, w strefach ZWARCIE (melee) / DYSTANS (ranged); licznik rundy; wskaźnik czyja tura; przyciski akcji (Atak / Akcja / Zbliż się).
   3. KARTA POSTACI (character sheet) — staty (STR/DEX/CON/INT/WIS/CHA/LCK), paski HP/Mana/XP, poziom, warunki/statusy, ekwipunek (8 slotów na ciele + plecak), złoto.
 
 Dla każdego ekranu pokaż 2 widoki: MOBILE (priorytet) i DESKTOP.
@@ -214,7 +214,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-50 | Composer | pole akcji + licznik znaków + mic STT + paleta + wyślij + overlay "czytanie TTS" | — |
 | F-51 | Log narracji | dymki gracza/GM/system, metadane (nazwa/tura/data — toggle), fade-in, auto-scroll, slash-popup; karty combat_turn (⚔️ atak gracza / 🗡️ atak wroga / 💀 śmierć / 🛡 reakcja). **#861 (dual-wield):** off-hand drugi cios → karta „🗡️🗡️ DRUGI CIOS" (klasa `cturn--offhand`); atak wroga sparowany → badge „🛡 Parujesz (+N obrona)" (`cturn--parried`) — flagi `offhand`/`parry_bonus` z meta combat_turn (silnik #598) | — |
 | F-52 | Karta rzutu | nazwa testu, modyfikator, suma, werdykt (sukces/porażka/krytyk) | — |
-| F-53 | Baner walki | runda, czyja tura, arena z 2 strefami (ZWARCIE/DYSTANS), chipy wrogów (HP/nazwa/portret), aktywny aktor, axis hint "← bliżej · dalej →" | — |
+| F-53 | Baner walki | **#967 — kompaktowy layout (Wariant D):** każdy uczestnik = JEDNA linia (`.cline`) z inline HP barem (kolor wg %): TY/imię · ❤HP · pasek · DEF · INI · strefa(🗡/🏹) · warunki · 🎯cel; (gracz dodatkowo 🛡absorb + ostrzeżenie trwałości broni). Strefy ZWARCIE/DYSTANS = lekkie nagłówki (`.czone__head`), pusta strefa = inline „— pusto —" (nie pełna sekcja). Aktywny aktor = amber glow (`.cline--active`). Banner ≥40% niższy niż stary (karty + oś + sekcje usunięte). Render: `combatLineHtml()` w `combat_ui.js`. | #967 |
 | F-54 | Paski HP/Mana/XP | nagłówek (HP, Mana-mag) + karty w sheecie + XP bar z meta | — |
 | F-55 | Warunki/statusy | sekcja buffów/debuffów/ran; pasek statusu gracza w walce (SF4) | — |
 | F-56 | Ekwipunek | złoto, diagram anatomii (8 slotów), plecak (stackable), itemy fabularne (lore), equip przez klik/drag | — |

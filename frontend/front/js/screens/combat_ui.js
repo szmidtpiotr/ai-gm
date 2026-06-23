@@ -1133,6 +1133,87 @@ async function refreshCombatShieldFlag() {
     } catch { /* brak danych → zostaw poprzedni stan */ }
 }
 
+// #967 — kompaktowa linia uczestnika (Wariant D): JEDNA linia z inline HP barem.
+// Nic nie ukryte względem starych kart: HP liczby+pasek, DEF, INI, strefa (🗡/🏹),
+// warunki, cel (🎯), a u gracza absorb tarczy + ostrzeżenie trwałości broni.
+// Czysta funkcja (zależna tylko od argumentów + globalnych helperów) — wystawiona na window
+// dla kontraktu Playwright. opts: { isActive, isTarget }. isTarget=undefined → liczone z selectedTargetId.
+function combatLineHtml(c, opts = {}) {
+    const isPlayer = c.type === 'player';
+    const isActive = !!opts.isActive;
+    const hpCur = Math.max(0, Number(c.hp_current ?? 0));
+    const hpMax = Math.max(1, Number(c.hp_max ?? hpCur ?? 1));
+    const pct = Math.max(0, Math.min(100, Math.round((hpCur / hpMax) * 100)));
+    const dead = hpCur <= 0;
+    const tier = pct > _woundThresholds.healthy_pct ? 'hi' : (pct > _woundThresholds.critical_pct ? 'mid' : 'lo');
+    const def = c.defense != null ? `<span class="cline__def">DEF ${c.defense}</span>` : '';
+    const ini = c.initiative_roll != null ? `<span class="cline__ini">INI ${c.initiative_roll}</span>` : '';
+    const hpbar = `<span class="cline__hpbar cline__hpbar--${tier}" aria-hidden="true"><i style="width:${pct}%"></i></span>`;
+    const wound = !dead ? renderWoundLabelHTML(hpCur, hpMax) : '';
+    const activeCls = isActive ? ' cline--active' : '';
+
+    if (isPlayer) {
+        const _absorb = Math.max(0, Number(c.absorb_hp ?? 0));   // B10 (#657): pula absorpcji tarczy
+        const _pz = String(c.zone || 'engaged');
+        const _zoneBadge = _pz === 'ranged'
+            ? '<span class="cline__zone" title="Jesteś na dystansie">🏹</span>'
+            : '<span class="cline__zone" title="Jesteś w zwarciu">🗡</span>';
+        const conds = _renderConditionBadges(Array.isArray(c.conditions) ? c.conditions : []);
+        const wpn = _equippedDurability.weapon;
+        let duraWarn = '';
+        if (wpn && wpn.broken) {
+            duraWarn = `<div class="cline__dura cline__dura--broken">⚔ Oręż pęknięty — ciosy słabsze (−${wpn.penalty_pct}%)</div>`;
+        } else if (wpn && Number(wpn.pct) <= 20) {
+            duraWarn = `<div class="cline__dura">⚔ Oręż ledwo trzyma się rękojeści (${wpn.pct}%)</div>`;
+        }
+        return `
+            <div class="cline cline--you${activeCls}">
+                <span class="cline__tag">TY</span>
+                <span class="cline__name">${escapeHtml(c.name || 'Bohater')}</span>
+                <span class="cline__hp">❤ ${hpCur} / ${hpMax}</span>
+                ${hpbar}
+                ${_absorb > 0 ? `<span class="cline__absorb" title="Absorpcja tarczy">🛡 ${_absorb}</span>` : ''}
+                ${def}${ini}${_zoneBadge}
+                ${conds ? `<span class="cline__conds">${conds}</span>` : ''}
+                ${wound}
+                ${duraWarn}
+            </div>`;
+    }
+
+    // ── wróg ──
+    const name = String(c.name || c.enemy_key || 'Wróg');
+    const _rowConds = Array.isArray(c.conditions) ? c.conditions : [];
+    const _surprised = _rowConds.some(cc => cc && String(cc.key || '').toLowerCase() === 'zaskoczony');
+    const _surpriseBadge = _surprised
+        ? `<span class="cline__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</span>`
+        : '';
+    const _isTarget = opts.isTarget != null
+        ? (!!opts.isTarget && !dead)
+        : (!dead && selectedTargetId != null && String(c.id) === String(selectedTargetId));
+    const _targetable = !dead ? 'cline--targetable' : '';
+    const _targetSel = _isTarget ? 'cline--target' : '';
+    const _targetAttr = !dead ? ` data-target-id="${escapeHtml(String(c.id))}" role="button" tabindex="0" title="Kliknij, aby celować w tego wroga"` : '';
+    const _targetBadge = _isTarget ? `<span class="cline__target" title="Wybrany cel">🎯</span>` : '';
+    const _ez = String(c.zone || 'engaged');
+    const _ezBadge = _ez === 'ranged'
+        ? '<span class="cline__zone" title="Na dystans — daleko od ciebie">🏹</span>'
+        : '<span class="cline__zone" title="W zwarciu — blisko ciebie">🗡</span>';
+    const conds = !dead ? _renderConditionBadges(_rowConds) : '';
+    return `
+        <div class="cline cline--enemy${activeCls} ${dead ? 'cline--dead' : ''} ${_targetable} ${_targetSel}"${_targetAttr}>
+            ${dead ? '<span class="cline__zone">💀</span>' : _ezBadge}
+            <span class="cline__name${dead ? ' cline__name--dead' : ''}">${escapeHtml(name)}</span>
+            <span class="cline__hp">❤ ${hpCur} / ${hpMax}</span>
+            ${dead ? '' : hpbar}
+            ${def}${ini}
+            ${_surpriseBadge}
+            ${conds ? `<span class="cline__conds">${conds}</span>` : ''}
+            ${wound}
+            ${_targetBadge}
+        </div>`;
+}
+window.combatLineHtml = combatLineHtml;
+
 function renderCombatUI(cs) {
     // Stage 7 C1 — warm the condition meta cache so chip tooltips have descriptions.
     // First call hits the network; subsequent calls are cached (5-min TTL).
@@ -1174,99 +1255,9 @@ function renderCombatUI(cs) {
         : null;
     _showEnemyTurnOverlay(!isPlayerTurn && cs.status !== 'ended', _actingEnemy?.name);
 
-    const combatantRow = (c, isPlayer, isActive = false) => {
-        const activeCls = isActive ? ' combat-combatant--active' : '';
-        const activeArrow = isActive ? '<span class="combat-combatant__active-arrow" aria-hidden="true">▶</span>' : '';
-        const hpCur = Math.max(0, Number(c.hp_current ?? 0));
-        const hpMax = Math.max(1, Number(c.hp_max ?? hpCur ?? 1));
-        const pct = Math.max(0, Math.min(100, Math.round((hpCur / hpMax) * 100)));
-        const dead = hpCur <= 0;
-        const def = c.defense != null ? ` · DEF ${c.defense}` : '';
-        const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
-        if (isPlayer) {
-            const _absorb = Math.max(0, Number(c.absorb_hp ?? 0));  // B10 (#657): pula absorpcji tarczy
-            const hpPct = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
-            const woundHTML = renderWoundLabelHTML(hpCur, hpMax);
-            const wpn = _equippedDurability.weapon;
-            let duraWarn = '';
-            if (wpn && wpn.broken) {
-                duraWarn = `<div class="combat-dura-warn combat-dura-warn--broken">⚔ Twój oręż pęknięty — ciosy słabsze (−${wpn.penalty_pct}%)</div>`;
-            } else if (wpn && Number(wpn.pct) <= 20) {
-                duraWarn = `<div class="combat-dura-warn">⚔ Twój oręż ledwo trzyma się rękojeści (${wpn.pct}%)</div>`;
-            }
-            // #667: stan strefy gracza — wiąże z przyciskiem Zbliż się / Cofnij się.
-            const _pz = String(c.zone || 'engaged');
-            const _pzHint = _pz === 'ranged' ? '🏹 jesteś na dystansie' : '🗡 jesteś w zwarciu';
-            return `
-                <div class="combat-combatant combat-combatant--player${activeCls}">
-                    ${activeArrow}
-                    <div class="combat-combatant__icon">🛡️</div>
-                    <div class="combat-combatant__body">
-                        <div class="combat-combatant__name">
-                            <span class="combat-you__tag">TY</span>
-                            <span class="combat-combatant__name-text">${escapeHtml(c.name || 'Bohater')}</span>
-                            <span class="combat-combatant__meta">${ini}</span>
-                        </div>
-                        <div class="combat-you__zone">${_pzHint}</div>
-                        <div class="combat-combatant__hp-row">
-                            <span>HP</span>
-                            <span>${hpCur} / ${hpMax}${def}${_absorb > 0 ? ` · 🛡 ${_absorb}` : ''}</span>
-                        </div>
-                        <div class="combat-enemy__bar">
-                            <div class="combat-enemy__bar-fill combat-player__bar-fill--${hpPct}" style="width: ${pct}%"></div>
-                        </div>
-                        ${woundHTML}
-                        ${duraWarn}
-                    </div>
-                </div>`;
-        }
-        const tier = dead ? 'low' : (pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low'));
-        const name = String(c.name || c.enemy_key || 'Wróg');
-        // Stage 3 Z5 — surprise badge on combatant row
-        const _rowConds = Array.isArray(c.conditions) ? c.conditions : [];
-        const _rowSurprised = _rowConds.some(cc => cc && String(cc.key || '').toLowerCase() === 'zaskoczony');
-        const _rowSurpriseBadge = _rowSurprised
-            ? `<span class="combat-combatant__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</span>`
-            : '';
-        // #595: żywy wróg jest klikalnym celem; podświetl aktualnie wybrany + znacznik 🎯.
-        const _isTarget = !dead && selectedTargetId != null && String(c.id) === String(selectedTargetId);
-        const _targetable = !dead ? 'combat-combatant--targetable' : '';
-        const _targetSel = _isTarget ? 'combat-combatant--target-selected' : '';
-        const _targetAttr = !dead ? ` data-target-id="${escapeHtml(String(c.id))}" role="button" tabindex="0" title="Kliknij, aby celować w tego wroga"` : '';
-        const _targetBadge = _isTarget ? `<span class="combat-combatant__target-badge" title="Wybrany cel">🎯</span>` : '';
-        // #667: jawny znacznik strefy na żetonie (redundancja z kolumną) — czytelne
-        // bez polegania na pozycji w kolumnie.
-        const _ez = String(c.zone || 'engaged');
-        const _ezGlyph = _ez === 'ranged' ? '🏹' : '🗡';
-        const _ezTitle = _ez === 'ranged' ? 'Na dystans — daleko od ciebie' : 'W zwarciu — blisko ciebie';
-        const _ezBadge = !dead ? `<span class="combat-combatant__zone" title="${_ezTitle}">${_ezGlyph}</span>` : '';
-        // #660: po usunięciu chipów — rana + kondycje muszą żyć na wierszu, żeby nic nie zniknęło.
-        const _enWound = !dead ? renderWoundLabelHTML(hpCur, hpMax) : '';
-        const _enConds = !dead ? _renderConditionBadges(_rowConds) : '';
-        return `
-            <div class="combat-combatant combat-combatant--enemy${activeCls} ${dead ? 'combat-enemy--dead' : ''} ${_targetable} ${_targetSel}"${_targetAttr}>
-                ${activeArrow}
-                <div class="combat-combatant__icon">${dead ? '💀' : '⚔️'}</div>
-                <div class="combat-combatant__body">
-                    <div class="combat-combatant__name">
-                        ${_ezBadge}
-                        <span class="combat-combatant__name-text ${dead ? 'combat-enemy--dead' : ''}">${escapeHtml(name)}</span>
-                        ${_targetBadge}
-                        ${_rowSurpriseBadge}
-                        <span class="combat-combatant__meta">${ini}</span>
-                    </div>
-                    <div class="combat-combatant__hp-row">
-                        <span>HP</span>
-                        <span>${hpCur} / ${hpMax}${def}</span>
-                    </div>
-                    <div class="combat-enemy__bar">
-                        <div class="combat-enemy__bar-fill combat-enemy__bar-fill--${tier}" style="width: ${pct}%"></div>
-                    </div>
-                    ${_enWound}
-                    ${_enConds ? `<div class="combat-combatant__cond-row">${_enConds}</div>` : ''}
-                </div>
-            </div>`;
-    };
+    // #967: render linii delegowany do czystej combatLineHtml (Wariant D — kompakt,
+    // każdy uczestnik = jedna linia z inline HP barem). Cel liczony wewnątrz z selectedTargetId.
+    const combatantRow = (c, _isPlayer, isActive = false) => combatLineHtml(c, { isActive });
 
     // ── Render combatants (T34 / #667) ──
     // Gracz to STAŁY punkt odniesienia poza kolumnami; kolumny = TYLKO wrogowie
