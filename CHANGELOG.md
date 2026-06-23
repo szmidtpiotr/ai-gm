@@ -4,6 +4,73 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.4 — 2026-06-24 — Regeneracja planu GM + kompaktowy interfejs walki i przygody + dopięcie multiplayera + historia kampanii
+
+Duża porcja dopracowania interfejsu gracza i mechaniki: GM może teraz odbudować zepsuty plan kampanii jednym przyciskiem, walka i pasek przygody dostały kompaktowy, czytelny układ, multiplayer został domknięty i przetestowany end-to-end, a stare kampanie da się zarchiwizować i przeglądać.
+
+### Added
+
+**Regeneracja planu GM — ratunek dla „uproszczonych" planów (#966, #968)**
+- W panelu admina (monitor kampanii → zakładka „Plan GM") pojawił się przycisk **„Wygeneruj plan na nowo"**. Działa nawet gdy kampania w ogóle nie ma planu (pusty stan), nie tylko gdy plan jest zepsuty.
+- API zwraca teraz status `plan_degraded` — system rozpoznaje, kiedy plan kampanii jest „uproszczony" (słaby model na PROD nie potrafił wygenerować pełnego planu w JSON) i sygnalizuje to w panelu.
+- Regeneracja jest **świadoma historii** (`history-aware`): nowy plan kontynuuje dotychczasową rozgrywkę zamiast zaczynać kampanię od zera — uwzględnia to, co już się wydarzyło.
+
+**Archiwum kampanii — podgląd zakończonych przygód (#900)**
+- Zakończone kampanie można zarchiwizować; pojawia się osobna sekcja „Historia" z podglądem przebiegu.
+- Przeglądarka historii (read-only) — nakładka z turami archiwalnej kampanii, bez ryzyka edycji.
+- Przed przepisaniem bohatera do nowej kampanii pojawia się **modal potwierdzenia** (żeby nie zgubić starej przygody przez przypadek).
+
+**Wczytywanie mapy świata z kanonu (#958)**
+- Nowy przycisk **„Wczytaj mapę (z kanonu)"** + endpoint — admin może odtworzyć mapę Kresów z zatwierdzonego pliku-źródła, nie tylko zapisać.
+
+### Changed / UI
+
+**Kompaktowy banner walki — Wariant D (#967)**
+- Nowy układ paska walki: jedna linia na uczestnika z **wbudowanym paskiem HP** (inline) — zwarcie informacji, mniej zajętego ekranu.
+- Naprawiono znikanie górnej belki: w trakcie walki pasek przygody **nie chowa się** przy przewijaniu (górna belka już nie „ucieka").
+
+**Kompaktowy pasek przygody (#952)**
+- Pasek przygody zwinięty do **jednego rzędu**: menu pod ikoną ☰, scalony HUD lochu (pora dnia + godzina jako jeden chip), usunięte zbędne ikony mapa/widok.
+- Naprawione auto-ukrywanie: nie chowa się przy przewijaniu programowym, reaguje na tap (tap-to-reveal), belka rośnie przy otwarciu menu.
+
+**Drobne poprawki interfejsu gracza**
+- #965: usunięto 4 nieaktualne funkcje deweloperskie/testowe z zakładki Ustawienia gracza.
+- #953: rozwijanie tury — zamiana `webkit-line-clamp` na `max-height` (niezawodne rozwijanie długich tur).
+- #951: przesuwanie zakładek karty postaci — dynamiczne rozpoznawanie widocznych zakładek zamiast zepsutej stałej kolejności.
+- #897: spójny zestaw ikon SVG w dolnej nawigacji (zamiast emoji).
+- #896: koniec mignięcia tła na ekranie logowania (FOUC) — tło wczytywane z localStorage.
+- #899: przycisk „wstecz" na ekranie listy kampanii.
+- #950: czat drużyny — trwały stan przyklejenia, przeciąganie i minimalizacja do ikony.
+- #901: Księga Zasad otwiera się w nowej karcie zamiast nakładki iframe.
+- #955: trwały zapis flagi „tester" (`is_tester`) przez panel admina.
+
+### Fixed — Multiplayer (domknięcie FAZY 5)
+
+- #961: `POST /combat/start` w kampanii MP trafia teraz do silnika walki multiplayer (`start_mp_combat`).
+- #962: akcja wskrzeszenia uruchamia pętlę auto-rozstrzygania tur przeciwników w walce MP.
+- #963: w czacie drużyny nadawca „szeptu" jest normalizowany do nazwy postaci (zamiast loginu).
+- #959: po narracji otwierającej automatycznie otwiera się kolejna runda zbierania akcji (`done → collecting`).
+- #954: przyciski usuń/opuść na kartach lobby i aktywnej gry MP.
+- #957: D-pad w lochu — chwytanie wskaźnika dopiero przy przeciąganiu, nie przy zwykłym tapnięciu.
+
+### World / Balans
+
+- #933: rejestracja typów heksów Kresów (`hex_types`) + powiązanie osad z `location_key`.
+- #824 (LB5): skalowanie **liczby** przeciwników wg wielkości drużyny (a nie ich poziomu/siły).
+
+### Wizytówka (showcase)
+- Dedykowana sekcja **Multiplayer („Graj razem")** + link w nawigacji.
+- Aktualizacja treści o v1.5.3 (lobby MP end-to-end, trwała mapa świata, reroll).
+
+### Testy / infra (dev-only, bez wpływu na grę)
+- Nowe skille do testów grywalności: `/game-smoke-pw`, `/game-smoke-dungeon-pw`, `/game-smoke-mp-pw` (warianty przez prawdziwe UI Playwright) + nowy `/test-inreview` (masowy runner issue z etykietą `review`).
+- Odbudowa harnessu testowego multiplayera: pytest GREEN + Playwright 3/3, weryfikacja kompletu zadań FAZY 5.
+- Masowy przegląd issue „in-review": **40/40** FAZA B+L+MP-G zamknięte, skan 65 issue (55 zamknięte), partie FIX-B/C/D (7/7, 9/9, 2/2) zweryfikowane i zamknięte.
+- Poprawki schematu testowej bazy (kolumny z późniejszych migracji: `quiet_start`/`quiet_end`/`team_tz` itd.).
+- Dokumentacja w `notes.md`: sekcja testowania multiplayera (3 warstwy) + opis skilli smoke.
+
+---
+
 ## v1.5.3 — 2026-06-23 — Multiplayer lobby działa end-to-end (GF7) + trwała mapa świata + reroll 100/350/700
 
 ### Added
