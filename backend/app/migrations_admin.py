@@ -3530,6 +3530,21 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         )
     """, "v2-hex-teleport-connections")
 
+    # #933 — Register Kresy map hex_types missing from original seed.
+    # INSERT OR IGNORE is idempotent — safe to re-run every startup.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon, is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('heath',   'Wrzosowisko', 1.0, 0.20, '#9a8a5a', '🌾', 1, 'biome',   0.10),
+        ('snow',    'Śnieg',       1.5, 0.15, '#d8e8e8', '❄',  1, 'biome',   0.05),
+        ('sea',     'Morze',       0.0, 0.10, '#1a3a6a', '🌊', 0, 'biome',   0.00),
+        ('mountain','Góra',        2.0, 0.25, '#7a7a7a', '🏔️', 1, 'biome',   0.05),
+        ('village', 'Wioska',      0.0, 0.00, '#c49a3a', '🏡', 1, 'scatter', 0.00),
+        ('lake',    'Jezioro',     0.0, 0.05, '#3a6a9a', '🏞️', 0, 'biome',   0.00),
+        ('bridge',  'Most',        1.0, 0.45, '#7a6a4a', '🌉', 1, 'scatter', 0.00)
+    """, "v933-kresy-hex-types")
+
     logger.info("v2_schema_migrations_complete")
 
 
@@ -5142,6 +5157,48 @@ def _backfill_character_campaign_state(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _link_kresy_settlements(conn: sqlite3.Connection) -> None:
+    """#933 — Link Kresy settlement hexes to game_locations via label normalization.
+
+    Normalizes Polish characters + spaces to generate a candidate game_locations.key
+    and updates world_hexes.location_key where the key exists. Idempotent (WHERE NULL).
+    """
+    _PL = str.maketrans(
+        "ąęóśłżźćńĄĘÓŚŁŻŹĆŃ",
+        "aeosl" "zzc" "n" "aeosl" "zzc" "n",
+    )
+
+    def _normalize(label: str) -> str:
+        key = label.lower().translate(_PL)
+        if "(" in key:
+            key = key[: key.index("(")].rstrip()
+        return key.strip().replace(" ", "_").replace("-", "_")
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT q, r, label FROM world_hexes"
+        " WHERE map_level=0 AND hex_type IN ('town','village','ruins')"
+        " AND (location_key IS NULL OR location_key = '')"
+    )
+    hexes = cur.fetchall()
+    linked = 0
+    for row in hexes:
+        q, r, label = row["q"], row["r"], row["label"]
+        if not label:
+            continue
+        candidate = _normalize(label)
+        cur.execute("SELECT key FROM game_locations WHERE key=?", (candidate,))
+        if cur.fetchone():
+            cur.execute(
+                "UPDATE world_hexes SET location_key=? WHERE q=? AND r=? AND map_level=0",
+                (candidate, q, r),
+            )
+            linked += 1
+    if linked:
+        conn.commit()
+    logger.info("v933_settlement_linkage", linked=linked, checked=len(hexes))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5258,6 +5315,7 @@ def run_admin_migrations() -> None:
         _ensure_complete_push_sent_column(conn)  # #802 G21
         _ensure_autopilot_consent_column(conn)  # #803 G22
         _ensure_onboarding_summary_column(conn)  # #806 G25
+        _link_kresy_settlements(conn)  # #933
     finally:
         conn.close()
 
