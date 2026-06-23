@@ -404,6 +404,10 @@ body {
 .header--game.header--hidden {
   transform: translateY(-100%);
 }
+/* #967: w walce pasek NIGDY nie ucieka — body.combat-active overriduje translateY */
+body.combat-active .header--game {
+  transform: none !important;
+}
 
 /* #952 — kompaktowe ikony akcji w pasku gry */
 .header--game .header__avatar,

@@ -2819,15 +2819,8 @@ function setupHeaderAutoHide() {
             lastY = y;
             return;
         }
-        // #967: podczas walki NIE chowaj paska — inaczej po jego zjechaniu (translateY)
-        // zostaje 50px pustki nad banerem walki i „górna belka ucieka". W walce trzymamy
-        // stabilny HUD (pasek + baner przyklejone do góry), chat scrolluje pod nimi.
-        const combatOn = !document.getElementById('combat-banner')?.hidden;
-        if (combatOn) {
-            header.classList.remove('header--hidden');
-            lastY = y;
-            return;
-        }
+        // #967: combat blokuje uciekanie paska przez body.combat-active (CSS !important).
+        // Scroll handler może spokojnie dodawać/zdejmować header--hidden — CSS go overriduje.
         const delta = y - lastY;
         if (y < 40) {
             header.classList.remove('header--hidden');
