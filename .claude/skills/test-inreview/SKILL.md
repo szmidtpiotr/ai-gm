@@ -95,7 +95,7 @@ Podmień `MODEL` na wybrany model (np. `claude-sonnet-4-6`, `claude-haiku-4-5-20
 
 ```bash
 # Uruchom w tle (Bash run_in_background: true)
-claude --model MODEL --dangerouslySkipPermissions \
+claude --model MODEL --dangerously-skip-permissions \
   --print < /tmp/aigm-test-grupaN.md > /tmp/aigm-out-grupaN.md 2>&1
 ```
 
