@@ -169,8 +169,8 @@ def post_party_chat(
                     raise HTTPException(status_code=403, detail="Spectator muted by this player")
 
         row = conn.execute(
-            "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to) "
-            "VALUES (?, ?, ?, ?, ?) RETURNING id, created_at",
+            "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to, created_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now')) RETURNING id, created_at",
             (campaign_id, uid, req.character_name, req.message.strip(), req.whisper_to),
         ).fetchone()
         conn.commit()

@@ -468,6 +468,19 @@ RAW_MIGRATIONS = [
         used_by INTEGER
     )""",
     "CREATE INDEX IF NOT EXISTS idx_campaign_invites_token ON campaign_invites(token)",
+    # #938 — party_messages table (party chat endpoint failed with no such table)
+    """CREATE TABLE IF NOT EXISTS party_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        character_name TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL,
+        whisper_to TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_party_messages_campaign ON party_messages(campaign_id)",
+    # #938 — add whisper_to column if table was created with wrong schema (is_whisper/whisper_to_user_id)
+    "ALTER TABLE party_messages ADD COLUMN whisper_to TEXT",
 ]
 
 
