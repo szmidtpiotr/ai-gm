@@ -164,7 +164,12 @@ function _renderMpLobbies(lobbies) {
     if (!section || !list) return;
     if (!lobbies.length) { section.style.display = 'none'; return; }
     section.style.display = '';
-    list.innerHTML = lobbies.map(lob => `
+    list.innerHTML = lobbies.map(lob => {
+        const isHost = lob.host_username === currentUser?.username;
+        const removeBtn = isHost
+            ? `<button class="mp-lobby-remove" data-id="${lob.campaign_id}" data-host="1" title="Rozwiąż lobby" style="padding:6px 10px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171;cursor:pointer;font-size:.8rem;margin-left:6px">🗑</button>`
+            : `<button class="mp-lobby-remove" data-id="${lob.campaign_id}" data-host="0" title="Opuść lobby" style="padding:6px 10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#f87171;cursor:pointer;font-size:.8rem;margin-left:6px">Opuść</button>`;
+        return `
         <div class="campaign-card" style="margin-bottom:10px;cursor:default">
             <div class="campaign-card__icon"><span>🏠</span></div>
             <div class="campaign-card__content">
@@ -172,7 +177,9 @@ function _renderMpLobbies(lobbies) {
                 <p>Gracze: ${lob.accepted_count || 1} / ${lob.max_players || '?'} · Host: ${escapeHtml(lob.host_username || '?')}</p>
             </div>
             <button class="mp-lobby-return" data-id="${lob.campaign_id}" style="padding:8px 14px;border-radius:8px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f5b342;cursor:pointer;font-size:.8rem;white-space:nowrap">Wróć do lobby</button>
-        </div>`).join('');
+            ${removeBtn}
+        </div>`;
+    }).join('');
     list.querySelectorAll('.mp-lobby-return').forEach(btn => {
         btn.addEventListener('click', () => {
             if (typeof _showLobbyScreen === 'function') {
@@ -182,6 +189,26 @@ function _renderMpLobbies(lobbies) {
             }
         });
     });
+    list.querySelectorAll('.mp-lobby-remove').forEach(btn => {
+        btn.addEventListener('click', () => _handleMpRemove(Number(btn.dataset.id), btn.dataset.host === '1'));
+    });
+}
+
+async function _handleMpRemove(campaignId, isHost) {
+    const label = isHost ? 'Rozwiąż lobby / grę dla wszystkich?' : 'Opuścić tę kampanię?';
+    if (!confirm(label)) return;
+    try {
+        if (isHost) {
+            await apiRequest('DELETE', `/campaigns/${campaignId}`);
+            showToast('Kampania usunięta', 'success');
+        } else {
+            await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/leave`);
+            showToast('Opuściłeś kampanię', 'success');
+        }
+        await _loadMpSections();
+    } catch (e) {
+        showToast(e.message || 'Błąd operacji', 'error');
+    }
 }
 
 function _renderMpActiveGames(games) {
@@ -192,6 +219,7 @@ function _renderMpActiveGames(games) {
     section.style.display = '';
     list.innerHTML = games.map(g => {
         const isSpectator = g.role === 'spectator';
+        const isHost = g.host_username === currentUser?.username;
         const icon = isSpectator ? '👁' : '⚔️';
         const spectatorBadge = isSpectator
             ? '<span style="font-size:10px;background:rgba(100,100,255,.15);border:1px solid rgba(100,100,255,.3);color:#9b9bff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle">WIDZ</span>'
@@ -200,6 +228,7 @@ function _renderMpActiveGames(games) {
         const btnColor = isSpectator
             ? 'background:rgba(100,100,255,.1);border:1px solid rgba(100,100,255,.3);color:#9b9bff'
             : 'background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);color:#4caf50';
+        const removeLabel = isHost ? '🗑' : 'Opuść';
         return `
         <div class="campaign-card" style="margin-bottom:10px;cursor:default">
             <div class="campaign-card__icon"><span>${icon}</span></div>
@@ -208,10 +237,14 @@ function _renderMpActiveGames(games) {
                 <p>Gracze: ${g.player_count || '?'} · Host: ${escapeHtml(g.host_username || '?')}</p>
             </div>
             <button class="mp-game-join" data-id="${g.campaign_id}" data-timer="${g.round_timer_hours || 24}" data-role="${g.role || 'player'}" style="padding:8px 14px;border-radius:8px;${btnColor};cursor:pointer;font-size:.8rem;white-space:nowrap">${btnLabel}</button>
+            <button class="mp-game-remove" data-id="${g.campaign_id}" data-host="${isHost ? 1 : 0}" title="${isHost ? 'Rozwiąż grę' : 'Opuść grę'}" style="padding:6px 10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#f87171;cursor:pointer;font-size:.8rem;margin-left:6px">${removeLabel}</button>
         </div>`;
     }).join('');
     list.querySelectorAll('.mp-game-join').forEach(btn => {
         btn.addEventListener('click', () => _joinMpActiveGame(Number(btn.dataset.id), Number(btn.dataset.timer), btn.dataset.role));
+    });
+    list.querySelectorAll('.mp-game-remove').forEach(btn => {
+        btn.addEventListener('click', () => _handleMpRemove(Number(btn.dataset.id), btn.dataset.host === '1'));
     });
 }
 
