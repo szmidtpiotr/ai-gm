@@ -68,6 +68,20 @@ Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez py
 ## 🧪 Testowanie — który kiedy
 *bug widać na ekranie?* → `/playwright-test-report` · *liczby w bazie przez wiele tur?* → `/game-test-player-screenshot` · *cały tryb grywalny?* → `/game-smoke[-dungeon][-mp]` (API, szybkie) lub `-pw` (przez prawdziwe UI) · *szybki podgląd?* → `/game-screen`. (Pomijasz: `/game-test`, `/verify`, `/webapp-testing`.)
 
+## 🎮 Multiplayer — jak testować
+Trzy warstwy, od najtańszej do najdroższej:
+
+| Narzędzie | Co sprawdza | Jak odpalić |
+|---|---|---|
+| **Specy Playwright** (deterministyczne, bez LLM) | okablowanie UI + kontrakty API | w kontenerze test-agent: `docker exec ai-gm-dev-test-agent-1 npx playwright test mp/ --config playwright.config.js` — 6 runnable (multicontext, round-sync, spectator, party-chat, lobby-kick) + regresje #813/#824/#812 |
+| **`/game-smoke-mp N`** | grywalność drużyny przez **API** (lobby→rundy→walka→absencja→wipe) | `/game-smoke-mp 2` (lub 3/4); werdykt GRYWALNY/NIE + 12 core + CP13–26 + issue P0/P1/P2 |
+| **`/game-smoke-mp-pw N`** | to samo przez **prawdziwe UI** (browser) — czego API nie widzi: ekran lobby + kick, przyciski 🗑/Opuść (#954), sync narracji u wielu graczy, panel czatu, kompozytor widza, baner walki MP | `/game-smoke-mp-pw 2`; najlepiej **nowa sesja, Sonnet 4.6, effort high** (czysty kontekst) |
+
+- **N graczy = N osobnych kont** `tester_mp1..N` (hasło `mp_tester_2026`) — setup: `setup_mp_users.py`.
+- Skrypty harness: `.claude/skills/game-smoke-mp/scripts/` (`setup_mp_users`, `setup_mp_lobby [--no-start]`, `play_mp_round`, `mp_sweep`, `snapshot_mp`).
+- **PW = jeden browser = jeden gracz**: API steruje resztą, fokus na P1 + widzu, POV-switch tokenem w localStorage.
+- DB tylko przez `ssh + docker exec sqlite3` (NIGDY sshfs — staleness WAL).
+
 ## 🎮 Smoke testy — „czy w ten tryb da się grać?"
 Pełny obchód trybu: ~15-30 realnych tur z prawdziwym LLM, checkpoint po checkpoincie. Werdykt: GRYWALNY / Z ZASTRZEŻENIAMI / NIEGRYWALNY. Konto Demo, nic nie usuwają, raport + issue P0/P1/P2.
 
