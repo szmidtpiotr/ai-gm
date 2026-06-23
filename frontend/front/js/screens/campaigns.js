@@ -711,6 +711,22 @@ async function _launchReadyCampaign(templateId, tpl) {
 async function handleNewCampaignWithHero() {
     if (!currentHero || !currentUser?.id) return;
 
+    // #900: confirm before silently overwriting an active campaign
+    if (currentHero.campaign_id) {
+        let campaignTitle = 'aktywną kampanię';
+        let turnCount = null;
+        try {
+            const campResp = await apiRequest('GET', `/campaigns/${currentHero.campaign_id}`);
+            const camp = campResp.campaign || campResp;
+            if (camp.title) campaignTitle = camp.title;
+            if (camp.turn_count != null) turnCount = camp.turn_count;
+        } catch (_) {}
+        const confirmed = await _confirmNewCampaignOverwrite(
+            currentHero.name || 'Bohater', campaignTitle, turnCount
+        );
+        if (!confirmed) return;
+    }
+
     // E28: offer tutorial for first-time players
     let isTutorial = false;
     try {

@@ -2,6 +2,21 @@ import json
 import sqlite3
 
 
+def has_active_campaign(conn: sqlite3.Connection, hero_id: int) -> bool:
+    """#900: Return True if the active hero already belongs to a campaign.
+
+    Used as a guard before silently reassigning a hero to a new campaign.
+    Only active heroes (is_active=1) with a non-NULL campaign_id return True.
+    """
+    row = conn.execute(
+        "SELECT campaign_id FROM characters WHERE id = ? AND is_active = 1",
+        (hero_id,),
+    ).fetchone()
+    if not row:
+        return False
+    return row["campaign_id"] is not None
+
+
 def maybe_reset_hp_for_new_campaign(
     conn: sqlite3.Connection,
     character_id: int,

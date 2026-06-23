@@ -661,6 +661,38 @@ function _askTutorial() {
     });
 }
 
+// #900: confirmation modal before overwriting an active campaign
+function _confirmNewCampaignOverwrite(heroName, campaignTitle, turnCount) {
+    return new Promise((resolve) => {
+        const pluralTury = (n) => n === 1 ? 'tura' : n < 5 ? 'tury' : 'tur';
+        const turns = (turnCount != null && turnCount > 0)
+            ? ` (${turnCount} ${pluralTury(turnCount)})`
+            : '';
+        const overlay = document.createElement('div');
+        overlay.id = 'confirm-new-campaign-overlay';
+        overlay.className = 'onboarding-card-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML = `
+            <div class="onboarding-card">
+                <h3 class="onboarding-card__title">Nowa kampania?</h3>
+                <p class="onboarding-card__content">
+                    Bohater <strong>${escapeHtml(heroName)}</strong> jest już
+                    w kampanii <strong>${escapeHtml(campaignTitle)}</strong>${escapeHtml(turns)}.<br><br>
+                    Obecna trafi do archiwum — możesz do niej wrócić później.
+                </p>
+                <div class="onboarding-card__nav">
+                    <button type="button" class="btn btn--secondary" id="cnc-cancel">Anuluj</button>
+                    <button type="button" class="btn btn--primary" id="cnc-confirm">Rozpocznij nową</button>
+                </div>
+            </div>`;
+        overlay.querySelector('#cnc-confirm').addEventListener('click', () => { overlay.remove(); resolve(true); });
+        overlay.querySelector('#cnc-cancel').addEventListener('click', () => { overlay.remove(); resolve(false); });
+        document.body.appendChild(overlay);
+        overlay.querySelector('#cnc-cancel')?.focus();
+    });
+}
+
 // ── Profile page ────────────────────────────────────────────────────────
 function _renderProfileAvatar(avatarUrl, fallbackLetter) {
     const el = document.getElementById('profile-avatar');
