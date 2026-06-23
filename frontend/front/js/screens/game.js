@@ -5355,63 +5355,6 @@ async function handleDeathReturn() {
 }
 
 // ============================================================================
-// Campaign Actions (Admin only)
-// ============================================================================
-async function handleResetCampaign() {
-    if (!currentCampaignId) {
-        showToast('Brak aktywnej kampanii', 'error');
-        return;
-    }
-
-    const confirmed = confirm(
-        'Zresetować kampanię?\n\n' +
-        'Usunięte: historia czatu, aktywna walka, podsumowania AI.\n' +
-        'Kampania i postać zostają.'
-    );
-
-    if (!confirmed) return;
-
-    try {
-        await apiRequest('POST', `/campaigns/${currentCampaignId}/reset`);
-        showToast('Kampania zresetowana', 'success');
-        closeSettings();
-        // Reload chat
-        elements.chatMessages.innerHTML = '';
-    } catch (error) {
-        console.error('[Admin] Reset campaign error:', error);
-        showToast(error.message || 'Błąd resetowania kampanii', 'error');
-    }
-}
-
-async function handleResetCharacter() {
-    if (!characterData?.id) {
-        showToast('Brak aktywnej postaci', 'error');
-        return;
-    }
-
-    const confirmed = confirm(
-        'Zresetować postać?\n\n' +
-        'Przywraca stan jak po kreatorze.\n' +
-        'Zachowane: imię, archetyp, historia.'
-    );
-
-    if (!confirmed) return;
-
-    try {
-        const response = await apiRequest('POST', `/characters/${characterData.id}/reset-progress`);
-        characterData = { ...characterData, sheet_json: response.sheet_json };
-        populateCharacterSheet(characterData);
-        updateHeaderStats();
-        showToast('Postać zresetowana', 'success');
-        closeSettings();
-    } catch (error) {
-        console.error('[Admin] Reset character error:', error);
-        showToast(error.message || 'Błąd resetowania postaci', 'error');
-    }
-}
-
-
-// ============================================================================
 // Utility Functions
 // ============================================================================
 function formatTime(dateStr) {

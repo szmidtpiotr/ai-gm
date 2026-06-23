@@ -3407,83 +3407,6 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   font-style: italic;
 }
 
-/* Admin Actions */
-.settings-admin-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.settings-admin-btn {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 14px 16px;
-  background: rgba(201, 74, 74, 0.08);
-  border: 1px solid rgba(201, 74, 74, 0.2);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.settings-admin-btn:hover {
-  background: rgba(201, 74, 74, 0.15);
-  border-color: rgba(201, 74, 74, 0.35);
-}
-
-.settings-admin-btn:active {
-  transform: scale(0.98);
-}
-
-.settings-admin-btn__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: rgba(201, 74, 74, 0.15);
-  border-radius: 8px;
-  color: var(--danger);
-  font-size: 18px;
-}
-
-.settings-admin-btn__content {
-  flex: 1;
-}
-
-.settings-admin-btn__title {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.settings-admin-btn__desc {
-  display: block;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.settings-admin-btn--test {
-  background: rgba(107, 102, 94, 0.1);
-  border-color: rgba(107, 102, 94, 0.3);
-}
-
-.settings-admin-btn--test:hover {
-  background: rgba(107, 102, 94, 0.2);
-  border-color: rgba(107, 102, 94, 0.5);
-}
-
-.settings-admin-btn--test .settings-admin-btn__icon {
-  background: rgba(107, 102, 94, 0.2);
-  color: var(--text-secondary);
-}
-
 /* Foldable settings sections */
 .settings-group__header--toggle {
   cursor: pointer;
@@ -8174,23 +8097,6 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   background: rgba(106,144,96,0.12); border-radius: 3px; padding: 0 4px;
   margin-left: 5px; cursor: pointer; }
 .bubble-debug-id:hover { color: #8ac880; background: rgba(106,144,96,0.22); }
-.settings-debug-log { margin-top: var(--space-md); padding: var(--space-md);
-  background: var(--bg-secondary); border-radius: var(--radius-md);
-  border: 1px solid var(--border); }
-.settings-debug-log__title { font-size: 0.82rem; font-weight: 700;
-  color: var(--text-primary); margin-bottom: var(--space-sm); }
-.settings-debug-log__row { display: flex; align-items: center; gap: 8px;
-  margin-bottom: var(--space-sm); flex-wrap: wrap; }
-.settings-debug-log__label { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
-.settings-debug-log__pills { display: flex; gap: 4px; }
-.debug-turns-btn { background: var(--bg-elevated); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--text-muted); font-size: 0.75rem; padding: 3px 8px; cursor: pointer; }
-.debug-turns-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-.settings-debug-log__hint { font-size: 0.7rem; color: var(--text-muted); margin-bottom: var(--space-sm); line-height: 1.4; }
-.settings-debug-log__preview { width: 100%; height: 80px; background: var(--bg-base);
-  border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted);
-  font-size: 0.65rem; font-family: monospace; padding: 6px; resize: none;
-  box-sizing: border-box; }
 
 /* ── T33: Suggested Actions (Hybrid Input UI) ────────────────────────────── */
 /* ── Suggested Actions Strip (T33) ─────────────────────────────────────────── */

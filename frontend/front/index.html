@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=952-r4">
+  <link rel="stylesheet" href="./css/styles.css?v=965-r1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1620,47 +1620,6 @@
             </label>
           </div>
 
-          <!-- Debug log copy -->
-          <div class="settings-debug-log" id="debug-log-section">
-            <div class="settings-debug-log__title">📋 Skopiuj log do zgłoszenia błędu</div>
-            <div class="settings-debug-log__row">
-              <span class="settings-debug-log__label">Ostatnie tury:</span>
-              <div class="settings-debug-log__pills">
-                <button class="debug-turns-btn active" data-n="3">3</button>
-                <button class="debug-turns-btn" data-n="5">5</button>
-                <button class="debug-turns-btn" data-n="10">10</button>
-              </div>
-              <button class="primary-btn" id="debug-copy-btn" style="font-size:0.78rem;padding:5px 12px">Kopiuj</button>
-            </div>
-            <div class="settings-debug-log__hint">Zawiera: wejście gracza · surową odpowiedź GM · zdarzenia ekwipunku · walki · JSON do analizy</div>
-            <textarea id="debug-log-preview" class="settings-debug-log__preview" readonly placeholder="Tu pojawi się podgląd przed skopiowaniem…"></textarea>
-          </div>
-
-          <div class="settings-admin-actions">
-            <button type="button" class="settings-admin-btn" id="reset-campaign-btn">
-              <span class="settings-admin-btn__icon">↺</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Reset kampanii</span>
-                <span class="settings-admin-btn__desc">Czyści historię czatu</span>
-              </div>
-            </button>
-
-            <button type="button" class="settings-admin-btn" id="reset-character-btn">
-              <span class="settings-admin-btn__icon">⟲</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Reset postaci</span>
-                <span class="settings-admin-btn__desc">Przywraca stan początkowy</span>
-              </div>
-            </button>
-
-            <button type="button" class="settings-admin-btn settings-admin-btn--test" id="test-death-btn">
-              <span class="settings-admin-btn__icon">💀</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Test: Śmierć</span>
-                <span class="settings-admin-btn__desc">Pokaż ekran śmierci</span>
-              </div>
-            </button>
-          </div>
         </section>
 
         <!-- Credits -->
@@ -2279,10 +2238,10 @@
   <script src="./js/screens/heroes.js?v=882-r4"></script>
   <script src="./js/screens/campaigns.js?v=900-viewer"></script>
   <script src="./js/screens/wizard.js?v=882-r4"></script>
-  <script src="./js/screens/game.js?v=952-r4"></script>
+  <script src="./js/screens/game.js?v=965-r1"></script>
   <script src="./js/screens/combat_ui.js?v=882-r4"></script>
   <script src="./js/multiplayer_ui.js?v=960-r1"></script>
-  <script src="./js/app.js?v=957-dpad-tap"></script>
+  <script src="./js/app.js?v=965-r1"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

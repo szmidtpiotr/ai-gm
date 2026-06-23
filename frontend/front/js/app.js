@@ -188,8 +188,6 @@ const elements = {
 
     // Admin Settings
     adminSettingsSection: document.getElementById('admin-settings-section'),
-    btnResetCampaign: document.getElementById('reset-campaign-btn'),
-    btnResetCharacter: document.getElementById('reset-character-btn'),
 
     // Service status dots
     svcDotBackend: document.getElementById('svc-dot-backend'),
@@ -1358,16 +1356,6 @@ function initEventListeners() {
         showScreen('heroes');
     });
 
-    // Admin actions (C04-C06)
-    elements.btnResetCampaign?.addEventListener('click', handleResetCampaign);
-    elements.btnResetCharacter?.addEventListener('click', handleResetCharacter);
-
-    // Death screen test button
-    document.getElementById('test-death-btn')?.addEventListener('click', () => {
-        closeSettings();
-        showDeathScreen(characterData?.name || 'Bohater');
-    });
-
     // Death screen buttons
     document.getElementById('resurrect-btn')?.addEventListener('click', handleResurrect);
     document.getElementById('death-return-btn')?.addEventListener('click', handleDeathReturn);
@@ -1518,35 +1506,6 @@ function initBubblePrefs() {
         });
     }
 
-    // Debug log copy
-    let _debugTurnsN = 3;
-    document.querySelectorAll('.debug-turns-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.debug-turns-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            _debugTurnsN = parseInt(btn.dataset.n);
-        });
-    });
-
-    document.getElementById('debug-copy-btn')?.addEventListener('click', async () => {
-        if (!currentCampaignId) { showToast('Brak aktywnej kampanii', 'error'); return; }
-        const btn = document.getElementById('debug-copy-btn');
-        const preview = document.getElementById('debug-log-preview');
-        btn.disabled = true; btn.textContent = 'Ładuję…';
-        try {
-            const resp = await apiRequest('GET', `/campaigns/${currentCampaignId}/turns/debug-log?limit=${_debugTurnsN}`);
-            const humanText = resp.human_text || '';
-            const jsonBlock = '\n\n```json\n' + JSON.stringify({campaign_id: resp.campaign_id, hero: resp.hero, turns: resp.turns}, null, 2) + '\n```';
-            const full = humanText + jsonBlock;
-            if (preview) preview.value = full.slice(0, 800) + (full.length > 800 ? '\n...[skrócono]' : '');
-            await navigator.clipboard.writeText(full);
-            showToast('Log skopiowany do schowka ✓', 'success', 2500);
-        } catch (e) {
-            showToast('Błąd: ' + (e.message || '?'), 'error');
-        } finally {
-            btn.disabled = false; btn.textContent = 'Kopiuj';
-        }
-    });
 }
 
 function initVoiceSettings() {
