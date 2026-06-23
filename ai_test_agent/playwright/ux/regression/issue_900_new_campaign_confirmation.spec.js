@@ -87,6 +87,13 @@ test("REGRESSION #900 — confirmation modal appears before creating new campaig
     await expect(page.locator("#cnc-cancel")).toBeVisible({ timeout: 1000 });
     await expect(page.locator("#cnc-confirm")).toBeVisible({ timeout: 1000 });
 
+    // Modal must warn that old campaign is permanently closed (not just archived)
+    const modalText = await page.locator("#confirm-new-campaign-overlay .onboarding-card__content").textContent();
+    expect(
+        modalText,
+        "Modal must mention campaign is permanently closed (#900 design decision)",
+    ).toContain("zamknięta na zawsze");
+
     // Clicking "Anuluj" dismisses the modal — no new campaign created
     await page.locator("#cnc-cancel").click();
     await expect(page.locator("#confirm-new-campaign-overlay")).not.toBeVisible({ timeout: 2000 });

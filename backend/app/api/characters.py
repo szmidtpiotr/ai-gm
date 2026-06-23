@@ -1396,6 +1396,13 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
                 ),
             )
 
+        # #900: seal old campaign as read-only archive before hero moves to new one
+        try:
+            from app.services.character_campaign_service import archive_previous_campaign
+            archive_previous_campaign(conn, hero_id=character_id, new_campaign_id=int(campaign_id))
+        except Exception as e:
+            logger.warning("[assign_campaign] archive_previous failed (non-fatal): %s", str(e))
+
         # Link hero to campaign and ensure game session exists
         conn.execute(
             "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",

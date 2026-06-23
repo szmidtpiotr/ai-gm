@@ -297,8 +297,10 @@ async function loadCampaigns() {
         const campaigns = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
             if (Number(ownerId) !== Number(currentUser?.id)) return false;
-            // Hide ended/archived campaigns
-            if (c.status === 'ended' || c.status === 'archived' || c.status === 'discarded') return false;
+            // Hide ended/discarded — archived goes to history section below
+            if (c.status === 'ended' || c.status === 'discarded') return false;
+            // #900: archived campaigns go to history, not main list
+            if (c.status === 'archived') return false;
             // If we have a hero, only show campaigns that have this hero as character
             if (currentHero?.id) {
                 const campCharId = c.character_id ?? c.char_id;
@@ -316,8 +318,23 @@ async function loadCampaigns() {
             return true;
         });
 
-        console.log('[Campaigns] Filtered:', campaigns.length, 'of', allCampaigns.length);
+        // #900: archived campaigns — read-only history section for this hero
+        const archived = allCampaigns.filter(c => {
+            const ownerId = c.owner_user_id ?? c.owneruserid;
+            if (Number(ownerId) !== Number(currentUser?.id)) return false;
+            if (c.status !== 'archived') return false;
+            if (c.mode === 'dungeon') return false;
+            // Only show archives that belonged to THIS hero
+            if (currentHero?.id) {
+                const campCharId = c.character_id ?? c.char_id;
+                if (campCharId != null && Number(campCharId) !== Number(currentHero.id)) return false;
+            }
+            return true;
+        });
+
+        console.log('[Campaigns] Filtered:', campaigns.length, 'active,', archived.length, 'archived');
         renderCampaigns(campaigns);
+        renderArchivedCampaigns(archived);
     } catch (error) {
         console.error('[Campaigns] Failed to load:', error);
         showToast('Nie udało się załadować kampanii', 'error');
@@ -400,6 +417,47 @@ function renderCampaigns(campaigns) {
         initSwipeGesture(wrapper, card);
 
         elements.campaignsList.appendChild(wrapper);
+    });
+}
+
+// #900: read-only history of campaigns this hero played (status='archived')
+function renderArchivedCampaigns(archived) {
+    const section = document.getElementById('campaigns-history-section');
+    const list = document.getElementById('campaigns-history-list');
+    if (!section || !list) return;
+
+    if (!archived || archived.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+    list.innerHTML = '';
+
+    archived.forEach(campaign => {
+        const rawTitle = campaign.title || 'Zamknięta kampania';
+        const desc = campaign.description || campaign.system_id || 'Fantasy';
+        const turns = campaign.turn_count ? ` · ${campaign.turn_count} tur` : '';
+
+        const card = document.createElement('div');
+        card.className = 'campaign-card campaign-card--archived';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('title', 'Historia — tylko do odczytu');
+        card.innerHTML = `
+            <div class="campaign-card__icon"><span>📖</span></div>
+            <div class="campaign-card__content">
+                <h3>${escapeHtml(rawTitle)}</h3>
+                <p>${escapeHtml(desc)}${escapeHtml(turns)}</p>
+            </div>
+            <span class="campaign-card__badge">Historia</span>`;
+
+        // Read-only: show info toast, no campaign enter
+        card.addEventListener('click', () => {
+            showToast(`„${escapeHtml(rawTitle)}" — zamknięta kampania. Dostępna tylko jako historia.`, 'info', 3000);
+        });
+
+        list.appendChild(card);
     });
 }
 

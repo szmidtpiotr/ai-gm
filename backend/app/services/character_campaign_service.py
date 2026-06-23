@@ -17,6 +17,45 @@ def has_active_campaign(conn: sqlite3.Connection, hero_id: int) -> bool:
     return row["campaign_id"] is not None
 
 
+def archive_previous_campaign(
+    conn: sqlite3.Connection,
+    hero_id: int,
+    new_campaign_id: int,
+) -> bool:
+    """#900: Seal the hero's current campaign before moving them to a new one.
+
+    Sets old campaign status='archived' so it becomes read-only history.
+    Guards:
+    - noop when hero has no previous campaign
+    - noop when old campaign == new campaign (resume, not new)
+    - noop when old campaign mode='dungeon' (disposable, manages its own lifecycle)
+    Returns True if a campaign was archived, False otherwise.
+    """
+    row = conn.execute(
+        "SELECT campaign_id FROM characters WHERE id = ? AND is_active = 1",
+        (hero_id,),
+    ).fetchone()
+    if not row or row["campaign_id"] is None:
+        return False
+
+    old_id = int(row["campaign_id"])
+    if old_id == int(new_campaign_id):
+        return False
+
+    # Skip dungeon campaigns — they're disposable and end via their own flow
+    camp = conn.execute(
+        "SELECT mode FROM campaigns WHERE id = ?", (old_id,)
+    ).fetchone()
+    if camp and camp["mode"] == "dungeon":
+        return False
+
+    conn.execute(
+        "UPDATE campaigns SET status = 'archived' WHERE id = ? AND status NOT IN ('ended', 'archived', 'discarded')",
+        (old_id,),
+    )
+    return True
+
+
 def maybe_reset_hp_for_new_campaign(
     conn: sqlite3.Connection,
     character_id: int,

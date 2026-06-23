@@ -679,7 +679,10 @@ function _confirmNewCampaignOverwrite(heroName, campaignTitle, turnCount) {
                 <p class="onboarding-card__content">
                     Bohater <strong>${escapeHtml(heroName)}</strong> jest już
                     w kampanii <strong>${escapeHtml(campaignTitle)}</strong>${escapeHtml(turns)}.<br><br>
-                    Obecna trafi do archiwum — możesz do niej wrócić później.
+                    Bohater niesie swój los do przodu — nie można grać tej samej postacią
+                    (z obecnym ekwipunkiem i doświadczeniem) w dwóch kampaniach jednocześnie.<br><br>
+                    Stara kampania zostanie <strong>zamknięta na zawsze</strong>.
+                    Zobaczysz ją w historii jako zapis przeszłości, ale nie wrócisz do niej.
                 </p>
                 <div class="onboarding-card__nav">
                     <button type="button" class="btn btn--secondary" id="cnc-cancel">Anuluj</button>

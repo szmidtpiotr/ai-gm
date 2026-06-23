@@ -607,6 +607,12 @@
         <p>Rozpocznij nową przygodę powyżej</p>
       </div>
 
+      <!-- #900: read-only history of archived campaigns -->
+      <div id="campaigns-history-section" style="display:none">
+        <div class="campaigns-section-label">Historia (zamknięte kampanie)</div>
+        <div id="campaigns-history-list"></div>
+      </div>
+
       <!-- GF5 (#925) MP sections: invites / lobbies / active games -->
       <div id="mp-invites-section" style="display:none">
         <div class="campaigns-section-label">Zaproszenia do gry wieloosobowej</div>
@@ -2271,12 +2277,12 @@
   <script src="./js/combat_reconcile.js?v=701-desync-reason"></script>
   <script src="./js/screens/auth.js?v=882-r4"></script>
   <script src="./js/screens/heroes.js?v=882-r4"></script>
-  <script src="./js/screens/campaigns.js?v=900-guard"></script>
+  <script src="./js/screens/campaigns.js?v=900-archive"></script>
   <script src="./js/screens/wizard.js?v=882-r4"></script>
   <script src="./js/screens/game.js?v=952-r4"></script>
   <script src="./js/screens/combat_ui.js?v=882-r4"></script>
   <script src="./js/multiplayer_ui.js?v=950-r2"></script>
-  <script src="./js/app.js?v=952-r4"></script>
+  <script src="./js/app.js?v=900-archive"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
