@@ -624,7 +624,7 @@
 function openMultiplayerLobby() {
     document.getElementById('campaign-modes-hub')?.remove();
     setLobbyMode('ai');
-    if (typeof showScreen === 'function') showScreen('create-lobby-screen');
+    if (typeof showScreen === 'function') showScreen('create-lobby');
 }
 
 async function inviteFromGame() {
