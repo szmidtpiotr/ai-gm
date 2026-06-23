@@ -2812,6 +2812,11 @@ function setupGameMenu() {
         btn.setAttribute('aria-expanded', 'false');
     };
     const openMenu = () => {
+        // Zakotw menu pod przyciskiem ☰ przez viewport coords — menu jest poza <header> (position:fixed).
+        const r = btn.getBoundingClientRect();
+        menu.style.top  = `${r.bottom + 4}px`;
+        menu.style.right = `${window.innerWidth - r.right}px`;
+        menu.style.left = '';
         menu.hidden = false;
         btn.setAttribute('aria-expanded', 'true');
     };

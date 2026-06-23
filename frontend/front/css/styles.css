@@ -413,12 +413,10 @@ body {
   flex-shrink: 0;
 }
 
-/* #952 — dropdown menu ☰ (zawsze kotwiczone pod hamburgerem) */
+/* #952 — dropdown menu ☰ (position:fixed, kotwiczone przez JS pod ☰ — poza <header> żeby nie rozciągać belki) */
 .game-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 8px;
-  z-index: 60;
+  position: fixed;
+  z-index: 200;
   min-width: 210px;
   display: flex;
   flex-direction: column;
