@@ -605,6 +605,46 @@ def _reroll_repeated_tile_enemies(
     return graph
 
 
+# ── LB5 #824: Party-size enemy count scaling ─────────────────────────────────
+
+def _dungeon_party_size(conn: sqlite3.Connection, campaign_id: int) -> int:
+    """LB5 #824 — accepted campaign_members with assigned hero → party size."""
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM campaign_members "
+            "WHERE campaign_id = ? AND status = 'accepted' AND character_id IS NOT NULL",
+            (campaign_id,),
+        ).fetchone()
+        return max(1, int(row["cnt"] or 1))
+    except Exception:
+        return 1
+
+
+_DUNGEON_MP_ENEMY_COUNT_CAP = 4  # hard cap on extra enemies per tile node
+
+
+def _scale_tile_graph_enemy_counts(graph: dict, party_size: int) -> dict:
+    """LB5 #824 — scale count in every tile node's enemies list by party_size.
+
+    solo (party_size=1) → no change. Tier/enemy_key untouched.
+    Formula mirrors encounter_service: clamp(base × party_size, base, base + CAP).
+    """
+    if party_size <= 1:
+        return graph
+    for node in (graph.get("nodes") or {}).values():
+        content = node.get("content") or {}
+        enemies = content.get("enemies") or []
+        if not enemies:
+            continue
+        scaled = []
+        for e in enemies:
+            base = max(1, int(e.get("count") or 1))
+            scaled.append({**e, "count": min(base * party_size, base + _DUNGEON_MP_ENEMY_COUNT_CAP)})
+        content["enemies"] = scaled
+        node["content"] = content
+    return graph
+
+
 # ── Dungeon run orchestration (tile mode) ─────────────────────────────────────
 
 def _tile_count_for_difficulty(dungeon: dict, hero_level: int) -> int:
@@ -667,6 +707,8 @@ def enter_dungeon_tiles(
     conn, flags = _load_flags(campaign_id)
     try:
         graph = _reroll_repeated_tile_enemies(graph, enemy_pool, conn)
+        # LB5 #824 — scale enemy count in each tile node by party size
+        graph = _scale_tile_graph_enemy_counts(graph, _dungeon_party_size(conn, campaign_id))
 
         # L7: entry checkpoint — capture XP at dungeon start for rollback on death
         _char_row = None

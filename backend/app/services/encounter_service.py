@@ -15,6 +15,10 @@ logger = structlog.get_logger()
 # (so it isn't guaranteed every eligible turn). Scaled by the dwell multiplier.
 TEMPLATE_FALLBACK_BASE_PROB = 0.5
 
+# LB5 (#824) — enemy count scaling by party size. Starting values, tune in Sandbox.
+MP_ENEMY_PER_PLAYER = 1.0   # multiplicative: count × party_size (capped)
+MP_ENEMY_COUNT_CAP = 4      # max extra enemies per enemy type above solo baseline
+
 
 def _slugify(text: str) -> str:
     text = unicodedata.normalize("NFD", str(text).lower())
@@ -207,6 +211,10 @@ def maybe_inject_encounter(
                 continue
             if random.random() <= prob * dwell:
                 enc = ensure_encounter_enemies_in_db(conn, enc)
+                # LB5 #824 — scale enemy count by party size (tier unchanged)
+                party_size = _party_size_for_campaign(conn, campaign_id)
+                if enc.get("enemies"):
+                    enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
                 sf["active_encounter"] = enc
                 conn.execute(
                     "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
@@ -393,6 +401,36 @@ def _party_scaling_level(levels: list[int]) -> int:
 def _hero_level_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int:
     """G26 #807 — Party scaling level: max-1 for MP (2+ heroes), solo level for solo."""
     return _party_scaling_level(_party_levels_for_campaign(conn, campaign_id))
+
+
+def _party_size_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int:
+    """LB5 #824 — count accepted campaign_members with an assigned hero."""
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM campaign_members "
+            "WHERE campaign_id = ? AND status = 'accepted' AND character_id IS NOT NULL",
+            (campaign_id,),
+        ).fetchone()
+        return max(1, int(row["cnt"] or 1))
+    except Exception:
+        return 1
+
+
+def _scale_enemy_counts(enemies: list, party_size: int) -> list:
+    """LB5 #824 — scale each enemy's count by party_size, capped at base + MP_ENEMY_COUNT_CAP.
+
+    solo (party_size=1) → no change (backward compat).
+    Tier/key/other fields untouched — only count scales.
+    Formula: clamp(base × party_size, base, base + MP_ENEMY_COUNT_CAP).
+    """
+    if party_size <= 1:
+        return enemies
+    result = []
+    for e in enemies:
+        base = max(1, int(e.get("count") or 1))
+        scaled = min(base * party_size, base + MP_ENEMY_COUNT_CAP)
+        result.append({**e, "count": scaled})
+    return result
 
 
 def match_encounter_templates(
