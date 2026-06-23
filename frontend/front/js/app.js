@@ -85,6 +85,7 @@ const elements = {
     newCampaignForm: document.getElementById('new-campaign-form'),
     campaignNameInput: document.getElementById('campaign-name'),
     campaignNameCount: document.getElementById('campaign-name-count'),
+    btnCampaignsBack: document.getElementById('campaigns-back'),
     btnNewCampaignBack: document.getElementById('new-campaign-back'),
 
     // Character Wizard
@@ -1181,6 +1182,9 @@ function initEventListeners() {
     // Campaigns
     elements.btnNewCampaign?.addEventListener('click', showNewCampaignScreen);
     elements.btnLogout?.addEventListener('click', handleLogout);
+
+    // Campaigns → back to heroes
+    elements.btnCampaignsBack?.addEventListener('click', () => { loadHeroes(); showScreen('heroes'); });
 
     // New Campaign
     elements.newCampaignForm?.addEventListener('submit', handleCreateCampaign);
