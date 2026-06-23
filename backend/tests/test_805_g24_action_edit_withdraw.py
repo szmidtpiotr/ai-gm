@@ -143,8 +143,8 @@ def test_submit_blocked_when_narrating(tmp_path, monkeypatch):
     )
 
 
-def test_submit_blocked_when_done(tmp_path, monkeypatch):
-    """submit_action must return error when round status is 'done'."""
+def test_submit_after_done_auto_opens_next_round(tmp_path, monkeypatch):
+    """#959: 'done' round no longer blocks — auto-opens next collecting round instead."""
     db_path, conn = _make_test_db(tmp_path)
     _seed_campaign(conn)
     conn.execute(
@@ -161,9 +161,10 @@ def test_submit_blocked_when_done(tmp_path, monkeypatch):
         character_name="Hero101",
         action_text="Atakuję!",
     )
-    assert result.get("error") == "round_closed", (
-        f"Expected error='round_closed' but got: {result}"
+    assert result.get("error") != "round_closed", (
+        f"#959: done round should auto-open next round, not block. Got: {result}"
     )
+    assert "error" not in result, f"Unexpected error: {result}"
 
 
 def test_submit_allowed_when_collecting(tmp_path, monkeypatch):

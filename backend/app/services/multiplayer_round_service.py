@@ -369,7 +369,8 @@ def submit_action(
         ).fetchone()
 
         just_transitioned = False
-        if round_row and round_row["status"] != "collecting":
+        if round_row and round_row["status"] == "narrating":
+            # G24 (#805): narrating = LLM busy, truly blocked
             submitted = int(conn.execute(
                 "SELECT COUNT(*) as cnt FROM campaign_round_actions WHERE round_id=?",
                 (int(round_row["id"]),),
@@ -383,6 +384,25 @@ def submit_action(
                 "error": "round_closed",
                 "detail": "runda już domknięta",
             }
+
+        if round_row and round_row["status"] == "done":
+            # #959: opening round done → auto-open next collecting round so players can act
+            last = conn.execute(
+                "SELECT MAX(round_number) as mx FROM campaign_rounds WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchone()
+            next_num = (int(last["mx"]) + 1) if last and last["mx"] else 1
+            timer_min = _get_round_timer_minutes(campaign_id, conn)
+            deadline = _make_deadline(timer_min)
+            cur = conn.execute(
+                "INSERT INTO campaign_rounds (campaign_id, round_number, status, deadline)"
+                " VALUES (?, ?, 'collecting', ?)",
+                (campaign_id, next_num, deadline),
+            )
+            conn.commit()
+            round_row = conn.execute(
+                "SELECT * FROM campaign_rounds WHERE id = ?", (cur.lastrowid,)
+            ).fetchone()
 
         if not round_row:
             last = conn.execute(

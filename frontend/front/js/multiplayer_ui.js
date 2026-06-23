@@ -1161,3 +1161,19 @@ async function sendPartyMessage() {
     if (input) input.value = '';
     await window.multiplayerUI?._sendChat?.(msg);
 }
+
+// #959: enter a started MP game by campaign ID — fetches campaign object then delegates to enterGame
+async function enterMpGame(campaignId) {
+    try {
+        const campaign = await _lobbyFetch(`/campaigns/${campaignId}`);
+        if (typeof enterGame === 'function') {
+            await enterGame(campaign);
+        }
+    } catch (e) {
+        console.error('[MP] enterMpGame failed:', e);
+        if (typeof loadCampaigns === 'function') {
+            await loadCampaigns();
+            if (typeof showScreen === 'function') showScreen('campaigns');
+        }
+    }
+}
