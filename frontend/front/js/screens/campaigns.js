@@ -420,6 +420,66 @@ function renderCampaigns(campaigns) {
     });
 }
 
+// #900: read-only turn-by-turn viewer for an archived campaign
+async function _openArchivedCampaignViewer(campaign) {
+    document.getElementById('archived-campaign-viewer')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'archived-campaign-viewer';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;';
+    overlay.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid rgba(245,158,11,.2);background:#0e0e16;flex-shrink:0">
+            <div>
+                <div style="font-weight:700;color:#f5deb3;font-size:1rem">${escapeHtml(campaign.title || 'Kampania')}</div>
+                <div style="font-size:.72rem;color:#888;margin-top:2px">Historia (tylko do odczytu)</div>
+            </div>
+            <button id="acv-close" style="background:none;border:none;color:#aaa;font-size:1.4rem;cursor:pointer;padding:4px 8px">✕</button>
+        </div>
+        <div id="acv-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+            <div style="color:#888;text-align:center;padding:24px;font-size:.85rem">Ładowanie historii…</div>
+        </div>`;
+
+    overlay.querySelector('#acv-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+
+    const body = overlay.querySelector('#acv-body');
+    try {
+        const data = await apiRequest('GET', `/campaigns/${campaign.id}/turns-history?limit=200`);
+        const turns = data.turns || [];
+        if (!turns.length) {
+            body.innerHTML = '<div style="color:#888;text-align:center;padding:24px;font-size:.85rem">Brak zapisanych tur w tej kampanii.</div>';
+            return;
+        }
+        body.innerHTML = '';
+        turns.forEach(t => {
+            const entry = document.createElement('div');
+            entry.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+            if (t.user_text) {
+                entry.innerHTML += `<div style="align-self:flex-end;max-width:82%;background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:12px 12px 4px 12px;padding:10px 12px;font-size:.85rem;color:#ddd;white-space:pre-wrap;word-break:break-word">${escapeHtml(t.user_text)}</div>`;
+            }
+            if (t.assistant_text) {
+                let narr = t.assistant_text;
+                try {
+                    const parsed = JSON.parse(t.assistant_text);
+                    narr = parsed.narrative || parsed.text || t.assistant_text;
+                } catch (_) {}
+                const cleaned = narr.replace(/【[^】]*】/g, '').trim();
+                entry.innerHTML += `<div style="align-self:flex-start;max-width:88%;background:#14141c;border:1px solid rgba(245,158,11,.15);border-radius:12px 12px 12px 4px;padding:10px 12px;font-size:.85rem;color:#e8d5b0;line-height:1.5;white-space:pre-wrap;word-break:break-word">${escapeHtml(cleaned)}</div>`;
+            }
+            const turnLabel = document.createElement('div');
+            turnLabel.style.cssText = 'font-size:.65rem;color:#555;text-align:center;margin-top:-4px';
+            turnLabel.textContent = `— tura ${t.turn_number} —`;
+            entry.appendChild(turnLabel);
+            body.appendChild(entry);
+        });
+        // Scroll to top (oldest turn first)
+        body.scrollTop = 0;
+    } catch (err) {
+        body.innerHTML = `<div style="color:#c55;text-align:center;padding:24px;font-size:.85rem">Błąd ładowania historii: ${escapeHtml(err.message || '?')}</div>`;
+    }
+}
+
 // #900: read-only history of campaigns this hero played (status='archived')
 function renderArchivedCampaigns(archived) {
     const section = document.getElementById('campaigns-history-section');
@@ -452,10 +512,8 @@ function renderArchivedCampaigns(archived) {
             </div>
             <span class="campaign-card__badge">Historia</span>`;
 
-        // Read-only: show info toast, no campaign enter
-        card.addEventListener('click', () => {
-            showToast(`„${escapeHtml(rawTitle)}" — zamknięta kampania. Dostępna tylko jako historia.`, 'info', 3000);
-        });
+        // Read-only: open history viewer modal
+        card.addEventListener('click', () => _openArchivedCampaignViewer(campaign));
 
         list.appendChild(card);
     });

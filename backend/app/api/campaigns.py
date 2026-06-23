@@ -530,6 +530,49 @@ def get_campaign(
         conn.close()
 
 
+@router.get("/campaigns/{campaign_id}/turns-history")
+def get_campaign_turns_player(
+    campaign_id: int,
+    user_id: int | None = Query(None),
+    limit: int = Query(default=200, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+):
+    """#900: Read-only turn history for archived campaign viewer (player-facing).
+
+    Works for campaigns with any status — owner check via user_id/JWT.
+    Returns turns oldest-first for chronological reading.
+    """
+    effective_uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        camp = conn.execute(
+            "SELECT id, owner_user_id, title, status FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if effective_uid and int(camp["owner_user_id"]) != int(effective_uid):
+            raise HTTPException(status_code=403, detail="Not your campaign")
+
+        rows = conn.execute(
+            """SELECT turn_number, user_text, assistant_text, created_at
+               FROM campaign_turns
+               WHERE campaign_id = ?
+               ORDER BY turn_number ASC, id ASC
+               LIMIT ?""",
+            (campaign_id, limit),
+        ).fetchall()
+        return {
+            "campaign_id": campaign_id,
+            "title": camp["title"],
+            "status": camp["status"],
+            "turns": [dict(r) for r in rows],
+        }
+    finally:
+        conn.close()
+
+
 @router.patch("/campaigns/{campaign_id}/gm-plan")
 def patch_campaign_gm_plan(
     campaign_id: int,
