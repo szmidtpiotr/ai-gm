@@ -88,10 +88,10 @@ def create_lobby(
 
         cur = conn.execute(
             """INSERT INTO campaigns
-               (title, system_id, owner_user_id, mode, status,
+               (title, system_id, owner_user_id, model_id, mode, status,
                 round_timer_hours, round_timer_minutes, max_players, host_user_id, lobby_status,
                 template_id, gm_plan_json)
-               VALUES (?, ?, ?, 'multiplayer', 'active', ?, ?, ?, ?, 'open', ?, ?)""",
+               VALUES (?, ?, ?, 'default', 'multiplayer', 'active', ?, ?, ?, ?, 'open', ?, ?)""",
             (lobby_title, body.system_id, uid,
              max(1, body.round_timer_minutes // 60), body.round_timer_minutes,
              body.max_players, uid, template_id, gm_plan_json),
