@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=952-r3">
+  <link rel="stylesheet" href="./css/styles.css?v=952-r4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -882,13 +882,11 @@
           <!-- Chip czasu dnia (☀/🌙 D1·Rano) — ustępuje miejsca klastrowi lochu (#952) -->
           <span class="header__clock-chip" id="header-clock" aria-label="Czas w grze" hidden></span>
           <!-- Kontekstowy klaster lochu — w TYM SAMYM pasku, bez drugiego piętra (#952) -->
+          <!-- #952: ikony lochu (mapa/widok komnaty) usunięte z paska — mapa z d-pada (⊕), miniaturka kafla po kliknięciu mapy. -->
           <span class="header__dungeon" id="dungeon-hud" hidden>
             <span class="header__dungeon-label" id="dungeon-hud-label">⛏ Loch</span>
             <span class="header__dungeon-progress" id="dungeon-hud-progress"></span>
             <span class="header__dungeon-room" id="dungeon-hud-room-type"></span>
-            <button type="button" class="header__dungeon-btn" id="dungeon-room-view-btn" title="Pokaż widok komnaty" hidden>🖼</button>
-            <button type="button" class="header__dungeon-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
-            <button type="button" class="header__dungeon-btn" id="dungeon-advance-btn" hidden>Dalej →</button>
           </span>
         </div>
         <!-- HP/mana jako cienkie włoski (hairline) pod imieniem (#952) -->
@@ -2275,10 +2273,10 @@
   <script src="./js/screens/heroes.js?v=882-r4"></script>
   <script src="./js/screens/campaigns.js?v=900-guard"></script>
   <script src="./js/screens/wizard.js?v=882-r4"></script>
-  <script src="./js/screens/game.js?v=952-r3"></script>
+  <script src="./js/screens/game.js?v=952-r4"></script>
   <script src="./js/screens/combat_ui.js?v=882-r4"></script>
   <script src="./js/multiplayer_ui.js?v=950-r2"></script>
-  <script src="./js/app.js?v=952-r3"></script>
+  <script src="./js/app.js?v=952-r4"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

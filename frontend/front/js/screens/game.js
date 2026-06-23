@@ -11,13 +11,13 @@ function renderClock(state) {
             el.textContent = '';
             el.hidden = true;
         } else {
-            // #952 — chip "☀ D1 · 08:00" (ikona = pora dnia, kolor = period, godzina jawna).
+            // #952 — chip "☀ Rano · 08:00" (ikona+kolor = pora dnia, słowo pory + godzina).
             const period = state.period || '';
             const icon = (period === 'Noc' || period === 'Wieczór') ? '🌙' : '☀';
-            const day = state.day != null ? state.day : '';
             const hour = state.hour_str || '';
-            el.textContent = hour ? `${icon} D${day} · ${hour}` : (day ? `${icon} D${day}` : `${icon}`);
-            el.title = state.display; // pełny opis w tooltipie
+            const parts = [period, hour].filter(Boolean).join(' · ');
+            el.textContent = parts ? `${icon} ${parts}` : `${icon}`;
+            el.title = state.display; // pełny opis (Dzień N, ...) w tooltipie
             el.hidden = false;
             el.dataset.period = period;
         }
