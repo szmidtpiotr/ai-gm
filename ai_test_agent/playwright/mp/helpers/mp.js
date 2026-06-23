@@ -155,4 +155,35 @@ async function setupMpViaApi(users, { title = "#MP-pw", timer = 1 } = {}) {
   return { campaignId, members: users };
 }
 
-module.exports = { BACKEND, MP_PASSWORD, api, loginAs, ensureMpUsers, setupMpViaApi };
+// Same as setupMpViaApi but stops BEFORE /start — leaves an open lobby so lobby-screen
+// specs (kick, invite) can act on it.
+async function setupMpLobbyViaApi(users, { title = "#MP-pw-lobby", timer = 1 } = {}) {
+  const players = users.filter((u) => u.role !== "spectator");
+  const spectators = users.filter((u) => u.role === "spectator");
+  const host = players[0];
+
+  const created = await api("POST", "/api/multiplayer/campaigns", {
+    userId: host.userId,
+    body: { title, system_id: "fantasy", round_timer_minutes: timer, max_players: Math.max(players.length + spectators.length, 2) },
+  });
+  if (created.status !== 200) throw new Error(`create lobby failed: ${created.status} ${JSON.stringify(created.body)}`);
+  const campaignId = created.body.campaign_id;
+
+  if (host.heroId) {
+    await api("POST", `/api/multiplayer/campaigns/${campaignId}/accept`, {
+      userId: host.userId, body: { character_id: host.heroId },
+    });
+  }
+  for (const u of players.slice(1).concat(spectators)) {
+    await api("POST", `/api/multiplayer/campaigns/${campaignId}/invite/username`, {
+      userId: host.userId, body: { username: u.username },
+    });
+    await api("POST", `/api/multiplayer/campaigns/${campaignId}/accept`, {
+      userId: u.userId,
+      body: u.role === "spectator" ? { as_spectator: true } : { character_id: u.heroId },
+    });
+  }
+  return { campaignId, members: users };
+}
+
+module.exports = { BACKEND, MP_PASSWORD, api, loginAs, ensureMpUsers, setupMpViaApi, setupMpLobbyViaApi };

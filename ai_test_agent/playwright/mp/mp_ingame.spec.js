@@ -110,11 +110,12 @@ test("mp party chat: public messages visible to all members", async ({ browser }
   }
 });
 
-// CP13/15 — absence + vote-kick modal.
-// ⚠ GATED: vote-kick UI elements (.mp-kick-suggest / #mp-vote-kick) not yet in index.html,
-// AND absence_warnings setup requires external mp_sweep.py (not runnable from this container).
-// Remove fixme once both are available.
-test.fixme("mp vote-kick: kick modal appears after absence threshold", async ({ browser }) => {
+// CP13/15 — in-game absence-triggered vote-kick SUGGESTION (distinct from lobby host-kick).
+// Lobby host-kick (the path that actually ships) is covered runnable in mp_lobby_kick.spec.js.
+// ⚠ GATED: the in-game suggestion UI (.mp-kick-suggest / #mp-vote-kick) isn't built yet, AND
+// driving absence_warnings>=3 needs external mp_sweep.py (not runnable from this container).
+// Remove fixme once both exist.
+test.fixme("mp vote-kick: in-game kick suggestion appears after absence threshold", async ({ browser }) => {
   const users = await ensureMpUsers(3);
   const { campaignId } = await setupMpViaApi(users, { title: "#MP-pw-kick" });
   // (Prereq) drive absence_warnings>=3 for users[2] via repeated rounds + mp_sweep.py, then:
