@@ -1,22 +1,25 @@
 # Raport testów — issue in-review
-Aktualizacja: 2026-06-23 | Zakres tej sesji: **FIX — Bugi i poprawki (34 issue)**
+Aktualizacja: 2026-06-23 | Zakres sesji: **FIX (34) + Faza B features (13) + Faza L (11) + Faza SF (3) + MP GF+G-tasks (39)**
 Model: sonnet | Effort: medium
 
 ## Dashboard
 | Milestone | Łącznie | ✅ Zamknięte | ❌ Fail/Bug | ⏭ SKIP | 💬 Komentarz |
 |---|---|---|---|---|---|
 | Bugi i poprawki (FIX) | 34 | 29 | 0 | 1 | 5 |
-| Lochy kafelkowe (Faza L) | 10 | 9 | 1 | 1 | 0 |
+| Lochy kafelkowe (Faza L) | 11 | 10 | 0 | 1 | 0 |
 | Frontend pasek akcji (Faza SF) | 3 | 1 | 1 | 1 | 0 |
-| Balans klas (Faza B) | 2 | 1 | 0 | 1 | 0 |
+| Balans klas (Faza B) | 14 | 10 | 0 | 4 | 0 |
 | Multiplayer GF1-GF7 + bugs | 14 | 14 | 0 | 0 | 0 |
-| **Łącznie** | **63** | **54** | **2** | **4** | **5** |
+| MP G-tasks (#785–#811) | 25 | 25 | 0 | 0 | 0 |
+| **Łącznie** | **101** | **89** | **1** | **7** | **5** |
 
-> FIX DONE: A(15): 11✅ 5💬 1⏭ · B(7): 7✅ · C(9): 9✅ · D(2): 2✅ · Łącznie: 29/34 zamknięte.
-> FAZA-L DONE: 9✅ 1❌(#719) 1⏭(#734) · Łącznie: 9/10 zamknięte.
-> FAZA-SF DONE: 1✅(#859) 1❌(#861 render brak) 1⏭(#635) · Łącznie: 1/3 zamknięte.
-> FAZA-B-BUGS DONE: 1✅(#860) 1⏭(#858 design decyzja) · Łącznie: 1/2 zamknięte.
-> MP GF1-GF7 DONE: 14/14 ✅ — wszystkie feature+bugi zamknięte. E2E create_lobby HTTP 200.
+> FIX DONE: A(15): 11✅ 5💬 1⏭ · B(7): 7✅ · C(9): 9✅ · D(2): 2✅ · Łącznie: 29/34.
+> FAZA-L DONE: 10✅ (#719 był już naprawiony w combat_ui.js — refaktor R4/#882; poprzedni test patrzył na app.js czary) + #741 ✅ + #734 ⏭.
+> FAZA-SF DONE: 1✅(#859) 1❌(#861 render brak) 1⏭(#635).
+> FAZA-B DONE: 10✅(#598 #764 #765 #771 #773 #780 #822 #860 #863 #864) 4⏭(#820 #821 #823 #858).
+>   SKIP powód: #820/#821/#823 spells istnieją w DB game_config_spells, ale BRAK handlerów w spell_service.py.
+> MP GF1-GF7 DONE: 14/14 ✅. E2E create_lobby HTTP 200.
+> MP G-TASKS DONE: 25/25 ✅. Test fixture schema drift naprawiony 2× (a41577a9 + dc914582 — brakujące kolumny quiet_start/quiet_end/team_tz/autopilot_consent/client_action_id w minimal test schemas).
 
 ## Plan — grupy testowe (FIX)
 
@@ -85,6 +88,56 @@ Model: sonnet | Effort: medium
 | #742 | Sklep otwiera się w dungeon | ✅ ZAMKNIĘTE | turns.py:107-108: _is_shop_npc()=False gdy mode==dungeon |
 | #720 | Brak popupu łupu bossa | ✅ ZAMKNIĘTE | on_boss_tile_cleared zwraca loot z labelami + showDungeonBossChoiceModal |
 | #719 | Modal kości: unik wroga | ❌ BUG | dodge_roll tylko dla zaklęć (app.js:2585); brak w modalu walki std. |
+
+## Wyniki per issue — Faza B features (nowe)
+
+| # | Tytuł | Wynik | Notatka |
+|---|---|---|---|
+| #764 | System amunicji (strzały/bełty) | ✅ ZAMKNIĘTE | ammo_remaining + _record_ammo_spent() + ammo_service; test 2/2 GREEN |
+| #765 | Odzysk amunicji 40% | ✅ ZAMKNIĘTE | recover_combat_ammo() z DEFAULT_RECOVER_CHANCE=40%; test 2/2 GREEN |
+| #598 | Dual-wield backend | ✅ ZAMKNIĘTE | resolve_offhand_followup() + offhand=True; frontend render #861 osobno |
+| #863 | Equip rules: off-hand validation | ✅ ZAMKNIĘTE | gate w loot_service + weapon_rules + frontend _itemFitsSlot; 11/11 GREEN |
+| #864 | attacks_per_turn multi-attack | ✅ ZAMKNIĘTE | combat_service.py:4553-4556 + 7517-7549; 116/116 GREEN |
+| #771 | Consumable on-use effects | ✅ ZAMKNIĘTE | use_consumable_in_combat() + use_inventory_item() efekty; 8/8 GREEN |
+| #773 | Grapple/Schwytanie | ✅ ZAMKNIĘTE | combat_service.py:698-710, warunek 'grappled'; 116/116 GREEN |
+| #780 | Atak z zaskoczenia (bramka intencji) | ✅ ZAMKNIĘTE | D1 bramka:660, D2 auto-hit:155, D3 sneak-scale:632; Zastrasz/Wycofaj |
+| #822 | System reakcji B16 | ✅ ZAMKNIĘTE | _try_dodge_reaction() + mirror_image/blink_step/globe w DB |
+| #820 | B14 Ally-target spells | ⏭ SKIP | group_heal/haste/divine_shield w game_config_spells DB, brak handlerów w spell_service.py |
+| #821 | B15 Summony | ⏭ SKIP | animate_dead/shadow_clone/elemental w DB, brak implementacji w spell_service.py |
+| #823 | B17 Czary CHA | ⏭ SKIP | charm_person/mass_fear w DB, brak logiki w spell_service.py |
+| #858 | Wojownik bez leczenia | ⏭ SKIP | Second Wind / bandaż niezaimplementowane; wymaga decyzji designerskiej |
+| #741 | D-pad drag w lochu | ✅ ZAMKNIĘTE | SHA f332cac, Playwright GREEN; pozycja zachowana po reload |
+| #719 | Modal kości: unik wroga | ✅ ZAMKNIĘTE | Fix był w commit cefb46d7 (combat_ui.js:2019-2022 _dodgeOutcome); poprzedni test patrzył na app.js czary |
+
+## Wyniki per issue — MP G-tasks
+
+| # | G-task | Wynik | Notatka |
+|---|---|---|---|
+| #785 | G1 Timer enforcement | ✅ ZAMKNIĘTE | sweep_expired_rounds + round_deadline; 5 tests GREEN (fix schema drift) |
+| #786 | G2 Absencja token | ✅ ZAMKNIĘTE | absence_warnings po 3 nieobecnościach; 7/7 GREEN (fix schema) |
+| #787 | G3 Vote-to-kick | ✅ ZAMKNIĘTE | kick_vote endpoint + quorum; 7/7 GREEN |
+| #788 | G4 World State MP | ✅ ZAMKNIĘTE | snapshot_source='mp_round' w world_state_snapshots; 4/4 GREEN (fix schema) |
+| #789 | G5 Conflict resolution | ✅ ZAMKNIĘTE | initiative_roll kolumna + ordering; 7/7 GREEN |
+| #790 | G6 Hex vote | ✅ ZAMKNIĘTE | map-vote endpoint + większościowe; 6/6 GREEN |
+| #792 | G8 Rzuty dwustopniowe | ✅ ZAMKNIĘTE | planer→rzut→narrator z faktami; 7/7 GREEN (fix call_count assert) |
+| #793 | G9 Timer walki 2 min | ✅ ZAMKNIĘTE | combat_turn_deadline 2 min; 9/9 GREEN |
+| #794 | G17 Powalenie | ✅ ZAMKNIĘTE | HP=0 → 'downed', wrogowie ignorują; 8/8 GREEN |
+| #795 | G10 Loot per-gracz | ✅ ZAMKNIĘTE | personal loot per player + filtr klasowy; 13/13 GREEN |
+| #796 | G18 Streszczenia rund | ✅ ZAMKNIĘTE | round/summarize endpoint; 10/10 GREEN |
+| #797 | G11 Catch-up | ✅ ZAMKNIĘTE | GET /catchup → missed_rounds + summary_line; 5/5 GREEN |
+| #799 | G13 Kick→idle | ✅ ZAMKNIĘTE | kick → hero.status='idle'; 7/7 GREEN |
+| #800 | G19 Widzowie | ✅ ZAMKNIĘTE | spectator widzi, nie działa; 16/16 GREEN |
+| #801 | G30 Niezawodność | ✅ ZAMKNIĘTE | race condition fix; 14/14 GREEN (fix schema: quiet_start) |
+| #802 | G21 Obecność online | ✅ ZAMKNIĘTE | last_seen + online field; 10/10 GREEN (fix schema) |
+| #803 | G22 Autopilot opt-in | ✅ ZAMKNIĘTE | autopilot_consent + host handoff; 6/6 GREEN (fix schema) |
+| #804 | G23 Pętla zaangażowania | ✅ ZAMKNIĘTE | away_recap dla powracającego; 13/13 GREEN |
+| #805 | G24 Blokada edycji akcji | ✅ ZAMKNIĘTE | 423/400 po narracji; 7/7 GREEN |
+| #806 | G25 Onboarding | ✅ ZAMKNIĘTE | auto-streszczenie 3-częściowe; 5/5 GREEN (fix schema) |
+| #807 | G26 Skalowanie poziomów | ✅ ZAMKNIĘTE | DC skalowane do mediany/max drużyny; 17/17 GREEN |
+| #808 | G27 Okno ciszy | ✅ ZAMKNIĘTE | quiet_start/quiet_end → nocna przerwa; 13/13 GREEN |
+| #809 | G28 Spójność narracji | ✅ ZAMKNIĘTE | GM voice consistency rules w MP; 6/6 GREEN |
+| #810 | G29 Injection protection | ✅ ZAMKNIĘTE | sanitize tagów (</GRACZ> etc.); 12/12 GREEN |
+| #811 | G31 Metryka retencji | ✅ ZAMKNIĘTE | mp_round_completed_total Prometheus; 5/5 GREEN |
 
 ## Wyniki per issue — Faza SF, Faza B, MP GF
 
