@@ -3865,12 +3865,17 @@ function initDpadDrag() {
         baseLeft = r.left; baseTop = r.top;
         startX = e.clientX; startY = e.clientY;
         dragging = false;
-        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        // #957: NIE chwytaj wskaźnika przy tapie — capture na kontenerze tłumiłby click
+        // przycisków-dzieci (kierunki + ⊕). Capture dopiero gdy ruch przekroczy próg dragu.
 
         const onMove = (ev) => {
             const dx = ev.clientX - startX, dy = ev.clientY - startY;
             if (!dragging && Math.hypot(dx, dy) < _DPAD_DRAG_THRESHOLD) return; // jeszcze tap
-            if (!dragging) { dragging = true; nav.classList.add('is-dragging'); }
+            if (!dragging) {
+                dragging = true;
+                nav.classList.add('is-dragging');
+                try { handle.setPointerCapture(ev.pointerId); } catch (_) {}  // #957: dopiero przy realnym dragu
+            }
             const r2 = nav.getBoundingClientRect();
             const { left, top } = _clampDpadPos(baseLeft + dx, baseTop + dy, r2.width, r2.height);
             _applyDpadPos(nav, left, top);
