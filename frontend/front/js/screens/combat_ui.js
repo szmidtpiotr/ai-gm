@@ -573,6 +573,9 @@ function showCombatUI() {
     pendingBossLoot = null;   // L8: clear any stale boss drop from a prior fight
     lastRenderedCombatTurnId = 0;
     elements.combatBanner.hidden = false;
+    // #967: wejście w walkę przywraca pasek przygody, jeśli był schowany — w walce
+    // HUD pozostaje przyklejony do góry (auto-hide wyłączony, patrz setupHeaderAutoHide).
+    document.querySelector('.header--game')?.classList.remove('header--hidden');
     elements.combatComposer.hidden = false;
     elements.composer?.classList.add('composer--hidden');
     // Show spell button for Scholar
