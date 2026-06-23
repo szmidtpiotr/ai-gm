@@ -16,15 +16,16 @@ import pytest
 
 # ─── Test 1 — Reroll kosztuje więcej niż nałożenie (wszystkie tiery) ─────────
 
-def test_reroll_costs_exceed_apply_costs():
-    """REROLL_COSTS muszą być wyższe od APPLY_COSTS dla każdego tieru (decyzja U2)."""
+def test_reroll_costs_below_apply_costs():
+    """REROLL_COSTS są niższe od APPLY_COSTS — decyzja Piotra (#943): reroll tańszy
+    niż nałożenie, ceny jak dawniej 100/350/700 vs apply 150/500/1200."""
     from app.services.crafter_service import APPLY_COSTS, REROLL_COSTS
 
     for tier in APPLY_COSTS:
         apply_cost = APPLY_COSTS[tier]
         reroll_cost = REROLL_COSTS.get(tier, 0)
-        assert reroll_cost > apply_cost, (
-            f"Tier {tier}: reroll ({reroll_cost}g) musi być droższy niż nałożenie ({apply_cost}g)"
+        assert reroll_cost < apply_cost, (
+            f"Tier {tier}: reroll ({reroll_cost}g) ma być tańszy niż nałożenie ({apply_cost}g)"
         )
 
 

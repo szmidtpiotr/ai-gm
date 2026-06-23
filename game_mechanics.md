@@ -3467,13 +3467,13 @@ grind loch / walka → złoto + przedmioty
 - NPC rzemieślnik (płatnerz / enchanter) z flagą `is_crafter=1` (analogicznie do `is_shop`).
 - Dwie operacje na posiadanym egzemplarzu:
   - **Nałóż afiks** — dodaj losowy afiks z puli pasującej do typu/tieru na wolny slot.
-  - **Reroll afiksu** — wymień istniejący afiks na inny losowy z puli. Koszt wyższy niż nałożenie (~1.3×).
+  - **Reroll afiksu** — wymień istniejący afiks na inny losowy z puli. Koszt NIŻSZY niż nałożenie (decyzja Piotra #943: reroll tani — 100/350/700 vs apply 150/500/1200).
 - **Tabela stałych kosztów (U2 #510, wartości startowe — Numbers Policy):**
 
 | Operacja | T1 | T2 | T3 |
 |---|---|---|---|
 | Nałóż afiks | 150g | 500g | 1200g |
-| Reroll afiksu | 200g | 650g | 1500g |
+| Reroll afiksu | 100g | 350g | 700g |
 | Upgrade T→T+1 | 350g | 700g | — |
 
 - Zużywa złoto z grindu, domyka pętlę z systemem afiksów (CZĘŚĆ X).
