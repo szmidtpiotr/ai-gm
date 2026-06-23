@@ -627,6 +627,26 @@ async function showCodexLibrary() {
     overlay.querySelector('.onboarding-card__btn-ok, .codex-close')?.focus();
 }
 
+
+// ── #901 — Księga Zasad iframe overlay ────────────────────────────────────
+function showRulesBook() {
+    const overlay = document.createElement("div");
+    overlay.className = "rules-book-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.innerHTML = `
+        <div class="rules-book-overlay__header">
+            <span class="rules-book-overlay__title">Księga Zasad</span>
+            <button type="button" class="rules-book-overlay__close" aria-label="Zamknij">✕ Zamknij</button>
+        </div>
+        <iframe class="rules-book-overlay__frame" src="/rules/" title="Ksiega Zasad"></iframe>`;
+    const close = () => overlay.remove();
+    overlay.querySelector(".rules-book-overlay__close").addEventListener("click", close);
+    overlay.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    document.body.appendChild(overlay);
+    overlay.querySelector(".rules-book-overlay__close").focus();
+}
+
 // ── E28: Tutorial offer for first-time players ───────────────────────────────
 function _askTutorial() {
     return new Promise((resolve) => {
@@ -1106,6 +1126,10 @@ function initEventListeners() {
         closeSettings();
         loadProfilePage();
     });
+    document.getElementById('open-kodeks-gracza-btn')?.addEventListener('click', () => {
+        closeSettings();
+        showCodexLibrary();
+    });
     document.getElementById('profile-invite-btn')?.addEventListener('click', openInviteModal);
     // Invite modal
     document.getElementById('invite-modal-backdrop')?.addEventListener('click', closeInviteModal);
@@ -1217,7 +1241,7 @@ function initEventListeners() {
     });
     elements.btnOpenSettings?.addEventListener('click', toggleSettings);
     elements.btnOpenJournal?.addEventListener('click', toggleJournal);
-    elements.btnOpenCodex?.addEventListener('click', showCodexLibrary);
+    elements.btnOpenCodex?.addEventListener('click', showRulesBook);
 
     // Combat
     elements.btnCombatAttack?.addEventListener('click', onCombatAttackButton);  // B6c (#651): mag → menu ataku
