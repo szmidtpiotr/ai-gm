@@ -220,6 +220,7 @@ class AccountPatchReq(BaseModel):
     display_name: str | None = None
     is_active: int | None = None
     is_admin: int | None = Field(default=None, description="0 = player, 1 = admin")
+    is_tester: int | None = Field(default=None, description="0 = regular, 1 = tester (bug report FAB)")
 
 
 class AccountPasswordResetReq(BaseModel):
@@ -2251,6 +2252,7 @@ def admin_patch_account(
             display_name=req.display_name,
             is_active=req.is_active,
             is_admin=req.is_admin,
+            is_tester=req.is_tester,
         )
         return {"item": item}
     except KeyError:
