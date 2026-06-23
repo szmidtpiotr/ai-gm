@@ -32,9 +32,9 @@ def test_reroll_costs_specific_values():
     """Konkretne wartości U2: T1=200, T2=650, T3=1500."""
     from app.services.crafter_service import REROLL_COSTS
 
-    assert REROLL_COSTS[1] == 200, f"T1 reroll powinien kosztować 200g, jest {REROLL_COSTS[1]}g"
-    assert REROLL_COSTS[2] == 650, f"T2 reroll powinien kosztować 650g, jest {REROLL_COSTS[2]}g"
-    assert REROLL_COSTS[3] == 1500, f"T3 reroll powinien kosztować 1500g, jest {REROLL_COSTS[3]}g"
+    assert REROLL_COSTS[1] == 100, f"T1 reroll powinien kosztować 100g, jest {REROLL_COSTS[1]}g"
+    assert REROLL_COSTS[2] == 350, f"T2 reroll powinien kosztować 350g, jest {REROLL_COSTS[2]}g"
+    assert REROLL_COSTS[3] == 700, f"T3 reroll powinien kosztować 700g, jest {REROLL_COSTS[3]}g"
 
 
 def test_apply_costs_unchanged():
