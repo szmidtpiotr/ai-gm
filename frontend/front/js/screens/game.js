@@ -11,9 +11,14 @@ function renderClock(state) {
             el.textContent = '';
             el.hidden = true;
         } else {
-            el.textContent = state.display;
+            // #952 — kompaktowy chip "☀ D1·Rano" (ikona = pora dnia) zamiast pełnego wiersza.
+            const period = state.period || '';
+            const icon = (period === 'Noc' || period === 'Wieczór') ? '🌙' : '☀';
+            const day = state.day != null ? state.day : '';
+            el.textContent = day !== '' ? `${icon} D${day}·${period}` : `${icon} ${period}`;
+            el.title = state.display; // pełny opis w tooltipie
             el.hidden = false;
-            el.dataset.period = state.period || '';
+            el.dataset.period = period;
         }
     }
     // Time-of-day overlay — re-apply with current period

@@ -1265,6 +1265,11 @@ function initEventListeners() {
     elements.btnOpenJournal?.addEventListener('click', toggleJournal);
     elements.btnOpenCodex?.addEventListener('click', showRulesBook);
 
+    // #952 — hamburger ☰ dropdown menu (akcje drugorzędne + wyjście z lochu)
+    setupGameMenu();
+    // #952 — auto-hide paska przygody przy czytaniu narracji
+    setupHeaderAutoHide();
+
     // Combat
     elements.btnCombatAttack?.addEventListener('click', onCombatAttackButton);  // B6c (#651): mag → menu ataku
     elements.btnCombatFlee?.addEventListener('click', handleCombatFlee);
@@ -2796,6 +2801,60 @@ function _maybeShowDungeonCodexCard(cards) {
     showOnboardingCards(cards);
 }
 
+// #952 — hamburger ☰ dropdown: akcje drugorzędne + (w lochu) wyjście z krypty.
+function setupGameMenu() {
+    const btn = document.getElementById('game-menu-btn');
+    const menu = document.getElementById('game-menu');
+    if (!btn || !menu) return;
+
+    const closeMenu = () => {
+        menu.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+    };
+    const openMenu = () => {
+        menu.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+    };
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menu.hidden) openMenu(); else closeMenu();
+    });
+    // Klik pozycji menu → wykonaj akcję (handler już podpięty pod ID) i zamknij.
+    menu.querySelectorAll('.game-menu__item').forEach((item) => {
+        item.addEventListener('click', () => closeMenu());
+    });
+    // Klik poza menu / Escape → zamknij.
+    document.addEventListener('click', (e) => {
+        if (menu.hidden) return;
+        if (!menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) closeMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !menu.hidden) closeMenu();
+    });
+}
+
+// #952 — auto-hide paska przygody: scroll w dół narracji chowa pasek, scroll w górę go przywraca.
+function setupHeaderAutoHide() {
+    const scroller = document.getElementById('chat-messages');
+    const header = document.querySelector('.header--game');
+    if (!scroller || !header) return;
+    let lastY = 0;
+    const THRESHOLD = 8; // px — wartość startowa, do strojenia
+    scroller.addEventListener('scroll', () => {
+        const y = scroller.scrollTop;
+        const delta = y - lastY;
+        if (y < 40) {
+            header.classList.remove('header--hidden'); // przy górze zawsze widoczny
+        } else if (delta > THRESHOLD) {
+            header.classList.add('header--hidden');     // scroll w dół → schowaj
+        } else if (delta < -THRESHOLD) {
+            header.classList.remove('header--hidden');  // scroll w górę → pokaż
+        }
+        lastY = y;
+    }, { passive: true });
+}
+
 function updateDungeonHUD() {
     const run = _activeDungeonRun;
     if (!run) return;
@@ -2847,26 +2906,24 @@ function updateDungeonHUD() {
     }
 }
 
+// #952 — pasek lochu scalony z górną belką. Riddle panel pozycjonowany tuż pod paskiem.
 function _positionDungeonHUD() {
-    const hud = document.getElementById('dungeon-hud');
     const gameScreen = document.getElementById('game-screen');
-    if (!hud || !gameScreen) return;
-    const gr = gameScreen.getBoundingClientRect();
+    if (!gameScreen) return;
     const header = gameScreen.querySelector('.header');
-    const headerH = header ? header.getBoundingClientRect().height : 64;
+    const headerH = header ? header.getBoundingClientRect().height : 50;
     document.documentElement.style.setProperty('--dungeon-hud-top', `${headerH}px`);
-    document.documentElement.style.setProperty('--dungeon-hud-left', `${gr.left}px`);
-    document.documentElement.style.setProperty('--dungeon-hud-width', `${gr.width}px`);
-    requestAnimationFrame(() => {
-        const hudH = hud.getBoundingClientRect().height;
-        document.documentElement.style.setProperty('--dungeon-hud-h', `${hudH}px`);
-    });
+    document.documentElement.style.setProperty('--dungeon-hud-h', '0px');
 }
 
 function showDungeonHUD(show) {
-    const hud = document.getElementById('dungeon-hud');
-    if (!hud) return;
-    hud.hidden = !show;
+    const hud = document.getElementById('dungeon-hud');           // inline klaster w pasku
+    const clock = document.getElementById('header-clock');        // chip czasu — ustępuje w lochu
+    const exitItem = document.getElementById('dungeon-exit-btn'); // pozycja "Wyjdź z krypty" w menu ☰
+    if (hud) hud.hidden = !show;
+    if (exitItem) exitItem.hidden = !show;
+    if (clock && show) clock.hidden = true; // w lochu klaster zastępuje chip czasu
+    if (clock && !show && clock.textContent) clock.hidden = false; // po wyjściu z lochu chip wraca
     const gameScreen = document.getElementById('game-screen');
     if (show) {
         _positionDungeonHUD();
@@ -2876,7 +2933,7 @@ function showDungeonHUD(show) {
     }
 }
 
-// Reposition HUD on window resize
+// Reposition riddle-panel anchor on window resize
 window.addEventListener('resize', () => {
     if (!document.getElementById('dungeon-hud')?.hidden) _positionDungeonHUD();
 });

@@ -616,6 +616,14 @@ function filterTableGeneric(input, tableId, nameClass) {
         if (!items.length) { panel.innerHTML = '<p style="text-align:center;padding:24px;color:var(--t3)">Brak tur.</p>'; return; }
 
         const renderTurns = (debug) => {
+          let _cid = 0;
+          const _clamp = (text, lines=5) => {
+            if (!text) return '';
+            if (text.length <= 150) return _esc(text);
+            const id = 'tx953_' + (++_cid);
+            return `<span id="${id}" style="display:-webkit-box;-webkit-line-clamp:${lines};-webkit-box-orient:vertical;overflow:hidden">${_esc(text)}</span>` +
+              `<button onclick="var e=document.getElementById('${id}');if(e.style.webkitLineClamp!==''){e.style.webkitLineClamp='';e.style.overflow='visible';e.style.display='block';this.textContent='Zwiń';}else{e.style.webkitLineClamp='${lines}';e.style.overflow='hidden';e.style.display='-webkit-box';this.textContent='Rozwiń';}" style="font-size:0.7rem;color:var(--amber);background:none;border:none;cursor:pointer;padding:2px 0 0;display:block">Rozwiń</button>`;
+          };
           return `<div style="padding:0">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
               <span style="font-size:0.75rem;color:var(--t3)">Ostatnie ${items.length} tur</span>
@@ -648,8 +656,8 @@ function filterTableGeneric(input, tableId, nameClass) {
                     <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
                     <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
                   </div>
-                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_esc((t.user_text||'').slice(0,300))}</div>
-                  ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_esc(narrative.slice(0,400))}${narrative.length>400?'…':''}</div>` : ''}
+                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_clamp(t.user_text||'')}</div>
+                  ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_clamp(narrative)}</div>` : ''}
                   ${rawTags.length ? `<div style="margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px">${rawTags.map(tag=>`<code style="font-size:0.7rem;background:#1a1a2e;color:#7eb8f7;padding:2px 6px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
                   ${Object.keys(extraFields).length ? `<details style="margin-top:4px"><summary style="font-size:0.72rem;color:var(--t3);cursor:pointer">JSON fields (${Object.keys(extraFields).length})</summary><pre style="font-size:0.7rem;color:var(--t2);background:#0d0d1a;border-radius:4px;padding:8px;overflow-x:auto;margin-top:4px;max-height:200px;overflow-y:auto">${_esc(JSON.stringify(extraFields,null,2))}</pre></details>` : ''}
                 </div>`;
@@ -659,8 +667,8 @@ function filterTableGeneric(input, tableId, nameClass) {
                     <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
                     <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
                   </div>
-                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_esc((t.user_text||'').slice(0,200))}</div>
-                  <div style="font-size:0.78rem;color:var(--t3)">${_esc(narrative.slice(0,300))}${narrative.length>300?'…':''}</div>
+                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_clamp(t.user_text||'')}</div>
+                  <div style="font-size:0.78rem;color:var(--t3)">${_clamp(narrative)}</div>
                   ${rawTags.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${rawTags.map(tag=>`<code style="font-size:0.68rem;background:var(--surface);color:var(--t3);padding:1px 5px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
                 </div>`;
               }

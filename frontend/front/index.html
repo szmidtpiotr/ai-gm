@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=896-fouc-fix-2026-06-23">
+  <link rel="stylesheet" href="./css/styles.css?v=952-adventure-bar">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -869,50 +869,79 @@
   <div id="game-screen" class="screen">
     <header class="header header--game">
       <button type="button" class="header__avatar" id="home-btn" title="Postacie (główny ekran)">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 11.5 12 4l9 7.5"/>
           <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>
         </svg>
       </button>
       <div class="header__center">
-        <h1 class="header__title" id="character-name-display">Bohater</h1>
-        <p class="header__subtitle" id="character-stats-display">Poziom 1 • 29/29 HP</p>
-        <p class="header__clock" id="header-clock" aria-label="Czas w grze"></p>
-        <div class="header-hp-bar">
-          <div class="header-hp-bar__fill" id="header-hp-bar-fill" style="width:100%"></div>
+        <div class="header__id-row">
+          <h1 class="header__title" id="character-name-display">Bohater</h1>
+          <!-- Poziom • HP: nie jest już stałym wierszem — tylko tooltip/karta postaci (#952) -->
+          <p class="header__subtitle" id="character-stats-display" hidden>Poziom 1 • 29/29 HP</p>
+          <!-- Chip czasu dnia (☀/🌙 D1·Rano) — ustępuje miejsca klastrowi lochu (#952) -->
+          <span class="header__clock-chip" id="header-clock" aria-label="Czas w grze" hidden></span>
+          <!-- Kontekstowy klaster lochu — w TYM SAMYM pasku, bez drugiego piętra (#952) -->
+          <span class="header__dungeon" id="dungeon-hud" hidden>
+            <span class="header__dungeon-label" id="dungeon-hud-label">⛏ Loch</span>
+            <span class="header__dungeon-progress" id="dungeon-hud-progress"></span>
+            <span class="header__dungeon-room" id="dungeon-hud-room-type"></span>
+            <button type="button" class="header__dungeon-btn" id="dungeon-room-view-btn" title="Pokaż widok komnaty" hidden>🖼</button>
+            <button type="button" class="header__dungeon-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
+            <button type="button" class="header__dungeon-btn" id="dungeon-advance-btn" hidden>Dalej →</button>
+          </span>
         </div>
-        <div class="header-mana-bar" id="header-mana-bar" hidden>
-          <div class="header-mana-bar__fill" id="header-mana-bar-fill" style="width:100%"></div>
+        <!-- HP/mana jako cienkie włoski (hairline) pod imieniem (#952) -->
+        <div class="header__hairlines">
+          <div class="header-hp-bar">
+            <div class="header-hp-bar__fill" id="header-hp-bar-fill" style="width:100%"></div>
+          </div>
+          <div class="header-mana-bar" id="header-mana-bar" hidden>
+            <div class="header-mana-bar__fill" id="header-mana-bar-fill" style="width:100%"></div>
+          </div>
         </div>
         <div id="quest-bar" class="quest-bar" hidden></div>
       </div>
       <button type="button" class="header__action" id="open-map-btn" title="Mapa świata">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
           <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
         </svg>
       </button>
-      <button type="button" class="header__action" id="open-journal-btn" title="Dziennik podróżnika">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-          <line x1="9" y1="7" x2="16" y2="7"/>
-          <line x1="9" y1="11" x2="16" y2="11"/>
-          <line x1="9" y1="15" x2="13" y2="15"/>
+      <button type="button" class="header__action" id="game-menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <button type="button" class="header__action" id="open-codex-btn" title="Księga Zasad">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-        </svg>
-      </button>
-      <button type="button" class="header__action" id="open-settings-btn" title="Ustawienia">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </button>
+      <!-- Dropdown menu (#952) — akcje drugorzędne + (w lochu) wyjście -->
+      <div id="game-menu" class="game-menu" role="menu" hidden>
+        <button type="button" class="game-menu__item" id="open-journal-btn" role="menuitem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            <line x1="9" y1="7" x2="16" y2="7"/><line x1="9" y1="11" x2="16" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/>
+          </svg>
+          <span>Dziennik podróżnika</span>
+        </button>
+        <button type="button" class="game-menu__item" id="open-codex-btn" role="menuitem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          <span>Księga Zasad</span>
+        </button>
+        <button type="button" class="game-menu__item" id="open-settings-btn" role="menuitem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Ustawienia</span>
+        </button>
+        <button type="button" class="game-menu__item game-menu__item--exit" id="dungeon-exit-btn" role="menuitem" hidden>
+          <span aria-hidden="true">✕</span>
+          <span>Wyjdź z krypty</span>
+        </button>
+      </div>
     </header>
 
     <!-- Crit-flash overlay (Nat 20 / Nat 1) — T34 -->
@@ -1971,15 +2000,7 @@
   </div>
 
   <!-- Dungeon HUD (shown inside game screen during dungeon run) -->
-  <div id="dungeon-hud" class="dungeon-hud" hidden>
-    <div class="dungeon-hud__label" id="dungeon-hud-label">⛏ Loch</div>
-    <div class="dungeon-hud__progress" id="dungeon-hud-progress"></div>
-    <div class="dungeon-hud__room-type" id="dungeon-hud-room-type"></div>
-    <button type="button" class="dungeon-hud__map-btn" id="dungeon-room-view-btn" title="Pokaż widok komnaty" hidden>🖼</button>
-    <button type="button" class="dungeon-hud__advance" id="dungeon-advance-btn" hidden>Przejdź dalej →</button>
-    <button type="button" class="dungeon-hud__map-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
-    <button type="button" class="dungeon-hud__exit" id="dungeon-exit-btn">✕ Wyjdź</button>
-  </div>
+  <!-- #952: pasek lochu scalony z górną belką gry (header.header--game) — bez drugiego piętra. -->
 
   <!-- Dungeon Riddle Panel -->
   <div id="dungeon-riddle-panel" class="dungeon-riddle-panel" hidden>
@@ -2253,10 +2274,10 @@
   <script src="./js/screens/heroes.js?v=882-r4"></script>
   <script src="./js/screens/campaigns.js?v=900-guard"></script>
   <script src="./js/screens/wizard.js?v=882-r4"></script>
-  <script src="./js/screens/game.js?v=950-r2"></script>
+  <script src="./js/screens/game.js?v=952-adventure-bar"></script>
   <script src="./js/screens/combat_ui.js?v=882-r4"></script>
   <script src="./js/multiplayer_ui.js?v=950-r2"></script>
-  <script src="./js/app.js?v=900-guard"></script>
+  <script src="./js/app.js?v=952-adventure-bar"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

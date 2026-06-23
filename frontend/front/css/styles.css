@@ -172,10 +172,12 @@ body {
 
 .header__center {
   flex: 1;
-  text-align: center;
+  min-width: 0;
+  text-align: left;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  justify-content: center;
   gap: 2px;
 }
 
@@ -183,39 +185,97 @@ body {
   font-size: 20px;
 }
 
+/* #952 — wiersz tożsamości: imię (truncate) + chip czasu / klaster lochu inline */
+.header__id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .header__title {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .header__subtitle {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
+.header__subtitle[hidden] { display: none; }
 
-/* Game clock chip (T5) — "Dzień 3, 14:00 Popołudnie" */
-.header__clock {
+/* Game clock chip (#952) — kompaktowy "☀ D1·Rano" zamiast osobnego wiersza */
+.header__clock-chip {
+  flex-shrink: 0;
   font-family: 'IM Fell English', Georgia, serif;
   font-style: italic;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  margin: 2px 0 0;
-  color: rgba(201, 165, 74, 0.72);
-  transition: color 0.3s ease;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(201, 165, 74, 0.28);
+  background: rgba(201, 165, 74, 0.08);
+  color: rgba(201, 165, 74, 0.85);
+  white-space: nowrap;
+  transition: color 0.3s ease, border-color 0.3s ease;
 }
-.header__clock[hidden] { display: none; }
-.header__clock[data-period="Rano"]       { color: rgba(255, 215, 130, 0.85); }
-.header__clock[data-period="Popołudnie"] { color: rgba(201, 165, 74, 0.75); }
-.header__clock[data-period="Wieczór"]    { color: rgba(220, 130, 80, 0.85); }
-.header__clock[data-period="Noc"]        { color: rgba(120, 140, 200, 0.7); }
+.header__clock-chip[hidden] { display: none; }
+.header__clock-chip[data-period="Rano"]       { color: rgba(255, 215, 130, 0.9);  border-color: rgba(255, 215, 130, 0.3); }
+.header__clock-chip[data-period="Popołudnie"] { color: rgba(201, 165, 74, 0.9);   border-color: rgba(201, 165, 74, 0.3); }
+.header__clock-chip[data-period="Wieczór"]    { color: rgba(220, 130, 80, 0.9);   border-color: rgba(220, 130, 80, 0.32); }
+.header__clock-chip[data-period="Noc"]        { color: rgba(140, 160, 220, 0.85); border-color: rgba(120, 140, 200, 0.32); }
+
+/* #952 — kontekstowy klaster lochu, inline w pasku (zastępuje chip czasu) */
+.header__dungeon {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  font-size: 0.7rem;
+}
+.header__dungeon[hidden] { display: none; }
+.header__dungeon-label {
+  font-family: Cinzel, serif;
+  font-size: 0.72rem;
+  color: #e09030;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(201,117,26,0.4);
+  flex-shrink: 0;
+}
+.header__dungeon-progress { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.header__dungeon-room {
+  font-size: 0.64rem; color: #a08060; text-transform: uppercase;
+  letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.header__dungeon-btn {
+  background: none; border: 1px solid #3a2510; border-radius: 6px;
+  color: #c9a060; font-size: 0.78rem; padding: 2px 7px; cursor: pointer; flex-shrink: 0;
+  line-height: 1;
+}
+.header__dungeon-btn:hover { border-color: #c9751a; color: #e8951a; }
+.header__dungeon-btn[hidden] { display: none; }
+
+/* #952 — HP/mana jako cienkie włoski pod imieniem */
+.header__hairlines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+}
 
 .header-hp-bar {
-  height: 3px;
+  height: 2px;
   background: rgba(255,255,255,0.08);
   border-radius: var(--radius-full);
-  margin-top: 4px;
-  width: 80px;
+  width: 100%;
+  max-width: 220px;
   overflow: hidden;
 }
 
@@ -235,11 +295,11 @@ body {
 }
 
 .header-mana-bar {
-  height: 3px;
+  height: 2px;
   background: rgba(255,255,255,0.08);
   border-radius: var(--radius-full);
-  margin-top: 3px;
-  width: 80px;
+  width: 100%;
+  max-width: 220px;
   overflow: hidden;
 }
 
@@ -334,7 +394,63 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+  min-height: 50px;
+  padding: 6px 12px;
+  gap: 8px;
+  transition: transform 0.25s ease;
 }
+
+/* #952 — auto-hide: pasek chowa się przy czytaniu (scroll w dół), wraca przy scrollu w górę */
+.header--game.header--hidden {
+  transform: translateY(-100%);
+}
+
+/* #952 — kompaktowe ikony akcji w pasku gry */
+.header--game .header__avatar,
+.header--game .header__action {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+/* #952 — dropdown menu ☰ (zawsze kotwiczone pod hamburgerem) */
+.game-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 8px;
+  z-index: 60;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 2px;
+  background: var(--bg-secondary, #1a1206);
+  border: 1px solid var(--border, #3a2510);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+}
+.game-menu[hidden] { display: none; }
+.game-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 7px);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.game-menu__item:hover { background: var(--bg-card, rgba(255,255,255,0.06)); }
+.game-menu__item svg { flex-shrink: 0; color: var(--accent, #c9a54a); }
+.game-menu__item--exit { color: #c06040; }
+.game-menu__item--exit:hover { background: rgba(192,96,64,0.12); }
+.game-menu__item[hidden] { display: none; }
+#game-menu-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 
 /* Login Screen - Mystical Portal */
 #login-screen {
@@ -7824,33 +7940,10 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dungeon-card__arrow { color: #c9751a; font-size: 1.2rem; }
 .dungeon-card__cooldown { font-size: 0.78rem; color: #8a7050; white-space: nowrap; }
 
-/* Dungeon HUD (top strip in game screen) */
-.dungeon-hud { position: fixed; top: var(--dungeon-hud-top, 64px);
-  left: var(--dungeon-hud-left, 0); width: var(--dungeon-hud-width, 100%);
-  z-index: 200;
-  background: linear-gradient(180deg, #211608 0%, #1a1206 100%);
-  border-top: 1px solid #5a3518;
-  border-bottom: 1px solid #5a3518;
-  padding: 7px 16px;
-  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-  box-shadow: 0 2px 12px rgba(201,117,26,0.12); }
-.dungeon-hud[hidden] { display: none; }
-/* Shift game chat down when dungeon HUD is active */
-.game-screen--dungeon #chat-container { padding-top: var(--dungeon-hud-h, 41px); }
-.dungeon-hud__label { font-family: Cinzel, serif; font-size: 0.78rem; color: #e09030;
-  letter-spacing: 0.06em; flex-shrink: 0; text-shadow: 0 0 8px rgba(201,117,26,0.4); }
-.dungeon-hud__progress { display: flex; gap: 5px; flex: 1; align-items: center; }
+/* #952 — pasek lochu scalony z górną belką (header.header__dungeon). Pipy postępu nadal używane. */
 .dungeon-pip { font-size: 0.8rem; opacity: 0.35; transition: opacity 0.2s, transform 0.15s; }
 .dungeon-pip.cleared { opacity: 0.55; }
 .dungeon-pip.current { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 4px #c9751a); }
-.dungeon-hud__room-type { font-size: 0.7rem; color: #a08060; text-transform: uppercase;
-  letter-spacing: 0.1em; white-space: nowrap; }
-.dungeon-hud__advance { background: #c9751a; border: none; border-radius: 6px;
-  color: #0d0904; font-weight: 700; font-size: 0.78rem; padding: 5px 12px; cursor: pointer; }
-.dungeon-hud__advance:hover { background: #e8951a; }
-.dungeon-hud__exit { background: none; border: 1px solid #3a2510; border-radius: 6px;
-  color: #6a5040; font-size: 0.75rem; padding: 4px 8px; cursor: pointer; }
-.dungeon-hud__exit:hover { color: #c06040; border-color: #c06040; }
 
 /* L12 (#681): dungeon movement nav — floating D-pad cluster above the composer.
    Was unstyled (#681 follow-up): raw buttons leaked to the bottom-left of the page. */
