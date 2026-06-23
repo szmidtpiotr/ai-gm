@@ -131,6 +131,28 @@ def test_regenerate_reports_plan_degraded_true_when_still_weak(tmp_path, monkeyp
     assert result["ok"] is True
 
 
+# ─── Pusty plan / brak bohatera — regen sygnalizuje błąd (np. brak postaci) ──
+
+def test_regenerate_raises_when_retry_fails(tmp_path, monkeypatch):
+    """Kampania bez bohatera: retry zwraca (False, 'Brak postaci...') → ValueError → 502."""
+    db = tmp_path / "nohero.db"
+    _seed_db(str(db), plan_degraded=0)
+    # Wymuś pusty plan (kampania bez wygenerowanego planu).
+    conn = sqlite3.connect(str(db))
+    conn.execute("UPDATE campaigns SET gm_plan_json = '{}' WHERE id = 1")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(admin_campaigns, "DB_PATH", str(db))
+
+    def _fake_retry(conn, *, campaign_id, owner_user_id):
+        return False, "Brak postaci w kampanii — nie można zbudować kontekstu planu."
+
+    monkeypatch.setattr(admin_campaigns, "retry_initial_gm_plan_for_campaign", _fake_retry)
+
+    with pytest.raises(ValueError, match="Brak postaci"):
+        admin_campaigns.regenerate_campaign_gm_plan_admin(1)
+
+
 # ─── Backward compat — get_campaign_gm_plan_admin nadal zwraca swoje pola ─────
 
 def test_get_gm_plan_still_returns_core_keys_plus_degraded(tmp_path, monkeypatch):

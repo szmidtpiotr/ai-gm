@@ -563,7 +563,16 @@ function filterTableGeneric(input, tableId, nameClass) {
 
         const arcs = plan?.arcs || {};
         const arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
-        if (!arcList.length) { panel.innerHTML = gravityBadge + degradedBanner + '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
+        if (!arcList.length) {
+          // #966: campaign with no plan at all — offer to generate one (needs a hero).
+          panel.innerHTML = gravityBadge + degradedBanner +
+            `<div style="text-align:center;padding:24px;color:var(--t3)">
+               <p style="margin:0 0 14px">Brak planu GM.</p>
+               <button class="btn btn-sm btn-primary" onclick="regenerateCampPlan(${campId}, this)">♻ Wygeneruj plan MG</button>
+               <p style="font-size:0.72rem;margin:10px 0 0">Wymaga bohatera w kampanii (kontekst postaci).</p>
+             </div>`;
+          return;
+        }
         const activeArcId = plan?.active_arc_id;
         panel.innerHTML = gravityBadge + degradedBanner + arcList.map((arc, arcIdx) => {
           const isActive = arc.status === 'active' || arc.id === activeArcId;
