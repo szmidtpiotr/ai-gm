@@ -9,7 +9,7 @@ import json
 import random
 
 APPLY_COSTS  = {1: 150, 2: 500, 3: 1200}
-REROLL_COSTS = {1: 200, 2: 650, 3: 1500}
+REROLL_COSTS = {1: 100, 2: 350, 3: 700}
 UPGRADE_COSTS = {1: 350, 2: 700}
 
 
