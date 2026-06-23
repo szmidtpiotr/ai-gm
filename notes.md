@@ -54,7 +54,7 @@ Na końcu /playwright-test-report + raport po polsku.
 ```
 Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez pytań" (wychodzisz) · „co następne?" (Claude poda z Planu).
 
-## 🎯 6 poleceń
+## 🎯 7 poleceń
 | Komenda | Kiedy |
 |---|---|
 | „stan?" | gdzie jesteśmy (Plan + STATUS) |
@@ -63,9 +63,44 @@ Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez py
 | `/mass-implement` | wychodzisz, Claude leci listą issues sam |
 | `/playwright-test-report` | sprawdź UI + zgłoś bugi |
 | `/game-screen` | szybki podgląd ekranu |
+| `/test-inreview` | **masowy test wszystkich issue in-review** (patrz niżej) |
 
 ## 🧪 Testowanie — który kiedy
 *bug widać na ekranie?* → `/playwright-test-report` · *liczby w bazie przez wiele tur?* → `/game-test-player-screenshot` · *cały tryb grywalny?* → `/game-smoke[-dungeon]` · *szybki podgląd?* → `/game-screen`. (Pomijasz: `/game-test`, `/verify`, `/webapp-testing`.)
+
+## 🔬 `/test-inreview` — masowy test wszystkich review-issue
+Odpala kompletny przegląd wszystkich otwartych issue z labelką `review`. Wpisz gdy chcesz zamknąć zaległości po fazach wdrożeń.
+
+```
+/test-inreview
+```
+
+**Co robi:**
+1. Świeży skan GitHub (`review` label, open) — lista zmienia się między sesjami
+2. Pyta które **milestony** testować w tej sesji (multiSelect)
+3. Grupuje issue w 7 przebiegów scenariuszowych (nie per issue — per scenariusz gry)
+4. Każdy przebieg = osobna sesja subagenta (czysty kontekst)
+5. Triage: TESTABLE (backend+UI+DB wpięte) vs SKIP (spec-only)
+6. Test → **auto-zamknij** jeśli pewny · **komentarz po polsku** jeśli nierozstrzygalne
+7. Nowe bugi → issue w `Bugi i poprawki (FIX)` + label `bug`
+8. `TEST_RAPORT.md` aktualizowany na bieżąco
+
+**7 grup (kolejność):**
+| Grupa | Silnik | Typowe issue |
+|---|---|---|
+| 1 — Nowa Kampania | game-smoke + Playwright | kreator, quest, walka, sklep, kostki, World State |
+| 2 — Klasy bojowe | game-test-player | dual-wield, amunicja, short rest, pasek akcji |
+| 3 — Mag + specjalne | game-test-player (Scholar) | czary ally/summon/CHA, grapple, zaskoczenie |
+| 4 — Loch | game-smoke-dungeon | wszystkie L-taski + bugi zagadek |
+| 5 — Admin panel | Playwright /admin/ | tabele, zakładki kampanii, sandbox, dice config |
+| 6 — MP frontend | Playwright dual | GF1-GF7 + bugi HTTP 500/migracje |
+| 7 — G-tasks triage | grep + Playwright | G1-G31: co wdrożone → test, reszta → SKIP |
+
+**Zasady:**
+- Wykluczone zawsze: Admin Panel Mobile · Faza R · Faza 6
+- Nie naprawia podczas testów — tylko loguje. Wyjątek: < 5 min i blokuje dalsze testy.
+- Sekwencyjnie (dzielą konto Demo/DB) — nie równolegle
+- Tracking: milestone #12 „Test: Playwright + Pytest" (issues #888–#892)
 
 ## 🛠 Kodowanie / jakość
 - **`tdd #NNN`** — główny: test→kod→sprzątanie + Playwright + aktualizuje ISSUE.
