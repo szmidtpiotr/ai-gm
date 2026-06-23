@@ -231,6 +231,11 @@ async function _joinMpActiveGame(campaignId, timerHours, role) {
         } else {
             characterData = currentHero;
             await enterGame(camp);
+            // GF7 (#939): activate MP round UI for non-spectator player joining active MP game
+            if (camp.mode === 'multiplayer' && window.multiplayerUI && typeof window.multiplayerUI.activate === 'function') {
+                const timerMin = (timerHours || 24) * 60;
+                await window.multiplayerUI.activate(camp.id, currentHero?.id, currentHero?.name, false, timerMin, false);
+            }
         }
     } catch (e) {
         showToast(e.message || 'Błąd dołączania do gry', 'error');

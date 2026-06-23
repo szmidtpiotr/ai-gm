@@ -1826,6 +1826,55 @@
         </div>
       </div>
     </div>
+
+    <!-- GF7 (#939): Party Chat panel + MP controls — hidden when not in MP mode -->
+    <div id="party-chat-panel" class="party-chat-panel" hidden>
+      <div class="party-chat-panel__header">
+        <button type="button" class="mp-chat-panel__toggle" onclick="window.multiplayerUI?.togglePartyChat?.()" aria-expanded="false">
+          <span class="mp-chat-toggle__icon">💬</span>
+          <span class="mp-chat-toggle__label">Party Chat</span>
+          <span id="mp-chat-badge" class="mp-chat-badge" hidden>0</span>
+          <span id="mp-chat-nav-badge" class="mp-chat-nav-badge" hidden aria-hidden="true">●</span>
+        </button>
+        <button type="button" class="mp-leave-btn" onclick="window.multiplayerUI?.leave()" title="Opuść grę">✕ Opuść</button>
+      </div>
+
+      <!-- Invite + timer controls — shown when MP active (timer section only for host) -->
+      <div id="mp-multiplayer-section" class="mp-multiplayer-section" style="display:none">
+        <div class="mp-invite-row">
+          <input type="text" id="game-invite-username" class="mp-invite-input" placeholder="@gracz" autocomplete="off">
+          <button type="button" class="mp-invite-btn" onclick="inviteFromGame()">Zaproś</button>
+        </div>
+        <span id="game-invite-msg" class="mp-invite-msg"></span>
+        <div id="mp-timer-section" class="mp-timer-section" style="display:none">
+          <div class="mp-timer-row">
+            <label class="mp-timer-label">Czas rundy (min):</label>
+            <input type="number" id="mp-timer-input" class="mp-timer-input" value="1440" min="1" max="4320" oninput="updateMpTimerHint()">
+            <span id="mp-timer-hint" class="mp-timer-hint"></span>
+            <button type="button" class="mp-timer-save-btn" onclick="saveMpTimer()">Zapisz</button>
+          </div>
+          <span id="mp-timer-msg" class="mp-timer-msg"></span>
+        </div>
+      </div>
+
+      <!-- Message list + input -->
+      <div id="mp-chat-body" class="mp-chat-body" hidden>
+        <div id="mp-chat-messages" class="mp-chat-messages"></div>
+        <div class="mp-chat-input-row">
+          <input type="text" id="mp-chat-input" class="mp-chat-input-field" placeholder="Napisz do party... (/whisper @postać tekst)" autocomplete="off"
+            onkeydown="if(event.key==='Enter'){sendPartyMessage();}">
+          <button type="button" class="mp-chat-send-btn" onclick="sendPartyMessage()" aria-label="Wyślij">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Private note (host only, shown/hidden by _showNote/_hideNote) -->
+      <div id="multiplayer-private-note" class="mp-note" hidden>
+        <button type="button" class="mp-note__tab" aria-expanded="false" onclick="mpNoteToggle()">📋 Notatka GM</button>
+        <div class="mp-note-body"></div>
+      </div>
+    </div>
   </div>
 
   <!-- World Map Panel — Task 43 -->
