@@ -144,6 +144,50 @@ def post_party_chat(
         if not member:
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
 
+        # #963 — normalize whisper_to: accept username OR char name, store as char name
+        normalized_whisper_to = req.whisper_to
+        if req.whisper_to:
+            # 1. Check if it's already a valid character name in this campaign
+            char_match = conn.execute(
+                "SELECT name FROM characters WHERE name=? AND campaign_id=? LIMIT 1",
+                (req.whisper_to, campaign_id),
+            ).fetchone()
+            if not char_match:
+                # 2. Try as username → resolve to character name via campaign_members
+                user_row = conn.execute(
+                    "SELECT id FROM users WHERE username=?", (req.whisper_to,)
+                ).fetchone()
+                if user_row:
+                    target_uid = int(user_row["id"])
+                    # Prefer most recent round action (most reliable in-game name)
+                    char_action = conn.execute(
+                        "SELECT character_name FROM campaign_round_actions "
+                        "WHERE campaign_id=? AND user_id=? ORDER BY submitted_at DESC LIMIT 1",
+                        (campaign_id, target_uid),
+                    ).fetchone()
+                    if char_action:
+                        normalized_whisper_to = char_action["character_name"]
+                    else:
+                        # Fallback: campaign_members.character_id → characters.name
+                        char_row = conn.execute(
+                            "SELECT c.name FROM characters c "
+                            "JOIN campaign_members cm ON cm.character_id = c.id "
+                            "WHERE cm.campaign_id=? AND cm.user_id=? AND cm.status='accepted' LIMIT 1",
+                            (campaign_id, target_uid),
+                        ).fetchone()
+                        if char_row:
+                            normalized_whisper_to = char_row["name"]
+                        else:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="whisper_to: recipient not found in campaign",
+                            )
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="whisper_to: recipient not found in campaign",
+                    )
+
         # G19 #800 — spectator hint guard: whisper from spectator requires policy + no mute
         if member["role"] == "spectator" and req.whisper_to:
             camp = conn.execute(
@@ -171,7 +215,7 @@ def post_party_chat(
         row = conn.execute(
             "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to, created_at) "
             "VALUES (?, ?, ?, ?, ?, datetime('now')) RETURNING id, created_at",
-            (campaign_id, uid, req.character_name, req.message.strip(), req.whisper_to),
+            (campaign_id, uid, req.character_name, req.message.strip(), normalized_whisper_to),
         ).fetchone()
         conn.commit()
         msg_id = int(row["id"])
@@ -182,7 +226,9 @@ def post_party_chat(
     import threading
     from app.services.push_notification_service import send_push_to_campaign_players, send_push
 
-    if req.whisper_to:
+    if normalized_whisper_to:
+        _whisper_target = normalized_whisper_to
+
         def _push_whisper():
             from app.core.db_runtime import resolve_db_path
             import sqlite3 as _sqlite3
@@ -192,8 +238,16 @@ def post_party_chat(
                 target = conn2.execute(
                     "SELECT user_id FROM campaign_round_actions WHERE campaign_id=? AND character_name=? "
                     "ORDER BY submitted_at DESC LIMIT 1",
-                    (campaign_id, req.whisper_to),
+                    (campaign_id, _whisper_target),
                 ).fetchone()
+                if not target:
+                    # Fallback: campaign_members with character_id
+                    target = conn2.execute(
+                        "SELECT cm.user_id FROM campaign_members cm "
+                        "JOIN characters c ON cm.character_id = c.id "
+                        "WHERE cm.campaign_id=? AND c.name=? AND cm.status='accepted' LIMIT 1",
+                        (campaign_id, _whisper_target),
+                    ).fetchone()
                 if target:
                     send_push(int(target["user_id"]), f"🤫 Szept od {req.character_name}", req.message.strip()[:80], url="/")
             finally:
