@@ -6,9 +6,11 @@ Model: sonnet | Effort: medium
 | Milestone | Łącznie | ✅ Zamknięte | ❌ Fail/Bug | ⏭ SKIP | 💬 Komentarz |
 |---|---|---|---|---|---|
 | Bugi i poprawki (FIX) | 34 | 29 | 0 | 1 | 5 |
-| **Łącznie** | **34** | **29** | **0** | **1** | **5** |
+| Lochy kafelkowe (Faza L) | 10 | 9 | 1 | 1 | 0 |
+| **Łącznie** | **44** | **38** | **1** | **2** | **5** |
 
 > FIX DONE: A(15): 11✅ 5💬 1⏭ · B(7): 7✅ · C(9): 9✅ · D(2): 2✅ · Łącznie: 29/34 zamknięte.
+> FAZA-L DONE: 9✅ 1❌(#719) 1⏭(#734) · Łącznie: 9/10 zamknięte.
 
 ## Plan — grupy testowe (FIX)
 
@@ -18,6 +20,7 @@ Model: sonnet | Effort: medium
 | FIX-B: Player UI visual | Playwright (player) | #896 #897 #899 #901 #949 #950 #951 |
 | FIX-C: Admin panel | Playwright /admin/ | #727 #777 #779 #781 #849 #850 #852 #853 #955 |
 | FIX-D: Loch bugs | Playwright + dungeon | #847 #865 |
+| FAZA-L-BUGS: Loch bugs | grep + Playwright | #728 #746 #745 #721 #722 #733 #734 #742 #720 #719 |
 | SKIP | triage | #748 (Whisper STT — voice service off na DEV) |
 
 ## Wyniki per issue
@@ -58,6 +61,21 @@ Model: sonnet | Effort: medium
 | #950 | Party Chat w sesji single | ✅ ZAMKNIĘTE | enterGame() woła multiplayerUI.deactivate() na starcie |
 | #951 | Swipe nie zmienia zakładek karty postaci | ✅ ZAMKNIĘTE | initSheetTabSwipe: dynamiczny querySelectorAll zamiast stałej listy |
 | #955 | Flaga Tester nie zapisuje się | ✅ ZAMKNIĘTE | is_tester zapisuje się i persystuje; FAB widoczny |
+
+## Wyniki per issue — Faza L
+
+| # | Tytuł | Wynik | Notatka |
+|---|---|---|---|
+| #728 | Krypta cooldown=0 timeout | ✅ ZAMKNIĘTE | dungeon_service.py:121-122: cooldown_hours==0 → on_cooldown=False |
+| #746 | Nazwy łupów po angielsku | ✅ ZAMKNIĘTE | combat_service.py:1835: _lookup_loot_label() robi JOIN po label |
+| #745 | Panel zagadki nie znika po solve | ✅ ZAMKNIĘTE | app.js:3241-3243 panel chowany natychmiast po solve |
+| #721 | Panel zagadki pod belką | ✅ ZAMKNIĘTE | styles.css:7991 position:fixed + top:calc() poniżej HUD |
+| #722 | Zagadka do pominięcia | ✅ ZAMKNIĘTE | dungeon_tile_service.py:476+1697: auto-gate riddle_solved |
+| #733 | L18 pierwsza komnata za trudna | ✅ ZAMKNIĘTE | EASE_IN_ROOMS=2 EASE_IN_COUNT_CAP=(1,2) HP cap |
+| #734 | L18 mikstury w dungeon combat | ⏭ SKIP | Niezaimplementowane (backend+frontend) |
+| #742 | Sklep otwiera się w dungeon | ✅ ZAMKNIĘTE | turns.py:107-108: _is_shop_npc()=False gdy mode==dungeon |
+| #720 | Brak popupu łupu bossa | ✅ ZAMKNIĘTE | on_boss_tile_cleared zwraca loot z labelami + showDungeonBossChoiceModal |
+| #719 | Modal kości: unik wroga | ❌ BUG | dodge_roll tylko dla zaklęć (app.js:2585); brak w modalu walki std. |
 
 ## Nowe bugi znalezione podczas testów
 *(brak)*
