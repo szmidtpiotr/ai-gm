@@ -1713,6 +1713,7 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 
 .composer__input {
   flex: 1;
+  min-width: 0;
   padding: var(--space-md) var(--space-lg);
   background: var(--bg-input);
   border: 1px solid var(--border);
