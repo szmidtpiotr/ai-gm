@@ -1814,18 +1814,23 @@ async function init() {
 
 async function loadBgSettings() {
     try {
-        const resp = await fetch(`${API_BASE}/ui/backgrounds`);
+        // cache-bust so players see bg changes without hard-refresh (#896)
+        const resp = await fetch(`${API_BASE}/ui/backgrounds?t=${Date.now()}`);
         if (!resp.ok) return;
         const data = await resp.json();
         const bgs = data.backgrounds || {};
+        const cache = {};
         for (const [screen, url] of Object.entries(bgs)) {
             if (url) {
                 document.documentElement.style.setProperty(
                     `--bg-screen-${screen}`,
                     `url("${url}")`
                 );
+                cache[screen] = url;
             }
         }
+        // save to localStorage so preload script in <head> can apply on next visit (#896)
+        try { localStorage.setItem('ai-gm-bg-cache', JSON.stringify(cache)); } catch (_) {}
     } catch (_e) {}
 }
 

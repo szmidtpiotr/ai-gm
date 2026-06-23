@@ -95,7 +95,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   /* Screen backgrounds — overridden at runtime by /api/ui/backgrounds */
-  --bg-screen-login: url('../img/bg-login.jpg');
+  /* #896: default is none so browser never paints stale image before JS runs */
+  --bg-screen-login: none;
   --bg-screen-campaigns: url('../img/bg-campaigns.jpg');
   --bg-screen-new-campaign: url('https://wallpapercave.com/wp/wp5534522.jpg');
   --bg-screen-wizard: url('../img/bg-hero.jpg');
