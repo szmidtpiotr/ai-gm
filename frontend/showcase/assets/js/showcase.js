@@ -3,6 +3,20 @@
   'use strict';
   document.documentElement.classList.add('js'); // gate scroll-reveal; bez JS treść widoczna
 
+  // --- i18n scaffold (#914 W13 — PL now, ready for EN) ---
+  const LANG = 'pl';
+  const I18N = {
+    pl: {
+      subscribe_placeholder: 'Twój adres e-mail',
+      subscribe_btn: 'Zapisz się',
+      subscribe_ok: 'Zapisano! Damy znać, gdy gra wejdzie w nową fazę.',
+      subscribe_dup: 'Już jesteś na liście!',
+      subscribe_err: 'Ups, coś poszło nie tak. Spróbuj ponownie.',
+      subscribe_invalid: 'Podaj prawidłowy adres e-mail.',
+    },
+  };
+  function t(key) { return (I18N[LANG] || I18N.pl)[key] || key; }
+
   // --- mobile nav toggle ---
   const toggle = document.querySelector('.nav-toggle');
   const links = document.querySelector('.nav-links');
@@ -145,6 +159,43 @@
             <ul>${(c.items || []).map(it => `<li>${escapeHtml(it)}</li>`).join('')}</ul></div>`).join('');
         }
       }).catch(() => { /* fallback statyczny zostaje */ });
+  }
+
+  // --- email subscribe form (#914 W13) ---
+  const subForm = document.getElementById('subscribe-form');
+  const subMsg = document.getElementById('subscribe-msg');
+  if (subForm && subMsg) {
+    subForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = document.getElementById('subscribe-email');
+      const email = (input ? input.value : '').trim();
+      if (!email || !email.includes('@')) {
+        subMsg.textContent = t('subscribe_invalid');
+        subMsg.className = 'subscribe-msg err';
+        return;
+      }
+      subForm.querySelector('button').disabled = true;
+      try {
+        const r = await fetch('/api/showcase/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        if (r.ok) {
+          subMsg.textContent = t('subscribe_ok');
+          subMsg.className = 'subscribe-msg ok';
+          subForm.style.display = 'none';
+        } else {
+          subMsg.textContent = t('subscribe_err');
+          subMsg.className = 'subscribe-msg err';
+          subForm.querySelector('button').disabled = false;
+        }
+      } catch (_) {
+        subMsg.textContent = t('subscribe_err');
+        subMsg.className = 'subscribe-msg err';
+        subForm.querySelector('button').disabled = false;
+      }
+    });
   }
 
   function escapeHtml(s) {

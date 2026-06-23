@@ -85,6 +85,7 @@ from app.routers.seen_mechanics import router as seen_mechanics_router
 from app.routers.game_mechanics import router as game_mechanics_router
 from app.routers.db_lint import router as db_lint_router
 from app.routers.admin_dice_config import admin_router as dice_config_admin_router, public_router as dice_config_public_router
+from app.routers.showcase import router as showcase_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -712,6 +713,7 @@ app.include_router(admin_visual_router, prefix="/api")
 app.include_router(visual_public_router, prefix="/api")
 app.include_router(dice_config_admin_router, prefix="/api")
 app.include_router(dice_config_public_router, prefix="/api")
+app.include_router(showcase_router)  # #914 W13 — no prefix, path defined in router
 app.include_router(admin_ui_texts_router, prefix="/api")
 app.include_router(ui_texts_public_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")

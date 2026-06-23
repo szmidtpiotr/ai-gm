@@ -5199,6 +5199,20 @@ def _link_kresy_settlements(conn: sqlite3.Connection) -> None:
     logger.info("v933_settlement_linkage", linked=linked, checked=len(hexes))
 
 
+def _ensure_showcase_subscribers(conn: sqlite3.Connection) -> None:
+    """#914 W13 — Email waitlist for showcase. Idempotent."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS showcase_subscribers (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            email      TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            source     TEXT DEFAULT 'showcase',
+            UNIQUE(email)
+        )
+    """)
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5316,6 +5330,7 @@ def run_admin_migrations() -> None:
         _ensure_autopilot_consent_column(conn)  # #803 G22
         _ensure_onboarding_summary_column(conn)  # #806 G25
         _link_kresy_settlements(conn)  # #933
+        _ensure_showcase_subscribers(conn)  # #914 W13
     finally:
         conn.close()
 
