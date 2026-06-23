@@ -7,10 +7,16 @@ Model: sonnet | Effort: medium
 |---|---|---|---|---|---|
 | Bugi i poprawki (FIX) | 34 | 29 | 0 | 1 | 5 |
 | Lochy kafelkowe (Faza L) | 10 | 9 | 1 | 1 | 0 |
-| **Łącznie** | **44** | **38** | **1** | **2** | **5** |
+| Frontend pasek akcji (Faza SF) | 3 | 1 | 1 | 1 | 0 |
+| Balans klas (Faza B) | 2 | 1 | 0 | 1 | 0 |
+| Multiplayer GF1-GF7 + bugs | 14 | 14 | 0 | 0 | 0 |
+| **Łącznie** | **63** | **54** | **2** | **4** | **5** |
 
 > FIX DONE: A(15): 11✅ 5💬 1⏭ · B(7): 7✅ · C(9): 9✅ · D(2): 2✅ · Łącznie: 29/34 zamknięte.
 > FAZA-L DONE: 9✅ 1❌(#719) 1⏭(#734) · Łącznie: 9/10 zamknięte.
+> FAZA-SF DONE: 1✅(#859) 1❌(#861 render brak) 1⏭(#635) · Łącznie: 1/3 zamknięte.
+> FAZA-B-BUGS DONE: 1✅(#860) 1⏭(#858 design decyzja) · Łącznie: 1/2 zamknięte.
+> MP GF1-GF7 DONE: 14/14 ✅ — wszystkie feature+bugi zamknięte. E2E create_lobby HTTP 200.
 
 ## Plan — grupy testowe (FIX)
 
@@ -21,6 +27,9 @@ Model: sonnet | Effort: medium
 | FIX-C: Admin panel | Playwright /admin/ | #727 #777 #779 #781 #849 #850 #852 #853 #955 |
 | FIX-D: Loch bugs | Playwright + dungeon | #847 #865 |
 | FAZA-L-BUGS: Loch bugs | grep + Playwright | #728 #746 #745 #721 #722 #733 #734 #742 #720 #719 |
+| FAZA-SF: Pasek akcji | code check + grep | #859 #861 #635 |
+| FAZA-B-BUGS: Walka | code check + grep | #860 #858 |
+| MP-GF: Frontend GF1-GF7 + bugs | code check + API E2E | #921-#927 #932 #934-#939 |
 | SKIP | triage | #748 (Whisper STT — voice service off na DEV) |
 
 ## Wyniki per issue
@@ -76,6 +85,30 @@ Model: sonnet | Effort: medium
 | #742 | Sklep otwiera się w dungeon | ✅ ZAMKNIĘTE | turns.py:107-108: _is_shop_npc()=False gdy mode==dungeon |
 | #720 | Brak popupu łupu bossa | ✅ ZAMKNIĘTE | on_boss_tile_cleared zwraca loot z labelami + showDungeonBossChoiceModal |
 | #719 | Modal kości: unik wroga | ❌ BUG | dodge_roll tylko dla zaklęć (app.js:2585); brak w modalu walki std. |
+
+## Wyniki per issue — Faza SF, Faza B, MP GF
+
+| # | Tytuł | Wynik | Notatka |
+|---|---|---|---|
+| #859 | Brak mikstury w pasku akcji walki | ✅ ZAMKNIĘTE | combat-item-btn + /combat/use-consumable wdrożone |
+| #861 | Dual-wield render w UI | ❌ BUG | backend zwraca offhand/parry_bonus, frontend nie renderuje |
+| #635 | SF6 karta rzutu hazardu | ⏭ SKIP | sf6StakeLabel/sf6MarginDegree nie istnieje w kodzie |
+| #860 | Short rest blokada active_combat | ✅ ZAMKNIĘTE | _has_active_combat() w rest_service.py:113 |
+| #858 | Wojownik bez leczenia w walce | ⏭ SKIP | Wymaga decyzji design (Second Wind / bandaż) |
+| #921 | GF1: multiplayer_ui.js załadowany | ✅ ZAMKNIĘTE | Linia 2284 index.html |
+| #922 | GF2: create-lobby-screen | ✅ ZAMKNIĘTE | Ekran w index.html:710 |
+| #923 | GF3: lobby-screen | ✅ ZAMKNIĘTE | Ekran w index.html:806 |
+| #924 | GF4: openMultiplayerLobby() | ✅ ZAMKNIĘTE | Funkcja w multiplayer_ui.js:694 |
+| #925 | GF5: Moje lobby / Aktywne gry | ✅ ZAMKNIĘTE | Sekcja w index.html:622 |
+| #926 | GF6: Panel widza (spectator) | ✅ ZAMKNIĘTE | Spectator mode w multiplayer_ui.js |
+| #927 | GF7: E2E weryfikacja MP | ✅ ZAMKNIĘTE | API create_lobby → 200, campaign_id=100173 |
+| #932 | POST /multiplayer 500 model_id | ✅ ZAMKNIĘTE | model_id='default' w INSERT |
+| #934 | Brak kafelka Multiplayer | ✅ ZAMKNIĘTE | Kafelek istnieje (disabled/Wkrótce beta) |
+| #935 | showScreen złego klucza | ✅ ZAMKNIĘTE | showScreen('create-lobby') poprawny |
+| #936 | POST /multiplayer NOT NULL | ✅ ZAMKNIĘTE | Duplikat #932, fixed |
+| #937 | Brak tabeli campaign_invites | ✅ ZAMKNIĘTE | Migracja w main.py RAW_MIGRATIONS |
+| #938 | Brak migracji party_messages | ✅ ZAMKNIĘTE | Migracja w main.py RAW_MIGRATIONS |
+| #939 | Brak HTML czatu party | ✅ ZAMKNIĘTE | Wszystkie elementy w index.html:1883+ |
 
 ## Nowe bugi znalezione podczas testów
 *(brak)*
