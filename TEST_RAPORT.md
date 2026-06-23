@@ -5,10 +5,10 @@ Model: sonnet | Effort: medium
 ## Dashboard
 | Milestone | Łącznie | ✅ Zamknięte | ❌ Fail/Bug | ⏭ SKIP | 💬 Komentarz |
 |---|---|---|---|---|---|
-| Bugi i poprawki (FIX) | 34 | 18 | 0 | 1 | 5 |
-| **Łącznie** | **34** | **18** | **0** | **1** | **5** |
+| Bugi i poprawki (FIX) | 34 | 27 | 0 | 1 | 5 |
+| **Łącznie** | **34** | **27** | **0** | **1** | **5** |
 
-> FIX-A DONE (15 issue): 11 zamknięte, 5 komentarze, 1 skip. FIX-B DONE (7 issue): 7 zamknięte. FIX-C/D kolejne.
+> FIX-A (15): 11 zamknięte, 5 komentarze, 1 skip. FIX-B (7): 7 zamknięte. FIX-C (9): 9 zamknięte. FIX-D kolejne.
 
 ## Plan — grupy testowe (FIX)
 
@@ -25,7 +25,7 @@ Model: sonnet | Effort: medium
 | # | Tytuł | Wynik | Notatka |
 |---|---|---|---|
 | #653 | Brak animacji kostki dla zaklęć leczących | 💬 KOMENTARZ | Kod OK; Scholar miał pełne HP — nie mógł testować rzutu; needs Scholar z obniżonymi HP |
-| #727 | Combat Sandbox — HTTP 500 | ⏳ | FIX-C |
+| #727 | Combat Sandbox — HTTP 500 | ✅ ZAMKNIĘTE | prior_clones_purged działa; sandbox setup HTTP 200 |
 | #747 | Kreator postaci — skill budget bug | ✅ ZAMKNIĘTE | Playwright: 0/4→1/4→0/4 po +/- skillu; net model działa |
 | #748 | Whisper STT z .16 nie aktywny | ⏭ SKIP | Voice service wyłączony na DEV |
 | #749 | Łotrzyk bez wyposażenia na start | ✅ ZAMKNIĘTE | DB+API: dagger+shortbow+leather_armor+arrows przy tworzeniu |
@@ -34,18 +34,18 @@ Model: sonnet | Effort: medium
 | #757 | Inventory klucz zamiast nazwy | ✅ ZAMKNIĘTE | API inventory/999420: poprawne nazwy, brak surowych kluczy |
 | #772 | COMBAT_START blokowany spoza katalogu | ✅ ZAMKNIĘTE | Kod: turns.py:876 trust llm; 6/6 pytest GREEN |
 | #776 | Questy dostawy nie domykają się | 💬 KOMENTARZ | Pytest 4/4 GREEN; organiczne wywołanie questu dostawy trudne w teście |
-| #777 | Zakładki Stan/Decyzje puste | ⏳ | FIX-C |
-| #779 | Zakładka Quest+XP w admin | ⏳ | FIX-C |
-| #781 | Zakładka Zdarzenia w admin | ⏳ | FIX-C |
+| #777 | Zakładki Stan/Decyzje puste | ✅ ZAMKNIĘTE | Instrumentacja narracyjna zweryfikowana |
+| #779 | Zakładka Quest+XP w admin | ✅ ZAMKNIĘTE | Zakładka Questy+XP widoczna w modalu kampanii |
+| #781 | Zakładka Zdarzenia w admin | ✅ ZAMKNIĘTE | Endpoint /game-events + zakładka w UI |
 | #783 | Sklep gear→404 | ✅ ZAMKNIĘTE | API: gear→item mapping OK; Pochodnia zakupiona HTTP 200 |
 | #825 | World State — wrogowie cały czas | ✅ ZAMKNIĘTE | Wstrzyknięci wrogowie → zmiana lokacji → scene_enemies=[] |
 | #826 | Model obrony walki | 💬 KOMENTARZ | 19/19 pytest GREEN; 3 kryteria feel/Sandbox czekają na Piotra |
 | #829 | Animacja kostki Stage 2 | ✅ ZAMKNIĘTE | Playwright: Stage1(d20) + Stage2(obrażenia) animowane — Nat20: 7 obrażeń |
 | #847 | Loch: zagadka ukryta po cofnięciu | ⏳ | FIX-D |
-| #849 | Combat narrative toggle | ⏳ | FIX-C |
-| #850 | Admin dice style configurator | ⏳ | FIX-C |
-| #852 | Tabela Czary utknięta na Ładowanie… | ⏳ | FIX-C |
-| #853 | Tabela Rzuty brak obrażeń po redukcji | ⏳ | FIX-C |
+| #849 | Combat narrative toggle | ✅ ZAMKNIĘTE | Toggle gracza + global admin widoczne i działają |
+| #850 | Admin dice style configurator | ✅ ZAMKNIĘTE | Panel Kostki z live preview + zapis zweryfikowany |
+| #852 | Tabela Czary utknięta na Ładowanie… | ✅ ZAMKNIĘTE | _loaded.clear() działa; 37 czarów po każdej wizycie |
+| #853 | Tabela Rzuty brak obrażeń po redukcji | ✅ ZAMKNIĘTE | Kalkulacja armor_reduction widoczna w Rzuty |
 | #865 | Modal zagadki klucz zamiast treści | ⏳ | FIX-D |
 | #866 | Link /?join=TOKEN → login zamiast rejestracji | 💬 KOMENTARZ | Kod deployed OK; Playwright miał stały token — test w prawdziwym incognito potrzebny |
 | #896 | Flash starego tła logowania | ✅ ZAMKNIĘTE | --bg-screen-login:none w CSS; brak FOUC |
@@ -57,7 +57,7 @@ Model: sonnet | Effort: medium
 | #949 | Przycisk Wyślij poza ekran (mobile) | ✅ ZAMKNIĘTE | min-width:0 w .composer__input; send widoczny na 390px |
 | #950 | Party Chat w sesji single | ✅ ZAMKNIĘTE | enterGame() woła multiplayerUI.deactivate() na starcie |
 | #951 | Swipe nie zmienia zakładek karty postaci | ✅ ZAMKNIĘTE | initSheetTabSwipe: dynamiczny querySelectorAll zamiast stałej listy |
-| #955 | Flaga Tester nie zapisuje się | ⏳ | FIX-C |
+| #955 | Flaga Tester nie zapisuje się | ✅ ZAMKNIĘTE | is_tester zapisuje się i persystuje; FAB widoczny |
 
 ## Nowe bugi znalezione podczas testów
 *(brak)*
