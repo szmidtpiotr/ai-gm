@@ -969,6 +969,19 @@ def _maybe_start_combat_from_gm_tag(
     except Exception as _hf_err:
         logger.warning("combat_gm_tag_validation_error", error=str(_hf_err))
 
+    # #961 — MP campaigns must use start_mp_combat (solo initiate_combat fails for MP chars)
+    try:
+        with sqlite3.connect(DB_PATH) as _mconn:
+            _mconn.row_factory = sqlite3.Row
+            _camp_mode = _mconn.execute(
+                "SELECT mode FROM campaigns WHERE id=?", (campaign_id,)
+            ).fetchone()
+        if _camp_mode and _camp_mode["mode"] == "multiplayer":
+            from app.services.multiplayer_round_service import start_mp_combat as _start_mp_combat
+            return _start_mp_combat(campaign_id, enemy_keys)
+    except Exception as _mp_err:
+        logger.warning("combat_gm_tag_mp_routing_error", campaign_id=campaign_id, error=str(_mp_err))
+
     try:
         combat_state = cs.initiate_combat(campaign_id, character_id, enemy_keys)
         logger.info(
@@ -3753,6 +3766,8 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
 
     # Hex-enter encounter trigger: fire when current_hex changed
     _check_hex_enter_trigger(conn, campaign_id, _hex_before_enc)
+    # Snapshot hex after location intent processing (for hex_changed signal)
+    _hex_after_enc = _snapshot_hex(conn, campaign_id)
 
     # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
     _char_sh = json.loads(character["sheet_json"] or "{}")

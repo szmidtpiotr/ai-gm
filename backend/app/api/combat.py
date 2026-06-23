@@ -62,6 +62,22 @@ def post_start_combat(campaign_id: int, body: CombatStartRequest):
                 "przycisk ucieczki) zanim rozpoczniesz nową sesję w silniku."
             ),
         )
+    # #961 — MP campaigns must route to start_mp_combat; solo router's character lookup
+    # uses campaign_id which is NULL for MP members and always fails.
+    _conn = sqlite3.connect(combat.COMBAT_DB_PATH)
+    _conn.row_factory = sqlite3.Row
+    try:
+        _camp_row = _conn.execute(
+            "SELECT mode FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+    finally:
+        _conn.close()
+    if _camp_row and _camp_row["mode"] == "multiplayer":
+        from app.services.multiplayer_round_service import start_mp_combat as _start_mp
+        try:
+            return _start_mp(campaign_id, body.enemy_keys)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     ch_id = body.character_id if body.character_id is not None else _first_character_id(campaign_id)
     try:
         state = combat.initiate_combat(campaign_id, ch_id, body.enemy_keys)
