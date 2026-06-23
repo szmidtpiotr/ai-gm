@@ -2005,6 +2005,20 @@ def submit_mp_combat_action(
         if not revive_result:
             raise ValueError(f"target {target_id} is not knocked or not in combat")
         advance_turn(campaign_id)
+        # #962: run enemy auto-resolve loop identical to attack/spell path
+        MAX_AUTO = 20
+        for _ in range(MAX_AUTO):
+            current_snap = get_active_combat(campaign_id)
+            if not current_snap or current_snap["status"] != "active":
+                break
+            cur = str(current_snap["current_turn"])
+            if cur.startswith("player:"):
+                break
+            enemy_r = resolve_attack(campaign_id, 0, attacker="enemy")
+            enemy_results.append(enemy_r)
+            snap_after = get_active_combat(campaign_id)
+            if snap_after and snap_after["status"] == "active" and snap_after["current_turn"] == cur:
+                advance_turn(campaign_id)
         final_snap = get_active_combat(campaign_id)
         next_turn = (final_snap or {}).get("current_turn", "") if final_snap else ""
         if next_turn and (final_snap or {}).get("status") == "active":
@@ -2014,7 +2028,7 @@ def submit_mp_combat_action(
                 logger.warning("push_revive_advance_failed", error=str(e)[:100])
         return {
             "player_result": revive_result,
-            "enemy_results": [],
+            "enemy_results": enemy_results,
             "combat_state": final_snap,
         }
     elif action_type == "defense":
