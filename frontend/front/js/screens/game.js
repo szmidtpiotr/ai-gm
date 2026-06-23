@@ -1997,7 +1997,12 @@ function showTypingIndicator() {
 }
 
 function scrollToBottom() {
+    // Flaga w app.js: scroll programmatyczny nie chowa paska przygody (#952 bugfix).
+    if (typeof _suppressAutoHide !== 'undefined') _suppressAutoHide = true;
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    requestAnimationFrame(() => {
+        if (typeof _suppressAutoHide !== 'undefined') _suppressAutoHide = false;
+    });
 }
 
 // ============================================================================

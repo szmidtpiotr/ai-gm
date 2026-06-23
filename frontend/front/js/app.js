@@ -2835,24 +2835,40 @@ function setupGameMenu() {
 }
 
 // #952 — auto-hide paska przygody: scroll w dół narracji chowa pasek, scroll w górę go przywraca.
+// Ustawiany przez scrollToBottom() żeby programmatyczny scroll nie chował belki.
+let _suppressAutoHide = false;
+
 function setupHeaderAutoHide() {
     const scroller = document.getElementById('chat-messages');
     const header = document.querySelector('.header--game');
     if (!scroller || !header) return;
     let lastY = 0;
-    const THRESHOLD = 8; // px — wartość startowa, do strojenia
+    const THRESHOLD = 8;
+
     scroller.addEventListener('scroll', () => {
         const y = scroller.scrollTop;
+        if (_suppressAutoHide) {
+            // Programmatyczny scroll — tylko aktualizuj pozycję, nie ruszaj paska
+            lastY = y;
+            return;
+        }
         const delta = y - lastY;
         if (y < 40) {
-            header.classList.remove('header--hidden'); // przy górze zawsze widoczny
+            header.classList.remove('header--hidden');
         } else if (delta > THRESHOLD) {
-            header.classList.add('header--hidden');     // scroll w dół → schowaj
+            header.classList.add('header--hidden');
         } else if (delta < -THRESHOLD) {
-            header.classList.remove('header--hidden');  // scroll w górę → pokaż
+            header.classList.remove('header--hidden');
         }
         lastY = y;
     }, { passive: true });
+
+    // Tap w górnej strefie (~60px) przywraca schowany pasek — działa nawet gdy jesteś na dole.
+    document.getElementById('game-screen')?.addEventListener('click', (e) => {
+        if (e.clientY < 64 && header.classList.contains('header--hidden')) {
+            header.classList.remove('header--hidden');
+        }
+    });
 }
 
 function updateDungeonHUD() {
