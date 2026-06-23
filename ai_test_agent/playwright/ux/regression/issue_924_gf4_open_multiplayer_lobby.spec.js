@@ -33,8 +33,8 @@ test("REGRESSION #924 — openMultiplayerLobby pokazuje create-lobby-screen", as
   await page.evaluate(() => window.openMultiplayerLobby());
 
   const screenShown = await page.evaluate(() => window._screenShown);
-  expect(screenShown, "openMultiplayerLobby nie wywołał showScreen('create-lobby-screen')")
-    .toBe('create-lobby-screen');
+  expect(screenShown, "openMultiplayerLobby nie wywołał showScreen('create-lobby') — fix #935 zmienił klucz z 'create-lobby-screen' na 'create-lobby'")
+    .toBe('create-lobby');
 });
 
 test("REGRESSION #924 — openMultiplayerLobby usuwa overlay campaign-modes-hub", async ({ page }) => {
