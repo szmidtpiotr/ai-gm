@@ -85,6 +85,21 @@ Zwróć WYŁĄCZNIE jeden obiekt JSON (bez markdown, bez komentarzy, bez tekstu 
 Pisz po polsku jeśli kampania jest po polsku. To są notatki wewnętrzne MG — nie stylizuj na dialog z graczem."""
 
 
+# #968: continuation variant — used when the campaign already has played turns.
+# Builds a plan that picks up the story instead of restarting from scene 1.
+GM_PLAN_CONTINUATION_SYSTEM = """Jesteś asystentem projektowania kampanii RPG (notatki dla MG).
+Kampania jest JUŻ W TRAKCIE — poniżej dostaniesz streszczenie dotychczasowej rozgrywki.
+Zbuduj plan KONTYNUUJĄCY fabułę od bieżącego momentu — NIE restartuj, NIE zaczynaj od sceny startowej.
+Zwróć WYŁĄCZNIE jeden obiekt JSON (bez markdown, bez komentarzy, bez tekstu przed/po), kształt:
+{
+  "roadmap": "string — 2–6 zdań: dalszy łuk fabularny nawiązujący do dotychczasowych wydarzeń",
+  "scene_goals": ["3–6 krótkich celów NAJBLIŻSZYCH scen (kontynuacja, nie start)"],
+  "hooks": { "npcs": ["2–5 imion lub ról pasujących do obecnej sytuacji"], "locations": ["2–5 miejsc lub typów lokacji"] },
+  "title": "krótki tytuł bieżącego/kolejnego łuku (max ok. 80 znaków)"
+}
+Pisz po polsku jeśli kampania jest po polsku. To są notatki wewnętrzne MG — nie stylizuj na dialog z graczem."""
+
+
 def extract_first_json_object(text: str) -> dict[str, Any] | None:
     t = (text or "").strip()
     if not t:
@@ -182,21 +197,40 @@ def generate_initial_gm_plan_with_retries(
     user_id: int,
     model: str,
     llm_config: dict[str, Any],
+    story_so_far: str = "",
     max_attempts: int = 3,
 ) -> tuple[bool, str | None]:
     """
     Persists to campaigns.gm_plan_json on success. Returns (ok, error_message).
     On complete failure writes a fallback plan and sets plan_degraded=1 — always returns (True, None).
+
+    #968: when `story_so_far` is provided (campaign already has played turns), the
+    plan is generated in CONTINUATION mode — picks up the story instead of
+    restarting from the opening scene.
     """
-    user_content = (
-        f"Tytuł kampanii: {campaign_title}\n"
-        f"Język: {campaign_language}\n"
-        f"System (id): {system_id}\n\n"
-        f"{char_summary}\n\n"
-        "Na tej podstawie wypełnij JSON planu MG (roadmap, cele sceny, haki, tytuł łuku)."
-    )
+    story_so_far = (story_so_far or "").strip()
+    if story_so_far:
+        system_prompt = GM_PLAN_CONTINUATION_SYSTEM
+        user_content = (
+            f"Tytuł kampanii: {campaign_title}\n"
+            f"Język: {campaign_language}\n"
+            f"System (id): {system_id}\n\n"
+            f"{char_summary}\n\n"
+            f"DOTYCHCZASOWA ROZGRYWKA (streszczenie + ostatnie tury):\n{story_so_far}\n\n"
+            "Na tej podstawie zbuduj JSON planu MG KONTYNUUJĄCY fabułę od bieżącego momentu "
+            "(roadmap nawiązuje do wydarzeń, cele = najbliższe sceny, haki pasują do obecnej sytuacji)."
+        )
+    else:
+        system_prompt = GM_PLAN_GENERATION_SYSTEM
+        user_content = (
+            f"Tytuł kampanii: {campaign_title}\n"
+            f"Język: {campaign_language}\n"
+            f"System (id): {system_id}\n\n"
+            f"{char_summary}\n\n"
+            "Na tej podstawie wypełnij JSON planu MG (roadmap, cele sceny, haki, tytuł łuku)."
+        )
     base_messages = [
-        {"role": "system", "content": GM_PLAN_GENERATION_SYSTEM},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
 
@@ -350,6 +384,10 @@ def retry_initial_gm_plan_for_campaign(
     model = str(camp["model_id"] or "").strip() or "gemma3:1b"
     model = (llm_config.get("model") or "").strip() or model
 
+    # #968: when the campaign has played turns, feed the story-so-far so the plan
+    # continues the narrative instead of restarting from the opening scene.
+    story_so_far = _build_story_so_far(conn, campaign_id)
+
     return generate_initial_gm_plan_with_retries(
         conn,
         campaign_id=campaign_id,
@@ -360,5 +398,51 @@ def retry_initial_gm_plan_for_campaign(
         user_id=int(owner_user_id),
         model=model,
         llm_config=llm_config,
+        story_so_far=story_so_far,
         max_attempts=max_attempts,
     )
+
+
+def _build_story_so_far(conn, campaign_id: int, *, recent_turns: int = 8) -> str:
+    """#968: assemble a 'story so far' block (latest saved summary + last N turns)
+    for history-aware GM plan regeneration. Empty string when nothing was played."""
+    parts: list[str] = []
+    try:
+        from app.services.history_summary_service import (
+            fetch_latest_saved_summary_for_narrative,
+        )
+        summ = fetch_latest_saved_summary_for_narrative(conn, campaign_id)
+        if summ and str(summ.get("summary_text") or "").strip():
+            parts.append("Streszczenie: " + str(summ["summary_text"]).strip())
+    except Exception:
+        pass
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT user_text, assistant_text, turn_number
+            FROM campaign_turns
+            WHERE campaign_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (campaign_id, recent_turns),
+        ).fetchall()
+    except Exception:
+        rows = []
+
+    lines: list[str] = []
+    for r in reversed(rows or []):
+        try:
+            u = str((r["user_text"] if not isinstance(r, tuple) else r[0]) or "").strip()
+            a = str((r["assistant_text"] if not isinstance(r, tuple) else r[1]) or "").strip()
+        except Exception:
+            continue
+        if u:
+            lines.append(f"Gracz: {u[:300]}")
+        if a:
+            lines.append(f"MG: {a[:300]}")
+    if lines:
+        parts.append("Ostatnie tury:\n" + "\n".join(lines))
+
+    return "\n\n".join(parts).strip()
