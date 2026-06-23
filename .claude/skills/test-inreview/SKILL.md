@@ -33,8 +33,27 @@ gh issue list --repo szmidtpiotr/ai-gm --label review --state open --limit 300 \
   --jq '.[] | "#\(.number) [\(.milestone.title // "brak")] \(.title)"' | sort -t'#' -k2 -n
 ```
 
-Odejmij wykluczone milestony. Podziel pozostałe na 7 grup (patrz niżej).
+Pogrupuj wynik wg milestone, policz issue per milestone.
+
+## Krok 0.5 — ZAPYTAJ które milestony testować (OBOWIĄZKOWE)
+
+Przed jakimkolwiek testem użyj `AskUserQuestion` (multiSelect) — pokaż listę milestonów
+z liczbą issue `review` w każdym. Domyślnie odznacz wykluczone (Admin Mobile / Faza R / Faza 6),
+ale i tak je pokaż. User wybiera zakres tej sesji.
+
+Po wyborze: odejmij niewybrane, podziel resztę na grupy (patrz niżej).
 Jeśli lista różni się od poprzedniej sesji — zaktualizuj grupy przed startem.
+
+## Model wykonania — osobna sesja per przebieg
+
+**Każdy przebieg = osobny subagent (Agent tool).** Powód: czysty kontekst, jeden
+przebieg zamyka wiele issue, minimum przejść przez grę.
+
+- **Sekwencyjnie** dla przebiegów grających (1–4, 6, 7) — dzielą konto Demo (user_id=1)
+  + DB DEV. Równoległe granie = kolizja stanu kampanii. Lecisz jeden po drugim.
+- **Równolegle** dozwolone tylko dla read-only (przebieg 5 Admin Playwright), jeśli w zakresie.
+- Każdy subagent: triage swojej grupy → test → zamknij/skomentuj/zaloguj buga → zwróć podsumowanie.
+- Main wątek scala podsumowania → aktualizuje `TEST_RAPORT.md` po każdym przebiegu.
 
 ## 7 Grup testowych
 
