@@ -113,3 +113,9 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - Werdykt ⚠️ — backend generuje narrację, polling lobby działa, invite-by-username działa
 - Znalezione bugi: #934 (brak kafelka MP), #935 (zły klucz showScreen), #936 (createLobby 500 model_id), #938 (brak migracji campaign_invites+party_messages), #939 (brak HTML czatu party + enterGame nie aktywuje MP UI)
 - Priorytet napraw: #934→#935→#936 (blokują wejście do MP) → #938→#939 (blokują czat)
+
+## #932 — POST /multiplayer/campaigns HTTP 500 (brak model_id)
+- Fix: commit 4bf0c235 — model_id='default' dodany do INSERT w create_lobby()
+- Pytest: 3/3 PASS (test_issue932_create_lobby_model_id.py)
+- Przetestowane /playwright-test-report 2026-06-23, raport: https://github.com/szmidtpiotr/ai-gm/issues/932#issuecomment-4776267323
+- Werdykt ✅ — HTTP 200 + campaign_id, model_id=default w DB, lobby widoczne w UI
