@@ -66,7 +66,25 @@ Warianty: dopisz „Zatrzymaj się po RED" (checkpointy) · „Auto, leć bez py
 | `/test-inreview` | **masowy test wszystkich issue in-review** (patrz niżej) |
 
 ## 🧪 Testowanie — który kiedy
-*bug widać na ekranie?* → `/playwright-test-report` · *liczby w bazie przez wiele tur?* → `/game-test-player-screenshot` · *cały tryb grywalny?* → `/game-smoke[-dungeon]` · *szybki podgląd?* → `/game-screen`. (Pomijasz: `/game-test`, `/verify`, `/webapp-testing`.)
+*bug widać na ekranie?* → `/playwright-test-report` · *liczby w bazie przez wiele tur?* → `/game-test-player-screenshot` · *cały tryb grywalny?* → `/game-smoke[-dungeon][-mp]` (API, szybkie) lub `-pw` (przez prawdziwe UI) · *szybki podgląd?* → `/game-screen`. (Pomijasz: `/game-test`, `/verify`, `/webapp-testing`.)
+
+## 🎮 Smoke testy — „czy w ten tryb da się grać?"
+Pełny obchód trybu: ~15-30 realnych tur z prawdziwym LLM, checkpoint po checkpoincie. Werdykt: GRYWALNY / Z ZASTRZEŻENIAMI / NIEGRYWALNY. Konto Demo, nic nie usuwają, raport + issue P0/P1/P2.
+
+**Dwa warianty każdego trybu — API vs UI:**
+
+| Tryb | API (szybkie, stan w SQL) | UI (przez przeglądarkę, dowód wizualny) |
+|---|---|---|
+| Solo | `/game-smoke nowa-kampania` / `gotowa-kampania` | `/game-smoke-pw nowa-kampania` / `gotowa-kampania` |
+| Loch | `/game-smoke-dungeon` (`--engine`) | `/game-smoke-dungeon-pw` (`--engine`) |
+| Multiplayer | `/game-smoke-mp 2\|3\|4` | `/game-smoke-mp-pw 2\|3` |
+
+**API vs `-pw` — kiedy który:**
+- **API** (`/game-smoke`…) — gra przez `play_turn.py`, dowód = SQL. Szybsze, tańsze. NIE widzi warstwy UI (popup kości, modale, kolumny stref). Domyślny wybór do weryfikacji mechaniki/stanu.
+- **`-pw`** (`/game-smoke-*-pw`) — gra przez Playwright MCP w prawdziwym UI, dowód = zrzuty inline. Wolniejsze. Łapie to, czego API NIE widzi: kolumny **DYSTANS/ZWARCIE** + chipy 🏹/⚔, modal reakcji **SF10** (Przyjmij/Unik/Blok), popup kości, pasek many, menu czarów, picker mikstur, **mapę lochu** + D-pad, modale boss/porzucenie, lobby/czat MP.
+- Komplementarne — pełna pewność trybu = oba (API na stan + `-pw` na to co gracz widzi).
+
+Smoke ≠ test jednego issue. Pojedynczy bug → `/playwright-test-report #NNN` albo `/game-test-player-screenshot #NNN`.
 
 ## 🔬 `/test-inreview` — masowy test wszystkich review-issue
 Odpala kompletny przegląd wszystkich otwartych issue z labelką `review`. Wpisz gdy chcesz zamknąć zaległości po fazach wdrożeń.
