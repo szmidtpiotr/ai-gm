@@ -457,6 +457,17 @@ RAW_MIGRATIONS = [
     "ALTER TABLE campaigns ADD COLUMN quiet_start TEXT",
     "ALTER TABLE campaigns ADD COLUMN quiet_end TEXT",
     "ALTER TABLE campaigns ADD COLUMN team_tz TEXT",
+    # #937 — campaign_invites table (invite-link endpoint failed with no such table)
+    """CREATE TABLE IF NOT EXISTS campaign_invites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        created_by INTEGER NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        used_by INTEGER
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_campaign_invites_token ON campaign_invites(token)",
 ]
 
 
