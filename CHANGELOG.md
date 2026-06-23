@@ -4,6 +4,39 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.3 — 2026-06-23 — Multiplayer lobby działa end-to-end (GF7) + trwała mapa świata + reroll 100/350/700
+
+### Added
+
+**Trwała mapa Kresów — kanon w pliku (#933-related)**
+- `docs/world/world_map_seed.json` = kanoniczne źródło mapy; DB `world_hexes` (map_level=0) to tylko cache
+- Przycisk admin „Zapisz mapę (kanon)" → endpoint `POST /api/admin/world/snapshot-map` → commit pliku; tylko zatwierdzony snapshot przeżywa wipe DB
+- `scripts/seed_world_map.py` (idempotentny) + `scripts/snapshot_world_map.py`; auto-seed na końcu `deploy_dev.sh`
+- Ochrona: agenty/migracje nie ruszają `world_hexes` (map_level=0) bez jawnej zgody
+
+### Fixed
+
+**Multiplayer UI — lobby i czat działają end-to-end (GF7, #927, #932–#939)**
+- #934: kafelek „Multiplayer" na ekranie kampanii — wejście do lobby widoczne dla gracza
+- #935: `openMultiplayerLobby()` używał złego klucza ekranu `'create-lobby-screen'` (powinno być `'create-lobby'`) — lobby nie otwierało się wcale
+- #932: `create_lobby` INSERT pomijał `model_id` (NOT NULL) → 500; domyślna wartość `'default'`
+- #937: brak tabeli `campaign_invites` w `RAW_MIGRATIONS` → 500 przy starcie serwera
+- #938: brak tabeli `party_messages` + kolumna `whisper_to` + jawny `created_at` w INSERT
+- #939: HTML czatu drużyny + aktywacja MP UI dla non-spectator przy dołączeniu do kampanii
+- #949: przycisk wysyłania na mobile wychodził poza kontener (`.composer__input` bez `min-width:0`)
+
+**Reroll statystyk — koszty przywrócone do 100 / 350 / 700 (#943)**
+- Decyzja Piotra (wariant A): reroll tańszy od apply → koszty 100/350/700 (poprzednia wersja błędnie podwoiła na 200/650/1500)
+- Tabela w `game_mechanics.md` zaktualizowana; testy zsynchronizowane
+
+### Tests / infra
+- #942: migracja fixtures do `_fixtures_schema` — 8 paczek (shop, spells AOE, combat, loot, dungeon boss, admin cheat, faza 8)
+- #941: guard przed wyciekiem lokacji testowych do generacji świata (prefix `test_` + sufiks `time.time()`)
+- #930: izolacja stanu modułu `llm_service` w testach (autouse fixture)
+- #927: E2E Playwright dla GF7 — weryfikacja lobby HTTP 200 + czat drużyny
+
+---
+
 ## v1.5.2 — 2026-06-22 — Multiplayer FAZA 5 dokończona (G7–G31) + czary maga B14–B17 (siatka 26→34) + interaktywna Księga Zasad + pathfinding lochów
 
 ### Added
