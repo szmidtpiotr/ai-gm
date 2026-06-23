@@ -106,12 +106,13 @@ def test_g8_trigger_narration_makes_two_llm_calls():
             {201: _make_sheet_row(_sheet(dex=14))},
             saved,
         )
-        driver = _setup_llm_mock(mock_llm, planner_out, narrator_out)
+        summary_out = json.dumps({"summary": "Krótkie podsumowanie."})
+        driver = _setup_llm_mock(mock_llm, planner_out, narrator_out, summary_out)
 
         mrs.trigger_narration(1)
 
-    assert driver.generate_chat.call_count == 2, (
-        f"Expected 2 LLM calls (planner + narrator), got {driver.generate_chat.call_count}"
+    assert driver.generate_chat.call_count >= 2, (
+        f"Expected at least 2 LLM calls (planner + narrator), got {driver.generate_chat.call_count}"
     )
 
 
@@ -127,12 +128,16 @@ def test_g8_narrator_receives_roll_results_in_user_message():
 
     def fake_generate(base_url, model, messages, api_key=""):
         user_text = messages[-1]["content"] if messages else ""
-        # Second call (narrator) will have roll results
-        if captured.get("first_done"):
+        call_n = captured.get("call_count", 0)
+        captured["call_count"] = call_n + 1
+        # Call 1: planner (returns JSON list), Call 2: narrator (has roll results)
+        # Call 3+: round summary or other — return safe fallback
+        if call_n == 0:
+            return planner_out
+        if call_n == 1:
             captured["narrator_user"] = user_text
             return narrator_out
-        captured["first_done"] = True
-        return planner_out
+        return json.dumps({"summary": "."})  # safe fallback for extra calls (e.g. G18 summary)
 
     with patch("app.services.multiplayer_round_service._db") as mock_db, \
          patch("app.services.multiplayer_round_service.llm_service") as mock_llm:

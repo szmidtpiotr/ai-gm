@@ -39,7 +39,10 @@ def _make_test_db(tmp_path):
             host_user_id INTEGER,
             lobby_status TEXT NOT NULL DEFAULT 'open',
             host_note TEXT,
-            template_id INTEGER
+            template_id INTEGER,
+            quiet_start TEXT,
+            quiet_end TEXT,
+            team_tz TEXT
         );
         CREATE TABLE IF NOT EXISTS campaign_members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +53,8 @@ def _make_test_db(tmp_path):
             character_id INTEGER,
             joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             absence_warnings INTEGER NOT NULL DEFAULT 0,
+            last_seen TEXT,
+            autopilot_consent INTEGER NOT NULL DEFAULT 0,
             UNIQUE(campaign_id, user_id)
         );
         CREATE TABLE IF NOT EXISTS characters (
@@ -80,6 +85,7 @@ def _make_test_db(tmp_path):
             action_text TEXT NOT NULL,
             submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
             initiative_roll INTEGER NOT NULL DEFAULT 0,
+            client_action_id TEXT,
             UNIQUE(round_id, user_id)
         );
     """)

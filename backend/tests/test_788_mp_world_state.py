@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS campaign_members (
     character_id INTEGER,
     joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     absence_warnings INTEGER NOT NULL DEFAULT 0,
+    pending_intro INTEGER NOT NULL DEFAULT 0,
+    last_seen TEXT,
     UNIQUE(campaign_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS characters (
