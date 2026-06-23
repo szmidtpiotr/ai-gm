@@ -4371,7 +4371,6 @@ function initSheetTabSwipe(panel) {
     const content = panel.querySelector('.sheet-panel__content');
     if (!content) return;
 
-    const TAB_ORDER = ['stats', 'skills', 'inventory', 'appearance'];
     let startX = 0, startY = 0, moved = false;
 
     content.addEventListener('touchstart', (e) => {
@@ -4388,17 +4387,19 @@ function initSheetTabSwipe(panel) {
         const dy = e.changedTouches[0].clientY - startY;
         if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
 
+        // Build order from visible tabs only — handles dynamic spells tab (mage only)
+        const visibleTabs = Array.from(panel.querySelectorAll('.sheet-tab'))
+            .filter(el => el.offsetParent !== null);
         const activeTab = panel.querySelector('.sheet-tab--active');
-        const currentIdx = TAB_ORDER.indexOf(activeTab?.dataset?.tab);
+        const currentIdx = visibleTabs.indexOf(activeTab);
         if (currentIdx === -1) return;
 
         const nextIdx = dx < 0
-            ? Math.min(currentIdx + 1, TAB_ORDER.length - 1)
+            ? Math.min(currentIdx + 1, visibleTabs.length - 1)
             : Math.max(currentIdx - 1, 0);
         if (nextIdx === currentIdx) return;
 
-        const targetTab = panel.querySelector(`.sheet-tab[data-tab="${TAB_ORDER[nextIdx]}"]`);
-        targetTab?.click();
+        visibleTabs[nextIdx]?.click();
     }, { passive: true });
 }
 
