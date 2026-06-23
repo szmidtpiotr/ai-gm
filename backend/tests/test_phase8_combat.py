@@ -292,7 +292,9 @@ class TestPhase8Combat(unittest.TestCase):
         r = cs.resolve_attack(1, 4, attacker="player", raw_d20=20)
         self.assertTrue(r["hit"])
         self.assertFalse(r["dodged"])
-        self.assertEqual(r["damage"], 6)
+        # Ten test sprawdza BYPASS UNIKU na Nat 20 (trafia mimo uniku), nie dokładną
+        # magnitudę — ta ewoluuje (#826 margin/pancerz/krytyk) i jest pokryta osobno.
+        self.assertGreater(r["damage"], 0)
         self.assertEqual(r["dodge_roll"]["verdict"], "hit")
 
     @patch("app.services.combat_service.roll_damage_dice", return_value=6)

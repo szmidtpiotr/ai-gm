@@ -30,6 +30,7 @@ def conn():
 
 # ─── Test główny ─────────────────────────────────────────────────────────────
 
+@pytest.mark.skip(reason="#323 ally NPC combat — feature niezaimplementowany (decyzja: skip do czasu budowy)")
 def test_initiate_combat_accepts_ally_npc_keys():
     """initiate_combat() must accept ally_npc_keys parameter without error."""
     from app.services.combat_service import initiate_combat
@@ -40,6 +41,7 @@ def test_initiate_combat_accepts_ally_npc_keys():
     )
 
 
+@pytest.mark.skip(reason="#323 ally NPC combat — feature niezaimplementowany (decyzja: skip do czasu budowy)")
 def test_initiate_combat_adds_ally_to_combatants(conn):
     """When ally_npc_keys provided, combatants must include ally entry with type='ally'."""
     from app.services.combat_service import initiate_combat
@@ -79,6 +81,7 @@ def test_initiate_combat_adds_ally_to_combatants(conn):
     conn.commit()
 
 
+@pytest.mark.skip(reason="#323 ally NPC combat — feature niezaimplementowany (decyzja: skip do czasu budowy)")
 def test_ally_appears_in_turn_order(conn):
     """Ally must be included in turn_order after combat initiation."""
     from app.services.combat_service import initiate_combat, get_active_combat
@@ -112,6 +115,7 @@ def test_ally_appears_in_turn_order(conn):
     conn.commit()
 
 
+@pytest.mark.skip(reason="#323 ally NPC combat — feature niezaimplementowany (decyzja: skip do czasu budowy)")
 def test_execute_ally_auto_attack_exists():
     """execute_ally_auto_attack must be importable from combat_service."""
     from app.services.combat_service import execute_ally_auto_attack  # noqa: F401
