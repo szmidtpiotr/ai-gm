@@ -35,7 +35,8 @@ def _fresh_db(tmp_path):
             max_players INTEGER DEFAULT 4, lobby_status TEXT DEFAULT 'open',
             host_note TEXT, template_id INTEGER, status TEXT DEFAULT 'active',
             spectator_policy TEXT DEFAULT 'none',
-            party_hex_q INTEGER, party_hex_r INTEGER
+            party_hex_q INTEGER, party_hex_r INTEGER,
+            quiet_start TEXT, quiet_end TEXT, team_tz TEXT
         );
         CREATE TABLE campaign_members (
             id INTEGER PRIMARY KEY, campaign_id INTEGER, user_id INTEGER,

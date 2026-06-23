@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
     host_user_id INTEGER NOT NULL DEFAULT 1,
     lobby_status TEXT NOT NULL DEFAULT 'open',
     host_note TEXT,
-    gm_plan_json TEXT
+    gm_plan_json TEXT,
+    quiet_start TEXT,
+    quiet_end TEXT,
+    team_tz TEXT
 );
 CREATE TABLE IF NOT EXISTS campaign_members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

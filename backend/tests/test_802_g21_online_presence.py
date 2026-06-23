@@ -35,7 +35,10 @@ _SCHEMA = """
         host_user_id INTEGER,
         lobby_status TEXT NOT NULL DEFAULT 'open',
         host_note TEXT,
-        template_id INTEGER
+        template_id INTEGER,
+        quiet_start TEXT,
+        quiet_end TEXT,
+        team_tz TEXT
     );
     CREATE TABLE IF NOT EXISTS campaign_members (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
