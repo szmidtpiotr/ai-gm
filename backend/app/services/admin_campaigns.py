@@ -84,6 +84,17 @@ def get_campaign_gm_plan_admin(campaign_id: int) -> dict:
             characters_count = int(crow["n"] if crow else 0)
         except sqlite3.OperationalError:
             characters_count = 0
+        # #966: surface plan_degraded so the admin Plan GM tab can badge it and
+        # decide whether to offer the "♻ Regeneruj plan MG" button.
+        plan_degraded = False
+        try:
+            drow = conn.execute(
+                "SELECT plan_degraded FROM campaigns WHERE id = ?",
+                (campaign_id,),
+            ).fetchone()
+            plan_degraded = bool(drow["plan_degraded"]) if drow else False
+        except sqlite3.OperationalError:
+            plan_degraded = False
         raw_plan = str(row["gm_plan_json"] or "")
         normalized = normalize_gm_plan(raw_plan)
         divergence = evaluate_campaign_plan_divergence(
@@ -113,6 +124,7 @@ def get_campaign_gm_plan_admin(campaign_id: int) -> dict:
             "characters_count": characters_count,
             "divergence": divergence,
             "story_gravity": story_gravity,
+            "plan_degraded": plan_degraded,
         }
     finally:
         conn.close()
@@ -222,7 +234,11 @@ def regenerate_campaign_gm_plan_admin(campaign_id: int) -> dict:
             raise ValueError(err or "gm_plan_regeneration_failed")
     finally:
         conn.close()
-    return get_campaign_gm_plan_admin(campaign_id)
+    # #966: report ok + post-regen plan_degraded so the UI can show
+    # "Plan wygenerowany" vs "Nadal uproszczony — sprawdź LLM".
+    result = get_campaign_gm_plan_admin(campaign_id)
+    result["ok"] = True
+    return result
 
 
 def regenerate_campaign_summary_admin(campaign_id: int) -> dict:

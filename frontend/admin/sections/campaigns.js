@@ -552,11 +552,20 @@ function filterTableGeneric(input, tableId, nameClass) {
              </div>`
           : '';
 
+        // #966: degraded-plan banner — weak LLM fell back to a stub plan.
+        const degradedBanner = d.plan_degraded
+          ? `<div style="margin-bottom:12px;padding:8px 12px;border-radius:var(--r);border:1px solid #f59e0b;background:#f59e0b22;display:flex;align-items:center;gap:10px">
+               <span style="font-weight:700;color:#f59e0b">⚠ Plan uproszczony</span>
+               <span style="font-size:0.78rem;color:var(--t2)">LLM nie wygenerował pełnego planu MG — użyto planu zapasowego.</span>
+               <button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="regenerateCampPlan(${campId}, this)">♻ Regeneruj plan MG</button>
+             </div>`
+          : '';
+
         const arcs = plan?.arcs || {};
         const arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
-        if (!arcList.length) { panel.innerHTML = gravityBadge + '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
+        if (!arcList.length) { panel.innerHTML = gravityBadge + degradedBanner + '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
         const activeArcId = plan?.active_arc_id;
-        panel.innerHTML = gravityBadge + arcList.map((arc, arcIdx) => {
+        panel.innerHTML = gravityBadge + degradedBanner + arcList.map((arc, arcIdx) => {
           const isActive = arc.status === 'active' || arc.id === activeArcId;
           const currentScene = typeof arc.current_scene_ordinal === 'number' ? arc.current_scene_ordinal : null;
           const goals = arc.scene_goals || [];
@@ -603,6 +612,7 @@ function filterTableGeneric(input, tableId, nameClass) {
           </div>`;
         }).join('') +
           `<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+            <button class="btn btn-sm btn-secondary" onclick="regenerateCampPlan(${campId}, this)">♻ Regeneruj plan MG</button>
             <button class="btn btn-sm btn-secondary" onclick="advanceCampScene(${campId}, this)">➡ Następna scena</button>
           </div>`;
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
@@ -1248,6 +1258,25 @@ function filterTableGeneric(input, tableId, nameClass) {
     } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
   }
 
+  // #966 — regenerate the GM plan via current LLM; reports ok / still degraded.
+  async function regenerateCampPlan(campId, btn) {
+    if (!confirm('Zregenerować plan MG? Nadpisze obecny gm_plan_json kampanii.')) return;
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Generuję…';
+    try {
+      const d = await apiFetch(`/api/admin/campaigns/${campId}/gm-plan/regenerate-initial`, { method:'POST' });
+      if (d.plan_degraded) {
+        showToast('Nadal uproszczony — sprawdź LLM (model za słaby na JSON-plan).', 'error');
+      } else {
+        showToast('Plan wygenerowany.', 'success');
+      }
+      btn.closest('[data-loaded]').dataset.loaded = '';
+      btn.closest('[data-loaded]').innerHTML = '';
+      _loadCampTab(campId, 'plan', btn.closest('[data-loaded]'), btn.closest('.modal-overlay'));
+    } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; btn.textContent = orig; }
+  }
+
   async function _loadWorkshopEncounters(campId) {
     const list = document.getElementById('workshop-encounter-list');
     if (!list) return;
@@ -1458,6 +1487,7 @@ export async function init(panel) {
     _campOpenInspector,   // HI5 (#628) — link do Inspektora Bohatera
     openCampaignModal,
     advanceCampScene,
+    regenerateCampPlan,
     sendWorkshopMsg,
     _injectEncounterFromWorkshop,
   });
