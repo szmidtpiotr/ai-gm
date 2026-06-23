@@ -628,23 +628,9 @@ async function showCodexLibrary() {
 }
 
 
-// ── #901 — Księga Zasad iframe overlay ────────────────────────────────────
+// ── #901 — Księga Zasad — otwiera w nowej zakładce
 function showRulesBook() {
-    const overlay = document.createElement("div");
-    overlay.className = "rules-book-overlay";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.innerHTML = `
-        <div class="rules-book-overlay__header">
-            <span class="rules-book-overlay__title">Księga Zasad</span>
-            <button type="button" class="rules-book-overlay__close" aria-label="Zamknij">✕ Zamknij</button>
-        </div>
-        <iframe class="rules-book-overlay__frame" src="/rules/" title="Ksiega Zasad"></iframe>`;
-    const close = () => overlay.remove();
-    overlay.querySelector(".rules-book-overlay__close").addEventListener("click", close);
-    overlay.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
-    document.body.appendChild(overlay);
-    overlay.querySelector(".rules-book-overlay__close").focus();
+    window.open('/rules/', '_blank', 'noopener');
 }
 
 // ── E28: Tutorial offer for first-time players ───────────────────────────────
