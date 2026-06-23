@@ -252,14 +252,14 @@ class TestCharacterStateBlock:
         assert "Nieprzytomny" in block
 
     def test_fear_condition_separate(self, inj):
-        conditions = [{"condition_type": "fear_frightened", "severity": 2, "expires_at": None, "source": "test"}]
+        conditions = [{"condition_type": "frightened", "severity": 2, "expires_at": None, "source": "test"}]
         char = inj._get_character(1)
         block = inj._build_character_state_block(char, conditions)
-        assert "Przestraszony/a" in block
+        assert "Przerażony/a" in block
         assert "Strach:" in block
         # Fear NOT in aktywne stany
         active_line = next(l for l in block.split("\n") if "Aktywne" in l)
-        assert "fear_frightened" not in active_line
+        assert "frightened" not in active_line
 
     def test_other_conditions_listed(self, inj):
         conditions = [{"condition_type": "poisoned", "severity": 1, "expires_at": None, "source": "test"}]
