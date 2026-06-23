@@ -4205,7 +4205,7 @@ body:has(#game-screen.screen--active) .sheet-panel {
   padding: 4px 0;
   transition: color 0.15s;
 }
-.mbb-btn__icon { font-size: 20px; line-height: 1; }
+.mbb-btn__icon { display: flex; align-items: center; justify-content: center; line-height: 1; }
 .mbb-btn__label { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; }
 .mbb-btn:active { transform: scale(0.96); }
 .mbb-btn--active { color: var(--accent); }
