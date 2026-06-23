@@ -72,6 +72,8 @@ services:
       - ./game_mechanics.md:/app/game_mechanics.md:ro
       # Dungeon tile images — shared with frontend nginx (served at /images/tiles/)
       - ./frontend/images/tiles:/app/tiles:rw
+      # Showcase CMS data — backend writes here, nginx serves from frontend mount (#920 W15)
+      - ./frontend/showcase/data:/app/showcase_data:rw
     labels:
       - service=backend-dev
     networks:
