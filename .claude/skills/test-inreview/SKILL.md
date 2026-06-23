@@ -13,6 +13,15 @@ description: >-
 Cel: przetestować WSZYSTKIE otwarte issue z labelką `review` w minimalnej liczbie przebiegów,
 zamknąć pewne, skomentować nierozstrzygalne, zalogować nowe bugi.
 
+## ⛔ KONTRAKT — TRYB TEST, NIE NAPRAWA
+
+**Podczas testów NIE naprawiasz błędów.** Znaleziony bug → zaloguj issue → jedź dalej.
+
+Wyjątek: szybka naprawa (< 5 min, 1-2 linie) która **blokuje dalsze testowanie tej grupy**.
+Wtedy napraw, zacommituj jedną linią, kontynuuj. Nie rozwijaj.
+
+Reguła prosta: jeśli zastanawiasz się czy naprawić — nie naprawiaj. Zaloguj i jedź dalej.
+
 ## ⛔ KONTRAKT
 
 - **Zawsze rób świeży skan** labelki `review` przed startem — lista zmienia się między sesjami.
