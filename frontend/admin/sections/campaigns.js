@@ -621,8 +621,9 @@ function filterTableGeneric(input, tableId, nameClass) {
             if (!text) return '';
             if (text.length <= 150) return _esc(text);
             const id = 'tx953_' + (++_cid);
-            return `<span id="${id}" style="display:-webkit-box;-webkit-line-clamp:${lines};-webkit-box-orient:vertical;overflow:hidden">${_esc(text)}</span>` +
-              `<button onclick="var e=document.getElementById('${id}');if(e.style.webkitLineClamp!==''){e.style.webkitLineClamp='';e.style.overflow='visible';e.style.display='block';this.textContent='Zwiń';}else{e.style.webkitLineClamp='${lines}';e.style.overflow='hidden';e.style.display='-webkit-box';this.textContent='Rozwiń';}" style="font-size:0.7rem;color:var(--amber);background:none;border:none;cursor:pointer;padding:2px 0 0;display:block">Rozwiń</button>`;
+            const maxH = (lines * 1.6) + 'em';
+            return `<div id="${id}" style="overflow:hidden;max-height:${maxH}">${_esc(text)}</div>` +
+              `<button onclick="var e=document.getElementById('${id}');if(e.style.maxHeight){e.style.maxHeight='';this.textContent='Zwiń';}else{e.style.maxHeight='${maxH}';this.textContent='Rozwiń';}" style="font-size:0.7rem;color:var(--amber);background:none;border:none;cursor:pointer;padding:2px 0 0;display:block">Rozwiń</button>`;
           };
           return `<div style="padding:0">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
