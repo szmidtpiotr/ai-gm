@@ -129,7 +129,7 @@ async function setupMpViaApi(users, { title = "#MP-pw", timer = 1 } = {}) {
 
   const created = await api("POST", "/api/multiplayer/campaigns", {
     userId: host.userId,
-    body: { title, system_id: "fantasy", round_timer_minutes: timer, max_players: Math.max(players.length, 2) },
+    body: { title, system_id: "fantasy", round_timer_minutes: timer, max_players: Math.max(players.length + spectators.length, 2) },
   });
   if (created.status !== 200) throw new Error(`create lobby failed: ${created.status} ${JSON.stringify(created.body)}`);
   const campaignId = created.body.campaign_id;

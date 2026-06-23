@@ -1579,6 +1579,12 @@ async function handleSendMessage() {
     const content = elements.chatInput.value.trim();
     if (!content) return;
 
+    // MP mode: delegate before clearing input — handleSubmit reads + clears input internally
+    if (window.multiplayerUI?.isActive?.()) {
+        await window.multiplayerUI.handleSubmit();
+        return;
+    }
+
     elements.chatInput.value = '';
     hideCharCounter();
 

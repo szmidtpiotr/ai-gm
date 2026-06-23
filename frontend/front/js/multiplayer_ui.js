@@ -1162,12 +1162,37 @@ async function sendPartyMessage() {
     await window.multiplayerUI?._sendChat?.(msg);
 }
 
-// #959: enter a started MP game by campaign ID — fetches campaign object then delegates to enterGame
+// #959/#960: enter a started MP game by campaign ID — fetches campaign then activates MP UI.
+// enterGame() calls multiplayerUI.deactivate() as cleanup, so activate() must be called
+// explicitly here to start round polling + show the party chat panel.
 async function enterMpGame(campaignId) {
     try {
         const campaign = await _lobbyFetch(`/campaigns/${campaignId}`);
         if (typeof enterGame === 'function') {
             await enterGame(campaign);
+        }
+        if (campaign.mode === 'multiplayer' && window.multiplayerUI?.activate) {
+            let timerMin = 1440, isSpectator = false;
+            let charId = null, charName = 'Bohater';
+            try {
+                const lobby = await _lobbyFetch(`/multiplayer/campaigns/${campaignId}/lobby`);
+                timerMin = lobby.round_timer_minutes ?? 1440;
+                const me = (lobby.members || []).find(m => m.user_id === currentUser?.id);
+                isSpectator = me?.role === 'spectator';
+                charId = me?.character_id ?? null;
+            } catch (_) {}
+            if (!charId) {
+                charId = (typeof currentHero !== 'undefined' ? currentHero?.id : null)
+                      ?? (typeof characterData !== 'undefined' ? characterData?.id : null);
+            }
+            charName = (typeof currentHero !== 'undefined' && currentHero?.name) ? currentHero.name
+                     : (typeof characterData !== 'undefined' && characterData?.name) ? characterData.name
+                     : 'Bohater';
+            if (isSpectator && typeof _enterGameAsSpectator === 'function') {
+                await _enterGameAsSpectator(campaign, Math.max(1, Math.round(timerMin / 60)));
+                return;
+            }
+            await window.multiplayerUI.activate(campaign.id, charId, charName, false, timerMin, isSpectator);
         }
     } catch (e) {
         console.error('[MP] enterMpGame failed:', e);
