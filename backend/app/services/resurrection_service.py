@@ -36,6 +36,7 @@ import sqlite3
 from typing import Any
 
 import structlog
+from app.services.combat_service import is_combat_active, end_combat
 
 logger = structlog.get_logger()
 
@@ -592,6 +593,16 @@ def apply_resurrection(
         )
 
     conn.commit()
+
+    # End any active combat so the revived hero doesn't re-enter an enemy turn mid-fight.
+    # Reason "resurrected" avoids triggering the player_dead / solo_death chain.
+    if campaign_id:
+        try:
+            if is_combat_active(None, campaign_id):
+                end_combat(campaign_id, "resurrected")
+        except Exception as e:
+            logger.warning("end_combat_on_resurrect_failed", error=str(e), campaign_id=campaign_id)
+
     logger.info(
         "hero_resurrected",
         character_id=character_id,
