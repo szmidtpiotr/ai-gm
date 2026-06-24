@@ -4,7 +4,7 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
-## v1.5.5 — 2026-06-24 — Czar AoE maga + panel wizytówki + poprawki walki i lochów
+## v1.5.6 — 2026-06-24 — Czar AoE maga + panel wizytówki + poprawki walki i lochów
 
 Seria poprawek i dwóch nowych funkcji po v1.5.4: mąg dostaje czar obszarowy w starterze, administracja — prosty panel edycji wizytówki, a walka i lochy zbierają kilka gryzących bugów (wyścig animacji kości, pętla śmierci po wskrzeszeniu, widoczność kart walki).
 
