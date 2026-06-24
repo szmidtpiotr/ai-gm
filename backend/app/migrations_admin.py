@@ -2824,6 +2824,26 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
     """, "v2-spells-faza-b-b8-starter-backfill")
 
+    # ── FAZA B / B11b (#983): najtańszy czar AoE maga — spark_burst (tier 1) ──
+    # Rozszerza B11 (#659, silnik attack_aoe). spark_burst = AoE od L1: 1d4 na
+    # WSZYSTKICH żywych wrogów (aoe=1), mana 3. Słabszy od burning_arc (T2, 1d6,
+    # mana 4) → zachowana progresja. Wchodzi do startowego zestawu maga (5. czar).
+    # Wartości startowe (Numbers Policy) — tuning po B13.
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, rank2_json, rank3_json) VALUES
+        ('spark_burst', 'Iskrowy Wybuch', 1, 3, 'attack_aoe', '1d4', NULL, NULL, NULL, 1, 'any', 1, 'Wybuch iskier rani wszystkich pobliskich wrogów.', '{\"mana_cost\":3,\"damage_die\":\"1d6\"}', '{\"mana_cost\":2,\"damage_die\":\"2d4\"}')
+    """, "v2-spells-b11b-spark-burst")
+
+    # Backfill spark_burst do wszystkich istniejących scholarów (nie-destrukcyjny).
+    # MUSI biec PO seedzie wyżej (FK character_spells.spell_key → game_config_spells.key).
+    _exec("""
+        INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank)
+        SELECT c.id, 'spark_burst', 1
+        FROM characters c
+        WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
+    """, "v2-spells-b11b-spark-burst-backfill")
+
     # ── FAZA B / B10 (#657): pula absorpcji (temp-HP) dla tarcz maga ──────────
     # ward_of_iron/mage_armor dostają effect_json.absorb — ile obrażeń wroga pula
     # pochłonie, zanim spadnie HP. Wartości startowe (Numbers Policy): ward 6 (T1),

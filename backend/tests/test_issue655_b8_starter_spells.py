@@ -16,7 +16,8 @@ import pytest
 import app.services.spell_service as spell_service
 
 # Kanoniczny startowy zestaw B8 (źródło: CZĘŚĆ AK.4 + decyzja D-obronna 2026-06-15)
-B8_STARTER = {"fire_bolt", "minor_heal", "ward_of_iron", "detect_magic"}
+# B11b (#983): dodano spark_burst (tier-1 AoE) → starter ma teraz 5 czarów.
+B8_STARTER = {"fire_bolt", "minor_heal", "ward_of_iron", "detect_magic", "spark_burst"}
 # Stary zestaw (przed B8) — NIE może być nadawany nowym postaciom przez grant
 LEGACY_STARTER = {"magic_bolt", "mend_wounds", "magic_light"}
 
@@ -30,7 +31,8 @@ BACKFILL_SQL = """
         SELECT 'fire_bolt' AS spell_key UNION ALL
         SELECT 'minor_heal' UNION ALL
         SELECT 'ward_of_iron' UNION ALL
-        SELECT 'detect_magic'
+        SELECT 'detect_magic' UNION ALL
+        SELECT 'spark_burst'
     ) s
     WHERE JSON_EXTRACT(c.sheet_json, '$.archetype') = 'scholar'
 """

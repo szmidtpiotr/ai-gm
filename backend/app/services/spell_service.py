@@ -564,14 +564,15 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
 def grant_starting_spells(
     character_id: int, conn: sqlite3.Connection | None = None
 ) -> None:
-    """Grant Scholar's L1 starting kit (B8 #655): fire_bolt, minor_heal,
-    ward_of_iron, detect_magic — pełna tożsamość maga (atak/heal/obrona/utility),
-    4× tier 1 (spójne z bramką nauki L1 z B7). Wszystkie R1."""
+    """Grant Scholar's L1 starting kit (B8 #655 + B11b #983): fire_bolt,
+    minor_heal, ward_of_iron, detect_magic, spark_burst — pełna tożsamość maga
+    (atak ST / heal / obrona / utility / AoE), 5× tier 1 (spójne z bramką nauki
+    L1 z B7). spark_burst = najtańszy AoE maga (T1, 1d4). Wszystkie R1."""
     managed = conn is None
     if managed:
         conn = _get_db()
     try:
-        for spell_key in ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic"):
+        for spell_key in ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic", "spark_burst"):
             conn.execute(
                 "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
                 (character_id, spell_key),
