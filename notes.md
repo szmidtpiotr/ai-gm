@@ -171,11 +171,11 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 
 ## SMOKE-PW warrior — 2026-06-24
 - Kampania: #512 id=999964, [TEST] Wojownik id=2
-- Werdykt: **GRYWALNY Z ZASTRZEŻENIAMI** — P1: 2
-- Raport: https://github.com/szmidtpiotr/ai-gm/issues/512#issuecomment-4787649086
-- ✅ CP1 HUD, CP3 DB lokacja, CP4 NPC z DB, CP6 dice popup Stage 1, CP7 strefy walki, CP9 model dmg #826, CP17 czas gry
-- ❌ #984 Stage 2 damage popup brak | ❌ #985 Wskrzeszenie→tura wroga→śmierć loop
-- N/D: CP2 hex, CP5 test umiejętności, CP8 gate strefy, CP10 SF10, CP11 loot, CP12-14/16
+- Werdykt: **GRYWALNY Z ZASTRZEŻENIAMI** — P1: 3
+- Raport Run 1: https://github.com/szmidtpiotr/ai-gm/issues/512#issuecomment-4787649086
+- **Run 1** ✅ CP1 HUD, CP3 DB lokacja, CP4 NPC z DB, CP6 dice popup Stage 1, CP7 strefy walki, CP9 model dmg #826, CP17 czas gry | ❌ #984 Stage 2 damage popup brak | ❌ #985 Wskrzeszenie→tura wroga→śmierć loop
+- **Run 2** ✅ CP2 hex ruch, CP5 skill test Medycyna, CP11 combat loot, CP12 gate narracyjny, CP13 sklep kup+sprzedaj, CP16 konsumable w walce | ⚠ CP10 SF10 reakcja odpala ale wyświetla "? vs ?" zamiast wyników → #986 | ❌ CP8 NIETETOWALNY (bandyta zawsze dogania gracza → ta sama strefa)
+- Screenshots: temp-img/20260624_smoke-pw-warrior-r2/
 
 ## G15 #813 — Centralne flagi balansu MP (mp_balance.py) + strojenie kar wipe
 - Wdrożone commit 5b9c11a7 — nowy moduł mp_balance.py, refaktor _apply_mp_wipe, GET+PATCH /api/admin/sandbox/mp-balance
