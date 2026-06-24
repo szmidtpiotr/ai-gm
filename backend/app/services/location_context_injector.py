@@ -121,7 +121,27 @@ def _get_location_npcs(conn: sqlite3.Connection, location_key: str) -> list[dict
            WHERE location_key=? AND is_active=1""",
         (location_key,),
     ).fetchall()
-    return [dict(r) for r in rows]
+    if rows:
+        return [dict(r) for r in rows]
+
+    # Fallback: inherit NPCs from parent hub (one level up)
+    parent = conn.execute(
+        """SELECT p.key FROM game_locations gl
+           JOIN game_locations p ON p.id = gl.parent_id
+             AND COALESCE(p.is_active, 1) = 1
+           WHERE gl.key=? AND COALESCE(gl.is_active, 1) = 1""",
+        (location_key,),
+    ).fetchone()
+    if not parent:
+        return []
+
+    parent_rows = conn.execute(
+        """SELECT npc_key, assignment_type
+           FROM location_npc_assignments
+           WHERE location_key=? AND is_active=1""",
+        (parent["key"],),
+    ).fetchall()
+    return [dict(r) for r in parent_rows]
 
 
 def _get_hex_neighbors(conn: sqlite3.Connection, q: int, r: int) -> list[dict]:
