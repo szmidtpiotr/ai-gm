@@ -1392,7 +1392,10 @@ function appendCombatTurnCard(row) {
         let meta = {};
         try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
         let txt;
-        if (String(meta.reaction || '') === 'shield_block') {
+        const rxType = String(meta.reaction || '');
+        if (rxType === 'take') {
+            txt = `💥 Przyjął cios (${meta.damage ?? 0} obrażeń)`;
+        } else if (rxType === 'shield_block') {
             if (meta.full_block === true) {
                 txt = `🛡 Blok pełny — atak całkowicie odparty (test ${meta.block_total ?? '?'} vs ${meta.dc ?? '?'})`;
             } else if (Number(meta.reduction || 0) > 0) {
@@ -1401,6 +1404,7 @@ function appendCombatTurnCard(row) {
                 txt = `🛡 Blok nieudany (test ${meta.block_total ?? '?'} vs ${meta.dc ?? '?'})${meta.durability_hit ? ' — tarcza uszkodzona' : ''}`;
             }
         } else {
+            // dodge (or unknown fallback — always has dodge_total + attack_roll from backend)
             const dodged = meta.dodged === true;
             txt = dodged
                 ? `🛡 Unik udany — atak mija (test ${meta.dodge_total ?? '?'} vs ${meta.attack_roll ?? '?'})`
