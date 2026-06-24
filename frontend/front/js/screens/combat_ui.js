@@ -11,6 +11,10 @@ let enemyTurnInFlight = false;
 // gdy ŻADEN z tych fetchy nie trwa — wtedy zdejmuje zaciśnięty overlay/akcję (watchdog re-sync).
 let enemyTurnFetchActive = false;     // true tylko między POST enemy-turn a jego odpowiedzią
 let playerActionFetchActive = false;  // true tylko między POST akcji gracza a jego odpowiedzią
+// #984: blokuje pollCombatState przed wywołaniem handleCombatEnded podczas animacji kości.
+// Na zabójczym ciosie combat.status='ended' pojawia się zanim Stage 2 popup zacznie — bez
+// tej flagi poll wywołuje handleCombatEnded (victory overlay) w trakcie animacji Stage 2.
+let _diceAnimationActive = false;
 let _enemyTurnStartedAt = 0;          // timestamp startu POST enemy-turn (awaryjny watchdog)
 let reactionPending = false;   // SF10 (#633): okno reakcji otwarte — wstrzymuje pętlę tury wroga
 let _reactionTimer = null;     // SF10: handle odliczania 8 s (auto-take)
@@ -45,7 +49,10 @@ async function pollCombatState() {
 
         if (cs.status === 'ended') {
             lastCombatState = cs;
-            if (combatActive) {
+            // #984: nie wywołuj handleCombatEnded podczas animacji kości Stage 2 —
+            // na zabójczym ciosie victory overlay nakryłby Stage 2 popup zanim gracz go zobaczy.
+            // _handleCombatAttackResult wywoła handleCombatEnded po zakończeniu animacji.
+            if (combatActive && !_diceAnimationActive) {
                 window.clog?.event('combat_ended_detected', { reason: cs.ended_reason });
                 await handleCombatEnded(cs);
             }
@@ -1812,6 +1819,7 @@ function play2dDiceRoll(container, ds, forced, onDone) {
 // landing on the backend's per-die results. Returns a Promise that resolves when
 // the modal closes (auto-dwell or on click) so combat can continue.
 function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = null, outcome = null) {
+    _diceAnimationActive = true;  // #984: blokuj poll przed handleCombatEnded
     return new Promise((resolve) => {
         const overlay     = document.getElementById('dice-overlay');
         const container   = document.getElementById('dice-container');
@@ -1823,7 +1831,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
         const resultNum   = document.getElementById('dice-result-num');
         const resultTot   = document.getElementById('dice-result-total');
         const resultVerd  = document.getElementById('dice-result-verdict');
-        if (!overlay || !container || !resultCard || !resultNum) { resolve(); return; }
+        if (!overlay || !container || !resultCard || !resultNum) { _diceAnimationActive = false; resolve(); return; }
 
         const d20 = Math.max(1, Math.min(20, parseInt(forcedD20, 10) || 1));
 
@@ -1853,6 +1861,7 @@ function playCombatDiceRoll(forcedD20, label, breakdown = null, damageStage = nu
             clearDice3D();  // #829: also clear the modern 3D dice
             if (skillCard) skillCard.hidden = false;
             if (skipBtn)   skipBtn.style.display = '';
+            _diceAnimationActive = false;  // #984: odblokuj poll — animacja gotowa
             resolve();
         };
 
