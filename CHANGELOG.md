@@ -4,6 +4,29 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.5 — 2026-06-24 — Czar AoE maga + panel wizytówki + poprawki walki i lochów
+
+Seria poprawek i dwóch nowych funkcji po v1.5.4: mąg dostaje czar obszarowy w starterze, administracja — prosty panel edycji wizytówki, a walka i lochy zbierają kilka gryzących bugów (wyścig animacji kości, pętla śmierci po wskrzeszeniu, widoczność kart walki).
+
+### Added
+
+**B11b — czar `spark_burst` (AoE tier 1) w starterze maga (#983)**
+- Mąg startuje teraz z `spark_burst` — czar ataku obszarowego pierwszego tieru, dodany do startowego zestawu zaklęć.
+
+**W15 — panel edycji wizytówki w adminie (#920)**
+- Nowy panel CMS-lite w sekcji Świat → Wizytówka: edycja treści strony showcase bez potrzeby deployu.
+
+### Fixed
+
+- **#967** (uzupełnienie): dodatkowy guard CSS `body.combat-active !important` — header nie ucieka przy scrollu nawet w edge-case'ach po zmianie rozmiaru okna.
+- **#734**: wejście do walki w lochu używa teraz `pollCombatState` zamiast przestarzałego `loadCombatState` — spójne z resztą flow walki.
+- **#982**: fallback na lokację-rodzica w `_get_location_npcs` — NPC przypisane do pod-lokacji widoczne w głównej lokacji.
+- **#984**: guard `_diceAnimationActive` w `pollCombatState` — eliminuje wyścig gdzie poll nadpisywał animację kości.
+- **#985**: po wskrzeszeniu aktywna walka jest kończona — zapobiega nieskończonej pętli śmierci w turze wroga.
+- **#986**: karta walki poprawnie wyświetla reakcję `take` zamiast pustego stanu.
+
+---
+
 ## v1.5.4 — 2026-06-24 — Regeneracja planu GM + kompaktowy interfejs walki i przygody + dopięcie multiplayera + historia kampanii
 
 Duża porcja dopracowania interfejsu gracza i mechaniki: GM może teraz odbudować zepsuty plan kampanii jednym przyciskiem, walka i pasek przygody dostały kompaktowy, czytelny układ, multiplayer został domknięty i przetestowany end-to-end, a stare kampanie da się zarchiwizować i przeglądać.
