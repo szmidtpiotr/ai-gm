@@ -3149,7 +3149,7 @@ async function _dungeonMove(direction, opts = {}) {
             const campResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}`);
             if (campResp?.campaign) {
                 currentCampaignId = campResp.campaign.id;
-                await loadCombatState();
+                await pollCombatState();
             }
         }
 
