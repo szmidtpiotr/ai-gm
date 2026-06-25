@@ -86,6 +86,7 @@ from app.routers.game_mechanics import router as game_mechanics_router
 from app.routers.db_lint import router as db_lint_router
 from app.routers.admin_dice_config import admin_router as dice_config_admin_router, public_router as dice_config_public_router
 from app.routers.showcase import router as showcase_router
+from app.routers.local_map import router as local_map_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -741,6 +742,7 @@ app.include_router(multiplayer_router, prefix="/api")
 app.include_router(party_chat_router, prefix="/api")
 app.include_router(game_mechanics_router)
 app.include_router(db_lint_router)
+app.include_router(local_map_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")

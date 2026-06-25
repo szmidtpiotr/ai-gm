@@ -495,7 +495,18 @@ def persist_ai_generated_location(
             location_id=new_row["id"],
             label=intent.target_label,
         )
-        return dict(new_row)
+
+        # #993 FAZA ML: auto-attach local hex when sub-loc is under a hub
+        new_loc_dict = dict(new_row)
+        parent_k = new_loc_dict.get("parent_key") or (intent.parent_key if intent.parent_key else None)
+        if parent_k and new_loc_dict.get("location_type") == "sub":
+            try:
+                from app.services.local_hex_service import auto_assign_local_hex
+                auto_assign_local_hex(db, new_loc_dict["key"], parent_k, campaign_id=campaign_id)
+            except Exception as _lh_err:
+                logger.warning("local_hex_auto_assign_failed", error=str(_lh_err))
+
+        return new_loc_dict
     except sqlite3.Error as exc:
         logger.error("persist_location_error", error=str(exc))
         return None

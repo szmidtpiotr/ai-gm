@@ -42,7 +42,7 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
     hexes: dict[tuple[int, int], dict] = {}
     rows = conn.execute(
         "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key "
-        "FROM world_hexes WHERE is_active = 1"
+        "FROM world_hexes WHERE is_active = 1 AND map_level = 0"
     ).fetchall()
     for row in rows:
         q, r = int(row["q"]), int(row["r"])
