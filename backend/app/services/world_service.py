@@ -17,6 +17,8 @@ import sqlite3
 import structlog
 from typing import Any
 
+from app.services.llm_service import generate_chat
+
 logger = structlog.get_logger()
 
 DB_PATH = "/data/ai_gm.db"
@@ -1134,3 +1136,90 @@ def generate_sublocs_for_settlement(
 
     conn.commit()
     return created
+
+
+def enrich_sublocs_labels(
+    conn: sqlite3.Connection,
+    parent_key: str,
+    subloc_keys: list[str] | None = None,
+) -> list[dict]:
+    """#996 — LLM-enrich labels/descriptions of auto-generated sub-locations.
+
+    Fetches sub-locs under parent_key with ai_generated=0 (or the specific
+    subloc_keys if provided), asks LLM for thematic Polish names, then persists
+    label+description and sets ai_generated=1.  Idempotent: sub-locs already
+    enriched (ai_generated=1) are skipped.
+
+    Returns list of updated dicts: {"key", "label", "description"}.
+    """
+    parent = conn.execute(
+        "SELECT key, label, location_subtype, description FROM game_locations "
+        "WHERE key = ? AND is_active = 1",
+        (parent_key,),
+    ).fetchone()
+    if not parent:
+        return []
+
+    if subloc_keys:
+        placeholders = ",".join("?" * len(subloc_keys))
+        rows = conn.execute(
+            f"SELECT key, location_subtype FROM game_locations "
+            f"WHERE parent_key = ? AND ai_generated = 0 AND key IN ({placeholders}) AND is_active = 1",
+            [parent_key] + list(subloc_keys),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT key, location_subtype FROM game_locations "
+            "WHERE parent_key = ? AND ai_generated = 0 AND is_active = 1",
+            (parent_key,),
+        ).fetchall()
+
+    if not rows:
+        return []
+
+    subloc_list = [{"key": r["key"], "subtype": r["location_subtype"]} for r in rows]
+
+    prompt = (
+        f"Jesteś narratorem świata fantasy słowiańskiego (Kresy). "
+        f"Osada: '{parent['label']}' (typ: {parent['location_subtype'] or 'osada'}).\n"
+        f"Opis osady: {parent['description'] or 'brak opisu'}.\n\n"
+        f"Nadaj tematyczne nazwy i krótkie opisy atmosferyczne (1-2 zdania po polsku) "
+        f"dla następujących pod-lokacji tej osady:\n"
+        + "\n".join(f"- key: {s['key']}, subtype: {s['subtype']}" for s in subloc_list)
+        + "\n\nOdpowiedz WYŁĄCZNIE w formacie JSON:\n"
+        '{"sublocs": [{"key": "...", "label": "...", "description": "..."}]}'
+    )
+
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        raw = generate_chat(messages, call_type="subloc_enrich")
+    except Exception as exc:
+        logger.warning("subloc_enrich_llm_failed", parent_key=parent_key, error=str(exc))
+        return []
+
+    try:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        data = json.loads(raw[start:end])
+        enriched_list = data.get("sublocs", [])
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.warning("subloc_enrich_parse_failed", parent_key=parent_key, error=str(exc))
+        return []
+
+    updated: list[dict] = []
+    valid_keys = {r["key"] for r in rows}
+    for item in enriched_list:
+        key = item.get("key", "")
+        label = item.get("label", "")
+        description = item.get("description", "")
+        if key not in valid_keys or not label:
+            continue
+        conn.execute(
+            "UPDATE game_locations SET label = ?, description = ?, ai_generated = 1, "
+            "updated_at = datetime('now') WHERE key = ?",
+            (label, description, key),
+        )
+        updated.append({"key": key, "label": label, "description": description})
+
+    conn.commit()
+    return updated

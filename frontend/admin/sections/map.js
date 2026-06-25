@@ -1237,7 +1237,10 @@ const _ROW_REGISTRY = {
       ${isPending ? `<div style="display:flex;gap:6px">
         <button class="btn btn-sm btn-primary" onclick="_wbApproveLocation('${_esc(loc.key)}', this)">✓ Zatwierdź</button>
         <button class="btn btn-sm btn-danger" onclick="_wbDiscardLocation('${_esc(loc.key)}', this)">✕ Odrzuć</button>
-      </div>` : `<div style="font-size:0.78rem;color:var(--t3)">Lokacja globalna — widoczna w każdej kampanii.</div>`}
+      </div>` : `<div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:0.78rem;color:var(--t3)">Lokacja globalna — widoczna w każdej kampanii.</div>
+        <button class="btn btn-sm btn-secondary" onclick="_wbEnrichSublocs('${_esc(loc.key)}', this)">🪄 Nadaj nazwy LLM (sub-lokacje)</button>
+      </div>`}
     `;
   }
 
@@ -1309,10 +1312,34 @@ const _ROW_REGISTRY = {
           const body = { action: 'approve', generate_sublocs: selected.length ? selected : null };
           const res = await apiFetch(`/api/admin/world/review/location/${key}`, { method: 'POST', body: JSON.stringify(body) });
           const cnt = res.generated_sublocs ? res.generated_sublocs.length : 0;
-          _showToast(cnt ? `Zatwierdzono + ${cnt} pod-lokacji.` : 'Zatwierdzono.', 'success');
-          overlay.remove();
-          onSuccess();
-          resolve();
+          if (cnt > 0) {
+            // #996 — show enrich button before closing modal
+            const foot = overlay.querySelector('.modal-foot');
+            foot.innerHTML = `
+              <div style="width:100%;text-align:left;font-size:0.78rem;color:var(--t2)">
+                ✓ Wygenerowano ${cnt} pod-lokacji.
+              </div>
+              <button class="btn btn-secondary" id="subloc-skip-enrich-btn">Zamknij</button>
+              <button class="btn btn-primary" id="subloc-enrich-btn">🪄 Nadaj nazwy LLM</button>
+            `;
+            foot.querySelector('#subloc-skip-enrich-btn').addEventListener('click', () => {
+              overlay.remove(); onSuccess(); resolve();
+            });
+            foot.querySelector('#subloc-enrich-btn').addEventListener('click', async () => {
+              const eb = foot.querySelector('#subloc-enrich-btn');
+              eb.disabled = true; eb.textContent = '⏳ Pytam LLM…';
+              try {
+                const er = await apiFetch(`/api/admin/world/locations/${key}/enrich-sublocs`, { method: 'POST', body: JSON.stringify({}) });
+                _showToast(`🪄 Wzbogacono ${er.enriched} nazw sub-lokacji.`, 'success');
+              } catch(e) {
+                _showToast('Wzbogacanie nie powiodło się — sub-lokacje mają generyczne nazwy.', 'warn');
+              }
+              overlay.remove(); onSuccess(); resolve();
+            });
+          } else {
+            _showToast('Zatwierdzono.', 'success');
+            overlay.remove(); onSuccess(); resolve();
+          }
         } catch(e) {
           _showToast(e.message || 'Błąd', 'error');
           confirmBtn.disabled = false; confirmBtn.textContent = '✓ Zatwierdź + generuj';
@@ -1347,6 +1374,21 @@ const _ROW_REGISTRY = {
       if (badge) { badge.textContent = cnt ? `${cnt} oczekujące` : ''; badge.style.display = cnt ? '' : 'none'; }
       _wbRender(); _wbClearDetail();
     } catch(e) { _showToast(e.message || 'Błąd', 'error'); btn.disabled = false; btn.textContent = '✕ Odrzuć'; }
+  }
+
+  async function _wbEnrichSublocs(key, btn) {
+    btn.disabled = true; btn.textContent = '⏳ Pytam LLM…';
+    try {
+      const res = await apiFetch(`/api/admin/world/locations/${key}/enrich-sublocs`, { method: 'POST', body: JSON.stringify({}) });
+      if (res.enriched > 0) {
+        _showToast(`🪄 Wzbogacono ${res.enriched} nazw sub-lokacji.`, 'success');
+      } else {
+        _showToast('Brak sub-lokacji do wzbogacenia (wszystkie już wzbogacone lub brak).', 'info');
+      }
+    } catch(e) {
+      _showToast(e.message || 'Błąd wzbogacania.', 'error');
+    }
+    btn.disabled = false; btn.textContent = '🪄 Nadaj nazwy LLM (sub-lokacje)';
   }
 
   function _wbRenderThrottled() {

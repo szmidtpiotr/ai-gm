@@ -20,6 +20,7 @@ from app.services.world_service import (
     approve_entity,
     discard_entity,
     generate_sublocs_for_settlement,
+    enrich_sublocs_labels,
     SETTLEMENT_SUBLOC_DEFAULTS,
     SETTLEMENT_SUBTYPES,
     SUBLOC_SAFE_FOR_REST,
@@ -315,5 +316,29 @@ def get_subloc_defaults(key: str):
             "is_settlement": subtype in SETTLEMENT_SUBTYPES,
             "checklist": checklist,
         }
+    finally:
+        conn.close()
+
+
+class EnrichSublocsRequest(_BaseModel):
+    subloc_keys: list[str] | None = None
+
+
+@router.post("/locations/{key}/enrich-sublocs")
+def enrich_sublocs(key: str, req: EnrichSublocsRequest = None):
+    """#996 — LLM-enrich labels/descriptions for auto-generated sub-locations.
+
+    Calls the LLM with settlement context + sub-location subtypes and
+    stores thematic Polish names.  Sub-locs with ai_generated=1 are skipped
+    (idempotent).  On LLM failure the sub-locs keep their generic labels.
+    """
+    if req is None:
+        req = EnrichSublocsRequest()
+    conn = _get_db()
+    try:
+        updated = enrich_sublocs_labels(conn, key, subloc_keys=req.subloc_keys)
+        return {"enriched": len(updated), "sublocs": updated}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
     finally:
         conn.close()
