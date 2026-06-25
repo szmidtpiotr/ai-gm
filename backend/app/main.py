@@ -614,6 +614,20 @@ async def lifespan(app: FastAPI):
             _backfill_terrain_tags()
         except Exception:
             pass
+        # #992 — sync game_locations.world_hex_q/r from world_hexes.location_key (idempotent).
+        try:
+            from app.services.world_service import sync_location_hex_coordinates
+            _sync_conn = sqlite3.connect(DB_PATH)
+            _sync_conn.row_factory = sqlite3.Row
+            try:
+                _n = sync_location_hex_coordinates(_sync_conn)
+                if _n:
+                    import structlog as _sl
+                    _sl.get_logger().info("startup_sync_location_hex_coordinates", updated=_n)
+            finally:
+                _sync_conn.close()
+        except Exception:
+            pass
     # G1 (#785) + G9 (#793) — background sweep every 30s: expired narrative rounds + combat turns.
     async def _mp_sweep_loop() -> None:
         import asyncio as _asyncio

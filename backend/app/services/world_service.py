@@ -704,8 +704,10 @@ def deactivate_temporary_location_on_hex(
 ) -> dict | None:
     """Soft-delete any `temporary=1` location attached to a hex.
 
-    Called when MOVEMENT validates a move away from this hex. Clears
-    world_hexes.location_key so the wilderness reverts to its prior state.
+    Called when MOVEMENT validates a move away from this hex. Restores
+    world_hexes.location_key to the canonical parent location (fixes #992 anchor
+    desync — previously set to NULL, orphaning sessions that were still anchored
+    to the temp location).
     Returns the deactivated row info, or None if no temp was present.
     """
     hex_row = conn.execute(
@@ -716,7 +718,7 @@ def deactivate_temporary_location_on_hex(
         return None
     loc_key = hex_row["location_key"]
     loc_row = conn.execute(
-        "SELECT id, key, label, temporary FROM game_locations WHERE key = ? AND is_active = 1",
+        "SELECT id, key, label, temporary, parent_key FROM game_locations WHERE key = ? AND is_active = 1",
         (loc_key,),
     ).fetchone()
     if not loc_row or int(loc_row["temporary"] or 0) != 1:
@@ -725,13 +727,61 @@ def deactivate_temporary_location_on_hex(
         "UPDATE game_locations SET is_active = 0, safe_for_rest = 0, updated_at = datetime('now') WHERE id = ?",
         (loc_row["id"],),
     )
+    # #992: restore canonical location_key instead of setting NULL
+    parent_key = loc_row["parent_key"] or None
+    if parent_key:
+        canonical_exists = conn.execute(
+            "SELECT 1 FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (parent_key,),
+        ).fetchone()
+        restore_key = parent_key if canonical_exists else None
+    else:
+        restore_key = None
     conn.execute(
-        "UPDATE world_hexes SET location_key = NULL WHERE q = ? AND r = ? AND is_active = 1",
-        (q, r),
+        "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ? AND is_active = 1",
+        (restore_key, q, r),
     )
+    # #992: fix stale anchor in sessions still pointing at the deactivated temp_camp
+    if parent_key:
+        conn.execute(
+            """UPDATE game_sessions
+               SET session_flags = json_set(session_flags, '$.current_location_key', ?)
+               WHERE json_extract(session_flags, '$.current_location_key') = ?""",
+            (parent_key, loc_key),
+        )
     conn.commit()
-    logger.info("temp_location_deactivated", key=loc_key, q=q, r=r)
+    logger.info("temp_location_deactivated", key=loc_key, q=q, r=r,
+                restored_key=restore_key)
     return {"key": loc_key, "label": loc_row["label"]}
+
+
+def sync_location_hex_coordinates(conn: sqlite3.Connection) -> int:
+    """#992: Stamp game_locations.world_hex_q/r for canonical locations that
+    have a world_hexes entry (via world_hexes.location_key) but lack coordinates.
+
+    This is idempotent — only rows with world_hex_q IS NULL are updated.
+    Returns the count of updated rows.
+    """
+    rows = conn.execute(
+        """SELECT wh.q, wh.r, wh.location_key
+           FROM world_hexes wh
+           JOIN game_locations gl ON gl.key = wh.location_key
+           WHERE wh.is_active = 1
+             AND wh.map_level = 0
+             AND gl.is_active = 1
+             AND gl.world_hex_q IS NULL"""
+    ).fetchall()
+    count = 0
+    for row in rows:
+        conn.execute(
+            "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ? AND world_hex_q IS NULL",
+            (int(row["q"]), int(row["r"]), row["location_key"]),
+        )
+        count += 1
+    if count:
+        conn.commit()
+        logger.info("sync_location_hex_coordinates", updated=count)
+    return count
 
 
 def get_current_location_info(

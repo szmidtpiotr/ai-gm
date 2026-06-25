@@ -163,9 +163,13 @@ def resolve_location_key_to_hex(
     location_key: str,
     conn: sqlite3.Connection,
 ) -> tuple[int, int] | None:
-    """U30: Resolve a location_key → (q, r) via world_hexes.location_key.
+    """U30: Resolve a location_key → (q, r).
 
-    Returns None when the location has no hex assignment yet.
+    Primary: world_hexes.location_key lookup (fast, canonical).
+    Fallback (#992): game_locations.world_hex_q/r when the hex's location_key
+    was displaced (e.g. by a temp_camp overwrite) but game_locations still knows
+    its coordinates.
+    Returns None when neither path resolves.
     """
     if not location_key:
         return None
@@ -173,7 +177,56 @@ def resolve_location_key_to_hex(
         "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
         (location_key,),
     ).fetchone()
-    return (int(row["q"]), int(row["r"])) if row else None
+    if row:
+        return (int(row["q"]), int(row["r"]))
+    # #992 fallback: location may still know its hex even if world_hexes lost the pointer
+    loc = conn.execute(
+        "SELECT world_hex_q, world_hex_r FROM game_locations"
+        " WHERE key = ? AND is_active = 1 AND world_hex_q IS NOT NULL LIMIT 1",
+        (location_key,),
+    ).fetchone()
+    if loc:
+        return (int(loc["world_hex_q"]), int(loc["world_hex_r"]))
+    return None
+
+
+def detect_named_destination_hex(
+    target_location_key: str,
+    current_hex: dict | None,
+    conn: sqlite3.Connection,
+) -> tuple[int, int] | None:
+    """#992: Detect if a named destination is on a DIFFERENT hex than the player's current hex.
+
+    Used to redirect named-destination movement to hex-travel when the destination
+    is beyond the current hex boundary.
+
+    Resolution order for target hex:
+    1. Direct: resolve_location_key_to_hex(target_location_key)
+    2. Via parent: look up game_locations.parent_key, then resolve that
+
+    Returns (q, r) of the target hex if it differs from current_hex, else None.
+    """
+    if not target_location_key or not current_hex:
+        return None
+    cur_q = int(current_hex.get("q", 0))
+    cur_r = int(current_hex.get("r", 0))
+
+    # Direct resolution
+    target = resolve_location_key_to_hex(target_location_key, conn)
+    if target is None:
+        # Try via parent_key (sub-location inherits its parent's hex)
+        parent_row = conn.execute(
+            "SELECT parent_key FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (target_location_key,),
+        ).fetchone()
+        if parent_row and parent_row["parent_key"]:
+            target = resolve_location_key_to_hex(parent_row["parent_key"], conn)
+
+    if target is None:
+        return None
+    if target == (cur_q, cur_r):
+        return None  # same hex — not cross-hex travel
+    return target
 
 
 # ── Main travel resolver ──────────────────────────────────────────────────────
