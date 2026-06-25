@@ -904,6 +904,14 @@ const _ROW_REGISTRY = {
 
 // ── Review entity ──────────────────────────────────────────────────────────────
   async function reviewEntity(entityType, key, action, btn) {
+    // #995: location approve for settlements → subloc checklist modal
+    if (entityType === 'location' && action === 'approve') {
+      await _approveLocationWithSublocs(key, btn, async () => {
+        _worldLoaded.delete('review');
+        await _loadPendingLocations();
+      });
+      return;
+    }
     const label = action === 'approve' ? 'Zatwierdź' : 'Odrzuć';
     if (!confirm(`${label} "${key}"?`)) return;
     btn.disabled = true; btn.textContent = '⏳';
@@ -1233,12 +1241,88 @@ const _ROW_REGISTRY = {
     `;
   }
 
-  async function _wbApproveLocation(key, btn) {
-    if (!confirm(`Zatwierdzić lokację "${key}"?`)) return;
+  // #995 — Settlement subloc checklist modal before approving a location
+  async function _approveLocationWithSublocs(key, btn, onSuccess) {
     btn.disabled = true; btn.textContent = '⏳';
     try {
-      await apiFetch(`/api/admin/world/review/location/${key}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) });
-      _showToast('Zatwierdzona.', 'success');
+      const defaults = await apiFetch(`/api/admin/world/locations/${key}/subloc-defaults`).catch(() => null);
+      if (defaults && defaults.is_settlement && defaults.checklist && defaults.checklist.length) {
+        btn.disabled = false; btn.textContent = '✓ Zatwierdź';
+        await _showSublockChecklistModal(key, defaults, onSuccess);
+      } else {
+        if (!confirm(`Zatwierdzić lokację "${key}"?`)) { btn.disabled = false; btn.textContent = '✓ Zatwierdź'; return; }
+        await apiFetch(`/api/admin/world/review/location/${key}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) });
+        _showToast('Zatwierdzono.', 'success');
+        onSuccess();
+      }
+    } catch(e) { _showToast(e.message || 'Błąd', 'error'); btn.disabled = false; btn.textContent = '✓ Zatwierdź'; }
+  }
+
+  function _showSublockChecklistModal(key, defaults, onSuccess) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay open';
+      const items = defaults.checklist.map((c, i) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer">
+          <input type="checkbox" data-subtype="${_esc(c.subtype)}" ${c.selected ? 'checked' : ''}>
+          <span>${_esc(c.label)}</span>
+          <span class="badge ${c.safe_for_rest ? 'badge-green' : 'badge-red'}" style="font-size:0.65rem;padding:1px 5px">${c.safe_for_rest ? '✓ nocleg' : '✕ ryzyko'}</span>
+        </label>`).join('');
+      overlay.innerHTML = `<div class="modal-box" style="max-width:420px">
+        <div class="modal-head">
+          <span class="modal-title">🏘 Zatwierdź + generuj pod-lokacje</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:12px 16px">
+          <div style="font-size:0.78rem;color:var(--t2);margin-bottom:10px">Osada: <strong>${_esc(key)}</strong> (${_esc(defaults.settlement_subtype)})</div>
+          <div style="margin-bottom:4px;font-size:0.8rem;font-weight:600;color:var(--t1)">Wybierz pod-lokacje do wygenerowania:</div>
+          <div id="subloc-checklist" style="display:flex;flex-direction:column;padding:4px 0">${items}</div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--t3);cursor:pointer">
+              <input type="checkbox" id="subloc-none-checkbox">
+              <span>Zatwierdź bez generowania</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-foot" style="padding:12px 16px;display:flex;justify-content:flex-end;gap:8px">
+          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+          <button class="btn btn-primary" id="subloc-confirm-btn">✓ Zatwierdź + generuj</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+
+      overlay.querySelector('#subloc-none-checkbox').addEventListener('change', e => {
+        const confirmBtn = overlay.querySelector('#subloc-confirm-btn');
+        const checkboxes = overlay.querySelectorAll('#subloc-checklist input[type="checkbox"]');
+        checkboxes.forEach(cb => { cb.disabled = e.target.checked; });
+        confirmBtn.textContent = e.target.checked ? '✓ Zatwierdź (bez pod-lokacji)' : '✓ Zatwierdź + generuj';
+      });
+
+      overlay.querySelector('#subloc-confirm-btn').addEventListener('click', async () => {
+        const noneChecked = overlay.querySelector('#subloc-none-checkbox').checked;
+        const selected = noneChecked ? [] :
+          [...overlay.querySelectorAll('#subloc-checklist input[type="checkbox"]:checked')]
+            .map(cb => cb.dataset.subtype);
+        const confirmBtn = overlay.querySelector('#subloc-confirm-btn');
+        confirmBtn.disabled = true; confirmBtn.textContent = '⏳';
+        try {
+          const body = { action: 'approve', generate_sublocs: selected.length ? selected : null };
+          const res = await apiFetch(`/api/admin/world/review/location/${key}`, { method: 'POST', body: JSON.stringify(body) });
+          const cnt = res.generated_sublocs ? res.generated_sublocs.length : 0;
+          _showToast(cnt ? `Zatwierdzono + ${cnt} pod-lokacji.` : 'Zatwierdzono.', 'success');
+          overlay.remove();
+          onSuccess();
+          resolve();
+        } catch(e) {
+          _showToast(e.message || 'Błąd', 'error');
+          confirmBtn.disabled = false; confirmBtn.textContent = '✓ Zatwierdź + generuj';
+        }
+      });
+    });
+  }
+
+  async function _wbApproveLocation(key, btn) {
+    await _approveLocationWithSublocs(key, btn, async () => {
       const lm = await apiFetch('/api/admin/world/locations-map').catch(() => ({ locations: [], pending_count: 0 }));
       _wbLocations = {};
       for (const loc of (lm.locations || [])) _wbLocations[_wbKey(loc.q, loc.r)] = loc;
@@ -1247,7 +1331,7 @@ const _ROW_REGISTRY = {
       _wbRender();
       const updated = _wbLocations[_wbKey(lm.locations?.find(l=>l.key===key)?.q, lm.locations?.find(l=>l.key===key)?.r)];
       if (updated) _wbShowLocationDetail(updated);
-    } catch(e) { _showToast(e.message || 'Błąd', 'error'); btn.disabled = false; btn.textContent = '✓ Zatwierdź'; }
+    });
   }
 
   async function _wbDiscardLocation(key, btn) {

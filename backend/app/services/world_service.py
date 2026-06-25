@@ -1051,3 +1051,86 @@ def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
         return True
     except Exception:
         return False
+
+
+# ── #995 — Settlement sub-location auto-generation ────────────────────────────
+
+# safe_for_rest per subtype — canonical convention shared with #994 build_camp guard
+SUBLOC_SAFE_FOR_REST: dict[str, int] = {
+    "tavern": 1, "inn": 1, "temple": 1, "shrine": 1,
+    "barracks": 1, "infirmary": 1, "civic": 1, "garden": 1,
+    "library": 1, "cells": 1, "armory": 1, "smithy": 1, "shop": 1,
+    "market": 0, "slum": 0, "port": 0, "tomb": 0,
+    "tower": 0, "work": 0, "guild": 0,
+}
+
+# Default sub-location lists per settlement subtype — admin-editable before generation
+SETTLEMENT_SUBLOC_DEFAULTS: dict[str, list[str]] = {
+    "village":   ["tavern", "smithy", "shrine", "shop", "civic"],
+    "town":      ["inn", "smithy", "temple", "market", "civic", "shop"],
+    "city":      ["market", "inn", "smithy", "temple", "guild", "slum", "civic"],
+    "garrison":  ["barracks", "tavern", "armory", "infirmary", "tower", "civic"],
+    "monastery": ["temple", "library", "cells", "garden", "tomb"],
+    "port":      ["port", "tavern", "market", "tower", "smithy"],
+}
+
+SETTLEMENT_SUBTYPES: frozenset[str] = frozenset(SETTLEMENT_SUBLOC_DEFAULTS.keys())
+
+# Polish labels for sub-location subtypes
+_SUBLOC_LABELS: dict[str, str] = {
+    "tavern": "Karczma", "inn": "Zajazd", "temple": "Świątynia",
+    "shrine": "Kapliczka", "smithy": "Kuźnia", "shop": "Sklep",
+    "civic": "Ratusz", "market": "Rynek", "guild": "Gildia",
+    "slum": "Dzielnica Ubogich", "barracks": "Koszary", "armory": "Zbrojownia",
+    "infirmary": "Lazaret", "tower": "Wieża Wartownicza", "library": "Biblioteka",
+    "cells": "Cele", "garden": "Ogród Ziołowy", "tomb": "Krypta",
+    "port": "Nabrzeże", "work": "Warsztaty",
+}
+
+
+def generate_sublocs_for_settlement(
+    conn: sqlite3.Connection,
+    parent_key: str,
+    subtypes: list[str],
+) -> list[dict]:
+    """Insert sub-locations under a settlement. Returns list of created dicts.
+
+    Each entry: {"key", "label", "subtype", "safe_for_rest"}.
+    Unknown parent_key → returns []. Duplicate subtype → suffixed key (_2, _3…).
+    """
+    parent = conn.execute(
+        "SELECT key, label FROM game_locations WHERE key = ? AND is_active = 1",
+        (parent_key,),
+    ).fetchone()
+    if not parent:
+        return []
+
+    parent_label = parent["label"]
+    created: list[dict] = []
+
+    for subtype in subtypes:
+        base_label = _SUBLOC_LABELS.get(subtype, subtype.capitalize())
+        safe = SUBLOC_SAFE_FOR_REST.get(subtype, 0)
+
+        base_key = f"{parent_key}_{subtype}"
+        key = base_key
+        idx = 2
+        while conn.execute("SELECT 1 FROM game_locations WHERE key = ?", (key,)).fetchone():
+            key = f"{base_key}_{idx}"
+            idx += 1
+
+        label = f"{parent_label}: {base_label}"
+
+        conn.execute(
+            """
+            INSERT INTO game_locations
+                (key, label, location_type, location_subtype, parent_key,
+                 safe_for_rest, approved, review_status, is_active, created_by, ai_generated)
+            VALUES (?, ?, 'sub', ?, ?, ?, 1, 'permanent', 1, 'auto_generated', 0)
+            """,
+            (key, label, subtype, parent_key, safe),
+        )
+        created.append({"key": key, "label": label, "subtype": subtype, "safe_for_rest": safe})
+
+    conn.commit()
+    return created

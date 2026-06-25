@@ -19,6 +19,11 @@ from app.services.world_service import (
     get_pending_items,
     approve_entity,
     discard_entity,
+    generate_sublocs_for_settlement,
+    SETTLEMENT_SUBLOC_DEFAULTS,
+    SETTLEMENT_SUBTYPES,
+    SUBLOC_SAFE_FOR_REST,
+    _SUBLOC_LABELS,
 )
 
 DB_PATH = "/data/ai_gm.db"
@@ -194,6 +199,7 @@ def auto_screen_queue(entity_type: str, dry_run: bool = False):
 
 class ReviewAction(BaseModel):
     action: str  # "approve" or "discard"
+    generate_sublocs: list[str] | None = None  # #995: subtypes to auto-generate (location approve only)
 
 
 class WeaponPatchReq(_BaseModel):
@@ -263,6 +269,51 @@ def review_entity(entity_type: str, key: str, req: ReviewAction):
 
         if not ok:
             raise HTTPException(status_code=404, detail=f"{entity_type} '{key}' not found")
-        return {"ok": True, "entity_type": entity_type, "key": key, "action": req.action}
+
+        # #995: auto-generate sub-locations when approving a settlement location
+        generated_sublocs: list[dict] = []
+        if req.action == "approve" and entity_type == "location" and req.generate_sublocs:
+            generated_sublocs = generate_sublocs_for_settlement(conn, key, req.generate_sublocs)
+
+        return {
+            "ok": True, "entity_type": entity_type, "key": key, "action": req.action,
+            "generated_sublocs": generated_sublocs,
+        }
+    finally:
+        conn.close()
+
+
+@router.get("/locations/{key}/subloc-defaults")
+def get_subloc_defaults(key: str):
+    """#995 — Return default sub-location checklist for a settlement pending review.
+
+    Returns is_settlement=False for non-settlement subtypes so the frontend
+    can conditionally show the generation UI.
+    """
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT location_subtype FROM game_locations WHERE key = ? AND is_active = 1",
+            (key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Location '{key}' not found")
+
+        subtype = row["location_subtype"] or ""
+        defaults = SETTLEMENT_SUBLOC_DEFAULTS.get(subtype, [])
+        checklist = [
+            {
+                "subtype": s,
+                "label": _SUBLOC_LABELS.get(s, s.capitalize()),
+                "safe_for_rest": SUBLOC_SAFE_FOR_REST.get(s, 0),
+                "selected": True,
+            }
+            for s in defaults
+        ]
+        return {
+            "settlement_subtype": subtype,
+            "is_settlement": subtype in SETTLEMENT_SUBTYPES,
+            "checklist": checklist,
+        }
     finally:
         conn.close()
