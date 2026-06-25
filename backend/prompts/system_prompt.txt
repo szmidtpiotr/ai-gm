@@ -550,19 +550,42 @@ Ustaw `location_intent: null`.
   "grant_item": "Żelazny klucz"
   ```
 - **OPIS PRZEDMIOTU (zalecane dla przedmiotów fabularnych):** zamiast samej nazwy
-  możesz podać obiekt `{"label": "...", "description": "..."}` — opis (1 zdanie:
-  do czego służy / skąd pochodzi) pokaże się graczowi w dymku przedmiotu w plecaku.
+  możesz podać obiekt `{"label": "...", "description": "..."}` — opis pokaże się
+  graczowi w dymku przedmiotu w plecaku.
   ```
   "grant_item": [{"label": "Złożony pergamin", "description": "Mapa skarbu z zatartą pieczęcią, znaleziona w ruinach."}]
   ```
   Mieszanie form jest OK: `["Pochodnia", {"label": "Zwój", "description": "..."}]`.
   Dla unikalnych/fabularnych przedmiotów ZAWSZE dołącz sensowny opis.
 
-- Przykłady:
+- **CZYTELNE DOKUMENTY — OBOWIĄZKOWE:** dla przedmiotów które gracz może PRZECZYTAĆ
+  (pergamin, list, notatka, notatnik, zwój, mapa, księga, dokument, pismo, wiadomość,
+  rękopis, kodeks) ZAWSZE używaj formy obiektowej i wpisuj do `description` **pełną
+  czytelną treść** — dokładnie to co jest napisane na dokumencie. Gracz kliknie przedmiot
+  w ekwipunku i przeczyta tę treść.
+
+  Przykłady POPRAWNE (pełna treść):
+  ```
+  "grant_item": [{"label": "List od Kupca Harenna",
+    "description": "Drogi przybyszu, piszę z obozu nad Prypecią. Straż widziała ognie na wschodzie — nie zbliżajcie się do ruin przed wschodem słońca. — H."}]
+  ```
+  ```
+  "grant_item": [{"label": "Pergamin z przepowiednią",
+    "description": "Gdy trzy księżyce zrównają się w zenicie, otworzą się wrota pod Czarną Górą. Tylko niosący znak Starego Domu zdoła przejść."}]
+  ```
+  ```
+  "grant_item": [{"label": "Zużyta mapa",
+    "description": "Szkic terenu z zaznaczonymi X w pobliżu rozwidlenia dróg. Obok napis: 'Schron — 3 dni na wschód od Mizelborga'."}]
+  ```
+
+  NIE: `"grant_item": "Złożony pergamin"` ← gołego stringa dla czytelnych dokumentów
+  NIE: `"grant_item": [{"label": "List", "description": "Tajemniczy list"}]` ← opis zamiast treści
+
+- Przykłady — przedmioty nieczytelne (goły string OK):
   * "biorę torbę i księgę" → `"grant_item": ["Torba z notatkami", "Stara Księga"]`
   * "podnosisz zardzewiałą włócznię" → `"grant_item": "Zardzewiała włócznia"`
   * "twoje rzeczy: notatki i fiolka" → `"grant_item": ["Notatnik badacza", "Tajemnicza fiolka"]`
-  * "kupiec daje ci pergamin" → `"grant_item": "Zwój z mapą"`
+  * "kupiec daje ci pergamin z treścią" → forma obiektowa ZAWSZE (patrz wyżej)
 
 - **NIGDY nie pomijaj grant_item gdy bohater fizycznie zdobywa przedmiot.**
 - System automatycznie rozpoznaje typ:

@@ -2316,6 +2316,28 @@ def _is_trivial_item_label(label: str) -> bool:
     return any(w.startswith(stem) for w in words for stem in _TRIVIAL_ITEM_STEMS)
 
 
+# Stems for items meant to be READ — pergamin/list/notatka/zwój/mapa/księga/dokument.
+# When LLM omits description for these, we use a placeholder that signals readable
+# content rather than the generic "Narracyjny przedmiot:" which confuses the player.
+_READABLE_ITEM_STEMS = (
+    "pergamin", "list", "notatk", "notatni", "zwoj", "zwój", "zwojk",
+    "ksieg", "księ", "książ", "mapa", "map", "dokument", "pismo",
+    "wiadomosc", "wiadomość", "kartk", "rękopis", "rekopis", "manuskrypt",
+    "kodeks",
+)
+
+
+def _is_readable_item_label(label: str) -> bool:
+    """True when the label refers to a readable item (parchment, letter, note, scroll…).
+
+    Used to give a better fallback description instead of the generic
+    'Narracyjny przedmiot: <label>' when LLM omits description (#988).
+    Prefix match covers Polish inflection.
+    """
+    words = re.findall(r"[a-ząćęłńóśźżź]+", str(label or "").lower())
+    return any(w.startswith(stem) for w in words for stem in _READABLE_ITEM_STEMS)
+
+
 def _grant_pending_item(
     conn: sqlite3.Connection,
     *,
@@ -2339,7 +2361,12 @@ def _grant_pending_item(
     import time as _time
     slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")
     key = f"narrative_item_{slug}_{campaign_id}_{int(_time.time()) % 100000}"
-    desc = description or f"Narracyjny przedmiot: {label}"
+    if description:
+        desc = description
+    elif _is_readable_item_label(label):
+        desc = f"Czytelny dokument — {label}"
+    else:
+        desc = f"Narracyjny przedmiot: {label}"
     pending_category = "trivial" if _is_trivial_item_label(label) else "standard"
 
     try:
