@@ -4107,6 +4107,12 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                 # HF-2: persist to character_quests for /quest command and stats
                 for _q_ns in _to_add_ns:
                     _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns)
+                # #991: new quest arrived — clear quest_suggest_needed guard flag
+                try:
+                    from app.services.quest_persist_service import clear_quest_suggest_needed as _cqsn_ns
+                    _cqsn_ns(conn, campaign_id)
+                except Exception as _cqsn_ns_err:
+                    logger.warning("clear_quest_suggest_needed_error", error=str(_cqsn_ns_err))
         clean_assistant = _repack_narrative(clean_assistant, _sqs_ns(_narr_qs_ns), _pjson_qs_ns)
     except Exception as _qse_ns:
         logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
@@ -5658,6 +5664,12 @@ def create_turn_stream(
                             try:
                                 for _q in _to_add:
                                     _pqdb(_qs_conn, character_id=character_id_val, campaign_id=campaign_id_val, quest=_q)
+                                # #991: new quest arrived — clear quest_suggest_needed guard flag
+                                try:
+                                    from app.services.quest_persist_service import clear_quest_suggest_needed as _cqsn_s
+                                    _cqsn_s(_qs_conn, campaign_id_val)
+                                except Exception as _cqsn_s_err:
+                                    logger.warning("clear_quest_suggest_needed_stream_error", error=str(_cqsn_s_err))
                             finally:
                                 _qs_conn.close()
                     clean_text = _repack_narrative(clean_text, _sqs(_narr_qs), _pjson_qs)

@@ -330,3 +330,44 @@ def gm_plan_is_ready(raw: str | None) -> bool:
             return True
 
     return False
+
+
+# ── #991: Arc auto-advance ───────────────────────────────────────────────────
+
+_TUTORIAL_ARC_MARKERS = ("tutorial", "intro", "prolog", "wstep", "wstęp", "samouczek")
+
+
+def advance_gm_plan_arc(raw: str | None) -> tuple[dict[str, Any], bool]:
+    """After tutorial/intro quest completes, advance active_arc_id to the next arc.
+
+    Only auto-advances when the current arc id or title contains a tutorial/intro marker.
+    Returns (updated_plan_dict, did_advance).
+    """
+    plan = normalize_gm_plan(raw)
+    arcs: dict[str, Any] = plan.get("arcs", {})
+    active_id = plan.get("active_arc_id")
+
+    if not active_id or not arcs or len(arcs) < 2:
+        return plan, False
+
+    # Check if current arc is a tutorial/intro arc by id or title
+    active_arc = arcs.get(str(active_id), {})
+    active_label = (str(active_id) + " " + str(active_arc.get("title", ""))).lower()
+    if not any(marker in active_label for marker in _TUTORIAL_ARC_MARKERS):
+        return plan, False
+
+    arc_keys = list(arcs.keys())
+    try:
+        idx = arc_keys.index(str(active_id))
+    except ValueError:
+        return plan, False
+
+    if idx + 1 >= len(arc_keys):
+        return plan, False
+
+    next_arc_id = arc_keys[idx + 1]
+    plan = deepcopy(plan)
+    plan["arcs"][str(active_id)]["status"] = "closed"
+    plan["arcs"][next_arc_id]["status"] = "active"
+    plan["active_arc_id"] = next_arc_id
+    return plan, True

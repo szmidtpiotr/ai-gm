@@ -5,6 +5,7 @@ Two public functions called from turns.py QUEST_SUGGEST and kill-quest handlers:
   complete_quest_in_character_quests() — UPDATE on kill/location auto-complete
 
 #756: added objective-level dedup (Jaccard word similarity) + build_quest_context_block().
+#991: check_and_set_quest_suggest_needed() + build_quest_suggest_directive() — quest-dead guard.
 """
 from __future__ import annotations
 
@@ -177,3 +178,90 @@ def complete_quest_in_character_quests(
             completed_turn=completed_turn,
         )
     return updated
+
+
+# ── #991: Quest-dead guard ───────────────────────────────────────────────────
+
+QUEST_SUGGEST_URGENCY_THRESHOLD = 3  # turns before directive escalates
+
+
+def check_and_set_quest_suggest_needed(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+    completed_quest_title: str,
+) -> bool:
+    """After quest completes, set session_flags[quest_suggest_needed] if no active quests remain.
+
+    Returns True if flag was set (no active quests), False if active quests still exist.
+    """
+    import json
+
+    active_count = conn.execute(
+        "SELECT COUNT(*) FROM character_quests WHERE character_id=? AND campaign_id=? AND status='active'",
+        (character_id, campaign_id),
+    ).fetchone()[0]
+    if active_count > 0:
+        return False
+
+    row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not row:
+        return False
+
+    sf = json.loads(row["session_flags"] or "{}")
+    sf["quest_suggest_needed"] = {
+        "last_completed": completed_quest_title,
+        "turns_waiting": 0,
+    }
+    conn.execute(
+        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+        (json.dumps(sf, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    logger.info(
+        "quest_suggest_needed_set",
+        campaign_id=campaign_id,
+        character_id=character_id,
+        quest=completed_quest_title,
+    )
+    return True
+
+
+def clear_quest_suggest_needed(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """Remove quest_suggest_needed flag once a new quest is proposed."""
+    import json
+
+    row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not row:
+        return
+    sf = json.loads(row["session_flags"] or "{}")
+    if "quest_suggest_needed" in sf:
+        del sf["quest_suggest_needed"]
+        conn.execute(
+            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+            (json.dumps(sf, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+
+
+def build_quest_suggest_directive(last_completed: str = "", turns_waiting: int = 0) -> str:
+    """Build a system directive injected into LLM context to nudge new quest proposal.
+
+    Escalates urgency after QUEST_SUGGEST_URGENCY_THRESHOLD turns without a quest.
+    """
+    urgency = "PILNE! " if turns_waiting >= QUEST_SUGGEST_URGENCY_THRESHOLD else ""
+    completed_part = f' (ukończony quest: "{last_completed}")' if last_completed else ""
+    wait_part = f" od {turns_waiting} tur" if turns_waiting > 0 else ""
+    return (
+        f"[QUEST_SUGGEST_NEEDED: {urgency}Bohater nie ma aktywnego zadania{wait_part}"
+        f"{completed_part}. "
+        "GM MUSI zaproponować nowy cel używając tagu [QUEST_SUGGEST:tytuł|cel|nagroda] "
+        "— wynikający z bieżących odkryć, NPC i lokacji z ostatnich tur. "
+        "Nie twórz generycznego questu — użyj konkretnych wątków z historii kampanii.]"
+    )

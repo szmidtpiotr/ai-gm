@@ -265,6 +265,34 @@ def process_narrative_xp_tags(
                 {"quest_title": quest_title, "xp": xp, "turn": turn_number},
                 conn=conn,
             )
+            # #991: flag quest_suggest_needed when no active quests remain
+            try:
+                from app.services.quest_persist_service import check_and_set_quest_suggest_needed
+                check_and_set_quest_suggest_needed(conn, character_id, campaign_id, quest_title)
+            except Exception as _qsn_err:
+                logger.warning("quest_suggest_needed_error", error=str(_qsn_err))
+            # #991: auto-advance GM plan arc out of tutorial when quest completes
+            try:
+                import json as _json
+                from app.services.gm_plan_schema import advance_gm_plan_arc as _advance_arc
+                _camp_row = conn.execute(
+                    "SELECT gm_plan_json FROM campaigns WHERE id=?", (campaign_id,)
+                ).fetchone()
+                if _camp_row:
+                    _new_plan, _did_advance = _advance_arc(_camp_row["gm_plan_json"])
+                    if _did_advance:
+                        conn.execute(
+                            "UPDATE campaigns SET gm_plan_json=? WHERE id=?",
+                            (_json.dumps(_new_plan, ensure_ascii=False), campaign_id),
+                        )
+                        conn.commit()
+                        logger.info(
+                            "gm_plan_arc_auto_advanced",
+                            campaign_id=campaign_id,
+                            new_arc=_new_plan.get("active_arc_id"),
+                        )
+            except Exception as _arc_err:
+                logger.warning("arc_advance_error", error=str(_arc_err))
 
     for m in _DUNGEON_RE.finditer(narrative):
         total += grant_dungeon_clear(conn, character_id, campaign_id, m.group(1), turn_number)

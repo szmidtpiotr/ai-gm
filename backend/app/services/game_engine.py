@@ -694,6 +694,37 @@ def build_narrative_messages(
             except Exception as _qb_err:
                 logger.warning("quest_block_inject_failed", error=str(_qb_err))
 
+        # #991: inject quest_suggest_needed directive when flag is set in session_flags
+        if character and messages:
+            try:
+                import json as _json991
+                from app.services.quest_persist_service import (
+                    build_quest_suggest_directive as _bqsd,
+                    clear_quest_suggest_needed as _cqsn,
+                )
+                _sf991_row = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                    (int(campaign["id"]),),
+                ).fetchone()
+                _sf991 = _json991.loads((_sf991_row["session_flags"] if _sf991_row else None) or "{}")
+                _qsn991 = _sf991.get("quest_suggest_needed")
+                if _qsn991 and isinstance(_qsn991, dict):
+                    _qsn_turns = int(_qsn991.get("turns_waiting", 0)) + 1
+                    _qsn_last = str(_qsn991.get("last_completed", ""))
+                    # Update turns_waiting counter
+                    _sf991["quest_suggest_needed"] = {"last_completed": _qsn_last, "turns_waiting": _qsn_turns}
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                        (_json991.dumps(_sf991, ensure_ascii=False), int(campaign["id"])),
+                    )
+                    # Inject directive into system context
+                    _directive991 = _bqsd(last_completed=_qsn_last, turns_waiting=_qsn_turns)
+                    first = messages[0]
+                    if isinstance(first, dict) and first.get("role") == "system":
+                        first["content"] = f"{first.get('content', '').rstrip()}\n\n{_directive991}"
+            except Exception as _qsn991_err:
+                logger.warning("quest_suggest_directive_error", error=str(_qsn991_err))
+
         # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
         # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
         # L13c (#689): skipped inside a dungeon (no overworld travel to push toward).
