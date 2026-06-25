@@ -131,8 +131,12 @@ async function enterGame(campaign, opts = {}) {
         const timeline = [];
         for (const t of turns) timeline.push({ kind: 'turn', at: t.created_at || '', data: t });
         for (const c of combatRows) timeline.push({ kind: 'combat', at: c.created_at || '', data: c });
+        // Normalize timestamps before sort: campaign_turns use space separator ("2026-06-25 12:58:01")
+        // while combat_turns use ISO T+Z ("2026-06-25T10:27:08Z"). Space (0x20) < T (0x54) makes
+        // string compare wrong — campaign turns always sort before combat turns regardless of time.
+        const normTs = ts => String(ts || '').replace(' ', 'T').replace(/Z$/, '');
         timeline.sort((a, b) => {
-            const ta = String(a.at || ''), tb = String(b.at || '');
+            const ta = normTs(a.at), tb = normTs(b.at);
             if (ta !== tb) return ta < tb ? -1 : 1;
             // Same timestamp: combat events first (they fired before the wrapping campaign turn)
             if (a.kind !== b.kind) return a.kind === 'combat' ? -1 : 1;
