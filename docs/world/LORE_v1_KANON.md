@@ -63,8 +63,8 @@ Religie świata są **prawdziwe jako wiara ludzi**, nie jako dowiedzione bóstwa
 *Nazwa kanoniczna. Alt rozważane: Strażyńskie Pogranicze, Wschodnia Marchia.*
 
 **Charakter:** zwykli ludzie na granicy mroku — tu zaczyna się większość historii (otwarcie Mizela 🟢). Codzienność, strach, drobne zlecenia, które urastają do czegoś większego.
-**Lokacje 🟢:** **Strażyn** (twierdza graniczna, 200 lat straży), **Cieszowice**, **Brzezino** (drwale, blisko Boru Zmarłych), **Wolanka** (wioska górnicza), **Most Czarnej Rzeki** (poborcy myta), **Karczma Pod Trzema Krukami** (plotki, ukrywający się), **Pustelnia Świętego Marcina**, **Zgliszcza** (spalona wieś). Tu też domyślnie stoi gospoda **„Pod Złamanym Rogiem"** 🟢 (Marta karczmarka) — pierwsze schronienie bohatera.
-**Nieludzie 🔵:** we wsiach górniczych (Wolanka) i przy Moście Czarnej Rzeki **osiadłe rody krasnoludzkich górników i kowali**, częściowo zasymilowane; pierwsze ofiary, gdy mrok pełznie z gór.
+**Lokacje 🟢:** **Strzegwacht** (twierdza graniczna, 200 lat straży; hybryda słow.+germ.), **Cieszburg** (wioska przy twierdzy), **Birkenwald** (drwale, blisko Boru Zmarłych), **Wolfsmark** (wioska górnicza), **Most Czarnej Rzeki** (poborcy myta), **Karczma Pod Trzema Krukami** (plotki, ukrywający się), **Pustelnia Świętego Marcina**, **Zgliszcza** (spalona wieś). Tu też domyślnie stoi gospoda **„Pod Złamanym Rogiem"** 🟢 (Marta karczmarka) — pierwsze schronienie bohatera.
+**Nieludzie 🔵:** we wsiach górniczych (Wolfsmark) i przy Moście Czarnej Rzeki **osiadłe rody krasnoludzkich górników i kowali**, częściowo zasymilowane; pierwsze ofiary, gdy mrok pełznie z gór.
 
 ---
 
@@ -197,6 +197,36 @@ Magia nie jest darem bogów — to **okruchowe czerpanie z Rdzenia** (sekcja 2).
 4. **Sekret Rady Czterech** (Vilnograd, A) — kim są mecenasi rządzący zza tronu? Czy któryś z nich już sięgnął po Rdzeń? Główny hak intrygi politycznej.
 5. **Rdzeń pod Świątynią Pradawnych** (F) — „wnętrze martwego boga"; źródło, które zniszczyło Pradawnych. Ktoś — kult albo członek Rady — może chcieć je obudzić. **Oś końcowej, kosmicznej stawki świata.**
 6. **Przed czym uciekły krasnoludy?** 🔵 (Czarny Hutman, D) — hak łączący przyszłą frakcję krasnoludów z metafizyką Rdzenia.
+
+---
+
+---
+
+## 9. NAZEWNICTWO — KONWENCJA MIX SŁOWIAŃSKO-GERMAŃSKI (#997)
+
+*Zatwierdzone 2026-06-25. Obowiązuje dla nowych lokacji, NPC, sub-lokacji (#995) i całego kanonu.*
+
+Kresy = marchie/pogranicze → naturalnie uzasadnia mieszankę dwóch tradycji nazewniczych:
+
+**(a) Czysto słowiańskie fantasy** (wzory już w kanonie):
+Vilnograd, Czarnobór, Czarnogród, Siwe Granie, Zatoka Topielców, Bór Zmarłych, Klasztor Iskry.
+
+**(b) Czysto germańskie dark**:
+Strzegwacht, Rabenstein, Düsterburg, Eisenmark, Grenzwacht, Schwarzwald, Nebelheim.
+
+**(c) Hybrydy** (słowiański rdzeń + germańska końcówka lub odwrotnie):
+Czarnstein, Wilczburg, Mrokfeld, Graugród, Nebelbór, Cieszburg, Birkenwald, Wolfsmark.
+
+**Logika regionalna:**
+- Zachód / dawne Imperium → więcej germańskich końcówek
+- Wschód / głębokie Kresy → więcej słowiańskich rdzeni
+- Pas graniczny → hybrydy
+
+**Bezwzględnie unikać** realnych polskich toponimów osadniczych:
+- Złe wzory: `-owice` (Cieszowice), `-anka` (Wolanka), `-ino` (Brzezino), nazwy-wsie
+- Pytanie kontrolne: „Czy ta nazwa mogłaby być prawdziwą wsią w Polsce? Jeśli tak — przerób."
+
+**Rename historyczny (2026-06-25):** Cieszowice→Cieszburg · Wolanka→Wolfsmark · Brzezino→Birkenwald · Strażyn→Strzegwacht.
 
 ---
 

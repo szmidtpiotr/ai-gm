@@ -4576,7 +4576,7 @@
    "q": 21,
    "r": 1,
    "hex_type": "village",
-   "label": "Wolanka",
+   "label": "Wolfsmark",
    "atmosphere": null,
    "encounter_chance": 0.15
   },
@@ -9072,7 +9072,7 @@
    "q": 33,
    "r": 6,
    "hex_type": "town",
-   "label": "Strażyn",
+   "label": "Strzegwacht",
    "atmosphere": null,
    "encounter_chance": 0.15
   },
@@ -11312,7 +11312,7 @@
    "q": 13,
    "r": 22,
    "hex_type": "village",
-   "label": "Cieszowice",
+   "label": "Cieszburg",
    "atmosphere": null,
    "encounter_chance": 0.15
   },
@@ -11520,7 +11520,7 @@
    "q": 39,
    "r": 9,
    "hex_type": "village",
-   "label": "Brzezino",
+   "label": "Birkenwald",
    "atmosphere": null,
    "encounter_chance": 0.15
   },

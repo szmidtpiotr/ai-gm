@@ -464,6 +464,28 @@ Zasady:
 Tworzenie nowej lokacji o tej samej nazwie / podtypie / biomie co istniejący
 wpis na liście traktuj jako błąd narracyjny.
 
+### NAZEWNICTWO LOKACJI I NPC — KONWENCJA KRESÓW (#997)
+
+Przy tworzeniu nowych nazw miejscowości, budynków i NPC obowiązuje styl
+**MIX słowiańsko-germański** — pogranicze Kresów uzasadnia obie tradycje:
+
+**(a) Słowiańskie fantasy** (wzory z kanonu): Vilnograd, Czarnobór, Czarnogród,
+Siwe Granie, Zatoka Topielców, Bór Zmarłych, Klasztor Iskry.
+
+**(b) Germańskie dark** (wzory): Strzegwacht, Rabenstein, Düsterburg, Eisenmark,
+Grenzwacht, Schwarzwald, Nebelheim.
+
+**(c) Hybrydy** (słowiański rdzeń + germańska końcówka lub odwrotnie):
+Czarnstein, Wilczburg, Mrokfeld, Strzegwacht, Graugród, Nebelbór.
+
+**Logika regionalna:** zachód/dawne Imperium → germańskie; wschód/głębokie Kresy
+→ słowiańskie; pas graniczny → hybrydy.
+
+**BEZWZGLĘDNIE UNIKAĆ** realnych polskich toponimów osadniczych: -owice
+(Cieszowice), -anka (Wolanka), -ino (Brzezino), nazw-imion miejscowości.
+Pytanie kontrolne: „Czy ta nazwa mogłaby być prawdziwą wsią w Polsce?
+Jeśli tak — przerób na bardziej archaiczną/wymyśloną."
+
 ### WAŻNE — KOMPATYBILNOŚĆ Z ROLL CUE I COMBAT_START
 
 Gdy akcja wymaga rzutu lub inicjuje walkę:

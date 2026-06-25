@@ -23,7 +23,7 @@ czerpiącemu. Wiara jest prawdziwa jako wiara ludzi: ŚWIATŁO łata pęknięcia
 
 # GEOGRAFIA — 6 KRAIN (jeden spójny kontynent)
 - KRESY — pogranicze i wsie. Kraina wstępna, tu zaczyna się większość historii.
-  Twierdza Strażyn, wsie (Cieszowice, Brzezino, Wolanka), Most Czarnej Rzeki,
+  Twierdza Strzegwacht, wsie (Cieszburg, Birkenwald, Wolfsmark), Most Czarnej Rzeki,
   gospoda „Pod Złamanym Rogiem". Zwykli ludzie na granicy mroku.
 - KORONNE NIZINY — rdzeń cywilizacji. Stolica Vilnograd, gildie, świątynia Światła,
   dzielnica złodziei. Jawnie rządzi Korona, w cieniu Rada Czterech.
@@ -58,4 +58,12 @@ Uczony = ten, kto tknął zakazaną wiedzę Rdzenia; mana = pojemność bezpiecz
 kontaktu z Rdzeniem, miscast = kara za sięgnięcie zbyt głęboko.
 Łotrzyk = półświatek i dzielnica złodziei Vilnogradu; wchodzi tam, gdzie miecz i
 magia zawiodą.
+
+# NAZEWNICTWO — KONWENCJA MIX SŁOWIAŃSKO-GERMAŃSKI (#997)
+Kresy to pogranicze marchii → naturalna mieszanka trzech typów nazw:
+(a) Słowiańskie fantasy: Vilnograd, Czarnobór, Czarnogród, Siwe Granie, Zatoka Topielców.
+(b) Germańskie dark: Strzegwacht, Rabenstein, Düsterburg, Eisenmark, Grenzwacht.
+(c) Hybrydy (słow. rdzeń + germ. końcówka): Czarnstein, Wilczburg, Mrokfeld, Graugród, Nebelbór.
+Logika regionalna: zachód/dawne Imperium → germańskie; wschód/głębokie Kresy → słowiańskie; pas graniczny → hybrydy.
+UNIKAĆ: realnych PL toponimów (-owice, -anka, -ino, -ów w stylu wsi). Pytanie kontrolne: „Czy ta nazwa mogłaby być prawdziwą wsią w Polsce? Jeśli tak — przerób."
 === KONIEC BIBLII ŚWIATA ===
