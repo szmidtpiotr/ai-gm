@@ -404,7 +404,36 @@ function formatMessageContent(content) {
         .replace(/\n/g, '<br>');
 }
 
+// Issue #989 — polska konwencja dialogu. LLM (lub legacy tury) bywa wpleciony
+// w cudzysłów inline: `"Coś tam" mówi nisko.` Zamieniamy taką kwestię na osobną
+// linię od myślnika: `\n— Coś tam — mówi nisko.`, którą renderer pokaże jako
+// akapit dialogu. Cudzysłowy bez czasownika mówienia w sąsiedztwie (cytat z
+// listu/pergaminu) zostawiamy nietknięte.
+const SPEECH_VERB_RE = /mów|szepc|szepn|warcz|warkn|pyta|spyta|zapyta|odpowiad|odrzek|rzek|rzuc|mrucz|mruk|woł|krzycz|krzykn|sycz|cedzi|dodaj|dodał|burk|stwierdz|wtrąc|wykrztu|chrypi|jęcz|jękn|prych|parsk|kontynu|oznajm|wyzna|szydz|kpi|prosi|błag|ostrzeg|odezw|odzyw|zaśmia|śmieje|wita|żegna|odpar|odrzu|wycedz|zaprasz|przedstaw/i;
+
+function splitInlineDialogue(content) {
+    if (!content || (content.indexOf('"') < 0 && content.indexOf('„') < 0 && content.indexOf('“') < 0)) {
+        return content;
+    }
+    // quote (PL „…", straight "…", curly "…") + opcjonalne didaskalia do końca zdania
+    const re = /(„[^”]{1,400}”|"[^"]{1,400}"|“[^”]{1,400}”)([\s,;:—–-]*)([^\n.!?]{0,90}[.!?])?/g;
+    return content.replace(re, (m, quote, sep, trail, offset, str) => {
+        const inner = quote.slice(1, -1).trim();
+        if (!inner) return m;
+        const before = str.slice(Math.max(0, offset - 60), offset);
+        const trailHasVerb = trail && SPEECH_VERB_RE.test(trail);
+        const beforeHasVerb = SPEECH_VERB_RE.test(before);
+        if (!trailHasVerb && !beforeHasVerb) return m;   // brak czasownika mówienia → cytat/list, zostaw
+        if (trailHasVerb) {
+            return '\n— ' + inner + ' — ' + trail.trim();
+        }
+        // czasownik przed kwestią (np. „Strażnik warczy:") — didaskalia zostają w narracji nad kwestią
+        return '\n— ' + inner + (sep || '') + (trail || '');
+    });
+}
+
 function formatGmNarrative(content) {
+    content = splitInlineDialogue(content);
     const paragraphs = content.split(/\n+/);
     return paragraphs.map(para => {
         if (!para.trim()) return '';

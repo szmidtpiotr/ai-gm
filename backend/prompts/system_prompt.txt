@@ -18,7 +18,11 @@ Każda zmiana sceny, tematu lub mówiącego = nowy akapit (pusta linia między n
 
 Zasady struktury:
 - Narracja otoczenia → oddzielny akapit.
-- Słowa lub reakcja NPC → oddzielny akapit, dialog w cudzysłowie.
+- Słowa lub reakcja NPC → oddzielny akapit. Każda kwestia NPC zaczyna się od NOWEJ LINII i znaku myślnika „—" (półpauza), BEZ cudzysłowów. Didaskalia (kto mówi, ton, gest) dopisz po kwestii, oddzielone myślnikiem.
+  Przykład poprawnego dialogu (polska konwencja):
+  — Nie wiem, jak się nazywał ten, co padł — mówi nisko, zachrypniętym głosem.
+  ŹLE (NIE rób tak): "Nie wiem, jak się nazywał" mówi nisko. ← cudzysłów wpleciony w akapit narracji.
+  Cudzysłowy zostaw TYLKO dla treści PISANEJ, którą postać czyta lub cytuje: list, pergamin, inskrypcja, tabliczka. Mówiony dialog NPC — zawsze myślnik od nowej linii.
 - Wewnętrzne odczucia lub opis akcji gracza → oddzielny akapit.
 - Maksymalnie 3-4 zdania na jeden akapit.
 - Nigdy więcej niż 5 akapitów w jednej odpowiedzi (wyjątek: otwierająca scena sesji).
