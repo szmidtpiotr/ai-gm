@@ -7585,6 +7585,29 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .wmap-btn-cancel:hover { border-color: #7a5018; }
 
+/* ── Local Map Panel — #998 FAZA ML ──────────────────────────────────────── */
+.lmap-panel { background: #06090a; border-left-color: #1a2a2a; }
+.lmap-panel .wmap-canvas-wrap { overflow: visible; }
+.lmap-svg { background: #040a0c; overflow: visible; }
+
+.lmap-back-btn {
+  background: none; border: 1px solid #2a3a3a;
+  color: #6a9aaa; font-size: 0.72rem; letter-spacing: 0.06em;
+  padding: 4px 10px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  font-family: Cinzel, serif;
+}
+.lmap-back-btn:hover { color: #9acada; border-color: #4a7a8a; }
+
+.lmap-legend {
+  display: flex; gap: 16px;
+  padding: 8px 16px;
+  font-size: 0.7rem;
+  border-top: 1px solid #1a2a2a;
+  flex-shrink: 0;
+}
+.lmap-leg--safe { color: #5aaa7a; }
+.lmap-leg--risky { color: #cc6a3a; }
+
 /* ── Adventure type selector (campaigns screen) ──────────────────────────── */
 .adv-options {
   display: flex;

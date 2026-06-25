@@ -1333,8 +1333,9 @@ function initEventListeners() {
     // Swipe left/right to switch sheet tabs
     initSheetTabSwipe(elements.sheetPanel);
 
-    // World map panel
+    // World map panel + local map panel
     initWorldMap();
+    initLocalMap();
     initDungeon();
 
     // Journal regen
@@ -2247,6 +2248,18 @@ async function _wmOpen() {
     openDungeonMap();
     return;
   }
+  // #998: In settlement with sub-map, show local map instead of world map
+  if (_lmap.panel) {
+    try {
+      const localData = await _lmRefresh();
+      if (localData?.has_local_map) {
+        _lmap.panel.removeAttribute('hidden');
+        _lmap.panel.style.transform = 'translateX(0)';
+        requestAnimationFrame(() => { _lmCenter(); _lmRender(); });
+        return;
+      }
+    } catch (_) { /* no local map — fall through to world map */ }
+  }
   _wmap.panel.removeAttribute('hidden');
   _wmap.panel.style.transform = 'translateX(0)';
 
@@ -2307,6 +2320,198 @@ function initWorldMap() {
     if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
   });
   window.addEventListener('mouseup', () => { _wmap._ds = null; });
+}
+
+// ── Local Map Panel — #998 FAZA ML ───────────────────────────────────────────
+
+const _lmap = {
+  panel:   null,
+  svg:     null,
+  confirm: null,
+  title:   null,
+  zoom: 1.6,
+  pan:  { x: 0, y: 0 },
+  hexes: [],
+  currentHex: null,   // { hex_id, q, r, location_key }
+  hubLabel: null,
+  pendingTravel: null, // { hex_id, label, encounter_chance }
+};
+
+function _lmHexFill(hex) {
+  if (hex.encounter_chance > 0) return '#2a1208'; // risky — dark red-brown
+  return '#082014';                                // safe  — dark green
+}
+function _lmHexStroke(hex, isCurrent) {
+  if (isCurrent) return { color: '#f0c040', width: 2.5 };
+  if (hex.encounter_chance > 0) return { color: '#7a3a18', width: 0.8 };
+  return { color: '#1a3020', width: 0.8 };
+}
+
+function _lmRender() {
+  const svg = _lmap.svg;
+  if (!svg) return;
+  const rz = _WH * _lmap.zoom;
+  let html = '';
+
+  for (const hex of _lmap.hexes) {
+    const { x, y } = _wmHexToPixel(hex.q, hex.r);
+    const sx = x * _lmap.zoom + _lmap.pan.x;
+    const sy = y * _lmap.zoom + _lmap.pan.y;
+    const isCurrent = _lmap.currentHex && _lmap.currentHex.hex_id === hex.id;
+    const fill = _lmHexFill(hex);
+    const { color: stroke, width: sw } = _lmHexStroke(hex, isCurrent);
+    const risky = hex.encounter_chance > 0;
+
+    html += `<polygon class="lmap-hex" data-hex-id="${hex.id}"
+      points="${_wmCorners(sx, sy, rz - 1)}"
+      fill="${fill}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
+
+    if (risky)
+      html += `<text x="${sx}" y="${sy - rz * 0.25}" text-anchor="middle"
+        font-size="${Math.max(9, 11 * _lmap.zoom)}" style="pointer-events:none" fill="#cc6a3a">⚠</text>`;
+
+    if (hex.label)
+      html += `<text x="${sx}" y="${sy + rz * 0.38}" text-anchor="middle"
+        font-size="${Math.max(7, 7.5 * _lmap.zoom)}" fill="#8ac8a8" style="pointer-events:none"
+        >${escapeHtml((hex.label.includes(': ') ? hex.label.split(': ').slice(1).join(': ') : hex.label).slice(0, 12))}</text>`;
+
+    if (isCurrent)
+      html += `<text x="${sx}" y="${sy - rz * 0.52}" text-anchor="middle"
+        font-size="${Math.max(11, 14 * _lmap.zoom)}" style="pointer-events:none">📍</text>`;
+  }
+
+  svg.innerHTML = html;
+  svg.querySelectorAll('.lmap-hex').forEach(el => {
+    el.addEventListener('click', _lmOnHexClick);
+  });
+}
+
+function _lmCenter() {
+  if (!_lmap.hexes.length || !_lmap.svg) return;
+  const pixels = _lmap.hexes.map(h => _wmHexToPixel(h.q, h.r));
+  const rz = _WH * _lmap.zoom;
+  // Use bounding box of hex centers to determine content extent
+  const minX = Math.min(...pixels.map(p => p.x)) - rz;
+  const maxX = Math.max(...pixels.map(p => p.x)) + rz;
+  const minY = Math.min(...pixels.map(p => p.y)) - rz;
+  const maxY = Math.max(...pixels.map(p => p.y)) + rz;
+  const contentW = (maxX - minX) * _lmap.zoom;
+  const contentH = (maxY - minY) * _lmap.zoom;
+  // Try real SVG rect first, fallback to viewport estimate
+  const rect = _lmap.svg.getBoundingClientRect();
+  const w = rect.width  > 10 ? rect.width  : Math.min(window.innerWidth  || 390, 420) * 0.95;
+  const h = rect.height > 10 ? rect.height : (window.innerHeight || 700) - 120;
+  // Center content in available space
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  _lmap.pan = {
+    x: w / 2 - cx * _lmap.zoom,
+    y: Math.max(rz, Math.min(h / 2 - cy * _lmap.zoom, h - contentH - rz)),
+  };
+}
+
+function _lmOnHexClick(e) {
+  const hexId = parseInt(e.currentTarget.dataset.hexId);
+  const hex = _lmap.hexes.find(h => h.id === hexId);
+  if (!hex) return;
+
+  const label = hex.label || `(${hex.q},${hex.r})`;
+  const riskInfo = hex.encounter_chance > 0 ? '⚠ Ryzykowna lokacja — możliwe spotkanie' : '✓ Bezpieczna lokacja';
+
+  _lmap.pendingTravel = { hex_id: hexId, label, encounter_chance: hex.encounter_chance };
+  _lmap.confirm.querySelector('#lmap-confirm-title').textContent = `Idziesz do ${label}`;
+  _lmap.confirm.querySelector('#lmap-confirm-info').textContent = riskInfo;
+  _lmap.confirm.removeAttribute('hidden');
+}
+
+async function _lmExecuteTravel() {
+  const t = _lmap.pendingTravel;
+  if (!t || !currentCampaignId) return;
+  _lmap.confirm.setAttribute('hidden', '');
+
+  try {
+    const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/local-travel`, {
+      hex_id: t.hex_id,
+    });
+
+    if (response.clock) renderClock(response.clock);
+
+    _lmap.currentHex = response.local_hex;
+    _lmRender();
+
+    const prose = `Przemieszczasz się do <strong>${escapeHtml(t.label)}</strong>. (+15 min)`;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble--travel';
+    bubble.innerHTML = prose;
+    elements.chatMessages.appendChild(bubble);
+    scrollToBottom();
+
+    await refreshCharacterData();
+  } catch (err) {
+    showToast(err.message || 'Błąd ruchu lokalnego', 'error');
+  }
+}
+
+async function _lmRefresh() {
+  if (!currentCampaignId) return;
+  const data = await apiRequest('GET', `/campaigns/${currentCampaignId}/local-map`);
+  _lmap.hexes = data.hexes || [];
+  _lmap.currentHex = data.current_local_hex || null;
+  _lmap.hubLabel = data.hub_label || 'Osada';
+  if (_lmap.title) _lmap.title.textContent = `🏘 ${_lmap.hubLabel}`;
+  return data;
+}
+
+async function _lmOpen() {
+  if (!currentCampaignId) return;
+  try {
+    const data = await _lmRefresh();
+    if (!data?.has_local_map) {
+      // Fallthrough to world map if no local map
+      _wmOpen();
+      return;
+    }
+    _lmap.panel.removeAttribute('hidden');
+    _lmap.panel.style.transform = 'translateX(0)';
+    // Defer centering until after layout is applied
+    requestAnimationFrame(() => { _lmCenter(); _lmRender(); });
+  } catch (err) {
+    showToast(err.message || 'Błąd ładowania mapy osady', 'error');
+    _wmOpen(); // fallback to world map
+  }
+}
+
+function _lmClose() {
+  _lmap.panel.style.transform = 'translateX(100%)';
+  setTimeout(() => _lmap.panel.setAttribute('hidden', ''), 280);
+  if (_lmap.confirm) _lmap.confirm.setAttribute('hidden', '');
+  _lmap.pendingTravel = null;
+}
+
+function initLocalMap() {
+  _lmap.panel   = document.getElementById('local-map-panel');
+  _lmap.svg     = document.getElementById('lmap-svg');
+  _lmap.confirm = document.getElementById('lmap-confirm');
+  _lmap.title   = document.getElementById('lmap-title');
+  if (!_lmap.panel) return;
+
+  document.getElementById('lmap-close-btn')?.addEventListener('click', _lmClose);
+  document.getElementById('lmap-back-btn')?.addEventListener('click', () => {
+    _lmClose();
+    setTimeout(_wmOpen, 300);
+  });
+  document.getElementById('lmap-btn-go')?.addEventListener('click', _lmExecuteTravel);
+  document.getElementById('lmap-btn-cancel')?.addEventListener('click', () => {
+    _lmap.confirm.setAttribute('hidden', '');
+    _lmap.pendingTravel = null;
+  });
+
+  // Swipe right to close (mobile)
+  let _swipeStartX = 0;
+  _lmap.panel.addEventListener('touchstart', e => { _swipeStartX = e.touches[0].clientX; }, { passive: true });
+  _lmap.panel.addEventListener('touchend', e => {
+    if (e.changedTouches[0].clientX - _swipeStartX > 60) _lmClose();
+  }, { passive: true });
 }
 
 // ── Spell Picker (Scholar combat) ─────────────────────────────────────────────

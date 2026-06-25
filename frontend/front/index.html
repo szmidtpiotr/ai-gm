@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=967-r3">
+  <link rel="stylesheet" href="./css/styles.css?v=998-r1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1907,6 +1907,30 @@
     </div>
   </div>
 
+  <!-- Local Map Panel — #998 FAZA ML -->
+  <div id="local-map-panel" class="wmap-panel lmap-panel" hidden>
+    <div class="wmap-header">
+      <button type="button" class="lmap-back-btn" id="lmap-back-btn" title="Mapa Świata">← Świat</button>
+      <span class="wmap-title" id="lmap-title">🏘 Osada</span>
+      <button type="button" class="wmap-close" id="lmap-close-btn">✕</button>
+    </div>
+    <div class="wmap-canvas-wrap">
+      <svg id="lmap-svg" class="wmap-svg lmap-svg" style="overflow:visible"></svg>
+    </div>
+    <div class="lmap-legend">
+      <span class="lmap-leg--safe">■ Bezpieczne</span>
+      <span class="lmap-leg--risky">⚠ Ryzykowne</span>
+    </div>
+    <div id="lmap-confirm" class="wmap-confirm" hidden>
+      <div class="wmap-confirm-title" id="lmap-confirm-title">Przemieszczasz się do…</div>
+      <div class="wmap-confirm-info" id="lmap-confirm-info"></div>
+      <div class="wmap-confirm-btns">
+        <button class="wmap-btn-go" id="lmap-btn-go">Idź</button>
+        <button class="wmap-btn-cancel" id="lmap-btn-cancel">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Combat End Overlay -->
   <div id="combat-end-overlay" class="combat-end-overlay" hidden>
     <div class="combat-end-inner">
@@ -2237,7 +2261,7 @@
   <script src="./js/screens/game.js?v=989-dialog"></script>
   <script src="./js/screens/combat_ui.js?v=984-r1"></script>
   <script src="./js/multiplayer_ui.js?v=960-r1"></script>
-  <script src="./js/app.js?v=734-r1"></script>
+  <script src="./js/app.js?v=998-r1"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>
