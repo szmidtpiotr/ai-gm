@@ -424,6 +424,7 @@ def intercept_skill_test_tag(
     conn: sqlite3.Connection,
     campaign_id: int,
     character_id: int,
+    user_text: str | None = None,
 ) -> tuple[str, dict | None]:
     """
     Strip first [SKILL_TEST:...] tag from prose and return pending context.
