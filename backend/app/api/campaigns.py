@@ -1092,6 +1092,17 @@ def build_camp(campaign_id: int):
                 raise HTTPException(status_code=409, detail="Ten hex jest już bezpieczny do odpoczynku — obóz zbędny.")
             if msg == "no_hex_record":
                 raise HTTPException(status_code=404, detail="Bieżący hex nie istnieje w bazie.")
+            if msg.startswith("settlement_has_rest"):
+                parts = msg.split("|", 2)
+                suggested_key = parts[1] if len(parts) > 1 else None
+                suggested_label = parts[2] if len(parts) > 2 else None
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "W tej osadzie jest miejsce odpoczynku — obóz zbędny.",
+                        "suggested_rest_location": {"key": suggested_key, "label": suggested_label} if suggested_key else None,
+                    },
+                )
             raise HTTPException(status_code=400, detail=msg)
 
         # Re-read flags (build_camp commits, but doesn't touch session_flags)

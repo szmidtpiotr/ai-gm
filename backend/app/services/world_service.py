@@ -625,11 +625,36 @@ def build_camp(
 
     if existing_location_key:
         existing = conn.execute(
-            "SELECT id, key, safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1",
+            "SELECT id, key, label, safe_for_rest, location_type, parent_key FROM game_locations WHERE key = ? AND is_active = 1",
             (existing_location_key,),
         ).fetchone()
         if existing and int(existing["safe_for_rest"] or 0) == 1:
             raise ValueError("hex_already_safe")
+
+        # Check entire settlement tree for safe_for_rest=1 (#994):
+        # If the current location is a sub, its siblings or parent may have a rest spot.
+        if existing:
+            root_key = None
+            if existing["location_type"] == "macro":
+                root_key = existing["key"]
+            elif existing["parent_key"]:
+                root_key = existing["parent_key"]
+
+            if root_key:
+                # Check root macro itself
+                root = conn.execute(
+                    "SELECT key, label, safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1",
+                    (root_key,),
+                ).fetchone()
+                if root and int(root["safe_for_rest"] or 0) == 1:
+                    raise ValueError(f"settlement_has_rest|{root['key']}|{root['label']}")
+                # Check sibling sub-locations
+                safe_sub = conn.execute(
+                    "SELECT key, label FROM game_locations WHERE parent_key = ? AND is_active = 1 AND safe_for_rest = 1 LIMIT 1",
+                    (root_key,),
+                ).fetchone()
+                if safe_sub:
+                    raise ValueError(f"settlement_has_rest|{safe_sub['key']}|{safe_sub['label']}")
 
     # Resolve parent macro: prefer the macro hosting the current hex's location,
     # else nearest macro by parent_id chain — but for simplicity, just inherit
