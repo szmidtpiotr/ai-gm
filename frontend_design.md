@@ -170,7 +170,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-08 | Lista bohaterów | `#heroes-screen` | Karuzela postaci + "Nowy bohater" | — |
 | F-09 | Lista kampanii | `#campaigns-screen` | Wybór kampanii, typ przygody (Nowa/Gotowa/Loch), aktywne, empty state | — |
 | F-10 | Nowa kampania | `#new-campaign-screen` | Kreator nazwy kampanii | — |
-| F-11 | Kreator postaci | `#character-wizard-screen` | 4 kroki: tożsamość → archetyp → staty → finalizacja | — |
+| F-11 | Kreator postaci | `#character-wizard-screen` | 5 kroków: Krok 0 wybór rasy (Człowiek/Krasnolud) → tożsamość → staty → umiejętności → finalizacja (#976 R7) | #976 |
 | F-12 | Ekran gry | `#game-screen` | Główny gameplay: kompaktowy "pasek przygody" (1 rząd ~50px: avatar · imię+HP hairline · chip czasu ☀/🌙 · 🗺 · ☰ menu; auto-hide przy scrollu; w lochu klaster krypty inline zamiast 2. piętra — #952) + log narracji + composer; hostuje panele combat/inventory/settings | #952 |
 | F-13 | Lobby (MP) | `#lobby-screen` | Multiplayer pre-game: team builder, zaproszenia, timer | — |
 
