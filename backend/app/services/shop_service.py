@@ -18,6 +18,10 @@ from app.services import haggle_service
 
 SELL_RATIO = 0.5
 
+# #973 R4: Kowalskie oko — krasnolud discount (STARTING value, tunable via Sandbox)
+DWARF_SHOP_DISCOUNT = 0.15
+DWARF_REPAIR_COST_GP = 20  # złoto za akcję Reperuj (startowo)
+
 # Type aliases: catalog may return sub-types that map to canonical stored types.
 # "gear" appears in game_config_items.item_type and is returned by catalog for
 # general equipment (torch, rope, etc.), but shop_inventory_json stores them as "item".
@@ -274,6 +278,21 @@ def _get_character_cha(conn: sqlite3.Connection, character_id: int) -> int:
         return 10
 
 
+def _get_character_race(conn: sqlite3.Connection, character_id: int) -> str:
+    """Return character race ('human'/'dwarf'). Fallback 'human' on any error."""
+    try:
+        row = conn.execute(
+            "SELECT race FROM characters WHERE id = ? LIMIT 1",
+            (int(character_id),),
+        ).fetchone()
+        if row:
+            val = row["race"] if isinstance(row, sqlite3.Row) else row[0]
+            return str(val or "human").strip().lower()
+    except Exception:
+        pass
+    return "human"
+
+
 def _cha_buy_multiplier(cha: int) -> float:
     """F10 (#470): buy-price multiplier from CHA, symmetric to sell.
 
@@ -511,6 +530,10 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         cha = _get_character_cha(conn, character_id)
         haggle_discount = _consume_haggle_for_character(conn, character_id)
         eff_buy_mult = haggle_service.effective_buy_multiplier(_cha_buy_multiplier(cha), haggle_discount)
+        # #973 R4: Kowalskie oko — krasnolud płaci mniej u kowala (15% startowo)
+        race = _get_character_race(conn, character_id)
+        if race == "dwarf":
+            eff_buy_mult = round(eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT), 4)
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.

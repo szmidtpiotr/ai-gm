@@ -2141,6 +2141,35 @@ function populateCharacterSheet(character) {
         }
     }
 
+    // Race badge + racial traits (#977 R8)
+    const race = (character.race || sheet.race || 'human').toLowerCase();
+    const raceBadge = document.getElementById('sheet-race-badge');
+    const raceIcon = document.getElementById('sheet-race-icon');
+    const raceLabel = document.getElementById('sheet-race-label');
+    if (raceBadge && raceIcon && raceLabel) {
+        const RACE_META = {
+            human: { icon: '🧑', label: 'Człowiek' },
+            dwarf: { icon: '⛏️', label: 'Krasnolud' },
+        };
+        const meta = RACE_META[race] || { icon: '🧬', label: race };
+        raceIcon.textContent = meta.icon;
+        raceLabel.textContent = meta.label;
+        raceBadge.style.display = race !== 'human' ? '' : 'none';
+    }
+    const racialSection = document.getElementById('sheet-racial-section');
+    const racialTraits = document.getElementById('sheet-racial-traits');
+    if (racialSection && racialTraits && race === 'dwarf') {
+        racialSection.style.display = '';
+        racialTraits.innerHTML = [
+            { name: 'Twardy jak kamień', desc: '-2 obrażenia od trucizny, mroku i Rdzenia' },
+            { name: 'Kowalskie oko', desc: '15% zniżki w sklepie · przycisk "Reperuj" (+20 PŻ za 20 sz)' },
+            { name: 'Wzrok górnika', desc: '+3 percepcja w lochu · ludzie: -4 w ciemności' },
+            { name: 'Rdzeń-magia', desc: 'Uczony: miscast na Nat1+Nat2 · ekskluzywne czary Rdzenia' },
+        ].map(t => `<div class="racial-trait"><span class="racial-trait__name">${t.name}</span><span class="racial-trait__desc">${t.desc}</span></div>`).join('');
+    } else if (racialSection) {
+        racialSection.style.display = 'none';
+    }
+
     // HP
     const hp = sheet.current_hp ?? character.hp ?? 29;
     const maxHp = Math.max(1, sheet.max_hp ?? character.max_hp ?? 29);

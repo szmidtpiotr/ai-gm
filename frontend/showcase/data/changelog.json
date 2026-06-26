@@ -2,6 +2,21 @@
  "generated_from": "CHANGELOG.md",
  "entries": [
   {
+   "version": "v1.6.0",
+   "date": "2026-06-26",
+   "when": "czerwiec 2026",
+   "title": "Grywalne krasnoludy — nowa rasa z własną magią i cechami rasowymi",
+   "highlights": [
+    "Nowy Krok 0 w kreatorze postaci: wybierasz rasę przed archetype — Człowiek lub Krasnolud",
+    "Krasnolud ma własne modyfikatory statystyk: +2 KON, +1 SIŁ, −1 CHA, −1 ZRĘ — i widać je na karcie postaci",
+    "Twardy jak kamień: krasnolud przyjmuje o 2 obrażenia mniej od trucizny, mroku i Rdzenia",
+    "Kowalskie oko: 15% zniżki w każdym sklepie + możliwość reperowania się za 20 złota (+20 PŻ)",
+    "Wzrok górnika: w lochach krasnolud widzi lepiej (+3), człowiek gorzej w ciemności (−4)",
+    "Rdzeń-magia: uczony-krasnolud korzysta z 6 ekskluzywnych czarów Rdzenia (vein_tremor, rdzen_shield...); miscast na Nat1 i Nat2 z wyjątkowym opisem (krew z uszu, pulsacja w kościach)",
+    "Narrator jest świadomy rasy bohatera: reaguje na enklawy krasnoludów w stolicy, wioski górnicze i historię Czarnego Hutmana"
+   ]
+  },
+  {
    "version": "v1.5.3",
    "date": "2026-06-23",
    "when": "czerwiec 2026",

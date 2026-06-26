@@ -439,6 +439,18 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r9-poziomy">Progi poziomów</a></li>
         </ul>
       </li>
+      <li class="chap" id="toc-rasy">
+        <button class="chap-h"><span class="rn">X</span><span class="ttl">Rasy bohatera</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#rasy">Wprowadzenie</a></li>
+          <li><a href="#rasy-czlowiek">Człowiek</a></li>
+          <li><a href="#rasy-krasnolud">Krasnolud</a></li>
+          <li><a href="#rasy-twardy">Twardy jak kamień</a></li>
+          <li><a href="#rasy-kowalskie">Kowalskie oko</a></li>
+          <li><a href="#rasy-wzrok">Wzrok górnika</a></li>
+          <li><a href="#rasy-rdzen">Rdzeń-magia</a></li>
+        </ul>
+      </li>
     </ul>
     <div class="toc-empty">Brak wyników.</div>
   </nav>
@@ -2017,6 +2029,93 @@ document.addEventListener('DOMContentLoaded',function(){
 
       <footer>
         <span class="draft">Wersja robocza · Wstęp + Rozdziały I–IX</span><br>
+        Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
+      </footer>
+    </section>
+
+    <!-- ════════════════ ROZDZIAŁ X — RASY ════════════════ -->
+    <section id="rasy">
+      <p class="eyebrow">Kreacja postaci</p>
+      <h1><span class="num">X</span>Rasy bohatera</h1>
+      <p class="subtitle">Człowiek i Krasnolud — dwa sposoby bycia w tym świecie</p>
+      <hr class="rule">
+
+      <p>Rasę wybierasz w Kroku 0 kreatora postaci, przed wyborem archetypu. Rasa nadaje stałe modyfikatory statystyk i odblokowuje unikalne cechy — widoczne na karcie postaci w sekcji <em>Cechy rasowe</em>. Narrator zna rasę twojego bohatera i reaguje na nią w dialogach z NPC, opisach miejsc i narracji magicznej.</p>
+
+      <h2 id="rasy-czlowiek">Człowiek</h2>
+      <p>Rasa domyślna. Żaden modyfikator statystyk — żadna cecha rasowa. Człowiek korzysta z pełnego zakresu zaklęć arcańskich uczonego i jest traktowany neutralnie przez NPC. To rasa wszechstronna: wszystkie archetypy osiągają pełnię możliwości bez kompromisów.</p>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Człowiek · modyfikatory</h4>
+        <p>Brak. Statystyki ustalane przez archetype i rzuty.</p>
+        <p><em>Miscast uczonego:</em> porażka zaklęcia tylko na Nat 1. Opisy: rozbłysk energii, utrata kontroli nad splotem arkanów.</p>
+      </div>
+
+      <h2 id="rasy-krasnolud">Krasnolud</h2>
+      <p>Lud kuzien i kopalń z Siwych Grani. Dwadzieścia lat temu opuścili Kopalnię Czarnego Hutmana, gdy nawiercili żyłę Rdzenia i obudzili coś, co wciąż stuka. Rozproszeni po świecie: kupiecka enklawa w stolicy, osiadłe rody we wsiach górniczych, samotne hołdy wyżej w górach — każdy nosi w sobie echo tamtego błędu.</p>
+      <div class="entry" style="margin:1.2em 0">
+        <h4>Krasnolud · modyfikatory statystyk</h4>
+        <p>Stosowane PO bonusach archetypu:</p>
+        <ul>
+          <li><strong>+2 KON</strong> — wytrzymałość fizyczna i odporność</li>
+          <li><strong>+1 SIŁ</strong> — siła górnika i kowala</li>
+          <li><strong>−1 CHA</strong> — zwięzłość krasnoludzka bywa odczytywana jako chłód</li>
+          <li><strong>−1 ZRĘ</strong> — solidna budowa kosztem zwinności</li>
+        </ul>
+        <p><em>Przykład:</em> Wojownik-krasnolud startuje z CON 14 zamiast 12 i STR 13 zamiast 12, ale DEX 9 zamiast 10.</p>
+      </div>
+
+      <h2 id="rasy-twardy">Twardy jak kamień</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Twardy jak kamień</h4>
+        <p>Krasnolud redukuje obrażenia o <strong>2</strong> od każdego ciosu o typie <em>trucizna</em>, <em>mrok</em> lub <em>rdzeń</em>.</p>
+        <p><strong>Minimum:</strong> zawsze co najmniej 1 obrażenie na trafienie (redukcja nie może zbić do zera).</p>
+        <p><em>Przykład:</em> Wróg zadaje 4 obrażenia od jadu. Krasnolud przyjmuje 2. Gdyby cios zadał tylko 2 — krasnolud przyjmuje 1.</p>
+        <p><em>Uwaga:</em> ta cecha nie działa na typy fizyczne (cięcie, kłucie, obuchowe) ani ogień/lód.</p>
+      </div>
+
+      <h2 id="rasy-kowalskie">Kowalskie oko</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Kowalskie oko</h4>
+        <p>Krasnolud ocenia wartość materiałów i narzędzi instynktownie — co przekłada się na dwa efekty mechaniczne:</p>
+        <ul>
+          <li><strong>Zniżka sklepowa 15%</strong> — ceny kupna w każdym sklepie obniżone o 15%. Sprzedaż: bez zmiany.</li>
+          <li><strong>Reperuj</strong> — przycisk dostępny w sekcji odpoczynku. Koszt: 20 złota. Efekt: +20 PŻ (nie przekracza max HP). Działa zawsze — krasnolud skleja się sznurkiem i smaruje smołą.</li>
+        </ul>
+        <p><em>Przykład:</em> Miecz kosztuje 100 sz. Krasnolud płaci 85 sz. Przycisk „Reperuj" pojawia się na karcie postaci obok odpoczynku.</p>
+      </div>
+
+      <h2 id="rasy-wzrok">Wzrok górnika</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Wzrok górnika</h4>
+        <p>Krasnolud widzi w ciemności lochu. W aktywnej sesji dungeon:</p>
+        <ul>
+          <li>Krasnolud: <strong>+3 do percepcji</strong> (bonus do rzutów obserwacji, pułapek, zasadzek)</li>
+          <li>Człowiek w ciemności: <strong>−4 do percepcji</strong> (kara za brak darkvision)</li>
+        </ul>
+        <p>Poza lochem oba bonusy = 0. Narrator opisuje ciemność odpowiednio do rasy — krasnolud widzi przez mrok, człowiek stawia kroki ostrożnie.</p>
+      </div>
+
+      <h2 id="rasy-rdzen">Rdzeń-magia</h2>
+      <div class="entry">
+        <h4>Cecha rasowa · Rdzeń-magia (Uczony-krasnolud)</h4>
+        <p>Krasnolud-uczony nie korzysta ze standardowych zaklęć arcańskich. Zamiast nich poznaje <strong>6 czarów Rdzenia</strong> — magii wydobytej z żył ziemi:</p>
+        <table class="mechanic-table" style="margin:0.8em 0">
+          <thead><tr><th>Klucz</th><th>Nazwa robocza</th></tr></thead>
+          <tbody>
+            <tr><td>vein_tremor</td><td>Drżenie żyły</td></tr>
+            <tr><td>rdzen_pulse</td><td>Puls Rdzenia</td></tr>
+            <tr><td>vein_bleed</td><td>Krwawienie żyły</td></tr>
+            <tr><td>rdzen_shield</td><td>Tarcza Rdzenia</td></tr>
+            <tr><td>deep_quake</td><td>Głębinowe wstrząsy</td></tr>
+            <tr><td>black_vein</td><td>Czarna żyła</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Miscast (Rdzeń-czerpanie):</strong> porażka zaklęcia na <em>Nat 1 i Nat 2</em> (nie tylko Nat 1). Narrator opisuje to inaczej niż ludzki miscast: żyła ziemi vibruje w kościach, krew z uszu lub nosa, zapach rozgrzanego metalu, stukot głębinowych machin.</p>
+        <p><em>Ludzki uczony</em> nie może nauczyć się czarów Rdzenia — są zablokowane (race_lock = dwarf). <em>Krasnolud-uczony</em> nie może nauczyć się standardowych czarów arcańskich.</p>
+      </div>
+
+      <footer>
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–X</span><br>
         Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
       </footer>
     </section>

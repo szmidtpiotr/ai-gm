@@ -5233,6 +5233,77 @@ def _ensure_showcase_subscribers(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_character_race_column(conn: sqlite3.Connection) -> None:
+    """#970 R1 — pole `race` (TEXT DEFAULT 'human') w tabeli characters."""
+    try:
+        conn.execute("ALTER TABLE characters ADD COLUMN race TEXT NOT NULL DEFAULT 'human'")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+
+def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
+    """#975 R6 — 6 ekskluzywnych czarów krasnoludów + pole race_lock w game_config_spells."""
+    try:
+        conn.execute("ALTER TABLE game_config_spells ADD COLUMN race_lock TEXT")
+        conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            pass
+        else:
+            raise
+
+    dwarf_spells = [
+        {
+            "key": "vein_tremor", "label": "Żyłowy Wstrząs", "tier": 1, "mana_cost": 1,
+            "description": "2d6 dmg fizycznych (wstrząs ziemi) + wróg prone (DC 10 CON).",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+        {
+            "key": "rdzen_pulse", "label": "Rdzeń-Puls", "tier": 2, "mana_cost": 2,
+            "description": "2d4 dmg obszarowe (wszyscy wrogowie) + ogłuszenie 1 tura.",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+        {
+            "key": "vein_bleed", "label": "Żyłokrwawienie", "tier": 3, "mana_cost": 3,
+            "description": "3d6 dmg ignoruje AC (Rdzeń przebija zbroję).",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+        {
+            "key": "rdzen_shield", "label": "Rdzeń-Tarcza", "tier": 2, "mana_cost": 2,
+            "description": "Absorb następny atak (anuluj dmg). Chaotyczna tarcza Rdzenia.",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+        {
+            "key": "deep_quake", "label": "Trzęsienie Głębinowe", "tier": 4, "mana_cost": 4,
+            "description": "2d8 dmg obszarowe + prone (brak save). ZAWSZE −1d4 HP casteru.",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+        {
+            "key": "black_vein", "label": "Czarna Żyła", "tier": 5, "mana_cost": 5,
+            "description": "4d8 dmg + zatrucie Rdzenia (−2 HP/tura, 3 tury, ignoruje odporności).",
+            "is_active": 1, "race_lock": "dwarf",
+        },
+    ]
+    for sp in dwarf_spells:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_spells
+                    (key, label, tier, mana_cost, description, is_active, race_lock)
+                VALUES
+                    (:key, :label, :tier, :mana_cost, :description, :is_active, :race_lock)
+                """,
+                sp,
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5351,6 +5422,8 @@ def run_admin_migrations() -> None:
         _ensure_onboarding_summary_column(conn)  # #806 G25
         _link_kresy_settlements(conn)  # #933
         _ensure_showcase_subscribers(conn)  # #914 W13
+        _ensure_character_race_column(conn)  # #970 R1
+        _seed_dwarf_spells(conn)  # #975 R6
     finally:
         conn.close()
 

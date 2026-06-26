@@ -3,6 +3,7 @@
 // ============================================================================
 function startCharacterWizard() {
     wizardStepNum = 0;
+    wizardRace = 'human';
     wizardCreatedChar = null;
     wizardStatBases = {};
     wizardStatOriginal = {};
@@ -68,9 +69,10 @@ function _wizardRender() {
     elements.btnWizardNext.disabled = false;
 
     const content = elements.wizardContent;
-    if (wizardStepNum === 0) _renderStep1(content);
-    else if (wizardStepNum === 1) _renderStep2(content, true);
-    else if (wizardStepNum === 2) _renderStep3(content, true);
+    if (wizardStepNum === 0) _renderStep0(content);
+    else if (wizardStepNum === 1) _renderStep1(content);
+    else if (wizardStepNum === 2) _renderStep2(content, true);
+    else if (wizardStepNum === 3) _renderStep3(content, true);
     else _renderStep4(content);
 }
 
@@ -125,6 +127,46 @@ function _wizardRollAnimate(container, type) {
             }, flashStart);
         });
     }
+}
+
+// Step 0 — Race selection (#976 R7)
+function _renderStep0(c) {
+    const sel = wizardRace || 'human';
+    c.innerHTML = `
+        <div class="wizard-hero">
+            <span class="wizard-hero__icon">🧬</span>
+            <h2>Wybierz rasę</h2>
+            <p>Rasa kształtuje cechy fizyczne i zdolności twojego bohatera. Krasnoludy są odporne i uparcie pracowite — ale mniej zwinne i charyzmatyczne.</p>
+        </div>
+        <div class="archetype-grid">
+            <button type="button" class="archetype-card${sel === 'human' ? ' archetype-card--selected' : ''}" data-race="human">
+                <span class="archetype-icon">🧑</span>
+                <span class="archetype-title">Człowiek</span>
+                <span class="archetype-desc">Wszechstronny i elastyczny. Brak rasowych modyfikatorów — wszystkie archetypy dostępne w pełni.</span>
+                <span class="archetype-bonus">Brak modyfikatorów · Zaklęcia arcańskie</span>
+            </button>
+            <button type="button" class="archetype-card${sel === 'dwarf' ? ' archetype-card--selected' : ''}" data-race="dwarf">
+                <span class="archetype-icon">⛏️</span>
+                <span class="archetype-title">Krasnolud</span>
+                <span class="archetype-desc">Twardy jak kamień, urodzony pod ziemią. Odporny na trucizny i mroczną magię, widzi w ciemnościach, zna tajemnice Rdzenia.</span>
+                <span class="archetype-bonus">+2 KON · +1 SIŁ · −1 CHA · −1 ZRĘ · Rdzeń-magia</span>
+            </button>
+        </div>
+        <p class="wizard-hint" style="margin-top:1rem">Kliknij kartę aby wybrać rasę. Domyślnie: Człowiek.</p>
+    `;
+    c.querySelectorAll('.archetype-card').forEach(btn => {
+        btn.addEventListener('click', () => {
+            c.querySelectorAll('.archetype-card').forEach(b => b.classList.remove('archetype-card--selected'));
+            btn.classList.add('archetype-card--selected');
+            wizardRace = btn.dataset.race || 'human';
+        });
+    });
+}
+
+function _wizardStep0Submit() {
+    // race already stored in wizardRace via click handler; default 'human' is always set
+    wizardStepNum = 1;
+    _wizardRender();
 }
 
 // Step 1 — Name, background, archetype
@@ -496,11 +538,13 @@ async function handleWizardNext() {
     _wizardSetLoading(true);
     try {
         if (wizardStepNum === 0) {
-            await _wizardStep1Submit();
+            _wizardStep0Submit();
         } else if (wizardStepNum === 1) {
-            wizardStepNum = 2;
-            _wizardRender();
+            await _wizardStep1Submit();
         } else if (wizardStepNum === 2) {
+            wizardStepNum = 3;
+            _wizardRender();
+        } else if (wizardStepNum === 3) {
             await _wizardStep3Submit();
         } else {
             await _wizardFinalizeAndEnter();
@@ -528,6 +572,7 @@ async function _wizardStep1Submit() {
         char = await apiRequest('POST', `/campaigns/${currentCampaignId}/characters`, {
             user_id: currentUser?.id,
             name,
+            race: wizardRace || 'human',
             system_id: currentCampaign?.system_id || 'fantasy',
             sheet_json: { archetype, background_note: bg, backstory: bg },
         });
@@ -536,6 +581,7 @@ async function _wizardStep1Submit() {
         char = await apiRequest('POST', `/characters`, {
             user_id: currentUser?.id,
             name,
+            race: wizardRace || 'human',
             system_id: 'fantasy',
             sheet_json: { archetype, background_note: bg, backstory: bg },
         });
@@ -575,9 +621,9 @@ async function _wizardStep1Submit() {
 async function _wizardStep3Submit() {
     // Generate identity while transitioning to step 4
     elements.wizardContent.innerHTML = `<div class="wizard-form"><p class="wizard-hint">Generowanie tożsamości postaci przez AI...</p></div>`;
-    wizardStepNum = 3;
-    elements.wizardStep.textContent = WIZARD_STEPS[3].subtitle;
-    elements.wizardTitle.textContent = WIZARD_STEPS[3].title;
+    wizardStepNum = 4;
+    elements.wizardStep.textContent = WIZARD_STEPS[4].subtitle;
+    elements.wizardTitle.textContent = WIZARD_STEPS[4].title;
     elements.btnWizardPrev.style.display = 'block';
     elements.btnWizardNext.innerHTML = 'Rozpocznij przygodę <span class="btn__icon">✨</span>';
 

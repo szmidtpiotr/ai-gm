@@ -1218,6 +1218,10 @@
             <span class="sheet-location-badge__pin">📍</span>
             <span class="sheet-location-badge__label" id="sheet-location-label"></span>
           </span>
+          <span class="sheet-race-badge" id="sheet-race-badge" style="display:none">
+            <span class="sheet-race-badge__icon" id="sheet-race-icon">🧑</span>
+            <span class="sheet-race-badge__label" id="sheet-race-label">Człowiek</span>
+          </span>
         </div>
         <div class="sheet-tabs">
           <button type="button" class="sheet-tab sheet-tab--active" data-tab="stats">
@@ -1299,6 +1303,12 @@
           <!-- Stage 4 S2+S3 + merged skills: one combined stat→skill list -->
           <div class="stat-skill-list" id="sheet-stat-skill-list">
             <!-- Grouped stat+skill blocks inserted by JS -->
+          </div>
+
+          <!-- #977 R8 racial traits section (shown only for non-human or dwarf) -->
+          <div id="sheet-racial-section" style="display:none">
+            <h3 class="sheet-section-title">Cechy rasowe</h3>
+            <div id="sheet-racial-traits" class="racial-traits-list"></div>
           </div>
 
           <div id="sheet-conditions-section" style="display:none">
@@ -2257,11 +2267,11 @@
   <script src="./js/screens/auth.js?v=882-r4"></script>
   <script src="./js/screens/heroes.js?v=882-r4"></script>
   <script src="./js/screens/campaigns.js?v=900-viewer"></script>
-  <script src="./js/screens/wizard.js?v=882-r4"></script>
-  <script src="./js/screens/game.js?v=989-dialog"></script>
+  <script src="./js/screens/wizard.js?v=976-r7"></script>
+  <script src="./js/screens/game.js?v=977-r8"></script>
   <script src="./js/screens/combat_ui.js?v=984-r1"></script>
   <script src="./js/multiplayer_ui.js?v=960-r1"></script>
-  <script src="./js/app.js?v=998-r1"></script>
+  <script src="./js/app.js?v=976-r7"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

@@ -533,3 +533,44 @@ def handle_dungeon_abandon(campaign_id: int, character_id: int) -> dict:
         "restored": restored,
         "cooldown_until": cooldown_info.get("cooldown_until"),
     }
+
+
+# ── #974 R5: Wzrok górnika / darkvision ──────────────────────────────────────
+
+# STARTING values (Sandbox-tunable per #969 Numbers Policy)
+DWARF_DARKVISION_BONUS = 3   # +3 do rzutu Percepcji pod ziemią
+HUMAN_DARKNESS_PENALTY = -4  # malus w ciemności dla człowieka (dwarf: 0)
+
+
+def get_darkvision_bonus(character_id: int, is_dungeon: bool = False) -> dict:
+    """Return darkvision modifiers for a character in dungeon context.
+
+    Returns:
+        perception_bonus: flat bonus to Perception rolls underground (0 for humans)
+        darkness_penalty: penalty in dark rooms (negative for humans, 0 for dwarves)
+        race: character race used for the calculation
+    """
+    if not is_dungeon:
+        return {"perception_bonus": 0, "darkness_penalty": 0, "race": "human"}
+    try:
+        conn = _get_db()
+        row = conn.execute(
+            "SELECT race FROM characters WHERE id = ? LIMIT 1",
+            (int(character_id),),
+        ).fetchone()
+        conn.close()
+        race = str(row["race"] if row else "human").strip().lower()
+    except Exception:
+        race = "human"
+
+    if race == "dwarf":
+        return {
+            "perception_bonus": DWARF_DARKVISION_BONUS,
+            "darkness_penalty": 0,
+            "race": race,
+        }
+    return {
+        "perception_bonus": 0,
+        "darkness_penalty": HUMAN_DARKNESS_PENALTY,
+        "race": race,
+    }

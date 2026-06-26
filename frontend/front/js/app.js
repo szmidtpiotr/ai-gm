@@ -232,7 +232,8 @@ let authToken = null;
 let currentUser = null;
 let debugMode = localStorage.getItem('aigm_debug') === '1';
 
-// --- Wizard state (real 4-step flow) ---
+// --- Wizard state (real 5-step flow) ---
+let wizardRace = 'human';       // #976 R7 — chosen race (step 0)
 let wizardCreatedChar = null;   // character returned from POST /campaigns/{id}/characters
 let wizardStatBases = {};       // base stat values (pre-archetype-bonus), player edits these
 let wizardStatOriginal = {};    // original rolled bases (for reset)
@@ -266,10 +267,11 @@ const ALL_SKILL_ROWS = [
 ].sort((a, b) => a.key.localeCompare(b.key));
 const RANK_LABEL = ['—', 'Trained', 'Skilled'];
 const WIZARD_STEPS = [
-    { title: 'Twój bohater', subtitle: 'Krok 1 z 4' },
-    { title: 'Statystyki', subtitle: 'Krok 2 z 4' },
-    { title: 'Umiejętności', subtitle: 'Krok 3 z 4' },
-    { title: 'Tożsamość', subtitle: 'Krok 4 z 4' },
+    { title: 'Rasa', subtitle: 'Krok 1 z 5' },
+    { title: 'Twój bohater', subtitle: 'Krok 2 z 5' },
+    { title: 'Statystyki', subtitle: 'Krok 3 z 5' },
+    { title: 'Umiejętności', subtitle: 'Krok 4 z 5' },
+    { title: 'Tożsamość', subtitle: 'Krok 5 z 5' },
 ];
 function _skillRow(key) { return ALL_SKILL_ROWS.find(r => r.key === key) || { key, label: key, stat: '?' }; }
 function _skillBudgetUsed() {

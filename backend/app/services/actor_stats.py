@@ -100,6 +100,31 @@ def parse_stats_json(raw: Any) -> dict[str, int]:
     return out
 
 
+# Racial stat modifiers (STARTING values — Sandbox-tunable via #969).
+RACIAL_STAT_MODS: dict[str, dict[str, int]] = {
+    "dwarf": {"CON": +2, "STR": +1, "CHA": -1, "DEX": -1},
+    "human": {},
+}
+
+
+def apply_racial_modifiers(sheet_json: dict, race: str) -> dict:
+    """Apply racial stat bonuses/penalties to sheet_json.stats in-place-ish.
+
+    Returns the same dict (modified). HP/mana NOT recalculated here — caller
+    must call calculate_hp/calculate_mana after this if stats changed.
+    Unknown race → treated as 'human' (no modifiers).
+    """
+    mods = RACIAL_STAT_MODS.get(str(race or "human").strip().lower(), {})
+    if not mods:
+        return sheet_json
+    stats = sheet_json.get("stats") or {}
+    for stat_key, delta in mods.items():
+        current = int(stats.get(stat_key, 10))
+        stats[stat_key] = max(1, min(20, current + delta))
+    sheet_json["stats"] = stats
+    return sheet_json
+
+
 def validate_stats_json(values: dict[str, int] | None) -> str:
     """Admin-supplied stats dict → canonical JSON string for storage.
 

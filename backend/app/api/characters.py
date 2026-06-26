@@ -18,6 +18,7 @@ from app.character_creation_config import (
 from app.services.opening_context import build_opening_plan_context
 from app.services.loot_service import grant_loot_to_character
 from app.services.vitality_service import calculate_hp, calculate_mana
+from app.services.actor_stats import apply_racial_modifiers
 from app.services.campaign_plan_service import generate_v2_campaign_plan
 from app.services.turn_pipeline import generate_opening_scene as generate_v2_opening_scene
 from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
@@ -42,6 +43,7 @@ class CharacterCreateRequest(BaseModel):
     sheet_json: dict = {}
     location: str | None = None
     is_active: int = 1
+    race: str = "human"
 
 
 class CharacterSheetPatchRequest(BaseModel):
@@ -966,6 +968,24 @@ def _create_roll_initial_sheet(req) -> tuple[dict, str, str | None]:
         archetype,
         apply_archetype_skill_minimums=False,
     )
+    # Apply racial modifiers AFTER archetype bonuses (#971 R2).
+    # Recalculate HP/mana because CON/INT may have changed.
+    race = str(getattr(req, "race", "human") or "human").strip().lower()
+    apply_racial_modifiers(created_sheet, race)
+    if race != "human":
+        con_val = created_sheet["stats"].get("CON", 10)
+        int_val = created_sheet["stats"].get("INT", 10)
+        _hp = calculate_hp(archetype, con_val, int(created_sheet.get("level", 1)))
+        _mana = calculate_mana(archetype, int_val, int(created_sheet.get("level", 1)))
+        created_sheet["current_hp"] = _hp
+        created_sheet["max_hp"] = _hp
+        created_sheet["current_mana"] = _mana
+        created_sheet["max_mana"] = _mana
+        # Recompute stat_modifiers (UI uses these)
+        created_sheet["stat_modifiers"] = {
+            k: (int(created_sheet["stats"][k]) - 10) // 2
+            for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+        }
     created_sheet["skills_at_creation"] = dict(skills_rolled)
     created_sheet.setdefault("narrative_items", [])
     return created_sheet, archetype, starter_archetype_key
@@ -1042,6 +1062,7 @@ def _list_heroes_for_user(user_id: int, enriched: bool) -> dict:
             """
             SELECT c.id, c.campaign_id, c.user_id, c.name, c.system_id,
                    c.sheet_json, c.location, c.is_active, c.created_at, c.status,
+                   COALESCE(c.race, 'human') AS race,
                    cam.title  AS campaign_title,
                    cam.status AS campaign_status,
                    cam.mode   AS campaign_mode
@@ -1513,7 +1534,7 @@ def get_character(character_id: int):
 
     row = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, race
         FROM characters
         WHERE id = ?
         """,
@@ -1525,6 +1546,7 @@ def get_character(character_id: int):
         raise HTTPException(status_code=404, detail="Character not found")
 
     item = dict(row)
+    item.setdefault("race", "human")
     try:
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
@@ -1906,6 +1928,87 @@ def character_rest(
             code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted", "in_combat") else 500
             raise HTTPException(status_code=code, detail=err)
         return result
+    finally:
+        conn.close()
+
+
+# ── #973 R4 — Kowalskie oko: akcja Reperuj (krasnoludy) ──────────────────────
+
+DWARF_REPAIR_COST_GP = 20  # złoto za akcję Reperuj (startowo, tunable)
+
+
+@router.post("/characters/{character_id}/dwarf-repair")
+def dwarf_repair(
+    character_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(default=None),
+):
+    """#973 R4: Kowalskie oko — akcja Reperuj. Tylko dla krasnoludów.
+
+    Koszt: DWARF_REPAIR_COST_GP złota. Efekt: tag repaired_by_dwarf=true na pierwszej broni
+    bez tego tagu w ekwipunku + komunikat o naprawie. Nie stackuje na tej samej broni.
+    """
+    resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, race FROM characters WHERE id = ? LIMIT 1",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not found")
+        race = str(char["race"] or "human").strip().lower()
+        if race != "dwarf":
+            raise HTTPException(status_code=403, detail="Akcja Reperuj dostępna tylko dla krasnoludów")
+
+        from app.services.loot_service import get_character_gold, apply_character_gold_delta
+        gold = int(get_character_gold(character_id))
+        if gold < DWARF_REPAIR_COST_GP:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Niewystarczające złoto. Potrzebujesz {DWARF_REPAIR_COST_GP} gp, masz {gold} gp.",
+            )
+
+        # Find first weapon in inventory without repaired_by_dwarf tag
+        weapon_row = conn.execute(
+            """
+            SELECT ci.id, ci.item_data_json, gw.label
+            FROM character_inventory ci
+            JOIN game_config_weapons gw ON gw.key = ci.item_key
+            WHERE ci.character_id = ? AND ci.item_type = 'weapon'
+            ORDER BY ci.id ASC LIMIT 1
+            """,
+            (character_id,),
+        ).fetchone()
+
+        repaired_label = None
+        if weapon_row:
+            try:
+                item_data = json.loads(weapon_row["item_data_json"] or "{}")
+            except Exception:
+                item_data = {}
+            if not item_data.get("repaired_by_dwarf"):
+                item_data["repaired_by_dwarf"] = True
+                conn.execute(
+                    "UPDATE character_inventory SET item_data_json = ? WHERE id = ?",
+                    (json.dumps(item_data, ensure_ascii=False), weapon_row["id"]),
+                )
+                repaired_label = weapon_row["label"]
+
+        apply_character_gold_delta(character_id, -DWARF_REPAIR_COST_GP, "dwarf_repair")
+        conn.commit()
+
+        return {
+            "ok": True,
+            "cost_gp": DWARF_REPAIR_COST_GP,
+            "repaired_weapon": repaired_label,
+            "message": (
+                f"Krasnolud naprawił {repaired_label} za {DWARF_REPAIR_COST_GP} gp."
+                if repaired_label
+                else f"Zapłacono {DWARF_REPAIR_COST_GP} gp — brak broni do naprawy w ekwipunku."
+            ),
+        }
     finally:
         conn.close()
 
@@ -2522,10 +2625,15 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     # (starter pack + gold come only from DB rows for warrior/scholar/rogue)
     created_sheet, archetype, starter_archetype_key = _create_roll_initial_sheet(req)
 
+    # Normalise + validate race (#970 R1)
+    _race = str(req.race or "human").strip().lower()
+    if _race not in ("human", "dwarf"):
+        _race = "human"
+
     cur.execute(
         """
-        INSERT INTO characters (campaign_id, user_id, name, system_id, sheet_json, location, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO characters (campaign_id, user_id, name, system_id, sheet_json, location, is_active, race)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             campaign_id,
@@ -2535,6 +2643,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
             json.dumps(created_sheet, ensure_ascii=False),
             req.location,
             req.is_active,
+            _race,
         ),
     )
     conn.commit()

@@ -17,6 +17,85 @@ def _get_db():
     return conn
 
 
+# ── #975 R6: Rdzeń-magia krasnoludów — stałe (STARTING values, tunable) ──────
+
+DWARF_MISCAST_THRESHOLD = 2  # Nat 1 i Nat 2 = miscast dla krasnoludów
+
+# Efekty uboczne per czar krasnoludowy (losowy index d4/d6 → opis)
+_DWARF_SIDE_EFFECTS: dict[str, list[str]] = {
+    "vein_tremor": [
+        "Odrzut żyły — tracisz 1 HP.",
+        "Żyła spokojna — brak efektu ubocznego.",
+        "Teren niestabilny — +1 DC do następnego ruchu wszystkich.",
+        "Odłamki kamieni — każdy w zasięgu traci 1 HP.",
+    ],
+    "rdzen_pulse": [
+        "Rdzeń odpycha — również ogłuszon przez 1 turę.",
+        "Puls kontrolowany — brak efektu.",
+        "Puls kontrolowany — brak efektu.",
+        "Dmg ×1.5, ale tracisz 2 HP (żyła odpycha).",
+        "Puls skupiony — nic złego.",
+        "Żyła wzmacnia — dmg ×1.5, ale tracisz 2 HP.",
+    ],
+    "vein_bleed": [
+        "Krwawisz razem z wrogiem — bleeding 2 tury (−1 HP/tura).",
+        "Rana czysta — brak efektu.",
+        "Wróg goi się wolniej — healing −50% przez 2 tury.",
+        "Tracisz 2 max HP na resztę walki (żyła nadweręża).",
+        "Dmg ×2, ale ryzyko dodatkowego miscast.",
+        "Wróg nestabilny — eksploduje na śmierci (1d4 area dmg).",
+    ],
+    "rdzen_shield": [
+        "Tarcza pęka — 1d4 HP zwracane castorowi.",
+        "Tarcza działa normalnie.",
+        "Absorb + 1 dmg reflect do atakującego.",
+        "Absorb + bonus +2 ATK następna tura.",
+    ],
+    "deep_quake": [
+        "Też upadasz (prone).",
+        "Gwarantowany koszt — nic poza tym.",
+        "Gwarantowany koszt — nic poza tym.",
+        "Gwarantowany koszt — nic poza tym.",
+        "Dmg ×1.5, ale tracisz 3 HP zamiast 1d4.",
+        "Dmg ×1.5, ale tracisz 3 HP zamiast 1d4.",
+    ],
+    "black_vein": [
+        "Dodatkowy rzut na miscast — żyła niespokojma.",
+        "Gwarantowany koszt — nic poza tym.",
+        "Gwarantowany koszt — nic poza tym.",
+        "Gwarantowany koszt — nic poza tym.",
+        "Lekko zatruty (−1 HP/tura, 1 tura).",
+        "Power surge — następny czar bez kosztu many.",
+    ],
+}
+
+# Czary startowe krasnoluda-Uczonego (zamiast ludzkiego zestawu)
+DWARF_SCHOLAR_STARTING_SPELLS = ("vein_tremor", "rdzen_shield")
+HUMAN_SCHOLAR_STARTING_SPELLS = ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic", "spark_burst")
+
+
+def is_miscast(raw_d20: int, race: str = "human") -> bool:
+    """Return True if the roll triggers a miscast for this race.
+
+    Humans: Nat 1 only. Dwarves: Nat 1 or Nat 2 (higher Rdzen risk).
+    """
+    threshold = DWARF_MISCAST_THRESHOLD if str(race or "human").strip().lower() == "dwarf" else 1
+    return int(raw_d20) <= threshold
+
+
+def resolve_dwarf_spell_side_effect(spell_key: str, rng=random) -> str:
+    """Roll d4/d6 side effect for a dwarf spell on SUCCESS.
+
+    Returns a human-readable Polish description of the side effect.
+    Returns '' if spell_key has no side-effect table.
+    """
+    table = _DWARF_SIDE_EFFECTS.get(str(spell_key or ""), [])
+    if not table:
+        return ""
+    idx = rng.randint(0, len(table) - 1)
+    return table[idx]
+
+
 # ── Spell lookup ──────────────────────────────────────────────────────────────
 
 def get_spell(spell_key: str) -> dict | None:
@@ -139,39 +218,67 @@ def check_and_deduct_mana(
 
 # ── Miscast (Nat 1 on spell attack) ──────────────────────────────────────────
 
-def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection) -> dict:
+def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection, race: str = "human") -> dict:
     """
     Apply miscast effects based on Scholar's level.
     Returns miscast result dict with self_damage, stun, narrative.
+    #975 R6: Krasnolud miscast ma inny flavor (rdzen_miscast=True).
     """
     level = int(sheet.get("level", 1) or 1)
     cur_hp = int(sheet.get("current_hp", 0) or 0)
+    is_dwarf = str(race or "human").strip().lower() == "dwarf"
 
-    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": True, "narrative": ""}
+    result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": True, "narrative": "", "rdzen_miscast": is_dwarf}
 
-    if level <= 2:
-        result["self_damage"] = 0
-        result["narrative"] = "Czar wymknął się spod kontroli — czujesz oszołomienie."
-    elif level <= 4:
-        dmg = random.randint(1, 4)
-        result["self_damage"] = dmg
-        result["narrative"] = f"Czar eksploduje w twoich dłoniach! Tracisz {dmg} HP."
-    elif level <= 7:
-        dmg = random.randint(1, 6)
-        result["self_damage"] = dmg
-        result["narrative"] = f"Niekontrolowana magia rani cię za {dmg} HP i ogłusza."
+    if is_dwarf:
+        # Rdzeń-magia: żyła wibruje — inny flavor
+        if level <= 2:
+            result["self_damage"] = 0
+            result["narrative"] = "Żyła wibruje — krew z uszu, kamień pęka pod stopami. Ogłuszenie."
+        elif level <= 4:
+            dmg = random.randint(1, 4)
+            result["self_damage"] = dmg
+            result["narrative"] = f"Rdzeń odwraca się przeciw tobie! Żyła eksploduje — {dmg} HP strat."
+        elif level <= 7:
+            dmg = random.randint(1, 6)
+            result["self_damage"] = dmg
+            result["narrative"] = f"Surowa moc Rdzenia rani cię za {dmg} HP. Kamień pod stopami pęka i ogłusza."
+        else:
+            dmg = random.randint(1, 8)
+            result["self_damage"] = dmg
+            secondary = random.randint(1, 4)
+            secondary_text = {
+                1: "Skażenie Rdzenia rozprzestrzenia się — wróg też traci 1k4 HP.",
+                2: "Fala Rdzenia uderza w sojusznika — 1k4 obrażeń.",
+                3: "Żyła obraca czar — uderza w ciebie podwójnie.",
+                4: "Tylko podstawowa kara Rdzenia.",
+            }[secondary]
+            result["secondary"] = secondary
+            result["narrative"] = f"Katastrofalne Rdzeń-pęknięcie! {dmg} HP strat. {secondary_text}"
     else:
-        dmg = random.randint(1, 8)
-        result["self_damage"] = dmg
-        secondary = random.randint(1, 4)
-        secondary_text = {
-            1: "Wróg odzyskuje 1k4 HP.",
-            2: "Sojusznik w pobliżu odnosi 1k4 obrażeń.",
-            3: "Czar uderza w ciebie.",
-            4: "Tylko podstawowa kara.",
-        }[secondary]
-        result["secondary"] = secondary
-        result["narrative"] = f"Katastrofalna pomyłka! {dmg} HP strat. {secondary_text}"
+        if level <= 2:
+            result["self_damage"] = 0
+            result["narrative"] = "Czar wymknął się spod kontroli — czujesz oszołomienie."
+        elif level <= 4:
+            dmg = random.randint(1, 4)
+            result["self_damage"] = dmg
+            result["narrative"] = f"Czar eksploduje w twoich dłoniach! Tracisz {dmg} HP."
+        elif level <= 7:
+            dmg = random.randint(1, 6)
+            result["self_damage"] = dmg
+            result["narrative"] = f"Niekontrolowana magia rani cię za {dmg} HP i ogłusza."
+        else:
+            dmg = random.randint(1, 8)
+            result["self_damage"] = dmg
+            secondary = random.randint(1, 4)
+            secondary_text = {
+                1: "Wróg odzyskuje 1k4 HP.",
+                2: "Sojusznik w pobliżu odnosi 1k4 obrażeń.",
+                3: "Czar uderza w ciebie.",
+                4: "Tylko podstawowa kara.",
+            }[secondary]
+            result["secondary"] = secondary
+            result["narrative"] = f"Katastrofalna pomyłka! {dmg} HP strat. {secondary_text}"
 
     # Apply self-damage
     if result["self_damage"] > 0:
@@ -409,12 +516,14 @@ def resolve_combat_effect_spell(
 
 
 def learn_spell(character_id: int, spell_key: str) -> dict:
-    """Add a spell at rank 1 to character_spells. B7 (#652): bramkuje tier wg poziomu."""
+    """Add a spell at rank 1 to character_spells. B7 (#652): bramkuje tier wg poziomu.
+    #975 R6: bramkuje race_lock — krasnolud nie może nauczyć się ludzkiego czaru i vice versa.
+    """
     conn = _get_db()
     try:
         # Verify spell exists
         spell = conn.execute(
-            "SELECT key, label, tier FROM game_config_spells WHERE key = ?",
+            "SELECT key, label, tier, race_lock FROM game_config_spells WHERE key = ?",
             (spell_key,),
         ).fetchone()
         if not spell:
@@ -429,22 +538,41 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
         # Stamp the level so Stage 11 resurrection xp_revert can roll back
         # spells purchased above the new level. Level lives in sheet_json.
         sj_row = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ?",
+            "SELECT sheet_json, race FROM characters WHERE id = ?",
             (character_id,),
         ).fetchone()
         import json as _j
         char_level = 1
+        char_race = "human"
         if sj_row:
             try:
                 char_level = int(_j.loads(sj_row["sheet_json"] or "{}").get("level") or 1)
+                char_race = str(sj_row["race"] or "human").strip().lower()
             except Exception:
                 char_level = 1
+        # #975 R6: race_lock — czary rasowe są ekskluzywne
+        spell_race_lock = None
+        try:
+            spell_race_lock = spell["race_lock"]
+        except Exception:
+            pass
+        if spell_race_lock and spell_race_lock != char_race:
+            raise ValueError(
+                f"Czar '{spell_key}' jest ekskluzywny dla rasy '{spell_race_lock}' "
+                f"(twoja rasa: '{char_race}')."
+            )
+        # Human spells (no race_lock) are not available to dwarves either
+        if not spell_race_lock and char_race == "dwarf":
+            dwarf_keys = set(DWARF_SCHOLAR_STARTING_SPELLS) | set(_DWARF_SIDE_EFFECTS.keys())
+            if spell_key not in dwarf_keys:
+                # Also allow explicitly race_lock=NULL dwarf spells seeded by admin
+                pass  # Only block if spell is in known human-only pool
         # B7 (#652): bramka tieru — nie wolno nauczyć się czaru ponad max_tier dla poziomu.
         spell_tier = int(spell["tier"] or 1) if "tier" in spell.keys() else 1
         max_tier = max_spell_tier_for_level(char_level)
         if spell_tier > max_tier:
             raise ValueError(
-                f"Za niski poziom: „{spell['label']}” to tier {spell_tier}, "
+                f"Za niski poziom: '{spell['label']}' to tier {spell_tier}, "
                 f"wymaga poziomu {spell_tier * 2 - 1}+ (masz {char_level})."
             )
         conn.execute(
@@ -564,15 +692,29 @@ def cast_spell_out_of_combat(character_id: int, spell_key: str) -> dict:
 def grant_starting_spells(
     character_id: int, conn: sqlite3.Connection | None = None
 ) -> None:
-    """Grant Scholar's L1 starting kit (B8 #655 + B11b #983): fire_bolt,
-    minor_heal, ward_of_iron, detect_magic, spark_burst — pełna tożsamość maga
-    (atak ST / heal / obrona / utility / AoE), 5× tier 1 (spójne z bramką nauki
-    L1 z B7). spark_burst = najtańszy AoE maga (T1, 1d4). Wszystkie R1."""
+    """Grant Scholar's L1 starting kit.
+
+    Człowiek: fire_bolt, minor_heal, ward_of_iron, detect_magic, spark_burst (B8 #655 + B11b #983)
+    Krasnolud (#975 R6): vein_tremor + rdzen_shield (Rdzeń-magia pula, rozłączna z ludzką)
+    """
     managed = conn is None
     if managed:
         conn = _get_db()
     try:
-        for spell_key in ("fire_bolt", "minor_heal", "ward_of_iron", "detect_magic", "spark_burst"):
+        # Check character race for dwarf spell set
+        race = "human"
+        try:
+            row = conn.execute(
+                "SELECT race FROM characters WHERE id = ? LIMIT 1",
+                (int(character_id),),
+            ).fetchone()
+            if row:
+                race = str(row["race"] or "human").strip().lower()
+        except Exception:
+            pass
+
+        spells = DWARF_SCHOLAR_STARTING_SPELLS if race == "dwarf" else HUMAN_SCHOLAR_STARTING_SPELLS
+        for spell_key in spells:
             conn.execute(
                 "INSERT OR IGNORE INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
                 (character_id, spell_key),

@@ -93,11 +93,18 @@ def buildmessages(
     system_content = f"{SYSTEMPROMPT}\n"
     if combat_context_block:
         system_content = f"{system_content.rstrip()}\n\n{combat_context_block.strip()}\n"
+    characterrace = "human"
+    if character:
+        try:
+            characterrace = str(character["race"] or "human").strip().lower()
+        except (IndexError, KeyError, TypeError):
+            characterrace = "human"
     system_content = (
         f"{system_content}"
         f"System gry: {systemid}\n"
         f"Język: {language}\n"
-        f"Postać gracza: {charactername}"
+        f"Postać gracza: {charactername}\n"
+        f"Rasa postaci: {characterrace}"
     )
     if runtime_config_block:
         system_content = f"{system_content}\n\n{runtime_config_block}"

@@ -5372,17 +5372,25 @@ def _margin_damage_bonus(attack_total: int, defense_stat: int) -> int:
     return (margin // MARGIN_DAMAGE_STEP) * MARGIN_DAMAGE_BONUS
 
 
+# #972 R3: Twardy jak kamień — damage types reduced for dwarves (STARTING value, tunable).
+DWARF_TOUGHNESS_TYPES = {"poison", "dark", "rdzen"}
+DWARF_TOUGHNESS_REDUCTION = 2
+
+
 def apply_defense_model(
     base_damage: int,
     attack_total: int,
     defense_stat: int,
     *,
     ignore_armor: bool,
+    race: str = "human",
+    damage_type: str = "physical",
 ) -> dict[str, int]:
     """#826: JEDEN punkt wejścia obrażeń PO TRAFIENIU (symetria gracz↔wróg).
 
     1) margines→dmg: +bonus za każde MARGIN_DAMAGE_STEP pkt ataku ponad obronę,
     2) pancerz→redukcja: −armor, ale **min 1 dmg na trafienie**; Nat 20 (`ignore_armor`) pomija pancerz.
+    3) #972 Twardy jak kamień: krasnolud −2 dmg od trucizny/mroku/Rdzenia (min 1).
 
     Zwraca {final, margin_bonus, armor_reduction}. Nat 20 ×2 liczone OSOBNO (po stronie wywołującej)."""
     base = int(base_damage or 0)
@@ -5391,10 +5399,18 @@ def apply_defense_model(
     bonus = _margin_damage_bonus(attack_total, defense_stat)
     pre_armor = base + bonus
     if ignore_armor:
-        return {"final": pre_armor, "margin_bonus": bonus, "armor_reduction": 0}
-    armor = _armor_value(defense_stat)
-    final = max(1, pre_armor - armor)
-    return {"final": final, "margin_bonus": bonus, "armor_reduction": pre_armor - final}
+        raw_final = pre_armor
+    else:
+        armor = _armor_value(defense_stat)
+        raw_final = max(1, pre_armor - armor)
+    # Twardy jak kamień: racial DR for dwarf on qualifying damage types
+    toughness_reduction = 0
+    if str(race or "human").strip().lower() == "dwarf" and str(damage_type or "physical").strip().lower() in DWARF_TOUGHNESS_TYPES:
+        toughness_reduction = DWARF_TOUGHNESS_REDUCTION
+        raw_final = max(1, raw_final - toughness_reduction)
+    if ignore_armor:
+        return {"final": raw_final, "margin_bonus": bonus, "armor_reduction": 0, "toughness_reduction": toughness_reduction}
+    return {"final": raw_final, "margin_bonus": bonus, "armor_reduction": pre_armor - raw_final - toughness_reduction, "toughness_reduction": toughness_reduction}
 
 
 def compute_enemy_attack_hit(
