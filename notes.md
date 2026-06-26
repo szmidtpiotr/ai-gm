@@ -92,10 +92,17 @@ Pełny obchód trybu: ~15-30 realnych tur z prawdziwym LLM, checkpoint po checkp
 | Solo | `/game-smoke nowa-kampania` / `gotowa-kampania` | `/game-smoke-pw nowa-kampania` / `gotowa-kampania` |
 | Loch | `/game-smoke-dungeon` (`--engine`) | `/game-smoke-dungeon-pw` (`--engine`) |
 | Multiplayer | `/game-smoke-mp 2\|3\|4` | `/game-smoke-mp-pw 2\|3` |
+| **Rasa** | `/game-smoke-race warrior\|scholar` | `/game-smoke-race-pw warrior\|scholar` |
+
+**Rasa krasnolud — dwa poziomy testów (uzupełniają się):**
+- **Automatyczne (bez LLM):** `pytest tests/playability/test_race_playability.py` (18 GREEN) + Playwright spec `ux/race/race_smoke.spec.js` (6 GREEN) — szybkie, deterministyczne, mechanika CP1-CP10.
+- **`/game-smoke-race`** (API) — 12 checkpointów przez `play_turn.py`: Twardy jak kamień (karta HP delta), Kowalskie oko gold_delta, Wzrok górnika session_flags, rdzeń-czar mana. Wymaga LLM.
+- **`/game-smoke-race-pw`** (Playwright MCP) — to samo przez UI: Krok 0 kreator (karty rasy), badge ⛏️ + Cechy rasowe, cena -15% w sklepie, przycisk Reperuj, karta obrażeń z toughness_reduction, lista rdzeń-czarów bez magic_bolt, miscast rdzeń-flavor.
+- Setup: `python3 .claude/skills/game-smoke-race/scripts/setup_dwarf_pool.py` → tworzy [TEST] Krasnolud Wojownik + [TEST] Krasnolud Uczony (idempotentne).
 
 **API vs `-pw` — kiedy który:**
 - **API** (`/game-smoke`…) — gra przez `play_turn.py`, dowód = SQL. Szybsze, tańsze. NIE widzi warstwy UI (popup kości, modale, kolumny stref). Domyślny wybór do weryfikacji mechaniki/stanu.
-- **`-pw`** (`/game-smoke-*-pw`) — gra przez Playwright MCP w prawdziwym UI, dowód = zrzuty inline. Wolniejsze. Łapie to, czego API NIE widzi: kolumny **DYSTANS/ZWARCIE** + chipy 🏹/⚔, modal reakcji **SF10** (Przyjmij/Unik/Blok), popup kości, pasek many, menu czarów, picker mikstur, **mapę lochu** + D-pad, modale boss/porzucenie, lobby/czat MP.
+- **`-pw`** (`/game-smoke-*-pw`) — gra przez Playwright MCP w prawdziwym UI, dowód = zrzuty inline. Wolniejsze. Łapie to, czego API NIE widzi: kolumny **DYSTANS/ZWARCIE** + chipy 🏹/⚔, modal reakcji **SF10** (Przyjmij/Unik/Blok), popup kości, pasek many, menu czarów, picker mikstur, **mapę lochu** + D-pad, modale boss/porzucenie, lobby/czat MP. Dla rasy: badge, cechy rasowe, cena sklepu, karta obrażeń z toughness.
 - Komplementarne — pełna pewność trybu = oba (API na stan + `-pw` na to co gracz widzi).
 
 Smoke ≠ test jednego issue. Pojedynczy bug → `/playwright-test-report #NNN` albo `/game-test-player-screenshot #NNN`.
