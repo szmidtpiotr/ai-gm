@@ -1173,6 +1173,10 @@ def create_standalone_character(req: dict = Body(...)):
     if archetype not in ("warrior", "scholar", "rogue"):
         archetype = "warrior"
 
+    race = str(req.get("race", "human") or "human").strip().lower()
+    if race not in ("human", "dwarf"):
+        race = "human"
+
     # Roll stats and skills exactly as the campaign-scoped endpoint does
     base_sheet["archetype"] = archetype
     base_sheet["stats"] = {
@@ -1187,6 +1191,24 @@ def create_standalone_character(req: dict = Body(...)):
     created_sheet["skills_at_creation"] = dict(skills_rolled)
     created_sheet.setdefault("narrative_items", [])
 
+    # Apply racial modifiers (#969): adjusts CON/STR/CHA/DEX and recalculates HP/mana.
+    if race != "human":
+        from app.services.actor_stats import apply_racial_modifiers
+        apply_racial_modifiers(created_sheet, race)
+        con_val = created_sheet["stats"].get("CON", 10)
+        int_val = created_sheet["stats"].get("INT", 10)
+        level = int(created_sheet.get("level", 1))
+        _hp = calculate_hp(archetype, con_val, level)
+        _mana = calculate_mana(archetype, int_val, level)
+        created_sheet["current_hp"] = _hp
+        created_sheet["max_hp"] = _hp
+        created_sheet["current_mana"] = _mana
+        created_sheet["max_mana"] = _mana
+        created_sheet["stat_modifiers"] = {
+            k: (int(created_sheet["stats"][k]) - 10) // 2
+            for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+        }
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -1197,10 +1219,10 @@ def create_standalone_character(req: dict = Body(...)):
         cur = conn.execute(
             """
             INSERT INTO characters
-                (campaign_id, user_id, name, system_id, sheet_json, is_active, status, created_at)
-            VALUES (NULL, ?, ?, ?, ?, 1, 'idle', datetime('now'))
+                (campaign_id, user_id, name, system_id, sheet_json, race, is_active, status, created_at)
+            VALUES (NULL, ?, ?, ?, ?, ?, 1, 'idle', datetime('now'))
             """,
-            (int(user_id), name, system_id, json.dumps(created_sheet, ensure_ascii=False)),
+            (int(user_id), name, system_id, json.dumps(created_sheet, ensure_ascii=False), race),
         )
         conn.commit()
         char_id = cur.lastrowid
