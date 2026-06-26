@@ -777,20 +777,21 @@ def get_campaign_death_summary(campaign_id: int):
 def get_campaign_quests(campaign_id: int):
     """E1 (#416) — Player-facing active quests for the HUD quest bar.
 
-    Returns the active_quests list from game_sessions so the frontend
-    can populate the quest bar on campaign entry without waiting for a turn.
+    #999: reads character_quests (status='active') — the single source of truth —
+    instead of world_state.active_quests, which drifted (completed quests never
+    pruned, new ones never added). Keeps the bar in sync with the quest lifecycle.
     """
-    from app.services.world_state_service import get_world_state_flags
+    from app.services.quest_persist_service import get_active_quests_for_bar
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Campaign not found")
+        active = get_active_quests_for_bar(conn, campaign_id)
     finally:
         conn.close()
-    flags = get_world_state_flags(campaign_id)
-    return {"active_quests": flags.get("active_quests", [])}
+    return {"active_quests": active}
 
 
 @router.get("/campaigns/{campaign_id}/journal")

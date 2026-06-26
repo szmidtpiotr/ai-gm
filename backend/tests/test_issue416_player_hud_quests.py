@@ -42,7 +42,12 @@ def test_campaign_quests_endpoint_exists():
 
 
 def test_campaign_quests_returns_stored_quests():
-    """Stored quests in game_sessions must be returned by the endpoint."""
+    """#999: active quests from character_quests (source of truth) must be returned.
+
+    Updated from the old contract (seeded game_sessions.active_quests) — the endpoint
+    now reads character_quests directly, so world_state can no longer drift the bar.
+    """
+    seed_title = "Znajdź artefakt #999test"
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -51,28 +56,34 @@ def test_campaign_quests_returns_stored_quests():
             pytest.skip("No campaigns in DB")
         campaign_id = row["id"]
 
-        # Seed a known quest into game_sessions
-        test_quests = [{"title": "Znajdź artefakt", "objective": "Pobierz artefakt ze skrzynki", "reward": "50 XP"}]
+        # Seed a known ACTIVE quest into the source of truth: character_quests
         conn.execute(
-            "INSERT OR IGNORE INTO game_sessions (campaign_id, scene_enemies, scene_npcs, active_quests, player_conditions) VALUES (?,?,?,?,?)",
-            (campaign_id, "[]", "[]", json.dumps(test_quests, ensure_ascii=False), "[]"),
-        )
-        conn.execute(
-            "UPDATE game_sessions SET active_quests = ? WHERE campaign_id = ?",
-            (json.dumps(test_quests, ensure_ascii=False), campaign_id),
+            """INSERT INTO character_quests
+                   (character_id, campaign_id, quest_type, title, narrative, status, created_turn)
+               VALUES (?,?,?,?,?,?,?)""",
+            (999001, campaign_id, "main", seed_title, "Pobierz artefakt ze skrzynki", "active", 9999),
         )
         conn.commit()
     finally:
         conn.close()
 
-    r = _get_campaign_quests(campaign_id)
-
-    assert r.status_code == 200
-    body = r.json()
-    quests = body["active_quests"]
-    assert len(quests) >= 1, "Expected at least 1 quest in response"
-    titles = [q["title"] for q in quests]
-    assert "Znajdź artefakt" in titles, f"Seeded quest not found in response: {quests}"
+    try:
+        r = _get_campaign_quests(campaign_id)
+        assert r.status_code == 200
+        body = r.json()
+        quests = body["active_quests"]
+        assert len(quests) >= 1, "Expected at least 1 quest in response"
+        titles = [q["title"] for q in quests]
+        assert seed_title in titles, f"Seeded quest not found in response: {quests}"
+        # narrative mapped to objective for the HUD
+        seeded = next(q for q in quests if q["title"] == seed_title)
+        assert seeded["objective"] == "Pobierz artefakt ze skrzynki"
+    finally:
+        # cleanup — don't pollute the shared DEV DB
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("DELETE FROM character_quests WHERE title = ?", (seed_title,))
+        conn.commit()
+        conn.close()
 
 
 # ─── Backward compatibility ──────────────────────────────────────────────────

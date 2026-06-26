@@ -143,6 +143,40 @@ def build_quest_context_block(
     return "\n".join(lines)
 
 
+def get_active_quests_for_bar(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> list[dict]:
+    """#999 — Active quests for the HUD quest bar, read from character_quests.
+
+    Single source of truth: character_quests WHERE status='active'. Replaces the
+    old world_state.active_quests read, which drifted (completed quests never
+    pruned, new ones never added). Maps `narrative` → `objective` for the HUD
+    (renderQuestBar reads q.title / q.objective / q.reward); `reward` is not
+    stored on character_quests so it is returned empty.
+    """
+    try:
+        rows = conn.execute(
+            """SELECT title, narrative FROM character_quests
+               WHERE campaign_id=? AND status='active'
+               ORDER BY created_turn, id""",
+            (campaign_id,),
+        ).fetchall()
+    except Exception as e:
+        logger.warning("quest_bar_query_failed", campaign_id=campaign_id, error=str(e))
+        return []
+
+    out: list[dict] = []
+    for row in rows:
+        d = dict(row) if hasattr(row, "keys") else {"title": row[0], "narrative": row[1]}
+        out.append({
+            "title": d.get("title") or "",
+            "objective": d.get("narrative") or "",
+            "reward": "",
+        })
+    return out
+
+
 def complete_quest_in_character_quests(
     conn: sqlite3.Connection,
     character_id: int,
