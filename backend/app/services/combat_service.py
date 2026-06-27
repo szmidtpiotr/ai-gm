@@ -1973,7 +1973,9 @@ def _resolve_effect_spell_in_combat(
     out["player_nat1"] = (player_raw == 1)
 
     if resolution["outcome"] == "miscast":
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
@@ -2102,7 +2104,9 @@ def _resolve_aoe_effect_spell_in_combat(
 
     # Nat 1 → miscast (pełna mana, brak kondycji na nikim).
     if player_raw == 1:
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)
@@ -2836,7 +2840,9 @@ def _resolve_aoe_spell_in_combat(
 
     # 2. Nat 1 → miscast (pełna mana stracona)
     if player_nat1:
-        _miscast = spell_service.resolve_miscast(sheet, enemy, conn)
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         out["hit"] = False
@@ -6044,7 +6050,9 @@ def _attack_spell_secondary(
                 })
     if is_spell and player_nat1:
         from app.services.spell_service import resolve_miscast
-        _miscast = resolve_miscast(sheet, enemy, conn)
+        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        _miscast = resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
         _save_char_sheet(conn, campaign_id, int(row["character_id"]), sheet)

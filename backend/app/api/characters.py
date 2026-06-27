@@ -1984,8 +1984,11 @@ def dwarf_repair(
         if race != "dwarf":
             raise HTTPException(status_code=403, detail="Akcja Reperuj dostępna tylko dla krasnoludów")
 
-        from app.services.loot_service import get_character_gold, apply_character_gold_delta
-        gold = int(get_character_gold(character_id))
+        from app.services.economy_service import change_gold
+        gold_row = conn.execute(
+            "SELECT gold_gp FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        gold = int((gold_row["gold_gp"] if gold_row else None) or 0)
         if gold < DWARF_REPAIR_COST_GP:
             raise HTTPException(
                 status_code=400,
@@ -1995,10 +1998,10 @@ def dwarf_repair(
         # Find first weapon in inventory without repaired_by_dwarf tag
         weapon_row = conn.execute(
             """
-            SELECT ci.id, ci.item_data_json, gw.label
+            SELECT ci.id, ci.meta_json, gw.label
             FROM character_inventory ci
-            JOIN game_config_weapons gw ON gw.key = ci.item_key
-            WHERE ci.character_id = ? AND ci.item_type = 'weapon'
+            JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+            WHERE ci.character_id = ? AND ci.weapon_key IS NOT NULL
             ORDER BY ci.id ASC LIMIT 1
             """,
             (character_id,),
@@ -2007,18 +2010,19 @@ def dwarf_repair(
         repaired_label = None
         if weapon_row:
             try:
-                item_data = json.loads(weapon_row["item_data_json"] or "{}")
+                item_data = json.loads(weapon_row["meta_json"] or "{}")
             except Exception:
                 item_data = {}
             if not item_data.get("repaired_by_dwarf"):
                 item_data["repaired_by_dwarf"] = True
                 conn.execute(
-                    "UPDATE character_inventory SET item_data_json = ? WHERE id = ?",
+                    "UPDATE character_inventory SET meta_json = ? WHERE id = ?",
                     (json.dumps(item_data, ensure_ascii=False), weapon_row["id"]),
                 )
                 repaired_label = weapon_row["label"]
 
-        apply_character_gold_delta(character_id, -DWARF_REPAIR_COST_GP, "dwarf_repair")
+        # Use same conn to avoid second-connection deadlock in WAL mode
+        change_gold(conn, character_id, -DWARF_REPAIR_COST_GP, "dwarf_repair")
         conn.commit()
 
         return {
