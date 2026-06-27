@@ -304,6 +304,8 @@ function filterTableGeneric(input, tableId, nameClass) {
       _showToast(`✦ ${name} wskrzeszony — HP ${res.revived_hp ?? '?'}/${res.max_hp ?? '?'}`, 'success');
       btn.textContent = '✓ Wskrzeszony';
       btn.style.background = 'var(--green)';
+      // #1008: przeładuj listę kampanii, by zniknął badge 💀 i odświeżył się HP na karcie.
+      _loadCampaigns();
     } catch(e) { _showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera'; }
   }
 

@@ -83,6 +83,12 @@ function applyTimeOfDayOverlay(period) {
 }
 
 async function enterGame(campaign, opts = {}) {
+    // #1008: clear any stale death/victory overlay before (re)entering a live campaign.
+    // The overlay only auto-hides via player-initiated actions; if the hero is revived from
+    // another surface (admin card #1002), the leftover #death-screen (fixed, inset:0,
+    // body{overflow:hidden}) would cover the rendered chat → "po wskrzeszeniu brak treści".
+    hideDeathScreen();
+    hideVictoryScreen();
     // #950: Clear party chat panel before entering any game type (single/dungeon).
     // activate() is called separately only for MP — without this, the panel stays
     // visible (sticky state) if the player visited MP earlier in the same browser session.
