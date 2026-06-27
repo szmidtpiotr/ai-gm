@@ -2354,7 +2354,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
                 c.gm_plan_json, c.plan_degraded,
                 ga.username AS owner_username,
                 ch.id AS char_id, ch.name AS char_name, ch.location AS char_location,
-                ch.sheet_json,
+                ch.status AS char_status, ch.sheet_json,
                 (SELECT ct.user_text || '|||' || ct.assistant_text
                  FROM campaign_turns ct
                  WHERE ct.campaign_id = c.id
@@ -2427,6 +2427,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
                 "char_id": r["char_id"],
                 "char_name": r["char_name"],
                 "char_location": r["char_location"],
+                "char_status": r["char_status"],
                 "char_archetype": sheet.get("archetype"),
                 "char_level": sheet.get("level"),
                 "char_current_hp": sheet.get("current_hp"),

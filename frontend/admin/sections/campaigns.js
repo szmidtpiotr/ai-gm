@@ -57,12 +57,17 @@ function filterTableGeneric(input, tableId, nameClass) {
 //  _campsData / _loadCampaigns / _renderCampCards / _setCampView
 // ══════════════════════════════════════════════════════════════
   let _campsData = [];
+  let _resConfig = null;
   async function _loadCampaigns() {
     const tbody = document.querySelector('#campaigns-table tbody');
     if (!tbody) return;
     tbody.innerHTML = _loading(9);
     try {
-      const d = await apiFetch('/api/admin/campaigns/live');
+      const [d, resCfg] = await Promise.all([
+        apiFetch('/api/admin/campaigns/live'),
+        apiFetch('/api/admin/resurrection-config').catch(() => null),
+      ]);
+      _resConfig = resCfg;
       const items = d.items || [];
       _campsData = items;
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak kampanii</td></tr>`; _renderCampCards(); return; }
@@ -93,11 +98,16 @@ function filterTableGeneric(input, tableId, nameClass) {
     if (!grid) return;
     if (!_campsData.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--t3)">Brak kampanii.</div>'; return; }
     const archMap = { warrior:'Wojownik', scholar:'Uczony', rogue:'Złodziej', ranger:'Ranger' };
-    grid.innerHTML = _campsData.map(c => {
+    const resEnabled = _resConfig ? !!_resConfig.config?.enabled : true;
+    const resWarning = !resEnabled
+      ? `<div style="grid-column:1/-1;padding:8px 14px;background:var(--amber-dim,#3a2d00);border:1px solid var(--amber,#f59e0b);border-radius:6px;margin-bottom:10px;font-size:0.78rem;color:var(--amber,#f59e0b)">&#9888; Globalne wskrzeszenia <strong>wyłączone</strong> dla graczy (System → Wskrzeszenie). Admin force zawsze działa.</div>`
+      : '';
+    grid.innerHTML = resWarning + _campsData.map(c => {
       const pct = c.char_max_hp ? Math.round((c.char_current_hp/c.char_max_hp)*100) : 0;
       const hpCls = pct < 30 ? 'low' : pct < 65 ? 'mid' : 'green';
+      const isDead = c.char_status === 'dead' || (c.char_current_hp != null && c.char_current_hp <= 0);
       const statusBadge = ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[c.status] || '<span class="badge badge-slate">—</span>');
-      return `<div class="card" style="padding:14px;cursor:pointer" onclick="openCampaignModal(${c.id})">
+      return `<div class="card" style="padding:14px;cursor:pointer${isDead ? ';border-color:var(--red,#c0392b);' : ''}" onclick="openCampaignModal(${c.id})">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px">
           <div style="font-weight:600;color:var(--t1);font-size:0.94rem">${_esc(c.title)}${c.plan_degraded ? ' <span title="GM Plan nie mógł być wygenerowany przez LLM; użyto planu zapasowego. Zregeneruj z Warsztatu." style="font-size:0.7rem;color:#f59e0b;cursor:help;display:block;margin-top:2px">⚠ Plan uproszczony</span>' : ''}</div>
           ${statusBadge}
@@ -109,7 +119,13 @@ function filterTableGeneric(input, tableId, nameClass) {
           <span class="td-muted">Poz. ${c.char_level??'—'}</span>
         </div>
         ${c.char_max_hp ? `<div style="margin-bottom:8px"><div class="hp-bar"><div class="hp-fill ${hpCls}" style="width:${pct}%"></div></div><div style="font-size:0.72rem;color:var(--t3);margin-top:3px">HP ${c.char_current_hp??'—'}/${c.char_max_hp}</div></div>` : ''}
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--t3)">
+        ${isDead && c.char_id ? `<div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="badge badge-red">&#x1F480; Bohater martwy</span>
+            <button class="btn btn-primary btn-sm" style="flex:1;min-width:110px" onclick="event.stopPropagation();_campModalResurrect(${c.char_id},'${_esc(c.char_name||'Bohater')}',this)">✦ Wskrześ</button>
+          </div>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--t3);margin-top:${isDead && c.char_id ? 8 : 0}px">
           <span>Tury: <strong style="color:var(--t1)">${c.turn_count??'—'}</strong></span>
           <span style="display:flex;gap:6px;align-items:center"><span style="opacity:0.5">#${c.id}</span><span>${_timeAgo(c.last_turn_at)||'brak tur'}</span></span>
         </div>
