@@ -1526,7 +1526,7 @@ def list_characters(campaign_id: int):
 
     rows = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        SELECT id, campaign_id, user_id, name, race, system_id, sheet_json, location, is_active, created_at
         FROM characters
         WHERE campaign_id = ?
         ORDER BY id ASC
