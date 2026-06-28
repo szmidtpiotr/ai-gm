@@ -136,8 +136,9 @@ def mark_beat_visited(
 
     if changed:
         current_act = int(plan.get("active_act", 1))
-        _check_and_advance_act(plan, conn)
+        skipped_keys = _check_and_advance_act(plan, conn)
         save_plan(campaign_id, plan, conn)
+        _cancel_quests_for_skipped(campaign_id, skipped_keys, conn)
         logger.info("beat_visited", campaign_id=campaign_id, beat_key=beat_key)
         write_game_event(
             "beat_complete",
@@ -150,30 +151,72 @@ def mark_beat_visited(
     return changed
 
 
-def _check_and_advance_act(plan: dict, conn: sqlite3.Connection) -> None:
-    """Advance to next act if all key beats in current act are visited."""
+def _check_and_advance_act(plan: dict, conn: sqlite3.Connection) -> list[str]:
+    """Advance to next act once its *critical* beats are visited (#1010 refinement).
+
+    Critical-path model: an act closes when every non-optional (`optional != True`)
+    beat is visited; optional beats never block. An all-optional act falls back to
+    "every beat required" so it cannot auto-close empty. On close, still-unvisited
+    beats are tagged `skipped=True` (never `visited`) for honest telemetry.
+
+    Returns the beat_keys newly marked `skipped` so the caller can cancel any
+    side-quests pinned to them (#1011 refinement). Empty list when nothing closed.
+    """
     active_idx = int(plan.get("active_act", 1)) - 1
     acts = plan.get("acts", [])
     if active_idx >= len(acts):
-        return
+        return []
 
     current_act = acts[active_idx]
     beats = current_act.get("key_beats", [])
 
     # Check if all beats visited (skip if no structured beats)
     if not beats:
-        return
+        return []
 
-    all_visited = all(
-        b.get("visited", False) if isinstance(b, dict) else True
-        for b in beats
+    # Critical beats = non-optional dict beats. If the act has none (all optional),
+    # fall back to every dict beat so it cannot close with everything skipped.
+    dict_beats = [b for b in beats if isinstance(b, dict)]
+    critical = [b for b in dict_beats if b.get("optional") is not True]
+    blocking = critical if critical else dict_beats
+
+    # String beats are legacy / non-blocking (treated visited, as before).
+    all_visited = all(b.get("visited", False) for b in blocking) if blocking else all(
+        not isinstance(b, dict) for b in beats
     )
 
+    skipped_keys: list[str] = []
     if all_visited and not current_act.get("completed"):
         current_act["completed"] = True
+        # Honest telemetry: unvisited beats at close are skipped, not visited.
+        for b in dict_beats:
+            if not b.get("visited") and not b.get("skipped"):
+                b["skipped"] = True
+                key = b.get("beat_key")
+                if key:
+                    skipped_keys.append(str(key))
         if active_idx + 1 < len(acts):
             plan["active_act"] = active_idx + 2  # 1-indexed
             logger.info("act_advanced", new_act=plan["active_act"])
+
+    return skipped_keys
+
+
+def _cancel_quests_for_skipped(
+    campaign_id: int, skipped_keys: list[str], conn: sqlite3.Connection
+) -> None:
+    """#1011 — auto-cancel side-quests pinned to beats skipped on act close.
+
+    Best-effort: a stale beat_key column or quest-service import error must never
+    block beat completion.
+    """
+    if not skipped_keys:
+        return
+    try:
+        from app.services.quest_persist_service import cancel_quests_for_skipped_beats
+        cancel_quests_for_skipped_beats(conn, campaign_id, skipped_keys)
+    except Exception as _q_err:
+        logger.warning("cancel_skipped_quests_error", campaign_id=campaign_id, error=str(_q_err))
 
 
 # ── T38 (#1009): deterministic campaign victory ───────────────────────────
@@ -221,9 +264,12 @@ def maybe_complete_campaign(
     if not is_plan_complete(get_plan(campaign_id, conn)):
         return False
 
+    # #1011 refinement: only active *main* quests block victory. Side quests are
+    # optional threads — a legally-skipped side quest must not strand the finale.
     active_quests = conn.execute(
         "SELECT COUNT(*) FROM character_quests "
-        "WHERE character_id = ? AND campaign_id = ? AND status = 'active'",
+        "WHERE character_id = ? AND campaign_id = ? AND status = 'active' "
+        "AND COALESCE(quest_type, 'main') = 'main'",
         (character_id, campaign_id),
     ).fetchone()[0]
     if active_quests > 0:
@@ -336,6 +382,10 @@ def find_orphan_beats(plan: dict | None) -> list[str]:
         for beat in act.get("key_beats", []):
             if not isinstance(beat, dict):
                 continue
+            # #1010 refinement: an optional beat is intentionally skippable —
+            # it never strands the act, so it is never an orphan.
+            if beat.get("optional") is True:
+                continue
             if beat.get("objective_type") in _OBJECTIVE_TYPES:
                 continue
             if beat.get("narrative_close"):
@@ -397,8 +447,9 @@ def auto_complete_beats_by_event(
             )
 
     if changed:
-        _check_and_advance_act(plan, conn)
+        skipped_keys = _check_and_advance_act(plan, conn)
         save_plan(campaign_id, plan, conn)
+        _cancel_quests_for_skipped(campaign_id, skipped_keys, conn)
 
     return changed
 

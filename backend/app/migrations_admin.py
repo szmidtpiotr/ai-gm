@@ -1933,6 +1933,9 @@ ADMIN_SEEDS = [
     # Optional — quests without it fall back to keyword-matching their narrative.
     "ALTER TABLE character_quests ADD COLUMN objective_type TEXT",
     "ALTER TABLE character_quests ADD COLUMN objective_value TEXT",
+    # #1011 refinement: pin a quest to a beat (beat_key) so it auto-cancels
+    # (status='skipped') when that beat is skipped on critical-path act close (#1010).
+    "ALTER TABLE character_quests ADD COLUMN beat_key TEXT",
 ]
 
 

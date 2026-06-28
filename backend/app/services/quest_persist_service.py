@@ -358,6 +358,58 @@ def auto_complete_quests_by_event(
     return completed
 
 
+# ── #1011 refinement: cancel quests pinned to skipped beats ──────────────────
+
+
+def cancel_quests_for_skipped_beats(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    beat_keys: list[str],
+) -> list[str]:
+    """Cancel active quests pinned (via `beat_key`) to beats skipped on act close.
+
+    When an optional beat is skipped (critical-path act completion, #1010), any
+    side-quest attached to it would otherwise hang `status='active'` forever and
+    block the #1009 victory check. Flip such quests to `status='skipped'` so the
+    player legally dropping a side thread does not strand the campaign.
+
+    Returns the titles of cancelled quests. Idempotent; tolerant of an un-migrated
+    `beat_key` column (returns [] without raising).
+    """
+    if not beat_keys:
+        return []
+    placeholders = ",".join("?" * len(beat_keys))
+    try:
+        rows = conn.execute(
+            f"SELECT id, title FROM character_quests "
+            f"WHERE campaign_id=? AND status='active' AND beat_key IN ({placeholders})",
+            (campaign_id, *beat_keys),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # beat_key column not migrated yet → nothing to cancel by link.
+        return []
+
+    cancelled: list[str] = []
+    for r in rows:
+        cur = conn.execute(
+            "UPDATE character_quests "
+            "SET status='skipped', updated_at=datetime('now') "
+            "WHERE id=? AND status='active'",
+            (r["id"],),
+        )
+        if cur.rowcount > 0:
+            cancelled.append(r["title"])
+    if cancelled:
+        conn.commit()
+        logger.info(
+            "quests_cancelled_skipped_beats",
+            campaign_id=campaign_id,
+            beat_keys=beat_keys,
+            titles=cancelled,
+        )
+    return cancelled
+
+
 # ── #1011: Fallback reminder when the narrator forgets [QUEST_COMPLETE] ───────
 
 # Starting value (Numbers Policy): a quest active this many turns without closing
