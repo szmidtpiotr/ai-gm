@@ -89,6 +89,18 @@ def get_plan(campaign_id: int, conn: sqlite3.Connection) -> dict:
 
 
 def save_plan(campaign_id: int, plan: dict, conn: sqlite3.Connection) -> None:
+    # #1010 — warn (non-blocking) when the plan contains orphan beats that can
+    # never complete; surfaces the #1009 victory blocker at its source.
+    try:
+        orphans = find_orphan_beats(plan)
+        if orphans:
+            logger.warning(
+                "gm_plan_orphan_beats",
+                campaign_id=campaign_id,
+                orphan_beat_keys=orphans,
+            )
+    except Exception:
+        pass
     conn.execute(
         "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
         (json.dumps(plan, ensure_ascii=False), campaign_id)
@@ -252,6 +264,84 @@ def maybe_complete_campaign(
         turn=turn_number,
     )
     return True
+
+
+# ── Beat reachability (#1010): expose beat_keys + orphan validator ─────────
+
+
+def get_active_act_beat_keys(plan: dict | None) -> list[str]:
+    """#1010 — beat_keys of the active act's *unvisited* key_beats.
+
+    These are exactly the keys the narrator may close with [BEAT_COMPLETE:key].
+    Follows the `active_act` pointer (1-indexed). Returns [] for empty/absent
+    plans so a planless campaign never advertises phantom beats.
+    """
+    if not isinstance(plan, dict):
+        return []
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return []
+    idx = int(plan.get("active_act", 1)) - 1
+    if idx < 0 or idx >= len(acts):
+        return []
+    act = acts[idx]
+    if not isinstance(act, dict):
+        return []
+    out: list[str] = []
+    for beat in act.get("key_beats", []):
+        if isinstance(beat, dict) and not beat.get("visited"):
+            key = beat.get("beat_key")
+            if key:
+                out.append(str(key))
+    return out
+
+
+def get_beat_completion_context_block(campaign_id: int, conn: sqlite3.Connection) -> str:
+    """#1010 — narrator-facing block listing the active act's open beat_keys plus
+    the [BEAT_COMPLETE] instruction. Empty when nothing is open.
+
+    Without this the narrator never sees the exact keys, so it cannot emit a valid
+    [BEAT_COMPLETE:beat_key] for scenes that have no mechanical objective_type.
+    """
+    keys = get_active_act_beat_keys(get_plan(campaign_id, conn))
+    if not keys:
+        return ""
+    listing = ", ".join(keys)
+    return (
+        "## Sceny do domknięcia (beat_key)\n"
+        f"Otwarte sceny tego aktu: {listing}\n"
+        "Gdy któraś z tych scen zostanie FABULARNIE domknięta, osadź w narracji tag "
+        "[BEAT_COMPLETE:beat_key] z DOKŁADNYM kluczem z powyższej listy (skopiuj 1:1). "
+        "Emituj tylko przy pełnym domknięciu sceny, nie przy częściowym postępie."
+    )
+
+
+def find_orphan_beats(plan: dict | None) -> list[str]:
+    """#1010 — beat_keys that can never complete by any path.
+
+    An orphan beat has neither an `objective_type` (auto-complete via game event)
+    NOR an explicit `narrative_close` marker (intentionally closed by the narrator's
+    [BEAT_COMPLETE] tag). Such a beat strands its act forever → blocks victory (#1009).
+    Returned for warning at plan create/save time.
+    """
+    if not isinstance(plan, dict):
+        return []
+    acts = plan.get("acts")
+    if not isinstance(acts, list):
+        return []
+    orphans: list[str] = []
+    for act in acts:
+        if not isinstance(act, dict):
+            continue
+        for beat in act.get("key_beats", []):
+            if not isinstance(beat, dict):
+                continue
+            if beat.get("objective_type") in _OBJECTIVE_TYPES:
+                continue
+            if beat.get("narrative_close"):
+                continue
+            orphans.append(str(beat.get("beat_key") or "<no-key>"))
+    return orphans
 
 
 # ── Beat auto-complete by objective (U8 #532) ─────────────────────────────

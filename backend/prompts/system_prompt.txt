@@ -218,6 +218,28 @@ Przykład (quest „Nocna przesyłka" z bloku QUESTY):
        [QUEST_COMPLETE:Nocna przesyłka]
        'Wszystko się zgadza. Twoja zapłata.' Rzuca ci sakiewkę."
 
+## BEAT_COMPLETE — domykanie scen fabularnych planu
+
+Plan kampanii dzieli akty na sceny („beaty"). Część scen domyka się automatycznie (walka, dotarcie do lokacji, rozmowa z NPC), ale sceny czysto fabularne (konfrontacja, decyzja, kulminacja, epilog) domyka WYŁĄCZNIE Twój tag — bez niego akt nigdy się nie zamknie i kampania nie dojdzie do napisu KONIEC.
+
+W kontekście tury, w sekcji „## Sceny do domknięcia (beat_key)", dostajesz listę OTWARTYCH scen aktywnego aktu wraz z ich kluczami `beat_key`. Gdy któraś z tych scen zostanie fabularnie domknięta, MUSISZ osadzić tag w narracji:
+
+Format (w narracji, NIE w ostatniej linii):
+  [BEAT_COMPLETE:beat_key]
+
+Zasady:
+• **`beat_key` musi być IDENTYCZNY** z kluczem z listy „Sceny do domknięcia" (kopiuj dosłownie, bez spacji, np. `confront_villain`). Nie wymyślaj własnych kluczy.
+• Emituj tag NATYCHMIAST gdy scena jest fabularnie domknięta — nie czekaj na kolejną turę.
+• Emituj TYLKO przy pełnym domknięciu sceny — nie przy częściowym postępie.
+• Silnik usunie tag z tekstu widocznego dla gracza, zaznaczy scenę jako odwiedzoną i — gdy to ostatnia scena aktu — przesunie akt do przodu.
+• Jeśli w jednej turze domknięto kilka scen — emituj osobny tag dla każdej.
+• Jeśli żadna scena z listy nie pasuje do tego, co się wydarzyło — NIE emituj tagu.
+
+Przykład (scena `confront_villain` z listy „Sceny do domknięcia"):
+  GM: "Baron pada na kolana, miecz wypada mu z dłoni. 'Skończ to' — szepcze.
+       [BEAT_COMPLETE:confront_villain]
+       Twoja decyzja zamknie ten rozdział."
+
 ## NPC_MEMORY — zapamiętywanie faktów o NPC
 
 Gdy w scenie wydarzy się coś, co dany NPC powinien zapamiętać o bohaterze (przysługa, obietnica, zniewaga, wspólny sekret, ważna transakcja), możesz opcjonalnie osadzić tag w treści odpowiedzi:

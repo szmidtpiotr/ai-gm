@@ -549,6 +549,16 @@ def _inject_campaign_s11_context(
     if formatted:
         block_parts.append(formatted)
 
+    # #1010 — give the narrator the active act's open beat_keys + the [BEAT_COMPLETE]
+    # instruction, so narrative-only scenes can be closed and the act can complete (#1009).
+    try:
+        from app.services.campaign_plan_runtime import get_beat_completion_context_block
+        beat_block = get_beat_completion_context_block(cid, conn)
+        if beat_block:
+            block_parts.append(beat_block)
+    except Exception:
+        pass
+
     try:
         from app.services.history_summary_service import fetch_latest_saved_summary_for_narrative
 
