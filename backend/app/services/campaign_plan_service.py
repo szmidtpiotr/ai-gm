@@ -21,7 +21,7 @@ import sqlite3
 from typing import Any, Literal
 
 import structlog
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 from app.services.llm_service import generate_chat
 
@@ -30,14 +30,68 @@ logger = structlog.get_logger()
 DB_PATH = "/data/ai_gm.db"
 
 
+# ── Slug helper ─────────────────────────────────────────────────────────────
+
+_PL_MAP = {"ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n",
+           "ó": "o", "ś": "s", "ź": "z", "ż": "z"}
+
+
+def _slugify_beat(text: str) -> str:
+    """Deterministic lowercase slug from a beat summary/title (first ~6 words)."""
+    s = (text or "").lower().strip()
+    s = re.sub(r"[ąćęłńóśźż]", lambda m: _PL_MAP.get(m.group(), m.group()), s)
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    # keep it short — first chunk of words, capped
+    return "_".join(s.split("_")[:6])[:50] or "beat"
+
+
 # ── Pydantic schema ────────────────────────────────────────────────────────
+
+class PlotBeat(BaseModel):
+    """A single story beat (#1017). Structured so the win machinery (#1009–#1014)
+    can track it: `beat_key` is the stable identifier, `objective_type`/`objective_value`
+    enable auto-complete, `optional` marks non-critical side scenes."""
+    beat_key: str
+    summary: str = ""
+    objective_type: Literal["kill_enemy", "visit_location", "talk_to_npc", "find_item"] | None = None
+    objective_value: str | None = None
+    optional: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, v: Any) -> Any:
+        """Accept a bare string (legacy) or a dict missing beat_key — derive a slug."""
+        if isinstance(v, str):
+            return {"beat_key": _slugify_beat(v), "summary": v}
+        if isinstance(v, dict):
+            d = dict(v)
+            if not d.get("beat_key"):
+                d["beat_key"] = _slugify_beat(str(d.get("summary") or d.get("title") or ""))
+            return d
+        return v
+
 
 class PlotAct(BaseModel):
     number: int
     title: str
     summary: str
-    key_beats: list[str]
+    key_beats: list[PlotBeat] = []
     completed: bool = False
+
+    @model_validator(mode="after")
+    def _unique_beat_keys(self) -> "PlotAct":
+        """Ensure beat_key uniqueness within the act (#1017)."""
+        seen: set[str] = set()
+        for b in self.key_beats:
+            base = b.beat_key
+            key = base
+            i = 2
+            while key in seen:
+                key = f"{base}_{i}"
+                i += 1
+            b.beat_key = key
+            seen.add(key)
+        return self
 
 
 class PlotEnding(BaseModel):
@@ -83,6 +137,22 @@ class CampaignPlan(BaseModel):
     branches: list[str] = []
     engine_private: EnginePrivate
 
+    @model_validator(mode="after")
+    def _unique_beat_keys_plan_wide(self) -> "CampaignPlan":
+        """Disambiguate beat_key collisions across acts so each beat is plan-unique (#1017)."""
+        seen: set[str] = set()
+        for act in self.acts:
+            for b in act.key_beats:
+                base = b.beat_key
+                key = base
+                i = 2
+                while key in seen:
+                    key = f"{base}_{i}"
+                    i += 1
+                b.beat_key = key
+                seen.add(key)
+        return self
+
 
 # ── Prompt builder ─────────────────────────────────────────────────────────
 
@@ -101,7 +171,9 @@ SCHEMAT JSON (wypełnij każde pole):
       "number": 1,
       "title": "string — tytuł aktu",
       "summary": "string — 2-4 zdania opisujące łuk aktu",
-      "key_beats": ["string", "string", "string"],
+      "key_beats": [
+        {"beat_key": "slug_beatu", "summary": "string — co się dzieje", "objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false}
+      ],
       "completed": false
     }
   ],
@@ -158,6 +230,7 @@ ZASADY OBOWIĄZKOWE:
 5. Akt 1 musi nawiązywać do co najmniej jednej Więzi bohatera.
 6. Antagonista/główny konflikt musi dotykać co najmniej jednej Słabości bohatera.
 7. Klucze NPC i lokacji (pola "key") muszą być lowercase_slug bez spacji, np. "innkeeper_boris", "loc_graustein".
+8. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w planie), "summary". Gdzie sensowne dodaj "objective_type" (kill_enemy/visit_location/talk_to_npc/find_item) + "objective_value" (slug celu). "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
 """
 
 

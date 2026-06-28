@@ -1102,7 +1102,10 @@ def _build_generate_plan_system_prompt(act_count: int) -> str:
     """Build the generate-plan system prompt with exactly act_count act entries in the schema.
     Showing the correct number in the example is the only reliable way to get LLMs to honour it."""
     acts_entries = ",\n    ".join(
-        f'{{"number": {i}, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}}'
+        f'{{"number": {i}, "title": "string", "summary": "string", '
+        '"key_beats": [{"beat_key": "slug_beatu", "summary": "string — co się dzieje", '
+        '"objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false}], '
+        '"completed": false}'
         for i in range(1, act_count + 1)
     )
     return f"""\
@@ -1152,6 +1155,7 @@ ZASADY:
 7. 1-3 kluczowych wrogów (key_enemies) typowych dla fabuły.
 8. Każdy wróg MUSI mieć description (wygląd/charakter) i note (zdolności specjalne, taktyka).
 9. Każda lokacja MUSI mieć description (min. 2 zdania dla MG — klimat, wygląd, przeznaczenie).
+10. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w obrębie planu), "summary" (co się dzieje). Gdzie sensowne dodaj "objective_type" (jedno z: kill_enemy, visit_location, talk_to_npc, find_item) + "objective_value" (slug celu, np. klucz wroga/lokacji/NPC). Ustaw "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
 """
 
 
