@@ -661,8 +661,11 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
 
     Po dowolnej przewadze (sukces Stealth, grapple, wróg ogłuszony/schwytany,
     „nóż do gardła") silnik STOP i pyta gracza zamiast cicho ustawiać flagę i
-    zależeć od LLM. Zwraca strukturę 3 przycisków (atak / zastraszenie / wycofaj)
-    do renderu w UI gracza. ``None`` gdy brak źródła przewagi."""
+    zależeć od LLM. Zwraca strukturę 4 przycisków (atak / zastraszenie / wycofaj / dialog)
+    do renderu w UI gracza. ``None`` gdy brak źródła przewagi.
+
+    #1000: intimidate i withdraw używają prefiksu __GATE:xxx zamiast prozy —
+    backend obsługuje je deterministycznie (bez LLM) i czyści pending_zaskoczony."""
     if not source or not str(source).strip():
         return None
     src = str(source).strip()
@@ -676,22 +679,34 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
                 "label": "Atak z zaskoczenia",
                 "hint": "Zaatakuj zanim Cię zauważy — pełny cios zasadzki.",
                 # Tekst tury — uruchamia normalny przepływ walki (COMBAT_START po stronie LLM).
+                # pending_zaskoczony kasowane przez COMBAT_START handler (linia ~1003 turns.py).
                 "action": "Atakuję z zaskoczenia, zanim zdąży zareagować.",
             },
             {
                 "id": "intimidate",
                 "icon": "💬",
-                "label": "Zastraszenie / rozmowa",
-                "hint": "Wymuś uległość bez zabijania — test Zastraszenia z bonusem przewagi.",
-                # BEZ walki — jawnie sygnalizuje intencję non-lethal (casus Mizela #99791).
-                "action": "Przykładam ostrze i żądam, by się poddał — chcę go zastraszyć, nie zabić.",
+                "label": "Zastraszenie",
+                "hint": "Wymuś uległość bez zabijania — test Zastraszania z bonusem przewagi +2.",
+                # #1000: prefiks __GATE: → backend od razu ustawia pending_skill_test
+                # dla 'intimidation' z bonusem +2 i czyści pending_zaskoczony. Bez LLM.
+                "action": "__GATE:intimidate",
             },
             {
                 "id": "withdraw",
                 "icon": "👤",
                 "label": "Wycofaj się",
                 "hint": "Zniknij w cieniu, zachowując przewagę na później.",
-                "action": "Wycofuję się cicho w cień, zachowując przewagę.",
+                # #1000: prefiks __GATE: → backend czyści pending_zaskoczony i narruje odwrót.
+                "action": "__GATE:withdraw",
+            },
+            {
+                "id": "dialog",
+                "icon": "🗣️",
+                "label": "Porozmawiaj / zapytaj",
+                "hint": "Podejdź spokojnie i zacznij rozmowę — wolne wejście tekstowe.",
+                # #1000: prefiks __GATE: → backend czyści pending_zaskoczony i narruje podejście.
+                # Po odpowiedzi gracz może pisać swój własny dialog dowolnym tekstem.
+                "action": "__GATE:dialog",
             },
         ],
     }

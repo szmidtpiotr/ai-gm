@@ -5131,6 +5131,69 @@ def create_turn_stream(
                 headers=stream_headers,
             )
 
+        # ── D1 (#1000): Advantage gate option dispatch ───────────────────────
+        # Przyciski bramki intencji (Zastraszenie/Wycofaj/Dialog) wysyłają prefix
+        # __GATE:xxx zamiast prozy, żeby backend obsłużył je deterministycznie.
+        # "strike" nadal używa prozy → COMBAT_START czyści pending_zaskoczony.
+        if text.startswith("__GATE:"):
+            _gate_opt = text[7:].split(":", 1)[0].lower()
+            _gate_sf_row = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            _gate_sf = json.loads(_gate_sf_row["session_flags"] or "{}") if _gate_sf_row else {}
+
+            if _gate_opt == "intimidate":
+                # Deterministyczny test Zastraszania z bonusem +2 za przewagę (bez LLM).
+                _gate_sf.pop("pending_zaskoczony", None)
+                from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                import uuid as _guuid
+                _gate_sheet = json.loads(character["sheet_json"] or "{}")
+                _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation")
+                _gate_mod = dict(_gate_mod)
+                _gate_mod["total"] = int(_gate_mod.get("total", 0)) + 2
+                _gate_mod["advantage_bonus"] = 2
+                _gate_pending = {
+                    "skill_test_id": f"st-{_guuid.uuid4().hex[:8]}",
+                    "skill_key": "intimidation",
+                    "skill_label": _skill_label("intimidation"),
+                    "counter": _get_counter(conn, "intimidation"),
+                    "modifier_breakdown": _gate_mod,
+                    "advantage_source": "stealth_gate",
+                }
+                _gate_sf = _commit_pending_skill_test(_gate_pending, _gate_sf)
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                    (json.dumps(_gate_sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+                logger.info("gate_intimidate_skill_test_set", campaign_id=campaign_id,
+                            skill_test_id=_gate_pending["skill_test_id"])
+                _gate_done = json.dumps({"skill_test_pending": _gate_pending}, ensure_ascii=False)
+
+                def _gate_intimidate_stream():
+                    yield f"data: [DONE]{_gate_done}\n\n"
+
+                return StreamingResponse(
+                    _gate_intimidate_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
+            else:
+                # withdraw / dialog / unknown — czyść flagę i kontynuuj do LLM z narratywnym tekstem.
+                _gate_sf.pop("pending_zaskoczony", None)
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                    (json.dumps(_gate_sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+                logger.info("gate_option_consumed", campaign_id=campaign_id, gate_opt=_gate_opt)
+                if _gate_opt == "withdraw":
+                    text = "Wycofuję się cicho w cień, zachowując przewagę."
+                else:
+                    text = "Podchodzę spokojnie i zaczynam rozmowę."
+
         # ── Pre-LLM keyword scan (streaming endpoint) ────────────────────────
         # Mirror of the same scanner in create_turn(); fires before the LLM
         # call so exploration actions that match trigger_keywords get a dice
@@ -6682,7 +6745,10 @@ def resolve_skill_test_endpoint(
         _adv_gate = None
         try:
             from app.services.combat_service import build_advantage_gate
-            if _sf_st.get("pending_zaskoczony"):
+            # #1000: emit gate ONLY immediately after resolving the Stealth test itself.
+            # Any subsequent skill test (intimidation, etc.) must NOT re-emit the gate —
+            # that caused the infinite loop when Zastraszenie/Wycofaj was chosen.
+            if _sf_st.get("pending_zaskoczony") and str(pending.get("skill_key", "")).lower() == "stealth":
                 _adv_gate = build_advantage_gate("stealth")
         except Exception as _gate_err:
             logger.warning("advantage_gate_build_error", error=str(_gate_err))
