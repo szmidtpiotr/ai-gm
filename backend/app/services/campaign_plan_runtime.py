@@ -342,6 +342,36 @@ def get_active_act_beat_keys(plan: dict | None) -> list[str]:
     return out
 
 
+def get_active_act_critical_beat_keys(plan: dict | None) -> list[str]:
+    """#1012 — beat_keys of the active act's *unvisited, non-optional* key_beats.
+
+    The anti-stall escalation pushes the narrator toward the critical path only;
+    a legally-skippable optional beat must never be advertised as a required goal.
+    Subset of `get_active_act_beat_keys` filtered to `optional != True`.
+    """
+    if not isinstance(plan, dict):
+        return []
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return []
+    idx = int(plan.get("active_act", 1)) - 1
+    if idx < 0 or idx >= len(acts):
+        return []
+    act = acts[idx]
+    if not isinstance(act, dict):
+        return []
+    out: list[str] = []
+    for beat in act.get("key_beats", []):
+        if not isinstance(beat, dict):
+            continue
+        if beat.get("visited") or beat.get("optional") is True:
+            continue
+        key = beat.get("beat_key")
+        if key:
+            out.append(str(key))
+    return out
+
+
 def get_beat_completion_context_block(campaign_id: int, conn: sqlite3.Connection) -> str:
     """#1010 — narrator-facing block listing the active act's open beat_keys plus
     the [BEAT_COMPLETE] instruction. Empty when nothing is open.

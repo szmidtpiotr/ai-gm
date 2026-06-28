@@ -824,6 +824,42 @@ def build_narrative_messages(
             except Exception as _c1_err:
                 logger.warning("story_stale_inject_failed", error=str(_c1_err))
 
+        # #1012: playthrough anti-stall (story-progress detector) + autopilot.
+        # Progress = critical beat visited / act advance / main-quest change
+        # (#1010/#1011). When unchanged for STALL_TURN_THRESHOLD turns we push the
+        # narrator toward the active act's critical beat_keys + log telemetry.
+        if messages and character:
+            try:
+                from app.services import playthrough_service as _pts
+                first = messages[0]
+                _is_sys = isinstance(first, dict) and first.get("role") == "system"
+
+                # Autopilot: keep an automated [TEST] playthrough alive.
+                if _pts.is_autopilot_active():
+                    _pts.protect_test_hero_from_death(conn, character)
+                    _ap_dir = _pts.build_autopilot_narration_directive()
+                    if _is_sys and _ap_dir:
+                        first["content"] = f"{first.get('content', '').rstrip()}\n\n{_ap_dir}"
+
+                _turn_no = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=?",
+                    (int(campaign["id"]),),
+                ).fetchone()[0]
+                _stall = _pts.record_progress_and_detect_stall(
+                    conn, int(campaign["id"]), int(character["id"]), int(_turn_no)
+                )
+                if _stall.get("stalled") and _is_sys:
+                    from app.services.campaign_plan_runtime import (
+                        get_plan as _gp,
+                        get_active_act_critical_beat_keys as _gacbk,
+                    )
+                    _crit = _gacbk(_gp(int(campaign["id"]), conn))
+                    _sd = _pts.build_stall_directive(int(_stall.get("stall_turns", 0)), _crit)
+                    if _sd:
+                        first["content"] = f"{first.get('content', '').rstrip()}\n\n{_sd}"
+            except Exception as _pts_err:
+                logger.warning("playthrough_stall_inject_failed", error=str(_pts_err))
+
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
         first = messages[0]
