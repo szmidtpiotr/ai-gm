@@ -164,6 +164,96 @@ def _check_and_advance_act(plan: dict, conn: sqlite3.Connection) -> None:
             logger.info("act_advanced", new_act=plan["active_act"])
 
 
+# ── T38 (#1009): deterministic campaign victory ───────────────────────────
+
+
+def is_plan_complete(plan: dict | None) -> bool:
+    """True when every act in the GM-plan roadmap is completed.
+
+    An act flips `completed=True` only once all its `key_beats` are visited
+    (see `_check_and_advance_act`). So "all acts completed" == "all scenes
+    traversed". Returns False for empty/absent plans so a fresh campaign with
+    no roadmap can never be auto-won.
+    """
+    if not isinstance(plan, dict):
+        return False
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return False
+    return all(isinstance(a, dict) and a.get("completed") for a in acts)
+
+
+def maybe_complete_campaign(
+    campaign_id: int,
+    character_id: int,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> bool:
+    """T38 spinacz — flip campaign to 'completed' when the agreed victory
+    definition holds: all acts/scenes traversed AND zero active quests.
+
+    Idempotent: no-op if the campaign already has a terminal status. On success
+    also clears `session_flags.quest_suggest_needed` so the #991 quest-dead guard
+    does not push a new quest after the finale, and logs a `campaign_complete`
+    game event. Returns True only on the transition.
+    """
+    row = conn.execute(
+        "SELECT status FROM campaigns WHERE id = ?", (campaign_id,)
+    ).fetchone()
+    if not row:
+        return False
+    status = str((row["status"] if isinstance(row, sqlite3.Row) else row[0]) or "").lower()
+    if status in ("completed", "ended", "archived", "discarded"):
+        return False
+
+    if not is_plan_complete(get_plan(campaign_id, conn)):
+        return False
+
+    active_quests = conn.execute(
+        "SELECT COUNT(*) FROM character_quests "
+        "WHERE character_id = ? AND campaign_id = ? AND status = 'active'",
+        (character_id, campaign_id),
+    ).fetchone()[0]
+    if active_quests > 0:
+        return False
+
+    conn.execute(
+        "UPDATE campaigns SET status = 'completed' WHERE id = ?", (campaign_id,)
+    )
+    # Drop the quest-dead nudge so the narrator is not told to invent a new quest.
+    try:
+        sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if sf_row:
+            raw = sf_row["session_flags"] if isinstance(sf_row, sqlite3.Row) else sf_row[0]
+            sf = json.loads(raw or "{}")
+            if sf.pop("quest_suggest_needed", None) is not None:
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (json.dumps(sf, ensure_ascii=False), campaign_id),
+                )
+    except Exception as _sf_err:
+        logger.warning("victory_clear_quest_flag_error", error=str(_sf_err))
+    conn.commit()
+
+    write_game_event(
+        "campaign_complete",
+        int(campaign_id),
+        int(character_id),
+        None,
+        {"turn": turn_number, "trigger": "all_acts_and_quests"},
+    )
+    logger.info(
+        "campaign_completed",
+        campaign_id=campaign_id,
+        character_id=character_id,
+        turn=turn_number,
+    )
+    return True
+
+
 # ── Beat auto-complete by objective (U8 #532) ─────────────────────────────
 
 _OBJECTIVE_TYPES = frozenset({"kill_enemy", "visit_location", "talk_to_npc", "find_item"})

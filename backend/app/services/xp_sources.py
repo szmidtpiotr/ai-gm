@@ -299,6 +299,17 @@ def process_narrative_xp_tags(
 
     for m in _CAMPAIGN_RE.finditer(narrative):
         total += grant_campaign_end(conn, character_id, campaign_id, m.group(1), turn_number)
+        # T38 (#1009): a narrator [CAMPAIGN_END] tag also closes the campaign,
+        # not just grants XP (completes the half-built victory path).
+        try:
+            conn.execute(
+                "UPDATE campaigns SET status = 'completed' "
+                "WHERE id = ? AND lower(coalesce(status, '')) = 'active'",
+                (campaign_id,),
+            )
+            conn.commit()
+        except Exception as _ce_err:
+            logger.warning("campaign_end_status_error", error=str(_ce_err))
 
     for m in _DISC_RE.finditer(narrative):
         total += grant_discovery(conn, character_id, campaign_id, m.group(1), turn_number)
@@ -320,5 +331,13 @@ def process_narrative_xp_tags(
                 {"reason": reason_str, "amount": granted, "turn": turn_number},
                 conn=conn,
             )
+
+    # T38 (#1009): deterministic victory spinacz — runs after every turn's tags.
+    # Fires only when all acts/scenes are traversed AND no active quests remain.
+    try:
+        from app.services.campaign_plan_runtime import maybe_complete_campaign
+        maybe_complete_campaign(campaign_id, character_id, turn_number, conn)
+    except Exception as _vc_err:
+        logger.warning("campaign_victory_check_error", error=str(_vc_err))
 
     return {"total_granted": total, "session_free_grant_total": session_free_grant_total}

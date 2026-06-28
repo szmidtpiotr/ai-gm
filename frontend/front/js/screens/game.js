@@ -1427,6 +1427,12 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         if (result.npc_interaction && result.npc_interaction.image_url) {
             showEnemyPortraitModal([result.npc_interaction]).catch(() => {});
         }
+
+        // T38 (#1009): campaign reached its victory condition this turn —
+        // auto-raise the victory overlay (previously only via /debug preview-victory).
+        if (result.campaign_ended) {
+            showVictoryScreen().catch(() => {});
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -1501,6 +1507,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
         if (payload.startsWith('[DONE]')) {
             const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
             if (meta.skill_test_pending)       result.skill_test_pending       = meta.skill_test_pending;
+            if (meta.campaign_ended)           result.campaign_ended           = true; // T38 (#1009)
             if (meta.current_location)         result.current_location         = meta.current_location;
             if (meta.suggested_actions)        result.suggested_actions        = meta.suggested_actions;
             if (meta.active_quests)            result.active_quests            = meta.active_quests;

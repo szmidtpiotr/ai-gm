@@ -195,11 +195,31 @@ def complete_quest_in_character_quests(
         ).fetchone()
         completed_turn = row[0] if row else 1
 
+    # T38 (#1009): match title case/whitespace-insensitively. The narrator often
+    # restates a quest title with a different case or stray spaces; an exact `title=?`
+    # match silently no-ops, leaving the quest active forever and blocking the
+    # campaign-victory check ("0 active quests"). Matching is done in Python with
+    # str.casefold() — SQLite's lower() is ASCII-only and would mis-handle Polish
+    # diacritics (e.g. 'Ł' stays 'Ł', never folds to 'ł').
+    want = (title or "").strip().casefold()
+    rows = conn.execute(
+        "SELECT id, title FROM character_quests "
+        "WHERE character_id=? AND campaign_id=? AND status='active'",
+        (character_id, campaign_id),
+    ).fetchall()
+    match_id = None
+    for r in rows:
+        r_title = r["title"] if isinstance(r, sqlite3.Row) else r[1]
+        if (r_title or "").strip().casefold() == want:
+            match_id = r["id"] if isinstance(r, sqlite3.Row) else r[0]
+            break
+    if match_id is None:
+        return False
     cur = conn.execute(
         """UPDATE character_quests
            SET status='completed', completed_turn=?, updated_at=datetime('now')
-           WHERE character_id=? AND campaign_id=? AND title=? AND status='active'""",
-        (completed_turn, character_id, campaign_id, title),
+           WHERE id=? AND status='active'""",
+        (completed_turn, match_id),
     )
     conn.commit()
     updated = cur.rowcount > 0
