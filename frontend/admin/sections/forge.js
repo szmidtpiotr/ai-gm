@@ -1722,9 +1722,7 @@ function _renderTplActs(acts) {
         '<div class="form-row"><label class="form-label">Streszczenie</label>' +
           '<textarea class="form-input" id="tpl-act-summary-' + i + '" rows="3" style="resize:vertical">' + _esc(act.summary||'') + '</textarea></div>' +
         '<div class="form-row"><label class="form-label">Kluczowe zdarzenia (key_beats)</label>' +
-          '<div id="tpl-act-beats-' + i + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
-            (act.key_beats||[]).map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + i + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('') +
-          '</div>' +
+          '<div id="tpl-act-beats-' + i + '" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>' +
           '<div style="display:flex;gap:6px">' +
             '<input class="form-input" id="tpl-act-beats-input-' + i + '" type="text" placeholder="Dodaj zdarzenie…" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_addTplBeat(' + i + ')}">' +
             '<button class="btn btn-sm btn-secondary" onclick="_addTplBeat(' + i + ')">+ Dodaj</button>' +
@@ -1733,33 +1731,61 @@ function _renderTplActs(acts) {
       '</div>' +
     '</details>'
   ).join('');
+  // #1014 — render beat rows (with optional checkbox) after the act shells exist.
+  acts.forEach((_, i) => _renderTplBeatChips(i));
+}
+
+// #1014 — beats may be bare strings (legacy) or {beat_key, summary, optional} objects.
+function _tplBeatText(b) { return (b && typeof b === 'object') ? (b.summary || b.beat_key || '') : (b || ''); }
+function _tplBeatOptional(b) { return !!(b && typeof b === 'object' && b.optional === true); }
+
+// Normalize an act's beats to objects in place so `optional` can be toggled + persisted.
+function _normalizeTplActBeats(actIdx) {
+  const act = _tplEditorPlan?.acts?.[actIdx];
+  if (!act) return [];
+  act.key_beats = (act.key_beats || []).map(b =>
+    (b && typeof b === 'object') ? { ...b, optional: b.optional === true }
+                                 : { summary: String(b || ''), optional: false });
+  return act.key_beats;
+}
+
+function _renderTplBeatChips(actIdx) {
+  const el = document.getElementById('tpl-act-beats-' + actIdx);
+  if (!el) return;
+  const beats = _normalizeTplActBeats(actIdx);
+  el.innerHTML = beats.map((b, bi) =>
+    '<div data-beat-row="' + bi + '" style="display:flex;align-items:center;gap:8px;font-size:0.78rem;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' +
+      '<span style="flex:1">' + _esc(_tplBeatText(b)) + '</span>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px;color:var(--t3);cursor:pointer;white-space:nowrap;font-size:0.72rem" title="Scena opcjonalna — pomijalna, nie blokuje zakończenia aktu (#1014)">' +
+        '<input type="checkbox" class="tpl-beat-optional" ' + (_tplBeatOptional(b) ? 'checked' : '') +
+          ' onchange="_toggleTplBeatOptional(' + actIdx + ',' + bi + ',this.checked)">opcjonalna</label>' +
+      '<button type="button" onclick="_removeTplBeat(' + actIdx + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button>' +
+    '</div>'
+  ).join('');
+}
+
+function _toggleTplBeatOptional(actIdx, beatIdx, checked) {
+  const beats = _normalizeTplActBeats(actIdx);
+  if (beats[beatIdx]) beats[beatIdx].optional = !!checked;
 }
 
 function _addTplBeat(actIdx) {
   const input = document.getElementById('tpl-act-beats-input-' + actIdx);
   if (!input || !input.value.trim()) return;
-  const beat = input.value.trim();
+  const text = input.value.trim();
   input.value = '';
   if (!_tplEditorPlan) _tplEditorPlan = {};
   if (!_tplEditorPlan.acts) _tplEditorPlan.acts = [];
   if (!_tplEditorPlan.acts[actIdx]) _tplEditorPlan.acts[actIdx] = {};
   if (!_tplEditorPlan.acts[actIdx].key_beats) _tplEditorPlan.acts[actIdx].key_beats = [];
-  _tplEditorPlan.acts[actIdx].key_beats.push(beat);
-  const beatsEl = document.getElementById('tpl-act-beats-' + actIdx);
-  if (beatsEl) {
-    const beats = _tplEditorPlan.acts[actIdx].key_beats;
-    beatsEl.innerHTML = beats.map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + actIdx + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('');
-  }
+  _tplEditorPlan.acts[actIdx].key_beats.push({ summary: text, optional: false });
+  _renderTplBeatChips(actIdx);
 }
 
 function _removeTplBeat(actIdx, beatIdx) {
   if (_tplEditorPlan?.acts?.[actIdx]?.key_beats) {
     _tplEditorPlan.acts[actIdx].key_beats.splice(beatIdx, 1);
-    const beatsEl = document.getElementById('tpl-act-beats-' + actIdx);
-    if (beatsEl) {
-      const beats = _tplEditorPlan.acts[actIdx].key_beats;
-      beatsEl.innerHTML = beats.map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + actIdx + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('');
-    }
+    _renderTplBeatChips(actIdx);
   }
 }
 
@@ -3472,6 +3498,7 @@ export async function init(panel) {
   window._openHookLinkPicker = _openHookLinkPicker;
   window._addTplBeat = _addTplBeat;
   window._removeTplBeat = _removeTplBeat;
+  window._toggleTplBeatOptional = _toggleTplBeatOptional;  // #1014
   window._addTplNPC = _addTplNPC;
   window._addTplEnemy = _addTplEnemy;
   window._addTplLocation = _addTplLocation;

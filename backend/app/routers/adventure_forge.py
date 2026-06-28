@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
+from app.services.campaign_plan_service import normalize_plan_beats
 from app.services.llm_service import generate_chat
 
 
@@ -923,6 +924,9 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
                     ).fetchall()
                     hook_ids = [h["id"] for h in hooks]
 
+        # #1014 — derive beat_key + preserve `optional` for UI-authored beats.
+        gm_plan = normalize_plan_beats(gm_plan)
+
         cur = conn.execute(
             """INSERT INTO campaign_templates
                (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by, adventure_idea_id,
@@ -1057,7 +1061,8 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
                 updates.append(f"{field} = ?"); params.append(val)
         if req.gm_plan_json is not None:
             updates.append("gm_plan_json = ?")
-            params.append(json.dumps(req.gm_plan_json, ensure_ascii=False))
+            # #1014 — derive beat_key + preserve `optional` for UI-authored beats.
+            params.append(json.dumps(normalize_plan_beats(req.gm_plan_json), ensure_ascii=False))
         if req.hook_ids is not None:
             updates.append("hook_ids = ?")
             params.append(json.dumps(req.hook_ids, ensure_ascii=False))

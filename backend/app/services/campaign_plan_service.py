@@ -456,6 +456,51 @@ def _store_plan(conn: sqlite3.Connection, campaign_id: int,
     conn.commit()
 
 
+def normalize_plan_beats(plan: dict | None) -> dict | None:
+    """#1014 — normalize `acts[].key_beats` so every authored beat is a structured
+    PlotBeat: derive a stable, plan-unique `beat_key` (slug from summary), preserve
+    `optional` (default False), tolerate bare-string beats (legacy). Idempotent.
+
+    Runs at template-save time so a beat entered in the Forge UI always carries the
+    `beat_key` the win machinery (#1009–#1012) needs and the `optional` flag #1014
+    exposes. Non-act / planless input is returned untouched (default-safe).
+    """
+    if not isinstance(plan, dict):
+        return plan
+    acts = plan.get("acts")
+    if not isinstance(acts, list):
+        return plan
+    # Carry-through fields PlotBeat doesn't model but runtime/round-trip rely on.
+    _EXTRA = ("visited", "skipped", "narrative_close", "label")
+    seen: set[str] = set()
+    for act in acts:
+        if not isinstance(act, dict):
+            continue
+        beats = act.get("key_beats")
+        if not isinstance(beats, list):
+            continue
+        norm: list[dict] = []
+        for b in beats:
+            try:
+                d = PlotBeat.model_validate(b).model_dump()
+            except ValidationError:
+                continue
+            base = d["beat_key"]
+            key, i = base, 2
+            while key in seen:
+                key = f"{base}_{i}"
+                i += 1
+            d["beat_key"] = key
+            seen.add(key)
+            if isinstance(b, dict):
+                for extra in _EXTRA:
+                    if extra in b and extra not in d:
+                        d[extra] = b[extra]
+            norm.append(d)
+        act["key_beats"] = norm
+    return plan
+
+
 def get_public_plan(gm_plan_json: str) -> dict:
     """
     Parse gm_plan_json and return the public-safe plan (engine_private stripped).
