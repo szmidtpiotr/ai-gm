@@ -151,36 +151,43 @@ async function enterGame(campaign, opts = {}) {
 
         if (timeline.length > 0) {
             for (const item of timeline) {
-                if (item.kind === 'combat') {
-                    const row = item.data;
-                    const evt = String(row.event_type || '');
-                    // Re-use live renderer for attack/death; skip system events (start/end/initiative)
-                    if (evt === 'attack' || evt === 'death' || evt === 'zone_change') {
-                        appendCombatTurnCard(row);
-                        lastRenderedCombatTurnId = Math.max(lastRenderedCombatTurnId, Number(row.id) || 0);
+                // #1008: render each item in isolation — a single malformed combat/turn row
+                // must NOT abort the whole history render (which left the chat blank for
+                // combat-heavy campaigns after resurrect). Skip the bad row, keep the rest.
+                try {
+                    if (item.kind === 'combat') {
+                        const row = item.data;
+                        const evt = String(row.event_type || '');
+                        // Re-use live renderer for attack/death; skip system events (start/end/initiative)
+                        if (evt === 'attack' || evt === 'death' || evt === 'zone_change') {
+                            appendCombatTurnCard(row);
+                            lastRenderedCombatTurnId = Math.max(lastRenderedCombatTurnId, Number(row.id) || 0);
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                const turn = item.data;
-                const utext = turn.user_text || '';
-                if (utext && !utext.startsWith('__AI_GM')) {
-                    // Skill test rich format: "[Rzut: Skill — d20 +mod = total — Outcome]"
-                    let displayText = utext;
-                    const richM = utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\s*([+\-−])\s*(\d+)\s*=\s*(\d+)\s*[—-]\s*(.+?)\]$/);
-                    const simpleM = !richM && utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
-                    if (richM) {
-                        const sign = richM[3] === '−' ? '−' : richM[3];
-                        displayText = `🎲 ${richM[1]}: ${richM[2]} ${sign}${richM[4]} = ${richM[5]} — ${richM[6]}`;
-                    } else if (simpleM) {
-                        displayText = `🎲 ${simpleM[1]}: rzut ${simpleM[2]}`;
+                    const turn = item.data;
+                    const utext = turn.user_text || '';
+                    if (utext && !utext.startsWith('__AI_GM')) {
+                        // Skill test rich format: "[Rzut: Skill — d20 +mod = total — Outcome]"
+                        let displayText = utext;
+                        const richM = utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\s*([+\-−])\s*(\d+)\s*=\s*(\d+)\s*[—-]\s*(.+?)\]$/);
+                        const simpleM = !richM && utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
+                        if (richM) {
+                            const sign = richM[3] === '−' ? '−' : richM[3];
+                            displayText = `🎲 ${richM[1]}: ${richM[2]} ${sign}${richM[4]} = ${richM[5]} — ${richM[6]}`;
+                        } else if (simpleM) {
+                            displayText = `🎲 ${simpleM[1]}: rzut ${simpleM[2]}`;
+                        }
+                        appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
                     }
-                    appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
-                }
-                if (turn.assistant_text) {
-                    const { narrative: gmContent, ...gmMeta } = parseGmFull(turn.assistant_text);
-                    if (gmContent && gmContent.trim()) {
-                        appendMessage({ role: 'assistant', content: gmContent, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, debugMeta: gmMeta, turn_id: turn.id }, { autoSpeak: false });
+                    if (turn.assistant_text) {
+                        const { narrative: gmContent, ...gmMeta } = parseGmFull(turn.assistant_text);
+                        if (gmContent && gmContent.trim()) {
+                            appendMessage({ role: 'assistant', content: gmContent, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, debugMeta: gmMeta, turn_id: turn.id }, { autoSpeak: false });
+                        }
                     }
+                } catch (itemErr) {
+                    console.warn('[enterGame] skipped a malformed history item:', itemErr, item);
                 }
             }
         } else {
@@ -212,6 +219,15 @@ async function enterGame(campaign, opts = {}) {
         }
     } catch (error) {
         console.error('Failed to load chat history:', error);
+        // #1008: never leave a silently blank chat — if nothing rendered, surface a hint
+        // so the player knows to retry instead of staring at an empty screen.
+        if (elements.chatMessages && elements.chatMessages.children.length === 0) {
+            const note = document.createElement('div');
+            note.className = 'chat-bubble chat-bubble--system';
+            note.style.cssText = 'opacity:0.7;text-align:center;padding:14px;font-size:0.85rem';
+            note.textContent = 'Nie udało się załadować historii kampanii. Odśwież stronę, aby spróbować ponownie.';
+            elements.chatMessages.appendChild(note);
+        }
     }
 
     if (characterData) {
