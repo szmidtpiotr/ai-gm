@@ -735,6 +735,23 @@ def build_narrative_messages(
             except Exception as _qsn991_err:
                 logger.warning("quest_suggest_directive_error", error=str(_qsn991_err))
 
+        # #1011: nudge the narrator to close long-lived quests it may have forgotten
+        # to tag with [QUEST_COMPLETE]. Fallback for the "narrator dropped the tag" case.
+        if character and messages:
+            try:
+                from app.services.quest_persist_service import build_quest_complete_reminder
+                _qcr_turn = conn.execute(
+                    "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=?",
+                    (int(campaign["id"]),),
+                ).fetchone()[0]
+                _qcr = build_quest_complete_reminder(conn, int(campaign["id"]), int(_qcr_turn))
+                if _qcr:
+                    first = messages[0]
+                    if isinstance(first, dict) and first.get("role") == "system":
+                        first["content"] = f"{first.get('content', '').rstrip()}\n\n{_qcr}"
+            except Exception as _qcr_err:
+                logger.warning("quest_complete_reminder_error", error=str(_qcr_err))
+
         # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
         # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
         # L13c (#689): skipped inside a dungeon (no overworld travel to push toward).

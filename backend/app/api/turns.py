@@ -4069,6 +4069,11 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             auto_complete_talk_to_npc(
                 campaign_id, text, _loc_key_for_beat, _dlg_key, _xp_turn, conn
             )
+            # #1011: auto-close talk quests on the same engagement (no tag needed)
+            from app.services.quest_persist_service import auto_complete_quests_by_event
+            _q_target = (_dlg_key or text or "").strip()
+            if _q_target:
+                auto_complete_quests_by_event(conn, campaign_id, "talk_to_npc", _q_target, _xp_turn)
         except Exception as _b11_err:
             logger.warning("talk_beat_autocomplete_error", error=str(_b11_err))
         if _xp_total:
@@ -6010,6 +6015,13 @@ def create_turn_stream(
                                 campaign_id_val, user_text_val, _loc_key_for_beat2,
                                 _dlg_key2, _xp_turn2, save_conn
                             )
+                            # #1011: auto-close talk quests on the same engagement
+                            from app.services.quest_persist_service import auto_complete_quests_by_event
+                            _q_target2 = (_dlg_key2 or user_text_val or "").strip()
+                            if _q_target2:
+                                auto_complete_quests_by_event(
+                                    save_conn, campaign_id_val, "talk_to_npc", _q_target2, _xp_turn2
+                                )
                         except Exception as _b11_err2:
                             logger.warning("talk_beat_autocomplete_stream_error", error=str(_b11_err2))
                         if _xp_total2:

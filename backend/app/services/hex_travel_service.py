@@ -460,6 +460,11 @@ def resolve_chain_travel(
                         auto_complete_beats_by_event(
                             campaign_id, "visit_location", _hex_location_key, _tn_loc, conn
                         )
+                        # #1011: auto-close visit quests on mechanical arrival (no tag needed)
+                        from app.services.quest_persist_service import auto_complete_quests_by_event
+                        auto_complete_quests_by_event(
+                            conn, campaign_id, "visit_location", _hex_location_key, _tn_loc
+                        )
                     except Exception:
                         pass
             elif arrived_hex != from_hex:

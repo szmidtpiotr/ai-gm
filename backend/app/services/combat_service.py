@@ -2774,6 +2774,9 @@ def _resolve_aoe_single_target(
                     (campaign_id,),
                 ).fetchone()[0]
                 auto_complete_beats_by_event(campaign_id, "kill_enemy", _beat_label, _tn_beat, conn)
+                # #1011: auto-close kill quests on the same event (no [QUEST_COMPLETE] tag needed)
+                from app.services.quest_persist_service import auto_complete_quests_by_event
+                auto_complete_quests_by_event(conn, campaign_id, "kill_enemy", _beat_label, _tn_beat)
         except Exception:
             pass
         # Death log
@@ -6656,6 +6659,11 @@ def _resolve_player_attack_turn(
                     ).fetchone()[0]
                     auto_complete_beats_by_event(
                         campaign_id, "kill_enemy", _enemy_label, _tn_beat, conn
+                    )
+                    # #1011: auto-close kill quests on the same event
+                    from app.services.quest_persist_service import auto_complete_quests_by_event
+                    auto_complete_quests_by_event(
+                        conn, campaign_id, "kill_enemy", _enemy_label, _tn_beat
                     )
             except Exception:
                 pass

@@ -31,9 +31,15 @@ docker compose -f docker-compose.dev.yml up -d --build --remove-orphans  # rebui
 # PROD deploy (on .63)
 ./scripts/deploy_prod.sh  # pulls main, rebuilds, healthchecks :8000
 
-# Backend tests — run inside the dev backend container
-docker exec ai-gm-dev-backend-1 pytest backend/tests/test_phase8_combat.py
-docker exec ai-gm-dev-backend-1 pytest -k <pattern>
+# Backend tests — NOTE: inside the container tests live at /app/tests/, NOT backend/tests/
+# Fast TDD iteration (docker cp avoids rebuild; use --build only in FAZA 4 deploy)
+docker cp backend/tests/test_foo.py ai-gm-dev-backend-1:/app/tests/test_foo.py
+docker cp backend/app/services/my_service.py ai-gm-dev-backend-1:/app/app/services/my_service.py
+docker exec ai-gm-dev-backend-1 pytest tests/test_foo.py -v        # run single test file
+docker exec ai-gm-dev-backend-1 pytest tests/ -k "pattern" -q      # run by keyword
+
+# DO NOT run the full suite (pytest tests/) — ~8-9 min, many pre-existing failures.
+# Piotr runs the full suite manually per phase. Target only the relevant file(s).
 
 # DB backup/restore (data/ is bind-mounted to /data inside container)
 ./scripts/backup.sh                                  # → ./backups/ai_gm_<ts>.db
@@ -42,6 +48,19 @@ docker exec ai-gm-dev-backend-1 pytest -k <pattern>
 # Logs
 docker compose -f docker-compose.dev.yml logs backend --tail=50
 ```
+
+### Test environment variables
+
+`env.test` at repo root is auto-loaded by `app/bootstrap_env.py` on startup. Key vars:
+
+| Var | Effect |
+|---|---|
+| `AI_TEST_MODE=1` | Enables seeded test user / campaign; seeds `ai_test_player` |
+| `AI_TEST_STUB_LLM=1` | Disables live LLM calls — returns deterministic stub responses |
+
+For E2E (Playwright) tests: `./scripts/test_e2e.sh` — starts isolated `docker-compose.e2e.yml` (ports 18100/13002), seeds test data, runs preflight checks, then Playwright suite under `ai_test_agent/playwright/ux/`.
+
+Playwright specs in `ai_test_agent/playwright/` are **bind-mounted** (`:rw`) into the test-agent container — new spec files are live immediately without a rebuild, and auto-appear in `/admin/#tools → 🎭 Playwright`.
 
 ## Architecture
 
@@ -258,7 +277,9 @@ This applies to every implementation, no matter how small.
 - Scholar spell system: `backend/app/services/spell_service.py`
 - Dungeon runs: `backend/app/services/dungeon_service.py`
 - Smart Entry router: `backend/app/routers/smart_entry.py`
-- Ideas Workshop router: `backend/app/routers/ideas_workshop.py`
+- Adventure Forge (campaign templates): `backend/app/routers/adventure_forge.py`
+- Hex world map: `backend/app/routers/hex_world.py`
+- Voice proxy (Piper TTS): `backend/app/routers/voice_proxy.py`
 - Admin migrations: `backend/app/migrations_admin.py`
 - Modular Admin entry: `frontend/admin/index.html`
 - Content section (weapons/items): `frontend/admin/sections/content.js`

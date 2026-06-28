@@ -1928,6 +1928,11 @@ ADMIN_SEEDS = [
         updated_at = datetime('now')
     WHERE key = 'rogue'
     """,
+    # #1011: structured quest objective so quests auto-close on a matching game event
+    # (kill_enemy/visit_location/talk_to_npc/find_item), mirroring the beat model.
+    # Optional — quests without it fall back to keyword-matching their narrative.
+    "ALTER TABLE character_quests ADD COLUMN objective_type TEXT",
+    "ALTER TABLE character_quests ADD COLUMN objective_value TEXT",
 ]
 
 

@@ -889,20 +889,29 @@ def _auto_complete_beats_by_mechanic(
     action_type: str, result: dict, context: dict,
     campaign_id: int, turn_number: int, conn: sqlite3.Connection,
 ) -> None:
-    """U8 #532 — Auto-complete beats whose objective_type matches the mechanic outcome."""
+    """U8 #532 — Auto-complete beats whose objective_type matches the mechanic outcome.
+
+    #1011 — fires the analogous quest auto-complete on the same events so a quest with a
+    condition closes itself without the narrator's [QUEST_COMPLETE] tag.
+    """
     from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+    from app.services.quest_persist_service import auto_complete_quests_by_event
+
+    def _fire(event_type: str, target: str) -> None:
+        auto_complete_beats_by_event(campaign_id, event_type, target, turn_number, conn)
+        auto_complete_quests_by_event(conn, campaign_id, event_type, target, turn_number)
 
     if action_type == "ATTACK" and result.get("target_dead"):
         enemy = context.get("target_enemy") or {}
         target = enemy.get("label") or result.get("target_key", "")
         if target:
-            auto_complete_beats_by_event(campaign_id, "kill_enemy", target, turn_number, conn)
+            _fire("kill_enemy", target)
 
     elif action_type == "MOVEMENT" and result.get("outcome") == "SUCCESS":
         dest = context.get("destination_location") or {}
         target = dest.get("label") or result.get("to_location_key", "")
         if target:
-            auto_complete_beats_by_event(campaign_id, "visit_location", target, turn_number, conn)
+            _fire("visit_location", target)
 
     elif action_type == "DIALOGUE":
         npc = context.get("target_npc") or {}
@@ -910,13 +919,13 @@ def _auto_complete_beats_by_mechanic(
         target = (npc.get("label") or npc.get("key") or
                   result.get("npc_name") or result.get("npc_key") or "")
         if target:
-            auto_complete_beats_by_event(campaign_id, "talk_to_npc", target, turn_number, conn)
+            _fire("talk_to_npc", target)
 
     elif action_type in ("ITEM_USE", "EXAMINE"):
         item = context.get("item_record") or {}
         target = item.get("label") or item.get("key", "")
         if target:
-            auto_complete_beats_by_event(campaign_id, "find_item", target, turn_number, conn)
+            _fire("find_item", target)
 
 
 def _process_npc_first_talk(
