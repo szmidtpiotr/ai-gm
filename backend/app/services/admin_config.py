@@ -1087,7 +1087,8 @@ def list_enemies() -> list[dict]:
                tier, attacks_per_turn, damage_bonus, damage_type,
                xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                description, is_active, locked_at, created_at, updated_at, loot_tier,
-               image_url, image_url_raw, image_gen_prompt
+               image_url, image_url_raw, image_gen_prompt,
+               COALESCE(min_level, 1) AS min_level
         FROM game_config_enemies
         ORDER BY key ASC
         """

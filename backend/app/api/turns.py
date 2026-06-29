@@ -340,6 +340,7 @@ def _resolve_enemy_key_from_context(
     conn: sqlite3.Connection,
     campaign_id: int,
     assistant_text: str,
+    hero_level: int = 20,
 ) -> str:
     """Best-effort enemy_key resolution from the current GM response + last
     few turns. Falls back to `unknown_attacker` if nothing matches.
@@ -382,7 +383,8 @@ def _resolve_enemy_key_from_context(
         return "unknown_attacker"
     try:
         enemy_rows = conn.execute(
-            "SELECT key, label FROM game_config_enemies WHERE is_active = 1"
+            "SELECT key, label FROM game_config_enemies WHERE is_active = 1 AND COALESCE(min_level, 1) <= ?",
+            (hero_level,),
         ).fetchall()
     except sqlite3.OperationalError:
         return "unknown_attacker"
@@ -413,6 +415,7 @@ def _ensure_combat_start_tag(
     campaign_id: int,
     player_text: str,
     assistant_text: str,
+    character_id: int | None = None,
 ) -> str:
     """If player declared combat intent and the GM response is missing both
     a [COMBAT_START:…] tag AND a `Roll Initiative d20` cue, append a tag so
@@ -439,7 +442,18 @@ def _ensure_combat_start_tag(
             return assistant_text
     except sqlite3.OperationalError:
         pass
-    enemy_key = _resolve_enemy_key_from_context(conn, campaign_id, assistant_text)
+    # #1023 — resolve hero level for enemy level-gate filtering
+    _hero_level = 20
+    if character_id is not None:
+        try:
+            _ch = conn.execute(
+                "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+            ).fetchone()
+            if _ch:
+                _hero_level = int((json.loads(_ch["sheet_json"] or "{}")).get("level") or 1)
+        except Exception:
+            pass
+    enemy_key = _resolve_enemy_key_from_context(conn, campaign_id, assistant_text, hero_level=_hero_level)
     # #596/#535: never inject a tag for an enemy that is not actually present in the
     # scene/narration. Validation rejects stale/off-scene/friendly targets, so a
     # peaceful "nic nie atakuję" turn or an absent goblin can no longer spawn a fight.
@@ -4367,7 +4381,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
 
     # Issue #135 — inject [COMBAT_START] when player declared attack but
     # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
-    assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
+    assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text, character_id=payload.character_id)
 
     new_combat = _maybe_start_combat_from_gm_tag(
         campaign_id, payload.character_id, assistant_text,
@@ -5505,7 +5519,7 @@ def create_turn_stream(
                         assistant_text=clean_text,
                     )
                     # Issue #135 — inject [COMBAT_START] when player attacked but LLM omitted it.
-                    clean_text = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, clean_text)
+                    clean_text = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, clean_text, character_id=character_id_val)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, clean_text,
                         turn_log_id=stream_log.get("id") if stream_log else None,
@@ -6121,7 +6135,7 @@ def create_turn_stream(
                     except Exception as _gm4_err:
                         logger.warning("gm_note_stream_error", error=str(_gm4_err))
                     # Issue #135 — fallback inject for streaming narrative path too.
-                    full_raw = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, full_raw)
+                    full_raw = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, full_raw, character_id=character_id_val)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw,
                         turn_log_id=stream_log.get("id") if stream_log else None,

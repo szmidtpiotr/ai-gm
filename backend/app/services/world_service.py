@@ -405,13 +405,28 @@ def build_available_content_index(
         for r in npc_rows:
             lines.append(f"  - {r['key']}: {r['label']} ({r['npc_type']})")
 
+    # #1023 — fetch hero level to gate over-leveled enemies from narrator context
+    hero_level: int | None = None
+    if character_id is not None:
+        try:
+            ch_row = conn.execute(
+                "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+            ).fetchone()
+            if ch_row:
+                _sheet = json.loads(ch_row["sheet_json"] or "{}")
+                hero_level = int(_sheet.get("level") or 1)
+        except Exception:
+            pass
+
     # Enemies in location — check location_enemy_assignments first, then enemy_keys JSON
+    _level_clause = "AND e.min_level <= ?" if hero_level is not None else ""
+    _level_params: tuple = (location_key, hero_level) if hero_level is not None else (location_key,)
     enemy_rows = conn.execute(
-        """SELECT e.key, e.label, e.tier
+        f"""SELECT e.key, e.label, e.tier
            FROM location_enemy_assignments lea
            JOIN game_config_enemies e ON e.key = lea.enemy_key
-           WHERE lea.location_key = ? AND lea.is_active = 1 AND e.is_active = 1""",
-        (location_key,)
+           WHERE lea.location_key = ? AND lea.is_active = 1 AND e.is_active = 1 {_level_clause}""",
+        _level_params,
     ).fetchall()
 
     if not enemy_rows:
@@ -422,9 +437,11 @@ def build_available_content_index(
             try:
                 keys = json.loads(loc_row[0])
                 if keys:
+                    _kp = keys if hero_level is None else keys + [hero_level]
+                    _level_clause2 = "AND min_level <= ?" if hero_level is not None else ""
                     enemy_rows = conn.execute(
-                        f"SELECT key, label, tier FROM game_config_enemies WHERE key IN ({','.join('?'*len(keys))}) AND is_active=1",
-                        keys
+                        f"SELECT key, label, tier FROM game_config_enemies WHERE key IN ({','.join('?'*len(keys))}) AND is_active=1 {_level_clause2}",
+                        _kp,
                     ).fetchall()
             except Exception:
                 pass

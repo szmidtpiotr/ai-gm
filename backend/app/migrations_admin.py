@@ -5540,6 +5540,31 @@ def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_enemy_min_level(conn: sqlite3.Connection) -> None:
+    """#1023 — add min_level gate to game_config_enemies, backfill by tier.
+
+    Numbers Policy (starting values, tunable in game_mechanics.md):
+      weak / standard → 1, elite → 6, boss → 10
+    """
+    try:
+        conn.execute(
+            "ALTER TABLE game_config_enemies ADD COLUMN min_level INTEGER NOT NULL DEFAULT 1"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            pass
+        else:
+            raise
+    conn.execute(
+        "UPDATE game_config_enemies SET min_level = 6 WHERE tier = 'elite' AND min_level < 6"
+    )
+    conn.execute(
+        "UPDATE game_config_enemies SET min_level = 10 WHERE tier = 'boss' AND min_level < 10"
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5662,6 +5687,7 @@ def run_admin_migrations() -> None:
         _ensure_showcase_subscribers(conn)  # #914 W13
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
+        _ensure_enemy_min_level(conn)  # #1023
     finally:
         conn.close()
 
