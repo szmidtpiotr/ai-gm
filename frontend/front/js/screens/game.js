@@ -5214,6 +5214,11 @@ function _renderRunStats(elId, stats) {
         ['🧑', 'NPC poznani', stats.npcs_met ?? 0],
         ['📜', 'Questy ukończone', stats.quests_completed ?? 0],
     ];
+    // #1016 — side-quest counter (X/Y zrobione). Hidden when no side quests (0/0).
+    const sideTotal = stats.side_quests_total ?? 0;
+    if (sideTotal > 0) {
+        items.push(['🧭', 'Poboczne', `${stats.side_quests_completed ?? 0}/${sideTotal}`]);
+    }
     el.innerHTML = items.map(([icon, label, val]) =>
         `<div class="run-stat"><span class="run-stat__icon">${icon}</span>` +
         `<span class="run-stat__val">${val}</span>` +

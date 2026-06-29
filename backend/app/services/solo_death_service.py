@@ -219,6 +219,24 @@ def campaign_run_stats(
             "SELECT COUNT(*) FROM character_quests WHERE campaign_id = ? AND completed_turn IS NOT NULL",
             (campaign_id,),
         ),
+        # #1016 — side-quest breakdown for the end screen (X/Y zrobione).
+        # X = side completed; Y = ALL side (completed + skipped + active);
+        # skipped counts toward Y but never toward X (legal optional skip, #1011).
+        "side_quests_completed": _scalar(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE campaign_id = ? AND quest_type = 'side' AND status = 'completed'",
+            (campaign_id,),
+        ),
+        "side_quests_total": _scalar(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE campaign_id = ? AND quest_type = 'side'",
+            (campaign_id,),
+        ),
+        "side_quests_skipped": _scalar(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE campaign_id = ? AND quest_type = 'side' AND status = 'skipped'",
+            (campaign_id,),
+        ),
     }
 
 
