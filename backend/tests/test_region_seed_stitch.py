@@ -17,18 +17,26 @@ from pathlib import Path
 
 import pytest
 
-# W kontenerze: test=/app/tests/ → REPO_ROOT=/app, scripts=/app/scripts/
-# Na hoście: test=backend/tests/ → REPO_ROOT=<repo-root> (parent.parent.parent), scripts=<repo-root>/scripts/
-_here = Path(__file__).resolve()
-_candidate_container = _here.parent.parent  # /app (container)
-_candidate_host = _here.parent.parent.parent  # repo root (host)
-# Wybierz ten, który ma katalog scripts/
-if (_candidate_container / "scripts").exists():
-    REPO_ROOT = _candidate_container
-else:
-    REPO_ROOT = _candidate_host
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+import importlib.util
+
+
+def _load_script(name: str):
+    """Załaduj skrypt host-side z katalogu scripts/. Skip gdy niedostępny."""
+    _here = Path(__file__).resolve()
+    candidates = [
+        _here.parent.parent / "scripts" / f"{name}.py",       # kontener po docker cp
+        _here.parent.parent.parent / "scripts" / f"{name}.py",  # host (repo root)
+    ]
+    for p in candidates:
+        if p.exists():
+            spec = importlib.util.spec_from_file_location(name, p)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    pytest.skip(
+        f"Skrypt {name}.py niedostępny — skopiuj: "
+        f"docker cp scripts/{name}.py ai-gm-dev-backend-1:/app/scripts/"
+    )
 
 
 # ─── Pomocnicze ─────────────────────────────────────────────────────────────
@@ -64,7 +72,7 @@ def _make_region_file(tmp_dir: Path, region_key: str, hexes: list[dict],
 
 def test_split_creates_region_kresy_file(tmp_path):
     """split zapisuje region_kresy.json z poprawnymi polami top-level."""
-    import scripts.split_seed_into_regions as splitter
+    splitter = _load_script("split_seed_into_regions")
 
     hexes_src = _make_hex_list(100)
     _make_seed_file(tmp_path, hexes_src)
@@ -94,7 +102,7 @@ def test_split_creates_region_kresy_file(tmp_path):
 
 def test_split_round_trip_diff_zero(tmp_path):
     """Diff (q,r,hex_type) między starym seedem a region_kresy.json = 0."""
-    import scripts.split_seed_into_regions as splitter
+    splitter = _load_script("split_seed_into_regions")
 
     hexes_src = _make_hex_list(200, region="kresy")
     _make_seed_file(tmp_path, hexes_src)
@@ -122,7 +130,7 @@ def test_split_round_trip_diff_zero(tmp_path):
 
 def test_split_safeguard_refuses_small_seed(tmp_path):
     """Split odmawia gdy < 50 heksów."""
-    import scripts.split_seed_into_regions as splitter
+    splitter = _load_script("split_seed_into_regions")
 
     hexes_src = _make_hex_list(10)
     _make_seed_file(tmp_path, hexes_src)
@@ -146,7 +154,7 @@ def test_split_safeguard_refuses_small_seed(tmp_path):
 
 def test_stitch_collects_live_regions_only(tmp_path):
     """_stitch_hexes zbiera heksy tylko z live plików, pomija coming."""
-    import scripts.seed_world_map as seeder
+    seeder = _load_script("seed_world_map")
 
     regions_dir = tmp_path / "regions"
     regions_dir.mkdir()
@@ -175,7 +183,7 @@ def test_stitch_collects_live_regions_only(tmp_path):
 
 def test_stitch_combines_multiple_live_regions(tmp_path):
     """Stitch łączy heksy z wielu live krain."""
-    import scripts.seed_world_map as seeder
+    seeder = _load_script("seed_world_map")
 
     regions_dir = tmp_path / "regions"
     regions_dir.mkdir()
@@ -204,7 +212,7 @@ def test_stitch_combines_multiple_live_regions(tmp_path):
 
 def test_stitch_fallback_to_legacy_seed(tmp_path):
     """Gdy brak plików region_*.json → stitch fallback do legacy world_map_seed.json."""
-    import scripts.seed_world_map as seeder
+    seeder = _load_script("seed_world_map")
 
     regions_dir = tmp_path / "regions"
     regions_dir.mkdir()  # pusty katalog
@@ -235,7 +243,7 @@ def test_stitch_fallback_to_legacy_seed(tmp_path):
 
 def test_load_region_file_raises_on_missing(tmp_path):
     """_load_region_file sys.exit gdy plik nie istnieje."""
-    import scripts.seed_world_map as seeder
+    seeder = _load_script("seed_world_map")
 
     with pytest.raises(SystemExit):
         seeder._load_region_file(tmp_path / "nonexistent.json")
@@ -245,7 +253,7 @@ def test_load_region_file_raises_on_missing(tmp_path):
 
 def test_save_region_writes_correct_format(tmp_path):
     """_save_region zapisuje poprawny format JSON z top-level region/label/status."""
-    import scripts.snapshot_world_map as snapper
+    snapper = _load_script("snapshot_world_map")
 
     orig_dir = snapper.REGIONS_DIR
     snapper.REGIONS_DIR = tmp_path / "regions"
@@ -267,7 +275,7 @@ def test_save_region_writes_correct_format(tmp_path):
 
 def test_save_region_strips_region_from_hex_rows(tmp_path):
     """_save_region usuwa pole 'region' z każdego heksa (jest w top-level)."""
-    import scripts.snapshot_world_map as snapper
+    snapper = _load_script("snapshot_world_map")
 
     orig_dir = snapper.REGIONS_DIR
     snapper.REGIONS_DIR = tmp_path / "regions"
@@ -288,8 +296,8 @@ def test_save_region_strips_region_from_hex_rows(tmp_path):
 
 def test_split_stitch_round_trip(tmp_path):
     """Split → stitch zachowuje wszystkie heksy Kresów (round-trip kompletny)."""
-    import scripts.split_seed_into_regions as splitter
-    import scripts.seed_world_map as seeder
+    splitter = _load_script("split_seed_into_regions")
+    seeder = _load_script("seed_world_map")
 
     hexes_src = _make_hex_list(100)
     _make_seed_file(tmp_path, hexes_src)

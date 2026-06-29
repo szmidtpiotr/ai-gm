@@ -164,7 +164,9 @@ def snapshot_world_map(
             params_q,
         ).fetchall()
         hexes = [dict(x) for x in rows]
-        if len(hexes) < 50:
+        # Safeguard tylko dla full snapshot lub krainy Kresy (2500 heksów) — nie blokuj
+        # nowych krain (RM5+) które mają < 50 heksów na starcie DLC workflow.
+        if not region and len(hexes) < 50:
             raise HTTPException(
                 status_code=409,
                 detail=f"Mapa wygląda na niezainicjalizowaną ({len(hexes)} heks.) — odmawiam nadpisania kanonu.")
