@@ -34,14 +34,33 @@ def hex_neighbors(q: int, r: int) -> list[tuple[int, int]]:
 
 # ── Graph loading ─────────────────────────────────────────────────────────────
 
+def _load_live_regions(conn: sqlite3.Connection) -> set[str]:
+    """Return set of region keys that are 'live' (passable).
+
+    Falls back to {'kresy'} if the world_regions table is absent (pre-RM1 DB
+    or a test fixture without it) — keeps pathfinding working on legacy schemas.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT key FROM world_regions WHERE status = 'live'"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {"kresy"}
+    if not rows:
+        return {"kresy"}
+    return {r["key"] for r in rows}
+
+
 def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
     """
     Load world_hexes and hex_teleport_connections into an adjacency-aware dict.
+    Only hexes in 'live' regions are included — coming/locked regions are impassable.
     Returns: {(q, r): {hex_data + 'teleport_edges': [...]}}
     """
+    live_regions = _load_live_regions(conn)
     hexes: dict[tuple[int, int], dict] = {}
     rows = conn.execute(
-        "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key "
+        "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key, region "
         "FROM world_hexes WHERE is_active = 1 AND map_level = 0"
     ).fetchall()
     for row in rows:
@@ -52,7 +71,9 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
         except Exception:
             h["encounter_pool"] = []
         h["teleport_edges"] = []
-        hexes[(q, r)] = h
+        region = h.get("region") or "kresy"
+        if region in live_regions:
+            hexes[(q, r)] = h
 
     # Load teleport connections and attach to both endpoints
     trows = conn.execute(
@@ -264,6 +285,22 @@ def resolve_chain_travel(
         pass
 
     if to_hex not in hexes:
+        # Check if destination exists in a non-live region (coming/locked)
+        blocked_row = conn.execute(
+            "SELECT wh.region, wr.status, wr.label FROM world_hexes wh "
+            "LEFT JOIN world_regions wr ON wr.key = wh.region "
+            "WHERE wh.q = ? AND wh.r = ? AND wh.map_level = 0 AND wh.is_active = 1 LIMIT 1",
+            (to_hex[0], to_hex[1]),
+        ).fetchone()
+        if blocked_row and blocked_row["status"] in ("coming", "locked"):
+            region_label = blocked_row["label"] or blocked_row["region"]
+            return {
+                "ok": False,
+                "error": f"Kraina niedostępna — {region_label} jest za zamkniętą granicą.",
+                "path": [], "total_hours": 0,
+                "arrived_hex": {"q": from_hex[0], "r": from_hex[1]}, "encounter": None, "encounter_hex": None,
+                "hex_data": {}, "teleport_used": None, "item_blocked": None,
+            }
         return {
             "ok": False,
             "error": "Nie ma tam nic — to nieznane terytorium.",

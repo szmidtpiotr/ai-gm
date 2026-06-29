@@ -631,6 +631,20 @@ async def lifespan(app: FastAPI):
                 _sync_conn.close()
         except Exception:
             pass
+        # RM3 (#1030) — backfill region on map_level=1 hexes that inherited NULL from old inserts.
+        try:
+            from app.services.local_hex_service import backfill_local_hex_regions
+            _bf_conn = sqlite3.connect(DB_PATH)
+            _bf_conn.row_factory = sqlite3.Row
+            try:
+                _bf_n = backfill_local_hex_regions(_bf_conn)
+                if _bf_n:
+                    import structlog as _sl2
+                    _sl2.get_logger().info("startup_backfill_local_hex_regions", updated=_bf_n)
+            finally:
+                _bf_conn.close()
+        except Exception:
+            pass
     # G1 (#785) + G9 (#793) — background sweep every 30s: expired narrative rounds + combat turns.
     async def _mp_sweep_loop() -> None:
         import asyncio as _asyncio

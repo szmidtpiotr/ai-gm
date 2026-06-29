@@ -177,14 +177,22 @@ def auto_assign_local_hex(
         safe = bool(subloc["safe_for_rest"])
         encounter_chance = 0.0 if safe else RISKY_ENCOUNTER_CHANCE
 
+        parent_region = "kresy"
+        if hub_hex_id is not None:
+            parent_row = conn.execute(
+                "SELECT region FROM world_hexes WHERE id = ?", (hub_hex_id,)
+            ).fetchone()
+            if parent_row and parent_row["region"]:
+                parent_region = parent_row["region"]
+
         cursor = conn.execute(
             """
             INSERT INTO world_hexes
                 (q, r, hex_type, label, location_key, map_level, parent_hex_id,
-                 encounter_chance, created_by_gm, created_by_campaign_id)
-            VALUES (?, ?, 'settlement', ?, ?, 1, ?, ?, 0, ?)
+                 encounter_chance, created_by_gm, created_by_campaign_id, region)
+            VALUES (?, ?, 'settlement', ?, ?, 1, ?, ?, 0, ?, ?)
             """,
-            (q, r, subloc["label"], sk, hub_hex_id, encounter_chance, campaign_id),
+            (q, r, subloc["label"], sk, hub_hex_id, encounter_chance, campaign_id, parent_region),
         )
         conn.commit()
 
@@ -205,3 +213,33 @@ def auto_assign_local_hex(
         )
 
     return assigned_hex
+
+
+def backfill_local_hex_regions(conn: sqlite3.Connection) -> int:
+    """RM3: align region on map_level=1 hexes to their parent map_level=0 hex.
+
+    Project rule: ML sub-maps ALWAYS inherit the region of their parent hex
+    (via parent_hex_id). Because world_hexes.region is NOT NULL DEFAULT 'kresy',
+    existing ML hexes default to 'kresy' rather than NULL, so this aligns any ML
+    hex whose region differs from its parent (NULL-region rows covered too).
+    Returns count of updated rows.
+    """
+    rows = conn.execute(
+        "SELECT id, parent_hex_id, region FROM world_hexes WHERE map_level = 1"
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        if not row["parent_hex_id"]:
+            continue
+        parent = conn.execute(
+            "SELECT region FROM world_hexes WHERE id = ?", (row["parent_hex_id"],)
+        ).fetchone()
+        if parent and parent["region"] and parent["region"] != row["region"]:
+            conn.execute(
+                "UPDATE world_hexes SET region = ? WHERE id = ?",
+                (parent["region"], row["id"]),
+            )
+            updated += 1
+    if updated:
+        conn.commit()
+    return updated

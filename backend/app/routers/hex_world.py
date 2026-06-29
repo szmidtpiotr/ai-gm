@@ -10,7 +10,7 @@ import random
 import sqlite3
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
@@ -45,6 +45,7 @@ class HexCreate(BaseModel):
     location_key: Optional[str] = None
     campaign_id: Optional[int] = None  # if placed by GM mid-session
     created_by_gm: int = 0
+    region: str = "kresy"
 
 
 class HexUpdate(BaseModel):
@@ -55,6 +56,7 @@ class HexUpdate(BaseModel):
     encounter_pool: Optional[list[str]] = None
     location_key: Optional[str] = None
     is_active: Optional[int] = None
+    region: Optional[str] = None
 
 
 class TeleportCreate(BaseModel):
@@ -80,14 +82,42 @@ class CampaignHexOverlay(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/map")
-def get_world_map(authorization: str | None = Header(default=None)):
-    """Full world map: all hexes + teleport connections. Admin only."""
+def get_world_map(
+    authorization: str | None = Header(default=None),
+    region: Optional[str] = Query(default=None),
+):
+    """Full world map: all hexes + teleport connections + world_regions list. Admin only.
+
+    ?region=<key> filters to that region's hexes only.
+    Without ?region, returns hexes from all 'live' regions.
+    Always includes 'regions' list with all 6 world_regions entries.
+    """
     _require_admin(authorization)
     conn = _get_db()
     try:
-        hexes = [dict(r) for r in conn.execute(
-            "SELECT * FROM world_hexes WHERE is_active = 1 AND parent_hex_id IS NULL ORDER BY q, r"
+        regions = [dict(r) for r in conn.execute(
+            "SELECT key, label, color, status, entry_q, entry_r, sort_order, note "
+            "FROM world_regions ORDER BY sort_order"
         ).fetchall()]
+
+        if region:
+            hexes = [dict(r) for r in conn.execute(
+                "SELECT * FROM world_hexes WHERE is_active = 1 AND parent_hex_id IS NULL "
+                "AND region = ? ORDER BY q, r",
+                (region,),
+            ).fetchall()]
+        else:
+            live_keys = [r["key"] for r in regions if r["status"] == "live"]
+            if live_keys:
+                placeholders = ",".join("?" * len(live_keys))
+                hexes = [dict(r) for r in conn.execute(
+                    f"SELECT * FROM world_hexes WHERE is_active = 1 AND parent_hex_id IS NULL "
+                    f"AND region IN ({placeholders}) ORDER BY q, r",
+                    live_keys,
+                ).fetchall()]
+            else:
+                hexes = []
+
         for h in hexes:
             try:
                 h["encounter_pool"] = json.loads(h.get("encounter_pool") or "[]")
@@ -98,7 +128,7 @@ def get_world_map(authorization: str | None = Header(default=None)):
             "SELECT * FROM hex_teleport_connections WHERE is_active = 1"
         ).fetchall()]
 
-        return {"hexes": hexes, "teleport_connections": teleports}
+        return {"hexes": hexes, "teleport_connections": teleports, "regions": regions}
     finally:
         conn.close()
 
@@ -214,11 +244,12 @@ def create_hex(body: HexCreate, authorization: str | None = Header(default=None)
         conn.execute(
             """INSERT INTO world_hexes
                (q, r, hex_type, label, atmosphere, encounter_chance, encounter_pool,
-                location_key, discovered_in_campaign_id, created_by_gm, created_by_campaign_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                location_key, discovered_in_campaign_id, created_by_gm, created_by_campaign_id, region)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (body.q, body.r, body.hex_type, body.label, body.atmosphere,
              body.encounter_chance, json.dumps(body.encounter_pool),
-             body.location_key, body.campaign_id, body.created_by_gm, body.campaign_id),
+             body.location_key, body.campaign_id, body.created_by_gm, body.campaign_id,
+             body.region),
         )
         conn.commit()
         row = conn.execute(
@@ -310,6 +341,7 @@ def update_hex(q: int, r: int, body: HexUpdate, authorization: str | None = Head
         if body.encounter_pool is not None: updates["encounter_pool"] = json.dumps(body.encounter_pool)
         if body.location_key is not None: updates["location_key"] = body.location_key
         if body.is_active is not None: updates["is_active"] = body.is_active
+        if body.region is not None: updates["region"] = body.region
 
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
