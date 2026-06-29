@@ -494,9 +494,10 @@ const _HTML = `
               <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
                 <div style="font-size:0.78rem;color:var(--t3);line-height:1.5">Gdy wymagany beat fabularny nie odpali przez N tur, narrator dostaje rosnącą presję: L1 podpowiedź, L2 instrukcja, L3 wymuszona scena (domyślnie wyłączona).</div>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600"><input type="checkbox" id="sys-sg-enabled"> Włączone (globalnie)</label>
-                <div class="form-row"><label class="form-label">L1 — podpowiedź po (turach)</label><input class="form-input" id="sys-sg-l1" type="number" min="1" max="200" placeholder="5"></div>
-                <div class="form-row"><label class="form-label">L2 — instrukcja po (turach)</label><input class="form-input" id="sys-sg-l2" type="number" min="1" max="200" placeholder="10"></div>
-                <div class="form-row"><label class="form-label">L3 — wymuszona scena po (turach)</label><input class="form-input" id="sys-sg-l3" type="number" min="1" max="200" placeholder="15"></div>
+                <div class="form-row"><label class="form-label">L1 — podpowiedź po (turach)</label><input class="form-input" id="sys-sg-l1" type="number" min="1" max="200" placeholder="10"></div>
+                <div class="form-row"><label class="form-label">L2 — instrukcja po (turach)</label><input class="form-input" id="sys-sg-l2" type="number" min="1" max="200" placeholder="15"></div>
+                <div class="form-row"><label class="form-label">L3 — wymuszona scena po (turach)</label><input class="form-input" id="sys-sg-l3" type="number" min="1" max="200" placeholder="20"></div>
+                <div class="form-row"><label class="form-label">Travel hint — lista hexów po (turach)</label><input class="form-input" id="sys-sg-travel-hint" type="number" min="1" max="200" placeholder="12"><span style="font-size:0.72rem;color:var(--t3);margin-left:6px">(#1026 — było 5)</span></div>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sys-sg-l3-enabled"> L3 aktywne dla Nowej Kampanii <span style="font-size:0.72rem;color:var(--t3)">(domyślnie OFF — wolna eksploracja)</span></label>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px"><input type="checkbox" id="sys-sg-l3-enabled-gotowa" checked> L3 aktywne dla Gotowej Kampanii <span style="font-size:0.72rem;color:var(--t3)">(domyślnie ON — gracz wybrał historię)</span></label>
                 <div><button class="btn btn-primary" id="sys-sg-save">Zapisz progi</button></div>
@@ -2056,7 +2057,7 @@ async function _loadNarration() {
     const r = await apiFetch('/api/settings/story-gravity');
     const c = r.data || {};
     const set = (id, v) => { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = !!v; else el.value = v; } };
-    set('sys-sg-enabled', c.enabled); set('sys-sg-l1', c.turns_l1); set('sys-sg-l2', c.turns_l2); set('sys-sg-l3', c.turns_l3); set('sys-sg-l3-enabled', c.l3_enabled); set('sys-sg-l3-enabled-gotowa', c.l3_enabled_gotowa ?? true);
+    set('sys-sg-enabled', c.enabled); set('sys-sg-l1', c.turns_l1); set('sys-sg-l2', c.turns_l2); set('sys-sg-l3', c.turns_l3); set('sys-sg-l3-enabled', c.l3_enabled); set('sys-sg-l3-enabled-gotowa', c.l3_enabled_gotowa ?? true); set('sys-sg-travel-hint', c.travel_hint_threshold ?? 12);
   } catch(e) { console.warn('story-gravity', e.message); }
   const sgBtn = document.getElementById('sys-sg-save');
   if (sgBtn && !sgBtn.dataset.wired) {
@@ -2068,6 +2069,7 @@ async function _loadNarration() {
         turns_l1: num('sys-sg-l1'), turns_l2: num('sys-sg-l2'), turns_l3: num('sys-sg-l3'),
         l3_enabled: document.getElementById('sys-sg-l3-enabled')?.checked ?? false,
         l3_enabled_gotowa: document.getElementById('sys-sg-l3-enabled-gotowa')?.checked ?? true,
+        travel_hint_threshold: num('sys-sg-travel-hint') || 12,
       };
       try {
         await apiFetch('/api/settings/story-gravity', { method: 'PATCH', body: JSON.stringify(payload) });
