@@ -44,6 +44,41 @@ VALID_PLAN_JSON = json.dumps({
 
 GARBAGE = "To nie jest JSON!!! <broken>"
 
+# #1018 — admin "Regeneruj plan" (retry_initial_gm_plan_for_campaign) now emits a
+# V2 plan (acts/key_beats/endings). The regen test feeds a valid V2 plan so the
+# degrade flag is cleared (success path), not the legacy flat shape.
+VALID_V2_PLAN_JSON = json.dumps({
+    "title": "Zaginiony artefakt",
+    "premise": "Bohater szuka artefaktu.",
+    "acts": [
+        {"number": 1, "title": "Trop", "summary": "Pierwszy trop.",
+         "key_beats": [{"beat_key": "dotrzyj_do_wioski", "summary": "Dotrzyj do wioski",
+                        "objective_type": "visit_location", "objective_value": "wioska", "optional": False}],
+         "completed": False},
+        {"number": 2, "title": "Pościg", "summary": "Pościg za złodziejem.",
+         "key_beats": [{"beat_key": "dogon_zlodzieja", "summary": "Dogoń złodzieja", "optional": False}],
+         "completed": False},
+        {"number": 3, "title": "Finał", "summary": "Odzyskanie.",
+         "key_beats": [{"beat_key": "odzyskaj_artefakt", "summary": "Odzyskaj artefakt", "optional": False}],
+         "completed": False},
+    ],
+    "endings": [
+        {"id": "ending_primary", "title": "Triumf", "type": "primary",
+         "description": "Artefakt odzyskany.", "requirements": ["odzyskaj_artefakt"]},
+        {"id": "ending_alternate", "title": "Strata", "type": "alternate",
+         "description": "Artefakt zniszczony.", "requirements": []},
+    ],
+    "key_npcs": [
+        {"key": "zlodziej", "name": "Złodziej", "role": "antagonist",
+         "importance": "critical", "deviation_consequence": "branch", "alive": True},
+    ],
+    "key_locations": [
+        {"key": "wioska", "name": "Wioska", "role": "starting_point", "visited": False},
+    ],
+    "active_act": 1, "scene_log": [], "deviations": [], "branches": [],
+    "engine_private": {"secret_predisposition_hint": "", "hidden_twist": "", "contingency": ""},
+}, ensure_ascii=False)
+
 
 # ─── Test 1: retry dołącza błąd do promptu ───────────────────────────────────
 
@@ -141,7 +176,8 @@ def test_degraded_cleared_on_regenerate(monkeypatch):
     """retry_initial_gm_plan_for_campaign po sukcesie ustawia plan_degraded=0."""
     from app.services import gm_plan_generation_service as svc
 
-    monkeypatch.setattr(svc, "generate_chat", lambda **kwargs: VALID_PLAN_JSON)
+    # #1018 — regen tor is V2 now; feed a valid V2 plan so success clears degraded.
+    monkeypatch.setattr(svc, "generate_chat", lambda **kwargs: VALID_V2_PLAN_JSON)
 
     # Patch get_user_llm_settings_full żeby nie otwierało prawdziwego DB
     import app.services.user_llm_settings as uls

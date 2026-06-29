@@ -2562,7 +2562,7 @@ def _require_gm_plan_before_narrative_llm(
 
     # Plan not ready and no turns yet — auto-generate now
     try:
-        from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
+        from app.services.gm_plan_generation_service import generate_initial_gm_plan_v2_with_retries
         from app.services.user_llm_settings import get_user_llm_settings_full
 
         # Find the character for this campaign to build char summary
@@ -2598,7 +2598,8 @@ def _require_gm_plan_before_narrative_llm(
             + (f", Statystyki: {stat_lines}" if stat_lines else "")
             + f", Lokalizacja startowa: {_location_label}."
         )
-        gm_ready, _ = generate_initial_gm_plan_with_retries(
+        # #1018 — auto-gen on first turn also produces a V2 plan (winnable).
+        gm_ready, _ = generate_initial_gm_plan_v2_with_retries(
             conn,
             campaign_id=campaign_id,
             campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
@@ -2608,6 +2609,8 @@ def _require_gm_plan_before_narrative_llm(
             user_id=user_id,
             model=model,
             llm_config=llm_config,
+            identity=sheet.get("identity") if isinstance(sheet, dict) else None,
+            gm_only=sheet.get("gm_only") if isinstance(sheet, dict) else None,
             max_attempts=2,
         )
         logger.info("gm_plan_auto_generated_on_first_turn", campaign_id=campaign_id)

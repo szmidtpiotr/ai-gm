@@ -186,6 +186,281 @@ def _build_fallback_plan() -> dict[str, Any]:
     }
 
 
+# ── #1018: V2 structured plan (acts/key_beats/endings) for the player + admin tor ──
+
+
+def _build_v2_fallback_plan() -> dict[str, Any]:
+    """Minimal but *winnable* V2 plan used when LLM generation fails.
+
+    Structured so the #1009–#1017 victory machinery can still drive it: 3 acts
+    with non-optional beats (each marked `narrative_close` so it is closable via
+    the narrator's [BEAT_COMPLETE] tag and never an orphan), plus two endings.
+    """
+    return {
+        "title": "Start przygody",
+        "premise": "Bohater wyrusza w nieznane. Historia dopiero się zaczyna.",
+        "acts": [
+            {
+                "number": 1, "title": "Początek",
+                "summary": "Bohater poznaje okolicę i natrafia na pierwszy trop.",
+                "key_beats": [
+                    {"beat_key": "poznaj_okolice", "summary": "Zapoznaj się z okolicą",
+                     "optional": False, "narrative_close": True},
+                    {"beat_key": "znajdz_pierwszy_trop", "summary": "Znajdź pierwszy trop",
+                     "optional": False, "narrative_close": True},
+                ],
+                "completed": False,
+            },
+            {
+                "number": 2, "title": "Rozwinięcie",
+                "summary": "Konflikt narasta i wymaga konfrontacji.",
+                "key_beats": [
+                    {"beat_key": "stawienie_czola", "summary": "Stań do konfrontacji z przeszkodą",
+                     "optional": False, "narrative_close": True},
+                ],
+                "completed": False,
+            },
+            {
+                "number": 3, "title": "Finał",
+                "summary": "Główny wątek dochodzi do rozstrzygnięcia.",
+                "key_beats": [
+                    {"beat_key": "domknij_glowny_watek", "summary": "Domknij główny wątek",
+                     "optional": False, "narrative_close": True},
+                ],
+                "completed": False,
+            },
+        ],
+        "endings": [
+            {"id": "ending_primary", "title": "Zwycięstwo", "type": "primary",
+             "description": "Bohater osiąga cel, choć nie bez kosztów.",
+             "requirements": ["domknij_glowny_watek"]},
+            {"id": "ending_alternate", "title": "Gorzki kompromis", "type": "alternate",
+             "description": "Cel osiągnięty inną drogą, z moralnym ciężarem.",
+             "requirements": []},
+        ],
+        "key_npcs": [
+            {"key": "tajemniczy_nieznajomy", "name": "Tajemniczy nieznajomy",
+             "role": "przewodnik", "importance": "supporting",
+             "deviation_consequence": "steer", "alive": True},
+        ],
+        "key_locations": [
+            {"key": "loc_start", "name": "Karczma", "role": "starting_point", "visited": False},
+        ],
+        "active_act": 1,
+        "scene_log": [], "deviations": [], "branches": [],
+        "engine_private": {
+            "secret_predisposition_hint": "",
+            "hidden_twist": "",
+            "contingency": "",
+        },
+    }
+
+
+def _store_v2_plan(
+    conn,
+    campaign_id: int,
+    plan_public: dict[str, Any],
+    engine_private: dict[str, Any],
+    *,
+    degraded: bool,
+) -> None:
+    """Persist a V2 plan: public part → gm_plan_json, engine_private → engine_private_json,
+    plus plan_degraded. Falls back to inlining engine_private if the column is absent."""
+    plan_json = json.dumps(plan_public, ensure_ascii=False)
+    private_json = json.dumps(engine_private or {}, ensure_ascii=False)
+    deg = 1 if degraded else 0
+    try:
+        conn.execute(
+            "UPDATE campaigns SET gm_plan_json = ?, engine_private_json = ?, plan_degraded = ? WHERE id = ?",
+            (plan_json, private_json, deg, campaign_id),
+        )
+    except Exception:
+        full = dict(plan_public)
+        full["engine_private"] = engine_private or {}
+        conn.execute(
+            "UPDATE campaigns SET gm_plan_json = ?, plan_degraded = ? WHERE id = ?",
+            (json.dumps(full, ensure_ascii=False), deg, campaign_id),
+        )
+    try:
+        _maybe_rename_campaign_from_plan(conn, campaign_id, plan_public)
+    except Exception as e:
+        logger.warning("campaign_title_rename_v2_failed", campaign_id=campaign_id, error=str(e))
+    conn.commit()
+
+
+def generate_initial_gm_plan_v2_with_retries(
+    conn,
+    *,
+    campaign_id: int,
+    campaign_title: str,
+    campaign_language: str,
+    system_id: str,
+    char_summary: str,
+    user_id: int,
+    model: str,
+    llm_config: dict[str, Any],
+    identity: dict[str, Any] | None = None,
+    gm_only: dict[str, Any] | None = None,
+    story_so_far: str = "",
+    max_attempts: int = 3,
+) -> tuple[bool, str | None]:
+    """#1018 — generate a structured **V2** GM plan (acts/key_beats/endings) for the
+    player "Nowa Kampania" tor and the admin "Regeneruj plan" (#966) tor.
+
+    Validated against `CampaignPlan` + `normalize_plan_beats` (auto-slug beat_key),
+    engine_private split off into `engine_private_json`. Backward compatible: old
+    `arcs` plans still load (the loader keeps its arcs→acts fallback); only NEW
+    campaigns get V2.
+
+    Degrade-guard preserved: when the LLM keeps breaking the schema (weak PROD
+    model — see project_prod_llm_degraded_plans), a *winnable* V2 fallback plan is
+    written with plan_degraded=1 and (True, None) is returned so the campaign still
+    starts. When `story_so_far` is provided the plan is generated in CONTINUATION
+    mode (#968).
+    """
+    from pydantic import ValidationError
+
+    from app.services.campaign_plan_service import (
+        CampaignPlan,
+        _SYSTEM_PROMPT,
+        normalize_plan_beats,
+    )
+
+    story_so_far = (story_so_far or "").strip()
+    identity = identity or {}
+    gm_only = gm_only or {}
+
+    system_prompt = _SYSTEM_PROMPT
+    if story_so_far:
+        system_prompt = (
+            _SYSTEM_PROMPT
+            + "\n\nUWAGA — KAMPANIA JEST JUŻ W TRAKCIE. Zbuduj plan KONTYNUUJĄCY fabułę "
+              "od bieżącego momentu (na podstawie dotychczasowej rozgrywki poniżej). "
+              "NIE restartuj historii, NIE zaczynaj od sceny startowej — akt 1 ma "
+              "podejmować wątki z dotychczasowych wydarzeń."
+        )
+
+    user_lines: list[str] = [
+        f"Tytuł kampanii: {campaign_title}",
+        f"Język: {campaign_language}",
+        f"System (id): {system_id}",
+        "",
+        char_summary,
+    ]
+    bonds = identity.get("bonds") or []
+    weaknesses = identity.get("weaknesses") or []
+    if bonds:
+        user_lines.append(
+            "\nWIĘZI BOHATERA:\n"
+            + "\n".join(
+                f"  - ({b.get('type', '?')}) {b.get('description', '')}"
+                for b in bonds
+                if isinstance(b, dict)
+            )
+        )
+    if weaknesses:
+        user_lines.append(
+            "\nSŁABOŚCI BOHATERA:\n"
+            + "\n".join(
+                f"  - ({w.get('type', '?')}) {w.get('description', '')}"
+                for w in weaknesses
+                if isinstance(w, dict)
+            )
+        )
+    secret = str(gm_only.get("secret_predisposition") or "").strip()
+    if secret:
+        user_lines.append(f"\nUKRYTA PREDYSPOZYCJA (TYLKO DLA MG, nie ujawniaj graczowi): {secret}")
+    if story_so_far:
+        user_lines.append(
+            "\nDOTYCHCZASOWA ROZGRYWKA (streszczenie + ostatnie tury):\n" + story_so_far
+        )
+        user_lines.append(
+            "\nNa tej podstawie zbuduj plan KONTYNUUJĄCY fabułę (akty z beatami, zakończenia)."
+        )
+    else:
+        user_lines.append(
+            "\nNa tej podstawie stwórz pełny, spersonalizowany plan kampanii "
+            "(akty z beatami, zakończenia, kluczowe NPC i lokacje)."
+        )
+    user_content = "\n".join(user_lines)
+
+    base_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    last_err: str | None = None
+    last_raw: str = ""
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1 and last_raw:
+            messages = base_messages + [
+                {"role": "assistant", "content": last_raw},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Poprzednia odpowiedź nie była poprawnym planem V2. Błąd: {last_err}. "
+                        "Zwróć WYŁĄCZNIE poprawny obiekt JSON zgodny ze schematem "
+                        "(acts[].key_beats[] jako OBIEKTY z beat_key, endings[]), bez tekstu przed/po."
+                    ),
+                },
+            ]
+        else:
+            messages = base_messages
+
+        try:
+            raw = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
+            last_raw = raw
+            parsed = extract_first_json_object(raw)
+            if not parsed:
+                last_err = "LLM nie zwrócił poprawnego JSON planu V2"
+                logger.warning(
+                    "gm_plan_v2_parse_failed",
+                    campaign_id=campaign_id,
+                    attempt=attempt,
+                    preview=(raw[:400] if raw else ""),
+                )
+                continue
+            try:
+                plan = CampaignPlan.model_validate(parsed)
+            except ValidationError as ve:
+                last_err = f"Walidacja schematu V2 nieudana: {ve.error_count()} błędów"
+                logger.warning(
+                    "gm_plan_v2_validation_failed",
+                    campaign_id=campaign_id,
+                    attempt=attempt,
+                    errors=str(ve)[:300],
+                )
+                continue
+            plan_public = plan.model_dump()
+            engine_private = plan_public.pop("engine_private", {})
+            normalize_plan_beats(plan_public)
+            _store_v2_plan(conn, campaign_id, plan_public, engine_private, degraded=False)
+            logger.info(
+                "gm_plan_v2_ok", campaign_id=campaign_id, attempt=attempt, title=plan.title
+            )
+            return True, None
+        except Exception as e:
+            last_err = str(e)
+            logger.warning(
+                "gm_plan_v2_attempt_failed",
+                campaign_id=campaign_id,
+                attempt=attempt,
+                error=str(e),
+            )
+
+    # All attempts failed — winnable V2 fallback so the campaign always starts.
+    fallback = _build_v2_fallback_plan()
+    fb_private = fallback.pop("engine_private", {})
+    try:
+        _store_v2_plan(conn, campaign_id, fallback, fb_private, degraded=True)
+        logger.warning(
+            "gm_plan_v2_fallback_used", campaign_id=campaign_id, last_error=last_err
+        )
+    except Exception as e:
+        logger.error("gm_plan_v2_fallback_save_failed", campaign_id=campaign_id, error=str(e))
+    return True, None
+
+
 def generate_initial_gm_plan_with_retries(
     conn,
     *,
@@ -388,7 +663,10 @@ def retry_initial_gm_plan_for_campaign(
     # continues the narrative instead of restarting from the opening scene.
     story_so_far = _build_story_so_far(conn, campaign_id)
 
-    return generate_initial_gm_plan_with_retries(
+    # #1018 — admin "Regeneruj plan" (#966) now produces a V2 plan
+    # (acts/key_beats/endings) so regenerated campaigns are winnable, matching the
+    # player tor. Pass through any V2 identity present on the sheet.
+    return generate_initial_gm_plan_v2_with_retries(
         conn,
         campaign_id=campaign_id,
         campaign_title=str(camp["title"] or f"Kampania {campaign_id}"),
@@ -398,6 +676,8 @@ def retry_initial_gm_plan_for_campaign(
         user_id=int(owner_user_id),
         model=model,
         llm_config=llm_config,
+        identity=sheet.get("identity") if isinstance(sheet, dict) else None,
+        gm_only=sheet.get("gm_only") if isinstance(sheet, dict) else None,
         story_so_far=story_so_far,
         max_attempts=max_attempts,
     )

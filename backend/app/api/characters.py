@@ -21,7 +21,10 @@ from app.services.vitality_service import calculate_hp, calculate_mana
 from app.services.actor_stats import apply_racial_modifiers
 from app.services.campaign_plan_service import generate_v2_campaign_plan
 from app.services.turn_pipeline import generate_opening_scene as generate_v2_opening_scene
-from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
+from app.services.gm_plan_generation_service import (
+    generate_initial_gm_plan_with_retries,
+    generate_initial_gm_plan_v2_with_retries,
+)
 from app.services.llm_service import generate_chat
 from app.services.admin_config import list_skills
 from app.services.user_llm_settings import get_user_llm_settings_full
@@ -2399,7 +2402,10 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                             max_attempts=2,
                         )
                     else:
-                        gm_plan_ready, _ = generate_initial_gm_plan_with_retries(
+                        # #1018 — V2 plan (acts/key_beats/endings) even for simple
+                        # characters without bonds/weaknesses, so every new player
+                        # campaign is winnable by the #1009–#1017 machinery.
+                        gm_plan_ready, _ = generate_initial_gm_plan_v2_with_retries(
                             conn,
                             campaign_id=campaign_id,
                             campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
@@ -2752,7 +2758,8 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                 max_attempts=2,
             )
         else:
-            gm_plan_ready, gm_plan_error = generate_initial_gm_plan_with_retries(
+            # #1018 — V2 plan for simple characters too (winnable by #1009–#1017).
+            gm_plan_ready, gm_plan_error = generate_initial_gm_plan_v2_with_retries(
                 conn,
                 campaign_id=campaign_id,
                 campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),

@@ -296,6 +296,23 @@ def gm_plan_is_ready(raw: str | None) -> bool:
     Sprawdza aktywny łuk (lub pierwszy dostępny / legacy).
     """
     plan = normalize_gm_plan(raw)
+
+    # #1018 — V2 plans carry the roadmap as `acts[].key_beats[]` (no `arcs`).
+    # A plan with at least one act that has beats / a summary / a title is ready;
+    # without this a freshly generated V2 plan would look "empty" and trigger a
+    # spurious regeneration.
+    acts = plan.get("acts")
+    if isinstance(acts, list) and any(
+        isinstance(a, dict)
+        and (
+            a.get("key_beats")
+            or str(a.get("summary") or "").strip()
+            or str(a.get("title") or "").strip()
+        )
+        for a in acts
+    ):
+        return True
+
     arcs: dict[str, Any] = plan.get("arcs") if isinstance(plan.get("arcs"), dict) else {}
     active_id = plan.get("active_arc_id")
     node: dict[str, Any] | None = None
