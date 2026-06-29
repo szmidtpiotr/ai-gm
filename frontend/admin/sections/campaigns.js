@@ -683,7 +683,6 @@ function filterTableGeneric(input, tableId, nameClass) {
         }).join('') + endingsHtml +
           `<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
             <button class="btn btn-sm btn-secondary" onclick="regenerateCampPlan(${campId}, this)">♻ Regeneruj plan MG</button>
-            <button class="btn btn-sm btn-secondary" onclick="advanceCampScene(${campId}, this)">➡ Następna scena</button>
           </div>`;
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
     }
@@ -1314,19 +1313,8 @@ function filterTableGeneric(input, tableId, nameClass) {
   }
 
 // ══════════════════════════════════════════════════════════════
-//  advanceCampScene / _loadWorkshopEncounters / _injectEncounterFromWorkshop / sendWorkshopMsg
+//  _loadWorkshopEncounters / _injectEncounterFromWorkshop / sendWorkshopMsg
 // ══════════════════════════════════════════════════════════════
-  async function advanceCampScene(campId, btn) {
-    if (!confirm('Przenieść kampanię do następnej sceny?')) return;
-    btn.disabled = true;
-    try {
-      await apiFetch(`/api/admin/campaigns/${campId}/gm-plan/advance-scene`, { method:'POST' });
-      showToast('Scena zaawansowana.', 'success');
-      btn.closest('[data-loaded]').dataset.loaded = '';
-      btn.closest('[data-loaded]').innerHTML = '';
-      _loadCampTab(campId, 'plan', btn.closest('[data-loaded]'), btn.closest('.modal-overlay'));
-    } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
-  }
 
   // #966 — regenerate the GM plan via current LLM; reports ok / still degraded.
   async function regenerateCampPlan(campId, btn) {

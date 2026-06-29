@@ -151,69 +151,6 @@ def replace_campaign_gm_plan_admin(campaign_id: int, gm_plan_json: dict) -> dict
     return get_campaign_gm_plan_admin(campaign_id)
 
 
-def advance_campaign_scene_admin(campaign_id: int, note: str = "") -> dict:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        row = conn.execute(
-            "SELECT id, gm_plan_json FROM campaigns WHERE id = ?",
-            (campaign_id,),
-        ).fetchone()
-        if not row:
-            raise KeyError("campaign_not_found")
-
-        tr = conn.execute(
-            """
-            SELECT MAX(turn_number) AS m
-            FROM campaign_turns
-            WHERE campaign_id = ? AND route = 'narrative'
-            """,
-            (campaign_id,),
-        ).fetchone()
-        through_turn = int(tr["m"] or 0) if tr else 0
-
-        plan = normalize_gm_plan(str(row["gm_plan_json"] or ""))
-        arcs: dict = plan.get("arcs") if isinstance(plan.get("arcs"), dict) else {}
-        active = plan.get("active_arc_id")
-        if isinstance(active, str) and active.strip() and active in arcs:
-            key = active
-        elif arcs:
-            key = next(iter(arcs.keys()))
-        else:
-            key = "default"
-            arcs["default"] = {
-                "id": "default",
-                "title": "",
-                "status": "active",
-                "scene_goals": [],
-                "hooks": {},
-            }
-        arc = arcs.get(key) if isinstance(arcs.get(key), dict) else {}
-        ordn = int(arc.get("current_scene_ordinal") or plan.get("current_scene_ordinal") or 0) + 1
-        arc["current_scene_ordinal"] = ordn
-        log = arc.get("scene_log")
-        if not isinstance(log, list):
-            log = []
-        entry = {"ordinal": ordn, "ended_at": _now_iso(), "through_turn": through_turn}
-        nt = str(note or "").strip()
-        if nt:
-            entry["note"] = nt
-        log.append(entry)
-        arc["scene_log"] = log
-        arcs[key] = arc
-        plan["arcs"] = arcs
-        plan["active_arc_id"] = key
-        normalized = normalize_gm_plan(json.dumps(plan, ensure_ascii=False))
-        conn.execute(
-            "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
-            (json.dumps(normalized, ensure_ascii=False), campaign_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    return get_campaign_gm_plan_admin(campaign_id)
-
-
 def regenerate_campaign_gm_plan_admin(campaign_id: int) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

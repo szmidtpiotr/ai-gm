@@ -21,7 +21,6 @@ from app.services.admin_accounts import (
     update_account,
 )
 from app.services.admin_campaigns import (
-    advance_campaign_scene_admin,
     get_campaign_gm_plan_admin,
     list_campaigns_by_owner,
     regenerate_campaign_gm_plan_admin,
@@ -263,11 +262,6 @@ class ConfigImportReq(BaseModel):
 class AdminGmPlanPutReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     gm_plan_json: dict
-
-
-class AdminAdvanceSceneReq(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    note: str = Field(default="", max_length=2000)
 
 
 class SlashCommandItemReq(BaseModel):
@@ -2499,18 +2493,6 @@ def admin_put_campaign_gm_plan(
 ):
     try:
         return replace_campaign_gm_plan_admin(campaign_id, req.gm_plan_json)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Campaign not found") from None
-
-
-@router.post("/admin/campaigns/{campaign_id}/gm-plan/advance-scene")
-def admin_advance_campaign_scene(
-    campaign_id: int,
-    req: AdminAdvanceSceneReq,
-    _: None = Depends(require_admin_token),
-):
-    try:
-        return advance_campaign_scene_admin(campaign_id, note=req.note)
     except KeyError:
         raise HTTPException(status_code=404, detail="Campaign not found") from None
 
