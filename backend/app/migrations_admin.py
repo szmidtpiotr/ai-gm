@@ -4384,6 +4384,136 @@ def _patch_campaign_template_endings_and_optional(conn: sqlite3.Connection) -> N
         logger.info("issue1019_template_endings_optional_patched", template_ids=changed_ids)
 
 
+# #1021: minimalna grywalna kampania testowa (2 akty × 1 beat) — deterministyczny
+# test-bed trylogii #1009–#1020 do przejazdu trybem Playwright.
+_TEST_TRYLOGIA_TITLE = "[TEST] Przejazd 2-akty — trylogia #1009"
+
+
+def build_test_trylogia_2act_plan() -> dict:
+    """#1021 — V2 plan minimalnej grywalnej kampanii testowej.
+
+    2 akty, każdy 1 KRYTYCZNY beat z prostym objective_type + WILDCARD
+    objective_value (pusty = dowolny cel danego typu → brak zależności od
+    seedowanych kluczy NPC/lokacji):
+      - Akt 1 `reach_first_place`: visit_location → auto-complete przy 1. ruchu.
+      - Akt 2 `meet_the_elder`: talk_to_npc → auto-complete przy 1. rozmowie.
+    + endings[] (1 primary) → overlay zwycięstwa. 0 questów, brak orphan-beatów,
+    bez walki. Plan przechodzi bramkę winnable #1020.
+
+    Beaty trzymane pod `acts` (kanon V2) ORAZ `arcs` (ta sama lista) — żeby
+    template→campaign migracja (_migrate_template_plan_to_w1) zbudowała słownik
+    arcs W1, a runtime/validator widziały `acts` bez aliasowania.
+    """
+    acts = [
+        {
+            "id": "act_1_reach",
+            "number": 1,
+            "title": "Akt 1 — W drogę",
+            "label": "Akt 1 — W drogę",
+            "summary": "Bohater wyrusza i dociera do pierwszego miejsca na trasie.",
+            "status": "active",
+            "completed": False,
+            "key_beats": [
+                {
+                    "beat_key": "reach_first_place",
+                    "label": "Dotrzyj do pierwszego miejsca",
+                    "summary": "Dotarcie do dowolnej lokacji domyka ten beat.",
+                    "objective_type": "visit_location",
+                    "objective_value": "",  # wildcard — dowolna lokacja
+                    "optional": False,
+                }
+            ],
+        },
+        {
+            "id": "act_2_elder",
+            "number": 2,
+            "title": "Akt 2 — Starszy osady",
+            "label": "Akt 2 — Starszy osady",
+            "summary": "Bohater spotyka starszego osady i wymienia kilka słów.",
+            "status": "pending",
+            "completed": False,
+            "key_beats": [
+                {
+                    "beat_key": "meet_the_elder",
+                    "label": "Porozmawiaj ze starszym",
+                    "summary": "Rozmowa z dowolnym NPC domyka ten beat.",
+                    "objective_type": "talk_to_npc",
+                    "objective_value": "",  # wildcard — dowolny NPC
+                    "optional": False,
+                }
+            ],
+        },
+    ]
+    return {
+        "title": _TEST_TRYLOGIA_TITLE,
+        "premise": "Minimalny deterministyczny test-bed trylogii: dotrzyj gdziekolwiek, "
+                   "porozmawiaj z kimkolwiek — i kampania się domyka zwycięstwem.",
+        "acts": acts,
+        "arcs": acts,            # ta sama lista — spójna z konwencją seed-szablonów
+        "active_act": 1,
+        "active_arc_id": "act_1_reach",
+        "endings": [
+            {
+                "id": "ending_primary",
+                "type": "primary",
+                "title": "Próba przebyta",
+                "summary": "Bohater dotarł do celu i poznał starszego osady. Pierwsza "
+                           "próba została przebyta — droga przed nim stoi otworem.",
+                "requirements": ["meet_the_elder"],
+            }
+        ],
+        "key_npcs": [],
+        "key_locations": [],
+        "deviations": [],
+        "branches": [],
+        "scene_log": [],
+        "engine_private": {},
+    }
+
+
+def seed_test_trylogia_template(conn: sqlite3.Connection) -> int | None:
+    """#1021 — idempotentnie wstaw opublikowany seed-szablon [TEST] (2 akty × 1 beat).
+
+    created_by='seed' / status='published' / player_visible=1 → pojawia się w
+    pickerze Gotowej Kampanii. Idempotentne po tytule; przy istniejącym wierszu
+    odświeża gm_plan_json (gdyby plan się zmienił). Zwraca id szablonu.
+    """
+    import json as _json
+    try:
+        plan_json = _json.dumps(build_test_trylogia_2act_plan(), ensure_ascii=False)
+        row = conn.execute(
+            "SELECT id FROM campaign_templates WHERE title = ?", (_TEST_TRYLOGIA_TITLE,)
+        ).fetchone()
+        if row:
+            tid = row[0] if not isinstance(row, sqlite3.Row) else row["id"]
+            conn.execute(
+                "UPDATE campaign_templates SET gm_plan_json = ?, status = 'published', "
+                "created_by = 'seed', player_visible = 1 WHERE id = ?",
+                (plan_json, tid),
+            )
+            conn.commit()
+            return int(tid)
+        cur = conn.execute(
+            "INSERT INTO campaign_templates "
+            "(title, description, difficulty_rating, atmosphere, gm_plan_json, "
+            " status, created_by, player_visible, required_npc_keys, required_beats) "
+            "VALUES (?, ?, 1, ?, ?, 'published', 'seed', 1, '[]', '[]')",
+            (
+                _TEST_TRYLOGIA_TITLE,
+                "Minimalna grywalna kampania testowa (2 akty × 1 beat) do deterministycznego "
+                "przejazdu trybem Playwright — test-bed maszynerii wygranej #1009–#1020.",
+                "testowa, neutralna",
+                plan_json,
+            ),
+        )
+        conn.commit()
+        logger.info("issue1021_test_trylogia_template_seeded", template_id=cur.lastrowid)
+        return int(cur.lastrowid)
+    except Exception as _err:
+        logger.warning("issue1021_seed_test_trylogia_error", error=str(_err))
+        return None
+
+
 def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
     """U31 (#546): Backfill location_npc_assignments from legacy npc_locations table.
 
@@ -5502,6 +5632,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
         _patch_campaign_template_endings_and_optional(conn)  # #1019
+        seed_test_trylogia_template(conn)  # #1021
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
