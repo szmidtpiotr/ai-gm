@@ -2101,6 +2101,20 @@ Admin publikuje (status: draft → published)
 Kampania pojawia się u graczy na ekranie wyboru
 ```
 
+#### Checklista „winnable premade" — twarda walidacja publikacji (#1020)
+
+Każda NOWA gotowa kampania publikowana przez Forge musi być grywalna do końca
+(*winnable*) bez ręcznych poprawek. Przy `PATCH status=published`
+(`forge_patch_template` → `validate_winnable_plan` w `campaign_plan_runtime.py`)
+publikacja jest **BLOKOWANA (HTTP 422)**, jeśli plan nie spełnia wszystkich reguł:
+
+- [ ] **endings[] obecne, ≥1 `type=="primary"`** — bez tego overlay zwycięstwa (#1019) renderuje pusto i nie ma ścieżki wygranej.
+- [ ] **Brak krytycznych orphan-beatów** — każdy beat NIE-`optional` jest domykalny przez `objective_type` (auto-complete #532) ALBO `narrative_close` (`[BEAT_COMPLETE]`). Walidator `find_orphan_beats` (#1010) musi być czysty.
+- [ ] **Każdy akt ma ≥1 domykalny beat krytyczny** — akt złożony wyłącznie z beatów `optional:true` strandowałby przejazd (akt nigdy się nie domknie).
+- [ ] **`required_beats` / `required_npc_keys` spójne** — E7/E10 (#422/#425): wymagane beaty istnieją w planie, wymagani NPCe w bazie (`validate_template_publish`).
+
+Beaty poboczne oznaczaj `optional:true` (#1014) — nie blokują domknięcia aktu i nigdy nie są orphanami. Generator V2 (#1017/#1018) produkuje plan zgodny z tym wzorcem z urzędu.
+
 ---
 
 ### Replayability (grywalność dla różnych postaci)

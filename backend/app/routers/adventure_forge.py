@@ -1032,15 +1032,18 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
             })
         # E10 (#425) — block publishing when required NPCs/beats are missing.
         if req.status == "published":
-            # Apply any required_* changes coming in the same request first, so
+            # Apply any required_*/plan changes coming in the same request first, so
             # validation runs against the about-to-be-saved values.
-            if req.required_npc_keys is not None or req.required_beats is not None:
+            if req.required_npc_keys is not None or req.required_beats is not None or req.gm_plan_json is not None:
                 if req.required_npc_keys is not None:
                     conn.execute("UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
                                  (json.dumps(req.required_npc_keys, ensure_ascii=False), template_id))
                 if req.required_beats is not None:
                     conn.execute("UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
                                  (json.dumps(req.required_beats, ensure_ascii=False), template_id))
+                if req.gm_plan_json is not None:
+                    conn.execute("UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
+                                 (json.dumps(normalize_plan_beats(req.gm_plan_json), ensure_ascii=False), template_id))
                 conn.commit()
             vres = validate_template_publish(template_id, conn)
             if not vres["ok"]:
@@ -1049,6 +1052,27 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
                     "message": "Nie można opublikować — brakuje wymaganych elementów.",
                     "missing_npcs": vres["missing_npcs"],
                     "missing_beats": vres["missing_beats"],
+                })
+            # #1020 — hard "winnable premade" gate: endings(primary) + no critical
+            # orphan + ≥1 closable critical beat/act, so every published premade is
+            # playable to victory (#1009) without manual edits.
+            from app.services.campaign_plan_runtime import validate_winnable_plan
+            prow = conn.execute(
+                "SELECT gm_plan_json FROM campaign_templates WHERE id = ?", (template_id,)
+            ).fetchone()
+            try:
+                _plan = json.loads((prow["gm_plan_json"] if prow else None) or "{}")
+            except Exception:
+                _plan = {}
+            wres = validate_winnable_plan(_plan)
+            if not wres["ok"]:
+                raise HTTPException(status_code=422, detail={
+                    "error": "template_not_winnable",
+                    "message": "Nie można opublikować — szablon nie jest grywalny do końca (winnable). "
+                               + " ".join(wres["errors"]),
+                    "errors": wres["errors"],
+                    "orphan_beats": wres["orphan_beats"],
+                    "acts_without_closable_beat": wres["acts_without_closable_beat"],
                 })
         updates: list[str] = []
         params: list = []

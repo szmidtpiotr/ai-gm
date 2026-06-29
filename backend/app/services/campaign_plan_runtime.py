@@ -457,6 +457,76 @@ def find_orphan_beats(plan: dict | None) -> list[str]:
 _OBJECTIVE_TYPES = frozenset({"kill_enemy", "visit_location", "talk_to_npc", "find_item"})
 
 
+def validate_winnable_plan(plan: dict | None) -> dict:
+    """#1020 — Hard "winnable premade" check for Forge template publication.
+
+    A winnable plan guarantees a premade campaign can be played to victory (#1009)
+    with no manual edits. Three rules:
+      1. ``endings[]`` present with ≥1 ``type=="primary"`` ending — the victory
+         overlay (#1019) and the win path both need it.
+      2. No critical orphan beats — every non-optional beat is closable via
+         ``objective_type`` (auto-complete) OR ``narrative_close`` ([BEAT_COMPLETE]).
+         Reuses :func:`find_orphan_beats` (#1010).
+      3. Each act has ≥1 closable *critical* (non-optional) beat, so the act can
+         actually advance. An act of only optional beats strands the playthrough.
+
+    Returns ``{ok, errors:[str], orphan_beats:[str], acts_without_closable_beat:[int]}``.
+    """
+    if not isinstance(plan, dict):
+        return {"ok": False, "errors": ["plan nie jest obiektem"],
+                "orphan_beats": [], "acts_without_closable_beat": []}
+
+    errors: list[str] = []
+
+    # 1) endings[] with ≥1 primary (list or dict-keyed)
+    endings = plan.get("endings")
+    if isinstance(endings, dict):
+        ending_list = list(endings.values())
+    elif isinstance(endings, list):
+        ending_list = endings
+    else:
+        ending_list = []
+    if not ending_list:
+        errors.append("brak endings[] — gra nie ma jak się domknąć zwycięstwem")
+    elif not any(isinstance(e, dict) and e.get("type") == "primary" for e in ending_list):
+        errors.append("brak zakończenia type=='primary' (min. 1 wymagane)")
+
+    # 2) no critical orphan beats
+    orphans = find_orphan_beats(plan)
+    if orphans:
+        errors.append(
+            "krytyczne orphan-beaty (nigdy się nie domkną): " + ", ".join(orphans)
+        )
+
+    # 3) each act has ≥1 closable critical beat
+    acts_without: list[int] = []
+    acts = plan.get("acts")
+    if isinstance(acts, list):
+        for idx, act in enumerate(acts, start=1):
+            if not isinstance(act, dict):
+                continue
+            has_closable_critical = any(
+                isinstance(b, dict)
+                and b.get("optional") is not True
+                and (b.get("objective_type") in _OBJECTIVE_TYPES or b.get("narrative_close"))
+                for b in (act.get("key_beats") or [])
+            )
+            if not has_closable_critical:
+                acts_without.append(act.get("number") or idx)
+    if acts_without:
+        errors.append(
+            "akty bez domykalnego beatu krytycznego: "
+            + ", ".join(str(a) for a in acts_without)
+        )
+
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "orphan_beats": orphans,
+        "acts_without_closable_beat": acts_without,
+    }
+
+
 def auto_complete_beats_by_event(
     campaign_id: int,
     event_type: str,
