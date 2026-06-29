@@ -3682,18 +3682,21 @@ def admin_get_campaign_hex_map(campaign_id: int, _: None = Depends(require_admin
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        hexes = conn.execute("SELECT q, r, hex_type, label, atmosphere, location_key FROM world_hexes WHERE is_active = 1").fetchall()
+        hexes = conn.execute("SELECT q, r, hex_type, label, atmosphere, location_key, region FROM world_hexes WHERE is_active = 1").fetchall()
         overlay = {(int(rv["hex_q"]), int(rv["hex_r"])): dict(rv) for rv in conn.execute("SELECT * FROM campaign_hex_data WHERE campaign_id = ?", (campaign_id,)).fetchall()}
         ht_rows = conn.execute("SELECT hex_type, label, map_icon, map_color FROM hex_type_config WHERE is_active = 1").fetchall() if conn.execute("SELECT 1 FROM sqlite_master WHERE name='hex_type_config'").fetchone() else []
+        has_wr = conn.execute("SELECT 1 FROM sqlite_master WHERE name='world_regions'").fetchone()
+        regions = [dict(r) for r in conn.execute("SELECT key, label, color, status FROM world_regions ORDER BY sort_order").fetchall()] if has_wr else []
         result = []
         for h in hexes:
             q2, r2 = int(h["q"]), int(h["r"])
             ov = overlay.get((q2, r2), {})
             result.append({"q": q2, "r": r2, "hex_type": h["hex_type"], "label": h["label"], "location_key": h["location_key"],
+                "region": h["region"] or "kresy",
                 "discovered": bool(ov.get("discovered", 0)), "encounter_cleared": bool(ov.get("encounter_cleared", 0)),
                 "campaign_label": ov.get("campaign_label") or "", "campaign_notes": ov.get("campaign_notes") or "",
                 "narrative_encounter": ov.get("narrative_encounter") or "", "has_overlay": bool(ov)})
-        return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id}
+        return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id, "regions": regions}
     finally:
         conn.close()
 

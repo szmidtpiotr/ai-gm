@@ -325,10 +325,12 @@ function filterTableGeneric(input, tableId, nameClass) {
 // ══════════════════════════════════════════════════════════════
 //  Hex-map rendering + edit modal
 // ══════════════════════════════════════════════════════════════
-  function _renderAdminHexMap(hexes, hexTypes, currentHex) {
+  function _renderAdminHexMap(hexes, hexTypes, currentHex, regions) {
     if (!hexes || !hexes.length) {
       return `<div id="admin-hex-map-svg-wrap" style="padding:24px;text-align:center;color:var(--t3)">Brak danych mapy.</div>`;
     }
+    const regionColorMap = {};
+    (regions || []).forEach(r => { regionColorMap[r.key] = r.color; });
     const HEX_SIZE = 18;
     const hexToPixel = (q, r) => ({ x: HEX_SIZE * 1.5 * q, y: HEX_SIZE * Math.sqrt(3) * (r + q / 2) });
     const corners = size => Array.from({length:6}, (_,i) => {
@@ -355,9 +357,10 @@ function filterTableGeneric(input, tableId, nameClass) {
       const htColor = hexTypes[h.hex_type] && hexTypes[h.hex_type].map_color;
       const fill = htColor || typeColors[h.hex_type] || typeColors.default;
       const isCurrent = currentHex && h.q === currentHex.q && h.r === currentHex.r;
-      let stroke = '#333', strokeW = '0.5';
+      const hexRegionColor = regionColorMap[h.region] || null;
+      let stroke = hexRegionColor ? hexRegionColor + '66' : '#333', strokeW = '0.5';
       if (isCurrent) { stroke = '#ff2222'; strokeW = '2.5'; }
-      else if (h.discovered) { stroke = '#4a8a4a'; strokeW = '1'; }
+      else if (h.discovered) { stroke = hexRegionColor || '#4a8a4a'; strokeW = '1'; }
       const opacity = (h.discovered || isCurrent) ? '1' : '0.45';
       const indicators = [];
       if (isCurrent) {
@@ -775,9 +778,25 @@ function filterTableGeneric(input, tableId, nameClass) {
         const hexes = d.hexes || [];
         const hexTypes = d.hex_types || {};
         const currentHex = d.current_hex || null;
+        const regions = d.regions || [];
         const overlay_hexes = hexes.filter(h => h.has_overlay || h.discovered || h.campaign_label);
-        const svgHtml = _renderAdminHexMap(hexes, hexTypes, currentHex);
+        // Build region summary from discovered hexes
+        const regionCounts = {};
+        hexes.filter(h => h.discovered).forEach(h => { const rk = h.region || 'kresy'; regionCounts[rk] = (regionCounts[rk] || 0) + 1; });
+        const regionBadges = Object.entries(regionCounts).map(([rk, cnt]) => {
+          const ri = regions.find(r => r.key === rk);
+          const color = ri ? ri.color : '#7ab648';
+          const label = ri ? ri.label : rk;
+          const status = ri ? ri.status : 'live';
+          const sColors = { live: '#22c55e', coming: '#f59e0b', locked: '#6b7280' };
+          return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:${color}18;border:1px solid ${color}44;font-size:0.7rem">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+            ${_esc(label)} <span style="color:${sColors[status]||'#6b7280'};font-size:0.62rem">${status}</span>
+            <span style="color:var(--t3);font-size:0.65rem">${cnt}h</span></span>`;
+        }).join('');
+        const svgHtml = _renderAdminHexMap(hexes, hexTypes, currentHex, regions);
         panel.innerHTML = `
+          ${regionBadges ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center"><span style="font-size:0.7rem;color:var(--t3)">Krainy:</span>${regionBadges}</div>` : ''}
           <div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">${hexes.length} heksów · ${overlay_hexes.length} z nakładką · <span style="color:var(--t3)">Kliknij hex aby edytować</span></div>
           ${svgHtml}
           <div style="margin-top:8px;font-size:0.72rem;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">

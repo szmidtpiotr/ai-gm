@@ -1082,9 +1082,49 @@ const _ROW_REGISTRY = {
   let _wbPan = { x: 400, y: 280 };
   let _wbDragStart = null;
   const _WB_SIZE = 40;
+  // RM6 — region state
+  let _wbRegions = [];
+  let _wbActiveRegion = null;
 
   function _wbHexToPixel(q, r) {
     return { x: _WB_SIZE * 1.5 * q, y: _WB_SIZE * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r) };
+  }
+
+  function _wbRegionBadgeHtml(status) {
+    const s = { live: ['#22c55e', 'live'], coming: ['#f59e0b', 'coming'], locked: ['#6b7280', 'locked'] };
+    const [c, t] = s[status] || ['#6b7280', status || '?'];
+    return `<span style="padding:1px 5px;border-radius:3px;background:${c}22;color:${c};border:1px solid ${c}55;font-size:0.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em">${t}</span>`;
+  }
+
+  function _wbRenderRegionBar() {
+    const bar = document.getElementById('wb-region-bar');
+    if (!bar) return;
+    if (!_wbRegions.length) { bar.innerHTML = ''; return; }
+    const opts = _wbRegions.map(r =>
+      `<option value="${_esc(r.key)}"${r.key === _wbActiveRegion ? ' selected' : ''}>${_esc(r.label)} (${r.status})</option>`
+    ).join('');
+    const active = _wbActiveRegion ? _wbRegions.find(r => r.key === _wbActiveRegion) : null;
+    const dotColor = active ? active.color : '#7ab648';
+    const badge = active ? _wbRegionBadgeHtml(active.status) : _wbRegionBadgeHtml('live');
+    const warn = (active && active.status !== 'live')
+      ? `<span style="font-size:0.65rem;color:#f59e0b;margin-left:6px">⚠ niedostępna dla graczy</span>`
+      : '';
+    bar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:#0d0d18;border-bottom:2px solid ${dotColor}33">
+      <span style="font-size:0.68rem;color:var(--t3)">Kraina:</span>
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+      <select id="wb-region-select" onchange="wbFilterRegion(this.value)" style="background:#111;border:1px solid #2a2a3a;color:#c8c0a8;font-size:0.72rem;padding:2px 6px;border-radius:4px;cursor:pointer">
+        <option value="">Wszystkie (live)</option>${opts}
+      </select>
+      ${badge}${warn}
+    </div>`;
+  }
+
+  async function wbFilterRegion(key) {
+    _wbActiveRegion = key || null;
+    _wbRenderRegionBar();
+    await _wbLoadHexes();
+    _wbCenter();
+    _wbRender();
   }
 
   function _wbHexCorners(cx, cy, size) {
@@ -1688,12 +1728,21 @@ const _ROW_REGISTRY = {
   }
 
   async function _wbLoadHexes() {
-    const m = await apiFetch('/api/admin/world/map');
+    const url = _wbActiveRegion
+      ? `/api/admin/world/map?region=${encodeURIComponent(_wbActiveRegion)}`
+      : '/api/admin/world/map';
+    const m = await apiFetch(url);
     _wbHexes = {};
     for (const h of (m.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
     _wbTeleports = m.teleport_connections || [];
+    if (m.regions && m.regions.length) _wbRegions = m.regions;
     _wbUndoStack = [];
     _wbUpdateUndoBtn();
+    const svg = document.getElementById('wb-svg');
+    if (svg) {
+      const active = _wbActiveRegion ? _wbRegions.find(r => r.key === _wbActiveRegion) : null;
+      svg.style.background = active ? `color-mix(in srgb, ${active.color} 8%, #080608)` : '#080608';
+    }
   }
 
   function _wbCenter() {
@@ -1733,6 +1782,7 @@ const _ROW_REGISTRY = {
       ]);
       for (const h of (m.hexes || [])) _wbHexes[_wbKey(h.q, h.r)] = h;
       _wbTeleports = m.teleport_connections || [];
+      if (m.regions && m.regions.length) _wbRegions = m.regions;
       _wbHexTypes = {};
       for (const ht of (t.hex_types || [])) _wbHexTypes[ht.hex_type] = ht;
       _wbLocations = {};
@@ -1750,6 +1800,7 @@ const _ROW_REGISTRY = {
     }
 
     _wbRenderPalette();
+    _wbRenderRegionBar();
 
     // Wheel zoom
     svg.addEventListener('wheel', (e) => {
@@ -2394,8 +2445,11 @@ function _sectionHtml() {
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
             </div>
-            <div class="wb-canvas-wrap">
-              <svg id="wb-svg" style="background:#080608"></svg>
+            <div style="display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden">
+              <div id="wb-region-bar"></div>
+              <div class="wb-canvas-wrap" style="flex:1">
+                <svg id="wb-svg" style="background:#080608"></svg>
+              </div>
             </div>
             <div class="wb-detail" id="wb-detail">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij hex aby edytować.</div>
@@ -2420,7 +2474,7 @@ export async function init(panel) {
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,
-    openLocDetailModal,
+    openLocDetailModal, wbFilterRegion,
   });
 
   // Wire tab switching (data-mtap)
