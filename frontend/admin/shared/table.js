@@ -176,10 +176,11 @@ export function enableColumnResize(tableOrId) {
 }
 
 /**
- * #591 — per-column value filter. Injects a filter row of <select> dropdowns under
- * the header; each dropdown lists the distinct values present in that column. Picking
- * a value hides rows whose cell in that column doesn't equal it. Multiple column
- * dropdowns combine with AND. Idempotent.
+ * #1027 — per-column text filter. Injects a filter row of <input> boxes under the
+ * header; typing a word hides rows whose cell in that column does NOT contain it as a
+ * substring (case + Polish-diacritic insensitive). Multiple column inputs combine with
+ * AND. Works for async-loaded data (no value prepopulation needed). Idempotent.
+ * Supersedes the #591 exact-match <select> dropdowns.
  */
 export function enableColumnFilters(tableOrId) {
   const table = _resolveTable(tableOrId);
@@ -198,74 +199,55 @@ export function enableColumnFilters(tableOrId) {
     cell.style.padding = '2px 4px';
     // Mirror visibility classes so the filter cell hides/shows in lockstep with its
     // column (e.g. `detail-col` toggled by "Szczegóły"). Without this the filter row
-    // keeps all cells visible while the header/body hide some → dropdowns shift under
+    // keeps all cells visible while the header/body hide some → inputs shift under
     // the wrong columns (#591).
     if (th.classList.contains('detail-col')) cell.classList.add('detail-col');
     if (th.classList.contains('td-sticky')) cell.classList.add('td-sticky');
     const label = (th.querySelector('.th-inner') || th).textContent?.trim().toLowerCase() || '';
     const skip = th.classList.contains('col-check') || label === 'akcje' || label === 'actions' || !label;
     if (!skip) {
-      const select = document.createElement('select');
-      select.className = 'col-filter-select';
-      select.dataset.colIdx = String(colIdx);
-      select.style.cssText = 'width:100%;font-size:0.7rem;padding:2px 4px;box-sizing:border-box';
-      const opt0 = document.createElement('option');
-      opt0.value = '';
-      opt0.textContent = '(wszystkie)';
-      select.appendChild(opt0);
-      // Rows are often loaded async AFTER enhanceTable runs, so the column values
-      // aren't known yet. Repopulate distinct values every time the dropdown opens.
-      const repopulate = () => _populateFilterSelect(table, select, colIdx);
-      select.addEventListener('mousedown', repopulate);
-      select.addEventListener('focus', repopulate);
-      select.addEventListener('click', e => e.stopPropagation());
-      select.addEventListener('change', () => _applyColFilters(table));
-      repopulate();  // initial attempt (works when data already present)
-      cell.appendChild(select);
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'col-filter-input';
+      input.dataset.colIdx = String(colIdx);
+      input.placeholder = 'filtruj…';
+      input.style.cssText = 'width:100%;font-size:0.7rem;padding:2px 4px;box-sizing:border-box';
+      // Debounce ~150 ms (starting value) so filtering doesn't fire per keystroke.
+      let t = null;
+      input.addEventListener('input', () => {
+        clearTimeout(t);
+        t = setTimeout(() => _applyColFilters(table), 150);
+      });
+      input.addEventListener('click', e => e.stopPropagation());  // don't trigger header sort
+      cell.appendChild(input);
     }
     filterRow.appendChild(cell);
   });
   thead.appendChild(filterRow);
 }
 
-function _populateFilterSelect(table, select, colIdx) {
-  const tbody = table.querySelector('tbody');
-  if (!tbody) return;
-  const seen = new Set();
-  tbody.querySelectorAll('tr').forEach(row => {
-    if (row.classList.contains('col-filter-row')) return;
-    const txt = (row.querySelectorAll('td')[colIdx]?.textContent || '').trim();
-    if (txt) seen.add(txt);
-  });
-  const values = Array.from(seen).sort((a, b) => a.localeCompare(b, 'pl', { sensitivity: 'base' }));
-  const current = select.value;
-  // Rebuild options preserving the current selection.
-  select.innerHTML = '';
-  const opt0 = document.createElement('option');
-  opt0.value = '';
-  opt0.textContent = '(wszystkie)';
-  select.appendChild(opt0);
-  values.forEach(v => {
-    const o = document.createElement('option');
-    o.value = v;
-    o.textContent = v.length > 40 ? v.slice(0, 40) + '…' : v;
-    select.appendChild(o);
-  });
-  if (current && values.includes(current)) select.value = current;
+// Lowercase + strip Polish diacritics so "miecz" matches "Miecz", "łuk" matches "luk".
+function _normalizePL(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')   // combining marks (ó→o, ą→a, ę→e, ć→c…)
+    .replace(/ł/g, 'l');          // ł has no NFD decomposition — map explicitly
 }
 
 function _applyColFilters(table) {
   const filterRow = table.querySelector('thead .col-filter-row');
   const tbody = table.querySelector('tbody');
   if (!filterRow || !tbody) return;
-  const selects = Array.from(filterRow.querySelectorAll('th')).map(th => th.querySelector('select'));
+  const inputs = Array.from(filterRow.querySelectorAll('th')).map(th => th.querySelector('input'));
+  const needles = inputs.map(inp => _normalizePL((inp?.value || '').trim()));
   Array.from(tbody.querySelectorAll('tr')).forEach(row => {
     const cells = row.querySelectorAll('td');
     let show = true;
-    selects.forEach((sel, i) => {
-      if (!sel || !sel.value) return;
-      const txt = (cells[i]?.textContent || '').trim();
-      if (txt !== sel.value) show = false;
+    needles.forEach((needle, i) => {
+      if (!needle) return;
+      const txt = _normalizePL((cells[i]?.textContent || '').trim());
+      if (!txt.includes(needle)) show = false;
     });
     row.style.display = show ? '' : 'none';
   });
