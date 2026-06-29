@@ -1900,6 +1900,7 @@ def update_enemy(
     image_url: str | None = None,
     image_url_raw: str | None = None,
     image_gen_prompt: str | None = None,
+    min_level: int | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1912,7 +1913,8 @@ def update_enemy(
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at,
-                   image_url, image_url_raw, image_gen_prompt
+                   image_url, image_url_raw, image_gen_prompt,
+                   COALESCE(min_level, 1) AS min_level
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),
@@ -1977,6 +1979,7 @@ def update_enemy(
         final_image_url = image_url if image_url is not None else current.get("image_url")
         final_image_url_raw = image_url_raw if image_url_raw is not None else current.get("image_url_raw")
         final_image_gen_prompt = image_gen_prompt if image_gen_prompt is not None else current.get("image_gen_prompt")
+        final_min_level = max(1, int(min_level)) if min_level is not None else int(current.get("min_level") or 1)
 
         conn.execute(
             """
@@ -1985,6 +1988,7 @@ def update_enemy(
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
                 xp_award = ?, conditions_immune = ?, skills_json = ?, stats_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
                 description = ?, is_active = ?, image_url = ?, image_url_raw = ?, image_gen_prompt = ?,
+                min_level = ?,
                 updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -2011,6 +2015,7 @@ def update_enemy(
                 final_image_url,
                 final_image_url_raw,
                 final_image_gen_prompt,
+                final_min_level,
                 safe_key,
             ),
         )
@@ -2021,7 +2026,8 @@ def update_enemy(
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, skills_json, stats_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at,
-                   image_url, image_url_raw, image_gen_prompt
+                   image_url, image_url_raw, image_gen_prompt,
+                   COALESCE(min_level, 1) AS min_level
             FROM game_config_enemies WHERE key = ?
             """,
             (safe_key,),

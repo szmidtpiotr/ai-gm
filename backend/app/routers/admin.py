@@ -384,6 +384,7 @@ class EnemyPatchReq(BaseModel):
     image_url: str | None = None
     image_url_raw: str | None = None
     image_gen_prompt: str | None = None
+    min_level: int | None = None
 
 
 class EnemyDeleteReq(BaseModel):
@@ -1529,6 +1530,7 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             image_url=req.image_url,
             image_url_raw=req.image_url_raw,
             image_gen_prompt=req.image_gen_prompt,
+            min_level=req.min_level,
         )
         return {"item": item}
     except KeyError:

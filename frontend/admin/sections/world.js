@@ -230,17 +230,17 @@ async function _loadEnemies() {
   try {
     const d = await apiFetch('/api/admin/enemies');
     const items = d.items || [];
-    if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak wrogów</td></tr>`; return; }
-    const tierBadge = t => ({1:'<span class="badge badge-green">Słaby</span>',2:'<span class="badge badge-blue">Standard</span>',3:'<span class="badge badge-amber">Elita</span>',4:'<span class="badge badge-red">Boss</span>'}[t]||`<span class="badge badge-slate">T${t??'—'}</span>`);
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak wrogów</td></tr>`; return; }
+    const tierBadge = t => ({'weak':'<span class="badge badge-green">Słaby</span>','standard':'<span class="badge badge-blue">Standard</span>','elite':'<span class="badge badge-amber">Elita</span>','boss':'<span class="badge badge-red">Boss</span>'}[t]||`<span class="badge badge-slate">${t??'—'}</span>`);
     tbody.innerHTML = items.map(e => {
       const enc = encodeURIComponent(JSON.stringify(e));
       return `<tr data-key="${_esc(e.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox"></td>
         <td class="td-sticky td-name">${_esc(e.label||e.key)}</td>
-        <td class="td-mono" data-label="Poziom">${e.tier??'—'}</td>
+        <td data-label="Tier">${tierBadge(e.tier)}</td>
+        <td class="td-mono" data-label="Min lvl" title="Minimalny poziom bohatera">${e.min_level??1}</td>
         <td class="td-mono" data-label="HP">${e.hp_base??'—'}</td>
         <td class="td-mono" data-label="Kość">${_esc(e.damage_die||'—')}</td>
-        <td data-label="Tier">${tierBadge(e.tier)}</td>
         <td class="td-muted" data-label="Łupy">${_esc(e.loot_table_key||'—')}</td>
         <td class="td-actions">
           <button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="window._worldEnemyImage('${_esc(e.key)}','${enc}')">🖼</button>
@@ -285,9 +285,10 @@ function openEnemyFormModal(prefillOrNull) {
       <div class="form-grid">
         ${isEdit ? '' : `<div class="form-field form-full"><label class="form-label required">Klucz</label><input id="ef-key" class="form-input mono" placeholder="np. goblin_archer" /></div>`}
         <div class="form-field form-full"><label class="form-label required">Nazwa</label><input id="ef-label" class="form-input" value="${_esc(p.label||'')}" /></div>
-        <div class="form-field"><label class="form-label">Poziom</label>
+        <div class="form-field"><label class="form-label">Tier</label>
           <select id="ef-tier" class="form-select">${TIERS.map(t=>`<option value="${t}"${p.tier===t?' selected':''}>${t}</option>`).join('')}</select>
         </div>
+        <div class="form-field"><label class="form-label" title="Minimalny poziom bohatera wymagany do spotkania">Min lvl</label><input id="ef-minlvl" class="form-input mono" type="number" min="1" max="20" value="${p.min_level??1}" /></div>
         <div class="form-field"><label class="form-label">Typ dmg</label>
           <select id="ef-dmgtype" class="form-select">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
         </div>
@@ -340,6 +341,7 @@ async function saveEnemyForm(existingKey, btn) {
   const body = {
     label, key,
     tier: g('ef-tier')?.value,
+    min_level: parseInt(g('ef-minlvl')?.value) || 1,
     damage_type: g('ef-dmgtype')?.value,
     hp_base: parseInt(g('ef-hp')?.value) || null,
     ac_base: parseInt(g('ef-ac')?.value) || null,
@@ -1479,10 +1481,10 @@ function _sectionHtml() {
             <thead><tr>
               <th class="col-check"><input type="checkbox"></th>
               <th class="td-sticky"><div class="th-inner">Nazwa</div></th>
-              <th><div class="th-inner">Poziom</div></th>
+              <th><div class="th-inner">Tier</div></th>
+              <th><div class="th-inner">Min lvl</div></th>
               <th><div class="th-inner">HP</div></th>
               <th><div class="th-inner">Kość</div></th>
-              <th><div class="th-inner">Tier</div></th>
               <th><div class="th-inner">Tabela łupów</div></th>
               <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
             </tr></thead>
