@@ -5565,6 +5565,19 @@ def _ensure_enemy_min_level(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _seed_dwarf_toughness_enemy(conn: sqlite3.Connection) -> None:
+    """#1005 — giant_spider gets damage_type='poison' so Twardy jak kamień is reachable.
+
+    Thematically: spiders deal venomous (poison) damage. Without this, DWARF_TOUGHNESS_TYPES
+    mechanic can never activate in normal gameplay (0 enemies had qualifying damage_type).
+    Idempotent: only updates if still 'physical'.
+    """
+    conn.execute(
+        "UPDATE game_config_enemies SET damage_type = 'poison' WHERE key = 'giant_spider' AND damage_type = 'physical'"
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5688,6 +5701,7 @@ def run_admin_migrations() -> None:
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
         _ensure_enemy_min_level(conn)  # #1023
+        _seed_dwarf_toughness_enemy(conn)  # #1005
     finally:
         conn.close()
 
