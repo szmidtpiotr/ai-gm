@@ -120,7 +120,8 @@ def delete_character_admin(character_id: int) -> dict:
         conn.execute("DELETE FROM characters WHERE id = ?", (character_id,))
         _audit_character(conn, character_id, "DELETE_CHARACTER", audit_old, None)
         conn.commit()
-        return {"ok": True, "deleted_id": character_id, "campaign_id": int(row["campaign_id"])}
+        cid = row["campaign_id"]
+        return {"ok": True, "deleted_id": character_id, "campaign_id": int(cid) if cid is not None else None}
     except Exception:
         conn.rollback()
         raise

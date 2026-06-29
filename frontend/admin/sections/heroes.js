@@ -14,6 +14,7 @@ import { showToast } from '../shared/toast.js';
 import { confirmDialog } from '../shared/modal.js';
 
 const OBSERVED_OWNER_ID = 1013; // PiotrSzmidt — konto obserwowane (read-only protocol)
+const MIZEL_CHAR_ID = 999420;   // Piotr's personal hero — never auto-delete
 // Staty edytowalne przez cheat „add stat" (delta). LCK celowo poza — backend add stat go nie wspiera.
 const EDITABLE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 let _condCatalog = null; // cache katalogu kondycji (GET /api/admin/conditions)
@@ -41,6 +42,7 @@ const _ARCHETYPE_LABEL = {
 let _heroes = [];          // ostatnio pobrana lista
 let _statusFilter = 'all'; // all | idle | playing
 let _search = '';
+let _selected = new Set(); // ids zaznaczonych bohaterów (bulk delete)
 
 // ── Lista ────────────────────────────────────────────────────────────────────
 
@@ -54,20 +56,44 @@ function _matches(h) {
   return true;
 }
 
+function _isBulkProtected(h) {
+  return Number(h.user_id) === OBSERVED_OWNER_ID
+      || Number(h.id) === MIZEL_CHAR_ID
+      || String(h.name || '').startsWith('[SBX]');
+}
+
+function _updateBulkBar() {
+  const btn = document.getElementById('heroes-bulk-del');
+  if (!btn) return;
+  const n = _selected.size;
+  if (n > 0) {
+    btn.textContent = `🗑 Usuń zaznaczone (${n})`;
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
 function _renderRows() {
   const tbody = document.getElementById('heroes-tbody');
   if (!tbody) return;
   const rows = _heroes.filter(_matches);
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Brak bohaterów dla tego filtra.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Brak bohaterów dla tego filtra.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(h => {
     const observed = Number(h.user_id) === OBSERVED_OWNER_ID;
+    const protected_ = _isBulkProtected(h);
     const hp = (h.hp != null && h.max_hp != null) ? `${h.hp}/${h.max_hp}` : '—';
     const statusLbl = _STATUS_LABEL[h.status] || h.status || '—';
     const arch = _ARCHETYPE_LABEL[h.archetype] || h.archetype || '—';
+    const checked = _selected.has(h.id) ? 'checked' : '';
+    const cbx = protected_
+      ? `<td style="text-align:center"><span title="Chroniony — nie można zaznaczyć" style="color:var(--t3)">—</span></td>`
+      : `<td style="text-align:center"><input type="checkbox" data-hero-cb="${h.id}" ${checked} style="cursor:pointer"></td>`;
     return `<tr data-hero-id="${h.id}" style="cursor:pointer">
+      ${cbx}
       <td class="td-name">${_esc(h.name || '—')}${observed ? ' <span title="Konto obserwowane (#1013)" style="color:var(--red)">👁</span>' : ''}</td>
       <td>${_esc(arch)}</td>
       <td data-sort-val="${h.level ?? 0}">${h.level ?? '—'}</td>
@@ -81,7 +107,18 @@ function _renderRows() {
     </tr>`;
   }).join('');
   tbody.querySelectorAll('tr[data-hero-id]').forEach(tr => {
-    tr.addEventListener('click', () => openInspector(Number(tr.dataset.heroId)));
+    tr.addEventListener('click', e => {
+      if (e.target.type === 'checkbox') return; // checkbox click handles itself
+      openInspector(Number(tr.dataset.heroId));
+    });
+  });
+  tbody.querySelectorAll('[data-hero-cb]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      e.stopPropagation();
+      const id = Number(cb.dataset.heroCb);
+      if (cb.checked) _selected.add(id); else _selected.delete(id);
+      _updateBulkBar();
+    });
   });
   tbody.querySelectorAll('[data-hero-del]').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -110,6 +147,29 @@ async function _deleteHero(h) {
   } catch (e) {
     showToast(`Błąd usuwania: ${e.message}`, 'error');
   }
+}
+
+async function _bulkDelete() {
+  const ids = [..._selected];
+  if (!ids.length) return;
+  const ok = await confirmDialog(
+    `Usunąć ${ids.length} bohater${ids.length === 1 ? 'a' : 'ów'}? Operacji NIE można cofnąć — usunięte zostaną też wszystkie tury. Kampanie pozostają.`
+  );
+  if (!ok) return;
+  let done = 0, errors = 0;
+  for (const id of ids) {
+    try {
+      await apiFetch(`/api/admin/characters/${id}`, { method: 'DELETE' });
+      done++;
+    } catch {
+      errors++;
+    }
+  }
+  _selected.clear();
+  _updateBulkBar();
+  if (errors) showToast(`Usunięto ${done}, błędy: ${errors}`, 'error');
+  else showToast(`Usunięto ${done} bohatera/ów`, 'success');
+  await _loadList();
 }
 
 async function _loadList() {
@@ -814,7 +874,7 @@ export async function openInspector(heroId) {
 // ── Init ───────────────────────────────────────────────────────────────────
 
 export async function init(panel) {
-  _heroes = []; _statusFilter = 'all'; _search = '';
+  _heroes = []; _statusFilter = 'all'; _search = ''; _selected = new Set();
   panel.innerHTML = `
     <div id="section-heroes">
       <div class="section-head" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
@@ -826,9 +886,11 @@ export async function init(panel) {
         </div>
         <input id="heroes-search" class="form-input" placeholder="Szukaj po imieniu / właścicielu…" style="max-width:260px">
         <button class="btn" id="heroes-refresh" style="margin-left:auto">↻ Odśwież</button>
+        <button class="btn" id="heroes-bulk-del" style="display:none;color:var(--red)">🗑 Usuń zaznaczone</button>
       </div>
       <table class="data-table" id="heroes-table">
         <thead><tr>
+          <th style="width:32px"><input type="checkbox" id="heroes-cb-all" title="Zaznacz wszystkich (niechronionych)"></th>
           <th>Imię</th><th>Archetyp</th><th>Poziom</th><th>Właściciel</th><th>Status</th><th>Kampania</th><th>HP</th><th></th>
         </tr></thead>
         <tbody id="heroes-tbody"></tbody>
@@ -848,6 +910,14 @@ export async function init(panel) {
     _renderRows();
   });
   panel.querySelector('#heroes-refresh').addEventListener('click', _loadList);
+  panel.querySelector('#heroes-bulk-del').addEventListener('click', _bulkDelete);
+  panel.querySelector('#heroes-cb-all').addEventListener('change', e => {
+    const visible = _heroes.filter(_matches).filter(h => !_isBulkProtected(h));
+    if (e.target.checked) visible.forEach(h => _selected.add(h.id));
+    else visible.forEach(h => _selected.delete(h.id));
+    _renderRows();
+    _updateBulkBar();
+  });
 
   await _loadList();
 }
