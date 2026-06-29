@@ -580,7 +580,34 @@ function filterTableGeneric(input, tableId, nameClass) {
           : '';
 
         const arcs = plan?.arcs || {};
-        const arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
+        let arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
+        // #1018: V2 plans store acts[].key_beats (arcs empty). Adapt to the arc/scene
+        // renderer so the Plan GM tab is not blank for new/regenerated campaigns.
+        if (!arcList.length && Array.isArray(plan?.acts) && plan.acts.length) {
+          arcList = plan.acts.map(act => ({
+            id: act.id,
+            title: act.label || act.title || act.id,
+            status: (act.id && act.id === plan.active_act) ? 'active' : (act.status || undefined),
+            roadmap: act.summary || act.roadmap || '',
+            _v2: true,
+            scene_goals: (act.key_beats || []).map(b => ({
+              goal: b.summary || b.label || b.beat_key || '',
+              _visited: !!b.visited,
+              _objtype: b.objective_type || '',
+              _optional: !!b.optional,
+            })),
+            hooks: act.hooks || [],
+          }));
+        }
+        // #1018: endings block (V2 only) rendered after the acts.
+        const endings = Array.isArray(plan?.endings) ? plan.endings : [];
+        const endingsHtml = endings.length ? `
+          <div style="margin-bottom:14px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+            <div style="background:var(--surface);padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:0.88rem;color:var(--t1)">🏁 Zakończenia (${endings.length})</div>
+            <div style="padding:10px 14px;display:flex;flex-direction:column;gap:6px">
+              ${endings.map(e => `<div style="font-size:0.82rem;color:var(--t2)"><span class="badge badge-slate">${_esc(e.ending_key||e.key||e.id||'')}</span> ${_esc(e.summary||e.label||e.description||(typeof e==='string'?e:''))}</div>`).join('')}
+            </div>
+          </div>` : '';
         if (!arcList.length) {
           // #966: campaign with no plan at all — offer to generate one (needs a hero).
           panel.innerHTML = gravityBadge + degradedBanner +
@@ -596,14 +623,18 @@ function filterTableGeneric(input, tableId, nameClass) {
           const isActive = arc.status === 'active' || arc.id === activeArcId;
           const currentScene = typeof arc.current_scene_ordinal === 'number' ? arc.current_scene_ordinal : null;
           const goals = arc.scene_goals || [];
+          const firstUnvisited = goals.findIndex(x => x && typeof x === 'object' && '_visited' in x && !x._visited);
           const hooksForScene = arc.hooks || [];
+          const beatsLabel = arc._v2 ? 'Beaty' : 'Sceny';
           const scenesHtml = goals.length ? `
-            <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Sceny (${goals.length})</div>
+            <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">${beatsLabel} (${goals.length})</div>
             <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
               ${goals.map((g, si) => {
-                const isCurrent = currentScene !== null && si === currentScene;
-                const isDone = currentScene !== null && si < currentScene;
+                const v2 = g && typeof g === 'object' && '_visited' in g;
+                const isDone = v2 ? !!g._visited : (currentScene !== null && si < currentScene);
+                const isCurrent = v2 ? (isActive && si === firstUnvisited) : (currentScene !== null && si === currentScene);
                 const goalText = typeof g === 'string' ? g : (g?.goal || g?.description || JSON.stringify(g));
+                const metaBadges = v2 ? `${g._objtype ? `<span class="badge badge-slate" style="font-size:0.66rem">${_esc(g._objtype)}</span>` : ''}${g._optional ? `<span class="badge badge-slate" style="font-size:0.66rem;opacity:.7">opcjonalny</span>` : ''}` : '';
                 const extraHtml = isCurrent && hooksForScene.length ? `
                   <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--accent-rgb,100,160,255),.2)">
                     <div style="font-size:0.72rem;color:var(--accent,#64a0ff);font-weight:600;margin-bottom:4px">Hooki sceny</div>
@@ -612,7 +643,8 @@ function filterTableGeneric(input, tableId, nameClass) {
                 return `<details open style="border-radius:var(--r);border:1px solid ${isCurrent?'rgba(var(--accent-rgb,100,160,255),.45)':'var(--border)'};background:${isCurrent?'rgba(var(--accent-rgb,100,160,255),.08)':isDone?'var(--surface)':'transparent'};opacity:${isDone?'0.6':'1'}">
                   <summary style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;outline:none">
                     <span style="font-size:0.72rem;font-weight:700;color:${isCurrent?'var(--accent,#64a0ff)':'var(--t3)'};min-width:18px;flex-shrink:0">${isDone?'✓':(isCurrent?'▶':String(si+1))}</span>
-                    <span style="font-size:0.78rem;color:var(--t3)">Scena ${si+1}</span>
+                    <span style="font-size:0.78rem;color:var(--t3)">${v2?'Beat':'Scena'} ${si+1}</span>
+                    ${metaBadges ? `<span style="display:flex;gap:4px;margin-left:auto">${metaBadges}</span>` : ''}
                   </summary>
                   <div style="padding:6px 10px 10px 36px">
                     <p style="font-size:0.82rem;font-weight:${isCurrent?'600':'400'};color:${isCurrent?'var(--t1)':isDone?'var(--t3)':'var(--t2)'};margin:0 0 ${extraHtml?'8px':'0'}">${_esc(goalText)}</p>
@@ -631,13 +663,13 @@ function filterTableGeneric(input, tableId, nameClass) {
             <div style="background:var(--surface);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">
               <span style="font-weight:700;font-size:0.88rem;color:var(--t1)">${_esc(arc.title||arc.id||`Akt ${arcIdx+1}`)}</span>
               <div style="display:flex;align-items:center;gap:6px">
-                ${currentScene !== null ? `<span style="font-size:0.72rem;color:var(--t3)">Scena ${currentScene+1}/${goals.length}</span>` : ''}
+                ${currentScene !== null ? `<span style="font-size:0.72rem;color:var(--t3)">Scena ${currentScene+1}/${goals.length}</span>` : (arc._v2 ? `<span style="font-size:0.72rem;color:var(--t3)">${goals.filter(x=>x&&x._visited).length}/${goals.length} beatów</span>` : '')}
                 <span class="badge ${isActive?'badge-green':'badge-slate'}">${isActive?'● Aktywny':'○ Nieaktywny'}</span>
               </div>
             </div>
             <div style="padding:12px 14px">${roadmapHtml}${scenesHtml}${hooksHtml}</div>
           </div>`;
-        }).join('') +
+        }).join('') + endingsHtml +
           `<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
             <button class="btn btn-sm btn-secondary" onclick="regenerateCampPlan(${campId}, this)">♻ Regeneruj plan MG</button>
             <button class="btn btn-sm btn-secondary" onclick="advanceCampScene(${campId}, this)">➡ Następna scena</button>
