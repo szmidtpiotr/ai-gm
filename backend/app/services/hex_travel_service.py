@@ -681,6 +681,29 @@ def _find_character_existing_hex(
     return None
 
 
+def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | None:
+    """#992: return the key of the game_location physically placed on hex (q, r).
+
+    A location is "on" a hex when its world_hex_q/world_hex_r match. When several
+    sit on one hex, prefer a top-level macro/settlement over a child sub-location
+    (the anchor should be the place the player arrives at, not a room inside it).
+    Returns None when no active location is mapped to the hex.
+    """
+    try:
+        row = conn.execute(
+            "SELECT key FROM game_locations "
+            "WHERE world_hex_q = ? AND world_hex_r = ? AND COALESCE(is_active, 1) = 1 "
+            "ORDER BY (location_type = 'macro') DESC, (parent_key IS NULL) DESC, id "
+            "LIMIT 1",
+            (q, r),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    return row["key"] if isinstance(row, sqlite3.Row) else row[0]
+
+
 def resolve_starting_hex(
     campaign_id: int,
     character_id: int,
@@ -794,8 +817,23 @@ def resolve_starting_hex(
     # Stage 2B-Schema S17: pair the hex with a canonical game_location (or create minimal one)
     loc_key: str | None = None
 
+    # #992: a game_location physically sitting on this hex (world_hex_q/r) is the
+    # ONLY correct anchor. For an already-existing matched hex the old code skipped
+    # straight to name-matching and then a RANDOM canonical fallback, anchoring the
+    # session at an unrelated location while current_hex pointed elsewhere — the
+    # location↔hex rozjazd that broke rest (safe_for_rest read off the wrong loc)
+    # and fed wrong location context to the narrator. Prefer the on-hex location.
+    if not is_new:
+        on_hex_key = _find_location_on_hex(conn, sq, sr)
+        if on_hex_key:
+            loc_key = on_hex_key
+            logger.info(
+                "s17_hex_location_paired",
+                campaign_id=campaign_id, loc_key=loc_key, q=sq, r=sr,
+            )
+
     # U28: try placement engine first (for new hexes only — existing hexes keep their location)
-    if is_new:
+    if not loc_key and is_new:
         try:
             from app.services.placement_engine import try_place_location_on_hex
             placed_key = try_place_location_on_hex(conn, sq, sr, hex_type, campaign_seed=campaign_id)

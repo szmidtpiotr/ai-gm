@@ -4475,9 +4475,16 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
 
     # B5: auto-save World State snapshot after each narrative turn
     try:
-        from app.services.world_state_service import auto_save_snapshot as _ws_snap, get_world_state_flags as _gwsf_out
+        from app.services.world_state_service import auto_save_snapshot as _ws_snap
+        from app.services.quest_persist_service import get_active_quests_for_bar as _gaqfb_out
         _ws_snap(campaign_id)
-        out["active_quests"] = _gwsf_out(campaign_id).get("active_quests", [])
+        # #999: the bar must reflect character_quests (single source of truth), not the
+        # drifting world_state.active_quests column — completed quests linger there.
+        _qb_conn_out = get_db()
+        try:
+            out["active_quests"] = _gaqfb_out(_qb_conn_out, campaign_id)
+        finally:
+            _qb_conn_out.close()
     except Exception as _ws_err:
         logger.warning("world_state_snapshot_error", error=str(_ws_err))
 
@@ -5533,9 +5540,14 @@ def create_turn_stream(
                                 _rwd_conn.commit()
                             finally:
                                 _rwd_conn.close()
-                        _combat_done["active_quests"] = _cq_updated
-                    elif _cq_quests:
-                        _combat_done["active_quests"] = _cq_quests
+                    # #999: emit the bar from character_quests (source of truth) so a
+                    # kill-completed quest is pruned immediately, not left on the world_state column.
+                    from app.services.quest_persist_service import get_active_quests_for_bar as _gaqfb_cq
+                    _qb_conn_cq = get_db()
+                    try:
+                        _combat_done["active_quests"] = _gaqfb_cq(_qb_conn_cq, campaign_id_val)
+                    finally:
+                        _qb_conn_cq.close()
                 except Exception as _cqe:
                     logger.warning("kill_quest_check_error", error=str(_cqe))
                 yield f"data: [DONE]{json.dumps(_combat_done, ensure_ascii=False)}\n\n"
@@ -6251,8 +6263,14 @@ def create_turn_stream(
                                 _lrwd_conn.close()
                 except Exception as _lqe:
                     logger.warning("location_quest_check_error", error=str(_lqe))
-                # C10: include current active_quests in DONE payload
-                done_payload["active_quests"] = _aq_current
+                # C10/#999: DONE-payload bar from character_quests (source of truth),
+                # so a location-completed quest is pruned and never lingers stale.
+                from app.services.quest_persist_service import get_active_quests_for_bar as _gaqfb_done
+                _qb_conn_done = get_db()
+                try:
+                    done_payload["active_quests"] = _gaqfb_done(_qb_conn_done, campaign_id_val)
+                finally:
+                    _qb_conn_done.close()
             except Exception as _ws_err_s:
                 logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
 
