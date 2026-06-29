@@ -317,10 +317,12 @@ Twoje JEDNO zadanie w tej sesji to DOKŁADNIE: ${tid}. Pracuj tylko nad nim, w t
 $(fill "$BASE_TEMPLATE" "$tid")"
 
   cd "$ROOT" || { echo "ERROR cd"; break; }
+  effort_flag="${MASS_EFFORT:+--effort $MASS_EFFORT}"
   setsid env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID \
       -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_EXECPATH -u AI_AGENT \
     claude -p --name "$sess_name" --session-id "$uuid" --add-dir "$ROOT" \
       --dangerously-skip-permissions --output-format text \
+      ${effort_flag} \
       "$child_prompt" </dev/null > "$child_log" 2>&1
   rc=$?
 
