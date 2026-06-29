@@ -483,6 +483,9 @@ RAW_MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_party_messages_campaign ON party_messages(campaign_id)",
     # #938 — add whisper_to column if table was created with wrong schema (is_whisper/whisper_to_user_id)
     "ALTER TABLE party_messages ADD COLUMN whisper_to TEXT",
+    # RM1 (#1028) — region tag on world map + locations
+    "ALTER TABLE world_hexes ADD COLUMN region TEXT NOT NULL DEFAULT 'kresy'",
+    "ALTER TABLE game_locations ADD COLUMN region TEXT",
 ]
 
 

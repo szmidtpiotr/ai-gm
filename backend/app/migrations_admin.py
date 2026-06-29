@@ -5578,6 +5578,63 @@ def _seed_dwarf_toughness_enemy(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_region_schema(conn: sqlite3.Connection) -> None:
+    """RM1 (#1028) — world_regions table + 6-region seed + world_hexes indexes."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS world_regions (
+            key        TEXT PRIMARY KEY,
+            label      TEXT NOT NULL,
+            color      TEXT NOT NULL DEFAULT '#888888',
+            status     TEXT NOT NULL DEFAULT 'coming'
+                       CHECK(status IN ('live', 'coming', 'locked')),
+            entry_q    INTEGER,
+            entry_r    INTEGER,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            note       TEXT
+        )
+    """)
+    conn.commit()
+
+    REGIONS = [
+        ("kresy",            "Kresy",             "#7ab648", "live",   25, 25, 1, "Startowa kraina — istniejąca mapa 50×50"),
+        ("koronne_niziny",   "Koronne Niziny",     "#e8c96a", "coming", None, None, 2, "Vilnograd, Volhynia, Klasztor Iskry"),
+        ("czarnobor",        "Czarnobór",          "#2d6e3e", "coming", None, None, 3, "Bór Zmarłych, Bagienna Knieja"),
+        ("siwe_granie",      "Siwe Granie",        "#b0c4de", "coming", None, None, 4, "Kopalnia Czarnego Hutmana, Krzyż Gór"),
+        ("wybrzeze_lez",     "Wybrzeże Łez",       "#4a7fa5", "coming", None, None, 5, "Czarnogród, Zatoka Topielców"),
+        ("martwe_pustkowia", "Martwe Pustkowia",   "#8b7355", "coming", None, None, 6, "Pustkowie Solne, Świątynia Pradawnych"),
+    ]
+    for row in REGIONS:
+        try:
+            conn.execute(
+                "INSERT INTO world_regions(key,label,color,status,entry_q,entry_r,sort_order,note)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                row,
+            )
+        except sqlite3.IntegrityError:
+            pass
+    conn.commit()
+
+    # Unique scope index: (q,r,map_level,region) — replaces old plain (q,r) idx
+    try:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_region_scope"
+            " ON world_hexes(q, r, map_level, region)"
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+    # Lookup index for region-aware queries
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_hexes_region_level"
+            " ON world_hexes(region, map_level)"
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5702,6 +5759,7 @@ def run_admin_migrations() -> None:
         _seed_dwarf_spells(conn)  # #975 R6
         _ensure_enemy_min_level(conn)  # #1023
         _seed_dwarf_toughness_enemy(conn)  # #1005
+        _ensure_region_schema(conn)  # #1028 RM1
     finally:
         conn.close()
 
