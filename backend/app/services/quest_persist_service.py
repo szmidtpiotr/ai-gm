@@ -56,10 +56,16 @@ def persist_quest_to_character_quests(
     campaign_id: int,
     quest: dict,
     turn_number: int | None = None,
+    beat_key: str | None = None,
 ) -> bool:
     """Insert quest into character_quests if not already present.
 
     Returns True if inserted, False if duplicate (exact title OR similar objective).
+
+    #1015: `beat_key` pins the quest to the scene that spawned it so the #1011
+    skip-cancel loop can fire (skipped beat → skipped quest). It may also be read
+    from the quest dict (`quest["beat_key"]`) for template/Forge spawn paths;
+    the explicit argument wins. None = unlinked quest (legacy behavior).
     """
     title = quest.get("title", "").strip()
     if not title:
@@ -91,12 +97,27 @@ def persist_quest_to_character_quests(
         ).fetchone()
         turn_number = row[0] if row else 1
 
-    conn.execute(
-        """INSERT INTO character_quests
-               (character_id, campaign_id, quest_type, title, narrative, status, created_turn)
-           VALUES (?,?,?,?,?,?,?)""",
-        (character_id, campaign_id, "main", title, narrative, "active", turn_number),
-    )
+    # #1015: explicit arg wins; fall back to a beat_key carried on the quest dict
+    # (template/Forge spawn). Empty string normalizes to NULL (= unlinked).
+    link = beat_key if beat_key is not None else quest.get("beat_key")
+    link = (str(link).strip() or None) if link else None
+
+    try:
+        conn.execute(
+            """INSERT INTO character_quests
+                   (character_id, campaign_id, quest_type, title, narrative, status,
+                    created_turn, beat_key)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (character_id, campaign_id, "main", title, narrative, "active", turn_number, link),
+        )
+    except sqlite3.OperationalError:
+        # beat_key column not migrated yet → insert without the link (legacy schema).
+        conn.execute(
+            """INSERT INTO character_quests
+                   (character_id, campaign_id, quest_type, title, narrative, status, created_turn)
+               VALUES (?,?,?,?,?,?,?)""",
+            (character_id, campaign_id, "main", title, narrative, "active", turn_number),
+        )
     conn.commit()
     logger.info(
         "quest_persisted_to_db",
@@ -104,6 +125,7 @@ def persist_quest_to_character_quests(
         campaign_id=campaign_id,
         title=title,
         created_turn=turn_number,
+        beat_key=link,
     )
     return True
 

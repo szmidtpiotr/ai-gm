@@ -342,6 +342,34 @@ def get_active_act_beat_keys(plan: dict | None) -> list[str]:
     return out
 
 
+def get_current_beat_key(plan: dict | None) -> str | None:
+    """#1015 — beat_key of the scene the player is currently in.
+
+    Defined as the first *unvisited* key_beat of the active act, in plan order.
+    Used to pin a runtime-spawned side quest (QUEST_SUGGEST) to its scene so the
+    #1011 skip-cancel loop fires: skip that scene → its quest auto-cancels.
+    Returns None for empty/absent plans or an act with no open beats, so a
+    planless campaign never mis-pins a quest.
+    """
+    if not isinstance(plan, dict):
+        return None
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return None
+    idx = int(plan.get("active_act", 1)) - 1
+    if idx < 0 or idx >= len(acts):
+        return None
+    act = acts[idx]
+    if not isinstance(act, dict):
+        return None
+    for beat in act.get("key_beats", []):
+        if isinstance(beat, dict) and not beat.get("visited") and not beat.get("skipped"):
+            key = beat.get("beat_key")
+            if key:
+                return str(key)
+    return None
+
+
 def get_active_act_critical_beat_keys(plan: dict | None) -> list[str]:
     """#1012 — beat_keys of the active act's *unvisited, non-optional* key_beats.
 

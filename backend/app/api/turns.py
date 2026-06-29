@@ -4116,9 +4116,16 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
             if _to_add_ns:
                 _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
+                # #1015: pin runtime-spawned quests to the current scene's beat_key
+                # so the #1011 skip-cancel loop fires (skipped beat → skipped quest).
+                try:
+                    from app.services.campaign_plan_runtime import get_plan as _gp_ns, get_current_beat_key as _gcbk_ns
+                    _beat_key_ns = _gcbk_ns(_gp_ns(campaign_id, conn))
+                except Exception:
+                    _beat_key_ns = None
                 # HF-2: persist to character_quests for /quest command and stats
                 for _q_ns in _to_add_ns:
-                    _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns)
+                    _pqdb_ns(conn, character_id=payload.character_id, campaign_id=campaign_id, quest=_q_ns, beat_key=_beat_key_ns)
                 # #991: new quest arrived — clear quest_suggest_needed guard flag
                 try:
                     from app.services.quest_persist_service import clear_quest_suggest_needed as _cqsn_ns
@@ -5737,8 +5744,14 @@ def create_turn_stream(
                             # HF-2: persist to character_quests for /quest command and stats
                             _qs_conn = get_db()
                             try:
+                                # #1015: pin runtime-spawned quests to the current scene's beat_key.
+                                try:
+                                    from app.services.campaign_plan_runtime import get_plan as _gp_s, get_current_beat_key as _gcbk_s
+                                    _beat_key_s = _gcbk_s(_gp_s(campaign_id_val, _qs_conn))
+                                except Exception:
+                                    _beat_key_s = None
                                 for _q in _to_add:
-                                    _pqdb(_qs_conn, character_id=character_id_val, campaign_id=campaign_id_val, quest=_q)
+                                    _pqdb(_qs_conn, character_id=character_id_val, campaign_id=campaign_id_val, quest=_q, beat_key=_beat_key_s)
                                 # #991: new quest arrived — clear quest_suggest_needed guard flag
                                 try:
                                     from app.services.quest_persist_service import clear_quest_suggest_needed as _cqsn_s
