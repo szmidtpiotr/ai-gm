@@ -1544,7 +1544,6 @@ export async function init(panel) {
     _campModalResurrect,
     _campOpenInspector,   // HI5 (#628) — link do Inspektora Bohatera
     openCampaignModal,
-    advanceCampScene,
     regenerateCampPlan,
     sendWorkshopMsg,
     _injectEncounterFromWorkshop,
