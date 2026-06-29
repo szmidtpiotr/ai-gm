@@ -2325,6 +2325,7 @@ function renderRestButtons(character, sheet) {
     const shortUsed = parseInt(sheet.short_rests_used ?? 0);
     const shortLeft = Math.max(0, 2 - shortUsed);
     const safeForRest = !!character.safe_for_rest;
+    const race = (character.race || sheet.race || 'human').toLowerCase();
 
     container.innerHTML = `
         <div class="rest-actions">
@@ -2343,6 +2344,7 @@ function renderRestButtons(character, sheet) {
                 <button class="rest-btn rest-btn--upgrade" id="btn-awansuj">
                     ⬆ Awansuj${sheet.xp_available > 0 ? ` (${sheet.xp_available} PD)` : ''}
                 </button>
+                ${race === 'dwarf' ? '<button class="rest-btn rest-btn--repair" id="btn-dwarf-repair">⛏️ Reperuj <span class="rest-charges">20 gp</span></button>' : ''}
             </div>
             ${!safeForRest ? '<div class="rest-actions__note">Musisz być w bezpiecznym miejscu</div>' : ''}
         </div>`;
@@ -2350,6 +2352,22 @@ function renderRestButtons(character, sheet) {
     container.querySelector('#btn-short-rest')?.addEventListener('click', () => doRest('short', character, sheet));
     container.querySelector('#btn-long-rest')?.addEventListener('click', () => openLongRestModal(character, sheet));
     container.querySelector('#btn-awansuj')?.addEventListener('click', () => openAwansujPanel(character, sheet));
+    container.querySelector('#btn-dwarf-repair')?.addEventListener('click', () => doDwarfRepair(character));
+}
+
+async function doDwarfRepair(character) {
+    try {
+        const r = await fetch(`/api/characters/${character.id}/dwarf-repair?user_id=${currentUser?.id}`, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) {
+            showToast(data.detail || 'Błąd akcji Reperuj', 'error');
+            return;
+        }
+        showToast(data.message || `Naprawiono za ${data.cost_gp} gp.`, 'success');
+        await refreshCharacterSheet();
+    } catch (e) {
+        showToast('Błąd akcji Reperuj: ' + e.message, 'error');
+    }
 }
 
 function openLongRestModal(character, sheet) {
