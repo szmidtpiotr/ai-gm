@@ -4,6 +4,52 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.7 — 2026-06-29 — Wygrana kampanii + Plan GM V2 + grywalne krasnoludy + mapa lokalna
+
+Duży release po v1.5.6. Kampania wreszcie ma metę: deterministyczny warunek zwycięstwa kończy ją, gdy gracz domknie wszystkie akty fabuły i wszystkie questy. Pod spodem przebudowany Plan GM (format V2 z aktami, beatami i zakończeniami). Krasnoludy stają się w pełni grywalną rasą. Osady dostają mapę lokalną z auto-generowanymi pod-lokacjami, a świat Kresów — kanoniczną obsadę i spójne nazewnictwo. Do tego fala poprawek questów, podróży po mapie, walki i UI.
+
+### Added
+
+**Wygrana kampanii — „spinacz" zwycięstwa (T38, #1009–#1012, #1016–#1021)**
+- Kampania kończy się sama, gdy wszystkie akty Planu GM są zaliczone **i** nie ma już aktywnych questów — odpala się ekran zwycięstwa z podsumowaniem zakończenia. Wcześniej kampania trwała w nieskończoność.
+- Plan GM w nowym formacie V2: akty → beaty (`beat_key`, `objective_type`, flaga `optional`) → zakończenia (`endings[]`). „Nowa Kampania" i regeneracja w adminie generują już V2; admin → Plan GM poprawnie renderuje akty i beaty.
+- Beaty krytyczne vs opcjonalne — do wygranej liczą się tylko krytyczne; opcjonalne nie blokują finału, a pominięte questy boczne anulują się same.
+- Detektor stagnacji fabuły + tryb autopilota, gdy narracja się zapętli.
+- Minimalna grywalna kampania testowa (2 akty × 1 beat) jako winnable seed-szablon + bramka publikacji „winnable-premade" (wymaga zakończeń, brak osieroconych beatów, domykalne akty).
+- Licznik questów bocznych X/Y na ekranie końcowym.
+
+**Grywalne krasnoludy (#969)**
+- Pełna rasa krasnolud: rdzeń-miscast z osobną narracją, przycisk „Reperuj" w panelu odpoczynku, kreator postaci Krok 0 = wybór rasy. 18 testów pytest + 6 Playwright (smoke rasy).
+
+**Mapa lokalna osad — FAZA ML (#993–#998)**
+- Pod-lokacje osad jako hex-grid `map_level=1` pod hexem osady; auto-generacja pod-lokacji przy zatwierdzeniu lokacji, wzbogacana przez LLM. Panel mapy lokalnej w UI gracza.
+
+**Obsada i nazewnictwo Kresów (#981, #997)**
+- Kanoniczne NPC + wrogowie miejsc grozy wpięci do lokacji. Konwencja nazewnicza: mix słowiańsko-germański (Vilnograd, Wachstein, hybrydy), bez realnych polskich toponimów.
+
+**Filtry i pola w adminie (#1023, #1026, #1027)**
+- Filtry kolumn w tabelach admina: pole tekstowe substring (PL-insensitive) zamiast dropdownu.
+- Kolumna i pole `min_level` wroga; `travel_hint_threshold` edytowalny w Story Gravity.
+- Odznaka martwego bohatera + przycisk wskrzeszenia na kartach kampanii (mobile admin).
+
+### Changed
+
+- Progi „story-stale" i „travel-hint" podniesione z 5 → 12 (rzadsze wymuszanie podróży).
+- `key_beats` jako struktura `PlotBeat` zamiast zwykłych stringów.
+- Gate poziomu wrogów: narrator nie widzi elitarnych/bossów poniżej ich `min_level`.
+
+### Fixed
+
+- **Questy** — pasek questów czyta `character_quests` (nie dryfujący `world_state`); auto-zamykanie questów na event gry + fallback `[QUEST_COMPLETE]`; sugestia nowego questa po ukończeniu.
+- **Podróż po mapie** — odblokowana podróż po hexach overworld + cap aktywnych questów; naprawiony desync kotwicy lokacji przy zwijaniu obozu; guard `safe_for_rest` sprawdza całe drzewo pod-lokacji.
+- **Level-up na długim odpoczynku (#1024)** — `max_hp` i `max_mana` rosną przy awansie podczas odpoczynku.
+- **Śmierć / wskrzeszenie (#1008)** — stary overlay śmierci/zwycięstwa czyszczony przy wejściu do kampanii; jeden zepsuty wiersz historii nie blankuje już całego czatu.
+- **Walka** — czyszczenie `pending_zaskoczony` przy nie-uderzeniowych wyborach bramki; krasnoludzi miscast dostają poprawny parametr rasy; null-guard na `campaign_id` przy usuwaniu postaci.
+- **Narracja** — dialogi NPC po polsku (myślnik od nowej linii zamiast cudzysłowu), czytelne opisy przedmiotów, naprawione streamingowe testy umiejętności.
+- Usunięty martwy kod V1 (przycisk „następna scena" powodował crash sekcji), normalizacja `created_at` przed sortem osi czasu.
+
+---
+
 ## v1.5.6 — 2026-06-24 — Czar AoE maga + panel wizytówki + poprawki walki i lochów
 
 Seria poprawek i dwóch nowych funkcji po v1.5.4: mąg dostaje czar obszarowy w starterze, administracja — prosty panel edycji wizytówki, a walka i lochy zbierają kilka gryzących bugów (wyścig animacji kości, pętla śmierci po wskrzeszeniu, widoczność kart walki).
