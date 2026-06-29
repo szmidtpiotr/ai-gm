@@ -25,7 +25,7 @@ REGION_META = {
     "kresy":            {"label": "Kresy",            "status": "live",   "w": 50, "h": 50},
     "koronne_niziny":   {"label": "Koronne Niziny",   "status": "coming", "w": 50, "h": 50},
     "czarnobor":        {"label": "Czarnobór",        "status": "coming", "w": 50, "h": 50},
-    "siwe_granie":      {"label": "Siwe Granie",      "status": "coming", "w": 50, "h": 50},
+    "siwe_granie":      {"label": "Siwe Granie",      "status": "live",   "w": 50, "h": 50},  # RM7 — odblokowano
     "wybrzeze_lez":     {"label": "Wybrzeże Łez",     "status": "coming", "w": 50, "h": 50},
     "martwe_pustkowia": {"label": "Martwe Pustkowia", "status": "coming", "w": 50, "h": 50},
 }

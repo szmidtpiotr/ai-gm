@@ -40,11 +40,14 @@ def test_world_hexes_has_region_column(db):
 
 
 def test_world_hexes_region_default_kresy(db):
-    """Wszystkie istniejące heksy mają region='kresy' (DEFAULT stosuje się do ADD COLUMN)."""
+    """Heksy bez przypisanej krainy DLC mają region='kresy'. Po RM7 siwe_granie też zaseedowane."""
+    known_live = {"kresy", "siwe_granie"}  # RM7 odblokowało siwe_granie jako pilot DLC
     row = db.execute(
-        "SELECT count(*) AS cnt FROM world_hexes WHERE map_level=0 AND region != 'kresy'"
+        "SELECT count(*) AS cnt FROM world_hexes WHERE map_level=0 AND region NOT IN ('kresy','siwe_granie')"
     ).fetchone()
-    assert row["cnt"] == 0, f"{row['cnt']} heksów map_level=0 ma region != 'kresy'"
+    assert row["cnt"] == 0, (
+        f"{row['cnt']} heksów map_level=0 ma region spoza znanych live krain {known_live}"
+    )
 
 
 def test_world_hexes_count_unchanged(db):
@@ -91,12 +94,17 @@ def test_world_regions_kresy_is_live(db):
 
 
 def test_world_regions_others_are_coming(db):
+    # RM7: siwe_granie jest teraz 'live' (pilot DLC) — wykluczone z asercji 'coming'
+    live_extra = {"siwe_granie"}
     rows = db.execute(
-        "SELECT key, status FROM world_regions WHERE key != 'kresy'"
+        "SELECT key, status FROM world_regions WHERE key NOT IN ('kresy','siwe_granie')"
     ).fetchall()
-    assert len(rows) == 5, f"Oczekiwano 5 krain poza Kresami, jest {len(rows)}"
+    assert len(rows) == 4, f"Oczekiwano 4 krain coming (po wyłączeniu Kresów+Siwych Grani), jest {len(rows)}"
     bad = [r["key"] for r in rows if r["status"] != "coming"]
     assert not bad, f"Te krainy mają status != 'coming': {bad}"
+    # Weryfikuj że siwe_granie jest live
+    sg = db.execute("SELECT status FROM world_regions WHERE key='siwe_granie'").fetchone()
+    assert sg and sg["status"] == "live", "siwe_granie powinna być live po RM7"
 
 
 def test_world_regions_all_keys_present(db):

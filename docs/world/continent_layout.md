@@ -22,7 +22,7 @@ Krainy **nie nakładają się** (test: `backend/tests/test_continent_no_overlap.
 | Koronne Niziny | `koronne_niziny` | coming | -55 | -6 | -24 | 49 | -55 | 0 |
 | **Kresy** | `kresy` | **live** | 0 | 49 | -24 | 49 | 0 | 0 |
 | Czarnobór | `czarnobor` | coming | 55 | 104 | -24 | 49 | 55 | 0 |
-| Siwe Granie | `siwe_granie` | coming (pilot RM7) | 0 | 49 | -99 | -26 | 0 | -75 |
+| **Siwe Granie** | `siwe_granie` | **live** (RM7 pilot) | 0 | 49 | -99 | -26 | 0 | -75 |
 | Wybrzeże Łez | `wybrzeze_lez` | coming | -55 | -6 | 51 | 124 | -55 | 75 |
 | Martwe Pustkowia | `martwe_pustkowia` | coming | 55 | 104 | 51 | 124 | 55 | 75 |
 
@@ -67,7 +67,7 @@ r:51..124  │WYBRZEŻE  │      [morze]        │  MARTWE     │
 ```
 data/regions/
   region_kresy.json            ← live, ~2500 heksów
-  region_siwe_granie.json      ← coming, ~2500 heksów
+  region_siwe_granie.json      ← live,   ~2500 heksów  (RM7 — odblokowano)
   region_czarnobor.json        ← coming, ~2500 heksów
   region_koronne_niziny.json   ← coming, ~2500 heksów
   region_wybrzeze_lez.json     ← coming, ~2500 heksów

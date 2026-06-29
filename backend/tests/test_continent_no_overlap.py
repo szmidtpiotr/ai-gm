@@ -70,17 +70,20 @@ def test_kresy_region_in_expected_bounds():
 
 
 def test_coming_regions_have_correct_status():
-    """Wszystkie kraina poza Kresami mają status='coming' (nie seedowane do live)."""
+    """Krainy live = kresy + siwe_granie (RM7 pilot). Reszta = coming."""
+    live_regions = {"kresy", "siwe_granie"}  # siwe_granie odblokowane w RM7
     for rf in ALL_REGION_FILES:
         data = json.loads(rf.read_text(encoding="utf-8"))
         region = data.get("region")
         status = data.get("status")
-        if region == "kresy":
-            continue  # Kresy = live, pominięte
-        assert status == "coming", (
-            f"{rf.name}: oczekiwany status='coming', mamy '{status}'. "
-            "Status zmienia dopiero RM7 (pilot Siwe Granie)."
-        )
+        if region in live_regions:
+            assert status == "live", (
+                f"{rf.name}: region '{region}' powinien mieć status='live', ma '{status}'."
+            )
+        else:
+            assert status == "coming", (
+                f"{rf.name}: region '{region}' powinien mieć status='coming', ma '{status}'."
+            )
 
 
 @pytest.mark.parametrize("expected_region,expected_biomes", [
