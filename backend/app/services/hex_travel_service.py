@@ -634,7 +634,9 @@ def _find_nearby_empty_hex(
     Find an empty hex coordinate near the existing world (within max_distance).
     Returns (q, r) that is not yet in world_hexes.
     """
-    rows = conn.execute("SELECT q, r FROM world_hexes WHERE is_active = 1").fetchall()
+    rows = conn.execute(
+        "SELECT q, r FROM world_hexes WHERE is_active = 1 AND map_level = 0"
+    ).fetchall()
     if not rows:
         return (0, 0)
 
@@ -666,11 +668,20 @@ def _find_character_existing_hex(
     new_campaign_id: int,
     user_id: int,
 ) -> "tuple[int, int] | None":
-    """C18: Return (q, r) of a previously discovered hex for this user, or None."""
+    """C18: Return (q, r) of a previously discovered hex for this user, or None.
+
+    #992-ii: only reuse a hex that is a valid OVERWORLD travel node (world_hexes
+    map_level=0, active). Past runs polluted campaign_hex_data with map_level=1 local
+    coords (e.g. (1,0)); reusing one stranded the player off the travel graph so every
+    directional MOVE refused "nieznane terytorium". The JOIN filters those out.
+    """
     row = conn.execute(
         """SELECT chd.hex_q, chd.hex_r
            FROM campaign_hex_data chd
            JOIN campaigns c ON c.id = chd.campaign_id
+           JOIN world_hexes wh
+                ON wh.q = chd.hex_q AND wh.r = chd.hex_r
+               AND wh.map_level = 0 AND wh.is_active = 1
            WHERE c.owner_user_id = ? AND c.id != ? AND chd.discovered = 1
            ORDER BY chd.id DESC
            LIMIT 1""",
@@ -684,11 +695,34 @@ def _find_character_existing_hex(
 def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | None:
     """#992: return the key of the game_location physically placed on hex (q, r).
 
-    A location is "on" a hex when its world_hex_q/world_hex_r match. When several
-    sit on one hex, prefer a top-level macro/settlement over a child sub-location
-    (the anchor should be the place the player arrives at, not a room inside it).
+    Resolution order:
+      1. The canonical world_hexes.location_key for the overworld (map_level=0) hex —
+         the authoritative hex→location pairing (game_locations.world_hex_q/r can be
+         stale, e.g. brzezino stamped (1,0) while world_hexes maps it at (39,9)).
+      2. Fallback: a game_location stamped with this hex via world_hex_q/r, preferring
+         a top-level macro/settlement over a child sub-location.
     Returns None when no active location is mapped to the hex.
     """
+    # 1. Canonical world_hexes pairing.
+    try:
+        wh = conn.execute(
+            "SELECT location_key FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 "
+            "AND location_key IS NOT NULL AND location_key != '' LIMIT 1",
+            (q, r),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        wh = None
+    if wh:
+        wh_key = wh["location_key"] if isinstance(wh, sqlite3.Row) else wh[0]
+        loc = conn.execute(
+            "SELECT key FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1 LIMIT 1",
+            (wh_key,),
+        ).fetchone()
+        if loc:
+            return loc["key"] if isinstance(loc, sqlite3.Row) else loc[0]
+
+    # 2. Fallback: game_location stamped with this hex.
     try:
         row = conn.execute(
             "SELECT key FROM game_locations "
@@ -738,8 +772,14 @@ def resolve_starting_hex(
     # Try to match existing hex by label
     matched_hex = None
     if starting_location_name and starting_location_name.strip():
+        # #992-ii: ONLY overworld hexes (map_level=0) are valid start/travel nodes.
+        # Without this filter the label match could resolve to a map_level=1 LOCAL
+        # sub-map hex (FAZA ML) — e.g. "Wolanka: Kościół" at (1,0) — placing the
+        # player on coords absent from the travel graph (_load_hex_graph loads only
+        # map_level=0), so every directional MOVE refused "nieznane terytorium".
         rows = conn.execute(
-            "SELECT q, r, hex_type, label FROM world_hexes WHERE is_active = 1 AND label IS NOT NULL"
+            "SELECT q, r, hex_type, label FROM world_hexes "
+            "WHERE is_active = 1 AND map_level = 0 AND label IS NOT NULL"
         ).fetchall()
         best_score, best_row = 0.0, None
         for row in rows:
@@ -769,7 +809,9 @@ def resolve_starting_hex(
         if reuse_coords:
             sq, sr = reuse_coords
             wh = conn.execute(
-                "SELECT hex_type, label FROM world_hexes WHERE q = ? AND r = ?", (sq, sr)
+                "SELECT hex_type, label FROM world_hexes "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (sq, sr),
             ).fetchone()
             hex_type = wh["hex_type"] if wh else "plains"
             label = wh["label"] if wh else None

@@ -17,6 +17,34 @@ logger = structlog.get_logger(__name__)
 
 _SIMILARITY_THRESHOLD = 0.65
 
+# #1011: hard cap on concurrent active quests. The narrator can emit a fresh
+# [QUEST_SUGGEST] almost every turn; title + Jaccard-objective dedup misses
+# re-worded near-duplicates (smoke 999972 spawned 5 variants of "find Iwo").
+# Beyond this many active main quests, new suggestions are dropped until the
+# player closes one. STARTING VALUE — tunable.
+MAX_ACTIVE_QUESTS = 3
+
+
+def count_active_quests(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int | None = None
+) -> int:
+    """Count active *main* quests for a campaign (optionally scoped to a character)."""
+    if character_id is not None:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE campaign_id=? AND character_id=? AND status='active' "
+            "AND COALESCE(quest_type,'main')='main'",
+            (campaign_id, character_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE campaign_id=? AND status='active' "
+            "AND COALESCE(quest_type,'main')='main'",
+            (campaign_id,),
+        ).fetchone()
+    return int(row[0]) if row else 0
+
 
 def _normalize_words(text: str) -> set[str]:
     """Lowercase + strip punctuation → set of words for Jaccard comparison."""
@@ -87,6 +115,18 @@ def persist_quest_to_character_quests(
             character_id=character_id,
             campaign_id=campaign_id,
             title=title,
+        )
+        return False
+
+    # #1011: cap concurrent active quests — backstop against runaway narrator spam
+    # that re-wording slips past the dedup. Beyond the cap, drop the new quest.
+    if count_active_quests(conn, campaign_id, character_id) >= MAX_ACTIVE_QUESTS:
+        logger.info(
+            "quest_rejected_at_cap",
+            character_id=character_id,
+            campaign_id=campaign_id,
+            title=title,
+            cap=MAX_ACTIVE_QUESTS,
         )
         return False
 

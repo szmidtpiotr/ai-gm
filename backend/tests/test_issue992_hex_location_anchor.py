@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, "/app")
 
 
-def _make_db():
+def _make_db(with_world_hexes=False):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
@@ -30,6 +30,17 @@ def _make_db():
             world_hex_r   INTEGER
         );
     """)
+    if with_world_hexes:
+        conn.executescript("""
+            CREATE TABLE world_hexes (
+                q            INTEGER,
+                r            INTEGER,
+                map_level    INTEGER DEFAULT 0,
+                is_active    INTEGER DEFAULT 1,
+                location_key TEXT,
+                label        TEXT
+            );
+        """)
     return conn
 
 
@@ -80,4 +91,33 @@ def test_skips_inactive_location():
     conn = _make_db()
     _ins(conn, key="dead", label="Dead", location_type="macro", is_active=0, world_hex_q=1, world_hex_r=0)
 
+    assert _find_location_on_hex(conn, 1, 0) is None
+
+
+# ── Canonical world_hexes pairing wins over stale game_locations coords ────────
+
+def test_prefers_canonical_world_hex_pairing():
+    """world_hexes.location_key is authoritative; used even when game_locations
+    stamped the location at a DIFFERENT (stale) hex — the brzezino (1,0) vs (39,9) case."""
+    from app.services.hex_travel_service import _find_location_on_hex
+    conn = _make_db(with_world_hexes=True)
+    # game_locations says brzezino is on a stale hex (1,0); real overworld pairing is (39,9).
+    _ins(conn, key="brzezino", label="Brzezino", location_type="macro", world_hex_q=1, world_hex_r=0)
+    conn.execute(
+        "INSERT INTO world_hexes (q,r,map_level,is_active,location_key,label) VALUES (39,9,0,1,'brzezino','Birkenwald')"
+    )
+    conn.commit()
+
+    assert _find_location_on_hex(conn, 39, 9) == "brzezino"
+
+
+def test_ignores_world_hex_pairing_on_local_map_level():
+    """A map_level=1 (local sub-map) world_hex pairing must NOT anchor an overworld hex."""
+    from app.services.hex_travel_service import _find_location_on_hex
+    conn = _make_db(with_world_hexes=True)
+    conn.execute(
+        "INSERT INTO world_hexes (q,r,map_level,is_active,location_key,label) VALUES (1,0,1,1,'wolanka_kosciol','Wolanka: Kościół')"
+    )
+    conn.commit()
+    # No game_location on (1,0) either → nothing to anchor.
     assert _find_location_on_hex(conn, 1, 0) is None

@@ -4117,6 +4117,14 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             _existing_ns = _gwsf_ns(campaign_id).get("active_quests", [])
             _seen_ns = {q.get("title", "") for q in _existing_ns}
             _to_add_ns = [q for q in _new_quests_ns if q["title"] not in _seen_ns]
+            # #1011: respect the active-quest cap so the world_state mirror matches
+            # character_quests (the bar's source of truth) — drop runaway suggestions.
+            try:
+                from app.services.quest_persist_service import count_active_quests as _caq_ns, MAX_ACTIVE_QUESTS as _maq_ns
+                _slots_ns = max(0, _maq_ns - _caq_ns(conn, campaign_id, payload.character_id))
+                _to_add_ns = _to_add_ns[:_slots_ns]
+            except Exception as _capn_err:
+                logger.warning("quest_cap_trim_nonstream_error", error=str(_capn_err))
             if _to_add_ns:
                 _swsf_ns(campaign_id, active_quests=_existing_ns + _to_add_ns)
                 # #1015: pin runtime-spawned quests to the current scene's beat_key
@@ -5754,6 +5762,13 @@ def create_turn_stream(
                         _existing = _gwsf(campaign_id_val).get("active_quests", [])
                         _seen_titles = {q.get("title", "") for q in _existing}
                         _to_add = [q for q in _new_quests if q["title"] not in _seen_titles]
+                        # #1011: respect the active-quest cap (mirror char_quests).
+                        try:
+                            from app.services.quest_persist_service import count_active_quests as _caq_s, MAX_ACTIVE_QUESTS as _maq_s
+                            _slots_s = max(0, _maq_s - _caq_s(conn, campaign_id_val, character_id_val))
+                            _to_add = _to_add[:_slots_s]
+                        except Exception as _caps_err:
+                            logger.warning("quest_cap_trim_stream_error", error=str(_caps_err))
                         if _to_add:
                             _swsf(campaign_id_val, active_quests=_existing + _to_add)
                             # HF-2: persist to character_quests for /quest command and stats
