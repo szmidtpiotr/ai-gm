@@ -133,49 +133,147 @@ def get_world_map(
         conn.close()
 
 
-@router.post("/map/snapshot")
-def snapshot_world_map(authorization: str | None = Header(default=None)):
-    """Zapisz bieżącą mapę świata (world_hexes, map_level=0) → /data/world_map_seed.json.
+_REGION_META = {
+    "kresy":            {"label": "Kresy",            "status": "live"},
+    "koronne_niziny":   {"label": "Koronne Niziny",   "status": "coming"},
+    "czarnobor":        {"label": "Czarnobór",        "status": "coming"},
+    "siwe_granie":      {"label": "Siwe Granie",      "status": "coming"},
+    "wybrzeze_lez":     {"label": "Wybrzeże Łez",     "status": "coming"},
+    "martwe_pustkowia": {"label": "Martwe Pustkowia", "status": "coming"},
+}
 
-    /data jest bind-mountem na hoście (./data-dev), więc plik jest TRWAŁY i przeżywa
-    czyszczenie/rebuild DB — scripts/seed_world_map.py odtwarza z niego mapę. To czyni
-    edycje admina kanonem (Piotr-owned)."""
+
+@router.post("/map/snapshot")
+def snapshot_world_map(
+    region: Optional[str] = Query(default=None, description="Snapshot jednej krainy; brak = wszystkie"),
+    authorization: str | None = Header(default=None),
+):
+    """Zapisz mapę świata → /data/regions/region_<key>.json (per-region DLC paczka).
+
+    Bez ?region= — snapshot wszystkich krain do osobnych plików + legacy /data/world_map_seed.json.
+    Z ?region=<key> — snapshot tylko tej krainy.
+    /data jest bind-mountem na hoście (./data-dev), plik trwały między rebuildami."""
     _require_admin(authorization)
     conn = _get_db()
     try:
+        where = "map_level = 0" + (f" AND region = ?" if region else "")
+        params_q = (region,) if region else ()
         rows = conn.execute(
-            "SELECT q, r, hex_type, label, atmosphere, encounter_chance "
-            "FROM world_hexes WHERE map_level = 0 ORDER BY r, q"
+            f"SELECT q, r, hex_type, label, atmosphere, encounter_chance, region "
+            f"FROM world_hexes WHERE {where} ORDER BY region, r, q",
+            params_q,
         ).fetchall()
         hexes = [dict(x) for x in rows]
         if len(hexes) < 50:
             raise HTTPException(
                 status_code=409,
-                detail=f"Mapa wygląda na niezainicjalizowaną ({len(hexes)} heks.) — odmawiam nadpisania kanonu. "
-                       f"Najpierw przywróć mapę (seed_world_map.py).")
-        data = {
-            "name": "Kresy",
-            "note": "KANON mapy świata (world_hexes map_level=0). Zapisane z admin→Mapa. "
-                    "Źródło prawdy dla scripts/seed_world_map.py.",
-            "w": 50, "h": 50, "hexes": hexes,
-        }
-        out = "/data/world_map_seed.json"
-        tmp = out + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=1)
-        os.replace(tmp, out)
-        return {"ok": True, "count": len(hexes), "path": out}
+                detail=f"Mapa wygląda na niezainicjalizowaną ({len(hexes)} heks.) — odmawiam nadpisania kanonu.")
+
+        os.makedirs("/data/regions", exist_ok=True)
+
+        def _write_region(rkey: str, rhexes: list[dict]) -> str:
+            stripped = [{k: v for k, v in h.items() if k != "region"} for h in rhexes]
+            meta = _REGION_META.get(rkey, {"label": rkey, "status": "coming"})
+            data = {
+                "region": rkey, "label": meta["label"], "status": meta["status"],
+                "w": 50, "h": 50,
+                "note": f"DLC paczka FAZY RM — {meta['label']}. Kanon = ten plik w git.",
+                "hexes": stripped,
+            }
+            out = f"/data/regions/region_{rkey}.json"
+            tmp = out + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, out)
+            return out
+
+        if region:
+            out = _write_region(region, hexes)
+            return {"ok": True, "count": len(hexes), "path": out, "region": region}
+
+        # Snapshot wszystkich krain
+        by_region: dict[str, list[dict]] = {}
+        for h in hexes:
+            rk = h.get("region") or "kresy"
+            by_region.setdefault(rk, []).append(h)
+
+        paths = []
+        for rk, rhexes in sorted(by_region.items()):
+            paths.append(_write_region(rk, rhexes))
+
+        # Legacy backward-compat
+        kresy = by_region.get("kresy", [])
+        if kresy:
+            legacy_data = {
+                "name": "Kresy", "w": 50, "h": 50,
+                "note": "KANON mapy świata (legacy). Nowe krainy w data/regions/region_<key>.json.",
+                "hexes": [{k: v for k, v in h.items() if k != "region"} for h in kresy],
+            }
+            legacy_path = "/data/world_map_seed.json"
+            tmp = legacy_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(legacy_data, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, legacy_path)
+
+        return {"ok": True, "count": len(hexes), "regions": list(by_region.keys()), "paths": paths}
     finally:
         conn.close()
 
 
 @router.post("/map/restore")
-def restore_world_map(authorization: str | None = Header(default=None)):
+def restore_world_map(
+    region: Optional[str] = Query(default=None, description="Przywróć jedną krainę; brak = legacy stitch"),
+    authorization: str | None = Header(default=None),
+):
     """Wczytaj mapę świata z pliku kanon → world_hexes (map_level=0).
 
-    Czyta /data/world_map_seed.json (zapisany przez /map/snapshot), usuwa obecne
-    heksy map_level=0 i wstawia z pliku. Symetryczny do /map/snapshot."""
+    Z ?region=<key> — partial restore: usuwa heksy tej krainy, wstawia z /data/regions/region_<key>.json.
+    Bez ?region= — full restore z /data/world_map_seed.json (legacy, cała mapa)."""
     _require_admin(authorization)
+
+    def _insert_hexes(conn, hexes: list[dict], region_key: Optional[str] = None):
+        cols = "(q, r, hex_type, label, atmosphere, encounter_chance, encounter_pool, created_by_gm, is_active, map_level, region)"
+        chunk = 200
+        for i in range(0, len(hexes), chunk):
+            batch = hexes[i:i + chunk]
+            placeholders = ",".join(["(?,?,?,?,?,?,?,?,?,?,?)"] * len(batch))
+            params: list[Any] = []
+            for h in batch:
+                params.extend([
+                    h["q"], h["r"], h.get("hex_type", "plains"),
+                    h.get("label"), h.get("atmosphere"),
+                    h.get("encounter_chance", 0.15),
+                    json.dumps(h.get("encounter_pool", [])),
+                    0, 1, 0, region_key or h.get("region", "kresy"),
+                ])
+            conn.execute(f"INSERT INTO world_hexes {cols} VALUES {placeholders}", params)
+
+    if region:
+        seed_path = f"/data/regions/region_{region}.json"
+        if not os.path.exists(seed_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Brak pliku kanon ({seed_path}). Najpierw snapshot_world_map.py --region {region}.",
+            )
+        with open(seed_path, encoding="utf-8") as f:
+            data = json.load(f)
+        hexes = data.get("hexes", [])
+        if not hexes:
+            raise HTTPException(status_code=409, detail=f"Plik kanon regionu '{region}' nie zawiera heksów.")
+        conn = _get_db()
+        try:
+            conn.execute("BEGIN")
+            conn.execute("DELETE FROM world_hexes WHERE map_level = 0 AND region = ?", (region,))
+            _insert_hexes(conn, hexes, region)
+            conn.execute("COMMIT")
+            return {"ok": True, "count": len(hexes), "region": region, "source": seed_path}
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+
+    # Legacy full restore
     seed_path = "/data/world_map_seed.json"
     if not os.path.exists(seed_path):
         raise HTTPException(
@@ -191,21 +289,7 @@ def restore_world_map(authorization: str | None = Header(default=None)):
     try:
         conn.execute("BEGIN")
         conn.execute("DELETE FROM world_hexes WHERE map_level = 0")
-        cols = "(q, r, hex_type, label, atmosphere, encounter_chance, encounter_pool, created_by_gm, is_active, map_level)"
-        chunk = 200
-        for i in range(0, len(hexes), chunk):
-            batch = hexes[i:i + chunk]
-            placeholders = ",".join(["(?,?,?,?,?,?,?,?,?,?)"] * len(batch))
-            params: list[Any] = []
-            for h in batch:
-                params.extend([
-                    h["q"], h["r"], h.get("hex_type", "plains"),
-                    h.get("label"), h.get("atmosphere"),
-                    h.get("encounter_chance", 0.15),
-                    json.dumps(h.get("encounter_pool", [])),
-                    0, 1, 0,
-                ])
-            conn.execute(f"INSERT INTO world_hexes {cols} VALUES {placeholders}", params)
+        _insert_hexes(conn, hexes, "kresy")
         conn.execute("COMMIT")
         return {"ok": True, "count": len(hexes), "source": seed_path}
     except Exception:

@@ -10,6 +10,9 @@ data/seeds/*
 !data/seeds/*.sql
 !data/seeds/*.json
 !data/seeds/tile_categories/
+!data/regions/
+data/regions/*
+!data/regions/*.json
 backups/*
 !backups/.gitkeep
 ollama/
