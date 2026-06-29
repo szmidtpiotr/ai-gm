@@ -372,7 +372,7 @@ class ContextInjector:
         lines.append(f"Pora: {_time_of_day(ingame_hours)}")
         return "\n".join(lines)
 
-    _STORY_STALE_THRESHOLD = 5
+    _STORY_STALE_THRESHOLD = 12  # #1026: raised from 5 — was triggering too early
 
     def _build_stale_block(self, session_flags: dict) -> str:
         turns = session_flags.get("turns_at_location", 0)

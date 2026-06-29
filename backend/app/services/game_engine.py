@@ -15,17 +15,22 @@ from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
 logger = get_logger(__name__)
 
 
-def build_travel_hint_block(discovered_hexes: list[dict] | None, turns_at_location: int, max_pills: int = 5) -> str | None:
+def build_travel_hint_block(
+    discovered_hexes: list[dict] | None,
+    turns_at_location: int,
+    max_pills: int = 5,
+    threshold: int = 12,
+) -> str | None:
     """Build [TRAVEL_HINT: ...] block from discovered nearby locations.
 
     Returns None if:
-    - turns_at_location < 5 (STORY_STALE not active yet)
+    - turns_at_location < threshold (default 12, #1026 raised from 5)
     - discovered_hexes is empty or None
 
     Otherwise returns: [TRAVEL_HINT: [Loc1] [Loc2] ... — wskaż bohaterowi bezpieczne kierunki]
     Pills limited to max_pills (default 5) to avoid LLM distraction.
     """
-    if turns_at_location < 5 or not discovered_hexes:
+    if turns_at_location < threshold or not discovered_hexes:
         return None
 
     limited = discovered_hexes[:max_pills]
@@ -752,11 +757,14 @@ def build_narrative_messages(
             except Exception as _qcr_err:
                 logger.warning("quest_complete_reminder_error", error=str(_qcr_err))
 
-        # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
-        # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
+        # C1: inject STORY_STALE when player hasn't moved for N consecutive turns.
+        # #1026: threshold now configurable via story_gravity_config (default 12, was 5).
+        # Escalates: mild (threshold → threshold+5), strong (+10), critical (+15).
         # L13c (#689): skipped inside a dungeon (no overworld travel to push toward).
         if messages and not _in_dungeon:
             try:
+                from app.services.story_gravity_service import get_travel_hint_threshold
+                _stale_threshold = get_travel_hint_threshold()
                 _sf_row = conn.execute(
                     "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
                     (int(campaign["id"]),),
@@ -764,17 +772,17 @@ def build_narrative_messages(
                 if _sf_row and _sf_row["session_flags"]:
                     _sf = json.loads(_sf_row["session_flags"] or "{}")
                     _stale = int(_sf.get("turns_at_location", 0))
-                    if _stale >= 5:
+                    if _stale >= _stale_threshold:
                         first = messages[0]
                         if isinstance(first, dict) and first.get("role") == "system":
-                            if _stale >= 15:
+                            if _stale >= _stale_threshold + 15:
                                 _stale_msg = (
                                     f"[STORY_STALE: {_stale} tur bez ruchu — KRYTYCZNE! "
                                     "Bohater MUSI natychmiast opuścić tę lokację! "
                                     "Śmierć czai się w każdej sekundzie zwłoki. "
                                     "Uruchom działanie lub scenę ucieczki TERAZ.]"
                                 )
-                            elif _stale >= 10:
+                            elif _stale >= _stale_threshold + 10:
                                 _stale_msg = (
                                     f"[STORY_STALE: {_stale} tur bez ruchu — "
                                     "Sytuacja staje się niebezpieczna i naglna! "
@@ -816,7 +824,9 @@ def build_narrative_messages(
                                     ]
                                 except Exception:
                                     pass
-                            _travel_hint = build_travel_hint_block(_discovered, _stale)
+                            _travel_hint = build_travel_hint_block(
+                                _discovered, _stale, threshold=_stale_threshold
+                            )
                             if _travel_hint and isinstance(first, dict):
                                 first["content"] = (
                                     f"{first.get('content', '').rstrip()}\n\n{_travel_hint}"

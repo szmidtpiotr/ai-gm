@@ -20,11 +20,12 @@ _CONFIG_KEY = "story_gravity_config"
 
 _DEFAULTS = {
     "enabled": True,
-    "turns_l1": 5,
-    "turns_l2": 10,
-    "turns_l3": 15,
+    "turns_l1": 10,               # #1026: raised from 5 — was too aggressive
+    "turns_l2": 15,               # #1026: raised from 10
+    "turns_l3": 20,               # #1026: raised from 15
     "l3_enabled": False,          # forced scene OFF for Nowa Kampania (free exploration)
     "l3_enabled_gotowa": True,    # U8: L3 ON by default for Gotowa Kampania (player chose the story)
+    "travel_hint_threshold": 12,  # #1026: turns before hex pill list appears (was hardcoded 5)
 }
 
 # Per-level GM context nudges (Polish — injected into the narrator prompt).
@@ -166,3 +167,9 @@ def compute_story_gravity(campaign_id: int, conn: sqlite3.Connection) -> dict:
     out["level"] = level
     out["hint"] = _HINTS.get(level, "")
     return out
+
+
+def get_travel_hint_threshold() -> int:
+    """Return the configured travel_hint_threshold (admin-configurable, default 12)."""
+    cfg = get_story_gravity_config()
+    return int(cfg.get("travel_hint_threshold", _DEFAULTS["travel_hint_threshold"]))
