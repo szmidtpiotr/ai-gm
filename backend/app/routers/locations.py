@@ -122,6 +122,16 @@ def row_to_location_dict(row: sqlite3.Row) -> dict:
         except json.JSONDecodeError:
             # Zachowaj oryginalny string, jeśli to nie jest poprawny JSON
             pass
+    # Hardening: legacy dane spoza ograniczeń LocationResponse nie mogą wywalać
+    # CAŁEJ listy ResponseValidationError-em (jeden zły wiersz = HTTP 500 całej tabeli).
+    # 1) created_by spoza enuma (np. 'auto_generated') → 'gm_runtime'.
+    _ALLOWED_CREATED_BY = {"seed", "admin_manual", "admin_kreator", "gm_runtime", "import"}
+    if result.get("created_by") not in _ALLOWED_CREATED_BY:
+        result["created_by"] = "gm_runtime"
+    # 2) Puste stringi w polach z min_length=1 (key, parent_key) → None (Optional).
+    for _opt_key in ("key", "parent_key", "location_subtype", "biome"):
+        if isinstance(result.get(_opt_key), str) and not result[_opt_key].strip():
+            result[_opt_key] = None
     return result
 
 
