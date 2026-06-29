@@ -163,6 +163,7 @@ def perform_long_rest(
     - +8 ingame hours
     - Full HP + mana restore
     - Flush pending_xp → xp_available
+    - Level-up if XP threshold crossed (#1024)
     - Reset short_rests_used = 0, death_saves_failed = 0
     """
     from app.services.clock_service import advance_clock
@@ -190,8 +191,36 @@ def perform_long_rest(
     xp_available = int(sheet.get("xp_available") or 0)
     xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
 
-    sheet["current_hp"] = max_hp
-    sheet["current_mana"] = max_mana
+    # #1024: level-up check. grant_pending_xp already updated xp_lifetime_earned
+    # to include pending XP — compute the correct level from it now.
+    new_max_hp = max_hp
+    new_max_mana = max_mana
+    leveled_up = False
+    new_level = int(sheet.get("level") or 1)
+
+    if pending_xp > 0:
+        from app.services.xp_service import level_from_xp, get_xp_level_thresholds
+        from app.services.vitality_service import apply_level_up
+        old_level = new_level
+        thresholds = get_xp_level_thresholds(conn)
+        new_level = level_from_xp(xp_lifetime, thresholds)
+        level_ups = max(0, new_level - old_level)
+        if level_ups > 0:
+            archetype = str(sheet.get("archetype") or "warrior").lower()
+            stats = sheet.get("stats") or {}
+            con = int(stats.get("CON", 10) or 10)
+            int_stat = int(stats.get("INT", 10) or 10)
+            for _ in range(level_ups):
+                new_max_hp, new_max_mana = apply_level_up(
+                    archetype, new_max_hp, new_max_mana, con, int_stat
+                )
+            sheet["level"] = new_level
+            sheet["max_hp"] = new_max_hp
+            sheet["max_mana"] = new_max_mana
+            leveled_up = True
+
+    sheet["current_hp"] = new_max_hp
+    sheet["current_mana"] = new_max_mana
     sheet["pending_xp"] = 0
     sheet["xp_available"] = xp_available + pending_xp
     if pending_xp:
@@ -227,22 +256,28 @@ def perform_long_rest(
         "long_rest_performed",
         character_id=character_id,
         campaign_id=campaign_id,
-        hp_restored=max_hp - hp_before,
-        mana_restored=max_mana - mana_before,
+        hp_restored=new_max_hp - hp_before,
+        mana_restored=new_max_mana - mana_before,
         xp_unlocked=pending_xp,
+        leveled_up=leveled_up,
+        new_level=new_level if leveled_up else None,
     )
 
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "type": "long",
         "hp_before": hp_before,
-        "hp_after": max_hp,
+        "hp_after": new_max_hp,
         "mana_before": mana_before,
-        "mana_after": max_mana,
+        "mana_after": new_max_mana,
         "xp_unlocked": pending_xp,
         "xp_available": sheet["xp_available"],
         "hours_advanced": 8,
     }
+    if leveled_up:
+        result["leveled_up"] = True
+        result["new_level"] = new_level
+    return result
 
 
 def perform_short_rest(

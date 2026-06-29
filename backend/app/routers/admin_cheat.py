@@ -592,6 +592,46 @@ def admin_cheat(
             )
             result = {"level": sheet["level"]}
 
+        elif cmd == "recalc vitals":
+            # #1024: backfill max_hp/max_mana for characters whose HP never grew on level-up.
+            from app.services.vitality_service import calculate_hp, calculate_mana
+            level = int(sheet.get("level") or 1)
+            archetype = str(sheet.get("archetype") or "warrior").lower()
+            stats = sheet.get("stats") or {}
+            con = int(stats.get("CON", 10) or 10)
+            int_stat = int(stats.get("INT", 10) or 10)
+            old_max_hp = int(sheet.get("max_hp") or 0)
+            old_max_mana = int(sheet.get("max_mana") or 0)
+            new_max_hp = calculate_hp(archetype, con, level)
+            new_max_mana = calculate_mana(archetype, int_stat, level)
+            sheet["max_hp"] = new_max_hp
+            sheet["max_mana"] = new_max_mana
+            # current_hp/mana: keep proportional if not at full, or cap at new max
+            cur_hp = int(sheet.get("current_hp") or 0)
+            cur_mana = int(sheet.get("current_mana") or 0)
+            if old_max_hp > 0 and cur_hp < old_max_hp:
+                sheet["current_hp"] = min(cur_hp, new_max_hp)
+            else:
+                sheet["current_hp"] = new_max_hp
+            if old_max_mana > 0 and cur_mana < old_max_mana:
+                sheet["current_mana"] = min(cur_mana, new_max_mana)
+            else:
+                sheet["current_mana"] = new_max_mana
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), character_id),
+            )
+            result = {
+                "max_hp": new_max_hp,
+                "max_mana": new_max_mana,
+                "old_max_hp": old_max_hp,
+                "old_max_mana": old_max_mana,
+                "archetype": archetype,
+                "level": level,
+                "con": con,
+                "int": int_stat,
+            }
+
         elif cmd == "set location":
             loc = str(req.key or "").strip()
             if not loc:
