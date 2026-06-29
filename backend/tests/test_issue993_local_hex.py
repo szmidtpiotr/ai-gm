@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS world_hexes (
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
     parent_hex_id INTEGER,
-    map_level INTEGER NOT NULL DEFAULT 0
+    map_level INTEGER NOT NULL DEFAULT 0,
+    region TEXT NOT NULL DEFAULT 'kresy'
 );
 CREATE TABLE IF NOT EXISTS game_locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
