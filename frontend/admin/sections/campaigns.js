@@ -581,9 +581,13 @@ function filterTableGeneric(input, tableId, nameClass) {
 
         const arcs = plan?.arcs || {};
         let arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
-        // #1018: V2 plans store acts[].key_beats (arcs empty). Adapt to the arc/scene
-        // renderer so the Plan GM tab is not blank for new/regenerated campaigns.
-        if (!arcList.length && Array.isArray(plan?.acts) && plan.acts.length) {
+        // #1018: V2 plans store acts[].key_beats. The admin endpoint normalizer injects
+        // a degenerate empty `arcs.default` (status:'draft', scene_goals:[]) even for V2
+        // plans, so a plain `!arcList.length` guard would render that blank arc. Prefer
+        // the V2 acts whenever they carry beats and the legacy arcs have no real content.
+        const _arcsHaveContent = arcList.some(a => Array.isArray(a?.scene_goals) && a.scene_goals.length);
+        const _hasV2Acts = Array.isArray(plan?.acts) && plan.acts.some(a => (a?.key_beats || []).length);
+        if (_hasV2Acts && !_arcsHaveContent) {
           arcList = plan.acts.map((act, ai) => {
             // V2 acts key on `number`/`title`/`summary`/`completed`; `active_act` is the
             // act number. Match active by id OR number OR 1-based index so the badge shows.
