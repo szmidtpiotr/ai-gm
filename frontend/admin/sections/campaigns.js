@@ -584,20 +584,27 @@ function filterTableGeneric(input, tableId, nameClass) {
         // #1018: V2 plans store acts[].key_beats (arcs empty). Adapt to the arc/scene
         // renderer so the Plan GM tab is not blank for new/regenerated campaigns.
         if (!arcList.length && Array.isArray(plan?.acts) && plan.acts.length) {
-          arcList = plan.acts.map(act => ({
-            id: act.id,
-            title: act.label || act.title || act.id,
-            status: (act.id && act.id === plan.active_act) ? 'active' : (act.status || undefined),
-            roadmap: act.summary || act.roadmap || '',
-            _v2: true,
-            scene_goals: (act.key_beats || []).map(b => ({
-              goal: b.summary || b.label || b.beat_key || '',
-              _visited: !!b.visited,
-              _objtype: b.objective_type || '',
-              _optional: !!b.optional,
-            })),
-            hooks: act.hooks || [],
-          }));
+          arcList = plan.acts.map((act, ai) => {
+            // V2 acts key on `number`/`title`/`summary`/`completed`; `active_act` is the
+            // act number. Match active by id OR number OR 1-based index so the badge shows.
+            const isActiveAct = (act.id != null && act.id === plan.active_act)
+              || (act.number != null && act.number === plan.active_act)
+              || (ai + 1) === plan.active_act;
+            return {
+              id: act.id || act.number || (ai + 1),
+              title: act.label || act.title || act.id || `Akt ${act.number || ai + 1}`,
+              status: isActiveAct ? 'active' : (act.completed ? 'done' : (act.status || undefined)),
+              roadmap: act.summary || act.roadmap || '',
+              _v2: true,
+              scene_goals: (act.key_beats || []).map(b => ({
+                goal: b.summary || b.label || b.beat_key || '',
+                _visited: !!(b.visited || act.completed),
+                _objtype: b.objective_type || '',
+                _optional: !!b.optional,
+              })),
+              hooks: act.hooks || [],
+            };
+          });
         }
         // #1018: endings block (V2 only) rendered after the acts.
         const endings = Array.isArray(plan?.endings) ? plan.endings : [];
