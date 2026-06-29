@@ -4286,6 +4286,104 @@ def _patch_campaign_template_beat_objectives(conn: sqlite3.Connection) -> None:
         logger.info("hf8_template_beats_patched", template_ids=changed_ids)
 
 
+# #1019: side beats that become legally-skippable (`optional:true`) in seed templates.
+# Each arc keeps ≥1 critical beat so it can still auto-close (#1010 critical-path model).
+_TEMPLATE_OPTIONAL_BEATS: set[str] = {
+    "first_exploration",  # Pierwsze Kroki — exploration is a side lesson
+    "seek_origin",        # Przeklęte Ziemie — investigation side-thread
+    "seek_allies",        # Cień Licza — ally gathering is optional colour
+}
+
+# #1019: victory-overlay endings (min. 1 primary) per seed template, keyed by title.
+# Read at victory by solo_death_service (`plan.endings` → title + summary/description).
+_TEMPLATE_SEED_ENDINGS: dict[str, list[dict]] = {
+    "Pierwsze Kroki": [
+        {"id": "ending_primary", "type": "primary", "title": "Gotów na przygodę",
+         "summary": "Bohater opanował podstawy walki, handlu i eksploracji. "
+                    "Vilnograd nie ma już przed nim tajemnic — czas ruszyć w prawdziwy świat.",
+         "requirements": ["first_combat"]},
+    ],
+    "Przeklęte Ziemie": [
+        {"id": "ending_primary", "type": "primary", "title": "Klątwa zdjęta",
+         "summary": "Źródło zła zostało odnalezione i zniszczone. Mgła opada znad wiosek, "
+                    "a duchy przeszłości w końcu zaznają spokoju. Kraina powoli wraca do życia.",
+         "requirements": ["lift_curse"]},
+    ],
+    "Cień Licza": [
+        {"id": "ending_primary", "type": "primary", "title": "Cień rozwiany",
+         "summary": "Filar duszy Licza legł w gruzach, a starożytne zło rozsypało się w proch. "
+                    "Armie nieumarłych padają bez swojego pana — kontynent ocalony, "
+                    "a imię bohatera przejdzie do legendy.",
+         "requirements": ["final_battle"]},
+    ],
+}
+
+
+def _patch_campaign_template_endings_and_optional(conn: sqlite3.Connection) -> None:
+    """#1019: backfill endings[] + optional beats into the 3 seed campaign templates.
+
+    Without endings[] the victory overlay renders empty (no title/summary); without
+    `optional:true` on side beats every beat is critical, so side scenes from #1010/#1014
+    can never be skipped. The NOT EXISTS seed guard never updates already-seeded rows,
+    so existing DEV/PROD DBs need this idempotent patch.
+
+    Idempotent: endings added only when absent; `optional` added only to known side
+    beat_keys that don't already carry the flag. Touches only `campaign_templates`
+    (created_by='seed') — running campaigns are untouched.
+    """
+    import json as _json
+
+    try:
+        rows = conn.execute(
+            "SELECT id, title, gm_plan_json FROM campaign_templates WHERE created_by = 'seed'"
+        ).fetchall()
+    except Exception:
+        return  # table may not exist in test environments
+
+    changed_ids = []
+    for row in rows:
+        if isinstance(row, sqlite3.Row):
+            template_id, title, raw = row["id"], row["title"], row["gm_plan_json"]
+        else:
+            template_id, title, raw = row[0], row[1], row[2]
+        if not raw:
+            continue
+        try:
+            plan = _json.loads(raw)
+        except (ValueError, TypeError):
+            continue
+
+        modified = False
+
+        # 1) endings[] — add primary ending if the plan has none yet
+        if not plan.get("endings") and title in _TEMPLATE_SEED_ENDINGS:
+            plan["endings"] = _TEMPLATE_SEED_ENDINGS[title]
+            modified = True
+
+        # 2) optional flag on known side beats (works for both arcs/acts shapes)
+        for container_key in ("arcs", "acts"):
+            for arc in plan.get(container_key, []) or []:
+                if not isinstance(arc, dict):
+                    continue
+                for beat in arc.get("key_beats", []):
+                    if not isinstance(beat, dict):
+                        continue
+                    if beat.get("beat_key") in _TEMPLATE_OPTIONAL_BEATS and "optional" not in beat:
+                        beat["optional"] = True
+                        modified = True
+
+        if modified:
+            conn.execute(
+                "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
+                (_json.dumps(plan, ensure_ascii=False), template_id),
+            )
+            changed_ids.append(template_id)
+
+    if changed_ids:
+        conn.commit()
+        logger.info("issue1019_template_endings_optional_patched", template_ids=changed_ids)
+
+
 def _migrate_npc_locations_to_assignments(conn: sqlite3.Connection) -> None:
     """U31 (#546): Backfill location_npc_assignments from legacy npc_locations table.
 
@@ -5403,6 +5501,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_source_template(conn)
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
+        _patch_campaign_template_endings_and_optional(conn)  # #1019
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
