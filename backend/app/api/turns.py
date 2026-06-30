@@ -672,6 +672,22 @@ def _process_location_intent(
                 "UPDATE game_sessions SET scene_enemies = '[]', scene_npcs = '[]' WHERE campaign_id = ?",
                 (campaign_id,),
             )
+            # #1046: clear pending_zaskoczony on location change — moving voids stealth advantage.
+            try:
+                _gsf_lc = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if _gsf_lc:
+                    _sf_lc = json.loads(_gsf_lc["session_flags"] or "{}")
+                    if "pending_zaskoczony" in _sf_lc:
+                        _sf_lc.pop("pending_zaskoczony")
+                        conn.execute(
+                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                            (json.dumps(_sf_lc, ensure_ascii=False), campaign_id),
+                        )
+            except Exception:
+                pass
             # Also sync current_hex so the world map pin follows narrative movement
             try:
                 import json as _jloc

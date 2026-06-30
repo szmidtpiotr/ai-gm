@@ -20,11 +20,17 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _maybe_add_pending_advantage_gate(row_dict: dict, sf: dict) -> None:
-    """#1045: surface pending_advantage_gate when pending_zaskoczony is set in session_flags.
+def _maybe_add_pending_advantage_gate(row_dict: dict, sf: dict, scene_enemies_raw: str = "[]") -> None:
+    """#1045: surface pending_advantage_gate when pending_zaskoczony is set AND enemies are in scene.
     Mirrors the pending_skill_test restore pattern so F5 re-renders the advantage gate card.
+    #1046: also checks scene_enemies so a stale flag (after movement) never re-shows the gate.
     """
     if not (isinstance(sf, dict) and sf.get("pending_zaskoczony")):
+        return
+    try:
+        if not json.loads(scene_enemies_raw or "[]"):
+            return
+    except Exception:
         return
     try:
         from app.services.combat_service import build_advantage_gate
@@ -163,7 +169,7 @@ def _apply_gm_plan_visibility(
     # _commit_pending_skill_test in turns.py) so F5 cannot reroll.
     try:
         gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            "SELECT session_flags, scene_enemies FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
         ).fetchone()
         if gs and gs["session_flags"]:
@@ -171,8 +177,8 @@ def _apply_gm_plan_visibility(
             if isinstance(sf, dict) and sf.get("pending_skill_test"):
                 row_dict["pending_skill_test"] = sf["pending_skill_test"]
                 row_dict["state_machine"] = sf.get("state") or "SKILL_TEST_PENDING"
-            # #1045: restore advantage gate so F5 re-renders the pending gate card
-            _maybe_add_pending_advantage_gate(row_dict, sf)
+            # #1045/#1046: restore advantage gate — only when enemies still in scene
+            _maybe_add_pending_advantage_gate(row_dict, sf, gs["scene_enemies"] if gs else "[]")
     except Exception:
         pass
     return row_dict

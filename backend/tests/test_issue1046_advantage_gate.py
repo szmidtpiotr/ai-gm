@@ -49,13 +49,14 @@ def test_stealth_gate_set_when_scene_enemies_is_null():
 
 # ─── #1045: Boot-restore ─────────────────────────────────────────────────────
 
-def test_campaign_surfaces_pending_gate_when_flag_set():
-    """#1045: gdy session_flags.pending_zaskoczony=True, kampania eksponuje pending_advantage_gate."""
+def test_campaign_surfaces_pending_gate_when_flag_set_and_enemies_present():
+    """#1045: pending_zaskoczony=True + wrogowie w scenie → kampania eksponuje pending_advantage_gate."""
     from app.api.campaigns import _maybe_add_pending_advantage_gate
 
     row_dict: dict = {}
     sf: dict = {"pending_zaskoczony": True}
-    _maybe_add_pending_advantage_gate(row_dict, sf)
+    enemies = '[{"key": "goblin", "hp_current": 10}]'
+    _maybe_add_pending_advantage_gate(row_dict, sf, enemies)
 
     assert "pending_advantage_gate" in row_dict, "kampania powinna zwracać pending_advantage_gate"
     gate = row_dict["pending_advantage_gate"]
@@ -68,13 +69,24 @@ def test_campaign_surfaces_pending_gate_when_flag_set():
     assert "dialog" in option_ids
 
 
+def test_campaign_no_gate_when_flag_set_but_no_enemies():
+    """#1046: pending_zaskoczony=True ale scene_enemies=[] → brak bramki (stale flag po ruchu)."""
+    from app.api.campaigns import _maybe_add_pending_advantage_gate
+
+    row_dict: dict = {}
+    sf: dict = {"pending_zaskoczony": True}
+    _maybe_add_pending_advantage_gate(row_dict, sf, "[]")  # pusta scena
+
+    assert "pending_advantage_gate" not in row_dict, "stara flaga bez wrogów nie powinna pokazywać bramki"
+
+
 def test_campaign_no_gate_when_flag_absent():
     """#1045 backward compat: brak pending_zaskoczony → brak pending_advantage_gate w payloadzie."""
     from app.api.campaigns import _maybe_add_pending_advantage_gate
 
     row_dict: dict = {}
     sf: dict = {}
-    _maybe_add_pending_advantage_gate(row_dict, sf)
+    _maybe_add_pending_advantage_gate(row_dict, sf, "[]")
 
     assert "pending_advantage_gate" not in row_dict
 
@@ -85,7 +97,7 @@ def test_campaign_no_gate_when_flag_false():
 
     row_dict: dict = {}
     sf: dict = {"pending_zaskoczony": False}
-    _maybe_add_pending_advantage_gate(row_dict, sf)
+    _maybe_add_pending_advantage_gate(row_dict, sf, "[]")
 
     assert "pending_advantage_gate" not in row_dict
 
