@@ -123,6 +123,46 @@ def _stealth_should_emit_gate(conn: "sqlite3.Connection", campaign_id: int) -> b
         return False
 
 
+def _maybe_clear_surprise_on_location_change(
+    conn: "sqlite3.Connection",
+    campaign_id: int,
+) -> None:
+    """#1054: Clear pending_zaskoczony on location change — but NOT when scene had enemies.
+
+    Moving AWAY from an empty area voids stealth (the original #1046 intent).
+    Moving TOWARD enemies (approach-to-attack) preserves the surprise advantage —
+    the player positioned themselves for the strike and is still in the same encounter.
+    Reads scene_enemies BEFORE the #825 scene-clear to detect the approach scenario.
+    """
+    try:
+        _se_row = conn.execute(
+            "SELECT scene_enemies FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        _prev_had_enemies = bool(json.loads((_se_row["scene_enemies"] if _se_row else None) or "[]"))
+    except Exception:
+        _prev_had_enemies = False
+
+    if _prev_had_enemies:
+        return
+
+    try:
+        _gsf_lc = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if _gsf_lc:
+            _sf_lc = json.loads(_gsf_lc["session_flags"] or "{}")
+            if "pending_zaskoczony" in _sf_lc:
+                _sf_lc.pop("pending_zaskoczony")
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                    (json.dumps(_sf_lc, ensure_ascii=False), campaign_id),
+                )
+    except Exception:
+        pass
+
+
 # K2 fix helpers ──────────────────────────────────────────────────────────────
 _PL_NORMALIZE = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
 
@@ -233,8 +273,9 @@ def _is_compound_action(text: str) -> bool:
 # Polish narrative mode still slipped through ~5% of the time. Without this
 # fallback the entire fight plays out as cinematic prose with zero HP / dice.
 _COMBAT_INTENT_VERBS = (
-    # atakować
+    # atakować — imperative + 1st/3rd person + infinitive + past tense (#1054)
     "atakuj", "atakuje", "zaatakuj", "zaatakuje",
+    "zaatakowac", "zaatakowal", "zaatakowala", "zaatakowali",
     # uderzać / bić
     "uderzam", "uderzac", "uderz", "bij", "bije", "bije sie", "bijac",
     # walczyć
@@ -286,7 +327,7 @@ _COMBAT_MOTION_STEMS = (
 _NEGATION_ATTACK_RE = re.compile(
     r"\bnie\s+(?:chce\s+|bede\s+|zamierzam\s+|mam\s+zamiaru\s+)?"
     r"(?:nikogo\s+|nic\s+|niczego\s+)?"
-    r"(atakuj|zaatakuj|uderz|strzel|walcz|bij|tne|tnac|kluj|dzga|szarz|nacier|rzuc|macha|kop|sieka)",
+    r"(atakuj|zaatakuj|zaatakowac|uderz|strzel|walcz|bij|tne|tnac|kluj|dzga|szarz|nacier|rzuc|macha|kop|sieka)",
 )
 
 
@@ -442,6 +483,21 @@ def _ensure_combat_start_tag(
     # against the player without emitting a tag (#520 reverse direction).
     player_intent = _player_combat_intent(player_text)
     narrative_combat = bool(_AGGRESSION_NARRATIVE_RE.search(_normalize_pl(assistant_text or "")))
+    # #1054: secondary check — pending_zaskoczony active + "z zaskoczenia" keyword + weapon
+    # handles phrases like "chcę zaatakować z zaskoczenia" that may still slip through
+    # the primary verb list (e.g. LLM prompted a social skill_test instead of combat).
+    if not player_intent and not narrative_combat:
+        _norm_p = _normalize_pl(player_text or "")
+        if "zaskoczenia" in _norm_p and any(ws in _norm_p for ws in _COMBAT_WEAPON_STEMS):
+            try:
+                _sf_row = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if _sf_row and json.loads(_sf_row["session_flags"] or "{}").get("pending_zaskoczony"):
+                    player_intent = True
+            except Exception:
+                pass
     if not player_intent and not narrative_combat:
         return assistant_text
     if COMBAT_START_RE.search(assistant_text or ""):
@@ -733,26 +789,13 @@ def _process_location_intent(
             # Pre-spawn enemies (no hp) from a prior encounter must not follow the
             # player into the new location — hex-travel already did this; now narrative
             # movement (tavern room entry, etc.) does too.
+            # #1054: read scene_enemies BEFORE clearing — helper preserves
+            # pending_zaskoczony when player is approaching enemies (not fleeing).
+            _maybe_clear_surprise_on_location_change(conn, campaign_id)
             conn.execute(
                 "UPDATE game_sessions SET scene_enemies = '[]', scene_npcs = '[]' WHERE campaign_id = ?",
                 (campaign_id,),
             )
-            # #1046: clear pending_zaskoczony on location change — moving voids stealth advantage.
-            try:
-                _gsf_lc = conn.execute(
-                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
-                    (campaign_id,),
-                ).fetchone()
-                if _gsf_lc:
-                    _sf_lc = json.loads(_gsf_lc["session_flags"] or "{}")
-                    if "pending_zaskoczony" in _sf_lc:
-                        _sf_lc.pop("pending_zaskoczony")
-                        conn.execute(
-                            "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
-                            (json.dumps(_sf_lc, ensure_ascii=False), campaign_id),
-                        )
-            except Exception:
-                pass
             # Also sync current_hex so the world map pin follows narrative movement
             try:
                 import json as _jloc
