@@ -183,6 +183,15 @@ const _ROW_REGISTRY = {
     });
   }
 
+  function filterLocationsRegion(select) {
+    const region = select.value;
+    document.querySelectorAll('#locations-table tbody tr').forEach(row => {
+      if (!region) { row.style.display = ''; return; }
+      const cell = row.querySelector('.td-region')?.dataset?.region || '';
+      row.style.display = cell === region ? '' : 'none';
+    });
+  }
+
 // ── Tab dispatcher + hexmap generate ───────────────────────────────────────────
   function _loadMapTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
@@ -279,10 +288,12 @@ const _ROW_REGISTRY = {
       const caret = hasKids ? `<button class="loc-tree-toggle" data-loc-key="${_esc(l.key)}" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--t2);padding:0 4px;width:18px">${expanded?'▼':'▶'}</button>` : '<span style="display:inline-block;width:18px"></span>';
       const indent = depth * 18;
       const childCount = hasKids ? ` <span style="color:var(--t3);font-size:0.72rem">(${children.length})</span>` : '';
+      const regionLabel = l.region ? _esc(l.region) : '<span class="td-muted">(brak)</span>';
       return `<tr data-key="${_esc(l.key)}" data-rjson="${enc}">
         <td class="col-check"><input type="checkbox"></td>
         <td class="td-sticky td-name"><span style="display:inline-block;width:${indent}px"></span>${caret}<span style="font-weight:${depth===0?'600':'normal'}">${_esc(l.label||l.key)}</span>${childCount}</td>
         <td>${locBadge(l.location_type)}</td>
+        <td class="td-region" data-region="${_esc(l.region||'')}" style="font-size:0.78rem;color:var(--t2)">${regionLabel}</td>
         <td class="td-muted">${_esc(l.biome||l.location_subtype||'—')}</td>
         <td class="td-mono">${l.tier||'—'}</td>
         <td>${l.safe_for_rest ? '<span class="badge badge-green">🛏 Safe</span>' : '<span class="td-muted">—</span>'}</td>
@@ -298,7 +309,7 @@ const _ROW_REGISTRY = {
       }
       return html;
     };
-    tbody.innerHTML = renderBranch('', 0) || `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--t3)">Brak lokacji</td></tr>`;
+    tbody.innerHTML = renderBranch('', 0) || `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak lokacji</td></tr>`;
     if (!tbody._locWired) {
       tbody._locWired = true;
       tbody.addEventListener('click', e => {
@@ -315,7 +326,7 @@ const _ROW_REGISTRY = {
   async function _loadLocations() {
     const tbody = document.querySelector('#locations-table tbody');
     if (!tbody) return;
-    tbody.innerHTML = _loading(7);
+    tbody.innerHTML = _loading(8);
     try {
       const d = await apiFetch('/api/locations/admin/locations?active_only=1');
       const items = Array.isArray(d) ? d : (d.items||[]);
@@ -326,7 +337,7 @@ const _ROW_REGISTRY = {
       });
       _renderLocTree();
       _wireRowActions('locations-table');
-    } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
+    } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
   }
 
   // U28 — Floating lokacje
@@ -2304,6 +2315,15 @@ function _sectionHtml() {
               <button class="chip" onclick="filterLocationsType(this,'miasto')">Miasto</button>
               <button class="chip" onclick="filterLocationsType(this,'dzikość')">Dzikość</button>
             </div>
+            <select id="locations-region-filter" onchange="filterLocationsRegion(this)" style="background:#111;border:1px solid #2a2a3a;color:#c8c0a8;font-size:0.72rem;padding:3px 8px;border-radius:4px;cursor:pointer;height:28px">
+              <option value="">Wszystkie krainy</option>
+              <option value="kresy">Kresy</option>
+              <option value="czarnobor">Czarnobór</option>
+              <option value="siwe_granie">Siwe Granie</option>
+              <option value="martwe_pustkowia">Martwe Pustkowia</option>
+              <option value="koronne_niziny">Koronne Niziny</option>
+              <option value="wybrzeze_lez">Wybrzeże Łez</option>
+            </select>
           </div>
           <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow-y:auto">
             <table class="data-table" id="locations-table">
@@ -2312,6 +2332,7 @@ function _sectionHtml() {
                   <th class="col-check"><input type="checkbox"></th>
                   <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
                   <th><div class="th-inner">Typ</div></th>
+                  <th><div class="th-inner">Kraina</div></th>
                   <th><div class="th-inner">Biom</div></th>
                   <th><div class="th-inner">Tier</div></th>
                   <th><div class="th-inner">Safe</div></th>
@@ -2470,7 +2491,7 @@ export async function init(panel) {
 
   // Expose globals for inline onclick/onchange strings (port 1:1 zachowuje nazwy bare).
   Object.assign(window, {
-    filterTableGeneric, filterLocationsType, openTerrainFormModal, hexmapGenerate,
+    filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal, hexmapGenerate,
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,

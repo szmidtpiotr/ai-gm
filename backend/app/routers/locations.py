@@ -67,6 +67,7 @@ class LocationBase(BaseModel):
     tier: int = Field(default=1, ge=1, le=5)
     canonical: bool = True
     source_campaign_id: Optional[int] = None
+    region: Optional[str] = None
 
 
 class LocationCreate(LocationBase):
