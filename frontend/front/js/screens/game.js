@@ -260,6 +260,12 @@ async function enterGame(campaign, opts = {}) {
             console.warn('[skill-roll] could not restore pending popup on resume:', e);
         }
     }
+    // #1045: restore advantage gate card if pending_zaskoczony was set before F5
+    if (campaign?.pending_advantage_gate) {
+        try { renderAdvantageGate(campaign.pending_advantage_gate); } catch (e) {
+            console.warn('[advantage-gate] could not restore on resume:', e);
+        }
+    }
 }
 
 function appendMessage(msg, opts = {}) {

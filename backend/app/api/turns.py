@@ -108,6 +108,21 @@ def _should_emit_open_shop_in_mode(npc_key: str | None, campaign_mode: str) -> b
     return bool(npc_key) and str(campaign_mode or "solo").lower() != "dungeon"
 
 
+def _stealth_should_emit_gate(conn: "sqlite3.Connection", campaign_id: int) -> bool:
+    """#1044: True only when scene_enemies is non-empty for campaign.
+    No enemy in scene = stealth is a narrative success only; no advantage gate needed.
+    """
+    try:
+        row = conn.execute(
+            "SELECT scene_enemies FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        raw = (row["scene_enemies"] if row else None) or "[]"
+        return bool(json.loads(raw))
+    except Exception:
+        return False
+
+
 # K2 fix helpers ──────────────────────────────────────────────────────────────
 _PL_NORMALIZE = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
 
@@ -6574,8 +6589,12 @@ def resolve_skill_test_endpoint(
                     logger.info("stealth_success_zaskoczony_applied",
                                 campaign_id=campaign_id, enemies=_stealth_applied)
                 else:
-                    session_flags["pending_zaskoczony"] = True
-                    logger.info("stealth_success_pending_zaskoczony", campaign_id=campaign_id)
+                    # #1044: only gate when enemies are actually in the scene
+                    if _stealth_should_emit_gate(conn, campaign_id):
+                        session_flags["pending_zaskoczony"] = True
+                        logger.info("stealth_success_pending_zaskoczony", campaign_id=campaign_id)
+                    else:
+                        logger.info("stealth_success_no_scene_enemies_skip_gate", campaign_id=campaign_id)
             except Exception as _sa_err:
                 logger.warning("stealth_zaskoczony_error", error=str(_sa_err))
 

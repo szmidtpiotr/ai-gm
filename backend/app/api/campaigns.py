@@ -20,6 +20,21 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _maybe_add_pending_advantage_gate(row_dict: dict, sf: dict) -> None:
+    """#1045: surface pending_advantage_gate when pending_zaskoczony is set in session_flags.
+    Mirrors the pending_skill_test restore pattern so F5 re-renders the advantage gate card.
+    """
+    if not (isinstance(sf, dict) and sf.get("pending_zaskoczony")):
+        return
+    try:
+        from app.services.combat_service import build_advantage_gate
+        gate = build_advantage_gate("stealth")
+        if gate:
+            row_dict["pending_advantage_gate"] = gate
+    except Exception:
+        pass
+
+
 def _migrate_template_plan_to_w1(raw: str | None) -> str:
     """Migrate template gm_plan_json from list-arcs format to W1 dict-arcs + acts list.
 
@@ -156,6 +171,8 @@ def _apply_gm_plan_visibility(
             if isinstance(sf, dict) and sf.get("pending_skill_test"):
                 row_dict["pending_skill_test"] = sf["pending_skill_test"]
                 row_dict["state_machine"] = sf.get("state") or "SKILL_TEST_PENDING"
+            # #1045: restore advantage gate so F5 re-renders the pending gate card
+            _maybe_add_pending_advantage_gate(row_dict, sf)
     except Exception:
         pass
     return row_dict
