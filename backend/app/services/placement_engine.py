@@ -11,17 +11,20 @@ def try_place_location_on_hex(
     r: int,
     hex_type: str,
     campaign_seed: int = 0,
+    region: str = "kresy",
 ) -> Optional[str]:
     """
-    Próbuje osadzić lokację z bazy na hexie (q,r) wg reguł terenu.
+    Próbuje osadzić lokację z bazy na hexie (q,r) wg reguł terenu i krainy.
     Zwraca location_key jeśli osadzono lub hex miał już lokację, None jeśli hex pozostaje pusty.
 
     Deterministyczne per (q, r, campaign_seed) — ta sama kampania zawsze daje ten sam wynik.
     Lokacja osadzona raz (placement='placed') nie wchodzi ponownie do puli.
+    Filtruje kandydatów wg region — lokacje z innej krainy nie trafią na hex tej krainy.
     """
     existing = conn.execute(
-        "SELECT location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1",
-        (q, r),
+        "SELECT location_key FROM world_hexes"
+        " WHERE q=? AND r=? AND map_level=0 AND region=? AND is_active=1",
+        (q, r, region),
     ).fetchone()
     if existing and existing["location_key"]:
         return existing["location_key"]
@@ -38,7 +41,9 @@ def try_place_location_on_hex(
 
     candidates = conn.execute(
         "SELECT key, terrain_tags FROM game_locations"
-        " WHERE approved=1 AND placement='floating' AND is_active=1",
+        " WHERE approved=1 AND placement='floating' AND is_active=1"
+        " AND (region = ? OR region IS NULL)",
+        (region,),
     ).fetchall()
 
     matching = []
@@ -56,8 +61,9 @@ def try_place_location_on_hex(
     chosen_key = rng.choice(matching)
 
     conn.execute(
-        "UPDATE world_hexes SET location_key=? WHERE q=? AND r=? AND is_active=1",
-        (chosen_key, q, r),
+        "UPDATE world_hexes SET location_key=?"
+        " WHERE q=? AND r=? AND map_level=0 AND region=? AND is_active=1",
+        (chosen_key, q, r, region),
     )
     conn.execute(
         "UPDATE game_locations SET placement='placed', world_hex_q=?, world_hex_r=? WHERE key=?",

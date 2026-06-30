@@ -55,7 +55,8 @@ def _mk_conn() -> sqlite3.Connection:
             key TEXT, label TEXT, location_type TEXT, location_subtype TEXT,
             terrain_tags TEXT, biome TEXT, tier INTEGER, description TEXT,
             parent_key TEXT, ai_generated INTEGER, placement TEXT,
-            approved INTEGER, is_active INTEGER, world_hex_q INTEGER, world_hex_r INTEGER
+            approved INTEGER, is_active INTEGER, world_hex_q INTEGER, world_hex_r INTEGER,
+            region TEXT
         )"""
     )
     conn.execute(

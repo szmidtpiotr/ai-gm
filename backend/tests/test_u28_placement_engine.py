@@ -14,6 +14,8 @@ def db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             q INTEGER NOT NULL, r INTEGER NOT NULL,
             hex_type TEXT NOT NULL DEFAULT 'plains',
+            map_level INTEGER NOT NULL DEFAULT 0,
+            region TEXT NOT NULL DEFAULT 'kresy',
             label TEXT, encounter_chance REAL DEFAULT 0.15,
             encounter_pool TEXT DEFAULT '[]',
             location_key TEXT, is_active INTEGER DEFAULT 1
@@ -29,13 +31,14 @@ def db():
             approved INTEGER DEFAULT 1, is_active INTEGER DEFAULT 1,
             location_type TEXT DEFAULT 'macro', location_subtype TEXT,
             biome TEXT, tier INTEGER DEFAULT 1,
-            world_hex_q INTEGER, world_hex_r INTEGER
+            world_hex_q INTEGER, world_hex_r INTEGER,
+            region TEXT, description TEXT, parent_key TEXT, ai_generated INTEGER DEFAULT 0
         );
         INSERT INTO hex_type_config VALUES ('town', 1.0);
         INSERT INTO hex_type_config VALUES ('plains', 0.15);
         INSERT INTO hex_type_config VALUES ('forest', 0.15);
-        INSERT INTO world_hexes (q,r,hex_type,is_active) VALUES (5,3,'town',1);
-        INSERT INTO world_hexes (q,r,hex_type,is_active) VALUES (1,1,'plains',1);
+        INSERT INTO world_hexes (q,r,hex_type,map_level,region,is_active) VALUES (5,3,'town',0,'kresy',1);
+        INSERT INTO world_hexes (q,r,hex_type,map_level,region,is_active) VALUES (1,1,'plains',0,'kresy',1);
     """)
     return conn
 

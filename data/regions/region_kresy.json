@@ -8183,14 +8183,6 @@
    "encounter_chance": 0.15
   },
   {
-   "q": 24,
-   "r": 8,
-   "hex_type": "plains",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.15
-  },
-  {
    "q": 25,
    "r": 8,
    "hex_type": "plains",
@@ -10507,14 +10499,6 @@
    "r": 14,
    "hex_type": "heath",
    "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.15
-  },
-  {
-   "q": 15,
-   "r": 14,
-   "hex_type": "town",
-   "label": "Targowa Wola",
    "atmosphere": null,
    "encounter_chance": 0.15
   },
