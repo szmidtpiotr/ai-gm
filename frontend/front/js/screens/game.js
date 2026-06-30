@@ -3455,9 +3455,12 @@ function _renderBackpackRow(item, occupied) {
     }
 
     const dura = (item.durability && (canEquip)) ? _durabilityBarHTML(item.durability, { compact: true }) : '';
+    const iconContent = item.image_url
+        ? `<img src="${escapeHtml(item.image_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : INV_ICONS[kind];
     return `
         <div class="inv-row" data-inventory-id="${item.id}">
-            <div class="inv-row__icon">${INV_ICONS[kind]}</div>
+            <div class="inv-row__icon">${iconContent}</div>
             <div class="inv-row__info">
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
                 ${dura}
@@ -3567,12 +3570,16 @@ function _showItemDetailModal(d) {
     const overlay = document.createElement('div');
     overlay.id = 'item-view-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    const itemImgHtml = d.image_url
+        ? `<img src="${escapeHtml(d.image_url)}" alt="" loading="lazy" style="width:100%;max-height:180px;object-fit:cover;border-radius:8px;margin-bottom:12px;display:block">`
+        : '';
     overlay.innerHTML = `
         <div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:420px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.5)">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
                 <div style="font-size:1.05rem;font-weight:700;color:#f5deb3">${escapeHtml(d.name || '?')}</div>
                 <button id="item-view-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
             </div>
+            ${itemImgHtml}
             ${d.description ? `<div style="color:#bbb;font-size:.88rem;line-height:1.5;margin-bottom:12px">${escapeHtml(d.description)}</div>` : ''}
             <div>${statRows}</div>
             ${d.durability ? `<div style="margin-top:12px">${_durabilityBarHTML(d.durability)}</div>` : ''}

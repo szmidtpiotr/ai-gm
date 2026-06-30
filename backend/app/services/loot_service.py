@@ -1013,6 +1013,24 @@ def get_character_inventory(character_id: int) -> list[dict]:
         except sqlite3.OperationalError:
             durability_by_id = {}
 
+        # #1049: batch-fetch image_url from game_config_items for item rows (no SQL builder change).
+        image_url_by_item_key: dict[str, str | None] = {}
+        try:
+            _item_keys = list({
+                r["item_key"] for r in rows
+                if r["item_key"] and r["item_key"] != "__narrative__"
+                   and not r["weapon_key"] and not r["consumable_key"]
+            })
+            if _item_keys:
+                _ph = ",".join("?" * len(_item_keys))
+                for _ir in conn.execute(
+                    f"SELECT key, image_url FROM game_config_items WHERE key IN ({_ph})",
+                    _item_keys,
+                ).fetchall():
+                    image_url_by_item_key[_ir["key"]] = _ir["image_url"]
+        except sqlite3.OperationalError:
+            pass
+
     from app.services.durability_service import durability_view
 
     out: list[dict] = []
@@ -1127,6 +1145,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "is_light": is_light,
                 "covered_slots": covered_slots,
                 "durability": durability_view(dur_cur, dur_max),
+                "image_url": image_url_by_item_key.get(key) if item_type not in ("weapon", "consumable") else None,
             }
         )
     return out
@@ -1258,6 +1277,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                     "description": _rget(it, "description"),
                     "value_gp": int(_rget(it, "value_gp", 0) or 0),
                     "note": _rget(it, "note"),
+                    "image_url": _rget(it, "image_url"),
                 }
                 if item_type == "armor":
                     detail["armor"] = {

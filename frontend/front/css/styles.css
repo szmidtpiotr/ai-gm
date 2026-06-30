@@ -2887,6 +2887,7 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   flex-shrink: 0;
 }
 .inv-row__icon svg { width: 18px; height: 18px; }
+.inv-row__icon img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; }
 .inv-row__info { min-width: 0; }
 .inv-row__name {
   font-size: var(--font-size-sm);
