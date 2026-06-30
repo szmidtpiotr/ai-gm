@@ -263,6 +263,12 @@ def build_swiat_block(
     intent_subtypes = _detect_location_intent(player_message)
     if intent_subtypes:
         candidates = _find_location_candidates(conn, q, r, intent_subtypes)
+        # Only placed locations within 3 hexes count as "real" match — floating templates
+        # (no hex assigned) don't block creation of a new local instance.
+        placed_nearby = [
+            c for c in candidates
+            if not c.get("floating") and isinstance(c.get("distance"), int) and c["distance"] <= 3
+        ]
         if candidates:
             lines.append("Kandydaci z bazy (pasują do intencji gracza):")
             for cand in candidates:
@@ -272,7 +278,7 @@ def build_swiat_block(
                 else:
                     dist_txt = f"{dist} hex" if isinstance(dist, int) and dist < 999 else "nieznana odległość"
                 lines.append(f"  [{cand['key']}] {cand['label']} — {dist_txt}")
-        else:
+        if not placed_nearby:
             lines.append("brak_dopasowania: true")
 
     # ── Sąsiednie hexy (priorytet 3) ─────────────────────────────────────────
