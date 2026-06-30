@@ -4809,15 +4809,7 @@
   {
    "q": 0,
    "r": 0,
-   "hex_type": "snow",
-   "label": "ku Siwym Graniom",
-   "atmosphere": null,
-   "encounter_chance": 0.15
-  },
-  {
-   "q": 1,
-   "r": 0,
-   "hex_type": "snow",
+   "hex_type": "plains",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
@@ -5202,14 +5194,6 @@
    "q": 49,
    "r": 0,
    "hex_type": "forest",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.15
-  },
-  {
-   "q": 0,
-   "r": 1,
-   "hex_type": "snow",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.15
