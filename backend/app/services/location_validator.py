@@ -381,18 +381,19 @@ def _create_new_location(
         cursor = conn.execute(
             """
             INSERT INTO game_locations (
-                key, label, description, parent_id, location_type,
+                key, label, description, parent_id, parent_key, location_type,
                 ai_generated, approved,
                 created_by, review_status, canonical, source_campaign_id,
                 biome, location_subtype
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             """,
             (
                 key,
                 intent.target_label,
                 description,
                 parent_id,
+                intent.parent_key or None,
                 "sub" if parent_id else "macro",
                 1 if ai_generated else 0,
                 0 if ai_generated else 1,
