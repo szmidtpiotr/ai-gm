@@ -72,7 +72,7 @@ def get_floating_locations(conn: sqlite3.Connection) -> list:
     """Zwraca listę approved lokacji w stanie floating (niezakotwiczonych na hexach)."""
     rows = conn.execute(
         "SELECT key, label, location_type, location_subtype, terrain_tags, biome, tier,"
-        " description, parent_key, ai_generated"  # #590: full fields for preview/edit modal
+        " description, parent_key, ai_generated, region"  # #590: full fields for preview/edit modal
         " FROM game_locations"
         " WHERE placement='floating' AND approved=1 AND is_active=1"
         " ORDER BY label",

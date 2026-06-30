@@ -344,11 +344,11 @@ const _ROW_REGISTRY = {
   async function _loadFloating() {
     const tbody = document.querySelector('#floating-locations-table tbody');
     if (!tbody) return;
-    tbody.innerHTML = _loading(6);
+    tbody.innerHTML = _loading(7);
     try {
       const items = await apiFetch('/api/admin/locations/floating');
       if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3)">Brak floating lokacji — wszystkie zakotwiczone ✓</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3)">Brak floating lokacji — wszystkie zakotwiczone ✓</td></tr>';
         return;
       }
       items.forEach(loc => { _locDetailReg[loc.key] = loc; });  // #590
@@ -357,6 +357,7 @@ const _ROW_REGISTRY = {
           <td><code style="font-size:0.75rem">${_esc(loc.key)}</code></td>
           <td>${_esc(loc.label || '—')}</td>
           <td>${_esc(loc.location_subtype || loc.location_type || '—')}</td>
+          <td style="font-size:0.78rem;color:var(--t2)">${loc.region ? _esc(loc.region) : '<span class="td-muted">(brak)</span>'}</td>
           <td>${(loc.terrain_tags||[]).map(t => `<span class="chip on" style="font-size:0.7rem;padding:2px 6px">${_esc(t)}</span>`).join(' ')}</td>
           <td>${_esc(loc.biome || '—')}</td>
           <td style="white-space:nowrap">
@@ -364,7 +365,7 @@ const _ROW_REGISTRY = {
             <button class="btn btn-sm btn-secondary" onclick="openPlaceModal('${_esc(loc.key)}')">⚓ Osadź</button>
           </td>
         </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+    } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
   }
 
   window.openPlaceModal = function(locKey) {
@@ -595,6 +596,7 @@ const _ROW_REGISTRY = {
         <td class="td-mono" style="font-size:0.72rem">${_esc(p.key)}</td>
         <td class="td-sticky td-name">${_esc(p.label||p.key)}</td>
         <td class="td-muted">${_esc(p.location_type||'—')}</td>
+        <td style="font-size:0.78rem;color:var(--t2)">${p.region ? _esc(p.region) : '<span class="td-muted">(brak)</span>'}</td>
         <td class="td-muted">${_esc(p.biome||'—')}</td>
         ${coordCell}
         <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc((p.description||'').slice(0,70))}</td>
@@ -611,6 +613,7 @@ const _ROW_REGISTRY = {
           <th><div class="th-inner">Klucz</div></th>
           <th class="td-sticky"><div class="th-inner">Nazwa</div></th>
           <th><div class="th-inner">Typ</div></th>
+          <th><div class="th-inner">Kraina</div></th>
           <th><div class="th-inner">Biom</div></th>
           <th><div class="th-inner">Koord.</div></th>
           <th><div class="th-inner">Opis</div></th>
@@ -2357,12 +2360,13 @@ function _sectionHtml() {
                   <th>Klucz</th>
                   <th>Nazwa</th>
                   <th>Typ</th>
+                  <th>Kraina</th>
                   <th>Tagi terenu</th>
                   <th>Biom</th>
                   <th>Akcja</th>
                 </tr>
               </thead>
-              <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3)">Ładowanie…</td></tr></tbody>
+              <tbody><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3)">Ładowanie…</td></tr></tbody>
             </table>
           </div>
         </div>
