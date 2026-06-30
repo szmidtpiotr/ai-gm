@@ -449,7 +449,7 @@ Pole `location_intent` zawiera intencję ruchu — lub `null` gdy gracz nie zmie
 Przy `action: create` ZAWSZE dołącz pola `biome` i `location_subtype` jeśli scena na nie wskazuje — pozwala to silnikowi i edytorowi świata reużywać lokację w innych kampaniach. Dozwolone wartości (jeden string, lowercase, snake_case):
 
 - `biome`: `forest`, `mountain`, `swamp`, `plains`, `coast`, `desert`, `tundra`, `urban`, `underground`
-- `location_subtype`: `tavern`, `inn`, `shop`, `temple`, `guild`, `village`, `town`, `city`, `castle`, `ruin`, `cave`, `dungeon`, `tower`, `watchtower`, `forest_clearing`, `camp`, `road`, `bridge`, `crossroads`, `graveyard`, `swamp_hut`, `mine`, `harbor`, `other`
+- `location_subtype`: `tavern`, `inn`, `shop`, `temple`, `shrine`, `guild`, `village`, `town`, `city`, `castle`, `ruin`, `cave`, `dungeon`, `tower`, `watchtower`, `forest_clearing`, `camp`, `road`, `bridge`, `crossroads`, `graveyard`, `swamp_hut`, `mine`, `harbor`, `other`
 
 Jeśli typ miejsca nie pasuje do żadnej z opcji, pomiń to pole zamiast zgadywać — admin uzupełni je później w kolejce weryfikacji.
 

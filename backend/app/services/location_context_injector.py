@@ -38,6 +38,9 @@ _INTENT_KEYWORDS: dict[str, list[str]] = {
     "świątynia":    ["temple", "church"],
     "kościół":      ["temple", "church"],
     "kaplica":      ["temple", "church"],
+    "kapliczka":    ["shrine"],
+    "przydrożna":   ["shrine"],
+    "kapliczk":     ["shrine"],
     "sklep":        ["shop", "market"],
     "rynek":        ["market", "shop"],
     "targowisko":   ["market", "shop"],
@@ -83,16 +86,23 @@ def _detect_location_intent(player_message: str) -> list[str]:
 
     Uses stem matching (first N-1 chars of keyword) to handle Polish declension:
     'karczma' stem 'karczm' matches 'karczmy', 'karczmie', etc.
+    Longer keywords win: if 'kapliczk' matches, shorter 'kaplic' prefix is skipped.
     """
     if not player_message:
         return []
     msg_lower = player_message.lower()
     subtypes: list[str] = []
-    for keyword, subs in _INTENT_KEYWORDS.items():
-        # Use stem = keyword minus last char for declension tolerance
+    matched_stems: list[str] = []
+    # Process longest keywords first so specific matches shadow shorter-stem prefixes
+    sorted_kw = sorted(_INTENT_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True)
+    for keyword, subs in sorted_kw:
         stem = keyword[:-1] if len(keyword) > 3 else keyword
         if stem in msg_lower:
+            # Skip if a longer, already-matched stem starts with this stem (prefix collision)
+            if any(ms.startswith(stem) for ms in matched_stems):
+                continue
             subtypes.extend(subs)
+            matched_stems.append(stem)
     return list(dict.fromkeys(subtypes))  # deduplicate, preserve order
 
 
