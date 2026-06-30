@@ -2648,8 +2648,8 @@ ${isScholar && spellRows ? `<div class="awansuj-section"><div class="awansuj-sec
                         const data = await r.json();
                         if (!r.ok) throw new Error(data.detail || 'error');
                         showToast(`Zapisano! Pozostało: ${data.xp_available} PD`, 'success');
-                        modal.style.display = 'none';
                         await refreshCharacterSheet();
+                        await openAwansujPanel(characterData, getSheet(characterData));
                     } catch (e) {
                         showToast('Błąd: ' + e.message, 'error');
                         strip.remove();
