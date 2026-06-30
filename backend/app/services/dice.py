@@ -40,9 +40,13 @@ SAVE_STAT_MAP = {
 # Keep spell_attack in INT mapping, as locked in phases.
 SKILL_STAT_MAP["spell_attack"] = "INT"
 
-# Dice canonical test name -> `game_config_skills.key` when they differ (ADMIN seeds use `attack`).
+# Dice canonical test name -> `game_config_skills.key` when they differ.
+# Also used as sheet_json.skills fallback: legacy key → catalog key (#1052).
 DICE_TEST_TO_CONFIG_SKILL_KEY = {
     "melee_attack": "attack",
+    "ranged_attack": "attack",
+    "spell_attack": "arcana",
+    "sleight_of_hand": "pickpocket",
 }
 
 VALID_TEST_NAMES = set(SKILL_STAT_MAP.keys()) | set(SAVE_STAT_MAP.keys())
@@ -381,7 +385,8 @@ def resolve_roll(
     stat_key = skill_linked_stat_for_test(normalized_test)
     stat_value = _safe_int(stats.get(stat_key, 10), 10) if stat_key else 10
     stat_mod = (stat_value - 10) // 2 if stat_key else 0
-    skill_rank = _safe_int(skills.get(normalized_test, 0), 0)
+    _canon_key = DICE_TEST_TO_CONFIG_SKILL_KEY.get(normalized_test, normalized_test)
+    skill_rank = _safe_int(skills.get(normalized_test) or skills.get(_canon_key, 0), 0)
     proficiency = 2 if skill_rank >= 3 else 0
     total = effective_raw_roll + stat_mod + skill_rank + proficiency
     modifier = stat_mod + skill_rank + proficiency
@@ -521,7 +526,11 @@ def build_gm_dice_breakdown(character_sheet: dict, roll_key: str, roll: int) -> 
     stat_modifier = (stat_value - 10) // 2
 
     skill = resolved["skill"]
-    skill_rank = 0 if (resolved["is_save"] or not skill) else _safe_int(skills.get(skill, 0), 0)
+    if resolved["is_save"] or not skill:
+        skill_rank = 0
+    else:
+        _canon = DICE_TEST_TO_CONFIG_SKILL_KEY.get(skill, skill)
+        skill_rank = _safe_int(skills.get(skill) or skills.get(_canon, 0), 0)
     proficiency_bonus = 0 if resolved["is_save"] else (2 if skill_rank >= 3 else 0)
     final_total = _safe_int(roll, 0) + stat_modifier + skill_rank + proficiency_bonus
 

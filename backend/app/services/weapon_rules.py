@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from app.services.dice import DICE_TEST_TO_CONFIG_SKILL_KEY
+
 ATTACK_TESTS = frozenset({"melee_attack", "ranged_attack", "spell_attack"})
 TWO_HANDED_SKILL_KEYS = ("two_handed", "great_weapon")
 
@@ -328,7 +330,8 @@ def resolve_attack_roll_for_weapon(
     attack_stat = effective_attack_stat_for_weapon(sheet, weapon_row)
     stat_mod = stat_modifier(sheet, attack_stat)
     skills = _sheet_skills(sheet)
-    skill_rank = _safe_int(skills.get(test, 0), 0)
+    _canon = DICE_TEST_TO_CONFIG_SKILL_KEY.get(test, test)
+    skill_rank = _safe_int(skills.get(test) or skills.get(_canon, 0), 0)
     proficiency = 2 if skill_rank >= 3 else 0
     weapon_bonus = two_handed_attack_modifier(sheet, weapon_row)
     modifier = stat_mod + skill_rank + proficiency + weapon_bonus

@@ -5652,6 +5652,50 @@ def _ensure_item_image_columns(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _migrate_legacy_skill_keys(conn: sqlite3.Connection) -> None:
+    """#1052 — remap legacy sheet_json.skills keys to catalog keys.
+
+    melee_attack/ranged_attack → attack (unified combat skill in catalog)
+    spell_attack → arcana (Scholar attack test, INT-based, already in catalog)
+    sleight_of_hand → pickpocket (renamed in catalog)
+
+    Takes max(legacy_rank, existing_catalog_rank) to avoid over-buffing.
+    Sandbox clones ([SBX]) are skipped — they regenerate on next setup.
+    """
+    REMAP = {
+        "melee_attack": "attack",
+        "ranged_attack": "attack",
+        "spell_attack": "arcana",
+        "sleight_of_hand": "pickpocket",
+    }
+    rows = conn.execute(
+        "SELECT id, sheet_json FROM characters WHERE name NOT LIKE '[SBX]%'"
+    ).fetchall()
+    for row in rows:
+        char_id = row["id"]
+        try:
+            sheet = json.loads(row["sheet_json"] or "{}")
+        except Exception:
+            continue
+        skills = sheet.get("skills")
+        if not isinstance(skills, dict):
+            continue
+        changed = False
+        for legacy, canonical in REMAP.items():
+            if legacy in skills:
+                old_rank = int(skills.pop(legacy) or 0)
+                existing = int(skills.get(canonical) or 0)
+                skills[canonical] = max(old_rank, existing)
+                changed = True
+        if changed:
+            sheet["skills"] = skills
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), char_id),
+            )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5778,6 +5822,7 @@ def run_admin_migrations() -> None:
         _seed_dwarf_toughness_enemy(conn)  # #1005
         _ensure_region_schema(conn)  # #1028 RM1
         _ensure_item_image_columns(conn)  # #1048
+        _migrate_legacy_skill_keys(conn)  # #1052
     finally:
         conn.close()
 

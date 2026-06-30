@@ -215,10 +215,9 @@ def _skill_known_in_catalog(skill_key: str) -> bool:
         for s in (cfg.get("skills") or [])
         if isinstance(s, dict) and s.get("key")
     }
-    if skill_key in keys:
-        return True
-    alt = DICE_TEST_TO_CONFIG_SKILL_KEY.get(skill_key)
-    return bool(alt and alt in keys)
+    # Strict check — no alias expansion. Legacy dice-test names (melee_attack etc.)
+    # must be rejected here so they can't be accidentally re-added via XP spend (#1052).
+    return skill_key in keys
 
 
 CATCHUP_XP_MULTIPLIER = 1.5  # G26 #807: starting value, tune after playtest

@@ -2521,12 +2521,13 @@ async function openAwansujPanel(character, sheet) {
 
         let skillRows = '';
         Object.entries(skills).forEach(([key, rank]) => {
+            if (!skillInfoMap[key]) return; // #1052: hide non-catalog skills (melee_attack etc.)
             if (rank >= skillRankCeiling) return;
             const newRank = rank + 1;
             const cost = rankCosts[newRank] || rankCosts[String(newRank)];
             if (!cost) return;
             const canAfford = xpAvail >= cost;
-            const info = skillInfoMap[key] || LEGACY_SKILLS[key] || {};
+            const info = skillInfoMap[key] || {};
             skillRows += _awRow({
                 nameHtml: escapeHtml(info.label || key),
                 statBadge: info.stat || '',

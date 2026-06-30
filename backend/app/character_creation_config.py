@@ -17,7 +17,7 @@ SKILL_BUDGET: Final = {
 ARCHETYPE_SKILL_WEIGHTS: Final = {
     "warrior": [
         "athletics",
-        "melee_attack",
+        "attack",  # #1052: was melee_attack (not in catalog); attack is the catalog key
         "endurance",
         "intimidation",
         "survival",
@@ -31,7 +31,7 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
     "rogue": [
         "stealth",
         "lockpick",
-        "sleight_of_hand",
+        "pickpocket",  # #1052: was sleight_of_hand (not in catalog); pickpocket is the catalog key
         "acrobatics",
         "awareness",
         "investigation",
@@ -50,12 +50,12 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
 MAX_SKILL_LVL_AT_CREATION: Final = 2
 PLAYER_SWAP_SLOTS: Final = 4
 
-# Full skill key pool used at creation (matches prior backend + extras).
+# Full skill key pool used at creation — all keys must exist in game_config_skills (#1052).
 CREATION_SKILL_POOL: Final = frozenset(
     {
         "athletics",
         "stealth",
-        "sleight_of_hand",
+        "pickpocket",   # #1052: replaces sleight_of_hand (not in catalog)
         "lockpick",
         "acrobatics",
         "endurance",
@@ -67,9 +67,7 @@ CREATION_SKILL_POOL: Final = frozenset(
         "medicine",
         "persuasion",
         "intimidation",
-        "melee_attack",
-        "ranged_attack",
-        "spell_attack",
+        "attack",       # #1052: replaces melee_attack/ranged_attack/spell_attack (unified combat)
         "alchemy",
         # #826 pkt.4: skille reakcji osiągalne losowo/zamianą (wcześniej poza pulą → martwe).
         # `dodge` = aktywny unik (DEX), `shield_block` = blok tarczą (STR + założona tarcza).
