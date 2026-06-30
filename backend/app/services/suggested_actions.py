@@ -324,9 +324,9 @@ def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugges
         # Try location_npc_assignments join table first
         rows = conn.execute(
             """
-            SELECT n.key, n.name
+            SELECT n.key, n.label
             FROM location_npc_assignments lna
-            JOIN game_npcs n ON n.key = lna.npc_key
+            JOIN npcs n ON n.key = lna.npc_key
             WHERE lna.location_key = ? AND lna.is_active = 1
             LIMIT 2
             """,
@@ -334,7 +334,7 @@ def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugges
         ).fetchall()
         for row in rows:
             npc_key = str(row["key"] or "")
-            npc_name = str(row["name"] or npc_key)
+            npc_name = str(row["label"] or npc_key)
             actions.append(SuggestedAction(
                 label=f"Porozmawiaj z {npc_name}",
                 action=f"DIALOGUE:{npc_key}",
@@ -359,10 +359,10 @@ def _get_npc_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugges
                             continue
                         # Try to get name
                         nr = conn.execute(
-                            "SELECT name FROM game_npcs WHERE key = ? LIMIT 1",
+                            "SELECT label FROM npcs WHERE key = ? LIMIT 1",
                             (npc_key,),
                         ).fetchone()
-                        npc_name = str(nr["name"]) if nr else npc_key
+                        npc_name = str(nr["label"]) if nr else npc_key
                         actions.append(SuggestedAction(
                             label=f"Porozmawiaj z {npc_name}",
                             action=f"DIALOGUE:{npc_key}",
@@ -378,16 +378,16 @@ def _get_exit_actions(conn: sqlite3.Connection, location_key: str) -> list[Sugge
     try:
         rows = conn.execute(
             """
-            SELECT lc.to_key, gl.label
+            SELECT lc.to_location_key, gl.label
             FROM location_connections lc
-            LEFT JOIN game_locations gl ON gl.key = lc.to_key
-            WHERE lc.from_key = ?
+            LEFT JOIN game_locations gl ON gl.key = lc.to_location_key
+            WHERE lc.from_location_key = ?
             LIMIT 2
             """,
             (location_key,),
         ).fetchall()
         for row in rows:
-            dest_key = str(row["to_key"] or "")
+            dest_key = str(row["to_location_key"] or "")
             dest_name = str(row["label"] or dest_key)
             if not dest_key:
                 continue
