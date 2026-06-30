@@ -619,6 +619,71 @@ def _inject_pre_llm_unknown_location_denial(
     return True
 
 
+def _sync_local_hex_narrative_move(
+    conn: sqlite3.Connection,
+    session_id: int,
+    campaign_id: int,
+    resolved_location_id: int,
+) -> None:
+    """#1057: Sync session_flags.local_hex after a narrative move.
+
+    - Sub-location with existing hex → update local_hex to that hex.
+    - Sub-location missing a hex → auto-create it then update local_hex.
+    - Macro location → clear local_hex (player left the settlement).
+    """
+    try:
+        from app.services.local_hex_service import (
+            get_local_hex_for_subloc as _get_lh,
+            auto_assign_local_hex as _auto_lh,
+            LOCAL_TRAVEL_MINUTES as _LT_MIN,
+        )
+        loc_row = conn.execute(
+            "SELECT key, location_type, parent_key FROM game_locations WHERE id = ? AND is_active = 1",
+            (resolved_location_id,),
+        ).fetchone()
+        if not loc_row:
+            return
+
+        sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        sf = json.loads(sf_row["session_flags"] or "{}") if sf_row else {}
+
+        loc_type = loc_row["location_type"] if loc_row["location_type"] else "macro"
+        parent_key = loc_row["parent_key"]
+
+        if loc_type == "sub" and parent_key:
+            lh = _get_lh(conn, loc_row["key"])
+            if not lh:
+                lh = _auto_lh(conn, loc_row["key"], parent_key, campaign_id=campaign_id)
+            if lh:
+                sf["local_hex"] = {
+                    "hex_id": lh["id"],
+                    "q": lh["q"],
+                    "r": lh["r"],
+                    "location_key": lh.get("location_key"),
+                }
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(sf, ensure_ascii=False), session_id),
+                )
+                try:
+                    from app.services.clock_service import advance_clock as _adv_clock
+                    _adv_clock(campaign_id, minutes=_LT_MIN, reason="narrative_local_travel")
+                except Exception:
+                    pass
+        else:
+            if "local_hex" in sf:
+                sf.pop("local_hex")
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(sf, ensure_ascii=False), session_id),
+                )
+    except Exception as _lh_err:
+        logger.warning("local_hex_sync_narrative_failed", error=str(_lh_err))
+
+
 def _process_location_intent(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -792,6 +857,8 @@ def _process_location_intent(
                                 pass
                 except Exception as _newloc_hex_err:
                     logger.warning("new_location_hex_link_failed", error=str(_newloc_hex_err))
+            # #1057: sync local_hex after narrative move
+            _sync_local_hex_narrative_move(conn, session_id, campaign_id, result.resolved_location_id)
             conn.commit()
             logger.info(
                 "location_updated_from_gm_response",
