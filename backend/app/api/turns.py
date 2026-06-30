@@ -5915,14 +5915,19 @@ def create_turn_stream(
                     logger.warning("narrative_tag_strip_stream_error", error=str(_ste))
                 # U30.4 (#578): anti-desync guard on the streaming tor — flag when the
                 # narrator claims travel but no mechanical move happened this turn.
+                # #1056: outer `conn` is closed before token_generator runs; open fresh conn.
                 try:
                     from app.services.turn_pipeline import guard_travel_desync as _u30_guard_s
                     _u30s_narr, _ = _extract_narrative_for_cues(clean_text)
-                    _u30s_turn = conn.execute(
-                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
-                        (campaign_id_val,),
-                    ).fetchone()[0]
-                    _u30_guard_s(conn, campaign_id_val, _u30s_narr, u30_travel_executed, _u30s_turn)
+                    _u30_conn = get_db()
+                    try:
+                        _u30s_turn = _u30_conn.execute(
+                            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                            (campaign_id_val,),
+                        ).fetchone()[0]
+                        _u30_guard_s(_u30_conn, campaign_id_val, _u30s_narr, u30_travel_executed, _u30s_turn)
+                    finally:
+                        _u30_conn.close()
                 except Exception as _u30gse:
                     logger.warning("u30_desync_guard_stream_error", error=str(_u30gse))
                 # C10: parse QUEST_SUGGEST tags → active_quests, strip from narrative
@@ -5937,9 +5942,14 @@ def create_turn_stream(
                         _seen_titles = {q.get("title", "") for q in _existing}
                         _to_add = [q for q in _new_quests if q["title"] not in _seen_titles]
                         # #1011: respect the active-quest cap (mirror char_quests).
+                        # #1056: outer `conn` is closed; open fresh conn for cap check.
                         try:
                             from app.services.quest_persist_service import count_active_quests as _caq_s, MAX_ACTIVE_QUESTS as _maq_s
-                            _slots_s = max(0, _maq_s - _caq_s(conn, campaign_id_val, character_id_val))
+                            _cap_conn = get_db()
+                            try:
+                                _slots_s = max(0, _maq_s - _caq_s(_cap_conn, campaign_id_val, character_id_val))
+                            finally:
+                                _cap_conn.close()
                             _to_add = _to_add[:_slots_s]
                         except Exception as _caps_err:
                             logger.warning("quest_cap_trim_stream_error", error=str(_caps_err))
