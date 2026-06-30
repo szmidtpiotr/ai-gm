@@ -1055,6 +1055,7 @@ async function _openItemImageModal(key, encData, tableType) {
   };
   const endpoint = endpointMap[tableType] || '/api/admin/items';
   const reload   = reloadMap[tableType] || (() => {});
+  const isItem   = tableType === 'item';
   const m = document.createElement('div');
   m.id = 'item-img-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -1065,20 +1066,20 @@ async function _openItemImageModal(key, encData, tableType) {
     </div>
     <div style="overflow-y:auto;flex:1;padding:16px;display:flex;flex-direction:column;gap:14px">
       <div>
-        <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:4px">Prompt (EN)</label>
-        <textarea id="ii-prompt" style="resize:none;width:100%;box-sizing:border-box;min-height:72px;max-height:200px;background:var(--bg,#111);border:1px solid var(--border,#333);border-radius:6px;padding:8px;color:var(--t1,#eee);font-size:0.82rem">${_esc(item.image_prompt||'')}</textarea>
+        <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:4px">Prompt (EN)${isItem ? ' — zostaw puste dla auto-LLM' : ''}</label>
+        <textarea id="ii-prompt" style="resize:none;width:100%;box-sizing:border-box;min-height:72px;max-height:200px;background:var(--bg,#111);border:1px solid var(--border,#333);border-radius:6px;padding:8px;color:var(--t1,#eee);font-size:0.82rem">${_esc(item.image_gen_prompt||'')}</textarea>
       </div>
       <div id="ii-preview" style="min-height:60px;border-radius:8px;border:1px dashed var(--border,#333);display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.8rem">
         ${item.image_url ? `<img src="${_esc(item.image_url)}" style="max-width:100%;max-height:280px;border-radius:6px;object-fit:contain">` : 'Brak obrazu'}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="ii-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
-        <button id="ii-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>
+        ${!isItem ? '<button id="ii-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>' : ''}
       </div>
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border,#333);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
-      <button id="ii-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>
-      <button onclick="document.getElementById('item-img-modal').remove()" class="btn btn-secondary">Anuluj</button>
+      ${!isItem ? '<button id="ii-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>' : ''}
+      <button onclick="document.getElementById('item-img-modal').remove()" class="btn btn-secondary">Zamknij</button>
     </div>
   </div>`;
   document.body.appendChild(m);
@@ -1090,26 +1091,42 @@ async function _openItemImageModal(key, encData, tableType) {
     const btn = m.querySelector('#ii-gen-btn');
     btn.disabled = true; btn.textContent = '⏳ Generuję…';
     try {
-      const prompt = m.querySelector('#ii-prompt').value.trim() || 'fantasy item, detailed illustration';
-      const r = await apiFetch('/api/admin/images/generate', {method:'POST', body:JSON.stringify({prompt,width:512,height:512,steps:4})});
-      _lastFilename = r.filename; _lastUrl = r.url;
-      m.querySelector('#ii-preview').innerHTML = `<img src="${_esc(r.url)}" style="max-width:100%;max-height:280px;border-radius:6px;object-fit:contain">`;
-      m.querySelector('#ii-ref-btn').disabled = false;
-      m.querySelector('#ii-accept-btn').disabled = false;
+      if (isItem) {
+        // Items: LLM prompt builder + auto-save via dedicated endpoint
+        const customPrompt = m.querySelector('#ii-prompt').value.trim() || null;
+        const body = { force: true };
+        if (customPrompt) body.prompt = customPrompt;
+        const r = await apiFetch(`/api/admin/images/item/${encodeURIComponent(key)}/generate`, {method:'POST', body:JSON.stringify(body)});
+        m.querySelector('#ii-preview').innerHTML = `<img src="${_esc(r.image_url)}" style="max-width:100%;max-height:280px;border-radius:6px;object-fit:contain">`;
+        if (r.image_gen_prompt) m.querySelector('#ii-prompt').value = r.image_gen_prompt;
+        showToast('Obraz wygenerowany i zapisany.', 'success');
+        reload();
+      } else {
+        // Weapons/consumables/armor: generic FLUX endpoint, manual accept step
+        const prompt = m.querySelector('#ii-prompt').value.trim() || 'fantasy item, detailed illustration';
+        const r = await apiFetch('/api/admin/images/generate', {method:'POST', body:JSON.stringify({prompt,width:512,height:512,steps:4})});
+        _lastFilename = r.filename; _lastUrl = r.url;
+        m.querySelector('#ii-preview').innerHTML = `<img src="${_esc(r.url)}" style="max-width:100%;max-height:280px;border-radius:6px;object-fit:contain">`;
+        const refBtn = m.querySelector('#ii-ref-btn'); if (refBtn) refBtn.disabled = false;
+        const acceptBtn = m.querySelector('#ii-accept-btn'); if (acceptBtn) acceptBtn.disabled = false;
+      }
     } catch(ex) { showToast(ex.message||'Błąd generowania', 'error'); }
     finally { btn.disabled = false; btn.textContent = '⚡ Generuj'; }
   };
 
-  m.querySelector('#ii-accept-btn').onclick = async () => {
-    if (!_lastFilename) return;
-    const btn = m.querySelector('#ii-accept-btn');
-    btn.disabled = true; btn.textContent = 'Zapisuję…';
-    try {
-      await apiFetch(`${endpoint}/${encodeURIComponent(key)}`, {method:'PATCH', body:JSON.stringify({image_url:_lastUrl, image_prompt:m.querySelector('#ii-prompt').value.trim()||null})});
-      showToast('Obraz zapisany.', 'success');
-      reload(); m.remove();
-    } catch(ex) { showToast(ex.message||'Błąd zapisu', 'error'); btn.disabled=false; btn.textContent='✓ Akceptuj i zapisz'; }
-  };
+  const acceptBtn = m.querySelector('#ii-accept-btn');
+  if (acceptBtn) {
+    acceptBtn.onclick = async () => {
+      if (!_lastFilename) return;
+      const btn = acceptBtn;
+      btn.disabled = true; btn.textContent = 'Zapisuję…';
+      try {
+        await apiFetch(`${endpoint}/${encodeURIComponent(key)}`, {method:'PATCH', body:JSON.stringify({image_url:_lastUrl, image_gen_prompt:m.querySelector('#ii-prompt').value.trim()||null})});
+        showToast('Obraz zapisany.', 'success');
+        reload(); m.remove();
+      } catch(ex) { showToast(ex.message||'Błąd zapisu', 'error'); btn.disabled=false; btn.textContent='✓ Akceptuj i zapisz'; }
+    };
+  }
 }
 
 // ── Smart Entry ────────────────────────────────────────────────────────────────

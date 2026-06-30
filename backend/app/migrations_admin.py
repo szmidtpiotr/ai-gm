@@ -5635,6 +5635,23 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _ensure_item_image_columns(conn: sqlite3.Connection) -> None:
+    """#1048 — image_url + image_gen_prompt columns for game_config_items."""
+    for sql in [
+        "ALTER TABLE game_config_items ADD COLUMN image_url TEXT",
+        "ALTER TABLE game_config_items ADD COLUMN image_gen_prompt TEXT",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "duplicate column" in msg or "no such table" in msg:
+                pass
+            else:
+                raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5760,6 +5777,7 @@ def run_admin_migrations() -> None:
         _ensure_enemy_min_level(conn)  # #1023
         _seed_dwarf_toughness_enemy(conn)  # #1005
         _ensure_region_schema(conn)  # #1028 RM1
+        _ensure_item_image_columns(conn)  # #1048
     finally:
         conn.close()
 

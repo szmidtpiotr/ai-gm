@@ -480,6 +480,8 @@ class ItemPatchReq(BaseModel):
     note: str | None = None
     is_active: bool | None = None
     force: bool = False
+    image_url: str | None = None
+    image_gen_prompt: str | None = None
 
 
 class ItemDeleteReq(BaseModel):
@@ -1770,6 +1772,8 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             note=req.note,
             is_active=req.is_active,
             force=req.force,
+            image_url=req.image_url,
+            image_gen_prompt=req.image_gen_prompt,
         )
         return {"item": item}
     except KeyError:
