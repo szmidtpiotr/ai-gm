@@ -21,6 +21,7 @@ from app.services.world_service import (
     discard_entity,
     generate_sublocs_for_settlement,
     enrich_sublocs_labels,
+    fill_missing_pending_fields,
     SETTLEMENT_SUBLOC_DEFAULTS,
     SETTLEMENT_SUBTYPES,
     SUBLOC_SAFE_FOR_REST,
@@ -36,6 +37,21 @@ def _get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@router.post("/pending/fill/{entity_type}/{key}")
+def fill_pending_entity(entity_type: str, key: str):
+    """#1047 — LLM-generate suggestions for empty fields in a pending entity."""
+    if entity_type not in ("enemy", "npc", "item", "weapon"):
+        raise HTTPException(status_code=400, detail=f"Unsupported entity type: {entity_type}")
+    conn = _get_db()
+    try:
+        result = fill_missing_pending_fields(conn, entity_type, key)
+        if result.get("error") == "not found":
+            raise HTTPException(status_code=404, detail=f"{entity_type} '{key}' not found")
+        return result
+    finally:
+        conn.close()
 
 
 @router.get("/pending/counts")

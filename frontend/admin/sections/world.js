@@ -569,21 +569,23 @@ async function _loadBestiaryPending() {
   if (!container) return;
   container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>';
   try {
-    const [npcRes, enemyRes, weapRes, itemRes] = await Promise.allSettled([
+    const [npcRes, enemyRes, weapRes, itemRes, locRes] = await Promise.allSettled([
       apiFetch('/api/admin/world/pending/npcs'),
       apiFetch('/api/admin/world/pending/enemies'),
       apiFetch('/api/admin/world/pending/weapons'),
       apiFetch('/api/admin/world/pending/items'),
+      apiFetch('/api/admin/world/pending/locations'),
     ]);
-    const npcs    = npcRes.status==='fulfilled'   ? (npcRes.value?.items||npcRes.value||[])     : [];
-    const enemies = enemyRes.status==='fulfilled' ? (enemyRes.value?.items||enemyRes.value||[]) : [];
-    const weapons = weapRes.status==='fulfilled'  ? (weapRes.value?.items||weapRes.value||[])   : [];
-    const items   = itemRes.status==='fulfilled'  ? (itemRes.value?.items||itemRes.value||[])   : [];
-    const total = npcs.length + enemies.length + weapons.length + items.length;
+    const npcs      = npcRes.status==='fulfilled'   ? (npcRes.value?.items||npcRes.value||[])     : [];
+    const enemies   = enemyRes.status==='fulfilled' ? (enemyRes.value?.items||enemyRes.value||[]) : [];
+    const weapons   = weapRes.status==='fulfilled'  ? (weapRes.value?.items||weapRes.value||[])   : [];
+    const items     = itemRes.status==='fulfilled'  ? (itemRes.value?.items||itemRes.value||[])   : [];
+    const locations = locRes.status==='fulfilled'   ? (locRes.value?.items||locRes.value||[])     : [];
+    const total = npcs.length + enemies.length + weapons.length + items.length + locations.length;
     const badge = document.getElementById('world-pending-badge');
     if (badge) { badge.textContent = total || ''; badge.style.display = total ? '' : 'none'; }
     if (!total) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie, bronie i przedmioty zatwierdzone.</div></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie, bronie, przedmioty i lokacje zatwierdzone.</div></div>';
       return;
     }
     const _formatDate = (iso) => {
@@ -628,6 +630,7 @@ async function _loadBestiaryPending() {
       <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
+        <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditWeapon(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
         <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','approve',this)">✓</button>
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','discard',this)">✕</button>
       </td>
@@ -647,17 +650,29 @@ async function _loadBestiaryPending() {
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('item','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
+    const mkLocationRow = p => `<tr>
+      <td class="col-check"><input type="checkbox"></td>
+      <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
+      <td data-sort-val="Lokacja" data-label="Typ"><span class="badge badge-green" style="background:rgba(60,120,200,0.15);color:#7aadff">Lokacja</span></td>
+      <td class="td-muted" data-sort-val="${_esc(p.location_type||p.location_subtype||'')}" data-label="Typ lok.">${_esc(p.location_subtype||p.location_type||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc((p.description||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||'')}">${_esc((p.description||'').slice(0,70)||'—')}</td>
+      <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
+      <td class="td-actions">
+        <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('location','${_esc(p.key)}','approve',this)">✓</button>
+        <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('location','${_esc(p.key)}','discard',this)">✕</button>
+      </td>
+    </tr>`;
     container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table" id="bestiary-pending-table">
       <thead><tr>
         <th class="col-check"></th>
         <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
         <th><div class="th-inner">Typ</div></th>
-        <th><div class="th-inner">Rola/Tier</div></th>
+        <th><div class="th-inner">Rola/Tier/Typ lok.</div></th>
         <th><div class="th-inner">Opis</div></th>
         <th><div class="th-inner">Data utworzenia</div></th>
         <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
       </tr></thead>
-      <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow)].join('')}</tbody>
+      <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow), ...locations.map(mkLocationRow)].join('')}</tbody>
     </table></div>`;
   } catch(e) {
     container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
@@ -699,8 +714,10 @@ function openPendingNpcEditModal(item) {
       <div class="form-row"><label class="form-label">Opis</label><textarea id="pnpc-desc" class="field-input" rows="3">${_esc(p.description||p.backstory||'')}</textarea></div>
       <div class="form-row"><label class="form-label">Osobowość (prompt GM)</label><textarea id="pnpc-prompt" class="field-input" rows="3">${_esc(p.personality_prompt||'')}</textarea></div>
     </div>
-    <div class="modal-foot">
+    <div class="modal-foot" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-secondary" onclick="window._worldPendingFillAI('npc','${_esc(p.key)}',this)">🤖 Uzupełnij AI</button>
+      ${p.id ? `<button class="btn btn-secondary" onclick="window._worldNpcImage(${p.id},${JSON.stringify(p).replace(/"/g,'&quot;')})">🖼 Generuj obraz</button>` : ''}
       <button class="btn btn-primary" onclick="window._worldSavePendingNpc('${_esc(p.key)}',this)">✓ Zapisz i Zatwierdź</button>
     </div>
   </div>`;
@@ -744,7 +761,7 @@ function openPendingEnemyEditModal(item) {
   const DMG_TYPES = ['physical','fire','cold','poison','magic','lightning'];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
-  overlay.innerHTML = `<div class="modal-box" style="max-width:560px">
+  overlay.innerHTML = `<div class="modal-box" style="max-width:580px">
     <div class="modal-head"><span class="modal-title">Edytuj i Zatwierdź: ${_esc(p.label||p.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
     <div class="modal-body grid-2col" style="gap:10px">
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="pe-label" class="field-input" value="${_esc(p.label||'')}"></div>
@@ -755,16 +772,20 @@ function openPendingEnemyEditModal(item) {
         <select id="pe-dmgtype" class="field-input">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
       </div>
       <div class="form-row"><label class="form-label">HP bazowe</label><input id="pe-hp" class="field-input" type="number" value="${p.hp_base??''}"></div>
-      <div class="form-row"><label class="form-label">AC bazowe</label><input id="pe-ac" class="field-input" type="number" value="${p.ac_base??''}"></div>
-      <div class="form-row"><label class="form-label">Bonus ataku</label><input id="pe-atk" class="field-input" type="number" value="${p.attack_bonus??''}"></div>
-      <div class="form-row"><label class="form-label">Kość obrażeń</label><input id="pe-die" class="field-input" placeholder="np. 1d6" value="${_esc(p.damage_die||'')}"></div>
+      <div class="form-row"><label class="form-label" style="color:var(--warning)">AC bazowe *</label><input id="pe-ac" class="field-input" type="number" value="${p.ac_base??''}" placeholder="wymagane (8–18)"></div>
+      <div class="form-row"><label class="form-label" style="color:var(--warning)">Bonus ataku *</label><input id="pe-atk" class="field-input" type="number" value="${p.attack_bonus??''}" placeholder="wymagane (0–8)"></div>
+      <div class="form-row"><label class="form-label" style="color:var(--warning)">Kość obrażeń *</label><input id="pe-die" class="field-input" placeholder="wymagane (np. 1d6)" value="${_esc(p.damage_die||'')}"></div>
+      <div class="form-row"><label class="form-label">Mod. DEX</label><input id="pe-dex" class="field-input" type="number" value="${p.dex_modifier??0}" placeholder="0"></div>
+      <div class="form-row"><label class="form-label">Min. poziom</label><input id="pe-minlvl" class="field-input" type="number" min="1" value="${p.min_level??1}"></div>
       <div class="form-row"><label class="form-label">Nagroda XP</label><input id="pe-xp" class="field-input" type="number" value="${p.xp_award??''}"></div>
       <div class="form-row"><label class="form-label">Drop %</label><input id="pe-drop" class="field-input" type="number" min="0" max="100" value="${p.drop_chance!=null?Math.round(p.drop_chance*100):''}"></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pe-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="pe-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
     </div>
-    <div class="modal-foot">
+    <div class="modal-foot" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-secondary" onclick="window._worldPendingFillAI('enemy','${_esc(p.key)}',this)">🤖 Uzupełnij AI</button>
+      <button class="btn btn-secondary" onclick="window._worldEnemyImage('${_esc(p.key)}',${JSON.stringify(p).replace(/"/g,'&quot;')})">🖼 Generuj obraz</button>
       <button class="btn btn-primary" onclick="window._worldSavePendingEnemy('${_esc(p.key)}',this)">✓ Zapisz i Zatwierdź</button>
     </div>
   </div>`;
@@ -775,15 +796,23 @@ async function savePendingEnemy(key, btn) {
   const g = id => document.getElementById(id);
   const label = g('pe-label')?.value?.trim();
   if (!label) { _showToast('Wypełnij nazwę.', 'error'); return; }
+  const acVal = g('pe-ac')?.value?.trim();
+  const atkVal = g('pe-atk')?.value?.trim();
+  const dieVal = g('pe-die')?.value?.trim();
+  if (acVal === '' || acVal === null || acVal === undefined) { _showToast('AC bazowe jest wymagane.', 'error'); return; }
+  if (atkVal === '' || atkVal === null || atkVal === undefined) { _showToast('Bonus ataku jest wymagany.', 'error'); return; }
+  if (!dieVal) { _showToast('Kość obrażeń jest wymagana (np. 1d6).', 'error'); return; }
   btn.disabled = true; btn.textContent = '⏳';
   const body = {
     label, key,
     tier: g('pe-tier')?.value,
     damage_type: g('pe-dmgtype')?.value,
     hp_base: parseInt(g('pe-hp')?.value) || null,
-    ac_base: parseInt(g('pe-ac')?.value) || null,
-    attack_bonus: parseInt(g('pe-atk')?.value) || 0,
-    damage_die: g('pe-die')?.value?.trim() || null,
+    ac_base: parseInt(acVal),
+    attack_bonus: parseInt(atkVal),
+    dex_modifier: parseInt(g('pe-dex')?.value) || 0,
+    damage_die: dieVal,
+    min_level: parseInt(g('pe-minlvl')?.value) || 1,
     xp_award: parseInt(g('pe-xp')?.value) || 0,
     drop_chance: g('pe-drop')?.value !== '' ? parseInt(g('pe-drop').value)/100 : null,
     description: g('pe-desc')?.value?.trim() || null,
@@ -822,8 +851,10 @@ function openPendingItemEditModal(item) {
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pi-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="pi-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
     </div>
-    <div class="modal-foot">
+    <div class="modal-foot" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-secondary" onclick="window._worldPendingFillAI('item','${_esc(p.key)}',this)">🤖 Uzupełnij AI</button>
+      <button class="btn btn-secondary" onclick="window._worldPendingGenItemImage('${_esc(p.key)}',this)">🖼 Generuj obraz</button>
       <button class="btn btn-primary" onclick="window._worldSavePendingItem('${_esc(p.key)}',this)">✓ Zapisz i Zatwierdź</button>
     </div>
   </div>`;
@@ -856,6 +887,126 @@ async function savePendingItem(key, btn) {
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
     btn.disabled = false; btn.textContent = '✓ Zapisz i Zatwierdź';
+  }
+}
+
+// ── Pending weapon edit modal (#1047) ──────────────────────────────────────────
+function openPendingWeaponEditModal(item) {
+  const p = typeof item === 'string' ? JSON.parse(item) : item;
+  const STATS = ['STR','DEX','CON','INT','WIS','CHA'];
+  const WTYPES = ['melee','ranged','thrown','magic'];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
+    <div class="modal-head"><span class="modal-title">Edytuj i Zatwierdź broń: ${_esc(p.label||p.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+    <div class="modal-body grid-2col" style="gap:10px">
+      <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="pw-label" class="field-input" value="${_esc(p.label||'')}"></div>
+      <div class="form-row"><label class="form-label">Typ broni</label>
+        <select id="pw-type" class="field-input">${WTYPES.map(t=>`<option value="${t}"${p.weapon_type===t?' selected':''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="form-row"><label class="form-label" style="color:var(--warning)">Kość obrażeń *</label><input id="pw-die" class="field-input" placeholder="np. 1d8" value="${_esc(p.damage_die||'')}"></div>
+      <div class="form-row"><label class="form-label">Stat bazowy</label>
+        <select id="pw-stat" class="field-input">${STATS.map(s=>`<option value="${s}"${(p.linked_stat||'STR')===s?' selected':''}>${s}</option>`).join('')}</select>
+      </div>
+      <div class="form-row"><label class="form-label">Bonus ataku</label><input id="pw-atk" class="field-input" type="number" value="${p.attack_bonus??0}"></div>
+      <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pw-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
+      <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka</label><textarea id="pw-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
+    </div>
+    <div class="modal-foot" style="flex-wrap:wrap;gap:6px">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-secondary" onclick="window._worldPendingFillAI('weapon','${_esc(p.key)}',this)">🤖 Uzupełnij AI</button>
+      <button class="btn btn-primary" onclick="window._worldSavePendingWeapon('${_esc(p.key)}',this)">✓ Zapisz i Zatwierdź</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function savePendingWeapon(key, btn) {
+  const g = id => document.getElementById(id);
+  const label = g('pw-label')?.value?.trim();
+  if (!label) { _showToast('Wypełnij nazwę.', 'error'); return; }
+  const dieVal = g('pw-die')?.value?.trim();
+  if (!dieVal) { _showToast('Kość obrażeń jest wymagana (np. 1d8).', 'error'); return; }
+  btn.disabled = true; btn.textContent = '⏳';
+  const body = {
+    label,
+    weapon_type: g('pw-type')?.value || 'melee',
+    damage_die: dieVal,
+    linked_stat: g('pw-stat')?.value || 'STR',
+    attack_bonus: parseInt(g('pw-atk')?.value) || 0,
+    description: g('pw-desc')?.value?.trim() || null,
+    note: g('pw-note')?.value?.trim() || null,
+  };
+  try {
+    await apiFetch(`/api/admin/world/pending/weapons/${key}`, { method: 'PATCH', body: JSON.stringify(body) });
+    await apiFetch(`/api/admin/world/review/weapon/${key}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) });
+    btn.closest('.modal-overlay').remove();
+    _loaded.delete('pending'); _loaded.delete('weapons');
+    await _loadBestiaryPending();
+    if (window.__adminShell && window.__adminShell._loadPendingCount) {
+      await window.__adminShell._loadPendingCount();
+    }
+    _showToast('Zatwierdzono broń.', 'success');
+  } catch(e) {
+    _showToast(e.message || 'Błąd.', 'error');
+    btn.disabled = false; btn.textContent = '✓ Zapisz i Zatwierdź';
+  }
+}
+
+// ── #1047: AI fill missing fields ──────────────────────────────────────────────
+async function _pendingFillAI(entityType, key, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ AI…';
+  try {
+    const r = await apiFetch(`/api/admin/world/pending/fill/${entityType}/${key}`, { method: 'POST' });
+    const suggestions = r.suggestions || {};
+    if (!Object.keys(suggestions).length) {
+      _showToast(r.error ? `AI: ${r.error}` : 'Brak brakujących pól.', 'info');
+      return;
+    }
+    const fieldMap = {
+      ac_base: 'pe-ac', attack_bonus: 'pe-atk', dex_modifier: 'pe-dex',
+      damage_die: 'pe-die', min_level: 'pe-minlvl', xp_award: 'pe-xp',
+      description: 'pe-desc', note: 'pe-note',
+      personality_prompt: 'pnpc-prompt',
+      // item fields
+      'description_item': 'pi-desc', 'note_item': 'pi-note',
+      // weapon fields
+      'damage_die_w': 'pw-die', 'description_w': 'pw-desc', 'note_w': 'pw-note',
+    };
+    const altMap = {
+      description: entityType === 'npc' ? 'pnpc-desc' : entityType === 'item' ? 'pi-desc' : entityType === 'weapon' ? 'pw-desc' : 'pe-desc',
+      note: entityType === 'item' ? 'pi-note' : entityType === 'weapon' ? 'pw-note' : 'pe-note',
+      damage_die: entityType === 'weapon' ? 'pw-die' : 'pe-die',
+    };
+    let filled = 0;
+    for (const [field, value] of Object.entries(suggestions)) {
+      const elId = altMap[field] || fieldMap[field];
+      if (!elId) continue;
+      const el = document.getElementById(elId);
+      if (!el) continue;
+      el.value = value;
+      filled++;
+    }
+    _showToast(`AI wypełnił ${filled} pola/pól.`, 'success');
+  } catch(e) {
+    _showToast('Błąd AI: ' + (e.message||''), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+// ── #1047: item image generation from pending modal ────────────────────────────
+async function _pendingGenItemImage(key, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Generuję…';
+  try {
+    await apiFetch(`/api/admin/images/item/${encodeURIComponent(key)}/generate`, { method: 'POST' });
+    _showToast('Obraz wygenerowany i zapisany.', 'success');
+  } catch(e) {
+    _showToast('Błąd generowania: ' + (e.message||''), 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
   }
 }
 
@@ -1543,8 +1694,12 @@ export async function init(panel) {
   window._worldSavePendingNpc   = (key, btn) => savePendingNpc(key, btn);
   window._worldPendingEditEnemy = (p) => openPendingEnemyEditModal(p);
   window._worldSavePendingEnemy = (key, btn) => savePendingEnemy(key, btn);
-  window._worldPendingEditItem  = (p) => openPendingItemEditModal(p);
-  window._worldSavePendingItem  = (key, btn) => savePendingItem(key, btn);
+  window._worldPendingEditItem   = (p) => openPendingItemEditModal(p);
+  window._worldSavePendingItem   = (key, btn) => savePendingItem(key, btn);
+  window._worldPendingEditWeapon = (p) => openPendingWeaponEditModal(p);
+  window._worldSavePendingWeapon = (key, btn) => savePendingWeapon(key, btn);
+  window._worldPendingFillAI     = (type, key, btn) => _pendingFillAI(type, key, btn);
+  window._worldPendingGenItemImage = (key, btn) => _pendingGenItemImage(key, btn);
   window.eiOpenGallery  = (key) => eiOpenGallery(key);
   window.eiPickGallery  = (key, enc) => eiPickGallery(key, enc);
   window.niOpenGallery  = (id) => niOpenGallery(id);

@@ -926,7 +926,7 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
             """SELECT key, label, location_type, description, review_status,
                       created_by, location_subtype, biome, tier, canonical,
                       safe_for_rest, parent_key, source_campaign_id,
-                      ai_generated, is_active, temporary
+                      ai_generated, is_active, temporary, created_at
                FROM game_locations
                WHERE review_status = 'pending_review' AND is_active = 1
                ORDER BY rowid DESC LIMIT 100"""
@@ -960,7 +960,8 @@ def update_location_fields(conn: sqlite3.Connection, key: str, fields: dict) -> 
 def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, npc_type, personality_prompt, review_status, created_at
+            """SELECT id, key, label, npc_type, personality_prompt, description,
+                      is_ally, is_shop, is_quest_giver, is_active, review_status, created_at
                FROM npcs WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
@@ -972,7 +973,9 @@ def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, tier, hp_base, review_status, created_at
+            """SELECT key, label, tier, hp_base, ac_base, attack_bonus, dex_modifier,
+                      damage_die, damage_type, xp_award, drop_chance, min_level,
+                      description, note, image_url, review_status, created_at
                FROM game_config_enemies WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
@@ -1240,3 +1243,86 @@ def enrich_sublocs_labels(
 
     conn.commit()
     return updated
+
+
+# ── #1047: AI fill missing fields for pending entities ───────────────────────
+
+_FILL_ENTITY_CFG: dict[str, dict] = {
+    "enemy": {
+        "table": "game_config_enemies",
+        "fill_fields": ["ac_base", "attack_bonus", "dex_modifier", "damage_die",
+                        "xp_award", "description", "note"],
+        "hints": "ac_base 8-18, attack_bonus 0-8, dex_modifier -2 to 4, damage_die like '1d6' or '2d4', xp_award 10-500",
+    },
+    "npc": {
+        "table": "npcs",
+        "fill_fields": ["description", "personality_prompt"],
+        "hints": "Slavic-Germanic dark fantasy world called Kresy",
+    },
+    "item": {
+        "table": "game_config_items",
+        "fill_fields": ["description", "note"],
+        "hints": "item in dark fantasy RPG Kresy world",
+    },
+    "weapon": {
+        "table": "game_config_weapons",
+        "fill_fields": ["damage_die", "description", "note"],
+        "hints": "damage_die like '1d6' or '1d8', dark fantasy weapon",
+    },
+}
+
+
+def fill_missing_pending_fields(conn: sqlite3.Connection, entity_type: str, key: str) -> dict:
+    """LLM-generate suggestions for empty fields in a pending entity.
+
+    Returns {suggestions: {field: value, ...}, error: str | None}.
+    Never raises — on LLM failure returns {suggestions: {}, error: "..."}.
+    """
+    cfg = _FILL_ENTITY_CFG.get(entity_type)
+    if not cfg:
+        return {"suggestions": {}, "error": f"Unsupported entity type: {entity_type}"}
+
+    row = conn.execute(f"SELECT * FROM {cfg['table']} WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return {"suggestions": {}, "error": "not found"}
+
+    data = dict(row)
+    missing = [f for f in cfg["fill_fields"] if not data.get(f)]
+    if not missing:
+        return {"suggestions": {}, "error": None}
+
+    label = data.get("label", key)
+    context_parts = []
+    for k, v in data.items():
+        if v is not None and v != "" and k not in ("key", "review_status", "is_active"):
+            context_parts.append(f"{k}={v}")
+    context = ", ".join(context_parts[:20])
+
+    system_msg = (
+        "You are a fantasy RPG content designer for a dark Slavic-Germanic world called Kresy. "
+        "Respond with ONLY a valid JSON object — no markdown, no explanation."
+    )
+    user_msg = (
+        f"Fill missing fields for this {entity_type}: \"{label}\"\n"
+        f"Known data: {context}\n"
+        f"Missing fields to fill: {', '.join(missing)}\n"
+        f"Hints: {cfg['hints']}\n"
+        "All text fields (description, note, personality_prompt) MUST be in Polish.\n"
+        f"Return JSON with ONLY these keys: {missing}"
+    )
+
+    try:
+        from app.services.llm_service import generate_chat
+        response = generate_chat(
+            [{"role": "system", "content": system_msg},
+             {"role": "user", "content": user_msg}],
+            call_type="pending_fill",
+        )
+        m = re.search(r"\{[^{}]*\}", response, re.DOTALL)
+        if not m:
+            return {"suggestions": {}, "error": "LLM returned no JSON"}
+        raw = json.loads(m.group())
+        suggestions = {k: v for k, v in raw.items() if k in missing and v is not None}
+        return {"suggestions": suggestions, "error": None}
+    except Exception as exc:
+        return {"suggestions": {}, "error": str(exc)[:300]}
