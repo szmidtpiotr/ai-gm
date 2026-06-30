@@ -71,8 +71,8 @@ _DIRECTION_KEYWORDS: dict[str, tuple[int, int]] = {
 }
 
 _MOVE_VERB_PATTERN = _re_tp.compile(
-    r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam|podroz?uj[eę]|podróżuj[eę]|"
-    r"jad[eę]|biegne|biegnę|zmierzam|ruszam|wchodz[eę]|wchodze|"
+    r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam[y]?|podroz?uj(?:[eę]|emy)|podróżuj(?:[eę]|emy)|"
+    r"jad[eę]|biegne|biegnę|zmierzam|ruszam[y]?|wchodz[eę]|wchodze|"
     r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy)\b",
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
@@ -120,6 +120,71 @@ def detect_move_intent(
             }
 
     return None
+
+
+# ── #1050: Vague move intent detection + hint builder ────────────────────────
+
+def detect_vague_move_intent(player_message: str) -> bool:
+    """Return True when message has movement verb but no cardinal direction (#1050).
+
+    Triggers narrator hint injection so the LLM asks where the player wants to go
+    instead of inventing a destination.
+    """
+    text = player_message.strip().lower()
+    if not _MOVE_VERB_PATTERN.search(text):
+        return False
+    for direction_name in _DIRECTION_KEYWORDS:
+        if direction_name in text:
+            return False
+    return True
+
+
+def _build_vague_move_hint(conn: "sqlite3.Connection", session_flags: dict) -> str:
+    """Build [SYSTEM: ...] hint for narrator when player movement intent is vague (#1050).
+
+    Looks up adjacent hex labels from world_hexes so the narrator can offer real options.
+    """
+    cur = session_flags.get("current_hex") or {"q": 0, "r": 0}
+    q, r = int(cur.get("q", 0)), int(cur.get("r", 0))
+
+    from app.services.hex_travel_service import hex_neighbors
+    neighbor_coords = hex_neighbors(q, r)
+
+    location_hints: list[str] = []
+    max_hints = 4
+    for nq, nr in neighbor_coords:
+        if len(location_hints) >= max_hints:
+            break
+        row = conn.execute(
+            "SELECT label, hex_type, location_key FROM world_hexes "
+            "WHERE q=? AND r=? AND is_active=1 AND map_level=0",
+            (nq, nr),
+        ).fetchone()
+        if not row:
+            continue
+        name = row["label"] or row["hex_type"] or f"({nq},{nr})"
+        if row["location_key"]:
+            loc = conn.execute(
+                "SELECT label FROM game_locations WHERE key=? LIMIT 1",
+                (row["location_key"],),
+            ).fetchone()
+            if loc and loc["label"]:
+                name = loc["label"]
+        location_hints.append(name)
+
+    if location_hints:
+        options = ", ".join(location_hints)
+        body = (
+            "Gracz nie podał kierunku ani celu podróży. Zapytaj dokąd zmierza. "
+            f"Możliwe pobliskie miejsca: {options}. "
+            "NIE opisuj wyruszenia — gracz stoi w miejscu."
+        )
+    else:
+        body = (
+            "Gracz nie podał kierunku ani celu podróży. Zapytaj dokąd zmierza. "
+            "NIE opisuj wyruszenia — gracz stoi w miejscu."
+        )
+    return f"\n[SYSTEM: {body}]"
 
 
 # ── U30: Anty-desync guard ────────────────────────────────────────────────────
@@ -177,6 +242,9 @@ def execute_directional_travel(
 
     mv = detect_move_intent(player_text, cur)
     if not mv:
+        if detect_vague_move_intent(player_text):
+            hint = _build_vague_move_hint(conn, flags)
+            return {"executed": False, "system_fact": hint, "intent": None}
         return {"executed": False, "system_fact": None, "intent": None}
 
     from app.services.hex_travel_service import resolve_chain_travel
@@ -288,6 +356,7 @@ def process_v2_turn(
     """
     t_start = time.perf_counter()
     _skill_pending = None  # set if narrator embeds [SKILL_TEST] or [TRAP] tag
+    _vague_move = False  # #1050: set when player has movement verb but no direction
 
     # ── Step 1: Parse input ────────────────────────────────────────────────
     if is_structured_action(user_input):
@@ -296,6 +365,8 @@ def process_v2_turn(
         # U30 keyword fast-path: directional text → MOVEMENT without LLM call
         parsed = ParsedIntent(action_type=_move["action_type"], params=_move["params"], raw_tag="")
     else:
+        # #1050: detect vague movement before LLM parse so we can inject hint later
+        _vague_move = detect_vague_move_intent(user_input)
         loc_info = get_current_location_info(conn, campaign_id)
         location_key = (session_flags.get("current_location_key") or
                         (loc_info["key"] if loc_info else ""))
@@ -432,6 +503,10 @@ def process_v2_turn(
         campaign_id=campaign_id,
         player_message=user_input,
     )
+
+    # #1050: inject vague-move hint so narrator asks for destination, not invents one
+    if _vague_move:
+        narrator_prompt += _build_vague_move_hint(conn, refreshed_flags)
 
     # ── Step 8: LLM Narrator ──────────────────────────────────────────────
     try:
