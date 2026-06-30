@@ -157,6 +157,7 @@ class ContextInjector:
         if _in_dungeon:
             blocks = [
                 continuity_block,
+                self._build_length_directive_block(session_flags, action_type, mechanic_result, player_message),
                 self._build_loch_block(session_flags),
                 self._build_entities_block([], combat_roster),  # enemies only, no overworld NPCs
                 self._build_mechanic_block(action_type, mechanic_result),
@@ -168,6 +169,7 @@ class ContextInjector:
             # Build blocks
             blocks = [
                 continuity_block,
+                self._build_length_directive_block(session_flags, action_type, mechanic_result, player_message),
                 self._build_narrative_state_block(session_flags),
                 self._build_world_block(session_flags, ingame_hours, player_message),
                 self._build_stale_block(session_flags),
@@ -373,6 +375,67 @@ class ContextInjector:
         return "\n".join(lines)
 
     _STORY_STALE_THRESHOLD = 12  # #1026: raised from 5 — was triggering too early
+
+    # ── #1038 — Adaptacyjna długość narracji ────────────────────────────────
+    # Resolver łączy stan-lokacji (B: turns_at_location) + intencję gracza
+    # (C: action_type / słowa-klucze) → jeden poziom → wstrzykuje [DŁUGOŚĆ: ...].
+    # Słownik poziomów (A) jest konfigurowalny (strojenie — Numbers Policy #1038).
+    _NARRATION_LEVELS = {
+        "WALKA":       "2-3 krótkie, dynamiczne zdania akcji (patrz ACTIVE COMBAT)",
+        "PEŁNY":       "4-6+ zdań — pełny opis sensoryczny miejsca (widzisz/słyszysz/czujesz)",
+        "ŚREDNI":      "3-4 zdania — opisz to, co gracz bada; bez re-opisu całej lokacji",
+        "ZWIĘZŁY":     "1-3 zdania — odpowiedz na akcję, NIE opisuj ponownie znanego miejsca",
+        "MECHANICZNY": "1-2 zdania — zwięzła reakcja na prostą akcję",
+    }
+    # Próg "nowa lokacja" (turns_at_location <= próg → PEŁNY). Startowy = 0.
+    _NEW_LOCATION_TURNS = 0
+    # Akcje czysto mechaniczne → MECHANICZNY.
+    _MECHANICAL_ACTIONS = frozenset({"ITEM_PICKUP", "ITEM_USE", "DEATH_SAVE", "FEAR_TEST"})
+    # Akcje walki → WALKA (poza sygnałem combat_roster).
+    _COMBAT_ACTIONS = frozenset({"ATTACK", "FLEE"})
+    # Akcje examine → ŚREDNI.
+    _EXAMINE_ACTIONS = frozenset({"EXAMINE", "SEARCH"})
+    # Słowa-klucze intencji "rozejrzyj się / zbadaj" (C) — fallback gdy action_type ogólny.
+    _EXAMINE_KEYWORDS = (
+        "rozejrz", "rozglą", "zbadaj", "badam", "przyjrz", "obejrz", "oglądam",
+        "szukam", "przeszuk", "lustruj", "patrzę", "obserwuj",
+    )
+
+    def _resolve_narration_length(
+        self, session_flags: dict, action_type: str, mechanic_result: dict, player_message: str
+    ) -> tuple[str, str]:
+        """Resolver długości narracji (#1038). Zwraca (poziom, opis).
+
+        Pierwszeństwo wg macierzy: walka > nowa lokacja > examine > mechaniczne > akcja.
+        B = turns_at_location (stan lokacji), C = action_type / słowa-klucze (intencja).
+        """
+        action = (action_type or "").upper()
+        combat_active = bool(session_flags.get("combat_roster")) or action in self._COMBAT_ACTIONS
+        if combat_active:
+            return "WALKA", self._NARRATION_LEVELS["WALKA"]
+
+        turns = int(session_flags.get("turns_at_location", 0) or 0)
+        # B: nowa lokacja / zmiana sceny → PEŁNY (nadpisuje intencję, poza walką).
+        if turns <= self._NEW_LOCATION_TURNS or action == "MOVEMENT":
+            return "PEŁNY", self._NARRATION_LEVELS["PEŁNY"]
+
+        # Ta sama lokacja — C koryguje bazę.
+        msg = (player_message or "").lower()
+        examine = action in self._EXAMINE_ACTIONS or any(k in msg for k in self._EXAMINE_KEYWORDS)
+        if examine:
+            return "ŚREDNI", self._NARRATION_LEVELS["ŚREDNI"]
+        if action in self._MECHANICAL_ACTIONS:
+            return "MECHANICZNY", self._NARRATION_LEVELS["MECHANICZNY"]
+        return "ZWIĘZŁY", self._NARRATION_LEVELS["ZWIĘZŁY"]
+
+    def _build_length_directive_block(
+        self, session_flags: dict, action_type: str, mechanic_result: dict, player_message: str
+    ) -> str:
+        """Wstrzykuje deterministyczną dyrektywę długości do kontekstu narratora (#1038)."""
+        level, desc = self._resolve_narration_length(
+            session_flags, action_type, mechanic_result, player_message
+        )
+        return f"[DŁUGOŚĆ: {level} — {desc}]"
 
     def _build_stale_block(self, session_flags: dict) -> str:
         turns = session_flags.get("turns_at_location", 0)
