@@ -1087,6 +1087,7 @@ const _ROW_REGISTRY = {
   let _wbSelected = null;
   let _wbPaintType = 'forest';
   let _wbPaintMode = false;
+  let _wbShowLocOverlay = false; // toggle: highlight hexes with locations
   let _wbDrawingTp = null;
   let _wbPainting = false;        // mid drag-stroke
   let _wbStroke = null;           // Map<"q,r", priorHexCloneOrNull> for current stroke
@@ -1168,11 +1169,15 @@ const _ROW_REGISTRY = {
       const cfg = _wbHexTypes[hex.hex_type] || { map_color:'#4a6a4a', map_icon:'' };
       const sel = _wbSelected && _wbSelected.q === hex.q && _wbSelected.r === hex.r;
       const hl = !sel && _wbPaintType && hex.hex_type === _wbPaintType;
+      const hasLoc = _wbShowLocOverlay && !!_wbLocations[_wbKey(hex.q, hex.r)];
+      const strokeColor = sel ? '#f0c040' : hasLoc ? '#4ade80' : hl ? '#38bdf8' : '#222';
+      const strokeWidth = sel ? 2 : hasLoc ? 2.5 : hl ? 2 : 0.7;
       html += `<polygon class="whx" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wbHexCorners(sx, sy, rz - 1)}"
-        fill="${cfg.map_color}" stroke="${sel ? '#f0c040' : hl ? '#38bdf8' : '#222'}"
-        stroke-width="${sel ? 2 : hl ? 2 : 0.7}"
+        fill="${cfg.map_color}" stroke="${strokeColor}"
+        stroke-width="${strokeWidth}"
         style="cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
+      if (hasLoc) html += `<polygon points="${_wbHexCorners(sx, sy, rz - 1)}" fill="#4ade80" fill-opacity="0.18" stroke="none" style="pointer-events:none"/>`;
       if (_wbZoom >= 0.45 && cfg.map_icon)
         html += `<text x="${sx}" y="${sy - rz * 0.05}" text-anchor="middle"
           font-size="${Math.max(9, 13 * _wbZoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
@@ -1713,6 +1718,12 @@ const _ROW_REGISTRY = {
       mSelect.onclick = () => { _wbPaintMode = false; _wbRenderPalette(); _wbRender(); };
       mPaint.onclick = () => { _wbPaintMode = true; _wbRenderPalette(); _wbRender(); };
     }
+    const locOverlayBtn = document.getElementById('wb-loc-overlay');
+    if (locOverlayBtn) locOverlayBtn.onclick = () => {
+      _wbShowLocOverlay = !_wbShowLocOverlay;
+      locOverlayBtn.className = `btn btn-sm ${_wbShowLocOverlay ? 'btn-primary' : 'btn-secondary'}`;
+      _wbRender();
+    };
     const undoBtn = document.getElementById('wb-undo');
     if (undoBtn) { undoBtn.onclick = _wbUndo; _wbUpdateUndoBtn(); }
     const saveBtn = document.getElementById('wb-save-canon');
@@ -2457,6 +2468,9 @@ function _sectionHtml() {
               </div>
               <div style="padding:2px 6px 2px">
                 <button id="wb-undo" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Cofnij ostatnią edycję (Ctrl+Z)" disabled>↶ Cofnij</button>
+              </div>
+              <div style="padding:0 6px 2px">
+                <button id="wb-loc-overlay" class="btn btn-sm btn-secondary" style="width:100%;font-size:0.68rem;padding:4px 3px" title="Podświetl heksy z przypiętymi lokacjami (zielone = ma lokację)">📍 Lokacje na mapie</button>
               </div>
               <div style="padding:0 6px 2px">
                 <button id="wb-save-canon" class="btn btn-sm" style="width:100%;font-size:0.68rem;padding:5px 3px;background:#c9a54a;color:#1a1206;border:1px solid #c9a54a;font-weight:700" title="Zapisz bieżącą mapę jako kanon — trwałe, przeżywa reset/wipe DB">💾 Zapisz mapę (kanon)</button>
