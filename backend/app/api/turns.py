@@ -676,11 +676,30 @@ def _process_location_intent(
                         ).fetchone()
                         if _gs_sf:
                             _sf_loc = _jloc.loads(_gs_sf["session_flags"] or "{}")
-                            _sf_loc["current_hex"] = {"q": int(_hex_row["q"]), "r": int(_hex_row["r"])}
-                            conn.execute(
-                                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                                (_jloc.dumps(_sf_loc, ensure_ascii=False), _gs_sf["id"]),
-                            )
+                            # #1043: guard narrative hex jump — narrator cannot teleport >1 hex
+                            _new_q, _new_r = int(_hex_row["q"]), int(_hex_row["r"])
+                            _old_hx = _sf_loc.get("current_hex") or {}
+                            _old_q, _old_r = _old_hx.get("q"), _old_hx.get("r")
+                            _jump_ok = True
+                            if _old_q is not None and _old_r is not None:
+                                from app.services.hex_travel_service import hex_distance as _hd
+                                _dist = _hd(int(_old_q), int(_old_r), _new_q, _new_r)
+                                if _dist > 1:
+                                    logger.warning(
+                                        "narrative_hex_jump_blocked_location_intent",
+                                        from_hex=(_old_q, _old_r),
+                                        to_hex=(_new_q, _new_r),
+                                        distance=_dist,
+                                        location_key=_loc_row["key"],
+                                        session_id=session_id,
+                                    )
+                                    _jump_ok = False
+                            if _jump_ok:
+                                _sf_loc["current_hex"] = {"q": _new_q, "r": _new_r}
+                                conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                                    (_jloc.dumps(_sf_loc, ensure_ascii=False), _gs_sf["id"]),
+                                )
             except Exception as _hex_sync_err:
                 logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
             # Link new gm_runtime location to the current world_hex so it appears on the admin map

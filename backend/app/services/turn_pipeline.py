@@ -826,12 +826,33 @@ def _update_hex_world_state(
     dest_q = mechanic_result.get("destination_q")
     dest_r = mechanic_result.get("destination_r")
     # U30 fix #518: text movement provides to_location_key but not q/r — resolve via world_hexes
+    # #1043: guard — LLM-resolved destination via to_location_key cannot jump the whole
+    # region in a single turn. Named-location moves up to MAX_LLM_HEX_JUMP are allowed;
+    # beyond that the move is blocked and the hex stays (prevents far-corner teleport).
+    # Directional fast-path (destination_q/r explicit) is exempt — detect_move_intent
+    # already enforces ±1 steps, so no extra guard needed there.
+    MAX_LLM_HEX_JUMP = 15  # numbers policy starting value — whole region ~30-50 hexes
     if dest_q is None or dest_r is None:
         to_loc_key = mechanic_result.get("to_location_key")
         if to_loc_key:
-            from app.services.hex_travel_service import resolve_location_key_to_hex
+            from app.services.hex_travel_service import resolve_location_key_to_hex, hex_distance
             coords = resolve_location_key_to_hex(to_loc_key, conn)
             if coords:
+                old_hex = session_flags.get("current_hex") or {}
+                old_q = old_hex.get("q")
+                old_r = old_hex.get("r")
+                if old_q is not None and old_r is not None:
+                    dist = hex_distance(int(old_q), int(old_r), coords[0], coords[1])
+                    if dist > MAX_LLM_HEX_JUMP:
+                        logger.warning(
+                            "narrative_hex_jump_blocked_location_key",
+                            from_hex=(old_q, old_r),
+                            to_hex=coords,
+                            distance=dist,
+                            location_key=to_loc_key,
+                            campaign_id=campaign_id,
+                        )
+                        return
                 dest_q, dest_r = coords
                 logger.info("u30_hex_resolved_from_location_key",
                             location_key=to_loc_key, q=dest_q, r=dest_r,
