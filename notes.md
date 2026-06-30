@@ -203,3 +203,8 @@ caveman (zwięzłość) · RTK (kompresja komend) · ponytail (mniej kodu).
 - Pytest: 3/3 PASS (test_issue932_create_lobby_model_id.py)
 - Przetestowane /playwright-test-report 2026-06-23, raport: https://github.com/szmidtpiotr/ai-gm/issues/932#issuecomment-4776267323
 - Werdykt ✅ — HTTP 200 + campaign_id, model_id=default w DB, lobby widoczne w UI
+
+## #1057 local_hex narrative sync — test 2026-06-30
+- Playwright test: https://github.com/szmidtpiotr/ai-gm/issues/1057#issuecomment-4844433104
+- Werdykt: ✅ DZIAŁA — `_sync_local_hex_narrative_move()` poprawnie ustawia local_hex po ruchu narracyjnym; 📍 pin na submap; `has_local_map=false` gdy poza osadą otwiera mapę świata
+- Edge case: brak location_intent przy wyjściu = local_hex stale w DB, ale UX poprawny (submapa nie pokazuje się)
