@@ -25,7 +25,8 @@ def _make_db():
         CREATE TABLE campaigns (
             id INTEGER PRIMARY KEY,
             status TEXT DEFAULT 'active',
-            gm_plan_json TEXT
+            gm_plan_json TEXT,
+            ended_at TEXT
         );
         CREATE TABLE character_quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

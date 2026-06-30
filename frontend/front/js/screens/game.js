@@ -5288,6 +5288,12 @@ async function showVictoryScreen() {
         if (metaEl)  metaEl.textContent  = `${data.character_class || ''} · Poz. ${data.level || 1} · ${data.xp_lifetime_earned ?? 0} PD`;
         if (titleEl) titleEl.textContent = data.ending_title || '';
         if (sumEl)   sumEl.textContent   = data.ending_summary || '';
+        // #1058: dynamic tone label based on ending type
+        const toneEl = document.getElementById('victory-tone-label');
+        if (toneEl) {
+            const toneMap = { primary: 'triumfalnego końca', alternate: 'nieoczekiwanego końca', failure: 'gorzkiego końca' };
+            toneEl.textContent = toneMap[data.ending_type] || 'niezwykłego końca';
+        }
         _renderRunStats('victory-stats', data?.stats);
     } catch (_e) {}
 }

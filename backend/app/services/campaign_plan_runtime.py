@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from datetime import datetime, timezone
 import structlog
 
 from app.services.event_logger import write_game_event
@@ -275,8 +276,10 @@ def maybe_complete_campaign(
     if active_quests > 0:
         return False
 
+    ended_at = datetime.now(timezone.utc).isoformat()
     conn.execute(
-        "UPDATE campaigns SET status = 'completed' WHERE id = ?", (campaign_id,)
+        "UPDATE campaigns SET status = 'completed', ended_at = ? WHERE id = ?",
+        (ended_at, campaign_id),
     )
     # Drop the quest-dead nudge so the narrator is not told to invent a new quest.
     try:

@@ -22,6 +22,157 @@ DEATH_SAVE_FAILURE_THRESHOLD = 3
 _V2_DC_LADDER = [10, 13, 16, 19]
 
 
+# ── #1058 — Victory ending helpers ───────────────────────────────────────────
+
+
+def _find_ending_by_id(endings, ending_id: str) -> dict | None:
+    """Find ending by id in list or dict form of endings."""
+    if isinstance(endings, dict):
+        return endings.get(ending_id)
+    if isinstance(endings, list):
+        for e in endings:
+            if isinstance(e, dict) and str(e.get("id") or "") == ending_id:
+                return e
+    return None
+
+
+def _find_primary_type_ending(endings) -> dict | None:
+    """First ending with type=='primary', or first ending if none has that type."""
+    if isinstance(endings, dict):
+        endings_list = list(endings.values())
+    elif isinstance(endings, list):
+        endings_list = endings
+    else:
+        return None
+    for e in endings_list:
+        if isinstance(e, dict) and e.get("type") == "primary":
+            return e
+    return endings_list[0] if endings_list else None
+
+
+def _store_selected_ending(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    ending_id: str,
+) -> None:
+    """Persist selected_ending_id inside gm_plan_json for future reads."""
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if not row:
+            return
+        plan = json.loads(row["gm_plan_json"] if isinstance(row, sqlite3.Row) else row[0] or "{}")
+        plan["selected_ending_id"] = ending_id
+        conn.execute(
+            "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+            (json.dumps(plan, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+    except Exception as _err:
+        logger.warning("store_selected_ending_failed", error=str(_err))
+
+
+def _select_ending_id_llm(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    plan: dict,
+    camp,
+) -> str | None:
+    """Ask LLM to pick the best ending_id based on the last 15 turns.
+
+    Returns None on any error so callers can fall back gracefully.
+    """
+    endings = plan.get("endings")
+    if not endings:
+        return None
+    endings_list = list(endings.values()) if isinstance(endings, dict) else (
+        endings if isinstance(endings, list) else []
+    )
+    if len(endings_list) <= 1:
+        e = endings_list[0] if endings_list else None
+        return str(e.get("id")) if isinstance(e, dict) and e.get("id") else None
+
+    try:
+        rows = conn.execute(
+            "SELECT user_text, assistant_text FROM campaign_turns "
+            "WHERE campaign_id = ? ORDER BY turn_number DESC LIMIT 15",
+            (campaign_id,),
+        ).fetchall()
+    except Exception:
+        return None
+    rows = list(reversed(rows))
+    turns_text = "\n".join(
+        f"Gracz: {(r['user_text'] or '')[:200]}\nNarrator: {(r['assistant_text'] or '')[:200]}"
+        for r in rows
+    )
+    endings_desc = "\n".join(
+        f"- {e.get('id')}: \"{e.get('title')}\" — wymagania: {'; '.join(e.get('requirements', []))}"
+        for e in endings_list if isinstance(e, dict)
+    )
+    prompt = (
+        f"Ostatnie tury gry (chronologicznie):\n{turns_text}\n\n"
+        f"Dostępne zakończenia kampanii:\n{endings_desc}\n\n"
+        "Na podstawie faktycznych wydarzeń z ostatnich tur wybierz JEDNO zakończenie, "
+        "które najlepiej pasuje do tego, co naprawdę się wydarzyło. "
+        "Zwróć TYLKO id zakończenia, np. `ending_alternate`. Bez żadnego innego tekstu."
+    )
+    owner_id = int(camp["owner_user_id"]) if camp else 1
+    model = str(camp["model_id"] or "").strip() if camp else ""
+    llm_config = get_user_llm_settings_full(owner_id)
+    model_resolved = (llm_config.get("model") or model or "").strip() or model
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a game master assistant. Return only the ending_id string, nothing else.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        text = (generate_chat(messages=messages, model=model_resolved, llm_config=llm_config) or "").strip()
+        valid_ids = {str(e.get("id")) for e in endings_list if isinstance(e, dict) and e.get("id")}
+        for vid in valid_ids:
+            if vid in text:
+                return vid
+    except Exception as e:
+        logger.warning("ending_selection_llm_failed", error=str(e))
+    return None
+
+
+def generate_victory_epitaph_llm(
+    *,
+    name: str,
+    arch: str,
+    ending_title: str,
+    ending_summary: str,
+    recent_turns: str,
+    model: str,
+    llm_config: dict,
+) -> str:
+    """Generate a short (2-3 sentence) victory summary based on last turns + chosen ending."""
+    prompt = (
+        f"Napisz krótkie podsumowanie zakończenia (2–3 zdania) dla bohatera imieniem {name} ({arch}).\n"
+        f"Tytuł zakończenia: {ending_title}\n"
+        f"Opis zakończenia: {ending_summary}\n"
+        f"Ostatnie zdarzenia:\n{recent_turns}\n\n"
+        "Pisz po polsku, bez markdown. Klimat ciemnego fantasy. "
+        "Opisz co faktycznie zaszło, nie tylko powtarzaj tytuł."
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": "Piszesz krótkie klimatyczne podsumowania zakończeń kampanii RPG. Zwykły tekst, bez markdown.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        text = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
+    except Exception as e:
+        logger.warning("victory_epitaph_llm_failed", error=str(e))
+        text = ""
+    return text or f"{name} osiągnął kres swej przygody — {ending_title}."
+
+
 def get_v2_death_save_dc(death_save_count: int) -> int:
     """Return the DC for the Nth 0-HP event in this combat (1-indexed)."""
     idx = min(max(0, death_save_count - 1), len(_V2_DC_LADDER) - 1)
@@ -269,7 +420,8 @@ def _end_summary_payload(
 ) -> dict[str, Any] | None:
     camp = conn.execute(
         """
-        SELECT id, status, death_reason, ended_at, epitaph, gm_plan_json
+        SELECT id, status, death_reason, ended_at, epitaph, gm_plan_json,
+               model_id, owner_user_id
         FROM campaigns WHERE id = ?
         """,
         (campaign_id,),
@@ -330,25 +482,74 @@ def _end_summary_payload(
     xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
 
     # Pull ending title + summary from gm_plan_json for victory.
+    # #1058: use selected_ending_id (stored on CAMPAIGN_END tag or from LLM selection)
+    # instead of always picking endings[0].
     ending_title = ""
     ending_summary = ""
+    ending_type = "primary"
     if outcome == "victory":
         try:
             plan = json.loads(camp["gm_plan_json"] or "{}")
         except Exception:
             plan = {}
         endings = plan.get("endings")
-        # endings may be a dict keyed by ending_id, or a list. Pick the first
-        # non-empty one for MVP — when CAMPAIGN_END tag lands the id will be
-        # propagated explicitly.
         ending_obj = None
-        if isinstance(endings, dict) and endings:
-            ending_obj = next(iter(endings.values()))
-        elif isinstance(endings, list) and endings:
-            ending_obj = endings[0]
+
+        # 1. Use pre-stored ending_id if available (from [CAMPAIGN_END:id] tag)
+        sel_id = plan.get("selected_ending_id")
+        if sel_id:
+            ending_obj = _find_ending_by_id(endings, sel_id)
+
+        # 2. LLM-based selection — lazy, cached in gm_plan_json after first run
+        if not ending_obj:
+            selected_id = _select_ending_id_llm(conn, int(camp["id"]), plan, camp)
+            if selected_id:
+                ending_obj = _find_ending_by_id(endings, selected_id)
+                if ending_obj:
+                    _store_selected_ending(conn, int(camp["id"]), selected_id)
+
+        # 3. Fall back to first primary-type ending (not just endings[0])
+        if not ending_obj:
+            ending_obj = _find_primary_type_ending(endings)
+
         if isinstance(ending_obj, dict):
             ending_title = str(ending_obj.get("title") or "")
             ending_summary = str(ending_obj.get("summary") or ending_obj.get("description") or "")
+            ending_type = str(ending_obj.get("type") or "primary")
+
+        # Generate victory epitaph on first load, cache in DB
+        if not str(camp["epitaph"] or "").strip() and ending_title:
+            try:
+                rows = conn.execute(
+                    "SELECT user_text, assistant_text FROM campaign_turns "
+                    "WHERE campaign_id = ? ORDER BY turn_number DESC LIMIT 10",
+                    (int(camp["id"]),),
+                ).fetchall()
+                recent_turns = "\n".join(
+                    f"Gracz: {(r['user_text'] or '')[:150]}\nNarrator: {(r['assistant_text'] or '')[:150]}"
+                    for r in reversed(rows)
+                )
+                owner_id = int(camp["owner_user_id"] or 1)
+                model = str(camp["model_id"] or "").strip()
+                llm_cfg = get_user_llm_settings_full(owner_id)
+                model_resolved = (llm_cfg.get("model") or model or "").strip() or model
+                victory_epitaph = generate_victory_epitaph_llm(
+                    name=str(ch["name"] or "Bohater"),
+                    arch=arch,
+                    ending_title=ending_title,
+                    ending_summary=ending_summary,
+                    recent_turns=recent_turns,
+                    model=model_resolved,
+                    llm_config=llm_cfg,
+                )
+                if victory_epitaph:
+                    conn.execute(
+                        "UPDATE campaigns SET epitaph = ? WHERE id = ?",
+                        (victory_epitaph, int(camp["id"])),
+                    )
+                    conn.commit()
+            except Exception as _ep_err:
+                logger.warning("victory_epitaph_generation_error", error=str(_ep_err))
 
     return {
         "outcome": outcome,  # 'death' | 'victory'
@@ -363,6 +564,7 @@ def _end_summary_payload(
         "epitaph": str(camp["epitaph"] or ""),
         "ending_title": ending_title,
         "ending_summary": ending_summary,
+        "ending_type": ending_type,  # #1058: 'primary'|'alternate' for tone label
         "secret": str(ident.get("secret") or ""),
         "bonds": bonds_out,
         # E3/E4 (#418/#419) — campaign run stats for the summary screen.

@@ -18,6 +18,7 @@ Call sites:
 """
 from __future__ import annotations
 
+import datetime
 import re
 import sqlite3
 from typing import Any
@@ -298,18 +299,27 @@ def process_narrative_xp_tags(
         total += grant_dungeon_clear(conn, character_id, campaign_id, m.group(1), turn_number)
 
     for m in _CAMPAIGN_RE.finditer(narrative):
-        total += grant_campaign_end(conn, character_id, campaign_id, m.group(1), turn_number)
+        _ending_id_from_tag = m.group(1).strip()
+        total += grant_campaign_end(conn, character_id, campaign_id, _ending_id_from_tag, turn_number)
         # T38 (#1009): a narrator [CAMPAIGN_END] tag also closes the campaign,
         # not just grants XP (completes the half-built victory path).
+        # #1058: also store ended_at + selected_ending_id so victory screen picks
+        # the correct ending instead of always using endings[0].
         try:
+            _ended_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             conn.execute(
-                "UPDATE campaigns SET status = 'completed' "
+                "UPDATE campaigns SET status = 'completed', ended_at = ? "
                 "WHERE id = ? AND lower(coalesce(status, '')) = 'active'",
-                (campaign_id,),
+                (_ended_at, campaign_id),
             )
             conn.commit()
         except Exception as _ce_err:
             logger.warning("campaign_end_status_error", error=str(_ce_err))
+        try:
+            from app.services.solo_death_service import _store_selected_ending
+            _store_selected_ending(conn, campaign_id, _ending_id_from_tag)
+        except Exception as _se_err:
+            logger.warning("campaign_end_store_ending_error", error=str(_se_err))
 
     for m in _DISC_RE.finditer(narrative):
         total += grant_discovery(conn, character_id, campaign_id, m.group(1), turn_number)
