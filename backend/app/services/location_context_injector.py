@@ -207,6 +207,76 @@ def _find_location_candidates(
     return candidates[:limit]
 
 
+def _tokenize_stems(text: str, min_len: int = 4) -> set[str]:
+    """Tokenize text into declension-tolerant stems.
+
+    #1051: split on non-letters, lowercase, keep tokens ≥ min_len, strip the
+    last char (handles Polish declension: 'karczmy'/'karczmie' → 'karczm').
+    """
+    if not text:
+        return set()
+    stems: set[str] = set()
+    for tok in re.findall(r"[^\W\d_]+", text.lower(), re.UNICODE):
+        if len(tok) >= min_len:
+            stems.add(tok[:-1])
+    return stems
+
+
+def _candidate_dist_txt(cand: dict) -> str:
+    """Human-readable distance label for a candidate line in the ŚWIAT block."""
+    if cand.get("floating"):
+        return "pula nieosadzona — zostanie przypisana przy odkryciu hexa"
+    dist = cand.get("distance", "?")
+    return f"{dist} hex" if isinstance(dist, int) and dist < 999 else "nieznana odległość"
+
+
+def _find_label_candidates(
+    conn: sqlite3.Connection,
+    q: int,
+    r: int,
+    player_message: str,
+    limit: int = 3,
+    max_dist: int = 5,
+) -> list[dict]:
+    """#1051 — Direct fuzzy match of player message against game_locations.label.
+
+    Language-independent: matches by token overlap on declension-tolerant stems,
+    so any future label works without touching _INTENT_KEYWORDS. Placed locations
+    farther than max_dist hexes are excluded; floating (niezakotwiczone) templates
+    are kept as low-priority candidates (sorted last).
+
+    Returns top candidates sorted by overlap score desc, then distance asc.
+    """
+    msg_stems = _tokenize_stems(player_message)
+    if not msg_stems:
+        return []
+    rows = conn.execute(
+        """SELECT key, label, location_subtype, biome, placement, world_hex_q, world_hex_r
+           FROM game_locations
+           WHERE approved=1 AND is_active=1
+             AND label IS NOT NULL AND TRIM(label) != ''""",
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        c = dict(row)
+        overlap = msg_stems & _tokenize_stems(c["label"])
+        if not overlap:
+            continue
+        if c.get("world_hex_q") is not None and c.get("world_hex_r") is not None:
+            dist = _hex_distance(q, r, int(c["world_hex_q"]), int(c["world_hex_r"]))
+            c["floating"] = False
+            if dist > max_dist:
+                continue  # placed but too far — not a candidate
+        else:
+            dist = 999
+            c["floating"] = True
+        c["distance"] = dist
+        c["score"] = len(overlap)
+        candidates.append(c)
+    candidates.sort(key=lambda x: (-x["score"], x["distance"]))
+    return candidates[:limit]
+
+
 def build_swiat_block(
     conn: sqlite3.Connection,
     session_flags: dict,
@@ -260,26 +330,37 @@ def build_swiat_block(
                 lines.append(f"    NPC: {', '.join(npc_parts)}")
 
     # ── Kandydaci z bazy (priorytet 2 — gdy intencja gracza) ─────────────────
-    intent_subtypes = _detect_location_intent(player_message)
-    if intent_subtypes:
-        candidates = _find_location_candidates(conn, q, r, intent_subtypes)
-        # Only placed locations within 3 hexes count as "real" match — floating templates
-        # (no hex assigned) don't block creation of a new local instance.
+    # #1051: najpierw bezpośrednie dopasowanie po NAZWIE lokacji (odporne na
+    # polską odmianę i kolizje rdzeni). Dopiero gdy brak trafień po nazwie —
+    # spadamy do starego dopasowania po location_subtype (_INTENT_KEYWORDS).
+    label_candidates = _find_label_candidates(conn, q, r, player_message)
+    if label_candidates:
+        # Label match within range = "real" match (placed, ≤5 hexów) → no create.
         placed_nearby = [
-            c for c in candidates
-            if not c.get("floating") and isinstance(c.get("distance"), int) and c["distance"] <= 3
+            c for c in label_candidates
+            if not c.get("floating") and isinstance(c.get("distance"), int) and c["distance"] <= 5
         ]
-        if candidates:
-            lines.append("Kandydaci z bazy (pasują do intencji gracza):")
-            for cand in candidates:
-                dist = cand.get("distance", "?")
-                if cand.get("floating"):
-                    dist_txt = "pula nieosadzona — zostanie przypisana przy odkryciu hexa"
-                else:
-                    dist_txt = f"{dist} hex" if isinstance(dist, int) and dist < 999 else "nieznana odległość"
-                lines.append(f"  [{cand['key']}] {cand['label']} — {dist_txt}")
+        lines.append("Kandydaci z bazy (dopasowanie po nazwie lokacji):")
+        for cand in label_candidates:
+            lines.append(f"  [{cand['key']}] {cand['label']} — {_candidate_dist_txt(cand)}")
         if not placed_nearby:
             lines.append("brak_dopasowania: true")
+    else:
+        intent_subtypes = _detect_location_intent(player_message)
+        if intent_subtypes:
+            candidates = _find_location_candidates(conn, q, r, intent_subtypes)
+            # Only placed locations within 3 hexes count as "real" match — floating
+            # templates (no hex assigned) don't block creation of a new local instance.
+            placed_nearby = [
+                c for c in candidates
+                if not c.get("floating") and isinstance(c.get("distance"), int) and c["distance"] <= 3
+            ]
+            if candidates:
+                lines.append("Kandydaci z bazy (pasują do intencji gracza):")
+                for cand in candidates:
+                    lines.append(f"  [{cand['key']}] {cand['label']} — {_candidate_dist_txt(cand)}")
+            if not placed_nearby:
+                lines.append("brak_dopasowania: true")
 
     # ── Sąsiednie hexy (priorytet 3) ─────────────────────────────────────────
     block_so_far = "\n".join(lines)
