@@ -38,7 +38,7 @@ const _ROW_REGISTRY = {
       {name:'tier',          label:'Tier',   type:'number'},
       {name:'description',   label:'Opis',   type:'textarea'},
       {name:'image_url',     label:'Obraz',  type:'image-preview'},
-    ], reload: () => { _worldLoaded.delete('locations'); _loadLocations(); }, noDelete:true },
+    ], reload: () => { _worldLoaded.delete('locations'); _loadLocations(); } },
 };
 
 // ── mechPatchEdit (inline label edit) ──────────────────────────────────────────
