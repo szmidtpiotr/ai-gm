@@ -2729,7 +2729,7 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     _renderTplEnemies(_tplEditorPlan.key_enemies || []);
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
-    _renderTplItems(_tplEditorPlan.key_items || []);
+    await _loadTplDbItems();  // #1084 — reload DB items after generate-plan (auto-assigned rewards)
     const ep = _tplEditorPlan.engine_private || {};
     if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
     if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
