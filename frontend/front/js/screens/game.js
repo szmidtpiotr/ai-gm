@@ -3266,13 +3266,13 @@ async function renderInventoryTab(character) {
         bpList.innerHTML = filterPill + body;
     }
 
-    // Lore
+    // Lore — #1088: grouped by category into collapsible <details> sections
     const loreCount = document.getElementById('inv-lore-count');
     const loreList = document.getElementById('sheet-lore');
     if (loreCount) loreCount.textContent = lore.length;
     if (loreList) {
         loreList.innerHTML = lore.length
-            ? lore.map(_renderLoreRow).join('')
+            ? _renderLoreGrouped(lore)
             : `<div class="inv-empty">Brak przedmiotów nieużywalnych</div>`;
     }
 
@@ -3470,6 +3470,73 @@ function _renderBackpackRow(item, occupied) {
             <div class="inv-row__actions">${action}${dropBtn}</div>
         </div>`;
 }
+
+// #1088: category classification — mirrors inventory_category.py lore_category_key()
+const _LORE_CATS = {
+    scrolls: { label: 'Zwoje i pergaminy', icon: INV_ICONS.scroll },
+    books:   { label: 'Księgi i traktaty', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>` },
+    keys:    { label: 'Klucze', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>` },
+    quest:   { label: 'Przedmioty fabularne', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
+    misc:    { label: 'Inne przedmioty', icon: INV_ICONS.pack },
+};
+const _CAT_ORDER = ['scrolls', 'books', 'keys', 'quest', 'misc'];
+
+function _loreCategoryKey(item) {
+    const lab = String(item.label || item.key || '');
+    const t   = String(item.item_type || '').toLowerCase();
+    if (/pergamin|zwój|zwoj|list|pismo|manuskrypt/i.test(lab)) return 'scrolls';
+    if (/księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome/i.test(lab)) return 'books';
+    if (/klucz/i.test(lab)) return 'keys';
+    if (t === 'quest') return 'quest';
+    return 'misc';
+}
+
+function _renderLoreGrouped(lore) {
+    const groups = {};
+    for (const item of lore) {
+        const cat = _loreCategoryKey(item);
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(item);
+    }
+    const sessionKey = 'lore-cat-open';
+    let openCats;
+    try { openCats = new Set(JSON.parse(sessionStorage.getItem(sessionKey) || '[]')); }
+    catch (_) { openCats = new Set(); }
+
+    const parts = [];
+    for (const cat of _CAT_ORDER) {
+        const items = groups[cat];
+        if (!items || !items.length) continue;
+        const meta = _LORE_CATS[cat] || _LORE_CATS.misc;
+        const isOpen = openCats.has(cat) || items.length <= 3;
+        const rows = items.map(_renderLoreRow).join('');
+        parts.push(`
+            <details class="lore-group" data-lore-cat="${cat}"${isOpen ? ' open' : ''}>
+                <summary class="lore-group__header">
+                    <span class="lore-group__icon">${meta.icon}</span>
+                    <span class="lore-group__label">${meta.label}</span>
+                    <span class="lore-group__count">×${items.length}</span>
+                    <span class="lore-group__chevron" aria-hidden="true">▾</span>
+                </summary>
+                <div class="lore-group__body">${rows}</div>
+            </details>`);
+    }
+    return parts.join('') || '<div class="inv-empty">Brak przedmiotów</div>';
+}
+
+// #1088: persist open/closed state in sessionStorage
+document.addEventListener('toggle', (ev) => {
+    const el = ev.target.closest?.('.lore-group');
+    if (!el) return;
+    const cat = el.dataset.loreCat;
+    if (!cat) return;
+    const key = 'lore-cat-open';
+    let set;
+    try { set = new Set(JSON.parse(sessionStorage.getItem(key) || '[]')); }
+    catch (_) { set = new Set(); }
+    el.open ? set.add(cat) : set.delete(cat);
+    sessionStorage.setItem(key, JSON.stringify([...set]));
+}, true);
 
 function _renderLoreRow(item) {
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
