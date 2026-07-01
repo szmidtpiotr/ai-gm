@@ -1308,12 +1308,10 @@ def forge_generate_template_plan(
                 detail=f"Brak modelu w aktywnym presecie LLM (provider: {provider}). "
                        "Przejdź Admin → System → Konta i uzupełnij pole 'Model' w aktywnym presecie.",
             )
-        config = {k: v for k, v in llm_cfg.items() if k != "model"}
-
         last_err = None
         for attempt in range(1, 3):
             try:
-                raw = (generate_chat(messages=messages, model=model, llm_config=config) or "").strip()
+                raw = (generate_chat(messages=messages, llm_config=llm_cfg) or "").strip()
                 from app.services.campaign_plan_service import _extract_json, CampaignPlan
                 from pydantic import ValidationError
                 plan_dict = _extract_json(raw)
