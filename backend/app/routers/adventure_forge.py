@@ -1166,6 +1166,11 @@ def _auto_fill_plan_fields(
     Only fills when the field is currently empty (preserves manual edits).
     Returns dict with auto_filled_npc_keys, auto_filled_beat_keys, auto_filled_atmosphere.
     """
+    # sqlite3.Row doesn't support .get() — normalize to plain dicts (#1081)
+    if hasattr(tpl, "keys"):
+        tpl = dict(tpl)
+    if idea is not None and hasattr(idea, "keys"):
+        idea = dict(idea)
     try:
         existing_npc = json.loads(tpl["required_npc_keys"] or "[]") if tpl["required_npc_keys"] else []
         existing_beats = json.loads(tpl["required_beats"] or "[]") if tpl["required_beats"] else []
@@ -1311,6 +1316,39 @@ def _auto_create_forge_npcs(
                     created_at, updated_at)
                    VALUES (?, ?, 'neutral', ?, '{}', '[]', 'pending', 1, ?, ?)""",
                 (key, name, description, now, now),
+            )
+            if conn.execute("SELECT changes()").fetchone()[0]:
+                created.append({"key": key, "name": name})
+        except Exception:
+            pass
+    return created
+
+
+# ── Auto-create location stubs for a template (#1092) ─────────────────────────
+
+def _auto_create_forge_locations(
+    conn: sqlite3.Connection,
+    template_id: int,
+    locations: list[dict],
+) -> list[dict]:
+    """Create game_locations rows from plan key_locations with review_status='pending'.
+
+    Idempotent: skips any key that already exists in game_locations.
+    Returns list of {key, name} for each created location.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    created: list[dict] = []
+    for loc in locations:
+        key = loc.get("key") or _slugify(loc.get("name") or "location")
+        name = loc.get("name") or key
+        description = loc.get("role") or ""
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_locations
+                   (key, label, description, review_status, is_active, ai_generated,
+                    created_by, source_campaign_id, created_at, updated_at)
+                   VALUES (?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?)""",
+                (key, name, description, template_id, now, now),
             )
             if conn.execute("SELECT changes()").fetchone()[0]:
                 created.append({"key": key, "name": name})
@@ -1612,8 +1650,10 @@ def forge_generate_template_plan(
                     )
 
                 # Auto-fill npc keys, beat keys, atmosphere (#1085)
+                # Convert sqlite3.Row → dict so _auto_fill_plan_fields can call .get() (#1081)
                 _fill = _auto_fill_plan_fields(
-                    conn, tpl_id=template_id, tpl=tpl, idea=idea, plan_public=plan_public
+                    conn, tpl_id=template_id, tpl=dict(tpl),
+                    idea=dict(idea) if idea else None, plan_public=plan_public
                 )
                 auto_npc_keys = _fill["auto_filled_npc_keys"]
                 auto_beat_keys = _fill["auto_filled_beat_keys"]
@@ -1659,6 +1699,18 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # NPC creation is non-fatal
 
+                # #1092 — auto-create pending location stubs from key_locations
+                auto_locations: list[dict] = []
+                try:
+                    raw_locations = plan_public.get("key_locations") or []
+                    if raw_locations:
+                        auto_locations = _auto_create_forge_locations(
+                            conn, template_id, raw_locations
+                        )
+                        conn.commit()
+                except Exception:
+                    pass  # location creation is non-fatal
+
                 return {
                     "ok": True,
                     "template_id": template_id,
@@ -1669,6 +1721,7 @@ def forge_generate_template_plan(
                     "auto_assigned_items": auto_items,
                     "auto_created_enemies": auto_enemies,
                     "auto_created_npcs": auto_npcs,
+                    "auto_created_locations": auto_locations,
                 }
             except Exception as e:
                 last_err = str(e)
