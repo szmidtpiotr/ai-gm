@@ -1154,6 +1154,69 @@ _TIER_AC_RANGE: dict[str, tuple[int, int]] = {
 }
 
 
+def _auto_fill_plan_fields(
+    conn: "sqlite3.Connection",
+    tpl_id: int,
+    tpl: dict,
+    idea: "dict | None",
+    plan_public: dict,
+) -> dict:
+    """Auto-fill required_npc_keys, required_beats, and atmosphere on template after plan gen.
+
+    Only fills when the field is currently empty (preserves manual edits).
+    Returns dict with auto_filled_npc_keys, auto_filled_beat_keys, auto_filled_atmosphere.
+    """
+    try:
+        existing_npc = json.loads(tpl["required_npc_keys"] or "[]") if tpl["required_npc_keys"] else []
+        existing_beats = json.loads(tpl["required_beats"] or "[]") if tpl["required_beats"] else []
+    except Exception:
+        existing_npc, existing_beats = [], []
+
+    auto_npc_keys: list[str] = []
+    auto_beat_keys: list[str] = []
+    auto_filled_atmosphere: str = ""
+
+    if not existing_npc:
+        auto_npc_keys = [npc["key"] for npc in plan_public.get("key_npcs", []) if npc.get("key")]
+        if auto_npc_keys:
+            conn.execute(
+                "UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
+                (json.dumps(auto_npc_keys, ensure_ascii=False), tpl_id),
+            )
+
+    if not existing_beats:
+        auto_beat_keys = [
+            beat["beat_key"]
+            for act in plan_public.get("acts", [])
+            for beat in act.get("key_beats", [])
+            if beat.get("beat_key") and not beat.get("optional", False)
+        ]
+        if auto_beat_keys:
+            conn.execute(
+                "UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
+                (json.dumps(auto_beat_keys, ensure_ascii=False), tpl_id),
+            )
+
+    # Auto-fill atmosphere from idea tone if template has none
+    if idea and not (tpl.get("atmosphere") or "").strip():
+        try:
+            idea_tone = json.loads(idea.get("tone") or "[]")
+        except Exception:
+            idea_tone = []
+        if idea_tone:
+            auto_filled_atmosphere = ", ".join(idea_tone)
+            conn.execute(
+                "UPDATE campaign_templates SET atmosphere = ? WHERE id = ?",
+                (auto_filled_atmosphere, tpl_id),
+            )
+
+    return {
+        "auto_filled_npc_keys": auto_npc_keys,
+        "auto_filled_beat_keys": auto_beat_keys,
+        "auto_filled_atmosphere": auto_filled_atmosphere,
+    }
+
+
 def _clamp_enemy_stats(hp: int, ac: int, tier: str, difficulty: int) -> tuple[int, int]:
     """Clamp LLM-generated HP/AC to tier + difficulty-appropriate ranges.
 
@@ -1548,36 +1611,13 @@ def forge_generate_template_plan(
                         (idea_id, template_id),
                     )
 
-                # Auto-fill required_npc_keys and required_beats from generated plan
-                # — only when those fields are currently empty (don't overwrite manual edits)
-                auto_npc_keys: list[str] = []
-                auto_beat_keys: list[str] = []
-                try:
-                    existing_npc = json.loads(tpl["required_npc_keys"] or "[]") if tpl["required_npc_keys"] else []
-                    existing_beats = json.loads(tpl["required_beats"] or "[]") if tpl["required_beats"] else []
-                except Exception:
-                    existing_npc, existing_beats = [], []
-
-                if not existing_npc:
-                    auto_npc_keys = [npc["key"] for npc in plan_public.get("key_npcs", []) if npc.get("key")]
-                    if auto_npc_keys:
-                        conn.execute(
-                            "UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
-                            (json.dumps(auto_npc_keys, ensure_ascii=False), template_id),
-                        )
-
-                if not existing_beats:
-                    auto_beat_keys = [
-                        beat["beat_key"]
-                        for act in plan_public.get("acts", [])
-                        for beat in act.get("key_beats", [])
-                        if beat.get("beat_key") and not beat.get("optional", False)
-                    ]
-                    if auto_beat_keys:
-                        conn.execute(
-                            "UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
-                            (json.dumps(auto_beat_keys, ensure_ascii=False), template_id),
-                        )
+                # Auto-fill npc keys, beat keys, atmosphere (#1085)
+                _fill = _auto_fill_plan_fields(
+                    conn, tpl_id=template_id, tpl=tpl, idea=idea, plan_public=plan_public
+                )
+                auto_npc_keys = _fill["auto_filled_npc_keys"]
+                auto_beat_keys = _fill["auto_filled_beat_keys"]
+                auto_filled_atmosphere = _fill["auto_filled_atmosphere"]
 
                 conn.commit()
 
@@ -1625,6 +1665,7 @@ def forge_generate_template_plan(
                     "gm_plan_json": plan_public,
                     "auto_filled_npc_keys": auto_npc_keys,
                     "auto_filled_beat_keys": auto_beat_keys,
+                    "auto_filled_atmosphere": auto_filled_atmosphere,
                     "auto_assigned_items": auto_items,
                     "auto_created_enemies": auto_enemies,
                     "auto_created_npcs": auto_npcs,

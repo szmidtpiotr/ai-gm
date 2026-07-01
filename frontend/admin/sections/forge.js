@@ -2730,6 +2730,19 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
     await _loadTplDbItems();  // #1084 — reload DB items after generate-plan (auto-assigned rewards)
+    // #1085 — populate klimat/beat/npc fields from auto-fill (only when currently empty)
+    if (d.auto_filled_npc_keys?.length) {
+      const el = document.getElementById('tpl-required-npcs');
+      if (el && !el.value.trim()) el.value = d.auto_filled_npc_keys.join(', ');
+    }
+    if (d.auto_filled_beat_keys?.length) {
+      const el = document.getElementById('tpl-required-beats');
+      if (el && !el.value.trim()) el.value = d.auto_filled_beat_keys.join(', ');
+    }
+    if (d.auto_filled_atmosphere) {
+      const el = document.getElementById('tpl-atmosphere');
+      if (el && !el.value.trim()) el.value = d.auto_filled_atmosphere;
+    }
     const ep = _tplEditorPlan.engine_private || {};
     if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
     if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
