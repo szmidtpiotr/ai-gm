@@ -2681,6 +2681,17 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
       document.getElementById('tpl-title').value = d.gm_plan_json.title;
     }
     _showToast('Plan kampanii wygenerowany!', 'success');
+    try {
+      const vres = await apiFetch('/api/admin/forge/validate-plan', {method:'POST', body:JSON.stringify({gm_plan_json:_tplEditorPlan})});
+      if (vres.issues && vres.issues.length) {
+        const ec = vres.errors ? vres.errors.length : 0;
+        const wc = vres.warnings ? vres.warnings.length : 0;
+        const parts = [];
+        if (ec) parts.push(ec + (ec===1?' błąd':' błędy'));
+        if (wc) parts.push(wc + (wc===1?' ostrzeżenie':' ostrzeżenia'));
+        _showToast('⚠ Plan ma ' + parts.join(', ') + ' — sprawdź przed publikacją', 'warning');
+      }
+    } catch(_) { /* walidacja opcjonalna */ }
   } catch(e) { _showToast(e.message || 'Błąd generowania planu.', 'error'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Generuj plan AI'; } }
 }
