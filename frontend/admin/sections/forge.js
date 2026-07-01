@@ -858,6 +858,9 @@ async function _forgeSendEditsToAgent() {
   const input = document.getElementById('forge-input');
   const currentMsg = input?.value?.trim() || 'Zaktualizowałem szkic. Kontynuuj na podstawie tych zmian.';
   if (input) input.value = '';
+  // Open floating chat so user sees the agent's response
+  const fc = document.getElementById('forge-float-chat');
+  if (fc && fc.classList.contains('ffc-hidden')) fc.classList.remove('ffc-hidden');
   await _forgeSendMessage(currentMsg, collected);
 }
 
@@ -919,15 +922,27 @@ async function _forgeSendMessage(msg, draftOverride) {
 async function saveForgeIdea() {
   if (!_forgeDraft) { _showToast('Brak szkicu do zapisania.', 'warning'); return; }
   try {
+    const arcCount = (_forgeDraft?.arcs || []).length;
     const d = await apiFetch('/api/admin/forge/chat/save', {
       method: 'POST',
       body: JSON.stringify({ session_id: _forgeSessionId, idea_data: _forgeDraft }),
     });
     _showToast(`Zapisano: ${d.idea?.title||'pomysł'}`, 'success');
+    const ideaId = d.idea?.id;
+    const ideaTitle = d.idea?.title || '';
     _forgeDraft = null;
     _forgeSessionId = 'forge-' + Date.now();
     const saveRow = document.getElementById('forge-save-row');
     if (saveRow) saveRow.style.display = 'none';
+    // Show next-step actions immediately after save
+    const actionsEl = document.getElementById('fsc-actions');
+    if (actionsEl && ideaId) {
+      actionsEl.style.display = 'flex';
+      actionsEl.innerHTML =
+        `<button class="btn btn-sm btn-secondary" onclick="forgeReloadIdeaInChat(${ideaId})">↩ Kontynuuj w Warsztacie</button>` +
+        `<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(${ideaId},this)">⚡ Wyodrębnij haki → DB</button>` +
+        `<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(${ideaId},${JSON.stringify(ideaTitle).replace(/"/g,'&quot;')},${arcCount})">📖 Utwórz szablon</button>`;
+    }
     await _refreshForgeIdeas();
   } catch(e) { _showToast(e.message||'Błąd zapisu.', 'error'); }
 }
