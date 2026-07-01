@@ -685,6 +685,7 @@ function filterTableGeneric(input, tableId, nameClass) {
           </div>`;
         }).join('') + endingsHtml +
           `<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+            <button class="btn btn-sm btn-secondary" onclick="checkCampPlan(${campId})">🔍 Sprawdź plan</button>
             <button class="btn btn-sm btn-secondary" onclick="regenerateCampPlan(${campId}, this)">♻ Regeneruj plan MG</button>
           </div>`;
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
@@ -1334,6 +1335,32 @@ function filterTableGeneric(input, tableId, nameClass) {
 // ══════════════════════════════════════════════════════════════
 //  _loadWorkshopEncounters / _injectEncounterFromWorkshop / sendWorkshopMsg
 // ══════════════════════════════════════════════════════════════
+
+  // #1060 — validate GM plan for orphan beats / empty acts before any publish.
+  async function checkCampPlan(campId) {
+    try {
+      const d = await apiFetch(`/api/admin/campaigns/${campId}/gm-plan`);
+      const plan = typeof d.gm_plan_json === 'string' ? JSON.parse(d.gm_plan_json) : (d.gm_plan_json || {});
+      const vres = await apiFetch('/api/admin/forge/validate-plan', {
+        method: 'POST',
+        body: JSON.stringify({ gm_plan_json: plan }),
+      });
+      const { openModal } = await import('../shared/modal.js');
+      if (!vres.issues || !vres.issues.length) {
+        openModal('Walidacja planu GM', '<div style="color:var(--green,#22c55e);font-weight:600;padding:8px 0">✅ Plan poprawny — brak wykrytych problemów.</div>', { width: 480 });
+        return;
+      }
+      const cards = vres.issues.map(i => {
+        const bg = i.type === 'error' ? 'var(--red,#dc2626)' : 'var(--amber,#d97706)';
+        const icon = i.type === 'error' ? '🔴' : '🟡';
+        return '<div style="background:' + bg + '18;border:1px solid ' + bg + ';border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
+          '<div style="font-weight:600;font-size:0.82rem;color:' + bg + '">' + icon + ' ' + (i.type === 'error' ? 'BLAD' : 'OSTRZEZENIE') + ' — ' + _esc(i.code) + '</div>' +
+          '<div style="font-size:0.8rem;margin-top:3px;color:var(--t1)">' + _esc(i.message) + '</div>' +
+        '</div>';
+      }).join('');
+      openModal('Walidacja planu GM', '<div style="max-height:60vh;overflow-y:auto">' + cards + '</div>', { width: 560 });
+    } catch(e) { _showToast('Błąd walidacji: ' + (e.message || 'nieznany'), 'error'); }
+  }
 
   // #966 — regenerate the GM plan via current LLM; reports ok / still degraded.
   async function regenerateCampPlan(campId, btn) {
