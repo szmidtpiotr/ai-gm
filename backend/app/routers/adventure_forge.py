@@ -1222,6 +1222,40 @@ def _auto_create_forge_enemies(
     return created
 
 
+# ── Auto-create NPC stubs for a template (#1087) ──────────────────────────────
+
+def _auto_create_forge_npcs(
+    conn: sqlite3.Connection,
+    template_id: int,
+    npcs: list[dict],
+) -> list[dict]:
+    """Create npcs rows from plan key_npcs with review_status='pending'.
+
+    Idempotent: skips any key that already exists in npcs.
+    Returns list of {key, name} for each created NPC.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    created: list[dict] = []
+    for n in npcs:
+        key = n.get("key") or _slugify(n.get("name") or "npc")
+        name = n.get("name") or key
+        description = n.get("role") or n.get("description") or ""
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO npcs
+                   (key, label, npc_type, description, personality_json,
+                    keyword_triggers, review_status, is_active,
+                    created_at, updated_at)
+                   VALUES (?, ?, 'neutral', ?, '{}', '[]', 'pending', 1, ?, ?)""",
+                (key, name, description, now, now),
+            )
+            if conn.execute("SELECT changes()").fetchone()[0]:
+                created.append({"key": key, "name": name})
+        except Exception:
+            pass
+    return created
+
+
 # ── Auto-assign reward items for a template ────────────────────────────────────
 
 def _auto_assign_reward_items(
@@ -1575,6 +1609,16 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # enemy creation is non-fatal
 
+                # #1087 — auto-create pending NPC stubs from key_npcs
+                auto_npcs: list[dict] = []
+                try:
+                    raw_npcs = plan_public.get("key_npcs") or []
+                    if raw_npcs:
+                        auto_npcs = _auto_create_forge_npcs(conn, template_id, raw_npcs)
+                        conn.commit()
+                except Exception:
+                    pass  # NPC creation is non-fatal
+
                 return {
                     "ok": True,
                     "template_id": template_id,
@@ -1583,6 +1627,7 @@ def forge_generate_template_plan(
                     "auto_filled_beat_keys": auto_beat_keys,
                     "auto_assigned_items": auto_items,
                     "auto_created_enemies": auto_enemies,
+                    "auto_created_npcs": auto_npcs,
                 }
             except Exception as e:
                 last_err = str(e)
