@@ -1016,6 +1016,17 @@ def validate_template_publish(template_id: int, conn: sqlite3.Connection) -> dic
     }
 
 
+class ValidatePlanReq(BaseModel):
+    gm_plan_json: dict = {}
+
+
+@router.post("/validate-plan")
+def forge_validate_plan(req: ValidatePlanReq, _: None = Depends(_require_admin)):
+    """#1060 — Standalone plan validator. Returns structured issues for Forge UI pre-publish feedback."""
+    from app.services.campaign_plan_runtime import validate_gm_plan
+    return validate_gm_plan(req.gm_plan_json)
+
+
 @router.patch("/templates/{template_id}")
 def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depends(_require_admin)):
     conn = _get_db()

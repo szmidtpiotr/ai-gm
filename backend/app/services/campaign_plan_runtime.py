@@ -460,6 +460,92 @@ def find_orphan_beats(plan: dict | None) -> list[str]:
 _OBJECTIVE_TYPES = frozenset({"kill_enemy", "visit_location", "talk_to_npc", "find_item"})
 
 
+def validate_gm_plan(plan: dict | None) -> dict:
+    """#1060 — Granular plan validator for the Forge UI.
+
+    Returns a structured list of issues so the UI can show red/yellow cards
+    before the user attempts to publish. Designed for fast pre-publish feedback —
+    NOT a replacement for the hard gate in validate_winnable_plan.
+
+    Checks (per act):
+    - Error ``empty_act``: act has no key_beats at all.
+
+    Checks (per beat):
+    - Error ``orphan_beat``: non-optional beat without objective_type AND without
+      narrative_close — will never complete, strands the act.
+    - Warning ``missing_objective_value``: beat has objective_type but no
+      objective_value — wildcard trigger (any event of that type matches), which
+      may be intentional but is often an oversight.
+
+    Returns:
+        {ok, errors:[str], warnings:[str], issues:[{type, code, act_number, beat_key, message}]}
+    """
+    if not isinstance(plan, dict):
+        return {"ok": True, "errors": [], "warnings": [], "issues": []}
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return {"ok": True, "errors": [], "warnings": [], "issues": []}
+
+    issues: list[dict] = []
+
+    for act in acts:
+        if not isinstance(act, dict):
+            continue
+        act_num = act.get("number") or 0
+        beats = act.get("key_beats") or []
+
+        if not beats:
+            issues.append({
+                "type": "error",
+                "code": "empty_act",
+                "act_number": act_num,
+                "beat_key": None,
+                "message": "Akt " + str(act_num) + " nie ma zadnych beatow -- akt nigdy sie nie domknie.",
+            })
+            continue
+
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            beat_key = str(beat.get("beat_key") or beat.get("summary") or "<no-key>")
+            optional = beat.get("optional") is True
+            obj_type = beat.get("objective_type")
+            obj_value = beat.get("objective_value")
+            narrative_close = beat.get("narrative_close")
+
+            if not optional and obj_type not in _OBJECTIVE_TYPES and not narrative_close:
+                issues.append({
+                    "type": "error",
+                    "code": "orphan_beat",
+                    "act_number": act_num,
+                    "beat_key": beat_key,
+                    "message": (
+                        "Akt " + str(act_num) + " / beat '" + beat_key + "': brak objective_type i narrative_close"
+                        " -- beat nigdy sie nie domknie i zablokuje kampanie."
+                    ),
+                })
+            elif obj_type in _OBJECTIVE_TYPES and not obj_value:
+                issues.append({
+                    "type": "warning",
+                    "code": "missing_objective_value",
+                    "act_number": act_num,
+                    "beat_key": beat_key,
+                    "message": (
+                        "Akt " + str(act_num) + " / beat '" + beat_key + "': objective_type=" + repr(obj_type)
+                        + " ale brak objective_value -- beat domknie sie dla dowolnego celu tego typu (wildcard)."
+                    ),
+                })
+
+    errors = [i["message"] for i in issues if i["type"] == "error"]
+    warnings = [i["message"] for i in issues if i["type"] == "warning"]
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "issues": issues,
+    }
+
+
 def validate_winnable_plan(plan: dict | None) -> dict:
     """#1020 — Hard "winnable premade" check for Forge template publication.
 

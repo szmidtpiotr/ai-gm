@@ -1420,8 +1420,45 @@ async function forgeSetTemplateStatus(id, status) {
   } catch(e) { _showToast(e.message || 'Błąd.', 'error'); }
 }
 
+// #1060 — Pre-publish validator: shows red/yellow issue cards, blocks if errors.
 async function forgePublishTemplate(id) {
-  return forgeSetTemplateStatus(id, 'published');
+  const tpl = _forgeTemplatesCache.find(t => t.id === id);
+  const plan = tpl ? (tpl.gm_plan_json || {}) : {};
+  let vres;
+  try {
+    vres = await apiFetch('/api/admin/forge/validate-plan', {
+      method: 'POST',
+      body: JSON.stringify({ gm_plan_json: plan }),
+    });
+  } catch(e) {
+    // Validation call failed — proceed with normal publish (backend gate still blocks)
+    return forgeSetTemplateStatus(id, 'published');
+  }
+  if (!vres.issues || !vres.issues.length) {
+    return forgeSetTemplateStatus(id, 'published');
+  }
+  // Build modal with issue cards
+  const cards = vres.issues.map(i => {
+    const bg = i.type === 'error' ? 'var(--red,#dc2626)' : 'var(--amber,#d97706)';
+    const icon = i.type === 'error' ? '🔴' : '🟡';
+    return '<div style="background:' + bg + '18;border:1px solid ' + bg + ';border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
+      '<div style="font-weight:600;font-size:0.82rem;color:' + bg + '">' + icon + ' ' + (i.type === 'error' ? 'BLAD' : 'OSTRZEZENIE') + ' — ' + _esc(i.code) + '</div>' +
+      '<div style="font-size:0.8rem;margin-top:3px;color:var(--t1)">' + _esc(i.message) + '</div>' +
+    '</div>';
+  }).join('');
+  const hasErrors = vres.issues.some(i => i.type === 'error');
+  const publishBtn = hasErrors
+    ? '<button class="btn btn-sm" disabled style="opacity:0.4;cursor:not-allowed">Publikuj (zablokowane — napraw bledy)</button>'
+    : '<button class="btn btn-sm btn-primary" id="_forge-publish-anyway">Publikuj mimo ostrzezen</button>';
+  const html = '<div style="max-height:60vh;overflow-y:auto;margin-bottom:12px">' + cards + '</div>' + publishBtn;
+  const { openModal, closeModal } = await import('../shared/modal.js');
+  openModal('Walidacja planu GM', html, { width: 560 });
+  if (!hasErrors) {
+    document.getElementById('_forge-publish-anyway')?.addEventListener('click', () => {
+      closeModal();
+      forgeSetTemplateStatus(id, 'published');
+    });
+  }
 }
 
 async function forgeAllocateHex(id) {
