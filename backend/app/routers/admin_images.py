@@ -771,3 +771,177 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
         )
 
     return {"status": "ok", "key": key, "image_url": image_url, "image_gen_prompt": saved_prompt}
+
+
+# ── Per-weapon image generation (#1076) ──────────────────────────────────────
+
+class WeaponGenerateRequest(BaseModel):
+    force: bool = False
+    steps: int | None = None
+    width: int | None = None
+    height: int | None = None
+    prompt: str | None = None
+
+
+@router.get("/weapon/missing")
+async def list_weapons_missing_images():
+    """List active weapons without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT key, label, weapon_type, description, image_url, image_gen_prompt "
+            "FROM game_config_weapons "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY key"
+        ).fetchall()
+    return {"weapons": [dict(r) for r in rows], "count": len(rows)}
+
+
+@router.post("/weapon/{key}/generate")
+async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(default=None)):
+    """Generate icon for a weapon. Saves image_url + image_gen_prompt to DB.
+    Skips (status=skipped) if image already exists unless force=true.
+    """
+    if req is None:
+        req = WeaponGenerateRequest()
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        row = c.execute("SELECT * FROM game_config_weapons WHERE key = ?", (key,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Weapon not found: {key}")
+    row = dict(row)
+
+    if row.get("image_url") and not req.force:
+        return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
+
+    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    if not saved_prompt:
+        description = (row.get("description") or row.get("label") or key).strip()
+        weapon_type = row.get("weapon_type") or "melee"
+        rarity = row.get("rarity") or 1
+        rarity_label = {1: "common", 2: "uncommon", 3: "rare", 4: "epic", 5: "legendary"}.get(int(rarity), "common")
+        from app.services.llm_service import generate_chat
+        system = (
+            "You are a visual prompt engineer for dark fantasy RPG game weapon icon generation. "
+            "The user will give you a Polish description of a weapon or piece of equipment. "
+            "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
+            "Focus on: weapon shape, material (steel/wood/bone/magic), rarity glow, dark fantasy style. "
+            "End with: game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI. "
+            "No explanations. No Polish words. No full sentences. Only English keywords."
+        )
+        user_msg = f"[Context: weapon_type:{weapon_type}, rarity:{rarity_label}]\n\n{description}"
+        try:
+            reply = generate_chat(messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ])
+            keywords = reply.strip().strip(".,")
+            saved_prompt = keywords + ", game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+        except Exception:
+            label = row.get("label") or key
+            saved_prompt = (
+                f"{label}, {weapon_type} weapon, {rarity_label} rarity, dark fantasy, "
+                "game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+            )
+
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    width = req.width if req.width is not None else 512
+    height = req.height if req.height is not None else 512
+
+    image_url = await _run_flux_generate(saved_prompt, width, height, steps)
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.execute(
+            "UPDATE game_config_weapons SET image_url = ?, image_gen_prompt = ?, updated_at = datetime('now') WHERE key = ?",
+            (image_url, saved_prompt, key),
+        )
+
+    return {"status": "ok", "key": key, "image_url": image_url, "image_gen_prompt": saved_prompt}
+
+
+# ── Per-consumable image generation (#1076) ───────────────────────────────────
+
+class ConsumableGenerateRequest(BaseModel):
+    force: bool = False
+    steps: int | None = None
+    width: int | None = None
+    height: int | None = None
+    prompt: str | None = None
+
+
+@router.get("/consumable/missing")
+async def list_consumables_missing_images():
+    """List active consumables without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT key, label, effect_type, description, image_url, image_gen_prompt "
+            "FROM game_config_consumables "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY key"
+        ).fetchall()
+    return {"consumables": [dict(r) for r in rows], "count": len(rows)}
+
+
+@router.post("/consumable/{key}/generate")
+async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = Body(default=None)):
+    """Generate icon for a consumable. Saves image_url + image_gen_prompt to DB.
+    Skips (status=skipped) if image already exists unless force=true.
+    """
+    if req is None:
+        req = ConsumableGenerateRequest()
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        row = c.execute("SELECT * FROM game_config_consumables WHERE key = ?", (key,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Consumable not found: {key}")
+    row = dict(row)
+
+    if row.get("image_url") and not req.force:
+        return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
+
+    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    if not saved_prompt:
+        description = (row.get("description") or row.get("label") or key).strip()
+        effect_type = row.get("effect_type") or "misc"
+        rarity = row.get("rarity") or 1
+        rarity_label = {1: "common", 2: "uncommon", 3: "rare", 4: "epic", 5: "legendary"}.get(int(rarity), "common")
+        from app.services.llm_service import generate_chat
+        system = (
+            "You are a visual prompt engineer for dark fantasy RPG game potion/consumable icon generation. "
+            "The user will give you a Polish description of a potion, elixir, food, or consumable item. "
+            "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
+            "Focus on: container shape (vial/flask/jar), liquid color, glowing effect, dark fantasy style. "
+            "End with: game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI. "
+            "No explanations. No Polish words. No full sentences. Only English keywords."
+        )
+        user_msg = f"[Context: effect_type:{effect_type}, rarity:{rarity_label}]\n\n{description}"
+        try:
+            reply = generate_chat(messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ])
+            keywords = reply.strip().strip(".,")
+            saved_prompt = keywords + ", game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+        except Exception:
+            label = row.get("label") or key
+            saved_prompt = (
+                f"{label}, {effect_type} potion, {rarity_label} rarity, glowing flask, dark fantasy, "
+                "game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+            )
+
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    width = req.width if req.width is not None else 512
+    height = req.height if req.height is not None else 512
+
+    image_url = await _run_flux_generate(saved_prompt, width, height, steps)
+
+    with sqlite3.connect(_DB_PATH) as c:
+        c.execute(
+            "UPDATE game_config_consumables SET image_url = ?, image_gen_prompt = ?, updated_at = datetime('now') WHERE key = ?",
+            (image_url, saved_prompt, key),
+        )
+
+    return {"status": "ok", "key": key, "image_url": image_url, "image_gen_prompt": saved_prompt}

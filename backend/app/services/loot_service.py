@@ -1042,6 +1042,32 @@ def get_character_inventory(character_id: int) -> list[dict]:
         except sqlite3.OperationalError:
             pass
 
+        # #1076: batch-fetch image_url for weapons and consumables.
+        image_url_by_weapon_key: dict[str, str | None] = {}
+        image_url_by_consumable_key: dict[str, str | None] = {}
+        try:
+            _wkeys = list({r["weapon_key"] for r in rows if r["weapon_key"]})
+            if _wkeys:
+                _ph = ",".join("?" * len(_wkeys))
+                for _wr in conn.execute(
+                    f"SELECT key, image_url FROM game_config_weapons WHERE key IN ({_ph})",
+                    _wkeys,
+                ).fetchall():
+                    image_url_by_weapon_key[_wr["key"]] = _wr["image_url"]
+        except sqlite3.OperationalError:
+            pass
+        try:
+            _ckeys = list({r["consumable_key"] for r in rows if r["consumable_key"]})
+            if _ckeys:
+                _ph = ",".join("?" * len(_ckeys))
+                for _cr in conn.execute(
+                    f"SELECT key, image_url FROM game_config_consumables WHERE key IN ({_ph})",
+                    _ckeys,
+                ).fetchall():
+                    image_url_by_consumable_key[_cr["key"]] = _cr["image_url"]
+        except sqlite3.OperationalError:
+            pass
+
     from app.services.durability_service import durability_view
 
     out: list[dict] = []
@@ -1156,7 +1182,11 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "is_light": is_light,
                 "covered_slots": covered_slots,
                 "durability": durability_view(dur_cur, dur_max),
-                "image_url": image_url_by_item_key.get(key) if item_type not in ("weapon", "consumable") else None,
+                "image_url": (
+                    image_url_by_weapon_key.get(key) if item_type == "weapon"
+                    else image_url_by_consumable_key.get(key) if item_type == "consumable"
+                    else image_url_by_item_key.get(key)
+                ),
             }
         )
     return out
@@ -1237,6 +1267,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                     "description": _rget(w, "description"),
                     "value_gp": int(_rget(w, "value_gp", 0) or 0),
                     "note": _rget(w, "note"),
+                    "image_url": _rget(w, "image_url"),
                     "weapon": {
                         "damage_die": _rget(w, "damage_die"),
                         "linked_stat": _rget(w, "linked_stat"),
@@ -1249,6 +1280,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
             return {
                 **base, "kind": "weapon", "item_type": "weapon",
                 "name": _rget(ci, "label") or wkey, "description": None, "weapon": {},
+                "image_url": None,
                 "affixes": affixes,
                 "durability": _dur,
             }
@@ -1266,6 +1298,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                     "description": _rget(c, "description"),
                     "value_gp": int(_rget(c, "base_price", 0) or 0),
                     "note": _rget(c, "note"),
+                    "image_url": _rget(c, "image_url"),
                     "consumable": {
                         "effect_type": _rget(c, "effect_type"),
                         "effect_dice": _rget(c, "effect_dice"),

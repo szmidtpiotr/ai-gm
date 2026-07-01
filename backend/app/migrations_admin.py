@@ -5635,6 +5635,21 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _ensure_weapon_consumable_image_columns(conn: sqlite3.Connection) -> None:
+    """#1076 — image_url + image_gen_prompt columns for game_config_weapons + game_config_consumables."""
+    for table in ("game_config_weapons", "game_config_consumables"):
+        for col in ("image_url TEXT", "image_gen_prompt TEXT"):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "duplicate column" in msg or "no such table" in msg:
+                    pass
+                else:
+                    raise
+
+
 def _ensure_item_image_columns(conn: sqlite3.Connection) -> None:
     """#1048 — image_url + image_gen_prompt columns for game_config_items."""
     for sql in [
@@ -5823,6 +5838,7 @@ def run_admin_migrations() -> None:
         _ensure_region_schema(conn)  # #1028 RM1
         _ensure_item_image_columns(conn)  # #1048
         _migrate_legacy_skill_keys(conn)  # #1052
+        _ensure_weapon_consumable_image_columns(conn)  # #1076
     finally:
         conn.close()
 

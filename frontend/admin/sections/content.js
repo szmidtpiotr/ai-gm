@@ -1055,6 +1055,7 @@ async function _openItemImageModal(key, encData, tableType) {
   };
   const endpoint = endpointMap[tableType] || '/api/admin/items';
   const reload   = reloadMap[tableType] || (() => {});
+  const isDedicatedEndpoint = tableType === 'item' || tableType === 'weapon' || tableType === 'consumable';
   const isItem   = tableType === 'item';
   const m = document.createElement('div');
   m.id = 'item-img-modal';
@@ -1074,11 +1075,11 @@ async function _openItemImageModal(key, encData, tableType) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="ii-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
-        ${!isItem ? '<button id="ii-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>' : ''}
+        ${!isDedicatedEndpoint ? '<button id="ii-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>' : ''}
       </div>
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border,#333);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
-      ${!isItem ? '<button id="ii-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>' : ''}
+      ${!isDedicatedEndpoint ? '<button id="ii-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>' : ''}
       <button onclick="document.getElementById('item-img-modal').remove()" class="btn btn-secondary">Zamknij</button>
     </div>
   </div>`;
@@ -1091,18 +1092,19 @@ async function _openItemImageModal(key, encData, tableType) {
     const btn = m.querySelector('#ii-gen-btn');
     btn.disabled = true; btn.textContent = '⏳ Generuję…';
     try {
-      if (isItem) {
-        // Items: LLM prompt builder + auto-save via dedicated endpoint
+      if (isDedicatedEndpoint) {
+        // Items/weapons/consumables: LLM prompt builder + auto-save via dedicated endpoint
         const customPrompt = m.querySelector('#ii-prompt').value.trim() || null;
         const body = { force: true };
         if (customPrompt) body.prompt = customPrompt;
-        const r = await apiFetch(`/api/admin/images/item/${encodeURIComponent(key)}/generate`, {method:'POST', body:JSON.stringify(body)});
+        const epType = isItem ? 'item' : tableType; // 'item' | 'weapon' | 'consumable'
+        const r = await apiFetch(`/api/admin/images/${epType}/${encodeURIComponent(key)}/generate`, {method:'POST', body:JSON.stringify(body)});
         m.querySelector('#ii-preview').innerHTML = `<img src="${_esc(r.image_url)}" style="max-width:100%;max-height:280px;border-radius:6px;object-fit:contain">`;
         if (r.image_gen_prompt) m.querySelector('#ii-prompt').value = r.image_gen_prompt;
         showToast('Obraz wygenerowany i zapisany.', 'success');
         reload();
       } else {
-        // Weapons/consumables/armor: generic FLUX endpoint, manual accept step
+        // Armor/other: generic FLUX endpoint, manual accept step
         const prompt = m.querySelector('#ii-prompt').value.trim() || 'fantasy item, detailed illustration';
         const r = await apiFetch('/api/admin/images/generate', {method:'POST', body:JSON.stringify({prompt,width:512,height:512,steps:4})});
         _lastFilename = r.filename; _lastUrl = r.url;
