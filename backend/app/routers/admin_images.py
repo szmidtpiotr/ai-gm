@@ -740,7 +740,7 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
             "The user will give you a Polish description of an inventory item. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: item appearance, material, shape, texture, lighting. "
-            "End with: game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: item_type:{item_type}, rarity:{rarity_label}]\n\n{description}"
@@ -750,12 +750,12 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {item_type}, {rarity_label} rarity, dark fantasy item, "
-                "game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
             )
 
     steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
@@ -827,7 +827,7 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
             "The user will give you a Polish description of a weapon or piece of equipment. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: weapon shape, material (steel/wood/bone/magic), rarity glow, dark fantasy style. "
-            "End with: game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: weapon_type:{weapon_type}, rarity:{rarity_label}]\n\n{description}"
@@ -837,12 +837,12 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {weapon_type} weapon, {rarity_label} rarity, dark fantasy, "
-                "game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
             )
 
     steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
@@ -914,7 +914,7 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
             "The user will give you a Polish description of a potion, elixir, food, or consumable item. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: container shape (vial/flask/jar), liquid color, glowing effect, dark fantasy style. "
-            "End with: game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: effect_type:{effect_type}, rarity:{rarity_label}]\n\n{description}"
@@ -924,12 +924,12 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {effect_type} potion, {rarity_label} rarity, glowing flask, dark fantasy, "
-                "game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI"
+                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
             )
 
     steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))

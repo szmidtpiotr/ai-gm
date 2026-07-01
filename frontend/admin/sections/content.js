@@ -1055,8 +1055,8 @@ async function _openItemImageModal(key, encData, tableType) {
   };
   const endpoint = endpointMap[tableType] || '/api/admin/items';
   const reload   = reloadMap[tableType] || (() => {});
-  const isDedicatedEndpoint = tableType === 'item' || tableType === 'weapon' || tableType === 'consumable';
-  const isItem   = tableType === 'item';
+  const isDedicatedEndpoint = tableType === 'item' || tableType === 'weapon' || tableType === 'consumable' || tableType === 'armor';
+  const isItem   = tableType === 'item' || tableType === 'armor';
   const m = document.createElement('div');
   m.id = 'item-img-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
