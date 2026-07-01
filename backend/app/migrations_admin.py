@@ -5635,6 +5635,24 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _ensure_template_item_columns(conn: sqlite3.Connection) -> None:
+    """#1084 — template_id + hidden columns for campaign-scoped reward items in game_config tables."""
+    for table in ("game_config_weapons", "game_config_items", "game_config_consumables"):
+        for col_def in (
+            "template_id INTEGER DEFAULT NULL",
+            "hidden INTEGER NOT NULL DEFAULT 0",
+        ):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "duplicate column" in msg or "no such table" in msg:
+                    pass
+                else:
+                    raise
+
+
 def _ensure_weapon_consumable_image_columns(conn: sqlite3.Connection) -> None:
     """#1076 — image_url + image_gen_prompt columns for game_config_weapons + game_config_consumables."""
     for table in ("game_config_weapons", "game_config_consumables"):
@@ -5839,6 +5857,7 @@ def run_admin_migrations() -> None:
         _ensure_item_image_columns(conn)  # #1048
         _migrate_legacy_skill_keys(conn)  # #1052
         _ensure_weapon_consumable_image_columns(conn)  # #1076
+        _ensure_template_item_columns(conn)  # #1084
     finally:
         conn.close()
 

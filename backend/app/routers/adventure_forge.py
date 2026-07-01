@@ -1136,6 +1136,101 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
         conn.close()
 
 
+# ── Auto-assign reward items for a template ────────────────────────────────────
+
+def _auto_assign_reward_items(
+    conn: sqlite3.Connection,
+    template_id: int,
+    difficulty_rating: int,
+) -> list[dict]:
+    """#1084 — pull 1 weapon + 1 item + 1 consumable from global pool matching
+    difficulty tier and insert as hidden template-scoped reward items.
+    Returns [{category, key, name}] for each assigned item."""
+    if difficulty_rating <= 2:
+        rarity_min, rarity_max = 1, 2
+    elif difficulty_rating <= 4:
+        rarity_min, rarity_max = 3, 3
+    else:
+        rarity_min, rarity_max = 4, 99
+
+    now = datetime.utcnow().isoformat()
+    assigned: list[dict] = []
+
+    def _unique_key(table: str, base: str) -> str:
+        key, i = base, 2
+        while conn.execute(f"SELECT 1 FROM {table} WHERE key = ?", (key,)).fetchone():
+            key = f"{base}_{i}"; i += 1
+        return key
+
+    weapon = conn.execute(
+        "SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes, rarity, description, note "
+        "FROM game_config_weapons WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+        "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1",
+        (rarity_min, rarity_max),
+    ).fetchone()
+    if weapon:
+        new_key = _unique_key("game_config_weapons", f"tpl{template_id}_{weapon['key']}")
+        conn.execute(
+            "INSERT INTO game_config_weapons "
+            "(key, label, damage_die, weapon_type, linked_stat, allowed_classes, rarity, description, note, "
+            "template_id, hidden, ai_generated, approved, review_status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 1, 'permanent', ?, ?)",
+            (
+                new_key, weapon["label"], weapon["damage_die"], weapon["weapon_type"],
+                weapon["linked_stat"], weapon["allowed_classes"], weapon["rarity"],
+                weapon["description"], weapon["note"],
+                template_id, now, now,
+            ),
+        )
+        assigned.append({"category": "weapon", "key": new_key, "name": weapon["label"]})
+
+    item = conn.execute(
+        "SELECT key, label, item_type, value_gp, rarity, description "
+        "FROM game_config_items WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+        "AND is_active=1 AND approved=1 AND item_type != 'armor' ORDER BY RANDOM() LIMIT 1",
+        (rarity_min, rarity_max),
+    ).fetchone()
+    if item:
+        new_key = _unique_key("game_config_items", f"tpl{template_id}_{item['key']}")
+        conn.execute(
+            "INSERT INTO game_config_items "
+            "(key, label, item_type, value_gp, rarity, description, "
+            "template_id, hidden, ai_generated, approved, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, 1, ?, ?)",
+            (
+                new_key, item["label"], item["item_type"], item["value_gp"] or 0,
+                item["rarity"], item["description"],
+                template_id, now, now,
+            ),
+        )
+        assigned.append({"category": "item", "key": new_key, "name": item["label"]})
+
+    consumable = conn.execute(
+        "SELECT key, label, effect_type, effect_dice, effect_bonus, effect_target, base_price, rarity, description "
+        "FROM game_config_consumables WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+        "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1",
+        (rarity_min, rarity_max),
+    ).fetchone()
+    if consumable:
+        new_key = _unique_key("game_config_consumables", f"tpl{template_id}_{consumable['key']}")
+        conn.execute(
+            "INSERT INTO game_config_consumables "
+            "(key, label, effect_type, effect_dice, effect_bonus, effect_target, base_price, rarity, description, "
+            "template_id, hidden, ai_generated, approved, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 1, ?, ?)",
+            (
+                new_key, consumable["label"], consumable["effect_type"] or "misc",
+                consumable["effect_dice"], consumable["effect_bonus"] or 0,
+                consumable["effect_target"] or "self", consumable["base_price"] or 0,
+                consumable["rarity"], consumable["description"],
+                template_id, now, now,
+            ),
+        )
+        assigned.append({"category": "consumable", "key": new_key, "name": consumable["label"]})
+
+    return assigned
+
+
 # ── Generate full CampaignPlan for a template ─────────────────────────────────
 
 def _build_generate_plan_system_prompt(act_count: int) -> str:
@@ -1365,12 +1460,29 @@ def forge_generate_template_plan(
                         )
 
                 conn.commit()
+
+                # #1084 — auto-assign reward items (only when no items already linked)
+                auto_items: list[dict] = []
+                try:
+                    existing_items = conn.execute(
+                        "SELECT COUNT(*) FROM game_config_weapons WHERE template_id = ?",
+                        (template_id,),
+                    ).fetchone()[0]
+                    if existing_items == 0:
+                        auto_items = _auto_assign_reward_items(
+                            conn, template_id, tpl["difficulty_rating"]
+                        )
+                        conn.commit()
+                except Exception:
+                    pass  # reward items are non-fatal
+
                 return {
                     "ok": True,
                     "template_id": template_id,
                     "gm_plan_json": plan_public,
                     "auto_filled_npc_keys": auto_npc_keys,
                     "auto_filled_beat_keys": auto_beat_keys,
+                    "auto_assigned_items": auto_items,
                 }
             except Exception as e:
                 last_err = str(e)
@@ -1403,13 +1515,13 @@ def list_published_templates():
             tid = r["id"]
             try:
                 weapons = conn.execute(
-                    "SELECT key, label, 'weapon' AS entry_type, rarity, damage_die, NULL AS effect_type, description FROM game_config_weapons WHERE template_id = ?", (tid,)
+                    "SELECT key, label, 'weapon' AS entry_type, rarity, damage_die, NULL AS effect_type, description FROM game_config_weapons WHERE template_id = ? AND COALESCE(hidden, 0) = 0", (tid,)
                 ).fetchall()
                 cons = conn.execute(
-                    "SELECT key, label, 'consumable' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_consumables WHERE template_id = ?", (tid,)
+                    "SELECT key, label, 'consumable' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_consumables WHERE template_id = ? AND COALESCE(hidden, 0) = 0", (tid,)
                 ).fetchall()
                 its = conn.execute(
-                    "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ?", (tid,)
+                    "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ? AND COALESCE(hidden, 0) = 0", (tid,)
                 ).fetchall()
             except Exception:
                 weapons = cons = its = []
