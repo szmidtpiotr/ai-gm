@@ -32,7 +32,7 @@ def _patch(monkeypatch):
         def __exit__(self, *a): return False
         def execute(self, *a, **k):
             class _C:
-                def fetchone(self_inner): return {"loot_table_key": "loot_enemy"}
+                def fetchone(self_inner): return {"loot_table_key": "loot_enemy", "drop_chance": 1.0}
             return _C()
     monkeypatch.setattr(loot_service, "_conn", lambda: _FakeConn())
     monkeypatch.setattr(loot_service, "get_loot_table", lambda _ek: list(_ENTRIES))
@@ -71,3 +71,33 @@ def test_empty_loot_is_possible(monkeypatch):
 def test_blank_key_returns_empty():
     assert loot_service.roll_loot("") == []
     assert loot_service.roll_loot(None) == []
+
+
+# ─── drop_chance gate (#1076) ─────────────────────────────────────────────────
+
+def test_drop_chance_zero_always_blocks_loot(monkeypatch):
+    """drop_chance=0.0 → gate zawsze blokuje, żaden item nie wypada."""
+    class _FakeConnZero:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, *a, **k):
+            class _C:
+                def fetchone(self_inner): return {"loot_table_key": "loot_enemy", "drop_chance": 0.0}
+            return _C()
+    monkeypatch.setattr(loot_service, "_conn", lambda: _FakeConnZero())
+    monkeypatch.setattr(loot_service, "get_loot_table", lambda _ek: list(_ENTRIES))
+    for s in range(20):
+        random.seed(s)
+        assert loot_service.roll_loot("enemy") == [], f"seed {s}: drop_chance=0.0 powinien blokować wszystko"
+
+
+def test_drop_chance_one_never_blocks_loot(monkeypatch):
+    """drop_chance=1.0 → gate zawsze przepuszcza (przy dobrym seedzie wypada item)."""
+    _patch(monkeypatch)
+    saw_item = False
+    for s in range(50):
+        random.seed(s)
+        if loot_service.roll_loot("enemy"):
+            saw_item = True
+            break
+    assert saw_item, "drop_chance=1.0 powinien zawsze przepuszczać gate"

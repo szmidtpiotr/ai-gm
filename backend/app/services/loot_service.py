@@ -527,17 +527,21 @@ def get_loot_table(enemy_key: str) -> list[dict]:
 def roll_loot(enemy_key: str) -> list[dict]:
     """
     Roll each loot-table entry independently for enemy_key.
-    Returns [] when enemy or loot table is missing, or no entry roll succeeds.
+    Returns [] when enemy or loot table is missing, drop_chance gate fails, or no entry rolls.
+    drop_chance (0.0–1.0) is an outer gate: if it fails, no items roll at all.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
         return []
     with _conn() as conn:
         enemy = conn.execute(
-            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
+            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
             (ek,),
         ).fetchone()
     if not enemy or not enemy["loot_table_key"]:
+        return []
+    dc = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
+    if random.random() > dc:
         return []
 
     entries = get_loot_table(ek)
@@ -582,10 +586,13 @@ def roll_loot_for_class(enemy_key: str, archetype: str) -> list[dict]:
         return []
     with _conn() as conn:
         enemy = conn.execute(
-            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
+            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
             (ek,),
         ).fetchone()
         if not enemy or not enemy["loot_table_key"]:
+            return []
+        dc = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
+        if random.random() > dc:
             return []
         table_key = str(enemy["loot_table_key"])
         entries = conn.execute(
@@ -693,7 +700,8 @@ def distribute_mp_loot(campaign_id: int, enemy_key: str) -> dict:
 def roll_gold_drop(enemy_key: str) -> int:
     """
     Roll gold reward for an enemy from its loot table range.
-    Returns 0 when enemy/table missing or range is empty.
+    Returns 0 when enemy/table missing, range is empty, or drop_chance gate fails.
+    drop_chance is shared with roll_loot() — one gate controls both gold and items.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
@@ -702,7 +710,7 @@ def roll_gold_drop(enemy_key: str) -> int:
         with _conn() as conn:
             row = conn.execute(
                 """
-                SELECT t.gold_min, t.gold_max
+                SELECT t.gold_min, t.gold_max, e.drop_chance
                 FROM game_config_enemies e
                 JOIN game_config_loot_tables t ON t.key = e.loot_table_key
                 WHERE e.key = ? AND t.is_active = 1
@@ -714,6 +722,9 @@ def roll_gold_drop(enemy_key: str) -> int:
         # Backward compatibility with DBs created before gold columns existed.
         return 0
     if not row:
+        return 0
+    dc = float(row["drop_chance"] if row["drop_chance"] is not None else 1.0)
+    if random.random() > dc:
         return 0
     gmin = max(0, int(row["gold_min"] or 0))
     gmax = max(0, int(row["gold_max"] or 0))

@@ -109,7 +109,7 @@ class TestLootService(unittest.TestCase):
         self.assertGreaterEqual(g, 5)
         self.assertLessEqual(g, 15)
 
-    @patch("app.services.loot_service.random.random", side_effect=[0.10, 0.90, 0.04])
+    @patch("app.services.loot_service.random.random", side_effect=[0.10, 0.10, 0.90, 0.04])
     @patch("app.services.loot_service.random.randint", side_effect=[2, 1])
     def test_roll_loot_rolls_each_entry_independently(self, _randint, _random):
         rolled = ls.roll_loot("bandit")
