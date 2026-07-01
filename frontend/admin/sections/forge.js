@@ -2082,6 +2082,9 @@ async function openTplEntityModal(listKey, idx, type, data) {
   document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(type, data.overrides || data);
   if (['weapon','item','consumable'].includes(type)) _forgeWireEffectBuilder();
   document.getElementById('tpl-entity-delete-btn').style.display = idx < 0 ? 'none' : '';
+  // #1085 — show enemy pool swap section for existing enemies
+  const swapSection = document.getElementById('tpl-enemy-swap-section');
+  if (swapSection) swapSection.style.display = (type === 'enemy' && idx >= 0) ? '' : 'none';
   modal.style.display = 'flex';
 }
 
@@ -2108,6 +2111,49 @@ function _refreshTplEntityList(listKey) {
   else if (listKey === 'key_locations') _renderTplLocations(_tplEditorPlan.key_locations || []);
   else if (listKey === 'key_enemies' && typeof _renderTplEnemies === 'function') _renderTplEnemies(_tplEditorPlan.key_enemies || []);
   else if (listKey === 'key_items' && typeof _renderTplItems === 'function') _renderTplItems(_tplEditorPlan.key_items || []);
+}
+
+// #1085 — enemy pool swap helpers
+async function _loadEnemyPoolIntoSelect() {
+  const sel = document.getElementById('tpl-enemy-pool-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Ładowanie…</option>';
+  try {
+    const data = await apiFetch('/api/admin/enemies');
+    const enemies = (data.items || []).filter(e => e.review_status !== 'pending');
+    if (!enemies.length) { sel.innerHTML = '<option value="">Brak wrogów w puli</option>'; return; }
+    sel.innerHTML = '<option value="">— wybierz wroga —</option>' +
+      enemies.map(e => `<option value="${_esc(e.key)}" data-label="${_esc(e.label)}" data-hp="${e.hp_base||20}" data-ac="${e.ac_base||12}" data-dmg="${_esc(e.damage_die||'1d6')}" data-tier="${_esc(e.tier||'standard')}">${_esc(e.label)} (${e.tier||'standard'}, HP ${e.hp_base||'?'})</option>`).join('');
+  } catch(err) {
+    sel.innerHTML = '<option value="">Błąd wczytywania: ' + _esc(String(err.message||err)) + '</option>';
+  }
+}
+
+function _swapTplEnemyFromPool() {
+  if (!_tplEntityCtx || _tplEntityCtx.type !== 'enemy') return;
+  const { listKey, idx } = _tplEntityCtx;
+  const sel = document.getElementById('tpl-enemy-pool-select');
+  if (!sel || !sel.value) { _showToast('Wybierz wroga z listy', 'warning'); return; }
+  const opt = sel.selectedOptions[0];
+  const swapped = {
+    key: sel.value,
+    label: opt.dataset.label || sel.value,
+    tier: opt.dataset.tier || 'standard',
+    campaign_specific: false,
+    overrides: {
+      key: sel.value,
+      label: opt.dataset.label || sel.value,
+      hp_base: parseInt(opt.dataset.hp) || 20,
+      ac_base: parseInt(opt.dataset.ac) || 12,
+      damage_die: opt.dataset.dmg || '1d6',
+      tier: opt.dataset.tier || 'standard',
+    },
+  };
+  if (!_tplEditorPlan[listKey]) _tplEditorPlan[listKey] = [];
+  if (idx >= 0) _tplEditorPlan[listKey][idx] = swapped;
+  _refreshTplEntityList(listKey);
+  closeTplEntityModal();
+  _showToast('Wróg zamieniony ✓', 'success');
 }
 
 function saveTplEntityEdits() {
@@ -3389,6 +3435,17 @@ function _modalsHtml() {
           <span>Specyficzne dla kampanii — nadpisuje globalny rekord w DB</span>
         </label>
         <div id="tpl-entity-form"></div>
+        <!-- #1085 — swap enemy with one from global pool -->
+        <div id="tpl-enemy-swap-section" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--t2);margin-bottom:8px">Zamień na wroga z puli globalnej</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="tpl-enemy-pool-select" class="form-input" style="flex:1;font-size:0.82rem">
+              <option value="">— kliknij Wczytaj puli —</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="_loadEnemyPoolIntoSelect()">Wczytaj pulę</button>
+            <button class="btn btn-sm btn-primary" onclick="_swapTplEnemyFromPool()">Zamień</button>
+          </div>
+        </div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-sm btn-secondary" onclick="closeTplEntityModal()">Anuluj</button>
@@ -3575,6 +3632,8 @@ export async function init(panel) {
   window.closeTplEntityModal = closeTplEntityModal;
   window._deleteTplEntity = _deleteTplEntity;
   window.saveTplEntityEdits = saveTplEntityEdits;
+  window._loadEnemyPoolIntoSelect = _loadEnemyPoolIntoSelect;
+  window._swapTplEnemyFromPool = _swapTplEnemyFromPool;
   window._addTplReq = _addTplReq;
   window._removeTplReq = _removeTplReq;
   window.forgeGeneratePlanConfirm = forgeGeneratePlanConfirm;

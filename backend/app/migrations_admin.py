@@ -5729,6 +5729,22 @@ def _migrate_legacy_skill_keys(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_enemy_forge_columns(conn: sqlite3.Connection) -> None:
+    """#1085 — add created_by and template_id columns to game_config_enemies for forge traceability."""
+    for col_sql in [
+        "ALTER TABLE game_config_enemies ADD COLUMN created_by TEXT DEFAULT NULL",
+        "ALTER TABLE game_config_enemies ADD COLUMN template_id INTEGER DEFAULT NULL",
+    ]:
+        try:
+            conn.execute(col_sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5858,6 +5874,7 @@ def run_admin_migrations() -> None:
         _migrate_legacy_skill_keys(conn)  # #1052
         _ensure_weapon_consumable_image_columns(conn)  # #1076
         _ensure_template_item_columns(conn)  # #1084
+        _ensure_enemy_forge_columns(conn)  # #1085
     finally:
         conn.close()
 

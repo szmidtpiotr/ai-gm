@@ -7,7 +7,7 @@ import json
 import re
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -290,7 +290,7 @@ def _ensure_unique_key(conn: sqlite3.Connection, table: str, base_key: str) -> s
     key = base_key
     i = 2
     while True:
-        row = conn.execute(f"SELECT id FROM {table} WHERE key = ?", (key,)).fetchone()
+        row = conn.execute(f"SELECT 1 FROM {table} WHERE key = ?", (key,)).fetchone()
         if not row:
             return key
         key = f"{base_key}_{i}"
@@ -1136,6 +1136,52 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
         conn.close()
 
 
+# ── Auto-create forge enemies for a template (#1085) ──────────────────────────
+
+def _auto_create_forge_enemies(
+    conn: sqlite3.Connection,
+    template_id: int,
+    enemies: list[dict],
+) -> list[dict]:
+    """Create game_config_enemies rows from plan key_enemies with review_status='pending'.
+
+    Returns list of {key, name} for each created enemy. Skips enemies whose keys
+    conflict by appending a numeric suffix (uses _ensure_unique_key).
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    created: list[dict] = []
+    for e in enemies:
+        base_key = e.get("key") or _slugify(e.get("name") or "enemy")
+        key = _ensure_unique_key(conn, "game_config_enemies", base_key)
+        try:
+            conn.execute(
+                """INSERT INTO game_config_enemies
+                   (key, label, hp_base, ac_base, attack_bonus, damage_die,
+                    description, note, tier, damage_type,
+                    review_status, created_by, template_id,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, 'physical',
+                           'pending', 'forge', ?, ?, ?)""",
+                (
+                    key,
+                    e.get("name") or key,
+                    int(e.get("hp_base") or 20),
+                    int(e.get("ac_base") or 12),
+                    e.get("damage_die") or "1d6",
+                    e.get("description") or "",
+                    e.get("note") or "",
+                    e.get("tier") or "standard",
+                    template_id,
+                    now,
+                    now,
+                ),
+            )
+            created.append({"key": key, "name": e.get("name") or key})
+        except Exception:
+            pass
+    return created
+
+
 # ── Auto-assign reward items for a template ────────────────────────────────────
 
 def _auto_assign_reward_items(
@@ -1476,6 +1522,16 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # reward items are non-fatal
 
+                # #1085 — auto-create pending enemies from key_enemies
+                auto_enemies: list[dict] = []
+                try:
+                    raw_enemies = plan_public.get("key_enemies") or []
+                    if raw_enemies:
+                        auto_enemies = _auto_create_forge_enemies(conn, template_id, raw_enemies)
+                        conn.commit()
+                except Exception:
+                    pass  # enemy creation is non-fatal
+
                 return {
                     "ok": True,
                     "template_id": template_id,
@@ -1483,6 +1539,7 @@ def forge_generate_template_plan(
                     "auto_filled_npc_keys": auto_npc_keys,
                     "auto_filled_beat_keys": auto_beat_keys,
                     "auto_assigned_items": auto_items,
+                    "auto_created_enemies": auto_enemies,
                 }
             except Exception as e:
                 last_err = str(e)

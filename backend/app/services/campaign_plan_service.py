@@ -118,6 +118,18 @@ class PlotLocation(BaseModel):
     visited: bool = False
 
 
+class PlotEnemy(BaseModel):
+    """Key enemy generated in the plan (#1085). Auto-created in game_config_enemies as pending."""
+    key: str
+    name: str
+    tier: str = "standard"
+    hp_base: int = 20
+    ac_base: int = 12
+    damage_die: str = "1d6"
+    description: str = ""
+    note: str = ""
+
+
 class EnginePrivate(BaseModel):
     secret_predisposition_hint: str
     hidden_twist: str
@@ -131,6 +143,7 @@ class CampaignPlan(BaseModel):
     endings: list[PlotEnding]
     key_npcs: list[PlotNPC]
     key_locations: list[PlotLocation]
+    key_enemies: list[PlotEnemy] = []
     active_act: int = 1
     scene_log: list[str] = []
     deviations: list[str] = []
