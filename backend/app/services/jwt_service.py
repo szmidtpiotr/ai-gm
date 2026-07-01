@@ -46,7 +46,10 @@ def _secret() -> str:
     if env:
         return env
     # Dev fallback — DO NOT use in prod. Log a warning so it's visible in logs.
-    seed = (os.uname().nodename + "::ai_gm::dev_jwt_fallback").encode("utf-8")
+    # Keyed on the DB *path* (stable across rebuilds), not hostname (changes every
+    # `docker compose up --build` → ephemeral ID → all tokens invalidated).
+    db_path = os.environ.get("DATABASE_URL", "/data/ai_gm.db")
+    seed = (db_path + "::ai_gm::dev_jwt_fallback").encode("utf-8")
     derived = hashlib.sha256(seed).hexdigest()
     logger.warning("jwt_secret_env_missing_using_dev_fallback",
                    hint="Set JWT_SECRET in production for stable, unpredictable signing.")

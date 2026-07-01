@@ -30,6 +30,8 @@ services:
     ports:
       - "8100:8000"
     environment:
+      # #1090 — JWT secret must survive rebuilds; pass from .env to container
+      - JWT_SECRET=${JWT_SECRET:-}
       - OLLAMA_LOAD_TIMEOUT=300s
       - OLLAMA_TIMEOUT=240
       - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
