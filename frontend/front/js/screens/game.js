@@ -3484,11 +3484,25 @@ const _CAT_ORDER = ['scrolls', 'books', 'keys', 'quest', 'misc'];
 function _loreCategoryKey(item) {
     const lab = String(item.label || item.key || '');
     const t   = String(item.item_type || '').toLowerCase();
-    if (/pergamin|zwój|zwoj|list|pismo|manuskrypt/i.test(lab)) return 'scrolls';
-    if (/księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome/i.test(lab)) return 'books';
+    if (/pergamin|zwój|zwoj|list|pismo|manuskrypt|skrawek|świstek|swistek|kartka|notatka|wiadomość|wiadomosc|rozkaz|ulotka|liścik|liscik|doniesienie|raport|wypis|przepustka|zezwolenie|dokument/i.test(lab)) return 'scrolls';
+    if (/księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome|zapis|dziennik|pamiętnik|pamietnik|grimuar|grimoire|atlas|bestiariusz/i.test(lab)) return 'books';
     if (/klucz/i.test(lab)) return 'keys';
     if (t === 'quest') return 'quest';
     return 'misc';
+}
+
+function _stackLoreItems(items) {
+    const map = new Map();
+    for (const item of items) {
+        const key = String(item.label || item.key || '').toLowerCase().trim();
+        if (map.has(key)) {
+            const ex = map.get(key);
+            ex.quantity = (ex.quantity || 1) + (item.quantity || 1);
+        } else {
+            map.set(key, { ...item, quantity: item.quantity || 1 });
+        }
+    }
+    return [...map.values()];
 }
 
 function _renderLoreGrouped(lore) {
@@ -3507,15 +3521,16 @@ function _renderLoreGrouped(lore) {
     for (const cat of _CAT_ORDER) {
         const items = groups[cat];
         if (!items || !items.length) continue;
+        const stacked = _stackLoreItems(items);
         const meta = _LORE_CATS[cat] || _LORE_CATS.misc;
         const isOpen = openCats.has(cat) || cat === 'misc';
-        const rows = items.map(item => _renderLoreRow(item, cat)).join('');
+        const rows = stacked.map(item => _renderLoreRow(item, cat)).join('');
         parts.push(`
             <details class="lore-group" data-lore-cat="${cat}"${isOpen ? ' open' : ''}>
                 <summary class="lore-group__header">
                     <span class="lore-group__icon">${meta.icon}</span>
                     <span class="lore-group__label">${meta.label}</span>
-                    <span class="lore-group__count">×${items.length}</span>
+                    <span class="lore-group__count">×${stacked.length}</span>
                     <span class="lore-group__chevron" aria-hidden="true">▾</span>
                 </summary>
                 <div class="lore-group__body">${rows}</div>

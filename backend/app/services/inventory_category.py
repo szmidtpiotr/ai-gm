@@ -1,9 +1,18 @@
 """Lore item category classification — mirrors the client-side JS heuristic in game.js."""
 import re
 
-_SCROLL_RE = re.compile(r"pergamin|zwój|zwoj|list|pismo|manuskrypt", re.IGNORECASE)
-_BOOK_RE   = re.compile(r"księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome", re.IGNORECASE)
-_KEY_RE    = re.compile(r"klucz", re.IGNORECASE)
+_SCROLL_RE = re.compile(
+    r"pergamin|zwój|zwoj|list|pismo|manuskrypt|skrawek|świstek|swistek"
+    r"|kartka|notatka|wiadomość|wiadomosc|rozkaz|ulotka|liścik|liscik"
+    r"|doniesienie|raport|wypis|przepustka|zezwolenie|dokument",
+    re.IGNORECASE,
+)
+_BOOK_RE = re.compile(
+    r"księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome"
+    r"|zapis|dziennik|pamiętnik|pamietnik|grimuar|grimoire|atlas|bestiariusz",
+    re.IGNORECASE,
+)
+_KEY_RE = re.compile(r"klucz", re.IGNORECASE)
 
 
 def lore_category_key(label: str, item_type: str) -> str:

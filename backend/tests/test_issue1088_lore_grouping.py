@@ -25,11 +25,20 @@ def _get_conn():
 # ─── Test główny — klasyfikacja lore items po etykiecie ──────────────────────
 
 def test_scroll_category():
-    """Pergaminy / zwoje / listy → 'scrolls'."""
+    """Pergaminy / zwoje / listy / skrawki / świstki → 'scrolls'."""
     assert lore_category_key("Pergamin ze zaklęciem", "misc") == "scrolls"
     assert lore_category_key("Zwój Ognia", "misc") == "scrolls"
     assert lore_category_key("List do kniazia", "misc") == "scrolls"
     assert lore_category_key("Zwój Wiatru", "narrative") == "scrolls"
+    # expanded vocab — paper scraps
+    assert lore_category_key("Skrawek papieru", "misc") == "scrolls"
+    assert lore_category_key("Złożony skrawek papieru", "misc") == "scrolls"
+    assert lore_category_key("Poplamiony świstek", "misc") == "scrolls"
+    assert lore_category_key("Kartka z instrukcją", "misc") == "scrolls"
+    assert lore_category_key("Wiadomość od szpiega", "misc") == "scrolls"
+    assert lore_category_key("Rozkaz marszu", "misc") == "scrolls"
+    assert lore_category_key("Przepustka do twierdzy", "misc") == "scrolls"
+    assert lore_category_key("Notatka kupca", "misc") == "scrolls"
 
 
 def test_book_category():
