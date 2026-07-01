@@ -4,25 +4,7 @@
 -- campaign_templates table created by migration (migrations_admin.py S13/S14 block).
 -- Safe to re-run: NOT EXISTS guard by title+created_by.
 -- HF-8: key_beats now include objective_type for U8 auto-complete (empty = match any target).
-
-INSERT INTO campaign_templates
-    (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids,
-     status, created_by, required_npc_keys, required_beats, player_visible)
-SELECT
-    'Pierwsze Kroki',
-    'Kampania tutorialowa dla nowych graczy. Bohater poznaje świat, mechaniki walki i handlu w bezpiecznym otoczeniu miasta Vilnograd i okolic. Idealna jako wprowadzenie do systemu.',
-    1,
-    'Przyjazny, bezpieczny świat z wyraźnymi wskazówkami. Powoli odkrywane możliwości.',
-    '{"arcs":[{"id":"arc_tutorial","label":"Tutorial","key_beats":[{"beat_key":"first_combat","label":"Pierwsza walka","objective_type":"kill_enemy"},{"beat_key":"first_merchant","label":"Pierwszy handel","objective_type":"talk_to_npc"},{"beat_key":"first_exploration","label":"Pierwsza eksploracja","objective_type":"visit_location","optional":true}],"status":"active"}],"endings":[{"id":"ending_primary","type":"primary","title":"Gotów na przygodę","summary":"Bohater opanował podstawy walki, handlu i eksploracji. Vilnograd nie ma już przed nim tajemnic — czas ruszyć w prawdziwy świat.","requirements":["first_combat"]}]}',
-    '[]',
-    'published',
-    'seed',
-    '["innkeeper_marta","blacksmith_goran"]',
-    '["first_combat","first_merchant","first_exploration"]',
-    1
-WHERE NOT EXISTS (
-    SELECT 1 FROM campaign_templates WHERE title = 'Pierwsze Kroki' AND created_by = 'seed'
-);
+-- Pierwsze Kroki removed — replaced by proper auto-onboarding (see issue #XXXX).
 
 INSERT INTO campaign_templates
     (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids,

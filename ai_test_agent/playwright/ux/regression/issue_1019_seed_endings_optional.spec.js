@@ -1,12 +1,13 @@
 /**
  * REGRESSION #1019 — seed campaign templates expose endings[] + optional side beats.
- * Acceptance: each published seed template ("Pierwsze Kroki", "Przeklęte Ziemie", "Cień Licza")
+ * Acceptance: each published seed template ("Przeklęte Ziemie", "Cień Licza")
  * carries gm_plan_json.endings (≥1 primary, with title) and ≥1 optional beat, while every arc
  * keeps ≥1 critical (non-optional) beat so it can still auto-close.
+ * Note: "Pierwsze Kroki" removed — replaced by auto-onboarding feature.
  */
 const { test, expect } = require("@playwright/test");
 
-const SEED_TITLES = ["Pierwsze Kroki", "Przeklęte Ziemie", "Cień Licza"];
+const SEED_TITLES = ["Przeklęte Ziemie", "Cień Licza"];
 
 test("REGRESSION #1019 — seed templates have endings + optional beats", async ({ page }) => {
   const r = await page.request.get("/api/campaign-templates");

@@ -2,35 +2,9 @@
  * REGRESSION #539 (HF-8) — Beat auto-complete działa w Gotowej Kampanii.
  * Acceptance: szablony kampanii mają objective_type na beatach;
  * endpoint /api/campaign-templates zwraca opublikowane szablony z key_beats zawierającymi objective_type.
+ * Note: test "Pierwsze Kroki" usunięty — szablon zastąpiony auto-onboardingiem.
  */
 const { test, expect } = require("@playwright/test");
-
-test("REGRESSION #539 — Pierwsze Kroki beats have objective_type after HF-8 migration", async ({ page }) => {
-  const r = await page.request.get("/api/campaign-templates");
-  expect(r.ok(), "GET /api/campaign-templates powinien zwrócić 200").toBeTruthy();
-  const body = await r.json();
-  const templates = body.items || body;
-
-  const firstKroki = templates.find(t => t.title === "Pierwsze Kroki" && t.status === "published");
-  expect(firstKroki, "Szablon 'Pierwsze Kroki' musi istnieć i być published").toBeTruthy();
-
-  // gm_plan_json może być obiektem (backend parsuje) lub stringiem
-  const plan = typeof firstKroki.gm_plan_json === "string"
-    ? JSON.parse(firstKroki.gm_plan_json)
-    : firstKroki.gm_plan_json;
-
-  const beats = plan.arcs?.[0]?.key_beats || [];
-  expect(beats.length, "Tutorial musi mieć co najmniej 3 beaty").toBeGreaterThanOrEqual(3);
-
-  const firstCombat = beats.find(b => b.beat_key === "first_combat");
-  expect(firstCombat?.objective_type, "first_combat → kill_enemy (#539 HF-8)").toBe("kill_enemy");
-
-  const firstMerchant = beats.find(b => b.beat_key === "first_merchant");
-  expect(firstMerchant?.objective_type, "first_merchant → talk_to_npc (#539 HF-8)").toBe("talk_to_npc");
-
-  const firstExploration = beats.find(b => b.beat_key === "first_exploration");
-  expect(firstExploration?.objective_type, "first_exploration → visit_location (#539 HF-8)").toBe("visit_location");
-});
 
 test("REGRESSION #539 — Przeklęte Ziemie beats have objective_type", async ({ page }) => {
   const r = await page.request.get("/api/campaign-templates");
