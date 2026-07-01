@@ -4834,3 +4834,36 @@ def patch_combat_narrative_config(payload: dict = Body(...)) -> dict:
         return {"ok": True, "skip_combat_narrative": skip}
     finally:
         conn.close()
+
+
+# ── GM-plan completion notifications toggle ───────────────────────────────────
+_GM_PLAN_NOTIF_KEY = "gm_plan_notifications_enabled"
+
+
+@router.get("/admin/config/gm-plan-notifications", dependencies=[Depends(require_admin_token)])
+def get_gm_plan_notifications() -> dict:
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ?", (_GM_PLAN_NOTIF_KEY,)
+        ).fetchone()
+        enabled = str((row[0] if row else "") or "").strip() not in ("0", "false", "no")
+        return {"gm_plan_notifications_enabled": enabled}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/config/gm-plan-notifications", dependencies=[Depends(require_admin_token)])
+def patch_gm_plan_notifications(payload: dict = Body(...)) -> dict:
+    enabled = bool(payload.get("gm_plan_notifications_enabled", True))
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (_GM_PLAN_NOTIF_KEY, "1" if enabled else "0"),
+        )
+        conn.commit()
+        return {"ok": True, "gm_plan_notifications_enabled": enabled}
+    finally:
+        conn.close()

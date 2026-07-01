@@ -1598,6 +1598,20 @@ body.combat-active .header--game {
   color: var(--text-secondary);
 }
 
+/* #1086: beat/quest completion notification bubble */
+.chat-bubble--completion {
+  align-self: center;
+  background: rgba(201, 165, 74, 0.08);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: var(--font-size-sm);
+  color: var(--accent-light);
+  text-align: center;
+  margin: 6px auto;
+  max-width: 80%;
+}
+
 .message__meta {
   display: flex;
   align-items: center;

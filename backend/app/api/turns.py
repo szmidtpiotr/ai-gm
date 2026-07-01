@@ -6572,6 +6572,25 @@ def create_turn_stream(
             if False:
                 pass
 
+            # #1086: beat/quest completion notifications for player chat bubbles
+            try:
+                from app.services.turn_notifications import collect_turn_notifications as _ctn
+                _notif_turn = locals().get("_xp_turn2")
+                if _notif_turn:
+                    _notif_conn = sqlite3.connect(DB_PATH)
+                    _notif_conn.row_factory = sqlite3.Row
+                    try:
+                        _notif_meta = _notif_conn.execute(
+                            "SELECT value FROM game_config_meta WHERE key='gm_plan_notifications_enabled' LIMIT 1"
+                        ).fetchone()
+                        _notif_enabled = str((_notif_meta[0] if _notif_meta else "") or "").strip() not in ("0", "false", "no")
+                        _notif = _ctn(campaign_id_val, _notif_turn, _notif_conn, enabled=_notif_enabled)
+                        done_payload.update(_notif)
+                    finally:
+                        _notif_conn.close()
+            except Exception as _notif_err:
+                logger.warning("turn_notifications_error", error=str(_notif_err))
+
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(

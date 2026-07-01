@@ -1439,6 +1439,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         if (result.campaign_ended) {
             showVictoryScreen().catch(() => {});
         }
+
+        // #1086: beat/quest completion notifications
+        if (result.completed_beats?.length || result.completed_quests?.length) {
+            renderCompletionNotifications(result.completed_beats, result.completed_quests);
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -1521,6 +1526,8 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.clock)              renderClock(meta.clock);
             if (meta.onboarding_cards)   result.onboarding_cards   = meta.onboarding_cards;
             if (meta.narrative_append)   result.narrative_append   = meta.narrative_append;
+            if (meta.completed_beats)    result.completed_beats    = meta.completed_beats;
+            if (meta.completed_quests)   result.completed_quests   = meta.completed_quests;
             // U30: sync map pin after each narrative turn (text movement updates current_hex).
             // If the hex changed AND the panel is open, re-fetch the map so the newly
             // discovered destination hex (not in the stale client cache) renders live —
@@ -1968,6 +1975,22 @@ function _renderInspiredRerollButton(skillTestId, offer) {
     };
     wrap.appendChild(btn);
     elements.chatMessages.appendChild(wrap);
+}
+
+// ── #1086: Beat/quest completion notification bubbles ─────────────────────────
+
+function renderCompletionNotifications(beats, quests) {
+    if (!elements.chatMessages) return;
+    const items = [
+        ...(beats || []).map(b => `✓ Cel wykonany: ${b.label || b.key}`),
+        ...(quests || []).map(q => q.xp > 0 ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`),
+    ];
+    for (const text of items) {
+        const el = document.createElement('div');
+        el.className = 'chat-bubble chat-bubble--completion';
+        el.textContent = text;
+        elements.chatMessages.appendChild(el);
+    }
 }
 
 // ── UI state recovery ─────────────────────────────────────────────────────────

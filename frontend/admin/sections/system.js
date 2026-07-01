@@ -516,6 +516,17 @@ const _HTML = `
               <div><button class="btn btn-primary" id="sys-skip-combat-narr-save">Zapisz</button></div>
             </div>
           </div>
+          <!-- #1086: Beat/quest completion notifications -->
+          <div class="card" style="margin-top:12px">
+            <div class="card-header"><span class="card-title">📜 Notyfikacje planu GM</span></div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:0.78rem;color:var(--t3);line-height:1.5">Złote dymki w chacie gracza po zaliczeniu beatu lub questa z planu GM (✓ Cel wykonany / ✓ Quest). Globalny przełącznik — wyłącza dla wszystkich graczy.</div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+                <input type="checkbox" id="sys-gm-plan-notif" checked> Włącz notyfikacje beatu/questa w chacie gracza
+              </label>
+              <div><button class="btn btn-primary" id="sys-gm-plan-notif-save">Zapisz</button></div>
+            </div>
+          </div>
         </div>
         </div>
       </div>
@@ -2091,6 +2102,23 @@ async function _loadNarration() {
       try {
         await apiFetch('/api/admin/config/combat-narrative', { method: 'PATCH', body: JSON.stringify({ skip_combat_narrative: skip }) });
         showToast(skip ? 'Narracja bojowa wyłączona globalnie.' : 'Narracja bojowa włączona.', 'success');
+      } catch(e) { showToast(e.message || 'Błąd zapisu.', 'error'); }
+    });
+  }
+  // #1086: GM plan notifications toggle
+  try {
+    const gnr = await apiFetch('/api/admin/config/gm-plan-notifications');
+    const gnEl = document.getElementById('sys-gm-plan-notif');
+    if (gnEl) gnEl.checked = gnr?.gm_plan_notifications_enabled !== false;
+  } catch(e) { console.warn('gm-plan-notif-cfg', e.message); }
+  const gnBtn = document.getElementById('sys-gm-plan-notif-save');
+  if (gnBtn && !gnBtn.dataset.wired) {
+    gnBtn.dataset.wired = '1';
+    gnBtn.addEventListener('click', async () => {
+      const enabled = document.getElementById('sys-gm-plan-notif')?.checked ?? true;
+      try {
+        await apiFetch('/api/admin/config/gm-plan-notifications', { method: 'PATCH', body: JSON.stringify({ gm_plan_notifications_enabled: enabled }) });
+        showToast(enabled ? 'Notyfikacje planu GM włączone.' : 'Notyfikacje planu GM wyłączone.', 'success');
       } catch(e) { showToast(e.message || 'Błąd zapisu.', 'error'); }
     });
   }
