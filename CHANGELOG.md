@@ -4,6 +4,28 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.8 — 2026-07-01 — Fuzzy routing lokacji + poprawki walki, UI i streamingu
+
+Seria poprawek stabilizacyjnych po dużym v1.5.7. Narracja trafia teraz precyzyjniej do lokacji (fuzzy matching etykiet); atak z zaskoczenia startuje walkę zamiast testu Zastraszania; naprawione race condition streamingu otwierające własne połączenia DB; kilka uciążliwych bugów UI (modal Awansuj, błędne klucze umiejętności); nowa nakładka na mapie admina podświetlająca heksy z lokacjami.
+
+### Added
+
+- **Admin mapa — nakładka lokacji** — toggle podświetlający heksy posiadające lokacje bezpośrednio na mapie hex-grid.
+- **Podpowiedź kierunku (#1050)** — gdy gracz wpisuje ruch bez kierunku, narrator pyta dokąd zamiast zignorować intent.
+
+### Fixed
+
+- **Fuzzy routing lokacji (#1051)** — location_intent dopasowuje teraz etykietę lokacji po jej `label` (fuzzy), nie tylko po `to_key`; naprawiony stuck Mizel na 25 turach bez ruchu.
+- **Narracja przesuwa po mapie lokalnej (#1057)** — synchronizacja `local_hex` z narracją zweryfikowana Playwright; auto-tworzenie hexa gdy narrator wskazuje miejsce spoza znanych sub-lokacji.
+- **Wygrana — dobór zakończenia (#1058)** — `showVictoryScreen` wybiera właściwe zakończenie przez stored `ending_id` lub fallback LLM; wypełnia `ended_at` + `epitaph`.
+- **Stream guards (#1056)** — stream u30 + quest_cap otwierały własne połączenie DB (resource leak); naprawione.
+- **Sugerowane akcje (#1055)** — schema drift w `suggested_actions`: `game_npcs`, `lc.to_key` naprawione.
+- **Modal Awansuj (#1053)** — modal pozostawał otwarty po wydaniu PD; teraz zamyka się poprawnie.
+- **Legacy skill keys (#1052)** — nieznane klucze umiejętności (`unknown_skill`) powodowały błąd na ekranie Awansuj; naprawione.
+- **Atak z zaskoczenia (#1054)** — atak z zaskoczenia startuje `COMBAT_START` zamiast testu Zastraszania.
+
+---
+
 ## v1.5.7 — 2026-06-29 — Wygrana kampanii + Plan GM V2 + grywalne krasnoludy + mapa lokalna
 
 Duży release po v1.5.6. Kampania wreszcie ma metę: deterministyczny warunek zwycięstwa kończy ją, gdy gracz domknie wszystkie akty fabuły i wszystkie questy. Pod spodem przebudowany Plan GM (format V2 z aktami, beatami i zakończeniami). Krasnoludy stają się w pełni grywalną rasą. Osady dostają mapę lokalną z auto-generowanymi pod-lokacjami, a świat Kresów — kanoniczną obsadę i spójne nazewnictwo. Do tego fala poprawek questów, podróży po mapie, walki i UI.
