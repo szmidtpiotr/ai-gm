@@ -1443,7 +1443,7 @@ async function forgePublishTemplate(id) {
     const icon = i.type === 'error' ? '🔴' : '🟡';
     return '<div style="background:' + bg + '18;border:1px solid ' + bg + ';border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
       '<div style="font-weight:600;font-size:0.82rem;color:' + bg + '">' + icon + ' ' + (i.type === 'error' ? 'BLAD' : 'OSTRZEZENIE') + ' — ' + _esc(i.code) + '</div>' +
-      '<div style="font-size:0.8rem;margin-top:3px;color:var(--t1)">' + _esc(i.message) + '</div>' +
+      '<div style="font-size:0.8rem;margin-top:3px;color:#e2e8f0">' + _esc(i.message) + '</div>' +
     '</div>';
   }).join('');
   const hasErrors = vres.issues.some(i => i.type === 'error');
