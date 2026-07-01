@@ -1085,6 +1085,24 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
                     "orphan_beats": wres["orphan_beats"],
                     "acts_without_closable_beat": wres["acts_without_closable_beat"],
                 })
+            # #1094 — auto-allocate start hex if not set, so launch never falls back to a random/occupied hex.
+            cur_hex = conn.execute(
+                "SELECT start_hex_q FROM campaign_templates WHERE id = ?", (template_id,)
+            ).fetchone()
+            if cur_hex and cur_hex["start_hex_q"] is None:
+                best_hex = _allocate_hex_for_template(conn, template_id)
+                if best_hex is None:
+                    raise HTTPException(status_code=422, detail={
+                        "error": "no_free_hex",
+                        "message": "Nie można opublikować — brak wolnych hexów na mapie świata. "
+                                   "Wszystkie dostępne hexy są zajęte przez lokacje lub oznaczone jako POI. "
+                                   "Zwolnij hex lub ręcznie przydziel teren przed publikacją.",
+                    })
+                conn.execute(
+                    "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
+                    (best_hex["q"], best_hex["r"], template_id),
+                )
+                conn.commit()
         updates: list[str] = []
         params: list = []
         for field, val in [
@@ -2379,10 +2397,72 @@ def _hex_distance(q1: int, r1: int, q2: int, r2: int) -> int:
     return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) // 2
 
 
+def _allocate_hex_for_template(conn: "sqlite3.Connection", template_id: int) -> "dict | None":
+    """#1094 — core allocation logic, callable internally (auto-publish) or via endpoint.
+
+    Hard-excludes hexes that:
+    - have a non-empty label (named POI / named location on the world map)
+    - already have a game_locations row anchored to that hex (world_hex_q/r match)
+    Other templates' taken hexes are also skipped.
+    Returns best hex dict {q, r, hex_type, label} or None if no free hex found.
+    Does NOT write to DB — caller is responsible.
+    """
+    taken = {
+        (int(r["start_hex_q"]), int(r["start_hex_r"]))
+        for r in conn.execute(
+            "SELECT start_hex_q, start_hex_r FROM campaign_templates "
+            "WHERE start_hex_q IS NOT NULL AND id != ?",
+            (template_id,),
+        ).fetchall()
+    }
+
+    # Hexes already claimed by a game_location (world_hex_q/r set)
+    try:
+        occupied_by_location = {
+            (int(r["world_hex_q"]), int(r["world_hex_r"]))
+            for r in conn.execute(
+                "SELECT world_hex_q, world_hex_r FROM game_locations "
+                "WHERE world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL AND is_active = 1"
+            ).fetchall()
+        }
+    except Exception:
+        occupied_by_location = set()
+
+    world_hexes = [
+        {"q": int(r["q"]), "r": int(r["r"]), "hex_type": r["hex_type"], "label": r["label"] or ""}
+        for r in conn.execute(
+            "SELECT q, r, hex_type, label FROM world_hexes WHERE map_level = 0 AND is_active = 1"
+        ).fetchall()
+    ]
+
+    _PREF = {"town": 3, "plains": 2, "castle": 1}
+    best = None
+    best_score = -1
+    for h in world_hexes:
+        hq, hr = h["q"], h["r"]
+        # Hard exclusions: named POI or existing location
+        if h["label"].strip():
+            continue
+        if (hq, hr) in occupied_by_location:
+            continue
+        if (hq, hr) in taken:
+            continue
+        pref = _PREF.get(h["hex_type"], 0)
+        min_dist = min((_hex_distance(hq, hr, tq, tr) for tq, tr in taken), default=999)
+        center_dist = _hex_distance(0, 0, hq, hr)
+        score = min_dist * 10 + pref - center_dist * 2
+        if score > best_score:
+            best_score = score
+            best = h
+
+    return best
+
+
 @router.post("/templates/{template_id}/allocate-hex")
 def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
     """Find a free world hex cluster for this template and assign it.
-    Prefers town/plains hexes far from other templates' start hexes."""
+    Prefers town/plains hexes far from other templates' start hexes.
+    Hard-excludes named POI hexes and hexes with existing game_locations."""
     conn = _get_db()
     try:
         tpl = conn.execute(
@@ -2391,15 +2471,6 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
         ).fetchone()
         if not tpl:
             raise HTTPException(status_code=404, detail="Template not found")
-
-        taken = [
-            (int(r["start_hex_q"]), int(r["start_hex_r"]))
-            for r in conn.execute(
-                "SELECT start_hex_q, start_hex_r FROM campaign_templates "
-                "WHERE start_hex_q IS NOT NULL AND id != ?",
-                (template_id,),
-            ).fetchall()
-        ]
 
         world_hexes = [
             {"q": int(r["q"]), "r": int(r["r"]), "hex_type": r["hex_type"], "label": r["label"]}
@@ -2411,21 +2482,10 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
         if not world_hexes:
             raise HTTPException(status_code=422, detail="No world hexes — generate world first")
 
-        _PREF = {"town": 3, "plains": 2, "castle": 1}
-        best = None
-        best_score = -1
-        for h in world_hexes:
-            pref = _PREF.get(h["hex_type"], 0)
-            min_dist = min((_hex_distance(h["q"], h["r"], tq, tr) for tq, tr in taken), default=999)
-            # Penalise hexes far from world centre so templates cluster in the middle
-            center_dist = _hex_distance(0, 0, h["q"], h["r"])
-            score = min_dist * 10 + pref - center_dist * 2
-            if score > best_score:
-                best_score = score
-                best = h
+        best = _allocate_hex_for_template(conn, template_id)
 
         if not best:
-            raise HTTPException(status_code=422, detail="Could not find suitable hex")
+            raise HTTPException(status_code=422, detail="Could not find suitable hex — all free hexes are occupied or named POI")
 
         conn.execute(
             "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
