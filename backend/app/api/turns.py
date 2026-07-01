@@ -2202,18 +2202,28 @@ _MONETARY_CONTENT_RE = re.compile(
     r'\b(monet|zapłat|złot|gold|gp)\w*\b',
     re.IGNORECASE,
 )
+# Non-monetary bags: empty bag (pusty*) or travel/utility pouches (podróżna*, etc.)
+_MONETARY_BAG_NEGATE_RE = re.compile(
+    r'\b(pust\w*|podróżn\w*)\b',
+    re.IGNORECASE,
+)
 _AMOUNT_RE = re.compile(r'\b(\d+)\b')
 
 
 def _monetary_item_gold(label: str, description: str | None) -> int | None:
     """Return gold amount if label is a monetary purse/bag; None if it's a regular item.
 
-    Requires bag keyword in label AND money keyword in label+description to avoid
-    false-positives like 'Pusty mieszek' (empty bag = narrative prop, not currency).
+    Bag keyword in label is sufficient — content word (monet/złot) is not required (#1089).
+    Exceptions: explicitly empty bags (pusty*) or travel pouches (podróżna*) stay as items.
+    Amount is extracted from label+description when present; defaults to 10 gp.
     """
-    combined = (label or "") + " " + (description or "")
-    if not (_MONETARY_BAG_RE.search(label or "") and _MONETARY_CONTENT_RE.search(combined)):
+    lbl = label or ""
+    if not _MONETARY_BAG_RE.search(lbl):
         return None
+    # Explicit non-monetary bags stay as regular items
+    if _MONETARY_BAG_NEGATE_RE.search(lbl):
+        return None
+    combined = lbl + " " + (description or "")
     m = _AMOUNT_RE.search(combined)
     return int(m.group(1)) if m else 10
 
