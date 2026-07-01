@@ -179,7 +179,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | ID | Modal | Trigger | Kluczowe elementy | React |
 |---|---|---|---|---|
 | F-20 | Rzut kośćmi (3D) | rzut na test / combat / `/roll` | canvas 3D, d4–d100, karta wyniku | — |
-| F-21 | Karta postaci (panel) | nagłówek / swipe | zakładki Staty / Ekwipunek / Czary (mag) / Wygląd | — |
+| F-21 | Karta postaci (panel) | nagłówek / swipe | zakładki Staty / Ekwipunek / Czary (mag) / Wygląd; swipe-down zamyka tylko gdy lista na szczycie (scrollTop guard #1091); overscroll-behavior:contain blokuje pull-to-refresh | — |
 | F-22 | Ustawienia (panel) | ikona koła zębatego / swipe | push, wygląd tekstu (font/rozmiar/preview), metadane dymków, voice (TTS/STT), theme, sekcja admin | — |
 | F-23 | Dziennik (panel) | ikona dziennika | Zadania / Wątki / Kronika, recap "Poprzednio…", regen | — |
 | F-24 | Akcja walki (sheet) | "Akcja" w walce | Czar / Ruch / Unik-Blok / Zapasy; ikona+nazwa+koszt+opis | — |

@@ -2203,6 +2203,7 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 .sheet-panel__content {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-lg);
 }
 

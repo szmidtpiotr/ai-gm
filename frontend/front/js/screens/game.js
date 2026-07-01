@@ -4589,15 +4589,21 @@ function initPanelSwipeDown(panel, closeFn) {
     let startY = 0;
     let currentY = 0;
     let dragging = false;
+    let isDragClose = false;
 
     panel.addEventListener('touchstart', (e) => {
         startY = e.touches[0].clientY;
+        currentY = startY;
         dragging = true;
-        panel.style.transition = 'none';
+        // Only start drag-to-close when content scroll is at the very top.
+        // If user is scrolled down inside the panel, let native scroll handle it.
+        const content = panel.querySelector('.sheet-panel__content');
+        isDragClose = !content || content.scrollTop <= 0;
+        if (isDragClose) panel.style.transition = 'none';
     }, { passive: true });
 
     panel.addEventListener('touchmove', (e) => {
-        if (!dragging) return;
+        if (!dragging || !isDragClose) return;
         currentY = e.touches[0].clientY;
         const diff = currentY - startY;
         if (diff > 0) {
@@ -4609,15 +4615,18 @@ function initPanelSwipeDown(panel, closeFn) {
         if (!dragging) return;
         dragging = false;
         panel.style.transition = '';
-        const diff = currentY - startY;
-        if (diff > 80) {
-            panel.style.transform = '';
-            closeFn();
-        } else {
-            panel.style.transform = '';
+        if (isDragClose) {
+            const diff = currentY - startY;
+            if (diff > 80) {
+                panel.style.transform = '';
+                closeFn();
+            } else {
+                panel.style.transform = '';
+            }
         }
         startY = 0;
         currentY = 0;
+        isDragClose = false;
     });
 }
 
