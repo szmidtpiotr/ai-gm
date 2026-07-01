@@ -3508,8 +3508,8 @@ function _renderLoreGrouped(lore) {
         const items = groups[cat];
         if (!items || !items.length) continue;
         const meta = _LORE_CATS[cat] || _LORE_CATS.misc;
-        const isOpen = openCats.has(cat) || items.length <= 3;
-        const rows = items.map(_renderLoreRow).join('');
+        const isOpen = openCats.has(cat) || cat === 'misc';
+        const rows = items.map(item => _renderLoreRow(item, cat)).join('');
         parts.push(`
             <details class="lore-group" data-lore-cat="${cat}"${isOpen ? ' open' : ''}>
                 <summary class="lore-group__header">
@@ -3538,7 +3538,7 @@ document.addEventListener('toggle', (ev) => {
     sessionStorage.setItem(key, JSON.stringify([...set]));
 }, true);
 
-function _renderLoreRow(item) {
+function _renderLoreRow(item, cat) {
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
     // D5 (#380): old hover tooltip removed — the click-to-open detail modal replaces it
     // (was duplicating the description with the new modal).
@@ -3547,9 +3547,14 @@ function _renderLoreRow(item) {
     const dropBtn = !isQuest
         ? `<button class="inv-row__drop-btn" data-action="drop" data-inventory-id="${item.id}" title="Wyrzuć przedmiot">✕</button>`
         : '';
+    // #1088: use item image_url if present, else category icon, else generic scroll
+    const catIcon = (cat && _LORE_CATS[cat]) ? _LORE_CATS[cat].icon : INV_ICONS.scroll;
+    const iconContent = item.image_url
+        ? `<img src="${escapeHtml(item.image_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : catIcon;
     return `
         <div class="inv-row" data-inventory-id="${item.id}">
-            <div class="inv-row__icon">${INV_ICONS.scroll}</div>
+            <div class="inv-row__icon">${iconContent}</div>
             <div class="inv-row__info">
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
                 ${item.description ? `<div class="inv-row__desc">${escapeHtml(item.description)}</div>` : ''}
