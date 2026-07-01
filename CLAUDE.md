@@ -70,12 +70,14 @@ Playwright specs in `ai_test_agent/playwright/` are **bind-mounted** (`:rw`) int
 
 - Entry point: `app/main.py` — wires FastAPI, runs `init_db()` + `run_raw_migrations()` + `run_app_sql_migrations()` + `run_admin_migrations()` + `hydrate_runtime_from_stored_preset()` in lifespan.
 - Two router namespaces:
-  - `app/api/` — gameplay surface: `auth`, `campaigns`, `characters`, `turns`, `combat`, `inventory`, `npcs`, `shop`, `mechanics`, `commands`, `campaign_*`, `client_logs`
+  - `app/api/` — gameplay surface: `auth`, `campaigns`, `characters`, `turns`, `combat`, `inventory`, `npcs`, `shop`, `mechanics`, `commands`, `campaign_*`, `client_logs`, `multiplayer`, `party_chat`
   - `app/routers/` — admin/system: `admin`, `admin_cheat`, `admin_location`, `bg_images`, `debug`, `locations`, `session_location`, `settings`, `test_runner`, `smart_entry`, `ideas_workshop`, `workshops`
 - Services (`app/services/`) hold all business logic — game engine, dice, combat, LLM, summaries, GM plan, locations, inventory, shop, XP, weapon rules, effect-JSON migrations.
+- **Turn pipeline submodules** (`app/services/turn/`): the main turn handler delegates to five submodules — `commands.py` (special slash commands), `gambling.py` (dice mini-game), `gate.py` (pre-turn validation gates), `intent.py` (player intent classification), `skill_router.py` (skill check routing). These feed into `turns.py` in `app/api/`.
 - Migrations: `app/migrations_admin.py` (admin tables) + inline `RAW_MIGRATIONS` in `main.py` + `app/db/migrations/*.sql`. SQLite path inside container: `/data/ai_gm.db`.
 - System prompt loaded from `backend/prompts/system_prompt.txt` — **mechanics contract, locked**.
 - Logging: `app/core/logging.py` (structlog JSON), Prometheus instrumentation, request IDs in `X-Request-Id` response header.
+- `app/systems/` — multi-game-system stubs: `fantasy.py` is active; `cyberpunk.py` and `neuroshima.py` are non-functional stubs for a future system-switcher. Do not build on these stubs without explicit direction.
 
 ### LLM Resolution (single source of truth)
 
@@ -88,9 +90,9 @@ Global provider/credentials edited from `Admin Panel → Accounts`. Player UI "C
 
 ### Frontend — Two UIs
 
-**Player UI** (`frontend/index.html` + `frontend/js/`): Login gate → gameplay. Standard RPG turn flow.
+**Player UI** (`frontend/front/index.html` + `frontend/front/js/`): Login gate → gameplay. Standard RPG turn flow.
 
-**Modular Admin Shell** (`frontend/admin/`) — active admin interface at `/admin/` (FADM migration, replaces admin3 monolith):
+**Modular Admin Shell** (`frontend/admin/`) — active admin interface at `/admin/`:
 - Entry: `index.html` — loads sidebar nav, mounts section ES modules dynamically
 - Login: native overlay (`doLogin`/`doLogout`) using `POST /api/admin/dev-login`; token stored in localStorage
 - Shared utilities: `shared/api.js` (adminFetch + APIError), `shared/toast.js`, `shared/modal.js`
@@ -115,6 +117,10 @@ Global provider/credentials edited from `Admin Panel → Accounts`. Player UI "C
 | `system` | `sections/system.js` | LLM presets, config export/import |
 
 **Legacy Admin (`frontend/admin_panel_v2/`)** — still operational at `/admin2/`; has sandbox, analytics, narrator, voice sections not yet ported to modular admin. Do not add new features here.
+
+### MCP Server (`mcp_server/server.py`)
+
+Custom MCP server (~86K) that exposes game state and actions as Claude tools. Runs alongside the backend and is used by Claude Code itself during development sessions. Provides tools for querying game events, rolling dice, submitting player turns, checking system health, and accessing campaign context. Not part of the player-facing product — it's a development/integration interface.
 
 ### Smart Entry (AI Kreator) — `shared/smart_entry.js` v4
 
@@ -274,13 +280,16 @@ This applies to every implementation, no matter how small.
 - Backend entry: `backend/app/main.py`
 - LLM service: `backend/app/services/llm_service.py`
 - Combat: `backend/app/services/combat_service.py`
+- Multiplayer combat: `backend/app/services/multiplayer_round_service.py`
 - Scholar spell system: `backend/app/services/spell_service.py`
 - Dungeon runs: `backend/app/services/dungeon_service.py`
+- Turn submodules: `backend/app/services/turn/` (commands, gambling, gate, intent, skill_router)
 - Smart Entry router: `backend/app/routers/smart_entry.py`
 - Adventure Forge (campaign templates): `backend/app/routers/adventure_forge.py`
 - Hex world map: `backend/app/routers/hex_world.py`
 - Voice proxy (Piper TTS): `backend/app/routers/voice_proxy.py`
 - Admin migrations: `backend/app/migrations_admin.py`
+- MCP server (game tools for Claude): `mcp_server/server.py`
 - Modular Admin entry: `frontend/admin/index.html`
 - Content section (weapons/items): `frontend/admin/sections/content.js`
 - Campaign monitor: `frontend/admin/sections/campaigns.js`
@@ -290,3 +299,4 @@ This applies to every implementation, no matter how small.
 - Compose: `docker-compose.yml` (PROD), `docker-compose.dev.yml` (DEV)
 - Planned work: `to_do_ideas.md`
 - Game mechanics reference (stats, combat, skills, DC, archetypes): `game_mechanics.md`
+- System architecture map: `architecture-map.md`
