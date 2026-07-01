@@ -2935,6 +2935,13 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 .inv-equip-btn:active:not(:disabled) { transform: translateY(1px); }
 .inv-equip-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
+.inv-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Lore variant — preserved/untouchable look */
 .inv-list--lore .inv-row {
   background: transparent;

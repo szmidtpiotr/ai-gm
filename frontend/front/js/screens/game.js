@@ -3459,6 +3459,7 @@ function _renderBackpackRow(item, occupied) {
     const iconContent = item.image_url
         ? `<img src="${escapeHtml(item.image_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
         : INV_ICONS[kind];
+    const dropBtn = `<button type="button" class="inv-row__drop-btn" data-action="drop" data-inventory-id="${item.id}" title="Wyrzuć przedmiot">✕</button>`;
     return `
         <div class="inv-row" data-inventory-id="${item.id}">
             <div class="inv-row__icon">${iconContent}</div>
@@ -3466,7 +3467,7 @@ function _renderBackpackRow(item, occupied) {
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
                 ${dura}
             </div>
-            ${action}
+            <div class="inv-row__actions">${action}${dropBtn}</div>
         </div>`;
 }
 
@@ -3976,6 +3977,11 @@ function _wireInventoryActions() {
             btn.disabled = true;
             try {
                 if (action === 'drop') {
+                    const itemName = btn.closest('.inv-row')?.querySelector('.inv-row__name')?.textContent?.trim() || 'przedmiot';
+                    if (!window.confirm(`Wyrzucić „${itemName}"? Tej operacji nie można cofnąć.`)) {
+                        btn.disabled = false;
+                        return;
+                    }
                     const r = await fetch(`/api/inventory/${characterData.id}/${id}`, {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json' },
