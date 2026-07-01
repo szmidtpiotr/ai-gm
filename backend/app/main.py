@@ -645,6 +645,20 @@ async def lifespan(app: FastAPI):
                 _bf_conn.close()
         except Exception:
             pass
+        # #1059 — backfill region on game_locations with NULL region (hex > fallback 'kresy').
+        try:
+            from app.services.world_service import backfill_location_regions
+            _loc_conn = sqlite3.connect(DB_PATH)
+            _loc_conn.row_factory = sqlite3.Row
+            try:
+                _loc_n = backfill_location_regions(_loc_conn)
+                if _loc_n:
+                    import structlog as _sl3
+                    _sl3.get_logger().info("startup_backfill_location_regions", updated=_loc_n)
+            finally:
+                _loc_conn.close()
+        except Exception:
+            pass
     # G1 (#785) + G9 (#793) — background sweep every 30s: expired narrative rounds + combat turns.
     async def _mp_sweep_loop() -> None:
         import asyncio as _asyncio

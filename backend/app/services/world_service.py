@@ -828,6 +828,46 @@ def sync_location_hex_coordinates(conn: sqlite3.Connection) -> int:
     return count
 
 
+def backfill_location_regions(conn: sqlite3.Connection) -> int:
+    """#1059 — assign region on game_locations where region IS NULL.
+
+    Priority: world_hexes.region (via hex coords) > fallback 'kresy'.
+    Idempotent: only touches rows where region IS NULL.
+    Returns count of updated rows.
+    """
+    # Pass 1: locations with hex coordinates — inherit region from overworld hex.
+    hex_rows = conn.execute(
+        """SELECT gl.key, wh.region
+           FROM game_locations gl
+           JOIN world_hexes wh
+             ON wh.q = gl.world_hex_q
+            AND wh.r = gl.world_hex_r
+            AND wh.map_level = 0
+           WHERE gl.region IS NULL
+             AND gl.world_hex_q IS NOT NULL
+             AND gl.world_hex_r IS NOT NULL
+             AND gl.is_active = 1"""
+    ).fetchall()
+    count = 0
+    for row in hex_rows:
+        conn.execute(
+            "UPDATE game_locations SET region = ? WHERE key = ? AND region IS NULL",
+            (row["region"], row["key"]),
+        )
+        count += 1
+
+    # Pass 2: remaining NULL-region locations — fallback to 'kresy'.
+    fallback = conn.execute(
+        "UPDATE game_locations SET region = 'kresy' WHERE region IS NULL AND is_active = 1"
+    ).rowcount
+    count += fallback
+
+    if count:
+        conn.commit()
+        logger.info("backfill_location_regions", updated=count)
+    return count
+
+
 def get_current_location_info(
     conn: sqlite3.Connection, campaign_id: int
 ) -> dict | None:
