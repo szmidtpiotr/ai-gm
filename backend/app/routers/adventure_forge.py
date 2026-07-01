@@ -1138,21 +1138,61 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
 
 # ── Auto-create forge enemies for a template (#1085) ──────────────────────────
 
+# HP and AC ranges per tier — derived from DB analysis of permanent enemies.
+# difficulty factor: 0.6 at diff=1, stepping +0.1 each level, 1.0 at diff=5.
+_TIER_HP_RANGE: dict[str, tuple[int, int]] = {
+    "weak":     (6,  15),
+    "standard": (8,  28),
+    "elite":    (30, 60),
+    "boss":     (50, 100),
+}
+_TIER_AC_RANGE: dict[str, tuple[int, int]] = {
+    "weak":     (8,  11),
+    "standard": (10, 14),
+    "elite":    (12, 16),
+    "boss":     (14, 18),
+}
+
+
+def _clamp_enemy_stats(hp: int, ac: int, tier: str, difficulty: int) -> tuple[int, int]:
+    """Clamp LLM-generated HP/AC to tier + difficulty-appropriate ranges.
+
+    Prevents LLM hallucinations (e.g. HP=100 for a standard enemy in a diff=1 campaign).
+    difficulty 1 → 60% of tier max; difficulty 5 → 100%.
+    """
+    factor = 0.6 + max(0, min(4, difficulty - 1)) * 0.1
+
+    hp_min, hp_max = _TIER_HP_RANGE.get(tier, (8, 28))
+    scaled_hp_max = max(hp_min, int(hp_max * factor))
+    clamped_hp = max(hp_min, min(hp, scaled_hp_max))
+
+    ac_min, ac_max = _TIER_AC_RANGE.get(tier, (10, 14))
+    scaled_ac_max = max(ac_min, int(ac_max * factor))
+    clamped_ac = max(ac_min, min(ac, scaled_ac_max))
+
+    return clamped_hp, clamped_ac
+
+
 def _auto_create_forge_enemies(
     conn: sqlite3.Connection,
     template_id: int,
     enemies: list[dict],
+    difficulty: int = 3,
 ) -> list[dict]:
     """Create game_config_enemies rows from plan key_enemies with review_status='pending'.
 
-    Returns list of {key, name} for each created enemy. Skips enemies whose keys
-    conflict by appending a numeric suffix (uses _ensure_unique_key).
+    HP/AC are clamped to tier+difficulty ranges to prevent LLM hallucinations.
+    Returns list of {key, name} for each created enemy.
     """
     now = datetime.now(timezone.utc).isoformat()
     created: list[dict] = []
     for e in enemies:
         base_key = e.get("key") or _slugify(e.get("name") or "enemy")
         key = _ensure_unique_key(conn, "game_config_enemies", base_key)
+        tier = e.get("tier") or "standard"
+        raw_hp = int(e.get("hp_base") or 20)
+        raw_ac = int(e.get("ac_base") or 12)
+        hp, ac = _clamp_enemy_stats(raw_hp, raw_ac, tier, difficulty)
         try:
             conn.execute(
                 """INSERT INTO game_config_enemies
@@ -1165,12 +1205,12 @@ def _auto_create_forge_enemies(
                 (
                     key,
                     e.get("name") or key,
-                    int(e.get("hp_base") or 20),
-                    int(e.get("ac_base") or 12),
+                    hp,
+                    ac,
                     e.get("damage_die") or "1d6",
                     e.get("description") or "",
                     e.get("note") or "",
-                    e.get("tier") or "standard",
+                    tier,
                     template_id,
                     now,
                     now,
@@ -1522,12 +1562,15 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # reward items are non-fatal
 
-                # #1085 — auto-create pending enemies from key_enemies
+                # #1085 — auto-create pending enemies from key_enemies (HP/AC clamped by difficulty)
                 auto_enemies: list[dict] = []
                 try:
                     raw_enemies = plan_public.get("key_enemies") or []
                     if raw_enemies:
-                        auto_enemies = _auto_create_forge_enemies(conn, template_id, raw_enemies)
+                        auto_enemies = _auto_create_forge_enemies(
+                            conn, template_id, raw_enemies,
+                            difficulty=int(tpl["difficulty_rating"] or 3),
+                        )
                         conn.commit()
                 except Exception:
                     pass  # enemy creation is non-fatal

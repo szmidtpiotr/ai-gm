@@ -225,3 +225,68 @@ def test_campaign_plan_without_key_enemies_still_valid():
     dumped = plan.model_dump()
     assert "key_enemies" in dumped, "key_enemies musi istnieć (pusta lista)"
     assert dumped["key_enemies"] == [], "Pusta lista gdy brak w JSON"
+
+
+# ─── Clamp HP/AC per tier + difficulty (#1085 rozszerzenie) ──────────────────
+
+def test_clamp_enemy_stats_caps_hp_for_low_difficulty():
+    """Dla difficulty=1, elite nie może mieć HP > scaled_max = 60 * 0.6 = 36."""
+    from app.routers.adventure_forge import _clamp_enemy_stats
+    hp, ac = _clamp_enemy_stats(hp=80, ac=15, tier="elite", difficulty=1)
+    assert hp <= 36, f"Elite diff=1: HP powinno być ≤36, jest {hp}"
+    assert hp >= 30, f"Elite diff=1: HP nie może spaść poniżej min=30, jest {hp}"
+
+
+def test_clamp_enemy_stats_caps_hp_for_difficulty_2():
+    """Dla difficulty=2, standard nie może przekroczyć 28 * 0.7 = 19."""
+    from app.routers.adventure_forge import _clamp_enemy_stats
+    hp, ac = _clamp_enemy_stats(hp=50, ac=14, tier="standard", difficulty=2)
+    assert hp <= 19, f"Standard diff=2: HP powinno być ≤19, jest {hp}"
+    assert hp >= 8, f"Standard diff=2: HP nie może spaść poniżej min=8, jest {hp}"
+
+
+def test_clamp_enemy_stats_does_not_reduce_below_tier_min():
+    """Clamp nie może zejść poniżej tier_min nawet dla difficulty=1."""
+    from app.routers.adventure_forge import _clamp_enemy_stats
+    hp, ac = _clamp_enemy_stats(hp=5, ac=8, tier="elite", difficulty=1)
+    assert hp >= 30, f"Elite min HP to 30, got {hp}"
+
+
+def test_clamp_enemy_stats_passes_through_on_difficulty_5():
+    """Difficulty=5 — maksymalny zakres, HP w normie przechodzi bez zmian."""
+    from app.routers.adventure_forge import _clamp_enemy_stats
+    hp, ac = _clamp_enemy_stats(hp=55, ac=15, tier="elite", difficulty=5)
+    assert hp == 55, f"Diff=5, HP 55 mieści się w elite max=60, nie powinno być clampowane, got {hp}"
+
+
+def test_auto_create_forge_enemies_applies_clamp():
+    """_auto_create_forge_enemies() clampuje HP/AC przez _clamp_enemy_stats."""
+    from app.routers.adventure_forge import _auto_create_forge_enemies
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE game_config_enemies (
+            key TEXT PRIMARY KEY, label TEXT NOT NULL,
+            hp_base INTEGER NOT NULL, ac_base INTEGER NOT NULL,
+            attack_bonus INTEGER NOT NULL DEFAULT 0, dex_modifier INTEGER NOT NULL DEFAULT 0,
+            damage_die TEXT NOT NULL, description TEXT, note TEXT,
+            tier TEXT NOT NULL DEFAULT 'standard', damage_type TEXT NOT NULL DEFAULT 'physical',
+            attacks_per_turn INTEGER NOT NULL DEFAULT 1, damage_bonus INTEGER NOT NULL DEFAULT 0,
+            xp_award INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
+            review_status TEXT NOT NULL DEFAULT 'permanent',
+            created_by TEXT DEFAULT NULL, template_id INTEGER DEFAULT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # Difficulty=1, standard — LLM halucynuje HP=100 i AC=20
+    enemies = [{"key": "big_bad", "name": "Big Bad", "tier": "standard",
+                "hp_base": 100, "ac_base": 20, "damage_die": "2d10"}]
+    _auto_create_forge_enemies(conn, template_id=1, enemies=enemies, difficulty=1)
+
+    row = conn.execute("SELECT hp_base, ac_base FROM game_config_enemies WHERE key='big_bad'").fetchone()
+    assert row["hp_base"] <= 16, f"HP powinno być clampowane (standard diff=1 max≈16), got {row['hp_base']}"
+    assert row["ac_base"] <= 11, f"AC powinno być clampowane (standard diff=1 max≈11), got {row['ac_base']}"
