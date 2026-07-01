@@ -366,13 +366,13 @@ def _player_combat_intent(text: str) -> bool:
 # collisions: `zaku[cw]`/`sku[cw]` match "zakuć"/"skuwam" but NOT "zakup"/"skupiam" (#766).
 _SUBDUE_INTENT_RE = re.compile(
     r"(obezwladn|schwyt|chwyt|chwyc|pochwyc|przypr|przypier|przycisk|przycisn"
-    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym)"
+    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym|oglusz)"
 )
 _NEGATION_SUBDUE_RE = re.compile(
     r"\bnie\s+(?:chce\s+|bede\s+|zamierzam\s+|mam\s+zamiaru\s+)?"
     r"(?:go\s+|ja\s+|jej\s+|jego\s+|ich\s+|nikogo\s+|nic\s+|niczego\s+)?"
     r"(obezwladn|schwyt|chwyt|chwyc|pochwyc|przypr|przypier|przycisk|przycisn"
-    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym)"
+    r"|unieruch|przytrzym|zaku[cw]|sku[cw]|powstrzym|oglusz)"
 )
 
 
@@ -388,6 +388,38 @@ def _subdue_intent(text: str) -> bool:
     if _NEGATION_SUBDUE_RE.search(norm):
         stripped = _NEGATION_SUBDUE_RE.sub(" ", norm)
         if not _SUBDUE_INTENT_RE.search(stripped):
+            return False
+    return True
+
+
+# #1069 — intimidate/capture intent (zastrasz, groźba, pojmaj, nóż do gardła, żywcem).
+# Odrębna od _subdue_intent (fizyczne chwytanie) — obejmuje słowne groźby i pojmanie.
+# Negacja "nie zastraszam" odpada, bo model jest po prostu False gdy zaprzeczenie + brak
+# innego słowa-klucza (regex nie matchuje). Stems na znormalizowanym tekście (bez PL).
+_INTIMIDATE_INTENT_RE = re.compile(
+    r"(zastrasz|groz[ei]|groz\b|przystrasz"
+    r"|pojmaj|pojmam|pojmi|wez\s+zywcem|biore\s+zywcem|wziac\s+zywcem|brac\s+zywcem"
+    r"|noz\s+do\s+(?:\w+\s+)?gardla|przyloz\s+noz|przyloz\s+klinge)"
+)
+_NEGATION_INTIMIDATE_RE = re.compile(
+    r"\bnie\s+(?:chce\s+|bede\s+|zamierzam\s+|mam\s+zamiaru\s+)?"
+    r"(?:go\s+|ja\s+|jej\s+|jego\s+|ich\s+|nikogo\s+|nic\s+|niczego\s+)?"
+    r"(zastrasz|groz[ei]|groz\b|pojmaj|pojmam)"
+)
+
+
+def _intimidate_intent(text: str) -> bool:
+    """Detect intimidation/capture intent (non-grapple non-lethal) in player text.
+
+    Covers: "zastrasz", "grożę", "pojmaj", "nóż do gardła", "wziąć żywcem".
+    Routes through advantage gate (#780) instead of COMBAT_START. (#1069)
+    """
+    norm = _normalize_pl(text or "")
+    if not _INTIMIDATE_INTENT_RE.search(norm):
+        return False
+    if _NEGATION_INTIMIDATE_RE.search(norm):
+        stripped = _NEGATION_INTIMIDATE_RE.sub(" ", norm)
+        if not _INTIMIDATE_INTENT_RE.search(stripped):
             return False
     return True
 
@@ -4643,13 +4675,18 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     if _dungeon_clear_result:
         out["dungeon_cleared"] = _dungeon_clear_result
 
-    # #773 (1A) — deklaracja obezwładnienia poza walką → bramka intencji (#780)
-    # zamiast cichego COMBAT_START. Agresywna deklaracja non-lethal („obezwładniam",
-    # „przyciskam do ściany") nie wybucha śmiertelną walką — silnik STOP i pyta gracza.
-    if new_combat is None and not combat_was_active and _subdue_intent(text):
+    # #773/#1069 — non-lethal deklaracja poza walką → bramka intencji (#780).
+    # Obsługuje dwa tryby: fizyczne obezwładnienie (grapple) i zastraszenie/pojmanie (intimidate).
+    _nonlethal_gate_source = None
+    if new_combat is None and not combat_was_active:
+        if _subdue_intent(text):
+            _nonlethal_gate_source = "grapple"
+        elif _intimidate_intent(text):
+            _nonlethal_gate_source = "intimidate"
+    if _nonlethal_gate_source:
         try:
             from app.services.combat_service import build_advantage_gate
-            _sub_gate = build_advantage_gate("grapple")
+            _sub_gate = build_advantage_gate(_nonlethal_gate_source)
             if _sub_gate:
                 out["advantage_gate"] = _sub_gate
         except Exception as _sub_err:
@@ -6424,11 +6461,17 @@ def create_turn_stream(
                     _sa_conn.close()
             except Exception:
                 pass
-            # #773 (1A) — subdue/grapple intent → bramka intencji (#780) w odpowiedzi stream.
+            # #773/#1069 — non-lethal intent → bramka intencji (#780) w odpowiedzi stream.
             try:
-                if new_combat is None and not combat_was_active and _subdue_intent(user_text_val):
+                _s_gate_src = None
+                if new_combat is None and not combat_was_active:
+                    if _subdue_intent(user_text_val):
+                        _s_gate_src = "grapple"
+                    elif _intimidate_intent(user_text_val):
+                        _s_gate_src = "intimidate"
+                if _s_gate_src:
                     from app.services.combat_service import build_advantage_gate as _bag_s
-                    _sub_gate_s = _bag_s("grapple")
+                    _sub_gate_s = _bag_s(_s_gate_src)
                     if _sub_gate_s:
                         done_payload["advantage_gate"] = _sub_gate_s
             except Exception as _sub_err_s:
