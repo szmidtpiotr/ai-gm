@@ -172,6 +172,7 @@ class ContextInjector:
             blocks = [
                 continuity_block,
                 hero_chronicle_block,
+                self._build_reputation_block(character_id, campaign_id),
                 self._build_length_directive_block(session_flags, action_type, mechanic_result, player_message),
                 self._build_narrative_state_block(session_flags),
                 self._build_world_block(session_flags, ingame_hours, player_message),
@@ -338,6 +339,18 @@ class ContextInjector:
             return get_hero_chronicle(self.conn, character_id, limit=3)
         except Exception as e:
             logger.warning("hero_chronicle_block_failed", error=str(e))
+            return ""
+
+    def _build_reputation_block(self, character_id: int, campaign_id: int) -> str:
+        """#1099 — inject the hero's regional reputation standing so NPCs, merchants
+        and quest-givers react to their deeds. Empty when standing is neutral."""
+        try:
+            from app.services import reputation_service as rep
+            region = rep.resolve_region(self.conn, campaign_id)
+            value = rep.get_reputation(self.conn, character_id, region)
+            return rep.reputation_context_line(value, region)
+        except Exception as e:
+            logger.warning("reputation_block_failed", error=str(e))
             return ""
 
     def _build_world_block(

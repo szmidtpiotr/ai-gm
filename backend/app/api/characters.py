@@ -1636,6 +1636,20 @@ def get_character_sheet(character_id: int):
     return {"sheet_json": _strip_hidden_fields(sheet_json)}
 
 
+@router.get("/characters/{character_id}/reputation")
+def get_character_reputation(character_id: int):
+    """#1099 — hero's regional reputation standings (for the player-facing exposure /
+    Kronika #1098 reputation bar). Returns [] when the hero has no standing yet."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.services import reputation_service as rep
+        rows = rep.get_all_reputation(conn, character_id)
+    finally:
+        conn.close()
+    return {"character_id": character_id, "reputation": rows}
+
+
 class SpendSkillXpRequest(BaseModel):
     """Buy +1 rank in a skill; cost from `game_config_meta.xp_skill_rank_costs` ([S10])."""
 

@@ -2,6 +2,19 @@
  "generated_from": "CHANGELOG.md",
  "entries": [
   {
+   "version": "v1.7.0",
+   "date": "2026-07-02",
+   "when": "lipiec 2026",
+   "title": "Reputacja — świat pamięta twoje czyny",
+   "highlights": [
+    "Bohater buduje reputację w krainie: wygrane przygody podnoszą standing, śmierć go lekko nadszarpuje",
+    "Ceny u kupców zależą od reputacji — dobra sława daje zniżki, zła nalicza narzut",
+    "NPC i zleceniodawcy odnoszą się do bohatera zgodnie z jego reputacją — od pomocy po wrogość",
+    "Anty-farm: porzucenie przygody po zdobyciu łupu obniża reputację w tej krainie (łup i doświadczenie zostają — bohater jest ważniejszy niż kampania)",
+    "Na start liczy się reputacja regionalna (Kresy); wpływ frakcyjny — u gildii i rodów — nadejdzie z rozszerzeniem"
+   ]
+  },
+  {
    "version": "v1.6.0",
    "date": "2026-06-26",
    "when": "czerwiec 2026",

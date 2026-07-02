@@ -576,6 +576,13 @@ def close_campaign_with_summary(
         gold_at_end=gold_at_end,
         turns_count=turns_count,
     )
+    # #1099 — apply the regional reputation delta for this outcome (victory raises,
+    # death dents). Abandonment is handled at delete_campaign. Best-effort.
+    try:
+        from app.services import reputation_service as rep
+        rep.apply_campaign_outcome(conn, character_id, campaign_id, outcome)
+    except Exception as _rep_err:
+        logger.warning("reputation_outcome_failed", error=str(_rep_err))
     schedule_chapter_summary(
         history_id=history_id,
         campaign_id=campaign_id,

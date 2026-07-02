@@ -1219,6 +1219,13 @@ def delete_campaign(campaign_id: int):
                     "name": str(h["name"] or "Bohater"),
                     "user_id": int(h["user_id"] or 0),
                 })
+                # #1099 — anti-farm: farm-and-bail lowers regional reputation (the
+                # narrative scar becomes a mechanical dent). Real play only.
+                try:
+                    from app.services import reputation_service as rep
+                    rep.apply_campaign_outcome(conn, int(h["id"]), campaign_id, "abandoned")
+                except Exception as _rep_err:
+                    logger.warning("reputation_abandon_failed", error=str(_rep_err))
 
         conn.execute(
             "DELETE FROM campaign_turns WHERE campaign_id = ?",

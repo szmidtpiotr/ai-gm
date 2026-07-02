@@ -1120,6 +1120,19 @@ ADMIN_MIGRATIONS = [
         UNIQUE(campaign_id, npc_name)
     )
     """,
+    # #1099: per-region reputation — mechanical consequences of a hero's deeds.
+    # scope_type generic ('region' now, 'faction' later — #1103).
+    """
+    CREATE TABLE IF NOT EXISTS character_reputation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        scope_type TEXT NOT NULL DEFAULT 'region',
+        scope_key TEXT NOT NULL,
+        value INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(character_id, scope_type, scope_key)
+    )
+    """,
     # S3 (#583): NPC ability stats — lazy-generated per campaign + optional global template.
     "ALTER TABLE campaign_known_npcs ADD COLUMN stats_json TEXT",
     "ALTER TABLE npcs ADD COLUMN stats_json TEXT",

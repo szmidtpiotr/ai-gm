@@ -508,6 +508,24 @@ def get_shop_inventory_by_key(npc_key: str, character_id: int, location_key: str
     return get_shop_inventory(int(npc["id"]), character_id, location_key=location_key)
 
 
+def _reputation_buy_multiplier(conn, character_id: int) -> float:
+    """#1099 — regional-reputation buy-price multiplier for a character. 1.0 when
+    the character has no campaign / neutral standing or anything goes wrong."""
+    try:
+        from app.services import reputation_service as rep
+        row = conn.execute(
+            "SELECT campaign_id FROM characters WHERE id = ?", (int(character_id),)
+        ).fetchone()
+        campaign_id = row["campaign_id"] if row else None
+        if not campaign_id:
+            return 1.0
+        region = rep.resolve_region(conn, int(campaign_id))
+        value = rep.get_reputation(conn, int(character_id), region)
+        return rep.shop_price_multiplier(value)
+    except Exception:
+        return 1.0
+
+
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
@@ -534,6 +552,10 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         race = _get_character_race(conn, character_id)
         if race == "dwarf":
             eff_buy_mult = round(eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT), 4)
+        # #1099: regional reputation shifts prices (high standing = discount, low = markup).
+        rep_mult = _reputation_buy_multiplier(conn, character_id)
+        if rep_mult != 1.0:
+            eff_buy_mult = round(eff_buy_mult * rep_mult, 4)
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.
