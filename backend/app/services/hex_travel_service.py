@@ -162,6 +162,12 @@ def find_path(
 
 # ── Encounter resolution ──────────────────────────────────────────────────────
 
+# PT7 #1117: Daily march budget — Numbers Policy (Sandbox-tunable starting values)
+DAILY_SOFT_CAP = 8.0        # hours — dusk prompt threshold
+DAILY_HARD_CAP = 12.0       # hours — forced camp threshold
+NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
+
+
 def _roll_encounter(hex_data: dict, hex_type_cfg: dict[str, dict]) -> bool:
     """Roll encounter for a hex. Returns True if encounter triggers."""
     base_chance = float(hex_data.get("encounter_chance") or 0.15)
@@ -340,6 +346,15 @@ def resolve_chain_travel(
     hexes = _load_hex_graph(conn)
     hex_type_cfg = _load_hex_type_config(conn)
 
+    # PT7 #1117: Load daily march budget from session_flags
+    _gs_budget = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    _sf_budget = json.loads((_gs_budget["session_flags"] if _gs_budget else None) or "{}")
+    hours_marched_today = float(_sf_budget.get("hours_marched_today", 0.0))
+    night_march = bool(_sf_budget.get("night_march", False))
+
     if from_hex not in hexes and from_hex != to_hex:
         # Player is not on a hex yet — allow if destination exists
         pass
@@ -417,7 +432,7 @@ def resolve_chain_travel(
             teleport_used = dict(edge)
             break
 
-    # Compute total travel hours along path
+    # Compute total travel hours along path (PT7: use terrain costs from hex_type_config)
     total_hours = 0.0
     for i in range(1, len(path)):
         prev, cur = path[i - 1], path[i]
@@ -431,12 +446,17 @@ def resolve_chain_travel(
                     teleport_used = dict(edge)
                 break
         if not is_tp:
-            total_hours += 1.0  # 1 hour per hex
+            _cur_hex_type = hexes.get(cur, {}).get("hex_type", "plains")
+            total_hours += float(hex_type_cfg.get(_cur_hex_type, {}).get("travel_hours", 1.0))
 
     # Roll encounters along path (skip start hex)
     encounter_result = None
     encounter_hex = None
     arrived_hex = to_hex  # assume full travel unless interrupted
+
+    # PT7 #1117: budget interrupt tracking
+    _budget_interrupt = False
+    _budget_reason: str | None = None
 
     # Load cleared encounters for this campaign (won't re-trigger)
     cleared_coords: set[tuple[int, int]] = set()
@@ -449,12 +469,59 @@ def resolve_chain_travel(
     except Exception:
         pass
 
+    def _recalc_hours_to(target_hex: tuple[int, int]) -> float:
+        """Recalculate total travel hours up to and including target_hex."""
+        h = 0.0
+        sub_path = path[:path.index(target_hex) + 1]
+        for _i in range(1, len(sub_path)):
+            _p, _c = sub_path[_i - 1], sub_path[_i]
+            _tp = any(e["_dest"] == _c for e in hexes.get(_p, {}).get("teleport_edges", []))
+            if _tp:
+                h += float(next(
+                    e.get("travel_hours", 8.0)
+                    for e in hexes.get(_p, {}).get("teleport_edges", [])
+                    if e["_dest"] == _c
+                ))
+            else:
+                _cht = hexes.get(_c, {}).get("hex_type", "plains")
+                h += float(hex_type_cfg.get(_cht, {}).get("travel_hours", 1.0))
+        return h
+
     for step_hex in path[1:]:
         hex_data = hexes.get(step_hex, {})
-        # Skip encounter if already cleared at this hex
+
+        # PT7: Accumulate terrain cost against daily march budget
+        _hex_type = hex_data.get("hex_type", "plains")
+        _step_cost = float(hex_type_cfg.get(_hex_type, {}).get("travel_hours", 1.0))
+        hours_marched_today += _step_cost
+
+        # PT7: Hard cap — forced camp at DAILY_HARD_CAP regardless of night_march
+        if hours_marched_today >= DAILY_HARD_CAP:
+            arrived_hex = step_hex
+            _budget_interrupt = True
+            _budget_reason = "forced_camp"
+            total_hours = _recalc_hours_to(step_hex)
+            break
+
+        # PT7: Soft cap — dusk prompt at DAILY_SOFT_CAP (skip when night_march already)
+        if hours_marched_today >= DAILY_SOFT_CAP and not night_march:
+            arrived_hex = step_hex
+            _budget_interrupt = True
+            _budget_reason = "dusk"
+            total_hours = _recalc_hours_to(step_hex)
+            break
+
+        # Skip encounter if already cleared at this hex (budget already counted above)
         if step_hex in cleared_coords:
             continue
-        if _roll_encounter(hex_data, hex_type_cfg):
+
+        # PT7: Apply night_march encounter multiplier before rolling
+        _enc_hex_data = hex_data
+        if night_march:
+            _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
+            _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
+
+        if _roll_encounter(_enc_hex_data, hex_type_cfg):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
                 encounter_result = {
@@ -465,16 +532,7 @@ def resolve_chain_travel(
                 }
                 encounter_hex = step_hex
                 arrived_hex = step_hex  # interrupted here
-                # Recalculate hours to interruption point
-                total_hours = 0.0
-                interrupted_path = path[:path.index(step_hex) + 1]
-                for i in range(1, len(interrupted_path)):
-                    prev, cur = interrupted_path[i - 1], interrupted_path[i]
-                    is_tp = any(e["_dest"] == cur for e in hexes.get(prev, {}).get("teleport_edges", []))
-                    total_hours += (next(
-                        e.get("travel_hours", 8.0) for e in hexes.get(prev, {}).get("teleport_edges", [])
-                        if e["_dest"] == cur
-                    ) if is_tp else 1.0)
+                total_hours = _recalc_hours_to(step_hex)
                 break
 
     # Stage 2B R4: deactivate any temp_camp_* on the hex the player just left.
@@ -583,7 +641,7 @@ def resolve_chain_travel(
     except Exception:
         pass
 
-    # PT6 #1116: save travel_plan on encounter interrupt; clear on full arrival
+    # PT6 #1116 + PT7 #1117: save travel_plan on interrupt; clear on full arrival; persist march budget
     try:
         gs_tp = conn.execute(
             "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -591,19 +649,28 @@ def resolve_chain_travel(
         ).fetchone()
         if gs_tp:
             sf_tp = json.loads(gs_tp["session_flags"] or "{}")
-            if encounter_result and len(path) > 1:
-                dest_data = hexes.get(to_hex, {})
-                dest_loc_key = dest_data.get("location_key")
-                dest_label = None
-                if dest_loc_key:
-                    _dl_row = conn.execute(
-                        "SELECT label FROM game_locations WHERE key = ? LIMIT 1",
-                        (dest_loc_key,),
+
+            # PT7: Persist updated daily march budget (always, even on full arrival)
+            sf_tp["hours_marched_today"] = hours_marched_today
+            if _budget_reason == "forced_camp":
+                sf_tp["night_march"] = True  # flag for PT9 nocturnal attack bonus
+
+            def _resolve_dest_label() -> tuple[str | None, str]:
+                d = hexes.get(to_hex, {})
+                lk = d.get("location_key")
+                lbl = None
+                if lk:
+                    _r = conn.execute(
+                        "SELECT label FROM game_locations WHERE key = ? LIMIT 1", (lk,)
                     ).fetchone()
-                    if _dl_row:
-                        dest_label = _dl_row["label"]
-                if not dest_label:
-                    dest_label = dest_data.get("label") or f"hex ({to_hex[0]},{to_hex[1]})"
+                    if _r:
+                        lbl = _r["label"]
+                if not lbl:
+                    lbl = d.get("label") or f"hex ({to_hex[0]},{to_hex[1]})"
+                return lk, lbl
+
+            if encounter_result and len(path) > 1:
+                dest_loc_key, dest_label = _resolve_dest_label()
                 enc_idx = path.index(encounter_hex)
                 remaining_hexes = max(0, len(path) - 1 - enc_idx)
                 sf_tp["travel_plan"] = {
@@ -615,8 +682,23 @@ def resolve_chain_travel(
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": "encounter",
                 }
+            elif _budget_interrupt and _budget_reason:
+                # PT7: dusk or forced_camp interrupt
+                dest_loc_key, dest_label = _resolve_dest_label()
+                b_idx = path.index(arrived_hex)
+                remaining_hexes = max(0, len(path) - 1 - b_idx)
+                sf_tp["travel_plan"] = {
+                    "destination_hex": {"q": to_hex[0], "r": to_hex[1]},
+                    "destination_key": dest_loc_key,
+                    "destination_label": dest_label,
+                    "path": [{"q": h[0], "r": h[1]} for h in path],
+                    "step_index": b_idx,
+                    "hours_remaining": float(remaining_hexes),
+                    "interrupt_reason": _budget_reason,
+                }
             elif arrived_hex == to_hex:
                 sf_tp.pop("travel_plan", None)
+
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
                 (json.dumps(sf_tp, ensure_ascii=False), gs_tp["id"]),

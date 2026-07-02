@@ -246,6 +246,23 @@ def perform_long_rest(
 
     advance_clock(campaign_id, 8, "long_rest", conn=conn)
 
+    # PT7 #1117: Reset daily march budget after long rest
+    try:
+        _gs_rest = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if _gs_rest:
+            _sf_rest = json.loads(_gs_rest["session_flags"] or "{}")
+            _sf_rest["hours_marched_today"] = 0.0
+            _sf_rest["night_march"] = False
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(_sf_rest, ensure_ascii=False), _gs_rest["id"]),
+            )
+    except Exception as _re:
+        logger.warning("march_budget_reset_failed", error=str(_re))
+
     if pending_xp:
         conn.execute(
             """INSERT INTO character_xp_grants

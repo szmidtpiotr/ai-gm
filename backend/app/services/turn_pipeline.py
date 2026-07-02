@@ -588,11 +588,15 @@ def detect_travel_continuation(player_text: str) -> bool:
 
 
 def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | None:
-    """PT6 #1116: After combat ends, inject narrator hint if travel was interrupted.
+    """PT6 #1116 + PT7 #1117: Inject narrator hint when travel was interrupted.
 
-    Returns a [SYSTEM:...] fact asking player to choose: continue / rest / camp.
-    Clears interrupt_reason to 'encounter_prompted' so hint fires only once.
-    Returns None if no travel_plan, combat still active, or hint already shown.
+    Handles three interrupt reasons:
+    - "encounter": combat interrupted travel → ask continue/rest/camp
+    - "dusk": 8h daily budget reached → ask continue (night march, risky) or camp
+    - "forced_camp": 12h hard cap → inform player of forced camp
+
+    Fires once per interrupt (marks reason as *_prompted). Returns None if no
+    travel_plan, combat still active, or hint already shown.
     """
     try:
         gs = conn.execute(
@@ -603,27 +607,57 @@ def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | 
             return None
         flags = json.loads(gs["session_flags"] or "{}")
         tp = flags.get("travel_plan")
-        if not tp or tp.get("interrupt_reason") != "encounter":
+        if not tp:
             return None
-        # Don't prompt while combat is still ongoing
-        ac = conn.execute(
-            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        if ac:
+
+        reason = tp.get("interrupt_reason")
+        if reason not in ("encounter", "dusk", "forced_camp"):
             return None
+
         dest_label = tp.get("destination_label") or (
             f"hex ({tp.get('destination_hex', {}).get('q')},{tp.get('destination_hex', {}).get('r')})"
         )
         remaining = int(tp.get("hours_remaining", 0))
-        hint = (
-            f"\n[SYSTEM: Gracz był w trakcie podróży do {dest_label}, "
-            f"zostało ~{remaining}h drogi. Walka przerwała wyprawę. "
-            f"Zapytaj gracza (prozą): czy kontynuuje podróż do {dest_label}, "
-            f"chce odpocząć (/rest), czy rozbija obóz. Nie decyduj za gracza — zadaj pytanie.]"
-        )
-        # Mark hint as shown — prevents repeat on next turn
-        flags["travel_plan"]["interrupt_reason"] = "encounter_prompted"
+
+        if reason == "encounter":
+            # Don't prompt while combat is still ongoing
+            ac = conn.execute(
+                "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if ac:
+                return None
+            hint = (
+                f"\n[SYSTEM: Gracz był w trakcie podróży do {dest_label}, "
+                f"zostało ~{remaining}h drogi. Walka przerwała wyprawę. "
+                f"Zapytaj gracza (prozą): czy kontynuuje podróż do {dest_label}, "
+                f"chce odpocząć (/rest), czy rozbija obóz. Nie decyduj za gracza — zadaj pytanie.]"
+            )
+            flags["travel_plan"]["interrupt_reason"] = "encounter_prompted"
+
+        elif reason == "dusk":
+            # PT7: dusk prompt — ask player: camp or continue (night march, risky)
+            hint = (
+                f"\n[SYSTEM: zapada zmierzch po 8h marszu. "
+                f"Zapytaj gracza: czy rozbija obóz (/camp), czy maszeruje dalej "
+                f"mimo zmęczenia i ciemności? Cel: {dest_label} (~{remaining}h drogi). "
+                f"Nocny marsz = zwiększone ryzyko napaści (×1.5). "
+                f"Nie decyduj za gracza — zadaj pytanie prozą.]"
+            )
+            flags["travel_plan"]["interrupt_reason"] = "dusk_prompted"
+
+        elif reason == "forced_camp":
+            # PT7: hard cap — player collapses, forced camp
+            hint = (
+                f"\n[SYSTEM: gracz pada z sił po 12h marszu — "
+                f"wymuszone zatrzymanie. Opisz rozbicie obozu w trybie awaryjnym. "
+                f"Cel {dest_label} czeka na świt. Nocne czuwanie = zwiększone ryzyko napaści.]"
+            )
+            flags["travel_plan"]["interrupt_reason"] = "forced_camp_prompted"
+
+        else:
+            return None
+
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
             (json.dumps(flags, ensure_ascii=False), gs["id"]),
