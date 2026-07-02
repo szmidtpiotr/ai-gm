@@ -3080,9 +3080,11 @@ const INV_SLOT_DEFS = [
     { key: 'l_arm',     label: 'Lewe ramię',      icon: 'gaunt',  area: 'larm',      wound: ['arm_wound', 'arm_wound_left',  'l_arm_wound'] },
     { key: 'torso',     label: 'Tors',            icon: 'armor',  area: 'torso',     wound: ['torso_wound', 'chest_wound'] },
     { key: 'r_arm',     label: 'Prawe ramię',     icon: 'gaunt',  area: 'rarm',      wound: ['arm_wound', 'arm_wound_right', 'r_arm_wound'] },
+    { key: 'back',      label: 'Płaszcz',         icon: 'armor',  area: 'back',      wound: [] },
     { key: 'hands',     label: 'Rękawice',        icon: 'gaunt',  area: 'hands',     wound: ['hand_wound'] },
     { key: 'l_leg',     label: 'Lewa noga',       icon: 'greave', area: 'lleg',      wound: ['leg_wound', 'leg_wound_left',   'l_leg_wound'] },
     { key: 'r_leg',     label: 'Prawa noga',      icon: 'greave', area: 'rleg',      wound: ['leg_wound', 'leg_wound_right',  'r_leg_wound'] },
+    { key: 'feet',      label: 'Buty',            icon: 'greave', area: 'feet',      wound: [] },
     { key: 'main_hand', label: 'Główna ręka',     icon: 'sword',  area: 'mainh',     wound: [] },
     { key: 'off_hand',  label: 'Pomocnicza',      icon: 'shield', area: 'offh',      wound: [] },
 ];
@@ -3126,6 +3128,8 @@ function _invPickEquipSlot(item, occupied) {
         const cov = String(item.armor_coverage || '').toLowerCase();
         if (cov === 'head') return 'head';
         if (cov === 'hands') return 'hands';   // #743: rękawice → slot dłoni, nie torso
+        if (cov === 'feet') return 'feet';     // #1070: buty → slot stóp
+        if (cov === 'back') return 'back';     // #1070: płaszcz → slot pleców
         if (cov === 'limb_arm') return occupied.l_arm ? 'r_arm' : 'l_arm';
         if (cov === 'limb_leg') return occupied.l_leg ? 'r_leg' : 'l_leg';
         if (cov === 'full') return 'torso';
@@ -3280,7 +3284,8 @@ async function renderInventoryTab(character) {
     const backpack = [];
     const lore = [];
     const occupied = { head: false, torso: false, l_arm: false, r_arm: false,
-                       l_leg: false, r_leg: false, main_hand: false, off_hand: false };
+                       l_leg: false, r_leg: false, main_hand: false, off_hand: false,
+                       feet: false, back: false };
 
     // U16: odśwież cache trwałości założonej broni/zbroi (dla ostrzeżenia w HUD walki).
     const _eqDura = { weapon: null, armor: null };
@@ -3392,6 +3397,8 @@ function _itemFitsSlot(item, slot) {
     if (slot === 'l_arm' || slot === 'r_arm') return cov === 'limb_arm' || cov === 'full';
     if (slot === 'l_leg' || slot === 'r_leg') return cov === 'limb_leg' || cov === 'full';
     if (slot === 'hands')              return cov === 'hands';
+    if (slot === 'feet')               return cov === 'feet';
+    if (slot === 'back')               return cov === 'back';
     return false;
 }
 

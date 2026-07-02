@@ -2241,7 +2241,7 @@ def delete_condition(key: str, *, force: bool) -> None:
         conn.close()
 
 
-_VALID_ARMOR_COVERAGE = {"head", "torso", "limb_arm", "limb_leg", "full"}
+_VALID_ARMOR_COVERAGE = {"head", "torso", "limb_arm", "limb_leg", "full", "hands", "feet", "back"}
 
 
 def list_items() -> list[dict]:

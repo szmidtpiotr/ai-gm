@@ -220,12 +220,12 @@ def _armor_auto_slot(
     """armor_coverage → anatomiczny slot manekina (zgodnie z loot_service.equip_item).
 
     Pary kończyn: wolna strona (najpierw lewa). 'full' → torso. Coverage bez slotu w
-    manekinie (feet/back/nieznane) → None (zostaw w plecaku, nie zakładaj na siłę).
+    manekinie (nieznane) → None (zostaw w plecaku, nie zakładaj na siłę).
     """
     cov = str(coverage or "").lower()
     if cov in ("torso", "full"):
         return "torso"
-    if cov in ("head", "hands"):
+    if cov in ("head", "hands", "feet", "back"):
         return cov
     if cov in ("limb_arm", "limb_leg"):
         left, right = ("l_arm", "r_arm") if cov == "limb_arm" else ("l_leg", "r_leg")

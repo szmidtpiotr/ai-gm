@@ -108,12 +108,12 @@ class TestArmorAutoSlot(unittest.TestCase):
             conn.close()
 
     def test_helper_rejects_unmapped_coverage(self):
-        """feet/back/unknown have no anatomical doll slot → ValueError (caller skips equip)."""
+        """Unknown coverage has no anatomical doll slot → ValueError (caller skips equip)."""
         conn = sqlite3.connect(str(self._tmp))
         conn.row_factory = sqlite3.Row
         try:
             with self.assertRaises(ValueError):
-                ls._auto_pick_armor_slot(conn, 1, "feet")
+                ls._auto_pick_armor_slot(conn, 1, "unknown_coverage")
         finally:
             conn.close()
 

@@ -35,6 +35,8 @@ _SLOT_VALUES = {
     "l_leg",
     "r_leg",
     "hands",
+    "feet",
+    "back",
     "main_hand",
     "off_hand",
 }
@@ -47,6 +49,8 @@ _ARMOR_COVERAGE_TO_SLOTS = {
     "limb_arm": ("l_arm", "r_arm"),  # caller picks one at equip time
     "limb_leg": ("l_leg", "r_leg"),  # caller picks one at equip time
     "hands": ("hands",),
+    "feet": ("feet",),
+    "back": ("back",),
     "full": ("torso", "l_arm", "r_arm", "l_leg", "r_leg"),
 }
 _VALID_ARMOR_COVERAGE = frozenset(_ARMOR_COVERAGE_TO_SLOTS.keys())
@@ -66,7 +70,7 @@ def _auto_pick_armor_slot(conn, character_id: int, coverage: str) -> str:
     cov = str(coverage or "").lower()
     if cov in ("torso", "full"):
         return "torso"
-    if cov in ("head", "hands"):
+    if cov in ("head", "hands", "feet", "back"):
         return cov
     if cov in ("limb_arm", "limb_leg"):
         left, right = _ARMOR_COVERAGE_TO_SLOTS[cov]
@@ -1986,6 +1990,10 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
                 raise ValueError("leg armor must equip to 'l_leg' or 'r_leg'")
             if coverage == "hands" and s != "hands":
                 raise ValueError("hand armor can only equip to slot 'hands'")
+            if coverage == "feet" and s != "feet":
+                raise ValueError("feet armor can only equip to slot 'feet'")
+            if coverage == "back" and s != "back":
+                raise ValueError("back armor can only equip to slot 'back'")
             if coverage == "full":
                 anchor_slot = "torso"
                 slots_to_free = list(_ARMOR_COVERAGE_TO_SLOTS["full"])

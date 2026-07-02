@@ -2599,8 +2599,10 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   grid-template-areas:
     ". head ."
     "larm torso rarm"
+    ". back ."
     ". hands ."
     "lleg . rleg"
+    ". feet ."
     "mainh . offh";
   gap: 8px;
 }
@@ -2609,9 +2611,11 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 .anatomy-slot--larm  { grid-area: larm; }
 .anatomy-slot--torso { grid-area: torso; }
 .anatomy-slot--rarm  { grid-area: rarm; }
+.anatomy-slot--back  { grid-area: back; }
 .anatomy-slot--hands { grid-area: hands; }
 .anatomy-slot--lleg  { grid-area: lleg; }
 .anatomy-slot--rleg  { grid-area: rleg; }
+.anatomy-slot--feet  { grid-area: feet; }
 .anatomy-slot--mainh { grid-area: mainh; }
 .anatomy-slot--offh  { grid-area: offh; }
 
