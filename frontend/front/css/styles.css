@@ -7632,8 +7632,9 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   padding: 12px 16px;
   border-bottom: 1px solid #2a2218;
   flex-shrink: 0;
+  gap: 8px;
 }
-.wmap-title { font-family: Cinzel,serif; font-size: 0.88rem; font-weight: 700; color: #c9961a; letter-spacing: 0.1em; }
+.wmap-title { font-family: Cinzel,serif; font-size: 0.88rem; font-weight: 700; color: #c9961a; letter-spacing: 0.1em; flex: 1 1 auto; min-width: 0; white-space: normal; word-break: break-word; }
 .wmap-close { background: none; border: none; color: var(--text-muted, #666); cursor: pointer; font-size: 1rem; padding: 2px 6px; }
 .wmap-close:hover { color: var(--text-primary, #eee); }
 

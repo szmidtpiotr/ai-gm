@@ -201,7 +201,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-40 | Porzucenie lochu (L13) | próba porzucenia | potwierdzenie + info restore/cooldown | — |
 | F-41 | Wznowienie lochu (L13) | niedokończony loch | "Kontynuuj" / "Porzuć" | — |
 | F-42 | Boss lochu (L13) | boss pokonany | "Wyjdź z łupem" / "Idź głębiej" | — |
-| F-43 | Mapa świata (panel) | ikona mapy / podróż | SVG hex mapa + potwierdzenie podróży | — |
+| F-43 | Mapa świata (panel) | ikona mapy / podróż | SVG hex mapa + potwierdzenie podróży. #1106: nagłówek panelu pokazuje pełną nazwę aktualnego hexa (`_wmUpdateTitle`, aktualizacja przy open/travel); etykieta aktualnego hexa renderowana zawsze (bez progu zoomu, bez slice(0,14)), większy font + halo dla kontrastu; pozostałe hexy: slice 14→20+"…" | — |
 | F-44 | Paleta komend | Ctrl+/ / ikona | search, lista komend, nawigacja | — |
 | F-45 | Zaproszenie | przycisk invite | email + wiadomość, submit | — |
 | F-46 | Zgłoszenie buga | FAB (tylko tester) | typ, obserwacja/reprodukcja, submit | — |

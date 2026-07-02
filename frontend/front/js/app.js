@@ -1936,6 +1936,21 @@ function _wmWorld(wx, wy) {
   return { x: wx * _wmap.zoom + _wmap.pan.x, y: wy * _wmap.zoom + _wmap.pan.y };
 }
 
+// #1106: header shows the current hex's full name so the player always knows where they are,
+// independent of zoom/label rendering on the SVG itself.
+function _wmUpdateTitle() {
+  const titleEl = document.getElementById('wmap-title');
+  if (!titleEl) return;
+  const hex = _wmap.currentHex;
+  if (hex && hex.label) {
+    titleEl.textContent = `🗺 Mapa Świata — ${hex.label}`;
+  } else if (hex && hex.q !== undefined) {
+    titleEl.textContent = `🗺 Mapa Świata — (${hex.q},${hex.r})`;
+  } else {
+    titleEl.textContent = '🗺 Mapa Świata';
+  }
+}
+
 function _wmRender() {
   const svg = _wmap.svg;
   if (!svg) return;
@@ -1959,9 +1974,16 @@ function _wmRender() {
       if (_wmap.zoom >= 0.9 && cfg.map_icon)
         html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
           font-size="${Math.max(10, 13*_wmap.zoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
-      if (_wmap.zoom >= 1.0 && hex.label)
+      // #1106: current hex label always shown, full text, larger font, halo for contrast.
+      // Other hexes keep the zoom threshold but with a longer slice before truncating.
+      if (hex.label && (isCurrent || _wmap.zoom >= 1.0)) {
+        const labelText = isCurrent ? hex.label
+          : (hex.label.length > 20 ? hex.label.slice(0, 20) + '…' : hex.label);
+        const fontSize = isCurrent ? Math.max(11, 14*_wmap.zoom) : Math.max(7, 9*_wmap.zoom);
         html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
-          font-size="${Math.max(7, 9*_wmap.zoom)}" fill="#c8b87a" style="pointer-events:none">${escapeHtml(hex.label.slice(0,14))}</text>`;
+          font-size="${fontSize}" fill="#c8b87a" paint-order="stroke" stroke="#000" stroke-width="3"
+          style="pointer-events:none">${escapeHtml(labelText)}</text>`;
+      }
       if (isCurrent)
         html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
           font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
@@ -2180,6 +2202,7 @@ async function _wmExecuteTravel() {
     // Update current hex on map
     if (arrivedHex.q !== undefined) {
       _wmap.currentHex = arrivedHex;
+      _wmUpdateTitle();
       if (!_wmap.panel.hasAttribute('hidden')) _wmRender();
     }
 
@@ -2227,6 +2250,7 @@ async function _wmRefresh(recenter = false) {
   _wmap.teleports = data.teleport_connections || [];
   _wmap.currentHex = data.current_hex;
   _wmap.hexTypes = data.hex_types || {};
+  _wmUpdateTitle();
 
   if (recenter) {
     const disc = _wmap.hexes.filter(h => h.status === 'discovered');
