@@ -355,6 +355,87 @@ def execute_directional_travel(
     return {"executed": False, "system_fact": fact, "intent": mv}
 
 
+def _build_desync_correction_fact(
+    conn: "sqlite3.Connection",
+    session_flags: dict,
+    consecutive: int,
+) -> str:
+    """PT4 #1114: Build [SYSTEM:...] corrective fact for the next turn's narrator.
+
+    consecutive >= 2 triggers a stronger hint that includes the neighbor hex list
+    (same lookup pattern as _build_vague_move_hint).
+    """
+    loc_label = ""
+    loc_key = session_flags.get("current_location_key") or session_flags.get("location_key", "")
+    if loc_key:
+        row = conn.execute(
+            "SELECT label FROM game_locations WHERE key = ? LIMIT 1", (loc_key,)
+        ).fetchone()
+        if row and row["label"]:
+            loc_label = row["label"]
+    if not loc_label:
+        cur = session_flags.get("current_hex") or {}
+        loc_label = f"hex ({cur.get('q', '?')},{cur.get('r', '?')})"
+
+    base = (
+        f"W poprzedniej turze narracja opisała podróż, ale pozycja gracza się NIE zmieniła "
+        f"— gracz nadal jest w: {loc_label}. "
+        "Skoryguj narrację lub poproś gracza o kierunek/cel podróży. "
+        "NIE opisuj wyruszenia ani wędrówki — gracz stoi w miejscu."
+    )
+
+    if consecutive >= 2:
+        cur = session_flags.get("current_hex") or {"q": 0, "r": 0}
+        q, r = int(cur.get("q", 0)), int(cur.get("r", 0))
+        from app.services.hex_travel_service import hex_neighbors
+        location_hints: list[str] = []
+        for nq, nr in hex_neighbors(q, r):
+            if len(location_hints) >= 4:
+                break
+            row = conn.execute(
+                "SELECT label, hex_type, location_key FROM world_hexes "
+                "WHERE q=? AND r=? AND is_active=1 AND map_level=0",
+                (nq, nr),
+            ).fetchone()
+            if not row:
+                continue
+            name = row["label"] or row["hex_type"] or f"({nq},{nr})"
+            if row["location_key"]:
+                loc_row = conn.execute(
+                    "SELECT label FROM game_locations WHERE key=? LIMIT 1",
+                    (row["location_key"],),
+                ).fetchone()
+                if loc_row and loc_row["label"]:
+                    name = loc_row["label"]
+            location_hints.append(name)
+        if location_hints:
+            base += f" Pobliskie miejsca: {', '.join(location_hints)}."
+
+    return f"\n[SYSTEM: {base}]"
+
+
+def _reset_desync_counter(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """PT4 #1114: Clear consecutive desync counter from session_flags on a clean turn."""
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return
+        flags = json.loads(gs["session_flags"] or "{}")
+        if flags.get("travel_desync_consecutive", 0) > 0:
+            flags.pop("travel_desync_consecutive", None)
+            flags.pop("travel_desync_correction", None)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning("travel_desync_counter_reset_failed", error=str(e))
+
+
 def guard_travel_desync(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -368,8 +449,13 @@ def guard_travel_desync(
     happened this turn, record `travel_narrated_without_move` in `llm_tag_errors` so the
     desync is measurable (gate criterion B6) and visible. Returns True when a desync is
     flagged. Never raises.
+
+    PT4 #1114: on desync, also saves a corrective [SYSTEM:...] fact to session_flags
+    so the NEXT turn's narrator prompt is corrected. Tracks consecutive desync count —
+    2+ consecutive triggers a stronger hint with the neighbor hex list.
     """
     if move_executed:
+        _reset_desync_counter(conn, campaign_id)
         return False
     if not _TRAVEL_NARRATIVE_MARKERS.search(narrative or ""):
         return False
@@ -386,7 +472,61 @@ def guard_travel_desync(
         )
     except Exception as log_err:  # logging must not crash a turn
         logger.warning("travel_desync_log_failed", error=str(log_err))
+
+    # PT4 #1114: save corrective fact for next turn
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs:
+            flags = json.loads(gs["session_flags"] or "{}")
+            consecutive = flags.get("travel_desync_consecutive", 0) + 1
+            flags["travel_desync_consecutive"] = consecutive
+            flags["travel_desync_correction"] = _build_desync_correction_fact(
+                conn, flags, consecutive
+            )
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+            logger.info(
+                "travel_desync_correction_saved",
+                campaign_id=campaign_id,
+                consecutive=consecutive,
+            )
+    except Exception as corr_err:
+        logger.warning("travel_desync_correction_save_failed", error=str(corr_err))
+
     return True
+
+
+def pop_desync_correction(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    """PT4 #1114: Read and clear travel desync correction from session_flags.
+
+    Returns the [SYSTEM:...] correction string to inject into the current turn's
+    narrator prompt, or None if no pending correction.
+    """
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return None
+        flags = json.loads(gs["session_flags"] or "{}")
+        correction = flags.pop("travel_desync_correction", None)
+        if correction:
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+        return correction
+    except Exception as e:
+        logger.warning("pop_desync_correction_failed", error=str(e))
+        return None
 
 
 # ── Main pipeline function ─────────────────────────────────────────────────

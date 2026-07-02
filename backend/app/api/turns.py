@@ -4978,6 +4978,16 @@ def create_turn(
             except Exception as _u30_err:
                 logger.warning("u30_directional_fastpath_error", error=str(_u30_err), campaign_id=campaign_id)
 
+        # PT4 #1114: inject corrective fact from previous-turn desync (if any)
+        try:
+            from app.services.turn_pipeline import pop_desync_correction as _pt4_pop
+            _pt4_correction = _pt4_pop(conn, campaign_id)
+            if _pt4_correction:
+                _u30_system_fact = (_u30_system_fact or "") + _pt4_correction
+                logger.info("pt4_desync_correction_injected", campaign_id=campaign_id)
+        except Exception as _pt4_err:
+            logger.warning("pt4_desync_correction_inject_error", error=str(_pt4_err))
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -5627,6 +5637,20 @@ def create_turn_stream(
                 )
         except Exception as _u30_err:
             logger.warning("u30_directional_fastpath_error", error=str(_u30_err), campaign_id=campaign_id)
+
+        # PT4 #1114: inject corrective fact from previous-turn desync (if any)
+        try:
+            from app.services.turn_pipeline import pop_desync_correction as _pt4_pop_s
+            _pt4_correction_s = _pt4_pop_s(conn, campaign_id)
+            if _pt4_correction_s:
+                _first_mv_pt4 = messages[0] if messages else None
+                if isinstance(_first_mv_pt4, dict) and _first_mv_pt4.get("role") == "system":
+                    _first_mv_pt4["content"] = f"{_first_mv_pt4.get('content', '').rstrip()}{_pt4_correction_s}"
+                else:
+                    messages.insert(0, {"role": "system", "content": _pt4_correction_s.strip()})
+                logger.info("pt4_desync_correction_injected_stream", campaign_id=campaign_id)
+        except Exception as _pt4_err_s:
+            logger.warning("pt4_desync_correction_inject_stream_error", error=str(_pt4_err_s))
 
         location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
             conn, campaign_id, text, messages
