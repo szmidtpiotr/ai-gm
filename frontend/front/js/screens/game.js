@@ -2393,6 +2393,9 @@ function populateCharacterSheet(character) {
     // Stage 4 S2+S3 + merged: stat→skill grouped list
     renderStatSkillList(sheet);
 
+    // #1107 Reputation section below stats + skills
+    renderReputationSection(character);
+
     // Stage 4 S5+S6+S11: conditions w/ tooltip, auto-expand, fade transitions
     renderConditionsBlock(sheet.conditions || []);
 
@@ -3035,6 +3038,62 @@ async function renderStatSkillList(sheet) {
                 ${skillsBlock}
             </div>`;
     }).join('');
+}
+
+// #1107 — Reputation section on character card (below stats + skills)
+async function renderReputationSection(character) {
+    const section = document.getElementById('sheet-reputation-section');
+    const list = document.getElementById('sheet-reputation-list');
+    if (!section || !list || !character?.id) return;
+
+    const TIER_LABELS = {
+        exalted: 'Czczony',
+        friendly: 'Przyjazny',
+        neutral: 'Neutralny',
+        disliked: 'Nielubiany',
+        hated: 'Znienawidzony',
+    };
+    const TIER_COLOR = {
+        exalted: '#4ade80',
+        friendly: '#86efac',
+        neutral: '#9ca3af',
+        disliked: '#f87171',
+        hated: '#dc2626',
+    };
+    const REGION_LABELS = {
+        kresy: 'Kresy',
+        siwe_granie: 'Siwe Granie',
+        czarnobor: 'Czarnobór',
+        wilczburg: 'Wilczburg',
+        wachstein: 'Wachstein',
+        vilnograd: 'Vilnograd',
+    };
+
+    try {
+        const r = await fetch(`/api/characters/${character.id}/reputation`);
+        if (!r.ok) { section.style.display = 'none'; return; }
+        const data = await r.json();
+        const reps = data.reputation || [];
+
+        section.style.display = '';
+        if (reps.length === 0) {
+            list.innerHTML = '<div class="reputation-empty">Świat jeszcze nie zna bohatera.</div>';
+            return;
+        }
+        list.innerHTML = reps.map(rep => {
+            const regionLabel = REGION_LABELS[rep.scope_key] || rep.scope_key.replace(/_/g, ' ');
+            const tierLabel = TIER_LABELS[rep.tier] || rep.tier;
+            const color = TIER_COLOR[rep.tier] || TIER_COLOR.neutral;
+            const valStr = rep.value >= 0 ? `+${rep.value}` : `${rep.value}`;
+            return `<div class="reputation-row">
+                <span class="reputation-row__region">${escapeHtml(regionLabel)}</span>
+                <span class="reputation-row__value" style="color:${color}">${escapeHtml(valStr)}</span>
+                <span class="reputation-row__tier" style="color:${color}">${escapeHtml(tierLabel)}</span>
+            </div>`;
+        }).join('');
+    } catch (_) {
+        section.style.display = 'none';
+    }
 }
 
 async function renderSkillsTab(sheet) {

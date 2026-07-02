@@ -10480,3 +10480,46 @@ body[data-theme="classic"] {
   font-size: 0.75rem; font-family: 'Cinzel', serif; letter-spacing: 0.05em;
   white-space: nowrap; padding: 2px 8px;
 }
+
+/* #1107 — Reputation section on character card */
+.reputation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.reputation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.reputation-row:last-child {
+  border-bottom: none;
+}
+.reputation-row__region {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.reputation-row__value {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+.reputation-row__tier {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 80px;
+  text-align: right;
+}
+.reputation-empty {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
