@@ -13,8 +13,12 @@ Player-facing endpoints for the local hex grid (map_level=1) inside a settlement
 from __future__ import annotations
 
 import json
+import random
 import sqlite3
 from typing import Optional
+
+# PT10 #1120: fallback enemy pool when local hex has no encounter_pool set
+_LOCAL_ENCOUNTER_FALLBACK_POOL = ["bandit", "unknown_attacker", "goblin"]
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -57,6 +61,36 @@ def _hub_key_for_location(loc: dict) -> Optional[str]:
     if loc.get("location_type") == "sub":
         return loc.get("parent_key")
     return loc["key"]
+
+
+def _check_local_encounter(target: dict, cleared_local_hexes: list) -> Optional[dict]:
+    """PT10 #1120: Roll encounter for a local hex.
+
+    Returns encounter dict {"enemy_key": str, "hex_label": str} if triggered, else None.
+    Respects encounter_cleared guard (cleared_local_hexes = list of hex IDs already fought).
+    """
+    chance = float(target.get("encounter_chance") or 0.0)
+    if chance <= 0.0:
+        return None
+
+    hex_id = target.get("id")
+    if hex_id is not None and hex_id in cleared_local_hexes:
+        return None
+
+    if random.random() >= chance:
+        return None
+
+    pool = target.get("encounter_pool") or []
+    if isinstance(pool, str):
+        try:
+            pool = json.loads(pool)
+        except Exception:
+            pool = []
+    if not pool:
+        pool = _LOCAL_ENCOUNTER_FALLBACK_POOL
+
+    enemy_key = random.choice(pool)
+    return {"enemy_key": enemy_key, "hex_label": target.get("label", "sub-lokacja")}
 
 
 # ── GET /api/campaigns/{id}/local-map ─────────────────────────────────────────
@@ -203,12 +237,34 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
 
         # Advance clock +15 min — skip when player is already at target hex (#1115)
         clock_state: dict = {}
+        encounter_result: Optional[dict] = None
         if body.hex_id != current_hex_id:
             try:
                 from app.services.clock_service import advance_clock
                 clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel")
             except Exception as _clk_err:
                 pass  # clock must never break movement
+
+            # PT10 #1120: encounter check for risky local hexes
+            try:
+                cleared_local_hexes = flags.get("cleared_local_hexes") or []
+                encounter_result = _check_local_encounter(target, cleared_local_hexes)
+                if encounter_result:
+                    # Re-read flags after set_position + clock writes
+                    _sf_enc = conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    _flags_enc = json.loads((_sf_enc["session_flags"] if _sf_enc else None) or "{}")
+                    _flags_enc["local_travel_hint"] = {
+                        "destination_label": target.get("label", "sub-lokacja"),
+                    }
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (json.dumps(_flags_enc, ensure_ascii=False), campaign_id),
+                    )
+            except Exception as _enc_err:
+                pass  # encounter check must never break movement
 
         conn.commit()
 
@@ -223,6 +279,7 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             "local_hex": flags.get("local_hex"),
             "location_key": loc_key,
             "clock": clock_state,
+            "encounter": encounter_result,
         }
     finally:
         conn.close()

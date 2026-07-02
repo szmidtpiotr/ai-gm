@@ -2465,14 +2465,37 @@ async function _lmExecuteTravel() {
     _lmap.currentHex = response.local_hex;
     _lmRender();
 
-    const prose = `Przemieszczasz się do <strong>${escapeHtml(t.label)}</strong>. (+15 min)`;
+    const enc = response.encounter;
+    let prose = `Przemieszczasz się do <strong>${escapeHtml(t.label)}</strong>. (+15 min)`;
+    if (enc) prose += `<br><strong>⚔ Na miejscu czyhają napastnicy!</strong>`;
+
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble chat-bubble--travel';
     bubble.innerHTML = prose;
     elements.chatMessages.appendChild(bubble);
     scrollToBottom();
 
-    await refreshCharacterData();
+    // PT10 #1120: encounter → trigger combat via turn API (same as world travel)
+    if (enc?.enemy_key) {
+      _lmClose();
+      setTimeout(async () => {
+        try {
+          const typingIndicator = showTypingIndicator();
+          const combatResponse = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
+            text: `Napastnicy atakują! Przygotowuję się do walki!`,
+            character_id: characterData.id,
+          });
+          typingIndicator.remove();
+          const gmText = combatResponse.prose || combatResponse.text || '';
+          if (gmText) appendGmMessage(gmText, combatResponse);
+          await refreshCharacterData();
+        } catch (combatErr) {
+          showToast('Błąd inicjacji walki: ' + (combatErr.message || ''), 'error');
+        }
+      }, 600);
+    } else {
+      await refreshCharacterData();
+    }
   } catch (err) {
     showToast(err.message || 'Błąd ruchu lokalnego', 'error');
   }

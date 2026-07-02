@@ -3013,6 +3013,19 @@ def _resolve_aoe_spell_in_combat(
                         (campaign_id, int(ch_hex["q"]), int(ch_hex["r"])),
                     )
                     conn.commit()
+                # PT10 #1120: clear local hex encounter after victory
+                local_hex = _sf_hex.get("local_hex")
+                if local_hex and local_hex.get("hex_id"):
+                    _cleared = _sf_hex.get("cleared_local_hexes") or []
+                    _lhid = int(local_hex["hex_id"])
+                    if _lhid not in _cleared:
+                        _cleared.append(_lhid)
+                        _sf_hex["cleared_local_hexes"] = _cleared
+                        conn.execute(
+                            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                            (json.dumps(_sf_hex, ensure_ascii=False), campaign_id),
+                        )
+                        conn.commit()
         except Exception:
             pass
         # XS13: outnumbered XP (3+ wrogów)
@@ -6733,6 +6746,19 @@ def _resolve_player_attack_turn(
                                 (campaign_id, int(ch["q"]), int(ch["r"])),
                             )
                             conn.commit()
+                        # PT10 #1120: clear local hex encounter after victory
+                        local_hex = _sf_hex.get("local_hex")
+                        if local_hex and local_hex.get("hex_id"):
+                            _cleared2 = _sf_hex.get("cleared_local_hexes") or []
+                            _lhid2 = int(local_hex["hex_id"])
+                            if _lhid2 not in _cleared2:
+                                _cleared2.append(_lhid2)
+                                _sf_hex["cleared_local_hexes"] = _cleared2
+                                conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                    (json.dumps(_sf_hex, ensure_ascii=False), campaign_id),
+                                )
+                                conn.commit()
                 except Exception:
                     pass
                 # XS13: outnumbered victory (3+ enemies)

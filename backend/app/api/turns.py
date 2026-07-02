@@ -5000,6 +5000,16 @@ def create_turn(
         except Exception as _pt6_err:
             logger.warning("pt6_travel_plan_hint_inject_error", error=str(_pt6_err))
 
+        # PT10 #1120: inject local travel interruption hint after combat ends
+        try:
+            from app.services.turn_pipeline import pop_local_travel_hint as _pt10_pop
+            _pt10_hint = _pt10_pop(conn, campaign_id)
+            if _pt10_hint:
+                _u30_system_fact = (_u30_system_fact or "") + _pt10_hint
+                logger.info("pt10_local_travel_hint_injected", campaign_id=campaign_id)
+        except Exception as _pt10_err:
+            logger.warning("pt10_local_travel_hint_inject_error", error=str(_pt10_err))
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -5677,6 +5687,20 @@ def create_turn_stream(
                 logger.info("pt6_travel_plan_hint_injected_stream", campaign_id=campaign_id)
         except Exception as _pt6_err_s:
             logger.warning("pt6_travel_plan_hint_inject_stream_error", error=str(_pt6_err_s))
+
+        # PT10 #1120: inject local travel interruption hint (streaming path)
+        try:
+            from app.services.turn_pipeline import pop_local_travel_hint as _pt10_pop_s
+            _pt10_hint_s = _pt10_pop_s(conn, campaign_id)
+            if _pt10_hint_s:
+                _first_mv_pt10 = messages[0] if messages else None
+                if isinstance(_first_mv_pt10, dict) and _first_mv_pt10.get("role") == "system":
+                    _first_mv_pt10["content"] = f"{_first_mv_pt10.get('content', '').rstrip()}{_pt10_hint_s}"
+                else:
+                    messages.insert(0, {"role": "system", "content": _pt10_hint_s.strip()})
+                logger.info("pt10_local_travel_hint_injected_stream", campaign_id=campaign_id)
+        except Exception as _pt10_err_s:
+            logger.warning("pt10_local_travel_hint_inject_stream_error", error=str(_pt10_err_s))
 
         location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
             conn, campaign_id, text, messages

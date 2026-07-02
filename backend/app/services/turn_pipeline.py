@@ -669,6 +669,52 @@ def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | 
         return None
 
 
+def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str | None":
+    """PT10 #1120: Inject narrator hint when local travel was interrupted by encounter.
+
+    Fires once (clears local_travel_hint after emitting). Returns None if no hint,
+    combat still active, or already consumed.
+    """
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return None
+        flags = json.loads(gs["session_flags"] or "{}")
+        hint_data = flags.get("local_travel_hint")
+        if not hint_data:
+            return None
+
+        # Don't prompt while combat is still active
+        ac = conn.execute(
+            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if ac:
+            return None
+
+        dest_label = hint_data.get("destination_label", "sub-lokacja")
+        hint = (
+            f"\n[SYSTEM: Gracz był w drodze do {dest_label}. "
+            f"Walka przerwała ruch. Zapytaj gracza (prozą): "
+            f"czy kontynuuje do {dest_label} czy wraca? "
+            f"(W osadzie rozbicie obozu niedostępne — odpoczynek tylko w bezpiecznych miejscach.) "
+            f"Nie decyduj za gracza — zadaj pytanie.]"
+        )
+        flags.pop("local_travel_hint")
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), gs["id"]),
+        )
+        conn.commit()
+        return hint
+    except Exception as e:
+        logger.warning("pop_local_travel_hint_failed", error=str(e))
+        return None
+
+
 # ── Main pipeline function ─────────────────────────────────────────────────
 
 def process_v2_turn(
