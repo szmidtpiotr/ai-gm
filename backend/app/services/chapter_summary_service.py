@@ -204,6 +204,71 @@ def schedule_chapter_summary(
     t.start()
 
 
+def get_hero_chronicle(
+    conn: sqlite3.Connection,
+    character_id: int,
+    *,
+    limit: int = 3,
+) -> str:
+    """#1096 — Read hero's campaign history as a formatted chronicle block.
+
+    Returns a Polish text block with the last `limit` campaign summaries,
+    or empty string if no completed campaigns exist for this character.
+    """
+    try:
+        rows = conn.execute(
+            """
+            SELECT cch.outcome, cch.chapter_summary, cch.turns_count,
+                   cch.completed_at, c.title
+            FROM character_campaign_history cch
+            LEFT JOIN campaigns c ON c.id = cch.campaign_id
+            WHERE cch.character_id = ?
+              AND cch.outcome IN ('victory', 'death', 'abandoned')
+              AND cch.chapter_summary IS NOT NULL
+              AND cch.chapter_summary != ''
+            ORDER BY cch.completed_at DESC
+            LIMIT ?
+            """,
+            (character_id, limit),
+        ).fetchall()
+    except Exception:
+        # campaigns table may not exist in test DBs without it
+        try:
+            rows = conn.execute(
+                """
+                SELECT cch.outcome, cch.chapter_summary, cch.turns_count,
+                       cch.completed_at, NULL as title
+                FROM character_campaign_history cch
+                WHERE cch.character_id = ?
+                  AND cch.outcome IN ('victory', 'death', 'abandoned')
+                  AND cch.chapter_summary IS NOT NULL
+                  AND cch.chapter_summary != ''
+                ORDER BY cch.completed_at DESC
+                LIMIT ?
+                """,
+                (character_id, limit),
+            ).fetchall()
+        except Exception:
+            return ""
+
+    if not rows:
+        return ""
+
+    _outcome_pl = {"victory": "zwycięstwo", "death": "śmierć", "abandoned": "porzucona"}
+    parts: list[str] = []
+    for i, r in enumerate(reversed(list(rows)), start=1):
+        outcome_pl = _outcome_pl.get(str(r["outcome"] or ""), str(r["outcome"] or ""))
+        title = str(r["title"] or "Poprzednia kampania").strip()
+        summary = str(r["chapter_summary"] or "").strip()
+        parts.append(f"Rozdział {i} — {title} [{outcome_pl}]:\n{summary}")
+
+    return (
+        "=== KRONIKA BOHATERA (poprzednie kampanie) ===\n"
+        + "\n\n".join(parts)
+        + "\n=== KONIEC KRONIKI ==="
+    )
+
+
 def close_campaign_with_summary(
     conn: sqlite3.Connection,
     *,

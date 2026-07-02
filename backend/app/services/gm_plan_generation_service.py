@@ -303,6 +303,7 @@ def generate_initial_gm_plan_v2_with_retries(
     gm_only: dict[str, Any] | None = None,
     story_so_far: str = "",
     max_attempts: int = 3,
+    hero_chronicle: str = "",
 ) -> tuple[bool, str | None]:
     """#1018 — generate a structured **V2** GM plan (acts/key_beats/endings) for the
     player "Nowa Kampania" tor and the admin "Regeneruj plan" (#966) tor.
@@ -370,6 +371,12 @@ def generate_initial_gm_plan_v2_with_retries(
     secret = str(gm_only.get("secret_predisposition") or "").strip()
     if secret:
         user_lines.append(f"\nUKRYTA PREDYSPOZYCJA (TYLKO DLA MG, nie ujawniaj graczowi): {secret}")
+    if (hero_chronicle or "").strip():
+        user_lines.append(
+            "\n" + hero_chronicle.strip()
+            + "\nUwzględnij powyższą kronikę bohatera — nawiązuj do poprzednich czynów, "
+              "powracających NPC i konsekwencji decyzji przy budowie nowego planu."
+        )
     if story_so_far:
         user_lines.append(
             "\nDOTYCHCZASOWA ROZGRYWKA (streszczenie + ostatnie tury):\n" + story_so_far

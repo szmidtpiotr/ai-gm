@@ -256,6 +256,7 @@ def _build_user_prompt(
     weaknesses: list[dict],
     secret_predisposition: str,
     ideas_seeds: list[dict] | None = None,
+    hero_chronicle: str = "",
 ) -> str:
     archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
 
@@ -274,6 +275,14 @@ def _build_user_prompt(
         for s in ideas_seeds[:3]:
             seeds_text += f"  - {s.get('title','')}: {s.get('premise','')}\n"
 
+    chronicle_text = ""
+    if (hero_chronicle or "").strip():
+        chronicle_text = (
+            f"\n{hero_chronicle.strip()}\n"
+            "Uwzględnij powyższą kronikę bohatera przy tworzeniu planu — "
+            "nawiązuj do poprzednich czynów, powracających NPC, konsekwencji decyzji.\n"
+        )
+
     return (
         f"POSTAĆ:\n"
         f"  Imię: {name}\n"
@@ -284,7 +293,8 @@ def _build_user_prompt(
         f"\nSŁABOŚCI BOHATERA:\n{weak_text or '  (brak)'}\n"
         f"\nUKRYTA PREDYSPOZYCJA (TYLKO DLA MG, nie ujawniaj graczowi):\n"
         f"  {secret_predisposition or '(brak)'}\n"
-        f"{seeds_text}\n"
+        f"{seeds_text}"
+        f"{chronicle_text}\n"
         "Stwórz plan kampanii spersonalizowany pod tę postać. "
         "Fabuła powinna wynikać z jej więzi i słabości — nie być generyczna."
     )
@@ -319,6 +329,7 @@ def generate_v2_campaign_plan(
     model: str,
     llm_config: dict,
     max_attempts: int = 2,
+    hero_chronicle: str = "",
 ) -> tuple[bool, str | None]:
     """
     Generate and store a V2 CampaignPlan for the given campaign.
@@ -360,6 +371,7 @@ def generate_v2_campaign_plan(
         weaknesses=weaknesses,
         secret_predisposition=secret_predisposition,
         ideas_seeds=seeds,
+        hero_chronicle=hero_chronicle,
     )
 
     messages = [

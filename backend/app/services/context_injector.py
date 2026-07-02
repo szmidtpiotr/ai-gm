@@ -154,6 +154,8 @@ class ContextInjector:
             and not _drun.get("failed")
         )
 
+        hero_chronicle_block = self._build_hero_chronicle_block(character_id)
+
         if _in_dungeon:
             blocks = [
                 continuity_block,
@@ -169,6 +171,7 @@ class ContextInjector:
             # Build blocks
             blocks = [
                 continuity_block,
+                hero_chronicle_block,
                 self._build_length_directive_block(session_flags, action_type, mechanic_result, player_message),
                 self._build_narrative_state_block(session_flags),
                 self._build_world_block(session_flags, ingame_hours, player_message),
@@ -325,6 +328,16 @@ class ContextInjector:
             return format_narrative_state_block(session_flags.get("narrative_state"))
         except Exception as e:
             logger.warning("narrative_state_block_failed", error=str(e))
+            return ""
+
+    def _build_hero_chronicle_block(self, character_id: int) -> str:
+        """#1096 — inject hero's cross-campaign chronicle so the narrator can reference
+        the character's past. Silently returns empty string when no history exists."""
+        try:
+            from app.services.chapter_summary_service import get_hero_chronicle
+            return get_hero_chronicle(self.conn, character_id, limit=3)
+        except Exception as e:
+            logger.warning("hero_chronicle_block_failed", error=str(e))
             return ""
 
     def _build_world_block(
