@@ -644,12 +644,18 @@ def validate_move(
         
         if not current_loc:
             # Brak aktualnej lokalizacji — dowolny ruch dozwolony (inicjalizacja)
-            # Spróbuj znaleźć lub utworzyć lokalizację docelową (#522: canonical first)
-            all_locs = _find_all_locations()
-            canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
-            matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+            # #1105: an exact target_key match is authoritative — a slightly
+            # reworded target_label (e.g. GM adds a region prefix) must never
+            # cause fuzzy label matching to bump the move onto an unrelated,
+            # merely-similar-sounding existing location.
+            matched = _get_location_by_key(tk) if tk else None
             if not matched:
-                matched = _fuzzy_match_location(intent.target_label, all_locs)
+                # Spróbuj znaleźć lub utworzyć lokalizację docelową (#522: canonical first)
+                all_locs = _find_all_locations()
+                canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+                matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+                if not matched:
+                    matched = _fuzzy_match_location(intent.target_label, all_locs)
             
             if matched:
                 return _result_with_log(resolved_session_id, intent, ValidationResult(
@@ -676,27 +682,33 @@ def validate_move(
                 block_reason=f"Nieznana lokalizacja: {intent.target_label}"
             ), "blocked")
         
-        # Fuzzy match — for action='move' prefer canonical (ai_generated=0) locations
-        # first. Only fall back to ai_generated ones when no canonical match exists,
-        # to avoid stranding the session on an unreviewed AI-invented place (#522).
-        # For action='create' we always search all locations (including ai_generated)
-        # so the LLM can discover already-pending duplicates before minting another (#39).
-        all_locs = _find_all_locations()
-        canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
-        if intent.action == "move":
-            matched = _fuzzy_match_location(intent.target_label, canonical_locs)
-            if not matched:
+        # #1105: exact target_key match wins outright — skip fuzzy-label
+        # guessing (and the LLM tie-break below) entirely, so it can never
+        # land on an unrelated existing location.
+        matched = _get_location_by_key(tk) if (intent.action == "move" and tk) else None
+
+        if not matched:
+            # Fuzzy match — for action='move' prefer canonical (ai_generated=0) locations
+            # first. Only fall back to ai_generated ones when no canonical match exists,
+            # to avoid stranding the session on an unreviewed AI-invented place (#522).
+            # For action='create' we always search all locations (including ai_generated)
+            # so the LLM can discover already-pending duplicates before minting another (#39).
+            all_locs = _find_all_locations()
+            canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
+            if intent.action == "move":
+                matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+                if not matched:
+                    matched = _fuzzy_match_location(intent.target_label, all_locs)
+            else:
                 matched = _fuzzy_match_location(intent.target_label, all_locs)
-        else:
-            matched = _fuzzy_match_location(intent.target_label, all_locs)
-        
-        if matched:
-            # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases)
-            if fuzz.ratio(intent.target_label.lower(), matched["label"].lower()) < 95:
-                # Niedokładny match — zapytaj LLM
-                if not _ask_llm_if_same_location(intent.target_label, matched["label"]):
-                    # LLM mówi że to inne miejsce
-                    matched = None
+
+            if matched:
+                # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases)
+                if fuzz.ratio(intent.target_label.lower(), matched["label"].lower()) < 95:
+                    # Niedokładny match — zapytaj LLM
+                    if not _ask_llm_if_same_location(intent.target_label, matched["label"]):
+                        # LLM mówi że to inne miejsce
+                        matched = None
         
         if not matched:
             # Issue #39: only honor auto-create when GM explicitly emitted action='create'.
