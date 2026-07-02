@@ -1530,6 +1530,7 @@ ZASADY:
 8. Każdy wróg MUSI mieć description (wygląd/charakter) i note (zdolności specjalne, taktyka).
 9. Każda lokacja MUSI mieć description (min. 2 zdania dla MG — klimat, wygląd, przeznaczenie).
 10. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w obrębie planu), "summary" (co się dzieje). Gdzie sensowne dodaj "objective_type" (jedno z: kill_enemy, visit_location, talk_to_npc, find_item) + "objective_value" (slug celu, np. klucz wroga/lokacji/NPC). Ustaw "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
+11. DOMYKALNOŚĆ (KRYTYCZNE): każdy beat krytyczny (optional: false) MUSI dać się domknąć — albo ma "objective_type"+"objective_value" (auto-domknięcie), albo "narrative_close": true (domknięcie sygnałem MG). Beat krytyczny bez żadnego z tych pól zablokuje kampanię. Dla scen czysto fabularnych (walka bez konkretnego wroga w bazie, rozmowa, decyzja) ustaw "narrative_close": true.
 """
 
 
@@ -1656,6 +1657,10 @@ def forge_generate_template_plan(
                     continue
                 plan = CampaignPlan.model_validate(plan_dict)
                 plan_public = plan.model_dump()
+                # #1109 — never emit a plan with critical orphan beats: any non-optional
+                # beat lacking objective_type/narrative_close gets a GM narrative close.
+                from app.services.campaign_plan_runtime import ensure_beats_closable
+                ensure_beats_closable(plan_public)
                 plan_json = json.dumps(plan_public, ensure_ascii=False)
                 conn.execute(
                     "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",

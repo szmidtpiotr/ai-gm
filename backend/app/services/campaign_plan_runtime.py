@@ -535,6 +535,39 @@ def find_orphan_beats(plan: dict | None) -> list[str]:
 _OBJECTIVE_TYPES = frozenset({"kill_enemy", "visit_location", "talk_to_npc", "find_item"})
 
 
+def ensure_beats_closable(plan: dict | None) -> dict | None:
+    """#1109 — guarantee no critical orphan beats in a generated plan.
+
+    Every non-optional beat that has neither an ``objective_type`` (auto-complete
+    trigger) nor a ``narrative_close`` ([BEAT_COMPLETE] GM signal) would strand the
+    act — ``validate_gm_plan`` reports it as ``orphan_beat`` and the winnable gate
+    blocks publication. Here we make such a beat closable by the GM's narrative
+    signal (``narrative_close=True``), the safest universal fallback.
+
+    Optional beats are left untouched (a flavour beat may legitimately never close).
+    Idempotent and default-safe on non-plan input. Mutates and returns ``plan``.
+    """
+    if not isinstance(plan, dict):
+        return plan
+    acts = plan.get("acts")
+    if not isinstance(acts, list):
+        return plan
+    for act in acts:
+        if not isinstance(act, dict):
+            continue
+        for beat in (act.get("key_beats") or []):
+            if not isinstance(beat, dict):
+                continue
+            if beat.get("optional") is True:
+                continue
+            if beat.get("objective_type") in _OBJECTIVE_TYPES:
+                continue
+            if beat.get("narrative_close"):
+                continue
+            beat["narrative_close"] = True
+    return plan
+
+
 def validate_gm_plan(plan: dict | None) -> dict:
     """#1060 — Granular plan validator for the Forge UI.
 

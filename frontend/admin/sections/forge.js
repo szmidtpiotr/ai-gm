@@ -1788,6 +1788,7 @@ async function openTemplateEditor(id) {
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
     _renderTplItems(_tplEditorPlan.key_items || []);
+    _renderTplValidation();  // #1109 — plan health panel in Przegląd
     _loadTplDbItems();
     const ep = _tplEditorPlan.engine_private || {};
     if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
@@ -1798,6 +1799,48 @@ async function openTemplateEditor(id) {
       if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; el.addEventListener('input', function(){ this.style.height='auto'; this.style.height=this.scrollHeight+'px'; }, {once:false}); }
     });
   } catch(e) { _showToast(e.message || 'Błąd ładowania szablonu.', 'error'); }
+}
+
+// #1109 — Plan validation panel in the Przegląd tab: shows red errors / yellow
+// warnings from validate-plan, or a green "no problems" state.
+async function _renderTplValidation() {
+  const panel = document.getElementById('tpl-validation-panel');
+  if (!panel) return;
+  const plan = _tplEditorPlan || {};
+  if (!Array.isArray(plan.acts) || !plan.acts.length) {
+    panel.innerHTML = '<span style="color:var(--t3)">Brak planu do sprawdzenia — wygeneruj lub dodaj akty.</span>';
+    return;
+  }
+  panel.textContent = 'Sprawdzam…';
+  try {
+    const v = await apiFetch('/api/admin/forge/validate-plan', {
+      method: 'POST', body: JSON.stringify({ gm_plan_json: plan }),
+    });
+    const issues = v.issues || [];
+    if (!issues.length) {
+      panel.innerHTML = '<div style="color:var(--green);font-weight:600">✅ Brak błędów — plan gotowy do publikacji.</div>';
+      return;
+    }
+    const errs = issues.filter(i => i.type === 'error').length;
+    const warns = issues.filter(i => i.type === 'warning').length;
+    const summary = '<div style="font-weight:600;margin-bottom:8px">' +
+      (errs ? '<span style="color:var(--red,#dc2626)">🔴 ' + errs + ' błąd(ów)</span>' : '') +
+      (errs && warns ? ' · ' : '') +
+      (warns ? '<span style="color:var(--amber,#d97706)">🟡 ' + warns + ' ostrzeżenie(a)</span>' : '') +
+      '</div>';
+    const cards = issues.map(i => {
+      const isErr = i.type === 'error';
+      const col = isErr ? 'var(--red,#dc2626)' : 'var(--amber,#d97706)';
+      const where = 'Akt ' + (i.act_number ?? '?') + (i.beat_key ? ' / ' + _esc(i.beat_key) : '');
+      return '<div style="background:' + col + '18;border:1px solid ' + col + ';border-radius:6px;padding:7px 9px;margin-bottom:6px">' +
+        '<div style="font-weight:600;font-size:0.78rem;color:' + col + '">' + (isErr ? '🔴' : '🟡') + ' ' + _esc(i.code) + ' — ' + where + '</div>' +
+        '<div style="font-size:0.78rem;margin-top:2px;color:var(--t2)">' + _esc(i.message) + '</div>' +
+      '</div>';
+    }).join('');
+    panel.innerHTML = summary + cards;
+  } catch(e) {
+    panel.innerHTML = '<span style="color:var(--red)">Nie można zwalidować planu: ' + _esc(e.message || 'błąd') + '</span>';
+  }
 }
 
 function _closeTemplateEditor() {
@@ -2837,6 +2880,7 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     _renderTplEnemies(_tplEditorPlan.key_enemies || []);
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
+    _renderTplValidation();  // #1109 — refresh plan health after regeneration
     await _loadTplDbItems();  // #1084 — reload DB items after generate-plan (auto-assigned rewards)
     // #1085 — populate klimat/beat/npc fields from auto-fill (only when currently empty)
     if (d.auto_filled_npc_keys?.length) {
@@ -3387,6 +3431,14 @@ function _sectionHtml() {
 
         <!-- Tab: Przegląd -->
         <div id="tpl-tab-overview">
+          <!-- #1109 — walidacja planu (błędy/ostrzeżenia z validate-plan) -->
+          <div class="card" style="padding:14px;margin-bottom:12px">
+            <div class="card-header" style="padding:0 0 8px;margin-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <span class="card-title">🩺 Walidacja planu</span>
+              <button class="btn btn-sm btn-secondary" onclick="_renderTplValidation()">↻ Sprawdź ponownie</button>
+            </div>
+            <div id="tpl-validation-panel" style="font-size:0.8rem;color:var(--t3)">Ładowanie…</div>
+          </div>
           <div class="card" style="padding:16px;margin-bottom:12px">
             <div class="form-row">
               <label class="form-label">Opis</label>
@@ -3722,6 +3774,7 @@ export async function init(panel) {
   window.saveHookEdits = saveHookEdits;
   // Szablony
   window.openTemplateEditor = openTemplateEditor;
+window._renderTplValidation = _renderTplValidation;
   window.openCreateTemplate = openCreateTemplate;
   window._closeTemplateEditor = _closeTemplateEditor;
   window.forgeSetTemplateStatus = forgeSetTemplateStatus;
