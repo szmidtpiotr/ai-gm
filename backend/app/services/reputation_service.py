@@ -190,6 +190,54 @@ def npc_attitude_from_reputation(value: int) -> str:
 _ATTITUDE_PL = {"friendly": "przyjazny", "neutral": "neutralny", "hostile": "wrogi"}
 
 
+# ─── Faction helpers (#1103) ──────────────────────────────────────────────────
+
+def get_faction_shop_multiplier(
+    conn: sqlite3.Connection,
+    character_id: int,
+    faction_key: str,
+) -> float:
+    """Buy-price multiplier from faction reputation. 1.0 when no standing yet."""
+    value = get_reputation(conn, int(character_id), faction_key, scope_type="faction")
+    return shop_price_multiplier(value)
+
+
+def combined_buy_multiplier(
+    conn: sqlite3.Connection,
+    character_id: int,
+    region_key: str,
+    faction_key: str | None,
+) -> float:
+    """Best-deal multiplier combining region rep and (optional) faction rep.
+
+    Player benefits from whichever standing gives a lower price. When the NPC
+    has no faction, only region rep applies.
+    """
+    region_mult = shop_price_multiplier(
+        get_reputation(conn, int(character_id), region_key, scope_type="region")
+    )
+    if not faction_key:
+        return region_mult
+    faction_mult = get_faction_shop_multiplier(conn, int(character_id), faction_key)
+    return min(region_mult, faction_mult)
+
+
+def faction_context_line(value: int, faction_name: str) -> str:
+    """One-line faction standing summary for narrator injection. Empty when neutral."""
+    v = int(value)
+    if npc_attitude_from_reputation(v) == "neutral":
+        return ""
+    tier = reputation_tier(v)
+    attitude_pl = _ATTITUDE_PL[npc_attitude_from_reputation(v)]
+    sign = "+" if v >= 0 else ""
+    return (
+        f"=== REPUTACJA W FRAKCJI ({faction_name}) ===\n"
+        f"Bohater ma reputację {sign}{v} ({tier}) wobec tej frakcji. "
+        f"Członkowie i powiązani NPC odnoszą się do niego jako: {attitude_pl}. "
+        f"Wpleć tę postawę w reakcje NPC należących do {faction_name}."
+    )
+
+
 def reputation_context_line(value: int, region: str = REGION_DEFAULT) -> str:
     """One-line standing summary injected into the narrator context so NPCs react
     to the hero's regional reputation. Empty when neutral (nothing to say)."""

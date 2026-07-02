@@ -508,9 +508,12 @@ def get_shop_inventory_by_key(npc_key: str, character_id: int, location_key: str
     return get_shop_inventory(int(npc["id"]), character_id, location_key=location_key)
 
 
-def _reputation_buy_multiplier(conn, character_id: int) -> float:
-    """#1099 — regional-reputation buy-price multiplier for a character. 1.0 when
-    the character has no campaign / neutral standing or anything goes wrong."""
+def _reputation_buy_multiplier(conn, character_id: int, npc_id: int | None = None) -> float:
+    """#1099/#1103 — buy-price multiplier combining region + faction reputation.
+
+    Uses combined_buy_multiplier: best-deal of region rep and (if NPC belongs to
+    a faction) faction rep. 1.0 when no campaign / neutral standing / error.
+    """
     try:
         from app.services import reputation_service as rep
         row = conn.execute(
@@ -520,8 +523,17 @@ def _reputation_buy_multiplier(conn, character_id: int) -> float:
         if not campaign_id:
             return 1.0
         region = rep.resolve_region(conn, int(campaign_id))
-        value = rep.get_reputation(conn, int(character_id), region)
-        return rep.shop_price_multiplier(value)
+        # #1103: check if this NPC belongs to a faction
+        faction_key = None
+        if npc_id is not None:
+            try:
+                npc_row = conn.execute(
+                    "SELECT faction_key FROM npcs WHERE id = ?", (int(npc_id),)
+                ).fetchone()
+                faction_key = npc_row["faction_key"] if npc_row else None
+            except Exception:
+                pass
+        return rep.combined_buy_multiplier(conn, int(character_id), region, faction_key)
     except Exception:
         return 1.0
 
@@ -552,8 +564,8 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         race = _get_character_race(conn, character_id)
         if race == "dwarf":
             eff_buy_mult = round(eff_buy_mult * (1.0 - DWARF_SHOP_DISCOUNT), 4)
-        # #1099: regional reputation shifts prices (high standing = discount, low = markup).
-        rep_mult = _reputation_buy_multiplier(conn, character_id)
+        # #1099/#1103: reputation shifts prices — region + faction (best deal).
+        rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
         if rep_mult != 1.0:
             eff_buy_mult = round(eff_buy_mult * rep_mult, 4)
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price

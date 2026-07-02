@@ -354,13 +354,39 @@ class ContextInjector:
             return ""
 
     def _build_reputation_block(self, character_id: int, campaign_id: int) -> str:
-        """#1099 — inject the hero's regional reputation standing so NPCs, merchants
-        and quest-givers react to their deeds. Empty when standing is neutral."""
+        """#1099/#1103 — inject region + faction reputation standings for narrator.
+
+        Region block always checked. Faction blocks added for any non-neutral
+        faction standings the character has accumulated. Empty when all neutral.
+        """
         try:
             from app.services import reputation_service as rep
             region = rep.resolve_region(self.conn, campaign_id)
-            value = rep.get_reputation(self.conn, character_id, region)
-            return rep.reputation_context_line(value, region)
+            region_value = rep.get_reputation(self.conn, character_id, region)
+            parts = [rep.reputation_context_line(region_value, region)]
+
+            # #1103: inject faction standings (non-neutral only)
+            try:
+                faction_rows = self.conn.execute(
+                    """
+                    SELECT cr.scope_key, cr.value, f.name
+                    FROM character_reputation cr
+                    JOIN game_config_factions f ON f.key = cr.scope_key
+                    WHERE cr.character_id = ? AND cr.scope_type = 'faction'
+                      AND ABS(cr.value) >= 20
+                    ORDER BY ABS(cr.value) DESC
+                    LIMIT 3
+                    """,
+                    (int(character_id),),
+                ).fetchall()
+                for row in faction_rows:
+                    line = rep.faction_context_line(row["value"], row["name"])
+                    if line:
+                        parts.append(line)
+            except Exception:
+                pass
+
+            return "\n".join(p for p in parts if p)
         except Exception as e:
             logger.warning("reputation_block_failed", error=str(e))
             return ""

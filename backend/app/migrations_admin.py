@@ -1133,6 +1133,28 @@ ADMIN_MIGRATIONS = [
         UNIQUE(character_id, scope_type, scope_key)
     )
     """,
+    # #1103: per-faction reputation — extends #1099 scope_type to include 'faction'.
+    # Faction definitions + assignment of NPCs to factions.
+    """
+    CREATE TABLE IF NOT EXISTS game_config_factions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        key          TEXT NOT NULL UNIQUE,
+        name         TEXT NOT NULL,
+        faction_type TEXT NOT NULL DEFAULT 'guild'
+                       CHECK(faction_type IN ('guild', 'clan', 'order')),
+        description  TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "ALTER TABLE npcs ADD COLUMN faction_key TEXT REFERENCES game_config_factions(key)",
+    # Starter faction content (seeded — idempotent INSERT OR IGNORE).
+    """
+    INSERT OR IGNORE INTO game_config_factions (key, name, faction_type, description) VALUES
+        ('gildia_kupcow',    'Gildia Kupców',             'guild', 'Sieć kupiecka kontrolująca handel na Kresach. Przychylność = tańsze towary u zrzeszonych kupców.'),
+        ('zakon_straznikow', 'Zakon Strażników',          'order', 'Zakon wojowników strzegących granicznych rubieży. Przychylność = dostęp do misji obronnych.'),
+        ('wolni_najemnicy',  'Towarzystwo Wolnych Najemników', 'guild', 'Luźna federacja najemników i poszukiwaczy przygód. Przychylność = lepsze stawki za kontrakty.')
+    """,
     # S3 (#583): NPC ability stats — lazy-generated per campaign + optional global template.
     "ALTER TABLE campaign_known_npcs ADD COLUMN stats_json TEXT",
     "ALTER TABLE npcs ADD COLUMN stats_json TEXT",
