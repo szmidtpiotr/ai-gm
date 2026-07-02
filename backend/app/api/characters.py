@@ -1323,9 +1323,31 @@ def resurrect_hero(
             raise HTTPException(status_code=403, detail="not your hero")
         # Accept status='dead' OR current_hp <= 0 — the death service doesn't
         # always set status, it leaves heroes as 'in_campaign' with 0 HP.
+        # A MISSING current_hp key is NOT death (#1102) — `or 0` used to treat
+        # a stale/partial sheet_json overwrite as HP 0, letting the same hero
+        # resurrect repeatedly. Cooldown below is a backstop for that same bug
+        # class regardless of which writer produced the stale-dead-looking sheet.
         import json as _j
+        from datetime import datetime, timezone
         sheet = _j.loads(char["sheet_json"] or "{}")
-        is_dead = char["status"] == "dead" or int(sheet.get("current_hp") or 0) <= 0
+
+        last_res = sheet.get("last_resurrected_at")
+        if last_res:
+            try:
+                last_dt = datetime.fromisoformat(last_res)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                if elapsed < 60:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"resurrection cooldown active — {60 - int(elapsed)}s remaining",
+                    )
+            except ValueError:
+                pass
+
+        hp_raw = sheet.get("current_hp")
+        is_dead = char["status"] == "dead" or (hp_raw is not None and int(hp_raw) <= 0)
         if not is_dead:
             raise HTTPException(status_code=409, detail=f"hero is '{char['status']}' with {sheet.get('current_hp')} HP — not dead")
         try:

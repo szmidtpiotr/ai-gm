@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import random
 import sqlite3
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -686,6 +687,10 @@ def apply_resurrection(
     sheet["current_hp"] = revive_hp
     sheet["death_saves_failed"] = 0
     sheet["short_rests_used"] = 0
+    # Cooldown stamp (#1102) — lets the /resurrect gate reject a rapid repeat
+    # even when some other writer later stomps current_hp back to a
+    # dead-looking value.
+    sheet["last_resurrected_at"] = datetime.now(timezone.utc).isoformat()
     # Clear any death-tagged conditions
     if isinstance(sheet.get("conditions"), list):
         sheet["conditions"] = [c for c in sheet["conditions"] if c not in ("dead", "unconscious", "dying")]
