@@ -1116,8 +1116,18 @@ def build_camp(campaign_id: int):
                 )
             raise HTTPException(status_code=400, detail=msg)
 
+        # PT9 (#1119): boost from terrain type via hex_type_config
+        hex_row = conn.execute(
+            "SELECT wh.hex_type, htc.camp_encounter_boost "
+            "FROM world_hexes wh "
+            "LEFT JOIN hex_type_config htc ON htc.hex_type = wh.hex_type AND htc.is_active = 1 "
+            "WHERE wh.q = ? AND wh.r = ? AND wh.is_active = 1 LIMIT 1",
+            (int(q), int(r)),
+        ).fetchone()
+        encounter_boost = float(hex_row["camp_encounter_boost"] if hex_row and hex_row["camp_encounter_boost"] is not None else 0.20)
+
         # Re-read flags (build_camp commits, but doesn't touch session_flags)
-        flags["camp_encounter_boost"] = 0.20
+        flags["camp_encounter_boost"] = encounter_boost
         flags["current_location_key"] = location["key"]
         conn.execute(
             "UPDATE game_sessions SET session_flags = ?, current_location_id = (SELECT id FROM game_locations WHERE key = ?) WHERE id = ?",
@@ -1136,7 +1146,7 @@ def build_camp(campaign_id: int):
             "ok": True,
             "location": location,
             "current_clock": clock,
-            "encounter_boost": 0.20,
+            "encounter_boost": encounter_boost,
         }
     finally:
         conn.close()

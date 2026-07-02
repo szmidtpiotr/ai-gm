@@ -247,6 +247,8 @@ def perform_long_rest(
     advance_clock(campaign_id, 8, "long_rest", conn=conn)
 
     # PT7 #1117: Reset daily march budget after long rest
+    # PT9 #1119: Roll camp encounter before clearing flags, then clear boost
+    camp_encounter: dict[str, Any] = {}
     try:
         _gs_rest = conn.execute(
             "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -254,8 +256,43 @@ def perform_long_rest(
         ).fetchone()
         if _gs_rest:
             _sf_rest = json.loads(_gs_rest["session_flags"] or "{}")
+            _boost = float(_sf_rest.get("camp_encounter_boost") or 0.0)
+            _night_march = bool(_sf_rest.get("night_march", False))
+            if _boost > 0:
+                _night_bonus = 0.10 if _night_march else 0.0
+                _effective = min(1.0, _boost + _night_bonus)
+                _roll = random.random()
+                _triggered = _roll < _effective
+                _enemy_key = None
+                if _triggered:
+                    _hex = _sf_rest.get("current_hex") or {}
+                    _q, _r = _hex.get("q"), _hex.get("r")
+                    if _q is not None and _r is not None:
+                        _hex_row = conn.execute(
+                            "SELECT encounter_pool FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1 LIMIT 1",
+                            (_q, _r),
+                        ).fetchone()
+                        if _hex_row:
+                            _pool = json.loads(_hex_row["encounter_pool"] or "[]")
+                            _enemy_key = random.choice(_pool) if _pool else None
+                camp_encounter = {
+                    "triggered": _triggered,
+                    "roll": round(_roll, 3),
+                    "effective_boost": round(_effective, 3),
+                    "night_march_bonus": _night_march,
+                    "enemy_key": _enemy_key,
+                }
+                logger.info(
+                    "camp_encounter_rolled",
+                    campaign_id=campaign_id,
+                    triggered=_triggered,
+                    boost=_boost,
+                    night_march=_night_march,
+                    enemy_key=_enemy_key,
+                )
             _sf_rest["hours_marched_today"] = 0.0
             _sf_rest["night_march"] = False
+            _sf_rest.pop("camp_encounter_boost", None)
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
                 (json.dumps(_sf_rest, ensure_ascii=False), _gs_rest["id"]),
@@ -298,6 +335,8 @@ def perform_long_rest(
     if leveled_up:
         result["leveled_up"] = True
         result["new_level"] = new_level
+    if camp_encounter:
+        result["camp_encounter"] = camp_encounter
     return result
 
 

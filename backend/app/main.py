@@ -486,6 +486,9 @@ RAW_MIGRATIONS = [
     # RM1 (#1028) — region tag on world map + locations
     "ALTER TABLE world_hexes ADD COLUMN region TEXT NOT NULL DEFAULT 'kresy'",
     "ALTER TABLE game_locations ADD COLUMN region TEXT",
+    # PT9 (#1119) — nocna napaść przy obozie: boost zależny od terenu (0.20 cywilizowany / 0.35 dziki)
+    "ALTER TABLE hex_type_config ADD COLUMN camp_encounter_boost REAL NOT NULL DEFAULT 0.20",
+    "UPDATE hex_type_config SET camp_encounter_boost = 0.35 WHERE hex_type IN ('forest','mountains','mountain','swamp','cave','ruins','volcanic','tundra','desert','heath')",
 ]
 
 
