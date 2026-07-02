@@ -3358,6 +3358,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
 
     _exec("ALTER TABLE characters ADD COLUMN hero_status TEXT NOT NULL DEFAULT 'active'", "v2-characters-hero-status")
     _exec("ALTER TABLE characters ADD COLUMN visited_location_keys TEXT NOT NULL DEFAULT '[]'", "v2-characters-visited-locations")
+    # #1096 — Hero Legend: cumulative, flattened cross-campaign digest (whole life,
+    # bounded length) + count of chapters folded into it (for lazy staleness check).
+    _exec("ALTER TABLE characters ADD COLUMN legend_digest TEXT", "v2-characters-legend-digest")
+    _exec("ALTER TABLE characters ADD COLUMN legend_digest_count INTEGER NOT NULL DEFAULT 0", "v2-characters-legend-digest-count")
 
     # ── ALTER TABLE: character_xp_grants ─────────────────────────────────
 

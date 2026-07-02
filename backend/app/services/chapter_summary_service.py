@@ -204,22 +204,40 @@ def schedule_chapter_summary(
     t.start()
 
 
-def get_hero_chronicle(
-    conn: sqlite3.Connection,
-    character_id: int,
-    *,
-    limit: int = 3,
-) -> str:
-    """#1096 — Read hero's campaign history as a formatted chronicle block.
+_OUTCOME_PL_FULL = {"victory": "zwycięstwo", "death": "śmierć", "abandoned": "porzucona"}
 
-    Returns a Polish text block with the last `limit` campaign summaries,
-    or empty string if no completed campaigns exist for this character.
-    """
+# #1096 — Hero Legend: cap the flattened whole-life digest so token cost stays
+# constant no matter how many campaigns a hero survives. Starting value.
+LEGEND_DIGEST_TARGET_WORDS = 300
+
+
+def _count_completed_chapters(conn: sqlite3.Connection, character_id: int) -> int:
+    """Number of finished campaigns with a chapter summary for this hero."""
     try:
-        rows = conn.execute(
+        row = conn.execute(
             """
-            SELECT cch.outcome, cch.chapter_summary, cch.turns_count,
-                   cch.completed_at, c.title
+            SELECT COUNT(*) AS n
+            FROM character_campaign_history
+            WHERE character_id = ?
+              AND outcome IN ('victory', 'death', 'abandoned')
+              AND chapter_summary IS NOT NULL
+              AND chapter_summary != ''
+            """,
+            (character_id,),
+        ).fetchone()
+        return int(row["n"] if row else 0)
+    except Exception:
+        return 0
+
+
+def _fetch_recent_chapters(
+    conn: sqlite3.Connection, character_id: int, limit: int
+) -> list[sqlite3.Row]:
+    """Last `limit` finished chapters (newest first). Handles DBs without `campaigns`."""
+    try:
+        return conn.execute(
+            """
+            SELECT cch.outcome, cch.chapter_summary, cch.completed_at, c.title
             FROM character_campaign_history cch
             LEFT JOIN campaigns c ON c.id = cch.campaign_id
             WHERE cch.character_id = ?
@@ -232,12 +250,11 @@ def get_hero_chronicle(
             (character_id, limit),
         ).fetchall()
     except Exception:
-        # campaigns table may not exist in test DBs without it
         try:
-            rows = conn.execute(
+            return conn.execute(
                 """
-                SELECT cch.outcome, cch.chapter_summary, cch.turns_count,
-                       cch.completed_at, NULL as title
+                SELECT cch.outcome, cch.chapter_summary, cch.completed_at,
+                       NULL AS title
                 FROM character_campaign_history cch
                 WHERE cch.character_id = ?
                   AND cch.outcome IN ('victory', 'death', 'abandoned')
@@ -249,24 +266,153 @@ def get_hero_chronicle(
                 (character_id, limit),
             ).fetchall()
         except Exception:
-            return ""
+            return []
 
-    if not rows:
+
+def _read_legend_digest(conn: sqlite3.Connection, character_id: int) -> str:
+    """Cached whole-life legend digest, or '' when absent / column missing."""
+    try:
+        row = conn.execute(
+            "SELECT legend_digest FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        return str((row["legend_digest"] if row else "") or "").strip()
+    except Exception:
         return ""
 
-    _outcome_pl = {"victory": "zwycięstwo", "death": "śmierć", "abandoned": "porzucona"}
-    parts: list[str] = []
-    for i, r in enumerate(reversed(list(rows)), start=1):
-        outcome_pl = _outcome_pl.get(str(r["outcome"] or ""), str(r["outcome"] or ""))
-        title = str(r["title"] or "Poprzednia kampania").strip()
-        summary = str(r["chapter_summary"] or "").strip()
-        parts.append(f"Rozdział {i} — {title} [{outcome_pl}]:\n{summary}")
 
+def _build_legend_prompt(name: str, chapters: list[sqlite3.Row]) -> str:
+    """LLM prompt that folds ALL chapters into one bounded life-legend."""
+    lines: list[str] = []
+    for i, r in enumerate(chapters, start=1):
+        outcome_pl = _OUTCOME_PL_FULL.get(str(r["outcome"] or ""), str(r["outcome"] or ""))
+        summary = str(r["chapter_summary"] or "").strip()
+        lines.append(f"Kampania {i} [{outcome_pl}]: {summary}")
+    transcript = "\n\n".join(lines)
     return (
-        "=== KRONIKA BOHATERA (poprzednie kampanie) ===\n"
-        + "\n\n".join(parts)
-        + "\n=== KONIEC KRONIKI ==="
+        f"Jesteś kronikarzem legend. Oto kroniki WSZYSTKICH przygód bohatera {name} "
+        f"(od najstarszej do najnowszej):\n\n{transcript}\n\n"
+        f"Napisz zwięzłą LEGENDĘ tego bohatera — spłaszczone streszczenie CAŁEGO życia. "
+        f"NIE gub wczesnych wydarzeń: zachowaj reputację, powracających NPC, wrogów, "
+        f"sojuszników, kluczowe łuki i konsekwencje decyzji. Pomiń drobiazgi. "
+        f"Maksymalnie ~{LEGEND_DIGEST_TARGET_WORDS} słów, PO POLSKU, proza w trzeciej osobie. "
+        f"Bez nagłówków ani markdown."
     )
+
+
+def refresh_hero_legend(
+    conn: sqlite3.Connection,
+    character_id: int,
+    user_id: int,
+) -> str:
+    """#1096 — Lazily (re)generate the hero's flattened whole-life legend digest.
+
+    Cheap-guarded: only calls the LLM when the stored digest is stale
+    (legend_digest_count != number of finished chapters). Returns the digest
+    (possibly the existing cached one). Safe when the character has no history.
+    """
+    completed = _count_completed_chapters(conn, character_id)
+    if completed == 0:
+        return ""
+
+    try:
+        row = conn.execute(
+            "SELECT name, legend_digest, legend_digest_count FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+    except Exception:
+        return ""
+    if not row:
+        return ""
+
+    cur_digest = str((row["legend_digest"] or "")).strip()
+    try:
+        cur_count = int(row["legend_digest_count"] or 0)
+    except Exception:
+        cur_count = 0
+
+    # Fresh — nothing changed since last fold.
+    if cur_digest and cur_count == completed:
+        return cur_digest
+
+    name = str(row["name"] or "Bohater")
+    chapters = _fetch_recent_chapters(conn, character_id, limit=completed)
+    # oldest → newest for a chronological legend
+    chapters = list(reversed(chapters))
+    if not chapters:
+        return cur_digest
+
+    prompt = _build_legend_prompt(name, chapters)
+    messages = [
+        {"role": "system", "content": "Piszesz legendy bohaterów gry RPG. Tylko czysty tekst, bez nagłówków."},
+        {"role": "user", "content": prompt},
+    ]
+    llm_config = get_user_llm_settings_full(user_id)
+    try:
+        digest = (generate_chat(messages=messages, llm_config=llm_config) or "").strip()
+    except Exception as e:
+        logger.warning("hero_legend_llm_failed", error=str(e), character_id=character_id)
+        return cur_digest
+
+    if not digest:
+        return cur_digest
+
+    try:
+        conn.execute(
+            "UPDATE characters SET legend_digest = ?, legend_digest_count = ? WHERE id = ?",
+            (digest, completed, character_id),
+        )
+        conn.commit()
+        logger.info("hero_legend_refreshed", character_id=character_id, chapters=completed)
+    except Exception as e:
+        logger.warning("hero_legend_save_failed", error=str(e), character_id=character_id)
+    return digest
+
+
+def get_hero_chronicle(
+    conn: sqlite3.Connection,
+    character_id: int,
+    *,
+    limit: int = 2,
+    user_id: int | None = None,
+    regenerate: bool = False,
+) -> str:
+    """#1096 — Two-tier hero chronicle for cross-campaign continuity.
+
+    Tier 1 (LEGENDA): cached, flattened whole-life digest — keeps early
+    campaigns alive no matter how many a hero survives (bounded tokens).
+    Tier 2 (OSTATNIE ROZDZIAŁY): the last `limit` chapter summaries verbatim.
+
+    READ-ONLY by default (no LLM) — safe to call every narrator turn.
+    Plan-generation paths pass `regenerate=True` + `user_id` to lazily refresh
+    the digest first. Returns '' when the hero has no history.
+    """
+    if regenerate and user_id is not None:
+        try:
+            refresh_hero_legend(conn, character_id, user_id)
+        except Exception as e:
+            logger.warning("hero_chronicle_regen_failed", error=str(e), character_id=character_id)
+
+    digest = _read_legend_digest(conn, character_id)
+    recent = _fetch_recent_chapters(conn, character_id, limit)
+
+    if not digest and not recent:
+        return ""
+
+    parts: list[str] = []
+    if digest:
+        parts.append("=== LEGENDA BOHATERA (całe życie) ===\n" + digest)
+
+    if recent:
+        verbatim: list[str] = []
+        for i, r in enumerate(reversed(list(recent)), start=1):
+            outcome_pl = _OUTCOME_PL_FULL.get(str(r["outcome"] or ""), str(r["outcome"] or ""))
+            title = str(r["title"] or "Poprzednia kampania").strip()
+            summary = str(r["chapter_summary"] or "").strip()
+            verbatim.append(f"Rozdział {i} — {title} [{outcome_pl}]:\n{summary}")
+        parts.append("=== OSTATNIE ROZDZIAŁY (szczegóły) ===\n" + "\n\n".join(verbatim))
+
+    return "\n\n".join(parts) + "\n=== KONIEC KRONIKI ==="
 
 
 def close_campaign_with_summary(

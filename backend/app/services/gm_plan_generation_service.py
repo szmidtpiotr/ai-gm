@@ -671,10 +671,13 @@ def retry_initial_gm_plan_for_campaign(
     story_so_far = _build_story_so_far(conn, campaign_id)
 
     # #1096 — inject hero chronicle so regenerated plan knows the character's past.
+    # regenerate=True lazily refreshes the flattened whole-life legend digest.
     hero_chronicle = ""
     try:
         from app.services.chapter_summary_service import get_hero_chronicle
-        hero_chronicle = get_hero_chronicle(conn, int(char["id"]))
+        hero_chronicle = get_hero_chronicle(
+            conn, int(char["id"]), user_id=int(owner_user_id), regenerate=True
+        )
     except Exception:
         pass
 

@@ -2387,7 +2387,9 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     )
 
                     if has_v2_identity:
-                        _hero_chronicle = get_hero_chronicle(conn, character_id)
+                        _hero_chronicle = get_hero_chronicle(
+                            conn, character_id, user_id=user_id or 0, regenerate=True
+                        )
                         char_data = {
                             "name": name,
                             "archetype": archetype,
@@ -2408,7 +2410,9 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                         # #1018 — V2 plan (acts/key_beats/endings) even for simple
                         # characters without bonds/weaknesses, so every new player
                         # campaign is winnable by the #1009–#1017 machinery.
-                        _hero_chronicle = get_hero_chronicle(conn, character_id)
+                        _hero_chronicle = get_hero_chronicle(
+                            conn, character_id, user_id=user_id or 0, regenerate=True
+                        )
                         gm_plan_ready, _ = generate_initial_gm_plan_v2_with_retries(
                             conn,
                             campaign_id=campaign_id,
@@ -2746,7 +2750,9 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         identity_block = rebuilt_sheet.get("identity") or {}
         has_v2_identity = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
 
-        _hero_chronicle = get_hero_chronicle(conn, character_id)
+        _hero_chronicle = get_hero_chronicle(
+            conn, character_id, user_id=int(req.user_id), regenerate=True
+        )
         if has_v2_identity:
             char_data = {
                 "name": name,
