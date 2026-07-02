@@ -694,81 +694,90 @@ function filterTableGeneric(input, tableId, nameClass) {
     else if (tab === 'turns') {
       panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
       try {
-        const d = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=20`);
-        const items = d.items || [];
-        if (!items.length) { panel.innerHTML = '<p style="text-align:center;padding:24px;color:var(--t3)">Brak tur.</p>'; return; }
+        const ADMIN_PAGE = 20;
+        let _turnsItems = [];
+        let _turnsOffset = 0;
+        let _turnsTotal = 0;
+        let _turnsDebug = false;
 
-        const renderTurns = (debug) => {
-          let _cid = 0;
-          const _clamp = (text, lines=5) => {
-            if (!text) return '';
-            if (text.length <= 150) return _esc(text);
-            const id = 'tx953_' + (++_cid);
-            const maxH = (lines * 1.6) + 'em';
-            return `<div id="${id}" style="overflow:hidden;max-height:${maxH}">${_esc(text)}</div>` +
-              `<button onclick="var e=document.getElementById('${id}');if(e.style.maxHeight){e.style.maxHeight='';this.textContent='Zwiń';}else{e.style.maxHeight='${maxH}';this.textContent='Rozwiń';}" style="font-size:0.7rem;color:var(--amber);background:none;border:none;cursor:pointer;padding:2px 0 0;display:block">Rozwiń</button>`;
-          };
-          return `<div style="padding:0">
+        const _clamp = (text, lines=5) => {
+          if (!text) return '';
+          if (text.length <= 150) return _esc(text);
+          let _cid2 = Math.random().toString(36).slice(2,7);
+          const maxH = (lines * 1.6) + 'em';
+          return `<div id="tx${_cid2}" style="overflow:hidden;max-height:${maxH}">${_esc(text)}</div>` +
+            `<button onclick="var e=document.getElementById('tx${_cid2}');if(e.style.maxHeight){e.style.maxHeight='';this.textContent='Zwiń';}else{e.style.maxHeight='${maxH}';this.textContent='Rozwiń';}" style="font-size:0.7rem;color:var(--amber);background:none;border:none;cursor:pointer;padding:2px 0 0;display:block">Rozwiń</button>`;
+        };
+
+        const _renderTurnRow = (t) => {
+          let narrative = '', extraFields = {};
+          try {
+            const parsed = JSON.parse(t.assistant_text || '{}');
+            narrative = parsed.narrative || '';
+            for (const [k,v] of Object.entries(parsed)) {
+              if (k !== 'narrative' && v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length)) extraFields[k] = v;
+            }
+          } catch(e) { narrative = (t.assistant_text||'').replace(/\{[\s\S]*\}/,'').trim(); }
+          const rawTags = [...(t.assistant_text||'').matchAll(/\[([A-Z_]+:[^\]]*)\]/g)].map(m=>m[0]);
+          const routeBadgeColor = {narrative:'badge-slate',combat:'badge-red',skill_test:'badge-amber',skill_test_keyword:'badge-amber',structured:'badge-green'}[t.route]||'badge-slate';
+          if (_turnsDebug) {
+            return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
+                <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+              </div>
+              <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_clamp(t.user_text||'')}</div>
+              ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_clamp(narrative)}</div>` : ''}
+              ${rawTags.length ? `<div style="margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px">${rawTags.map(tag=>`<code style="font-size:0.7rem;background:#1a1a2e;color:#7eb8f7;padding:2px 6px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
+              ${Object.keys(extraFields).length ? `<details style="margin-top:4px"><summary style="font-size:0.72rem;color:var(--t3);cursor:pointer">JSON fields (${Object.keys(extraFields).length})</summary><pre style="font-size:0.7rem;color:var(--t2);background:#0d0d1a;border-radius:4px;padding:8px;overflow-x:auto;margin-top:4px;max-height:200px;overflow-y:auto">${_esc(JSON.stringify(extraFields,null,2))}</pre></details>` : ''}
+            </div>`;
+          } else {
+            return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
+                <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+              </div>
+              <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_clamp(t.user_text||'')}</div>
+              <div style="font-size:0.78rem;color:var(--t3)">${_clamp(narrative)}</div>
+              ${rawTags.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${rawTags.map(tag=>`<code style="font-size:0.68rem;background:var(--surface);color:var(--t3);padding:1px 5px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
+            </div>`;
+          }
+        };
+
+        const _reRender = () => {
+          const hasMore = _turnsOffset < _turnsTotal - ADMIN_PAGE;
+          const countLabel = `Pokazuję ${_turnsItems.length} z ${_turnsTotal} tur`;
+          panel.innerHTML = `<div style="padding:0">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
-              <span style="font-size:0.75rem;color:var(--t3)">Ostatnie ${items.length} tur</span>
+              <span id="admin-turns-counter" style="font-size:0.75rem;color:var(--t3)">${countLabel}</span>
               <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--t2);cursor:pointer">
-                <input type="checkbox" id="turns-debug-toggle" ${debug?'checked':''} style="cursor:pointer"> 🔍 Raw debug
+                <input type="checkbox" id="turns-debug-toggle" ${_turnsDebug?'checked':''} style="cursor:pointer"> 🔍 Raw debug
               </label>
             </div>
-            ${items.map(t => {
-              let narrative = '', parsed = null, tags = [], extraFields = {};
-              try {
-                parsed = JSON.parse(t.assistant_text || '{}');
-                narrative = parsed.narrative || '';
-                delete parsed.narrative;
-                // Collect interesting non-null fields
-                for (const [k,v] of Object.entries(parsed)) {
-                  if (v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length)) {
-                    extraFields[k] = v;
-                  }
-                }
-              } catch(e) {
-                narrative = (t.assistant_text||'').replace(/\{[\s\S]*\}/,'').trim();
-              }
-              // Extract tags from raw text
-              const rawTags = [...(t.assistant_text||'').matchAll(/\[([A-Z_]+:[^\]]*)\]/g)].map(m=>m[0]);
-              const routeBadgeColor = {narrative:'badge-slate',combat:'badge-red',skill_test:'badge-amber',skill_test_keyword:'badge-amber',structured:'badge-green'}[t.route]||'badge-slate';
-
-              if (debug) {
-                return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
-                    <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
-                  </div>
-                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_clamp(t.user_text||'')}</div>
-                  ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_clamp(narrative)}</div>` : ''}
-                  ${rawTags.length ? `<div style="margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px">${rawTags.map(tag=>`<code style="font-size:0.7rem;background:#1a1a2e;color:#7eb8f7;padding:2px 6px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
-                  ${Object.keys(extraFields).length ? `<details style="margin-top:4px"><summary style="font-size:0.72rem;color:var(--t3);cursor:pointer">JSON fields (${Object.keys(extraFields).length})</summary><pre style="font-size:0.7rem;color:var(--t2);background:#0d0d1a;border-radius:4px;padding:8px;overflow-x:auto;margin-top:4px;max-height:200px;overflow-y:auto">${_esc(JSON.stringify(extraFields,null,2))}</pre></details>` : ''}
-                </div>`;
-              } else {
-                return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
-                    <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
-                  </div>
-                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_clamp(t.user_text||'')}</div>
-                  <div style="font-size:0.78rem;color:var(--t3)">${_clamp(narrative)}</div>
-                  ${rawTags.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${rawTags.map(tag=>`<code style="font-size:0.68rem;background:var(--surface);color:var(--t3);padding:1px 5px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
-                </div>`;
-              }
-            }).join('')}
+            ${hasMore ? `<div style="text-align:center;padding:8px 16px;border-bottom:1px solid var(--border)"><button id="admin-turns-older" style="font-size:0.75rem;color:var(--amber);background:none;border:1px solid rgba(245,158,11,.3);border-radius:4px;padding:4px 12px;cursor:pointer">Pokaż starsze</button></div>` : ''}
+            ${_turnsItems.map(_renderTurnRow).join('')}
           </div>`;
-        };
-
-        let _turnsDebug = false;
-        const reRender = () => {
-          panel.innerHTML = renderTurns(_turnsDebug);
           panel.querySelector('#turns-debug-toggle').addEventListener('change', e => {
-            _turnsDebug = e.target.checked;
-            reRender();
+            _turnsDebug = e.target.checked; _reRender();
+          });
+          const olderBtn = panel.querySelector('#admin-turns-older');
+          if (olderBtn) olderBtn.addEventListener('click', async () => {
+            olderBtn.disabled = true; olderBtn.textContent = 'Ładowanie…';
+            try {
+              const nextOffset = _turnsOffset + ADMIN_PAGE;
+              const more = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=${nextOffset}`);
+              _turnsItems = [..._turnsItems, ...(more.items || [])];
+              _turnsOffset = nextOffset;
+              _reRender();
+            } catch(e2) { olderBtn.disabled = false; olderBtn.textContent = 'Błąd'; }
           });
         };
-        reRender();
+
+        const d = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`);
+        _turnsItems = d.items || [];
+        _turnsTotal = d.total_count || _turnsItems.length;
+        if (!_turnsItems.length) { panel.innerHTML = '<p style="text-align:center;padding:24px;color:var(--t3)">Brak tur.</p>'; return; }
+        _reRender();
       } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
     }
 

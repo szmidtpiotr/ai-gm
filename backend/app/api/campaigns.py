@@ -560,12 +560,14 @@ def get_campaign_turns_player(
     campaign_id: int,
     user_id: int | None = Query(None),
     limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     authorization: str | None = Header(default=None),
 ):
-    """#900: Read-only turn history for archived campaign viewer (player-facing).
+    """#900/#1065: Read-only turn history for archived campaign viewer (player-facing).
 
     Works for campaigns with any status — owner check via user_id/JWT.
     Returns turns oldest-first for chronological reading.
+    Supports offset pagination; response includes total_count.
     """
     effective_uid = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
@@ -580,18 +582,23 @@ def get_campaign_turns_player(
         if effective_uid and int(camp["owner_user_id"]) != int(effective_uid):
             raise HTTPException(status_code=403, detail="Not your campaign")
 
+        total_count = conn.execute(
+            "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()[0]
         rows = conn.execute(
             """SELECT turn_number, user_text, assistant_text, created_at
                FROM campaign_turns
                WHERE campaign_id = ?
                ORDER BY turn_number ASC, id ASC
-               LIMIT ?""",
-            (campaign_id, limit),
+               LIMIT ? OFFSET ?""",
+            (campaign_id, limit, offset),
         ).fetchall()
         return {
             "campaign_id": campaign_id,
             "title": camp["title"],
             "status": camp["status"],
+            "total_count": total_count,
             "turns": [dict(r) for r in rows],
         }
     finally:

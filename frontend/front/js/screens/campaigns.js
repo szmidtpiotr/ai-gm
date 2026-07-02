@@ -479,37 +479,111 @@ async function _openArchivedCampaignViewer(campaign) {
     document.body.appendChild(overlay);
 
     const body = overlay.querySelector('#acv-body');
+
+    const PAGE_SIZE = 50;
+    let loadedOffset = 0;
+    let totalCount = 0;
+
+    function _renderTurnEntry(t) {
+        const entry = document.createElement('div');
+        entry.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+        if (t.user_text) {
+            entry.innerHTML += `<div style="align-self:flex-end;max-width:82%;background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:12px 12px 4px 12px;padding:10px 12px;font-size:.85rem;color:#ddd;white-space:pre-wrap;word-break:break-word">${escapeHtml(t.user_text)}</div>`;
+        }
+        if (t.assistant_text) {
+            let narr = t.assistant_text;
+            try {
+                const parsed = JSON.parse(t.assistant_text);
+                narr = parsed.narrative || parsed.text || t.assistant_text;
+            } catch (_) {}
+            const cleaned = narr.replace(/【[^】]*】/g, '').trim();
+            entry.innerHTML += `<div style="align-self:flex-start;max-width:88%;background:#14141c;border:1px solid rgba(245,158,11,.15);border-radius:12px 12px 12px 4px;padding:10px 12px;font-size:.85rem;color:#e8d5b0;line-height:1.5;white-space:pre-wrap;word-break:break-word">${escapeHtml(cleaned)}</div>`;
+        }
+        const turnLabel = document.createElement('div');
+        turnLabel.style.cssText = 'font-size:.65rem;color:#555;text-align:center;margin-top:-4px';
+        turnLabel.textContent = `— tura ${t.turn_number} —`;
+        entry.appendChild(turnLabel);
+        return entry;
+    }
+
+    function _updateCounter() {
+        const el = overlay.querySelector('#acv-counter');
+        if (el) el.textContent = `Pokazuję ${Math.min(loadedOffset + PAGE_SIZE, totalCount)} z ${totalCount} tur`;
+    }
+
+    async function _loadPage(offset) {
+        const data = await apiRequest('GET', `/campaigns/${campaign.id}/turns-history?limit=${PAGE_SIZE}&offset=${offset}`);
+        return data;
+    }
+
     try {
-        const data = await apiRequest('GET', `/campaigns/${campaign.id}/turns-history?limit=200`);
-        const turns = data.turns || [];
-        if (!turns.length) {
+        // Load first page (most recent = highest offset so user sees oldest-first within page)
+        // Strategy: load from offset=0 → first PAGE_SIZE turns (oldest). Show "Wczytaj starsze" prepends older turns.
+        // Actually issue wants: start showing LAST turns, load OLDER ones. So we load from the end.
+        // First call: get total, load last page.
+        const firstData = await _loadPage(0);
+        totalCount = firstData.total_count || 0;
+        const allTurns = firstData.turns || [];
+
+        if (!allTurns.length) {
             body.innerHTML = '<div style="color:#888;text-align:center;padding:24px;font-size:.85rem">Brak zapisanych tur w tej kampanii.</div>';
             return;
         }
+
+        // Load most-recent page so user sees current state of story
+        const startOffset = Math.max(0, totalCount - PAGE_SIZE);
+        const recentData = startOffset > 0 ? await _loadPage(startOffset) : firstData;
+        loadedOffset = startOffset;
+
         body.innerHTML = '';
-        turns.forEach(t => {
-            const entry = document.createElement('div');
-            entry.style.cssText = 'display:flex;flex-direction:column;gap:10px';
-            if (t.user_text) {
-                entry.innerHTML += `<div style="align-self:flex-end;max-width:82%;background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:12px 12px 4px 12px;padding:10px 12px;font-size:.85rem;color:#ddd;white-space:pre-wrap;word-break:break-word">${escapeHtml(t.user_text)}</div>`;
+
+        // Counter bar at top
+        const counterBar = document.createElement('div');
+        counterBar.id = 'acv-counter';
+        counterBar.style.cssText = 'font-size:.72rem;color:#666;text-align:center;padding:6px 0 2px;flex-shrink:0';
+        body.appendChild(counterBar);
+
+        // "Load older" button (prepend older turns above current)
+        const loadOlderBtn = document.createElement('button');
+        loadOlderBtn.id = 'acv-load-older';
+        loadOlderBtn.style.cssText = 'display:block;width:100%;padding:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;color:#f5deb3;font-size:.78rem;cursor:pointer;margin-bottom:8px';
+        loadOlderBtn.textContent = 'Wczytaj starsze';
+        if (startOffset <= 0) loadOlderBtn.style.display = 'none';
+        body.appendChild(loadOlderBtn);
+
+        // Turn container
+        const turnContainer = document.createElement('div');
+        turnContainer.id = 'acv-turns';
+        turnContainer.style.cssText = 'display:flex;flex-direction:column;gap:16px';
+        body.appendChild(turnContainer);
+
+        recentData.turns.forEach(t => turnContainer.appendChild(_renderTurnEntry(t)));
+        _updateCounter();
+
+        loadOlderBtn.addEventListener('click', async () => {
+            if (loadedOffset <= 0) return;
+            loadOlderBtn.disabled = true;
+            loadOlderBtn.textContent = 'Ładowanie…';
+            try {
+                const prevOffset = Math.max(0, loadedOffset - PAGE_SIZE);
+                const olderData = await _loadPage(prevOffset);
+                const scrollBottom = body.scrollHeight - body.scrollTop;
+                olderData.turns.forEach(t => {
+                    turnContainer.insertBefore(_renderTurnEntry(t), turnContainer.firstChild);
+                });
+                // Restore scroll position
+                body.scrollTop = body.scrollHeight - scrollBottom;
+                loadedOffset = prevOffset;
+                if (loadedOffset <= 0) loadOlderBtn.style.display = 'none';
+                else { loadOlderBtn.disabled = false; loadOlderBtn.textContent = 'Wczytaj starsze'; }
+                _updateCounter();
+            } catch (e) {
+                loadOlderBtn.disabled = false;
+                loadOlderBtn.textContent = 'Błąd — spróbuj ponownie';
             }
-            if (t.assistant_text) {
-                let narr = t.assistant_text;
-                try {
-                    const parsed = JSON.parse(t.assistant_text);
-                    narr = parsed.narrative || parsed.text || t.assistant_text;
-                } catch (_) {}
-                const cleaned = narr.replace(/【[^】]*】/g, '').trim();
-                entry.innerHTML += `<div style="align-self:flex-start;max-width:88%;background:#14141c;border:1px solid rgba(245,158,11,.15);border-radius:12px 12px 12px 4px;padding:10px 12px;font-size:.85rem;color:#e8d5b0;line-height:1.5;white-space:pre-wrap;word-break:break-word">${escapeHtml(cleaned)}</div>`;
-            }
-            const turnLabel = document.createElement('div');
-            turnLabel.style.cssText = 'font-size:.65rem;color:#555;text-align:center;margin-top:-4px';
-            turnLabel.textContent = `— tura ${t.turn_number} —`;
-            entry.appendChild(turnLabel);
-            body.appendChild(entry);
         });
-        // Scroll to top (oldest turn first)
-        body.scrollTop = 0;
+
+        body.scrollTop = body.scrollHeight;
     } catch (err) {
         body.innerHTML = `<div style="color:#c55;text-align:center;padding:24px;font-size:.85rem">Błąd ładowania historii: ${escapeHtml(err.message || '?')}</div>`;
     }

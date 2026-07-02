@@ -2452,21 +2452,26 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
 def admin_get_campaign_turns(
     campaign_id: int,
     limit: int = Query(default=15, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     _: None = Depends(require_admin_token),
 ):
-    """Last N turns for a campaign (newest first → reversed for display)."""
+    """Last N turns for a campaign (newest first → reversed for display). #1065: offset + total_count."""
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        total_count = conn.execute(
+            "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()[0]
         rows = conn.execute(
             """SELECT id, turn_number, user_text, assistant_text, route, created_at
                FROM campaign_turns
                WHERE campaign_id = ?
-               ORDER BY id DESC LIMIT ?""",
-            (campaign_id, limit),
+               ORDER BY id DESC LIMIT ? OFFSET ?""",
+            (campaign_id, limit, offset),
         ).fetchall()
         turns = [dict(r) for r in reversed(rows)]
-        return {"items": turns}
+        return {"items": turns, "total_count": total_count}
     finally:
         conn.close()
 
