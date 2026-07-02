@@ -973,7 +973,7 @@ const _ROW_REGISTRY = {
           </td>
           <td>
             <input type="number" class="field-input" style="width:64px;padding:3px 6px;font-size:0.8rem"
-              value="${r.travel_hours}" min="1" max="48" step="0.5"
+              value="${r.travel_hours}" min="0.5" max="48" step="0.5"
               onchange="terrainPatch('${_esc(r.hex_type)}','travel_hours',this.value,this)"
               onkeydown="if(event.key==='Enter')this.blur()" />
           </td>

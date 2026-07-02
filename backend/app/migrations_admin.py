@@ -4260,6 +4260,28 @@ def _ensure_campaign_plan_degraded(conn: sqlite3.Connection) -> None:
         pass  # already exists
 
 
+def _seed_pt8_terrain_costs(conn: sqlite3.Connection) -> None:
+    """PT8 #1118 — seed travel_hours defaults when still at 1.0 (never customised).
+
+    Numbers Policy (starting values, editable per terrain in admin → Mapa → Konfiguracja terenu):
+      road 0.5 / plains 1.0 / forest 2.0 / hills 2.0 / mountains 3.0 / swamp 4.0
+    Idempotent: only updates rows still at the default 1.0 value so admin edits survive.
+    """
+    updates = [
+        ("road",      0.5, 1.0),
+        ("forest",    2.0, 1.0),
+        ("hills",     2.0, 1.0),
+        ("mountains", 3.0, 1.0),
+        ("swamp",     4.0, 1.0),
+    ]
+    for hex_type, new_val, guard in updates:
+        conn.execute(
+            "UPDATE hex_type_config SET travel_hours = ? WHERE hex_type = ? AND travel_hours = ?",
+            (new_val, hex_type, guard),
+        )
+    conn.commit()
+
+
 def _ensure_campaign_finale_available(conn: sqlite3.Connection) -> None:
     """#1097: sticky flag — victory condition (#1009) reached but player hasn't
     triggered POST /finish yet. Campaign stays 'active' in this grace window."""
@@ -5935,6 +5957,7 @@ def run_admin_migrations() -> None:
         _ensure_template_item_columns(conn)  # #1084
         _ensure_enemy_forge_columns(conn)  # #1085
         _ensure_campaign_finale_available(conn)  # #1097
+        _seed_pt8_terrain_costs(conn)  # #1118 PT8
     finally:
         conn.close()
 

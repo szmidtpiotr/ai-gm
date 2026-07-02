@@ -56,9 +56,21 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
     """
     Load world_hexes and hex_teleport_connections into an adjacency-aware dict.
     Only hexes in 'live' regions are included — coming/locked regions are impassable.
+    PT8 #1118: hex types with is_passable=0 (water, sea) are excluded from the graph.
     Returns: {(q, r): {hex_data + 'teleport_edges': [...]}}
     """
     live_regions = _load_live_regions(conn)
+
+    # PT8: load passable hex types; None = fallback (pre-PT8 schema — allow all)
+    passable_types: set[str] | None = None
+    try:
+        pt_rows = conn.execute(
+            "SELECT hex_type FROM hex_type_config WHERE is_passable = 1 AND is_active = 1"
+        ).fetchall()
+        passable_types = {r["hex_type"] for r in pt_rows}
+    except Exception:
+        pass
+
     hexes: dict[tuple[int, int], dict] = {}
     rows = conn.execute(
         "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key, region "
@@ -73,7 +85,8 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
             h["encounter_pool"] = []
         h["teleport_edges"] = []
         region = h.get("region") or "kresy"
-        if region in live_regions:
+        hex_type = h.get("hex_type", "plains")
+        if region in live_regions and (passable_types is None or hex_type in passable_types):
             hexes[(q, r)] = h
 
     # Load teleport connections and attach to both endpoints
@@ -103,11 +116,16 @@ def find_path(
     start: tuple[int, int],
     goal: tuple[int, int],
     hexes: dict[tuple[int, int], dict],
+    hex_type_cfg: dict[str, dict] | None = None,
 ) -> list[tuple[int, int]] | None:
     """
     A* from start to goal on hex grid + teleport connections.
+    PT8 #1118: step cost = travel_hours from hex_type_cfg (fallback 1.0 when cfg absent).
+    Heuristic = hex_distance × 0.5 (admissible: min terrain cost = road 0.5h/hex).
     Returns ordered list of (q, r) including start and goal, or None if unreachable.
     """
+    _MIN_TERRAIN_COST = 0.5  # road — keeps heuristic admissible
+
     if start == goal:
         return [start]
 
@@ -136,11 +154,15 @@ def find_path(
             neighbor = (nq, nr)
             if neighbor not in hexes:
                 continue
-            tentative_g = g_score[current] + 1.0  # 1 hex = 1 movement unit
+            # PT8: terrain cost from hex_type_cfg; fallback 1.0 when cfg absent
+            nb_type = hexes[neighbor].get("hex_type", "plains")
+            step_cost = float((hex_type_cfg or {}).get(nb_type, {}).get("travel_hours", 1.0)) or 1.0
+            tentative_g = g_score[current] + step_cost
             if tentative_g < g_score.get(neighbor, float("inf")):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
-                f = tentative_g + hex_distance(nq, nr, *goal)
+                # PT8: admissible heuristic = dist × min_terrain_cost (road 0.5h/hex)
+                f = tentative_g + hex_distance(nq, nr, *goal) * _MIN_TERRAIN_COST
                 heapq.heappush(open_set, (f, neighbor))
 
         # Teleport edges from current hex
@@ -154,7 +176,7 @@ def find_path(
             if tentative_g < g_score.get(dest, float("inf")):
                 came_from[dest] = current
                 g_score[dest] = tentative_g
-                f = tentative_g + hex_distance(*dest, *goal)
+                f = tentative_g + hex_distance(*dest, *goal) * _MIN_TERRAIN_COST
                 heapq.heappush(open_set, (f, dest))
 
     return None  # No path found
@@ -395,7 +417,7 @@ def resolve_chain_travel(
             "hex_data": dest_data, "teleport_used": None, "item_blocked": None,
         }
 
-    path = find_path(from_hex, to_hex, hexes)
+    path = find_path(from_hex, to_hex, hexes, hex_type_cfg)
     if path is None:
         return {
             "ok": False,
