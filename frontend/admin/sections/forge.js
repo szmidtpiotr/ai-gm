@@ -1402,7 +1402,7 @@ async function _loadForgeTemplates() {
           (t.status === 'review' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgePublishTemplate(' + t.id + ')">Opublikuj</button>' : '') +
           (t.status !== 'draft' ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">↩ Szkic</button>' : '') +
           '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
-          '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeAllocateHex(' + t.id + ')">🗺 Przydziel teren</button>' +
+          '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeOpenHexPicker(' + t.id + ')">🗺 Przydziel teren</button>' +
           (t.status === 'published' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeLaunchCampaignFromTemplate(' + t.id + ')" style="background:var(--green);border-color:var(--green)">🚀 Uruchom kampanię</button>' : '') +
           '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
         '</div>' +
@@ -1476,13 +1476,121 @@ async function forgePublishTemplate(id) {
   }
 }
 
-async function forgeAllocateHex(id) {
+// #1108 — Auto-allocate: server picks best free town/plains hex (preference dominates).
+async function forgeAutoAllocateHex(id) {
   try {
     const r = await apiFetch(`/api/admin/forge/templates/${id}/allocate-hex`, { method: 'POST' });
     const h = r.start_hex || {};
-    _showToast(`Przydzielono teren: ${h.label || ''}(${h.q}, ${h.r})`, 'success');
+    if (r.warning) _showToast(r.warning, 'warn', 6000);
+    else _showToast(`Przydzielono teren: ${h.label || ''} (${h.q}, ${h.r}) — ${h.hex_type}`, 'success');
     await _loadForgeTemplates();
   } catch(e) { _showToast(e.message || 'Błąd przydziału terenu.', 'error'); }
+}
+
+// #1108 — Map picker modal: click a free hex on the world map to set the template start.
+const _FORGE_HEX_COLORS = {
+  free_good:     { fill: '#1f6b3a', stroke: '#34d17a' },   // 🟢 town/plains/forest
+  free_atypical: { fill: '#7a5a12', stroke: '#e0a92b' },   // 🟡 snow/swamp/ruins (warning)
+  occupied:      { fill: '#5a1f1f', stroke: '#b04040' },   // 🔴 POI/location/other start
+};
+
+async function forgeOpenHexPicker(id) {
+  const tpl = (_forgeTemplatesCache || []).find(t => t.id === id) || {};
+  let data;
+  try {
+    data = await apiFetch(`/api/admin/forge/templates/${id}/hex-availability`);
+  } catch(e) { _showToast(e.message || 'Nie można wczytać mapy.', 'error'); return; }
+  const hexes = data.hexes || [];
+  if (!hexes.length) { _showToast('Brak hexów mapy świata — wygeneruj świat.', 'warn'); return; }
+
+  const SZ = 26;
+  const h2p = (q, r) => ({ x: SZ * 1.5 * q, y: SZ * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r) });
+  const hexPts = (s) => Array.from({ length: 6 }, (_, i) => {
+    const a = Math.PI / 3 * i;
+    return `${(s * Math.cos(a)).toFixed(1)},${(s * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+
+  const px = hexes.map(h => h2p(h.q, h.r));
+  const minX = Math.min(...px.map(p => p.x)) - SZ * 2;
+  const minY = Math.min(...px.map(p => p.y)) - SZ * 2;
+  const maxX = Math.max(...px.map(p => p.x)) + SZ * 2;
+  const maxY = Math.max(...px.map(p => p.y)) + SZ * 2;
+  const vw = (maxX - minX).toFixed(1), vh = (maxY - minY).toFixed(1);
+
+  const svgInner = hexes.map(h => {
+    const { x, y } = h2p(h.q, h.r);
+    const tx = (x - minX).toFixed(1), ty = (y - minY).toFixed(1);
+    const c = _FORGE_HEX_COLORS[h.status] || _FORGE_HEX_COLORS.occupied;
+    const clickable = h.status !== 'occupied';
+    const title = `(${h.q}, ${h.r}) · ${h.hex_type}${h.label ? ' · ' + h.label : ''}${h.status === 'occupied' ? ' · ZAJĘTY' : (h.status === 'free_atypical' ? ' · nietypowy' : '')}`;
+    // markers
+    let marker = '';
+    if (h.is_current) marker = `<circle cx="0" cy="0" r="6" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>`;
+    else if (h.is_template_start) marker = `<circle cx="0" cy="0" r="5" fill="#a855f7" stroke="#fff" stroke-width="1"/>`;
+    return `<g class="fhx" data-q="${h.q}" data-r="${h.r}" data-status="${h.status}" data-atypical="${h.status === 'free_atypical' ? 1 : 0}" transform="translate(${tx},${ty})" style="cursor:${clickable ? 'pointer' : 'not-allowed'}">
+      <title>${_esc(title)}</title>
+      <polygon points="${hexPts(SZ - 1.5)}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${h.is_current ? 2.2 : 0.9}"/>
+      <text x="0" y="3" text-anchor="middle" font-size="6" fill="#cbd5e1" style="pointer-events:none">${h.q},${h.r}</text>
+      ${marker}
+    </g>`;
+  }).join('');
+
+  const legend = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.72rem;color:var(--t2);margin-bottom:8px">
+      <span>🟢 wolny (town/plains/forest)</span>
+      <span>🟡 wolny nietypowy (ostrzeżenie)</span>
+      <span>🔴 zajęty (POI/lokacja/inny start)</span>
+      <span>🔵 obecny start</span>
+      <span>🟣 start innego szablonu</span>
+    </div>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:760px;width:94vw">
+      <div class="modal-head">
+        <span class="modal-title">🗺 Wybór hexa startowego — ${_esc(tpl.title || '')}</span>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:14px">
+        ${legend}
+        <div style="border:1px solid var(--border);border-radius:6px;background:#0d1117;overflow:auto;max-height:60vh">
+          <svg id="forge-hex-svg" viewBox="0 0 ${vw} ${vh}" style="width:100%;height:auto;min-height:340px;display:block"></svg>
+        </div>
+        <div id="forge-hex-hint" style="font-size:0.75rem;color:var(--t3);margin-top:8px">Kliknij wolny (zielony/żółty) hex, aby ustawić start szablonu.</div>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" id="forge-hex-auto">⚙ Auto-przydziel</button>
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Zamknij</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  // inject SVG content (avoid HTML-parser namespace issues by setting innerHTML on the svg node)
+  overlay.querySelector('#forge-hex-svg').innerHTML = svgInner;
+
+  overlay.querySelector('#forge-hex-auto').addEventListener('click', async () => {
+    overlay.remove();
+    await forgeAutoAllocateHex(id);
+  });
+
+  overlay.querySelector('#forge-hex-svg').addEventListener('click', async (e) => {
+    const g = e.target.closest('.fhx');
+    if (!g) return;
+    if (g.dataset.status === 'occupied') { _showToast('Ten hex jest zajęty — wybierz inny.', 'warn'); return; }
+    const q = parseInt(g.dataset.q, 10), r = parseInt(g.dataset.r, 10);
+    if (g.dataset.atypical === '1' &&
+        !confirm(`Hex (${q}, ${r}) to nietypowy teren (śnieg/bagno/ruiny). Ustawić mimo to jako start?`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/forge/templates/${id}/set-start-hex`, {
+        method: 'POST', body: JSON.stringify({ q, r }),
+      });
+      const h = res.start_hex || {};
+      _showToast(`Start ustawiony: (${h.q}, ${h.r}) — ${h.hex_type}${res.atypical ? ' ⚠ nietypowy' : ''}`, 'success');
+      overlay.remove();
+      await _loadForgeTemplates();
+    } catch(err) { _showToast(err.message || 'Nie udało się ustawić hexa.', 'error'); }
+  });
 }
 
 async function forgeLaunchCampaignFromTemplate(templateId) {
@@ -3619,7 +3727,8 @@ export async function init(panel) {
   window.forgeSetTemplateStatus = forgeSetTemplateStatus;
   window.forgePublishTemplate = forgePublishTemplate;
   window.forgeUnpublishTemplate = forgeUnpublishTemplate;
-  window.forgeAllocateHex = forgeAllocateHex;
+  window.forgeAutoAllocateHex = forgeAutoAllocateHex;
+window.forgeOpenHexPicker = forgeOpenHexPicker;
   window.forgeLaunchCampaignFromTemplate = forgeLaunchCampaignFromTemplate;
   window.forgeGenerateTplDescription = forgeGenerateTplDescription;
   window._toggleTemplatePublish = _toggleTemplatePublish;

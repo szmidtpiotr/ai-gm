@@ -2435,27 +2435,126 @@ def _allocate_hex_for_template(conn: "sqlite3.Connection", template_id: int) -> 
         ).fetchall()
     ]
 
+    # #1108 — Two-tier allocation so terrain PREFERENCE always dominates centre
+    # attraction. Previously `min_dist*10 + pref - center_dist*2` let a snow hex
+    # near the centre beat a town hex farther out (Żar → tundra bug). Now we first
+    # restrict to preferred terrain {town, plains}; only if none are free do we fall
+    # back to any other free hex and flag it (is_fallback) for a publish-time warning.
+    _PREFERRED_TYPES = {"town", "plains"}
     _PREF = {"town": 3, "plains": 2, "castle": 1}
-    best = None
-    best_score = -1
+
+    def _pick(pool):
+        """Tie-break within a homogeneous-preference pool: keep far from other
+        templates' starts (min_dist), gently favour terrain, mild centre pull."""
+        chosen = None
+        chosen_score = -1e9
+        for h in pool:
+            hq, hr = h["q"], h["r"]
+            pref = _PREF.get(h["hex_type"], 0)
+            min_dist = min((_hex_distance(hq, hr, tq, tr) for tq, tr in taken), default=999)
+            center_dist = _hex_distance(0, 0, hq, hr)
+            score = min_dist * 10 + pref - center_dist * 2
+            if score > chosen_score:
+                chosen_score = score
+                chosen = h
+        return chosen
+
+    free = []
     for h in world_hexes:
         hq, hr = h["q"], h["r"]
-        # Hard exclusions: named POI or existing location
+        # Hard exclusions: named POI or existing location or another template's start
         if h["label"].strip():
             continue
         if (hq, hr) in occupied_by_location:
             continue
         if (hq, hr) in taken:
             continue
-        pref = _PREF.get(h["hex_type"], 0)
-        min_dist = min((_hex_distance(hq, hr, tq, tr) for tq, tr in taken), default=999)
-        center_dist = _hex_distance(0, 0, hq, hr)
-        score = min_dist * 10 + pref - center_dist * 2
-        if score > best_score:
-            best_score = score
-            best = h
+        free.append(h)
 
+    if not free:
+        return None
+
+    preferred = [h for h in free if h["hex_type"] in _PREFERRED_TYPES]
+    if preferred:
+        return _pick(preferred)
+
+    # No town/plains free → fall back to any free hex, flagged for a warning.
+    best = _pick(free)
+    if best is not None:
+        best = {**best, "is_fallback": True}
     return best
+
+
+def _hex_availability(conn: "sqlite3.Connection", template_id: int) -> "list[dict]":
+    """#1108 — classify every overworld hex for the Kuźnia map picker modal.
+
+    Returns one dict per active map_level=0 hex with:
+      q, r, hex_type, label
+      status         : 'free_good' | 'free_atypical' | 'occupied'
+      is_current     : True if it is THIS template's current start_hex
+      is_template_start : True if it is ANOTHER template's start_hex
+    A hex is 'occupied' when it has a named POI label, an active game_location, or
+    is another template's start. 'free_good' = town/plains/forest; other free
+    terrain (snow/swamp/ruins/…) = 'free_atypical' (clickable with a warning).
+    """
+    _GOOD_TYPES = {"town", "plains", "forest"}
+
+    current = conn.execute(
+        "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?",
+        (template_id,),
+    ).fetchone()
+    current_qr = None
+    if current and current["start_hex_q"] is not None:
+        current_qr = (int(current["start_hex_q"]), int(current["start_hex_r"]))
+
+    other_starts = {
+        (int(r["start_hex_q"]), int(r["start_hex_r"]))
+        for r in conn.execute(
+            "SELECT start_hex_q, start_hex_r FROM campaign_templates "
+            "WHERE start_hex_q IS NOT NULL AND id != ?",
+            (template_id,),
+        ).fetchall()
+    }
+
+    try:
+        occupied_by_location = {
+            (int(r["world_hex_q"]), int(r["world_hex_r"]))
+            for r in conn.execute(
+                "SELECT world_hex_q, world_hex_r FROM game_locations "
+                "WHERE world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL AND is_active = 1"
+            ).fetchall()
+        }
+    except Exception:
+        occupied_by_location = set()
+
+    out = []
+    for r in conn.execute(
+        "SELECT q, r, hex_type, label FROM world_hexes WHERE map_level = 0 AND is_active = 1"
+    ).fetchall():
+        q, rr = int(r["q"]), int(r["r"])
+        label = (r["label"] or "").strip()
+        htype = r["hex_type"] or ""
+        qr = (q, rr)
+        is_current = qr == current_qr
+        is_other_start = qr in other_starts
+
+        if is_current:
+            # own current start stays clickable (re-confirm) → not 'occupied'
+            status = "free_good" if htype in _GOOD_TYPES else "free_atypical"
+        elif label or qr in occupied_by_location or is_other_start:
+            status = "occupied"
+        elif htype in _GOOD_TYPES:
+            status = "free_good"
+        else:
+            status = "free_atypical"
+
+        out.append({
+            "q": q, "r": rr, "hex_type": htype, "label": label,
+            "status": status,
+            "is_current": is_current,
+            "is_template_start": is_other_start,
+        })
+    return out
 
 
 @router.post("/templates/{template_id}/allocate-hex")
@@ -2501,11 +2600,79 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
             if nb:
                 cluster.append(nb)
 
-        return {
+        resp = {
             "ok": True,
             "template_id": template_id,
             "start_hex": {"q": best["q"], "r": best["r"], "label": best["label"], "hex_type": best["hex_type"]},
             "cluster": cluster,
+        }
+        if best.get("is_fallback"):
+            resp["warning"] = (
+                f"Brak wolnych hexów town/plains — przydzielono nietypowy teren "
+                f"'{best['hex_type']}'. Rozważ ręczny wybór hexa na mapie."
+            )
+        return resp
+    finally:
+        conn.close()
+
+
+@router.get("/templates/{template_id}/hex-availability")
+def forge_hex_availability(template_id: int, _: None = Depends(_require_admin)):
+    """#1108 — hex map picker data: every overworld hex classified
+    free_good / free_atypical / occupied, plus current + other-template start markers."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        hexes = _hex_availability(conn, template_id)
+        return {"ok": True, "template_id": template_id, "hexes": hexes}
+    finally:
+        conn.close()
+
+
+class SetStartHexReq(BaseModel):
+    q: int
+    r: int
+
+
+@router.post("/templates/{template_id}/set-start-hex")
+def forge_set_start_hex(template_id: int, req: SetStartHexReq, _: None = Depends(_require_admin)):
+    """#1108 — manually set a template's start hex from the map picker modal.
+
+    Rejects hexes that are occupied (named POI / active game_location / another
+    template's start). Atypical-but-free terrain (snow/swamp/…) is allowed; the
+    frontend surfaces a warning before calling this. world_hexes is read-only."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        avail = {(h["q"], h["r"]): h for h in _hex_availability(conn, template_id)}
+        hx = avail.get((req.q, req.r))
+        if hx is None:
+            raise HTTPException(status_code=422, detail="Hex nie istnieje na mapie świata")
+        if hx["status"] == "occupied":
+            raise HTTPException(
+                status_code=409,
+                detail="Hex zajęty (POI / lokacja / start innego szablonu) — wybierz wolny hex.",
+            )
+
+        conn.execute(
+            "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
+            (req.q, req.r, template_id),
+        )
+        conn.commit()
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "start_hex": {"q": req.q, "r": req.r, "hex_type": hx["hex_type"], "label": hx["label"]},
+            "atypical": hx["status"] == "free_atypical",
         }
     finally:
         conn.close()
