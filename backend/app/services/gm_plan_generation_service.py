@@ -670,6 +670,14 @@ def retry_initial_gm_plan_for_campaign(
     # continues the narrative instead of restarting from the opening scene.
     story_so_far = _build_story_so_far(conn, campaign_id)
 
+    # #1096 — inject hero chronicle so regenerated plan knows the character's past.
+    hero_chronicle = ""
+    try:
+        from app.services.chapter_summary_service import get_hero_chronicle
+        hero_chronicle = get_hero_chronicle(conn, int(char["id"]))
+    except Exception:
+        pass
+
     # #1018 — admin "Regeneruj plan" (#966) now produces a V2 plan
     # (acts/key_beats/endings) so regenerated campaigns are winnable, matching the
     # player tor. Pass through any V2 identity present on the sheet.
@@ -687,6 +695,7 @@ def retry_initial_gm_plan_for_campaign(
         gm_only=sheet.get("gm_only") if isinstance(sheet, dict) else None,
         story_so_far=story_so_far,
         max_attempts=max_attempts,
+        hero_chronicle=hero_chronicle,
     )
 
 

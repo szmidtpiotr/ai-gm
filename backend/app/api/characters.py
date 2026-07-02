@@ -25,6 +25,7 @@ from app.services.gm_plan_generation_service import (
     generate_initial_gm_plan_with_retries,
     generate_initial_gm_plan_v2_with_retries,
 )
+from app.services.chapter_summary_service import get_hero_chronicle
 from app.services.llm_service import generate_chat
 from app.services.admin_config import list_skills
 from app.services.user_llm_settings import get_user_llm_settings_full
@@ -2386,6 +2387,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     )
 
                     if has_v2_identity:
+                        _hero_chronicle = get_hero_chronicle(conn, character_id)
                         char_data = {
                             "name": name,
                             "archetype": archetype,
@@ -2400,11 +2402,13 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                             model=model,
                             llm_config=llm_config,
                             max_attempts=2,
+                            hero_chronicle=_hero_chronicle,
                         )
                     else:
                         # #1018 — V2 plan (acts/key_beats/endings) even for simple
                         # characters without bonds/weaknesses, so every new player
                         # campaign is winnable by the #1009–#1017 machinery.
+                        _hero_chronicle = get_hero_chronicle(conn, character_id)
                         gm_plan_ready, _ = generate_initial_gm_plan_v2_with_retries(
                             conn,
                             campaign_id=campaign_id,
@@ -2416,6 +2420,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                             model=model,
                             llm_config=llm_config,
                             max_attempts=3,
+                            hero_chronicle=_hero_chronicle,
                         )
 
                     if gm_plan_ready:
@@ -2741,6 +2746,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         identity_block = rebuilt_sheet.get("identity") or {}
         has_v2_identity = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
 
+        _hero_chronicle = get_hero_chronicle(conn, character_id)
         if has_v2_identity:
             char_data = {
                 "name": name,
@@ -2756,6 +2762,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                 model=model,
                 llm_config=llm_config,
                 max_attempts=2,
+                hero_chronicle=_hero_chronicle,
             )
         else:
             # #1018 — V2 plan for simple characters too (winnable by #1009–#1017).
@@ -2770,6 +2777,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                 model=model,
                 llm_config=llm_config,
                 max_attempts=3,
+                hero_chronicle=_hero_chronicle,
             )
     except Exception as e:
         logger.warning("[create_character] gm plan generation failed (non-fatal): %s", str(e))
