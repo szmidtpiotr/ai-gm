@@ -432,8 +432,6 @@ def resolve_chain_travel(
             (campaign_id,),
         ).fetchone()
         if gs:
-            flags = json.loads(gs["session_flags"] or "{}")
-            flags["current_hex"] = {"q": arrived_hex[0], "r": arrived_hex[1]}
             # Also update location context for narrator if arrived hex has a linked location
             arrived_data = hexes.get(arrived_hex, {})
             _hex_location_key = arrived_data.get("location_key")
@@ -473,19 +471,16 @@ def resolve_chain_travel(
                 except Exception:
                     _hex_location_key = None
 
+            # Resolve location_id from key (if any)
+            _loc_id: int | None = None
             if _hex_location_key:
-                flags["current_location_key"] = _hex_location_key
                 _loc_row = conn.execute(
                     "SELECT id FROM game_locations WHERE key = ? AND COALESCE(is_active,1)=1",
                     (_hex_location_key,),
                 ).fetchone()
                 if _loc_row:
-                    conn.execute(
-                        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
-                        (int(_loc_row["id"]), campaign_id),
-                    )
+                    _loc_id = int(_loc_row["id"])
                 # HF-11 (#553): visit_location beat auto-complete on mechanical arrival
-                # (same dead-code root cause as talk_to_npc — process_v2_turn unreachable).
                 if arrived_hex != from_hex:
                     try:
                         from app.services.campaign_plan_runtime import auto_complete_beats_by_event
@@ -504,16 +499,16 @@ def resolve_chain_travel(
                         )
                     except Exception:
                         pass
-            elif arrived_hex != from_hex:
-                # Arrived at a hex with no linked location — clear stale location context
-                flags.pop("current_location_key", None)
-                conn.execute(
-                    "UPDATE game_sessions SET current_location_id = NULL WHERE campaign_id = ?",
-                    (campaign_id,),
-                )
-            conn.execute(
-                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-                (json.dumps(flags, ensure_ascii=False), campaign_id),
+
+            # #1112: atomic position write via canonical service
+            from app.services.location_state_service import set_position
+            set_position(
+                conn,
+                campaign_id=campaign_id,
+                current_hex={"q": arrived_hex[0], "r": arrived_hex[1]},
+                current_location_id=_loc_id,
+                clear_location_id=(not _hex_location_key and arrived_hex != from_hex),
+                clear_local_hex=True,
             )
 
         # Mark hex as discovered for this campaign
@@ -922,18 +917,12 @@ def resolve_starting_hex(
         (campaign_id, sq, sr, campaign_label),
     )
 
-    # Update session_flags with current_hex
+    # Check if session exists (needed for downstream loc_id write)
     gs = conn.execute(
         "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
         (campaign_id,),
     ).fetchone()
-    if gs:
-        flags = _json.loads(gs["session_flags"] or "{}")
-        flags["current_hex"] = {"q": sq, "r": sr}
-        conn.execute(
-            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-            (_json.dumps(flags, ensure_ascii=False), gs["id"]),
-        )
+    # Note: set_position() called below after loc_key resolved (combines current_hex + loc_id)
 
     # Stage 2B-Schema S17: pair the hex with a canonical game_location (or create minimal one)
     loc_key: str | None = None
@@ -1019,20 +1008,27 @@ def resolve_starting_hex(
             (loc_key, sq, sr),
         )
 
-    # Also anchor the session at the resolved location so context injection works from turn 1
+    # #1112: atomic position write via canonical service (current_hex + loc_id in one tx)
     if gs:
-        loc_row = conn.execute(
-            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
-        ).fetchone()
-        if loc_row and not conn.execute(
-            "SELECT current_location_id FROM game_sessions "
-            "WHERE campaign_id = ? AND current_location_id IS NOT NULL",
-            (campaign_id,),
-        ).fetchone():
-            conn.execute(
-                "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
-                (loc_row["id"], campaign_id),
-            )
+        _start_loc_id: int | None = None
+        if loc_key:
+            _loc_row = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
+            ).fetchone()
+            # Only anchor if session has no location yet (don't overwrite resumed campaigns)
+            if _loc_row and not conn.execute(
+                "SELECT current_location_id FROM game_sessions "
+                "WHERE campaign_id = ? AND current_location_id IS NOT NULL",
+                (campaign_id,),
+            ).fetchone():
+                _start_loc_id = int(_loc_row["id"])
+        from app.services.location_state_service import set_position
+        set_position(
+            conn,
+            campaign_id=campaign_id,
+            current_hex={"q": sq, "r": sr},
+            current_location_id=_start_loc_id,
+        )
 
     conn.commit()
 

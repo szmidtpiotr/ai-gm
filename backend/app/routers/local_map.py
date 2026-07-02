@@ -161,14 +161,36 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             if hub_hex_id and target.get("parent_hex_id") != hub_hex_id:
                 raise HTTPException(status_code=400, detail="Hex does not belong to current hub")
 
-        # Update session_flags.local_hex
-        flags = json.loads(session.get("session_flags") or "{}")
-        flags["local_hex"] = {
-            "hex_id": target["id"],
-            "q": target["q"],
-            "r": target["r"],
-            "location_key": target.get("location_key"),
-        }
+        # Resolve sub-location id if hex has a location_key
+        loc_key = target.get("location_key")
+        new_loc_id: int | None = None
+        if loc_key:
+            new_loc_row = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
+            ).fetchone()
+            if new_loc_row:
+                new_loc_id = int(new_loc_row["id"])
+
+        # #1112: atomic position write via canonical service
+        from app.services.location_state_service import set_position
+        set_position(
+            conn,
+            campaign_id=campaign_id,
+            local_hex={
+                "hex_id": target["id"],
+                "q": target["q"],
+                "r": target["r"],
+                "location_key": loc_key,
+            },
+            current_location_id=new_loc_id,
+        )
+        # Keep local reference in sync for the return value
+        flags = json.loads(
+            (conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone() or {}).get("session_flags") or "{}"
+        )
 
         # Advance clock +15 min
         clock_state: dict = {}
@@ -177,23 +199,6 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel")
         except Exception as _clk_err:
             pass  # clock must never break movement
-
-        conn.execute(
-            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-            (json.dumps(flags), campaign_id),
-        )
-
-        # Move to the sub-location if the hex has a location_key
-        loc_key = target.get("location_key")
-        if loc_key:
-            new_loc_row = conn.execute(
-                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
-            ).fetchone()
-            if new_loc_row:
-                conn.execute(
-                    "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
-                    (new_loc_row["id"], campaign_id),
-                )
 
         conn.commit()
 
@@ -205,7 +210,7 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
 
         return {
             "moved": True,
-            "local_hex": flags["local_hex"],
+            "local_hex": flags.get("local_hex"),
             "location_key": loc_key,
             "clock": clock_state,
         }

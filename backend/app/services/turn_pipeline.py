@@ -837,13 +837,11 @@ def _update_character_location(campaign_id: int, location_key: str,
     if not loc_row:
         return
     conn.execute(
-        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
-        (loc_row[0], campaign_id)
-    )
-    conn.execute(
         "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
         (loc_row[0],),
     )
+    from app.services.location_state_service import set_position
+    set_position(conn, campaign_id=campaign_id, current_location_id=int(loc_row[0]))
     conn.commit()
     try:
         maybe_lazy_enrich_subloc(conn, location_key)
@@ -922,17 +920,32 @@ def _update_hex_world_state(
                             campaign_id=campaign_id)
     if dest_q is None or dest_r is None:
         return
-    session_flags["current_hex"] = {"q": int(dest_q), "r": int(dest_r)}
+
+    # Resolve location_id from destination hex (if any)
     hex_row = conn.execute(
         "SELECT location_key FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
         (int(dest_q), int(dest_r)),
     ).fetchone()
-    if hex_row and hex_row["location_key"]:
-        session_flags["current_location_key"] = hex_row["location_key"]
-    conn.execute(
-        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-        (json.dumps(session_flags, ensure_ascii=False), campaign_id),
+    loc_key = hex_row["location_key"] if hex_row else None
+    loc_id: int | None = None
+    if loc_key:
+        loc_row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1",
+            (loc_key,),
+        ).fetchone()
+        if loc_row:
+            loc_id = int(loc_row["id"])
+
+    from app.services.location_state_service import set_position
+    set_position(
+        conn,
+        campaign_id=campaign_id,
+        current_hex={"q": int(dest_q), "r": int(dest_r)},
+        current_location_id=loc_id,
+        clear_local_hex=True,
     )
+    # Keep in-memory dict in sync for downstream callers this turn
+    session_flags["current_hex"] = {"q": int(dest_q), "r": int(dest_r)}
     conn.commit()
 
 

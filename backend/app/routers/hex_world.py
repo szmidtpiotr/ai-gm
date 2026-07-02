@@ -1278,16 +1278,17 @@ def get_player_map(campaign_id: int, character_id: int = 0):
             if (t["from_q"], t["from_r"]) in discovered or (t["to_q"], t["to_r"]) in discovered
         ]
 
-        # Current hex
-        char_row = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (character_id, campaign_id),
-        ).fetchone() if character_id else None
+        # #1112: current_hex read from session_flags (authoritative source)
+        # sheet_json.current_hex is a mirror only; session_flags is always up-to-date
+        _gs_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
         current_hex = None
-        if char_row:
+        if _gs_row:
             import json as _json
-            sheet = _json.loads(char_row["sheet_json"] or "{}")
-            current_hex = sheet.get("current_hex")  # {q, r}
+            _sf = _json.loads(_gs_row["session_flags"] or "{}")
+            current_hex = _sf.get("current_hex")  # {q, r}
 
         return {
             "hexes": result_hexes,

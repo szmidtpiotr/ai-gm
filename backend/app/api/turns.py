@@ -741,20 +741,21 @@ def _sync_local_hex_narrative_move(
         loc_type = loc_row["location_type"] if loc_row["location_type"] else "macro"
         parent_key = loc_row["parent_key"]
 
+        from app.services.location_state_service import set_position as _set_pos_lh
         if loc_type == "sub" and parent_key:
             lh = _get_lh(conn, loc_row["key"])
             if not lh:
                 lh = _auto_lh(conn, loc_row["key"], parent_key, campaign_id=campaign_id)
             if lh:
-                sf["local_hex"] = {
-                    "hex_id": lh["id"],
-                    "q": lh["q"],
-                    "r": lh["r"],
-                    "location_key": lh.get("location_key"),
-                }
-                conn.execute(
-                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                    (json.dumps(sf, ensure_ascii=False), session_id),
+                _set_pos_lh(
+                    conn,
+                    campaign_id=campaign_id,
+                    local_hex={
+                        "hex_id": lh["id"],
+                        "q": lh["q"],
+                        "r": lh["r"],
+                        "location_key": lh.get("location_key"),
+                    },
                 )
                 try:
                     from app.services.clock_service import advance_clock as _adv_clock
@@ -762,12 +763,7 @@ def _sync_local_hex_narrative_move(
                 except Exception:
                     pass
         else:
-            if "local_hex" in sf:
-                sf.pop("local_hex")
-                conn.execute(
-                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                    (json.dumps(sf, ensure_ascii=False), session_id),
-                )
+            _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
     except Exception as _lh_err:
         logger.warning("local_hex_sync_narrative_failed", error=str(_lh_err))
 
@@ -810,10 +806,6 @@ def _process_location_intent(
         )
         if result.allowed and result.resolved_location_id and session_id is not None:
             conn.execute(
-                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
-                (result.resolved_location_id, session_id),
-            )
-            conn.execute(
                 "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
                 (result.resolved_location_id,),
             )
@@ -828,7 +820,9 @@ def _process_location_intent(
                 "UPDATE game_sessions SET scene_enemies = '[]', scene_npcs = '[]' WHERE campaign_id = ?",
                 (campaign_id,),
             )
-            # Also sync current_hex so the world map pin follows narrative movement
+            # Resolve world hex for this location (for the world map pin)
+            # #1043: guard — narrator cannot teleport >1 hex via location intent
+            _narrative_new_hex: dict | None = None
             try:
                 import json as _jloc
                 _loc_row = conn.execute(
@@ -841,38 +835,42 @@ def _process_location_intent(
                         (_loc_row["key"],),
                     ).fetchone()
                     if _hex_row:
-                        _gs_sf = conn.execute(
-                            "SELECT id, session_flags FROM game_sessions WHERE id = ?",
+                        _cur_sf = conn.execute(
+                            "SELECT session_flags FROM game_sessions WHERE id = ?",
                             (session_id,),
                         ).fetchone()
-                        if _gs_sf:
-                            _sf_loc = _jloc.loads(_gs_sf["session_flags"] or "{}")
-                            # #1043: guard narrative hex jump — narrator cannot teleport >1 hex
-                            _new_q, _new_r = int(_hex_row["q"]), int(_hex_row["r"])
-                            _old_hx = _sf_loc.get("current_hex") or {}
-                            _old_q, _old_r = _old_hx.get("q"), _old_hx.get("r")
-                            _jump_ok = True
-                            if _old_q is not None and _old_r is not None:
-                                from app.services.hex_travel_service import hex_distance as _hd
-                                _dist = _hd(int(_old_q), int(_old_r), _new_q, _new_r)
-                                if _dist > 1:
-                                    logger.warning(
-                                        "narrative_hex_jump_blocked_location_intent",
-                                        from_hex=(_old_q, _old_r),
-                                        to_hex=(_new_q, _new_r),
-                                        distance=_dist,
-                                        location_key=_loc_row["key"],
-                                        session_id=session_id,
-                                    )
-                                    _jump_ok = False
-                            if _jump_ok:
-                                _sf_loc["current_hex"] = {"q": _new_q, "r": _new_r}
-                                conn.execute(
-                                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                                    (_jloc.dumps(_sf_loc, ensure_ascii=False), _gs_sf["id"]),
+                        _sf_cur = _jloc.loads((_cur_sf["session_flags"] if _cur_sf else None) or "{}")
+                        _new_q, _new_r = int(_hex_row["q"]), int(_hex_row["r"])
+                        _old_hx = _sf_cur.get("current_hex") or {}
+                        _old_q, _old_r = _old_hx.get("q"), _old_hx.get("r")
+                        _jump_ok = True
+                        if _old_q is not None and _old_r is not None:
+                            from app.services.hex_travel_service import hex_distance as _hd
+                            _dist = _hd(int(_old_q), int(_old_r), _new_q, _new_r)
+                            if _dist > 1:
+                                logger.warning(
+                                    "narrative_hex_jump_blocked_location_intent",
+                                    from_hex=(_old_q, _old_r),
+                                    to_hex=(_new_q, _new_r),
+                                    distance=_dist,
+                                    location_key=_loc_row["key"],
+                                    session_id=session_id,
                                 )
+                                _jump_ok = False
+                        if _jump_ok:
+                            _narrative_new_hex = {"q": _new_q, "r": _new_r}
             except Exception as _hex_sync_err:
                 logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
+
+            # #1112: atomic position write via canonical service
+            from app.services.location_state_service import set_position as _set_pos
+            _set_pos(
+                conn,
+                campaign_id=campaign_id,
+                current_location_id=result.resolved_location_id,
+                current_hex=_narrative_new_hex,  # None if jump guard blocked it
+            )
+
             # Link new gm_runtime location to the current world_hex so it appears on the admin map
             if result.is_new_location:
                 try:
