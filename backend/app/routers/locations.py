@@ -683,6 +683,12 @@ async def patch_location(
             updates.append("approved = ?")
             params.append(1 if data["approved"] else 0)
 
+        # #1064 — manual label/description edit is an override: mark it
+        # ai_generated=1 so later lazy-enrichment (on player entry) skips it
+        # instead of silently overwriting the admin's text.
+        if ("label" in data or "description" in data) and "ai_generated" not in data:
+            updates.append("ai_generated = 1")
+
         if not updates:
             return location
         

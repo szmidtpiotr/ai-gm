@@ -1310,6 +1310,26 @@ def enrich_sublocs_labels(
     return updated
 
 
+def maybe_lazy_enrich_subloc(conn: sqlite3.Connection, location_key: str) -> bool:
+    """#1064 — lazy LLM-enrichment on first player entry into a sub-location.
+
+    No-op (and no LLM call) unless the row is location_type='sub', has a
+    parent_key, and is still ai_generated=0 (generic template). Idempotent:
+    subsequent entries skip the LLM entirely. LLM failure leaves ai_generated=0
+    so the next entry retries instead of getting stuck.
+    """
+    row = conn.execute(
+        "SELECT parent_key, location_type, ai_generated FROM game_locations "
+        "WHERE key = ? AND is_active = 1",
+        (location_key,),
+    ).fetchone()
+    if not row or row["location_type"] != "sub" or row["ai_generated"] == 1 or not row["parent_key"]:
+        return False
+
+    updated = enrich_sublocs_labels(conn, row["parent_key"], subloc_keys=[location_key])
+    return bool(updated)
+
+
 # ── #1047: AI fill missing fields for pending entities ───────────────────────
 
 _FILL_ENTITY_CFG: dict[str, dict] = {

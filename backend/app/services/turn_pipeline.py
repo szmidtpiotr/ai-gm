@@ -30,7 +30,8 @@ from app.services.mechanic_resolver import resolve as mechanic_resolve
 from app.services.context_injector import ContextInjector
 from app.services.world_service import (
     process_create_tags, get_current_location_info,
-    build_available_content_index, build_v2_npc_context_block
+    build_available_content_index, build_v2_npc_context_block,
+    maybe_lazy_enrich_subloc,
 )
 from app.services.campaign_plan_runtime import (
     get_narrator_context_block, mark_beat_visited, mark_npc_dead, log_deviation
@@ -861,6 +862,10 @@ def _update_character_location(campaign_id: int, location_key: str,
         (loc_row[0],),
     )
     conn.commit()
+    try:
+        maybe_lazy_enrich_subloc(conn, location_key)
+    except Exception:
+        logger.warning("lazy_subloc_enrich_failed", location_key=location_key, exc_info=True)
 
 
 def _update_session_flags(wsm_result, session_flags: dict, mechanic_result: dict,

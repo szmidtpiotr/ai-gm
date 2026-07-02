@@ -25,6 +25,7 @@ from app.services.local_hex_service import (
     get_local_hexes,
     get_local_hex_for_subloc,
 )
+from app.services.world_service import maybe_lazy_enrich_subloc
 
 DB_PATH = "/data/ai_gm.db"
 router = APIRouter(tags=["local-map"])
@@ -195,6 +196,12 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
                 )
 
         conn.commit()
+
+        if loc_key:
+            try:
+                maybe_lazy_enrich_subloc(conn, loc_key)
+            except Exception:
+                pass  # lazy enrichment must never break movement
 
         return {
             "moved": True,
