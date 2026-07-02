@@ -775,6 +775,31 @@ def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | Non
     return row["key"] if isinstance(row, sqlite3.Row) else row[0]
 
 
+def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int] | None":
+    """#1110 — the start_hex assigned to the campaign's source template in the Kuźnia.
+
+    Returns (q, r) when the campaign was launched from a template that has an explicit
+    start_hex_q/r set, else None. Prefers `template_id`, falls back to `source_template_id`
+    (create_campaign stamps the latter).
+    """
+    try:
+        crow = conn.execute(
+            "SELECT COALESCE(template_id, source_template_id) AS tid FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+    except Exception:
+        return None
+    tid = crow["tid"] if crow else None
+    if not tid:
+        return None
+    trow = conn.execute(
+        "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?", (tid,)
+    ).fetchone()
+    if trow and trow["start_hex_q"] is not None and trow["start_hex_r"] is not None:
+        return (int(trow["start_hex_q"]), int(trow["start_hex_r"]))
+    return None
+
+
 def resolve_starting_hex(
     campaign_id: int,
     character_id: int,
@@ -806,9 +831,26 @@ def resolve_starting_hex(
     if _is_sentinel:
         starting_location_name = _pick_random_start_location(conn) or None
 
-    # Try to match existing hex by label
+    # #1110 — an explicit start_hex assigned in the Kuźnia (campaign_templates.start_hex)
+    # is authoritative: it wins over label-matching so the campaign starts exactly where
+    # the template says. Only used when that hex exists on the overworld; otherwise fall
+    # through to the legacy name-match (backward compatible for campaigns without a hex).
     matched_hex = None
-    if starting_location_name and starting_location_name.strip():
+    _tpl_hex = _template_start_hex(conn, campaign_id)
+    if _tpl_hex:
+        _twh = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+            (_tpl_hex[0], _tpl_hex[1]),
+        ).fetchone()
+        if _twh:
+            matched_hex = {
+                "q": _tpl_hex[0], "r": _tpl_hex[1],
+                "hex_type": _twh["hex_type"], "label": _twh["label"],
+            }
+
+    # Try to match existing hex by label (fallback when no template hex applied)
+    if matched_hex is None and starting_location_name and starting_location_name.strip():
         # #992-ii: ONLY overworld hexes (map_level=0) are valid start/travel nodes.
         # Without this filter the label match could resolve to a map_level=1 LOCAL
         # sub-map hex (FAZA ML) — e.g. "Wolanka: Kościół" at (1,0) — placing the
