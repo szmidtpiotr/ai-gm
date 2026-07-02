@@ -1159,6 +1159,54 @@ def get_character_history(character_id: int):
         conn.close()
 
 
+def _get_chronicle_data(conn: sqlite3.Connection, character_id: int) -> dict:
+    """#1098 — Extract chronicle data: legend + chapters + scars from DB."""
+    char_row = conn.execute(
+        "SELECT legend_digest FROM characters WHERE id = ? AND is_active = 1",
+        (character_id,),
+    ).fetchone()
+    if not char_row:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    legend = char_row["legend_digest"] if char_row["legend_digest"] else None
+
+    rows = conn.execute(
+        """
+        SELECT h.id, h.campaign_id, h.outcome, h.chapter_summary,
+               h.xp_earned, h.gold_at_end, h.turns_count,
+               h.completed_at, h.abandonment_note,
+               cam.title AS campaign_title
+        FROM character_campaign_history h
+        LEFT JOIN campaigns cam ON cam.id = h.campaign_id
+        WHERE h.character_id = ?
+        ORDER BY COALESCE(h.completed_at, h.created_at) DESC, h.id DESC
+        """,
+        (character_id,),
+    ).fetchall()
+
+    chapters = []
+    scars = []
+    for r in rows:
+        row = dict(r)
+        if row.get("chapter_summary"):
+            chapters.append(row)
+        elif row.get("abandonment_note"):
+            scars.append(row)
+
+    return {"legend": legend, "chapters": chapters, "scars": scars}
+
+
+@router.get("/characters/{character_id}/chronicle")
+def get_character_chronicle(character_id: int):
+    """#1098 — Read-only Hero Chronicle: legend digest + completed chapters + abandonment scars."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return _get_chronicle_data(conn, character_id)
+    finally:
+        conn.close()
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.

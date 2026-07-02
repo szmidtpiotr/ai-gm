@@ -316,3 +316,4 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 ---
 
 _Koniec dokumentu. Aktualizuj sekcję 7 przy każdej nowej funkcjonalności frontendu gracza._
+| F-79 | Kronika bohatera | 📖 Kronika na karcie bohatera (#1098) | Modal: LEGENDA (legend_digest) + lista rozdziałów (chapter_summary / outcome / XP / tury) + sekcja blizn porzuceń (abandonment_note) | heroes.js , endpoint GET /characters/{id}/chronicle |

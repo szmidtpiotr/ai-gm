@@ -94,6 +94,7 @@ function renderHeroes(heroes) {
                   <span title="Zakończone przygody">⚔ ${completed}</span>
                   <span title="Łączna ilość zdobytych PD">🏆 ${xpLifetime} PD</span>
                   <button type="button" class="hero-card__history-btn" data-hero-id="${hero.id}" title="Historia bohatera">📜 Historia</button>
+                  <button type="button" class="hero-card__chronicle-btn" data-hero-id="${hero.id}" title="Kronika bohatera — legenda i rozdziały">📖 Kronika</button>
                   ${status === 'idle' && xpAvail > 0 ? `<button type="button" class="hero-card__awansuj-btn" data-hero-id="${hero.id}" title="Wydaj PD na rozwój">⬆ Awansuj (${xpAvail} PD)</button>` : ''}
                 </div>
               </div>
@@ -101,7 +102,7 @@ function renderHeroes(heroes) {
         `;
         card.addEventListener('click', (e) => {
             // Don't trigger card-select when clicking the inline buttons.
-            if (e.target.closest('.hero-card__history-btn, .hero-card__awansuj-btn')) return;
+            if (e.target.closest('.hero-card__history-btn, .hero-card__awansuj-btn, .hero-card__chronicle-btn')) return;
             selectHero(hero);
         });
 
@@ -109,6 +110,10 @@ function renderHeroes(heroes) {
         card.querySelector('.hero-card__history-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             openHeroHistoryModal(hero);
+        });
+        card.querySelector('.hero-card__chronicle-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openHeroChronicleModal(hero);
         });
         card.querySelector('.hero-card__awansuj-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -215,5 +220,109 @@ async function selectHero(hero) {
     try { localStorage.setItem('aigm_hero_id', hero.id); localStorage.removeItem('aigm_campaign_id'); } catch {}
     await loadCampaigns();
     showScreen('campaigns');
+}
+
+// #1098 — Hero Chronicle modal: LEGENDA + rozdziały + blizny porzuceń (read-only).
+async function openHeroChronicleModal(hero) {
+    let modal = document.getElementById('hero-chronicle-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'hero-chronicle-modal';
+        modal.className = 'hero-history-modal';
+        modal.innerHTML = `
+          <div class="hero-history-modal__backdrop" data-action="close"></div>
+          <div class="hero-history-modal__card hero-chronicle-modal__card">
+            <header class="hero-history-modal__header">
+              <h3 id="hero-chronicle-modal-title">Kronika</h3>
+              <button type="button" class="hero-history-modal__close" data-action="close" aria-label="Zamknij">✕</button>
+            </header>
+            <div class="hero-history-modal__body" id="hero-chronicle-modal-body">
+              <p class="hero-history-modal__loading">Wczytywanie…</p>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            if (e.target.dataset.action === 'close') {
+                modal.classList.remove('hero-history-modal--open');
+            }
+        });
+    }
+
+    const title = document.getElementById('hero-chronicle-modal-title');
+    const body  = document.getElementById('hero-chronicle-modal-body');
+    if (title) title.textContent = `📖 ${hero.name} — Kronika`;
+    if (body) body.innerHTML = `<p class="hero-history-modal__loading">Wczytywanie…</p>`;
+    modal.classList.add('hero-history-modal--open');
+
+    try {
+        const data = await apiRequest('GET', `/characters/${hero.id}/chronicle`);
+        if (!body) return;
+
+        const { legend, chapters = [], scars = [] } = data;
+
+        if (!legend && !chapters.length && !scars.length) {
+            body.innerHTML = `<p class="hero-history-modal__empty">Twoja legenda dopiero się zaczyna. Ukończ pierwszą przygodę aby zapisać swój rozdział.</p>`;
+            return;
+        }
+
+        let html = '';
+
+        if (legend) {
+            html += `
+              <section class="hero-chronicle-section">
+                <h4 class="hero-chronicle-section__title">⭐ Legenda</h4>
+                <p class="hero-chronicle-legend">${_esc(legend)}</p>
+              </section>`;
+        }
+
+        if (chapters.length) {
+            const outcomeIcon  = { victory: '🏆', death: '💀', abandoned: '🚪' };
+            const outcomeLabel = { victory: 'Zwycięstwo', death: 'Śmierć', abandoned: 'Porzucono' };
+            html += `
+              <section class="hero-chronicle-section">
+                <h4 class="hero-chronicle-section__title">📜 Rozdziały</h4>
+                <ul class="hero-history-list">` +
+                chapters.map(h => {
+                    const icon  = outcomeIcon[h.outcome] || '•';
+                    const lbl   = outcomeLabel[h.outcome] || h.outcome || '—';
+                    const cTitle = h.campaign_title || `Kampania #${h.campaign_id}`;
+                    return `
+                      <li class="hero-history-row hero-history-row--${_esc(h.outcome)}">
+                        <span class="hero-history-row__icon">${icon}</span>
+                        <div class="hero-history-row__main">
+                          <div class="hero-history-row__title">${_esc(cTitle)}</div>
+                          <div class="hero-history-row__meta">${_esc(lbl)} · ${h.xp_earned ?? 0} PD · ${h.turns_count ?? 0} tur</div>
+                          ${h.chapter_summary ? `<div class="hero-history-row__summary">${_esc(h.chapter_summary)}</div>` : ''}
+                        </div>
+                      </li>`;
+                }).join('') +
+                `</ul>
+              </section>`;
+        }
+
+        if (scars.length) {
+            html += `
+              <section class="hero-chronicle-section hero-chronicle-section--scars">
+                <h4 class="hero-chronicle-section__title">🔥 Niedokończone sprawy</h4>
+                <ul class="hero-history-list">` +
+                scars.map(h => {
+                    const cTitle = h.campaign_title || `Kampania #${h.campaign_id}`;
+                    return `
+                      <li class="hero-history-row hero-history-row--abandoned hero-chronicle-scar">
+                        <span class="hero-history-row__icon">🚪</span>
+                        <div class="hero-history-row__main">
+                          <div class="hero-history-row__title">${_esc(cTitle)}</div>
+                          <div class="hero-history-row__summary hero-chronicle-scar__note">${_esc(h.abandonment_note)}</div>
+                        </div>
+                      </li>`;
+                }).join('') +
+                `</ul>
+              </section>`;
+        }
+
+        body.innerHTML = html;
+    } catch (err) {
+        if (body) body.innerHTML = `<p class="hero-history-modal__empty">Nie udało się wczytać kroniki: ${_esc(err.message || err)}</p>`;
+    }
 }
 

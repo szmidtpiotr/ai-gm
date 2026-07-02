@@ -1057,6 +1057,55 @@ body.combat-active .header--game {
   line-height: 1.4;
 }
 
+/* #1098 — Hero Chronicle modal */
+.hero-chronicle-modal__card { max-width: 560px; }
+
+.hero-chronicle-section {
+  margin-bottom: 20px;
+}
+.hero-chronicle-section__title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.hero-chronicle-legend {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  margin: 0;
+}
+.hero-chronicle-section--scars .hero-chronicle-section__title {
+  color: rgba(201,165,74,0.8);
+}
+.hero-chronicle-scar__note {
+  font-style: italic;
+  color: rgba(201,165,74,0.7) !important;
+}
+
+.hero-card__chronicle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.hero-card__chronicle-btn:hover {
+  background: rgba(255,255,255,0.09);
+  color: var(--text-primary);
+}
+
 .campaign-swipe-wrapper .campaign-card {
   position: relative;
   z-index: 1;
