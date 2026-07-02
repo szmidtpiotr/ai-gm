@@ -37,6 +37,8 @@ from typing import Any
 
 import structlog
 from app.services.combat_service import is_combat_active, end_combat
+from app.services.llm_service import generate_chat
+from app.services.user_llm_settings import get_user_llm_settings_full
 
 logger = structlog.get_logger()
 
@@ -491,6 +493,105 @@ def _apply_item_loss(
     return pick
 
 
+RESURRECTION_NARRATIVE_SYSTEM = """Jesteś Mistrzem Gry w grze RPG (samonarracja, tekst dla gracza).
+Bohater właśnie wrócił do życia po śmierci. Napisz krótką narrację (3-6 zdań) opisującą:
+- przebudzenie / powrót do życia,
+- miejsce w którym się znajduje,
+- jego stan (rany, blizny, koszt wskrzeszenia — wpleć naturalnie, bez liczb/JSON),
+- zaczep zachęcający do dalszego działania.
+Ton dopasuj do kosztu: darmowe wskrzeszenie = łagodniejszy, spokojniejszy ton; bolesne
+(utrata złota/przedmiotu/PD) = cięższy, bardziej dramatyczny ton.
+Pisz w języku podanym przez użytkownika. Bez nagłówków markdown, bez list, bez staty."""
+
+
+def _describe_cost_for_narration(cost_applied: dict[str, Any]) -> str:
+    mode = cost_applied.get("mode")
+    if cost_applied.get("free") or mode == "admin_free":
+        return "wskrzeszenie nie kosztowało nic"
+    if mode in ("gold_percent", "gold_recent_days"):
+        gold = cost_applied.get("gold_lost") or 0
+        if gold:
+            return f"utracono {gold} sztuk złota"
+        return "wskrzeszenie nie kosztowało nic (brak złota do odjęcia)"
+    if mode == "xp_revert":
+        xp = cost_applied.get("xp_subtracted") or 0
+        if xp:
+            return f"cofnięto {xp} punktów doświadczenia"
+        return "wskrzeszenie nie kosztowało nic (brak PD do cofnięcia)"
+    if mode == "item_loss":
+        if cost_applied.get("fell_back_to_free"):
+            return "wskrzeszenie nie kosztowało nic (brak przedmiotów do utraty)"
+        item = cost_applied.get("item_lost") or {}
+        label = item.get("label") or "przedmiot"
+        return f"utracono przedmiot: {label}"
+    return "nieznany koszt"
+
+
+def generate_resurrection_narration_llm(
+    *,
+    name: str,
+    class_label: str,
+    death_reason: str,
+    epitaph: str,
+    location: str,
+    cost_applied: dict[str, Any],
+    revived_hp: int,
+    max_hp: int,
+    language: str,
+    user_id: int,
+    model: str,
+) -> str:
+    cost_desc = _describe_cost_for_narration(cost_applied)
+    user_content = (
+        f"Język odpowiedzi: {language or 'pl'}\n"
+        f"Imię: {name}\n"
+        f"Klasa: {class_label}\n"
+        f"Powód śmierci: {death_reason or 'nieznany'}\n"
+        f"Epitafium: {epitaph or '(brak)'}\n"
+        f"Lokacja: {location or 'nieznane miejsce'}\n"
+        f"Koszt wskrzeszenia: {cost_desc}\n"
+        f"HP po wskrzeszeniu: {revived_hp}/{max_hp}\n\n"
+        "Napisz narrację powrotu do życia."
+    )
+    messages = [
+        {"role": "system", "content": RESURRECTION_NARRATIVE_SYSTEM},
+        {"role": "user", "content": user_content},
+    ]
+    llm_config = get_user_llm_settings_full(user_id)
+    try:
+        text = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
+    except Exception as e:
+        logger.warning("resurrection_narration_llm_failed", error_message=str(e))
+        text = ""
+    if not text:
+        text = f"{name} otwiera oczy. Świat wraca powoli — {location or 'nieznane miejsce'} czeka."
+    return text
+
+
+def _insert_resurrection_turn(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    assistant_text: str,
+) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(MAX(turn_number), 0) AS max_turn FROM campaign_turns WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    turn_number = int(row["max_turn"] or 0) + 1
+    conn.execute(
+        """
+        INSERT INTO campaign_turns (
+            campaign_id, character_id, user_text, route, assistant_text, turn_number
+        )
+        VALUES (?, ?, ?, 'narrative', ?, ?)
+        """,
+        (campaign_id, character_id, "[Wskrzeszenie] Bohater wraca do życia.", assistant_text, turn_number),
+    )
+    return turn_number
+
+
 def apply_resurrection(
     character_id: int,
     user_id: int,
@@ -513,6 +614,20 @@ def apply_resurrection(
     if not char:
         raise LookupError(f"Character {character_id} not found")
 
+    # `name`/`location` aren't in every legacy test fixture — fetch defensively so
+    # this never breaks the revive itself.
+    char_name = "Bohater"
+    char_location = ""
+    try:
+        extra_row = conn.execute(
+            "SELECT name, location FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        if extra_row:
+            char_name = extra_row["name"] or char_name
+            char_location = extra_row["location"] or ""
+    except sqlite3.OperationalError:
+        pass
+
     if not force:
         if not cfg["enabled"]:
             raise PermissionError("Resurrection is disabled")
@@ -523,6 +638,18 @@ def apply_resurrection(
     campaign_id = int(char["campaign_id"]) if char["campaign_id"] else None
     from app.services.clock_service import get_clock_state
     current_day = int(get_clock_state(campaign_id, conn=conn)["day"]) if campaign_id else 1
+
+    # Capture death context BEFORE the revive UPDATE below clears it from `campaigns`.
+    camp_row = None
+    if campaign_id:
+        try:
+            camp_row = conn.execute(
+                "SELECT title, system_id, model_id, language, owner_user_id, death_reason, epitaph"
+                " FROM campaigns WHERE id = ?",
+                (campaign_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            camp_row = None
 
     cost_applied: dict[str, Any] = {"mode": "admin_free" if force else cfg["mode"]}
 
@@ -612,6 +739,39 @@ def apply_resurrection(
         revived_hp=revive_hp,
     )
 
+    # Auto-narrate the "return to life" turn so the player isn't left facing a
+    # silent chat window (#1072). Best-effort — a failure here must not undo
+    # the revive that already happened above.
+    narration_text: str | None = None
+    narration_turn_number: int | None = None
+    if campaign_id and camp_row:
+        try:
+            owner_id = int(camp_row["owner_user_id"] or user_id)
+            llm_config = get_user_llm_settings_full(owner_id)
+            model = (llm_config.get("model") or "").strip() or str(camp_row["model_id"] or "").strip() or "gemma3:1b"
+            narration_text = generate_resurrection_narration_llm(
+                name=char_name.strip(),
+                class_label=str(sheet.get("archetype") or sheet.get("class") or "adventurer").strip(),
+                death_reason=str(camp_row["death_reason"] or ""),
+                epitaph=str(camp_row["epitaph"] or ""),
+                location=char_location.strip(),
+                cost_applied=cost_applied,
+                revived_hp=revive_hp,
+                max_hp=max_hp,
+                language=str(camp_row["language"] or "pl"),
+                user_id=owner_id,
+                model=model,
+            )
+            narration_turn_number = _insert_resurrection_turn(
+                conn,
+                campaign_id=campaign_id,
+                character_id=character_id,
+                assistant_text=narration_text,
+            )
+            conn.commit()
+        except Exception as e:
+            logger.warning("resurrection_narration_failed", error=str(e), campaign_id=campaign_id)
+
     uses_after = (uses_remaining - 1) if (not force and uses_remaining is not None) else uses_remaining
     return {
         "character_id": character_id,
@@ -620,4 +780,6 @@ def apply_resurrection(
         "revived_hp": revive_hp,
         "max_hp": max_hp,
         "uses_remaining_after": uses_after,
+        "narration": narration_text,
+        "narration_turn_number": narration_turn_number,
     }
