@@ -224,6 +224,49 @@ def execute_directional_travel(
     flags = json.loads((gs["session_flags"] if gs else None) or "{}")
     cur = flags.get("current_hex") or {"q": 0, "r": 0}
 
+    # PT6 #1116: player continues interrupted travel after combat
+    tp = flags.get("travel_plan")
+    if tp and tp.get("interrupt_reason") == "encounter_prompted" and detect_travel_continuation(player_text):
+        from app.services.hex_travel_service import resolve_chain_travel as _rct_resume
+        dest_hex = tp.get("destination_hex") or {}
+        dq_r, dr_r = int(dest_hex.get("q", 0)), int(dest_hex.get("r", 0))
+        dest_label_r = tp.get("destination_label") or f"hex ({dq_r},{dr_r})"
+        tr_r = _rct_resume(
+            campaign_id=campaign_id,
+            character_id=character_id,
+            from_hex=(int(cur["q"]), int(cur["r"])),
+            to_hex=(dq_r, dr_r),
+            character_sheet=character_sheet,
+            conn=conn,
+        )
+        if tr_r.get("ok"):
+            try:
+                from app.services.clock_service import advance_clock
+                hrs_r = float(tr_r.get("total_hours") or 0.0)
+                if hrs_r > 0:
+                    advance_clock(campaign_id, hrs_r, "travel", conn=conn)
+                    conn.commit()
+            except Exception as _clk_r:
+                logger.warning("pt6_resume_clock_failed", error=str(_clk_r))
+            arr_r = tr_r.get("arrived_hex") or {}
+            enc_r = tr_r.get("encounter")
+            hex_info_r = tr_r.get("hex_data") or {}
+            fact_r = (
+                f"\n[SYSTEM: Gracz wznowił podróż do {dest_label_r}. "
+                f"Przemieścił się na hex ({arr_r.get('q')},{arr_r.get('r')}), "
+                f"teren: {hex_info_r.get('hex_type', 'nieznany')}, "
+                f"czas: {tr_r.get('total_hours', 0)}h."
+            )
+            if enc_r:
+                fact_r += (
+                    f" Nowe spotkanie: {enc_r.get('enemy_key')} — opisz nadejście zagrożenia."
+                )
+            else:
+                fact_r += f" Gracz dotarł do celu: {dest_label_r}."
+            fact_r += " Opisz wznowienie podróży w 2-4 zdaniach. NIE przenoś gracza — ruch rozstrzygnięty.]"
+            logger.info("pt6_travel_resumed", campaign_id=campaign_id, destination=dest_label_r)
+            return {"executed": True, "system_fact": fact_r, "intent": None}
+
     mv = detect_move_intent(player_text, cur)
     if not mv:
         # PT3/#1113: before vague-move hint, check for a named destination on a different hex
@@ -526,6 +569,69 @@ def pop_desync_correction(conn: sqlite3.Connection, campaign_id: int) -> str | N
         return correction
     except Exception as e:
         logger.warning("pop_desync_correction_failed", error=str(e))
+        return None
+
+
+# ── PT6 #1116: travel_plan post-combat hint ───────────────────────────────────
+
+_TRAVEL_CONTINUATION_KEYWORDS = [
+    "kontynuuj", "idę dalej", "ruszam dalej", "lecę dalej", "wróćmy na szlak",
+    "wracam na szlak", "tak dalej", "resume", "continue travel",
+    "tak, kontynuuję", "tak idę dalej",
+]
+
+
+def detect_travel_continuation(player_text: str) -> bool:
+    """PT6 #1116: Detect 'continue travel' intent from post-combat player prose."""
+    t = player_text.lower().strip()
+    return any(kw in t for kw in _TRAVEL_CONTINUATION_KEYWORDS)
+
+
+def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | None:
+    """PT6 #1116: After combat ends, inject narrator hint if travel was interrupted.
+
+    Returns a [SYSTEM:...] fact asking player to choose: continue / rest / camp.
+    Clears interrupt_reason to 'encounter_prompted' so hint fires only once.
+    Returns None if no travel_plan, combat still active, or hint already shown.
+    """
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return None
+        flags = json.loads(gs["session_flags"] or "{}")
+        tp = flags.get("travel_plan")
+        if not tp or tp.get("interrupt_reason") != "encounter":
+            return None
+        # Don't prompt while combat is still ongoing
+        ac = conn.execute(
+            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if ac:
+            return None
+        dest_label = tp.get("destination_label") or (
+            f"hex ({tp.get('destination_hex', {}).get('q')},{tp.get('destination_hex', {}).get('r')})"
+        )
+        remaining = int(tp.get("hours_remaining", 0))
+        hint = (
+            f"\n[SYSTEM: Gracz był w trakcie podróży do {dest_label}, "
+            f"zostało ~{remaining}h drogi. Walka przerwała wyprawę. "
+            f"Zapytaj gracza (prozą): czy kontynuuje podróż do {dest_label}, "
+            f"chce odpocząć (/rest), czy rozbija obóz. Nie decyduj za gracza — zadaj pytanie.]"
+        )
+        # Mark hint as shown — prevents repeat on next turn
+        flags["travel_plan"]["interrupt_reason"] = "encounter_prompted"
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), gs["id"]),
+        )
+        conn.commit()
+        return hint
+    except Exception as e:
+        logger.warning("pop_travel_plan_hint_failed", error=str(e))
         return None
 
 

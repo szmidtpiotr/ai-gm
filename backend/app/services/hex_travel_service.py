@@ -583,6 +583,48 @@ def resolve_chain_travel(
     except Exception:
         pass
 
+    # PT6 #1116: save travel_plan on encounter interrupt; clear on full arrival
+    try:
+        gs_tp = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs_tp:
+            sf_tp = json.loads(gs_tp["session_flags"] or "{}")
+            if encounter_result and len(path) > 1:
+                dest_data = hexes.get(to_hex, {})
+                dest_loc_key = dest_data.get("location_key")
+                dest_label = None
+                if dest_loc_key:
+                    _dl_row = conn.execute(
+                        "SELECT label FROM game_locations WHERE key = ? LIMIT 1",
+                        (dest_loc_key,),
+                    ).fetchone()
+                    if _dl_row:
+                        dest_label = _dl_row["label"]
+                if not dest_label:
+                    dest_label = dest_data.get("label") or f"hex ({to_hex[0]},{to_hex[1]})"
+                enc_idx = path.index(encounter_hex)
+                remaining_hexes = max(0, len(path) - 1 - enc_idx)
+                sf_tp["travel_plan"] = {
+                    "destination_hex": {"q": to_hex[0], "r": to_hex[1]},
+                    "destination_key": dest_loc_key,
+                    "destination_label": dest_label,
+                    "path": [{"q": h[0], "r": h[1]} for h in path],
+                    "step_index": enc_idx,
+                    "hours_remaining": float(remaining_hexes),
+                    "interrupt_reason": "encounter",
+                }
+            elif arrived_hex == to_hex:
+                sf_tp.pop("travel_plan", None)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(sf_tp, ensure_ascii=False), gs_tp["id"]),
+            )
+            conn.commit()
+    except Exception as _tp_err:
+        logger.warning("travel_plan_update_failed", error=str(_tp_err))
+
     return {
         "ok": True,
         "error": None,

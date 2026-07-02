@@ -4990,6 +4990,16 @@ def create_turn(
         except Exception as _pt4_err:
             logger.warning("pt4_desync_correction_inject_error", error=str(_pt4_err))
 
+        # PT6 #1116: inject travel_plan resumption hint after combat ends
+        try:
+            from app.services.turn_pipeline import pop_travel_plan_hint as _pt6_pop
+            _pt6_hint = _pt6_pop(conn, campaign_id)
+            if _pt6_hint:
+                _u30_system_fact = (_u30_system_fact or "") + _pt6_hint
+                logger.info("pt6_travel_plan_hint_injected", campaign_id=campaign_id)
+        except Exception as _pt6_err:
+            logger.warning("pt6_travel_plan_hint_inject_error", error=str(_pt6_err))
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -5653,6 +5663,20 @@ def create_turn_stream(
                 logger.info("pt4_desync_correction_injected_stream", campaign_id=campaign_id)
         except Exception as _pt4_err_s:
             logger.warning("pt4_desync_correction_inject_stream_error", error=str(_pt4_err_s))
+
+        # PT6 #1116: inject travel_plan resumption hint after combat ends (streaming path)
+        try:
+            from app.services.turn_pipeline import pop_travel_plan_hint as _pt6_pop_s
+            _pt6_hint_s = _pt6_pop_s(conn, campaign_id)
+            if _pt6_hint_s:
+                _first_mv_pt6 = messages[0] if messages else None
+                if isinstance(_first_mv_pt6, dict) and _first_mv_pt6.get("role") == "system":
+                    _first_mv_pt6["content"] = f"{_first_mv_pt6.get('content', '').rstrip()}{_pt6_hint_s}"
+                else:
+                    messages.insert(0, {"role": "system", "content": _pt6_hint_s.strip()})
+                logger.info("pt6_travel_plan_hint_injected_stream", campaign_id=campaign_id)
+        except Exception as _pt6_err_s:
+            logger.warning("pt6_travel_plan_hint_inject_stream_error", error=str(_pt6_err_s))
 
         location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
             conn, campaign_id, text, messages
