@@ -2707,10 +2707,13 @@ def get_character_or_404(
 
 
 def get_active_campaign_or_gone(conn: sqlite3.Connection, campaign_id: int):
-    """404 if missing, 410 if campaign has ended (solo death / GM-ended)."""
+    """404 if missing, 409 if campaign is completed/archived, 410 if ended."""
     campaign = get_campaign_or_404(conn, campaign_id)
-    if str(campaign["status"] or "").lower() == "ended":
+    status = str(campaign["status"] or "").lower()
+    if status == "ended":
         raise HTTPException(status_code=410, detail="This campaign has ended.")
+    if status in ("completed", "archived"):
+        raise HTTPException(status_code=409, detail="This campaign is read-only (completed or archived).")
     return campaign
 
 

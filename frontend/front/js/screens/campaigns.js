@@ -330,10 +330,12 @@ async function loadCampaigns() {
         const campaigns = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
             if (Number(ownerId) !== Number(currentUser?.id)) return false;
-            // Hide ended/discarded — archived goes to history section below
+            // Hide ended/discarded — archived/completed go to history section below
             if (c.status === 'ended' || c.status === 'discarded') return false;
             // #900: archived campaigns go to history, not main list
             if (c.status === 'archived') return false;
+            // #1095: completed campaigns (T38 victory) go to history, not main list
+            if (c.status === 'completed') return false;
             // If we have a hero, only show campaigns that have this hero as character
             if (currentHero?.id) {
                 const campCharId = c.character_id ?? c.char_id;
@@ -351,11 +353,11 @@ async function loadCampaigns() {
             return true;
         });
 
-        // #900: archived campaigns — read-only history section for this hero
+        // #900 + #1095: archived/completed campaigns — read-only history section
         const archived = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
             if (Number(ownerId) !== Number(currentUser?.id)) return false;
-            if (c.status !== 'archived') return false;
+            if (c.status !== 'archived' && c.status !== 'completed') return false;
             if (c.mode === 'dungeon') return false;
             // Only show archives that belonged to THIS hero
             if (currentHero?.id) {
@@ -621,6 +623,12 @@ async function handleDeleteCampaignFromList(campaign) {
 }
 
 async function selectCampaign(campaign) {
+    // #1095: completed/archived campaigns → read-only viewer, never enterGame
+    if (campaign.status === 'completed' || campaign.status === 'archived') {
+        _openArchivedCampaignViewer(campaign);
+        return;
+    }
+
     currentCampaignId = campaign.id;
     currentCampaign = campaign;
 
