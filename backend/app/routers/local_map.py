@@ -171,6 +171,15 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             if new_loc_row:
                 new_loc_id = int(new_loc_row["id"])
 
+        # Read current local hex id before updating — for already-here guard (#1115)
+        _pre_sf = json.loads(
+            (conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone() or {}).get("session_flags") or "{}"
+        )
+        current_hex_id = (_pre_sf.get("local_hex") or {}).get("hex_id")
+
         # #1112: atomic position write via canonical service
         from app.services.location_state_service import set_position
         set_position(
@@ -192,13 +201,14 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             ).fetchone() or {}).get("session_flags") or "{}"
         )
 
-        # Advance clock +15 min
+        # Advance clock +15 min — skip when player is already at target hex (#1115)
         clock_state: dict = {}
-        try:
-            from app.services.clock_service import advance_clock
-            clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel")
-        except Exception as _clk_err:
-            pass  # clock must never break movement
+        if body.hex_id != current_hex_id:
+            try:
+                from app.services.clock_service import advance_clock
+                clock_state = advance_clock(campaign_id, minutes=LOCAL_TRAVEL_MINUTES, reason="local_travel")
+            except Exception as _clk_err:
+                pass  # clock must never break movement
 
         conn.commit()
 

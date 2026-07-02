@@ -747,6 +747,7 @@ def _sync_local_hex_narrative_move(
             if not lh:
                 lh = _auto_lh(conn, loc_row["key"], parent_key, campaign_id=campaign_id)
             if lh:
+                current_hex_id = (sf.get("local_hex") or {}).get("hex_id")
                 _set_pos_lh(
                     conn,
                     campaign_id=campaign_id,
@@ -757,11 +758,12 @@ def _sync_local_hex_narrative_move(
                         "location_key": lh.get("location_key"),
                     },
                 )
-                try:
-                    from app.services.clock_service import advance_clock as _adv_clock
-                    _adv_clock(campaign_id, minutes=_LT_MIN, reason="narrative_local_travel")
-                except Exception:
-                    pass
+                if lh["id"] != current_hex_id:
+                    try:
+                        from app.services.clock_service import advance_clock as _adv_clock
+                        _adv_clock(campaign_id, minutes=_LT_MIN, reason="narrative_local_travel")
+                    except Exception:
+                        pass
         else:
             _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
     except Exception as _lh_err:
@@ -7334,17 +7336,6 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
                 (parent_id,),
             ).fetchall()
-            # Auto-generate local submap on first zoom into a town/castle
-            if not local_hexes_rows and parent["hex_type"] in ("town", "castle"):
-                try:
-                    from app.routers.hex_world import _auto_generate_local_hexes
-                    _auto_generate_local_hexes(conn, parent_q, parent_r)
-                    local_hexes_rows = conn.execute(
-                        "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
-                        (parent_id,),
-                    ).fetchall()
-                except Exception:
-                    pass
             local_hexes = [
                 {"q": row["q"], "r": row["r"], "hex_type": row["hex_type"],
                  "label": row["label"], "status": "discovered"}

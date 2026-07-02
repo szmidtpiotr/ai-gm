@@ -1035,7 +1035,7 @@ def resolve_starting_hex(
             fallback_row = conn.execute(
                 """SELECT key, label FROM game_locations
                    WHERE canonical=1 AND is_active=1 AND review_status='permanent'
-                   ORDER BY RANDOM() LIMIT 1"""
+                   ORDER BY id ASC LIMIT 1"""
             ).fetchone()
             if fallback_row:
                 loc_key = fallback_row["key"]

@@ -102,13 +102,26 @@ def get_local_hex_for_subloc(conn: sqlite3.Connection, sublocation_key: str) -> 
 # ── Layout helpers ────────────────────────────────────────────────────────────
 
 def _next_local_coords(
-    conn: sqlite3.Connection, parent_hex_id: Optional[int]
+    conn: sqlite3.Connection, parent_hex_id: Optional[int], parent_key: Optional[str] = None
 ) -> tuple[int, int]:
-    """Return the next free (q, r) for a new local hex under parent_hex_id."""
+    """Return the next free (q, r) for a new local hex under parent_hex_id.
+
+    When parent_hex_id is None (hub has no world-map anchor), falls back to
+    querying by parent_key via game_locations join so sibling sub-locs don't
+    all collide at (0,0).
+    """
     if parent_hex_id is not None:
         existing = conn.execute(
             "SELECT q, r FROM world_hexes WHERE map_level = 1 AND parent_hex_id = ? AND is_active = 1",
             (parent_hex_id,),
+        ).fetchall()
+    elif parent_key is not None:
+        existing = conn.execute(
+            """SELECT wh.q, wh.r FROM world_hexes wh
+               JOIN game_locations gl ON gl.key = wh.location_key
+               WHERE wh.map_level = 1 AND wh.is_active = 1
+                 AND gl.parent_key = ? AND gl.is_active = 1""",
+            (parent_key,),
         ).fetchall()
     else:
         existing = []
@@ -173,7 +186,7 @@ def auto_assign_local_hex(
                 assigned_hex = dict(existing_row)
             continue
 
-        q, r = _next_local_coords(conn, hub_hex_id)
+        q, r = _next_local_coords(conn, hub_hex_id, parent_key=parent_key)
         safe = bool(subloc["safe_for_rest"])
         encounter_chance = 0.0 if safe else RISKY_ENCOUNTER_CHANCE
 

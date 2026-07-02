@@ -1339,12 +1339,10 @@ def hex_chain_travel(campaign_id: int, req: HexTravelReq):
         if current_hex_dict:
             from_hex = (int(current_hex_dict["q"]), int(current_hex_dict["r"]))
         else:
-            # No hex position yet: place player at origin so pathfinding from (0,0)
-            # or use destination directly if no hexes built yet (first placement)
-            origin_exists = conn.execute(
-                "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
-            ).fetchone()
-            from_hex = (0, 0) if origin_exists else (req.destination_q, req.destination_r)
+            # #1115: no position yet — properly place the player via resolve_starting_hex
+            from app.services.hex_travel_service import resolve_starting_hex as _rsh
+            _start = _rsh(campaign_id, req.character_id, None, conn)
+            from_hex = (_start["q"], _start["r"])
 
         to_hex = (req.destination_q, req.destination_r)
 
