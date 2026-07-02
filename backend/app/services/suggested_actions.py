@@ -410,7 +410,11 @@ def _is_safe_for_rest(conn: sqlite3.Connection, location_key: str) -> bool:
             (location_key,),
         ).fetchone()
         if row and "safe_for_rest" in row.keys():
-            return bool(row["safe_for_rest"])
+            if bool(row["safe_for_rest"]):
+                return True
+        # #1063 Opcja B: osada bez własnej flagi, ale z sub-lokacją inn/tavern.
+        from app.services.world_service import settlement_lodging
+        return settlement_lodging(conn, location_key) is not None
     except Exception as exc:
         logger.warning("safe_for_rest_error", error=str(exc))
     return False

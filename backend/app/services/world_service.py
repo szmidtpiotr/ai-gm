@@ -1117,6 +1117,31 @@ def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
 
 # ── #995 — Settlement sub-location auto-generation ────────────────────────────
 
+def settlement_lodging(conn: sqlite3.Connection, location_key: str) -> dict | None:
+    """#1063 Opcja B — czy osada (macro), do której należy `location_key`, ma
+    aktywną sub-lokację typu inn/tavern? Zwraca {"key","label"} noclegu lub None.
+
+    Działa niezależnie od kolumny `safe_for_rest` sub-lokacji (typ, nie flaga,
+    jest tu źródłem prawdy) — admin nie musi ręcznie zaznaczać noclegu dla osady.
+    `location_key` może być samą osadą (macro) lub jej sub-lokacją (sub).
+    """
+    loc = conn.execute(
+        "SELECT key, location_type, parent_key FROM game_locations WHERE key = ? AND is_active = 1",
+        (location_key,),
+    ).fetchone()
+    if not loc:
+        return None
+    root_key = loc["key"] if loc["location_type"] == "macro" else loc["parent_key"]
+    if not root_key:
+        return None
+    row = conn.execute(
+        "SELECT key, label FROM game_locations WHERE parent_key = ? AND is_active = 1 "
+        "AND location_subtype IN ('inn', 'tavern') LIMIT 1",
+        (root_key,),
+    ).fetchone()
+    return {"key": row["key"], "label": row["label"]} if row else None
+
+
 # safe_for_rest per subtype — canonical convention shared with #994 build_camp guard
 SUBLOC_SAFE_FOR_REST: dict[str, int] = {
     "tavern": 1, "inn": 1, "temple": 1, "shrine": 1,

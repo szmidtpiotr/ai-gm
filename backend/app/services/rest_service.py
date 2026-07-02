@@ -136,11 +136,15 @@ def _is_safe_for_character(character_id: int, campaign_id: int, conn: sqlite3.Co
     loc_id = sess["current_location_id"]
     if loc_id:
         loc = conn.execute(
-            "SELECT safe_for_rest FROM game_locations WHERE id = ? AND is_active = 1",
+            "SELECT key, safe_for_rest FROM game_locations WHERE id = ? AND is_active = 1",
             (loc_id,),
         ).fetchone()
         if loc:
-            return bool(loc["safe_for_rest"])
+            if bool(loc["safe_for_rest"]):
+                return True
+            # #1063 Opcja B: osada bez własnej flagi, ale z sub-lokacją inn/tavern.
+            from app.services.world_service import settlement_lodging
+            return settlement_lodging(conn, loc["key"]) is not None
 
     # Fallback: current hex from session_flags
     try:
