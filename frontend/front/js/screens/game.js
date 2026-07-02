@@ -1451,6 +1451,12 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         if (result.completed_beats?.length || result.completed_quests?.length) {
             renderCompletionNotifications(result.completed_beats, result.completed_quests);
         }
+
+        // #1101: service payments — visible 💰 bubble + HUD gold refresh
+        if (result.gold_events?.length) {
+            renderGoldEvents(result.gold_events);
+            refreshGoldHud().catch(() => {});
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -1536,6 +1542,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.narrative_append)   result.narrative_append   = meta.narrative_append;
             if (meta.completed_beats)    result.completed_beats    = meta.completed_beats;
             if (meta.completed_quests)   result.completed_quests   = meta.completed_quests;
+            if (meta.gold_events)        result.gold_events        = meta.gold_events; // #1101
             // U30: sync map pin after each narrative turn (text movement updates current_hex).
             // If the hex changed AND the panel is open, re-fetch the map so the newly
             // discovered destination hex (not in the stale client cache) renders live —
@@ -1999,6 +2006,40 @@ function renderCompletionNotifications(beats, quests) {
         el.textContent = text;
         elements.chatMessages.appendChild(el);
     }
+}
+
+// #1101: render a visible 💰 bubble per service payment so the player sees gold move.
+// Only fires from a live turn's [DONE] payload — history reload carries no gold_events.
+function renderGoldEvents(events) {
+    if (!elements.chatMessages || !Array.isArray(events)) return;
+    for (const ev of events) {
+        const delta = Number(ev?.delta ?? 0);
+        if (!delta) continue;
+        const sign = delta < 0 ? '-' : '+';
+        const amount = Math.abs(delta);
+        const label = ev?.label ? ` — ${ev.label}` : '';
+        const el = document.createElement('div');
+        el.className = 'chat-bubble chat-bubble--gold';
+        el.textContent = `💰 ${sign}${amount} zł${label}`;
+        elements.chatMessages.appendChild(el);
+    }
+}
+
+// #1101: refresh the gold value shown in the sheet/inventory HUD after a payment,
+// without forcing a full inventory reload. Updates in place + pulses if visible.
+async function refreshGoldHud() {
+    if (!characterData?.id) return;
+    let gold = null;
+    try {
+        const r = await fetch(`/api/characters/${characterData.id}/gold`).then(x => x.json());
+        if (r?.ok && r.data?.gold_gp != null) gold = r.data.gold_gp;
+        else if (r?.gold_gp != null) gold = r.gold_gp;
+    } catch { return; }
+    if (gold == null) return;
+    characterData.gold_gp = gold;
+    const valueEl = document.querySelector('.inv-gold__value');
+    if (valueEl) valueEl.textContent = gold;
+    pulseGoldOnChange(gold);
 }
 
 // ── #1097: soft finale gate — chat card, persistent menu button, confirm modal ──

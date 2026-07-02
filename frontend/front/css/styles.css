@@ -1612,6 +1612,21 @@ body.combat-active .header--game {
   max-width: 80%;
 }
 
+/* #1101: service payment bubble — gold moved visibly */
+.chat-bubble--gold {
+  align-self: center;
+  background: rgba(201, 165, 74, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: var(--font-size-sm);
+  color: var(--accent-light);
+  text-align: center;
+  margin: 6px auto;
+  max-width: 80%;
+  font-variant-numeric: tabular-nums;
+}
+
 .message__meta {
   display: flex;
   align-items: center;

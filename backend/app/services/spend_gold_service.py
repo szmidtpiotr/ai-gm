@@ -133,10 +133,25 @@ def build_refusal_text(
     )
 
 
+def _get_service_label(conn: sqlite3.Connection, service_key: str) -> str:
+    """Return human label for a service key, or the key itself if unavailable."""
+    try:
+        row = conn.execute(
+            "SELECT label FROM game_config_services WHERE key = ? AND is_active = 1 LIMIT 1",
+            (service_key,),
+        ).fetchone()
+    except Exception:
+        return service_key
+    if row is None or row["label"] is None:
+        return service_key
+    return str(row["label"])
+
+
 def apply_spend_gold_to_narrative(
     text: Optional[str],
     conn: sqlite3.Connection,
     character_id: int,
+    collect_events: Optional[list] = None,
 ) -> str:
     """Process all [SPEND_GOLD:key] tags in text.
 
@@ -144,6 +159,10 @@ def apply_spend_gold_to_narrative(
     - If character can afford: deduct gold (caller must commit), replace tag with "".
     - If insufficient: replace tag with Polish refusal text.
     - Unknown key: strip tag silently.
+
+    #1101: if `collect_events` is a list, append one visible record per SUCCESSFUL
+    charge — {delta, label, source, service_key} — so the turn pipeline can surface
+    a 💰 bubble in chat. Refusals/unknown keys add nothing (no money moved).
 
     Returns modified text. Does NOT commit the transaction.
     """
@@ -175,6 +194,13 @@ def apply_spend_gold_to_narrative(
             )
             logger.info("spend_gold_applied", character_id=character_id,
                         service_key=key, cost=cost, new_gold=new_gold)
+            if collect_events is not None:
+                collect_events.append({
+                    "delta": -cost,
+                    "label": _get_service_label(conn, key),
+                    "source": "service",
+                    "service_key": key,
+                })
             result = result.replace(tag_str, "", 1)
         else:
             refusal = build_refusal_text(conn, character_id, key)

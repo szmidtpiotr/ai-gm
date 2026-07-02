@@ -6038,7 +6038,11 @@ def create_turn_stream(
                     _sg_conn = get_db()
                     try:
                         _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
-                        _sg_narr_clean = _apply_sg(_sg_narr, _sg_conn, character_id_val)
+                        # #1101: collect visible gold_events for the 💰 chat bubble
+                        _gold_events_s = []
+                        _sg_narr_clean = _apply_sg(
+                            _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
+                        )
                         _sg_conn.commit()
                     finally:
                         _sg_conn.close()
@@ -6425,6 +6429,10 @@ def create_turn_stream(
                     # #1097: finale-gate opened this turn — one-shot chat card trigger.
                     if locals().get("_finale_transition_s"):
                         done_payload["finale_available"] = True
+                    # #1101: surface service payments as visible 💰 chat bubbles (this turn only).
+                    _ge_s = locals().get("_gold_events_s")
+                    if _ge_s:
+                        done_payload["gold_events"] = _ge_s
                     # BUG-02: include current clock so frontend updates immediately
                     try:
                         from app.services.clock_service import get_clock_state as _gcs
