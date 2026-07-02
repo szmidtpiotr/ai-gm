@@ -210,6 +210,96 @@ _OUTCOME_PL_FULL = {"victory": "zwycięstwo", "death": "śmierć", "abandoned": 
 # constant no matter how many campaigns a hero survives. Starting value.
 LEGEND_DIGEST_TARGET_WORDS = 300
 
+# #1096 (1B) — abandonment scar: only campaigns played for at least this many
+# narrative turns leave an "unfinished business" note. Below it (misclick / test
+# campaign) nothing is written. Starting value, tunable.
+ABANDON_MIN_TURNS = 5
+# Short scar — a faint reputation mark, not a full chapter. Starting value.
+ABANDON_NOTE_TARGET_WORDS = 70
+
+
+def _row_get(row, key):
+    """Safe column access — returns None when the column is absent (older schema)."""
+    try:
+        return row[key]
+    except Exception:
+        return None
+
+
+def should_generate_abandonment_note(narrative_turns: int) -> bool:
+    """#1096 (1B) — gate: only campaigns with enough play leave a scar."""
+    try:
+        return int(narrative_turns) >= ABANDON_MIN_TURNS
+    except Exception:
+        return False
+
+
+def _build_abandonment_prompt(name: str, campaign_title: str, transcript: str) -> str:
+    """LLM prompt for a short 'unfinished business' scar (reputation mark)."""
+    return (
+        f"Jesteś kronikarzem legend. Bohater {name} PORZUCIŁ przygodę "
+        f"„{campaign_title}” — odszedł, nie kończąc zadań.\n\n"
+        f"Fragment tego, co zdążyło się wydarzyć:\n{transcript}\n\n"
+        f"Napisz KRÓTKĄ notkę (~{ABANDON_NOTE_TARGET_WORDS} słów, PO POLSKU, "
+        f"trzecia osoba) o tym, co bohater zostawił NIEDOKOŃCZONE i kogo tym ZAWIÓDŁ "
+        f"— porzucone zadania, złamane obietnice, NPC/miejsca, które zapamiętają jego "
+        f"odejście. To rysa na reputacji, nie triumf. Bez nagłówków ani markdown."
+    )
+
+
+def _generate_abandonment_note_text(
+    name: str, campaign_title: str, transcript: str, user_id: int
+) -> str:
+    """Call the LLM to produce the abandonment scar note (empty string on failure)."""
+    prompt = _build_abandonment_prompt(name, campaign_title, transcript)
+    messages = [
+        {"role": "system", "content": "Piszesz kroniki bohaterów gry RPG. Tylko czysty tekst, bez nagłówków."},
+        {"role": "user", "content": prompt},
+    ]
+    llm_config = get_user_llm_settings_full(user_id)
+    try:
+        return (generate_chat(messages=messages, llm_config=llm_config) or "").strip()
+    except Exception as e:
+        logger.warning("abandonment_note_llm_failed", error=str(e))
+        return ""
+
+
+def _update_abandonment_note(history_id: int, note: str) -> None:
+    conn = _open_db()
+    try:
+        conn.execute(
+            "UPDATE character_campaign_history SET abandonment_note = ? WHERE id = ?",
+            (note, history_id),
+        )
+        conn.commit()
+        logger.info("abandonment_note_saved", history_id=history_id, length=len(note))
+    except Exception as e:
+        logger.warning("abandonment_note_save_failed", history_id=history_id, error=str(e))
+    finally:
+        conn.close()
+
+
+def schedule_abandonment_note(
+    *,
+    history_id: int,
+    name: str,
+    campaign_title: str,
+    transcript: str,
+    user_id: int,
+) -> None:
+    """Fire-and-forget: generate the abandonment scar in a daemon thread.
+
+    The transcript is captured BY THE CALLER before campaign_turns are deleted,
+    so this is self-contained and does not read the (soon-gone) turns table.
+    """
+    def _worker():
+        note = _generate_abandonment_note_text(name, campaign_title, transcript, user_id)
+        if note:
+            _update_abandonment_note(history_id, note)
+
+    t = threading.Thread(target=_worker, daemon=True, name=f"abandon-note-{history_id}")
+    t.start()
+
 
 def _count_completed_chapters(conn: sqlite3.Connection, character_id: int) -> int:
     """Number of finished campaigns with a chapter summary for this hero."""
@@ -281,20 +371,68 @@ def _read_legend_digest(conn: sqlite3.Connection, character_id: int) -> str:
         return ""
 
 
-def _build_legend_prompt(name: str, chapters: list[sqlite3.Row]) -> str:
-    """LLM prompt that folds ALL chapters into one bounded life-legend."""
+def _count_legend_sources(conn: sqlite3.Connection, character_id: int) -> int:
+    """#1096 (1B) — chapters (victory/death) PLUS abandonment scars that feed the
+    legend. Used for lazy staleness so a new scar also triggers a re-fold."""
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM character_campaign_history
+            WHERE character_id = ?
+              AND outcome IN ('victory', 'death', 'abandoned')
+              AND ( (chapter_summary  IS NOT NULL AND chapter_summary  != '')
+                 OR (abandonment_note IS NOT NULL AND abandonment_note != '') )
+            """,
+            (character_id,),
+        ).fetchone()
+        return int(row["n"] if row else 0)
+    except Exception:
+        # older schema without abandonment_note
+        return _count_completed_chapters(conn, character_id)
+
+
+def _fetch_legend_sources(conn: sqlite3.Connection, character_id: int) -> list[sqlite3.Row]:
+    """All legend inputs (chapters + abandonment scars), oldest → newest."""
+    try:
+        return conn.execute(
+            """
+            SELECT outcome, chapter_summary, abandonment_note, completed_at
+            FROM character_campaign_history
+            WHERE character_id = ?
+              AND outcome IN ('victory', 'death', 'abandoned')
+              AND ( (chapter_summary  IS NOT NULL AND chapter_summary  != '')
+                 OR (abandonment_note IS NOT NULL AND abandonment_note != '') )
+            ORDER BY completed_at ASC
+            """,
+            (character_id,),
+        ).fetchall()
+    except Exception:
+        # older schema — fall back to chapter summaries only (oldest → newest)
+        return list(reversed(_fetch_recent_chapters(conn, character_id, limit=9999)))
+
+
+def _build_legend_prompt(name: str, sources: list[sqlite3.Row]) -> str:
+    """LLM prompt that folds ALL chapters + abandonment scars into one bounded legend."""
     lines: list[str] = []
-    for i, r in enumerate(chapters, start=1):
+    for i, r in enumerate(sources, start=1):
         outcome_pl = _OUTCOME_PL_FULL.get(str(r["outcome"] or ""), str(r["outcome"] or ""))
-        summary = str(r["chapter_summary"] or "").strip()
-        lines.append(f"Kampania {i} [{outcome_pl}]: {summary}")
+        summary = str(_row_get(r, "chapter_summary") or "").strip()
+        note = str(_row_get(r, "abandonment_note") or "").strip()
+        if summary:
+            lines.append(f"Kampania {i} [{outcome_pl}]: {summary}")
+        elif note:
+            lines.append(f"Kampania {i} [PORZUCONA — niedokończone]: {note}")
     transcript = "\n\n".join(lines)
     return (
         f"Jesteś kronikarzem legend. Oto kroniki WSZYSTKICH przygód bohatera {name} "
-        f"(od najstarszej do najnowszej):\n\n{transcript}\n\n"
+        f"(od najstarszej do najnowszej). Kampanie oznaczone [PORZUCONA] to zadania, "
+        f"od których bohater odszedł — potraktuj je jako RYSY na reputacji.\n\n"
+        f"{transcript}\n\n"
         f"Napisz zwięzłą LEGENDĘ tego bohatera — spłaszczone streszczenie CAŁEGO życia. "
-        f"NIE gub wczesnych wydarzeń: zachowaj reputację, powracających NPC, wrogów, "
-        f"sojuszników, kluczowe łuki i konsekwencje decyzji. Pomiń drobiazgi. "
+        f"NIE gub wczesnych wydarzeń: zachowaj reputację (także złą), powracających NPC, "
+        f"wrogów, sojuszników, kluczowe łuki, konsekwencje decyzji ORAZ niedokończone "
+        f"sprawy z porzuconych wypraw. Pomiń drobiazgi. "
         f"Maksymalnie ~{LEGEND_DIGEST_TARGET_WORDS} słów, PO POLSKU, proza w trzeciej osobie. "
         f"Bez nagłówków ani markdown."
     )
@@ -311,8 +449,8 @@ def refresh_hero_legend(
     (legend_digest_count != number of finished chapters). Returns the digest
     (possibly the existing cached one). Safe when the character has no history.
     """
-    completed = _count_completed_chapters(conn, character_id)
-    if completed == 0:
+    sources_count = _count_legend_sources(conn, character_id)
+    if sources_count == 0:
         return ""
 
     try:
@@ -332,17 +470,15 @@ def refresh_hero_legend(
         cur_count = 0
 
     # Fresh — nothing changed since last fold.
-    if cur_digest and cur_count == completed:
+    if cur_digest and cur_count == sources_count:
         return cur_digest
 
     name = str(row["name"] or "Bohater")
-    chapters = _fetch_recent_chapters(conn, character_id, limit=completed)
-    # oldest → newest for a chronological legend
-    chapters = list(reversed(chapters))
-    if not chapters:
+    sources = _fetch_legend_sources(conn, character_id)  # oldest → newest
+    if not sources:
         return cur_digest
 
-    prompt = _build_legend_prompt(name, chapters)
+    prompt = _build_legend_prompt(name, sources)
     messages = [
         {"role": "system", "content": "Piszesz legendy bohaterów gry RPG. Tylko czysty tekst, bez nagłówków."},
         {"role": "user", "content": prompt},
@@ -360,10 +496,10 @@ def refresh_hero_legend(
     try:
         conn.execute(
             "UPDATE characters SET legend_digest = ?, legend_digest_count = ? WHERE id = ?",
-            (digest, completed, character_id),
+            (digest, sources_count, character_id),
         )
         conn.commit()
-        logger.info("hero_legend_refreshed", character_id=character_id, chapters=completed)
+        logger.info("hero_legend_refreshed", character_id=character_id, chapters=sources_count)
     except Exception as e:
         logger.warning("hero_legend_save_failed", error=str(e), character_id=character_id)
     return digest

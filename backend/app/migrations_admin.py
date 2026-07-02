@@ -3362,6 +3362,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # bounded length) + count of chapters folded into it (for lazy staleness check).
     _exec("ALTER TABLE characters ADD COLUMN legend_digest TEXT", "v2-characters-legend-digest")
     _exec("ALTER TABLE characters ADD COLUMN legend_digest_count INTEGER NOT NULL DEFAULT 0", "v2-characters-legend-digest-count")
+    # #1096 (1B) — abandonment scar: short "unfinished business" note for campaigns
+    # the player walked away from (deleted mid-play). Feeds the LEGEND (tier 1) only,
+    # never the verbatim recent-chapters tier. Loot/XP still persist (Hero-First).
+    _exec("ALTER TABLE character_campaign_history ADD COLUMN abandonment_note TEXT", "v2-cch-abandonment-note")
 
     # ── ALTER TABLE: character_xp_grants ─────────────────────────────────
 

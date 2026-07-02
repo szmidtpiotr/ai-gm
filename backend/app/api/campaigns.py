@@ -1078,6 +1078,29 @@ def delete_campaign(campaign_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Campaign not found")
 
+        # #1096 (1B) — capture context BEFORE turns are deleted, so we can
+        # generate an "unfinished business" scar for campaigns played long enough.
+        _camp_title = ""
+        _abandon_transcript = ""
+        _narrative_turns = 0
+        try:
+            _ct_row = conn.execute(
+                "SELECT title FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            _camp_title = str((_ct_row["title"] if _ct_row else "") or "Bezimienna wyprawa")
+            _narrative_turns = int(conn.execute(
+                "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                (campaign_id,),
+            ).fetchone()[0] or 0)
+            from app.services.chapter_summary_service import (
+                _fetch_last_turns,
+                should_generate_abandonment_note,
+            )
+            if should_generate_abandonment_note(_narrative_turns):
+                _abandon_transcript = _fetch_last_turns(conn, campaign_id)
+        except Exception as _pre_err:
+            logger.warning("abandon_precapture_failed", error=str(_pre_err))
+
         conn.execute("BEGIN")
 
         # Stage 6 write hook — record an `abandoned` history row for each hero
@@ -1085,13 +1108,14 @@ def delete_campaign(campaign_id: int):
         # history row already exists for (character, campaign).
         heroes_in = conn.execute(
             """
-            SELECT c.id, c.sheet_json,
+            SELECT c.id, c.name, c.user_id, c.sheet_json,
                    (SELECT COUNT(*) FROM campaign_turns t WHERE t.campaign_id = ?) AS turns_count,
                    COALESCE(c.gold_gp, 0) AS gold_at_end
             FROM characters c WHERE c.campaign_id = ?
             """,
             (campaign_id, campaign_id),
         ).fetchall()
+        _pending_scars: list[dict] = []  # scheduled after commit
         for h in heroes_in:
             try:
                 sheet = json.loads(h["sheet_json"] or "{}")
@@ -1108,7 +1132,7 @@ def delete_campaign(campaign_id: int):
             ).fetchone()
             if already:
                 continue
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO character_campaign_history
                   (character_id, campaign_id, outcome, xp_earned, gold_at_end, turns_count, completed_at)
@@ -1116,6 +1140,14 @@ def delete_campaign(campaign_id: int):
                 """,
                 (int(h["id"]), campaign_id, xp_lifetime, int(h["gold_at_end"]), int(h["turns_count"])),
             )
+            # #1096 (1B) — queue an abandonment scar when the run had real play.
+            # Loot/XP still persist (Hero-First) — this is a narrative mark only.
+            if _abandon_transcript:
+                _pending_scars.append({
+                    "history_id": int(cur.lastrowid),
+                    "name": str(h["name"] or "Bohater"),
+                    "user_id": int(h["user_id"] or 0),
+                })
 
         conn.execute(
             "DELETE FROM campaign_turns WHERE campaign_id = ?",
@@ -1134,6 +1166,22 @@ def delete_campaign(campaign_id: int):
         )
 
         conn.commit()
+
+        # After commit: fire-and-forget scar generation (daemon thread, own DB).
+        if _pending_scars:
+            try:
+                from app.services.chapter_summary_service import schedule_abandonment_note
+                for _scar in _pending_scars:
+                    schedule_abandonment_note(
+                        history_id=_scar["history_id"],
+                        name=_scar["name"],
+                        campaign_title=_camp_title,
+                        transcript=_abandon_transcript,
+                        user_id=_scar["user_id"],
+                    )
+            except Exception as _scar_err:
+                logger.warning("abandon_scar_schedule_failed", error=str(_scar_err))
+
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     except HTTPException:
