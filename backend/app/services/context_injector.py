@@ -154,7 +154,7 @@ class ContextInjector:
             and not _drun.get("failed")
         )
 
-        hero_chronicle_block = self._build_hero_chronicle_block(character_id)
+        hero_chronicle_block = self._build_hero_chronicle_block(character_id, campaign_id)
 
         if _in_dungeon:
             blocks = [
@@ -331,12 +331,24 @@ class ContextInjector:
             logger.warning("narrative_state_block_failed", error=str(e))
             return ""
 
-    def _build_hero_chronicle_block(self, character_id: int) -> str:
+    def _build_hero_chronicle_block(self, character_id: int, campaign_id: int | None = None) -> str:
         """#1096 — inject hero's cross-campaign chronicle so the narrator can reference
-        the character's past. Silently returns empty string when no history exists."""
+        the character's past. Silently returns empty string when no history exists.
+
+        #1100 — when the current region is known, also inject the relevant subset of
+        STRUCTURED key decisions (cheaper + precise NPC/region callbacks)."""
         try:
             from app.services.chapter_summary_service import get_hero_chronicle
-            return get_hero_chronicle(self.conn, character_id, limit=3)
+            region = None
+            if campaign_id is not None:
+                try:
+                    from app.services import reputation_service as rep
+                    region = rep.resolve_region(self.conn, campaign_id)
+                except Exception:
+                    region = None
+            return get_hero_chronicle(
+                self.conn, character_id, limit=3, relevant_region=region,
+            )
         except Exception as e:
             logger.warning("hero_chronicle_block_failed", error=str(e))
             return ""

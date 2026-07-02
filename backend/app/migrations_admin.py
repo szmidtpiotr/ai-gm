@@ -3379,6 +3379,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # the player walked away from (deleted mid-play). Feeds the LEGEND (tier 1) only,
     # never the verbatim recent-chapters tier. Loot/XP still persist (Hero-First).
     _exec("ALTER TABLE character_campaign_history ADD COLUMN abandonment_note TEXT", "v2-cch-abandonment-note")
+    # #1100 — structured hero memory: key decisions/consequences/relations as JSON
+    # (list of {typ, opis, konsekwencja, npc?, region?, waga}) extracted alongside the
+    # prose chapter_summary. Feeds reputation (#1099) + precise callbacks without prose parsing.
+    _exec("ALTER TABLE character_campaign_history ADD COLUMN key_decisions_json TEXT", "v2-cch-key-decisions-json")
 
     # ── ALTER TABLE: character_xp_grants ─────────────────────────────────
 

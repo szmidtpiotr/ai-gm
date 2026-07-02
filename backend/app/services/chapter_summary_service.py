@@ -187,6 +187,13 @@ def schedule_chapter_summary(
         conn = _open_db()
         try:
             info = _fetch_character_info(conn, character_id)
+            transcript = _fetch_last_turns(conn, campaign_id)
+            # #1100 — resolve region for the structured decisions (best-effort).
+            try:
+                from app.services import reputation_service as rep
+                region = rep.resolve_region(conn, campaign_id)
+            except Exception:
+                region = ""
         finally:
             conn.close()
 
@@ -199,6 +206,22 @@ def schedule_chapter_summary(
         )
         if summary:
             _update_chapter_summary(history_id, summary)
+
+        # #1100 — extract structured key decisions alongside the prose summary,
+        # from the SAME transcript. Best-effort; failure leaves key_decisions_json NULL.
+        try:
+            decisions = extract_key_decisions_from_transcript(
+                name=info["name"],
+                archetype=info["archetype"],
+                outcome=outcome,
+                transcript=transcript,
+                region=region,
+                user_id=user_id,
+            )
+            if decisions:
+                _update_key_decisions_json(history_id, decisions)
+        except Exception as e:
+            logger.warning("key_decisions_extract_failed", history_id=history_id, error=str(e))
 
     t = threading.Thread(target=_worker, daemon=True, name=f"chapter-summary-{campaign_id}")
     t.start()
@@ -224,6 +247,209 @@ def _row_get(row, key):
         return row[key]
     except Exception:
         return None
+
+
+# ── #1100 — Structured hero memory (key_decisions_json) ──────────────────────
+# Extract key decisions/consequences/relations as STRUCTURE alongside the prose
+# chapter summary. Cheaper + more precise to inject than flattened prose, and a
+# ready feed for the reputation system (#1099) and precise NPC callbacks.
+
+# Recognised decision categories (typ). Unknown values are kept as-is, not dropped.
+KEY_DECISION_TYPES = (
+    "moralna",          # moral choice
+    "sojusz",           # alliance with an NPC
+    "wrogosc",          # hostility with an NPC
+    "quest_ukonczony",  # completed quest
+    "quest_porzucony",  # abandoned quest
+    "tytul",            # earned title
+    "reputacja",        # reputation shift
+)
+# Cap how many entries we keep per campaign so token cost stays bounded. Starting value.
+KEY_DECISIONS_MAX = 12
+# Cap entries injected into a chronicle for the current region/NPC context. Starting value.
+KEY_DECISIONS_INJECT_LIMIT = 6
+
+
+def _clamp_waga(value, default: int = 3) -> int:
+    """Clamp the importance weight into 1..5 (starting scale)."""
+    try:
+        w = int(value)
+    except Exception:
+        return default
+    return max(1, min(5, w))
+
+
+def normalize_key_decisions(raw) -> list[dict]:
+    """Validate/normalise raw LLM output into a canonical list of decision dicts.
+
+    Accepts either a bare list or a dict wrapping it under 'decisions'/'key_decisions'.
+    Each surviving entry has the canonical shape
+    {typ, opis, konsekwencja, npc, region, waga}. Entries without a description are
+    dropped; junk (non-dict) is skipped; total is capped at KEY_DECISIONS_MAX.
+    """
+    if isinstance(raw, dict):
+        items = raw.get("decisions") or raw.get("key_decisions") or []
+    else:
+        items = raw
+    if not isinstance(items, list):
+        return []
+
+    out: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        opis = str(it.get("opis") or it.get("description") or "").strip()
+        if not opis:
+            continue
+        out.append({
+            "typ": str(it.get("typ") or it.get("type") or "inne").strip() or "inne",
+            "opis": opis,
+            "konsekwencja": str(it.get("konsekwencja") or it.get("consequence") or "").strip(),
+            "npc": str(it.get("npc") or "").strip(),
+            "region": str(it.get("region") or "").strip(),
+            "waga": _clamp_waga(it.get("waga") or it.get("weight")),
+        })
+        if len(out) >= KEY_DECISIONS_MAX:
+            break
+    return out
+
+
+def filter_key_decisions(
+    decisions: list[dict],
+    *,
+    region: str | None = None,
+    npcs: list[str] | None = None,
+    limit: int = KEY_DECISIONS_INJECT_LIMIT,
+) -> list[dict]:
+    """Return the relevant subset for the current context (region and/or NPCs).
+
+    With no criteria returns [] (nothing to inject). Matching is case-insensitive;
+    an entry matches when its region equals `region` OR its npc is in `npcs`.
+    Result is sorted by importance (waga) descending and capped at `limit`.
+    """
+    if not region and not npcs:
+        return []
+    region_l = (region or "").strip().lower()
+    npc_set = {str(n).strip().lower() for n in (npcs or []) if str(n).strip()}
+
+    matched: list[dict] = []
+    for d in decisions:
+        d_region = str(d.get("region") or "").strip().lower()
+        d_npc = str(d.get("npc") or "").strip().lower()
+        if (region_l and d_region and d_region == region_l) or (d_npc and d_npc in npc_set):
+            matched.append(d)
+    matched.sort(key=lambda x: _clamp_waga(x.get("waga")), reverse=True)
+    return matched[:max(0, int(limit))]
+
+
+def format_key_decisions_block(decisions: list[dict]) -> str:
+    """Render a compact injectable block for a subset of key decisions."""
+    if not decisions:
+        return ""
+    lines: list[str] = []
+    for d in decisions:
+        typ = str(d.get("typ") or "inne").strip()
+        opis = str(d.get("opis") or "").strip()
+        kons = str(d.get("konsekwencja") or "").strip()
+        npc = str(d.get("npc") or "").strip()
+        tail = f" → {kons}" if kons else ""
+        who = f" (NPC: {npc})" if npc else ""
+        lines.append(f"- [{typ}]{who} {opis}{tail}")
+    return "=== KLUCZOWE DECYZJE (istotne teraz) ===\n" + "\n".join(lines)
+
+
+def _fetch_all_key_decisions(conn: sqlite3.Connection, character_id: int) -> list[dict]:
+    """Flatten every stored key_decisions_json for this hero into one list.
+
+    Returns [] on older schemas without the column, or when nothing is stored."""
+    try:
+        rows = conn.execute(
+            """
+            SELECT key_decisions_json
+            FROM character_campaign_history
+            WHERE character_id = ?
+              AND key_decisions_json IS NOT NULL
+              AND key_decisions_json != ''
+            ORDER BY completed_at DESC
+            """,
+            (character_id,),
+        ).fetchall()
+    except Exception:
+        return []  # column missing (older schema) — fallback handled by caller (prose)
+
+    flat: list[dict] = []
+    for r in rows:
+        try:
+            parsed = json.loads(_row_get(r, "key_decisions_json") or "[]")
+        except Exception:
+            continue
+        flat.extend(normalize_key_decisions(parsed))
+    return flat
+
+
+def _build_decisions_prompt(
+    name: str, archetype: str, outcome: Outcome, transcript: str, region: str
+) -> str:
+    outcome_pl = _OUTCOME_LABEL.get(outcome, outcome)
+    return (
+        f"Jesteś analitykiem kroniki RPG. Wyodrębnij KLUCZOWE decyzje bohatera z fragmentu przygody "
+        f"i zwróć je jako STRUKTURĘ JSON.\n\n"
+        f"Bohater: {name} ({archetype})\n"
+        f"Zakończenie: {outcome_pl}\n"
+        f"Region: {region or 'kresy'}\n\n"
+        f"Fragment przygody:\n{transcript}\n\n"
+        f"Zwróć WYŁĄCZNIE JSON w formacie:\n"
+        f'{{"decisions": [{{"typ": "...", "opis": "...", "konsekwencja": "...", '
+        f'"npc": "...", "region": "...", "waga": 1-5}}]}}\n\n'
+        f"Zasady:\n"
+        f"- typ ∈ {list(KEY_DECISION_TYPES)} (wybierz najlepiej pasujący)\n"
+        f"- opis: krótkie zdanie CO bohater zrobił/postanowił\n"
+        f"- konsekwencja: krótki skutek (może być pusty)\n"
+        f"- npc: imię postaci, której to dotyczy (jeśli żadnej — pusty string)\n"
+        f'- region: nazwa regionu (jeśli nieznany — "{region or "kresy"}")\n'
+        f"- waga: 1 (drobne) do 5 (przełomowe)\n"
+        f"- maks. {KEY_DECISIONS_MAX} najważniejszych wpisów. Tylko realnie znaczące decyzje.\n"
+        f"Bez komentarza, bez markdown — sam obiekt JSON."
+    )
+
+
+def extract_key_decisions_from_transcript(
+    name: str, archetype: str, outcome: Outcome, transcript: str,
+    region: str, user_id: int,
+) -> list[dict]:
+    """Call the LLM to extract structured key decisions ([] on any failure)."""
+    from app.services.gm_plan_generation_service import extract_first_json_object
+
+    prompt = _build_decisions_prompt(name, archetype, outcome, transcript, region)
+    messages = [
+        {"role": "system", "content": "Zwracasz wyłącznie poprawny JSON, bez markdown."},
+        {"role": "user", "content": prompt},
+    ]
+    llm_config = get_user_llm_settings_full(user_id)
+    try:
+        raw = (generate_chat(messages=messages, llm_config=llm_config) or "").strip()
+    except Exception as e:
+        logger.warning("key_decisions_llm_failed", error=str(e))
+        return []
+    parsed = extract_first_json_object(raw)
+    if parsed is None:
+        return []
+    return normalize_key_decisions(parsed)
+
+
+def _update_key_decisions_json(history_id: int, decisions: list[dict]) -> None:
+    conn = _open_db()
+    try:
+        conn.execute(
+            "UPDATE character_campaign_history SET key_decisions_json = ? WHERE id = ?",
+            (json.dumps(decisions, ensure_ascii=False), history_id),
+        )
+        conn.commit()
+        logger.info("key_decisions_saved", history_id=history_id, count=len(decisions))
+    except Exception as e:
+        logger.warning("key_decisions_save_failed", history_id=history_id, error=str(e))
+    finally:
+        conn.close()
 
 
 def should_generate_abandonment_note(narrative_turns: int) -> bool:
@@ -512,6 +738,8 @@ def get_hero_chronicle(
     limit: int = 2,
     user_id: int | None = None,
     regenerate: bool = False,
+    relevant_region: str | None = None,
+    relevant_npcs: list[str] | None = None,
 ) -> str:
     """#1096 — Two-tier hero chronicle for cross-campaign continuity.
 
@@ -532,7 +760,21 @@ def get_hero_chronicle(
     digest = _read_legend_digest(conn, character_id)
     recent = _fetch_recent_chapters(conn, character_id, limit)
 
-    if not digest and not recent:
+    # #1100 — structured subset: inject only key decisions relevant to the current
+    # context (region / NPCs). Falls back to nothing (prose only) on older schemas
+    # or when no criteria / no matching structured entries exist.
+    decisions_block = ""
+    if relevant_region or relevant_npcs:
+        try:
+            all_decisions = _fetch_all_key_decisions(conn, character_id)
+            subset = filter_key_decisions(
+                all_decisions, region=relevant_region, npcs=relevant_npcs,
+            )
+            decisions_block = format_key_decisions_block(subset)
+        except Exception as e:
+            logger.warning("hero_chronicle_decisions_failed", error=str(e), character_id=character_id)
+
+    if not digest and not recent and not decisions_block:
         return ""
 
     parts: list[str] = []
@@ -547,6 +789,9 @@ def get_hero_chronicle(
             summary = str(r["chapter_summary"] or "").strip()
             verbatim.append(f"Rozdział {i} — {title} [{outcome_pl}]:\n{summary}")
         parts.append("=== OSTATNIE ROZDZIAŁY (szczegóły) ===\n" + "\n\n".join(verbatim))
+
+    if decisions_block:
+        parts.append(decisions_block)
 
     return "\n\n".join(parts) + "\n=== KONIEC KRONIKI ==="
 
