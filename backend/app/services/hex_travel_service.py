@@ -8,6 +8,7 @@ from __future__ import annotations
 import heapq
 import json
 import random
+import re
 import sqlite3
 from typing import Any, Optional
 
@@ -248,6 +249,65 @@ def detect_named_destination_hex(
     if target == (cur_q, cur_r):
         return None  # same hex — not cross-hex travel
     return target
+
+
+# ── PT3/#1113: named-destination text resolver ────────────────────────────────
+
+_PT3_MOVE_VERB_RE = re.compile(
+    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy)\w*\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_PT3_DEST_RE = re.compile(
+    r"\b(?:do|ku)\s+([A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}"
+    r"(?:\s+[A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,})*)",
+    re.UNICODE,
+)
+
+
+def resolve_player_text_to_location_key(
+    player_text: str,
+    conn: sqlite3.Connection,
+) -> str | None:
+    """PT3/#1113: Extract 'idę do <City>' from player text and resolve to a location key.
+
+    Only fires when text contains a movement verb to avoid false positives like
+    'mapa do Vilnogradu'. Returns the DB key of the best matching canonical location,
+    or None when no match is found.
+
+    Handles Polish inflection via prefix matching: 'Vilnogradu' starts with 'Vilnograd'.
+    """
+    if not _PT3_MOVE_VERB_RE.search(player_text):
+        return None
+
+    m = _PT3_DEST_RE.search(player_text)
+    if not m:
+        return None
+    candidate = m.group(1).strip()
+    if not candidate:
+        return None
+
+    norm_cand = _normalize(candidate)
+
+    rows = conn.execute(
+        "SELECT key, label FROM game_locations WHERE canonical = 1 AND is_active = 1"
+    ).fetchall()
+
+    best_score = 0.0
+    best_key: str | None = None
+    for row in rows:
+        norm_label = _normalize(row["label"] or "")
+        if not norm_label or len(norm_label) < 3:
+            continue
+        # Prefix check handles genitive inflection ("vilnogradu" starts with "vilnograd")
+        if norm_cand.startswith(norm_label) or norm_label.startswith(norm_cand):
+            score = 1.0
+        else:
+            score = _label_similarity(candidate, row["label"])
+        if score > best_score:
+            best_score = score
+            best_key = row["key"]
+
+    return best_key if best_score >= 0.4 else None
 
 
 # ── Main travel resolver ──────────────────────────────────────────────────────

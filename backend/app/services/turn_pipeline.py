@@ -226,7 +226,80 @@ def execute_directional_travel(
 
     mv = detect_move_intent(player_text, cur)
     if not mv:
+        # PT3/#1113: before vague-move hint, check for a named destination on a different hex
         if detect_vague_move_intent(player_text):
+            from app.services.hex_travel_service import (
+                resolve_player_text_to_location_key,
+                detect_named_destination_hex,
+                resolve_chain_travel as _rct_named,
+            )
+            _named_key = resolve_player_text_to_location_key(player_text, conn)
+            if _named_key:
+                _named_hex = detect_named_destination_hex(_named_key, cur, conn)
+                if _named_hex:
+                    # Cross-hex named destination → chain travel (same as directional)
+                    dq_n, dr_n = _named_hex
+                    _loc_row_n = conn.execute(
+                        "SELECT label FROM game_locations WHERE key = ? LIMIT 1",
+                        (_named_key,),
+                    ).fetchone()
+                    _loc_label_n = _loc_row_n["label"] if _loc_row_n else _named_key
+                    tr_n = _rct_named(
+                        campaign_id=campaign_id,
+                        character_id=character_id,
+                        from_hex=(int(cur["q"]), int(cur["r"])),
+                        to_hex=(dq_n, dr_n),
+                        character_sheet=character_sheet,
+                        conn=conn,
+                    )
+                    if tr_n.get("ok"):
+                        try:
+                            from app.services.clock_service import advance_clock
+                            hours_n = float(tr_n.get("total_hours") or 0.0)
+                            if hours_n > 0:
+                                advance_clock(campaign_id, hours_n, "travel", conn=conn)
+                                conn.commit()
+                        except Exception as _clk_err:
+                            logger.warning("pt3_clock_advance_failed", error=str(_clk_err))
+
+                        arr_n = tr_n.get("arrived_hex") or {}
+                        hex_info_n = tr_n.get("hex_data") or {}
+                        enc_n = tr_n.get("encounter")
+                        fact_n = (
+                            f"\n[SYSTEM: Podróż do {_loc_label_n} wykonana mechanicznie: gracz "
+                            f"przemieścił się na hex ({arr_n.get('q')},{arr_n.get('r')}), "
+                            f"teren: {hex_info_n.get('hex_type', 'nieznany')}, "
+                            f"czas podróży: {tr_n.get('total_hours', 0)}h."
+                        )
+                        if enc_n:
+                            fact_n += (
+                                f" Podróż przerwana spotkaniem: {enc_n.get('enemy_key')} — "
+                                "opisz nadejście zagrożenia."
+                            )
+                        fact_n += (
+                            " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej"
+                            " lokacji — ruch już rozstrzygnięty mechanicznie.]"
+                        )
+                        logger.info(
+                            "pt3_named_destination_travel",
+                            campaign_id=campaign_id,
+                            location_key=_named_key,
+                            from_hex=(cur.get("q"), cur.get("r")),
+                            to_hex=_named_hex,
+                        )
+                        return {"executed": True, "system_fact": fact_n, "intent": None}
+
+                    fact_n = (
+                        f"\n[SYSTEM: Gracz próbuje dotrzeć do '{_loc_label_n}', "
+                        f"ale mechanika odmówiła: {tr_n.get('error', 'nieprzejezdny teren')}. "
+                        "Opisz przeszkodę narracyjnie. NIE opisuj dotarcia do celu.]"
+                    )
+                    return {"executed": False, "system_fact": fact_n, "intent": None}
+
+                # Named dest found but same hex → let LLM handle via location_intent
+                return {"executed": False, "system_fact": None, "intent": None}
+
+            # No named destination found → fall through to vague hint
             hint = _build_vague_move_hint(conn, flags)
             return {"executed": False, "system_fact": hint, "intent": None}
         return {"executed": False, "system_fact": None, "intent": None}
