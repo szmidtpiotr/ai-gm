@@ -16,16 +16,10 @@ logger = get_logger(__name__)
 # Maks. lokacji w known_locations (bez kolumny campaign_id — graf od bieżącej pozycji)
 _KNOWN_LOCATION_CAP = 120
 
-# ── U29: Flat-top hex directions (q_delta, r_delta, direction_name) ──────────
+# ── U29 / PT1: Flat-top hex directions — imported from canonical module ───────
+# Single source of truth: hex_directions.py (PT1 fix)
 
-_HEX_DIRECTIONS = [
-    (1,  0,  "wschód"),
-    (-1, 0,  "zachód"),
-    (0,  1,  "południe"),
-    (0,  -1, "północ"),
-    (1,  -1, "północny-wschód"),
-    (-1, 1,  "południowy-zachód"),
-]
+from app.services.hex_directions import HEX_DIRECTIONS as _HEX_DIRECTIONS
 
 # ── U29: Keyword → location_subtype mapping for candidate search ──────────────
 

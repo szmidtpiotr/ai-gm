@@ -49,27 +49,10 @@ DB_PATH = "/data/ai_gm.db"
 
 import re as _re_tp
 
-# ── U30: Keyword fast-path for MOVE intent ────────────────────────────────────
+# ── U30 / PT1: Keyword fast-path for MOVE intent ─────────────────────────────
+# Single source of truth: hex_directions.py (PT1 fix for zachód ≠ południowy-zachód)
 
-_DIRECTION_KEYWORDS: dict[str, tuple[int, int]] = {
-    # Polish with diacritics → axial hex offset (flat-top, standard orientation)
-    "północ": (0, -1), "północny": (0, -1), "north": (0, -1),
-    "południe": (0, 1), "południowy": (0, 1), "south": (0, 1),
-    "północny-wschód": (1, -1), "północny wschód": (1, -1), "northeast": (1, -1),
-    "północny-zachód": (-1, 0), "północny zachód": (-1, 0), "northwest": (-1, 0),
-    "południowy-wschód": (1, 0), "południowy wschód": (1, 0), "southeast": (1, 0),
-    "południowy-zachód": (-1, 1), "południowy zachód": (-1, 1), "southwest": (-1, 1),
-    "wschód": (1, 0), "wschodni": (1, 0), "east": (1, 0),
-    "zachód": (-1, 1), "zachodni": (-1, 1), "west": (-1, 1),
-    # ASCII transliterations (user may type without Polish diacritics)
-    "polnoc": (0, -1), "polnocny": (0, -1),
-    "poludnie": (0, 1), "poludniowy": (0, 1),
-    "polnocny-wschod": (1, -1), "polnocny wschod": (1, -1),
-    "polnocny-zachod": (-1, 0), "polnocny zachod": (-1, 0),
-    "poludniowy-wschod": (1, 0), "poludniowy wschod": (1, 0),
-    "poludniowy-zachod": (-1, 1), "poludniowy zachod": (-1, 1),
-    "wschod": (1, 0), "zachod": (-1, 1),
-}
+from app.services.hex_directions import DIRECTION_KEYWORDS as _DIRECTION_KEYWORDS
 
 _MOVE_VERB_PATTERN = _re_tp.compile(
     r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam[y]?|podroz?uj(?:[eę]|emy)|podróżuj(?:[eę]|emy)|"
