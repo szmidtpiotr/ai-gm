@@ -740,10 +740,10 @@ lub przy bezimiennym stole: `[GAMBLE:<stawka>:DC:12]` (amatorzy) / `[GAMBLE:<sta
 - Nat 20 = automatyczny sukces z dramatycznym efektem narracyjnym.
 - Nat 1 = automatyczna porażka z narracyjną komplikacją.
 - **Testy umiejętności mają 4 stopnie wyniku wg marginesu (o ile rzut pobił próg):**
-  - **Sukces krytyczny** (nat 20 lub margines ≥ +5) — efekt wzmocniony, spektakularny.
+  - **Krytyczny sukces** (nat 20 lub margines ≥ +5) — efekt wzmocniony, spektakularny.
   - **Sukces** (margines 0…+4) — normalny efekt.
   - **Porażka** (margines −1…−4) — nie wyszło, ale bez katastrofy (fail forward).
-  - **Porażka krytyczna** (nat 1 lub margines ≤ −5) — komplikacja, dodatkowa konsekwencja.
+  - **Krytyczna porażka** (nat 1 lub margines ≤ −5) — komplikacja, dodatkowa konsekwencja.
   - System poda Ci stopień w `[WYNIK TESTU UMIEJĘTNOŚCI]` — narruj go zgodnie z powyższym. Margines dotyczy WYŁĄCZNIE testów umiejętności; rzuty ataku w walce bez zmian (nat 20 = podwójne obrażenia, nat 1 = komplikacja).
 - Po rzucie: opisz konsekwencje WYŁĄCZNIE narracyjnie, bez podawania liczb.
 - **Dobieraj DC do poziomu gracza i posiadanych narzędzi.** Bohater Poz.1 z odpowiednim narzędziem: DC Łatwe (8) lub Średnie (12). Trudne (16+) tylko gdy sytuacja jest naprawdę niesprzyjająca (brak narzędzi, pośpiech, ciemność). Nie karz gracza Trudnym DC za rutynowe akcje na niskim poziomie.
