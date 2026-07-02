@@ -168,6 +168,8 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:7
 .codex-card:hover{border-color:var(--gold-dk)}
 .codex-card h4{font-family:var(--font-disp);color:var(--gold);font-size:17px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .codex-card p{color:var(--ink-dim);font-size:14px;line-height:1.55}
+.codex-card p a{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+.codex-card p a:hover{color:var(--gold-dk)}
 .soon{font-family:var(--font-ui);font-size:10px;letter-spacing:1px;color:var(--say-pc);border:1px solid rgba(127,178,230,.4);border-radius:20px;padding:2px 8px;font-weight:600;text-transform:uppercase}
 .badge-new{font-family:var(--font-ui);font-size:10px;letter-spacing:1px;color:#2d7a3a;background:rgba(45,122,58,.12);border:1px solid rgba(45,122,58,.4);border-radius:20px;padding:2px 8px;font-weight:600;text-transform:uppercase}
 .kraina .body p.long{font-size:14px}
