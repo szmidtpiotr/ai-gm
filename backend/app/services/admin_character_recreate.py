@@ -93,12 +93,18 @@ def _clear_inventory_if_exists(conn: sqlite3.Connection, character_id: int) -> N
         pass
 
 
-def delete_character_admin(character_id: int) -> dict:
+def delete_character_admin(character_id: int, *, force: bool = False) -> dict:
     """
     Remove a hero row and all dependent data for this character_id.
     Deletes campaign_turns and character_inventory for this character, then the characters row.
     Campaign and campaign_ai_summaries rows are left intact (campaign may become character-less).
+
+    #1071: blocks deletion while the hero has an active combat (live-lock, 409) unless
+    force=True — mirrors HI6 (#629). force=True ends the combat first so no orphaned
+    combat/combatants rows point at a deleted character_id.
     """
+    from app.services.inspector_guard import live_lock_by_character
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -112,6 +118,21 @@ def delete_character_admin(character_id: int) -> dict:
         ).fetchone()
         if not row:
             raise KeyError("character_not_found")
+
+        campaign_id = row["campaign_id"]
+        locked, lock_reason = live_lock_by_character(conn, character_id)
+        if locked:
+            if not force:
+                from fastapi import HTTPException
+
+                raise HTTPException(
+                    status_code=409,
+                    detail={"reason": "live_locked", "lock_reason": lock_reason},
+                )
+            if campaign_id is not None:
+                from app.services.combat_service import end_combat
+
+                end_combat(int(campaign_id), "admin_delete_force")
 
         audit_old = f"id={character_id},name={row['name']},campaign_id={row['campaign_id']},user_id={row['user_id']}"
         conn.execute("BEGIN")

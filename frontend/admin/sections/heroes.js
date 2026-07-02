@@ -130,21 +130,32 @@ function _renderRows() {
 }
 
 // Usuń bohatera (DELETE /api/admin/characters/{id}) — twardo blokowane dla #1013, z potwierdzeniem.
-async function _deleteHero(h) {
+// #1071: 409 live_locked gdy bohater jest w aktywnej walce — oferuje "Wymuś" (kończy walkę + usuwa).
+async function _deleteHero(h, force = false) {
   if (Number(h.user_id) === OBSERVED_OWNER_ID) {
     showToast('👁 Konto obserwowane (#1013) — usuwanie zablokowane.', 'error');
     return;
   }
   const label = h.name || ('#' + h.id);
-  const ok = await confirmDialog(
-    `Usunąć bohatera „${label}"? Operacji NIE można cofnąć — usunięte zostaną też wszystkie tury tej postaci. Kampania pozostaje.`
-  );
-  if (!ok) return;
+  if (!force) {
+    const ok = await confirmDialog(
+      `Usunąć bohatera „${label}"? Operacji NIE można cofnąć — usunięte zostaną też wszystkie tury tej postaci. Kampania pozostaje.`
+    );
+    if (!ok) return;
+  }
   try {
-    await apiFetch(`/api/admin/characters/${h.id}`, { method: 'DELETE' });
+    await apiFetch(`/api/admin/characters/${h.id}${force ? '?force=true' : ''}`, { method: 'DELETE' });
     showToast(`Bohater „${label}" usunięty`, 'success');
     await _loadList();
   } catch (e) {
+    if (e.status === 409) {
+      showToast('Bohater jest w trakcie walki — zakończ walkę albo użyj Wymuś.', 'error');
+      const wymus = await confirmDialog(
+        `Bohater „${label}" jest w trakcie aktywnej walki. Wymusić usunięcie? Walka zostanie zakończona, a bohater usunięty.`
+      );
+      if (wymus) await _deleteHero(h, true);
+      return;
+    }
     showToast(`Błąd usuwania: ${e.message}`, 'error');
   }
 }

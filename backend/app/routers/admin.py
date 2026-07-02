@@ -2528,13 +2528,16 @@ def admin_list_characters(
 
 
 @router.delete("/admin/characters/{character_id}")
-def admin_delete_character(character_id: int, _: None = Depends(require_admin_token)):
+def admin_delete_character(
+    character_id: int, force: bool = False, _: None = Depends(require_admin_token)
+):
     """
     Delete a user's hero (character row) and all turns for that character.
     Intended for rare admin / recovery use; campaign remains (may have zero characters).
+    #1071: 409 live_locked if the hero has an active combat, unless force=True (also ends it).
     """
     try:
-        return delete_character_admin(character_id)
+        return delete_character_admin(character_id, force=force)
     except KeyError:
         raise HTTPException(status_code=404, detail="Character not found") from None
 

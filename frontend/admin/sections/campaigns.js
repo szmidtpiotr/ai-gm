@@ -311,11 +311,11 @@ function filterTableGeneric(input, tableId, nameClass) {
 
   // HI5 (#628): otwórz Inspektora Bohatera (modal HI2) dla bohatera tej kampanii.
   // REUSE — dynamiczny import sekcji „Bohaterowie"; ten sam URL/wersja co loader sekcji
-  // (?v=37) → ta sama instancja modułu w cache, bez podwójnego fetchu. Modal sam dba o
+  // (?v=79) → ta sama instancja modułu w cache, bez podwójnego fetchu. Modal sam dba o
   // banery #1013 + live-lock i guardowane zapisy (audyt + 409).
   async function _campOpenInspector(charId) {
     try {
-      const mod = await import('./heroes.js?v=40');
+      const mod = await import('./heroes.js?v=79');
       mod.openInspector(Number(charId));
     } catch (e) {
       _showToast(`Nie udało się otworzyć inspektora: ${e.message}`, 'error');

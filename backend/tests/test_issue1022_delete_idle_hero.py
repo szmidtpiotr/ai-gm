@@ -22,11 +22,20 @@ class _Cursor:
 
 
 class _Conn:
+    """SQL-aware stub. #1071 added a live-lock check that queries `campaign_id FROM
+    characters` (row[0]) then `active_combat`/`game_sessions` — a query-blind stub
+    that always returned the fixture character row would false-positive the lock
+    (and mis-index row[0]) here, breaking these backward-compat cases."""
     def __init__(self, row):
         self._row = row
         self.row_factory = None
     def execute(self, sql='', params=()):
-        return _Cursor(self._row)
+        if 'campaign_id FROM characters' in sql:
+            cid = self._row['campaign_id'] if self._row else None
+            return _Cursor((cid,) if self._row else None)
+        if 'FROM characters' in sql:
+            return _Cursor(self._row)
+        return _Cursor(None)
     def commit(self): pass
     def rollback(self): pass
     def close(self): pass
