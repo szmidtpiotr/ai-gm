@@ -102,7 +102,8 @@ def _rm_campaign(cid):
 
 def test_full_victory_simulation():
     """Ruch (visit_location) → akt 1 completed; rozmowa (talk_to_npc) → akt 2 completed;
-    is_plan_complete → True; maybe_complete_campaign → status='completed' + event."""
+    is_plan_complete → True; maybe_complete_campaign → finale_available=1 + event (#1097:
+    status stays 'active' — the completed flip moved to the player-triggered /finish)."""
     _migrate()
     from app.migrations_admin import build_test_trylogia_2act_plan
     from app.services.campaign_plan_runtime import (
@@ -127,16 +128,17 @@ def test_full_victory_simulation():
         assert plan["acts"][1].get("completed") is True, "akt 2 zamknięty"
         assert is_plan_complete(plan) is True, "wszystkie akty completed → plan kompletny"
 
-        # Spinacz #1009 — 0 questów → status='completed' + event campaign_complete
+        # Spinacz #1009/#1097 — 0 questów → finale_available=1 + event (status zostaje 'active')
         won = maybe_complete_campaign(cid, char_id, 2, conn)
         assert won is True, "victory spinacz musi odpalić raz"
-        status = conn.execute("SELECT status FROM campaigns WHERE id = ?", (cid,)).fetchone()["status"]
-        assert status == "completed", f"campaigns.status oczekiwano 'completed', jest '{status}'"
+        row = conn.execute("SELECT status, finale_available FROM campaigns WHERE id = ?", (cid,)).fetchone()
+        assert row["status"] == "active", f"campaigns.status oczekiwano 'active' w oknie łaski, jest '{row['status']}'"
+        assert row["finale_available"] == 1, "finale_available musi zostać ustawiony"
         ev = conn.execute(
-            "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type = 'campaign_complete'",
+            "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type = 'campaign_finale_available'",
             (cid,),
         ).fetchone()[0]
-        assert ev >= 1, "event campaign_complete musi zostać zapisany"
+        assert ev >= 1, "event campaign_finale_available musi zostać zapisany"
 
         # Idempotencja — drugie wywołanie nie odpala ponownie
         assert maybe_complete_campaign(cid, char_id, 3, conn) is False

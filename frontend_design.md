@@ -233,6 +233,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-74 | Client logging | `clog.js`: RUM — page load, click `[data-clog]`, errory, unload beacon, session ID, batch flush 2.5s → POST `/api/client-logs` | — |
 | F-75 | D-pad lochu | `#dungeon-nav` (L12): krzyżak kierunków N/W/E/S + akcje (skrzynia/zagadka/odpoczynek). #741: przeciągany palcem (pointer events, próg 6px tap-vs-drag), pozycja zapamiętana w `localStorage.dungeonNavPos`; środek ⊕ otwiera mapę lochu (`openDungeonMap`, jak ikona 🗺 — F-37) | — |
 | F-76 | Grupowanie ekwipunku lore | `#sheet-lore` (#1088): lore items grupowane w zwijalne `<details>` sekcje — zwoje/księgi/klucze/fabularne/inne. Klasyfikacja client-side (`_loreCategoryKey()`) regex na labelu. Stan zwinięcia zapamiętany w `sessionStorage`. | — |
+| F-77 | Bramka finału (soft victory gate) | `#finish-campaign-btn` (menu ☰) + `#finale-confirm-modal` (#1097): karta na czacie „📜 Osiągnąłeś cel przygody…" przy pierwszym otwarciu bramki (`finale_available` transition w odpowiedzi tury) + trwały przycisk „Zakończ przygodę" w menu ☰ dopóki bramka otwarta (stan przywracany z `GET /campaigns/{id}.finale_available` przy wejściu). Klik → modal potwierdzenia „Osiągnąłeś cel przygody" ([Zakończ przygodę]/[Jeszcze zostań]) → `POST /campaigns/{id}/finish` → `showVictoryScreen()`. MP: przycisk ukryty dla nie-gospodarza (`multiplayerUI.isHost()`). | #1097 |
 
 ---
 

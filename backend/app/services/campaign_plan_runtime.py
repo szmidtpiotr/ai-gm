@@ -245,21 +245,33 @@ def maybe_complete_campaign(
     turn_number: int,
     conn: sqlite3.Connection,
 ) -> bool:
-    """T38 spinacz — flip campaign to 'completed' when the agreed victory
+    """T38/#1097 spinacz — open the finale gate when the agreed victory
     definition holds: all acts/scenes traversed AND zero active quests.
 
-    Idempotent: no-op if the campaign already has a terminal status. On success
-    also clears `session_flags.quest_suggest_needed` so the #991 quest-dead guard
-    does not push a new quest after the finale, and logs a `campaign_complete`
-    game event. Returns True only on the transition.
+    #1097: this NO LONGER flips `status='completed'` directly (that guarantee
+    moved to the player-triggered `finish_campaign()` / POST /finish). Instead
+    it sets the sticky `finale_available=1` flag so the player gets a grace
+    window to wrap up loose ends before manually ending the campaign. The
+    detection condition is unchanged 1:1 from #1009 — only the action differs.
+
+    Idempotent: no-op if the campaign already has a terminal status OR the
+    gate is already open (sticky — never re-evaluated once True, so a main
+    quest accepted during the grace window cannot close the gate again). On
+    the gate-open transition also clears `session_flags.quest_suggest_needed`
+    so the #991 quest-dead guard does not push a new quest after the finale,
+    and logs a `campaign_finale_available` game event. Returns True only on
+    that transition.
     """
     row = conn.execute(
-        "SELECT status FROM campaigns WHERE id = ?", (campaign_id,)
+        "SELECT status, finale_available FROM campaigns WHERE id = ?", (campaign_id,)
     ).fetchone()
     if not row:
         return False
     status = str((row["status"] if isinstance(row, sqlite3.Row) else row[0]) or "").lower()
     if status in ("completed", "ended", "archived", "discarded"):
+        return False
+    already_open = bool(row["finale_available"] if isinstance(row, sqlite3.Row) else row[1])
+    if already_open:
         return False
 
     if not is_plan_complete(get_plan(campaign_id, conn)):
@@ -276,10 +288,9 @@ def maybe_complete_campaign(
     if active_quests > 0:
         return False
 
-    ended_at = datetime.now(timezone.utc).isoformat()
     conn.execute(
-        "UPDATE campaigns SET status = 'completed', ended_at = ? WHERE id = ?",
-        (ended_at, campaign_id),
+        "UPDATE campaigns SET finale_available = 1 WHERE id = ?",
+        (campaign_id,),
     )
     # Drop the quest-dead nudge so the narrator is not told to invent a new quest.
     try:
@@ -300,19 +311,83 @@ def maybe_complete_campaign(
     conn.commit()
 
     write_game_event(
-        "campaign_complete",
+        "campaign_finale_available",
         int(campaign_id),
         int(character_id),
         None,
         {"turn": turn_number, "trigger": "all_acts_and_quests"},
     )
     logger.info(
-        "campaign_completed",
+        "campaign_finale_available",
         campaign_id=campaign_id,
         character_id=character_id,
         turn=turn_number,
     )
     return True
+
+
+# ── #1097: player-triggered finale (POST /campaigns/{id}/finish) ──────────
+
+
+def finish_campaign(
+    campaign_id: int,
+    character_id: int,
+    user_id: int,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> dict:
+    """#1097 — the actual `completed` flip, pulled by the player (not auto-fired).
+
+    Requires `finale_available=1` (set by `maybe_complete_campaign`) and the
+    caller to be the campaign owner or MP host (host-only v1). Idempotent on an
+    already-completed campaign. Does NOT schedule the chapter summary — that is
+    a best-effort side effect the caller (API layer) triggers separately, same
+    pattern as the existing death-flow in `api/turns.py`.
+
+    Returns {"ok": bool, "error": str|None, "already_completed": bool, "ended_at": str|None}.
+    """
+    row = conn.execute(
+        "SELECT status, finale_available, owner_user_id, host_user_id FROM campaigns WHERE id = ?",
+        (campaign_id,),
+    ).fetchone()
+    if not row:
+        return {"ok": False, "error": "not_found"}
+
+    status = str(row["status"] or "").lower()
+    if status in ("completed", "ended", "archived", "discarded"):
+        return {"ok": True, "already_completed": True, "ended_at": None}
+
+    owner_id = row["owner_user_id"]
+    host_id = row["host_user_id"] if "host_user_id" in row.keys() else None
+    allowed_ids = {i for i in (owner_id, host_id) if i is not None}
+    if allowed_ids and int(user_id) not in {int(i) for i in allowed_ids}:
+        return {"ok": False, "error": "not_host"}
+
+    if not row["finale_available"]:
+        return {"ok": False, "error": "finale_not_available"}
+
+    ended_at = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE campaigns SET status = 'completed', ended_at = ? WHERE id = ?",
+        (ended_at, campaign_id),
+    )
+    conn.commit()
+
+    write_game_event(
+        "campaign_complete",
+        int(campaign_id),
+        int(character_id),
+        None,
+        {"turn": turn_number, "trigger": "player_finish"},
+    )
+    logger.info(
+        "campaign_finished_by_player",
+        campaign_id=campaign_id,
+        character_id=character_id,
+        user_id=user_id,
+        turn=turn_number,
+    )
+    return {"ok": True, "already_completed": False, "ended_at": ended_at}
 
 
 # ── Beat reachability (#1010): expose beat_keys + orphan validator ─────────
@@ -808,6 +883,21 @@ def get_narrator_context_block(campaign_id: int, conn: sqlite3.Connection) -> st
         return ""
 
     lines = ["[CAMPAIGN CONTEXT]"]
+
+    # #1097: finale grace window — narrator reacts only, never drives new plot.
+    try:
+        fin_row = conn.execute(
+            "SELECT finale_available FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if fin_row and fin_row["finale_available"]:
+            lines.append(
+                "[FINALE DOSTĘPNY] Główny wątek fabularny jest rozwiązany — gracz może w "
+                "każdej chwili ręcznie zakończyć przygodę. NIE generuj nowych questów głównych "
+                "ani nowych beatów fabularnych. Tylko REAGUJ na działania gracza (pożegnania, "
+                "odbiór nagród, luźna wędrówka) w tonie epilogu/wyciszenia (denouement)."
+            )
+    except sqlite3.OperationalError:
+        pass
 
     # Active act
     active_act_num = int(plan.get("active_act", 1))

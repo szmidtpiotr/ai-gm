@@ -4114,6 +4114,16 @@ function initDungeon() {
         // Legacy: advance-btn no longer used in v2 but kept for safety
     });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
+    // #1097: soft finale gate — persistent "Zakończ przygodę" menu button + confirm modal
+    document.getElementById('finish-campaign-btn')?.addEventListener('click', () => {
+        document.getElementById('finale-confirm-modal')?.removeAttribute('hidden');
+    });
+    document.getElementById('finale-confirm-stay-btn')?.addEventListener('click', () => {
+        document.getElementById('finale-confirm-modal')?.setAttribute('hidden', '');
+    });
+    document.getElementById('finale-confirm-finish-btn')?.addEventListener('click', () => {
+        window.finishCampaignFlow?.();
+    });
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);

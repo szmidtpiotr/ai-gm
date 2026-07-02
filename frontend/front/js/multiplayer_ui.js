@@ -687,7 +687,7 @@
         }
     }
 
-    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, minimizePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers), isSpectator: () => _isSpectator };
+    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, minimizePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers), isSpectator: () => _isSpectator, isHost: () => _isHost };
 })();
 
 // GF4 (#924) — router from hub: open create-lobby-screen with default AI mode

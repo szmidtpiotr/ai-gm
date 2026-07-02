@@ -122,11 +122,12 @@ def test_end_summary_payload_returns_ending_type():
     assert result["ending_title"] == "Pęknięty łańcuch"
 
 
-# ─── Test 5: maybe_complete_campaign sets ended_at ───────────────────────────
+# ─── Test 5: finish_campaign() sets ended_at (#1097: moved off maybe_complete_campaign) ─
 
-def test_maybe_complete_campaign_sets_ended_at():
-    """maybe_complete_campaign must write ended_at when campaign completes."""
-    from app.services.campaign_plan_runtime import maybe_complete_campaign
+def test_finish_campaign_sets_ended_at():
+    """#1097: maybe_complete_campaign only opens the finale_available gate (no ended_at);
+    finish_campaign() (the player-triggered POST /finish) writes ended_at on completion."""
+    from app.services.campaign_plan_runtime import maybe_complete_campaign, finish_campaign
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -134,7 +135,8 @@ def test_maybe_complete_campaign_sets_ended_at():
         CREATE TABLE campaigns (
             id INTEGER PRIMARY KEY, status TEXT, ended_at TEXT,
             gm_plan_json TEXT, model_id TEXT DEFAULT 'test',
-            owner_user_id INTEGER DEFAULT 1, epitaph TEXT, death_reason TEXT
+            owner_user_id INTEGER DEFAULT 1, epitaph TEXT, death_reason TEXT,
+            finale_available INTEGER NOT NULL DEFAULT 0, host_user_id INTEGER
         )
     """)
     conn.execute("""
@@ -164,17 +166,24 @@ def test_maybe_complete_campaign_sets_ended_at():
         "endings": ENDINGS_LIST,
     }
     conn.execute(
-        "INSERT INTO campaigns VALUES (1,'active',NULL,?,?,1,NULL,NULL)",
+        "INSERT INTO campaigns VALUES (1,'active',NULL,?,?,1,NULL,NULL,0,NULL)",
         (json.dumps(plan), "test_model"),
     )
     conn.commit()
 
-    result = maybe_complete_campaign(1, 1, 5, conn)
-    assert result is True, "maybe_complete_campaign should return True on first completion"
+    opened = maybe_complete_campaign(1, 1, 5, conn)
+    assert opened is True, "maybe_complete_campaign should open the gate on first completion"
+    gate_row = conn.execute("SELECT status, ended_at, finale_available FROM campaigns WHERE id = 1").fetchone()
+    assert gate_row["status"] == "active", "campaign must stay active in the grace window"
+    assert gate_row["ended_at"] is None, "ended_at must NOT be set until the player finishes"
+    assert gate_row["finale_available"] == 1
+
+    result = finish_campaign(1, 1, user_id=1, turn_number=6, conn=conn)
+    assert result["ok"] is True
 
     row = conn.execute("SELECT status, ended_at FROM campaigns WHERE id = 1").fetchone()
     assert row["status"] == "completed"
-    assert row["ended_at"] is not None, "ended_at must be set after victory"
+    assert row["ended_at"] is not None, "ended_at must be set after the player finishes"
     assert len(row["ended_at"]) > 0, "ended_at must not be empty string"
 
 

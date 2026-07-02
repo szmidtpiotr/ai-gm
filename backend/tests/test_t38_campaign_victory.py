@@ -1,8 +1,13 @@
-"""TDD: T38 (#1009) — deterministic campaign victory spinacz.
+"""TDD: T38 (#1009) — deterministic campaign finale-gate spinacz.
 
-Victory = all acts/scenes traversed (every act.completed) AND 0 active quests.
-On that transition: campaigns.status -> 'completed', quest_suggest_needed cleared.
-Plus: quest-title completion is case/whitespace-insensitive; [CAMPAIGN_END] closes too.
+Victory condition = all acts/scenes traversed (every act.completed) AND 0 active
+quests — UNCHANGED 1:1 from #1009. #1097 changed the ACTION on that transition:
+instead of flipping campaigns.status directly, it now sets the sticky
+campaigns.finale_available=1 flag (status stays 'active'); quest_suggest_needed
+is still cleared. The actual status='completed' flip moved to the player-triggered
+finish_campaign() (see test_issue1097_finale_gate.py). [CAMPAIGN_END] narrator tag
+still closes the campaign directly (separate code path, untouched by #1097) and
+quest-title completion stays case/whitespace-insensitive.
 """
 import json
 import os
@@ -26,7 +31,8 @@ def _make_db():
             id INTEGER PRIMARY KEY,
             status TEXT DEFAULT 'active',
             gm_plan_json TEXT,
-            ended_at TEXT
+            ended_at TEXT,
+            finale_available INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE character_quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +106,10 @@ def _status(conn, cid=7):
     return conn.execute("SELECT status FROM campaigns WHERE id=?", (cid,)).fetchone()["status"]
 
 
+def _finale_available(conn, cid=7):
+    return bool(conn.execute("SELECT finale_available FROM campaigns WHERE id=?", (cid,)).fetchone()[0])
+
+
 # ─── is_plan_complete ─────────────────────────────────────────────────────────
 
 def test_is_plan_complete_variants():
@@ -117,7 +127,9 @@ def test_victory_fires_when_all_acts_done_and_no_quests():
     _seed_campaign(conn, plan=_plan(True, True), flags={"quest_suggest_needed": {"x": 1}})
     fired = maybe_complete_campaign(7, 42, 12, conn)
     assert fired is True
-    assert _status(conn) == "completed"
+    # #1097: gate opens, status stays 'active' — player finishes manually via /finish.
+    assert _status(conn) == "active"
+    assert _finale_available(conn) is True
     # quest_suggest_needed must be cleared so narrator isn't nudged for a new quest
     sf = json.loads(
         conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=7").fetchone()["session_flags"]
@@ -131,6 +143,7 @@ def test_victory_blocked_by_active_quest():
     _insert_quest(conn, 7, "Odbij twierdzę", status="active")
     assert maybe_complete_campaign(7, 42, 5, conn) is False
     assert _status(conn) == "active"
+    assert _finale_available(conn) is False
 
 
 def test_victory_blocked_by_incomplete_act():
@@ -138,6 +151,7 @@ def test_victory_blocked_by_incomplete_act():
     _seed_campaign(conn, plan=_plan(True, False))
     assert maybe_complete_campaign(7, 42, 5, conn) is False
     assert _status(conn) == "active"
+    assert _finale_available(conn) is False
 
 
 def test_victory_idempotent_on_terminal_status():
@@ -158,7 +172,8 @@ def test_victory_blocked_when_no_plan():
 
 def test_completing_last_quest_triggers_victory_case_insensitive():
     """Narrator restates title with different case/spaces — quest still completes,
-    then the spinacz flips the campaign to completed (all acts already done)."""
+    then the spinacz opens the finale gate (all acts already done). #1097: status
+    stays 'active' — only finale_available flips; player finishes manually."""
     conn = _make_db()
     _seed_campaign(conn, plan=_plan(True, True))
     _insert_quest(conn, 7, "Nocna przesyłka", status="active")
@@ -170,7 +185,8 @@ def test_completing_last_quest_triggers_victory_case_insensitive():
         "SELECT status FROM character_quests WHERE campaign_id=7 AND character_id=42"
     ).fetchone()
     assert q["status"] == "completed", f"quest not completed (silent no-op?): {q['status']}"
-    assert _status(conn) == "completed", "spinacz did not fire after last quest completed"
+    assert _status(conn) == "active", "campaign must stay active in the finale grace window"
+    assert _finale_available(conn) is True, "spinacz did not open the gate after last quest completed"
 
 
 def test_campaign_end_tag_closes_campaign():

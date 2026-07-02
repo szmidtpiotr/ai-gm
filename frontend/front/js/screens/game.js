@@ -89,6 +89,8 @@ async function enterGame(campaign, opts = {}) {
     // body{overflow:hidden}) would cover the rendered chat → "po wskrzeszeniu brak treści".
     hideDeathScreen();
     hideVictoryScreen();
+    // #1097: soft finale gate — restore persistent button state on (re)entry / refresh.
+    _updateFinaleGateUI(campaign);
     // #950: Clear party chat panel before entering any game type (single/dungeon).
     // activate() is called separately only for MP — without this, the panel stays
     // visible (sticky state) if the player visited MP earlier in the same browser session.
@@ -1440,6 +1442,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
             showVictoryScreen().catch(() => {});
         }
 
+        // #1097: finale gate opened this turn — one-shot chat card + persistent button.
+        if (result.finale_available) {
+            renderFinaleAvailableCard();
+        }
+
         // #1086: beat/quest completion notifications
         if (result.completed_beats?.length || result.completed_quests?.length) {
             renderCompletionNotifications(result.completed_beats, result.completed_quests);
@@ -1519,6 +1526,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
             if (meta.skill_test_pending)       result.skill_test_pending       = meta.skill_test_pending;
             if (meta.campaign_ended)           result.campaign_ended           = true; // T38 (#1009)
+            if (meta.finale_available)         result.finale_available         = true; // #1097
             if (meta.current_location)         result.current_location         = meta.current_location;
             if (meta.suggested_actions)        result.suggested_actions        = meta.suggested_actions;
             if (meta.active_quests)            result.active_quests            = meta.active_quests;
@@ -1992,6 +2000,54 @@ function renderCompletionNotifications(beats, quests) {
         elements.chatMessages.appendChild(el);
     }
 }
+
+// ── #1097: soft finale gate — chat card, persistent menu button, confirm modal ──
+
+let _finaleAvailable = false;
+
+function _finaleAllowedForCurrentUser(campaign) {
+    // Solo campaigns (no host_user_id) — the owner is the only possible caller.
+    if (!window.multiplayerUI?.isActive?.()) return true;
+    return window.multiplayerUI.isHost();
+}
+
+function _updateFinaleGateUI(campaign) {
+    _finaleAvailable = !!campaign?.finale_available;
+    const btn = document.getElementById('finish-campaign-btn');
+    if (!btn) return;
+    btn.hidden = !(_finaleAvailable && _finaleAllowedForCurrentUser(campaign));
+}
+
+function renderFinaleAvailableCard() {
+    if (!elements.chatMessages) return;
+    const el = document.createElement('div');
+    el.className = 'chat-bubble chat-bubble--completion';
+    el.innerHTML = '📜 Osiągnąłeś cel przygody. Możesz dokończyć swoje sprawy, a gdy będziesz gotów — zakończyć przygodę. ' +
+        '<button type="button" id="finale-card-finish-btn" style="margin-left:8px;padding:4px 10px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;font-size:.85em">Zakończ przygodę</button>';
+    elements.chatMessages.appendChild(el);
+    el.querySelector('#finale-card-finish-btn')?.addEventListener('click', () => {
+        document.getElementById('finale-confirm-modal')?.removeAttribute('hidden');
+    });
+    document.getElementById('finish-campaign-btn')?.removeAttribute('hidden');
+    scrollToBottom();
+}
+
+async function finishCampaignFlow() {
+    document.getElementById('finale-confirm-modal')?.setAttribute('hidden', '');
+    if (!currentCampaignId) return;
+    const btn = document.getElementById('finale-confirm-finish-btn');
+    if (btn) btn.disabled = true;
+    try {
+        await apiRequest('POST', `/campaigns/${currentCampaignId}/finish`);
+        await showVictoryScreen();
+    } catch (err) {
+        const msg = err?.body?.detail === 'not_host' ? 'Tylko gospodarz może zakończyć tę kampanię.' : (err?.message || 'Nie udało się zakończyć przygody.');
+        showToast(msg, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+window.finishCampaignFlow = finishCampaignFlow;
 
 // ── UI state recovery ─────────────────────────────────────────────────────────
 

@@ -216,7 +216,8 @@ def _get_campaign_with_hero_state(
         c_row = conn.execute(
             """
             SELECT id, title, system_id, model_id, owner_user_id,
-                   language, mode, status, created_at, gm_plan_json
+                   language, mode, status, created_at, gm_plan_json,
+                   finale_available, host_user_id
             FROM campaigns
             WHERE id = ?
             """,
@@ -226,6 +227,7 @@ def _get_campaign_with_hero_state(
             return None
 
         campaign_dict = dict(c_row)
+        campaign_dict["finale_available"] = bool(campaign_dict.get("finale_available"))
 
         # Fetch attached hero status if any
         hero_status = None
@@ -917,6 +919,75 @@ def reset_campaign_progress(campaign_id: int):
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Campaign reset failed: {e}") from None
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaign_id}/finish")
+def finish_campaign_endpoint(
+    campaign_id: int,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
+    """#1097 — player-triggered finale. Requires the #1009 gate to be open
+    (`finale_available=1`, set by `maybe_complete_campaign` after every turn).
+    Host-only in multiplayer (owner_user_id / host_user_id); solo campaigns
+    always pass that check since the owner is the only possible caller.
+
+    Flips `status='completed'` + `ended_at`, logs `campaign_complete`
+    (trigger=`player_finish`), then best-effort schedules the chapter summary
+    with outcome=`victory` (mirrors the death-flow in api/turns.py — the async
+    summary job must never block this response).
+    """
+    resolved_user_id = resolve_authed_user_id(authorization, user_id)
+    from app.services.campaign_plan_runtime import finish_campaign
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char_row = conn.execute(
+            "SELECT id, user_id, sheet_json FROM characters "
+            "WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(status_code=404, detail="Brak aktywnego bohatera w tej kampanii.")
+        turn_number = conn.execute(
+            "SELECT COALESCE(MAX(turn_number), 1) FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()[0]
+
+        result = finish_campaign(
+            campaign_id, int(char_row["id"]), resolved_user_id, int(turn_number), conn
+        )
+        if not result["ok"]:
+            code = 404 if result["error"] == "not_found" else (
+                403 if result["error"] == "not_host" else 409
+            )
+            raise HTTPException(status_code=code, detail=result["error"])
+
+        if not result["already_completed"]:
+            try:
+                from app.services.chapter_summary_service import close_campaign_with_summary
+                sheet = json.loads(char_row["sheet_json"] or "{}")
+                turns_count = conn.execute(
+                    "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                    (campaign_id,),
+                ).fetchone()[0]
+                close_campaign_with_summary(
+                    conn,
+                    campaign_id=campaign_id,
+                    character_id=int(char_row["id"]),
+                    outcome="victory",
+                    user_id=int(char_row["user_id"]),
+                    xp_earned=int(sheet.get("xp_lifetime_earned") or 0),
+                    gold_at_end=int(sheet.get("gold_gp") or sheet.get("gold") or 0),
+                    turns_count=int(turns_count or 0),
+                )
+            except Exception as _cs_err:
+                logger.warning("finish_campaign_chapter_summary_error", error=str(_cs_err))
+
+        return {"ok": True, "campaign_id": campaign_id, "ended_at": result.get("ended_at")}
     finally:
         conn.close()
 

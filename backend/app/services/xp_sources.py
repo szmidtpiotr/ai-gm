@@ -342,12 +342,18 @@ def process_narrative_xp_tags(
                 conn=conn,
             )
 
-    # T38 (#1009): deterministic victory spinacz — runs after every turn's tags.
-    # Fires only when all acts/scenes are traversed AND no active quests remain.
+    # T38/#1097 (#1009): deterministic finale-gate spinacz — runs after every turn's
+    # tags. Opens (sticky) only when all acts/scenes are traversed AND no active
+    # quests remain; the player triggers the actual completion via POST /finish.
+    finale_opened = False
     try:
         from app.services.campaign_plan_runtime import maybe_complete_campaign
-        maybe_complete_campaign(campaign_id, character_id, turn_number, conn)
+        finale_opened = maybe_complete_campaign(campaign_id, character_id, turn_number, conn)
     except Exception as _vc_err:
         logger.warning("campaign_victory_check_error", error=str(_vc_err))
 
-    return {"total_granted": total, "session_free_grant_total": session_free_grant_total}
+    return {
+        "total_granted": total,
+        "session_free_grant_total": session_free_grant_total,
+        "finale_available_transition": finale_opened,
+    }

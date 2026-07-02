@@ -947,6 +947,11 @@
         <span aria-hidden="true">✕</span>
         <span>Wyjdź z krypty</span>
       </button>
+      <!-- #1097: soft finale gate — persistent while campaigns.finale_available=1 -->
+      <button type="button" class="game-menu__item game-menu__item--exit" id="finish-campaign-btn" role="menuitem" hidden>
+        <span aria-hidden="true">📜</span>
+        <span>Zakończ przygodę</span>
+      </button>
     </div>
 
     <!-- Crit-flash overlay (Nat 20 / Nat 1) — T34 -->
@@ -2102,6 +2107,21 @@
     </div>
   </div>
 
+  <!-- #1097: soft finale gate — "Zakończ przygodę" confirmation modal -->
+  <div id="finale-confirm-modal" class="dungeon-modal-overlay" hidden>
+    <div class="dungeon-modal">
+      <div class="dungeon-modal__icon">📜</div>
+      <div class="dungeon-modal__title">Osiągnąłeś cel przygody.</div>
+      <div class="dungeon-modal__body">
+        <p>Zakończyć ją teraz, czy jeszcze domknąć swoje sprawy?</p>
+      </div>
+      <div class="dungeon-modal__btns">
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--primary" id="finale-confirm-finish-btn">Zakończ przygodę</button>
+        <button type="button" class="dungeon-modal__btn dungeon-modal__btn--cancel" id="finale-confirm-stay-btn">Jeszcze zostań</button>
+      </div>
+    </div>
+  </div>
+
   <!-- L13 (#682): Boss choice modal — after boss defeated -->
   <div id="dungeon-boss-modal" class="dungeon-modal-overlay" hidden>
     <div class="dungeon-modal">
@@ -2268,10 +2288,10 @@
   <script src="./js/screens/heroes.js?v=882-r4"></script>
   <script src="./js/screens/campaigns.js?v=900-viewer"></script>
   <script src="./js/screens/wizard.js?v=976-r7"></script>
-  <script src="./js/screens/game.js?v=1088c-lore-stack"></script>
+  <script src="./js/screens/game.js?v=1097-finale-gate"></script>
   <script src="./js/screens/combat_ui.js?v=984-r1"></script>
-  <script src="./js/multiplayer_ui.js?v=960-r1"></script>
-  <script src="./js/app.js?v=976-r7"></script>
+  <script src="./js/multiplayer_ui.js?v=1097-finale-gate"></script>
+  <script src="./js/app.js?v=1097-finale-gate"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

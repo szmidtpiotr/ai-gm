@@ -4221,6 +4221,18 @@ def _ensure_campaign_plan_degraded(conn: sqlite3.Connection) -> None:
         pass  # already exists
 
 
+def _ensure_campaign_finale_available(conn: sqlite3.Connection) -> None:
+    """#1097: sticky flag — victory condition (#1009) reached but player hasn't
+    triggered POST /finish yet. Campaign stays 'active' in this grace window."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaigns ADD COLUMN finale_available INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except Exception:
+        pass  # already exists
+
+
 # HF-8 beat objective_type mapping: beat_key → objective_type
 _BEAT_OBJECTIVE_MAP: dict[str, str] = {
     # Pierwsze Kroki
@@ -5883,6 +5895,7 @@ def run_admin_migrations() -> None:
         _ensure_weapon_consumable_image_columns(conn)  # #1076
         _ensure_template_item_columns(conn)  # #1084
         _ensure_enemy_forge_columns(conn)  # #1085
+        _ensure_campaign_finale_available(conn)  # #1097
     finally:
         conn.close()
 

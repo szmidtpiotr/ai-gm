@@ -56,7 +56,7 @@ def _plan_with_optional():
 def db():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE campaigns (id INTEGER PRIMARY KEY, status TEXT DEFAULT 'active', gm_plan_json TEXT DEFAULT '{}')")
+    conn.execute("CREATE TABLE campaigns (id INTEGER PRIMARY KEY, status TEXT DEFAULT 'active', gm_plan_json TEXT DEFAULT '{}', finale_available INTEGER NOT NULL DEFAULT 0)")
     conn.execute(
         "CREATE TABLE character_quests ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, campaign_id INTEGER, "
@@ -177,8 +177,10 @@ def test_active_side_quest_does_not_block_victory(db, monkeypatch):
     db.commit()
     won = maybe_complete_campaign(1, 7, 10, db)
     assert won is True, "side quest active should NOT block victory"
-    row = db.execute("SELECT status FROM campaigns WHERE id=1").fetchone()
-    assert row["status"] == "completed"
+    # #1097: gate opens (finale_available), status stays 'active' until /finish.
+    row = db.execute("SELECT status, finale_available FROM campaigns WHERE id=1").fetchone()
+    assert row["status"] == "active"
+    assert row["finale_available"] == 1
 
 
 def test_active_main_quest_blocks_victory(db):

@@ -539,6 +539,17 @@ def check_and_set_quest_suggest_needed(
     if active_count > 0:
         return False
 
+    # #1097: in the finale grace window the narrator must not invent a new main
+    # quest — the story is already resolved, only denouement/epilogue remains.
+    try:
+        camp_row = conn.execute(
+            "SELECT finale_available FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+        if camp_row and camp_row["finale_available"]:
+            return False
+    except sqlite3.OperationalError:
+        pass
+
     row = conn.execute(
         "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
         (campaign_id,),

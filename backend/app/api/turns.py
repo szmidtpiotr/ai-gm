@@ -4270,6 +4270,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             assistant_text or "", conn, _xp_char_id, campaign_id, _xp_turn
         )
         _xp_total += _tag_r["total_granted"]
+        _finale_transition_ns = _tag_r.get("finale_available_transition")
         # XS5: first macro-location visit
         _loc_r5 = conn.execute(
             "SELECT gl.key FROM game_sessions gs "
@@ -4735,6 +4736,10 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     except Exception as _ob_err:
         logger.warning("onboarding_injection_error", error=str(_ob_err))
         out.setdefault("onboarding_cards", [])
+
+    # #1097: finale-gate opened this turn — one-shot chat card trigger.
+    if locals().get("_finale_transition_ns"):
+        out["finale_available"] = True
 
     return out
 
@@ -6273,6 +6278,10 @@ def create_turn_stream(
                             full_raw or "", save_conn, _xp_char_id2, campaign_id_val, _xp_turn2
                         )
                         _xp_total2 += _tag_r2["total_granted"]
+                        # #1097: surface the finale-gate open transition once, this turn only
+                        # (done_payload is built later — stash on outer scope var for now).
+                        if _tag_r2.get("finale_available_transition"):
+                            _finale_transition_s = True
                         _loc_r52 = save_conn.execute(
                             "SELECT gl.key FROM game_sessions gs "
                             "JOIN game_locations gl ON gl.id = gs.current_location_id "
@@ -6413,6 +6422,9 @@ def create_turn_stream(
                     ).fetchone()
                     if _camp_row and str(_camp_row["status"] or "").lower() in ("completed", "ended"):
                         done_payload["campaign_ended"] = True
+                    # #1097: finale-gate opened this turn — one-shot chat card trigger.
+                    if locals().get("_finale_transition_s"):
+                        done_payload["finale_available"] = True
                     # BUG-02: include current clock so frontend updates immediately
                     try:
                         from app.services.clock_service import get_clock_state as _gcs

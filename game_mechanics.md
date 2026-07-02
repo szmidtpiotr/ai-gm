@@ -4937,6 +4937,20 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 **E3/E4** — Ekrany zakończenia kampanii i śmierci: `_renderRunStats(elId, stats)` wyświetla kafelki ze statystykami runu (tury, złoto, NPC, questy). Backend: `campaign_run_stats(conn, campaign_id, character_id)` w `solo_death_service.py` zwraca te liczby. Ekran śmierci: Wskrześ (płatne) / Nowy bohater. Ekran zakończenia: LLM epitafium + statystyki.
 
+> **Bramka finału — gracz sam kończy kampanię (#1097, rozszerza T38/#1009).** Warunek zwycięstwa
+> (wszystkie akty domknięte + zero aktywnych questów głównych) jest wykrywany deterministycznie
+> po każdej turze — bez zmian względem #1009. Zmieniła się AKCJA: zamiast natychmiast kończyć
+> kampanię, gra ustawia trwałą flagę `finale_available` i zostawia kampanię w stanie `active`.
+> Gracz dostaje **okno łaski** — może dalej grać (pożegnać się z NPC, odebrać nagrodę, powędrować),
+> a narrator w tym oknie tylko REAGUJE i nie wymyśla nowych questów głównych ani beatów. Bramka
+> jest **lepka** — raz otwarta, zostaje otwarta nawet jeśli gracz przyjmie nowy quest główny.
+> Gracz kończy ręcznie przyciskiem **„Zakończ przygodę"** (karta na czacie przy pierwszym
+> otwarciu + trwały przycisk w menu ☰) → modal potwierdzenia „Osiągnąłeś cel przygody" z opcjami
+> [Zakończ przygodę] / [Jeszcze zostań] → dopiero wtedy kampania flipuje na `completed`, zapisuje
+> `ended_at` i pokazuje ekran zwycięstwa. W multiplayer kończyć może tylko gospodarz (host) —
+> v1, bez głosowania. Backend: `maybe_complete_campaign()` (gate) + `finish_campaign()` (flip) w
+> `campaign_plan_runtime.py`, endpoint `POST /campaigns/{id}/finish`.
+
 **E5** — Kampanie martwego bohatera: zablokowany dostęp gdy `hero_status=dead`. GET `/api/campaigns/{id}` zwraca `hero_blocked=true` + `hero_status=dead`. POST `/api/campaigns/{id}/turns` zwraca HTTP 423 Locked + msg "Cannot continue — hero is dead". ✅ 420
 
 **E6** — Narracja: `chapter_summary` kompresja starych tur (ponad N), `seed_events` injekcja do kontekstu LLM. Tag `[ARC_ADVANCE:arc_id]` parsowany w `turns.py` (obie ścieżki: streaming + narrative) → wywołuje `advance_arc()` w `campaign_plan_runtime.py`. `_ANY_NARRATIVE_RE` rozszerzony o ARC_ADVANCE strip.
