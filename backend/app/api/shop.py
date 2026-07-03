@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services import shop_service
+from app.services import night_economy_service as night_econ
 
 router = APIRouter(tags=["shop"])
 
@@ -33,6 +34,11 @@ def _map_shop_error(e: ValueError) -> HTTPException:
         return HTTPException(status_code=402, detail="Not enough gold")
     if "price_or_catalog_missing" in msg:
         return HTTPException(status_code=404, detail="Item price is not configured")
+    # #1127: night economy refusals → 403 with the player-facing Polish message.
+    if "shop_closed_night" in msg:
+        return HTTPException(status_code=403, detail=night_econ.SHOP_CLOSED_MSG)
+    if "black_market_day" in msg:
+        return HTTPException(status_code=403, detail=night_econ.BLACK_MARKET_DAY_MSG)
     return HTTPException(status_code=400, detail=str(e))
 
 
@@ -70,12 +76,12 @@ def post_shop_buy(npc_id: int, body: ShopBuyRequest):
 
 @router.post("/shop/{npc_id}/sell")
 def post_shop_sell(npc_id: int, body: ShopSellRequest):
-    # npc_id is kept in path for symmetric API and future validation rules.
-    _ = npc_id
     try:
+        # #1127: npc_id lets sell_item gate by shop hours / apply black-market ×0.6.
         data = shop_service.sell_item(
             character_id=body.character_id,
             inventory_id=body.inventory_id,
+            npc_id=npc_id,
         )
         return {"ok": True, "data": data}
     except ValueError as e:

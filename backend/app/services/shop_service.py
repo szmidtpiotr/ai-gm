@@ -15,6 +15,7 @@ from app.services.loot_service import (
     grant_loot_to_character,
 )
 from app.services import haggle_service
+from app.services import night_economy_service as night_econ
 
 SELL_RATIO = 0.5
 
@@ -45,6 +46,29 @@ def _campaign_id_for_character(conn: sqlite3.Connection, character_id: int) -> i
     except sqlite3.OperationalError:
         pass
     return None
+
+
+def _current_hour_for_character(conn: sqlite3.Connection, character_id: int) -> int | None:
+    """#1127: current in-game hour (0–23) from the campaign clock, or None when
+    the clock is unknown (no campaign / no session_flags) → night gate disabled."""
+    cid = _campaign_id_for_character(conn, character_id)
+    if cid is None:
+        return None
+    flags = _load_session_flags(conn, cid)
+    if "ingame_hours" not in flags:
+        return None
+    try:
+        return int(flags["ingame_hours"]) % 24
+    except (TypeError, ValueError):
+        return None
+
+
+def _shop_open_state(conn: sqlite3.Connection, npc: sqlite3.Row, character_id: int) -> dict:
+    """#1127: night-economy open/closed + black-market flag for this NPC & clock."""
+    npc_type = npc["npc_type"] if "npc_type" in npc.keys() else ""
+    kind = night_econ.classify_shop(npc["key"], npc["label"], npc_type)
+    hour = _current_hour_for_character(conn, character_id)
+    return night_econ.shop_open_state(kind, hour)
 
 
 def _load_session_flags(conn: sqlite3.Connection, campaign_id: int) -> dict:
@@ -475,6 +499,11 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         cha_buy_mult = _cha_buy_multiplier(cha)
         eff_buy_mult = haggle_service.effective_buy_multiplier(cha_buy_mult, haggle_discount)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
+        # #1127: night economy — reflect open state + black-market pricing in the UI.
+        night_state = _shop_open_state(conn, npc, character_id)
+        if night_state["is_black_market"] and night_state["open"]:
+            eff_buy_mult = round(eff_buy_mult * night_econ.BLACK_MARKET_BUY_MULT, 4)
+            ratio = round(ratio * night_econ.BLACK_MARKET_SELL_MULT, 4)
         entries = _effective_shop_entries(conn, npc)
         items = []
         for e in entries:
@@ -499,6 +528,11 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
         "location_key": location_key,
         # S6: ujemny rabat (crit-fail) = narzut; UI renderuje badge przy cenie.
         "haggle_discount": round(haggle_discount, 4),
+        # #1127: night economy — UI shows open/closed banner + black-market flag.
+        "shop_open": bool(night_state["open"]),
+        "shop_closed_reason": night_state["reason"],
+        "shop_closed_message": night_state["message"],
+        "is_black_market": bool(night_state["is_black_market"]),
     }
 
 
@@ -541,6 +575,10 @@ def _reputation_buy_multiplier(conn, character_id: int, npc_id: int | None = Non
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
+        # #1127: night economy — refuse closed shops; flag the black market.
+        night_state = _shop_open_state(conn, npc, character_id)
+        if not night_state["open"]:
+            raise ValueError(night_state["reason"] or "shop_closed_night")
         entries = _effective_shop_entries(conn, npc)
         req_type_norm = _norm_item_type(item_type)
         allowed = any(
@@ -568,6 +606,9 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         rep_mult = _reputation_buy_multiplier(conn, character_id, npc_id=npc_id)
         if rep_mult != 1.0:
             eff_buy_mult = round(eff_buy_mult * rep_mult, 4)
+        # #1127: black-market surcharge stacks on top of everything else.
+        if night_state["is_black_market"]:
+            eff_buy_mult = round(eff_buy_mult * night_econ.BLACK_MARKET_BUY_MULT, 4)
         price = max(1, int(math.floor(base_price * eff_buy_mult))) if base_price > 0 else base_price
 
     # Validate gold first for cleaner error mapping.
@@ -606,8 +647,22 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
     }
 
 
-def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
+def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -> dict[str, Any]:
     with _conn() as conn:
+        # #1127: night economy — gate the sale by shop hours when we know the NPC.
+        # npc_id omitted (legacy callers) → no gating, old behaviour preserved.
+        night_state = {"open": True, "is_black_market": False}
+        if npc_id is not None:
+            try:
+                npc = _load_shop_npc(conn, int(npc_id))
+                night_state = _shop_open_state(conn, npc, character_id)
+                if not night_state["open"]:
+                    raise ValueError(night_state["reason"] or "shop_closed_night")
+            except ValueError as e:
+                if "npc_not" in str(e).lower():
+                    night_state = {"open": True, "is_black_market": False}
+                else:
+                    raise
         row = conn.execute(
             """
             SELECT id, character_id, item_key, weapon_key, consumable_key, quantity
@@ -645,6 +700,9 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         haggle_discount = _consume_haggle_for_character(conn, character_id)
         ratio = haggle_service.effective_sell_ratio(_cha_sell_ratio(cha), haggle_discount)
         cha_sell_price = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
+        # #1127: the black-market fence pays less (×0.6).
+        if night_state.get("is_black_market") and cha_sell_price > 0:
+            cha_sell_price = max(1, int(math.floor(cha_sell_price * night_econ.BLACK_MARKET_SELL_MULT)))
 
         # F12 (#472): anti-farm decay for repeated sales of the same item_key
         # U16 (#564): także liczba sprzedaży w oknie + flaga oversupply dla komunikatu gracza
