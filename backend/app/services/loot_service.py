@@ -1179,7 +1179,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "label": label,
                 "item_type": item_type,
                 "key": key,
-                "can_use": item_type == "consumable" and not is_ammo,
+                "can_use": (item_type == "consumable" and not is_ammo) or item_type == "map",
                 "is_ammo": is_ammo,
                 "armor_coverage": coverage,
                 "weapon_slot": wslot,
@@ -1740,6 +1740,36 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         catalog_key = str(row["catalog_item_key"] or row["legacy_consumable_key"] or row["item_key"] or row["consumable_key"] or "").strip()
         item_label = str(row["item_label"] or row["legacy_consumable_label"] or catalog_key or "item").strip() or "item"
         raw_item_type = str(row["item_type"] or "").strip().lower()
+
+        # PT13 (#1123): map items reveal fog of war on the world map and are NOT
+        # consumed (one-shot reveal, item stays in inventory).
+        if raw_item_type == "map":
+            from app.services import map_reveal_service
+
+            payload = map_reveal_service.extract_map_payload(row["effect_json"])
+            if not payload:
+                raise ValueError("inventory item has no usable effects")
+            campaign_id = int(row["campaign_id"] or 0)
+            if campaign_id <= 0:
+                raise ValueError("map item requires an active campaign")
+            reveal = map_reveal_service.reveal_from_payload(campaign_id, payload, conn=conn)
+            conn.commit()
+            return {
+                "inventory_id": iid,
+                "character_id": cid,
+                "item": {"key": catalog_key, "label": item_label, "item_type": "map"},
+                "remaining_quantity": int(row["quantity"] or 1),
+                "consumed": False,
+                "map_reveal": reveal,
+                "effects_applied": [
+                    {"type": "map_reveal", "mode": reveal["mode"], "count": reveal["count"]}
+                ],
+                "narrative": (
+                    f"Studiujesz mapę — okolice nie są już tajemnicą. "
+                    f"Odsłonięto {reveal['count']} heksów mapy świata."
+                ),
+            }
+
         if raw_item_type == "consumable" or row["legacy_consumable_key"]:
             item_type = "consumable"
         else:

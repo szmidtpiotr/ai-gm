@@ -219,6 +219,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                     {"label": "accessory", "description": "Akcesoria (pierścień, amulet)"},
                     {"label": "misc", "description": "Różne przedmioty"},
                     {"label": "key_item", "description": "Przedmiot fabularny / klucz"},
+                    {"label": "map", "description": "Mapa — użycie odkrywa fragment mgły wojny (effect_json: mode radius/region/hexes)"},
                 ],
             },
             "value_gp": {
