@@ -398,3 +398,76 @@ def test_short_plains_travel_no_interrupt(conn):
     assert float(flags.get("hours_marched_today", 0)) == pytest.approx(1.0), (
         f"hours_marched_today must be 1.0 after 1 plains hex, got: {flags.get('hours_marched_today')}"
     )
+
+
+# ── PT-F3 #1137: daily budget resets on a new day (end of "eternal dusk") ──────
+
+def test_ptf3_budget_resets_on_new_day(conn):
+    """PT-F3: hours_marched_today from a PRIOR day must reset at dawn.
+
+    Bug: budget was only reset by a long rest, so a hero who hit 8h and kept playing
+    got an immediate dusk-interrupt on every later trip. A new in-game day = fresh
+    budget, so the trip should march a full 8h again (stop at hex 4), not stall at 0.
+    """
+    conn.execute(
+        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=1",
+        (json.dumps({
+            "current_hex": {"q": 0, "r": 0},
+            "ingame_hours": 25,          # day 2
+            "hours_marched_today": 8.0,  # spent yesterday
+            "march_day": 1,              # stamped on day 1
+            "night_march": True,         # from yesterday's night march
+        }),),
+    )
+    conn.commit()
+
+    from app.services.hex_travel_service import resolve_chain_travel
+    result = resolve_chain_travel(
+        campaign_id=1, character_id=None,
+        from_hex=(0, 0), to_hex=(9, 0),
+        character_sheet={}, conn=conn,
+    )
+    assert result.get("ok") is True
+    arrived = result.get("arrived_hex")
+    assert arrived == {"q": 4, "r": 0}, (
+        f"new day must reset budget -> full 8h march to hex 4, got {arrived} (stale budget bug)"
+    )
+    flags = json.loads(conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id=1"
+    ).fetchone()[0])
+    assert flags.get("march_day") == 2, "march_day must advance to the current day"
+    assert flags.get("night_march") is False, "night_march must clear on the new day"
+
+
+def test_ptf3_forced_camp_arms_ambush_boost(conn):
+    """PT-F3: a 12h forced collapse must set camp_encounter_boost so /rest rolls the ambush.
+
+    Bug: forced_camp set night_march but not camp_encounter_boost, so rest_service
+    skipped the whole ambush roll (boost==0) exactly when the hero is most exposed.
+    """
+    conn.execute(
+        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=1",
+        (json.dumps({
+            "current_hex": {"q": 0, "r": 0},
+            "ingame_hours": 19,
+            "hours_marched_today": 10.0,
+            "night_march": True,
+        }),),
+    )
+    conn.commit()
+
+    from app.services.hex_travel_service import resolve_chain_travel
+    result = resolve_chain_travel(
+        campaign_id=1, character_id=None,
+        from_hex=(0, 0), to_hex=(9, 0),
+        character_sheet={}, conn=conn,
+    )
+    assert result.get("ok") is True
+    flags = json.loads(conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id=1"
+    ).fetchone()[0])
+    assert flags.get("travel_plan", {}).get("interrupt_reason") == "forced_camp"
+    boost = flags.get("camp_encounter_boost")
+    assert boost is not None and boost > 0, "forced_camp must arm the ambush boost"
+    # forest has no camp_encounter_boost configured -> 0.20 default + 0.10 night_march
+    assert boost == pytest.approx(0.30), f"expected 0.20 base + 0.10 night_march = 0.30, got {boost}"

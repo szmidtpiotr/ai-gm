@@ -383,6 +383,29 @@ def resolve_chain_travel(
     hours_marched_today = float(_sf_budget.get("hours_marched_today", 0.0))
     night_march = bool(_sf_budget.get("night_march", False))
 
+    # PT-F3 #1137: reset the daily march budget on a new day (dawn). Without this,
+    # hours_marched_today was only ever reset by a long rest — a hero who hit 8h and
+    # kept playing without sleeping got an immediate dusk-interrupt on EVERY later
+    # trip, crawling 1 hex per command forever. A new in-game day = fresh budget and
+    # night_march cleared (morning is no longer a night march).
+    try:
+        from app.services.clock_service import get_clock_state as _get_clock
+        _cur_day = int(_get_clock(campaign_id, conn=conn).get("day", 1))
+        _march_day = _sf_budget.get("march_day")
+        if _march_day is not None and int(_march_day) != _cur_day:
+            hours_marched_today = 0.0
+            night_march = False
+            _sf_budget["hours_marched_today"] = 0.0
+            _sf_budget["night_march"] = False
+            _sf_budget["march_day"] = _cur_day
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(_sf_budget, ensure_ascii=False), _gs_budget["id"]),
+            )
+            conn.commit()
+    except Exception as _budget_day_err:
+        logger.warning("march_budget_day_reset_failed", error=str(_budget_day_err))
+
     # PT15 #1128: pogoda spowalnia marsz — mnożnik kosztu godzinowego kroku wg
     # stanu pogody (session_flags.weather.type / weather_override). NIE zmienia
     # trasy A* (tylko czas), więc gorsza pogoda = mniej hexów przed zmierzchem (PT7).
@@ -672,8 +695,29 @@ def resolve_chain_travel(
 
             # PT7: Persist updated daily march budget (always, even on full arrival)
             sf_tp["hours_marched_today"] = hours_marched_today
+            # PT-F3 #1137: stamp the day this march belongs to so the dawn reset above
+            # knows when a new day has begun.
+            try:
+                from app.services.clock_service import get_clock_state as _gcs_stamp
+                sf_tp["march_day"] = int(_gcs_stamp(campaign_id, conn=conn).get("day", 1))
+            except Exception:
+                pass
             if _budget_reason == "forced_camp":
                 sf_tp["night_march"] = True  # flag for PT9 nocturnal attack bonus
+                # PT-F3 #1137: a forced collapse in the wild must still arm the PT9
+                # night-ambush roll. build_camp set camp_encounter_boost; forced_camp
+                # never did, so /rest skipped the roll (boost==0) exactly when the
+                # hero is most exposed. Set it here from terrain + the night_march bonus.
+                try:
+                    _fc_hex = hexes.get(arrived_hex, {})
+                    _fc_terrain = _fc_hex.get("hex_type", "plains")
+                    _fc_cfg = hex_type_cfg.get(_fc_terrain, {})
+                    _fc_base = _fc_cfg.get("camp_encounter_boost")
+                    _fc_base = float(_fc_base) if _fc_base is not None else 0.20
+                    sf_tp["camp_encounter_boost"] = round(_fc_base + 0.10, 4)
+                except Exception as _fc_err:
+                    logger.warning("forced_camp_boost_failed", error=str(_fc_err))
+                    sf_tp["camp_encounter_boost"] = 0.30
 
             # PT-D1 (#1124): zmęczenie z podróży (nabija istniejącą kondycję exhausted, max 3).
             # (1) marsz >8h w dniu → +1 (raz na dzień, reset przez pełny nocleg);
