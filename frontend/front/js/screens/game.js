@@ -1234,6 +1234,12 @@ async function sendStructuredAction(actionStr, displayLabel) {
         return;
     }
 
+    // PT12 (#1122): TRAVEL_RESUME — mechanical "Kontynuuj podróż" after an interrupt.
+    if (actionStr === 'TRAVEL_RESUME') {
+        await handleTravelResume();
+        return;
+    }
+
     // REST:long opens the long-rest modal (which calls /rest API for HP restore).
     if (actionStr === 'REST:long') {
         const sheet = characterData?.sheet_json || {};
@@ -1311,6 +1317,54 @@ async function _executeTravelFromPill(q, r, label) {
         if (typeof updateWorldMap === 'function') updateWorldMap();
     } catch (e) {
         showToast(`Błąd podróży: ${e.message || e}`, 'error');
+    }
+}
+
+// PT12 (#1122): client-side handler for the "Kontynuuj podróż" suggested action.
+// Mechanical resume of an interrupted travel_plan — bypasses the narrator lottery.
+async function handleTravelResume() {
+    if (!currentCampaignId) {
+        showToast('Brak aktywnej kampanii.', 'error');
+        return;
+    }
+    renderSuggestedActions([]);
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/travel-resume`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            const msg = data?.detail || `HTTP ${r.status}`;
+            showToast(msg, 'error');
+            renderSuggestedActions(_suggestedActions);
+            return;
+        }
+        if (data.current_clock) renderClock(data.current_clock);
+        appendMessage({
+            role: 'system',
+            content: data.message || '🧭 Wznawiasz podróż.',
+            created_at: new Date(),
+        });
+        scrollToBottom();
+
+        const enc = data.encounter;
+        if (enc && enc.enemy_key) {
+            appendMessage({
+                role: 'system',
+                content: `⚔️ Napotkałeś wroga na szlaku: **${enc.enemy_label || enc.enemy_key}**!`,
+                created_at: new Date(),
+            });
+        }
+
+        // Buttons disappear after the decision; server returns the fresh set.
+        _suggestedActions = data.suggested_actions || [];
+        renderSuggestedActions(_suggestedActions);
+
+        await refreshCharacterData();
+        if (typeof updateWorldMap === 'function') updateWorldMap();
+    } catch (e) {
+        showToast(`Błąd wznowienia podróży: ${e.message || e}`, 'error');
+        renderSuggestedActions(_suggestedActions);
     }
 }
 

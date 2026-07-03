@@ -1152,6 +1152,126 @@ def build_camp(campaign_id: int):
         conn.close()
 
 
+@router.post("/campaigns/{campaign_id}/travel-resume")
+def travel_resume(campaign_id: int):
+    """PT12 (#1122) — mechanical "Kontynuuj podróż" after a travel interrupt.
+
+    Resumes a saved `travel_plan` (encounter or dusk interrupt) straight through the
+    movement engine, bypassing LLM intent interpretation. Prose narration still works
+    in parallel via the normal turn path — this is the deterministic shortcut.
+
+    Gates:
+      - 409 if hero is in combat
+      - 409 if there is no interrupted travel to resume
+      - 409 if the interrupt was `forced_camp` (hero collapsed — must rest first)
+      - 404 if no active session / no hero / 400 if the route is unreachable
+    """
+    from app.services.combat_service import get_active_combat
+    from app.services.hex_travel_service import resolve_chain_travel
+    from app.services.clock_service import advance_clock
+    from app.services.suggested_actions import build_suggested_actions
+
+    if get_active_combat(campaign_id):
+        raise HTTPException(status_code=409, detail="Nie można wznowić podróży w trakcie walki.")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            raise HTTPException(status_code=404, detail="Brak aktywnej sesji dla kampanii.")
+
+        flags = json.loads(gs["session_flags"] or "{}")
+        tp = flags.get("travel_plan")
+        reason = str(tp.get("interrupt_reason") or "") if isinstance(tp, dict) else ""
+        if not reason:
+            raise HTTPException(status_code=409, detail="Brak przerwanej podróży do wznowienia.")
+        if reason.startswith("forced_camp"):
+            raise HTTPException(status_code=409, detail="Bohater padł ze zmęczenia — najpierw odpocznij.")
+
+        char = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE campaign_id = ? ORDER BY id LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Brak bohatera w kampanii.")
+        try:
+            sheet = json.loads(char["sheet_json"] or "{}")
+        except Exception:
+            sheet = {}
+
+        cur = flags.get("current_hex") or {"q": 0, "r": 0}
+        dest = tp.get("destination_hex") or {}
+        dq, dr = int(dest.get("q", 0)), int(dest.get("r", 0))
+        dest_label = tp.get("destination_label") or f"hex ({dq},{dr})"
+
+        # PT7: a dusk resume = night march (risky). Flag it BEFORE resolving so the
+        # soft-cap check doesn't immediately re-interrupt with the same dusk prompt.
+        if reason.startswith("dusk"):
+            flags["night_march"] = True
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+
+        tr = resolve_chain_travel(
+            campaign_id=campaign_id,
+            character_id=int(char["id"]),
+            from_hex=(int(cur["q"]), int(cur["r"])),
+            to_hex=(dq, dr),
+            character_sheet=sheet,
+            conn=conn,
+        )
+        if not tr.get("ok"):
+            raise HTTPException(status_code=400, detail=tr.get("error") or "Nie udało się wznowić podróży.")
+
+        hrs = float(tr.get("total_hours") or 0.0)
+        clock = advance_clock(campaign_id, hrs, reason="travel") if hrs > 0 else None
+
+        arr = tr.get("arrived_hex") or {}
+        enc = tr.get("encounter")
+        hex_info = tr.get("hex_data") or {}
+        arrived_full = (
+            int(arr.get("q", dq)) == dq and int(arr.get("r", dr)) == dr and not enc
+        )
+        if arrived_full:
+            message = f"🧭 Wznawiasz podróż i docierasz do celu: {dest_label}."
+        elif enc:
+            message = (
+                f"🧭 Wznawiasz podróż, lecz w drodze napotykasz zagrożenie "
+                f"({hex_info.get('hex_type', 'teren')})."
+            )
+        else:
+            message = (
+                f"🧭 Wznawiasz podróż — przemieszczasz się dalej w stronę {dest_label} "
+                f"({hex_info.get('hex_type', 'teren')})."
+            )
+
+        # Fresh suggested actions from the post-move session state.
+        gs2 = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE id = ? LIMIT 1", (gs["id"],)
+        ).fetchone()
+        flags2 = json.loads((gs2["session_flags"] if gs2 else None) or "{}")
+        actions = build_suggested_actions(
+            conn, campaign_id, int(char["id"]), "NARRATIVE", flags2
+        )
+
+        return {
+            "ok": True,
+            "message": message,
+            "arrived_hex": arr,
+            "encounter": enc,
+            "current_clock": clock,
+            "suggested_actions": actions,
+        }
+    finally:
+        conn.close()
+
+
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_campaign(campaign_id: int):
     conn = sqlite3.connect(DB_PATH)

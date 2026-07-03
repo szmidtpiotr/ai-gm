@@ -95,6 +95,43 @@ def build_suggested_actions(
         return []
 
 
+# ── PT12 (#1122): travel-interrupt decision buttons ──────────────────────────
+
+# Set by resolve_chain_travel (encounter/dusk/forced_camp) and by turn_pipeline
+# after it prompts the player (…_prompted). Any of these means "journey paused".
+_TRAVEL_INTERRUPT_REASONS = {
+    "encounter", "dusk", "forced_camp",
+    "encounter_prompted", "dusk_prompted", "forced_camp_prompted",
+}
+
+
+def _build_travel_interrupt_actions(session_flags: dict) -> list[SuggestedAction]:
+    """PT12: when a journey is interrupted, show three mechanical decision buttons —
+    Kontynuuj podróż / Odpocznij / Rozbij obóz. Clicking bypasses the LLM (see
+    frontend TRAVEL_RESUME + /travel-resume endpoint). forced_camp = hero collapsed,
+    so Kontynuuj podróż is disabled until they rest.
+    """
+    tp = session_flags.get("travel_plan")
+    if not isinstance(tp, dict):
+        return []
+    reason = str(tp.get("interrupt_reason") or "")
+    if reason not in _TRAVEL_INTERRUPT_REASONS:
+        return []
+    can_resume = not reason.startswith("forced_camp")
+    return [
+        SuggestedAction(
+            label="Kontynuuj podróż",
+            action="TRAVEL_RESUME",
+            enabled=can_resume,
+            reason=None if can_resume else "Padłeś ze zmęczenia — najpierw odpocznij.",
+            icon="🧭",
+            type="travel",
+        ),
+        SuggestedAction(label="Odpocznij", action="REST:long", enabled=True, icon="😴"),
+        SuggestedAction(label="Rozbij obóz", action="BUILD_CAMP", enabled=True, icon="🔥"),
+    ]
+
+
 # ── NARRATIVE / DIALOGUE state ────────────────────────────────────────────────
 
 def _build_narrative_actions(
@@ -103,6 +140,11 @@ def _build_narrative_actions(
     session_flags: dict,
 ) -> list[SuggestedAction]:
     """Priority: NPCs first, exits, SEARCH, REST — capped at MAX_ACTIONS."""
+    # PT12 (#1122): a paused journey replaces the normal pills with 3 decision buttons.
+    interrupt = _build_travel_interrupt_actions(session_flags)
+    if interrupt:
+        return interrupt[:MAX_ACTIONS]
+
     actions: list[SuggestedAction] = []
 
     current_loc_key = session_flags.get("current_location_key") or ""
