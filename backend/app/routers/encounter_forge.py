@@ -38,6 +38,38 @@ def encounter_schema(kind: str = Query(...), _: None = Depends(_require_admin)):
         conn.close()
 
 
+@router.get("/catalog")
+def encounter_catalog_list(
+    kind: Optional[str] = Query(None),
+    biome: Optional[str] = Query(None),
+    subtype: Optional[str] = Query(None),
+    _: None = Depends(_require_admin),
+):
+    """Lista rekordów katalogu dla panelu (filtr kind/biome/subtype)."""
+    if kind:  # pusty string / None = bez filtra kind
+        _check_kind(kind)
+    conn = _get_db()
+    try:
+        cat.ensure_catalog_schema(conn)
+        rows = cat.list_catalog(conn, kind=kind, biome=biome, subtype=subtype)
+        return {"ok": True, "count": len(rows), "encounters": rows}
+    finally:
+        conn.close()
+
+
+@router.delete("/catalog/{key}")
+def encounter_catalog_delete(key: str, _: None = Depends(_require_admin)):
+    """Usuń rekord katalogu po kluczu. Nieistniejący → 404."""
+    conn = _get_db()
+    try:
+        cat.ensure_catalog_schema(conn)
+        if not cat.delete_encounter(conn, key):
+            raise HTTPException(status_code=404, detail=f"encounter '{key}' nie istnieje")
+        return {"ok": True, "key": key}
+    finally:
+        conn.close()
+
+
 class GenerateReq(BaseModel):
     kind: str
     count: int = 1

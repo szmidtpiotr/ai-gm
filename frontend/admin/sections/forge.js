@@ -502,6 +502,7 @@ async function _loadForge() {
       if (tab === 'hooks') _loadForgeHooks();
       if (tab === 'templates') _loadForgeTemplates();
       if (tab === 'encounters') _loadForgeEncounters();
+      if (tab === 'catalog') _loadForgeCatalog();
     });
   });
   // Wire hooks status filter
@@ -998,6 +999,274 @@ async function _loadForgeEncounters() {
       </div>`;
     }).join('');
   } catch(e) { grid.innerHTML = `<span style="color:var(--red)">${e.message}</span>`; }
+}
+
+// ── Katalog encounterów (game_config_encounters, PT-D4c #1132) ──────────────
+let _forgeCatFilter = { kind: '', text: '' };
+let _forgeCatSchemaCache = {};          // { combat: {...}, social: {...} }
+let _forgeCatDrafts = [];               // ostatnio wygenerowane drafty
+let _forgeCatEditing = null;            // { kind, key|null } — aktualnie edytowany rekord
+
+const _CAT_KIND_LABEL = { combat: '⚔ Bojowy', social: '💬 Społeczny' };
+// pola trafiające do topu draftu (reszta → payload)
+const _CAT_TOP_FIELDS = new Set(['biome', 'subtype', 'level_min', 'level_max', 'weight']);
+
+async function _catSchema(kind) {
+  if (!_forgeCatSchemaCache[kind]) {
+    _forgeCatSchemaCache[kind] = await apiFetch(`/api/admin/forge/encounters/schema?kind=${kind}`);
+  }
+  return _forgeCatSchemaCache[kind];
+}
+
+async function _loadForgeCatalog() {
+  const grid = document.getElementById('forge-cat-grid');
+  if (!grid) return;
+  // wire kind filter (idempotentnie — set once)
+  const bar = document.getElementById('forge-cat-kind-bar');
+  if (bar && !bar.dataset.wired) {
+    bar.dataset.wired = '1';
+    bar.querySelectorAll('.stab[data-catkind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bar.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _forgeCatFilter.kind = btn.dataset.catkind;
+        _loadForgeCatalog();
+      });
+    });
+  }
+  grid.innerHTML = '<em style="color:var(--t3);font-size:0.82rem">Ładowanie…</em>';
+  try {
+    const qs = new URLSearchParams();
+    if (_forgeCatFilter.kind) qs.set('kind', _forgeCatFilter.kind);
+    const txt = (_forgeCatFilter.text || '').trim();
+    if (txt) {
+      // biome dla combat, subtype dla social — filtruj po tym co pasuje do kind
+      if (_forgeCatFilter.kind === 'combat') qs.set('biome', txt);
+      else if (_forgeCatFilter.kind === 'social') qs.set('subtype', txt);
+    }
+    const d = await apiFetch(`/api/admin/forge/encounters/catalog?${qs.toString()}`);
+    let rows = d.encounters || [];
+    // filtr tekstowy po stronie klienta gdy kind=Wszystkie (biome LUB subtype)
+    if (txt && !_forgeCatFilter.kind) {
+      const t = txt.toLowerCase();
+      rows = rows.filter(r => (r.biome || '').toLowerCase().includes(t) || (r.subtype || '').toLowerCase().includes(t));
+    }
+    if (rows.length === 0) {
+      grid.innerHTML = '<em style="color:var(--t3);font-size:0.82rem">Brak encounterów dla filtra. Wygeneruj AI-em powyżej.</em>';
+      return;
+    }
+    grid.innerHTML = rows.map(_forgeCatCard).join('');
+  } catch (e) { grid.innerHTML = `<span style="color:var(--red)">${e.message}</span>`; }
+}
+
+function _forgeCatCard(r) {
+  const kindBadge = _CAT_KIND_LABEL[r.kind] || r.kind;
+  const scope = r.kind === 'combat' ? (r.biome || '—') : (r.subtype || '—');
+  const stars = '★'.repeat(r.quality_rating || 0) + '☆'.repeat(Math.max(0, 5 - (r.quality_rating || 0)));
+  const src = r.source === 'seed' ? '🌱 seed' : '🤖 AI';
+  return `<div class="card" style="border:1px solid var(--border)">
+    <div class="card-header" style="padding-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="badge" style="font-size:0.7rem;background:var(--surface3)">${kindBadge}</span>
+      <span style="font-size:0.72rem;color:var(--t3)">${_esc(scope)}</span>
+      <span style="font-size:0.7rem;color:var(--t3);margin-left:auto">${src}</span>
+    </div>
+    <div style="padding:0 12px 12px">
+      <div style="font-weight:600;font-size:0.9rem;margin-bottom:4px">${_esc(r.title || r.key)}</div>
+      <div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">
+        <span title="Ocena jakości" style="color:var(--yellow)">${stars}</span>
+        &nbsp;·&nbsp; 🎲 użyć: ${r.times_used || 0}
+        &nbsp;·&nbsp; waga: ${r.weight}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-secondary" onclick="_forgeCatEditRecord('${_esc(r.key)}')">✏ Edytuj</button>
+        <button class="btn btn-sm btn-secondary" onclick="_forgeCatDelete('${_esc(r.key)}')" style="color:var(--red)">🗑</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _forgeCatFilterTextChanged(v) {
+  _forgeCatFilter.text = v;
+  clearTimeout(_forgeCatFilterTextChanged._t);
+  _forgeCatFilterTextChanged._t = setTimeout(() => _loadForgeCatalog(), 300);
+}
+
+function _forgeCatGenKindChanged(kind) {
+  // dostosuj etykiety pól generacji (biom vs subtyp, poziom tylko dla combat)
+  const lbl = document.getElementById('forge-cat-gen-biome-lbl');
+  const levelWrap = document.getElementById('forge-cat-gen-level-wrap');
+  const biome = document.getElementById('forge-cat-gen-biome');
+  if (kind === 'social') {
+    if (lbl) lbl.textContent = 'Subtyp';
+    if (biome) biome.placeholder = 'np. market';
+    if (levelWrap) levelWrap.style.display = 'none';
+  } else {
+    if (lbl) lbl.textContent = 'Biom';
+    if (biome) biome.placeholder = 'np. forest';
+    if (levelWrap) levelWrap.style.display = '';
+  }
+}
+
+async function _forgeCatGenerate() {
+  const btn = document.getElementById('forge-cat-gen-btn');
+  const kind = document.getElementById('forge-cat-gen-kind').value;
+  const scopeVal = (document.getElementById('forge-cat-gen-biome').value || '').trim();
+  const level = parseInt(document.getElementById('forge-cat-gen-level').value, 10);
+  const count = Math.max(1, Math.min(20, parseInt(document.getElementById('forge-cat-gen-count').value, 10) || 1));
+  const body = { kind, count };
+  if (kind === 'combat') { if (scopeVal) body.biome = scopeVal; if (!isNaN(level)) body.level = level; }
+  else { if (scopeVal) body.subtype = scopeVal; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+  try {
+    const d = await apiFetch('/api/admin/forge/encounters/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    _forgeCatDrafts = d.drafts || [];
+    _renderForgeCatDrafts();
+    _showToast(`Wygenerowano ${_forgeCatDrafts.length} draft(ów)`, _forgeCatDrafts.length ? 'success' : 'info');
+  } catch (e) { _showToast(e.message, 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '✨ Generuj AI'; } }
+}
+
+function _renderForgeCatDrafts() {
+  const wrap = document.getElementById('forge-cat-drafts');
+  const grid = document.getElementById('forge-cat-drafts-grid');
+  if (!wrap || !grid) return;
+  if (!_forgeCatDrafts.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  grid.innerHTML = _forgeCatDrafts.map((d, i) => {
+    const p = d.payload || {};
+    const fkWarn = d.fk_valid === false
+      ? '<div style="font-size:0.72rem;color:var(--red)">⚠ Klucz FK spoza katalogu — popraw przed zapisem</div>' : '';
+    const scope = d.kind === 'combat' ? (d.biome || '—') : (d.subtype || '—');
+    return `<div class="card" style="border:1px solid var(--border)">
+      <div class="card-header" style="padding-bottom:6px">
+        <span class="badge" style="font-size:0.7rem;background:var(--surface3)">${_CAT_KIND_LABEL[d.kind] || d.kind}</span>
+        <span style="font-size:0.72rem;color:var(--t3);margin-left:6px">${_esc(scope)}</span>
+      </div>
+      <div style="padding:0 12px 12px">
+        <div style="font-weight:600;font-size:0.88rem;margin-bottom:4px">${_esc(p.title || d.title || '(bez tytułu)')}</div>
+        ${p.scene_setup ? `<div style="font-size:0.75rem;color:var(--t2);margin-bottom:6px">${_esc(String(p.scene_setup).substring(0, 100))}…</div>` : ''}
+        ${fkWarn}
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-sm btn-primary" onclick="_forgeCatAcceptDraft(${i})">✓ Edytuj i zapisz</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Akceptacja draftu → otwórz formularz wypełniony draftem (INSERT)
+async function _forgeCatAcceptDraft(idx) {
+  const d = _forgeCatDrafts[idx];
+  if (!d) return;
+  await _forgeCatOpenForm(d.kind, d, { isUpdate: false, draftIdx: idx });
+}
+
+// Edycja istniejącego rekordu → pobierz z listy, otwórz formularz (UPDATE)
+async function _forgeCatEditRecord(key) {
+  try {
+    const d = await apiFetch('/api/admin/forge/encounters/catalog');
+    const rec = (d.encounters || []).find(r => r.key === key);
+    if (!rec) { _showToast('Nie znaleziono rekordu', 'error'); return; }
+    await _forgeCatOpenForm(rec.kind, rec, { isUpdate: true });
+  } catch (e) { _showToast(e.message, 'error'); }
+}
+
+// Zbuduj dynamiczny formularz z /schema i wypełnij danymi (draft lub rekord)
+async function _forgeCatOpenForm(kind, data, { isUpdate, draftIdx = null }) {
+  const schema = await _catSchema(kind);
+  const payload = data.payload || {};
+  _forgeCatEditing = { kind, key: isUpdate ? data.key : null, draftIdx };
+  const getVal = (name) => {
+    if (_CAT_TOP_FIELDS.has(name)) return data[name];
+    if (name === 'gold_pct') return (payload.rewards && payload.rewards.gold_pct != null) ? payload.rewards.gold_pct : payload.gold_pct;
+    return payload[name];
+  };
+  const form = document.getElementById('cat-em-form');
+  form.innerHTML = schema.fields.map(f => _forgeCatField(f, schema.enums, getVal(f.name))).join('');
+  document.getElementById('cat-em-title').textContent = isUpdate ? `Edytuj: ${data.title || data.key}` : 'Nowy encounter';
+  document.getElementById('cat-em-badge').textContent = `${_CAT_KIND_LABEL[kind] || kind}${isUpdate ? ' · UPDATE' : ' · nowy'}`;
+  document.getElementById('cat-encounter-modal').classList.add('open');
+}
+
+function _forgeCatField(f, enums, val) {
+  const req = f.required ? '<span style="color:var(--red)">*</span>' : '';
+  const lbl = `<label class="form-label" style="font-size:0.78rem">${_esc(f.label)} ${req}</label>`;
+  const id = `catf-${f.name}`;
+  let ctrl = '';
+  if (f.type === 'textarea') {
+    ctrl = `<textarea id="${id}" data-fname="${f.name}" data-ftype="${f.type}" class="form-input" rows="2">${_esc(val ?? '')}</textarea>`;
+  } else if (f.type === 'int' || f.type === 'float') {
+    const step = f.type === 'float' ? 'any' : '1';
+    const mm = `${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''}`;
+    ctrl = `<input id="${id}" data-fname="${f.name}" data-ftype="${f.type}" class="form-input" type="number" step="${step}" ${mm} value="${val ?? ''}">`;
+  } else if (f.type === 'enum') {
+    const opts = (f.enum || []).map(o => `<option value="${_esc(o)}" ${o === val ? 'selected' : ''}>${_esc(o)}</option>`).join('');
+    ctrl = `<select id="${id}" data-fname="${f.name}" data-ftype="enum" class="form-input"><option value="">—</option>${opts}</select>`;
+  } else if (f.type === 'fk') {
+    const list = (enums[f.enum_ref] || []);
+    const opts = list.map(o => `<option value="${_esc(o.key)}" ${o.key === val ? 'selected' : ''}>${_esc(o.label || o.key)}</option>`).join('');
+    ctrl = `<select id="${id}" data-fname="${f.name}" data-ftype="fk" class="form-input"><option value="">—</option>${opts}</select>`;
+  } else if (f.type === 'fk_list') {
+    // lista wrogów: pierwszy enemy_key + count (proste, wystarcza do walki)
+    const list = (enums[f.enum_ref] || []);
+    const first = Array.isArray(val) && val[0] ? val[0] : {};
+    const opts = list.map(o => `<option value="${_esc(o.key)}" ${o.enemy_key === first.enemy_key || o.key === first.enemy_key ? 'selected' : ''}>${_esc(o.label || o.key)}</option>`).join('');
+    ctrl = `<div style="display:flex;gap:6px">
+      <select id="${id}" data-fname="${f.name}" data-ftype="fk_list" class="form-input" style="flex:1"><option value="">—</option>${opts}</select>
+      <input id="${id}-count" class="form-input" type="number" min="1" style="width:80px" value="${first.count || 1}" title="Ilość">
+    </div>`;
+  } else {
+    ctrl = `<input id="${id}" data-fname="${f.name}" data-ftype="text" class="form-input" type="text" value="${_esc(val ?? '')}">`;
+  }
+  return `<div class="form-row">${lbl}${ctrl}</div>`;
+}
+
+async function _forgeCatSaveForm() {
+  if (!_forgeCatEditing) return;
+  const { kind, key, draftIdx } = _forgeCatEditing;
+  const draft = { kind, payload: {} };
+  if (key) { draft.key = key; draft.replace = true; }
+  document.querySelectorAll('#cat-em-form [data-fname]').forEach(el => {
+    const name = el.dataset.fname, type = el.dataset.ftype;
+    let v = el.value;
+    if (v === '' || v == null) return;
+    if (type === 'int') v = parseInt(v, 10);
+    else if (type === 'float') v = parseFloat(v);
+    if (type === 'fk_list') {
+      const cnt = parseInt(document.getElementById(`catf-${name}-count`).value, 10) || 1;
+      draft.payload[name] = [{ enemy_key: v, count: cnt }];
+    } else if (_CAT_TOP_FIELDS.has(name)) {
+      draft[name] = v;
+    } else {
+      draft.payload[name] = v;
+    }
+  });
+  const btn = document.getElementById('cat-em-save');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const res = await apiFetch('/api/admin/forge/encounters/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft }),
+    });
+    _showToast(`Zapisano: ${res.key}`, 'success');
+    document.getElementById('cat-encounter-modal').classList.remove('open');
+    document.dispatchEvent(new CustomEvent('encounter-catalog-saved', { detail: { key: res.key } }));
+    // usuń zaakceptowany draft z listy pending
+    if (draftIdx != null) { _forgeCatDrafts = _forgeCatDrafts.filter((_, i) => i !== draftIdx); _renderForgeCatDrafts(); }
+    _loadForgeCatalog();
+  } catch (e) { _showToast(e.message, 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Zapisz do katalogu'; } }
+}
+
+async function _forgeCatDelete(key) {
+  if (!confirm(`Usunąć encounter "${key}" z katalogu?`)) return;
+  try {
+    await apiFetch(`/api/admin/forge/encounters/catalog/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    _showToast('Usunięto', 'success');
+    document.dispatchEvent(new CustomEvent('encounter-catalog-saved', { detail: { key, deleted: true } }));
+    _loadForgeCatalog();
+  } catch (e) { _showToast(e.message, 'error'); }
 }
 
 async function openEncounterModal(hookId) {
@@ -3150,6 +3419,7 @@ function _sectionHtml() {
       <button class="stab" data-forgetab="hooks">⚓ Haki</button>
       <button class="stab" data-forgetab="templates">📖 Szablony</button>
       <button class="stab" data-forgetab="encounters">⚔ Spotkania</button>
+      <button class="stab" data-forgetab="catalog">📖 Katalog</button>
     </div>
 
     <!-- Tab: Agent AI -->
@@ -3270,6 +3540,76 @@ function _sectionHtml() {
         <button class="btn btn-sm btn-secondary" onclick="_loadForgeEncounters()" style="margin-left:auto">↺ Odśwież</button>
       </div>
       <div id="forge-encounters-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px"></div>
+    </div>
+
+    <!-- Tab: Katalog encounterów (game_config_encounters, PT-D4c #1132) -->
+    <div id="forge-tab-catalog" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:0.82rem;color:var(--t3)">Katalog encounterów (baza <code>game_config_encounters</code>). Filtruj, generuj AI-em, edytuj i akceptuj.</span>
+        <button class="btn btn-sm btn-secondary" onclick="_loadForgeCatalog()" style="margin-left:auto">↺ Odśwież</button>
+      </div>
+
+      <!-- Filtr kind + biome/subtype -->
+      <div class="stab-bar" id="forge-cat-kind-bar" style="margin-bottom:10px">
+        <button class="stab active" data-catkind="">Wszystkie</button>
+        <button class="stab" data-catkind="combat">⚔ Bojowe</button>
+        <button class="stab" data-catkind="social">💬 Społeczne</button>
+        <input id="forge-cat-filter-text" class="form-input" style="max-width:220px;margin-left:auto"
+          placeholder="biom / subtyp…" oninput="_forgeCatFilterTextChanged(this.value)">
+      </div>
+
+      <!-- Generacja AI -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <label style="font-size:0.7rem;color:var(--t3)">Rodzaj</label>
+          <select id="forge-cat-gen-kind" class="form-input" style="width:130px" onchange="_forgeCatGenKindChanged(this.value)">
+            <option value="combat">⚔ Bojowy</option>
+            <option value="social">💬 Społeczny</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px" id="forge-cat-gen-biome-wrap">
+          <label style="font-size:0.7rem;color:var(--t3)" id="forge-cat-gen-biome-lbl">Biom</label>
+          <input id="forge-cat-gen-biome" class="form-input" style="width:150px" placeholder="np. forest">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px" id="forge-cat-gen-level-wrap">
+          <label style="font-size:0.7rem;color:var(--t3)">Poziom</label>
+          <input id="forge-cat-gen-level" class="form-input" type="number" style="width:80px" placeholder="1">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <label style="font-size:0.7rem;color:var(--t3)">Ile</label>
+          <input id="forge-cat-gen-count" class="form-input" type="number" style="width:70px" value="1" min="1" max="20">
+        </div>
+        <button class="btn btn-sm btn-primary" id="forge-cat-gen-btn" onclick="_forgeCatGenerate()">✨ Generuj AI</button>
+      </div>
+
+      <!-- Drafty AI (pending) -->
+      <div id="forge-cat-drafts" style="display:none;margin-bottom:14px">
+        <div style="font-size:0.8rem;font-weight:600;color:var(--t2);margin-bottom:6px">🪄 Wygenerowane drafty (do akceptacji)</div>
+        <div id="forge-cat-drafts-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
+      </div>
+
+      <!-- Katalog -->
+      <div id="forge-cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px"></div>
+    </div>
+
+    <!-- Katalog encounter edit/accept modal (dynamiczny formularz z /schema) -->
+    <div id="cat-encounter-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+      <div class="modal" style="max-width:720px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title" id="cat-em-title">Encounter</div>
+            <div class="modal-subtitle" id="cat-em-badge"></div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cat-encounter-modal').classList.remove('open')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="cat-em-form" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cat-encounter-modal').classList.remove('open')">Anuluj</button>
+          <button class="btn btn-sm btn-primary" id="cat-em-save" onclick="_forgeCatSaveForm()">💾 Zapisz do katalogu</button>
+        </div>
+      </div>
     </div>
 
     <!-- Encounter edit modal -->
@@ -3765,6 +4105,15 @@ export async function init(panel) {
   window._previewEncounterFromForm = _previewEncounterFromForm;
   window._injectEncounterFromModal = _injectEncounterFromModal;
   window._saveEncounterEdits = _saveEncounterEdits;
+  // Katalog encounterów (#1132)
+  window._loadForgeCatalog = _loadForgeCatalog;
+  window._forgeCatFilterTextChanged = _forgeCatFilterTextChanged;
+  window._forgeCatGenKindChanged = _forgeCatGenKindChanged;
+  window._forgeCatGenerate = _forgeCatGenerate;
+  window._forgeCatAcceptDraft = _forgeCatAcceptDraft;
+  window._forgeCatEditRecord = _forgeCatEditRecord;
+  window._forgeCatSaveForm = _forgeCatSaveForm;
+  window._forgeCatDelete = _forgeCatDelete;
   // Haki
   window.openHookModal = openHookModal;
   window.forgeApproveHook = forgeApproveHook;

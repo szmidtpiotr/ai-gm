@@ -458,6 +458,55 @@ def generate_encounter_drafts(
     return drafts
 
 
+# ── Panel Kuźnia: lista / delete (PT-D4c #1132) ──────────────────────────────
+
+def list_catalog(
+    conn: sqlite3.Connection,
+    *,
+    kind: Optional[str] = None,
+    biome: Optional[str] = None,
+    subtype: Optional[str] = None,
+) -> list[dict]:
+    """Lista rekordów katalogu dla panelu (filtr kind/biome/subtype).
+
+    Każdy rekord ma pola surowe + `title` wyciągnięty z payloadu (nagłówek karty).
+    Sortowanie: kind, biome/subtype, key — deterministyczne dla UI.
+    """
+    where, params = [], []
+    if kind:
+        where.append("kind = ?")
+        params.append(kind)
+    if biome:
+        where.append("biome = ?")
+        params.append(biome)
+    if subtype:
+        where.append("subtype = ?")
+        params.append(subtype)
+    sql = "SELECT * FROM game_config_encounters"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY kind, COALESCE(biome, subtype, ''), key"
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    out: list[dict] = []
+    for row in rows:
+        d = _row_to_dict(row)
+        payload = d.get("payload") or {}
+        d["title"] = payload.get("title") or d["key"]
+        d.pop("payload_json", None)
+        out.append(d)
+    return out
+
+
+def delete_encounter(conn: sqlite3.Connection, key: str) -> bool:
+    """Usuń rekord katalogu po kluczu. Zwraca True gdy coś usunięto (idempotentne)."""
+    cur = conn.execute("DELETE FROM game_config_encounters WHERE key = ?", (key,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
 # ── Seed z obecnego hardcode ─────────────────────────────────────────────────
 
 def seed_catalog(conn: sqlite3.Connection) -> int:
