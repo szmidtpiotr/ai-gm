@@ -5010,6 +5010,16 @@ def create_turn(
         except Exception as _pt10_err:
             logger.warning("pt10_local_travel_hint_inject_error", error=str(_pt10_err))
 
+        # PT-D2 #1125: surface delayed pickpocket 💰 notice when its counter matures
+        try:
+            from app.services.turn_pipeline import pop_gold_notices as _ptd2_pop
+            _ptd2_hint = _ptd2_pop(conn, campaign_id)
+            if _ptd2_hint:
+                _u30_system_fact = (_u30_system_fact or "") + _ptd2_hint
+                logger.info("ptd2_gold_notice_injected", campaign_id=campaign_id)
+        except Exception as _ptd2_err:
+            logger.warning("ptd2_gold_notice_inject_error", error=str(_ptd2_err))
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -5701,6 +5711,20 @@ def create_turn_stream(
                 logger.info("pt10_local_travel_hint_injected_stream", campaign_id=campaign_id)
         except Exception as _pt10_err_s:
             logger.warning("pt10_local_travel_hint_inject_stream_error", error=str(_pt10_err_s))
+
+        # PT-D2 #1125: delayed pickpocket 💰 notice (streaming path)
+        try:
+            from app.services.turn_pipeline import pop_gold_notices as _ptd2_pop_s
+            _ptd2_hint_s = _ptd2_pop_s(conn, campaign_id)
+            if _ptd2_hint_s:
+                _first_mv_ptd2 = messages[0] if messages else None
+                if isinstance(_first_mv_ptd2, dict) and _first_mv_ptd2.get("role") == "system":
+                    _first_mv_ptd2["content"] = f"{_first_mv_ptd2.get('content', '').rstrip()}{_ptd2_hint_s}"
+                else:
+                    messages.insert(0, {"role": "system", "content": _ptd2_hint_s.strip()})
+                logger.info("ptd2_gold_notice_injected_stream", campaign_id=campaign_id)
+        except Exception as _ptd2_err_s:
+            logger.warning("ptd2_gold_notice_inject_stream_error", error=str(_ptd2_err_s))
 
         location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
             conn, campaign_id, text, messages

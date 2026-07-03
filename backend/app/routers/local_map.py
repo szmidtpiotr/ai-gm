@@ -98,6 +98,117 @@ def _check_local_encounter(target: dict, cleared_local_hexes: list) -> Optional[
     return {"enemy_key": enemy_key, "hex_label": target.get("label", "sub-lokacja")}
 
 
+def _resolve_social_encounter(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    target: dict,
+    loc_key: Optional[str],
+    encounter_result: dict,
+    flags: dict,
+    hint: dict,
+) -> None:
+    """PT-D2 #1125: split a triggered local encounter 50/50 into combat vs social.
+
+    Combat half → leave encounter_result as-is (existing PT10 combat path).
+    Social half → resolve a subtype-specific social event in-flight (d20 + stat +
+    skill vs DC). Soft consequences (gold/hook); escalate to combat ONLY on Nat 1.
+    Pickpocket failure deducts 10% gold (cap 50) now, but schedules a delayed 💰
+    notice (1-3 turns) via session_flags.pending_gold_notices.
+
+    Mutates encounter_result (adds 'kind'/'social') and hint in place. Never raises
+    — any failure leaves the plain combat encounter untouched.
+    """
+    from app.services import social_encounter_service as ses
+
+    kind = ses.classify_encounter_kind(random.random())
+    encounter_result["kind"] = kind
+    if kind == "combat":
+        hint["kind"] = "combat"
+        return
+
+    # Resolve sub-location subtype for the event pool
+    subtype = "alley"
+    if loc_key:
+        _sub_row = conn.execute(
+            "SELECT location_subtype FROM game_locations WHERE key = ? LIMIT 1",
+            (loc_key,),
+        ).fetchone()
+        if _sub_row:
+            subtype = ses.resolve_subtype(_sub_row["location_subtype"])
+
+    event = ses.pick_social_event(subtype)
+
+    # Load the active character (stats + gold) for the in-flight skill check
+    char = conn.execute(
+        "SELECT id, sheet_json, gold_gp FROM characters "
+        "WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not char:
+        # No character to resolve against — degrade to a pure soft flavor hook
+        encounter_result.pop("enemy_key", None)
+        encounter_result["social"] = {"event": event["key"], "subtype": subtype}
+        hint.update({"kind": "social", "social_event": event["key"], "escalate": False})
+        return
+
+    from app.services.weapon_rules import stat_modifier
+    sheet = json.loads(char["sheet_json"] or "{}")
+    skills = sheet.get("skills") or {}
+    stat_mod = stat_modifier(sheet, event["stat"])
+    skill_rank = int(skills.get(event["skill"], 0) or 0)
+    d20 = random.randint(1, 20)
+    check = ses.resolve_skill_check(d20, stat_mod, skill_rank, event["dc"])
+
+    outcome = ses.build_social_outcome(
+        event_key=event["key"],
+        subtype=subtype,
+        gold=int(char["gold_gp"] or 0),
+        skill_check=check,
+        flags=flags,
+        delay_turns=None,
+    )
+
+    # Deduct gold now (delayed reveal handled by pending_gold_notices)
+    if outcome["gold_loss"] > 0:
+        try:
+            from app.services.economy_service import change_gold
+            change_gold(
+                conn,
+                int(char["id"]),
+                -int(outcome["gold_loss"]),
+                source="pickpocket",
+                campaign_id=campaign_id,
+                meta={"delayed": True, "subtype": subtype},
+                allow_negative=False,
+            )
+        except Exception:
+            pass  # gold mutation must never break movement
+
+    escalate = bool(check["escalate_combat"])
+    if escalate:
+        # Nat 1 — social turns violent; keep combat encounter (enemy_key stays)
+        encounter_result["kind"] = "combat_escalated"
+    else:
+        # Soft social encounter — no combat, drop the enemy
+        encounter_result.pop("enemy_key", None)
+
+    encounter_result["social"] = {
+        "event": event["key"],
+        "subtype": subtype,
+        "success": bool(check["success"]),
+        "escalate_combat": escalate,
+        "gold_loss": int(outcome["gold_loss"]),
+    }
+    hint.update(
+        {
+            "kind": "combat_escalated" if escalate else "social",
+            "social_event": event["key"],
+            "escalate": escalate,
+            "success": bool(check["success"]),
+        }
+    )
+
+
 # ── GET /api/campaigns/{id}/local-map ─────────────────────────────────────────
 
 @router.get("/campaigns/{campaign_id}/local-map")
@@ -270,9 +381,14 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
                         (campaign_id,),
                     ).fetchone()
                     _flags_enc = json.loads((_sf_enc["session_flags"] if _sf_enc else None) or "{}")
-                    _flags_enc["local_travel_hint"] = {
-                        "destination_label": target.get("label", "sub-lokacja"),
-                    }
+                    _hint: dict = {"destination_label": target.get("label", "sub-lokacja")}
+
+                    # PT-D2 #1125: split PT10 hit 50/50 → combat vs social encounter
+                    _resolve_social_encounter(
+                        conn, campaign_id, target, loc_key, encounter_result, _flags_enc, _hint
+                    )
+
+                    _flags_enc["local_travel_hint"] = _hint
                     conn.execute(
                         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                         (json.dumps(_flags_enc, ensure_ascii=False), campaign_id),

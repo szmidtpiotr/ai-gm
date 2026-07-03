@@ -696,13 +696,39 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
             return None
 
         dest_label = hint_data.get("destination_label", "sub-lokacja")
-        hint = (
-            f"\n[SYSTEM: Gracz był w drodze do {dest_label}. "
-            f"Walka przerwała ruch. Zapytaj gracza (prozą): "
-            f"czy kontynuuje do {dest_label} czy wraca? "
-            f"(W osadzie rozbicie obozu niedostępne — odpoczynek tylko w bezpiecznych miejscach.) "
-            f"Nie decyduj za gracza — zadaj pytanie.]"
-        )
+        hint_kind = hint_data.get("kind", "combat")
+
+        if hint_kind == "social":
+            # PT-D2 #1125: social encounter resolved in-flight — movement reached
+            # its destination. Narrate the soft social beat, do NOT prompt combat.
+            _ev = hint_data.get("social_event", "spotkanie")
+            _ok = hint_data.get("success")
+            _flavor = {
+                "pickpocket": "kieszonkowiec ociera się o gracza w tłumie",
+                "drunk_harassment": "pijak zaczepia gracza",
+                "card_cheat": "karciany oszust wabi gracza do gry",
+                "quest_rumor": "ktoś rzuca ciekawą plotkę",
+                "tout": "naganiacz próbuje wcisnąć gracza do kramu",
+                "guard_check": "straż zatrzymuje gracza do kontroli",
+            }.get(_ev, "drobne uliczne zajście")
+            _res = (
+                "Gracz w porę to wychwycił — opisz, jak zażegnuje sytuację."
+                if _ok
+                else "Sytuacja rozeszła się po kościach, ale zostawiła ślad."
+            )
+            hint = (
+                f"\n[SYSTEM: W drodze do {dest_label} zaszło drobne zdarzenie: {_flavor}. "
+                f"{_res} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
+            )
+        else:
+            # combat / combat_escalated → prompt continue-or-return as before
+            hint = (
+                f"\n[SYSTEM: Gracz był w drodze do {dest_label}. "
+                f"Walka przerwała ruch. Zapytaj gracza (prozą): "
+                f"czy kontynuuje do {dest_label} czy wraca? "
+                f"(W osadzie rozbicie obozu niedostępne — odpoczynek tylko w bezpiecznych miejscach.) "
+                f"Nie decyduj za gracza — zadaj pytanie.]"
+            )
         flags.pop("local_travel_hint")
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
@@ -712,6 +738,49 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
         return hint
     except Exception as e:
         logger.warning("pop_local_travel_hint_failed", error=str(e))
+        return None
+
+
+def pop_gold_notices(conn: "sqlite3.Connection", campaign_id: int) -> "str | None":
+    """PT-D2 #1125: emit the delayed 💰 pickpocket notice once its counter matures.
+
+    Called once per turn. Decrements every pending notice's turn counter and, for
+    any that just reached zero, returns a narrator [SYSTEM:...] line that surfaces
+    the loss as a 💰 bubble ("orientujesz się, że sakiewka jest lżejsza").
+    Returns None when nothing is due. Never raises.
+    """
+    try:
+        from app.services import social_encounter_service as ses
+
+        gs = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return None
+        flags = json.loads(gs["session_flags"] or "{}")
+        if not flags.get("pending_gold_notices"):
+            return None
+
+        due = ses.pop_due_gold_notices(flags)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), gs["id"]),
+        )
+        conn.commit()
+
+        if not due:
+            return None
+
+        total = sum(int(n.get("amount", 0)) for n in due)
+        if total <= 0:
+            return None
+        return (
+            f"\n[SYSTEM: 💰 Gracz orientuje się, że jego sakiewka jest lżejsza o {total} zł "
+            f"— ktoś musiał go okraść wcześniej. Wpleć krótko (1 zdanie) to odkrycie.]"
+        )
+    except Exception as e:
+        logger.warning("pop_gold_notices_failed", error=str(e))
         return None
 
 
