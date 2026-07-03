@@ -224,9 +224,16 @@ def execute_directional_travel(
     flags = json.loads((gs["session_flags"] if gs else None) or "{}")
     cur = flags.get("current_hex") or {"q": 0, "r": 0}
 
-    # PT6 #1116: player continues interrupted travel after combat
+    # PT6 #1116: player continues interrupted travel after combat.
+    # PT-F1 #1135: never resume while combat is active — "kontynuuję" typed mid-fight
+    # must not walk the hero off the combat hex.
     tp = flags.get("travel_plan")
-    if tp and tp.get("interrupt_reason") == "encounter_prompted" and detect_travel_continuation(player_text):
+    if (
+        tp
+        and tp.get("interrupt_reason") == "encounter_prompted"
+        and detect_travel_continuation(player_text)
+        and not _has_active_combat(conn, campaign_id)
+    ):
         from app.services.hex_travel_service import resolve_chain_travel as _rct_resume
         dest_hex = tp.get("destination_hex") or {}
         dq_r, dr_r = int(dest_hex.get("q", 0)), int(dest_hex.get("r", 0))
@@ -266,6 +273,26 @@ def execute_directional_travel(
             fact_r += " Opisz wznowienie podróży w 2-4 zdaniach. NIE przenoś gracza — ruch rozstrzygnięty.]"
             logger.info("pt6_travel_resumed", campaign_id=campaign_id, destination=dest_label_r)
             return {"executed": True, "system_fact": fact_r, "intent": None}
+
+    # PT-F1 #1135: after a 12h forced camp the hero has collapsed and MUST rest.
+    # /travel-resume already refuses this; guard the raw directional/named path too
+    # so a plain "idę dalej" can't crawl the hero 1 hex at a time instead of resting.
+    # Gate on the actual fatigue state (hours_marched_today) — a long rest resets it
+    # to 0 and lifts the block; a stale forced_camp_prompted reason alone doesn't.
+    if (
+        tp
+        and str(tp.get("interrupt_reason") or "").startswith("forced_camp")
+        and float(flags.get("hours_marched_today", 0) or 0) >= 12.0
+    ):
+        return {
+            "executed": False,
+            "system_fact": (
+                "\n[SYSTEM: gracz padł z wyczerpania po 12h marszu i próbuje iść dalej "
+                "bez odpoczynku. Odmów prozą — bohater musi najpierw odpocząć (/rest) "
+                "lub przespać noc, zanim ruszy w dalszą drogę.]"
+            ),
+            "intent": None,
+        }
 
     mv = detect_move_intent(player_text, cur)
     if not mv:
@@ -593,6 +620,27 @@ def detect_travel_continuation(player_text: str) -> bool:
     return any(kw in t for kw in _TRAVEL_CONTINUATION_KEYWORDS)
 
 
+# PT-F1 #1135: how many turns a travel_plan may linger in a *_prompted / awaiting
+# state before it is considered stale and dropped (prevents "kontynuuję" many
+# turns later resuming toward a long-abandoned destination).
+_PLAN_TTL_TURNS = 10
+
+# PT-F1 #1135: fizzle-guard — if the narrator never turns a travel encounter into
+# actual combat, fire the continue/rest/camp prompt after this many turns anyway.
+_ENCOUNTER_FIZZLE_TURNS = 2
+
+
+def _has_active_combat(conn: "sqlite3.Connection", campaign_id: int) -> bool:
+    """PT-F1 #1135: True if an active_combat row exists for this campaign."""
+    try:
+        return conn.execute(
+            "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone() is not None
+    except Exception:
+        return False
+
+
 def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | None:
     """PT6 #1116 + PT7 #1117: Inject narrator hint when travel was interrupted.
 
@@ -616,7 +664,26 @@ def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | 
         if not tp:
             return None
 
+        def _persist() -> None:
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(flags, ensure_ascii=False), gs["id"]),
+            )
+            conn.commit()
+
         reason = tp.get("interrupt_reason")
+
+        # PT-F1 #1135: TTL — a plan sitting in a terminal *_prompted state past
+        # _PLAN_TTL_TURNS turns is abandoned; drop it so a much-later "kontynuuję"
+        # can't resume toward a stale destination.
+        if isinstance(reason, str) and reason.endswith("_prompted"):
+            tp["age"] = int(tp.get("age", 0)) + 1
+            if tp["age"] > _PLAN_TTL_TURNS:
+                flags.pop("travel_plan", None)
+                logger.info("pt_f1_travel_plan_expired", campaign_id=campaign_id)
+            _persist()
+            return None
+
         if reason not in ("encounter", "dusk", "forced_camp"):
             return None
 
@@ -626,13 +693,25 @@ def pop_travel_plan_hint(conn: "sqlite3.Connection", campaign_id: int) -> str | 
         remaining = int(tp.get("hours_remaining", 0))
 
         if reason == "encounter":
-            # Don't prompt while combat is still ongoing
-            ac = conn.execute(
-                "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if ac:
+            # PT-F1 #1135: the encounter combat spawns POST-LLM, so on the turn the
+            # encounter is written no active_combat exists yet. Defer the prompt until
+            # the combat has actually happened AND ended:
+            #   - combat active now  → remember we saw it (combat_seen), wait.
+            #   - no combat, seen    → combat ended → fire the prompt.
+            #   - no combat, unseen  → same encounter turn; wait, but fire anyway
+            #                          after _ENCOUNTER_FIZZLE_TURNS (narrator never
+            #                          started combat).
+            if _has_active_combat(conn, campaign_id):
+                if not tp.get("combat_seen"):
+                    tp["combat_seen"] = True
+                    _persist()
                 return None
+            if not tp.get("combat_seen"):
+                tp["wait_turns"] = int(tp.get("wait_turns", 0)) + 1
+                if tp["wait_turns"] < _ENCOUNTER_FIZZLE_TURNS:
+                    _persist()
+                    return None
+                # fizzle timeout — narrator never fought; fall through and prompt.
             hint = (
                 f"\n[SYSTEM: Gracz był w trakcie podróży do {dest_label}, "
                 f"zostało ~{remaining}h drogi. Walka przerwała wyprawę. "

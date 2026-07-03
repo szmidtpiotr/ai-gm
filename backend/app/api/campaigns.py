@@ -1192,6 +1192,18 @@ def travel_resume(campaign_id: int):
         if reason.startswith("forced_camp"):
             raise HTTPException(status_code=409, detail="Bohater padł ze zmęczenia — najpierw odpocznij.")
 
+        # PT-F1 #1135: idempotency guard — reject a second concurrent resume so two
+        # POSTs can't both read the pre-move snapshot and double-advance the clock /
+        # double-roll encounters. The flag is cleared in the finally block.
+        if flags.get("travel_resume_in_flight"):
+            raise HTTPException(status_code=409, detail="Wznawianie podróży już w toku.")
+        flags["travel_resume_in_flight"] = True
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), gs["id"]),
+        )
+        conn.commit()
+
         char = conn.execute(
             "SELECT id, sheet_json FROM characters WHERE campaign_id = ? ORDER BY id LIMIT 1",
             (campaign_id,),
@@ -1269,6 +1281,22 @@ def travel_resume(campaign_id: int):
             "suggested_actions": actions,
         }
     finally:
+        # PT-F1 #1135: always release the idempotency lock, even on error paths.
+        try:
+            _rel = conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _rel:
+                _relf = json.loads(_rel["session_flags"] or "{}")
+                if _relf.pop("travel_resume_in_flight", None) is not None:
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_relf, ensure_ascii=False), _rel["id"]),
+                    )
+                    conn.commit()
+        except Exception:
+            pass
         conn.close()
 
 

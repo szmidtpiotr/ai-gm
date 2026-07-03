@@ -707,6 +707,30 @@ def _inject_pre_llm_unknown_location_denial(
     return True
 
 
+def _clear_stale_travel_plan(conn: sqlite3.Connection, session_id: int) -> None:
+    """PT-F1 #1135: drop a pending world travel_plan from session_flags.
+
+    Used when the hero leaves the road by a path that doesn't route through
+    resolve_chain_travel (entering a settlement's local map), so a later
+    "kontynuuję" can't resume toward a now-abandoned destination.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if not row:
+            return
+        sf = json.loads(row["session_flags"] or "{}")
+        if sf.pop("travel_plan", None) is not None:
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                (json.dumps(sf, ensure_ascii=False), session_id),
+            )
+            conn.commit()
+    except Exception as _e:
+        logger.warning("clear_stale_travel_plan_failed", error=str(_e))
+
+
 def _sync_local_hex_narrative_move(
     conn: sqlite3.Connection,
     session_id: int,
@@ -764,6 +788,10 @@ def _sync_local_hex_narrative_move(
                         _adv_clock(campaign_id, minutes=_LT_MIN, reason="narrative_local_travel")
                     except Exception:
                         pass
+                # PT-F1 #1135: entering a settlement's local map abandons any pending
+                # world-road travel_plan — the hero is off the road, so a later
+                # "kontynuuję" must not resume toward the old world destination.
+                _clear_stale_travel_plan(conn, session_id)
         else:
             _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
     except Exception as _lh_err:

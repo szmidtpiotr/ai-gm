@@ -725,6 +725,17 @@ def resolve_chain_travel(
                     "step_index": enc_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": "encounter",
+                    # PT-F1 #1135: the encounter combat spawns POST-LLM (from the
+                    # narrator's [GM: COMBAT_START] tag), so on this very turn no
+                    # active_combat row exists yet. These fields let
+                    # pop_travel_plan_hint defer the continue/rest/camp prompt until
+                    # the combat has actually happened and ended (combat_seen), with a
+                    # fizzle-guard (wait_turns) for when the narrator never fights.
+                    "combat_seen": False,
+                    "wait_turns": 0,
+                    # PT-F1 #1135: age counter for TTL — a stale plan left in
+                    # *_prompted state is dropped after PLAN_TTL_TURNS turns.
+                    "age": 0,
                 }
             elif _budget_interrupt and _budget_reason:
                 # PT7: dusk or forced_camp interrupt
@@ -739,6 +750,8 @@ def resolve_chain_travel(
                     "step_index": b_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": _budget_reason,
+                    # PT-F1 #1135: TTL age counter (see encounter branch above).
+                    "age": 0,
                 }
             elif arrived_hex == to_hex:
                 sf_tp.pop("travel_plan", None)

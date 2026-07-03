@@ -230,6 +230,8 @@ def test_pop_travel_plan_hint_returns_fact(conn):
                 "path": [{"q": 0, "r": 0}, {"q": 1, "r": 0}, {"q": 2, "r": 0}, {"q": 3, "r": 0}, {"q": 4, "r": 0}],
                 "step_index": 2,
                 "interrupt_reason": "encounter",
+                # PT-F1 #1135: combat already happened and ended -> hint may fire now
+                "combat_seen": True,
             },
         }),),
     )
@@ -286,6 +288,8 @@ def test_pop_travel_plan_hint_fires_once(conn):
                 "path": [{"q": 0, "r": 0}, {"q": 1, "r": 0}, {"q": 2, "r": 0}, {"q": 3, "r": 0}, {"q": 4, "r": 0}],
                 "step_index": 2,
                 "interrupt_reason": "encounter",
+                # PT-F1 #1135: combat already happened and ended -> one-shot may fire
+                "combat_seen": True,
             },
         }),),
     )
@@ -364,3 +368,75 @@ def resolve_chain_travel_import(conn, from_hex, to_hex):
         character_sheet={},
         conn=conn,
     )
+
+
+# ── PT-F1 #1135: encounter hint must be DEFERRED until combat happened+ended ───
+
+def _set_encounter_plan(conn, extra=None):
+    tp = {
+        "destination_hex": {"q": 4, "r": 0},
+        "destination_label": "Vilnograd",
+        "path": [{"q": 0, "r": 0}, {"q": 1, "r": 0}, {"q": 2, "r": 0}],
+        "step_index": 1,
+        "interrupt_reason": "encounter",
+        "combat_seen": False,
+        "wait_turns": 0,
+    }
+    if extra:
+        tp.update(extra)
+    conn.execute(
+        "UPDATE game_sessions SET session_flags=? WHERE campaign_id=1",
+        (json.dumps({"current_hex": {"q": 2, "r": 0}, "travel_plan": tp}),),
+    )
+    conn.commit()
+
+
+def test_ptf1_hint_deferred_on_encounter_turn(conn):
+    """PT-F1: on the encounter turn combat has not spawned yet (post-LLM) -> no hint.
+
+    The old P0 bug fired the continue/rest/camp prompt here, consuming the one-shot
+    before the real combat, so it never appeared afterwards.
+    """
+    _set_encounter_plan(conn)
+    from app.services.turn_pipeline import pop_travel_plan_hint
+    assert pop_travel_plan_hint(conn, 1) is None, "must not prompt on the encounter turn (combat not yet spawned)"
+
+
+def test_ptf1_hint_fires_after_combat_ended(conn):
+    """PT-F1: combat became active (combat_seen) then ended -> hint fires exactly then."""
+    _set_encounter_plan(conn)
+    from app.services.turn_pipeline import pop_travel_plan_hint
+
+    # turn 1: encounter turn, no combat yet -> deferred
+    assert pop_travel_plan_hint(conn, 1) is None
+
+    # combat spawns
+    conn.execute("INSERT INTO active_combat (campaign_id, status) VALUES (1, active_val)".replace("active_val", "'active'"))
+    conn.commit()
+    assert pop_travel_plan_hint(conn, 1) is None, "no prompt while combat active"
+
+    # combat ends
+    conn.execute("UPDATE active_combat SET status='ended' WHERE campaign_id=1")
+    conn.commit()
+    hint = pop_travel_plan_hint(conn, 1)
+    assert hint is not None and "[SYSTEM:" in hint, "hint must fire once combat has ended"
+    assert pop_travel_plan_hint(conn, 1) is None, "one-shot: no second hint"
+
+
+def test_ptf1_fizzle_guard_fires_if_no_combat(conn):
+    """PT-F1: if the narrator never turns the encounter into combat, fire after fizzle turns."""
+    _set_encounter_plan(conn)
+    from app.services.turn_pipeline import pop_travel_plan_hint
+    assert pop_travel_plan_hint(conn, 1) is None      # wait_turns 1
+    hint = pop_travel_plan_hint(conn, 1)              # wait_turns 2 -> fire
+    assert hint is not None, "fizzle guard must fire the prompt when combat never happened"
+
+
+def test_ptf1_prompted_plan_expires_via_ttl(conn):
+    """PT-F1: a plan stuck in *_prompted state is dropped after the TTL."""
+    _set_encounter_plan(conn, extra={"interrupt_reason": "encounter_prompted", "age": 0})
+    from app.services.turn_pipeline import pop_travel_plan_hint, _PLAN_TTL_TURNS
+    for _ in range(_PLAN_TTL_TURNS + 1):
+        pop_travel_plan_hint(conn, 1)
+    row = conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=1").fetchone()
+    assert json.loads(row[0]).get("travel_plan") is None, "stale prompted plan must be dropped by TTL"
