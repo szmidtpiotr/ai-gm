@@ -182,6 +182,63 @@ def is_weather_enabled() -> bool:
     return str(get_global_flag("weather_enabled", "1")).strip() not in ("0", "false", "off", "")
 
 
+# ─── PT15 (#1128): wpływ pogody na tempo marszu ───────────────────────────────
+
+# Mnożnik kosztu godzinowego kroku podróży wg typu pogody. Wartości STARTOWE
+# (Numbers Policy) — docelowo strojone w Sandbox/adminie obok toggle pogody.
+WEATHER_MARCH_MULT: dict[str, float] = {
+    "clear":  1.0,
+    "clouds": 1.0,
+    "rain":   1.25,
+    "fog":    1.25,
+    "storm":  1.5,
+    "snow":   1.5,
+    "heat":   1.25,
+}
+
+
+def weather_march_multiplier(weather_type: str | None) -> float:
+    """Mnożnik kosztu godzinowego kroku marszu wg typu pogody (PT15 #1128).
+
+    Nieznany typ / None → 1.0 (neutralny). Czysta funkcja, bez stanu."""
+    if not weather_type:
+        return 1.0
+    return WEATHER_MARCH_MULT.get(str(weather_type).strip().lower(), 1.0)
+
+
+def get_march_multiplier(
+    campaign_id: int,
+    conn: sqlite3.Connection,
+) -> tuple[float, str | None]:
+    """Efektywny mnożnik marszu dla kampanii wg stanu pogody w session_flags.
+
+    - Respektuje globalny toggle (weather_enabled=0 → 1.0).
+    - `weather_override` ma priorytet nad wylosowanym `weather.type`.
+    - READ-ONLY: nie persystuje ani nie przewija stanu pogody (świadomie NIE
+      wywołuje get_weather_state, by nie mieć skutków ubocznych w podróży).
+
+    Zwraca (mnożnik, typ_pogody) — typ zwracany tylko gdy mnożnik > 1.0
+    (sygnał dla narratora), inaczej None.
+    """
+    try:
+        if not is_weather_enabled():
+            return 1.0, None
+    except Exception:
+        # brak game_config_meta / błąd odczytu → traktuj jako włączone (domyślnie)
+        pass
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = json.loads((row["session_flags"] if row else None) or "{}")
+    except Exception:
+        return 1.0, None
+    wtype = flags.get("weather_override") or (flags.get("weather") or {}).get("type")
+    mult = weather_march_multiplier(wtype)
+    return mult, (str(wtype) if mult > 1.0 else None)
+
+
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 
 def _conn() -> sqlite3.Connection:
@@ -296,6 +353,8 @@ def get_weather_config() -> dict[str, Any]:
         "start_season_offset": _start_season_offset(),
         "weather_types": list(WEATHER_TYPES),
         "seasons": list(SEASONS),
+        # PT15 #1128: mnożniki kosztu marszu wg pogody (startowe, Sandbox-tunable)
+        "march_multipliers": dict(WEATHER_MARCH_MULT),
     }
 
 

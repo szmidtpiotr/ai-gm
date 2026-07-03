@@ -383,6 +383,15 @@ def resolve_chain_travel(
     hours_marched_today = float(_sf_budget.get("hours_marched_today", 0.0))
     night_march = bool(_sf_budget.get("night_march", False))
 
+    # PT15 #1128: pogoda spowalnia marsz — mnożnik kosztu godzinowego kroku wg
+    # stanu pogody (session_flags.weather.type / weather_override). NIE zmienia
+    # trasy A* (tylko czas), więc gorsza pogoda = mniej hexów przed zmierzchem (PT7).
+    try:
+        from app.services.weather_service import get_march_multiplier
+        _weather_mult, _weather_type = get_march_multiplier(campaign_id, conn)
+    except Exception:
+        _weather_mult, _weather_type = 1.0, None
+
     if from_hex not in hexes and from_hex != to_hex:
         # Player is not on a hex yet — allow if destination exists
         pass
@@ -490,7 +499,7 @@ def resolve_chain_travel(
                 break
         _terrain_cost = float(
             hex_type_cfg.get(_cur_data.get("hex_type", "plains"), {}).get("travel_hours", 1.0)
-        )
+        ) * _weather_mult  # PT15 #1128: pogoda podnosi koszt godzinowy marszu (teren, nie teleport)
         steps.append(
             MovementStep(
                 key=_cur,
@@ -753,6 +762,9 @@ def resolve_chain_travel(
         "teleport_used": teleport_used,
         "item_blocked": None,
         "hex_data": hexes.get(arrived_hex, {}),
+        # PT15 #1128: sygnał dla narratora, gdy pogoda spowalniała marsz
+        "weather_multiplier": _weather_mult,
+        "weather_slowdown": _weather_type,  # typ pogody, tylko gdy mnożnik > 1.0
     }
 
 

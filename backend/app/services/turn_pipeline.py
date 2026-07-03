@@ -383,6 +383,12 @@ def execute_directional_travel(
                 f" Podróż przerwana spotkaniem: {enc.get('enemy_key')} — "
                 "opisz nadejście zagrożenia."
             )
+        if tr.get("weather_slowdown"):
+            # PT15 #1128: pogoda spowalniała marsz — poproś narratora o powiązanie
+            fact += (
+                f" Pogoda ({tr.get('weather_slowdown')}) spowalniała marsz — "
+                "wpleć w opis trud drogi (błoto, śnieg, wiatr) i wolniejsze tempo."
+            )
         fact += (
             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
             "ruch już rozstrzygnięty mechanicznie.]"
