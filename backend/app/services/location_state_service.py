@@ -72,6 +72,28 @@ def set_position(
         flags.pop("local_hex")
         flags_dirty = True
 
+    # PT-F2 #1136 (wariant A): keep the legacy session_flags.current_location_key in
+    # sync with current_location_id. ~40 live readers (encounter-block on hex-enter,
+    # world_state_machine, suggested_actions, desync-correction) still read this key;
+    # PT2 stopped refreshing it, so travel left a stale key and the encounter gate
+    # fired on the wrong location. Derive the key here so it never drifts.
+    # (Full removal of the key = PT-F7 #1141, after the phase.)
+    if clear_location_id:
+        if flags.pop("current_location_key", None) is not None:
+            flags_dirty = True
+    elif current_location_id is not None:
+        try:
+            _lk = conn.execute(
+                "SELECT key FROM game_locations WHERE id = ? LIMIT 1",
+                (int(current_location_id),),
+            ).fetchone()
+            _key_val = _lk["key"] if _lk else None
+        except Exception:
+            _key_val = None
+        if _key_val is not None and flags.get("current_location_key") != _key_val:
+            flags["current_location_key"] = _key_val
+            flags_dirty = True
+
     # Write session_flags if anything changed
     if flags_dirty:
         conn.execute(
@@ -93,25 +115,31 @@ def set_position(
 
     # Mirror current_hex into sheet_json so the player map pin stays correct.
     # Auto-lookup character from campaign if not explicitly provided.
+    # PT-F2 #1136: this mirror is best-effort — the pin's source of truth is
+    # session_flags.current_hex (read by GET /player-map). Never let a missing
+    # `characters` table (isolated test DBs) or a bad row break a position write.
     if current_hex is not None:
-        char_id_to_use = character_id
-        if char_id_to_use is None:
-            char_lookup = conn.execute(
-                "SELECT id FROM characters WHERE campaign_id = ? AND status = 'active' LIMIT 1",
-                (campaign_id,),
-            ).fetchone()
-            if char_lookup:
-                char_id_to_use = char_lookup["id"]
+        try:
+            char_id_to_use = character_id
+            if char_id_to_use is None:
+                char_lookup = conn.execute(
+                    "SELECT id FROM characters WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if char_lookup:
+                    char_id_to_use = char_lookup["id"]
 
-        if char_id_to_use is not None:
-            char_row = conn.execute(
-                "SELECT sheet_json FROM characters WHERE id = ?",
-                (char_id_to_use,),
-            ).fetchone()
-            if char_row:
-                sheet: dict = json.loads(char_row["sheet_json"] or "{}")
-                sheet["current_hex"] = {"q": int(current_hex["q"]), "r": int(current_hex["r"])}
-                conn.execute(
-                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                    (json.dumps(sheet, ensure_ascii=False), char_id_to_use),
-                )
+            if char_id_to_use is not None:
+                char_row = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id = ?",
+                    (char_id_to_use,),
+                ).fetchone()
+                if char_row:
+                    sheet: dict = json.loads(char_row["sheet_json"] or "{}")
+                    sheet["current_hex"] = {"q": int(current_hex["q"]), "r": int(current_hex["r"])}
+                    conn.execute(
+                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                        (json.dumps(sheet, ensure_ascii=False), char_id_to_use),
+                    )
+        except sqlite3.OperationalError:
+            pass

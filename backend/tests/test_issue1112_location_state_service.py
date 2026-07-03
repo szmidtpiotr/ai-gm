@@ -279,3 +279,60 @@ def test_set_position_preserves_other_session_flags():
     assert session["flags"].get("fatigue") == 3, "fatigue skasowany przez set_position"
     assert session["flags"].get("combat_state") == "active", "combat_state skasowany przez set_position"
     assert session["flags"]["current_hex"] == {"q": 2, "r": 2}, "current_hex nie zaktualizowany"
+
+
+# ── PT-F2 #1136: current_location_key stays in sync with current_location_id ────
+
+def test_ptf2_location_key_synced_on_move():
+    """PT-F2: set_position(current_location_id=X) writes session_flags.current_location_key.
+
+    Regression guard: PT2 stopped refreshing this key, so travel left a stale key and
+    the hex-enter encounter gate fired on the wrong (old) location.
+    """
+    from app.services.location_state_service import set_position
+    conn, session_id, _ = _make_db(campaign_id=1)
+    conn.execute("INSERT INTO game_locations (id, key, label) VALUES (10, 'wilczy_las', 'Wilczy Las')")
+    conn.execute("INSERT INTO game_locations (id, key, label) VALUES (11, 'vilnograd', 'Vilnograd')")
+    conn.commit()
+
+    set_position(conn, campaign_id=1, current_location_id=10)
+    conn.commit()
+    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    assert flags.get("current_location_key") == "wilczy_las"
+
+    # moving again refreshes the key (no staleness)
+    set_position(conn, campaign_id=1, current_location_id=11)
+    conn.commit()
+    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    assert flags.get("current_location_key") == "vilnograd", "key must follow the new location"
+
+
+def test_ptf2_location_key_cleared_with_location():
+    """PT-F2: clear_location_id also removes the stale key."""
+    from app.services.location_state_service import set_position
+    conn, session_id, _ = _make_db(campaign_id=1)
+    conn.execute("INSERT INTO game_locations (id, key, label) VALUES (10, 'wilczy_las', 'Wilczy Las')")
+    conn.commit()
+    set_position(conn, campaign_id=1, current_location_id=10)
+    conn.commit()
+    set_position(conn, campaign_id=1, clear_location_id=True)
+    conn.commit()
+    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    assert "current_location_key" not in flags, "key must be dropped when location is cleared"
+
+
+def test_ptf2_missing_characters_table_no_crash():
+    """PT-F2: a position write must not crash when the characters table is absent."""
+    from app.services.location_state_service import set_position
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        "CREATE TABLE game_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER, session_flags TEXT DEFAULT '{}' , current_location_id INTEGER);"
+    )
+    conn.execute("INSERT INTO game_sessions (campaign_id, session_flags) VALUES (1, '{}')")
+    conn.commit()
+    # no characters table, no game_locations table -> must be tolerant
+    set_position(conn, campaign_id=1, current_hex={"q": 3, "r": 1})
+    conn.commit()
+    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=1").fetchone()[0])
+    assert flags["current_hex"] == {"q": 3, "r": 1}, "current_hex must persist even without characters table"

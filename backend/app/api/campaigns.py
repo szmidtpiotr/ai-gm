@@ -1126,13 +1126,23 @@ def build_camp(campaign_id: int):
         ).fetchone()
         encounter_boost = float(hex_row["camp_encounter_boost"] if hex_row and hex_row["camp_encounter_boost"] is not None else 0.20)
 
-        # Re-read flags (build_camp commits, but doesn't touch session_flags)
+        # Re-read flags (build_camp commits, but doesn't touch session_flags).
+        # camp_encounter_boost is not a position field — write it directly.
         flags["camp_encounter_boost"] = encounter_boost
-        flags["current_location_key"] = location["key"]
         conn.execute(
-            "UPDATE game_sessions SET session_flags = ?, current_location_id = (SELECT id FROM game_locations WHERE key = ?) WHERE id = ?",
-            (json.dumps(flags, ensure_ascii=False), location["key"], session_row["id"]),
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), session_row["id"]),
         )
+        conn.commit()
+        # PT-F2 #1136: route the position change through the canonical writer so
+        # current_location_id AND session_flags.current_location_key stay in sync
+        # (build_camp used to set them with a raw UPDATE, bypassing the single path).
+        _camp_loc = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? LIMIT 1", (location["key"],)
+        ).fetchone()
+        if _camp_loc:
+            from app.services.location_state_service import set_position as _set_pos_camp
+            _set_pos_camp(conn, campaign_id=campaign_id, current_location_id=int(_camp_loc["id"]))
         # #825: clear scene_enemies when moving to camp — prior encounter enemies
         # (pre-spawn, no hp) must not persist into the new temp_camp sublocation.
         conn.execute(
