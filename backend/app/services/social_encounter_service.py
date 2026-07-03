@@ -38,6 +38,10 @@ NOTICE_DELAY_MAX = 3
 PROFICIENCY_RANK_THRESHOLD = 3
 PROFICIENCY_BONUS = 2
 
+# PT-D5 (#1134) — grzywna straży w guard_check (startowe, Sandbox-tunable)
+GUARD_FINE_PCT = 0.10   # rewizja wrogiej straży: 10% złota
+GUARD_FINE_CAP = 40     # cap grzywny (szt.)
+
 
 # ── Pule zdarzeń per subtyp sub-lokacji ───────────────────────────────────────
 # Każde zdarzenie: stat/skill do rozstrzygnięcia + DC (locked DC scale) + kind.
@@ -114,6 +118,7 @@ def _event_from_catalog_row(row: dict) -> dict:
         "skill": payload.get("skill"),
         "dc": payload.get("dc"),
         "kind": kind,
+        "faction_tag": row.get("faction_tag"),  # PT-D5 #1134 — reputacja straży
         "from_catalog": True,
     }
 
@@ -279,4 +284,59 @@ def build_social_outcome(
         "gold_loss": gold_loss,
         "escalate_combat": escalate,
         "delay_turns": used_delay,
+    }
+
+
+# ── guard_check różnicowane reputacją frakcji (PT-D5 #1134) ───────────────────
+
+def guard_fine(gold: int) -> int:
+    """Grzywna straży: 10% złota (w dół), cap GUARD_FINE_CAP, nieujemna."""
+    g = max(0, int(gold or 0))
+    return min(int(g * GUARD_FINE_PCT), GUARD_FINE_CAP)
+
+
+def faction_guard_outcome(reputation_value: int, gold: int, skill_check: dict) -> dict:
+    """Zróżnicuj wynik `guard_check` wg reputacji frakcji straży (#1134, wyrasta z #1103).
+
+    Postawa (reużywa progi z reputation_service.npc_attitude_from_reputation):
+      friendly (rep ≥ +20) → auto-pass: straż macha ręką (hook), zero kosztu,
+                             wynik traktowany jak sukces niezależnie od rzutu.
+      neutral  (-20..+20)  → standard: wynik zależy od testu, bez dodatkowej kary.
+      hostile  (rep ≤ -20) → rewizja + grzywna przy PORAŻCE (strata złota); przy
+                             sukcesie i tak przepuszcza, ale burkliwie (bez grzywny).
+
+    Konsekwencje MIĘKKIE (złoto/reputacja) — walka pozostaje wyjątkiem (Nat 1 w
+    resolve_skill_check, obsługiwane jak dla pozostałych zdarzeń społecznych).
+
+    Pure: reputacja + złoto + wynik testu na wejściu, konsekwencja na wyjściu (bez
+    DB/I-O). Brak danych frakcji → wołający podaje reputation_value=0 → 'neutral'.
+
+    Zwraca {attitude, auto_pass, resolution, gold_loss, success}.
+    """
+    from app.services.reputation_service import npc_attitude_from_reputation
+
+    attitude = npc_attitude_from_reputation(int(reputation_value or 0))
+    success = bool(skill_check.get("success"))
+    gold_loss = 0
+
+    if attitude == "friendly":
+        auto_pass, resolution, effective_success = True, "waved_through", True
+    elif attitude == "hostile":
+        auto_pass = False
+        if success:
+            resolution, effective_success = "grudging_pass", True
+        else:
+            resolution, effective_success = "searched_fined", False
+            gold_loss = guard_fine(gold)
+    else:  # neutral — standardowy tor
+        auto_pass = False
+        resolution = "passed" if success else "questioned"
+        effective_success = success
+
+    return {
+        "attitude": attitude,
+        "auto_pass": auto_pass,
+        "resolution": resolution,
+        "gold_loss": int(gold_loss),
+        "success": effective_success,
     }

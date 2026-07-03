@@ -170,6 +170,29 @@ def _resolve_social_encounter(
         kind=event.get("kind"),  # #1133 — rekord z katalogu może mieć nowy klucz
     )
 
+    # PT-D5 #1134 — guard_check różnicowane reputacją frakcji straży (#1103).
+    # Czyta faction_tag encountera, pobiera reputację (scope_type='faction') i mapuje
+    # na konsekwencję: wroga → grzywna, neutralna → standard, przyjazna → auto-pass.
+    guard_meta = None
+    gold_source = "pickpocket"
+    if event["key"] == "guard_check":
+        faction_tag = event.get("faction_tag")
+        rep_value = 0
+        if faction_tag:
+            try:
+                from app.services.reputation_service import get_reputation
+                rep_value = get_reputation(
+                    conn, int(char["id"]), str(faction_tag), scope_type="faction"
+                )
+            except Exception:
+                rep_value = 0  # brak danych frakcji → neutralny fallback
+        guard_meta = ses.faction_guard_outcome(
+            rep_value, int(char["gold_gp"] or 0), check
+        )
+        outcome["gold_loss"] = int(guard_meta["gold_loss"])
+        check["success"] = bool(guard_meta["success"])  # auto-pass / rewizja override
+        gold_source = "guard_fine"
+
     # Deduct gold now (delayed reveal handled by pending_gold_notices)
     if outcome["gold_loss"] > 0:
         try:
@@ -178,7 +201,7 @@ def _resolve_social_encounter(
                 conn,
                 int(char["id"]),
                 -int(outcome["gold_loss"]),
-                source="pickpocket",
+                source=gold_source,
                 campaign_id=campaign_id,
                 meta={"delayed": True, "subtype": subtype},
                 allow_negative=False,
@@ -209,6 +232,15 @@ def _resolve_social_encounter(
             "success": bool(check["success"]),
         }
     )
+    # PT-D5 #1134 — dołóż postawę straży do payloadu (narracja + UI)
+    if guard_meta:
+        encounter_result["social"]["guard"] = {
+            "attitude": guard_meta["attitude"],
+            "resolution": guard_meta["resolution"],
+            "auto_pass": guard_meta["auto_pass"],
+        }
+        hint["guard_attitude"] = guard_meta["attitude"]
+        hint["guard_resolution"] = guard_meta["resolution"]
 
 
 # ── GET /api/campaigns/{id}/local-map ─────────────────────────────────────────
