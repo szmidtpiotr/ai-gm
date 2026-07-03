@@ -25,6 +25,12 @@ TEST_PENALTY = "test_penalty"
 INITIATIVE_PENALTY = "initiative_penalty"
 REGEN_MULTIPLIER = "regen_multiplier"
 
+# PT-F5 #1139: travel fatigue lives on its OWN condition, separate from the S9
+# `exhausted` (which the haste spell reuses via on_expire_apply). fatigue_service is
+# data-driven (finds the fatigue condition by its test_penalty primitive), so this
+# key is only needed at the apply site (charge_fatigue).
+FATIGUE_CONDITION_KEY = "zmeczony"
+
 _DWARF_RACES = {"dwarf", "krasnolud"}
 
 
@@ -223,7 +229,7 @@ def charge_fatigue(conn, character_id: int, *, campaign_id: int | None = None, r
         return 0
 
     with _cat_conn() as _cat:
-        template = _build_condition_entry(_cat, "exhausted", applied_at=reason or "travel_fatigue")
+        template = _build_condition_entry(_cat, FATIGUE_CONDITION_KEY, applied_at=reason or "travel_fatigue")
     if template is None:
         return 0
 

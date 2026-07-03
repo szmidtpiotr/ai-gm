@@ -334,7 +334,16 @@ def resolve_attack_roll_for_weapon(
     skill_rank = _safe_int(skills.get(test) or skills.get(_canon, 0), 0)
     proficiency = 2 if skill_rank >= 3 else 0
     weapon_bonus = two_handed_attack_modifier(sheet, weapon_row)
-    modifier = stat_mod + skill_rank + proficiency + weapon_bonus
+    # PT-F5 #1139: fatigue penalty (-1 per stack) applies to ATTACK rolls too, not only
+    # skill tests / initiative. Added as a distinct term — the locked d20 formula
+    # (d20 + stat + skill + proficiency) is unchanged; this is a circumstance penalty,
+    # not a stat modification.
+    try:
+        from app.services.fatigue_service import compute_test_penalty as _fat_pen
+        fatigue_penalty = _fat_pen(sheet.get("conditions") or [], sheet.get("race"))
+    except Exception:
+        fatigue_penalty = 0
+    modifier = stat_mod + skill_rank + proficiency + weapon_bonus + fatigue_penalty
     total = raw + modifier
     return {
         "test": test,
@@ -344,6 +353,7 @@ def resolve_attack_roll_for_weapon(
         "skill_rank": skill_rank,
         "proficiency": proficiency,
         "weapon_bonus": weapon_bonus,
+        "fatigue_penalty": fatigue_penalty,
         "modifier": modifier,
         "total": total,
         "roll_type": "attack",

@@ -155,3 +155,32 @@ def test_fatigue_does_not_touch_combat_stat_modifier():
     sheet = {"stats": {"STR": 14}, "conditions": [_exhausted(3)]}
     # STR 14 → +2, zmęczenie NIE rusza tego (brak static_stat_modifier w exhausted)
     assert _combatant_stat_modifier(sheet, sheet=None, stat="STR") == 2
+
+
+# ── PT-F5 #1139: fatigue penalty reaches ATTACK rolls (not only skill tests) ───
+
+def test_ptf5_attack_roll_reduced_by_fatigue():
+    """PT-F5: an exhausted hero swings less accurately — attack total drops by the
+    fatigue penalty, as a distinct term (stat modifier itself untouched)."""
+    from app.services.weapon_rules import resolve_attack_roll_for_weapon
+    weapon = {"key": "sword", "label": "Miecz", "weapon_type": "melee"}
+    base_sheet = {"stats": {"STR": 14}, "skills": {}, "conditions": []}
+    tired_sheet = {**base_sheet, "conditions": [_exhausted(2)]}  # -2 test penalty
+
+    base = resolve_attack_roll_for_weapon(base_sheet, raw_roll=10, weapon_row=weapon)
+    tired = resolve_attack_roll_for_weapon(tired_sheet, raw_roll=10, weapon_row=weapon)
+
+    assert base.get("fatigue_penalty", 0) == 0
+    assert tired["fatigue_penalty"] == -2, "2 fatigue stacks -> -2 to attack"
+    assert tired["total"] == base["total"] - 2, "attack total must drop by the fatigue penalty"
+    assert tired["stat_mod"] == base["stat_mod"], "stat modifier itself must be unchanged (locked formula)"
+
+
+def test_ptf5_dwarf_ignores_first_stack_on_attack():
+    """PT-F5: dwarf 'twardy jak kamień' ignores the 1st stack on attack too (race-wide, as decided)."""
+    from app.services.weapon_rules import resolve_attack_roll_for_weapon
+    weapon = {"key": "axe", "label": "Topór", "weapon_type": "melee"}
+    dwarf = {"stats": {"STR": 14}, "skills": {}, "race": "dwarf", "conditions": [_exhausted(1)]}
+    human = {"stats": {"STR": 14}, "skills": {}, "race": "human", "conditions": [_exhausted(1)]}
+    assert resolve_attack_roll_for_weapon(dwarf, raw_roll=10, weapon_row=weapon)["fatigue_penalty"] == 0
+    assert resolve_attack_roll_for_weapon(human, raw_roll=10, weapon_row=weapon)["fatigue_penalty"] == -1

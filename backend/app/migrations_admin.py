@@ -1444,18 +1444,28 @@ ADMIN_SEEDS = [
     VALUES
     ('exhausted', 'Wyczerpany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":2,"per_level_effects":[{"type":"static_stat_modifier","stat":"STR","value":-3},{"type":"static_stat_modifier","stat":"DEX","value":-3},{"type":"static_stat_modifier","stat":"CON","value":-3}],"threshold_effects":{"2":{"type":"block_action"}}}]}', 'Postać skrajnie zmęczona — STR/DEX/CON -3 na poziom (poziom 2 = -6 i omdlenie/utrata tury). Ponowne nałożenie podbija poziom (max 2). Zdjęcie: 1h odpoczynku = -1 poziom, pełny sen = wszystkie, mikstura/zaklęcie regeneracji natychmiast.', 1, 1, NULL, NULL, datetime('now'), datetime('now'))
     """,
-    # PT-D1 (#1124) FAZA PT — redesign kondycji `exhausted` na zmęczenie podróżne (3 progi).
+    # PT-D1 (#1124) / PT-F5 (#1139) FAZA PT — zmęczenie podróżne to WŁASNA kondycja `zmeczony`.
     # Prymitywy: test_penalty (per_level, -1/stack do KAŻDEGO testu), initiative_penalty (próg 2),
     # regen_multiplier (próg 3 = połowa regeneracji HP/many przy odpoczynku). Max 3 stacki.
-    # Liczby = wartości startowe (Numbers Policy → Sandbox-tunable). UPDATE, bo INSERT OR IGNORE
-    # nie nadpisze istniejącego wiersza z S9. Idempotentne (guard NOT LIKE '%test_penalty%').
+    # PT-F5 FIX: pierwotnie #1124 NADPISYWAŁO kondycję `exhausted` (S9), którą zużywa
+    # `hasted → on_expire_apply → exhausted` (STR/DEX/CON -3, block_action @L2). To kasowało
+    # projektowany koszt haste. Teraz zmęczenie ma osobny wiersz `zmeczony`, a exhausted zostaje S9.
+    # fatigue_service jest data-driven (szuka kondycji po prymitywie test_penalty), więc działa z zmeczony.
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('zmeczony', 'Zmęczony', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":3,"per_level_effects":[{"type":"test_penalty","value":-1}],"threshold_effects":{"2":{"type":"initiative_penalty","value":-2},"3":{"type":"regen_multiplier","value":0.5}}}]}', 'Zmęczenie z podróży — kara -1 do wszystkich testów (i rzutów ataku) za każdy stack (max 3). Od 2 stacków gorsza inicjatywa; przy 3 stackach odpoczynek regeneruje o połowę mniej HP/many. Stacki: +1 za marsz ponad 8h w dniu, +1 za dobę bez pełnego noclegu. Pełny nocleg czyści wszystkie; krótki odpoczynek NIE czyści. Krasnolud (twardy jak kamień) ignoruje kary 1. stacka.', 1, 1, NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    # PT-F5 (#1139) REPAIR — na bazach gdzie #1124 zdążyło nadpisać exhausted travel-fatigue jsonem,
+    # przywróć oryginalny efekt S9 (STR/DEX/CON -3, block_action @L2). Idempotentne (guard LIKE test_penalty).
     """
     UPDATE game_config_conditions
-    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":3,"per_level_effects":[{"type":"test_penalty","value":-1}],"threshold_effects":{"2":{"type":"initiative_penalty","value":-2},"3":{"type":"regen_multiplier","value":0.5}}}]}',
-        description = 'Zmęczenie z podróży — kara -1 do wszystkich testów za każdy stack (max 3). Od 2 stacków gorsza inicjatywa; przy 3 stackach odpoczynek regeneruje o połowę mniej HP/many. Stacki: +1 za marsz ponad 8h w dniu, +1 za dobę bez pełnego noclegu. Pełny nocleg czyści wszystkie; krótki odpoczynek NIE czyści. Krasnolud (twardy jak kamień) ignoruje kary 1. stacka.',
+    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":2,"per_level_effects":[{"type":"static_stat_modifier","stat":"STR","value":-3},{"type":"static_stat_modifier","stat":"DEX","value":-3},{"type":"static_stat_modifier","stat":"CON","value":-3}],"threshold_effects":{"2":{"type":"block_action"}}}]}',
+        description = 'Postać skrajnie zmęczona — STR/DEX/CON -3 na poziom (poziom 2 = -6 i omdlenie/utrata tury). Ponowne nałożenie podbija poziom (max 2). Zdjęcie: 1h odpoczynku = -1 poziom, pełny sen = wszystkie, mikstura/zaklęcie regeneracji natychmiast.',
         updated_at = datetime('now')
     WHERE key = 'exhausted'
-      AND effect_json NOT LIKE '%test_penalty%'
+      AND effect_json LIKE '%test_penalty%'
     """,
     # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
     # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
