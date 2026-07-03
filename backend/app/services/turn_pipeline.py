@@ -283,6 +283,32 @@ def execute_directional_travel(
                     "wpleć trud drogi w opis."
                 )
             fact_r += " Opisz wznowienie podróży w 2-4 zdaniach. NIE przenoś gracza — ruch rozstrzygnięty.]"
+            # #1148: a fully-arrived plan must die HERE. resolve_chain_travel pops the
+            # plan on arrival only when it actually walked (from != to); the flee case
+            # ends with the hero already ON the destination hex, so the early-return
+            # skipped the cleanup and the stale encounter_prompted plan hijacked every
+            # later "idę dalej" back to the old destination (hex frozen until TTL).
+            if (
+                int(arr_r.get("q", 10**9)) == dq_r
+                and int(arr_r.get("r", 10**9)) == dr_r
+                and not enc_r
+            ):
+                try:
+                    _gs_done_r = conn.execute(
+                        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if _gs_done_r:
+                        _sf_done_r = json.loads(_gs_done_r["session_flags"] or "{}")
+                        if _sf_done_r.pop("travel_plan", None) is not None:
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                                (json.dumps(_sf_done_r, ensure_ascii=False), _gs_done_r["id"]),
+                            )
+                            conn.commit()
+                            logger.info("pt6_travel_plan_completed", campaign_id=campaign_id)
+                except Exception as _done_err:
+                    logger.warning("pt6_travel_plan_complete_failed", error=str(_done_err))
             logger.info("pt6_travel_resumed", campaign_id=campaign_id, destination=dest_label_r)
             return {"executed": True, "system_fact": fact_r, "intent": None}
 

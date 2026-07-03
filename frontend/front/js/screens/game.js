@@ -1612,6 +1612,13 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             return;
         }
 
+        if (payload.startsWith('[SKILL_TEST_PENDING]')) {
+            // #1148: backend re-surfaces an unresolved skill test — re-open the
+            // dice popup; never render this payload as chat text.
+            const meta = JSON.parse(payload.slice(20));
+            if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
+            return;
+        }
         if (payload.startsWith('[COMBAT_STARTED]')) {
             result.combat_started = JSON.parse(payload.slice(16));
             return;

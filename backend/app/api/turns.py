@@ -1405,6 +1405,16 @@ def _maybe_advance_combat_after_player_narrative(campaign_id: int) -> dict | Non
     return {"combat_advanced": True, "new_combat_turn": new_turn}
 
 
+def _skill_test_source_allowed(user_text: str | None) -> bool:
+    """#1148: combat-roll follow-up turns (attack/flee epilogue the combat UI posts)
+    must never source a NEW skill test from narrator roll_cue / [SKILL_TEST] tags —
+    the combat action is already fully resolved by the engine. Without this guard a
+    stray narrator cue like "Roll stealth d20" after a successful flee committed
+    SKILL_TEST_PENDING with no dice popup, bricking the session (every following
+    movement turn returned prose:null and surfaced raw JSON in the chat)."""
+    return not str(user_text or "").startswith(COMBAT_ROLL_CTX_PREFIX)
+
+
 def _maybe_handle_blocked_player_combat_turn(
     *,
     conn: sqlite3.Connection,
@@ -4133,6 +4143,11 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         character_id=payload.character_id,
         character_sheet=_char_sh,
     )
+    if _skill_pending_narrator and not _skill_test_source_allowed(text):
+        logger.info("skill_test_skipped_combat_roll_turn",
+                    skill=_skill_pending_narrator.get("skill_key"),
+                    campaign_id=campaign_id)
+        _skill_pending_narrator = None
 
     # ── U7: safety net — force skill test if risky intent + LLM omitted tag ──
     _u7_forced = _apply_u7_safety_net(
@@ -4233,7 +4248,11 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     # K2 guard: suppress LLM-emitted roll_cue when player asked a question —
     # questions cannot be action attempts even if the LLM hallucinates a roll.
     _raw_cue = ""
-    if _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
+    if not _skill_test_source_allowed(text):
+        # #1148: combat-roll epilogue — never source a skill test from roll_cue.
+        if _parsed_json and str(_parsed_json.get("roll_cue") or "").strip():
+            logger.info("roll_cue_skipped_combat_roll_turn", campaign_id=campaign_id)
+    elif _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
         _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
     elif not _parsed_json and not _skill_pending_narrator:
         import re as _rc_re_pre
@@ -5653,8 +5672,11 @@ def create_turn_stream(
             }, ensure_ascii=False)
 
             def _pending_resuface_stream():
-                yield f"data: [SKILL_TEST_PENDING]{_re_payload}\n\n"
-                yield "data: [DONE]\n\n"
+                # #1148: emit as [DONE] meta — the same shape the pre-LLM scanner
+                # path uses — so the client re-opens the dice popup. The bespoke
+                # [SKILL_TEST_PENDING] marker was unknown to the frontend SSE
+                # parser and rendered as raw JSON in the chat.
+                yield f"data: [DONE]{_re_payload}\n\n"
 
             return StreamingResponse(
                 _pending_resuface_stream(),
@@ -6334,6 +6356,11 @@ def create_turn_stream(
                                             "counter": _gc(save_conn, _canonical_s),
                                             "modifier_breakdown": _csmi(_char_sh_s, _canonical_s),
                                         }
+                        if _sk_pending_s and not _skill_test_source_allowed(user_text_val):
+                            logger.info("skill_test_skipped_combat_roll_turn",
+                                        skill=_sk_pending_s.get("skill_key"),
+                                        campaign_id=campaign_id_val)
+                            _sk_pending_s = None
                         if _sk_pending_s and not _is_combat_class_skill(_sk_pending_s.get("skill_key", "")):
                             _gs_st_s = save_conn.execute(
                                 "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
