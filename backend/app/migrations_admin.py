@@ -5839,6 +5839,18 @@ def _ensure_enemy_forge_columns(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _ensure_encounter_catalog(conn: sqlite3.Connection) -> None:
+    """#1130 PT-D4a — kanoniczny katalog encounterów (combat+social) + seed z hardcode.
+
+    Tabela game_config_encounters + idempotentny seed z GENERIC_ENCOUNTERS
+    (`encounter_seed_service`) i _EVENT_DEFS/_SUBTYPE_EVENTS (`social_encounter_service`).
+    Silniki przepnie pod-task D (#1133); tu tylko fundament + fallback.
+    """
+    from app.services import encounter_catalog_service as _cat
+    _cat.ensure_catalog_schema(conn)
+    _cat.seed_catalog(conn)
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -5971,6 +5983,7 @@ def run_admin_migrations() -> None:
         _ensure_enemy_forge_columns(conn)  # #1085
         _ensure_campaign_finale_available(conn)  # #1097
         _seed_pt8_terrain_costs(conn)  # #1118 PT8
+        _ensure_encounter_catalog(conn)  # #1130 PT-D4a
     finally:
         conn.close()
 
