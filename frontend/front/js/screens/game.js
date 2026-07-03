@@ -1942,7 +1942,9 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             else if (sr.outcome === 'CRITICAL_FAILURE' || sr.nat1) outcome = ` — Krytyczna porażka ${marginStr}`;
             else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}${_degStr}`;
             else outcome = ` — Porażka ${marginStr}${_degStr}`;
-            const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
+            // #1144: znak modyfikatora — bez tego ujemny mod renderował się jako "+-1"
+            const modStr = (sr.modifier >= 0 ? '+' : '−') + Math.abs(sr.modifier);
+            const rollLine = `🎲 ${skillName}: ${sr.d20_roll} ${modStr} = ${sr.player_total}${outcome}`;
             appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
             // Keep reference to roll bubble so we can scroll to it (not the very bottom)
             rollBubbleEl = elements.chatMessages.lastElementChild;
@@ -2028,7 +2030,8 @@ function _renderInspiredRerollButton(skillTestId, offer) {
             else if (sr.outcome === 'SUCCESS' || sr.success) outcome = ` — Sukces ${marginStr}${_degStr}`;
             else outcome = ` — Porażka ${marginStr}${_degStr}`;
             const skillName = sr.skill_label || sr.skill_key || 'Test';
-            appendMessage({ role: 'user', content: `🎲 ↻ ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`, created_at: new Date() });
+            const modStr = (sr.modifier >= 0 ? '+' : '−') + Math.abs(sr.modifier);  // #1144
+            appendMessage({ role: 'user', content: `🎲 ↻ ${skillName}: ${sr.d20_roll} ${modStr} = ${sr.player_total}${outcome}`, created_at: new Date() });
             if (sr.nat20) triggerCritFlash('crit'); else if (sr.nat1) triggerCritFlash('fumble');
             if (resp.prose) {
                 const { narrative: gmContent } = parseGmFull(resp.prose);
@@ -2616,6 +2619,10 @@ async function doRest(type, character, sheet) {
             showToast(`Krótki odpoczynek. HP: ${data.hp_before}→${data.hp_after} (+${data.hp_after - data.hp_before}). +1h. Pozostało: ${data.short_rests_remaining}/2`, 'success');
         }
         await refreshCharacterSheet();
+        // #1144: długi odpoczynek przesuwa zegar (noc mija) — bez tego HUD pokazywał
+        // stare "Noc · 00:00" i nieaktualne chipy obozu aż do przeładowania strony.
+        await fetchAndRenderClock(currentCampaignId);
+        renderSuggestedActions([]);  // chipy obozu sprzed odpoczynku są już nieaktualne
     } catch (e) {
         showToast('Błąd odpoczynku: ' + e.message, 'error');
     }

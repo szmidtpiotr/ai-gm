@@ -57,7 +57,10 @@ from app.services.hex_directions import DIRECTION_KEYWORDS as _DIRECTION_KEYWORD
 _MOVE_VERB_PATTERN = _re_tp.compile(
     r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam[y]?|podroz?uj(?:[eę]|emy)|podróżuj(?:[eę]|emy)|"
     r"jad[eę]|biegne|biegnę|zmierzam|ruszam[y]?|wchodz[eę]|wchodze|"
-    r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy)\b",
+    r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy|"
+    # #1142: "maszeruję dalej na zachód" / "wychodzę na trakt" nie łapały się na fast-path
+    # → tura-fantom (narracja marszu bez ruchu hexa). Uzupełnione czasowniki marszu.
+    r"maszeruj\w*|wychodz[eę]|pod[ąa]ż\w*|krocz[eę])\b",
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
 
@@ -1262,11 +1265,15 @@ def _update_hex_world_state(
             loc_id = int(loc_row["id"])
 
     from app.services.location_state_service import set_position
+    # #1142: destination hex without a location = wilderness — clear the stale
+    # current_location_id (set_position treats None as "leave unchanged", so the old
+    # sub-location would leak into the narrator context: "wciąż jesteś przy tartaku").
     set_position(
         conn,
         campaign_id=campaign_id,
         current_hex={"q": int(dest_q), "r": int(dest_r)},
         current_location_id=loc_id,
+        clear_location_id=(loc_id is None),
         clear_local_hex=True,
     )
     # Keep in-memory dict in sync for downstream callers this turn

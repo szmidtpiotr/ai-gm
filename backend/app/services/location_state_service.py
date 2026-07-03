@@ -15,6 +15,10 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import structlog
+
+logger = structlog.get_logger()
+
 
 def get_current_location(conn: sqlite3.Connection, campaign_id: int) -> dict | None:
     """PT-F7 #1141: single source of truth for the current location.
@@ -144,17 +148,21 @@ def set_position(
             (json.dumps(flags, ensure_ascii=False), session_id),
         )
 
-    # Write current_location_id
-    if clear_location_id:
-        conn.execute(
-            "UPDATE game_sessions SET current_location_id = NULL WHERE id = ?",
-            (session_id,),
-        )
-    elif current_location_id is not None:
-        conn.execute(
-            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
-            (int(current_location_id), session_id),
-        )
+    # Write current_location_id — best-effort like the sheet mirror below: isolated
+    # test DBs may lack the column (#1142 made the clear path run far more often).
+    try:
+        if clear_location_id:
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = NULL WHERE id = ?",
+                (session_id,),
+            )
+        elif current_location_id is not None:
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                (int(current_location_id), session_id),
+            )
+    except sqlite3.OperationalError as exc:
+        logger.warning("set_position_location_id_write_skipped", error=str(exc))
 
     # Mirror current_hex into sheet_json so the player map pin stays correct.
     # Auto-lookup character from campaign if not explicitly provided.

@@ -5023,13 +5023,18 @@ def create_turn(
             except Exception as _u30_err:
                 logger.warning("u30_directional_fastpath_error", error=str(_u30_err), campaign_id=campaign_id)
 
-        # PT4 #1114: inject corrective fact from previous-turn desync (if any)
+        # PT4 #1114: inject corrective fact from previous-turn desync (if any).
+        # #1142: pop ALWAYS (clears the flag), but inject only when THIS turn did not
+        # move the hero — otherwise the stale "gracz stoi w miejscu" correction lands
+        # next to the fresh "gracz przemieścił się" fact and the narrator denies the move.
         try:
             from app.services.turn_pipeline import pop_desync_correction as _pt4_pop
             _pt4_correction = _pt4_pop(conn, campaign_id)
-            if _pt4_correction:
+            if _pt4_correction and not _u30_move_executed:
                 _u30_system_fact = (_u30_system_fact or "") + _pt4_correction
                 logger.info("pt4_desync_correction_injected", campaign_id=campaign_id)
+            elif _pt4_correction:
+                logger.info("pt4_desync_correction_skipped_move_executed", campaign_id=campaign_id)
         except Exception as _pt4_err:
             logger.warning("pt4_desync_correction_inject_error", error=str(_pt4_err))
 
@@ -5713,10 +5718,14 @@ def create_turn_stream(
         except Exception as _u30_err:
             logger.warning("u30_directional_fastpath_error", error=str(_u30_err), campaign_id=campaign_id)
 
-        # PT4 #1114: inject corrective fact from previous-turn desync (if any)
+        # PT4 #1114: inject corrective fact from previous-turn desync (if any).
+        # #1142: pop ALWAYS, inject only when no move this turn (see JSON tor).
         try:
             from app.services.turn_pipeline import pop_desync_correction as _pt4_pop_s
             _pt4_correction_s = _pt4_pop_s(conn, campaign_id)
+            if _pt4_correction_s and u30_travel_executed:
+                _pt4_correction_s = None
+                logger.info("pt4_desync_correction_skipped_move_executed_stream", campaign_id=campaign_id)
             if _pt4_correction_s:
                 _first_mv_pt4 = messages[0] if messages else None
                 if isinstance(_first_mv_pt4, dict) and _first_mv_pt4.get("role") == "system":
@@ -7154,10 +7163,17 @@ def resolve_skill_test_endpoint(
         skill_label = pending.get("skill_label", pending.get("skill_key", "skill"))
         _mod = int(result.get("modifier") or 0)
         _total = int(result.get("player_total") or payload.d20_roll)
+        # #1144: persisted label must match the live S1 (#581) margin degrees —
+        # otherwise the same roll reads "Krytyczna porażka" live and "Porażka" after reload.
+        _outcome_deg = str(result.get("outcome") or "")
         if result.get("nat20"):
             _outcome = "Naturalny 20"
         elif result.get("nat1"):
             _outcome = "Naturalny 1"
+        elif _outcome_deg == "CRITICAL_SUCCESS":
+            _outcome = "Krytyczny sukces"
+        elif _outcome_deg == "CRITICAL_FAILURE":
+            _outcome = "Krytyczna porażka"
         elif result.get("success"):
             _outcome = "Sukces"
         else:

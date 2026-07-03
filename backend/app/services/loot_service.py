@@ -166,9 +166,9 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
                    ci.item_key, ci.weapon_key, ci.consumable_key,
                    ci.label AS narrative_label, ci.meta_json AS ci_meta_json,
                    CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
-                        THEN gi.label ELSE NULL END AS item_label,
+                        THEN COALESCE(gi.label, gci.label) ELSE NULL END AS item_label,
                    CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
-                        THEN json_extract(gi.item_data, '$.item_type')
+                        THEN COALESCE(json_extract(gi.item_data, '$.item_type'), gci.item_type)
                         ELSE NULL END AS item_kind,
                    CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
                         THEN json_extract(gi.item_data, '$.armor_coverage')
@@ -195,6 +195,10 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
                              AND gi.kind = 'consumable'
                         THEN gi.label ELSE NULL END AS consumable_by_item_key_label
             FROM character_inventory ci
+            -- #1143: konfigi istniejące tylko w game_config_items (np. mapy) nie mają wiersza
+            -- w game_items — bez tego fallbacku item_type='map' ginęło i plecak nie pokazywał „Użyj".
+            LEFT JOIN game_config_items gci ON gci.key = ci.item_key
+                AND ci.weapon_key IS NULL AND ci.consumable_key IS NULL
             LEFT JOIN game_items gi ON gi.key = COALESCE(
                 NULLIF(TRIM(COALESCE(
                     CASE WHEN ci.weapon_key LIKE 'weapon_%' THEN SUBSTR(ci.weapon_key, 8)
