@@ -2670,6 +2670,57 @@ def admin_patch_resurrection_config(
         conn.close()
 
 
+# ── PT-D3 (#1126) — Pogoda / pory roku ────────────────────────────────────────
+
+class WeatherConfigReq(BaseModel):
+    weather_enabled: bool | None = None
+    days_per_season: int | None = None
+    start_season_offset: int | None = None  # 0=wiosna 1=lato 2=jesień 3=zima
+
+
+class WeatherOverrideReq(BaseModel):
+    weather_type: str | None = None  # None → usuń nadpisanie
+
+
+@router.get("/admin/weather-config")
+def admin_get_weather_config(_: None = Depends(require_admin_token)):
+    """Globalna konfiguracja pogody (toggle, długość pór roku, pora startowa)."""
+    from app.services import weather_service
+    return {"ok": True, "config": weather_service.get_weather_config()}
+
+
+@router.patch("/admin/weather-config")
+def admin_patch_weather_config(
+    req: WeatherConfigReq,
+    _: None = Depends(require_admin_token),
+):
+    """Ustaw globalną konfigurację pogody."""
+    from app.services import weather_service
+    try:
+        cfg = weather_service.set_weather_config(
+            weather_enabled=req.weather_enabled,
+            days_per_season=req.days_per_season,
+            start_season_offset=req.start_season_offset,
+        )
+        return {"ok": True, "config": cfg}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/admin/campaigns/{campaign_id}/weather-override")
+def admin_set_weather_override(
+    campaign_id: int,
+    req: WeatherOverrideReq,
+    _: None = Depends(require_admin_token),
+):
+    """Ręcznie wymuś pogodę dla kampanii (monitor). weather_type=null → wyłącz."""
+    from app.services import weather_service
+    try:
+        return weather_service.set_weather_override(campaign_id, req.weather_type)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 class UserResurrectionUsesReq(BaseModel):
     uses_remaining: int | None = None
     clear: bool = False  # set to explicitly make NULL (unlimited)

@@ -175,7 +175,7 @@ class ContextInjector:
                 self._build_reputation_block(character_id, campaign_id),
                 self._build_length_directive_block(session_flags, action_type, mechanic_result, player_message),
                 self._build_narrative_state_block(session_flags),
-                self._build_world_block(session_flags, ingame_hours, player_message),
+                self._build_world_block(session_flags, ingame_hours, player_message, campaign_id),
                 self._build_stale_block(session_flags),
                 self._build_entities_block(npcs, combat_roster),
                 self._build_mechanic_block(action_type, mechanic_result),
@@ -396,6 +396,7 @@ class ContextInjector:
         session_flags: dict,
         ingame_hours: int,
         player_message: str = "",
+        campaign_id: int | None = None,
     ) -> str:
         """U29 — build rich ŚWIAT block from hex data + DB candidates.
 
@@ -406,6 +407,9 @@ class ContextInjector:
             swiat = build_swiat_block(self.conn, session_flags, player_message)
             if swiat:
                 swiat += f"\nPora: {_time_of_day(ingame_hours)}"
+                weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
+                if weather:
+                    swiat += f"\n{weather}"
                 return swiat
         except Exception as e:
             logger.warning("build_swiat_block_failed", error=str(e))
@@ -436,7 +440,38 @@ class ContextInjector:
         else:
             lines.append("Lokacja: nieznana")
         lines.append(f"Pora: {_time_of_day(ingame_hours)}")
+        weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
+        if weather:
+            lines.append(weather)
         return "\n".join(lines)
+
+    def _build_weather_line(
+        self,
+        session_flags: dict,
+        ingame_hours: int,
+        campaign_id: int | None,
+    ) -> str:
+        """PT-D3 (#1126) — linia POGODA (pora roku + pogoda opisowa). '' gdy off/brak."""
+        if campaign_id is None:
+            return ""
+        try:
+            from app.services import weather_service
+            hex_type = None
+            cur = (session_flags or {}).get("current_hex") or {}
+            q, r = cur.get("q"), cur.get("r")
+            if q is not None and r is not None:
+                row = self.conn.execute(
+                    "SELECT hex_type FROM world_hexes WHERE q=? AND r=? LIMIT 1",
+                    (int(q), int(r)),
+                ).fetchone()
+                if row:
+                    hex_type = row["hex_type"] if isinstance(row, sqlite3.Row) else row[0]
+            return weather_service.build_weather_line(
+                int(campaign_id), int(ingame_hours), hex_type=hex_type, conn=self.conn
+            )
+        except Exception as e:
+            logger.warning("build_weather_line_failed", error=str(e))
+            return ""
 
     _STORY_STALE_THRESHOLD = 12  # #1026: raised from 5 — was triggering too early
 
