@@ -1444,6 +1444,19 @@ ADMIN_SEEDS = [
     VALUES
     ('exhausted', 'Wyczerpany', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":2,"per_level_effects":[{"type":"static_stat_modifier","stat":"STR","value":-3},{"type":"static_stat_modifier","stat":"DEX","value":-3},{"type":"static_stat_modifier","stat":"CON","value":-3}],"threshold_effects":{"2":{"type":"block_action"}}}]}', 'Postać skrajnie zmęczona — STR/DEX/CON -3 na poziom (poziom 2 = -6 i omdlenie/utrata tury). Ponowne nałożenie podbija poziom (max 2). Zdjęcie: 1h odpoczynku = -1 poziom, pełny sen = wszystkie, mikstura/zaklęcie regeneracji natychmiast.', 1, 1, NULL, NULL, datetime('now'), datetime('now'))
     """,
+    # PT-D1 (#1124) FAZA PT — redesign kondycji `exhausted` na zmęczenie podróżne (3 progi).
+    # Prymitywy: test_penalty (per_level, -1/stack do KAŻDEGO testu), initiative_penalty (próg 2),
+    # regen_multiplier (próg 3 = połowa regeneracji HP/many przy odpoczynku). Max 3 stacki.
+    # Liczby = wartości startowe (Numbers Policy → Sandbox-tunable). UPDATE, bo INSERT OR IGNORE
+    # nie nadpisze istniejącego wiersza z S9. Idempotentne (guard NOT LIKE '%test_penalty%').
+    """
+    UPDATE game_config_conditions
+    SET effect_json = '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"stacking_levels","max_level":3,"per_level_effects":[{"type":"test_penalty","value":-1}],"threshold_effects":{"2":{"type":"initiative_penalty","value":-2},"3":{"type":"regen_multiplier","value":0.5}}}]}',
+        description = 'Zmęczenie z podróży — kara -1 do wszystkich testów za każdy stack (max 3). Od 2 stacków gorsza inicjatywa; przy 3 stackach odpoczynek regeneruje o połowę mniej HP/many. Stacki: +1 za marsz ponad 8h w dniu, +1 za dobę bez pełnego noclegu. Pełny nocleg czyści wszystkie; krótki odpoczynek NIE czyści. Krasnolud (twardy jak kamień) ignoruje kary 1. stacka.',
+        updated_at = datetime('now')
+    WHERE key = 'exhausted'
+      AND effect_json NOT LIKE '%test_penalty%'
+    """,
     # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
     # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
     # Top-level `cure` = deklaratywne zdjęcie kondycji udanym SKILL_TEST:medicine (DC z zamka).

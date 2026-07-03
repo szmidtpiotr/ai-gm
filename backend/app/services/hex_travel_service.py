@@ -666,6 +666,30 @@ def resolve_chain_travel(
             if _budget_reason == "forced_camp":
                 sf_tp["night_march"] = True  # flag for PT9 nocturnal attack bonus
 
+            # PT-D1 (#1124): zmęczenie z podróży (nabija istniejącą kondycję exhausted, max 3).
+            # (1) marsz >8h w dniu → +1 (raz na dzień, reset przez pełny nocleg);
+            # (2) doba bez pełnego noclegu → +1 gdy marsz przekracza granicę dnia (raz na dobę).
+            # Aktywność poza podróżą (walki) NIE nabija stacków w tej iteracji (decyzja Piotra #1124).
+            try:
+                _stacks = 0
+                if hours_marched_today >= DAILY_SOFT_CAP and not sf_tp.get("fatigue_march_charged"):
+                    sf_tp["fatigue_march_charged"] = True
+                    _stacks += 1
+                _ing = float(sf_tp.get("ingame_hours", 9) or 9)
+                _day_before = int(_ing // 24) + 1
+                _day_after = int((_ing + float(total_hours)) // 24) + 1
+                if _day_after > _day_before and int(sf_tp.get("fatigue_last_day_charged", 0) or 0) < _day_after:
+                    sf_tp["fatigue_last_day_charged"] = _day_after
+                    _stacks += 1
+                if _stacks and character_id:
+                    from app.services.fatigue_service import charge_fatigue
+                    _fat_level = 0
+                    for _ in range(_stacks):
+                        _fat_level = charge_fatigue(conn, int(character_id), campaign_id=campaign_id, reason="travel_fatigue")
+                    logger.info("travel_fatigue_charged", campaign_id=campaign_id, stacks=_stacks, level=_fat_level)
+            except Exception as _fat_err:
+                logger.warning("fatigue_charge_failed", error=str(_fat_err))
+
             def _resolve_dest_label() -> tuple[str | None, str]:
                 d = hexes.get(to_hex, {})
                 lk = d.get("location_key")

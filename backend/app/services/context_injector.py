@@ -776,6 +776,21 @@ class ContextInjector:
         if fear_label:
             lines.append(f"Strach: {fear_label}")
 
+        # PT-D1 (#1124): zmęczenie z podróży (sheet.conditions). Przy 3 stackach narrator
+        # dostaje jawny fakt o skrajnym wyczerpaniu (chip pokazuje się osobno na karcie).
+        try:
+            from app.services.fatigue_service import read_fatigue_level
+            fatigue = read_fatigue_level(sheet.get("conditions") or []) if character else 0
+            if fatigue >= 3:
+                lines.append("Zmęczenie: SKRAJNE WYCZERPANIE — postać ledwo trzyma się na nogach; "
+                             "opisz ociężałość, drżące ręce i tępy umysł (nie wymyślaj skutków mechanicznych).")
+            elif fatigue == 2:
+                lines.append("Zmęczenie: mocno zmęczona — ruchy wolniejsze, uwaga rozproszona.")
+            elif fatigue == 1:
+                lines.append("Zmęczenie: lekko zmęczona po długim marszu.")
+        except Exception:
+            pass
+
         return "\n".join(lines)
 
     def _build_loch_block(self, session_flags: dict) -> str:

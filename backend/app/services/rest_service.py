@@ -223,8 +223,14 @@ def perform_long_rest(
             sheet["max_mana"] = new_max_mana
             leveled_up = True
 
-    sheet["current_hp"] = new_max_hp
-    sheet["current_mana"] = new_max_mana
+    # PT-D1 (#1124): przy 3 stackach zmęczenia odpoczynek regeneruje o połowę mniej HP/many.
+    # Mnożnik liczony PRZED wyczyszczeniem zmęczenia (odpoczynek najpierw leczy, potem budzi wypoczętego).
+    from app.services.fatigue_service import compute_regen_multiplier, clear_all_fatigue
+    regen_mult = compute_regen_multiplier(sheet.get("conditions") or [], race=sheet.get("race"))
+    hp_healed = int(round((new_max_hp - hp_before) * regen_mult))
+    mana_healed = int(round((new_max_mana - mana_before) * regen_mult))
+    sheet["current_hp"] = min(new_max_hp, hp_before + max(0, hp_healed))
+    sheet["current_mana"] = min(new_max_mana, mana_before + max(0, mana_healed))
     sheet["pending_xp"] = 0
     sheet["xp_available"] = xp_available + pending_xp
     if pending_xp:
@@ -232,12 +238,8 @@ def perform_long_rest(
     sheet["short_rests_used"] = 0
     sheet["death_saves_failed"] = 0
 
-    # S9 (#604): pełny sen zdejmuje WSZYSTKIE poziomy kondycji stackowalnych (exhausted).
-    conds = sheet.get("conditions")
-    if isinstance(conds, list) and conds:
-        from app.services.combat_service import reduce_stacking_conditions
-        new_conds, _ = reduce_stacking_conditions(conds, remove_all=True)
-        sheet["conditions"] = new_conds
+    # PT-D1 (#1124): pełny nocleg czyści WSZYSTKIE stacki zmęczenia (exhausted).
+    sheet["conditions"] = clear_all_fatigue(sheet.get("conditions") or [])
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
@@ -293,6 +295,13 @@ def perform_long_rest(
             _sf_rest["hours_marched_today"] = 0.0
             _sf_rest["night_march"] = False
             _sf_rest.pop("camp_encounter_boost", None)
+            # PT-D1 (#1124): pełny nocleg = reset dziennych liczników zmęczenia.
+            _sf_rest["fatigue_march_charged"] = False
+            try:
+                from app.services.clock_service import get_clock_state
+                _sf_rest["fatigue_last_rest_day"] = int(get_clock_state(campaign_id, conn=conn).get("day_number", 1))
+            except Exception:
+                pass
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
                 (json.dumps(_sf_rest, ensure_ascii=False), _gs_rest["id"]),
@@ -314,8 +323,9 @@ def perform_long_rest(
         "long_rest_performed",
         character_id=character_id,
         campaign_id=campaign_id,
-        hp_restored=new_max_hp - hp_before,
-        mana_restored=new_max_mana - mana_before,
+        hp_restored=sheet["current_hp"] - hp_before,
+        mana_restored=sheet["current_mana"] - mana_before,
+        regen_mult=regen_mult,
         xp_unlocked=pending_xp,
         leveled_up=leveled_up,
         new_level=new_level if leveled_up else None,
@@ -325,9 +335,10 @@ def perform_long_rest(
         "ok": True,
         "type": "long",
         "hp_before": hp_before,
-        "hp_after": new_max_hp,
+        "hp_after": sheet["current_hp"],
         "mana_before": mana_before,
-        "mana_after": new_max_mana,
+        "mana_after": sheet["current_mana"],
+        "regen_mult": regen_mult,
         "xp_unlocked": pending_xp,
         "xp_available": sheet["xp_available"],
         "hours_advanced": 8,
@@ -376,7 +387,10 @@ def perform_short_rest(
     max_hp = int(sheet.get("max_hp") or 0)
     con_mod = int((sheet.get("stat_modifiers") or {}).get("CON", 0) or 0)
     roll = random.randint(1, 6)
-    healed = max(0, roll + con_mod)
+    # PT-D1 (#1124): przy 3 stackach zmęczenia regeneracja o połowę mniejsza.
+    from app.services.fatigue_service import compute_regen_multiplier
+    regen_mult = compute_regen_multiplier(sheet.get("conditions") or [], race=sheet.get("race"))
+    healed = max(0, int(round((roll + con_mod) * regen_mult)))
     new_hp = min(max_hp, hp + healed)
 
     sheet["current_hp"] = new_hp
@@ -393,12 +407,8 @@ def perform_short_rest(
         except Exception:
             pass
 
-    # S9 (#604): krótki odpoczynek (1h) zdejmuje 1 poziom kondycji stackowalnych (exhausted).
-    conds = sheet.get("conditions")
-    if isinstance(conds, list) and conds:
-        from app.services.combat_service import reduce_stacking_conditions
-        new_conds, _ = reduce_stacking_conditions(conds, remove_all=False)
-        sheet["conditions"] = new_conds
+    # PT-D1 (#1124): krótki odpoczynek NIE czyści zmęczenia (tylko pełny nocleg).
+    # (Zmiana wobec S9 — zmęczenie podróżne wymaga pełnego snu, patrz issue #1124.)
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",

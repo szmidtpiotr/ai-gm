@@ -115,12 +115,20 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
     proficiency = 2 if skill_rank >= 3 else 0
-    total = skill_rank + stat_mod + proficiency
+    # PT-D1 (#1124): zmęczenie (exhausted) obniża sumę KAŻDEGO testu o poziom stacka.
+    # Data-driven (prymityw test_penalty); krasnolud ignoruje 1. stack.
+    try:
+        from app.services.fatigue_service import compute_test_penalty
+        fatigue_penalty = compute_test_penalty(sheet.get("conditions") or [], race=sheet.get("race"))
+    except Exception:
+        fatigue_penalty = 0
+    total = skill_rank + stat_mod + proficiency + fatigue_penalty
     return {
         "governing_stat": governing_stat,
         "skill_rank": skill_rank,
         "stat_mod": stat_mod,
         "proficiency": proficiency,
+        "fatigue_penalty": fatigue_penalty,
         "total": total,
     }
 

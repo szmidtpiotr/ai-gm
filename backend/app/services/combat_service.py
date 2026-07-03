@@ -4484,7 +4484,9 @@ def initiate_combat(
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
         dex_mod = _stat_mod(sheet, "DEX")
-        init_player = roll_d20() + dex_mod
+        # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
+        from app.services.fatigue_service import compute_initiative_penalty
+        init_player = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
         ability_stats = _ability_stats_seven(sheet)
         # F1 (#461): weapon Effect Objects applied at combat-start
         _wrow_init = resolve_sheet_weapon(conn, sheet, int(character_id))
@@ -5113,7 +5115,9 @@ def initiate_combat_mp(
             hp_cur, hp_max = _player_hp_pair(sheet)
             ac = _player_ac_from_sheet(sheet)
             dex_mod = _stat_mod(sheet, "DEX")
-            init_roll = roll_d20() + dex_mod
+            # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
+            from app.services.fatigue_service import compute_initiative_penalty
+            init_roll = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
             ability_stats = _ability_stats_seven(sheet)
 
             # Apply weapon AC bonus (same as solo)
