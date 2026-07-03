@@ -291,7 +291,12 @@ _COMBAT_INTENT_VERBS = (
     # rzucać się / skakać na
     "rzucam sie na", "rzucam sie", "skacze na", "skacze",
     # nacierać / szarżować / ruszać na
-    "naciera", "nacierac", "szarzuje", "szarze", "ruszam na", "ruszam sie na",
+    # Round-5 smoke (#1146): bare "ruszam na" matched every directional move
+    # ("ruszam na północ") and spawned combat vs a stale scene enemy — keep only
+    # person-targeted forms.
+    "naciera", "nacierac", "szarzuje", "szarze",
+    "ruszam na niego", "ruszam na nia", "ruszam na nich", "ruszam na wroga",
+    "ruszam sie na",
     # kopać / obalać
     "kopie", "kopnij", "obalam",
     # wyciągać broń / brać zamach
@@ -589,7 +594,11 @@ def _ensure_combat_start_tag(
     # engine's own roll, not from scene inference, so the narration-presence
     # validation below does not apply (the narrator typically ignored the ambush
     # entirely — that's the bug being fixed). Validate catalog existence only.
-    if pending_enemy and not player_intent and not narrative_combat:
+    # Round-4 smoke: the engine enemy is authoritative and must win even when the
+    # narration trips _AGGRESSION_NARRATIVE_RE or the player text reads aggressive —
+    # falling through to scene inference resolved to unknown_attacker →
+    # combat_target_not_present → the whole encounter fizzled.
+    if pending_enemy:
         try:
             _cat = conn.execute(
                 "SELECT 1 FROM game_config_enemies WHERE key = ? AND is_active = 1 LIMIT 1",
@@ -1302,6 +1311,42 @@ def _maybe_start_combat_from_gm_tag(
             enemy_keys=enemy_keys,
             combat_id=combat_state.get("id"),
         )
+        # Round-5 smoke (#1146/#1147): consume the pending engine encounter the
+        # moment its combat actually spawns. combat_seen was previously set only
+        # by the pre-LLM pop_* hooks while the combat was still active — a flee
+        # as the very first action ended the combat before any such turn ran,
+        # so _pending_engine_encounter_enemy still saw an unseen encounter and
+        # the injection spawned a SECOND combat on the flee-epilogue turn.
+        try:
+            import json as _csj
+            with sqlite3.connect(DB_PATH) as _csconn:
+                _csconn.row_factory = sqlite3.Row
+                _gs_cs = _csconn.execute(
+                    "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if _gs_cs:
+                    _sf_cs = _csj.loads(_gs_cs["session_flags"] or "{}")
+                    _dirty = False
+                    _tp_cs = _sf_cs.get("travel_plan") or {}
+                    if _tp_cs.get("interrupt_reason") == "encounter" and not _tp_cs.get("combat_seen"):
+                        _tp_cs["combat_seen"] = True
+                        _sf_cs["travel_plan"] = _tp_cs
+                        _dirty = True
+                    _lh_cs = _sf_cs.get("local_travel_hint") or {}
+                    if _lh_cs.get("kind") in ("combat", "combat_escalated") and not _lh_cs.get("combat_seen"):
+                        _lh_cs["combat_seen"] = True
+                        _sf_cs["local_travel_hint"] = _lh_cs
+                        _dirty = True
+                    if _dirty:
+                        _csconn.execute(
+                            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                            (_csj.dumps(_sf_cs, ensure_ascii=False), _gs_cs["id"]),
+                        )
+                        _csconn.commit()
+                        logger.info("combat_gm_tag_pending_encounter_consumed", campaign_id=campaign_id)
+        except Exception as _cs_err:
+            logger.warning("combat_gm_tag_pending_consume_error", error=str(_cs_err))
         # Stage 3 Z4 — apply pending zaskoczony from pre-combat stealth success
         try:
             import json as _pjson

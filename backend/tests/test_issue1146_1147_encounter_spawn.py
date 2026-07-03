@@ -131,6 +131,19 @@ def test_pending_engine_encounter_from_local_hint():
     assert _pending_engine_encounter_enemy(conn, 1) == "bandit"
 
 
+def test_pending_engine_encounter_ignores_seen_local_hint():
+    # Round-5 smoke: combat_seen is now set at combat spawn (consume-at-spawn in
+    # _maybe_start_combat_from_gm_tag) — a seen local hint must stop re-injection
+    # on the flee-epilogue turn (double-spawn bug).
+    from app.api.turns import _pending_engine_encounter_enemy
+
+    conn = _make_conn()
+    _set_flags(conn, 1, {"local_travel_hint": {
+        "kind": "combat", "enemy_key": "bandit", "combat_seen": True,
+    }})
+    assert _pending_engine_encounter_enemy(conn, 1) is None
+
+
 def test_pending_engine_encounter_ignores_social_hint():
     from app.api.turns import _pending_engine_encounter_enemy
 
@@ -179,6 +192,48 @@ def test_ensure_combat_start_tag_noop_when_tag_present_or_combat_active():
     conn.commit()
     peaceful = "Spokojny marsz."
     assert _ensure_combat_start_tag(conn, 1, "idę", peaceful) == peaceful
+
+
+def test_ensure_combat_start_tag_engine_enemy_wins_over_aggressive_narration():
+    # Round-4 smoke regression: prose matching _AGGRESSION_NARRATIVE_RE used to
+    # bypass the engine_encounter branch and fall into scene inference, which
+    # resolved to unknown_attacker → combat_target_not_present → encounter fizzled.
+    from app.api.turns import _ensure_combat_start_tag
+
+    conn = _make_conn()
+    _set_flags(conn, 1, {"travel_plan": {
+        "interrupt_reason": "encounter", "combat_seen": False, "enemy_key": "goblin",
+    }})
+    aggressive = "Coś dużego rzuca się na ciebie z paproci, nie widzisz co to jest."
+    out = _ensure_combat_start_tag(conn, 1, "idę dalej na południe", aggressive)
+    assert "[COMBAT_START:goblin]" in out, \
+        "Engine-rolled enemy must win even when narration reads aggressive"
+
+
+def test_ensure_combat_start_tag_engine_enemy_wins_over_player_intent():
+    # Same bypass via _player_combat_intent: an attack-sounding player line must
+    # not reroute the engine encounter into scene inference.
+    from app.api.turns import _ensure_combat_start_tag
+
+    conn = _make_conn()
+    _set_flags(conn, 1, {"travel_plan": {
+        "interrupt_reason": "encounter", "combat_seen": False, "enemy_key": "bandit",
+    }})
+    out = _ensure_combat_start_tag(conn, 1, "atakuję cień między drzewami", "Las milczy.")
+    assert "[COMBAT_START:bandit]" in out
+
+
+def test_directional_move_is_not_combat_intent():
+    # Round-5 smoke: bare "ruszam na" matched every directional move and spawned
+    # combat vs a stale scene enemy. Directions must not read as attack intent;
+    # person-targeted "ruszam na niego" must still count.
+    from app.api.turns import _player_combat_intent
+
+    assert _player_combat_intent("Ruszam na północ.") is False
+    assert _player_combat_intent("Ruszam na południe, między drzewa.") is False
+    assert _player_combat_intent("Ruszam na zachód, ku traktowi.") is False
+    assert _player_combat_intent("Ruszam na niego z pięściami!") is True
+    assert _player_combat_intent("Ruszam na wroga.") is True
 
 
 # ── #1147: local combat state machine ─────────────────────────────────────────
