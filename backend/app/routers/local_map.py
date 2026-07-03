@@ -136,7 +136,8 @@ def _resolve_social_encounter(
         if _sub_row:
             subtype = ses.resolve_subtype(_sub_row["location_subtype"])
 
-    event = ses.pick_social_event(subtype)
+    # PT-D4d (#1133) — dobór z katalogu (game_config_encounters); pusty → hardcode.
+    event = ses.pick_social_event(subtype, conn=conn)
 
     # Load the active character (stats + gold) for the in-flight skill check
     char = conn.execute(
@@ -166,6 +167,7 @@ def _resolve_social_encounter(
         skill_check=check,
         flags=flags,
         delay_turns=None,
+        kind=event.get("kind"),  # #1133 — rekord z katalogu może mieć nowy klucz
     )
 
     # Deduct gold now (delayed reveal handled by pending_gold_notices)

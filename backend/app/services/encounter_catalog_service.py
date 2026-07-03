@@ -194,6 +194,21 @@ def draw_social(
     return _row_to_dict(picked) if picked else None
 
 
+def increment_times_used(conn: sqlite3.Connection, key: str) -> None:
+    """PT-D4d (#1133) — podbij licznik użyć rekordu przy realnym doborze. Bezpieczne
+    (brak tabeli/rekordu → no-op). Commituje samodzielnie."""
+    if not key:
+        return
+    try:
+        conn.execute(
+            "UPDATE game_config_encounters SET times_used = times_used + 1 WHERE key = ?",
+            (key,),
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
 # ── Autoring AI w Kuźni (PT-D4b #1131) ───────────────────────────────────────
 #
 # Anty-halucynacja przez FK-enum: AI dostaje listę dozwolonych kluczy jako enum

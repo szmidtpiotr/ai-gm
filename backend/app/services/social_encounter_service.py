@@ -100,14 +100,50 @@ def subtype_event_keys(subtype: str) -> list[str]:
     return list(_SUBTYPE_EVENTS.get(subtype, _SUBTYPE_EVENTS["alley"]))
 
 
-def pick_social_event(subtype: str, roll: Optional[float] = None) -> dict:
+def _event_from_catalog_row(row: dict) -> dict:
+    """Zmapuj rekord katalogu social (#1130) na strukturę zdarzenia silnika.
+
+    payload katalogu: {stat, skill, dc, resolution_kind, ...} → {key, stat, skill,
+    dc, kind}. resolution_kind='pickpocket' → kind='pickpocket', wpp. 'soft'.
+    """
+    payload = row.get("payload") or {}
+    kind = "pickpocket" if payload.get("resolution_kind") == "pickpocket" else "soft"
+    return {
+        "key": row.get("key"),
+        "stat": payload.get("stat"),
+        "skill": payload.get("skill"),
+        "dc": payload.get("dc"),
+        "kind": kind,
+        "from_catalog": True,
+    }
+
+
+def pick_social_event(
+    subtype: str,
+    roll: Optional[float] = None,
+    conn=None,
+    rng=random,
+) -> dict:
     """Wybierz zdarzenie z puli subtypu. Zwraca kopię definicji + 'key'.
 
-    roll (0..1) pozwala deterministycznie wskazać element; None → losowo.
+    PT-D4d (#1133): gdy podano `conn`, dobór idzie z katalogu `game_config_encounters`
+    (`draw_social`) i podbija `times_used`. Pusty katalog / brak conn → fallback do
+    hardcode `_EVENT_DEFS` (dotychczasowe zachowanie). roll (0..1) deterministycznie
+    wskazuje element w trybie hardcode; None → losowo.
     """
+    if conn is not None:
+        try:
+            from app.services import encounter_catalog_service as cat
+            row = cat.draw_social(conn, subtype, rng=rng)
+        except Exception:
+            row = None
+        if row:
+            cat.increment_times_used(conn, row.get("key"))
+            return _event_from_catalog_row(row)
+
     keys = subtype_event_keys(subtype)
     if roll is None:
-        key = random.choice(keys)
+        key = rng.choice(keys)
     else:
         idx = min(int(roll * len(keys)), len(keys) - 1)
         key = keys[idx]
@@ -211,6 +247,7 @@ def build_social_outcome(
     skill_check: dict,
     flags: dict,
     delay_turns: Optional[int] = None,
+    kind: Optional[str] = None,
 ) -> dict:
     """Złóż konsekwencję zdarzenia społecznego (miękkie, walka to wyjątek).
 
@@ -218,9 +255,12 @@ def build_social_outcome(
     stratę złota i zaplanuj opóźniony dymek. Przy SUKCESIE — brak straty
     (gracz łapie złodzieja za rękę). Zwraca payload dla konsumenta:
       {event_key, kind, gold_loss, escalate_combat, delay_turns}
+
+    PT-D4d (#1133): `kind` można podać jawnie (rekord z katalogu z nowym kluczem
+    spoza `_EVENT_DEFS`). None → wyprowadzenie z `_EVENT_DEFS` (stare zachowanie).
     """
-    ev = _EVENT_DEFS.get(event_key, {})
-    kind = ev.get("kind", "soft")
+    if kind is None:
+        kind = _EVENT_DEFS.get(event_key, {}).get("kind", "soft")
     success = bool(skill_check.get("success"))
     escalate = bool(skill_check.get("escalate_combat"))
 

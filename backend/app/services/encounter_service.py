@@ -171,6 +171,23 @@ def maybe_inject_encounter(
                 except Exception:
                     hex_pool = []
 
+        # 2b. PT-D4d (#1133) — kanoniczny katalog (game_config_encounters) jest
+        #     nadrzędnym źródłem combatu dla danego biomu/poziomu. Gdy katalog ma
+        #     pasujący rekord — rozstrzyga on ten dobór (trafi lub nie); pusty
+        #     katalog → spadamy do legacy puli adventure_hooks (zero regresji).
+        if hex_type:
+            cat_row = None
+            try:
+                from app.services import encounter_catalog_service as _cat
+                _cat_level = _hero_level_for_campaign(conn, campaign_id)
+                cat_row = _cat.draw_combat(conn, hex_type, _cat_level)
+            except Exception:
+                cat_row = None
+            if cat_row is not None:
+                return _fire_catalog_combat(
+                    conn, campaign_id, sf, trigger, cat_row, dwell
+                )
+
         # 3. Load candidate encounter hooks (restricted to hex pool if set, else all approved)
         if hex_pool:
             placeholders = ",".join("?" * len(hex_pool))
@@ -268,6 +285,66 @@ def maybe_inject_encounter(
     except Exception as exc:
         logger.warning("maybe_inject_encounter_error", error=str(exc), campaign_id=campaign_id)
         return False
+
+
+def _fire_catalog_combat(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    sf: dict,
+    trigger: str,
+    cat_row: dict,
+    dwell: float,
+) -> bool:
+    """PT-D4d (#1133) — spróbuj wstrzyknąć encounter combat z katalogu.
+
+    Waga rekordu (weight) traktowana jak dotychczasowe trigger_probability×100.
+    Reguły bez zmian: gate napadu (robbery), skala dwell, skala party. Trafienie →
+    active_encounter + times_used++. Zwraca True gdy encounter wstrzyknięty.
+    """
+    payload = cat_row.get("payload") or {}
+    enc = {
+        "label": payload.get("title") or cat_row.get("key"),
+        "source": "catalog",
+        "catalog_key": cat_row.get("key"),
+        "trigger": trigger,
+        "enemies": payload.get("enemies") or [],
+    }
+    for k in ("encounter_type", "defense_stat"):
+        if payload.get(k):
+            enc[k] = payload[k]
+    if payload.get("scene_setup"):
+        enc["description"] = payload["scene_setup"]
+
+    # U24 (#574) — gate napadu (poverty threshold + 24h limit).
+    if _is_robbery(enc) and not _robbery_allowed(conn, campaign_id, sf):
+        return False
+
+    prob = float(cat_row.get("weight") or 25.0) / 100.0
+    if random.random() > prob * dwell:
+        return False
+
+    enc = ensure_encounter_enemies_in_db(conn, enc)
+    party_size = _party_size_for_campaign(conn, campaign_id)
+    if enc.get("enemies"):
+        enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
+    sf["active_encounter"] = enc
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(sf, ensure_ascii=False), campaign_id),
+    )
+    try:
+        from app.services import encounter_catalog_service as _cat
+        _cat.increment_times_used(conn, cat_row.get("key"))
+    except Exception:
+        pass
+    conn.commit()
+    logger.info(
+        "encounter_catalog_injected",
+        trigger=trigger,
+        catalog_key=cat_row.get("key"),
+        campaign_id=campaign_id,
+    )
+    return True
 
 
 def _is_robbery(enc: dict) -> bool:
