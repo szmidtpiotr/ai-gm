@@ -270,6 +270,13 @@ def execute_directional_travel(
                 )
             else:
                 fact_r += f" Gracz dotarł do celu: {dest_label_r}."
+            if tr_r.get("weather_slowdown"):
+                # PT-F6 #1140: weather fact was missing on the resume path (clock still
+                # slowed, but the narrator wasn't told). Parity with the directional path.
+                fact_r += (
+                    f" Pogoda ({tr_r.get('weather_slowdown')}) spowalniała marsz — "
+                    "wpleć trud drogi w opis."
+                )
             fact_r += " Opisz wznowienie podróży w 2-4 zdaniach. NIE przenoś gracza — ruch rozstrzygnięty.]"
             logger.info("pt6_travel_resumed", campaign_id=campaign_id, destination=dest_label_r)
             return {"executed": True, "system_fact": fact_r, "intent": None}
@@ -345,6 +352,12 @@ def execute_directional_travel(
                             fact_n += (
                                 f" Podróż przerwana spotkaniem: {enc_n.get('enemy_key')} — "
                                 "opisz nadejście zagrożenia."
+                            )
+                        if tr_n.get("weather_slowdown"):
+                            # PT-F6 #1140: weather fact parity on the named-destination path.
+                            fact_n += (
+                                f" Pogoda ({tr_n.get('weather_slowdown')}) spowalniała marsz — "
+                                "wpleć trud drogi w opis."
                             )
                         fact_n += (
                             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej"

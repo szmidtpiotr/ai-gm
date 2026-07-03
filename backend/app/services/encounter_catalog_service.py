@@ -85,6 +85,19 @@ def validate_fk(conn: sqlite3.Connection, *, kind: str, payload: dict) -> None:
             valid = _existing_keys(conn, "game_config_skills")
             if skill not in valid:
                 raise ValueError(f"skill '{skill}' spoza game_config_skills")
+        # PT-F6 #1140: also validate stat (vs the 7 canonical stats) and npc_key
+        # (vs npcs) — AI-authored social encounters could hallucinate these before.
+        stat = payload.get("stat")
+        if stat and str(stat).upper() not in STATS:
+            raise ValueError(f"stat '{stat}' spoza dozwolonych ({', '.join(STATS)})")
+        npc_key = payload.get("npc_key")
+        if npc_key:
+            try:
+                valid_npc = _existing_keys(conn, "npcs")
+            except Exception:
+                valid_npc = set()
+            if valid_npc and npc_key not in valid_npc:
+                raise ValueError(f"npc_key '{npc_key}' spoza npcs")
     else:
         raise ValueError(f"nieznany kind '{kind}' (dozwolone: combat|social)")
 
@@ -580,8 +593,21 @@ def seed_catalog(conn: sqlite3.Connection) -> int:
                 subtype=subtype,
                 weight=100.0,
                 payload=payload,
+                faction_tag=ed.get("faction_tag"),  # PT-F6 #1140 — guard_check → straż
                 source="seed",
             )
+
+    # PT-F6 #1140: backfill faction_tag on catalogs seeded before this fix (guard_check
+    # rows created with NULL faction_tag → PT-D5 friendly/hostile branches were dead).
+    for _ek, _ed in ses._EVENT_DEFS.items():
+        _ft = _ed.get("faction_tag")
+        if _ft:
+            conn.execute(
+                "UPDATE game_config_encounters SET faction_tag = ? "
+                "WHERE key = ? AND kind = 'social' AND (faction_tag IS NULL OR faction_tag = '')",
+                (_ft, _ek),
+            )
+    conn.commit()
 
     return conn.execute("SELECT COUNT(*) FROM game_config_encounters").fetchone()[0]
 

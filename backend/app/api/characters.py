@@ -3281,6 +3281,24 @@ def repair_item_endpoint(
             raise HTTPException(status_code=404, detail="character not found")
         if int(char["user_id"]) != int(authed_uid):
             raise HTTPException(status_code=403, detail="not your hero")
+        # PT-F6 #1140: the smith is a paid service — it closes at night like the shops
+        # (21:00–05:00), for consistency with the night economy (#1127). The dwarf's
+        # own "kowalskie oko" self-repair is a racial ability, not gated here.
+        try:
+            from app.services.night_economy_service import is_night_closed_hour, SHOP_CLOSED_MSG
+            _cc = conn.execute("SELECT campaign_id FROM characters WHERE id = ?", (character_id,)).fetchone()
+            if _cc and _cc[0] is not None:
+                _sf = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (int(_cc[0]),)
+                ).fetchone()
+                if _sf and _sf[0]:
+                    _fl = json.loads(_sf[0])
+                    if "ingame_hours" in _fl and is_night_closed_hour(int(_fl["ingame_hours"]) % 24):
+                        raise HTTPException(status_code=409, detail=f"Kuźnia zamknięta. {SHOP_CLOSED_MSG}")
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # clock unknown → don't block repair
         result = repair_item(conn, character_id, body.inventory_id)
         if not result["ok"]:
             raise HTTPException(status_code=422, detail=result.get("reason", "repair_failed"))

@@ -112,3 +112,52 @@ def test_hardcode_guard_check_still_soft():
     ev = dict(ses._EVENT_DEFS["guard_check"])
     assert ev["kind"] == "soft"
     assert ev["skill"] == "persuasion"
+
+
+# ── PT-F6 #1140: guard_check carries faction_tag (PT-D5 no longer dormant) ──────
+
+def test_ptf6_guard_check_has_faction_tag():
+    from app.services import social_encounter_service as ses
+    assert ses._EVENT_DEFS["guard_check"].get("faction_tag") == "zakon_straznikow"
+    # hardcode fallback path surfaces it
+    ev = dict(ses._EVENT_DEFS["guard_check"]); ev["key"] = "guard_check"
+    assert ev.get("faction_tag") == "zakon_straznikow"
+
+
+# ── PT-F6 #1140: validate_fk rejects hallucinated stat / npc_key ────────────────
+
+def _fk_db():
+    import sqlite3, json
+    c = sqlite3.connect(":memory:"); c.row_factory = sqlite3.Row
+    c.executescript(
+        "CREATE TABLE game_config_skills (key TEXT);"
+        "CREATE TABLE game_config_enemies (key TEXT);"
+        "CREATE TABLE npcs (key TEXT);"
+    )
+    c.execute("INSERT INTO game_config_skills (key) VALUES ('persuasion')")
+    c.execute("INSERT INTO npcs (key) VALUES ('kowal_bartek')")
+    c.commit()
+    return c
+
+
+def test_ptf6_validate_fk_rejects_bad_stat():
+    import pytest
+    from app.services.encounter_catalog_service import validate_fk
+    c = _fk_db()
+    with pytest.raises(ValueError):
+        validate_fk(c, kind="social", payload={"skill": "persuasion", "stat": "ZZZ"})
+
+
+def test_ptf6_validate_fk_accepts_good_stat_and_npc():
+    from app.services.encounter_catalog_service import validate_fk
+    c = _fk_db()
+    # should not raise
+    validate_fk(c, kind="social", payload={"skill": "persuasion", "stat": "CHA", "npc_key": "kowal_bartek"})
+
+
+def test_ptf6_validate_fk_rejects_bad_npc():
+    import pytest
+    from app.services.encounter_catalog_service import validate_fk
+    c = _fk_db()
+    with pytest.raises(ValueError):
+        validate_fk(c, kind="social", payload={"skill": "persuasion", "npc_key": "nieistniejacy_npc"})

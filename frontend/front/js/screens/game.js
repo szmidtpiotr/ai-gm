@@ -3684,7 +3684,10 @@ function _renderBackpackRow(item, occupied) {
     const kind = _invIconKind(item);
     const t = String(item.item_type || '').toLowerCase();
     const canEquip = t === 'weapon' || t === 'armor';
-    const canUse = t === 'consumable' && !!item.can_use;
+    // PT-F6 #1140: maps are usable from the backpack too (backend sets can_use for
+    // item_type 'map'), not only consumables — otherwise the "Użyj" button never
+    // rendered and the feature was unreachable.
+    const canUse = (t === 'consumable' || t === 'map') && !!item.can_use;
     const slot = canEquip ? _invPickEquipSlot(item, occupied) : null;
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
 
@@ -4324,6 +4327,13 @@ function _wireInventoryActions() {
                         body: JSON.stringify({ inventory_id: id }),
                     });
                     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'błąd użycia');
+                    // PT-F6 #1140: a map item reveals fog of war — refresh the world map
+                    // immediately and surface the narrative fact (map is not consumed).
+                    const _useRes = await r.json().catch(() => ({}));
+                    if (_useRes && _useRes.map_reveal) {
+                        if (typeof updateWorldMap === 'function') updateWorldMap();
+                        showToast(_useRes.narrative || `Odsłonięto ${_useRes.map_reveal.count || 0} heksów mapy.`, 'success');
+                    }
                 } else {
                     const body = { inventory_id: id };
                     if (action === 'equip') body.slot = btn.dataset.slot;

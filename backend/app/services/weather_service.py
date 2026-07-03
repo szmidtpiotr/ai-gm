@@ -286,10 +286,14 @@ def get_weather_state(
         ingame_hours = int(flags.get("ingame_hours", 9))
         day = (ingame_hours // 24) + 1
         slot = weather_slot(ingame_hours)
+        # PT-F6 #1140: the admin knob writes game_config_meta.season_start_offset, so
+        # read it from there (via _start_season_offset). A per-campaign
+        # session_flags.season_start_offset still overrides when present. Previously
+        # this read ONLY session_flags → the admin control was a no-op (always autumn).
         season = get_season(
             day,
             days_per_season=_days_per_season(),
-            start_offset=int(flags.get("season_start_offset", START_SEASON_OFFSET_DEFAULT)),
+            start_offset=int(flags.get("season_start_offset", _start_season_offset())),
         )
 
         # Ręczne nadpisanie admina — stały typ, bez re-rollu
@@ -444,7 +448,9 @@ def build_weather_line(
     try:
         state = get_weather_state(campaign_id, hex_type=hex_type, conn=conn)
         day = (int(ingame_hours) // 24) + 1
-        season = get_season(day, days_per_season=_days_per_season())
+        # PT-F6 #1140: honor the admin season_start_offset here too (was defaulting).
+        season = get_season(day, days_per_season=_days_per_season(),
+                            start_offset=_start_season_offset())
         w_type = state.get("type", "clear")
         w_pl = _WEATHER_PL.get(w_type, w_type)
         intensity = _INTENSITY_PL.get(state.get("intensity", "moderate"), "")

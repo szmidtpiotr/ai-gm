@@ -932,6 +932,11 @@ class TerrainConfigCreate(BaseModel):
 def create_terrain_config(body: TerrainConfigCreate, authorization: str | None = Header(default=None)):
     """Create a new terrain type."""
     _require_admin(authorization)
+    # PT-F6 #1140: travel_hours < 0.5 breaks the A* heuristic (min terrain cost 0.5 →
+    # heuristic would overestimate → suboptimal routes). Enforce on the server, not
+    # just the client min="0.5".
+    if float(body.travel_hours) < 0.5:
+        raise HTTPException(status_code=400, detail="travel_hours musi wynosić co najmniej 0.5")
     conn = _get_db()
     try:
         conn.execute(
@@ -966,6 +971,9 @@ def patch_terrain_config(
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
+    # PT-F6 #1140: enforce the A* heuristic floor on edits too.
+    if "travel_hours" in updates and float(updates["travel_hours"]) < 0.5:
+        raise HTTPException(status_code=400, detail="travel_hours musi wynosić co najmniej 0.5")
     conn = _get_db()
     try:
         set_clause = ", ".join(f"{k} = ?" for k in updates)

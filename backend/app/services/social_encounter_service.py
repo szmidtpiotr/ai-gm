@@ -56,7 +56,10 @@ _EVENT_DEFS: dict[str, dict] = {
     "quest_rumor": {"stat": "CHA", "skill": "gossip", "dc": 8, "kind": "soft"},
     # targ
     "tout": {"stat": "WIS", "skill": "insight", "dc": 10, "kind": "soft"},
-    "guard_check": {"stat": "CHA", "skill": "persuasion", "dc": 12, "kind": "soft"},
+    # PT-F6 #1140: faction_tag wires guard_check to the guard faction's reputation (#1103)
+    # so PT-D5's friendly/hostile branches actually fire (were dormant without it).
+    "guard_check": {"stat": "CHA", "skill": "persuasion", "dc": 12, "kind": "soft",
+                    "faction_tag": "zakon_straznikow"},
 }
 
 _SUBTYPE_EVENTS: dict[str, list[str]] = {

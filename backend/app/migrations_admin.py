@@ -1467,6 +1467,22 @@ ADMIN_SEEDS = [
     WHERE key = 'exhausted'
       AND effect_json LIKE '%test_penalty%'
     """,
+    # PT-F6 (#1140) FAZA PT — mapy jako przedmioty (PT13 #1123). Silnik map_reveal_service
+    # był gotowy, ale zero seedowanych map → funkcja nieosiągalna. Seed 2 map (radius + region);
+    # item_type='map' → can_use=True → przycisk „Użyj" w plecaku odsłania mgłę wojny. Nie zużywa się.
+    # Admin może dołożyć je do sklepu kartografa / tabel łupów (Zawartość → Przedmioty).
+    """
+    INSERT OR IGNORE INTO game_config_items
+    (key, label, item_type, description, value_gp, price_gp, effect_json, is_active, rarity, created_at, updated_at)
+    VALUES
+    ('mapa_okolic', 'Mapa okolic', 'map', 'Pożółkły zwój odsłaniający ukształtowanie terenu w promieniu kilku heksów od serca krainy. Studiując go, odkrywasz fragment mapy świata.', 40, 40, '{"mode":"radius","center_q":0,"center_r":0,"radius":3}', 1, 'uncommon', datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_items
+    (key, label, item_type, description, value_gp, price_gp, effect_json, is_active, rarity, created_at, updated_at)
+    VALUES
+    ('mapa_kresow', 'Mapa Kresów', 'map', 'Szczegółowa mapa całej krainy Kresów, kreślona ręką doświadczonego kartografa. Odsłania wszystkie znane heksy regionu.', 150, 150, '{"mode":"region","region":"kresy"}', 1, 'rare', datetime('now'), datetime('now'))
+    """,
     # S10 (#605) FAZA S — prymityw escalating_dot + kondycja hemorrhage (narastający DOT).
     # Liczby = wartości startowe (skills_conditions_design_doc.md, Numbers Policy → tuning po S20).
     # Top-level `cure` = deklaratywne zdjęcie kondycji udanym SKILL_TEST:medicine (DC z zamka).
