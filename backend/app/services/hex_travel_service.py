@@ -14,6 +14,12 @@ from typing import Any, Optional
 
 import structlog
 
+from app.services.movement_service import (
+    MovementProfile,
+    MovementStep,
+    run_step_sequence,
+)
+
 logger = structlog.get_logger()
 
 DB_PATH = "/data/ai_gm.db"
@@ -454,32 +460,6 @@ def resolve_chain_travel(
             teleport_used = dict(edge)
             break
 
-    # Compute total travel hours along path (PT7: use terrain costs from hex_type_config)
-    total_hours = 0.0
-    for i in range(1, len(path)):
-        prev, cur = path[i - 1], path[i]
-        # Check if this step is a teleport
-        is_tp = False
-        for edge in hexes.get(prev, {}).get("teleport_edges", []):
-            if edge["_dest"] == cur:
-                total_hours += float(edge.get("travel_hours", 8.0))
-                is_tp = True
-                if not teleport_used:
-                    teleport_used = dict(edge)
-                break
-        if not is_tp:
-            _cur_hex_type = hexes.get(cur, {}).get("hex_type", "plains")
-            total_hours += float(hex_type_cfg.get(_cur_hex_type, {}).get("travel_hours", 1.0))
-
-    # Roll encounters along path (skip start hex)
-    encounter_result = None
-    encounter_hex = None
-    arrived_hex = to_hex  # assume full travel unless interrupted
-
-    # PT7 #1117: budget interrupt tracking
-    _budget_interrupt = False
-    _budget_reason: str | None = None
-
     # Load cleared encounters for this campaign (won't re-trigger)
     cleared_coords: set[tuple[int, int]] = set()
     try:
@@ -491,71 +471,80 @@ def resolve_chain_travel(
     except Exception:
         pass
 
-    def _recalc_hours_to(target_hex: tuple[int, int]) -> float:
-        """Recalculate total travel hours up to and including target_hex."""
-        h = 0.0
-        sub_path = path[:path.index(target_hex) + 1]
-        for _i in range(1, len(sub_path)):
-            _p, _c = sub_path[_i - 1], sub_path[_i]
-            _tp = any(e["_dest"] == _c for e in hexes.get(_p, {}).get("teleport_edges", []))
-            if _tp:
-                h += float(next(
-                    e.get("travel_hours", 8.0)
-                    for e in hexes.get(_p, {}).get("teleport_edges", [])
-                    if e["_dest"] == _c
-                ))
-            else:
-                _cht = hexes.get(_c, {}).get("hex_type", "plains")
-                h += float(hex_type_cfg.get(_cht, {}).get("travel_hours", 1.0))
-        return h
+    # PT11 #1121: build the movement step sequence from the A* path, then run it
+    # through the shared movement core with the WORLD profile.
+    #   cost        = teleport-aware trip time (returned as total_hours),
+    #   budget_cost = terrain travel_hours (charged to the daily march budget).
+    steps: list[MovementStep] = [
+        MovementStep(key=from_hex, cost=0.0, data=hexes.get(from_hex, {}))
+    ]
+    for _i in range(1, len(path)):
+        _prev, _cur = path[_i - 1], path[_i]
+        _cur_data = hexes.get(_cur, {})
+        _tp_cost: float | None = None
+        for edge in hexes.get(_prev, {}).get("teleport_edges", []):
+            if edge["_dest"] == _cur:
+                _tp_cost = float(edge.get("travel_hours", 8.0))
+                if not teleport_used:
+                    teleport_used = dict(edge)
+                break
+        _terrain_cost = float(
+            hex_type_cfg.get(_cur_data.get("hex_type", "plains"), {}).get("travel_hours", 1.0)
+        )
+        steps.append(
+            MovementStep(
+                key=_cur,
+                cost=_tp_cost if _tp_cost is not None else _terrain_cost,
+                budget_cost=_terrain_cost,  # PT7: budget always terrain cost, even on teleport steps
+                data=_cur_data,
+                cleared=(_cur in cleared_coords),
+            )
+        )
 
-    for step_hex in path[1:]:
-        hex_data = hexes.get(step_hex, {})
+    def _world_budget_interrupt(acc: float, step: MovementStep) -> str | None:
+        # PT7: hard cap forced_camp (any time), soft cap dusk (unless already night_march)
+        if acc >= DAILY_HARD_CAP:
+            return "forced_camp"
+        if acc >= DAILY_SOFT_CAP and not night_march:
+            return "dusk"
+        return None
 
-        # PT7: Accumulate terrain cost against daily march budget
-        _hex_type = hex_data.get("hex_type", "plains")
-        _step_cost = float(hex_type_cfg.get(_hex_type, {}).get("travel_hours", 1.0))
-        hours_marched_today += _step_cost
-
-        # PT7: Hard cap — forced camp at DAILY_HARD_CAP regardless of night_march
-        if hours_marched_today >= DAILY_HARD_CAP:
-            arrived_hex = step_hex
-            _budget_interrupt = True
-            _budget_reason = "forced_camp"
-            total_hours = _recalc_hours_to(step_hex)
-            break
-
-        # PT7: Soft cap — dusk prompt at DAILY_SOFT_CAP (skip when night_march already)
-        if hours_marched_today >= DAILY_SOFT_CAP and not night_march:
-            arrived_hex = step_hex
-            _budget_interrupt = True
-            _budget_reason = "dusk"
-            total_hours = _recalc_hours_to(step_hex)
-            break
-
-        # Skip encounter if already cleared at this hex (budget already counted above)
-        if step_hex in cleared_coords:
-            continue
-
-        # PT7: Apply night_march encounter multiplier before rolling
+    def _world_roll_risk(step: MovementStep) -> dict | None:
+        hex_data = step.data
+        # PT7: apply night_march encounter multiplier before rolling
         _enc_hex_data = hex_data
         if night_march:
             _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
             _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
-
         if _roll_encounter(_enc_hex_data, hex_type_cfg):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
-                encounter_result = {
+                return {
                     "enemy_key": enemy_key,
                     "hex_type": hex_data.get("hex_type", "plains"),
                     "hex_label": hex_data.get("label"),
                     "atmosphere": hex_data.get("atmosphere"),
                 }
-                encounter_hex = step_hex
-                arrived_hex = step_hex  # interrupted here
-                total_hours = _recalc_hours_to(step_hex)
-                break
+        return None
+
+    _outcome = run_step_sequence(
+        steps,
+        MovementProfile(
+            name="world",
+            roll_risk=_world_roll_risk,
+            budget_interrupt=_world_budget_interrupt,
+        ),
+        budget_start=hours_marched_today,
+    )
+
+    # Map the shared outcome back onto the world result variables.
+    arrived_hex = steps[_outcome.arrived_index].key
+    total_hours = _outcome.total_cost
+    hours_marched_today = _outcome.budget_total
+    encounter_result = _outcome.encounter
+    encounter_hex = arrived_hex if _outcome.interrupt_reason == "encounter" else None
+    _budget_interrupt = _outcome.interrupt_reason in ("dusk", "forced_camp")
+    _budget_reason = _outcome.interrupt_reason if _budget_interrupt else None
 
     # Stage 2B R4: deactivate any temp_camp_* on the hex the player just left.
     if arrived_hex != from_hex:

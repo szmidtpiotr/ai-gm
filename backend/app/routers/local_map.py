@@ -29,6 +29,11 @@ from app.services.local_hex_service import (
     get_local_hexes,
     get_local_hex_for_subloc,
 )
+from app.services.movement_service import (
+    MovementProfile,
+    MovementStep,
+    run_step_sequence,
+)
 from app.services.world_service import maybe_lazy_enrich_subloc
 
 DB_PATH = "/data/ai_gm.db"
@@ -245,10 +250,19 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             except Exception as _clk_err:
                 pass  # clock must never break movement
 
-            # PT10 #1120: encounter check for risky local hexes
+            # PT10 #1120 + PT11 #1121: route the local encounter roll through the
+            # shared movement core as a single-step local sequence.
             try:
                 cleared_local_hexes = flags.get("cleared_local_hexes") or []
-                encounter_result = _check_local_encounter(target, cleared_local_hexes)
+                _local_steps = [
+                    MovementStep(key=None, cost=0.0),
+                    MovementStep(key=target.get("id"), cost=LOCAL_TRAVEL_MINUTES, data=target),
+                ]
+                _local_profile = MovementProfile(
+                    name="local",
+                    roll_risk=lambda s: _check_local_encounter(s.data, cleared_local_hexes),
+                )
+                encounter_result = run_step_sequence(_local_steps, _local_profile).encounter
                 if encounter_result:
                     # Re-read flags after set_position + clock writes
                     _sf_enc = conn.execute(
