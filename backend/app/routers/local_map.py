@@ -35,9 +35,11 @@ from app.services.movement_service import (
     run_step_sequence,
 )
 from app.services.world_service import maybe_lazy_enrich_subloc
+from app.core.logging import get_logger
 
 DB_PATH = "/data/ai_gm.db"
 router = APIRouter(tags=["local-map"])
+logger = get_logger(__name__)
 
 
 def _db() -> sqlite3.Connection:
@@ -243,6 +245,70 @@ def _resolve_social_encounter(
         hint["guard_resolution"] = guard_meta["resolution"]
 
 
+def roll_local_encounter(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    target: dict,
+    loc_key: Optional[str],
+) -> Optional[dict]:
+    """PT-F4 #1138: shared local-encounter roll for BOTH the /local-travel button
+    and the narrative move path (`_sync_local_hex_narrative_move`).
+
+    Rolls the risk of the target local hex (respecting encounter_cleared), and on a
+    hit splits 50/50 combat vs social (`_resolve_social_encounter`). A SOFT social
+    (kind == "social", not escalated) marks the hex cleared so repeated pass-throughs
+    can't re-roll the pickpocket forever (combat / escalated still clear on victory).
+    Persists `local_travel_hint`. Returns the encounter dict or None. Never raises.
+    """
+    try:
+        sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = json.loads((sf_row["session_flags"] if sf_row else None) or "{}")
+        cleared_local_hexes = flags.get("cleared_local_hexes") or []
+
+        _steps = [
+            MovementStep(key=None, cost=0.0),
+            MovementStep(key=target.get("id"), cost=LOCAL_TRAVEL_MINUTES, data=target),
+        ]
+        _profile = MovementProfile(
+            name="local",
+            roll_risk=lambda s: _check_local_encounter(s.data, cleared_local_hexes),
+        )
+        encounter_result = run_step_sequence(_steps, _profile).encounter
+        if not encounter_result:
+            return None
+
+        # Re-read flags (movement core may have written), then resolve the 50/50.
+        sf_row2 = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = json.loads((sf_row2["session_flags"] if sf_row2 else None) or "{}")
+        hint: dict = {"destination_label": target.get("label", "sub-lokacja")}
+        _resolve_social_encounter(conn, campaign_id, target, loc_key, encounter_result, flags, hint)
+
+        # PT-F4 #1138: a soft social resolves in-flight and must NOT re-trigger on the
+        # next pass — mark the hex cleared here (combat/escalated clear on victory).
+        if encounter_result.get("kind") == "social":
+            hex_id = target.get("id")
+            cleared = flags.get("cleared_local_hexes") or []
+            if hex_id is not None and hex_id not in cleared:
+                cleared.append(hex_id)
+                flags["cleared_local_hexes"] = cleared
+
+        flags["local_travel_hint"] = hint
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(flags, ensure_ascii=False), campaign_id),
+        )
+        return encounter_result
+    except Exception as _e:
+        logger.warning("roll_local_encounter_failed", campaign_id=campaign_id, error=str(_e))
+        return None
+
+
 # ── GET /api/campaigns/{id}/local-map ─────────────────────────────────────────
 
 @router.get("/campaigns/{campaign_id}/local-map")
@@ -395,40 +461,9 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             except Exception as _clk_err:
                 pass  # clock must never break movement
 
-            # PT10 #1120 + PT11 #1121: route the local encounter roll through the
-            # shared movement core as a single-step local sequence.
-            try:
-                cleared_local_hexes = flags.get("cleared_local_hexes") or []
-                _local_steps = [
-                    MovementStep(key=None, cost=0.0),
-                    MovementStep(key=target.get("id"), cost=LOCAL_TRAVEL_MINUTES, data=target),
-                ]
-                _local_profile = MovementProfile(
-                    name="local",
-                    roll_risk=lambda s: _check_local_encounter(s.data, cleared_local_hexes),
-                )
-                encounter_result = run_step_sequence(_local_steps, _local_profile).encounter
-                if encounter_result:
-                    # Re-read flags after set_position + clock writes
-                    _sf_enc = conn.execute(
-                        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                        (campaign_id,),
-                    ).fetchone()
-                    _flags_enc = json.loads((_sf_enc["session_flags"] if _sf_enc else None) or "{}")
-                    _hint: dict = {"destination_label": target.get("label", "sub-lokacja")}
-
-                    # PT-D2 #1125: split PT10 hit 50/50 → combat vs social encounter
-                    _resolve_social_encounter(
-                        conn, campaign_id, target, loc_key, encounter_result, _flags_enc, _hint
-                    )
-
-                    _flags_enc["local_travel_hint"] = _hint
-                    conn.execute(
-                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-                        (json.dumps(_flags_enc, ensure_ascii=False), campaign_id),
-                    )
-            except Exception as _enc_err:
-                pass  # encounter check must never break movement
+            # PT10 #1120 + PT11 #1121 + PT-F4 #1138: local encounter roll via the
+            # shared helper (also used by the narrative move path).
+            encounter_result = roll_local_encounter(conn, campaign_id, target, loc_key)
 
         conn.commit()
 

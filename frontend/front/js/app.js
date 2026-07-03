@@ -2467,7 +2467,17 @@ async function _lmExecuteTravel() {
 
     const enc = response.encounter;
     let prose = `Przemieszczasz się do <strong>${escapeHtml(t.label)}</strong>. (+15 min)`;
-    if (enc) prose += `<br><strong>⚔ Na miejscu czyhają napastnicy!</strong>`;
+    // PT-F4 #1138: only a real combat encounter (enemy_key) shows the ⚔ warning.
+    // A social encounter (kieszonkowiec/zaczepka) resolves in-flight — show its
+    // outcome, never a false "napastnicy czyhają".
+    if (enc?.enemy_key) {
+      prose += `<br><strong>⚔ Na miejscu czyhają napastnicy!</strong>`;
+    } else if (enc?.social || enc?.kind === 'social') {
+      const _ok = enc.social?.success;
+      prose += _ok
+        ? `<br>👁 W porę wychwytujesz drobne uliczne zajście.`
+        : `<br>💢 Drobne uliczne zajście zostawia po sobie ślad.`;
+    }
 
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble chat-bubble--travel';

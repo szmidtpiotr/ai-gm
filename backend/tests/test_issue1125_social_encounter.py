@@ -311,3 +311,74 @@ def test_resolve_social_encounter_combat_half_unchanged(monkeypatch):
     assert enc["kind"] == "combat"
     assert enc["enemy_key"] == "bandit"    # combat encounter untouched
     assert "social" not in enc
+
+
+# ── PT-F4 #1138: 💰 gold notice must freeze during combat ─────────────────────
+
+import json as _json
+import sqlite3 as _sq
+
+
+def _mk_notice_db(reveal_in=2, in_combat=False):
+    c = _sq.connect(":memory:")
+    c.row_factory = _sq.Row
+    c.executescript(
+        "CREATE TABLE game_sessions (id INTEGER PRIMARY KEY, campaign_id INTEGER, session_flags TEXT);"
+        "CREATE TABLE active_combat (campaign_id INTEGER, status TEXT);"
+    )
+    flags = {"pending_gold_notices": [{"amount": 25, "reveal_in": reveal_in, "label": "sakiewka"}]}
+    c.execute("INSERT INTO game_sessions (id, campaign_id, session_flags) VALUES (1, 1, ?)", (_json.dumps(flags),))
+    if in_combat:
+        c.execute("INSERT INTO active_combat (campaign_id, status) VALUES (1, 'active')")
+    c.commit()
+    return c
+
+
+def test_ptf4_gold_notice_frozen_in_combat():
+    """PT-F4: while combat is active the 💰 bubble must not fire and the counter must not tick."""
+    from app.services.turn_pipeline import pop_gold_notices
+    c = _mk_notice_db(reveal_in=2, in_combat=True)
+    assert pop_gold_notices(c, 1) is None, "no 💰 bubble mid-combat"
+    flags = _json.loads(c.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=1").fetchone()[0])
+    assert flags["pending_gold_notices"][0]["reveal_in"] == 2, "counter must be frozen (not decremented) during combat"
+
+
+def test_ptf4_gold_notice_fires_after_combat():
+    """PT-F4: with no combat the counter ticks and the bubble fires when it matures."""
+    from app.services.turn_pipeline import pop_gold_notices
+    c = _mk_notice_db(reveal_in=2, in_combat=False)
+    assert pop_gold_notices(c, 1) is None            # reveal_in 2 -> 1, not due
+    line = pop_gold_notices(c, 1)                     # 1 -> 0, due
+    assert line is not None and "💰" in line, "bubble must fire once the delay elapses"
+
+
+# ── PT-F4 #1138: soft social marks the local hex cleared (no infinite re-roll) ─
+
+def test_ptf4_social_marks_hex_cleared(monkeypatch):
+    """PT-F4: a resolved soft social must add the hex to cleared_local_hexes so a
+    repeated pass-through can't re-roll the pickpocket and drain gold forever."""
+    from app.services import social_encounter_service as ses
+    from app.routers import local_map
+
+    c = _sq.connect(":memory:")
+    c.row_factory = _sq.Row
+    c.executescript(
+        "CREATE TABLE game_sessions (id INTEGER PRIMARY KEY, campaign_id INTEGER, session_flags TEXT);"
+        "CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, sheet_json TEXT, gold_gp INTEGER, is_active INTEGER);"
+        "CREATE TABLE game_locations (id INTEGER PRIMARY KEY, key TEXT, location_subtype TEXT);"
+    )
+    c.execute("INSERT INTO game_sessions (id, campaign_id, session_flags) VALUES (1, 1, '{}')")
+    c.execute("INSERT INTO characters (id, campaign_id, sheet_json, gold_gp, is_active) VALUES (1, 1, '{}', 100, 1)")
+    c.execute("INSERT INTO game_locations (id, key, location_subtype) VALUES (1, 'zaulek', 'zaułek')")
+    c.commit()
+
+    # Force a guaranteed encounter and the social half of the 50/50.
+    monkeypatch.setattr(local_map.random, "random", lambda: 0.0)  # _check_local_encounter: 0 < 1.0 -> hit
+    monkeypatch.setattr(ses, "classify_encounter_kind", lambda _r: "social")
+
+    target = {"id": 42, "label": "Zaułek", "encounter_chance": 1.0, "encounter_pool": []}
+    enc = local_map.roll_local_encounter(c, 1, target, "zaulek")
+
+    assert enc is not None and enc.get("kind") == "social"
+    flags = _json.loads(c.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=1").fetchone()[0])
+    assert 42 in (flags.get("cleared_local_hexes") or []), "soft social must clear the hex to stop re-rolls"

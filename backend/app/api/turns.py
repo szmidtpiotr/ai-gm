@@ -788,6 +788,21 @@ def _sync_local_hex_narrative_move(
                         _adv_clock(campaign_id, minutes=_LT_MIN, reason="narrative_local_travel")
                     except Exception:
                         pass
+                    # PT-F4 #1138: narrative local moves ("idę do zaułka") must roll a
+                    # local encounter just like the /local-travel button — otherwise
+                    # half the movement surface is encounter-free. Uses the shared
+                    # helper; result surfaces via local_travel_hint on the next turn.
+                    try:
+                        _lh_row = conn.execute(
+                            "SELECT id, label, encounter_chance, encounter_pool "
+                            "FROM world_hexes WHERE id = ?",
+                            (lh["id"],),
+                        ).fetchone()
+                        if _lh_row:
+                            from app.routers.local_map import roll_local_encounter as _roll_enc
+                            _roll_enc(conn, campaign_id, dict(_lh_row), loc_row["key"])
+                    except Exception as _rle_err:
+                        logger.warning("narrative_local_encounter_failed", error=str(_rle_err))
                 # PT-F1 #1135: entering a settlement's local map abandons any pending
                 # world-road travel_plan — the hero is off the road, so a later
                 # "kontynuuję" must not resume toward the old world destination.

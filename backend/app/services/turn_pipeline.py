@@ -847,6 +847,12 @@ def pop_gold_notices(conn: "sqlite3.Connection", campaign_id: int) -> "str | Non
         if not flags.get("pending_gold_notices"):
             return None
 
+        # PT-F4 #1138: never surface the 💰 pickpocket bubble mid-combat — freeze the
+        # counters (don't decrement) so the notice waits until after the fight, matching
+        # pop_local_travel_hint's combat guard.
+        if _has_active_combat(conn, campaign_id):
+            return None
+
         due = ses.pop_due_gold_notices(flags)
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
