@@ -194,6 +194,270 @@ def draw_social(
     return _row_to_dict(picked) if picked else None
 
 
+# ── Autoring AI w Kuźni (PT-D4b #1131) ───────────────────────────────────────
+#
+# Anty-halucynacja przez FK-enum: AI dostaje listę dozwolonych kluczy jako enum
+# (wzór Smart Entry) i tylko wybiera — nie wymyśla. Walidacja przy zapisie odrzuca
+# klucze spoza katalogu. Free-text tylko dla otoczki (title/scene_setup/gm_notes).
+#
+# Numbers Policy (epik #1129): DC w skali 8-24, cap złota — STARTING VALUES,
+# Sandbox-tunable. Globalne stałe (split 0.5, cap 50) w kodzie, NIE w katalogu.
+
+DC_MIN = 8
+DC_MAX = 24
+GOLD_PCT_CAP = 50            # cap % złota z encountera (epik Numbers Policy)
+STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"]
+_MAX_BATCH = 20             # bezpiecznik batcha
+
+
+def _list_keys_labels(conn: sqlite3.Connection, table: str) -> list[dict]:
+    try:
+        rows = conn.execute(f"SELECT key, label FROM {table} ORDER BY label").fetchall()
+        return [{"key": r[0], "label": r[1]} for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def allowed_enums(conn: sqlite3.Connection, kind: str) -> dict:
+    """Dozwolone klucze FK jako enum (anty-halucynacja).
+
+    combat → enemy_key z game_config_enemies.
+    social → skill z game_config_skills + opcj. npc_key z npcs.
+    """
+    if kind == "combat":
+        return {"enemy_key": _list_keys_labels(conn, "game_config_enemies")}
+    if kind == "social":
+        return {
+            "skill": _list_keys_labels(conn, "game_config_skills"),
+            "npc_key": _list_keys_labels(conn, "npcs"),
+        }
+    raise ValueError(f"nieznany kind '{kind}' (dozwolone: combat|social)")
+
+
+def build_schema(conn: sqlite3.Connection, kind: str) -> dict:
+    """Pola formularza + dozwolone enumy dla danego kind (wzór Smart Entry)."""
+    enums = allowed_enums(conn, kind)
+    if kind == "combat":
+        fields = [
+            {"name": "title", "label": "Tytuł", "type": "text", "required": True, "free_text": True},
+            {"name": "biome", "label": "Biom", "type": "text", "required": True},
+            {"name": "level_min", "label": "Poziom min", "type": "int", "required": False},
+            {"name": "level_max", "label": "Poziom max", "type": "int", "required": False},
+            {"name": "weight", "label": "Waga losowania", "type": "float", "required": False},
+            {"name": "enemies", "label": "Wrogowie", "type": "fk_list", "required": True, "enum_ref": "enemy_key"},
+            {"name": "scene_setup", "label": "Opis sceny", "type": "textarea", "required": False, "free_text": True},
+            {"name": "gm_notes", "label": "Notatki MG", "type": "textarea", "required": False, "free_text": True},
+            {"name": "gold_pct", "label": f"Nagroda złota (%, max {GOLD_PCT_CAP})", "type": "int", "required": False, "max": GOLD_PCT_CAP},
+        ]
+    elif kind == "social":
+        fields = [
+            {"name": "title", "label": "Tytuł", "type": "text", "required": True, "free_text": True},
+            {"name": "subtype", "label": "Subtyp sub-lokacji", "type": "text", "required": True},
+            {"name": "weight", "label": "Waga losowania", "type": "float", "required": False},
+            {"name": "stat", "label": "Cecha", "type": "enum", "required": True, "enum": STATS},
+            {"name": "skill", "label": "Umiejętność", "type": "fk", "required": True, "enum_ref": "skill"},
+            {"name": "dc", "label": f"DC ({DC_MIN}-{DC_MAX})", "type": "int", "required": True, "min": DC_MIN, "max": DC_MAX},
+            {"name": "resolution_kind", "label": "Rozstrzygnięcie", "type": "enum", "required": True, "enum": ["pickpocket", "soft"]},
+            {"name": "npc_key", "label": "NPC (opcjonalnie)", "type": "fk", "required": False, "enum_ref": "npc_key"},
+            {"name": "soft_outcome", "label": "Wynik soft", "type": "textarea", "required": False, "free_text": True},
+            {"name": "flavor", "label": "Flavor", "type": "text", "required": False, "free_text": True},
+            {"name": "scene_setup", "label": "Opis sceny", "type": "textarea", "required": False, "free_text": True},
+            {"name": "gm_notes", "label": "Notatki MG", "type": "textarea", "required": False, "free_text": True},
+        ]
+    else:
+        raise ValueError(f"nieznany kind '{kind}' (dozwolone: combat|social)")
+    return {"kind": kind, "fields": fields, "enums": enums}
+
+
+def _clamp_int(val, lo: int, hi: int, default: int) -> int:
+    try:
+        val = int(val)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, val))
+
+
+def normalize_payload(kind: str, payload: dict) -> dict:
+    """Egzekwuj skalę DC 8-24 i cap złota. Zwraca oczyszczony payload (nie mutuje wejścia)."""
+    payload = dict(payload or {})
+    if kind == "social" and payload.get("dc") is not None:
+        payload["dc"] = _clamp_int(payload["dc"], DC_MIN, DC_MAX, DC_MIN)
+    rewards = payload.get("rewards")
+    if isinstance(rewards, dict) and rewards.get("gold_pct") is not None:
+        rewards = dict(rewards)
+        rewards["gold_pct"] = _clamp_int(rewards["gold_pct"], 0, GOLD_PCT_CAP, 0)
+        payload["rewards"] = rewards
+    if payload.get("gold_pct") is not None:
+        payload["gold_pct"] = _clamp_int(payload["gold_pct"], 0, GOLD_PCT_CAP, 0)
+    return payload
+
+
+def _slug(text: str) -> str:
+    import re
+    s = (text or "encounter").lower().strip()
+    s = re.sub(r"[ąćęłńóśźż]", lambda m: {
+        "ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n",
+        "ó": "o", "ś": "s", "ź": "z", "ż": "z"}.get(m.group(), m.group()), s)
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s[:48] or "encounter"
+
+
+def _draft_key(conn: sqlite3.Connection, draft: dict) -> str:
+    base = f"ai_{draft.get('kind', 'x')}_{_slug(draft.get('title', ''))}"
+    key = base
+    i = 2
+    while conn.execute(
+        "SELECT 1 FROM game_config_encounters WHERE key=?", (key,)
+    ).fetchone():
+        key = f"{base}_{i}"
+        i += 1
+    return key
+
+
+def save_encounter_from_draft(
+    conn: sqlite3.Connection, draft: dict, *, source: str = "ai_forge"
+) -> str:
+    """Zwaliduj (FK + DC/gold) i zapisz draft do katalogu. Rzuca ValueError na złe dane.
+
+    Klucze FK spoza katalogu → ValueError (router mapuje na 400).
+    """
+    kind = draft.get("kind")
+    if kind not in ("combat", "social"):
+        raise ValueError("kind musi być 'combat' lub 'social'")
+    payload = normalize_payload(kind, draft.get("payload") or {})
+    key = draft.get("key") or _draft_key(conn, draft)
+    insert_encounter(
+        conn,
+        key=key,
+        kind=kind,
+        biome=draft.get("biome"),
+        subtype=draft.get("subtype"),
+        level_min=draft.get("level_min", 1),
+        level_max=draft.get("level_max", 99),
+        weight=draft.get("weight", 100.0),
+        trigger_types=draft.get("trigger_types"),
+        region_tag=draft.get("region_tag"),
+        faction_tag=draft.get("faction_tag"),
+        payload=payload,
+        source=source,
+        quality_rating=draft.get("quality_rating", 3),
+        validate=True,
+        replace=bool(draft.get("replace")),
+    )
+    return key
+
+
+def _extract_json(text: str) -> Optional[dict]:
+    import re
+    cands: list[str] = []
+    m = re.search(r"```json\s*\n?(.*?)```", text or "", re.DOTALL)
+    if m:
+        cands.append(m.group(1).strip())
+    s = (text or "").strip()
+    if s.startswith("{"):
+        cands.append(s)
+    m2 = re.search(r"\{.*\}", text or "", re.DOTALL)
+    if m2:
+        cands.append(m2.group(0))
+    for c in cands:
+        try:
+            obj = json.loads(c)
+            if isinstance(obj, dict):
+                return obj
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _build_generate_prompt(
+    conn: sqlite3.Connection, kind: str, *, biome=None, subtype=None, level=None
+) -> str:
+    enums = allowed_enums(conn, kind)
+    if kind == "combat":
+        keys = ", ".join(e["key"] for e in enums["enemy_key"])
+        return (
+            "Jesteś projektantem encounterów BOJOWYCH do mrocznego fantasy RPG (WFRP-inspired).\n"
+            f"BIOM: {biome or 'dowolny'}. POZIOM bohatera: {level or 'dowolny'}.\n\n"
+            "ANTY-HALUCYNACJA (zasada absolutna): pole enemy_key MUSI pochodzić z tej "
+            "listy istniejących wrogów — NIE wymyślaj nowych kluczy:\n"
+            f"[{keys}]\n\n"
+            "Zwróć TYLKO obiekt JSON w bloku ```json:\n"
+            '{"kind":"combat","title":"...","biome":"' + (biome or "forest") + '",'
+            '"level_min":1,"level_max":5,"weight":100,'
+            '"payload":{"enemies":[{"enemy_key":"<klucz z listy>","count":2}],'
+            '"scene_setup":"...","gm_notes":"...","rewards":{"gold_pct":20}}}\n\n'
+            "Free-text WYŁĄCZNIE: title, scene_setup, gm_notes. "
+            "enemy_key tylko z listy. gold_pct maks " + str(GOLD_PCT_CAP) + "."
+        )
+    if kind == "social":
+        skills = ", ".join(s["key"] for s in enums["skill"])
+        return (
+            "Jesteś projektantem zdarzeń SPOŁECZNYCH do mrocznego fantasy RPG.\n"
+            f"SUBTYP sub-lokacji: {subtype or 'dowolny'}.\n\n"
+            "ANTY-HALUCYNACJA (zasada absolutna): pole skill MUSI pochodzić z tej "
+            "listy istniejących umiejętności — NIE wymyślaj nowych:\n"
+            f"[{skills}]\n\n"
+            "Zwróć TYLKO obiekt JSON w bloku ```json:\n"
+            '{"kind":"social","title":"...","subtype":"' + (subtype or "market") + '",'
+            '"weight":100,"payload":{"stat":"DEX","skill":"<klucz z listy>","dc":12,'
+            '"resolution_kind":"soft","soft_outcome":"...","flavor":"..."}}\n\n'
+            "Free-text WYŁĄCZNIE: title, soft_outcome, flavor. "
+            "skill tylko z listy. stat z: " + ", ".join(STATS) + ". "
+            f"DC w skali {DC_MIN}-{DC_MAX}."
+        )
+    raise ValueError(f"nieznany kind '{kind}'")
+
+
+def generate_encounter_drafts(
+    conn: sqlite3.Connection,
+    kind: str,
+    count: int = 1,
+    *,
+    biome=None,
+    subtype=None,
+    level=None,
+    generate_fn=None,
+) -> list[dict]:
+    """Wygeneruj N draftów encounterów przez LLM (schema-constrained, FK-enum).
+
+    Zwraca listę draftów `status='pending'` — NIE zapisuje do katalogu (akceptacja
+    w panelu C). Każdy draft ma `fk_valid` (czy referencje FK są realne). Drafty
+    bez poprawnego JSON są pomijane. `generate_fn(messages)->str` wstrzykiwalne w testach.
+    """
+    if kind not in ("combat", "social"):
+        raise ValueError(f"nieznany kind '{kind}' (dozwolone: combat|social)")
+    if generate_fn is None:
+        from app.services.llm_service import generate_chat
+        generate_fn = lambda messages: generate_chat(messages=messages)  # noqa: E731
+
+    prompt = _build_generate_prompt(conn, kind, biome=biome, subtype=subtype, level=level)
+    n = max(1, min(int(count or 1), _MAX_BATCH))
+    drafts: list[dict] = []
+    for i in range(n):
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Wygeneruj encounter #{i + 1}. Zwróć sam obiekt JSON."},
+        ]
+        try:
+            raw = generate_fn(messages)
+        except Exception:
+            continue
+        obj = _extract_json(raw or "")
+        if not obj:
+            continue
+        obj["kind"] = kind
+        obj["payload"] = normalize_payload(kind, obj.get("payload") or {})
+        try:
+            validate_fk(conn, kind=kind, payload=obj["payload"])
+            obj["fk_valid"] = True
+        except ValueError:
+            obj["fk_valid"] = False
+        obj["status"] = "pending"
+        obj.setdefault("source", "ai_forge")
+        drafts.append(obj)
+    return drafts
+
+
 # ── Seed z obecnego hardcode ─────────────────────────────────────────────────
 
 def seed_catalog(conn: sqlite3.Connection) -> int:
