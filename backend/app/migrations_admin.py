@@ -4299,6 +4299,27 @@ def _ensure_campaign_plan_degraded(conn: sqlite3.Connection) -> None:
         pass  # already exists
 
 
+def _backfill_local_hex_encounter_chance(conn: sqlite3.Connection) -> None:
+    """#1147 — existing local hexes (map_level=1) created with encounter_chance=0.0.
+
+    auto_assign_local_hex used to zero the chance for every safe_for_rest
+    sub-location, which turned off the whole PT10/PT-D2 local-encounter system on
+    markets, taverns and guilds. Backfill to the new starting values (Numbers
+    Policy, tunable): safe 0.10 / risky 0.20. Idempotent: only rows still at 0
+    are touched, admin edits survive.
+    """
+    conn.execute(
+        """UPDATE world_hexes SET encounter_chance = (
+               SELECT CASE WHEN COALESCE(gl.safe_for_rest, 0) = 1 THEN 0.10 ELSE 0.20 END
+               FROM game_locations gl WHERE gl.key = world_hexes.location_key
+           )
+           WHERE map_level = 1
+             AND COALESCE(encounter_chance, 0) = 0
+             AND location_key IN (SELECT key FROM game_locations)"""
+    )
+    conn.commit()
+
+
 def _seed_pt8_terrain_costs(conn: sqlite3.Connection) -> None:
     """PT8 #1118 — seed travel_hours defaults when still at 1.0 (never customised).
 
@@ -6010,6 +6031,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_finale_available(conn)  # #1097
         _seed_pt8_terrain_costs(conn)  # #1118 PT8
         _ensure_encounter_catalog(conn)  # #1130 PT-D4a
+        _backfill_local_hex_encounter_chance(conn)  # #1147
     finally:
         conn.close()
 

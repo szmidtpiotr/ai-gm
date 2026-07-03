@@ -269,7 +269,9 @@ def execute_directional_travel(
             )
             if enc_r:
                 fact_r += (
-                    f" Nowe spotkanie: {enc_r.get('enemy_key')} — opisz nadejście zagrożenia."
+                    f" Nowe spotkanie: {enc_r.get('enemy_key')} — opisz nadejście zagrożenia "
+                    f"i ROZPOCZNIJ walkę: OSTATNIA linia odpowiedzi MUSI być wyłącznie tagiem "
+                    f"[COMBAT_START:{enc_r.get('enemy_key')}]."
                 )
             else:
                 fact_r += f" Gracz dotarł do celu: {dest_label_r}."
@@ -354,7 +356,9 @@ def execute_directional_travel(
                         if enc_n:
                             fact_n += (
                                 f" Podróż przerwana spotkaniem: {enc_n.get('enemy_key')} — "
-                                "opisz nadejście zagrożenia."
+                                f"opisz nadejście zagrożenia i ROZPOCZNIJ walkę: OSTATNIA linia "
+                                f"odpowiedzi MUSI być wyłącznie tagiem "
+                                f"[COMBAT_START:{enc_n.get('enemy_key')}]."
                             )
                         if tr_n.get("weather_slowdown"):
                             # PT-F6 #1140: weather fact parity on the named-destination path.
@@ -424,7 +428,8 @@ def execute_directional_travel(
         if enc:
             fact += (
                 f" Podróż przerwana spotkaniem: {enc.get('enemy_key')} — "
-                "opisz nadejście zagrożenia."
+                f"opisz nadejście zagrożenia i ROZPOCZNIJ walkę: OSTATNIA linia "
+                f"odpowiedzi MUSI być wyłącznie tagiem [COMBAT_START:{enc.get('enemy_key')}]."
             )
         if tr.get("weather_slowdown"):
             # PT15 #1128: pogoda spowalniała marsz — poproś narratora o powiązanie
@@ -795,12 +800,24 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
         if not hint_data:
             return None
 
-        # Don't prompt while combat is still active
+        # Don't prompt while combat is still active — but remember we saw it
+        # (#1147: mirrors pop_travel_plan_hint's combat_seen deferral).
         ac = conn.execute(
             "SELECT 1 FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
             (campaign_id,),
         ).fetchone()
         if ac:
+            if (
+                hint_data.get("kind") in ("combat", "combat_escalated")
+                and not hint_data.get("combat_seen")
+            ):
+                hint_data["combat_seen"] = True
+                flags["local_travel_hint"] = hint_data
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(flags, ensure_ascii=False), gs["id"]),
+                )
+                conn.commit()
             return None
 
         dest_label = hint_data.get("destination_label", "sub-lokacja")
@@ -829,7 +846,45 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
                 f"{_res} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
             )
         else:
-            # combat / combat_escalated → prompt continue-or-return as before
+            # combat / combat_escalated — #1147: the fight has to actually HAPPEN
+            # before we ask continue-or-return. State machine mirrors the world path:
+            #   1. not combat_prompted → instruct the narrator to start the fight
+            #      ([COMBAT_START] cue; turns.py injection is the deterministic net),
+            #      keep the hint.
+            #   2. combat active → combat_seen (handled by the guard above), keep.
+            #   3. combat over (seen) OR fizzle timeout → continue-or-return, pop.
+            _enemy_key = hint_data.get("enemy_key")
+            if (
+                not hint_data.get("combat_prompted")
+                and not hint_data.get("combat_seen")
+                and _enemy_key
+            ):
+                hint_data["combat_prompted"] = True
+                hint_data["wait_turns"] = 0
+                flags["local_travel_hint"] = hint_data
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(flags, ensure_ascii=False), gs["id"]),
+                )
+                conn.commit()
+                return (
+                    f"\n[SYSTEM: W drodze do {dest_label} gracza dopada zbrojne "
+                    f"starcie: {_enemy_key}. Opisz zasadzkę w 2-3 zdaniach "
+                    f"i ROZPOCZNIJ walkę: OSTATNIA linia odpowiedzi MUSI być "
+                    f"wyłącznie tagiem [COMBAT_START:{_enemy_key}].]"
+                )
+            if hint_data.get("combat_prompted") and not hint_data.get("combat_seen"):
+                # combat never spawned yet — give the injection/narrator a bounded
+                # number of turns before falling through to the prompt (fizzle-guard).
+                hint_data["wait_turns"] = int(hint_data.get("wait_turns", 0)) + 1
+                if hint_data["wait_turns"] < _ENCOUNTER_FIZZLE_TURNS:
+                    flags["local_travel_hint"] = hint_data
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(flags, ensure_ascii=False), gs["id"]),
+                    )
+                    conn.commit()
+                    return None
             hint = (
                 f"\n[SYSTEM: Gracz był w drodze do {dest_label}. "
                 f"Walka przerwała ruch. Zapytaj gracza (prozą): "

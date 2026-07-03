@@ -169,8 +169,14 @@ def test_auto_assign_local_hex_idempotent():
 
 
 def test_local_hex_encounter_chance_from_safe_for_rest():
-    """safe_for_rest=True → encounter_chance=0.0; False → 0.20."""
-    from app.services.local_hex_service import auto_assign_local_hex, get_local_hexes
+    """#1147: safe_for_rest=True → encounter_chance=0.10 (NOT 0.0 — rest-safety
+    must not kill street events like pickpocket/guard-check); False → 0.20."""
+    from app.services.local_hex_service import (
+        auto_assign_local_hex,
+        get_local_hexes,
+        SAFE_ENCOUNTER_CHANCE,
+        RISKY_ENCOUNTER_CHANCE,
+    )
 
     conn = _make_conn()
     _seed_hub(conn)
@@ -182,8 +188,11 @@ def test_local_hex_encounter_chance_from_safe_for_rest():
     local = get_local_hexes(conn, "osada_radomierz")
     by_key = {h["location_key"]: h for h in local}
 
-    assert by_key["karczma"]["encounter_chance"] == 0.0, "Safe loc → 0.0 encounter"
-    assert by_key["ulica_targowa"]["encounter_chance"] == 0.20, "Risky loc → 0.20 encounter"
+    assert by_key["karczma"]["encounter_chance"] == SAFE_ENCOUNTER_CHANCE, \
+        "Safe loc → SAFE_ENCOUNTER_CHANCE (>0, #1147)"
+    assert by_key["karczma"]["encounter_chance"] > 0.0, "Safe loc must still roll encounters"
+    assert by_key["ulica_targowa"]["encounter_chance"] == RISKY_ENCOUNTER_CHANCE, \
+        "Risky loc → RISKY_ENCOUNTER_CHANCE"
 
 
 def test_get_local_hexes_filters_by_hub():

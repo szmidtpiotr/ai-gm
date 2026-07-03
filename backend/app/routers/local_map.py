@@ -126,6 +126,9 @@ def _resolve_social_encounter(
     encounter_result["kind"] = kind
     if kind == "combat":
         hint["kind"] = "combat"
+        # #1147: carry the enemy so pop_local_travel_hint + the [COMBAT_START]
+        # injection can actually spawn the fight.
+        hint["enemy_key"] = encounter_result.get("enemy_key")
         return
 
     # Resolve sub-location subtype for the event pool
@@ -234,6 +237,9 @@ def _resolve_social_encounter(
             "success": bool(check["success"]),
         }
     )
+    if escalate:
+        # #1147: Nat-1 escalation must spawn a real fight too.
+        hint["enemy_key"] = encounter_result.get("enemy_key")
     # PT-D5 #1134 — dołóż postawę straży do payloadu (narracja + UI)
     if guard_meta:
         encounter_result["social"]["guard"] = {

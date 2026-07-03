@@ -8,6 +8,10 @@ Numbers Policy (starting values, tunable):
   LOCAL_MAP_THRESHOLD = 2   — sub-locs needed to activate a local grid
   LOCAL_TRAVEL_MINUTES = 15 — in-game minutes per hex move on local map
   RISKY_ENCOUNTER_CHANCE = 0.20 — encounter chance for safe_for_rest=false locs
+  SAFE_ENCOUNTER_CHANCE = 0.10 — encounter chance for safe_for_rest=true locs
+    (#1147: rest-safety must not zero out street events — the PT-D2 pickpocket /
+    guard-check design explicitly targets markets and taverns, which are almost
+    always flagged safe_for_rest. 0.0 killed the whole local-encounter system.)
 """
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ logger = structlog.get_logger()
 LOCAL_MAP_THRESHOLD = 2
 LOCAL_TRAVEL_MINUTES = 15
 RISKY_ENCOUNTER_CHANCE = 0.20
+SAFE_ENCOUNTER_CHANCE = 0.10
 
 # Axial coords for local hex ring layout.
 # Index 0 = entry hex (center). Rings expand outward.
@@ -188,7 +193,7 @@ def auto_assign_local_hex(
 
         q, r = _next_local_coords(conn, hub_hex_id, parent_key=parent_key)
         safe = bool(subloc["safe_for_rest"])
-        encounter_chance = 0.0 if safe else RISKY_ENCOUNTER_CHANCE
+        encounter_chance = SAFE_ENCOUNTER_CHANCE if safe else RISKY_ENCOUNTER_CHANCE
 
         parent_region = "kresy"
         if hub_hex_id is not None:

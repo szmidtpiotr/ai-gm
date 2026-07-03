@@ -206,8 +206,26 @@ def _roll_encounter(hex_data: dict, hex_type_cfg: dict[str, dict]) -> bool:
     return random.random() < final_chance
 
 
+# #1146: hex-level pools are data-authored and mostly empty (the canonical seed
+# carries none), so an empty pool falls back to a terrain-typed default instead
+# of silently dropping the encounter. Keys must exist in game_config_enemies.
+_WORLD_ENCOUNTER_FALLBACK_POOLS: dict[str, list[str]] = {
+    "forest": ["wolf", "goblin", "bandit"],
+    "mountain": ["goblin", "unknown_attacker"],
+    "hills": ["wolf", "bandit"],
+    "swamp": ["giant_rat", "unknown_attacker"],
+    "road": ["bandit"],
+    "bridge": ["bandit"],
+    "ruins": ["unknown_attacker", "goblin"],
+}
+_WORLD_ENCOUNTER_FALLBACK_DEFAULT = ["bandit", "unknown_attacker", "wolf"]
+
+
 def _pick_encounter_enemy(hex_data: dict) -> str | None:
     pool = hex_data.get("encounter_pool") or []
+    if not pool:
+        ht = str(hex_data.get("hex_type") or "plains")
+        pool = _WORLD_ENCOUNTER_FALLBACK_POOLS.get(ht, _WORLD_ENCOUNTER_FALLBACK_DEFAULT)
     if not pool:
         return None
     return random.choice(pool)
@@ -769,9 +787,13 @@ def resolve_chain_travel(
                     "step_index": enc_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": "encounter",
+                    # #1146: persist the rolled enemy so the deterministic
+                    # [COMBAT_START] injection (turns.py) knows whom to spawn even
+                    # when the narrator ignores the encounter fact.
+                    "enemy_key": (encounter_result or {}).get("enemy_key"),
                     # PT-F1 #1135: the encounter combat spawns POST-LLM (from the
-                    # narrator's [GM: COMBAT_START] tag), so on this very turn no
-                    # active_combat row exists yet. These fields let
+                    # narrator's [COMBAT_START] tag or the #1146 injection), so on
+                    # this very turn no active_combat row exists yet. These fields let
                     # pop_travel_plan_hint defer the continue/rest/camp prompt until
                     # the combat has actually happened and ended (combat_seen), with a
                     # fizzle-guard (wait_turns) for when the narrator never fights.

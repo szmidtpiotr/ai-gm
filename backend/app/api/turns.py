@@ -498,6 +498,43 @@ def _resolve_enemy_key_from_context(
     return best_key or "unknown_attacker"
 
 
+def _pending_engine_encounter_enemy(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    """#1146/#1147: enemy_key of an engine-rolled encounter still awaiting its combat.
+
+    Two sources, both persisted by the movement engine BEFORE the narrator runs:
+    - travel_plan (overworld chain travel, interrupt_reason == "encounter")
+    - local_travel_hint (settlement local move, kind combat/combat_escalated)
+    Once the fight has been seen (combat_seen) or the plan moved to a *_prompted
+    state, this returns None — the injection window is bounded by the same
+    fizzle-guard that drives pop_*_hint.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return None
+        sf = json.loads(row["session_flags"] or "{}")
+        tp = sf.get("travel_plan") or {}
+        if (
+            tp.get("interrupt_reason") == "encounter"
+            and not tp.get("combat_seen")
+            and tp.get("enemy_key")
+        ):
+            return str(tp["enemy_key"])
+        lh = sf.get("local_travel_hint") or {}
+        if (
+            lh.get("kind") in ("combat", "combat_escalated")
+            and not lh.get("combat_seen")
+            and lh.get("enemy_key")
+        ):
+            return str(lh["enemy_key"])
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_combat_start_tag(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -512,13 +549,16 @@ def _ensure_combat_start_tag(
     """
     # Trigger when the PLAYER declares an attack (#535: negation already filtered
     # by _player_combat_intent) OR when the GM narration itself initiates combat
-    # against the player without emitting a tag (#520 reverse direction).
+    # against the player without emitting a tag (#520 reverse direction) OR when
+    # the movement engine rolled a travel/local encounter that must not fizzle
+    # (#1146/#1147 — the narrator kept describing a peaceful march instead).
     player_intent = _player_combat_intent(player_text)
     narrative_combat = bool(_AGGRESSION_NARRATIVE_RE.search(_normalize_pl(assistant_text or "")))
+    pending_enemy = _pending_engine_encounter_enemy(conn, campaign_id)
     # #1054: secondary check — pending_zaskoczony active + "z zaskoczenia" keyword + weapon
     # handles phrases like "chcę zaatakować z zaskoczenia" that may still slip through
     # the primary verb list (e.g. LLM prompted a social skill_test instead of combat).
-    if not player_intent and not narrative_combat:
+    if not player_intent and not narrative_combat and not pending_enemy:
         _norm_p = _normalize_pl(player_text or "")
         if "zaskoczenia" in _norm_p and any(ws in _norm_p for ws in _COMBAT_WEAPON_STEMS):
             try:
@@ -530,7 +570,7 @@ def _ensure_combat_start_tag(
                     player_intent = True
             except Exception:
                 pass
-    if not player_intent and not narrative_combat:
+    if not player_intent and not narrative_combat and not pending_enemy:
         return assistant_text
     if COMBAT_START_RE.search(assistant_text or ""):
         return assistant_text
@@ -545,6 +585,29 @@ def _ensure_combat_start_tag(
             return assistant_text
     except sqlite3.OperationalError:
         pass
+    # #1146/#1147 — engine-rolled encounter: the enemy comes from the movement
+    # engine's own roll, not from scene inference, so the narration-presence
+    # validation below does not apply (the narrator typically ignored the ambush
+    # entirely — that's the bug being fixed). Validate catalog existence only.
+    if pending_enemy and not player_intent and not narrative_combat:
+        try:
+            _cat = conn.execute(
+                "SELECT 1 FROM game_config_enemies WHERE key = ? AND is_active = 1 LIMIT 1",
+                (pending_enemy,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            _cat = None
+        _enc_enemy = pending_enemy if _cat else "unknown_attacker"
+        logger.info(
+            "combat_start_tag_injected",
+            campaign_id=campaign_id,
+            enemy_key=_enc_enemy,
+            trigger="engine_encounter",
+            player_snippet=(player_text or "")[:80],
+        )
+        sep = "\n\n" if not (assistant_text or "").endswith("\n") else ""
+        return f"{assistant_text or ''}{sep}[COMBAT_START:{_enc_enemy}]"
+
     # #1023 — resolve hero level for enemy level-gate filtering
     _hero_level = 20
     if character_id is not None:
@@ -7165,19 +7228,27 @@ def resolve_skill_test_endpoint(
         _total = int(result.get("player_total") or payload.d20_roll)
         # #1144: persisted label must match the live S1 (#581) margin degrees —
         # otherwise the same roll reads "Krytyczna porażka" live and "Porażka" after reload.
+        # #1145: including the margin suffix ("+1 (o włos)") the live card renders
+        # (game.js roll card + sf6MarginDegree in combat_ui.js) — same thresholds.
         _outcome_deg = str(result.get("outcome") or "")
-        if result.get("nat20"):
-            _outcome = "Naturalny 20"
-        elif result.get("nat1"):
-            _outcome = "Naturalny 1"
-        elif _outcome_deg == "CRITICAL_SUCCESS":
-            _outcome = "Krytyczny sukces"
-        elif _outcome_deg == "CRITICAL_FAILURE":
-            _outcome = "Krytyczna porażka"
+        try:
+            _margin = int(result.get(
+                "margin",
+                int(result.get("player_total") or 0) - int(result.get("opponent_total") or 0),
+            ))
+        except (TypeError, ValueError):
+            _margin = 0
+        _margin_str = f"+{_margin}" if _margin >= 0 else str(_margin)
+        _abs_m = abs(_margin)
+        _deg_word = "z nawiązką" if _abs_m >= 5 else ("na styk" if _abs_m >= 2 else "o włos")
+        if result.get("nat20") or _outcome_deg == "CRITICAL_SUCCESS":
+            _outcome = f"Krytyczny sukces {_margin_str}"
+        elif result.get("nat1") or _outcome_deg == "CRITICAL_FAILURE":
+            _outcome = f"Krytyczna porażka {_margin_str}"
         elif result.get("success"):
-            _outcome = "Sukces"
+            _outcome = f"Sukces {_margin_str} ({_deg_word})"
         else:
-            _outcome = "Porażka"
+            _outcome = f"Porażka {_margin_str} ({_deg_word})"
         _sign = "+" if _mod >= 0 else "−"
         # For opposed checks, append the opponent's result so the player knows why they succeeded/failed
         _opp_roll = result.get("opponent_roll")
@@ -7406,9 +7477,11 @@ def reroll_skill_test_endpoint(
             (campaign_id,),
         ).fetchone()[0]
         _outcome = "Sukces" if result.get("success") else "Porażka"
+        # #1145 (przy okazji): ujemny modyfikator renderował się jako "+-1".
+        _mod_str = f"+{modifier}" if int(modifier) >= 0 else f"−{abs(int(modifier))}"
         _persisted_roll = (
             f"[Przerzut: {result.get('skill_label')} — {kept_d20} (z {original_d20}/{new_d20}) "
-            f"+{modifier} = {derived['player_total']} — {_outcome}]"
+            f"{_mod_str} = {derived['player_total']} — {_outcome}]"
         )
         conn.execute(
             """INSERT INTO campaign_turns
