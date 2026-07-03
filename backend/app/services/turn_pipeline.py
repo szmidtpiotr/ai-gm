@@ -448,6 +448,7 @@ def _build_desync_correction_fact(
     conn: "sqlite3.Connection",
     session_flags: dict,
     consecutive: int,
+    campaign_id: int | None = None,
 ) -> str:
     """PT4 #1114: Build [SYSTEM:...] corrective fact for the next turn's narrator.
 
@@ -455,7 +456,13 @@ def _build_desync_correction_fact(
     (same lookup pattern as _build_vague_move_hint).
     """
     loc_label = ""
-    loc_key = session_flags.get("current_location_key") or session_flags.get("location_key", "")
+    # PT-F7 #1141: derive the location key from current_location_id (single source).
+    loc_key = ""
+    if campaign_id is not None:
+        from app.services.location_state_service import get_current_location_key
+        loc_key = get_current_location_key(conn, campaign_id) or ""
+    if not loc_key:
+        loc_key = session_flags.get("location_key", "")
     if loc_key:
         row = conn.execute(
             "SELECT label FROM game_locations WHERE key = ? LIMIT 1", (loc_key,)
@@ -573,7 +580,7 @@ def guard_travel_desync(
             consecutive = flags.get("travel_desync_consecutive", 0) + 1
             flags["travel_desync_consecutive"] = consecutive
             flags["travel_desync_correction"] = _build_desync_correction_fact(
-                conn, flags, consecutive
+                conn, flags, consecutive, campaign_id=campaign_id
             )
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
@@ -1276,11 +1283,9 @@ def _reload_session_flags(campaign_id: int, conn: sqlite3.Connection) -> dict | 
         return None
     flags = json.loads(row[0] or "{}")
 
-    # Add current location key to flags for context injector
-    if row[1]:
-        loc = conn.execute("SELECT key FROM game_locations WHERE id = ?", (row[1],)).fetchone()
-        if loc:
-            flags["current_location_key"] = loc[0]
+    # PT-F7 #1141: no longer inject current_location_key into the flags dict — readers
+    # (context_injector, game_engine, encounter gate, WSM, suggested_actions) derive it
+    # directly from current_location_id via get_current_location_key(). One source only.
 
     return flags
 

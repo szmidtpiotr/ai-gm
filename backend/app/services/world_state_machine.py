@@ -316,7 +316,7 @@ class WorldStateMachine:
 
     def _validate_flee(self, flags: dict, params: dict, character_id: int, campaign_id: int) -> WSMResult:
         # NARRATIVE flee already blocked by state-level check; this handles COMBAT
-        location_key = flags.get("current_location_key")
+        location_key = self._current_location_key(campaign_id, flags)
         if location_key:
             exits = self._get_location_exits(location_key)
             if not exits:
@@ -336,7 +336,7 @@ class WorldStateMachine:
             name = npc.get("label", npc_key)
             return WSMResult.blocked(f"{name} nie żyje. Możesz tylko zbadać ciało.")
 
-        location_key = flags.get("current_location_key")
+        location_key = self._current_location_key(campaign_id, flags)
         if location_key and not self._npc_in_location(npc_key, location_key):
             name = npc.get("label", npc_key)
             return WSMResult.blocked(f"{name} nie jest tutaj.")
@@ -389,7 +389,7 @@ class WorldStateMachine:
         if dest is None:
             return WSMResult.blocked(f"Lokacja '{dest_key}' nie istnieje.")
 
-        current_key = flags.get("current_location_key")
+        current_key = self._current_location_key(campaign_id, flags)
         if current_key and not self._locations_connected(current_key, dest_key):
             return WSMResult.blocked("Nie można tam dotrzeć z tego miejsca.")
 
@@ -400,7 +400,7 @@ class WorldStateMachine:
         if rest_type not in ("short", "long"):
             return WSMResult.blocked("Typ odpoczynku musi być 'krótki' (short) lub 'długi' (long).")
 
-        location_key = flags.get("current_location_key")
+        location_key = self._current_location_key(campaign_id, flags)
         if location_key:
             loc = self._get_location(location_key)
             if loc is not None:
@@ -452,7 +452,7 @@ class WorldStateMachine:
             name = npc.get("label", npc_key)
             return WSMResult.blocked(f"{name} nie jest kupcem.")
 
-        location_key = flags.get("current_location_key")
+        location_key = self._current_location_key(campaign_id, flags)
         if location_key and not self._npc_in_location(npc_key, location_key):
             name = npc.get("label", npc_key)
             return WSMResult.blocked(f"{name} nie jest tutaj.")
@@ -492,6 +492,20 @@ class WorldStateMachine:
             except (json.JSONDecodeError, TypeError):
                 pass
         return False
+
+    def _current_location_key(self, campaign_id: int, session_flags: dict | None = None) -> str | None:
+        """PT-F7 #1141: current location key derived from current_location_id (single
+        source of truth). In production session_flags never carries the key anymore
+        (the mirror was removed), so the DB lookup is the only live source; the
+        session_flags fallback exists solely for unit tests that stub the location
+        without a game_sessions row."""
+        from app.services.location_state_service import get_current_location_key
+        key = get_current_location_key(self.conn, campaign_id)
+        if key:
+            return key
+        if session_flags:
+            return session_flags.get("current_location_key")
+        return None
 
     def _get_location(self, location_key: str) -> dict | None:
         row = self.conn.execute(

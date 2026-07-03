@@ -101,6 +101,27 @@ class ContextInjector:
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        # PT-F7 #1141: key of the current location, derived from current_location_id
+        # during build() and reused by post_process/whitelist (which lack campaign_id).
+        self._cached_loc_key: str = ""
+
+    def _current_location_key(self, campaign_id: int | None, session_flags: dict | None = None) -> str:
+        """PT-F7 #1141: current location key from current_location_id (single source).
+
+        Production always passes campaign_id → DB derive (and caches for the sub-blocks
+        that lack campaign_id, like the whitelist). The session_flags fallback exists
+        only for legacy/unit callers that invoke a sub-block directly without a
+        campaign_id — production flags never carry the key anymore."""
+        if campaign_id is not None:
+            from app.services.location_state_service import get_current_location_key
+            key = get_current_location_key(self.conn, campaign_id) or ""
+            self._cached_loc_key = key
+            return key
+        if self._cached_loc_key:
+            return self._cached_loc_key
+        if session_flags:
+            return session_flags.get("current_location_key", "") or ""
+        return ""
 
     def build(
         self,
@@ -125,7 +146,7 @@ class ContextInjector:
         Returns:
             Complete prompt string to pass to LLM narrator.
         """
-        location_key = session_flags.get("current_location_key") or ""
+        location_key = self._current_location_key(campaign_id)
 
         # Load required data
         location = self._get_location(location_key)
@@ -218,7 +239,7 @@ class ContextInjector:
                 return PostProcessResult(text=narrator_response, retry_needed=True)
 
         # 2. Invented noun detection (light heuristic)
-        location_key = session_flags.get("current_location_key", "")
+        location_key = self._current_location_key(None, session_flags)
         whitelist = self._build_whitelist(session_flags)
         processed, subs = self._strip_invented_nouns(narrator_response, whitelist)
 
@@ -416,7 +437,7 @@ class ContextInjector:
 
         # Fallback: simple format when no hex context (pre-U29 behavior)
         session_flags = session_flags or {}
-        location_key = session_flags.get("current_location_key") or ""
+        location_key = self._current_location_key(campaign_id, session_flags)
         location = self._get_location(location_key)
         lines = ["=== ŚWIAT ==="]
         if location:
@@ -990,7 +1011,7 @@ class ContextInjector:
         """Build a set of known proper nouns that the narrator is allowed to use."""
         whitelist = set(_POLISH_WHITELIST)
         # Add NPC names from entities block
-        location_key = session_flags.get("current_location_key", "")
+        location_key = self._current_location_key(None, session_flags)
         for npc in self._get_npcs_in_location(location_key):
             name = npc.get("label") or npc.get("name") or ""
             for word in name.split():

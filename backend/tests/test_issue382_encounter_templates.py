@@ -97,6 +97,9 @@ class TestEncounterSafetyAndConfig(unittest.TestCase):
             INSERT INTO game_locations (key,label,safe_for_rest,location_subtype,is_active) VALUES
               ('tavern','Karczma',1,'tavern',1),
               ('forest_clearing','Polana',0,'wilderness',1);
+            CREATE TABLE game_sessions (id INTEGER PRIMARY KEY, campaign_id INTEGER,
+                                        current_location_id INTEGER, session_flags TEXT DEFAULT '{}');
+            INSERT INTO game_sessions (id, campaign_id, current_location_id) VALUES (1, 1, NULL);
             """
         )
         self.conn.commit()
@@ -116,11 +119,15 @@ class TestEncounterSafetyAndConfig(unittest.TestCase):
 
     def test_safe_location_blocks_encounter(self):
         from app.services.encounter_service import is_encounter_blocked_by_location
-        self.assertTrue(is_encounter_blocked_by_location(self.conn, {"current_location_key": "tavern"}))
+        self.conn.execute("UPDATE game_sessions SET current_location_id=(SELECT id FROM game_locations WHERE key='tavern') WHERE campaign_id=1")
+        self.conn.commit()
+        self.assertTrue(is_encounter_blocked_by_location(self.conn, 1))
 
     def test_unsafe_location_not_blocked(self):
         from app.services.encounter_service import is_encounter_blocked_by_location
-        self.assertFalse(is_encounter_blocked_by_location(self.conn, {"current_location_key": "forest_clearing"}))
+        self.conn.execute("UPDATE game_sessions SET current_location_id=(SELECT id FROM game_locations WHERE key='forest_clearing') WHERE campaign_id=1")
+        self.conn.commit()
+        self.assertFalse(is_encounter_blocked_by_location(self.conn, 1))
 
     def test_dwell_reduces_chance_when_settled(self):
         from app.services.encounter_service import dwell_chance_multiplier

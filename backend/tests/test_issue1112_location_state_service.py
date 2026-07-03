@@ -284,12 +284,10 @@ def test_set_position_preserves_other_session_flags():
 # ── PT-F2 #1136: current_location_key stays in sync with current_location_id ────
 
 def test_ptf2_location_key_synced_on_move():
-    """PT-F2: set_position(current_location_id=X) writes session_flags.current_location_key.
-
-    Regression guard: PT2 stopped refreshing this key, so travel left a stale key and
-    the hex-enter encounter gate fired on the wrong (old) location.
+    """PT-F7 #1141: current location key is DERIVED from current_location_id (single
+    source), not stored in session_flags. get_current_location_key follows the move.
     """
-    from app.services.location_state_service import set_position
+    from app.services.location_state_service import set_position, get_current_location_key
     conn, session_id, _ = _make_db(campaign_id=1)
     conn.execute("INSERT INTO game_locations (id, key, label) VALUES (10, 'wilczy_las', 'Wilczy Las')")
     conn.execute("INSERT INTO game_locations (id, key, label) VALUES (11, 'vilnograd', 'Vilnograd')")
@@ -297,14 +295,15 @@ def test_ptf2_location_key_synced_on_move():
 
     set_position(conn, campaign_id=1, current_location_id=10)
     conn.commit()
+    assert get_current_location_key(conn, 1) == "wilczy_las"
+    # and it is NOT mirrored into session_flags anymore (single source)
     flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
-    assert flags.get("current_location_key") == "wilczy_las"
+    assert "current_location_key" not in flags
 
-    # moving again refreshes the key (no staleness)
+    # moving again — derived key follows the new location, still no staleness
     set_position(conn, campaign_id=1, current_location_id=11)
     conn.commit()
-    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
-    assert flags.get("current_location_key") == "vilnograd", "key must follow the new location"
+    assert get_current_location_key(conn, 1) == "vilnograd", "derived key must follow the new location"
 
 
 def test_ptf2_location_key_cleared_with_location():
@@ -336,3 +335,44 @@ def test_ptf2_missing_characters_table_no_crash():
     conn.commit()
     flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id=1").fetchone()[0])
     assert flags["current_hex"] == {"q": 3, "r": 1}, "current_hex must persist even without characters table"
+
+
+# ── PT-F7 #1141: current_location_key is never persisted; location is single-source ──
+
+def test_ptf7_key_never_persisted_in_flags():
+    """PT-F7: set_position must NOT write session_flags.current_location_key, and must
+    strip any stale mirror left by older rows."""
+    from app.services.location_state_service import set_position, get_current_location_key
+    conn, session_id, _ = _make_db(campaign_id=1)
+    conn.execute("INSERT INTO game_locations (id, key, label) VALUES (10, 'wilczy_las', 'Wilczy Las')")
+    # simulate a legacy row that still had the mirror
+    conn.execute("UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                 (json.dumps({"current_location_key": "STALE"}), session_id))
+    conn.commit()
+
+    set_position(conn, campaign_id=1, current_location_id=10)
+    conn.commit()
+
+    flags = json.loads(conn.execute("SELECT session_flags FROM game_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    assert "current_location_key" not in flags, "stale mirror must be stripped, never re-written"
+    assert get_current_location_key(conn, 1) == "wilczy_las", "key derived from current_location_id"
+
+
+def test_ptf7_get_current_location_full_shape():
+    """PT-F7: get_current_location returns the full derived record."""
+    from app.services.location_state_service import set_position, get_current_location
+    conn, session_id, _ = _make_db(campaign_id=1)
+    # richer game_locations for this test
+    conn.execute("ALTER TABLE game_locations ADD COLUMN location_type TEXT")
+    conn.execute("ALTER TABLE game_locations ADD COLUMN safe_for_rest INTEGER DEFAULT 0")
+    conn.execute("ALTER TABLE game_locations ADD COLUMN parent_key TEXT")
+    conn.execute("INSERT INTO game_locations (id, key, label, location_type, safe_for_rest, parent_key) "
+                 "VALUES (10, 'karczma', 'Karczma', 'sub', 1, 'wolanka')")
+    conn.commit()
+    set_position(conn, campaign_id=1, current_location_id=10)
+    conn.commit()
+    loc = get_current_location(conn, 1)
+    assert loc["key"] == "karczma"
+    assert loc["safe_for_rest"] == 1
+    assert loc["parent_key"] == "wolanka"
+    assert loc["location_type"] == "sub"

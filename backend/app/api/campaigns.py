@@ -1134,9 +1134,9 @@ def build_camp(campaign_id: int):
             (json.dumps(flags, ensure_ascii=False), session_row["id"]),
         )
         conn.commit()
-        # PT-F2 #1136: route the position change through the canonical writer so
-        # current_location_id AND session_flags.current_location_key stay in sync
-        # (build_camp used to set them with a raw UPDATE, bypassing the single path).
+        # PT-F2 #1136 / PT-F7 #1141: route the position change through the canonical
+        # writer (set_position) — current_location_id is the single source of truth;
+        # build_camp used to set position with a raw UPDATE, bypassing the one path.
         _camp_loc = conn.execute(
             "SELECT id FROM game_locations WHERE key = ? LIMIT 1", (location["key"],)
         ).fetchone()

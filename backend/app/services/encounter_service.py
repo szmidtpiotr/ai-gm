@@ -145,7 +145,7 @@ def maybe_inject_encounter(
         # 1b. D7 (#382) — safety gate: no random encounters in safe locations
         #     (tavern/settlement marked safe_for_rest). Same hex, different
         #     narrative location — sitting in a room ≠ ambush.
-        if is_encounter_blocked_by_location(conn, sf):
+        if is_encounter_blocked_by_location(conn, campaign_id):
             return False
 
         # 1c. Dwell decay: the longer the hero has settled in one location doing
@@ -407,20 +407,30 @@ def encounter_matches(enc: dict, *, trigger: str, hex_type: str | None, hero_lev
     return True
 
 
-def is_encounter_blocked_by_location(conn: sqlite3.Connection, session_flags: dict) -> bool:
+def is_encounter_blocked_by_location(conn: sqlite3.Connection, campaign_id: int) -> bool:
     """D7 (#382) — żadnych losowych encounterów w bezpiecznej lokacji (karczma,
-    osada itp.). Gate po `safe_for_rest` bieżącej lokacji narracyjnej."""
-    key = (session_flags or {}).get("current_location_key")
-    if not key:
-        return False
+    osada itp.). Gate po `safe_for_rest` bieżącej lokacji narracyjnej.
+
+    PT-F7 #1141: safe_for_rest z lokacji wyprowadzonej z current_location_id
+    (jedno źródło prawdy), nie ze starego session_flags.current_location_key.
+    Minimalne zapytanie (tylko safe_for_rest), żeby było odporne na różne DB testów."""
     try:
         row = conn.execute(
-            "SELECT safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
-            (key,),
+            """
+            SELECT gl.safe_for_rest
+            FROM game_sessions gs
+            JOIN game_locations gl ON gl.id = gs.current_location_id
+            WHERE gs.campaign_id = ? AND gl.is_active = 1
+            LIMIT 1
+            """,
+            (int(campaign_id),),
         ).fetchone()
     except sqlite3.OperationalError:
         return False
-    return bool(row and int(row["safe_for_rest"] or 0))
+    if not row:
+        return False
+    val = row["safe_for_rest"] if hasattr(row, "keys") else row[0]
+    return bool(int(val or 0))
 
 
 def dwell_chance_multiplier(turns_at_location, settle_turns: int = 3) -> float:

@@ -16,6 +16,63 @@ import json
 import sqlite3
 
 
+def get_current_location(conn: sqlite3.Connection, campaign_id: int) -> dict | None:
+    """PT-F7 #1141: single source of truth for the current location.
+
+    Derives everything from game_sessions.current_location_id (never from the old
+    session_flags.current_location_key mirror, which is being removed). Returns
+    ``{id, key, label, location_type, safe_for_rest, parent_key}`` or None.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT gl.id, gl.key, gl.label, gl.location_type, gl.safe_for_rest, gl.parent_key
+            FROM game_sessions gs
+            JOIN game_locations gl ON gl.id = gs.current_location_id
+            WHERE gs.campaign_id = ?
+            LIMIT 1
+            """,
+            (int(campaign_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    keys = row.keys() if hasattr(row, "keys") else []
+    return {
+        "id": row["id"] if "id" in keys else row[0],
+        "key": row["key"] if "key" in keys else row[1],
+        "label": row["label"] if "label" in keys else row[2],
+        "location_type": row["location_type"] if "location_type" in keys else row[3],
+        "safe_for_rest": row["safe_for_rest"] if "safe_for_rest" in keys else row[4],
+        "parent_key": row["parent_key"] if "parent_key" in keys else row[5],
+    }
+
+
+def get_current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    """PT-F7 #1141: current location key derived from current_location_id (no mirror).
+
+    Minimal query (only gl.key) so it stays robust across the varied minimal test DBs
+    that don't carry every game_locations column.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT gl.key
+            FROM game_sessions gs
+            JOIN game_locations gl ON gl.id = gs.current_location_id
+            WHERE gs.campaign_id = ?
+            LIMIT 1
+            """,
+            (int(campaign_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    return row["key"] if hasattr(row, "keys") else row[0]
+
+
 def set_position(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -72,27 +129,13 @@ def set_position(
         flags.pop("local_hex")
         flags_dirty = True
 
-    # PT-F2 #1136 (wariant A): keep the legacy session_flags.current_location_key in
-    # sync with current_location_id. ~40 live readers (encounter-block on hex-enter,
-    # world_state_machine, suggested_actions, desync-correction) still read this key;
-    # PT2 stopped refreshing it, so travel left a stale key and the encounter gate
-    # fired on the wrong location. Derive the key here so it never drifts.
-    # (Full removal of the key = PT-F7 #1141, after the phase.)
-    if clear_location_id:
-        if flags.pop("current_location_key", None) is not None:
-            flags_dirty = True
-    elif current_location_id is not None:
-        try:
-            _lk = conn.execute(
-                "SELECT key FROM game_locations WHERE id = ? LIMIT 1",
-                (int(current_location_id),),
-            ).fetchone()
-            _key_val = _lk["key"] if _lk else None
-        except Exception:
-            _key_val = None
-        if _key_val is not None and flags.get("current_location_key") != _key_val:
-            flags["current_location_key"] = _key_val
-            flags_dirty = True
+    # PT-F7 #1141: session_flags.current_location_key is GONE — current_location_id is
+    # the single source of truth, and readers derive the key via
+    # get_current_location_key(). Proactively strip any stale mirror left in old rows
+    # so nothing can read it again.
+    if "current_location_key" in flags:
+        flags.pop("current_location_key", None)
+        flags_dirty = True
 
     # Write session_flags if anything changed
     if flags_dirty:

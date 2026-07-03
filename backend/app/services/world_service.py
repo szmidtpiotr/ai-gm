@@ -785,14 +785,20 @@ def deactivate_temporary_location_on_hex(
         "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ? AND is_active = 1",
         (restore_key, q, r),
     )
-    # #992: fix stale anchor in sessions still pointing at the deactivated temp_camp
-    if parent_key:
-        conn.execute(
-            """UPDATE game_sessions
-               SET session_flags = json_set(session_flags, '$.current_location_key', ?)
-               WHERE json_extract(session_flags, '$.current_location_key') = ?""",
-            (parent_key, loc_key),
-        )
+    # #992 + PT-F7 #1141: fix stale anchor in sessions pointing at the deactivated
+    # temp_camp. Position is anchored via current_location_id (single source), so
+    # re-point that column to the parent location's id (or NULL if none).
+    parent_id = None
+    if parent_key and restore_key:
+        _pr = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (parent_key,),
+        ).fetchone()
+        parent_id = _pr["id"] if _pr else None
+    conn.execute(
+        "UPDATE game_sessions SET current_location_id = ? WHERE current_location_id = ?",
+        (parent_id, loc_row["id"]),
+    )
     conn.commit()
     logger.info("temp_location_deactivated", key=loc_key, q=q, r=r,
                 restored_key=restore_key)

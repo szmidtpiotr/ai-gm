@@ -147,7 +147,9 @@ def _build_narrative_actions(
 
     actions: list[SuggestedAction] = []
 
-    current_loc_key = session_flags.get("current_location_key") or ""
+    # PT-F7 #1141: derive from current_location_id (single source), not the old mirror.
+    from app.services.location_state_service import get_current_location_key
+    current_loc_key = get_current_location_key(conn, campaign_id) or ""
     turns_at_location = int(session_flags.get("turns_at_location", 0) or 0)
 
     # U32 — travel pills from real hex data
@@ -530,7 +532,7 @@ def _can_flee(conn: sqlite3.Connection, character_id: int) -> bool:
             FROM characters c
             JOIN campaigns camp ON camp.id = c.campaign_id
             JOIN game_sessions gs ON gs.campaign_id = camp.id
-            LEFT JOIN game_locations gl ON gl.key = JSON_EXTRACT(gs.session_flags, '$.current_location_key')
+            LEFT JOIN game_locations gl ON gl.id = gs.current_location_id
             WHERE c.id = ?
             LIMIT 1
             """,

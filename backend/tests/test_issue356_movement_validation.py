@@ -176,8 +176,10 @@ def test_movement_updates_current_hex_in_flags():
 # ─── Test 7: location_key synced when destination hex has one ─────────────────
 
 def test_movement_updates_location_key_for_hex_with_location():
-    """When destination hex has location_key, current_location_key is set in flags."""
+    """PT-F7 #1141: destination location is anchored via current_location_id; the key
+    is DERIVED (not mirrored into session_flags)."""
     from app.services.turn_pipeline import _update_hex_world_state
+    from app.services.location_state_service import get_current_location_key
     conn = _make_conn()
     session_flags = {}
     _update_hex_world_state(
@@ -188,7 +190,8 @@ def test_movement_updates_location_key_for_hex_with_location():
         campaign_id=1,
     )
     assert session_flags.get("current_hex") == {"q": 3, "r": 0}
-    assert session_flags.get("current_location_key") == "village_1"
+    assert get_current_location_key(conn, 1) == "village_1"
+    assert "current_location_key" not in session_flags
 
 
 # ─── Test 8: No update on failed movement ────────────────────────────────────
