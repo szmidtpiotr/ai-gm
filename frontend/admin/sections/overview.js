@@ -2,7 +2,7 @@
 // Statystyki przeglądowe + 2 feedy (tury/audyt) + 6 zakładek analityki (days filter).
 // Wszystkie endpointy bez zmian (backend nietknięty). Wywołania przez shared/api.js.
 import { apiFetch, APIError } from '../shared/api.js';
-import { esc } from '../shared/table.js';
+import { esc } from '../shared/table.js?v=7';
 import { showToast } from '../shared/toast.js';
 
 // ── Helpers (port z monolitu) ──────────────────────────────────────────────
