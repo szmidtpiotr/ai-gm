@@ -598,6 +598,12 @@ function hideCombatUI() {
     combatActive = false;
     lastCombatState = null;
     enemyTurnInFlight = false;
+    // #1149: wyczyść też flagi akcji gracza na koniec KAŻDEJ walki. Gdy walka się kończy,
+    // żaden POST akcji gracza nie jest już istotny dla bramkowania NASTĘPNEJ walki — a
+    // zalegające combatBusy/playerActionFetchActive (np. po udanej ucieczce) zatruwały
+    // reconciler kolejnego encountera (spawn-z-narracji) → przyciski disabled do F5.
+    combatBusy = false;
+    playerActionFetchActive = false;
     pendingLoot = null;
     pendingGold = 0;
     elements.combatBanner.hidden = true;
@@ -2441,8 +2447,14 @@ async function handleCombatFlee() {
     } catch (e) {
         window.clog?.error('combat_flee_exception', { message: String(e?.message || e) });
         setCombatMsg(`Błąd ucieczki: ${e.message || e}`, true);
-        combatBusy = false; playerActionFetchActive = false;  // #700
         if (lastCombatState) renderCombatUI(lastCombatState);
+    } finally {
+        // #1149: SUKCES ucieczki nie miał resetu flag (był tylko w catch) — combatBusy/
+        // playerActionFetchActive zostawały true po wyjściu z walki. Następny encounter w
+        // podróży widział zalegające flagi → reconciler utykał na 'fetch_in_flight' (brak
+        // watchdoga dla playerActionFetchActive) i combatBusy blokował auto-turę wroga →
+        // przyciski martwe do F5. Reset w finally domyka OBIE ścieżki (sukces i błąd).
+        combatBusy = false; playerActionFetchActive = false;  // #700 / #1149
     }
 }
 
