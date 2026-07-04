@@ -2147,7 +2147,31 @@ async function _renderTplValidation() {
     const v = await apiFetch('/api/admin/forge/validate-plan', {
       method: 'POST', body: JSON.stringify({ gm_plan_json: plan }),
     });
-    const issues = v.issues || [];
+    const issues = (v.issues || []).slice();
+    // #1153 — the Opublikuj gate also checks required NPCs/beats + winnable; the
+    // panel must run the same preflight or it shows "Brak błędów" while publish 422s.
+    if (_tplEditorData?.id) {
+      try {
+        const p = await apiFetch(`/api/admin/forge/templates/${_tplEditorData.id}/validate-publish`);
+        (p.missing_beats || []).forEach(b => issues.push({
+          type: 'error', code: 'missing_required_beat', act_number: '—', beat_key: b,
+          message: `Wymagany beat "${b}" nie istnieje w planie. Beaty w planie: ` +
+            ((p.plan_beat_keys || []).join(', ') || 'brak') +
+            '. Popraw pole "Wymagane beaty" albo dodaj beat do planu.',
+        }));
+        (p.missing_npcs || []).forEach(n => issues.push({
+          type: 'error', code: 'missing_required_npc', act_number: '—', beat_key: n,
+          message: `Wymagany NPC "${n}" nie istnieje w bazie NPC (lub jest nieaktywny).`,
+        }));
+        ((p.winnable && !p.winnable.ok && p.winnable.errors) || []).forEach(e => issues.push({
+          type: 'error', code: 'not_winnable', act_number: '—', beat_key: '',
+          message: e,
+        }));
+      } catch (pe) {
+        issues.push({ type: 'warning', code: 'publish_preflight_failed', act_number: '—', beat_key: '',
+          message: 'Nie udało się sprawdzić bramek publikacji: ' + (pe.message || 'błąd') });
+      }
+    }
     if (!issues.length) {
       panel.innerHTML = '<div style="color:var(--green);font-weight:600">✅ Brak błędów — plan gotowy do publikacji.</div>';
       return;

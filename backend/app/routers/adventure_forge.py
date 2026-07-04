@@ -1027,6 +1027,37 @@ def forge_validate_plan(req: ValidatePlanReq, _: None = Depends(_require_admin))
     return validate_gm_plan(req.gm_plan_json)
 
 
+@router.get("/templates/{template_id}/validate-publish")
+def forge_validate_publish(template_id: int, _: None = Depends(_require_admin)):
+    """#1153 — full publish-gate preflight for the Forge validation panel.
+
+    Mirrors every check the PATCH status=published gate enforces (required NPCs/beats
+    + winnable plan), so the panel can never claim "gotowy do publikacji" while the
+    Opublikuj button would still 422 (validate-plan alone checks only plan structure).
+    """
+    conn = _get_db()
+    try:
+        vres = validate_template_publish(template_id, conn)
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        try:
+            plan = json.loads((row["gm_plan_json"] if row else None) or "{}")
+        except Exception:
+            plan = {}
+        from app.services.campaign_plan_runtime import validate_winnable_plan
+        wres = validate_winnable_plan(plan)
+        return {
+            "ok": bool(vres["ok"] and wres["ok"]),
+            "missing_npcs": vres["missing_npcs"],
+            "missing_beats": vres["missing_beats"],
+            "plan_beat_keys": sorted(_plan_beat_keys(plan)),
+            "winnable": wres,
+        }
+    finally:
+        conn.close()
+
+
 @router.patch("/templates/{template_id}")
 def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depends(_require_admin)):
     conn = _get_db()
