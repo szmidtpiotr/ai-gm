@@ -198,9 +198,7 @@
       if (title) title.textContent = LABELS[key] || 'Panel';
     }
 
-    // FADM-P15: wszystkie 18 sekcji sportowane do modularnego admin/. admin3 wycofany
-    // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
-    const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'heroes', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics', 'analytics', 'showcase']);
+    // FADM-P15: wszystkie 18 sekcji sportowane do modularnego admin/. admin3 wycofany.
 
     function placeholder(key) {
       return `<div class="section active"><div class="adm-placeholder">
@@ -214,8 +212,6 @@
       let key = (location.hash || '').replace(/^#/, '');
       if (!KEYS.includes(key)) key = localStorage.getItem(LAST_KEY) || 'overview';
       if (!KEYS.includes(key)) key = 'overview';
-      // Wszystkie sekcje sportowane → brak bounce do admin3. Nieznany klucz = neutralny placeholder.
-      if (!PORTED.has(key)) { document.getElementById('panel').innerHTML = placeholder(key); return; }
       localStorage.setItem(LAST_KEY, key);
       setActive(key);
       const panelRoot = document.getElementById('panel');
