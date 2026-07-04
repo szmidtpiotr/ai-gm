@@ -70,7 +70,8 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 def _stat_mod(stat: int) -> int:
-    return (int(stat) - 10) // 2
+    from app.core.mechanics import stat_modifier as _core
+    return _core(stat)
 
 def _d20() -> int:
     return random.randint(1, 20)

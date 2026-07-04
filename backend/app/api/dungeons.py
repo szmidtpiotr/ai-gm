@@ -111,7 +111,7 @@ def _save_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> None:
     conn = _get_db()
     try:
         char = conn.execute(
-            "SELECT sheet_json, gold, gold_gp FROM characters WHERE id = ?",
+            "SELECT sheet_json, gold_gp FROM characters WHERE id = ?",  # #1181: legacy `gold` retired
             (character_id,),
         ).fetchone()
         if not char:
@@ -135,8 +135,7 @@ def _save_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> None:
         "current_hp": sheet.get("current_hp"),
         "max_hp": sheet.get("max_hp"),
         "current_mana": sheet.get("current_mana"),  # L7: for mana restore on death
-        "gold": char["gold"],
-        "gold_gp": char["gold_gp"],
+        "gold_gp": char["gold_gp"],  # #1181: gold_gp is the sole gold column
         "inventory": inventory,
         "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),  # L7: XP rollback
         "xp_available": int(sheet.get("xp_available") or 0),

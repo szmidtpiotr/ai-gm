@@ -3,6 +3,7 @@ import random
 import re
 
 from app.core.logging import get_logger
+from app.core.mechanics import proficiency_bonus as _proficiency_bonus
 from app.services import config_service
 
 logger = get_logger(__name__)
@@ -387,7 +388,7 @@ def resolve_roll(
     stat_mod = (stat_value - 10) // 2 if stat_key else 0
     _canon_key = DICE_TEST_TO_CONFIG_SKILL_KEY.get(normalized_test, normalized_test)
     skill_rank = _safe_int(skills.get(normalized_test) or skills.get(_canon_key, 0), 0)
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = _proficiency_bonus(skill_rank)
     total = effective_raw_roll + stat_mod + skill_rank + proficiency
     modifier = stat_mod + skill_rank + proficiency
     success = None if dc is None else (total >= dc)
@@ -531,7 +532,7 @@ def build_gm_dice_breakdown(character_sheet: dict, roll_key: str, roll: int) -> 
     else:
         _canon = DICE_TEST_TO_CONFIG_SKILL_KEY.get(skill, skill)
         skill_rank = _safe_int(skills.get(skill) or skills.get(_canon, 0), 0)
-    proficiency_bonus = 0 if resolved["is_save"] else (2 if skill_rank >= 3 else 0)
+    proficiency_bonus = 0 if resolved["is_save"] else _proficiency_bonus(skill_rank)
     final_total = _safe_int(roll, 0) + stat_modifier + skill_rank + proficiency_bonus
 
     return {

@@ -377,7 +377,8 @@ def _write_inspector_audit(
 
 
 def _stat_modifier(value: int) -> int:
-    return (int(value) - 10) // 2
+    from app.core.mechanics import stat_modifier as _core
+    return _core(value)
 
 
 class CheatRequest(BaseModel):

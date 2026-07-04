@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from app.core.mechanics import proficiency_bonus
 from app.services.dice import DICE_TEST_TO_CONFIG_SKILL_KEY
 
 ATTACK_TESTS = frozenset({"melee_attack", "ranged_attack", "spell_attack"})
@@ -37,8 +38,9 @@ def _sheet_skills(sheet: dict[str, Any]) -> dict[str, Any]:
 
 
 def stat_modifier(sheet: dict[str, Any], stat_key: str) -> int:
+    from app.core.mechanics import stat_modifier as _core
     stats = _sheet_stats(sheet)
-    return (_safe_int(stats.get(stat_key, 10), 10) - 10) // 2
+    return _core(_safe_int(stats.get(stat_key, 10), 10))
 
 
 def is_attack_test(test_name: str | None) -> bool:
@@ -332,7 +334,7 @@ def resolve_attack_roll_for_weapon(
     skills = _sheet_skills(sheet)
     _canon = DICE_TEST_TO_CONFIG_SKILL_KEY.get(test, test)
     skill_rank = _safe_int(skills.get(test) or skills.get(_canon, 0), 0)
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     weapon_bonus = two_handed_attack_modifier(sheet, weapon_row)
     # PT-F5 #1139: fatigue penalty (-1 per stack) applies to ATTACK rolls too, not only
     # skill tests / initiative. Added as a distinct term — the locked d20 formula

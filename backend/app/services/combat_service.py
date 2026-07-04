@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.services.actor_stats import parse_stats_json
 from app.services.effect_json_migration import legacy_effect_fields_from_json
 from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
+from app.core.mechanics import proficiency_bonus
 from app.services.event_logger import write_game_event
 from app.services.weapon_rules import (
     load_weapon_row,
@@ -1142,7 +1143,7 @@ def _try_dodge_reaction(
     # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku).
     p.pop("reaction_declared", None)
     dex_mod = _combatant_stat_modifier(p, sheet=None, stat="DEX")  # kondycje (np. hasted) na combatancie
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     mod_total = int(dex_mod) + skill_rank + proficiency
     d20 = roll_d20()
     from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
@@ -1245,7 +1246,7 @@ def _try_shield_block_reaction(
         return {"reaction": "shield_block", "available": False, "reason": "no_shield",
                 "damage_before": int(dmg), "damage_after": int(dmg)}
     str_mod = _combatant_stat_modifier(p, sheet=None, stat="STR")  # kondycje (np. rage) na combatancie
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     mod_total = int(str_mod) + skill_rank + proficiency
     dc = max(int(attack_roll), 12)
     d20 = roll_d20()
@@ -8023,7 +8024,7 @@ def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[s
             skill_rank = int((sheet.get("skills") or {}).get("wrestling", 0) or 0)
         except (TypeError, ValueError):
             skill_rank = 0
-        proficiency = 2 if skill_rank >= 3 else 0
+        proficiency = proficiency_bonus(skill_rank)
 
         mapping = _load_skill_outcome_mapping(conn, "wrestling")
         stat = str(mapping.get("counter_key") or "STR").upper()

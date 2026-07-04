@@ -141,7 +141,8 @@ def _deep_merge_dicts(base: dict, incoming: dict) -> dict:
 
 
 def _stat_modifier(value: int) -> int:
-    return (int(value) - 10) // 2
+    from app.core.mechanics import stat_modifier as _core
+    return _core(value)
 
 
 def _default_identity_block() -> dict:

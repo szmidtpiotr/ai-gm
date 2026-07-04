@@ -44,7 +44,9 @@ _KEYWORD_PATTERNS: list[tuple[re.Pattern, str]] = [
     ), "flee"),
     # USE_ITEM
     (re.compile(
-        r"(używam|pię|piję|zakladam|zużywam|aktywuję|wypiję|pij)",
+        # #1181: anchored drink/use verbs — bare "pię" fragment removed, so
+        # "pięścią"/"pięknie" no longer false-match use_item (piję/wypiję/pij cover drinking).
+        r"(używam|piję|wypiję|\bpij\b|zakładam|zakladam|zużywam|aktywuję)",
         re.IGNORECASE
     ), "use_item"),
     # SKILL_TEST
