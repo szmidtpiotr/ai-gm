@@ -44,9 +44,20 @@ def _make_voice_hosts(conn: sqlite3.Connection) -> None:
 # ─── Test główny #1 — tabela voice_config powstaje i obsługuje upsert ─────────
 
 def test_voice_config_table_created_and_upsertable():
-    """Migracja tworzy voice_config; dokładny upsert z voice_proxy działa."""
+    """Migracja tworzy voice_config; dokładny upsert z voice_proxy działa.
+
+    #1178: duplikat no-op `_ensure_voice_config_table` usunięty — kanoniczny
+    CREATE żyje w ADMIN_MIGRATIONS. Test wykonuje dokładnie ten statement.
+    """
     conn = _fresh_conn()
-    migrations_admin._ensure_voice_config_table(conn)
+    voice_ddl = [
+        s for s in migrations_admin.ADMIN_MIGRATIONS
+        if isinstance(s, str) and "voice_config" in s
+    ]
+    assert voice_ddl, "CREATE voice_config musi istnieć w ADMIN_MIGRATIONS"
+    for stmt in voice_ddl:
+        conn.execute(stmt)
+    conn.commit()
     # dokładnie ten INSERT, którego używa voice_proxy._set_config_values
     conn.execute(
         "INSERT INTO voice_config (key, value) VALUES (?, ?)"

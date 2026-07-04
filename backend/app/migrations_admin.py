@@ -2682,8 +2682,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
 
     # ── New tables ────────────────────────────────────────────────────────
 
-    # campaign_members lives in main.py RAW_MIGRATIONS but ALTER TABLE helpers in this
-    # file reference it. CREATE IF NOT EXISTS so standalone run_admin_migrations() works (#943).
+    # campaign_members is CREATEd here (canonical); main.py RAW_MIGRATIONS only ALTERs it
+    # to add multiplayer columns. CREATE IF NOT EXISTS so standalone run_admin_migrations()
+    # works even when RAW hasn't run yet (#943, comment corrected #1178).
     _exec("""
         CREATE TABLE IF NOT EXISTS campaign_members (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5342,20 +5343,6 @@ def _ensure_warrior_shared_heal_858(conn: sqlite3.Connection) -> None:
 WHISPER_GPU_HOST_URL = "http://192.168.1.16:8300"
 
 
-def _ensure_voice_config_table(conn: sqlite3.Connection) -> None:
-    """#748 — voice_config była używana przez voice_proxy, lecz nigdy nie powstała,
-    więc zapis ustawień głosu (POST /voice/config) wykraszał na INSERT. Idempotentne."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS voice_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL DEFAULT ''
-        )
-        """
-    )
-    conn.commit()
-
-
 def _ensure_active_voice_host(conn: sqlite3.Connection) -> None:
     """#748 — gdy żaden host głosu nie jest aktywny, proxy fallbackuje na bundlowany
     `voice-service:8300`, którego na DEV nie ma → STT/TTS pada z 'Name or service not
@@ -6099,7 +6086,6 @@ def run_admin_migrations() -> None:
         _backfill_riddle_exit_conditions(conn)  # #722
         _ensure_consumable_effect_json(conn)  # #771
         _ensure_warrior_shared_heal_858(conn)  # #858
-        _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
         _ensure_character_campaign_state(conn)  # #784 G16
         _backfill_character_campaign_state(conn)  # #784 G16
