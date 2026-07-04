@@ -127,7 +127,7 @@
     import { showToast } from './shared/toast.js';
     import { initSortableTable, enhanceTable } from './shared/table.js?v=7';
 
-    // 15 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
+    // 18 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
       { key: 'overview',   label: 'Przegląd',   ico: '▦' },
       { key: 'players',    label: 'Gracze',     ico: '◉' },
@@ -198,7 +198,7 @@
       if (title) title.textContent = LABELS[key] || 'Panel';
     }
 
-    // FADM-P15: wszystkie 15 sekcji sportowane do modularnego admin/. admin3 wycofany
+    // FADM-P15: wszystkie 18 sekcji sportowane do modularnego admin/. admin3 wycofany
     // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
     const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'heroes', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge', 'game-mechanics', 'analytics', 'showcase']);
 
