@@ -4,6 +4,16 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.5.9 — 2026-07-04 — Idempotencja migracji (code-review #20, fala 2)
+
+### Fixed
+- #1162 — restart backendu nie cofa już ręcznych edycji admina (wagi lootu, sufit rang, koszty XP, teren heksów): ewidencja `schema_migrations`, instrukcje zmieniające dane uruchamiają się dokładnie raz
+- #1163 — świeża baza kompletna po jednym boocie (pętla zbieżności `run_all_migrations` dla cyklicznego grafu tabel; per-plik `try` dla migracji SQL)
+- #1164 — jedno źródło prawdy dla kosztów XP zgodne z `game_mechanics.md` (umiejętności 100/75/150, sufit statystyk 19)
+- #1166 — `backup.sh`/`restore.sh` trafiają we właściwy plik DB (DEV `data-dev` / PROD `data`, override `AIGM_DB_FILE`) i robią WAL-bezpieczną migawkę `sqlite3 .backup` zamiast `cp`
+
+---
+
 ## v1.5.8 — 2026-07-01 — Fuzzy routing lokacji + poprawki walki, UI i streamingu
 
 Seria poprawek stabilizacyjnych po dużym v1.5.7. Narracja trafia teraz precyzyjniej do lokacji (fuzzy matching etykiet); atak z zaskoczenia startuje walkę zamiast testu Zastraszania; naprawione race condition streamingu otwierające własne połączenia DB; kilka uciążliwych bugów UI (modal Awansuj, błędne klucze umiejętności); nowa nakładka na mapie admina podświetlająca heksy z lokacjami.
