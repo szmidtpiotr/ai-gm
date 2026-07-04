@@ -323,6 +323,11 @@ async function _tryRefreshAccessToken() {
             const data = await r.json();
             if (data?.access_token) {
                 localStorage.setItem('aigm_access_token', data.access_token);
+                // #1172: keep the in-memory authToken (and legacy 'token' key) in sync.
+                // game.js recap/journal/bugreport fetches send `Bearer ${authToken}` —
+                // without this they keep sending the expired token → 401 with no retry.
+                authToken = data.access_token;
+                localStorage.setItem('token', data.access_token);
                 return data.access_token;
             }
         } catch (e) {
