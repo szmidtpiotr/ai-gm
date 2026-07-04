@@ -1316,12 +1316,17 @@ class HexTravelReq(BaseModel):
 
 
 @router.post("/campaigns/{campaign_id}/hex-travel")
-def hex_chain_travel(campaign_id: int, req: HexTravelReq):
+def hex_chain_travel(campaign_id: int, req: HexTravelReq,
+                     authorization: str | None = Header(default=None)):
     """
     Chain travel to a destination hex via A* pathfinding.
     Rolls encounters per hex along the route.
     Returns: travel result including narrative context for the narrator.
+
+    #1154: admin-only surface (25/27 tras tego routera woła _require_admin) —
+    dodano guard. Gracze podróżują przez /api/campaigns/{id}/hex-travel (turns.py).
     """
+    _require_admin(authorization)
     import json as _json
     from app.services.hex_travel_service import resolve_chain_travel
 

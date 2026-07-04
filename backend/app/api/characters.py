@@ -1409,14 +1409,25 @@ def resurrect_hero(
 
 
 @router.patch("/characters/{character_id}/status")
-def update_character_status(character_id: int, req: dict = Body(...)):
-    """Update hero status: idle | in_campaign | in_dungeon."""
+def update_character_status(character_id: int, user_id: int, req: dict = Body(...)):
+    """Update hero status: idle | in_campaign | in_dungeon.
+
+    #1156: owner-check wzorem delete_character — user_id wymagany, cudzy bohater → 403.
+    """
     status = req.get("status", "idle")
     campaign_id = req.get("campaign_id")  # set when entering campaign
     if status not in ("idle", "in_campaign", "in_dungeon"):
         raise HTTPException(status_code=422, detail="status must be idle | in_campaign | in_dungeon")
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     try:
+        owner = conn.execute(
+            "SELECT user_id FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Hero not found")
+        if int(owner["user_id"]) != int(user_id):
+            raise HTTPException(status_code=403, detail="Not your hero")
         if campaign_id is not None:
             conn.execute(
                 "UPDATE characters SET status = ?, campaign_id = ? WHERE id = ?",
@@ -1681,13 +1692,14 @@ def get_character(character_id: int):
 
 
 @router.get("/characters/{character_id}/sheet")
-def get_character_sheet(character_id: int):
+def get_character_sheet(character_id: int, user_id: int):
+    # #1156: owner-check wzorem delete_character — user_id wymagany, cudza karta → 403.
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
     row = conn.execute(
         """
-        SELECT sheet_json
+        SELECT user_id, sheet_json
         FROM characters
         WHERE id = ?
         """,
@@ -1698,6 +1710,8 @@ def get_character_sheet(character_id: int):
 
     if not row:
         raise HTTPException(status_code=404, detail="Character not found")
+    if int(row["user_id"]) != int(user_id):
+        raise HTTPException(status_code=403, detail="Not your hero")
 
     try:
         sheet_json = json.loads(row["sheet_json"]) if row["sheet_json"] else {}

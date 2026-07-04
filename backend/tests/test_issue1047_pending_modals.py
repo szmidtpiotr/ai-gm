@@ -16,6 +16,18 @@ def _conn():
     return c
 
 
+def _admin_headers():
+    """#1154: world_review wymaga teraz tokena admina."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    for u, p in (("admin", "admin"), ("demo", "demo")):
+        r = c.post("/api/admin/dev-login", json={"username": u, "password": p})
+        if r.status_code == 200:
+            return {"Authorization": f"Bearer {r.json()['token']}"}
+    return {}
+
+
 @pytest.fixture(autouse=True)
 def seed_and_cleanup():
     conn = _conn()
@@ -46,7 +58,7 @@ def test_pending_enemies_returns_full_combat_fields():
     from fastapi.testclient import TestClient
     from app.main import app
     client = TestClient(app)
-    r = client.get('/api/admin/world/pending/enemies')
+    r = client.get('/api/admin/world/pending/enemies', headers=_admin_headers())
     assert r.status_code == 200
     items = r.json().get('items', [])
     our = next((i for i in items if i['key'] == _ENEMY_KEY), None)
@@ -67,7 +79,7 @@ def test_pending_locations_returns_created_at():
     from fastapi.testclient import TestClient
     from app.main import app
     client = TestClient(app)
-    r = client.get('/api/admin/world/pending/locations')
+    r = client.get('/api/admin/world/pending/locations', headers=_admin_headers())
     assert r.status_code == 200
     items = r.json().get('items', [])
     our = next((i for i in items if i['key'] == _LOC_KEY), None)
@@ -82,7 +94,7 @@ def test_pending_fill_endpoint_exists_not_404():
     from fastapi.testclient import TestClient
     from app.main import app
     client = TestClient(app)
-    r = client.post(f'/api/admin/world/pending/fill/enemy/{_ENEMY_KEY}')
+    r = client.post(f'/api/admin/world/pending/fill/enemy/{_ENEMY_KEY}', headers=_admin_headers())
     assert r.status_code != 404, \
         f"Endpoint not registered — got 404. Register POST /pending/fill/{{entity_type}}/{{key}}"
 
@@ -94,7 +106,7 @@ def test_pending_fill_returns_suggestions_dict():
     from fastapi.testclient import TestClient
     from app.main import app
     client = TestClient(app)
-    r = client.post(f'/api/admin/world/pending/fill/enemy/{_ENEMY_KEY}')
+    r = client.post(f'/api/admin/world/pending/fill/enemy/{_ENEMY_KEY}', headers=_admin_headers())
     assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text[:200]}"
     data = r.json()
     assert 'suggestions' in data, f"Missing 'suggestions' key in: {data}"

@@ -6,8 +6,10 @@ world entities created by the GM during sessions.
 """
 
 import sqlite3
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.routers.admin import require_admin_token
 
 from pydantic import BaseModel as _BaseModel
 from app.services.world_service import (
@@ -30,7 +32,7 @@ from app.services.world_service import (
 
 DB_PATH = "/data/ai_gm.db"
 
-router = APIRouter(prefix="/api/admin/world", tags=["admin-world-review"])
+router = APIRouter(prefix="/api/admin/world", tags=["admin-world-review"], dependencies=[Depends(require_admin_token)])
 
 
 def _get_db() -> sqlite3.Connection:

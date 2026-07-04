@@ -33,6 +33,14 @@ router = APIRouter()
 DB_PATH = resolve_db_path()
 
 
+def _require_admin_token(authorization: str | None = Header(default=None)) -> None:
+    """#1155: guard admina dla endpointów debugowych zwracających api_key w plaintext."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    if not verify_admin_token(authorization.removeprefix("Bearer ").strip()):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
 def _require_admin_bearer(
     authorization: str | None = Header(default=None),
 ) -> None:
@@ -298,10 +306,11 @@ def put_user_llm_settings(user_id: int, req: UserLlmSettingsReq):
     }
 
 
-@router.get("/users/{user_id}/llm-settings/internal")
+@router.get("/users/{user_id}/llm-settings/internal",
+            dependencies=[Depends(_require_admin_token)])
 def get_user_llm_settings_internal(user_id: int):
     """
     Internal endpoint for server-side debugging only.
-    Not used by the UI; returns api_key.
+    Not used by the UI; returns api_key. #1155: wymaga tokena admina.
     """
     return get_user_llm_settings_full(user_id=user_id)

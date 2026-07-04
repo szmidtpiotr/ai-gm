@@ -747,9 +747,9 @@ app.include_router(friends.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 app.include_router(client_logs_router, prefix="/api")
 app.include_router(knowledge_router, prefix="/api")
-# Keep non-prefixed character endpoints available for direct local calls
-# (e.g. /characters/{id}/sheet), while preserving /api/* routes.
-app.include_router(characters.router)
+# #1156: bare (non-/api) mount usunięty — podwajał ~39 tras i wystawiał
+# nieautoryzowany /characters/{id}/sheet poza prefiksem. Wszyscy klienci
+# (frontend API_BASE=/api, MCP GAME_API_URL=.../api) używają /api/*.
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(version_router, prefix="/api")

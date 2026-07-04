@@ -16,13 +16,15 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+from app.routers.admin import require_admin_token
 
 DB_PATH = Path("/data/ai_gm.db")
 RSB_TITLE_PREFIX = "[REST-SANDBOX]"
 CLONE_PREFIX = "[RSB] "
 
-router = APIRouter(prefix="/admin/rest-sandbox", tags=["rest-sandbox"])
+router = APIRouter(prefix="/admin/rest-sandbox", tags=["rest-sandbox"], dependencies=[Depends(require_admin_token)])
 
 
 def _conn() -> sqlite3.Connection:

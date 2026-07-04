@@ -28,7 +28,8 @@ import urllib.request
 import pytest
 
 DB_PATH = "/data/ai_gm.db"
-BASE_URL = "http://localhost:8000"
+# #1156: bare (non-/api) character mount usunięty — wszystkie ścieżki idą przez /api.
+BASE_URL = "http://localhost:8000/api"
 LIVE = os.environ.get("RACE_SMOKE_LIVE", "").strip() == "1"
 
 

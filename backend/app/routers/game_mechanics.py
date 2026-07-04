@@ -1,9 +1,11 @@
 import os
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
-router = APIRouter(prefix="/api/admin/game-mechanics", tags=["game_mechanics"])
+from app.routers.admin import require_admin_token
+
+router = APIRouter(prefix="/api/admin/game-mechanics", tags=["game_mechanics"], dependencies=[Depends(require_admin_token)])
 
 @router.get("/content", response_class=PlainTextResponse)
 async def get_game_mechanics_content():

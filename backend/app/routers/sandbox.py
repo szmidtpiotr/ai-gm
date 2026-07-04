@@ -18,14 +18,15 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
+from app.routers.admin import require_admin_token
 from app.services import combat_service as combat
 
 DB_PATH = Path("/data/ai_gm.db")
 SANDBOX_TITLE_PREFIX = "[SANDBOX]"
 
-router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"])
+router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"], dependencies=[Depends(require_admin_token)])
 
 
 def _conn() -> sqlite3.Connection:

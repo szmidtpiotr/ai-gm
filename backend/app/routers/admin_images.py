@@ -10,11 +10,13 @@ import time
 import base64
 import httpx
 from pathlib import Path
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Any
 
-router = APIRouter(prefix="/api/admin/images", tags=["admin-images"])
+from app.routers.admin import require_admin_token
+
+router = APIRouter(prefix="/api/admin/images", tags=["admin-images"], dependencies=[Depends(require_admin_token)])
 
 IMAGE_GEN_URL = os.getenv("IMAGE_GEN_URL", "http://192.168.1.170:8765")
 TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))

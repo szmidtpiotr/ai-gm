@@ -21,11 +21,13 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+from app.routers.admin import require_admin_token
 
 DB_PATH = Path("/data/ai_gm.db")
 
-admin_router = APIRouter(prefix="/admin/visual", tags=["admin-visual"])
+admin_router = APIRouter(prefix="/admin/visual", tags=["admin-visual"], dependencies=[Depends(require_admin_token)])
 public_router = APIRouter(prefix="/visual", tags=["visual"])
 
 
