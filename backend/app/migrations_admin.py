@@ -247,6 +247,18 @@ ADMIN_MIGRATIONS = [
         FOREIGN KEY (character_id) REFERENCES characters(id)
     )
     """,
+    # #1165 — campaign_turns jest pisana i czytana co turę (57 zapytań WHERE campaign_id,
+    # m.in. turns.py:467 last-3-turns i turns.py:1693/3112 MAX(turn_number)), ale nie miała
+    # żadnego indeksu → pełny skan tabeli. combat_turns/game_events mają swoje; ta była
+    # pominięta. Composite (campaign_id, turn_number) czyni MAX(turn_number) pokrytym.
+    """
+    CREATE INDEX IF NOT EXISTS idx_campaign_turns_campaign_id
+        ON campaign_turns(campaign_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_campaign_turns_campaign_turn
+        ON campaign_turns(campaign_id, turn_number)
+    """,
     """
     CREATE TABLE IF NOT EXISTS user_llm_settings (
         user_id INTEGER PRIMARY KEY,
