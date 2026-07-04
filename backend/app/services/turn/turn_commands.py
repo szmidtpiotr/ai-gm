@@ -163,8 +163,11 @@ def handle(
         if result.allowed:
             # Aktualizuj lokalizację w sesji
             if result.resolved_location_id:
+                # #1157: sesja jest kluczowana przez campaign_id, NIE po PK `id`
+                # (game_sessions.id != campaign_id). Zapis po `id = campaign_id`
+                # trafiał w zły/nieistniejący wiersz i /move cicho nic nie zmieniał.
                 conn.execute(
-                    "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                    "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
                     (result.resolved_location_id, campaign_id)
                 )
                 conn.commit()

@@ -726,22 +726,18 @@ def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -
             )
         else:
             conn.execute("DELETE FROM character_inventory WHERE id = ?", (int(row["id"]),))
+        # #1158: kredyt złota + tag anti-farm w TEJ SAMEJ transakcji co usunięcie
+        # przedmiotu — jedno połączenie, jeden commit. Wcześniej DELETE commitował się
+        # (linia 729), a wypłata szła osobnym połączeniem: awaria między nimi niszczyła
+        # przedmiot bez złota i bez kompensacji. change_gold journaluje z meta, więc
+        # item_key trafia w ten sam wiersz logu atomowo (koniec kruchego MAX(id)-taga).
+        from app.services.economy_service import change_gold
+        new_gold = change_gold(
+            conn, int(character_id), int(earned), "shop_sell",
+            meta={"item_key": item_key},
+        )
         conn.commit()
 
-    new_gold = apply_character_gold_delta(character_id, earned, "shop_sell")
-    # Tag the most recent shop_sell log row with item_key for anti-farm tracking
-    try:
-        with _conn() as _c:
-            _c.execute(
-                """UPDATE character_gold_log SET meta_json = ?
-                   WHERE character_id = ? AND source = 'shop_sell'
-                     AND id = (SELECT MAX(id) FROM character_gold_log
-                               WHERE character_id = ? AND source = 'shop_sell')""",
-                (json.dumps({"item_key": item_key}), int(character_id), int(character_id)),
-            )
-            _c.commit()
-    except Exception:
-        pass
     return {
         "gold_gp": int(new_gold),
         "earned_gp": int(earned),

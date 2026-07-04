@@ -976,6 +976,7 @@ def finish_campaign_endpoint(
         if not result["already_completed"]:
             try:
                 from app.services.chapter_summary_service import close_campaign_with_summary
+                from app.services.economy_service import get_character_gold
                 sheet = json.loads(char_row["sheet_json"] or "{}")
                 turns_count = conn.execute(
                     "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
@@ -988,7 +989,8 @@ def finish_campaign_endpoint(
                     outcome="victory",
                     user_id=int(char_row["user_id"]),
                     xp_earned=int(sheet.get("xp_lifetime_earned") or 0),
-                    gold_at_end=int(sheet.get("gold_gp") or sheet.get("gold") or 0),
+                    # #1159: złoto z kolumny characters.gold_gp, nie z sheet_json (zawsze 0).
+                    gold_at_end=get_character_gold(conn, int(char_row["id"])),
                     turns_count=int(turns_count or 0),
                 )
             except Exception as _cs_err:

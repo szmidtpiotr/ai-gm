@@ -3981,9 +3981,12 @@ def _ct_roll_and_death_save(conn, campaign_id, payload, character, text, turn_id
             # J2: write history row + queue chapter summary generation
             try:
                 from app.services.chapter_summary_service import close_campaign_with_summary
+                from app.services.economy_service import get_character_gold
                 _ch_sheet = json.loads(character["sheet_json"] or "{}")
                 _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
-                _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                # #1159: złoto trzymane tylko w kolumnie characters.gold_gp — sheet_json
+                # nigdy go nie ma, więc stary odczyt dawał gold_at_end=0.
+                _ch_gold = get_character_gold(conn, int(payload.character_id))
                 _ch_turns = conn.execute(
                     "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
                     (campaign_id,),
@@ -5549,9 +5552,11 @@ def create_turn_stream(
                 # J2: write history row + queue chapter summary generation
                 try:
                     from app.services.chapter_summary_service import close_campaign_with_summary
+                    from app.services.economy_service import get_character_gold
                     _ch_sheet = json.loads(character["sheet_json"] or "{}")
                     _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
-                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    # #1159: złoto trzymane tylko w kolumnie characters.gold_gp.
+                    _ch_gold = get_character_gold(conn, int(payload.character_id))
                     _ch_turns = conn.execute(
                         "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
                         (campaign_id,),

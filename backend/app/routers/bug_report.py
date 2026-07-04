@@ -16,6 +16,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.core.logging import get_logger
+from app.services.economy_service import get_character_gold as _get_character_gold
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -105,7 +106,8 @@ def _collect_context(user_id: int, campaign_id: int | None) -> dict[str, Any]:
                     "archetype": sheet.get("archetype", "?"),
                     "conditions": sheet.get("conditions", []),
                     "stats": sheet.get("stats", {}),
-                    "gold": sheet.get("gold", 0),
+                    # #1159: złoto z kolumny characters.gold_gp, nie z sheet_json (zawsze 0).
+                    "gold": _get_character_gold(conn, char["id"]),
                 }
 
             turns = conn.execute(
