@@ -235,6 +235,7 @@
         panelRoot.innerHTML = placeholder(key);
       } catch (e) {
         // Ported, ale błąd importu → widoczny placeholder (nie cichy redirect, by nie maskować buga).
+        console.error('[admin route] import sekcji nie powiódł się:', key, e);
         panelRoot.innerHTML = placeholder(key);
       }
     }
