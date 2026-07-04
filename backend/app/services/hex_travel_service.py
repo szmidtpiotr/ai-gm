@@ -1080,12 +1080,12 @@ def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | Non
     return row["key"] if isinstance(row, sqlite3.Row) else row[0]
 
 
-def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int] | None":
+def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int, int] | None":
     """#1110 — the start_hex assigned to the campaign's source template in the Kuźnia.
 
-    Returns (q, r) when the campaign was launched from a template that has an explicit
-    start_hex_q/r set, else None. Prefers `template_id`, falls back to `source_template_id`
-    (create_campaign stamps the latter).
+    Returns (q, r, template_id) when the campaign was launched from a template that
+    has an explicit start_hex_q/r set, else None. Prefers `template_id`, falls back
+    to `source_template_id` (create_campaign stamps the latter).
     """
     try:
         crow = conn.execute(
@@ -1101,7 +1101,7 @@ def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[in
         "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?", (tid,)
     ).fetchone()
     if trow and trow["start_hex_q"] is not None and trow["start_hex_r"] is not None:
-        return (int(trow["start_hex_q"]), int(trow["start_hex_r"]))
+        return (int(trow["start_hex_q"]), int(trow["start_hex_r"]), int(tid))
     return None
 
 
@@ -1141,6 +1141,7 @@ def resolve_starting_hex(
     # the template says. Only used when that hex exists on the overworld; otherwise fall
     # through to the legacy name-match (backward compatible for campaigns without a hex).
     matched_hex = None
+    _tpl_id: "int | None" = None
     _tpl_hex = _template_start_hex(conn, campaign_id)
     if _tpl_hex:
         _twh = conn.execute(
@@ -1153,6 +1154,7 @@ def resolve_starting_hex(
                 "q": _tpl_hex[0], "r": _tpl_hex[1],
                 "hex_type": _twh["hex_type"], "label": _twh["label"],
             }
+            _tpl_id = _tpl_hex[2]
 
     # Try to match existing hex by label (fallback when no template hex applied)
     if matched_hex is None and starting_location_name and starting_location_name.strip():
@@ -1268,6 +1270,25 @@ def resolve_starting_hex(
                 )
         except Exception as _pe:
             logger.warning("u28_placement_engine_error", error=str(_pe))
+
+    # #1206 — template-launch safety net: the template's start hex SHOULD carry the
+    # plan's start location (publish/allocate anchors it eagerly), but templates
+    # published before the fix have a bare hex. Materialize + anchor it now, so the
+    # session anchors to the story's start location instead of raw hex terrain
+    # (the "narracja o drzewach w karczmie" drift).
+    if not loc_key and not is_new and _tpl_id is not None:
+        try:
+            from app.services.template_start_anchor import ensure_template_start_location
+            _tsl = ensure_template_start_location(conn, _tpl_id, campaign_id=campaign_id)
+            if _tsl and int(_tsl["q"]) == sq and int(_tsl["r"]) == sr:
+                loc_key = _tsl["key"]
+                logger.info(
+                    "s17_template_start_location_materialized",
+                    campaign_id=campaign_id, loc_key=loc_key, q=sq, r=sr,
+                    status=_tsl["status"],
+                )
+        except Exception as _tsl_err:
+            logger.warning("template_start_location_error", error=str(_tsl_err))
 
     # #1152: for an EXISTING hex with no on-hex location, never anchor the session
     # to a name-matched or first-canonical location — starting_location_name may be

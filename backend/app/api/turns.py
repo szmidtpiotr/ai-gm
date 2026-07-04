@@ -4508,13 +4508,13 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                 conn, _xp_char_id, campaign_id, _dlg_m.group(1).strip(), _xp_turn
             )
         # XS1: [BEAT_COMPLETE:key] tag in narrative
+        # #1207 — mark first (via_llm_tag validates: objective-typed beats close only
+        # through event hooks), grant XP only for a genuinely newly-closed beat.
         for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
-            _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
-            # #1010: the live tor only granted XP before — actually mark the beat
-            # visited so narrative-only scenes flip and the act can complete (#1009).
             try:
                 from app.services.campaign_plan_runtime import mark_beat_visited as _mbv
-                _mbv(campaign_id, _bm.group(1).strip(), _xp_turn, conn)
+                if _mbv(campaign_id, _bm.group(1).strip(), _xp_turn, conn, via_llm_tag=True):
+                    _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
             except Exception as _bmv_err:
                 logger.warning("beat_complete_mark_error", error=str(_bmv_err))
         # E6 (#421): [ARC_ADVANCE:key] tag — jump the active GM-plan arc
@@ -6659,12 +6659,12 @@ def create_turn_stream(
                             _xp_total2 += grant_first_npc_talk(
                                 save_conn, _xp_char_id2, campaign_id_val, _npc_dialogue_key, _xp_turn2
                             )
+                        # #1207 — mark first (via_llm_tag validates), XP only when newly closed.
                         for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
-                            _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
-                            # #1010: mark the beat visited in the streaming tor too.
                             try:
                                 from app.services.campaign_plan_runtime import mark_beat_visited as _mbv2
-                                _mbv2(campaign_id_val, _bm2.group(1).strip(), _xp_turn2, save_conn)
+                                if _mbv2(campaign_id_val, _bm2.group(1).strip(), _xp_turn2, save_conn, via_llm_tag=True):
+                                    _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
                             except Exception as _bmv2_err:
                                 logger.warning("beat_complete_mark_error_stream", error=str(_bmv2_err))
                         # E6 (#421): [ARC_ADVANCE:key] tag in streaming path

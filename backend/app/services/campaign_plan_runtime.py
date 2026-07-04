@@ -112,10 +112,17 @@ def save_plan(campaign_id: int, plan: dict, conn: sqlite3.Connection) -> None:
 # ── Beat tracking ─────────────────────────────────────────────────────────
 
 def mark_beat_visited(
-    campaign_id: int, beat_key: str, turn_number: int, conn: sqlite3.Connection
+    campaign_id: int, beat_key: str, turn_number: int, conn: sqlite3.Connection,
+    via_llm_tag: bool = False,
 ) -> bool:
     """
     Mark a key beat as visited. Returns True if newly marked, False if already visited.
+
+    #1207 — `via_llm_tag=True` (the [BEAT_COMPLETE] parse sites) refuses beats that
+    carry a mechanical objective_type (talk_to_npc / visit_location / kill_enemy /
+    find_item): those complete ONLY through their real event hooks (U8/HF-11), never
+    on the narrator's say-so. Bug: the LLM closed `talk_to_npc: karczmarz_jorek`
+    during a conversation with a different NPC.
     """
     plan = get_plan(campaign_id, conn)
     if not plan:
@@ -127,6 +134,14 @@ def mark_beat_visited(
     for act in plan.get("acts", []):
         for beat in act.get("key_beats", []):
             if isinstance(beat, dict) and beat.get("beat_key") == beat_key:
+                if via_llm_tag and beat.get("objective_type") in _OBJECTIVE_TYPES:
+                    logger.info(
+                        "beat_complete_tag_rejected",
+                        campaign_id=campaign_id,
+                        beat_key=beat_key,
+                        objective_type=beat.get("objective_type"),
+                    )
+                    continue
                 if not beat.get("visited"):
                     beat["visited"] = True
                     beat["visited_at_turn"] = turn_number
@@ -478,14 +493,47 @@ def get_active_act_critical_beat_keys(plan: dict | None) -> list[str]:
     return out
 
 
+def get_active_act_tag_closable_beat_keys(plan: dict | None) -> list[str]:
+    """#1207 — open beats of the active act the narrator MAY close via [BEAT_COMPLETE].
+
+    Subset of `get_active_act_beat_keys` without the mechanically-closable beats
+    (objective_type in _OBJECTIVE_TYPES) — those complete only through their real
+    event hooks. Advertising them to the narrator invited hallucinated closes
+    ("Cel wykonany" for an NPC the player never talked to).
+    """
+    if not isinstance(plan, dict):
+        return []
+    acts = plan.get("acts")
+    if not isinstance(acts, list) or not acts:
+        return []
+    idx = int(plan.get("active_act", 1)) - 1
+    if idx < 0 or idx >= len(acts):
+        return []
+    act = acts[idx]
+    if not isinstance(act, dict):
+        return []
+    out: list[str] = []
+    for beat in act.get("key_beats", []):
+        if not isinstance(beat, dict) or beat.get("visited"):
+            continue
+        if beat.get("objective_type") in _OBJECTIVE_TYPES:
+            continue
+        key = beat.get("beat_key")
+        if key:
+            out.append(str(key))
+    return out
+
+
 def get_beat_completion_context_block(campaign_id: int, conn: sqlite3.Connection) -> str:
     """#1010 — narrator-facing block listing the active act's open beat_keys plus
     the [BEAT_COMPLETE] instruction. Empty when nothing is open.
 
     Without this the narrator never sees the exact keys, so it cannot emit a valid
     [BEAT_COMPLETE:beat_key] for scenes that have no mechanical objective_type.
+    #1207 — only tag-closable beats are advertised; objective-typed beats close
+    through their event hooks and are validated away in mark_beat_visited anyway.
     """
-    keys = get_active_act_beat_keys(get_plan(campaign_id, conn))
+    keys = get_active_act_tag_closable_beat_keys(get_plan(campaign_id, conn))
     if not keys:
         return ""
     listing = ", ".join(keys)

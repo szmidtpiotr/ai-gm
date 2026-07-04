@@ -119,7 +119,8 @@ def test_helper_returns_template_hex():
     db.execute("INSERT INTO campaign_templates (id,start_hex_q,start_hex_r) VALUES (77,5,5)")
     db.execute("INSERT INTO campaigns (id,owner_user_id,source_template_id) VALUES (100,1,77)")
     db.commit()
-    assert _template_start_hex(db, 100) == (5, 5)
+    # #1206 — helper zwraca też template_id (potrzebny do materializacji lokacji startowej)
+    assert _template_start_hex(db, 100) == (5, 5, 77)
 
 
 def test_helper_none_when_no_hex():

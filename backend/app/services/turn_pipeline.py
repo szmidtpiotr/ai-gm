@@ -1391,7 +1391,8 @@ def _process_beat_signals(
     for signal in mechanic_result.get("beat_signals", []):
         if signal.startswith("BEAT_COMPLETE:"):
             beat_key = signal.split(":", 1)[1]
-            if mark_beat_visited(campaign_id, beat_key, turn_number, conn):
+            # #1207 — LLM-emitted signal: objective-typed beats close only via event hooks
+            if mark_beat_visited(campaign_id, beat_key, turn_number, conn, via_llm_tag=True):
                 xp += grant_beat_complete(conn, character_id, campaign_id, beat_key, turn_number)
     return xp
 

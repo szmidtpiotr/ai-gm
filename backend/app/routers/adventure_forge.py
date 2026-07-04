@@ -13,9 +13,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.logging import get_logger
 from app.services.admin_auth import verify_admin_token
 from app.services.campaign_plan_service import normalize_plan_beats
 from app.services.llm_service import generate_chat
+
+logger = get_logger(__name__)
 
 
 def _safe_int(val, default):
@@ -1134,6 +1137,13 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
                     (best_hex["q"], best_hex["r"], template_id),
                 )
                 conn.commit()
+            # #1206 — materialize the plan's start location ON the start hex, so
+            # resolve_starting_hex anchors the session there (no forest-drift).
+            try:
+                from app.services.template_start_anchor import ensure_template_start_location
+                ensure_template_start_location(conn, template_id)
+            except Exception as _tsl_err:
+                logger.warning("template_start_location_error", error=str(_tsl_err))
         updates: list[str] = []
         params: list = []
         for field, val in [
@@ -2628,6 +2638,13 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
         )
         conn.commit()
 
+        # #1206 — anchor the plan's start location on the freshly allocated hex
+        try:
+            from app.services.template_start_anchor import ensure_template_start_location
+            ensure_template_start_location(conn, template_id)
+        except Exception as _tsl_err:
+            logger.warning("template_start_location_error", error=str(_tsl_err))
+
         _DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
         hex_set = {(h["q"], h["r"]): h for h in world_hexes}
         cluster = [best]
@@ -2704,6 +2721,14 @@ def forge_set_start_hex(template_id: int, req: SetStartHexReq, _: None = Depends
             (req.q, req.r, template_id),
         )
         conn.commit()
+
+        # #1206 — anchor (or move) the plan's start location onto the chosen hex
+        try:
+            from app.services.template_start_anchor import ensure_template_start_location
+            ensure_template_start_location(conn, template_id)
+        except Exception as _tsl_err:
+            logger.warning("template_start_location_error", error=str(_tsl_err))
+
         return {
             "ok": True,
             "template_id": template_id,
