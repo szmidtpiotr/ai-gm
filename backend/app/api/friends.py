@@ -16,7 +16,6 @@ import sqlite3
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
 
 from app.core.db_runtime import resolve_db_path
 from app.core.jwt_auth import require_current_user
@@ -25,9 +24,6 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Cap search results — prevents enumeration / DoS
-_SEARCH_MAX_RESULTS = 20
 
 
 def _db():
@@ -42,11 +38,6 @@ def _current_user_id(authorization: str | None) -> int:
     if uid <= 0:
         raise HTTPException(status_code=401, detail="invalid_token")
     return uid
-
-
-def _canonical_pair(a: int, b: int) -> tuple[int, int]:
-    """Return (lower, higher) so each friendship has exactly one canonical row."""
-    return (a, b) if a < b else (b, a)
 
 
 def _row_status_for(row: sqlite3.Row, viewer_id: int) -> str:
@@ -110,139 +101,6 @@ def list_friends(authorization: str | None = Header(default=None)):
             elif status == "pending_outgoing":
                 outgoing.append(payload)
         return {"accepted": accepted, "incoming": incoming, "outgoing": outgoing}
-    finally:
-        conn.close()
-
-
-# ── Search ─────────────────────────────────────────────────────────────────────
-
-@router.get("/me/friends/search")
-def search_users(q: str = "", authorization: str | None = Header(default=None)):
-    """Prefix-match users by username or display_name. Excludes self, soft-deleted,
-    inactive. Returns up to 20 with the relationship status from viewer's view."""
-    uid = _current_user_id(authorization)
-    q = (q or "").strip()
-    if len(q) < 2:
-        return {"results": []}
-
-    conn = _db()
-    try:
-        like = q + "%"
-        rows = conn.execute(
-            f"""
-            SELECT id, username, display_name, avatar_url
-            FROM users
-            WHERE id != ?
-              AND deleted_at IS NULL
-              AND COALESCE(is_active, 1) = 1
-              AND (LOWER(username) LIKE LOWER(?) OR LOWER(display_name) LIKE LOWER(?))
-            ORDER BY username
-            LIMIT {_SEARCH_MAX_RESULTS}
-            """,
-            (uid, like, like),
-        ).fetchall()
-
-        if not rows:
-            return {"results": []}
-
-        # Single query for existing friendships involving viewer + any of these matches
-        match_ids = [int(r["id"]) for r in rows]
-        placeholders = ",".join(["?"] * len(match_ids))
-        friendship_rows = conn.execute(
-            f"""
-            SELECT id, user_a_id, user_b_id, status, requester_id
-            FROM user_friendships
-            WHERE (user_a_id = ? AND user_b_id IN ({placeholders}))
-               OR (user_b_id = ? AND user_a_id IN ({placeholders}))
-            """,
-            (uid, *match_ids, uid, *match_ids),
-        ).fetchall()
-        # Map: other_user_id → friendship row
-        rel_map: dict[int, sqlite3.Row] = {}
-        for fr in friendship_rows:
-            other = int(fr["user_b_id"]) if int(fr["user_a_id"]) == uid else int(fr["user_a_id"])
-            rel_map[other] = fr
-
-        results = []
-        for r in rows:
-            uid2 = int(r["id"])
-            fr = rel_map.get(uid2)
-            if fr is None:
-                results.append(_serialize_user(r, status="none"))
-            else:
-                status = _row_status_for(fr, uid)
-                if status == "blocked":
-                    continue  # don't surface blocked users in search
-                results.append(_serialize_user(r, friendship_id=int(fr["id"]), status=status))
-        return {"results": results}
-    finally:
-        conn.close()
-
-
-# ── Request ────────────────────────────────────────────────────────────────────
-
-class FriendRequestReq(BaseModel):
-    target_user_id: int
-
-
-@router.post("/me/friends/request")
-def request_friend(req: FriendRequestReq, authorization: str | None = Header(default=None)):
-    """Send a friend request. If a reverse-pending row exists (the target sent me a
-    request first), this acts as an accept. Idempotent if accepted already."""
-    uid = _current_user_id(authorization)
-    target = int(req.target_user_id)
-    if target == uid:
-        raise HTTPException(status_code=400, detail="Nie możesz dodać siebie")
-
-    conn = _db()
-    try:
-        # Verify target exists and is reachable
-        t = conn.execute(
-            "SELECT id FROM users WHERE id = ? AND deleted_at IS NULL AND COALESCE(is_active, 1) = 1",
-            (target,),
-        ).fetchone()
-        if not t:
-            raise HTTPException(status_code=404, detail="Użytkownik nie istnieje")
-
-        a, b = _canonical_pair(uid, target)
-        existing = conn.execute(
-            "SELECT id, status, requester_id FROM user_friendships WHERE user_a_id = ? AND user_b_id = ?",
-            (a, b),
-        ).fetchone()
-
-        now = datetime.now(timezone.utc).isoformat()
-        if existing is None:
-            cur = conn.execute(
-                """
-                INSERT INTO user_friendships (user_a_id, user_b_id, status, requester_id, created_at)
-                VALUES (?, ?, 'pending', ?, ?)
-                """,
-                (a, b, uid, now),
-            )
-            conn.commit()
-            fid = int(cur.lastrowid)
-            logger.info("friend_request_sent", from_user=uid, to_user=target, friendship_id=fid)
-            return {"ok": True, "friendship_id": fid, "status": "pending_outgoing"}
-
-        status = str(existing["status"] or "")
-        requester = int(existing["requester_id"] or 0)
-        if status == "accepted":
-            return {"ok": True, "friendship_id": int(existing["id"]), "status": "accepted"}
-        if status == "blocked":
-            raise HTTPException(status_code=403, detail="Nie można wysłać zaproszenia")
-        if status == "pending":
-            if requester == uid:
-                # I already sent; idempotent
-                return {"ok": True, "friendship_id": int(existing["id"]), "status": "pending_outgoing"}
-            # Reverse pending — accept it
-            conn.execute(
-                "UPDATE user_friendships SET status = 'accepted', responded_at = ? WHERE id = ?",
-                (now, int(existing["id"])),
-            )
-            conn.commit()
-            logger.info("friend_request_auto_accepted", user=uid, friendship_id=int(existing["id"]))
-            return {"ok": True, "friendship_id": int(existing["id"]), "status": "accepted"}
-        raise HTTPException(status_code=409, detail=f"Nieznany status: {status}")
     finally:
         conn.close()
 

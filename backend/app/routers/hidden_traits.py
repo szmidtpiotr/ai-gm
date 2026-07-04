@@ -2,15 +2,8 @@
 import sqlite3
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
 
-from app.services.hidden_trait_service import (
-    assign_trait,
-    get_character_trait,
-    get_trait_pool,
-    is_trait_revealed,
-    reveal_trait,
-)
+from app.services.hidden_trait_service import get_trait_pool
 
 ADMIN_SQLITE_PATH = "/data/ai_gm.db"
 
@@ -33,11 +26,6 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
-class AssignTraitRequest(BaseModel):
-    character_id: int
-    trait_key: str
-
-
 @router.get("")
 def list_hidden_traits(_: None = Depends(_require_admin)):
     """Return all active hidden traits."""
@@ -46,48 +34,3 @@ def list_hidden_traits(_: None = Depends(_require_admin)):
         return get_trait_pool(conn)
     finally:
         conn.close()
-
-
-@router.post("/assign")
-def assign_hidden_trait(
-    body: AssignTraitRequest,
-    _: None = Depends(_require_admin),
-):
-    """Assign a hidden trait to a character."""
-    conn = _conn()
-    try:
-        assign_trait(conn, body.character_id, body.trait_key)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    finally:
-        conn.close()
-    return {"ok": True, "trait_key": body.trait_key}
-
-
-@router.get("/character/{character_id}")
-def get_trait_for_character(
-    character_id: int,
-    _: None = Depends(_require_admin),
-):
-    """Return the hidden trait assigned to a character."""
-    conn = _conn()
-    try:
-        key = get_character_trait(conn, character_id)
-        revealed = is_trait_revealed(conn, character_id)
-    finally:
-        conn.close()
-    return {"character_id": character_id, "trait_key": key, "revealed": revealed}
-
-
-@router.post("/character/{character_id}/reveal")
-def reveal_character_trait(
-    character_id: int,
-    _: None = Depends(_require_admin),
-):
-    """Mark a character's hidden trait as revealed."""
-    conn = _conn()
-    try:
-        reveal_trait(conn, character_id)
-    finally:
-        conn.close()
-    return {"ok": True, "revealed": True}
