@@ -5,8 +5,8 @@ import random
 import re
 import sqlite3
 
-from fastapi import APIRouter, Body, Header, HTTPException, Query
-from app.core.jwt_auth import resolve_authed_user_id
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from app.core.jwt_auth import current_user_optional, resolve_authed_user_id
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
@@ -1635,7 +1635,12 @@ def list_characters(campaign_id: int):
 
 
 @router.get("/characters/{character_id}")
-def get_character(character_id: int):
+def get_character(character_id: int, _auth: dict | None = Depends(current_user_optional)):
+    # #1200: owner-check w TRYBIE OBSERWACJI. get_character woła 11 miejsc UI bez
+    # user_id, więc twardy 403 (jak sheet) zepsułby grę. Zamiast tego: gdy przyszedł
+    # ważny JWT innego usera niż właściciel bohatera — logujemy `owner_check_would_block`,
+    # ale ZWRACAMY dane (200). Enforcement (403 + reguła multiplayer) dopiero po
+    # kwarantannie logów — Faza 2. Callerzy bez JWT nie są obserwowani (payload=None).
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -1651,6 +1656,20 @@ def get_character(character_id: int):
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Character not found")
+
+    # #1200: obserwacja właściciela (nie blokuje). Loguj gdy zalogowany JWT-user
+    # sięga po cudzego bohatera — dane do decyzji o enforcement (Faza 2, w tym MP).
+    if _auth is not None:
+        try:
+            requester = int(_auth.get("sub") or 0) or None
+        except (TypeError, ValueError):
+            requester = None
+        owner = int(row["user_id"]) if row["user_id"] is not None else None
+        if requester is not None and owner is not None and requester != owner:
+            logger.warning(
+                "owner_check_would_block endpoint=get_character character_id=%s owner=%s requester=%s",
+                character_id, owner, requester,
+            )
 
     item = dict(row)
     item.setdefault("race", "human")
