@@ -486,6 +486,85 @@ def generate_encounter_drafts(
     return drafts
 
 
+# ── Konwersacyjny autoring (mini-czat w Katalogu, #1132 opcja B) ─────────────
+# Admin OPISUJE encounter własnymi słowami; agent dopytuje i buduje draft z tym
+# samym kontraktem FK-enum co generate. Wzór {reply, draft} jak Smart Entry.
+
+def _build_chat_prompt(
+    conn: sqlite3.Connection, kind: str, *, biome=None, subtype=None, level=None
+) -> str:
+    base = _build_generate_prompt(conn, kind, biome=biome, subtype=subtype, level=level)
+    return (
+        base
+        + "\n\nTRYB ROZMOWY: Rozmawiasz z adminem, który OPISUJE encounter własnymi "
+        "słowami. Dopytaj krótko TYLKO gdy brakuje kluczowej informacji; gdy masz "
+        "dość, zbuduj kompletny draft. ZAWSZE odpowiadaj JEDNYM obiektem JSON w bloku "
+        "```json o kształcie:\n"
+        '{"reply":"krótka odpowiedź do admina po polsku","draft": <obiekt encountera '
+        "jak wyżej ALBO null gdy jeszcze dopytujesz>}\n"
+        "draft=null dopóki nie masz dość informacji. Gdy draft jest gotowy, w reply "
+        "napisz jednym zdaniem co złożyłeś i poproś o akceptację. Zasada anty-halucynacji "
+        "oraz limity (klucze FK z listy, skala DC, cap złota) obowiązują też w tym trybie."
+    )
+
+
+def chat_encounter_draft(
+    conn: sqlite3.Connection,
+    kind: str,
+    messages: list[dict],
+    *,
+    biome=None,
+    subtype=None,
+    level=None,
+    generate_fn=None,
+) -> dict:
+    """Jedna tura konwersacyjnego autoringu encountera.
+
+    `messages` = historia [{role:'user'|'assistant', content}]. Zwraca
+    `{reply, draft|None, fk_valid|None}`. Draft (gdy agent go zbuduje) jest
+    znormalizowany + zwalidowany FK — identycznie jak w `generate_encounter_drafts`,
+    więc wpada w ten sam przepływ akceptacji panelu. `generate_fn(messages)->str`
+    wstrzykiwalne w testach.
+    """
+    if kind not in ("combat", "social"):
+        raise ValueError(f"nieznany kind '{kind}' (dozwolone: combat|social)")
+    if generate_fn is None:
+        from app.services.llm_service import generate_chat
+        generate_fn = lambda m: generate_chat(messages=m)  # noqa: E731
+
+    convo = [{"role": "system", "content": _build_chat_prompt(
+        conn, kind, biome=biome, subtype=subtype, level=level)}]
+    for m in (messages or []):
+        role = (m or {}).get("role")
+        content = str((m or {}).get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            convo.append({"role": role, "content": content})
+
+    out = {"reply": "", "draft": None, "fk_valid": None}
+    try:
+        raw = generate_fn(convo)
+    except Exception:
+        out["reply"] = "Agent nie odpowiedział — spróbuj ponownie."
+        return out
+
+    obj = _extract_json(raw or "") or {}
+    out["reply"] = str(obj.get("reply") or "").strip() or (raw or "").strip()[:600]
+    draft = obj.get("draft")
+    if isinstance(draft, dict) and draft:
+        draft["kind"] = kind
+        draft["payload"] = normalize_payload(kind, draft.get("payload") or {})
+        try:
+            validate_fk(conn, kind=kind, payload=draft["payload"])
+            draft["fk_valid"] = True
+        except ValueError:
+            draft["fk_valid"] = False
+        draft["status"] = "pending"
+        draft.setdefault("source", "ai_forge")
+        out["draft"] = draft
+        out["fk_valid"] = draft["fk_valid"]
+    return out
+
+
 # ── Panel Kuźnia: lista / delete (PT-D4c #1132) ──────────────────────────────
 
 def list_catalog(

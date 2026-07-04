@@ -1128,6 +1128,68 @@ async function _forgeCatGenerate() {
   finally { if (btn) { btn.disabled = false; btn.textContent = '✨ Generuj AI'; } }
 }
 
+// ── Mini-czat opisowy (#1132 opcja B) ───────────────────────────────────────
+// Admin opisuje encounter słowami; agent dopytuje i buduje draft, który wpada
+// w TEN SAM przepływ akceptacji co formularzowy generator (_forgeCatDrafts).
+let _forgeCatChatMsgs = [];   // [{role:'user'|'assistant', content}]
+
+function _forgeCatChatReset() {
+  _forgeCatChatMsgs = [];
+  const h = document.getElementById('forge-cat-chat-history');
+  if (h) h.innerHTML = '<div style="font-size:0.76rem;color:var(--t3)">Nowa rozmowa. Opisz encounter…</div>';
+}
+
+function _forgeCatChatKey(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); _forgeCatChatSend(); }
+}
+
+function _forgeCatChatBubble(role, text) {
+  const h = document.getElementById('forge-cat-chat-history');
+  if (!h) return;
+  const mine = role === 'user';
+  const div = document.createElement('div');
+  div.style.cssText = 'align-self:' + (mine ? 'flex-end' : 'flex-start') +
+    ';max-width:85%;padding:6px 10px;border-radius:10px;font-size:0.8rem;white-space:pre-wrap;background:' +
+    (mine ? 'var(--accent,#3b82f6)' : 'var(--surface3)') + ';color:' + (mine ? '#fff' : 'var(--t1)');
+  div.textContent = text;
+  h.appendChild(div);
+  h.scrollTop = h.scrollHeight;
+}
+
+async function _forgeCatChatSend() {
+  const inp = document.getElementById('forge-cat-chat-input');
+  const btn = document.getElementById('forge-cat-chat-send');
+  const text = (inp && inp.value || '').trim();
+  if (!text) return;
+  const kind = document.getElementById('forge-cat-gen-kind')?.value || 'combat';
+  const scope = (document.getElementById('forge-cat-gen-biome')?.value || '').trim();
+  const level = parseInt(document.getElementById('forge-cat-gen-level')?.value, 10);
+  _forgeCatChatBubble('user', text);
+  _forgeCatChatMsgs.push({ role: 'user', content: text });
+  if (inp) inp.value = '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const body = { kind, messages: _forgeCatChatMsgs };
+    if (kind === 'combat') { if (scope) body.biome = scope; if (!isNaN(level)) body.level = level; }
+    else if (scope) { body.subtype = scope; }
+    const d = await apiFetch('/api/admin/forge/encounters/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const reply = d.reply || '(brak odpowiedzi)';
+    _forgeCatChatBubble('assistant', reply);
+    _forgeCatChatMsgs.push({ role: 'assistant', content: reply });
+    if (d.draft) {
+      _forgeCatDrafts = [d.draft];
+      _renderForgeCatDrafts();
+      _showToast(d.draft.fk_valid === false
+        ? 'Draft gotowy — ⚠ popraw klucz FK przed zapisem'
+        : 'Draft gotowy — sprawdź w „Wygenerowane drafty" poniżej',
+        d.draft.fk_valid === false ? 'info' : 'success');
+    }
+  } catch (e) { _forgeCatChatBubble('assistant', '⚠ ' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '➤'; } }
+}
+
 function _renderForgeCatDrafts() {
   const wrap = document.getElementById('forge-cat-drafts');
   const grid = document.getElementById('forge-cat-drafts-grid');
@@ -3582,6 +3644,22 @@ function _sectionHtml() {
         <button class="btn btn-sm btn-primary" id="forge-cat-gen-btn" onclick="_forgeCatGenerate()">✨ Generuj AI</button>
       </div>
 
+      <!-- Mini-czat opisowy (#1132 opcja B): admin opisuje encounter słowami -->
+      <div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:0.82rem;font-weight:600;color:var(--t1)">💬 Opisz encounter słowami</span>
+          <span style="font-size:0.72rem;color:var(--t3)">agent dopyta i złoży draft (rodzaj/biom/poziom bierze z pól wyżej; klucze FK z katalogu)</span>
+          <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="_forgeCatChatReset()">↺ Nowa rozmowa</button>
+        </div>
+        <div id="forge-cat-chat-history" style="max-height:220px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:0.76rem;color:var(--t3)">Napisz np. „napięta zasadzka goblinów w gęstym lesie, poziom 3" — agent dopyta o brakujące szczegóły i zbuduje draft poniżej.</div>
+        </div>
+        <div style="display:flex;gap:8px;padding:8px 10px;border-top:1px solid var(--border)">
+          <textarea id="forge-cat-chat-input" class="form-input" rows="2" style="flex:1;resize:vertical" placeholder="Opisz encounter… (Ctrl+Enter = wyślij)" onkeydown="_forgeCatChatKey(event)"></textarea>
+          <button class="btn btn-sm btn-primary" id="forge-cat-chat-send" onclick="_forgeCatChatSend()">➤</button>
+        </div>
+      </div>
+
       <!-- Drafty AI (pending) -->
       <div id="forge-cat-drafts" style="display:none;margin-bottom:14px">
         <div style="font-size:0.8rem;font-weight:600;color:var(--t2);margin-bottom:6px">🪄 Wygenerowane drafty (do akceptacji)</div>
@@ -4110,6 +4188,9 @@ export async function init(panel) {
   window._forgeCatFilterTextChanged = _forgeCatFilterTextChanged;
   window._forgeCatGenKindChanged = _forgeCatGenKindChanged;
   window._forgeCatGenerate = _forgeCatGenerate;
+  window._forgeCatChatSend = _forgeCatChatSend;
+  window._forgeCatChatReset = _forgeCatChatReset;
+  window._forgeCatChatKey = _forgeCatChatKey;
   window._forgeCatAcceptDraft = _forgeCatAcceptDraft;
   window._forgeCatEditRecord = _forgeCatEditRecord;
   window._forgeCatSaveForm = _forgeCatSaveForm;

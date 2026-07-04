@@ -96,6 +96,33 @@ def encounter_generate(req: GenerateReq, _: None = Depends(_require_admin)):
         conn.close()
 
 
+class ChatReq(BaseModel):
+    kind: str
+    messages: list[dict] = []
+    biome: Optional[str] = None
+    subtype: Optional[str] = None
+    level: Optional[int] = None
+
+
+@router.post("/chat")
+def encounter_chat(req: ChatReq, _: None = Depends(_require_admin)):
+    """Konwersacyjny autoring (#1132 opcja B): admin opisuje encounter słowami,
+    agent dopytuje i buduje draft (FK-enum). Zwraca {reply, draft|None, fk_valid}."""
+    _check_kind(req.kind)
+    conn = _get_db()
+    try:
+        cat.ensure_catalog_schema(conn)
+        result = cat.chat_encounter_draft(
+            conn, req.kind, req.messages,
+            biome=req.biome, subtype=req.subtype, level=req.level,
+        )
+        return {"ok": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
 class SaveReq(BaseModel):
     draft: dict
 
