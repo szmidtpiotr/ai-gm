@@ -30,30 +30,40 @@ async function _loadPush() {
     const sel = document.getElementById('push-target-user');
     if (sel) {
       sel.innerHTML = '<option value="">— wybierz gracza —</option>' +
-        _pushData.map(r => `<option value="${r.user_id}">[${r.subscription_count > 0 ? '✅' : '⬜'}] ${r.username}${r.display_name ? ' — '+r.display_name : ''}</option>`).join('');
+        _pushData.map(r => `<option value="${Number(r.user_id)}">[${r.subscription_count > 0 ? '✅' : '⬜'}] ${_esc(r.username)}${r.display_name ? ' — '+_esc(r.display_name) : ''}</option>`).join('');
     }
 
     if (tbody) {
+      // #1174: wszystkie player-controlled stringi przez _esc(); przyciski przez
+      // dataset + addEventListener (BEZ interpolacji username do atrybutu onclick).
       tbody.innerHTML = _pushData.map(r => {
         const hasSub = r.subscription_count > 0;
+        const uid = Number(r.user_id);
+        const uname = _esc(r.username);
         const statusBadge = hasSub
           ? `<span style="color:var(--green,#4caf50);font-weight:600">✅ Aktywna</span>`
           : `<span style="color:var(--t3)">⬜ Brak</span>`;
         const lastSub = r.last_subscribed_at ? new Date(r.last_subscribed_at).toLocaleString('pl-PL') : '—';
         return `<tr>
-          <td data-label="Gracz"><b>${r.username}</b>${r.display_name ? '<br><span style="color:var(--t3);font-size:12px">'+r.display_name+'</span>' : ''}</td>
+          <td data-label="Gracz"><b>${uname}</b>${r.display_name ? '<br><span style="color:var(--t3);font-size:12px">'+_esc(r.display_name)+'</span>' : ''}</td>
           <td data-label="Status">${statusBadge}</td>
-          <td data-label="Subskrypcji" style="text-align:center">${r.subscription_count}</td>
-          <td data-label="Ostatnia rej." style="font-size:12px;color:var(--t3)">${lastSub}</td>
+          <td data-label="Subskrypcji" style="text-align:center">${Number(r.subscription_count)}</td>
+          <td data-label="Ostatnia rej." style="font-size:12px;color:var(--t3)">${_esc(lastSub)}</td>
           <td data-label="Akcja" style="display:flex;gap:6px;align-items:center">
-            ${hasSub ? `<button class="btn btn-secondary btn-sm" onclick="_quickTestPush(${r.user_id},'${r.username}')">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}
-            ${hasSub ? `<button class="btn btn-sm" style="background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);color:var(--red,#e53935)" onclick="_revokePushSubscription(${r.user_id},'${r.username}')" title="Usuń subskrypcję — gracz będzie pytany o zgodę ponownie">✕ Usuń</button>` : ''}
+            ${hasSub ? `<button class="btn btn-secondary btn-sm push-test-btn" data-uid="${uid}" data-username="${uname}">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}
+            ${hasSub ? `<button class="btn btn-sm push-revoke-btn" data-uid="${uid}" data-username="${uname}" style="background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);color:var(--red,#e53935)" title="Usuń subskrypcję — gracz będzie pytany o zgodę ponownie">✕ Usuń</button>` : ''}
           </td>
         </tr>`;
       }).join('') || `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Brak użytkowników</td></tr>`;
+
+      // Wire actions via dataset (dataset zwraca zdekodowaną, oryginalną wartość username).
+      tbody.querySelectorAll('.push-test-btn').forEach(btn =>
+        btn.addEventListener('click', () => _quickTestPush(Number(btn.dataset.uid), btn.dataset.username)));
+      tbody.querySelectorAll('.push-revoke-btn').forEach(btn =>
+        btn.addEventListener('click', () => _revokePushSubscription(Number(btn.dataset.uid), btn.dataset.username)));
     }
   } catch(e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--red)">Błąd: ${e.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--red)">Błąd: ${_esc(e.message)}</td></tr>`;
   }
 }
 
