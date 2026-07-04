@@ -1376,6 +1376,17 @@ def resolve_starting_hex(
             current_location_id=_start_loc_id,
         )
 
+    # #1208 — plan-declared starting hour (evening tavern scene ≠ 09:00). Runs once
+    # here because every campaign-start flow passes through resolve_starting_hex;
+    # init_clock_from_plan itself refuses to touch an already-running clock.
+    try:
+        from app.services.clock_service import init_clock_from_plan
+        _sh = init_clock_from_plan(campaign_id, conn=conn)
+        if _sh is not None:
+            logger.info("clock_start_hour_applied", campaign_id=campaign_id, start_hour=_sh)
+    except Exception as _clk_err:
+        logger.warning("clock_start_hour_error", campaign_id=campaign_id, error=str(_clk_err))
+
     conn.commit()
 
     return {"q": sq, "r": sr, "hex_type": hex_type, "label": label or starting_location_name, "is_new": is_new}

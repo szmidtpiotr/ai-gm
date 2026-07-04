@@ -1533,6 +1533,7 @@ SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w 
 {{
   "title": "string",
   "premise": "string",
+  "start_hour": 9,
   "acts": [
     {acts_entries}
   ],
@@ -1572,6 +1573,7 @@ ZASADY:
 9. Każda lokacja MUSI mieć description (min. 2 zdania dla MG — klimat, wygląd, przeznaczenie).
 10. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w obrębie planu), "summary" (co się dzieje). Gdzie sensowne dodaj "objective_type" (jedno z: kill_enemy, visit_location, talk_to_npc, find_item) + "objective_value" (slug celu, np. klucz wroga/lokacji/NPC). Ustaw "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
 11. DOMYKALNOŚĆ (KRYTYCZNE): każdy beat krytyczny (optional: false) MUSI dać się domknąć — albo ma "objective_type"+"objective_value" (auto-domknięcie), albo "narrative_close": true (domknięcie sygnałem MG). Beat krytyczny bez żadnego z tych pól zablokuje kampanię. Dla scen czysto fabularnych (walka bez konkretnego wroga w bazie, rozmowa, decyzja) ustaw "narrative_close": true.
+12. PORA STARTOWA: "start_hour" (liczba 0-23) to godzina, o której dzieje się scena otwarcia — wybierz ją ŚWIADOMIE pod klimat pierwszej sceny (gwarna wieczorna karczma → 19-20, świt na trakcie → 6, nocna ucieczka → 23), nie ustawiaj odruchowo poranka. Zegar gry startuje dokładnie o tej godzinie.
 """
 
 

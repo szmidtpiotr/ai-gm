@@ -1604,6 +1604,17 @@ def generate_opening_scene(
             starting_loc_name = None
     starting_loc_name = starting_loc_name or "nieznane miejsce"
 
+    # #1208 — plan-declared starting hour: the opening prose must match the clock
+    # (evening tavern narrated as evening, not a default morning).
+    time_line = ""
+    try:
+        _sh = int(plan.get("start_hour"))
+        if 0 <= _sh <= 23:
+            from app.services.clock_service import _time_of_day_label
+            time_line = f"\n  Pora dnia: {_time_of_day_label(_sh)}, około {_sh:02d}:00"
+    except (TypeError, ValueError):
+        pass
+
     # Build opening scene prompt
     bonds_text = "\n".join(
         f"  - {b.get('description', '')}" for b in (identity.get("bonds") or [])
@@ -1628,11 +1639,12 @@ POSTAĆ:
 KAMPANIA:
   Tytuł aktu 1: {act1.get('title', '')}
   Streszczenie: {act1.get('summary', '')}
-  Miejsce startowe: {starting_loc_name}
+  Miejsce startowe: {starting_loc_name}{time_line}
 
 ZASADY:
 - Napisz 100-200 słów po polsku
 - Umieść postać fizycznie w miejscu startowym
+- Jeśli podano porę dnia — scena dzieje się DOKŁADNIE o tej porze (światło, odgłosy, ruch ludzi)
 - Nawiąż do jednej więzi lub słabości postaci
 - Stwórz napięcie lub ciekawość — coś jest nie tak
 - NIE mów graczowi co ma zrobić

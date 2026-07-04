@@ -107,6 +107,66 @@ def minutes_to_reach_phase(current_hour: int, target: str) -> int:
     return delta_hours * 60
 
 
+def init_clock_from_plan(
+    campaign_id: int, conn: sqlite3.Connection | None = None
+) -> int | None:
+    """#1208 — set the campaign's starting clock from `gm_plan_json.start_hour`.
+
+    Templates/plans may declare the hour the opening scene takes place (an evening
+    tavern scene → 19), instead of every campaign silently starting at 09:00.
+    No-op (returns None) when:
+    - the plan has no valid integer start_hour in 0–23,
+    - the session does not exist yet,
+    - the clock is already running (ingame_hours present or clock_history non-empty)
+      — never rewinds a campaign in progress.
+    Returns the applied hour on success.
+    """
+    managed = conn is None
+    if managed:
+        conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        try:
+            plan = json.loads((row["gm_plan_json"] if row else None) or "{}")
+        except Exception:
+            return None
+        raw_hour = plan.get("start_hour") if isinstance(plan, dict) else None
+        try:
+            start_hour = int(raw_hour)
+        except (TypeError, ValueError):
+            return None
+        if not 0 <= start_hour <= 23:
+            return None
+
+        sess = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not sess:
+            return None
+        flags = json.loads(sess["session_flags"] or "{}")
+        if "ingame_hours" in flags or flags.get("clock_history"):
+            return None  # clock already running — don't rewind mid-game
+
+        flags["ingame_hours"] = start_hour
+        flags["clock_history"] = [{
+            "from": start_hour, "to": start_hour, "delta": 0,
+            "reason": "plan_start_hour",
+        }]
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ?, ingame_hours = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), start_hour, sess["id"]),
+        )
+        if managed:
+            conn.commit()
+        return start_hour
+    finally:
+        if managed:
+            conn.close()
+
+
 def get_clock_state(campaign_id: int, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
     """Read the current clock state for a campaign.
 
