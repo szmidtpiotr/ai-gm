@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import hashlib
 import os
 import random
 
@@ -325,11 +326,14 @@ RAW_MIGRATIONS = [
     "ALTER TABLE hex_type_config ADD COLUMN is_passable INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE hex_type_config ADD COLUMN required_item TEXT",
     "UPDATE hex_type_config SET is_passable = 0 WHERE hex_type IN ('lake', 'ocean', 'sea')",
-    # C7: XP skill costs aligned to game_mechanics.md (new=100, 1→2=75, 2→3=150)
+    # C7 / #1164 — canonical XP meta (game_mechanics.md). Run-once (applied-set
+    # guarded in run_raw_migrations): the ONE enforcer that also corrects existing
+    # DBs, then never re-clobbers admin edits. ADMIN_SEEDS holds identical values
+    # for fresh DBs — keep the two in lock-step. new=100, 1→2=75, 2→3=150.
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_skill_rank_costs', '{\"1\":100,\"2\":75,\"3\":150}')",
-    # C7: skill rank ceiling = 3 for all skills
+    # C7: skill rank ceiling = 3 (run-once: admin edits per-skill ceiling survive replay, #1162)
     "UPDATE game_config_skills SET rank_ceiling = 3",
-    # C8: stat XP costs per game_mechanics.md (new_value→cost); current 8-10=50, 11-13=100, 14-16=200, 17-18=400
+    # C8: stat XP costs per game_mechanics.md (new_value→cost); 8-10=50, 11-13=100, 14-16=200, 17-18=400
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_point_costs', '{\"9\":50,\"10\":50,\"11\":50,\"12\":100,\"13\":100,\"14\":100,\"15\":200,\"16\":200,\"17\":200,\"18\":400,\"19\":400}')",
     # C8: stat ceiling = 19 (19+ = Niedostępne per game_mechanics.md)
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_value_ceiling', '19')",
@@ -493,43 +497,139 @@ RAW_MIGRATIONS = [
 ]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Migration idempotency (#1162 / #1163 / #1164)
+#
+# The runners used to replay every statement on every boot with a "no such table"
+# swallow. That (a) re-ran unconditional UPDATE / INSERT OR REPLACE and clobbered
+# admin runtime edits (loot weights, rank_ceiling, XP costs, hex terrain), and
+# (b) on a fresh DB silently skipped ALTERs whose tables did not exist yet, so the
+# schema was only complete after a 2nd restart. The table graph is CYCLIC
+# (RAW ↔ admin ↔ sql-file), so no single linear order gives a one-pass fresh DB.
+#
+# Fix: a `schema_migrations` applied-set so each non-DDL statement runs ONCE, plus
+# a fix-point loop (run_all_migrations) that re-runs the passes until zero
+# "no such table" remain. DDL (ALTER / CREATE) stays replay-idempotent as before.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ensure_schema_migrations(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS schema_migrations ("
+        " id TEXT PRIMARY KEY,"
+        " applied_at TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.commit()
+
+
+def _migration_applied(conn, mig_id):
+    return conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE id = ?", (mig_id,)
+    ).fetchone() is not None
+
+
+def _mark_migration(conn, mig_id):
+    conn.execute("INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)", (mig_id,))
+    conn.commit()
+
+
+def _is_ddl(sql):
+    """ALTER/CREATE are idempotent (IF NOT EXISTS / swallowed dup column) → always replay-safe.
+    Everything else (UPDATE / INSERT / DELETE) mutates data → must run at most once."""
+    head = sql.lstrip()[:6].upper()
+    return head.startswith("ALTER") or head.startswith("CREATE")
+
+
 def run_raw_migrations():
+    """Apply RAW_MIGRATIONS. Returns the count of statements skipped for a missing
+    table (so the fix-point loop knows to run another pass). Non-DDL statements are
+    guarded by the schema_migrations applied-set → they run exactly once and never
+    clobber later admin edits (#1162)."""
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
     logger.info("migration_db_path", db_path=DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    _ensure_schema_migrations(conn)
+    pending = 0
     for sql in RAW_MIGRATIONS:
+        run_once = not _is_ddl(sql)
+        mig_id = None
+        if run_once:
+            mig_id = "raw:" + hashlib.sha1(sql.encode("utf-8")).hexdigest()[:16]
+            if _migration_applied(conn, mig_id):
+                continue
         try:
             conn.execute(sql)
             conn.commit()
+            if mig_id:
+                _mark_migration(conn, mig_id)
             logger.info("migration_applied", sql=sql)
         except sqlite3.OperationalError as e:
             msg = str(e).lower()
-            if "duplicate column" in msg or "already exists" in msg or "no such table" in msg:
+            if "no such table" in msg:
+                # Target table not created yet — do NOT mark applied; retry next pass.
+                pending += 1
+                logger.info("migration_deferred", sql=sql, reason=str(e))
+            elif "duplicate column" in msg or "already exists" in msg:
                 logger.info("migration_skipped", sql=sql, reason=str(e))
             else:
                 logger.error("migration_error", sql=sql, error_message=str(e))
     conn.close()
+    return pending
 
 
 def run_app_sql_migrations():
-    """Apply optional SQL files from app/db/migrations/ (e.g. active_combat)."""
+    """Apply optional SQL files from app/db/migrations/ (e.g. active_combat).
+    Each file is applied at most once (schema_migrations applied-set) with its OWN
+    try/except, so a file that fails on a fresh DB (missing table) no longer aborts
+    the rest of the batch and its UPDATEs never re-clobber admin edits (#1162/#1163).
+    Returns the count of files deferred for a missing table."""
     mig_dir = Path(__file__).resolve().parent / "db" / "migrations"
     if not mig_dir.is_dir():
-        return
+        return 0
     conn = sqlite3.connect(DB_PATH)
+    pending = 0
     try:
+        _ensure_schema_migrations(conn)
         for path in sorted(mig_dir.glob("*.sql")):
-            sql = path.read_text(encoding="utf-8")
-            conn.executescript(sql)
-        conn.commit()
-    except sqlite3.OperationalError as e:
-        logger.error("migration_sql_file_error", error_message=str(e))
-        conn.rollback()
+            mig_id = "sqlfile:" + path.name
+            if _migration_applied(conn, mig_id):
+                continue
+            try:
+                conn.executescript(path.read_text(encoding="utf-8"))
+                conn.commit()
+                _mark_migration(conn, mig_id)
+            except sqlite3.OperationalError as e:
+                conn.rollback()
+                if "no such table" in str(e).lower():
+                    pending += 1
+                    logger.info("migration_sql_file_deferred", file=path.name, reason=str(e))
+                else:
+                    logger.error("migration_sql_file_error", file=path.name, error_message=str(e))
     finally:
         conn.close()
+    return pending
+
+
+def run_all_migrations(lite=False, max_passes=4):
+    """One boot = one call. Runs the migration passes to a fix-point: because the
+    table graph is cyclic (RAW ↔ admin ↔ sql-file), a single pass leaves forward
+    references unresolved. We repeat until no pass reports a missing table (#1163).
+    Returns the number of passes actually used."""
+    passes = 0
+    for _ in range(max_passes):
+        passes += 1
+        pending = run_raw_migrations()
+        pending += run_app_sql_migrations()
+        if not lite:
+            # admin migrations run LAST in each pass so they see RAW + sql-file tables;
+            # they are idempotent (CREATE IF NOT EXISTS / INSERT OR IGNORE / swallowed)
+            # and report their own deferrals so we keep iterating until admin settles.
+            pending += run_admin_migrations()
+        if pending == 0:
+            break
+    return passes
 
 
 def _backfill_terrain_tags():
@@ -605,10 +705,10 @@ async def lifespan(app: FastAPI):
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
     init_db()
-    run_raw_migrations()
-    run_app_sql_migrations()
-    if os.getenv("AIGM_E2E_LITE") != "1":
-        run_admin_migrations()
+    _lite = os.getenv("AIGM_E2E_LITE") == "1"
+    _passes = run_all_migrations(lite=_lite)
+    logger.info("migrations_complete", passes=_passes, lite=_lite)
+    if not _lite:
         hydrate_runtime_from_stored_preset()
         # E13 (#428) — ensure the generic encounter pool exists (idempotent).
         try:

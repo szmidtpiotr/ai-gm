@@ -3,7 +3,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-DB_TARGET="$ROOT_DIR/data/ai_gm.db"
+
+# #1166 — restore into the DB the running backend actually uses (DEV: data-dev,
+# PROD: data). The old hardcoded data/ai_gm.db restored a file the DEV backend
+# never reads, so the restore appeared to succeed but changed nothing live.
+# Override with AIGM_DB_FILE=<host path>.
+if [ -n "${AIGM_DB_FILE:-}" ]; then
+  DB_TARGET="$AIGM_DB_FILE"
+elif [ -f "$ROOT_DIR/data-dev/ai_gm.db" ]; then
+  DB_TARGET="$ROOT_DIR/data-dev/ai_gm.db"   # DEV
+else
+  DB_TARGET="$ROOT_DIR/data/ai_gm.db"       # PROD
+fi
+
 BACKUP_DIR="$ROOT_DIR/backups"
 
 if [ -z "${1:-}" ]; then

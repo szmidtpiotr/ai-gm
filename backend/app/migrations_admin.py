@@ -1617,23 +1617,27 @@ ADMIN_SEEDS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('loki_url', 'http://loki:3100')
     """,
+    # #1164 — single source of truth: values aligned to game_mechanics.md
+    # (skill 1→2=75, 2→3=150, new=100; stat costs per progression table; ceiling 19+).
+    # RAW_MIGRATIONS in main.py holds the identical values and enforces them once on
+    # existing DBs (run-once, applied-set guarded). Keep the two in lock-step.
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES (
       'xp_skill_rank_costs',
-      '{"1":50,"2":100,"3":200,"4":400,"5":1200}'
+      '{"1":100,"2":75,"3":150}'
     )
     """,
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES (
       'xp_stat_point_costs',
-      '{"8":40,"9":50,"10":65,"11":85,"12":110,"13":140,"14":180,"15":230,"16":300,"17":400,"18":550,"19":750,"20":1000}'
+      '{"9":50,"10":50,"11":50,"12":100,"13":100,"14":100,"15":200,"16":200,"17":200,"18":400,"19":400}'
     )
     """,
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
-    VALUES ('xp_stat_value_ceiling', '20')
+    VALUES ('xp_stat_value_ceiling', '19')
     """,
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
@@ -2651,6 +2655,11 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             msg = str(e).lower()
             if "already exists" in msg or "duplicate column" in msg:
                 logger.debug("v2_migration_skipped", label=label)
+            elif "no such column" in msg or "has no column named" in msg:
+                # #1163 — this seed references a column added by RAW_MIGRATIONS (main.py)
+                # which, on a fresh DB, may not have landed yet in this pass. Defer: the
+                # fix-point loop in run_all_migrations re-runs admin after RAW fills it in.
+                logger.debug("v2_migration_deferred_missing_column", label=label, reason=str(e))
             elif "no such table" in msg:
                 # Table doesn't exist in this DB (e.g. test fixtures only create admin tables).
                 # Skip silently — the column will be added when the full app DB is used.
@@ -5907,6 +5916,10 @@ def run_admin_migrations() -> None:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
 
+    # #1163 — count statements deferred for a missing table/column so the fix-point
+    # loop in main.run_all_migrations keeps iterating until admin settles too.
+    deferred = 0
+
     try:
         for sql in ADMIN_MIGRATIONS:
             try:
@@ -5921,6 +5934,15 @@ def run_admin_migrations() -> None:
                 if "already exists" in msg or "duplicate column" in msg:
                     logger.info(
                         "admin_migration_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
+                elif "no such table" in msg or "no such column" in msg or "has no column named" in msg:
+                    # Forward reference to a table/column another runner adds later —
+                    # defer; the fix-point loop re-runs admin after it lands (#1163).
+                    deferred += 1
+                    logger.info(
+                        "admin_migration_deferred",
                         sql_preview=sql.strip().splitlines()[0],
                         reason=str(e),
                     )
@@ -5960,6 +5982,15 @@ def run_admin_migrations() -> None:
                 if "already exists" in msg or "duplicate column" in msg:
                     logger.info(
                         "admin_migration_seeded_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
+                elif "no such table" in msg or "no such column" in msg or "has no column named" in msg:
+                    # #1163 — seed references a table/column another runner adds later
+                    # (e.g. price_gp). Defer; the fix-point loop re-runs it once present.
+                    deferred += 1
+                    logger.info(
+                        "admin_migration_seeded_deferred",
                         sql_preview=sql.strip().splitlines()[0],
                         reason=str(e),
                     )
@@ -6032,7 +6063,18 @@ def run_admin_migrations() -> None:
         _seed_pt8_terrain_costs(conn)  # #1118 PT8
         _ensure_encounter_catalog(conn)  # #1130 PT-D4a
         _backfill_local_hex_encounter_chance(conn)  # #1147
+    except sqlite3.OperationalError as e:
+        # #1163 — a helper referenced a table/column another runner adds later
+        # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
+        # loop in main.run_all_migrations re-runs admin once RAW/sql-file fill it in.
+        msg = str(e).lower()
+        if "no such table" in msg or "no such column" in msg or "has no column named" in msg:
+            deferred += 1
+            logger.info("admin_migration_helper_deferred", reason=str(e))
+        else:
+            raise
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.5")
+    logger.info("admin_migration_complete", phase="12.5", deferred=deferred)
+    return deferred

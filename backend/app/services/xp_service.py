@@ -2,11 +2,11 @@
 Character XP pool and skill / stat purchases (**[S10]**, **T21**).
 
 - `sheet_json.xp_available`, `sheet_json.xp_lifetime_earned`
-- Skill ranks — `game_config_meta.xp_skill_rank_costs`: {"1":50,"2":100,...}
-  (XP to reach rank N from rank N-1).
-- Stat bumps — `game_config_meta.xp_stat_point_costs`: {"11":100,...}
+- Skill ranks — `game_config_meta.xp_skill_rank_costs`: {"1":100,"2":75,"3":150}
+  (XP to reach rank N from rank N-1; game_mechanics.md).
+- Stat bumps — `game_config_meta.xp_stat_point_costs`: {"11":50,...}
   (XP to raise a stat **to** value N from N-1). Optional ceiling:
-  `xp_stat_value_ceiling` (default **20**).
+  `xp_stat_value_ceiling` (default **19** — 19+ = Niedostępne, game_mechanics.md; #1164).
 """
 
 from __future__ import annotations
