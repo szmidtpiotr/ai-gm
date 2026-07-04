@@ -1562,7 +1562,8 @@ def generate_opening_scene(
     """
     # Check not already generated
     existing = conn.execute(
-        "SELECT id FROM campaign_turns WHERE campaign_id = ? AND user_text IS NULL LIMIT 1",
+        "SELECT id FROM campaign_turns WHERE campaign_id = ? "
+        "AND (user_text = '' OR user_text IS NULL) LIMIT 1",
         (campaign_id,)
     ).fetchone()
     if existing:
@@ -1590,6 +1591,18 @@ def generate_opening_scene(
         plan.get("key_locations", [{}])[0] if plan.get("key_locations") else {}
     )
 
+    # #1152: when the plan has no key_locations, ground the opening in the party's
+    # real position (anchored location / hex terrain) so the intro doesn't invent a
+    # place that contradicts engine state ("teleport" on the next narrative turn).
+    starting_loc_name = starting_loc.get("name")
+    if not starting_loc_name:
+        try:
+            from app.services.location_state_service import describe_start_position
+            starting_loc_name = describe_start_position(conn, campaign_id)
+        except Exception:
+            starting_loc_name = None
+    starting_loc_name = starting_loc_name or "nieznane miejsce"
+
     # Build opening scene prompt
     bonds_text = "\n".join(
         f"  - {b.get('description', '')}" for b in (identity.get("bonds") or [])
@@ -1614,7 +1627,7 @@ POSTAĆ:
 KAMPANIA:
   Tytuł aktu 1: {act1.get('title', '')}
   Streszczenie: {act1.get('summary', '')}
-  Miejsce startowe: {starting_loc.get('name', 'nieznane miejsce')}
+  Miejsce startowe: {starting_loc_name}
 
 ZASADY:
 - Napisz 100-200 słów po polsku
@@ -1635,11 +1648,12 @@ ZASADY:
         if not prose.strip():
             prose = f"{name} przybywa do celu. Coś w powietrzu zdaje się nie tak."
 
-        # Store as turn 1 (no user_text)
+        # Store as turn 1 (empty user_text — column is NOT NULL; #1152: NULL here
+        # made every prebuilt opening fail and fall to the generic inline fallback)
         conn.execute(
             """INSERT INTO campaign_turns
                (campaign_id, character_id, user_text, assistant_text, route, turn_number)
-               VALUES (?, ?, NULL, ?, 'narrative', 1)""",
+               VALUES (?, ?, '', ?, 'narrative', 1)""",
             (campaign_id, character_id, prose)
         )
         conn.commit()

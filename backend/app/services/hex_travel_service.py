@@ -1269,7 +1269,22 @@ def resolve_starting_hex(
         except Exception as _pe:
             logger.warning("u28_placement_engine_error", error=str(_pe))
 
-    if not loc_key:
+    # #1152: for an EXISTING hex with no on-hex location, never anchor the session
+    # to a name-matched or first-canonical location — starting_location_name may be
+    # a random pick (sentinel) or a label from a different hex, and anchoring to it
+    # recreates the location↔hex rozjazd #992 removed (session at "Tundra" while
+    # current_hex is a forest on the other side of the map). Leave the location
+    # unanchored: the opening scene's location_intent creates and anchors the real
+    # start location on this hex.
+    if not loc_key and not is_new:
+        logger.info(
+            "s17_existing_hex_left_unanchored",
+            campaign_id=campaign_id,
+            q=sq, r=sr,
+            starting_name=starting_location_name,
+        )
+
+    if not loc_key and is_new:
         canonical_loc = _find_canonical_location_for_name(starting_location_name or "", conn)
         if canonical_loc:
             loc_key = canonical_loc["key"]

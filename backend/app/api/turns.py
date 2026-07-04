@@ -2890,6 +2890,83 @@ def _narrative_turn_count(conn: sqlite3.Connection, campaign_id: int) -> int:
     return int(row["n"] or 0) if row else 0
 
 
+def _apply_opening_location_intent(
+    conn: sqlite3.Connection, campaign_id: int, opening_text: str
+) -> None:
+    """#1152: apply the opening scene's location_intent (action=create) to the session.
+
+    The inline opening fallback used to store the narrator JSON verbatim and drop the
+    intent, so the invented start location was never created/anchored and the session
+    stayed anchored nowhere (or at an unrelated location) — the next narrative turn
+    then "teleported" the player back to raw hex terrain. Mirrors the create-character
+    opening path (characters.py), plus anchors the fresh location to the current hex.
+    """
+    try:
+        intent = parse_location_intent(opening_text, None)
+    except Exception as exc:
+        logger.warning("opening_intent_parse_failed", campaign_id=campaign_id, error=str(exc))
+        return
+    if not intent or intent.action != "create":
+        return
+    try:
+        from app.services.location_validator import persist_ai_generated_location
+
+        created = persist_ai_generated_location(intent, campaign_id=campaign_id, conn=conn)
+        if not created:
+            return
+        gs = conn.execute(
+            "SELECT id, current_location_id, session_flags FROM game_sessions "
+            "WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs or gs["current_location_id"]:
+            return
+        try:
+            cur_hex = (json.loads(gs["session_flags"] or "{}").get("current_hex")) or {}
+        except (ValueError, TypeError):
+            cur_hex = {}
+        loc_q = created.get("world_hex_q")
+        loc_r = created.get("world_hex_r")
+        has_hex = cur_hex.get("q") is not None and cur_hex.get("r") is not None
+        # A reused location already anchored to a DIFFERENT hex would re-create the
+        # location↔hex mismatch — leave the session unanchored in that case.
+        if (
+            loc_q is not None
+            and has_hex
+            and (int(loc_q), int(loc_r or 0)) != (int(cur_hex["q"]), int(cur_hex["r"]))
+        ):
+            logger.info(
+                "opening_intent_location_hex_mismatch_skipped",
+                campaign_id=campaign_id,
+                location_id=created.get("id"),
+            )
+            return
+        if loc_q is None and has_hex:
+            conn.execute(
+                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? "
+                "WHERE id = ? AND world_hex_q IS NULL",
+                (int(cur_hex["q"]), int(cur_hex["r"]), int(created["id"])),
+            )
+            conn.execute(
+                "UPDATE world_hexes SET location_key = ? "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND location_key IS NULL",
+                (created["key"], int(cur_hex["q"]), int(cur_hex["r"])),
+            )
+        conn.execute(
+            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+            (int(created["id"]), gs["id"]),
+        )
+        conn.commit()
+        logger.info(
+            "opening_intent_location_anchored",
+            campaign_id=campaign_id,
+            location_id=created.get("id"),
+            label=created.get("label"),
+        )
+    except Exception as exc:
+        logger.warning("opening_intent_apply_failed", campaign_id=campaign_id, error=str(exc))
+
+
 def _require_gm_plan_before_narrative_llm(
     conn: sqlite3.Connection, campaign_id: int, campaign: sqlite3.Row
 ) -> None:
@@ -2913,6 +2990,14 @@ def _require_gm_plan_before_narrative_llm(
         template_id = campaign["template_id"]
     except (KeyError, IndexError):
         template_id = None
+    if not template_id:
+        # #1152: create_campaign stamps source_template_id (template_id stays NULL for
+        # Kuźnia launches) — without this fallback prebuilt campaigns skipped
+        # generate_opening_scene() and fell to the generic inline opening.
+        try:
+            template_id = campaign["source_template_id"]
+        except (KeyError, IndexError):
+            template_id = None
 
     if template_id and raw and raw.strip() not in ("", "{}"):
         if _narrative_turn_count(conn, campaign_id) == 0:
@@ -5014,12 +5099,22 @@ def create_turn(
                 _name_open = character["name"] or "Bohater"
                 _arch_open = str(_sheet_open.get("archetype", "warrior")).lower()
                 _arch_lbl = "Uczony" if _arch_open == "scholar" else "Wojownik"
-                _loc_open = character["location"] or "nieznane miejsce"
+                # #1152: ground the opening in the session's REAL position (anchored
+                # location or hex terrain), not the stale characters.location field —
+                # otherwise the LLM invents a place the engine doesn't know and the
+                # next turn "teleports" the player back to the actual terrain.
+                from app.services.location_state_service import describe_start_position
+                _loc_open = (
+                    describe_start_position(conn, campaign_id)
+                    or character["location"]
+                    or "nieznane miejsce"
+                )
                 _opening_prompt = (
                     f"Postać: {_name_open}, Archetyp: {_arch_lbl}, Lokalizacja: {_loc_open}.\n\n"
                     "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
-                    "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
-                    "i zostaw otwarte zakończenie zachęcające do działania."
+                    "w którym bohater się znajduje. Opis MUSI zgadzać się z podaną lokalizacją — "
+                    "nie przenoś bohatera do innego rodzaju miejsca. Nie pytaj gracza o plany - "
+                    "po prostu opisz scenę i zostaw otwarte zakończenie zachęcające do działania."
                 )
                 _opening_fb = (_gen(
                     messages=[{"role": "system", "content": _OPENING_SYS},
@@ -5027,6 +5122,7 @@ def create_turn(
                     model=_opening_model, llm_config=llm_config,
                 ) or "").strip()
                 if _opening_fb:
+                    _apply_opening_location_intent(conn, campaign_id, _opening_fb)
                     _nt_fb = int((conn.execute(
                         "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
                         (campaign_id,),

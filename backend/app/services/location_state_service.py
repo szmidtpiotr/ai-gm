@@ -77,6 +77,81 @@ def get_current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str 
     return row["key"] if hasattr(row, "keys") else row[0]
 
 
+_TERRAIN_PL = {
+    "forest": "dziki las",
+    "plains": "otwarte równiny",
+    "mountains": "góry",
+    "hills": "wzgórza",
+    "swamp": "bagna",
+    "water": "brzeg wody",
+    "desert": "pustkowie",
+    "tundra": "mroźna tundra",
+    "town": "osada",
+    "castle": "zamek",
+}
+
+_SETTLEMENT_HEX_TYPES = {"town", "castle"}
+
+
+def describe_start_position(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    """#1152: human-readable description of the party's REAL start position.
+
+    Used to ground opening-scene prompts in engine state (anchored location, or the
+    terrain of current_hex) instead of the stale ``characters.location`` field —
+    otherwise the LLM invents a place (e.g. a tavern) that contradicts the hex the
+    session actually sits on, and the next narrative turn "teleports" the player.
+    Returns None when the session has no position at all.
+    """
+    try:
+        row = conn.execute(
+            "SELECT current_location_id, session_flags FROM game_sessions "
+            "WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+
+    loc_id = row["current_location_id"] if hasattr(row, "keys") else row[0]
+    if loc_id:
+        try:
+            loc = conn.execute(
+                "SELECT label, location_subtype FROM game_locations WHERE id = ?",
+                (int(loc_id),),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            loc = None
+        if loc and loc["label"]:
+            subtype = loc["location_subtype"] if "location_subtype" in loc.keys() else None
+            return f"{loc['label']} ({subtype})" if subtype else str(loc["label"])
+
+    flags_raw = row["session_flags"] if hasattr(row, "keys") else row[1]
+    try:
+        cur = (json.loads(flags_raw or "{}").get("current_hex")) or {}
+    except (ValueError, TypeError):
+        return None
+    if cur.get("q") is None or cur.get("r") is None:
+        return None
+    try:
+        wh = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+            (int(cur["q"]), int(cur["r"])),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not wh:
+        return None
+    hex_type = str(wh["hex_type"] or "")
+    terrain = _TERRAIN_PL.get(hex_type, hex_type or "dzicz")
+    label = wh["label"]
+    base = f"{label} — {terrain}" if label else terrain
+    if hex_type not in _SETTLEMENT_HEX_TYPES:
+        return f"{base}, teren dziki bez zabudowań (żadnej osady, karczmy ani budynku w zasięgu wzroku)"
+    return base
+
+
 def set_position(
     conn: sqlite3.Connection,
     campaign_id: int,
