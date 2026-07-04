@@ -43,6 +43,7 @@ from app.services.client_ui_config import (
     is_slash_command_enabled,
     slash_registry_key_for_dispatch,
 )
+from app.services import turn_lock
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.services.location_config_service import get_bool_flag
@@ -5014,7 +5015,10 @@ def create_turn(
 ):
     conn = get_db()
     turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn")
+    # #1186: in-flight lock — drugi równoległy turn tej samej kampanii → 409 (nie drugi LLM)
+    _lock_key = None
     try:
+        _lock_key = turn_lock.acquire_or_409(campaign_id)
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
 
@@ -5327,6 +5331,7 @@ def create_turn(
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         conn.close()
+        turn_lock.release(_lock_key)
 
 
 # ---------------------------------------------------------------------------
@@ -5362,7 +5367,14 @@ def create_turn_stream(
         "X-Accel-Buffering": "no",
         "X-Turn-Id": turn_id,
     }
+    # #1186: in-flight lock — drugi równoległy POST /turns/stream tej samej kampanii → 409
+    # (nie drugi call LLM). Ścieżka streamująca przekazuje własność locka generatorowi
+    # (`_lock_handed_off`), który zwalnia go w swoim `finally` PO [DONE]; wszystkie krótkie
+    # ścieżki (helpme/roll/command/gate) oraz błędy zwalniają w outer `finally`.
+    _lock_key = None
+    _lock_handed_off = False
     try:
+        _lock_key = turn_lock.acquire_or_409(campaign_id)
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
         llm_config = get_user_llm_settings_full(character["user_id"])
@@ -7000,8 +7012,19 @@ def create_turn_stream(
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
+        # #1186: przekaż własność locka generatorowi — zwalnia w `finally` po [DONE]
+        # (albo na rozłączeniu klienta → GeneratorExit). Lock trzymany przez CAŁY żywy
+        # stream LLM, nie tylko do returnu funkcji.
+        _lock_handed_off = True
+
+        def _locked_token_generator():
+            try:
+                yield from token_generator()
+            finally:
+                turn_lock.release(_lock_key)
+
         return StreamingResponse(
-            token_generator(),
+            _locked_token_generator(),
             media_type="text/event-stream",
             headers=stream_headers,
         )
@@ -7010,6 +7033,10 @@ def create_turn_stream(
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         conn.close()
+        # Ścieżki krótkie (helpme/roll/command/gate) i błędy zwalniają tutaj; ścieżka
+        # streamująca oddała lock generatorowi (`_lock_handed_off`) i tu go NIE zwalnia.
+        if not _lock_handed_off:
+            turn_lock.release(_lock_key)
 
 
 @router.post("/campaigns/{campaign_id}/search")

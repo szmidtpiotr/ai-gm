@@ -42,6 +42,11 @@ async function fetchAndRenderClock(campaignId) {
 // current clock period. Admin-configurable in Admin → Wygląd.
 
 let _visualSettings = null;
+// #1171: in-flight guard — jedna tura naraz. Blokuje sendTurn ORAZ ścieżkę Enter
+// (Enter omija wyłączony przycisk), a watchdogi (Escape/visibilitychange) nie mogą
+// re-enable przycisku w trakcie żywego streamu. Backendowy lock (#1186) to druga warstwa.
+let _turnInFlight = false;
+window.__turnInFlight = () => _turnInFlight;  // podgląd dla testów Playwright
 const _PERIOD_KEY_MAP = {
     'Rano':       'time_of_day.rano',
     'Popołudnie': 'time_of_day.popoludnie',
@@ -1440,6 +1445,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         return;
     }
 
+    // #1171: in-flight guard — druga tura (spam Enter / szybki re-klik / struct action)
+    // podczas żywego streamu jest odrzucana tu, zanim poleci drugi POST /turns/stream.
+    if (_turnInFlight) return;
+    _turnInFlight = true;
+
     // Stop any in-flight TTS immediately — every player action interrupts reading.
     try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
     window.voiceUI?.unlockAudio?.();
@@ -1516,6 +1526,9 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         console.error('Send message error:', error);
         showToast(error.message || 'Nie udało się wysłać wiadomości', 'error');
     } finally {
+        // #1171: stream zakończony (sukces/błąd/skill-test) → zwolnij in-flight guard.
+        // Dopiero teraz kolejna tura / Enter może wystartować.
+        _turnInFlight = false;
         if (!_skillTestPending) elements.btnSend.disabled = false;
         scrollToBottom();
     }
@@ -1726,6 +1739,9 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
 }
 
 async function handleSendMessage() {
+    // #1171: Enter podczas żywego streamu → no-op (nie omija guarda przez wyłączony przycisk).
+    if (_turnInFlight) return;
+
     const content = elements.chatInput.value.trim();
     if (!content) return;
 
@@ -2156,6 +2172,9 @@ window.finishCampaignFlow = finishCampaignFlow;
 // ── UI state recovery ─────────────────────────────────────────────────────────
 
 function _resetInputState() {
+    // #1171: NIE re-enable w trakcie żywego streamu — Escape / powrót z tła nie mogą
+    // odblokować przycisku, dopóki tura leci (inaczej watchdog otwiera drugą turę).
+    if (_turnInFlight) return;
     // Re-enable send button if stuck
     if (elements.btnSend) elements.btnSend.disabled = false;
     // Hide TTS overlay if stuck visible
