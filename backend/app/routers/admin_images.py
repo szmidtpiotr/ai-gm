@@ -16,7 +16,7 @@ from typing import Any
 
 from app.routers.admin import require_admin_token
 
-router = APIRouter(prefix="/api/admin/images", tags=["admin-images"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/api/admin/images", tags=["admin-images"])  # auth: warstwa /api/admin (#1187)
 
 IMAGE_GEN_URL = os.getenv("IMAGE_GEN_URL", "http://192.168.1.170:8765")
 TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))

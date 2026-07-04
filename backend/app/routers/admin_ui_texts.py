@@ -25,7 +25,7 @@ from app.routers.admin import require_admin_token
 
 DB_PATH = Path("/data/ai_gm.db")
 
-admin_router = APIRouter(prefix="/admin/ui-texts", tags=["admin-ui-texts"], dependencies=[Depends(require_admin_token)])
+admin_router = APIRouter(prefix="/admin/ui-texts", tags=["admin-ui-texts"])  # auth: warstwa /api/admin (#1187)
 public_router = APIRouter(prefix="/ui/texts", tags=["ui-texts"])
 
 # ── Seed catalogue ────────────────────────────────────────────────────────────

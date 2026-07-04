@@ -26,7 +26,7 @@ from app.services import combat_service as combat
 DB_PATH = Path("/data/ai_gm.db")
 SANDBOX_TITLE_PREFIX = "[SANDBOX]"
 
-router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"])  # auth: warstwa /api/admin (#1187)
 
 
 def _conn() -> sqlite3.Connection:

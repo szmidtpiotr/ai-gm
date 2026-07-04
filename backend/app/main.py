@@ -744,6 +744,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
 
+# #1187 — jedna warstwa auth admina. Chroni /api/admin/* domyślnie (świadomy opt-out
+# w ADMIN_AUTH_ALLOWLIST). Rejestrowana PRZED CORS → jest najbardziej wewnętrzną
+# warstwą, więc odpowiedzi 401 przechodzą jeszcze przez CORSMiddleware (nagłówki).
+from app.core.admin_guard import admin_namespace_guard  # noqa: E402
+
+app.middleware("http")(admin_namespace_guard)
+
 
 def _get_cors_origins() -> list[str]:
     raw = os.environ.get("CORS_ORIGINS", "https://aigm-dev.studio-colorbox.com,https://aigm.studio-colorbox.com")

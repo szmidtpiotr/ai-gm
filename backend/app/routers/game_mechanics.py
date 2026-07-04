@@ -5,7 +5,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.routers.admin import require_admin_token
 
-router = APIRouter(prefix="/api/admin/game-mechanics", tags=["game_mechanics"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/api/admin/game-mechanics", tags=["game_mechanics"])  # auth: warstwa /api/admin (#1187)
 
 @router.get("/content", response_class=PlainTextResponse)
 async def get_game_mechanics_content():

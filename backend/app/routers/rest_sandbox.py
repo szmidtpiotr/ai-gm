@@ -24,7 +24,7 @@ DB_PATH = Path("/data/ai_gm.db")
 RSB_TITLE_PREFIX = "[REST-SANDBOX]"
 CLONE_PREFIX = "[RSB] "
 
-router = APIRouter(prefix="/admin/rest-sandbox", tags=["rest-sandbox"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/admin/rest-sandbox", tags=["rest-sandbox"])  # auth: warstwa /api/admin (#1187)
 
 
 def _conn() -> sqlite3.Connection:
