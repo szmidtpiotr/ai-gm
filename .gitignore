@@ -10,6 +10,9 @@ data/seeds/*
 !data/seeds/*.sql
 !data/seeds/*.json
 !data/seeds/tile_categories/
+# Content-as-code seeds (#1202) — track the whole content/ subtree
+!data/seeds/content/
+!data/seeds/content/*.json
 !data/regions/
 data/regions/*
 !data/regions/*.json

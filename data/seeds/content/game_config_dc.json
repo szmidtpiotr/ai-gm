@@ -1,0 +1,42 @@
+[
+  {
+    "key": "easy",
+    "label": "Łatwe",
+    "value": 8,
+    "sort_order": 1,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Proste, oczywiste działania. Jeśli gracz robi to sprytnie, zwykle ma dużą szansę na sukces."
+  },
+  {
+    "key": "extreme",
+    "label": "Ekstremalne",
+    "value": 20,
+    "sort_order": 4,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Granica możliwości. Taka próba jest ryzykowna i często wiąże się z konsekwencjami porażki."
+  },
+  {
+    "key": "hard",
+    "label": "Trudne",
+    "value": 16,
+    "sort_order": 3,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Niepewne i wymagające. Nawet przy dobrym przygotowaniu jest sporo ryzyka."
+  },
+  {
+    "key": "legendary",
+    "label": "Legendarne",
+    "value": 24,
+    "sort_order": 5,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Działanie na poziomie legend. Tylko wyjątkowe przygotowanie, talent lub dramatyczny zryw może mieć sens."
+  },
+  {
+    "key": "medium",
+    "label": "Średnie",
+    "value": 12,
+    "sort_order": 2,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Wymaga skupienia i pewnej biegłości. Błędy kosztują, ale to nadal realna próba."
+  }
+]

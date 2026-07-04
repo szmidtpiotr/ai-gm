@@ -1,0 +1,142 @@
+[
+  {
+    "key": "brutal",
+    "name": "Brutalny",
+    "tier": 3,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":6}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:06:55",
+    "updated_at": "2026-06-11 12:06:55"
+  },
+  {
+    "key": "conquering",
+    "name": "Zdobywczy",
+    "tier": 3,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":4},{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":3}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "empowered",
+    "name": "Wzmocniony",
+    "tier": 2,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":2}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "guardian",
+    "name": "Strażniczy",
+    "tier": 2,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"ac_bonus\",\"value\":2}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "keen",
+    "name": "Wyostrzony",
+    "tier": 2,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":4}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:06:55",
+    "updated_at": "2026-06-11 12:06:55"
+  },
+  {
+    "key": "lifesteal",
+    "name": "Krwiopijca",
+    "tier": 2,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"heal_on_hit\",\"value\":2}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "light_edge",
+    "name": "Lekkie Ostrze",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":1}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "numbing",
+    "name": "Odrętwiający",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"apply_condition\",\"condition_key\":\"slowed\",\"duration_rounds\":2}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "runic_edge",
+    "name": "Runiczny",
+    "tier": 3,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":3},{\"type\":\"apply_condition\",\"condition_key\":\"weakened\",\"duration_rounds\":3}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "sharp",
+    "name": "Ostry",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":2}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:06:55",
+    "updated_at": "2026-06-11 12:06:55"
+  },
+  {
+    "key": "sturdy_grip",
+    "name": "Pewny Chwyt",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":1}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "swift_hand",
+    "name": "Szybka Ręka",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"DEX\",\"value\":1}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "vampiric",
+    "name": "Wampiryczny",
+    "tier": 3,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"damage_bonus\",\"value\":4},{\"type\":\"heal_on_hit\",\"value\":3}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  },
+  {
+    "key": "warding",
+    "name": "Ochronny",
+    "tier": 1,
+    "allowed_item_types": "weapon",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"gear_bonus\",\"effects\":[{\"type\":\"ac_bonus\",\"value\":1}]}",
+    "is_active": 1,
+    "created_at": "2026-06-11 14:47:17",
+    "updated_at": "2026-06-11 14:47:17"
+  }
+]

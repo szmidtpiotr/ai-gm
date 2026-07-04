@@ -1,0 +1,106 @@
+[
+  {
+    "id": 1,
+    "category_key": "stealth",
+    "skill_key": "stealth",
+    "default_dc": 12,
+    "keywords": "skrad,przekrad,niepostrzeżenie,kryję,chowam,ukrywam,przemykam,cichaczem",
+    "enabled": 1
+  },
+  {
+    "id": 2,
+    "category_key": "climb_jump",
+    "skill_key": "athletics",
+    "default_dc": 12,
+    "keywords": "wspinam,wspinaczka,skaczę,skok,przeskakuję,gramolę,drapię się,wchodzę na",
+    "enabled": 1
+  },
+  {
+    "id": 3,
+    "category_key": "theft",
+    "skill_key": "lockpick",
+    "default_dc": 12,
+    "keywords": "kradnę,ukraść,podkradam,kieszeni,zabieram,grasuje,kraść",
+    "enabled": 1
+  },
+  {
+    "id": 4,
+    "category_key": "persuasion_pressure",
+    "skill_key": "persuasion",
+    "default_dc": 12,
+    "keywords": "kłamię,blefuję,przekonuję,zastraszam,szantażuję,przesłuchuję,wymuszam",
+    "enabled": 1
+  },
+  {
+    "id": 5,
+    "category_key": "disarm",
+    "skill_key": "lockpick",
+    "default_dc": 16,
+    "keywords": "rozbrajam,unieszkodliwiam,manipuluję mechanizmem,wyważam zamek,otwieramy zamek",
+    "enabled": 1
+  },
+  {
+    "id": 6,
+    "category_key": "acrobatics",
+    "skill_key": "athletics",
+    "default_dc": 12,
+    "keywords": "akrobatyka,unik,uchylam,przewrót,balansując,równowaga",
+    "enabled": 1
+  },
+  {
+    "id": 601,
+    "category_key": "swimming",
+    "skill_key": "swim",
+    "default_dc": 12,
+    "keywords": "płynę,pływam,przepływam,nurkuję,wpław,brnę przez wodę,tonę",
+    "enabled": 1
+  },
+  {
+    "id": 602,
+    "category_key": "mounted",
+    "skill_key": "riding",
+    "default_dc": 12,
+    "keywords": "wsiadam na konia,dosiadam,wierzchowca,galopem,konno,jadę konno,cwałuję",
+    "enabled": 1
+  },
+  {
+    "id": 603,
+    "category_key": "pickpocketing",
+    "skill_key": "pickpocket",
+    "default_dc": 16,
+    "keywords": "kieszonkost,podkradam z kieszeni,wyciągam sakiewkę,opróżniam kieszenie,zwędzić sakiewkę",
+    "enabled": 1
+  },
+  {
+    "id": 604,
+    "category_key": "disguise",
+    "skill_key": "disguise",
+    "default_dc": 16,
+    "keywords": "przebieram się,przebranie,udaję kogoś,podszywam się,charakteryzuję,zmieniam wygląd",
+    "enabled": 1
+  },
+  {
+    "id": 605,
+    "category_key": "tracking",
+    "skill_key": "tracking",
+    "default_dc": 12,
+    "keywords": "tropię,śledzę ślady,podążam za śladami,czytam tropy,wytropić,szukam śladów",
+    "enabled": 1
+  },
+  {
+    "id": 606,
+    "category_key": "sailing",
+    "skill_key": "sailing",
+    "default_dc": 12,
+    "keywords": "steruję łodzią,rozkładam żagiel,nawiguję,płynę statkiem,trzymam ster,wychodzę z burzy",
+    "enabled": 1
+  },
+  {
+    "id": 607,
+    "category_key": "bribery",
+    "skill_key": "bribe",
+    "default_dc": 16,
+    "keywords": "przekupuję,wręczam łapówkę,daję w łapę,opłacam strażnika,łapówka,sypię złotem",
+    "enabled": 1
+  }
+]

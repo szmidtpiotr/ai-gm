@@ -28,6 +28,9 @@ for i in $(seq 1 12); do
     echo "✅ Dev deployment zakończony!"
     echo "🗺  Seed mapy świata (Kresy) — odtworzy z docs/world/world_map_seed.json jeśli world_hexes puste..."
     python3 scripts/seed_world_map.py || true
+    echo "📚 Seed treści gry (#1202) — git seedy -> DB (kanon; wiersze kampanijne nietknięte)..."
+    cp data-dev/ai_gm.db "backups/ai_gm_dev_pre_seed_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
+    python3 scripts/seed_content.py --apply --db data-dev/ai_gm.db --seeds data/seeds/content || true
     echo "   Dev: http://localhost:3002"
     exit 0
   fi

@@ -1,0 +1,51 @@
+[
+  {
+    "key": "CHA",
+    "label": "Charyzma",
+    "description": "Persuasion and intimidation presence",
+    "sort_order": 6,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "CON",
+    "label": "Kondycja",
+    "description": "Endurance and physical resilience",
+    "sort_order": 3,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "DEX",
+    "label": "Zręczność",
+    "description": "Agility, stealth, initiative",
+    "sort_order": 2,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "INT",
+    "label": "Inteligencja",
+    "description": "Arcane aptitude and knowledge",
+    "sort_order": 4,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "LCK",
+    "label": "Szczęście",
+    "description": "Rzuty losowe, jakość łupów, szanse ucieczki i zdarzenia losowe.",
+    "sort_order": 7,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "STR",
+    "label": "Siła",
+    "description": "Physical power and melee force",
+    "sort_order": 1,
+    "locked_at": "2026-04-14T00:00:00Z"
+  },
+  {
+    "key": "WIS",
+    "label": "Mądrość",
+    "description": "Awareness, survival, intuition",
+    "sort_order": 5,
+    "locked_at": "2026-04-14T00:00:00Z"
+  }
+]

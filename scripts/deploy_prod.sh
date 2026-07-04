@@ -72,6 +72,11 @@ compose up -d --build --remove-orphans
 echo "⏳ [5/5] Healthcheck backendu (max 120s)..."
 for i in $(seq 1 24); do
   if curl -sf http://localhost:8000/api/healthz > /dev/null; then
+    echo "📚 Seed treści gry (#1202) — git seedy -> DB (kanon; wiersze kampanijne + gracze nietknięci)..."
+    cp data/ai_gm.db "backups/ai_gm_pre_seed_$(date +%Y%m%d_%H%M%S).db"
+    if ! python3 scripts/seed_content.py --apply --db data/ai_gm.db --seeds data/seeds/content; then
+      echo "⚠️  Seed treści NIE powiódł się (rollback wewnętrzny — treść niezmieniona). Backend działa na dotychczasowej treści."
+    fi
     echo "✅ Deployment zakończony sukcesem!"
     echo "   Prod UI: http://localhost:3001"
     echo "   Prod API: http://localhost:8000/api"

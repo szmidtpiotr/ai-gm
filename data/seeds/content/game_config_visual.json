@@ -1,0 +1,62 @@
+[
+  {
+    "key": "dice_config",
+    "value": "{\"customColorset\": {\"foreground\": \"#ffffff\", \"background\": [\"#e76d08\", \"#ff0000\"], \"outline\": \"#000000\", \"texture\": \"fire\", \"material\": \"glass\"}, \"gravity_multiplier\": 300, \"strength\": 2, \"baseScale\": 89, \"light_intensity\": 1.5}",
+    "updated_at": "2026-06-23 20:01:13"
+  },
+  {
+    "key": "image_gen.checkpoint",
+    "value": "\"\"",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "image_gen.refine_steps",
+    "value": "8",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "image_gen.steps",
+    "value": "4",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "image_gen.url",
+    "value": "\"http://192.168.1.170:8765\"",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.enabled",
+    "value": "true",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.intensity",
+    "value": "60",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.mode",
+    "value": "\"frame\"",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.noc",
+    "value": "{\"color\":\"#5a6d99\",\"accent\":\"#7a8cb8\",\"label\":\"Noc\"}",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.popoludnie",
+    "value": "{\"color\":\"#c9a54a\",\"accent\":\"#d4b65e\",\"label\":\"Popołudnie\"}",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.rano",
+    "value": "{\"color\":\"#ffd97a\",\"accent\":\"#f7e7a3\",\"label\":\"Rano\"}",
+    "updated_at": "2026-06-11 12:06:54"
+  },
+  {
+    "key": "time_of_day.wieczor",
+    "value": "{\"color\":\"#c95c2e\",\"accent\":\"#e07555\",\"label\":\"Wieczór\"}",
+    "updated_at": "2026-06-11 12:06:54"
+  }
+]
