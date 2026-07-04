@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1,
+    "key": "berserker_rage",
+    "label": "Szał Berserkera",
+    "description": "Gdy zdrowie spada poniżej 30%, ataki zadają +2 obrażeń.",
+    "trigger_keywords": "berserk,rage,wściekłość,szał",
+    "effect_json": "{\"type\":\"damage_bonus\",\"bonus\":2,\"condition\":\"hp_below_30pct\"}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:47"
+  },
+  {
+    "id": 2,
+    "key": "shadow_step",
+    "label": "Krok Cienia",
+    "description": "Ukryty w walce — wrogowie mają -2 do trafienia przez pierwszą rundę.",
+    "trigger_keywords": "shadow,cień,ukrycie,skradanie",
+    "effect_json": "{\"type\":\"static_stat_modifier\",\"stats\":{\"enemy_attack_penalty\":2},\"duration\":1}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:47"
+  },
+  {
+    "id": 3,
+    "key": "iron_will",
+    "label": "Żelazna Wola",
+    "description": "Raz na długi odpoczynek zignoruj pierwszą śmiertelną ranę.",
+    "trigger_keywords": "will,wola,przeżycie,determinacja",
+    "effect_json": "{\"type\":\"apply_condition\",\"condition\":\"death_ward\",\"duration\":1,\"charges\":1}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:47"
+  },
+  {
+    "id": 4,
+    "key": "lucky_charm",
+    "label": "Talizman Szczęścia",
+    "description": "Raz na sesję przerzuć jeden nieudany rzut.",
+    "trigger_keywords": "luck,szczęście,traf,los",
+    "effect_json": "{\"type\":\"apply_condition\",\"condition\":\"reroll_once\",\"duration\":1,\"charges\":1}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:47"
+  },
+  {
+    "id": 5,
+    "key": "arcane_sensitivity",
+    "label": "Wrażliwość Arkanyczna",
+    "description": "Czujesz obecność magii — DC na wykrycie magicznych pułapek -4.",
+    "trigger_keywords": "magic,magia,arkana,czar,zaklęcie",
+    "effect_json": "{\"type\":\"static_stat_modifier\",\"stats\":{\"detect_magic_dc_bonus\":-4}}",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:47"
+  }
+]

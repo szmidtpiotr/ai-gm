@@ -5907,6 +5907,60 @@ def _ensure_encounter_catalog(conn: sqlite3.Connection) -> None:
     _cat.seed_catalog(conn)
 
 
+# Dead legacy columns dropped for DEV↔PROD schema alignment (#1202 CZĘŚĆ B).
+# Verified 2026-07-04: DEV backend boots + runs the whole game without any of
+# these (they are already absent on DEV); PROD still carries them from legacy
+# migrations. Zero code references on THESE tables, and PROD has no index /
+# trigger / view on any of them, so DROP COLUMN is safe. Kept deliberately:
+#   game_config_weapons.durability_base  (live — weapon durability)
+#   game_config_items.image_url / *.image_gen_prompt (live — image gen successor)
+_LEGACY_CONTENT_COLUMNS_1202 = {
+    "game_config_items": ("image_prompt", "durability_base"),
+    "game_config_weapons": ("image_prompt",),
+    "game_config_loot_entries": ("currency_code",),
+    "game_dungeons": ("difficulty_config_json",),
+    "game_locations": (
+        "local_hex_q",
+        "local_hex_r",
+        "is_generic",
+        "hex_type_key",
+        "image_url",
+    ),
+}
+
+
+def _drop_legacy_content_columns_1202(conn: sqlite3.Connection) -> None:
+    """#1202 B — drop 10 dead legacy columns so DEV and PROD schemas match.
+
+    Idempotent + existence-guarded: only drops a column that is actually
+    present, so this no-ops on DEV (already dropped) and drops on PROD once.
+    Requires SQLite ≥ 3.35 (DROP COLUMN) — verified 3.46.1 on both hosts.
+    """
+    for table, columns in _LEGACY_CONTENT_COLUMNS_1202.items():
+        try:
+            present = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        except sqlite3.OperationalError:
+            continue  # table not on this DB yet — nothing to drop
+        if not present:
+            continue  # unknown table — skip
+        for col in columns:
+            if col not in present:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+                conn.commit()
+                logger.info("legacy_column_dropped_1202", table=table, column=col)
+            except sqlite3.OperationalError as e:
+                # Older SQLite, or column bound to an index/trigger — leave it
+                # rather than fail the whole boot; drift stays visible in sync.
+                logger.warning(
+                    "legacy_column_drop_skipped_1202",
+                    table=table,
+                    column=col,
+                    reason=str(e),
+                )
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6063,6 +6117,7 @@ def run_admin_migrations() -> None:
         _seed_pt8_terrain_costs(conn)  # #1118 PT8
         _ensure_encounter_catalog(conn)  # #1130 PT-D4a
         _backfill_local_hex_encounter_chance(conn)  # #1147
+        _drop_legacy_content_columns_1202(conn)  # #1202 B — DEV↔PROD schema align
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

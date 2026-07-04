@@ -1,0 +1,281 @@
+[
+  {
+    "id": 1,
+    "location_key": "goblin_camp_u31",
+    "enemy_key": "goblin_u31",
+    "spawn_chance": 1.0,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 2,
+    "location_key": "empty_inn_u31",
+    "enemy_key": "goblin_u31",
+    "spawn_chance": 0.0,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 3,
+    "location_key": "tavern_u31",
+    "enemy_key": "goblin_u31",
+    "spawn_chance": 1.0,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 27,
+    "location_key": "bor_zmarlych",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.6,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 28,
+    "location_key": "bor_zmarlych",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.5,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 29,
+    "location_key": "bor_zmarlych",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 30,
+    "location_key": "bor_zmarlych",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 31,
+    "location_key": "bor_cmentarz_przy_drodze",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.6,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 32,
+    "location_key": "bor_cmentarz_przy_drodze",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.5,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 33,
+    "location_key": "bor_cmentarz_przy_drodze",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 34,
+    "location_key": "bor_kostnica_lesna",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.6,
+    "max_count": 4,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 35,
+    "location_key": "bor_kostnica_lesna",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 36,
+    "location_key": "bor_kosciol_zapomniany",
+    "enemy_key": "wraith",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 37,
+    "location_key": "bor_kosciol_zapomniany",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 38,
+    "location_key": "bor_kosciol_zapomniany",
+    "enemy_key": "cultist",
+    "spawn_chance": 0.3,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 39,
+    "location_key": "bor_swiete_zrodlo_krwi",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.5,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 40,
+    "location_key": "bor_swiete_zrodlo_krwi",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 41,
+    "location_key": "zgliszcza",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 42,
+    "location_key": "zgliszcza",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 43,
+    "location_key": "zgliszcza_masowy_grob",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.6,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 44,
+    "location_key": "zgliszcza_masowy_grob",
+    "enemy_key": "ghoul",
+    "spawn_chance": 0.5,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 45,
+    "location_key": "zgliszcza_masowy_grob",
+    "enemy_key": "skeleton",
+    "spawn_chance": 0.4,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 46,
+    "location_key": "zgliszcza_kosciol_spalony",
+    "enemy_key": "wraith",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 47,
+    "location_key": "zgliszcza_kosciol_spalony",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 48,
+    "location_key": "bagienna_knieja",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 49,
+    "location_key": "bagienna_knieja",
+    "enemy_key": "giant_spider",
+    "spawn_chance": 0.4,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 50,
+    "location_key": "bagienna_knieja",
+    "enemy_key": "slime",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 51,
+    "location_key": "bagienna_wyspa_topielca",
+    "enemy_key": "zombie",
+    "spawn_chance": 0.6,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 52,
+    "location_key": "bagienna_wyspa_topielca",
+    "enemy_key": "ghost",
+    "spawn_chance": 0.3,
+    "max_count": 2,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 53,
+    "location_key": "bagienna_pradawny_kamien",
+    "enemy_key": "cultist",
+    "spawn_chance": 0.4,
+    "max_count": 3,
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 54,
+    "location_key": "bagienna_pradawny_kamien",
+    "enemy_key": "dark_mage",
+    "spawn_chance": 0.3,
+    "max_count": 1,
+    "notes": null,
+    "is_active": 1
+  }
+]

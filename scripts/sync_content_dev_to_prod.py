@@ -28,40 +28,48 @@ world_hexes (PROD owns its bigger map), game_config_meta (env-specific),
 admin_tokens/audit. Same exclusion list as the /prod-update skill.
 """
 
+import os
 import sqlite3
 import sys
 
 PROD_DB = "/data/ai_gm.db"
 
-CONTENT_TABLES = [
-    "game_config_stats",
-    "game_config_skills",
-    "game_config_dc",
-    "game_config_conditions",
-    "game_config_xp_rewards",
-    "game_config_xp_awards",
-    "game_config_archetypes",
-    "game_config_weapons",
-    "game_config_spells",
-    "game_config_items",
-    "game_config_consumables",
-    "game_config_loot_tables",
-    "game_config_enemies",
-    "game_config_loot_entries",
-    "game_config_visual",
-    "game_config_affixes",
-    "game_config_hidden_traits",
-    "game_config_riddles",
-    "game_config_services",
-    "game_config_skill_risk_categories",
-    "game_dungeons",
-    "campaign_templates",
-    "npcs",
-    "game_locations",
-    "location_enemy_assignments",
-    "location_npc_assignments",
-    "npc_locations",
-]
+# Single source of truth for the table list = content_seed_lib (#1202). Import it
+# if copied alongside this script; otherwise fall back to an embedded copy so this
+# emergency tool always runs standalone. A backend test asserts the lists match.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from content_seed_lib import CONTENT_TABLES  # noqa: F401
+except ImportError:
+    CONTENT_TABLES = [
+        "game_config_stats",
+        "game_config_skills",
+        "game_config_dc",
+        "game_config_conditions",
+        "game_config_xp_rewards",
+        "game_config_xp_awards",
+        "game_config_archetypes",
+        "game_config_weapons",
+        "game_config_spells",
+        "game_config_items",
+        "game_config_consumables",
+        "game_config_loot_tables",
+        "game_config_enemies",
+        "game_config_loot_entries",
+        "game_config_visual",
+        "game_config_affixes",
+        "game_config_hidden_traits",
+        "game_config_riddles",
+        "game_config_services",
+        "game_config_skill_risk_categories",
+        "game_dungeons",
+        "campaign_templates",
+        "npcs",
+        "game_locations",
+        "location_enemy_assignments",
+        "location_npc_assignments",
+        "npc_locations",
+    ]
 
 
 def cols(conn, schema, table):

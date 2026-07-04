@@ -1,0 +1,177 @@
+[
+  {
+    "id": 1,
+    "npc_id": 4,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 2,
+    "npc_id": 3,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 3,
+    "npc_id": 1,
+    "location_key": "volhynia_kupiecka"
+  },
+  {
+    "id": 4,
+    "npc_id": 2,
+    "location_key": "trzech_krukow"
+  },
+  {
+    "id": 5,
+    "npc_id": 73,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 6,
+    "npc_id": 74,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 7,
+    "npc_id": 75,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 8,
+    "npc_id": 76,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 9,
+    "npc_id": 77,
+    "location_key": "vilnograd_stolica"
+  },
+  {
+    "id": 10,
+    "npc_id": 78,
+    "location_key": "volhynia_kupiecka"
+  },
+  {
+    "id": 11,
+    "npc_id": 79,
+    "location_key": "volhynia_kupiecka"
+  },
+  {
+    "id": 12,
+    "npc_id": 80,
+    "location_key": "volhynia_kupiecka"
+  },
+  {
+    "id": 13,
+    "npc_id": 81,
+    "location_key": "czarnogrod_port"
+  },
+  {
+    "id": 14,
+    "npc_id": 82,
+    "location_key": "czarnogrod_port"
+  },
+  {
+    "id": 15,
+    "npc_id": 83,
+    "location_key": "czarnogrod_port"
+  },
+  {
+    "id": 16,
+    "npc_id": 84,
+    "location_key": "klasztor_iskry_centrum"
+  },
+  {
+    "id": 17,
+    "npc_id": 85,
+    "location_key": "klasztor_iskry_centrum"
+  },
+  {
+    "id": 18,
+    "npc_id": 86,
+    "location_key": "zatoka_topielcow"
+  },
+  {
+    "id": 19,
+    "npc_id": 87,
+    "location_key": "zatoka_topielcow"
+  },
+  {
+    "id": 20,
+    "npc_id": 88,
+    "location_key": "zatoka_topielcow"
+  },
+  {
+    "id": 21,
+    "npc_id": 89,
+    "location_key": "brzezino"
+  },
+  {
+    "id": 22,
+    "npc_id": 90,
+    "location_key": "brzezino"
+  },
+  {
+    "id": 23,
+    "npc_id": 91,
+    "location_key": "brzezino"
+  },
+  {
+    "id": 24,
+    "npc_id": 92,
+    "location_key": "wolanka"
+  },
+  {
+    "id": 25,
+    "npc_id": 93,
+    "location_key": "wolanka"
+  },
+  {
+    "id": 26,
+    "npc_id": 94,
+    "location_key": "wolanka"
+  },
+  {
+    "id": 27,
+    "npc_id": 95,
+    "location_key": "strazyn"
+  },
+  {
+    "id": 28,
+    "npc_id": 96,
+    "location_key": "strazyn"
+  },
+  {
+    "id": 29,
+    "npc_id": 97,
+    "location_key": "strazyn"
+  },
+  {
+    "id": 30,
+    "npc_id": 98,
+    "location_key": "trzech_krukow"
+  },
+  {
+    "id": 31,
+    "npc_id": 99,
+    "location_key": "cieszowice"
+  },
+  {
+    "id": 32,
+    "npc_id": 100,
+    "location_key": "cieszowice"
+  },
+  {
+    "id": 33,
+    "npc_id": 101,
+    "location_key": "cieszowice"
+  },
+  {
+    "id": 34,
+    "npc_id": 102,
+    "location_key": "pustelnia_marcina"
+  },
+  {
+    "id": 35,
+    "npc_id": 103,
+    "location_key": "step_wilkow"
+  }
+]

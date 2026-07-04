@@ -1,0 +1,92 @@
+[
+  {
+    "key": "blacksmith_repair",
+    "label": "Kowal: naprawa ekwipunku",
+    "cost_gp": 15,
+    "description": "Naprawa uszkodzonej broni lub zbroi",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "guide_day",
+    "label": "Przewodnik: jeden dzień",
+    "cost_gp": 12,
+    "description": "Miejscowy przewodnik przez niebezpieczny teren",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "healer_heavy",
+    "label": "Uzdrowiciel: ciężkie rany",
+    "cost_gp": 50,
+    "description": "Leczenie poważnych ran wymagające magii lub chirurgii",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "healer_light",
+    "label": "Uzdrowiciel: lekkie rany",
+    "cost_gp": 10,
+    "description": "Opatrzenie ran niegroźnych: skaleczenia, stłuczenia",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "inn_night",
+    "label": "Gospoda: jedna noc",
+    "cost_gp": 5,
+    "description": "Nocleg i posiłek w gospodzie — standardowy pokój",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "inn_night_fine",
+    "label": "Gospoda: luksusowy pokój",
+    "cost_gp": 20,
+    "description": "Nocleg w prywatnym pokoju z pościelą i śniadaniem",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "messenger",
+    "label": "Posłaniec: wiadomość",
+    "cost_gp": 8,
+    "description": "Wysłanie wiadomości do pobliskiego miasta",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "stable_night",
+    "label": "Stajnia: jedna noc",
+    "cost_gp": 3,
+    "description": "Nocleg i pasza dla konia lub wierzchowca",
+    "is_active": 1,
+    "created_at": "2026-06-11 12:19:44",
+    "updated_at": "2026-06-11 12:19:44"
+  },
+  {
+    "key": "tavern_drink",
+    "label": "Gospoda: napój",
+    "cost_gp": 1,
+    "description": "Sam napój (piwo, wino, woda) — bez jedzenia (#751)",
+    "is_active": 1,
+    "created_at": "2026-06-19 14:40:57",
+    "updated_at": "2026-06-19 14:40:57"
+  },
+  {
+    "key": "tavern_meal",
+    "label": "Gospoda: posiłek",
+    "cost_gp": 2,
+    "description": "Jedzenie i napój w gospodzie — bez noclegu (#751)",
+    "is_active": 1,
+    "created_at": "2026-06-19 14:40:57",
+    "updated_at": "2026-06-19 14:40:57"
+  }
+]

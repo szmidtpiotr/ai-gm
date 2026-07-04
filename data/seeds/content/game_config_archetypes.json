@@ -1,0 +1,41 @@
+[
+  {
+    "key": "rogue",
+    "label": "Łotrzyk",
+    "description": "Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.",
+    "starter_items_json": "[{\"weapon_key\":\"dagger\"},{\"weapon_key\":\"shortbow\"},{\"item_key\":\"leather_armor\"},{\"consumable_key\":\"arrows\",\"quantity\":20}]",
+    "starter_gold_gp": 10,
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-06-11 12:25:21",
+    "updated_at": "2026-07-04 12:38:38",
+    "hp_base": 8,
+    "starting_stats_json": "{\"STR\":10,\"DEX\":12,\"CON\":10,\"INT\":10,\"WIS\":10,\"CHA\":10,\"LCK\":11}"
+  },
+  {
+    "key": "scholar",
+    "label": "Uczony",
+    "description": "Mag i znawca tajemnej wiedzy.",
+    "starter_items_json": "[{\"weapon_key\":\"quarterstaff\"},{\"consumable_key\":\"health_potion_small\"},{\"consumable_key\":\"mana_potion\"}]",
+    "starter_gold_gp": 15,
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-06-11 12:16:53",
+    "updated_at": "2026-07-04 12:38:38",
+    "hp_base": 6,
+    "starting_stats_json": "{\"STR\":10,\"DEX\":10,\"CON\":10,\"INT\":12,\"WIS\":11,\"CHA\":10,\"LCK\":10}"
+  },
+  {
+    "key": "warrior",
+    "label": "Wojownik",
+    "description": "Mistrz walki wręcz i broni.",
+    "starter_items_json": "[{\"weapon_key\": \"shortsword\"}, {\"weapon_key\": \"wooden_shield\"}, {\"weapon_key\": \"shortbow\"}, {\"item_key\": \"leatherarmor\"}, {\"consumable_key\": \"arrows\", \"quantity\": 20}, {\"consumable_key\": \"bandage\", \"quantity\": 2}]",
+    "starter_gold_gp": 10,
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-06-11 12:16:53",
+    "updated_at": "2026-07-04 12:38:38",
+    "hp_base": 12,
+    "starting_stats_json": "{\"STR\":12,\"DEX\":10,\"CON\":11,\"INT\":10,\"WIS\":10,\"CHA\":10,\"LCK\":10}"
+  }
+]
