@@ -114,10 +114,8 @@ const elements = {
     sheetHp: document.getElementById('sheet-hp'),
     sheetHpBar: document.getElementById('sheet-hp-bar'),
     sheetLevel: document.getElementById('sheet-level'),
-    sheetStats: document.getElementById('sheet-stats'),
     sheetSkills: document.getElementById('sheet-skills'),
     sheetGold: document.getElementById('sheet-gold'),
-    sheetInventory: document.getElementById('sheet-inventory'),
 
     // Settings Panel
     settingsPanel: document.getElementById('settings-panel'),
@@ -1329,8 +1327,6 @@ function initEventListeners() {
     // Overlay
     elements.overlay?.addEventListener('click', handleOverlayClick);
 
-    // Close settings panel
-    document.getElementById('settings-close-btn')?.addEventListener('click', closeSettings);
 
     // Swipe down to close panels
     initPanelSwipeDown(elements.settingsPanel, closeSettings);
@@ -1366,7 +1362,6 @@ function initEventListeners() {
 
     // Death screen buttons
     document.getElementById('resurrect-btn')?.addEventListener('click', handleResurrect);
-    document.getElementById('death-return-btn')?.addEventListener('click', handleDeathReturn);
 
     // Stage 9 P7 — post-end option buttons, shared between death + victory screens.
     document.addEventListener('click', (e) => {
@@ -2532,25 +2527,6 @@ async function _lmRefresh() {
   return data;
 }
 
-async function _lmOpen() {
-  if (!currentCampaignId) return;
-  try {
-    const data = await _lmRefresh();
-    if (!data?.has_local_map) {
-      // Fallthrough to world map if no local map
-      _wmOpen();
-      return;
-    }
-    _lmap.panel.removeAttribute('hidden');
-    _lmap.panel.style.transform = 'translateX(0)';
-    // Defer centering until after layout is applied
-    requestAnimationFrame(() => { _lmCenter(); _lmRender(); });
-  } catch (err) {
-    showToast(err.message || 'Błąd ładowania mapy osady', 'error');
-    _wmOpen(); // fallback to world map
-  }
-}
-
 function _lmClose() {
   _lmap.panel.style.transform = 'translateX(100%)';
   setTimeout(() => _lmap.panel.setAttribute('hidden', ''), 280);
@@ -3121,7 +3097,6 @@ function updateDungeonHUD() {
     const label = document.getElementById('dungeon-hud-label');
     const progress = document.getElementById('dungeon-hud-progress');
     const roomType = document.getElementById('dungeon-hud-room-type');
-    const advBtn = document.getElementById('dungeon-advance-btn');
 
     if (label) label.textContent = `⛏ ${run.dungeon_label || 'Loch'}`;
 
@@ -3154,7 +3129,6 @@ function updateDungeonHUD() {
     if (roomViewBtn) roomViewBtn.hidden = !currentNode?.content?.image_url;
 
     // v2: hide legacy advance-btn (movement via direction buttons)
-    if (advBtn) advBtn.hidden = true;
 
     // Refresh nav + tile scene
     updateDungeonNav(run);
@@ -3762,11 +3736,6 @@ function showDungeonBossChoiceModal(run) {
     document.getElementById('dungeon-boss-exit-btn')?.focus();
 }
 
-function _closeDungeonModals() {
-    ['dungeon-death-modal', 'dungeon-abandon-modal', 'dungeon-resume-modal', 'dungeon-boss-modal']
-        .forEach(id => document.getElementById(id)?.setAttribute('hidden', ''));
-}
-
 // ── Dungeon Map v2 (tile graph) — L11 ────────────────────────────────────────
 
 const ROOM_TYPE_LABELS = {
@@ -4178,9 +4147,6 @@ function initDungeon() {
         _dungeonResolveTile('rest');
     });
 
-    document.getElementById('dungeon-advance-btn')?.addEventListener('click', () => {
-        // Legacy: advance-btn no longer used in v2 but kept for safety
-    });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
     // #1097: soft finale gate — persistent "Zakończ przygodę" menu button + confirm modal
     document.getElementById('finish-campaign-btn')?.addEventListener('click', () => {
@@ -4193,7 +4159,6 @@ function initDungeon() {
         window.finishCampaignFlow?.();
     });
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
-    document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
 
     // #741: środkowy ⊕ D-pada otwiera mapę lochu (skrót pod kciukiem, jak ikona 🗺 w HUD).

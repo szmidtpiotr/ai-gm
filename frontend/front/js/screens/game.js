@@ -115,7 +115,6 @@ async function enterGame(campaign, opts = {}) {
     // matches the value on campaign entry (fixes stale bar from a previous hero/session).
     updateHeaderStats();
     elements.chatMessages.innerHTML = '';
-    document.getElementById('skill-roll-popup')?.remove();
     const _diceOverlayEl = document.getElementById('dice-overlay');
     if (_diceOverlayEl) _diceOverlayEl.hidden = true;
 
@@ -2165,8 +2164,6 @@ function _resetInputState() {
         window.voiceUI?.stopPlayback?.();
         ttsOverlay.hidden = true;
     }
-    // Remove any orphaned skill test popup
-    document.getElementById('skill-roll-popup')?.remove();
 }
 
 // Escape key: dismiss skill test popup or reset stuck input state
@@ -3164,66 +3161,6 @@ async function renderReputationSection(character) {
     }
 }
 
-async function renderSkillsTab(sheet) {
-    const skills = sheet?.skills || {};
-    if (typeof skills !== 'object' || Array.isArray(skills)) {
-        elements.sheetSkills.innerHTML = '<p class="muted">Brak umiejętności</p>';
-        return;
-    }
-
-    await _ensureSkillMeta();
-    const labelByKey = Object.fromEntries(ALL_SKILL_ROWS.map(r => [r.key, r.label]));
-
-    const entries = Object.entries(skills)
-        .filter(([_, v]) => Number(v) > 0) // only trained
-        .map(([k, v]) => {
-            const meta = SKILL_META_CACHE.byKey?.[k] || {};
-            return {
-                key: k,
-                label: meta.label || labelByKey[k] || _formatSkillLabel(k),
-                rank: Number(v) || 0,
-                ceiling: Number(meta.rank_ceiling) || 5,
-                description: SKILL_META_CACHE.descByKey?.[k] || meta.description || '',
-                stat: meta.linked_stat || (ALL_SKILL_ROWS.find(r => r.key === k)?.stat) || '',
-            };
-        })
-        .sort((a, b) => a.label.localeCompare(b.label));
-
-    if (!entries.length) {
-        elements.sheetSkills.innerHTML = '<p class="muted">Brak wytrenowanych umiejętności</p>';
-        return;
-    }
-
-    elements.sheetSkills.innerHTML = entries.map(s => {
-        const desc = s.description || 'Brak opisu w bazie.';
-        const stat = s.stat ? `<span class="skill-item__stat">${escapeHtml(s.stat)}</span>` : '';
-        return `
-            <div class="skill-item skill-item--clickable" data-skill-key="${escapeHtml(s.key)}" title="${escapeHtml(desc)}">
-                <div class="skill-item__row">
-                    <span class="skill-item__name">${escapeHtml(s.label)}</span>
-                    <span class="skill-item__meta">${stat}<span class="skill-item__rank">${s.rank}/${s.ceiling}</span></span>
-                </div>
-                <div class="skill-item__desc" hidden>${escapeHtml(desc)}</div>
-            </div>`;
-    }).join('');
-
-    // Tap toggles description for mobile (desktop has native title= tooltip on hover too)
-    elements.sheetSkills.querySelectorAll('.skill-item--clickable').forEach(el => {
-        el.addEventListener('click', () => {
-            const desc = el.querySelector('.skill-item__desc');
-            if (!desc) return;
-            const isOpen = !desc.hasAttribute('hidden');
-            // close all others
-            elements.sheetSkills.querySelectorAll('.skill-item__desc').forEach(d => d.setAttribute('hidden', ''));
-            elements.sheetSkills.querySelectorAll('.skill-item--clickable').forEach(d => d.classList.remove('skill-item--open'));
-            if (!isOpen) {
-                desc.removeAttribute('hidden');
-                el.classList.add('skill-item--open');
-            }
-        });
-    });
-}
-
 function _formatSkillLabel(key) {
     const k = String(key || '').trim().toLowerCase();
     const map = {
@@ -3322,17 +3259,6 @@ function _itemFitsSlot__weapon(item, slot) {
     // #863: off_hand = tarcze/buklery (off_hand_only) + LEKKIE bronie 'either'. Ciężka 'either' → tylko main.
     if (slot === 'off_hand')  return ws === 'off_hand_only' || (ws === 'either' && item.is_light === true);
     return false;
-}
-
-// Pre-existing helper continues below — left intact.
-function _invPickEquipSlot__legacy(item, occupied) {
-    const t = String(item.item_type || '').toLowerCase();
-    if (t === 'weapon') {
-        if (!occupied.main_hand) return 'main_hand';
-        if (!occupied.off_hand)  return 'off_hand';
-        return 'main_hand';
-    }
-    return null;
 }
 
 function _invIsUsable(item) {
@@ -5844,25 +5770,9 @@ async function handleResurrect() {
     });
 }
 
-async function handleDeathReturn() {
-    hideDeathScreen();
-    currentCampaignId = null;
-    currentCampaign = null;
-    characterData = null;
-    await loadCampaigns();
-    showScreen('campaigns');
-}
-
 // ============================================================================
 // Utility Functions
 // ============================================================================
-function formatTime(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
-    return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-}
-
 function handleOverlayClick() {
     if (isSheetOpen) closeCharacterSheet();
     if (isSettingsOpen) closeSettings();

@@ -789,54 +789,6 @@ function showNewCampaignScreen() {
     loadHeroes().then(() => showScreen('heroes'));
 }
 
-// D9 (#384) — Hub kampanii: 5 trybów z flagą dostępności (no broken states).
-async function _openCampaignModesHub() {
-    if (!currentHero?.id) {
-        showToast('Najpierw wybierz bohatera.', 'info', 3000);
-        loadHeroes().then(() => showScreen('heroes'));
-        return;
-    }
-    document.getElementById('campaign-modes-hub')?.remove();
-    let modes = [];
-    try { const d = await apiRequest('GET', '/campaign-modes'); modes = d.modes || []; }
-    catch (e) { modes = [{ key: 'nowa', label: 'Nowa kampania', description: '', available: true }]; }
-
-    const routes = {
-        nowa: () => handleNewCampaignWithHero(),
-        loch: () => (typeof openDungeonPicker === 'function' ? openDungeonPicker() : showToast('Loch chwilowo niedostępny', 'info')),
-        gotowa: () => _openReadyCampaignPicker(),
-        loch_kafelki: () => showToast('Loch z kafelkami — wkrótce w tym miejscu', 'info', 3000),
-        multiplayer: () => (typeof openMultiplayerLobby === 'function' ? openMultiplayerLobby() : showToast('Multiplayer — lobby pojawi się tutaj', 'info', 3000)),
-    };
-
-    const overlay = document.createElement('div');
-    overlay.id = 'campaign-modes-hub';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9998;padding:16px';
-    const cards = modes.map(m => {
-        const dis = !m.available;
-        const cnt = (m.count != null && m.count > 0) ? ` <span style="color:#888;font-size:.72rem">(${m.count})</span>` : '';
-        // U3: multiplayer shows "Wkrótce" badge instead of generic "— niedostępne"
-        const isMpDisabled = dis && m.key === 'multiplayer';
-        const disLabel = isMpDisabled
-            ? ` <span style="font-size:.68rem;color:#888;background:rgba(255,255,255,.07);padding:1px 7px;border-radius:10px;vertical-align:middle" data-mp-soon>Wkrótce</span>`
-            : (dis ? ' — niedostępne' : '');
-        return `<button data-mode="${m.key}" ${dis ? 'disabled' : ''} style="text-align:left;background:${dis ? '#0a0a0f' : '#0e0e16'};border:1px solid ${dis ? 'rgba(255,255,255,.05)' : 'rgba(245,158,11,.25)'};border-radius:10px;padding:12px 14px;cursor:${dis ? 'not-allowed' : 'pointer'};opacity:${dis ? .5 : 1};width:100%">
-            <div style="font-weight:600;color:#eee">${escapeHtml(m.label)}${cnt}${isMpDisabled ? disLabel : ''}</div>
-            <div style="font-size:.76rem;color:#9aa;margin-top:3px">${escapeHtml(m.description || '')}${!isMpDisabled && dis ? ' — niedostępne' : ''}</div>
-          </button>`;
-    }).join('');
-    overlay.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:460px;width:100%;padding:18px;display:flex;flex-direction:column;gap:10px;max-height:88vh;overflow-y:auto">
-        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700;color:#f5deb3;font-size:1.05rem">Wybierz tryb gry</div><button id="cmh-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
-        ${cards}
-      </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('#cmh-close').addEventListener('click', () => overlay.remove());
-    overlay.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
-        const k = b.dataset.mode; overlay.remove(); (routes[k] || (() => {}))();
-    }));
-    document.body.appendChild(overlay);
-}
-
 // E8 (#423) — player picker for ready (pre-built) campaigns. Cards show title,
 // description and difficulty; a difficulty filter narrows the list; clicking a
 // card launches the campaign from that template (copies the GM plan).

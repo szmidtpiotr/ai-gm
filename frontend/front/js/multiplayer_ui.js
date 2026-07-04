@@ -757,11 +757,6 @@ function setLobbyMaxPlayers(n) {
     });
 }
 
-function setMpTimer(minutes) {
-    const inp = document.getElementById('mp-timer-input');
-    if (inp) { inp.value = minutes; updateMpTimerHint(); }
-}
-
 function updateMpTimerHint() {
     const inp = document.getElementById('mp-timer-input');
     const hint = document.getElementById('mp-timer-hint');
