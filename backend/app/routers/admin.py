@@ -2476,6 +2476,47 @@ def admin_get_campaign_turns(
         conn.close()
 
 
+@router.post("/admin/campaigns/{campaign_id}/run-command")
+def admin_run_campaign_command(
+    campaign_id: int,
+    payload: dict = Body(...),
+    _: None = Depends(require_admin_token),
+):
+    """#1169 — Execute an admin slash command against a campaign's character.
+
+    Resolves the character bound to the campaign, then routes the text through
+    commands_service.execute_command_logic (the same engine the in-game composer
+    uses). Supports the /debug family (set-hp, xp add/set, roll, reset-cooldowns,
+    set-state, dump-state) plus /help, /name, /sheet. The frontend command box in
+    the campaign modal previously hit this (non-existent) route → 404.
+    """
+    text = str(payload.get("text") or "").strip()
+    if not text.startswith("/"):
+        raise HTTPException(status_code=400, detail="Komenda musi zaczynać się od /")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ? "
+            "ORDER BY (status='active') DESC, id DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not char:
+        raise HTTPException(status_code=404, detail=f"Brak postaci przypiętej do kampanii {campaign_id}")
+
+    from app.services.commands_service import execute_command_logic
+    try:
+        result = execute_command_logic(int(char["id"]), text)
+        return result.payload
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
 @router.post("/admin/campaigns/{campaign_id}/regenerate-summary")
 def admin_regenerate_campaign_summary(
     campaign_id: int, _: None = Depends(require_admin_token)

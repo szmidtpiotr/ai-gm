@@ -30,15 +30,6 @@ function _timeAgo(iso) {
 // ── Module-level state ─────────────────────────────────────────────────────────
 let _pdrawerCurrentUser = null;
 
-// ── Mode labels ────────────────────────────────────────────────────────────────
-const _MODE_LABELS = {
-  ai_campaign_enabled:    { label: 'Kampania AI',                    desc: 'Generowanie kampanii przez AI na żywo.' },
-  prebuilt_enabled:       { label: 'Gotowa kampania',                 desc: 'Wybór z predefiniowanych szablonów przygód.' },
-  dungeon_enabled:        { label: 'Loch (stary)',                    desc: 'Farmowalne lochy — stary system proceduralny.' },
-  dungeon_tiles_enabled:  { label: 'Loch (Kafelki)',                  desc: 'Nowy system kafelkowy z wizualnymi komnatami.' },
-  multiplayer_enabled:    { label: 'Multiplayer (Wyprawa grupowa)',    desc: 'Lobby wieloosobowe — tworzenie i dołączanie do sesji grupowych.' },
-};
-
 // ── Filter / selection helpers ─────────────────────────────────────────────────
 export function filterTableGeneric(input, tableId, nameClass) {
   const q = input.value.toLowerCase();
@@ -221,13 +212,11 @@ export async function openPlayerDrawer(userId, username) {
         <button class="pdrawer-tab active" data-pdtab="info">Info</button>
         <button class="pdrawer-tab" data-pdtab="camps">Kampanie</button>
         <button class="pdrawer-tab" data-pdtab="llm">LLM</button>
-        <button class="pdrawer-tab" data-pdtab="modes">Tryby gry</button>
       </div>
       <div class="pdrawer-body">
         <div class="pdrawer-pane active" id="pdrawer-info"><div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div></div>
         <div class="pdrawer-pane" id="pdrawer-camps"></div>
         <div class="pdrawer-pane" id="pdrawer-llm"></div>
-        <div class="pdrawer-pane" id="pdrawer-modes"></div>
       </div>
       <div class="pdrawer-foot">
         <button class="btn btn-secondary" onclick="_closePlayerDrawer()">Zamknij</button>
@@ -240,10 +229,8 @@ export async function openPlayerDrawer(userId, username) {
   document.getElementById('pdrawer-info').innerHTML    = '<div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div>';
   const campsPane  = document.getElementById('pdrawer-camps');
   const llmPane    = document.getElementById('pdrawer-llm');
-  const modesPane  = document.getElementById('pdrawer-modes');
   campsPane.innerHTML = ''; campsPane.dataset.loaded = '';
   llmPane.innerHTML   = ''; llmPane.dataset.loaded   = '';
-  if (modesPane) { modesPane.innerHTML = ''; modesPane.dataset.loaded = ''; }
   _switchPdrawerTab('info');
   backdrop.classList.add('open');
   drawer.classList.add('open');
@@ -256,7 +243,6 @@ export function _switchPdrawerTab(tab) {
   if (!_pdrawerCurrentUser) return;
   if (tab === 'camps'  && !document.getElementById('pdrawer-camps').dataset.loaded)  _loadPdrawerCamps(_pdrawerCurrentUser.id);
   if (tab === 'llm'    && !document.getElementById('pdrawer-llm').dataset.loaded)    _loadPdrawerLlm(_pdrawerCurrentUser.id);
-  if (tab === 'modes'  && !document.getElementById('pdrawer-modes').dataset.loaded)  _loadPdrawerModes(_pdrawerCurrentUser.id);
 }
 
 // ── Drawer: Info tab ───────────────────────────────────────────────────────────
@@ -424,67 +410,9 @@ export async function _resurrectChar(charId, name, userId, btn) {
   } catch(e) { showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera (force)'; }
 }
 
-// ── Drawer: Tryby gry tab ──────────────────────────────────────────────────────
-export async function _loadPdrawerModes(userId) {
-  const pane = document.getElementById('pdrawer-modes');
-  pane.innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div>';
-  try {
-    const d = await apiFetch(`/api/admin/users/${userId}/game-modes`);
-    const { global_flags = {}, overrides = {}, effective = {} } = d;
-    pane.innerHTML = `
-      <div style="padding:12px">
-        <p style="font-size:0.78rem;color:var(--t3);margin:0 0 12px">
-          Puste = brak nadpisania (używa globalnego ustawienia). Zaznacz lub odznacz, aby wymusić wartość dla tego gracza.
-        </p>
-        <div style="display:flex;flex-direction:column;gap:14px" id="pdrawer-modes-checks">
-          ${Object.entries(_MODE_LABELS).map(([key, {label, desc}]) => {
-            const isOverridden = key in overrides;
-            const val = effective[key] !== false;
-            return `
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <input type="checkbox" data-modekey="${key}" ${val ? 'checked' : ''} ${isOverridden ? 'data-overridden="1"' : ''}
-                style="width:17px;height:17px;margin-top:2px;accent-color:var(--accent);flex-shrink:0">
-              <span>
-                <strong style="font-size:0.88rem">${label}</strong>
-                ${isOverridden
-                  ? '<span style="font-size:0.7rem;color:var(--accent);margin-left:6px">nadpisano</span>'
-                  : '<span style="font-size:0.7rem;color:var(--t3);margin-left:6px">globalne: ' + (global_flags[key] !== false ? '✓' : '✗') + '</span>'}
-                <span style="display:block;font-size:0.75rem;color:var(--t3)">${desc}</span>
-              </span>
-            </div>`;
-          }).join('')}
-        </div>
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button class="btn btn-primary btn-sm" onclick="_savePdrawerModes(${userId},this)">Zapisz nadpisania</button>
-          <button class="btn btn-secondary btn-sm" onclick="_clearPdrawerModes(${userId},this)">Wyczyść (wróć do globalnych)</button>
-        </div>
-      </div>`;
-    pane.dataset.loaded = '1';
-  } catch(e) { pane.innerHTML = `<div style="padding:20px;color:var(--red)">${_esc(e.message)}</div>`; }
-}
-
-export async function _savePdrawerModes(userId, btn) {
-  btn.disabled = true;
-  const checks  = document.querySelectorAll('#pdrawer-modes-checks input[type=checkbox]');
-  const payload = {};
-  checks.forEach(cb => { payload[cb.dataset.modekey] = cb.checked; });
-  try {
-    await apiFetch(`/api/admin/users/${userId}/game-modes`, { method:'PATCH', body: JSON.stringify(payload) });
-    showToast('Tryby gracza zapisane.', 'success');
-    document.getElementById('pdrawer-modes').dataset.loaded = '';
-    _loadPdrawerModes(userId);
-  } catch(e) { showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
-}
-
-export async function _clearPdrawerModes(userId, btn) {
-  btn.disabled = true;
-  try {
-    await apiFetch(`/api/admin/users/${userId}/game-modes`, { method:'DELETE' });
-    showToast('Nadpisania wyczyszczone.', 'success');
-    document.getElementById('pdrawer-modes').dataset.loaded = '';
-    _loadPdrawerModes(userId);
-  } catch(e) { showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
-}
+// #1169 — per-user "Tryby gry" drawer retired: it called
+// GET/PATCH/DELETE /api/admin/users/{id}/game-modes which never existed (404).
+// Game modes are a GLOBAL setting only (Admin → System → Tryby gry).
 
 // ── Drawer: LLM tab ────────────────────────────────────────────────────────────
 export async function _loadPdrawerLlm(userId) {
@@ -612,8 +540,5 @@ Object.assign(window, {
   _deletePlayerRow,
   _saveResUses,
   _resurrectChar,
-  _loadPdrawerModes,
-  _savePdrawerModes,
-  _clearPdrawerModes,
   _savePdrawerLlm,
 });

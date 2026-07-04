@@ -132,16 +132,8 @@ async def get_image_gen_status():
         return {"online": False, "url": url, "error": str(ex)}
 
 
-@router.get("/models")
-async def list_models():
-    url = _get_image_gen_url()
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(f"{url}/models")
-            r.raise_for_status()
-            return {"models": r.json()}
-    except Exception as ex:
-        return {"models": [], "error": str(ex)}
+# #1168 — duplicate GET /models removed here; canonical definition (with
+# 503/502 error surfacing) lives further down in this module.
 
 
 class GenerateRequest(BaseModel):

@@ -3153,6 +3153,18 @@ def get_character_spells_public(character_id: int):
     return {"spells": get_character_spells(character_id)}
 
 
+@router.get("/spells")
+def get_spell_catalog_public():
+    """#1170 — Public spell catalog for the Scholar level-up modal.
+
+    The player UI (game.js) merges this against a character's known spells to
+    render learn/upgrade rows. Previously the frontend hit a non-existent
+    /api/spells (404 swallowed → empty list); this is the missing endpoint.
+    """
+    from app.services.spell_service import get_spell_catalog
+    return {"spells": get_spell_catalog()}
+
+
 # ─── Crafter NPC endpoints (#466 F6) ─────────────────────────────────────────
 
 class CraftApplyAffixRequest(BaseModel):

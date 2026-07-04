@@ -908,7 +908,9 @@ const _ROW_REGISTRY = {
     btn.disabled = true; btn.textContent = '⏳';
     try {
       if (entityType === 'location') {
-        await apiFetch(`/api/locations/${key}`, { method:'PATCH', body: JSON.stringify({ canonical: 1 }) }).catch(()=>{});
+        // #1169 — /api/locations/{key} has no PATCH (405); the partial-update
+        // endpoint that accepts `canonical` is /api/locations/admin/locations/{key}.
+        await apiFetch(`/api/locations/admin/locations/${key}`, { method:'PATCH', body: JSON.stringify({ canonical: 1 }) }).catch(()=>{});
       }
       await apiFetch(`/api/admin/world/review/${entityType}/${key}`, { method:'POST', body: JSON.stringify({ action:'approve' }) });
       _showToast(`Zatwierdzono jako Kanon.`, 'success');

@@ -1175,19 +1175,9 @@ class MpCombatActionReq(BaseModel):
     roll_result: Optional[int] = None
 
 
-@router.post("/campaigns/{campaign_id}/combat/start")
-def start_mp_combat(
-    campaign_id: int,
-    body: MpCombatStartReq,
-    authorization: Optional[str] = Header(None),
-    user_id: Optional[int] = Query(None),
-):
-    """G7 (#791) — Start sequential MP combat for all campaign members."""
-    uid = resolve_authed_user_id(authorization, user_id)
-    try:
-        return svc.start_mp_combat(campaign_id, body.enemy_keys)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# #1168 — duplicate route removed. combat.py's POST /campaigns/{id}/combat/start
+# is registered first and already branches to svc.start_mp_combat for MP campaigns
+# (mode=="multiplayer"), so this copy was permanently shadowed / unreachable.
 
 
 @router.post("/campaigns/{campaign_id}/combat/action")

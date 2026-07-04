@@ -184,6 +184,10 @@ function filterTableGeneric(input, tableId, nameClass) {
 // ══════════════════════════════════════════════════════════════
 //  Campaign admin commands (_CAMP_CMDS + helpers + _campModalResurrect)
 // ══════════════════════════════════════════════════════════════
+  // #1169 — only commands the backend engine (commands_service.execute_command_logic,
+  // via POST /admin/campaigns/{id}/run-command) actually implements. The legacy
+  // /heal //gold //level //additem //quest… entries had NO backend handler anywhere
+  // and were removed rather than left as dead autocomplete.
   const _CAMP_CMDS = [
     { cmd: '/debug set-hp',          hint: 'N',          desc: 'Ustaw HP postaci' },
     { cmd: '/debug dump-state',       hint: '',           desc: 'Pokaż pełny stan' },
@@ -192,19 +196,8 @@ function filterTableGeneric(input, tableId, nameClass) {
     { cmd: '/debug roll',            hint: '[skill]',     desc: 'Rzut kością' },
     { cmd: '/debug reset-cooldowns', hint: '',           desc: 'Resetuj cooldowny' },
     { cmd: '/debug set-state',       hint: 'NARRATIVE|COMBAT', desc: 'Zmień stan sesji' },
-    { cmd: '/heal',                  hint: '[N|max]',    desc: 'Dodaj HP (domyślnie max)' },
-    { cmd: '/sethp',                 hint: 'N',          desc: 'Ustaw HP na N' },
-    { cmd: '/gold',                  hint: 'N',          desc: 'Dodaj N złota' },
-    { cmd: '/setgold',               hint: 'N',          desc: 'Ustaw złoto na N' },
-    { cmd: '/level',                 hint: 'N',          desc: 'Ustaw poziom' },
-    { cmd: '/stat',                  hint: 'STR|DEX|CON|INT|WIS|CHA N', desc: 'Dodaj do statystyki' },
-    { cmd: '/additem',               hint: 'klucz',      desc: 'Dodaj przedmiot' },
-    { cmd: '/removeitem',            hint: 'klucz',      desc: 'Usuń przedmiot' },
-    { cmd: '/clearinv',              hint: '',           desc: 'Wyczyść ekwipunek' },
-    { cmd: '/questadd',              hint: 'klucz',      desc: 'Dodaj quest' },
-    { cmd: '/questfinish',           hint: 'klucz',      desc: 'Zakończ quest' },
-    { cmd: '/combatend',             hint: '',           desc: 'Zakończ walkę' },
-    { cmd: '/show',                  hint: '',           desc: 'Pokaż stan postaci' },
+    { cmd: '/sheet',                 hint: '',           desc: 'Pokaż kartę postaci' },
+    { cmd: '/help',                  hint: '',           desc: 'Lista komend' },
   ];
 
   let _campCmdSuggestIdx = -1;
