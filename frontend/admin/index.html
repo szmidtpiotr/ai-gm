@@ -157,7 +157,6 @@
       const b = document.createElement('button');
       b.className = 'nav-item';
       b.dataset.section = s.key;
-      const badgeId = s.key === 'world' ? 'id="world-nav-badge-span"' : '';
       b.innerHTML = `<span class="nav-item-icon">${s.ico}</span><span>${s.label}${s.key === 'world' ? '<span class="nav-badge" id="world-nav-badge" style="display:none">0</span>' : ''}</span>`;
       b.addEventListener('click', () => { location.hash = '#' + s.key; });
       nav.appendChild(b);
