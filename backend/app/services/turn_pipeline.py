@@ -55,7 +55,10 @@ import re as _re_tp
 from app.services.hex_directions import DIRECTION_KEYWORDS as _DIRECTION_KEYWORDS
 
 _MOVE_VERB_PATTERN = _re_tp.compile(
-    r"\b(id[ęeę]|idz[ie]*|wr[aó]c[aę]|wroc[ae]|wyruszam[y]?|podroz?uj(?:[eę]|emy)|podróżuj(?:[eę]|emy)|"
+    # #1114: bare "wr[aó]c[aę]\b" wymagało końca słowa na "wraca" → 1. os. "wracam"
+    # (i "zawracam"/"cofam się") nie łapały się i tura szła ścieżką narracyjną
+    # (narrator opisywał powrót, hex stał w miejscu — desync). Inflekcje przez \w*.
+    r"\b(id[ęeę]|idz[ie]*|wr[aó]c\w*|wroc\w*|zawr[aó]c\w*|zawroc\w*|cof\w*|wyruszam[y]?|podroz?uj(?:[eę]|emy)|podróżuj(?:[eę]|emy)|"
     r"jad[eę]|biegne|biegnę|zmierzam|ruszam[y]?|wchodz[eę]|wchodze|"
     r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy|"
     # #1142: "maszeruję dalej na zachód" / "wychodzę na trakt" nie łapały się na fast-path

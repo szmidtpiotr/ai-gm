@@ -126,3 +126,17 @@ def test_detect_move_intent_still_works():
     assert mv["action_type"] == "MOVEMENT"
     assert mv["params"]["destination_q"] == 0
     assert mv["params"]["destination_r"] == -1
+
+
+def test_detect_move_intent_wracam_zawracam_cofam():
+    # #1114: "Wracam na północ" nie łapało się na fast-path (wzorzec wymagał końca
+    # słowa na "wraca", 1. os. "wracam" miała trailing "m") → narrator opisywał
+    # powrót, a hex stał w miejscu (desync narracja↔stan).
+    for phrase in (
+        "Wracam na północ, ku traktowi.",
+        "Zawracam na południe.",
+        "Cofam się na wschód.",
+    ):
+        mv = tp.detect_move_intent(phrase, {"q": 5, "r": 5})
+        assert mv is not None, phrase
+        assert mv["action_type"] == "MOVEMENT"

@@ -46,7 +46,8 @@ def enemies_table_sql() -> str:
       stats_json TEXT,
       image_url TEXT,
       image_url_raw TEXT,
-      image_gen_prompt TEXT
+      image_gen_prompt TEXT,
+      min_level INTEGER DEFAULT 1
     );
     """
 
