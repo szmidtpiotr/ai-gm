@@ -69,6 +69,9 @@ services:
       - ./data-dev:/data
       - ./ai_test_agent/scenarios:/data/ai_test_scenarios:rw
       # W obrazie jest tylko katalog backend/ (/app) — monorepo env.test trafia do /app/env.test (load_repo_env).
+      # #1179 — host ./env.test MUSI być PLIKIEM. Docker tworzy pusty KATALOG gdy ścieżka nie istnieje,
+      # a bootstrap_env._load_one_file() pomija katalog (is_file()==False) → AI_TEST_MODE/AI_TEST_STUB_LLM
+      # się nie ładują. deploy_dev.sh seeduje env.test z env.test.example (gitignored) przed startem.
       - ./env.test:/app/env.test:ro
       # Game mechanics documentation
       - ./game_mechanics.md:/app/game_mechanics.md:ro

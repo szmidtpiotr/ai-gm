@@ -11,6 +11,20 @@ git fetch origin
 git checkout develop
 git pull origin develop
 
+# #1179 — env.test MUST be a file, not a directory. Docker bind-mount
+# (./env.test:/app/env.test) silently creates an empty DIRECTORY on the host
+# if the path is missing → bootstrap_env.py:_load_one_file() skips it
+# (is_file() == False) and AI_TEST_MODE / AI_TEST_STUB_LLM never load.
+# env.test is gitignored, so seed it from env.test.example on every deploy.
+if [ -d env.test ]; then
+  echo "⚠️  env.test is a directory (docker artifact) — replacing with file..."
+  rmdir env.test 2>/dev/null || rm -rf env.test
+fi
+if [ ! -f env.test ]; then
+  echo "🌱 Seeding env.test from env.test.example..."
+  cp env.test.example env.test
+fi
+
 echo "🐳 [2/3] Restart kontenerów dev..."
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
 
