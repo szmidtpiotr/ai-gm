@@ -54,8 +54,11 @@ services:
       - AI_TEST_MODE=${AI_TEST_MODE:-1}
       # Same SQLite as auth/campaigns (raw sqlite3); isolated test_ai.db breaks E2E login.
       - AI_TEST_DB_PATH=${AI_TEST_DB_PATH:-/data/ai_gm.db}
-      # Playwright: stub GM — NIE ustawiaj tutaj na 0 (blokuje env.test). Użyj pliku env.test lub override.
-      # - AI_TEST_STUB_LLM=...  (usunięte: domyślne 0 w kontenerze blokowało mount env.test)
+      # Stub GM — stack DEV NIGDY nie stubuje (Piotr gra na żywym LLM). Stub to wyłącznie E2E:
+      # docker-compose.e2e.yml ustawia AI_TEST_STUB_LLM=1 inline (osobny stack, porty 18100).
+      # Tu seal=0: bootstrap_env nie nadpisze zapieczętowanego klucza, więc env.test STUB=1 jest ignorowany.
+      # (Regresja #1179: usunięcie tej linii pozwoliło env.test włączyć stub na DEV → [E2E]-owe odpowiedzi GM.)
+      - AI_TEST_STUB_LLM=${AI_TEST_STUB_LLM:-0}
       # Seed + Playwright: JSON z id postaci/kampanii (wolumen ./data-dev -> widoczny na hoście).
       - AI_TEST_CONFIG_PATH=${AI_TEST_CONFIG_PATH:-/data/ai_test_config.json}
       # Stały URL — NIE ${AI_TEST_AGENT_URL:-…}: plik .env przy `docker compose` nadpisywał wartość
