@@ -1811,6 +1811,12 @@ async function init() {
         await loadHeroes();
         if (!authToken) return; // handleSessionExpired fired during loadHeroes
         if (await consumePendingJoin()) return;
+        // #1184 — restore MP lobby waiting room after F5. If the player was sitting in a
+        // multiplayer lobby, aigm_lobby_id is persisted; re-enter it (closed/deleted lobby
+        // self-heals: tryRestoreLobbySession clears the key and returns false → fall through).
+        if (typeof tryRestoreLobbySession === 'function' && localStorage.getItem('aigm_lobby_id')) {
+            if (await tryRestoreLobbySession()) return;
+        }
         if (await tryRestoreSession()) return;
         if (!authToken) return; // handleSessionExpired fired during tryRestoreSession
         showScreen('heroes');
