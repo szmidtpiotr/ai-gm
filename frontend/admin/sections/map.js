@@ -269,6 +269,35 @@ const _ROW_REGISTRY = {
         card.innerHTML = top5.map(([t,n])=>`<span style="font-size:0.78rem;color:var(--t2)">${_esc(t)}: <strong>${n}</strong></span>`).join(' · ') || '<span style="color:var(--t3);font-size:0.78rem">Brak heksów</span>';
       }
     } catch(_e) {}
+    // PM7 (#1226): load global knowledge-bubble radius into the FOW card.
+    _loadKnowledgeBubble();
+  }
+
+  // ── PM7 (#1226): globalny promień bąbla wiedzy (FOW) ──────────────────────────
+  async function _loadKnowledgeBubble() {
+    const inp = document.getElementById('kbr-radius');
+    if (!inp) return;
+    try {
+      const d = await apiFetch('/api/admin/settings/knowledge-bubble-radius');
+      if (d && d.radius != null) inp.value = d.radius;
+    } catch(_e) {}
+  }
+
+  async function saveKnowledgeBubble() {
+    const inp = document.getElementById('kbr-radius');
+    if (!inp) return;
+    const radius = parseInt(inp.value, 10);
+    if (isNaN(radius) || radius < 0) { _showToast('Podaj poprawny promień (≥0).', 'error'); return; }
+    const btn = document.getElementById('kbr-save-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const d = await apiFetch('/api/admin/settings/knowledge-bubble-radius', {
+        method: 'PUT', body: JSON.stringify({ radius }),
+      });
+      inp.value = d.radius;
+      _showToast(`Zasięg wiedzy = ${d.radius} heksów.`, 'success');
+    } catch(e) { _showToast('Błąd: ' + e.message, 'error'); }
+    finally { if (btn) btn.disabled = false; }
   }
 
 // ── Locations tree + NPC assign ────────────────────────────────────────────────
@@ -2472,6 +2501,18 @@ function _sectionHtml() {
             </div>
             <!-- Result -->
             <div id="hexmap-result" style="display:none"></div>
+            <!-- PM7 (#1226): globalny promień bąbla wiedzy (FOW) -->
+            <div class="card" style="padding:16px">
+              <div style="font-weight:600;margin-bottom:6px">Zasięg wiedzy gracza (mgła wojny)</div>
+              <div style="font-size:0.72rem;color:var(--t3);margin-bottom:12px">Promień (w heksach) bąbla „znane z opowieści” wokół pozycji gracza. Większy = gracz zna więcej terenu z wyprzedzenia. Domyślnie 4.</div>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
+                  <input type="number" id="kbr-radius" class="form-input" value="4" min="0" max="20" style="width:90px">
+                </div>
+                <button class="btn btn-primary" id="kbr-save-btn" onclick="saveKnowledgeBubble()">💾 Zapisz zasięg</button>
+              </div>
+            </div>
             <!-- Danger zone -->
             <div class="card" style="padding:16px;border:1px solid var(--red,#dc2626)">
               <div style="font-weight:600;margin-bottom:8px;color:var(--red,#dc2626)">⚠ Strefa niebezpieczna</div>
@@ -2533,6 +2574,7 @@ export async function init(panel) {
   // Expose globals for inline onclick/onchange strings (port 1:1 zachowuje nazwy bare).
   Object.assign(window, {
     filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal, hexmapGenerate,
+    saveKnowledgeBubble,
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,

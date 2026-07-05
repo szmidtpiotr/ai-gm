@@ -3798,6 +3798,7 @@ def admin_get_campaign_hex_map(campaign_id: int, _: None = Depends(require_admin
             result.append({"q": q2, "r": r2, "hex_type": h["hex_type"], "label": h["label"], "location_key": h["location_key"],
                 "region": h["region"] or "kresy",
                 "discovered": bool(ov.get("discovered", 0)), "encounter_cleared": bool(ov.get("encounter_cleared", 0)),
+                "known": bool(ov.get("known", 0)),
                 "campaign_label": ov.get("campaign_label") or "", "campaign_notes": ov.get("campaign_notes") or "",
                 "narrative_encounter": ov.get("narrative_encounter") or "", "has_overlay": bool(ov)})
         return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id, "regions": regions}
@@ -3810,6 +3811,7 @@ class HexOverlayPatchReq(BaseModel):
     encounter_cleared: bool | None = None
     campaign_label: str | None = None
     campaign_notes: str | None = None
+    known: bool | None = None   # PM7 (#1226): per-hex override → status 'known' w world-map
 
 
 @router.patch("/admin/campaigns/{campaign_id}/hex-map/{q}/{r}")
@@ -3824,13 +3826,55 @@ def admin_patch_campaign_hex(campaign_id: int, q: int, r: int, req: HexOverlayPa
             if req.encounter_cleared is not None: fields.append("encounter_cleared=?"); vals.append(1 if req.encounter_cleared else 0)
             if req.campaign_label is not None: fields.append("campaign_label=?"); vals.append(req.campaign_label)
             if req.campaign_notes is not None: fields.append("campaign_notes=?"); vals.append(req.campaign_notes)
+            if req.known is not None: fields.append("known=?"); vals.append(1 if req.known else 0)
             if fields: conn.execute(f"UPDATE campaign_hex_data SET {','.join(fields)} WHERE campaign_id=? AND hex_q=? AND hex_r=?", vals+[campaign_id, q, r])
         else:
-            conn.execute("INSERT INTO campaign_hex_data (campaign_id,hex_q,hex_r,discovered,encounter_cleared,campaign_label,campaign_notes) VALUES (?,?,?,?,?,?,?)",
-                (campaign_id, q, r, 1 if req.discovered else 0, 1 if req.encounter_cleared else 0, req.campaign_label or "", req.campaign_notes or ""))
+            conn.execute("INSERT INTO campaign_hex_data (campaign_id,hex_q,hex_r,discovered,encounter_cleared,campaign_label,campaign_notes,known) VALUES (?,?,?,?,?,?,?,?)",
+                (campaign_id, q, r, 1 if req.discovered else 0, 1 if req.encounter_cleared else 0, req.campaign_label or "", req.campaign_notes or "", 1 if req.known else 0))
         conn.commit()
         row = conn.execute("SELECT * FROM campaign_hex_data WHERE campaign_id=? AND hex_q=? AND hex_r=?", (campaign_id, q, r)).fetchone()
         return {"ok": True, "hex": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
+# ── PM7 (#1226): globalny promień bąbla wiedzy (FOW W2) ───────────────────────
+
+class KnowledgeBubbleReq(BaseModel):
+    radius: int
+
+
+@router.get("/admin/settings/knowledge-bubble-radius")
+def admin_get_knowledge_bubble_radius(_: None = Depends(require_admin_token)):
+    """Zwraca globalny promień bąbla wiedzy (game_config_meta), fallback 4 jak w world-map."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'knowledge_bubble_radius' LIMIT 1"
+        ).fetchone()
+        try:
+            radius = int(row["value"]) if row and row["value"] is not None else 4
+        except (TypeError, ValueError):
+            radius = 4
+        return {"radius": radius}
+    finally:
+        conn.close()
+
+
+@router.put("/admin/settings/knowledge-bubble-radius")
+def admin_set_knowledge_bubble_radius(req: KnowledgeBubbleReq, _: None = Depends(require_admin_token)):
+    """Ustawia globalny promień bąbla wiedzy. Odczyt w GET /campaigns/{id}/world-map (PM1)."""
+    radius = max(0, min(20, int(req.radius)))
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO game_config_meta (key, value) VALUES ('knowledge_bubble_radius', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(radius),),
+        )
+        conn.commit()
+        return {"ok": True, "radius": radius}
     finally:
         conn.close()
 

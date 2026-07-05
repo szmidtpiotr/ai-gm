@@ -449,6 +449,10 @@ RAW_MIGRATIONS = [
     # R6 (#1246) — hexy faktycznie przebyte trasą podróży → status 'known' (nie discovered).
     # Persystentny per-kampania flag, czytany przez FOW gate (PM1 #1220).
     "ALTER TABLE campaign_hex_data ADD COLUMN known INTEGER NOT NULL DEFAULT 0",
+    # PM7 (#1226) — globalny promień bąbla wiedzy (W2 FOW). Admin-tunable; czytnik
+    # w world-map ma fallback DEFAULT_BUBBLE_RADIUS=4, więc seed jest tylko jawnym
+    # domyślnym rekordem dla admin-UI. INSERT OR IGNORE = uruchamiane raz, nie kasuje edycji.
+    "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('knowledge_bubble_radius', '4')",
 ]
 
 

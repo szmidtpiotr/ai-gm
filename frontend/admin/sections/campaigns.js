@@ -351,10 +351,12 @@ function filterTableGeneric(input, tableId, nameClass) {
       const fill = htColor || typeColors[h.hex_type] || typeColors.default;
       const isCurrent = currentHex && h.q === currentHex.q && h.r === currentHex.r;
       const hexRegionColor = regionColorMap[h.region] || null;
-      let stroke = hexRegionColor ? hexRegionColor + '66' : '#333', strokeW = '0.5';
+      let stroke = hexRegionColor ? hexRegionColor + '66' : '#333', strokeW = '0.5', dash = '';
       if (isCurrent) { stroke = '#ff2222'; strokeW = '2.5'; }
       else if (h.discovered) { stroke = hexRegionColor || '#4a8a4a'; strokeW = '1'; }
-      const opacity = (h.discovered || isCurrent) ? '1' : '0.45';
+      // PM7 (#1226): 'known' (route/override) — amber dashed stroke, distinct from discovered.
+      else if (h.known) { stroke = '#c9a54a'; strokeW = '1'; dash = ' stroke-dasharray="2,1.5"'; }
+      const opacity = (h.discovered || isCurrent) ? '1' : (h.known ? '0.7' : '0.45');
       const indicators = [];
       if (isCurrent) {
         // Red pointer triangle pointing down
@@ -363,7 +365,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       } else if (h.encounter_cleared) indicators.push(`<text x="0" y="3" text-anchor="middle" font-size="7" fill="#4a8" opacity="0.9">✓</text>`);
       if (h.campaign_label) indicators.push(`<circle cx="${(HEX_SIZE*0.5).toFixed(1)}" cy="${-(HEX_SIZE*0.55).toFixed(1)}" r="2.5" fill="#8af" opacity="0.85"/>`);
       return `<g data-q="${h.q}" data-r="${h.r}" transform="translate(${tx},${ty})" style="cursor:pointer" opacity="${opacity}">
-        <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>
+        <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"${dash}/>
         ${indicators.join('')}
       </g>`;
     });
@@ -397,6 +399,9 @@ function filterTableGeneric(input, tableId, nameClass) {
           <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)">
             <input type="checkbox" id="hxe-clear" ${hex.encounter_cleared?'checked':''}> Encounter oczyszczony
           </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)" title="PM7 — wymuś status 'znane z opowieści' na mapie gracza (teren widoczny, bez szczegółów lokacji)">
+            <input type="checkbox" id="hxe-known" ${hex.known?'checked':''}> Znane z opowieści (known)
+          </label>
           <div>
             <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Etykieta kampanii</label>
             <input id="hxe-label" type="text" class="form-input" value="${_esc(hex.campaign_label||'')}" placeholder="np. Ruiny Starego Zamku" style="width:100%">
@@ -416,6 +421,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       const payload = {
         discovered: m.querySelector('#hxe-disc').checked,
         encounter_cleared: m.querySelector('#hxe-clear').checked,
+        known: m.querySelector('#hxe-known').checked,
         campaign_label: m.querySelector('#hxe-label').value.trim() || null,
         campaign_notes: m.querySelector('#hxe-notes').value.trim() || null,
       };
