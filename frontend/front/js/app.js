@@ -1979,7 +1979,8 @@ function _wmRender() {
       html += `<polygon class="wm-hex" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wmCorners(sx, sy, rz-1)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
-      if (_wmap.zoom >= 0.9 && cfg.map_icon)
+      // PM5 (#1224): road icon suppressed — trakt czytamy z linii łączącej (niżej).
+      if (_wmap.zoom >= 0.9 && cfg.map_icon && hex.hex_type !== 'road')
         html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
           font-size="${Math.max(10, 13*_wmap.zoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
       // #1106: current hex label always shown, full text, larger font, halo for contrast.
@@ -2004,7 +2005,8 @@ function _wmRender() {
         points="${_wmCorners(sx, sy, rz-1)}"
         fill="${fill}" fill-opacity="0.4" stroke="#6a5a34" stroke-width="0.7" stroke-dasharray="2,2"
         style="cursor:pointer"/>`;
-      if (_wmap.zoom >= 0.9 && cfg.map_icon)
+      // PM5 (#1224): road icon suppressed on known too — ciągłość z linii traktu.
+      if (_wmap.zoom >= 0.9 && cfg.map_icon && hex.hex_type !== 'road')
         html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
           font-size="${Math.max(10, 13*_wmap.zoom)}" opacity="0.55" style="pointer-events:none">${cfg.map_icon}</text>`;
       if (hex.label && _wmap.zoom >= 1.0) {
@@ -2020,6 +2022,37 @@ function _wmRender() {
         fill="transparent" stroke="#2a2218" stroke-width="0.6" stroke-dasharray="3,2"
         style="cursor:pointer"/>`;
     }
+  }
+
+  // PM5 (#1224): trakt jako CIĄG — linia przez środki sąsiadujących road-hexów.
+  // Każdy road hex (known/discovered) rysuje pół-segment do środka wspólnej krawędzi
+  // z każdym road-sąsiadem; pół-segmenty stykają się → widoczna, ciągła droga.
+  // Kolor z hex_type_config (#c8a86c); known przygaszony, discovered pełny.
+  {
+    const roadPts = new Map();  // "q,r" -> {q,r,sx,sy,known}
+    for (const hex of _wmap.hexes) {
+      if (hex.hex_type !== 'road') continue;
+      if (hex.status !== 'discovered' && hex.status !== 'known') continue;
+      const p = _wmHexToPixel(hex.q, hex.r);
+      const w = _wmWorld(p.x, p.y);
+      roadPts.set(hex.q + ',' + hex.r, { q: hex.q, r: hex.r, sx: w.x, sy: w.y, known: hex.status === 'known' });
+    }
+    const roadCol = (_wmap.hexTypes['road'] || {}).map_color || '#c8a86c';
+    const _AXNB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+    const rw = Math.max(1.6, 2.6 * _wmap.zoom);
+    let roadHtml = '';
+    for (const [, p] of roadPts) {
+      for (const [dq, dr] of _AXNB) {
+        const nb = roadPts.get((p.q + dq) + ',' + (p.r + dr));
+        if (!nb) continue;
+        const mx = (p.sx + nb.sx) / 2, my = (p.sy + nb.sy) / 2;
+        const op = p.known ? 0.5 : 0.9;
+        roadHtml += `<line x1="${p.sx}" y1="${p.sy}" x2="${mx}" y2="${my}"
+          stroke="${roadCol}" stroke-width="${rw}" stroke-linecap="round"
+          stroke-opacity="${op}" style="pointer-events:none"/>`;
+      }
+    }
+    html += roadHtml;
   }
 
   // Teleport connections
