@@ -40,7 +40,18 @@ export async function init(panel) {
 
     <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:16px;align-items:start">
       <div>
-        <div class="card" style="padding:14px">
+        <div class="card" style="padding:14px;border:1px solid var(--accent,#6b8afd)">
+          <h3 style="margin-top:0">🤖 Kreator — opisz agentowi</h3>
+          <div style="display:flex;gap:8px">
+            <input id="scn-issue" type="number" placeholder="# issue" style="width:110px">
+            <span style="color:var(--t3);font-size:12px;align-self:center">i/lub opis:</span>
+          </div>
+          <textarea id="scn-desc" rows="3" placeholder="Np. „ustaw rannego bohatera nocą w zaułku z dwoma bandytami — testuję gate ucieczki""
+            style="width:100%;margin-top:6px"></textarea>
+          <button id="scn-draft" class="btn btn-primary" style="margin-top:6px">✨ Wygeneruj setup (LLM)</button>
+          <div id="scn-draft-reply" style="font-size:12px;color:var(--t3);margin-top:6px"></div>
+        </div>
+        <div class="card" style="padding:14px;margin-top:14px">
           <h3 style="margin-top:0">Przygotuj ręcznie</h3>
           <label style="font-size:12px;color:var(--t3)">Bohater (źródło klona — nietykany)</label>
           <select id="scn-hero" style="width:100%;margin:4px 0 10px"></select>
@@ -75,6 +86,26 @@ export async function init(panel) {
       `<option value="${x.id}">${_esc(x.name)} (L${x.level ?? '?'} ${_esc(x.archetype ?? '')}, u${x.user_id})</option>`
     ).join('') || '<option value="">brak bohaterów</option>';
   } catch (e) { $('scn-hero').innerHTML = '<option value="">błąd wczytywania</option>'; }
+
+  $('scn-draft').addEventListener('click', async () => {
+    const issueNo = parseInt($('scn-issue').value, 10) || null;
+    const desc = $('scn-desc').value.trim();
+    if (!issueNo && !desc) { showToast('Podaj numer issue albo opis', 'error'); return; }
+    const btn = $('scn-draft');
+    btn.disabled = true; btn.textContent = '⏳ LLM pracuje…';
+    try {
+      const res = await apiFetch('/api/admin/scenario/draft', {
+        method: 'POST', body: JSON.stringify({ issue_number: issueNo, description: desc }),
+      });
+      $('scn-setup').value = JSON.stringify(res.setup, null, 2);
+      if (res.setup?.hero_id) $('scn-hero').value = String(res.setup.hero_id);
+      $('scn-draft-reply').innerHTML =
+        `${_esc(res.reply)}${res.issue ? `<br>📄 issue #${res.issue.number}: ${_esc(res.issue.title)}` : ''}` +
+        `${res.setup?.agent_notes ? `<br>📝 ${_esc(res.setup.agent_notes)}` : ''}` +
+        '<br><b>Sprawdź setup po prawej i kliknij 🎬 Przygotuj.</b>';
+    } catch (e) { showToast('Kreator: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '✨ Wygeneruj setup (LLM)'; }
+  });
 
   $('scn-prepare').addEventListener('click', async () => {
     let setup;

@@ -426,6 +426,192 @@ def get_scenario_state(
     }
 
 
+# ── Kreator (draft) — issue# + opis → setup przez LLM ───────────────────────
+
+_DRAFT_SYSTEM_PROMPT = """Jesteś asystentem QA gry RPG AI-GM. Admin chce przetestować
+konkretny element gry. Na podstawie treści GitHub issue i/lub opisu admina zbuduj
+setup Sandboxu scenariuszy: sesję ustawioną tak, by testowany element odpalił od
+PIERWSZEJ tury.
+
+Zwróć WYŁĄCZNIE poprawny JSON (bez markdown):
+{"reply": "<1-3 zdania po polsku co ustawiasz i dlaczego>",
+ "setup": {
+   "hero_id": <int — wybierz z listy bohaterów; preferuj bohatera testowego/demo>,
+   "issue_number": <int lub null>,
+   "title": "<krótki tytuł testu>",
+   "location_name": "<nazwa miejsca akcji>",
+   "location_key": "<klucz z katalogu lokacji lub pomiń>",
+   "scene_enemies": ["<TYLKO klucze z katalogu wrogów>"],
+   "scene_npcs": ["<nazwy NPC jeśli potrzebne>"],
+   "session_flags": {},
+   "ingame_hours": <0-23>,
+   "hero_overrides": {<np. "current_hp": 5 gdy test wymaga rannego bohatera>},
+   "gm_plan": {<opcjonalnie np. "scene_goal": "...">},
+   "opening_narration": "<2-4 zdania narracji GM po polsku stawiające gracza w środku testowanej sytuacji>",
+   "agent_notes": "<czego NIE dało się wywnioskować z issue/opisu — przyjęte założenia>"
+ }}
+
+Zasady: scene_enemies wyłącznie z katalogu (puste gdy test bez walki);
+nie wymyślaj pól spoza schematu; wszystko po polsku."""
+
+
+def _default_fetch_issue(issue_number: int) -> dict[str, Any] | None:
+    """Fetch issue title/body from GitHub using GITHUB_PAT (same env as bug_report)."""
+    import os
+
+    import httpx
+
+    pat = os.getenv("GITHUB_PAT", "").strip()
+    repo = os.getenv("GITHUB_REPO", "szmidtpiotr/ai-gm").strip()
+    if not pat:
+        return None
+    r = httpx.get(
+        f"https://api.github.com/repos/{repo}/issues/{issue_number}",
+        headers={
+            "Authorization": f"Bearer {pat}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        timeout=15,
+    )
+    if r.status_code != 200:
+        return None
+    d = r.json()
+    return {"number": issue_number, "title": d.get("title") or "", "body": d.get("body") or ""}
+
+
+def _default_llm(messages: list[dict[str, str]]) -> str:
+    from app.services.llm_service import (
+        content_llm_enabled,
+        generate_chat,
+        resolve_content_llm_config,
+    )
+
+    # Prefer the offline content profile (#818), but the Kreator is an
+    # interactive admin flow — when that box is down/empty, fall back to the
+    # live preset instead of failing.
+    if content_llm_enabled():
+        try:
+            cfg = resolve_content_llm_config()
+            out = generate_chat(messages=messages, llm_config=cfg, call_type="scenario_draft")
+            if (out or "").strip():
+                return out
+        except Exception:
+            pass
+    return generate_chat(messages=messages, llm_config=None, call_type="scenario_draft")
+
+
+def _strip_json_fence(raw: str) -> str:
+    s = (raw or "").strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else s
+        if s.rstrip().endswith("```"):
+            s = s.rstrip()[:-3]
+    return s.strip()
+
+
+def draft_scenario_setup(
+    issue_number: int | None = None,
+    description: str = "",
+    conn: sqlite3.Connection | None = None,
+    llm=None,
+    fetch_issue=None,
+) -> dict[str, Any]:
+    """Kreator: map an issue and/or admin description onto a prepare_scenario
+    setup via LLM. Returns {reply, setup, issue}. The setup is a DRAFT — the
+    admin reviews it in the panel before calling prepare_scenario."""
+    description = (description or "").strip()
+    if not issue_number and not description:
+        raise ScenarioError("issue_number or description required")
+
+    c, own = _use(conn)
+    try:
+        try:
+            enemies = c.execute(
+                "SELECT key, label, tier FROM game_config_enemies WHERE is_active = 1"
+                " ORDER BY key LIMIT 120",
+            ).fetchall()
+        except sqlite3.OperationalError:
+            enemies = []
+        try:
+            locations = c.execute(
+                "SELECT key, label FROM game_locations WHERE is_active = 1"
+                " AND key IS NOT NULL ORDER BY id DESC LIMIT 80",
+            ).fetchall()
+        except sqlite3.OperationalError:
+            locations = []
+        heroes = c.execute(
+            """
+            SELECT id, name, user_id,
+                   json_extract(sheet_json,'$.archetype') AS archetype,
+                   json_extract(sheet_json,'$.level')     AS level
+            FROM characters
+            WHERE is_active = 1
+              AND (name NOT LIKE '[SBX] %' OR name IS NULL)
+              AND (name NOT LIKE '[SCN] %' OR name IS NULL)
+            ORDER BY (user_id = 1) DESC, id DESC LIMIT 40
+            """,
+        ).fetchall()
+    finally:
+        if own:
+            c.close()
+
+    issue: dict[str, Any] | None = None
+    if issue_number:
+        fetcher = fetch_issue or _default_fetch_issue
+        issue = fetcher(int(issue_number))
+
+    ctx_lines = [
+        "KATALOG WROGÓW (key | label | tier):",
+        *[f"- {r['key']} | {r['label']} | {r['tier']}" for r in enemies],
+        "",
+        "KATALOG LOKACJI (key | label):",
+        *[f"- {r['key']} | {r['label']}" for r in locations],
+        "",
+        "BOHATEROWIE (id | name | level | archetype | user_id):",
+        *[f"- {r['id']} | {r['name']} | {r['level']} | {r['archetype']} | u{r['user_id']}"
+          for r in heroes],
+        "",
+    ]
+    if issue:
+        ctx_lines += [f"GITHUB ISSUE #{issue['number']}: {issue['title']}", issue["body"] or "", ""]
+    elif issue_number:
+        ctx_lines += [f"(nie udało się pobrać issue #{issue_number} z GitHuba)", ""]
+    if description:
+        ctx_lines += ["OPIS/INSTRUKCJA ADMINA:", description]
+
+    messages = [
+        {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
+        {"role": "user", "content": "\n".join(ctx_lines)},
+    ]
+
+    raw = (llm or _default_llm)(messages)
+    try:
+        parsed = json.loads(_strip_json_fence(raw))
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ScenarioError(f"LLM nie zwrócił poprawnego JSON: {e}") from e
+
+    setup = dict(parsed.get("setup") or {})
+
+    # guard: scene_enemies only from the catalog — hallucinated keys are cut
+    # and recorded in agent_notes so the admin sees the assumption.
+    known = {r["key"] for r in enemies}
+    wanted = list(setup.get("scene_enemies") or [])
+    kept = [k for k in wanted if k in known]
+    dropped = [k for k in wanted if k not in known]
+    setup["scene_enemies"] = kept
+    if dropped:
+        note = str(setup.get("agent_notes") or "")
+        setup["agent_notes"] = (note + ("; " if note else "")
+                                + f"usunięto nieznane klucze wrogów: {', '.join(dropped)}")
+
+    return {
+        "reply": str(parsed.get("reply") or ""),
+        "setup": setup,
+        "issue": issue,
+    }
+
+
 def list_scenarios(conn: sqlite3.Connection | None = None) -> list[dict[str, Any]]:
     """Active scenario campaigns with their clone + issue tag, newest first."""
     c, own = _use(conn)

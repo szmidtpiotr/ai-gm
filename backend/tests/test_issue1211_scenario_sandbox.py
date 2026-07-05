@@ -357,6 +357,98 @@ def test_state_groups_mechanics_by_turn():
     assert 2 not in nums and 3 in nums
 
 
+# ─── draft_scenario_setup — Kreator: issue# + opis → setup przez LLM ─────────
+
+def _mk_catalog(db):
+    db.executescript("""
+        CREATE TABLE game_config_enemies (
+            key TEXT PRIMARY KEY, label TEXT, tier TEXT, is_active INTEGER DEFAULT 1
+        );
+    """)
+    db.execute("INSERT INTO game_config_enemies (key, label, tier) VALUES ('bandit','Bandyta','standard')")
+    db.execute("INSERT INTO game_config_enemies (key, label, tier) VALUES ('wolf','Wilk','minion')")
+    db.execute("INSERT INTO game_locations (key, label) VALUES ('karczma_x','Karczma Pod Kotem')")
+    db.commit()
+
+
+def test_draft_builds_setup_from_llm_with_catalogs():
+    """Kreator: LLM dostaje katalogi (wrogowie/lokacje/bohaterowie) + treść issue,
+    zwraca JSON setupu gotowy pod prepare_scenario."""
+    from app.services.scenario_service import draft_scenario_setup
+
+    db = _make_db()
+    _mk_catalog(db)
+    hero_id = _mk_hero(db)
+
+    captured = {}
+
+    def fake_llm(messages):
+        captured["prompt"] = "\n".join(m["content"] for m in messages)
+        return json.dumps({
+            "reply": "Ustawiam zasadzkę bandytów nocą.",
+            "setup": {
+                "hero_id": hero_id,
+                "issue_number": 1183,
+                "title": "Zasadzka",
+                "scene_enemies": ["bandit"],
+                "ingame_hours": 23,
+                "opening_narration": "Noc. Zaułek.",
+                "agent_notes": "brak DC w issue",
+            },
+        })
+
+    def fake_fetch(issue_number):
+        assert issue_number == 1183
+        return {"number": 1183, "title": "[BUG] encounter w zaułku",
+                "body": "Acceptance: walka startuje nocą."}
+
+    res = draft_scenario_setup(
+        issue_number=1183, description="przetestuj zasadzkę",
+        conn=db, llm=fake_llm, fetch_issue=fake_fetch,
+    )
+
+    assert res["setup"]["hero_id"] == hero_id
+    assert res["setup"]["scene_enemies"] == ["bandit"]
+    assert res["reply"].startswith("Ustawiam")
+    assert res["issue"]["number"] == 1183
+    # LLM musiał dostać: katalog wrogów, lokacje, bohaterów i treść issue
+    assert "bandit" in captured["prompt"]
+    assert "karczma_x" in captured["prompt"]
+    assert "Tester" in captured["prompt"]
+    assert "walka startuje nocą" in captured["prompt"]
+
+
+def test_draft_tolerates_fenced_json_and_filters_unknown_enemies():
+    """Odporność: LLM opakowuje JSON w ```json``` i wymyśla nieistniejącego wroga —
+    fence zdjęty, nieznany klucz wycięty + dopisany do agent_notes."""
+    from app.services.scenario_service import draft_scenario_setup
+
+    db = _make_db()
+    _mk_catalog(db)
+    hero_id = _mk_hero(db)
+
+    def fake_llm(messages):
+        return ("```json\n" + json.dumps({
+            "reply": "ok",
+            "setup": {"hero_id": hero_id, "scene_enemies": ["bandit", "smok_pradawny"]},
+        }) + "\n```")
+
+    res = draft_scenario_setup(description="cokolwiek", conn=db, llm=fake_llm)
+    assert res["setup"]["scene_enemies"] == ["bandit"]
+    assert "smok_pradawny" in res["setup"]["agent_notes"]
+
+
+def test_draft_requires_issue_or_description():
+    from app.services.scenario_service import draft_scenario_setup, ScenarioError
+
+    db = _make_db()
+    try:
+        draft_scenario_setup(conn=db, llm=lambda m: "{}")
+        assert False, "expected ScenarioError"
+    except ScenarioError:
+        pass
+
+
 def test_list_scenarios_returns_only_scenario_campaigns():
     from app.services.scenario_service import prepare_scenario, list_scenarios
 

@@ -28,6 +28,24 @@ def prepare(payload: dict = Body(...)) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/draft")
+def draft(payload: dict = Body(...)) -> dict[str, Any]:
+    """Kreator: {issue_number?, description?} → LLM maps onto a setup draft.
+    Fetches the GitHub issue body via GITHUB_PAT when issue_number is given.
+    Returns {reply, setup, issue} — the admin reviews before /prepare."""
+    issue_number = payload.get("issue_number") or None
+    description = str(payload.get("description") or "")
+    try:
+        return scn.draft_scenario_setup(
+            issue_number=int(issue_number) if issue_number else None,
+            description=description,
+        )
+    except scn.ScenarioError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM/draft error: {e}") from e
+
+
 @router.get("/list")
 def list_scenarios() -> dict[str, Any]:
     return {"scenarios": scn.list_scenarios()}

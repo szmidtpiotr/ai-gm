@@ -73,6 +73,12 @@ test("REGRESSION #1211 — scenario prepare/state/list contract", async ({ page 
   expect(mine, "scenariusz nie widnieje na liście (#1211)").toBeTruthy();
   expect(mine.issue_number).toBe(1211);
 
+  // kreator (draft) — kontrakt walidacji: puste wejście = 400 (bez wołania LLM)
+  const draftR = await page.request.post("/api/admin/scenario/draft", {
+    headers: H, data: {},
+  });
+  expect(draftR.status(), "draft bez wejścia ma zwracać 400 (#1211)").toBe(400);
+
   // izolacja — oryginalny bohater nadal na liście źródeł, klon odfiltrowany
   const heroes2R = await page.request.get("/api/admin/sandbox/heroes", { headers: H });
   const heroes2 = (await heroes2R.json()).heroes || [];
