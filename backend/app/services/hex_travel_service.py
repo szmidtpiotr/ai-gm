@@ -1397,3 +1397,187 @@ def resolve_starting_hex(
     conn.commit()
 
     return {"q": sq, "r": sr, "hex_type": hex_type, "label": label or starting_location_name, "is_new": is_new}
+
+
+# ── #1244 (R4): single travel executor shared by every travel endpoint ────────
+
+
+def open_conn() -> sqlite3.Connection:
+    """Canonical sqlite opener for the travel endpoints (#1244 item 3).
+
+    All three travel routes now open/commit the DB the same way — this helper +
+    `execute_travel` (which owns every commit) so there is one open/commit path.
+    Caller owns closing the connection (wrap in try/finally).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _record_travel_turn(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int, result: dict
+) -> None:
+    """Insert a synthetic narrative turn for a completed map move.
+
+    Without this the LLM conversation history has no trace of the move and the
+    narrator keeps describing the previous location/terrain. Extracted verbatim
+    from the old /travel endpoint so every travel route now records it (#1244).
+    """
+    _hd = result.get("hex_data") or {}
+    _terrain = _hd.get("hex_type") or "nieznany"
+    _tcfg = conn.execute(
+        "SELECT label FROM hex_type_config WHERE hex_type = ?", (_terrain,)
+    ).fetchone()
+    _terrain_pl = (_tcfg["label"] if _tcfg else None) or _terrain
+    _place = _hd.get("label") or ""
+    _hours = result.get("total_hours") or 0
+    _narr = f"Podróżujesz przez świat i docierasz do nowego miejsca. Teren: {_terrain_pl}."
+    if _place:
+        _narr += f" Miejsce: {_place}."
+    if _hours:
+        _narr += f" Droga zajęła {_hours} h."
+    _tn_row = conn.execute(
+        "SELECT COALESCE(MAX(turn_number),0)+1 AS n FROM campaign_turns WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    conn.execute(
+        "INSERT INTO campaign_turns (campaign_id, character_id, user_text, route, assistant_text, turn_number) "
+        "VALUES (?,?,?,?,?,?)",
+        (
+            campaign_id, character_id,
+            "[Podróż mapą — przemieszczam się na nowy teren]",
+            "narrative",
+            json.dumps({"narrative": _narr}, ensure_ascii=False),
+            int(_tn_row["n"]),
+        ),
+    )
+    conn.commit()
+
+
+class TravelError(Exception):
+    """Raised by execute_travel; `code` maps to an HTTP status in the wrappers."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def execute_travel(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    target: dict,
+    *,
+    actor: int,
+) -> dict[str, Any]:
+    """#1244 (R4): the single travel pipeline every endpoint delegates to.
+
+    One canonical sequence so /travel, /hex-travel (player) and the admin
+    hex-travel route all produce IDENTICAL state (position, scene, turn row,
+    discovered fog):
+      1. resolve origin (session_flags.current_hex, else resolve_starting_hex)
+      2. resolve destination (target hex OR location_key → hex)
+      3. resolve_chain_travel (movement + fog + encounters)
+      4. advance in-game clock by hours travelled
+      5. dungeon_prompt flag for the destination hex
+      6. exit old / enter new location scene
+      7. record a synthetic narrative turn (narrator sees the move)
+
+    Args:
+      conn: open sqlite connection (caller owns open/close; this fn owns commits).
+      campaign_id: campaign.
+      target: {"hex": {"q","r"}} OR {"location_key": str}.
+      actor: character_id performing the travel.
+
+    Returns the resolve_chain_travel result dict enriched with `clock`,
+    `dungeon_prompt` and `scene_loaded`.
+
+    Raises TravelError(code) — code ∈ {character_not_found, no_target,
+    location_not_placed}.
+    """
+    character_id = actor
+
+    char = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
+        (character_id, campaign_id),
+    ).fetchone()
+    if char is None:
+        raise TravelError("character_not_found", "Character not found")
+    sheet = json.loads(char["sheet_json"] or "{}")
+
+    # (2) resolve destination hex
+    dest: "tuple[int, int] | None" = None
+    _th = target.get("hex")
+    _lk = target.get("location_key")
+    if _th:
+        dest = (int(_th["q"]), int(_th["r"]))
+    elif _lk:
+        dest = resolve_location_key_to_hex(_lk, conn)
+        if dest is None:
+            raise TravelError(
+                "location_not_placed",
+                f"Location '{_lk}' not placed on any hex yet.",
+            )
+    if dest is None:
+        raise TravelError("no_target", "Provide target hex or location_key")
+    dest_q, dest_r = dest
+
+    # (1) resolve origin — current_hex if present, else canonical fallback via
+    # resolve_starting_hex (consistent across all endpoints — replaces the old
+    # (0,0)/dest ad-hoc fallbacks in turns.py).
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+    ch = flags.get("current_hex")
+    if ch:
+        from_hex = (int(ch["q"]), int(ch["r"]))
+    else:
+        _start = resolve_starting_hex(campaign_id, character_id, None, conn)
+        from_hex = (int(_start["q"]), int(_start["r"]))
+
+    # (3) movement + fog + encounters
+    result = resolve_chain_travel(
+        campaign_id=campaign_id, character_id=character_id,
+        from_hex=from_hex, to_hex=(dest_q, dest_r),
+        character_sheet=sheet, conn=conn,
+    )
+
+    # (4) advance in-game clock by hours travelled
+    try:
+        from app.services.clock_service import advance_clock as _advance_clock
+        travel_hours = float(result.get("total_hours") or 0.0)
+        if travel_hours > 0:
+            clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
+            conn.commit()
+            result["clock"] = clock_state
+    except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
+        logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
+
+    # (5) dungeon hex flag — check destination (not arrived_hex): travel may fail
+    # but the hex is still a dungeon.
+    hex_row = conn.execute(
+        "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+        (dest_q, dest_r),
+    ).fetchone()
+    result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
+
+    # (6) exit old scene, enter new scene if destination hex has a location
+    try:
+        from app.services.world_state_service import enter_location_scene, exit_location_scene
+        exit_location_scene(campaign_id)
+        dest_location_key = (result.get("hex_data") or {}).get("location_key")
+        if dest_location_key:
+            result["scene_loaded"] = enter_location_scene(campaign_id, dest_location_key)
+    except Exception as _scene_err:  # noqa: BLE001
+        logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
+
+    # (7) record the move as a synthetic narrative turn
+    if result.get("ok"):
+        try:
+            _record_travel_turn(conn, campaign_id, character_id, result)
+        except Exception as _trec_err:  # noqa: BLE001
+            logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
+
+    return result

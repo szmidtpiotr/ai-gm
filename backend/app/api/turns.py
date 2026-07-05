@@ -7973,123 +7973,28 @@ class TravelPayload(BaseModel):
 
 @router.post("/campaigns/{campaign_id}/travel")
 def player_travel(campaign_id: int, payload: TravelPayload):
-    """U30: Unified travel endpoint — accepts target_hex OR target_location_key."""
-    import json as _j, sqlite3 as _sq
-    from app.services.hex_travel_service import resolve_chain_travel, resolve_location_key_to_hex
+    """U30: Unified travel endpoint — accepts target_hex OR target_location_key.
 
-    character_id = payload.character_id
+    #1244 (R4): thin wrapper over the shared `execute_travel` pipeline — all
+    travel logic (origin/destination resolution, chain travel, clock, scenes,
+    synthetic turn) lives in hex_travel_service so every travel route is identical.
+    """
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    DB_PATH = "/data/ai_gm.db"
-    conn = _sq.connect(DB_PATH)
-    conn.row_factory = _sq.Row
+    if payload.target_hex:
+        target = {"hex": {"q": int(payload.target_hex.get("q", 0)),
+                          "r": int(payload.target_hex.get("r", 0))}}
+    elif payload.target_location_key:
+        target = {"location_key": payload.target_location_key}
+    else:
+        raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
+
+    conn = open_conn()
     try:
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _j.loads(char["sheet_json"] or "{}")
-
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
-        ch = flags.get("current_hex")
-        origin_exists = conn.execute(
-            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
-        ).fetchone()
-
-        # Resolve destination
-        if payload.target_hex:
-            dest_q = int(payload.target_hex.get("q", 0))
-            dest_r = int(payload.target_hex.get("r", 0))
-        elif payload.target_location_key:
-            coords = resolve_location_key_to_hex(payload.target_location_key, conn)
-            if coords is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Location '{payload.target_location_key}' not placed on any hex yet."
-                )
-            dest_q, dest_r = coords
-        else:
-            raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
-
-        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0, 0) if origin_exists else (dest_q, dest_r))
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id, character_id=character_id,
-            from_hex=from_hex, to_hex=(dest_q, dest_r),
-            character_sheet=sheet, conn=conn,
-        )
-
-        try:
-            from app.services.clock_service import advance_clock as _advance_clock
-            travel_hours = float(result.get("total_hours") or 0.0)
-            if travel_hours > 0:
-                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
-                conn.commit()
-                result["clock"] = clock_state
-        except Exception as _clk_err:
-            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
-
-        hex_row = conn.execute(
-            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
-            (dest_q, dest_r),
-        ).fetchone()
-        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
-
-        # U31: exit old scene, load new scene if destination hex has a location
-        try:
-            from app.services.world_state_service import enter_location_scene, exit_location_scene
-            exit_location_scene(campaign_id)
-            dest_location_key = result.get("hex_data", {}).get("location_key")
-            if dest_location_key:
-                scene_result = enter_location_scene(campaign_id, dest_location_key)
-                result["scene_loaded"] = scene_result
-        except Exception as _scene_err:
-            logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
-
-        # Record map travel as a narrative turn — without this the LLM conversation
-        # history has no trace of the move and the narrator keeps describing the
-        # previous location/terrain.
-        if result.get("ok"):
-            try:
-                _hd = result.get("hex_data") or {}
-                _arr = result.get("arrived_hex") or {}
-                _terrain = _hd.get("hex_type") or "nieznany"
-                _tcfg = conn.execute(
-                    "SELECT label FROM hex_type_config WHERE hex_type = ?", (_terrain,)
-                ).fetchone()
-                _terrain_pl = (_tcfg["label"] if _tcfg else None) or _terrain
-                _place = _hd.get("label") or ""
-                _hours = result.get("total_hours") or 0
-                _narr = f"Podróżujesz przez świat i docierasz do nowego miejsca. Teren: {_terrain_pl}."
-                if _place:
-                    _narr += f" Miejsce: {_place}."
-                if _hours:
-                    _narr += f" Droga zajęła {_hours} h."
-                _tn_row = conn.execute(
-                    "SELECT COALESCE(MAX(turn_number),0)+1 AS n FROM campaign_turns WHERE campaign_id = ?",
-                    (campaign_id,),
-                ).fetchone()
-                conn.execute(
-                    "INSERT INTO campaign_turns (campaign_id, character_id, user_text, route, assistant_text, turn_number) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (
-                        campaign_id, character_id,
-                        "[Podróż mapą — przemieszczam się na nowy teren]",
-                        "narrative",
-                        _j.dumps({"narrative": _narr}, ensure_ascii=False),
-                        int(_tn_row["n"]),
-                    ),
-                )
-                conn.commit()
-            except Exception as _trec_err:
-                logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
 
@@ -8129,64 +8034,20 @@ def get_campaign_clock(campaign_id: int):
 
 @router.post("/campaigns/{campaign_id}/hex-travel")
 def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
-    """Player-initiated hex chain travel."""
-    import json as _j, sqlite3 as _sq
-    from app.services.hex_travel_service import resolve_chain_travel
+    """Player-initiated hex chain travel.
 
-    character_id = payload.character_id
-    dest_q = payload.destination_q
-    dest_r = payload.destination_r
+    #1244 (R4): alias of /travel — delegates to the shared `execute_travel`
+    pipeline so a hex-travel move now ALSO advances scenes and records a
+    synthetic turn (previously clock-only → narrator was blind to the move).
+    """
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    DB_PATH = "/data/ai_gm.db"
-    conn = _sq.connect(DB_PATH)
-    conn.row_factory = _sq.Row
+    target = {"hex": {"q": payload.destination_q, "r": payload.destination_r}}
+    conn = open_conn()
     try:
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _j.loads(char["sheet_json"] or "{}")
-
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
-        ch = flags.get("current_hex")
-        origin_exists = conn.execute(
-            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
-        ).fetchone()
-        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0,0) if origin_exists else (dest_q, dest_r))
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id, character_id=character_id,
-            from_hex=from_hex, to_hex=(dest_q, dest_r),
-            character_sheet=sheet, conn=conn,
-        )
-
-        # T2: Advance the in-game clock by the hours travelled. resolve_chain_travel
-        # already computed total_hours from the path + teleport edges; we just persist
-        # it onto session_flags via the canonical helper.
-        try:
-            from app.services.clock_service import advance_clock as _advance_clock
-            travel_hours = float(result.get("total_hours") or 0.0)
-            if travel_hours > 0:
-                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
-                conn.commit()  # _advance_clock uses caller conn, so we commit here
-                result["clock"] = clock_state  # surface clock display + delta to client
-        except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
-            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
-
-        # E21: flag dungeon hexes so frontend auto-opens dungeon picker.
-        # Check destination (not arrived_hex) — travel may fail but hex is still dungeon.
-        hex_row = conn.execute(
-            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
-            (dest_q, dest_r),
-        ).fetchone()
-        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()

@@ -1384,47 +1384,17 @@ def hex_chain_travel(campaign_id: int, req: HexTravelReq,
     dodano guard. Gracze podróżują przez /api/campaigns/{id}/hex-travel (turns.py).
     """
     _require_admin(authorization)
-    import json as _json
-    from app.services.hex_travel_service import resolve_chain_travel
+    # #1244 (R4): delegate to the shared travel pipeline so the admin route
+    # produces identical state to the player routes (origin fallback via
+    # resolve_starting_hex, clock, scenes, synthetic turn — same as /travel).
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    conn = _get_db()
+    target = {"hex": {"q": req.destination_q, "r": req.destination_r}}
+    conn = open_conn()
     try:
-        # Get character sheet
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (req.character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _json.loads(char["sheet_json"] or "{}")
-
-        # Get current hex from session_flags
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _json.loads((gs["session_flags"] if gs else None) or "{}")
-        current_hex_dict = flags.get("current_hex")
-
-        if current_hex_dict:
-            from_hex = (int(current_hex_dict["q"]), int(current_hex_dict["r"]))
-        else:
-            # #1115: no position yet — properly place the player via resolve_starting_hex
-            from app.services.hex_travel_service import resolve_starting_hex as _rsh
-            _start = _rsh(campaign_id, req.character_id, None, conn)
-            from_hex = (_start["q"], _start["r"])
-
-        to_hex = (req.destination_q, req.destination_r)
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id,
-            character_id=req.character_id,
-            from_hex=from_hex,
-            to_hex=to_hex,
-            character_sheet=sheet,
-            conn=conn,
-        )
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=req.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
