@@ -954,8 +954,22 @@ def _sync_local_hex_narrative_move(
                 # world-road travel_plan — the hero is off the road, so a later
                 # "kontynuuję" must not resume toward the old world destination.
                 _clear_stale_travel_plan(conn, session_id)
+            else:
+                # R7 #1247 leak #2: sub-location but the hub has <2 sub-locs, so
+                # auto_assign_local_hex returned None (no local map exists). The
+                # party is inside a building yet local_hex may still point at the
+                # previous settlement — clear it so the state stays consistent
+                # with GET /local-map returning has_local_map:false. Also drop any
+                # stale road travel_plan since the hero left the road.
+                _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
+                _clear_stale_travel_plan(conn, session_id)
         else:
+            # R7 #1247 leak #1: narrative move to a macro location must also
+            # abandon a pending world-road travel_plan (the sub branch already
+            # does via _clear_stale_travel_plan) — otherwise the plan lingers and
+            # a later "kontynuuję" resumes toward a destination the hero left.
             _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
+            _clear_stale_travel_plan(conn, session_id)
     except Exception as _lh_err:
         logger.warning("local_hex_sync_narrative_failed", error=str(_lh_err))
 

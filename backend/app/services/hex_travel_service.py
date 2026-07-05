@@ -623,6 +623,7 @@ def resolve_chain_travel(
                     (_hex_location_key,),
                 ).fetchone()
                 if _ai_check and _ai_check["ai_generated"] == 1:
+                    _prev_location_key = _hex_location_key
                     _aq, _ar = arrived_hex[0], arrived_hex[1]
                     _hex_type = arrived_data.get("hex_type", "plains")
                     conn.execute(
@@ -637,6 +638,17 @@ def resolve_chain_travel(
                         )
                     except Exception:
                         _hex_location_key = None
+                    # R7 #1247 leak #3: we already NULLed the hex's location_key
+                    # above. If the replacement placement failed, restore the
+                    # previous key — otherwise the hero arrives on a hex (and a
+                    # session) with no location at all ("przybycie donikąd").
+                    if not _hex_location_key:
+                        conn.execute(
+                            "UPDATE world_hexes SET location_key = ?"
+                            " WHERE q = ? AND r = ? AND is_active = 1",
+                            (_prev_location_key, _aq, _ar),
+                        )
+                        _hex_location_key = _prev_location_key
 
             # Try placement engine for hexes that have no DB-seeded location
             if not _hex_location_key and arrived_hex != from_hex:
