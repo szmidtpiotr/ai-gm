@@ -273,7 +273,7 @@ def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = No
                 """
                 INSERT INTO campaign_turns
                     (campaign_id, character_id, user_text, route, assistant_text, turn_number)
-                VALUES (?, ?, '[SCENARIO] start', 'narrative', ?, 1)
+                VALUES (?, ?, '— start scenariusza testowego —', 'narrative', ?, 1)
                 """,
                 (campaign_id, clone_id, opening),
             )

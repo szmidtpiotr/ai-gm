@@ -52,6 +52,7 @@ async function handleLogin(e) {
             updateAdminSettingsVisibility();
             try {
                 await loadHeroes();
+                if (await consumePendingCampaign()) return;
                 if (await tryRestoreSession()) return;
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
@@ -237,6 +238,7 @@ async function autoVerifyEmail(token) {
         showToast('Email potwierdzony! Witaj w AI-GM.', 'success');
         await loadHeroes();
         if (await consumePendingJoin()) return;
+        if (await consumePendingCampaign()) return;
         if (!resp.onboarded_at) {
             showOnboardingCinematic();
         } else {
@@ -378,6 +380,17 @@ function checkUrlRouting() {
             return true;
         }
     }
+    // #1211 — deep-link z admin Sandboxu scenariuszy: /?campaign=<id>
+    // (otwiera konkretną kampanię po zalogowaniu; działa też dla zalogowanych)
+    const campaignParam = parseInt(params.get('campaign') || '', 10);
+    if (campaignParam) {
+        localStorage.setItem('pendingCampaignId', String(campaignParam));
+        history.replaceState({}, '', window.location.pathname);
+        // logged in → init() consumes; logged out → default flow shows login,
+        // handleLogin consumes after auth.
+        return false;
+    }
+
     const joinToken = params.get('join');
     if (joinToken) {
         localStorage.setItem('pendingJoinToken', joinToken);
@@ -410,6 +423,40 @@ async function consumePendingJoin() {
         else if (status === 400) showToast('Lobby jest pełne lub już wystartowało', 'warning');
         else if (status === 404) showToast('Link zaproszenia jest nieprawidłowy', 'error');
         else showToast('Nie udało się dołączyć do kampanii', 'error');
+        return false;
+    }
+}
+
+// #1211 — deep-link do kampanii (np. scenariusz [SBX-SCN] z panelu admina).
+// Ustawia bohatera na postać tej kampanii (klon [SCN]) i wchodzi do czatu.
+async function consumePendingCampaign() {
+    const cid = parseInt(localStorage.getItem('pendingCampaignId') || '', 10);
+    if (!cid) return false;
+    localStorage.removeItem('pendingCampaignId');
+    try {
+        const resp = await apiRequest('GET', `/campaigns/${cid}`);
+        const campaign = resp.campaign || resp;
+        if (!campaign || !campaign.id) throw new Error('not found');
+        const ownerId = campaign.owner_user_id ?? campaign.owneruserid;
+        if (Number(ownerId) !== Number(currentUser?.id)) {
+            showToast('Ta kampania należy do innego konta — zaloguj się na właściwe.', 'warning', 4000);
+            return false;
+        }
+        try {
+            const chResp = await apiRequest('GET', `/campaigns/${cid}/characters`);
+            const chars = chResp.characters || (Array.isArray(chResp) ? chResp : []);
+            const mine = chars.find(c =>
+                c.is_active && (c.user_id === currentUser?.id || c.userid === currentUser?.id));
+            if (mine) {
+                currentHero = mine;
+                localStorage.setItem('aigm_hero_id', String(mine.id));
+            }
+        } catch {}
+        await selectCampaign(campaign);
+        return true;
+    } catch (e) {
+        console.error('[DeepLink] campaign open failed:', e);
+        showToast('Nie udało się otworzyć kampanii z linku', 'error');
         return false;
     }
 }

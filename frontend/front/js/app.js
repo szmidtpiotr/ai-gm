@@ -1806,6 +1806,8 @@ async function init() {
         await loadHeroes();
         if (!authToken) return; // handleSessionExpired fired during loadHeroes
         if (await consumePendingJoin()) return;
+        // #1211 — deep-link ?campaign= (Sandbox scenariuszy) wins over session restore
+        if (await consumePendingCampaign()) return;
         // #1184 — restore MP lobby waiting room after F5. If the player was sitting in a
         // multiplayer lobby, aigm_lobby_id is persisted; re-enter it (closed/deleted lobby
         // self-heals: tryRestoreLobbySession clears the key and returns false → fall through).

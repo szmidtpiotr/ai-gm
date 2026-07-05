@@ -6,6 +6,7 @@
  * godzina/flagi) ustawiona zgodnie z payloadem, narracja otwierająca obecna.
  */
 const { test, expect } = require("@playwright/test");
+const { login } = require("../../helpers/player_flow");
 
 async function adminToken(page) {
   const r = await page.request.post("/api/admin/dev-login", {
@@ -84,4 +85,38 @@ test("REGRESSION #1211 — scenario prepare/state/list contract", async ({ page 
   const heroes2 = (await heroes2R.json()).heroes || [];
   expect(heroes2.some((h) => h.id === hero.id), "oryginał zniknął (#1211)").toBeTruthy();
   expect(heroes2.some((h) => h.id === prep.character_id), "klon [SCN] wyciekł do listy bohaterów").toBeFalsy();
+});
+
+test("REGRESSION #1211 — deep-link /?campaign= wchodzi prosto do czatu scenariusza", async ({ page }) => {
+  // zalogowany gracz testowy
+  await login(page);
+  const uid = await page.evaluate(() => JSON.parse(localStorage.getItem("user") || "{}").id);
+  expect(uid, "brak user.id po logowaniu").toBeTruthy();
+
+  // scenariusz dla bohatera TEGO usera (deep-link wymaga zgodności konta)
+  const token = await adminToken(page);
+  const H = { Authorization: `Bearer ${token}` };
+  const heroes = ((await (await page.request.get("/api/admin/sandbox/heroes", { headers: H })).json()).heroes) || [];
+  const hero = heroes.find((h) => h.user_id === uid);
+  test.skip(!hero, "user testowy nie ma bohatera do sklonowania");
+
+  const prep = await (await page.request.post("/api/admin/scenario/prepare", {
+    headers: H,
+    data: {
+      hero_id: hero.id,
+      issue_number: 1211,
+      title: "Deep-link",
+      opening_narration: "DEEPLINK-1211: stoisz w zaułku testowym.",
+    },
+  })).json();
+  expect(prep.campaign_id).toBeTruthy();
+
+  // deep-link → prosto do gry, bez klikania po ekranach
+  await page.goto(`/?campaign=${prep.campaign_id}`);
+  await page.waitForFunction(
+    () => document.getElementById("game-screen")?.classList.contains("screen--active"),
+    null, { timeout: 25000 },
+  );
+  await expect(page.getByText("DEEPLINK-1211").first(), "narracja otwierająca niewidoczna w czacie")
+    .toBeVisible({ timeout: 15000 });
 });
