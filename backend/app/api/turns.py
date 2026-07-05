@@ -7955,8 +7955,14 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         all_hexes = {
             (int(r["q"]), int(r["r"])): dict(r)
             for r in conn.execute(
-                "SELECT q, r, hex_type, label, atmosphere, encounter_chance FROM world_hexes WHERE is_active = 1"
+                "SELECT q, r, hex_type, label, atmosphere, encounter_chance, region, location_key, map_level "
+                "FROM world_hexes WHERE is_active = 1"
             ).fetchall()
+        }
+        # PM1 (#1220): overworld-only index for the known-FOW layers.
+        all_hexes_l0 = {
+            coord: row for coord, row in all_hexes.items()
+            if int(row.get("map_level") or 0) == 0
         }
 
         # Current hex + auto-placement (must happen BEFORE building result_hexes)
@@ -7977,17 +7983,70 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 except Exception:
                     pass
 
-        # Campaign-specific discovered hexes
+        # Campaign-specific discovered hexes (+ R6 #1246 persisted 'known' rows)
         discovered_coords = set()
+        persisted_known = set()
         campaign_data = {}
         for row in conn.execute(
-            "SELECT hex_q, hex_r, campaign_label, discovered FROM campaign_hex_data WHERE campaign_id = ?",
+            "SELECT hex_q, hex_r, campaign_label, discovered, known FROM campaign_hex_data WHERE campaign_id = ?",
             (campaign_id,),
         ).fetchall():
             q, r = int(row["hex_q"]), int(row["hex_r"])
             if row["discovered"]:
                 discovered_coords.add((q, r))
+            elif row["known"]:
+                persisted_known.add((q, r))
             campaign_data[(q, r)] = dict(row)
+
+        # PM1 (#1220): compute the 'known' FOW layer (W1 region gazetteer +
+        # W2 rolling bubble + W3 world) and merge R6 persisted route hexes.
+        known_coords: set[tuple[int, int]] = set()
+        label_coords: set[tuple[int, int]] = set()
+        try:
+            from app.services.fow_service import compute_known_coords, DEFAULT_BUBBLE_RADIUS, is_landmark_hex
+            canonical_keys = {
+                row["key"] for row in conn.execute(
+                    "SELECT key FROM game_locations WHERE canonical = 1 AND key IS NOT NULL"
+                ).fetchall()
+            }
+            # Origin region = region of the campaign's starting hex (fixed anchor).
+            origin_region = None
+            try:
+                from app.services.hex_travel_service import resolve_starting_hex as _rsh
+                _start = _rsh(campaign_id, character_id, None, conn)
+                _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
+                if _srow:
+                    origin_region = _srow.get("region")
+            except Exception:
+                pass
+            if not origin_region and current_hex:
+                _crow = all_hexes_l0.get((int(current_hex["q"]), int(current_hex["r"])))
+                if _crow:
+                    origin_region = _crow.get("region")
+            # W2 radius from setting (PM7 admin-UI writes it), fallback DEFAULT 4.
+            bubble_radius = DEFAULT_BUBBLE_RADIUS
+            try:
+                _br = conn.execute(
+                    "SELECT value FROM game_config_meta WHERE key = 'knowledge_bubble_radius' LIMIT 1"
+                ).fetchone()
+                if _br and _br["value"] is not None:
+                    bubble_radius = int(_br["value"])
+            except Exception:
+                pass
+            known_coords, label_coords = compute_known_coords(
+                all_hexes_l0, discovered_coords, origin_region, canonical_keys, bubble_radius
+            )
+            # R6 persisted route hexes → known (label only if landmark).
+            for coord in persisted_known:
+                if coord in discovered_coords:
+                    continue
+                known_coords.add(coord)
+                _prow = all_hexes_l0.get(coord)
+                if _prow and is_landmark_hex(_prow, canonical_keys):
+                    label_coords.add(coord)
+        except Exception as _fow_err:
+            logger.warning("fow_known_compute_error", error=str(_fow_err))
+            known_coords, label_coords = set(), set()
 
         # Build result: discovered hexes + adjacent outlines
         result_hexes = []
@@ -8003,11 +8062,26 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "status": "discovered",
             }
             result_hexes.append(h)
-            # Build adjacent unvisited outlines
+            # Build adjacent unvisited outlines (known hexes render as 'known', not outline)
             for dq, dr in _DIRS:
                 nb = (coord[0]+dq, coord[1]+dr)
-                if nb not in discovered_coords and nb in all_hexes:
+                if nb not in discovered_coords and nb not in known_coords and nb in all_hexes:
                     outline_coords.add(nb)
+
+        # PM1 (#1220): emit 'known' hexes — terrain visible, label only for
+        # landmarks/canonical, NEVER location_key or game_locations data.
+        for coord in known_coords:
+            hdata = all_hexes_l0.get(coord, {})
+            cd = campaign_data.get(coord, {})
+            _label = None
+            if coord in label_coords:
+                _label = cd.get("campaign_label") or hdata.get("label")
+            result_hexes.append({
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": _label,
+                "status": "known",
+            })
 
         # Also expose all 6 neighbors of current hex so the player always sees
         # which directions they can travel from where they stand.
@@ -8018,7 +8092,7 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             ch = (int(current_hex["q"]), int(current_hex["r"]))
             for dq, dr in _DIRS:
                 nb = (ch[0]+dq, ch[1]+dr)
-                if nb not in discovered_coords:
+                if nb not in discovered_coords and nb not in known_coords:
                     if nb in all_hexes:
                         outline_coords.add(nb)
                     else:
