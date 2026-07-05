@@ -410,6 +410,10 @@ function filterTableGeneric(input, tableId, nameClass) {
             <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Notatki GM</label>
             <textarea id="hxe-notes" class="form-input" rows="2" style="width:100%;resize:vertical">${_esc(hex.campaign_notes||'')}</textarea>
           </div>
+          <div>
+            <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px" title="Skryptowe zdarzenie narracyjne wyzwalane, gdy gracz wejdzie na ten hex (dotyczy tylko tej kampanii)">Zdarzenie narracyjne (encounter)</label>
+            <textarea id="hxe-narr" class="form-input" rows="2" style="width:100%;resize:vertical" placeholder="np. Zza drzew wyłania się ranny posłaniec…">${_esc(hex.narrative_encounter||'')}</textarea>
+          </div>
           <button id="hxe-save" class="btn btn-primary" style="margin-top:4px">Zapisz</button>
         </div>
       </div>
@@ -418,18 +422,34 @@ function filterTableGeneric(input, tableId, nameClass) {
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     m.querySelector('#hxe-save').addEventListener('click', async () => {
       const newType = m.querySelector('#hxe-type').value;
+      const typeChanged = newType !== (hex.hex_type||'');
+      // R9 (#1249): editing hex_type rewrites the SHARED world map for every
+      // campaign — gate it behind an explicit warning with a blast-radius count.
+      if (typeChanged) {
+        let countMsg = '';
+        try {
+          const c = await apiFetch(`/api/admin/world/hexes/${q}/${r}/campaign-count`);
+          countMsg = `\n\nTen hex ma dane w ${c.on_hex} z ${c.total_campaigns} kampanii.`;
+        } catch(_) { /* count is advisory — proceed to warn regardless */ }
+        const ok = confirm(
+          `⚠ Zmiana typu terenu (${hex.hex_type||'—'} → ${newType}) dotknie WSZYSTKIE kampanie — ` +
+          `to edycja globalnej mapy świata, nie tylko tej kampanii.${countMsg}\n\nKontynuować?`
+        );
+        if (!ok) return;
+      }
       const payload = {
         discovered: m.querySelector('#hxe-disc').checked,
         encounter_cleared: m.querySelector('#hxe-clear').checked,
         known: m.querySelector('#hxe-known').checked,
         campaign_label: m.querySelector('#hxe-label').value.trim() || null,
         campaign_notes: m.querySelector('#hxe-notes').value.trim() || null,
+        narrative_encounter: m.querySelector('#hxe-narr').value.trim() || null,
       };
       try {
         const promises = [
           apiFetch(`/api/admin/campaigns/${campId}/hex-map/${q}/${r}`, {method:'PATCH', body: JSON.stringify(payload)}),
         ];
-        if (newType !== (hex.hex_type||'')) {
+        if (typeChanged) {
           promises.push(apiFetch(`/api/admin/world/hexes/${q}/${r}`, {method:'PATCH', body: JSON.stringify({hex_type: newType})}));
         }
         await Promise.all(promises);
