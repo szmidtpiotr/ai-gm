@@ -408,11 +408,18 @@ def get_scenario_state(
                 "current_location_id": gs["current_location_id"],
             }
 
+        # engine keeps the row after flee/end with status != 'active' — the
+        # header must not report a finished fight as live (#1149 feedback)
         combat = c.execute(
-            "SELECT * FROM active_combat WHERE campaign_id = ? LIMIT 1",
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
             (campaign_id,),
         ).fetchone()
         combat_out = dict(combat) if combat else None
+        last_combat = c.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? ORDER BY id DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        last_combat_out = dict(last_combat) if last_combat else None
 
         def _rows(table: str) -> list[dict[str, Any]]:
             try:
@@ -466,6 +473,7 @@ def get_scenario_state(
         "hero": hero_out,
         "session": session_out,
         "active_combat": combat_out,
+        "last_combat": last_combat_out,
         "turns": [dict(t) for t in turns],
         "mechanics": [by_turn[k] for k in sorted(by_turn)],
     }

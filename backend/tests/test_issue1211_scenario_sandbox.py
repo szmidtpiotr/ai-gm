@@ -516,6 +516,34 @@ def test_draft_requires_issue_or_description():
         pass
 
 
+def test_state_ended_combat_is_not_active():
+    """Po udanej ucieczce silnik zostawia wiersz active_combat ze status='ended'.
+    Panel ma pokazywać 'walka zakończona', NIE 'walka aktywna' (feedback #1149)."""
+    from app.services.scenario_service import prepare_scenario, get_scenario_state
+
+    db = _make_db()
+    hero_id = _mk_hero(db)
+    res = prepare_scenario({"hero_id": hero_id}, conn=db)
+
+    db.execute(
+        "INSERT INTO active_combat (campaign_id, character_id, combat_id, status)"
+        " VALUES (?, ?, 'cbt1', 'ended')",
+        (res["campaign_id"], res["character_id"]),
+    )
+    db.commit()
+
+    state = get_scenario_state(res["campaign_id"], conn=db)
+    assert state["active_combat"] is None
+    assert state["last_combat"]["status"] == "ended"
+
+    db.execute("UPDATE active_combat SET status='active' WHERE campaign_id = ?",
+               (res["campaign_id"],))
+    db.commit()
+    state2 = get_scenario_state(res["campaign_id"], conn=db)
+    assert state2["active_combat"] is not None
+    assert state2["active_combat"]["status"] == "active"
+
+
 def test_list_scenarios_returns_only_scenario_campaigns():
     from app.services.scenario_service import prepare_scenario, list_scenarios
 

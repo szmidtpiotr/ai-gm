@@ -173,7 +173,8 @@ export async function init(panel) {
         ${_esc(h.name || '')} ❤️ ${h.hp}/${h.max_hp}${h.mana ? ` · ✨ ${h.mana}` : ''} ·
         🕐 ${st.session?.ingame_hours}:00 ·
         wrogowie sceny: ${JSON.stringify(st.session?.scene_enemies || [])}
-        ${st.active_combat ? ' · <b style="color:var(--red)">⚔ WALKA AKTYWNA</b>' : ''}`;
+        ${st.active_combat ? ' · <b style="color:var(--red)">⚔ WALKA AKTYWNA</b>'
+          : (st.last_combat ? ` · ⚔ walka zakończona (${_esc(st.last_combat.status)})` : '')}`;
       // merge: każda tura z rozmowy + jej ślad mechaniki (mechanika bez tury też widoczna)
       const mech = {};
       (st.mechanics || []).forEach(t => { mech[t.turn_number] = t; });
