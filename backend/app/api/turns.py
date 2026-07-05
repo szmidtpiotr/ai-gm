@@ -1052,16 +1052,41 @@ def _sync_local_hex_narrative_move(
         logger.warning("local_hex_sync_narrative_failed", error=str(_lh_err))
 
 
+def _synthesize_move_intent_from_text(
+    conn: sqlite3.Connection, campaign_id: int, user_text: str
+):
+    """#1253: build a LocationIntent(move) from a player's declared move.
+
+    Uses the hub-aware placed-location resolver so "idę do kuźni" commits to the
+    real placed building even when the narrator returned no location_intent.
+    Returns a LocationIntent or None (no declared move / no placed target).
+    """
+    from app.services.hex_travel_service import resolve_declared_move_target
+    from app.services.location_intent_parser import LocationIntent
+
+    hit = resolve_declared_move_target(user_text, conn, campaign_id)
+    if not hit:
+        return None
+    key, label = hit
+    return LocationIntent(action="move", target_label=label, target_key=key)
+
+
 def _process_location_intent(
     conn: sqlite3.Connection,
     campaign_id: int,
     assistant_response: str,
     *,
     skip_post_process: bool = False,
+    user_text: str = "",
 ) -> str:
     """
     Parse GM location_intent, validate it, update current_location_id, and inject
     [LOCATION_BLOCKED] into JSON narrative when movement is rejected.
+
+    #1253: when the narrator describes a march in prose but emits
+    ``location_intent: null`` ("idę/ruszam do X" with no cardinal direction), we
+    synthesise the move from the player's own declaration so the pin/clock/plan
+    still commit — the move must not depend on the LLM remembering to tag it.
     """
     if skip_post_process:
         return assistant_response
@@ -1076,6 +1101,23 @@ def _process_location_intent(
     except Exception as exc:
         logger.error("location_intent_parse_hook_error", error=str(exc), campaign_id=campaign_id)
         return assistant_response
+
+    # #1253: no usable LLM move intent → try to recover one from the player's text.
+    _synth_move = False
+    if (not intent or intent.action not in ("move", "create")) and user_text:
+        try:
+            _syn = _synthesize_move_intent_from_text(conn, campaign_id, user_text)
+        except Exception as _syn_err:
+            logger.warning("synth_move_intent_error", error=str(_syn_err), campaign_id=campaign_id)
+            _syn = None
+        if _syn is not None:
+            intent = _syn
+            _synth_move = True
+            logger.info(
+                "narrative_move_synthesized",
+                campaign_id=campaign_id,
+                target_key=getattr(_syn, "target_key", None),
+            )
 
     if not intent or intent.action not in ("move", "create"):
         return assistant_response
@@ -4440,6 +4482,9 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         conn=conn,
         campaign_id=campaign_id,
         assistant_response=assistant_text,
+        # #1253: recover a declared move from the player's text when the narrator
+        # emitted none — but only when the pre-LLM fast-path did NOT already move.
+        user_text="" if _u30_move_executed else (text or ""),
     )
 
     # Hex-enter encounter trigger: fire when current_hex changed
@@ -6467,6 +6512,9 @@ def create_turn_stream(
                     campaign_id=campaign_id_val,
                     assistant_response=full_raw,
                     skip_post_process=location_skip_post_location_hook,
+                    # #1253: skip flag is already True when the pre-LLM fast-path moved,
+                    # so passing the player text only recovers a genuinely-missed move.
+                    user_text=(text or ""),
                 )
             finally:
                 hook_conn.close()
