@@ -489,6 +489,58 @@ def _collect_related_location_ids(
     return ids
 
 
+def _build_wilderness_context_block(
+    session_id: int | str, conn: sqlite3.Connection
+) -> str | None:
+    """#1245 (R5, wariant A): [LOCATION CONTEXT] for a session with no anchored location.
+
+    The party sits on a bare hex (no named place). Emit an explicit "wild terrain, no
+    buildings" block — grounded in the current hex's terrain when known — so the narrator
+    runs an outdoor scene instead of inventing a tavern/room. Never returns None on the
+    normal path (the block must not silently vanish); falls back to a terrain-less notice.
+    """
+    terrain_pl: str | None = None
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE id = ?",
+            (str(session_id),),
+        ).fetchone()
+        cur = json.loads((gs["session_flags"] if gs else None) or "{}").get("current_hex") or {}
+        if cur.get("q") is not None and cur.get("r") is not None:
+            wh = conn.execute(
+                "SELECT hex_type FROM world_hexes "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (int(cur["q"]), int(cur["r"])),
+            ).fetchone()
+            if wh and wh["hex_type"]:
+                tc = conn.execute(
+                    "SELECT label FROM hex_type_config WHERE hex_type = ?",
+                    (wh["hex_type"],),
+                ).fetchone()
+                terrain_pl = (tc["label"] if tc else None) or str(wh["hex_type"])
+    except sqlite3.OperationalError:
+        terrain_pl = None
+    except Exception:  # noqa: BLE001 — context block must never break a turn
+        terrain_pl = None
+
+    terrain_line = (
+        f'current_location: {{ "key": null, "label": null, "type": "wilderness", '
+        f'"teren": {json.dumps(terrain_pl)} }}'
+        if terrain_pl
+        else 'current_location: { "key": null, "label": null, "type": "wilderness" }'
+    )
+    return "\n".join(
+        [
+            "[LOCATION CONTEXT]",
+            terrain_line,
+            "Bohater jest w TERENIE DZIKIM — brak nazwanej lokacji, żadnych zabudowań "
+            "(osady, karczmy, budynku, wnętrza) w zasięgu wzroku. Prowadź scenę PLENEROWĄ "
+            "zgodną z terenem z bloku === ŚWIAT ===; NIE wymyślaj budynków ani pomieszczeń.",
+            "known_locations: (brak — otwarty teren)",
+        ]
+    )
+
+
 def build_location_context_block(session_id: int | str, conn: sqlite3.Connection) -> str | None:
     """
     Blok [LOCATION CONTEXT] jako osobna wiadomość systemowa dla LLM (8D-LOC-1 REV2).
@@ -499,8 +551,13 @@ def build_location_context_block(session_id: int | str, conn: sqlite3.Connection
         "SELECT current_location_id FROM game_sessions WHERE id = ?",
         (str(session_id),),
     ).fetchone()
+    # #1245 (R5, wariant A): a session with NO anchored location is on a wild hex.
+    # Previously this returned None and the [LOCATION CONTEXT] block vanished silently,
+    # while the === ŚWIAT === block still rendered — inconsistent framing that let the
+    # narrator invent buildings. Emit an explicit wilderness block instead so the pin
+    # (open terrain) and the prompt never disagree.
     if not row or not row["current_location_id"]:
-        return None
+        return _build_wilderness_context_block(session_id, conn)
 
     cur_id = int(row["current_location_id"])
     cur = conn.execute(
@@ -508,7 +565,7 @@ def build_location_context_block(session_id: int | str, conn: sqlite3.Connection
         (cur_id,),
     ).fetchone()
     if not cur:
-        return None
+        return _build_wilderness_context_block(session_id, conn)
 
     rel_ids = _collect_related_location_ids(conn, cur_id, _KNOWN_LOCATION_CAP)
     if cur_id not in rel_ids:

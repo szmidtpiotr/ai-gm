@@ -786,6 +786,84 @@ def _inject_location_blocked(assistant_response: str, reason: str) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
+def _run_narrative_travel(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    location_key: str,
+    target_label: str | None,
+    clean_response: str,
+) -> str:
+    """#1245 (R5, wariant A): a narrative move to a location whose pin sits >1 hex
+    away is a REAL journey, not a teleport.
+
+    The old guard (#1043) changed ``current_location_id`` to the destination but froze
+    the map pin — narrator said "you are at the mill" while the pin stayed put. Here we
+    run the unified travel engine (``execute_travel``, R4 #1244): the in-game clock
+    advances, encounters can interrupt the road, the pin advances WITH the hero, and the
+    destination scene loads only on arrival. The GM's arrival-claiming narrative for THIS
+    turn is replaced with a departure/outcome line so the pin and the prose can never
+    diverge, and ``location_intent`` is nulled so the normal apply-path is skipped.
+    """
+    from app.services.hex_travel_service import execute_travel, TravelError
+
+    # Hero-First: one active hero per campaign; fall back to any attached hero.
+    char_row = conn.execute(
+        "SELECT id FROM characters WHERE campaign_id = ? "
+        "ORDER BY (status = 'active') DESC, id LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not char_row:
+        logger.warning(
+            "narrative_travel_no_character",
+            campaign_id=campaign_id,
+            location_key=location_key,
+        )
+        return _inject_location_blocked(clean_response, "brak bohatera do podróży")
+
+    try:
+        result = execute_travel(
+            conn, campaign_id, {"location_key": location_key}, actor=int(char_row["id"])
+        )
+    except TravelError as exc:
+        logger.warning(
+            "narrative_travel_failed",
+            campaign_id=campaign_id,
+            location_key=location_key,
+            code=exc.code,
+        )
+        # location not placed / no target → soft-block, never desync the pin.
+        return _inject_location_blocked(clean_response, exc.message)
+
+    label = target_label or location_key
+    hours = result.get("total_hours") or 0
+    enc = result.get("encounter")
+    try:
+        data = json.loads(clean_response)
+    except Exception:
+        data = {}
+
+    if enc:
+        narr = (
+            f"Wyruszasz w drogę ku „{label}”. Po około {hours} h marszu droga zostaje "
+            "przerwana — nie docierasz jeszcze do celu i zatrzymujesz się w otwartym terenie."
+        )
+    else:
+        arrived_place = (result.get("hex_data") or {}).get("label") or label
+        narr = f"Wyruszasz w drogę i po około {hours} h docierasz do „{arrived_place}”."
+
+    data["narrative"] = narr
+    data["location_intent"] = None
+    logger.info(
+        "narrative_travel_completed",
+        campaign_id=campaign_id,
+        location_key=location_key,
+        arrived_hex=result.get("arrived_hex"),
+        encounter=bool(enc),
+        hours=hours,
+    )
+    return json.dumps(data, ensure_ascii=False)
+
+
 def _inject_pre_llm_unknown_location_denial(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -1028,7 +1106,11 @@ def _process_location_intent(
             )
             # Resolve world hex for this location (for the world map pin)
             # #1043: guard — narrator cannot teleport >1 hex via location intent
+            # #1245 (R5): a >1-hex jump to a PLACED location is no longer a
+            # half-block (loc changed, pin frozen → desync); it is promoted to a
+            # real journey via execute_travel. _travel_loc_key carries the target.
             _narrative_new_hex: dict | None = None
+            _travel_loc_key: str | None = None
             try:
                 import json as _jloc
                 _loc_row = conn.execute(
@@ -1054,8 +1136,12 @@ def _process_location_intent(
                             from app.services.hex_travel_service import hex_distance as _hd
                             _dist = _hd(int(_old_q), int(_old_r), _new_q, _new_r)
                             if _dist > 1:
-                                logger.warning(
-                                    "narrative_hex_jump_blocked_location_intent",
+                                # #1245 (R5, wariant A): promote to a real journey
+                                # rather than the old half-block. execute_travel moves
+                                # the pin (possibly interrupted by an encounter), so the
+                                # map and the narration can never diverge.
+                                logger.info(
+                                    "narrative_hex_jump_promoted_to_travel",
                                     from_hex=(_old_q, _old_r),
                                     to_hex=(_new_q, _new_r),
                                     distance=_dist,
@@ -1063,10 +1149,23 @@ def _process_location_intent(
                                     session_id=session_id,
                                 )
                                 _jump_ok = False
+                                _travel_loc_key = _loc_row["key"]
                         if _jump_ok:
                             _narrative_new_hex = {"q": _new_q, "r": _new_r}
             except Exception as _hex_sync_err:
                 logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
+
+            # #1245 (R5): a >1-hex narrative move to a placed location = real travel.
+            # Return here — the unified engine owns position/clock/scene; the direct
+            # set_position below (which would freeze the pin) is intentionally skipped.
+            if _travel_loc_key is not None:
+                return _run_narrative_travel(
+                    conn,
+                    campaign_id,
+                    _travel_loc_key,
+                    getattr(intent, "target_label", None),
+                    clean_response,
+                )
 
             # #1112: atomic position write via canonical service
             from app.services.location_state_service import set_position as _set_pos
