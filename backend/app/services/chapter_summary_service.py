@@ -18,6 +18,7 @@ from typing import Literal
 
 import structlog
 
+from app.core.constants import DEFAULT_REGION
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -396,7 +397,7 @@ def _build_decisions_prompt(
         f"i zwróć je jako STRUKTURĘ JSON.\n\n"
         f"Bohater: {name} ({archetype})\n"
         f"Zakończenie: {outcome_pl}\n"
-        f"Region: {region or 'kresy'}\n\n"
+        f"Region: {region or DEFAULT_REGION}\n\n"
         f"Fragment przygody:\n{transcript}\n\n"
         f"Zwróć WYŁĄCZNIE JSON w formacie:\n"
         f'{{"decisions": [{{"typ": "...", "opis": "...", "konsekwencja": "...", '
@@ -406,7 +407,7 @@ def _build_decisions_prompt(
         f"- opis: krótkie zdanie CO bohater zrobił/postanowił\n"
         f"- konsekwencja: krótki skutek (może być pusty)\n"
         f"- npc: imię postaci, której to dotyczy (jeśli żadnej — pusty string)\n"
-        f'- region: nazwa regionu (jeśli nieznany — "{region or "kresy"}")\n'
+        f'- region: nazwa regionu (jeśli nieznany — "{region or DEFAULT_REGION}")\n'
         f"- waga: 1 (drobne) do 5 (przełomowe)\n"
         f"- maks. {KEY_DECISIONS_MAX} najważniejszych wpisów. Tylko realnie znaczące decyzje.\n"
         f"Bez komentarza, bez markdown — sam obiekt JSON."

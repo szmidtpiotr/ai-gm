@@ -8,7 +8,7 @@ Atomically writes in one transaction:
   - game_sessions.current_location_id
   - session_flags.current_hex       (world hex pin)
   - session_flags.local_hex         (settlement local hex, optional)
-  - characters.sheet_json.current_hex  (mirror read by GET /player-map)
+  - characters.sheet_json.current_hex  (mirror; pin now served by GET /api/campaigns/{id}/world-map)
 """
 from __future__ import annotations
 
@@ -169,6 +169,10 @@ def set_position(
         conn: open SQLite connection (caller owns commit/rollback lifecycle;
               this function does NOT commit — callers that set autocommit=True
               or rely on the connection's isolation_level will commit naturally).
+              R9 (#1249) commit-discipline audit — all 6 call sites commit after
+              set_position: turn_pipeline.py:1553/1652, local_map.py:448,
+              hex_travel_service.py:988/1685/1728. Keep this invariant when adding
+              new callers, or the position write is silently rolled back.
         campaign_id: target campaign.
         current_hex: world hex coordinates {"q": int, "r": int}.
                      None = leave unchanged.
@@ -180,8 +184,9 @@ def set_position(
                          (use when player exits a settlement to the world map).
         clear_location_id: if True, sets current_location_id = NULL.
         character_id: if provided and current_hex is set, mirrors current_hex
-                      into characters.sheet_json.current_hex so GET /player-map
-                      shows the correct pin position.
+                      into characters.sheet_json.current_hex (legacy best-effort
+                      mirror; the authoritative pin is session_flags.current_hex,
+                      read by GET /api/campaigns/{id}/world-map).
     """
     # Load current session_flags
     row = conn.execute(
@@ -242,11 +247,11 @@ def set_position(
     # Mirror current_hex into sheet_json so the player map pin stays correct.
     # Auto-lookup character from campaign if not explicitly provided.
     # PT-F2 #1136: this mirror is best-effort — the pin's source of truth is
-    # session_flags.current_hex (read by GET /player-map). Never let a missing
+    # session_flags.current_hex (read by GET /world-map). Never let a missing
     # `characters` table (isolated test DBs) or a bad row break a position write.
     if current_hex is not None:
+        char_id_to_use = character_id
         try:
-            char_id_to_use = character_id
             if char_id_to_use is None:
                 char_lookup = conn.execute(
                     "SELECT id FROM characters WHERE campaign_id = ? AND status = 'active' LIMIT 1",
@@ -267,5 +272,13 @@ def set_position(
                         "UPDATE characters SET sheet_json = ? WHERE id = ?",
                         (json.dumps(sheet, ensure_ascii=False), char_id_to_use),
                     )
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:
+            # R9 (#1249): mirror is best-effort but a silent `pass` hid real schema
+            # drift on production DBs. Log so the failure is diagnosable. The pin's
+            # source of truth stays session_flags.current_hex (read by /world-map).
+            logger.warning(
+                "set_position_sheet_mirror_skipped",
+                error=str(exc),
+                campaign_id=campaign_id,
+                character_id=char_id_to_use,
+            )

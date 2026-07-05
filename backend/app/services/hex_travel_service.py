@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import structlog
 
+from app.core.constants import DEFAULT_REGION
 from app.services.movement_service import (
     MovementProfile,
     MovementStep,
@@ -52,9 +53,9 @@ def _load_live_regions(conn: sqlite3.Connection) -> set[str]:
             "SELECT key FROM world_regions WHERE status = 'live'"
         ).fetchall()
     except sqlite3.OperationalError:
-        return {"kresy"}
+        return {DEFAULT_REGION}
     if not rows:
-        return {"kresy"}
+        return {DEFAULT_REGION}
     return {r["key"] for r in rows}
 
 
@@ -90,7 +91,7 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
         except Exception:
             h["encounter_pool"] = []
         h["teleport_edges"] = []
-        region = h.get("region") or "kresy"
+        region = h.get("region") or DEFAULT_REGION
         hex_type = h.get("hex_type", "plains")
         if region in live_regions and (passable_types is None or hex_type in passable_types):
             hexes[(q, r)] = h

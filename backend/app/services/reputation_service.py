@@ -18,11 +18,14 @@ import sqlite3
 
 import structlog
 
+from app.core.constants import DEFAULT_REGION
+
 logger = structlog.get_logger(__name__)
 
 # ── Region model (#917) ──────────────────────────────────────────────────────
 # Only region live at launch; every hex is currently "Kresy" (region column NYI).
-REGION_DEFAULT = "kresy"
+# R9 (#1249): alias the shared constant so all fallbacks stay in lockstep.
+REGION_DEFAULT = DEFAULT_REGION
 
 # ── Campaign-outcome deltas (STARTING values) ────────────────────────────────
 REP_VICTORY_REWARD = 20   # finishing a campaign builds regional standing

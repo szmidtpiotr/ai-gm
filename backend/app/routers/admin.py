@@ -33,6 +33,7 @@ from app.services.admin_character_recreate import (
     list_characters_by_owner,
     recreate_character_in_place,
 )
+from app.core.constants import DEFAULT_REGION
 from app.migrations_admin import run_admin_migrations
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import (
@@ -3796,7 +3797,7 @@ def admin_get_campaign_hex_map(campaign_id: int, _: None = Depends(require_admin
             q2, r2 = int(h["q"]), int(h["r"])
             ov = overlay.get((q2, r2), {})
             result.append({"q": q2, "r": r2, "hex_type": h["hex_type"], "label": h["label"], "location_key": h["location_key"],
-                "region": h["region"] or "kresy",
+                "region": h["region"] or DEFAULT_REGION,
                 "discovered": bool(ov.get("discovered", 0)), "encounter_cleared": bool(ov.get("encounter_cleared", 0)),
                 "known": bool(ov.get("known", 0)),
                 "campaign_label": ov.get("campaign_label") or "", "campaign_notes": ov.get("campaign_notes") or "",
@@ -3812,6 +3813,7 @@ class HexOverlayPatchReq(BaseModel):
     campaign_label: str | None = None
     campaign_notes: str | None = None
     known: bool | None = None   # PM7 (#1226): per-hex override → status 'known' w world-map
+    narrative_encounter: str | None = None  # R9 (#1249): per-campaign scripted encounter, now editable
 
 
 @router.patch("/admin/campaigns/{campaign_id}/hex-map/{q}/{r}")
@@ -3827,13 +3829,38 @@ def admin_patch_campaign_hex(campaign_id: int, q: int, r: int, req: HexOverlayPa
             if req.campaign_label is not None: fields.append("campaign_label=?"); vals.append(req.campaign_label)
             if req.campaign_notes is not None: fields.append("campaign_notes=?"); vals.append(req.campaign_notes)
             if req.known is not None: fields.append("known=?"); vals.append(1 if req.known else 0)
+            if req.narrative_encounter is not None: fields.append("narrative_encounter=?"); vals.append(req.narrative_encounter)
             if fields: conn.execute(f"UPDATE campaign_hex_data SET {','.join(fields)} WHERE campaign_id=? AND hex_q=? AND hex_r=?", vals+[campaign_id, q, r])
         else:
-            conn.execute("INSERT INTO campaign_hex_data (campaign_id,hex_q,hex_r,discovered,encounter_cleared,campaign_label,campaign_notes,known) VALUES (?,?,?,?,?,?,?,?)",
-                (campaign_id, q, r, 1 if req.discovered else 0, 1 if req.encounter_cleared else 0, req.campaign_label or "", req.campaign_notes or "", 1 if req.known else 0))
+            conn.execute("INSERT INTO campaign_hex_data (campaign_id,hex_q,hex_r,discovered,encounter_cleared,campaign_label,campaign_notes,known,narrative_encounter) VALUES (?,?,?,?,?,?,?,?,?)",
+                (campaign_id, q, r, 1 if req.discovered else 0, 1 if req.encounter_cleared else 0, req.campaign_label or "", req.campaign_notes or "", 1 if req.known else 0, req.narrative_encounter or ""))
         conn.commit()
         row = conn.execute("SELECT * FROM campaign_hex_data WHERE campaign_id=? AND hex_q=? AND hex_r=?", (campaign_id, q, r)).fetchone()
         return {"ok": True, "hex": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/world/hexes/{q}/{r}/campaign-count")
+def admin_hex_campaign_count(q: int, r: int, _: None = Depends(require_admin_token)):
+    """R9 (#1249): blast-radius counter for the global-terrain-edit warning dialog.
+
+    Editing world_hexes.hex_type changes the base map for EVERY campaign. This
+    returns how many campaigns currently reference the hex (overlay row) plus the
+    total active-campaign count, so the admin sees the reach before committing.
+    """
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        on_hex = conn.execute(
+            """SELECT COUNT(DISTINCT chd.campaign_id) AS n
+               FROM campaign_hex_data chd
+               INNER JOIN campaigns c ON c.id = chd.campaign_id
+               WHERE chd.hex_q = ? AND chd.hex_r = ?""",
+            (q, r),
+        ).fetchone()
+        total = conn.execute("SELECT COUNT(*) AS n FROM campaigns").fetchone()
+        return {"on_hex": int(on_hex["n"] or 0), "total_campaigns": int(total["n"] or 0)}
     finally:
         conn.close()
 

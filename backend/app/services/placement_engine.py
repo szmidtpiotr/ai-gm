@@ -4,6 +4,8 @@ import random
 import sqlite3
 from typing import Optional
 
+from app.core.constants import DEFAULT_REGION
+
 
 def try_place_location_on_hex(
     conn: sqlite3.Connection,
@@ -11,7 +13,7 @@ def try_place_location_on_hex(
     r: int,
     hex_type: str,
     campaign_seed: int = 0,
-    region: str = "kresy",
+    region: str = DEFAULT_REGION,
 ) -> Optional[str]:
     """
     Próbuje osadzić lokację z bazy na hexie (q,r) wg reguł terenu i krainy.
