@@ -431,10 +431,16 @@ def _mk_catalog(db):
         CREATE TABLE game_config_enemies (
             key TEXT PRIMARY KEY, label TEXT, tier TEXT, is_active INTEGER DEFAULT 1
         );
+        CREATE TABLE npcs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, label TEXT,
+            npc_type TEXT DEFAULT 'neutral', is_shop INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1
+        );
     """)
     db.execute("INSERT INTO game_config_enemies (key, label, tier) VALUES ('bandit','Bandyta','standard')")
     db.execute("INSERT INTO game_config_enemies (key, label, tier) VALUES ('wolf','Wilk','minion')")
     db.execute("INSERT INTO game_locations (key, label) VALUES ('karczma_x','Karczma Pod Kotem')")
+    db.execute("INSERT INTO npcs (key, label, npc_type, is_shop) VALUES ('kowal_brok','Brok Żelazna Ręka','merchant',1)")
     db.commit()
 
 
@@ -478,11 +484,14 @@ def test_draft_builds_setup_from_llm_with_catalogs():
     assert res["setup"]["scene_enemies"] == ["bandit"]
     assert res["reply"].startswith("Ustawiam")
     assert res["issue"]["number"] == 1183
-    # LLM musiał dostać: katalog wrogów, lokacje, bohaterów i treść issue
+    # LLM musiał dostać: katalog wrogów, lokacje, NPC, bohaterów i treść issue
     assert "bandit" in captured["prompt"]
     assert "karczma_x" in captured["prompt"]
+    assert "Brok Żelazna Ręka" in captured["prompt"]
     assert "Tester" in captured["prompt"]
     assert "walka startuje nocą" in captured["prompt"]
+    # reguły anty-wpadkowe z testów Piotra: gold przy handlu, encje NPC
+    assert "gold_gp" in captured["prompt"]
 
 
 def test_draft_tolerates_fenced_json_and_filters_unknown_enemies():

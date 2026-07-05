@@ -495,11 +495,12 @@ Zwróć WYŁĄCZNIE poprawny JSON (bez markdown):
    "location_name": "<nazwa miejsca akcji>",
    "location_key": "<klucz z katalogu lokacji lub pomiń>",
    "scene_enemies": ["<TYLKO klucze z katalogu wrogów>"],
-   "scene_npcs": ["<nazwy NPC jeśli potrzebne>"],
+   "scene_npcs": ["<nazwy NPC — jeśli test dotyczy pamięci/reakcji NPC, użyj ISTNIEJĄCEGO NPC z katalogu (gołe wymyślone nazwy nie mają liczników ani pamięci)>"],
    "start_combat": <true TYLKO gdy testowany element wymaga AKTYWNEJ walki od pierwszej tury (przyciski walki, ucieczka, obrażenia); wtedy scene_enemies nie może być puste>,
    "session_flags": {},
    "ingame_hours": <0-23>,
-   "hero_overrides": {<np. "current_hp": 5 gdy test wymaga rannego bohatera>},
+   "hero_overrides": {<np. "current_hp": 5 gdy test wymaga rannego bohatera;
+                       "gold_gp": 200 ZAWSZE gdy test dotyczy handlu/zakupów/sklepu>},
    "gm_plan": {<opcjonalnie np. "scene_goal": "...">},
    "opening_narration": "<2-4 zdania narracji GM po polsku stawiające gracza w środku testowanej sytuacji>",
    "agent_notes": "<czego NIE dało się wywnioskować z issue/opisu — przyjęte założenia>"
@@ -596,6 +597,13 @@ def draft_scenario_setup(
             ).fetchall()
         except sqlite3.OperationalError:
             locations = []
+        try:
+            npcs = c.execute(
+                "SELECT key, label, npc_type, is_shop FROM npcs WHERE is_active = 1"
+                " ORDER BY is_shop DESC, id DESC LIMIT 60",
+            ).fetchall()
+        except sqlite3.OperationalError:
+            npcs = []
         heroes = c.execute(
             """
             SELECT id, name, user_id,
@@ -623,6 +631,10 @@ def draft_scenario_setup(
         "",
         "KATALOG LOKACJI (key | label):",
         *[f"- {r['key']} | {r['label']}" for r in locations],
+        "",
+        "KATALOG NPC (key | label | typ) — do testów pamięci/reakcji/handlu NPC bierz stąd:",
+        *[f"- {r['key']} | {r['label']} | {r['npc_type']}{' (sklep)' if r['is_shop'] else ''}"
+          for r in npcs],
         "",
         "BOHATEROWIE (id | name | level | archetype | user_id):",
         *[f"- {r['id']} | {r['name']} | {r['level']} | {r['archetype']} | u{r['user_id']}"
