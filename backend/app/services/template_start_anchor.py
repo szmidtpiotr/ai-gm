@@ -303,8 +303,8 @@ def ensure_template_location_structure(
         safe = 1 if is_hub or key == start_key else 0
 
         row = conn.execute(
-            "SELECT id, key, world_hex_q, world_hex_r, created_by, source_campaign_id "
-            "FROM game_locations WHERE key = ?",
+            "SELECT id, key, world_hex_q, world_hex_r, created_by, source_campaign_id, "
+            "location_type, parent_key FROM game_locations WHERE key = ?",
             (key,),
         ).fetchone()
         if row is None:
@@ -318,6 +318,20 @@ def ensure_template_location_structure(
                 (key, label, desc, loc_type, parent_key,
                  template_id, safe, hex_q, hex_r, now, now),
             )
+            return key
+        # Already in the desired shape (earlier materialization of THIS structure) —
+        # idempotent no-op. Without this check a restructured sub (world anchor
+        # cleared, foreign created_by) failed the ownership test on every next
+        # campaign launch and spawned a `_2` copy (dwie karczmy — #1212 regres).
+        if (
+            (row["location_type"] or "macro") == loc_type
+            and (row["parent_key"] or None) == parent_key
+            and (row["world_hex_q"] is None) == (hex_q is None)
+            and (
+                hex_q is None
+                or (int(row["world_hex_q"]) == hex_q and int(row["world_hex_r"]) == hex_r)
+            )
+        ):
             return key
         if _template_owns_row(row, template_id, q, r):
             conn.execute(

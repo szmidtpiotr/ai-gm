@@ -231,6 +231,36 @@ def test_launch_starts_inside_start_sub_with_local_hex_and_beat():
     assert not beats["rozmowa"].get("visited")
 
 
+def test_second_launch_is_idempotent_no_duplicate_karczma():
+    """Regres z DEV: karczma po restrukturyzacji (sub, bez kotwicy, obcy created_by)
+    nie przechodziła testu własności → każdy kolejny launch tworzył kopię `_2`
+    i czwarty hex na mapie lokalnej (dwie Karczmy na mapie Błotstein)."""
+    from app.services.template_start_anchor import ensure_template_location_structure
+    db = _make_db()
+    _tpl(db)
+    # rekord karczmy jak na DEV: obcy twórca, zrestrukturyzowany w 1. przebiegu
+    db.execute(
+        "INSERT INTO game_locations (key,label,location_type,world_hex_q,world_hex_r,created_by,source_campaign_id) "
+        "VALUES ('karczma_testowa','Karczma Testowa','macro',38,6,'manual_fix_1092',999986)"
+    )
+    db.commit()
+
+    r1 = ensure_template_location_structure(db, 132, campaign_id=None)
+    r2 = ensure_template_location_structure(db, 132, campaign_id=None)
+
+    assert r1["start_key"] == r2["start_key"] == "karczma_testowa"
+    rows = db.execute(
+        "SELECT key FROM game_locations WHERE key LIKE 'karczma_testowa%'"
+    ).fetchall()
+    assert [r["key"] for r in rows] == ["karczma_testowa"], "drugi launch nie może tworzyć kopii"
+    local = db.execute(
+        "SELECT location_key FROM world_hexes WHERE map_level=1"
+    ).fetchall()
+    keys = [l["location_key"] for l in local]
+    assert keys.count("karczma_testowa") == 1
+    assert not any(k.startswith("karczma_testowa_") for k in keys), "jedna karczma na mapie lokalnej"
+
+
 # ─── Kuźnia: stuby + walidacja publish ────────────────────────────────────────
 
 def test_forge_stubs_honor_scale_and_parent():
