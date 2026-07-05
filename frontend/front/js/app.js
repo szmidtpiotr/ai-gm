@@ -1995,6 +1995,24 @@ function _wmRender() {
       if (isCurrent)
         html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
           font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
+    } else if (hex.status === 'known') {
+      // PM6 (#1225): 'known' — teren znany z opowieści. Przygaszony fill (kolor terenu
+      // × opacity) + wyblakła ikona; label tylko gdy backend go dał (landmark/kanon).
+      // Wyraźnie różny od 'discovered' (pełny fill) i 'outline' (przezroczysty, kropkowany).
+      const fill = cfg.map_color || '#4a6a4a';
+      html += `<polygon class="wm-hex wm-hex--known" data-q="${hex.q}" data-r="${hex.r}"
+        points="${_wmCorners(sx, sy, rz-1)}"
+        fill="${fill}" fill-opacity="0.4" stroke="#6a5a34" stroke-width="0.7" stroke-dasharray="2,2"
+        style="cursor:pointer"/>`;
+      if (_wmap.zoom >= 0.9 && cfg.map_icon)
+        html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
+          font-size="${Math.max(10, 13*_wmap.zoom)}" opacity="0.55" style="pointer-events:none">${cfg.map_icon}</text>`;
+      if (hex.label && _wmap.zoom >= 1.0) {
+        const labelText = hex.label.length > 20 ? hex.label.slice(0, 20) + '…' : hex.label;
+        html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
+          font-size="${Math.max(7, 9*_wmap.zoom)}" fill="#9a8a5a" paint-order="stroke" stroke="#000" stroke-width="2.5"
+          style="pointer-events:none">${escapeHtml(labelText)}</text>`;
+      }
     } else {
       // Outline: unvisited adjacent hex
       html += `<polygon class="wm-hex wm-hex--outline" data-q="${hex.q}" data-r="${hex.r}"
@@ -2029,9 +2047,13 @@ function _wmOnHexClick(e) {
   const label = hex.label || `(${q},${r})`;
   const cfg = _wmap.hexTypes[hex.hex_type] || {};
   const typeName = cfg.label || hex.hex_type || '';
+  // PM6 (#1225): 'known' hex = ważny cel podróży, ale bez szczegółów lokacji —
+  // gracz zna go tylko z opowieści, więc pokazujemy sam teren + adnotację.
   const info = hex.status === 'discovered'
     ? typeName
-    : `${typeName} — nieznany teren`;
+    : hex.status === 'known'
+      ? `${typeName || 'Teren'} — znane z opowieści`
+      : `${typeName} — nieznany teren`;
 
   // E21: dungeon hex → skip travel, open dungeon picker directly
   if (hex.hex_type === 'dungeon') {

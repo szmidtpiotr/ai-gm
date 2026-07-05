@@ -1919,6 +1919,12 @@
     <div class="wmap-canvas-wrap">
       <svg id="wmap-svg" class="wmap-svg"></svg>
     </div>
+    <!-- PM6 (#1225): legenda trzech stanów mgły wojny -->
+    <div class="wmap-legend" id="wmap-legend">
+      <span class="wmap-legend-item"><span class="wmap-legend-swatch wmap-legend-swatch--disc"></span>Odkryte</span>
+      <span class="wmap-legend-item"><span class="wmap-legend-swatch wmap-legend-swatch--known"></span>Znane z opowieści</span>
+      <span class="wmap-legend-item"><span class="wmap-legend-swatch wmap-legend-swatch--outline"></span>Nieodkryte</span>
+    </div>
     <!-- Travel confirmation overlay (shown inside the map panel) -->
     <div id="wmap-confirm" class="wmap-confirm" hidden>
       <div class="wmap-confirm-title" id="wmap-confirm-title">Podróżujesz do…</div>
@@ -2299,7 +2305,7 @@
   <script src="./js/screens/game.js?v=1186-turnlock"></script>
   <script src="./js/screens/combat_ui.js?v=1177-i1054"></script>
   <script src="./js/multiplayer_ui.js?v=1176-cleanup"></script>
-  <script src="./js/app.js?v=1211-deeplink"></script>
+  <script src="./js/app.js?v=1225-known-fow"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

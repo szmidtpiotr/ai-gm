@@ -7710,6 +7710,23 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .wmap-svg { width: 100%; height: 100%; background: #060406; display: block; }
 
+/* PM6 (#1225): legenda trzech stanów mgły wojny */
+.wmap-legend {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  padding: 8px 16px;
+  background: rgba(10,8,6,0.9);
+  border-top: 1px solid #2a2012;
+  font-size: 0.68rem; color: #9a8a6a;
+  flex: 0 0 auto;
+}
+.wmap-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.wmap-legend-swatch {
+  width: 13px; height: 13px; border-radius: 2px; display: inline-block;
+}
+.wmap-legend-swatch--disc { background: #4a6a4a; border: 1px solid #1a1612; }
+.wmap-legend-swatch--known { background: #4a6a4a; opacity: 0.4; border: 1px dashed #6a5a34; }
+.wmap-legend-swatch--outline { background: transparent; border: 1px dashed #2a2218; }
+
 /* Travel confirmation */
 .wmap-confirm {
   position: absolute;
