@@ -1012,10 +1012,29 @@ def validate_template_publish(template_id: int, conn: sqlite3.Connection) -> dic
     plan_beats = _plan_beat_keys(plan)
     missing_beats = [b for b in required_beats if b not in plan_beats]
 
+    # #1212 — settlement structure sanity: subs must reference a declared hub.
+    # Only enforced when the plan uses scale at all (legacy flat plans skip).
+    structure_errors: list[str] = []
+    locs = [l for l in (plan.get("key_locations") or []) if isinstance(l, dict)]
+    if any(l.get("scale") for l in locs):
+        hub_keys = {str(l.get("key")) for l in locs if l.get("scale") == "hub" and l.get("key")}
+        subs = [l for l in locs if l.get("scale") == "sub"]
+        if subs and not hub_keys:
+            structure_errors.append("sublokacje bez zadeklarowanego huba (scale:'hub')")
+        if len(hub_keys) > 1:
+            structure_errors.append("więcej niż jeden hub w key_locations")
+        for s in subs:
+            p = s.get("parent")
+            if p and str(p) not in hub_keys:
+                structure_errors.append(
+                    f"sub '{s.get('key')}' wskazuje parent '{p}' spoza hubów"
+                )
+
     return {
-        "ok": not missing_npcs and not missing_beats,
+        "ok": not missing_npcs and not missing_beats and not structure_errors,
         "missing_npcs": missing_npcs,
         "missing_beats": missing_beats,
+        "structure_errors": structure_errors,
     }
 
 
@@ -1054,6 +1073,7 @@ def forge_validate_publish(template_id: int, _: None = Depends(_require_admin)):
             "ok": bool(vres["ok"] and wres["ok"]),
             "missing_npcs": vres["missing_npcs"],
             "missing_beats": vres["missing_beats"],
+            "structure_errors": vres.get("structure_errors", []),
             "plan_beat_keys": sorted(_plan_beat_keys(plan)),
             "winnable": wres,
         }
@@ -1097,6 +1117,7 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
                     "message": "Nie można opublikować — brakuje wymaganych elementów.",
                     "missing_npcs": vres["missing_npcs"],
                     "missing_beats": vres["missing_beats"],
+                    "structure_errors": vres.get("structure_errors", []),
                 })
             # #1020 — hard "winnable premade" gate: endings(primary) + no critical
             # orphan + ≥1 closable critical beat/act, so every published premade is
@@ -1140,8 +1161,8 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
             # #1206 — materialize the plan's start location ON the start hex, so
             # resolve_starting_hex anchors the session there (no forest-drift).
             try:
-                from app.services.template_start_anchor import ensure_template_start_location
-                ensure_template_start_location(conn, template_id)
+                from app.services.template_start_anchor import ensure_template_locations
+                ensure_template_locations(conn, template_id)
             except Exception as _tsl_err:
                 logger.warning("template_start_location_error", error=str(_tsl_err))
         updates: list[str] = []
@@ -1397,17 +1418,27 @@ def _auto_create_forge_locations(
     """
     now = datetime.now(timezone.utc).isoformat()
     created: list[dict] = []
+    hub_key = next(
+        (str(l.get("key")) for l in locations
+         if isinstance(l, dict) and l.get("scale") == "hub" and l.get("key")),
+        None,
+    )
     for loc in locations:
         key = loc.get("key") or _slugify(loc.get("name") or "location")
         name = loc.get("name") or key
-        description = loc.get("role") or ""
+        description = loc.get("description") or loc.get("role") or ""
+        # #1212 — settlement structure: sub-locations join the FAZA ML local map
+        is_sub = loc.get("scale") == "sub" and (loc.get("parent") or hub_key)
+        loc_type = "sub" if is_sub else "macro"
+        parent_key = (loc.get("parent") or hub_key) if is_sub else None
         try:
             conn.execute(
                 """INSERT OR IGNORE INTO game_locations
-                   (key, label, description, review_status, is_active, ai_generated,
+                   (key, label, description, location_type, parent_key,
+                    review_status, is_active, ai_generated,
                     created_by, source_campaign_id, created_at, updated_at)
-                   VALUES (?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?)""",
-                (key, name, description, template_id, now, now),
+                   VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?)""",
+                (key, name, description, loc_type, parent_key, template_id, now, now),
             )
             if conn.execute("SELECT changes()").fetchone()[0]:
                 created.append({"key": key, "name": name})
@@ -1545,7 +1576,7 @@ SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w 
     {{"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true, "personality_prompt": "string", "description": "string", "keyword_triggers": ["string"]}}
   ],
   "key_locations": [
-    {{"key": "slug", "name": "string", "role": "string", "description": "string — 2-3 zdania opisu dla MG (klimat, wygląd, przeznaczenie)", "visited": false}}
+    {{"key": "slug", "name": "string", "role": "string", "description": "string — 2-3 zdania opisu dla MG (klimat, wygląd, przeznaczenie)", "scale": "hub|sub|standalone", "parent": "klucz_huba (tylko dla sub)", "visited": false}}
   ],
   "key_enemies": [
     {{"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}}
@@ -1574,6 +1605,7 @@ ZASADY:
 10. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w obrębie planu), "summary" (co się dzieje). Gdzie sensowne dodaj "objective_type" (jedno z: kill_enemy, visit_location, talk_to_npc, find_item) + "objective_value" (slug celu, np. klucz wroga/lokacji/NPC). Ustaw "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
 11. DOMYKALNOŚĆ (KRYTYCZNE): każdy beat krytyczny (optional: false) MUSI dać się domknąć — albo ma "objective_type"+"objective_value" (auto-domknięcie), albo "narrative_close": true (domknięcie sygnałem MG). Beat krytyczny bez żadnego z tych pól zablokuje kampanię. Dla scen czysto fabularnych (walka bez konkretnego wroga w bazie, rozmowa, decyzja) ustaw "narrative_close": true.
 12. PORA STARTOWA: "start_hour" (liczba 0-23) to godzina, o której dzieje się scena otwarcia — wybierz ją ŚWIADOMIE pod klimat pierwszej sceny (gwarna wieczorna karczma → 19-20, świt na trakcie → 6, nocna ucieczka → 23), nie ustawiaj odruchowo poranka. Zegar gry startuje dokładnie o tej godzinie.
+13. STRUKTURA OSADY: jeśli przygoda toczy się w osadzie (wieś/miasteczko) z co najmniej 2 miejscami-budynkami (karczma, kuźnia, młyn, świątynia, sklep...), dodaj do key_locations OSADĘ ze "scale": "hub" (nazwij ją zgodnie z konwencją świata — mieszanka słowiańsko-germańska, np. Czarnstein, Wilczburg), a każdemu budynkowi daj "scale": "sub" + "parent": <klucz huba>. Miejsca POZA osadą (jaskinia, ruiny, leśny obóz, samotna wieża) → "scale": "standalone". Punkt startowy przygody to zwykle sub wewnątrz huba. Beaty visit_location celują w suby/standalone, nie w hub.
 """
 
 
@@ -2642,8 +2674,8 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
 
         # #1206 — anchor the plan's start location on the freshly allocated hex
         try:
-            from app.services.template_start_anchor import ensure_template_start_location
-            ensure_template_start_location(conn, template_id)
+            from app.services.template_start_anchor import ensure_template_locations
+            ensure_template_locations(conn, template_id)
         except Exception as _tsl_err:
             logger.warning("template_start_location_error", error=str(_tsl_err))
 
@@ -2726,8 +2758,8 @@ def forge_set_start_hex(template_id: int, req: SetStartHexReq, _: None = Depends
 
         # #1206 — anchor (or move) the plan's start location onto the chosen hex
         try:
-            from app.services.template_start_anchor import ensure_template_start_location
-            ensure_template_start_location(conn, template_id)
+            from app.services.template_start_anchor import ensure_template_locations
+            ensure_template_locations(conn, template_id)
         except Exception as _tsl_err:
             logger.warning("template_start_location_error", error=str(_tsl_err))
 

@@ -94,6 +94,10 @@ def _rewrite_plan_location_key(plan: dict, old_key: str, new_key: str) -> bool:
         if isinstance(loc, dict) and loc.get("key") == old_key:
             loc["key"] = new_key
             changed = True
+        # #1212 — settlement structure: sub-locations reference their hub via `parent`
+        if isinstance(loc, dict) and loc.get("parent") == old_key:
+            loc["parent"] = new_key
+            changed = True
     return changed
 
 
@@ -213,3 +217,183 @@ def ensure_template_start_location(
         foreign_created_by=row["created_by"],
     )
     return {"key": new_key, "status": "copied", "q": q, "r": r}
+
+
+# ── #1212 — settlement structure: hub + sub-locations → FAZA ML local map ─────
+
+def _plan_settlement_structure(plan: dict) -> "dict | None":
+    """Extract {hub: {...}, subs: [...]} from key_locations scale/parent fields.
+
+    Returns None when the plan declares no hub or fewer than 1 sub — the caller
+    then falls back to the flat #1206 start-anchor behavior. `parent` on a sub
+    defaults to the hub key.
+    """
+    if not isinstance(plan, dict):
+        return None
+    locs = [l for l in (plan.get("key_locations") or []) if isinstance(l, dict) and l.get("key")]
+    hubs = [l for l in locs if l.get("scale") == "hub"]
+    if not hubs:
+        return None
+    hub = hubs[0]
+    subs = [
+        l for l in locs
+        if l.get("scale") == "sub"
+        and (l.get("parent") or hub["key"]) == hub["key"]
+    ]
+    if not subs:
+        return None
+    return {"hub": hub, "subs": subs}
+
+
+def _template_owns_row(row, template_id: int, start_q: int, start_r: int) -> bool:
+    """A game_locations row this template may safely restructure:
+    its own forge stub, or the row materialized on its start hex (#1206 era)."""
+    if (
+        row["created_by"] == "forge"
+        and row["source_campaign_id"] is not None
+        and int(row["source_campaign_id"]) == int(template_id)
+    ):
+        return True
+    return (
+        row["world_hex_q"] is not None
+        and int(row["world_hex_q"]) == start_q
+        and int(row["world_hex_r"]) == start_r
+    )
+
+
+def ensure_template_location_structure(
+    conn: sqlite3.Connection,
+    template_id: int,
+    campaign_id: "int | None" = None,
+) -> "dict | None":
+    """#1212 — materialize the plan's settlement: hub anchored on the start hex,
+    sub-locations (parent_key → hub) on the FAZA ML local map (map_level=1).
+
+    Returns {"hub_key", "start_key", "sub_keys", "q", "r"} or None when the plan
+    declares no hub/sub structure (caller falls back to
+    `ensure_template_start_location`). Idempotent; key conflicts with foreign
+    locations follow the #1206 rule (unique-key copy + plan rewrite, never steal).
+    """
+    tpl = conn.execute(
+        "SELECT id, start_hex_q, start_hex_r, gm_plan_json FROM campaign_templates WHERE id = ?",
+        (template_id,),
+    ).fetchone()
+    if not tpl or tpl["start_hex_q"] is None or tpl["start_hex_r"] is None:
+        return None
+    try:
+        plan = json.loads(tpl["gm_plan_json"] or "{}")
+    except Exception:
+        return None
+
+    struct = _plan_settlement_structure(plan)
+    if not struct:
+        return None
+    q, r = int(tpl["start_hex_q"]), int(tpl["start_hex_r"])
+    now = datetime.now(timezone.utc).isoformat()
+    renames: list[tuple[str, str]] = []
+
+    def _materialize(loc: dict, *, is_hub: bool) -> str:
+        key = str(loc["key"])
+        label = str(loc.get("name") or key)
+        desc = str(loc.get("description") or loc.get("role") or "")
+        loc_type = "macro" if is_hub else "sub"
+        parent_key = None if is_hub else str(struct["hub"]["key"])
+        hex_q, hex_r = (q, r) if is_hub else (None, None)
+        # start sub = safe (tavern-like start); other subs default risky
+        safe = 1 if is_hub or key == start_key else 0
+
+        row = conn.execute(
+            "SELECT id, key, world_hex_q, world_hex_r, created_by, source_campaign_id "
+            "FROM game_locations WHERE key = ?",
+            (key,),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """INSERT INTO game_locations
+                   (key, label, description, location_type, parent_key,
+                    review_status, is_active, ai_generated, created_by,
+                    source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
+                (key, label, desc, loc_type, parent_key,
+                 template_id, safe, hex_q, hex_r, now, now),
+            )
+            return key
+        if _template_owns_row(row, template_id, q, r):
+            conn.execute(
+                "UPDATE game_locations SET location_type = ?, parent_key = ?, "
+                "world_hex_q = ?, world_hex_r = ?, is_active = 1, updated_at = ? "
+                "WHERE id = ?",
+                (loc_type, parent_key, hex_q, hex_r, now, row["id"]),
+            )
+            return key
+        # foreign row under this key → #1206 conflict rule: copy + rename in plans
+        new_key = _unique_location_key(conn, key)
+        conn.execute(
+            """INSERT INTO game_locations
+               (key, label, description, location_type, parent_key,
+                review_status, is_active, ai_generated, created_by,
+                source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
+                created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
+            (new_key, label, desc, loc_type, parent_key,
+             template_id, safe, hex_q, hex_r, now, now),
+        )
+        renames.append((key, new_key))
+        return new_key
+
+    # plan's start location (visit beat of act 1) — usually one of the subs
+    _start = _start_location_from_plan(plan)
+    start_key = _start[0] if _start else str(struct["subs"][0]["key"])
+
+    hub_key = _materialize(struct["hub"], is_hub=True)
+    sub_keys = [_materialize(s, is_hub=False) for s in struct["subs"]]
+
+    # apply conflict renames to template + campaign plan copies (and start_key)
+    for old_key, new_key in renames:
+        _rewrite_stored_plan(conn, "campaign_templates", template_id, old_key, new_key)
+        if campaign_id is not None:
+            _rewrite_stored_plan(conn, "campaigns", int(campaign_id), old_key, new_key)
+        if start_key == old_key:
+            start_key = new_key
+        if hub_key == old_key:
+            hub_key = new_key
+    conn.commit()
+
+    # FAZA ML: build the local map now (threshold #993 — needs ≥2 subs)
+    try:
+        from app.services.local_hex_service import auto_assign_local_hex
+        anchor_sub = start_key if start_key in sub_keys else sub_keys[0]
+        auto_assign_local_hex(conn, anchor_sub, hub_key, campaign_id=campaign_id)
+    except Exception as _lh_err:
+        logger.warning(
+            "template_local_map_error", template_id=template_id, error=str(_lh_err)
+        )
+
+    if start_key not in sub_keys and start_key != hub_key:
+        # start location outside the settlement (standalone) — session anchors to hub
+        start_key = hub_key
+
+    logger.info(
+        "template_settlement_materialized",
+        template_id=template_id, hub_key=hub_key, sub_keys=sub_keys,
+        start_key=start_key, q=q, r=r,
+    )
+    return {"hub_key": hub_key, "start_key": start_key, "sub_keys": sub_keys, "q": q, "r": r}
+
+
+def ensure_template_locations(
+    conn: sqlite3.Connection,
+    template_id: int,
+    campaign_id: "int | None" = None,
+) -> "dict | None":
+    """#1206 + #1212 — one entry point for template location materialization.
+
+    Settlement-structured plans (hub+subs) get the full FAZA ML treatment;
+    flat plans fall back to the single anchored start location.
+    """
+    struct = ensure_template_location_structure(conn, template_id, campaign_id=campaign_id)
+    if struct:
+        return {"key": struct["start_key"], "status": "settlement",
+                "q": struct["q"], "r": struct["r"], **struct}
+    return ensure_template_start_location(conn, template_id, campaign_id=campaign_id)

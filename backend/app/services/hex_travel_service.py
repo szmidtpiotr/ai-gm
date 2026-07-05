@@ -1271,15 +1271,16 @@ def resolve_starting_hex(
         except Exception as _pe:
             logger.warning("u28_placement_engine_error", error=str(_pe))
 
-    # #1206 — template-launch safety net: the template's start hex SHOULD carry the
-    # plan's start location (publish/allocate anchors it eagerly), but templates
-    # published before the fix have a bare hex. Materialize + anchor it now, so the
-    # session anchors to the story's start location instead of raw hex terrain
-    # (the "narracja o drzewach w karczmie" drift).
-    if not loc_key and not is_new and _tpl_id is not None:
+    # #1206/#1212 — template launch: materialize the template's locations (settlement
+    # hub + sub-locations with a FAZA ML local map, or the flat start location) and
+    # anchor the session at the story's start location instead of raw hex terrain.
+    # Runs even when an on-hex location was already paired: for a settlement the
+    # on-hex location is the HUB, but the session must start INSIDE the start
+    # sub-location (karczma), not "in the village" generically.
+    if not is_new and _tpl_id is not None:
         try:
-            from app.services.template_start_anchor import ensure_template_start_location
-            _tsl = ensure_template_start_location(conn, _tpl_id, campaign_id=campaign_id)
+            from app.services.template_start_anchor import ensure_template_locations
+            _tsl = ensure_template_locations(conn, _tpl_id, campaign_id=campaign_id)
             if _tsl and int(_tsl["q"]) == sq and int(_tsl["r"]) == sr:
                 loc_key = _tsl["key"]
                 logger.info(
@@ -1375,6 +1376,42 @@ def resolve_starting_hex(
             current_hex={"q": sq, "r": sr},
             current_location_id=_start_loc_id,
         )
+
+        # #1212 — start inside a settlement sub-location: seed the local-map
+        # position (session_flags.local_hex), mirroring #1057's narrative sync.
+        if _start_loc_id is not None and loc_key:
+            try:
+                _sub_row = conn.execute(
+                    "SELECT location_type, parent_key FROM game_locations WHERE id = ?",
+                    (_start_loc_id,),
+                ).fetchone()
+                if _sub_row and (_sub_row["location_type"] or "") == "sub" and _sub_row["parent_key"]:
+                    from app.services.local_hex_service import (
+                        get_local_hex_for_subloc, auto_assign_local_hex,
+                    )
+                    _lh = get_local_hex_for_subloc(conn, loc_key) or auto_assign_local_hex(
+                        conn, loc_key, _sub_row["parent_key"], campaign_id=campaign_id
+                    )
+                    if _lh:
+                        set_position(
+                            conn,
+                            campaign_id=campaign_id,
+                            local_hex={
+                                "hex_id": _lh["id"], "q": _lh["q"], "r": _lh["r"],
+                                "location_key": _lh.get("location_key"),
+                            },
+                        )
+            except Exception as _lh_err:
+                logger.warning("start_local_hex_error", campaign_id=campaign_id, error=str(_lh_err))
+
+        # #1212 — spawning at the start location IS visiting it: close the act-1
+        # visit_location beat that targets it (przybycie_do_karczmy class).
+        if _start_loc_id is not None and loc_key:
+            try:
+                from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+                auto_complete_beats_by_event(campaign_id, "visit_location", loc_key, 1, conn)
+            except Exception as _bt_err:
+                logger.warning("start_visit_beat_error", campaign_id=campaign_id, error=str(_bt_err))
 
     # #1208 — plan-declared starting hour (evening tavern scene ≠ 09:00). Runs once
     # here because every campaign-start flow passes through resolve_starting_hex;
