@@ -63,7 +63,10 @@ _MOVE_VERB_PATTERN = _re_tp.compile(
     r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy|"
     # #1142: "maszeruję dalej na zachód" / "wychodzę na trakt" nie łapały się na fast-path
     # → tura-fantom (narracja marszu bez ruchu hexa). Uzupełnione czasowniki marszu.
-    r"maszeruj\w*|wychodz[eę]|pod[ąa]ż\w*|krocz[eę])\b",
+    # PM3 #1222: "kieruję się" (bezpieczny czasownik ruchu). Miękkie warianty
+    # (szukam/udaję/próbuję) obsługiwane wyłącznie przez ścieżkę known-hex z
+    # przyimkiem celu — patrz _PT3_MOVE_VERB_RE + _KNOWN_HEX_DEST_RE.
+    r"maszeruj\w*|wychodz[eę]|pod[ąa]ż\w*|krocz[eę]|kieruj\w*)\b",
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
 
@@ -352,8 +355,18 @@ def execute_directional_travel(
 
     mv = detect_move_intent(player_text, cur)
     if not mv:
-        # PT3/#1113: before vague-move hint, check for a named destination on a different hex
-        if detect_vague_move_intent(player_text):
+        # PT3/#1113 + PM3 #1222: descriptive / named-destination travel.
+        # Trigger on either a classic vague-move verb OR a descriptive travel
+        # phrase ("szukam drogi do mostu", "udaję się w stronę wioski") — the
+        # latter carries its own move verb + destination preposition, so soft
+        # verbs never fire on their own.
+        from app.services.hex_travel_service import (
+            _PT3_MOVE_VERB_RE as _pt3_verb_re,
+            _KNOWN_HEX_DEST_RE as _kh_dest_re,
+        )
+        _vague = detect_vague_move_intent(player_text)
+        _dest_phrase = bool(_pt3_verb_re.search(player_text) and _kh_dest_re.search(player_text))
+        if _vague or _dest_phrase:
             from app.services.hex_travel_service import (
                 resolve_player_text_to_location_key,
                 detect_named_destination_hex,
@@ -432,11 +445,96 @@ def execute_directional_travel(
                     return {"executed": False, "system_fact": fact_n, "intent": None}
 
                 # Named dest found but same hex → let LLM handle via location_intent
+                # (the #1253 post-LLM net commits it if the narrator forgets).
                 return {"executed": False, "system_fact": None, "intent": None}
 
-            # No named destination found → fall through to vague hint
-            hint = _build_vague_move_hint(conn, flags)
-            return {"executed": False, "system_fact": hint, "intent": None}
+            # PM3 #1222: canonical resolver found nothing — try the known-hex
+            # descriptive resolver ("do mostu", "w stronę wioski"). Matches known/
+            # discovered hexes by label + Polish hex_type name; travels via the
+            # unified execute_travel (R4) so the pin/clock/scene all advance.
+            from app.services.hex_travel_service import (
+                resolve_player_text_to_known_hex,
+                execute_travel as _exec_travel_kh,
+                TravelError as _TravelError_kh,
+                KNOWN_HEX_UNKNOWN as _KH_UNKNOWN,
+            )
+            _kh = resolve_player_text_to_known_hex(
+                player_text, conn, campaign_id, character_id
+            )
+            if _kh == _KH_UNKNOWN:
+                # Point 4 (#1050 deadlock): a target was named but the hero doesn't
+                # know where it is — do NOT move; tell the narrator to suggest asking
+                # around, and NOT to describe setting out.
+                _mm = _kh_dest_re.search(player_text)
+                _tgt = (_mm.group(1).strip() if _mm else "cel")
+                fact_u = (
+                    f"\n[SYSTEM: gracz szuka drogi do \"{_tgt}\", bohater nie wie gdzie to "
+                    "jest — zasugeruj wypytanie ludzi (karczma, przechodnie, drogowskazy). "
+                    "NIE opisuj wyruszenia — bohater stoi w miejscu.]"
+                )
+                return {"executed": False, "system_fact": fact_u, "intent": None}
+            if _kh:
+                dq_k, dr_k = int(_kh[0]), int(_kh[1])
+                try:
+                    tr_k = _exec_travel_kh(
+                        conn, campaign_id, {"hex": {"q": dq_k, "r": dr_k}},
+                        actor=character_id, record_turn=False,
+                    )
+                except _TravelError_kh as _te_k:
+                    tr_k = {"ok": False, "error": _te_k.message}
+                except Exception as _te_gen:  # never break a turn
+                    logger.warning("pm3_known_hex_travel_error", error=str(_te_gen), campaign_id=campaign_id)
+                    tr_k = {"ok": False, "error": "błąd podróży"}
+                if tr_k.get("ok"):
+                    arr_k = tr_k.get("arrived_hex") or {}
+                    hex_info_k = tr_k.get("hex_data") or {}
+                    place_k = hex_info_k.get("label") or hex_info_k.get("hex_type") or "cel"
+                    enc_k = tr_k.get("encounter")
+                    fact_k = (
+                        f"\n[SYSTEM: Podróż do „{place_k}” wykonana mechanicznie: gracz "
+                        f"przemieścił się na hex ({arr_k.get('q')},{arr_k.get('r')}), "
+                        f"teren: {hex_info_k.get('hex_type', 'nieznany')}, "
+                        f"czas podróży: {tr_k.get('total_hours', 0)}h."
+                    )
+                    if enc_k:
+                        fact_k += (
+                            f" Podróż przerwana spotkaniem: {enc_k.get('enemy_key')} — "
+                            f"opisz nadejście zagrożenia i ROZPOCZNIJ walkę: OSTATNIA linia "
+                            f"odpowiedzi MUSI być wyłącznie tagiem "
+                            f"[COMBAT_START:{enc_k.get('enemy_key')}]."
+                        )
+                    if tr_k.get("weather_slowdown"):
+                        fact_k += (
+                            f" Pogoda ({tr_k.get('weather_slowdown')}) spowalniała marsz — "
+                            "wpleć trud drogi w opis."
+                        )
+                    fact_k += (
+                        " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej "
+                        "lokacji — ruch już rozstrzygnięty mechanicznie.]"
+                    )
+                    fact_k += _region_unlock_hint(tr_k)
+                    logger.info(
+                        "pm3_known_hex_travel",
+                        campaign_id=campaign_id,
+                        to_hex=(dq_k, dr_k),
+                        from_hex=(cur.get("q"), cur.get("r")),
+                    )
+                    return {"executed": True, "system_fact": fact_k, "intent": None}
+
+                fact_k = (
+                    "\n[SYSTEM: Gracz próbuje dotrzeć do znanego miejsca, ale mechanika "
+                    f"odmówiła: {tr_k.get('error', 'nieprzejezdny teren')}. Opisz przeszkodę "
+                    "narracyjnie. NIE opisuj dotarcia do celu.]"
+                )
+                return {"executed": False, "system_fact": fact_k, "intent": None}
+
+            # No named/known destination → vague hint only when the phrasing was a
+            # genuine bare move ("idę dalej"); a soft dest-phrase that matched nothing
+            # already returned above via KNOWN_HEX_UNKNOWN.
+            if _vague:
+                hint = _build_vague_move_hint(conn, flags)
+                return {"executed": False, "system_fact": hint, "intent": None}
+            return {"executed": False, "system_fact": None, "intent": None}
         return {"executed": False, "system_fact": None, "intent": None}
 
     from app.services.hex_travel_service import resolve_chain_travel

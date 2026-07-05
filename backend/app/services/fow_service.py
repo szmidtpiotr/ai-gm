@@ -128,3 +128,93 @@ def compute_known_coords(
     known -= discovered_coords
     labelable -= discovered_coords
     return known, labelable
+
+
+def compute_campaign_known_discovered(conn, campaign_id, character_id):
+    """PM3 #1222: campaign FOW sets for the descriptive-travel resolver.
+
+    Mirrors the world-map endpoint's known/discovered computation (turns.py) in a
+    reusable form: returns ``(known_coords, discovered_coords, all_hexes_l0)`` where
+    ``all_hexes_l0`` is the overworld hex index (coord → row). ``known_coords``
+    already excludes ``discovered_coords`` (discovered wins).
+    """
+    import json as _j
+
+    all_hexes_l0: dict = {}
+    for row in conn.execute(
+        "SELECT q, r, hex_type, label, location_key, region FROM world_hexes "
+        "WHERE is_active = 1 AND map_level = 0"
+    ).fetchall():
+        all_hexes_l0[(int(row["q"]), int(row["r"]))] = dict(row)
+
+    discovered: set = set()
+    persisted_known: set = set()
+    # campaign_hex_data.known may be absent on legacy/test schemas — degrade.
+    try:
+        rows = conn.execute(
+            "SELECT hex_q, hex_r, discovered, known FROM campaign_hex_data WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall()
+    except Exception:
+        rows = conn.execute(
+            "SELECT hex_q, hex_r, discovered FROM campaign_hex_data WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall()
+    for row in rows:
+        q, r = int(row["hex_q"]), int(row["hex_r"])
+        if row["discovered"]:
+            discovered.add((q, r))
+        elif ("known" in row.keys() and row["known"]):
+            persisted_known.add((q, r))
+
+    canonical_keys = {
+        r["key"] for r in conn.execute(
+            "SELECT key FROM game_locations WHERE canonical = 1 AND key IS NOT NULL"
+        ).fetchall()
+    }
+
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+    ).fetchone()
+    sf = _j.loads((gs["session_flags"] if gs else None) or "{}")
+
+    origin_region = None
+    try:
+        from app.services.hex_travel_service import resolve_starting_hex as _rsh
+        _start = _rsh(campaign_id, character_id, None, conn)
+        _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
+        if _srow:
+            origin_region = _srow.get("region")
+    except Exception:
+        pass
+    cur = sf.get("current_hex")
+    if not origin_region and cur:
+        _crow = all_hexes_l0.get((int(cur.get("q", 0)), int(cur.get("r", 0))))
+        if _crow:
+            origin_region = _crow.get("region")
+
+    known_regions: set = set()
+    if origin_region:
+        known_regions.add(origin_region)
+    kr = sf.get("known_regions")
+    if isinstance(kr, list):
+        known_regions |= {x for x in kr if x}
+
+    bubble_radius = DEFAULT_BUBBLE_RADIUS
+    try:
+        _br = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'knowledge_bubble_radius' LIMIT 1"
+        ).fetchone()
+        if _br and _br["value"] is not None:
+            bubble_radius = int(_br["value"])
+    except Exception:
+        pass
+
+    known_coords, _label = compute_known_coords(
+        all_hexes_l0, discovered, origin_region, canonical_keys, bubble_radius,
+        known_regions=known_regions,
+    )
+    for coord in persisted_known:
+        if coord not in discovered:
+            known_coords.add(coord)
+    return known_coords, discovered, all_hexes_l0

@@ -289,8 +289,14 @@ def detect_named_destination_hex(
 
 # ── PT3/#1113: named-destination text resolver ────────────────────────────────
 
+# PM3 #1222: descriptive-travel verbs. Beyond the classic movement verbs we add
+# "szukam (drogi)", "kieruję się", "udaję się", "chcę dotrzeć", "próbuję dojść",
+# "podążam". These soft verbs (esp. "udaj*" — the "udaję głupiego" idiom, #763)
+# are ALWAYS paired with a destination preposition (do/ku/w stronę/w kierunku)
+# by the caller, so they never fire on their own → no false move-intent.
 _PT3_MOVE_VERB_RE = re.compile(
-    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy)\w*\b",
+    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy|"
+    r"szukam|kieruj|udaj|chc[ęe]|prob[uó]j|próbuj|pod[ąa]ż|maszeruj|wychodz)\w*\b",
     re.IGNORECASE | re.UNICODE,
 )
 _PT3_DEST_RE = re.compile(
@@ -298,6 +304,19 @@ _PT3_DEST_RE = re.compile(
     r"(?:\s+[A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,})*)",
     re.UNICODE,
 )
+
+# PM3 #1222: destination phrase for the known-hex resolver — lowercase common
+# nouns allowed (most, rzeka, wioska, trakt, miasto) and the "w stronę / w
+# kierunku" phrasings. Captures 1-4 words after do/ku/w stronę/w kierunku.
+_KNOWN_HEX_DEST_RE = re.compile(
+    r"(?:\bdo\b|\bku\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
+    r"([a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{3,}(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
+    re.UNICODE | re.IGNORECASE,
+)
+
+# Sentinel: a destination phrase was present but nothing known matches it — the
+# hero should ask around rather than wander off (#1222 point 4, deadlock #1050).
+KNOWN_HEX_UNKNOWN = "__KNOWN_HEX_UNKNOWN__"
 
 
 def resolve_player_text_to_location_key(
@@ -344,6 +363,202 @@ def resolve_player_text_to_location_key(
             best_key = row["key"]
 
     return best_key if best_score >= 0.4 else None
+
+
+# ── PM3 #1222: known-hex descriptive-travel resolver ──────────────────────────
+
+def _fuzzy_prefix_match(cand: str, target: str) -> bool:
+    """True when two Polish words share enough of a stem to be the same noun.
+
+    Handles declension without a full stemmer: "mostu" ↔ "most", "wioski" ↔
+    "wioska", "rzeki" ↔ "rzeka". Prefix either way, else a common-prefix stem of
+    at least max(3, 60% of the shorter word).
+    """
+    a, b = _normalize(cand), _normalize(target)
+    if not a or not b:
+        return False
+    if a.startswith(b) or b.startswith(a):
+        return True
+    n = 0
+    for ca, cb in zip(a, b):
+        if ca != cb:
+            break
+        n += 1
+    return n >= max(3, int(0.6 * min(len(a), len(b))))
+
+
+def resolve_player_text_to_known_hex(
+    player_text: str,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+) -> "tuple[int, int] | str | None":
+    """PM3 #1222: resolve a descriptive travel phrase to a KNOWN/discovered hex.
+
+    Extends the #1113 canonical resolver to lowercase common-noun destinations
+    ("szukam drogi do mostu", "udaję się w stronę wioski"). The target is matched
+    — with Polish-declension-tolerant prefix matching — against every hex the
+    campaign already *knows* (FOW ``known`` ∪ ``discovered``, #1220), by both the
+    hex ``label`` and the Polish name of its ``hex_type`` (hex_type_config.label).
+
+    Returns:
+      (q, r)               — nearest known hex matching the phrase (≠ current hex),
+      KNOWN_HEX_UNKNOWN    — a destination phrase was present but nothing known
+                             matches it (caller must NOT move — ask around),
+      None                 — no descriptive travel phrase at all (not our case).
+    """
+    # TODO (#1222 pt.5): LLM fallback for target extraction when the regex/fuzzy
+    # path misses a paraphrased destination. turn_intent.py has no target
+    # classifier yet — see to_do_ideas.md. No dedicated extra LLM call for now.
+    if not _PT3_MOVE_VERB_RE.search(player_text):
+        return None
+    m = _KNOWN_HEX_DEST_RE.search(player_text)
+    if not m:
+        return None
+    cand_tokens = [t for t in _normalize(m.group(1)).split() if len(t) >= 3]
+    if not cand_tokens:
+        return None
+
+    try:
+        from app.services.fow_service import compute_campaign_known_discovered
+        known, discovered, all_hexes = compute_campaign_known_discovered(
+            conn, campaign_id, character_id
+        )
+    except Exception as _fow_err:
+        logger.warning("pm3_known_compute_failed", error=str(_fow_err), campaign_id=campaign_id)
+        return KNOWN_HEX_UNKNOWN
+    visible = known | discovered
+    if not visible:
+        return KNOWN_HEX_UNKNOWN
+
+    # Polish hex-type labels (hex_type → label), e.g. bridge → "Most", river → "Rzeka".
+    htcfg: dict[str, str] = {}
+    try:
+        for row in conn.execute(
+            "SELECT hex_type, label FROM hex_type_config WHERE is_active = 1"
+        ).fetchall():
+            htcfg[row["hex_type"]] = row["label"] or ""
+    except Exception:
+        pass
+
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    cur = json.loads((gs["session_flags"] if gs else None) or "{}").get("current_hex") or {"q": 0, "r": 0}
+    cq, cr = int(cur.get("q", 0)), int(cur.get("r", 0))
+
+    matches: list[tuple[int, int]] = []
+    for coord in visible:
+        row = all_hexes.get(coord)
+        if not row:
+            continue
+        names: list[str] = []
+        if row.get("label"):
+            names.append(row["label"])
+        ht = row.get("hex_type")
+        if ht:
+            names.append(htcfg.get(ht, ht))  # Polish label
+            names.append(ht)                 # english key fallback
+        hit = False
+        for name in names:
+            for nt in _normalize(name).split():
+                if any(_fuzzy_prefix_match(ct, nt) for ct in cand_tokens):
+                    hit = True
+                    break
+            if hit:
+                break
+        if hit:
+            matches.append(coord)
+
+    matches = [c for c in matches if c != (cq, cr)]
+    if not matches:
+        return KNOWN_HEX_UNKNOWN
+    matches.sort(key=lambda c: hex_distance(cq, cr, c[0], c[1]))
+    return matches[0]
+
+
+def resolve_declared_move_target(
+    player_text: str,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> "tuple[str, str] | None":
+    """#1253: resolve a player's *declared* move ("idę/ruszam do X") to a PLACED
+    game_location, independently of whether the LLM emitted a location_intent.
+
+    Used as a post-LLM safety net: when the narrator describes a march in prose
+    but returns ``location_intent: null``, we still need to know where the hero
+    said they were going so the move can be committed mechanically.
+
+    Preference order (also the #1254 rule): sub-locations of the CURRENT hub win
+    over anything, then locations physically placed on a hex; floating macros with
+    no ``world_hex`` are excluded when a hub sub-location matches.
+
+    Returns ``(location_key, label)`` or None.
+    """
+    if not _PT3_MOVE_VERB_RE.search(player_text):
+        return None
+    m = _PT3_DEST_RE.search(player_text) or _KNOWN_HEX_DEST_RE.search(player_text)
+    if not m:
+        return None
+    cand = m.group(1).strip()
+    cand_tokens = [t for t in _normalize(cand).split() if len(t) >= 3]
+    if not cand_tokens:
+        return None
+
+    # Current hub: the settlement the hero is in (parent of current sub-loc, or the
+    # current macro itself). Sub-locations of this hub are the strongest match.
+    hub_id: int | None = None
+    try:
+        crow = conn.execute(
+            "SELECT gl.id, gl.location_type, gl.parent_id "
+            "FROM game_locations gl JOIN game_sessions gs ON gs.current_location_id = gl.id "
+            "WHERE gs.campaign_id = ? AND gl.is_active = 1 LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if crow:
+            hub_id = int(crow["parent_id"]) if (crow["location_type"] == "sub" and crow["parent_id"]) else int(crow["id"])
+    except Exception:
+        pass
+
+    rows = conn.execute(
+        "SELECT key, label, location_type, parent_id, world_hex_q FROM game_locations "
+        "WHERE is_active = 1 AND label IS NOT NULL"
+    ).fetchall()
+
+    best: tuple[int, float, str, str] | None = None  # (tier, score, key, label)
+    hub_sub_exists = any(
+        hub_id is not None and r["parent_id"] == hub_id for r in rows
+        if _label_matches_tokens(r["label"], cand_tokens)
+    )
+    for r in rows:
+        if not _label_matches_tokens(r["label"], cand_tokens):
+            continue
+        is_placed = r["world_hex_q"] is not None
+        is_hub_sub = hub_id is not None and r["parent_id"] == hub_id
+        is_floating_no_hex = (r["location_type"] == "macro") and not is_placed
+        # #1254: inside a settlement, never fall onto a floating macro-without-hex.
+        if hub_sub_exists and is_floating_no_hex:
+            continue
+        tier = 3 if is_hub_sub else (2 if is_placed else 1)
+        score = _label_similarity(cand, r["label"])
+        cur_best = best
+        if cur_best is None or (tier, score) > (cur_best[0], cur_best[1]):
+            best = (tier, score, r["key"], r["label"])
+
+    if best is None:
+        return None
+    return (best[2], best[3])
+
+
+def _label_matches_tokens(label: str, cand_tokens: list[str]) -> bool:
+    """True when any candidate token fuzzy-prefix-matches any label token."""
+    if not label:
+        return False
+    label_tokens = _normalize(label).split()
+    return any(
+        _fuzzy_prefix_match(ct, lt) for ct in cand_tokens for lt in label_tokens
+    )
 
 
 # ── PM2 (#1221): region gazetteer unlock ──────────────────────────────────────
@@ -1574,6 +1789,7 @@ def execute_travel(
     target: dict,
     *,
     actor: int,
+    record_turn: bool = True,
 ) -> dict[str, Any]:
     """#1244 (R4): the single travel pipeline every endpoint delegates to.
 
@@ -1678,8 +1894,11 @@ def execute_travel(
     except Exception as _scene_err:  # noqa: BLE001
         logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
 
-    # (7) record the move as a synthetic narrative turn
-    if result.get("ok"):
+    # (7) record the move as a synthetic narrative turn.
+    # PM3 #1222: the pre-LLM descriptive-travel path passes record_turn=False —
+    # run_narrative_turn records the real (narrated) turn right after, so a synthetic
+    # "[Podróż mapą]" row here would duplicate it.
+    if result.get("ok") and record_turn:
         try:
             _record_travel_turn(conn, campaign_id, character_id, result)
         except Exception as _trec_err:  # noqa: BLE001
