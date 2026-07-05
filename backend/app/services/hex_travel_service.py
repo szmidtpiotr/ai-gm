@@ -346,6 +346,60 @@ def resolve_player_text_to_location_key(
     return best_key if best_score >= 0.4 else None
 
 
+# ── PM2 (#1221): region gazetteer unlock ──────────────────────────────────────
+
+def _region_of_hex(conn: sqlite3.Connection, q: int, r: int) -> str | None:
+    """Overworld region tag of hex (q, r), or None if unplaced/unregioned."""
+    row = conn.execute(
+        "SELECT region FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 "
+        "AND is_active = 1 LIMIT 1",
+        (q, r),
+    ).fetchone()
+    return (row["region"] if row and row["region"] else None)
+
+
+def unlock_region_for_hex(
+    conn: sqlite3.Connection, campaign_id: int, q: int, r: int
+) -> dict[str, str] | None:
+    """PM2 (#1221): mark the region containing hex (q, r) as *known* for this
+    campaign so its gazetteer (main landmarks/roads/settlements) becomes visible.
+
+    Cumulative: ``session_flags.known_regions`` only ever grows — a region once
+    unlocked never disappears (return trip to the old land keeps the new one).
+
+    Returns ``{"key", "label"}`` when this call newly unlocks a region (so the
+    caller can fire a narrator hint), else ``None`` (no region, already known, or
+    no session row).
+    """
+    region = _region_of_hex(conn, q, r)
+    if not region:
+        return None
+    gs = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not gs:
+        return None
+    sf = json.loads(gs["session_flags"] or "{}")
+    known = sf.get("known_regions")
+    if not isinstance(known, list):
+        known = []
+    if region in known:
+        return None
+    known.append(region)
+    sf["known_regions"] = known
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+        (json.dumps(sf, ensure_ascii=False), gs["id"]),
+    )
+    label_row = conn.execute(
+        "SELECT label FROM world_regions WHERE key = ? LIMIT 1", (region,)
+    ).fetchone()
+    label = (label_row["label"] if label_row and label_row["label"] else region)
+    logger.info("pm2_region_unlocked", campaign_id=campaign_id, region=region)
+    return {"key": region, "label": label}
+
+
 # ── Main travel resolver ──────────────────────────────────────────────────────
 
 def resolve_chain_travel(
@@ -589,6 +643,7 @@ def resolve_chain_travel(
             logger.warning("temp_camp_cleanup_failed", q=from_hex[0], r=from_hex[1], error=str(e))
 
     # Update character's current hex in session_flags
+    _region_unlocked: dict[str, str] | None = None
     try:
         gs = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -712,6 +767,15 @@ def resolve_chain_travel(
                 )
         except Exception:
             pass
+
+        # PM2 (#1221): entering a new region unlocks its gazetteer. Runs on every
+        # arrival (this is the single choke every travel path funnels through).
+        try:
+            _region_unlocked = unlock_region_for_hex(
+                conn, campaign_id, arrived_hex[0], arrived_hex[1]
+            )
+        except Exception as _ru_err:
+            logger.warning("pm2_region_unlock_failed", error=str(_ru_err))
 
         conn.commit()
     except Exception:
@@ -859,6 +923,8 @@ def resolve_chain_travel(
         # PT15 #1128: sygnał dla narratora, gdy pogoda spowalniała marsz
         "weather_multiplier": _weather_mult,
         "weather_slowdown": _weather_type,  # typ pogody, tylko gdy mnożnik > 1.0
+        # PM2 #1221: {"key","label"} gdy ten ruch odblokował nową krainę, else None
+        "region_unlocked": _region_unlocked,
     }
 
 
@@ -1365,6 +1431,26 @@ def resolve_starting_hex(
             current_hex={"q": sq, "r": sr},
             current_location_id=_start_loc_id,
         )
+
+        # PM2 (#1221): seed known_regions with the start hex's region so the
+        # origin land's gazetteer is unlocked from turn 0 (idempotent — only sets
+        # it when absent, never shrinks it on a resumed campaign).
+        try:
+            _sf_row = conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _sf_row:
+                _sf_kr = json.loads(_sf_row["session_flags"] or "{}")
+                if not isinstance(_sf_kr.get("known_regions"), list):
+                    _origin = _region_of_hex(conn, sq, sr)
+                    _sf_kr["known_regions"] = [_origin] if _origin else []
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_sf_kr, ensure_ascii=False), _sf_row["id"]),
+                    )
+        except Exception as _kr_err:
+            logger.warning("pm2_known_regions_seed_failed", campaign_id=campaign_id, error=str(_kr_err))
 
         # #1212 — start inside a settlement sub-location: seed the local-map
         # position (session_flags.local_hex), mirroring #1057's narrative sync.

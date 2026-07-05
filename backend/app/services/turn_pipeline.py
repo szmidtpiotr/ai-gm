@@ -129,6 +129,21 @@ def detect_vague_move_intent(player_message: str) -> bool:
     return True
 
 
+def _region_unlock_hint(tr: dict) -> str:
+    """PM2 (#1221): [SYSTEM:...] narrator hint when a move crossed into a new land.
+
+    ``tr["region_unlocked"]`` is set by resolve_chain_travel on the arrival that
+    first entered a region not yet in ``known_regions``. Empty string otherwise.
+    """
+    ru = tr.get("region_unlocked") or None
+    if not ru:
+        return ""
+    return (
+        f"\n[SYSTEM: Bohater wkracza do krainy {ru.get('label')} — nowy region. "
+        "Wspomnij o rozeznaniu w nowym terenie (pyta ludzi, drogowskazy, mapy).]"
+    )
+
+
 def _build_vague_move_hint(conn: "sqlite3.Connection", session_flags: dict) -> str:
     """Build [SYSTEM: ...] hint for narrator when player movement intent is vague (#1050).
 
@@ -399,6 +414,7 @@ def execute_directional_travel(
                             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej"
                             " lokacji — ruch już rozstrzygnięty mechanicznie.]"
                         )
+                        fact_n += _region_unlock_hint(tr_n)
                         logger.info(
                             "pt3_named_destination_travel",
                             campaign_id=campaign_id,
@@ -470,6 +486,7 @@ def execute_directional_travel(
             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
             "ruch już rozstrzygnięty mechanicznie.]"
         )
+        fact += _region_unlock_hint(tr)
         return {"executed": True, "system_fact": fact, "intent": mv}
 
     fact = (

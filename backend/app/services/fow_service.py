@@ -74,6 +74,7 @@ def compute_known_coords(
     origin_region: str | None,
     canonical_keys: set[str],
     bubble_radius: int = DEFAULT_BUBBLE_RADIUS,
+    known_regions: set[str] | None = None,
 ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
     """Compute the ``known`` coordinate set and the label-worthy subset.
 
@@ -84,6 +85,10 @@ def compute_known_coords(
         origin_region: region of the campaign's starting hex (W1 gazetteer).
         canonical_keys: set of ``game_locations.key`` where ``canonical=1``.
         bubble_radius: W2 rolling-bubble radius (axial), from setting.
+        known_regions: PM2 (#1221) — every region whose gazetteer (W1) the hero
+            has unlocked (start region + regions entered via travel). When given,
+            the W1 gazetteer is computed for EACH region in the set. Falls back to
+            ``{origin_region}`` when omitted (PM1 pre-PM2 behaviour).
 
     Returns:
         ``(known_coords, label_coords)`` where ``label_coords ⊆ known_coords``
@@ -93,10 +98,15 @@ def compute_known_coords(
     known: set[tuple[int, int]] = set()
     labelable: set[tuple[int, int]] = set()
 
+    # PM2 (#1221): W1 gazetteer spans every unlocked region, not just origin.
+    _w1_regions: set[str] = set(known_regions) if known_regions else set()
+    if origin_region:
+        _w1_regions.add(origin_region)
+
     # W1 (region gazetteer) + W3 (world) — single pass over the index.
     for coord, row in all_hexes_l0.items():
         landmark = is_landmark_hex(row, canonical_keys)
-        if origin_region and row.get("region") == origin_region and landmark:
+        if _w1_regions and row.get("region") in _w1_regions and landmark:
             known.add(coord)
             labelable.add(coord)
         if _is_world_hex(row, canonical_keys):

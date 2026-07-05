@@ -8023,6 +8023,18 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 _crow = all_hexes_l0.get((int(current_hex["q"]), int(current_hex["r"])))
                 if _crow:
                     origin_region = _crow.get("region")
+            # PM2 (#1221): every region the hero has unlocked (start + entered via
+            # travel). W1 gazetteer is computed for EACH of them, not just origin.
+            known_regions: set[str] = set()
+            if origin_region:
+                known_regions.add(origin_region)
+            if gs:
+                try:
+                    _kr = _j.loads(gs["session_flags"] or "{}").get("known_regions")
+                    if isinstance(_kr, list):
+                        known_regions |= {r for r in _kr if r}
+                except Exception:
+                    pass
             # W2 radius from setting (PM7 admin-UI writes it), fallback DEFAULT 4.
             bubble_radius = DEFAULT_BUBBLE_RADIUS
             try:
@@ -8034,7 +8046,8 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             except Exception:
                 pass
             known_coords, label_coords = compute_known_coords(
-                all_hexes_l0, discovered_coords, origin_region, canonical_keys, bubble_radius
+                all_hexes_l0, discovered_coords, origin_region, canonical_keys, bubble_radius,
+                known_regions=known_regions,
             )
             # R6 persisted route hexes → known (label only if landmark).
             for coord in persisted_known:
