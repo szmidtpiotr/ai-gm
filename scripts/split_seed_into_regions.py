@@ -17,15 +17,8 @@ REGIONS_DIR = ROOT / "data" / "regions"
 _DATA_SEED = ROOT / "data-dev" / "world_map_seed.json"
 _GIT_SEED = ROOT / "docs" / "world" / "world_map_seed.json"
 
-# world_regions seed — dane krain (kanon, sekcja 2 FAZA_RM_MAPA_KRAIN.md)
-REGION_META = {
-    "kresy":            {"label": "Kresy",            "status": "live",   "sort_order": 1},
-    "koronne_niziny":   {"label": "Koronne Niziny",    "status": "coming", "sort_order": 2},
-    "czarnobor":        {"label": "Czarnobór",         "status": "coming", "sort_order": 3},
-    "siwe_granie":      {"label": "Siwe Granie",       "status": "coming", "sort_order": 4},
-    "wybrzeze_lez":     {"label": "Wybrzeże Łez",      "status": "coming", "sort_order": 5},
-    "martwe_pustkowia": {"label": "Martwe Pustkowia",  "status": "coming", "sort_order": 6},
-}
+# Jednorazowy splitter dotyka tylko krainy Kresy (startowa, status live).
+# Status/metadane pozostałych krain = pliki data/regions/*.json (kanon, #1241 R1).
 
 
 def split(dry_run: bool = False) -> dict:
@@ -56,11 +49,10 @@ def split(dry_run: bool = False) -> dict:
     if dupes:
         print(f"OSTRZEŻENIE: {dupes} duplikatów (q,r) w źródle.", file=sys.stderr)
 
-    meta = REGION_META.get("kresy", {})
     region_data = {
         "region":  "kresy",
-        "label":   meta.get("label", "Kresy"),
-        "status":  meta.get("status", "live"),
+        "label":   "Kresy",
+        "status":  "live",
         "w":       data.get("w", 50),
         "h":       data.get("h", 50),
         "note":    (

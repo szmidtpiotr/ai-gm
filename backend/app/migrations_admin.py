@@ -5784,6 +5784,32 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _align_region_status_to_files(conn: sqlite3.Connection, regions_dir: str = "/data/regions") -> None:
+    """R1 (#1241) — kanon statusu krain = pliki data/regions/region_*.json.
+
+    Wyrównuje world_regions.status do statusu zapisanego w pliku krainy (jedyne źródło
+    prawdy). Idempotentne: aktualizuje wiersz tylko gdy status się różni; nigdy nie
+    wstawia (INSERT robi _ensure_region_schema), nigdy nie dotyka world_hexes.
+    Brak katalogu (świeży clone) → no-op, zostają domyślne statusy z seeda.
+    """
+    import glob
+    for path in sorted(glob.glob(os.path.join(regions_dir, "region_*.json"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        key = d.get("region")
+        status = d.get("status")
+        if not key or status not in ("live", "coming", "locked"):
+            continue
+        conn.execute(
+            "UPDATE world_regions SET status = ? WHERE key = ? AND status != ?",
+            (status, key, status),
+        )
+    conn.commit()
+
+
 def _ensure_template_item_columns(conn: sqlite3.Connection) -> None:
     """#1084 — template_id + hidden columns for campaign-scoped reward items in game_config tables."""
     for table in ("game_config_weapons", "game_config_items", "game_config_consumables"):
@@ -6106,6 +6132,7 @@ def run_admin_migrations() -> None:
         _ensure_enemy_min_level(conn)  # #1023
         _seed_dwarf_toughness_enemy(conn)  # #1005
         _ensure_region_schema(conn)  # #1028 RM1
+        _align_region_status_to_files(conn)  # #1241 R1 — status krain z plików
         _ensure_item_image_columns(conn)  # #1048
         _migrate_legacy_skill_keys(conn)  # #1052
         _ensure_weapon_consumable_image_columns(conn)  # #1076

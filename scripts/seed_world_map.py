@@ -6,17 +6,19 @@
 Tryby:
   (domyślnie)          — seed jeśli mapa pusta; stitch z data/regions/*.json (live),
                          fallback → docs/world/world_map_seed.json.
-  --force              — nadpisz nawet gdy mapa niepusta (full stitch).
   --region <key>       — załaduj tylko tę krainę z data/regions/region_<key>.json;
                          usuwa istniejące heksy tej krainy, wstawia nowe (bezpieczny partial).
+  --force              — WYMAGA --region: nadpisz istniejące heksy tej jednej krainy.
+  --force-all          — pełny wipe+reseed CAŁEJ mapy (map_level=0). Niebezpieczne —
+                         wymaga interaktywnego 'TAK' lub flagi --yes.
 
-Safeguard: < 50 heksów w pliku → odmowa.
+Safeguard: < 50 heksów w pliku krainy → odmowa (per-region + globalnie).
 
 Uruchom na hoście DEV (.61):
     python3 scripts/seed_world_map.py
-    python3 scripts/seed_world_map.py --force
     python3 scripts/seed_world_map.py --region kresy
     python3 scripts/seed_world_map.py --region kresy --force
+    python3 scripts/seed_world_map.py --force-all --yes
 """
 import json, subprocess, sys, argparse, glob
 from pathlib import Path
@@ -27,6 +29,9 @@ REGIONS_DIR = ROOT / "data" / "regions"
 # Legacy fallback (monolityczny seed)
 _DATA_SEED = ROOT / "data-dev" / "world_map_seed.json"
 _GIT_SEED = ROOT / "docs" / "world" / "world_map_seed.json"
+
+# Guard kompletności — kraina z mniejszą liczbą heksów wygląda na niezainicjalizowaną.
+MIN_HEX = 50
 
 
 def dexec(container: str, sql: str, piped: bool = False):
@@ -83,6 +88,13 @@ def _stitch_hexes() -> list[dict]:
                 continue
             hexes = d.get("hexes", [])
             region_key = d.get("region", rf.stem.replace("region_", ""))
+            # Guard per-region: live kraina z < MIN_HEX heksów = niekompletny plik.
+            # Odmawiamy, by nie wsiać dziurawej mapy zamiast pełnej.
+            if len(hexes) < MIN_HEX:
+                print(f"BŁĄD: live kraina '{region_key}' ma tylko {len(hexes)} heksów "
+                      f"(< {MIN_HEX}) w {rf.name} — plik niekompletny, odmawiam stitcha.",
+                      file=sys.stderr)
+                sys.exit(1)
             for h in hexes:
                 h.setdefault("region", region_key)
             print(f"  Dołączam {rf.name}: {len(hexes)} heksów (region={region_key})")
@@ -106,16 +118,26 @@ def _stitch_hexes() -> list[dict]:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--force",     action="store_true", help="nadpisz nawet gdy mapa niepusta")
     ap.add_argument("--region",    default=None,        help="seeduj tylko tę krainę (partial update)")
+    ap.add_argument("--force",     action="store_true", help="WYMAGA --region: nadpisz istniejące heksy tej krainy")
+    ap.add_argument("--force-all", dest="force_all", action="store_true",
+                    help="pełny wipe+reseed CAŁEJ mapy (map_level=0) — niebezpieczne")
+    ap.add_argument("--yes",       action="store_true", help="pomiń interaktywne potwierdzenie --force-all")
     ap.add_argument("--container", default="ai-gm-dev-backend-1")
     a = ap.parse_args()
+
+    # --force bez --region jest dwuznaczne: kiedyś oznaczało pełny wipe. Odmawiamy,
+    # by przypadkowy --force nie wymiótł całej mapy. Pełny wipe → --force-all.
+    if a.force and not a.region:
+        print("BŁĄD: --force wymaga --region <key> (wipe per-region). "
+              "Pełny wipe+reseed całej mapy → --force-all.", file=sys.stderr)
+        sys.exit(2)
 
     if a.region:
         # --- Tryb partial: jedna kraina ---
         rf = REGIONS_DIR / f"region_{a.region}.json"
         hexes = _load_region_file(rf)
-        if len(hexes) < 50:
+        if len(hexes) < MIN_HEX:
             print(f"BŁĄD: za mało heksów ({len(hexes)}) w {rf.name} — safeguard odmawia.", file=sys.stderr)
             sys.exit(1)
 
@@ -140,13 +162,21 @@ def main():
     else:
         # --- Tryb stitch: wszystkie live krainy ---
         cnt = int((dexec(a.container, "SELECT count(*) FROM world_hexes WHERE map_level=0;").stdout or "0").strip() or 0)
-        if cnt > 0 and not a.force:
-            print(f"world_hexes ma {cnt} heksów (map_level=0) — pomijam. Użyj --force by nadpisać.")
+        if cnt > 0 and not a.force_all:
+            print(f"world_hexes ma {cnt} heksów (map_level=0) — pomijam (idempotentny seed pustej mapy). "
+                  "Pełny wipe+reseed → --force-all.")
             return
+
+        if cnt > 0 and a.force_all and not a.yes:
+            ans = input(f"⚠️  PEŁNY WIPE {cnt} heksów (map_level=0) i reseed z plików kanon. "
+                        "Wpisz 'TAK' by potwierdzić: ")
+            if ans.strip() != "TAK":
+                print("Anulowano — mapa nietknięta.")
+                return
 
         print("Stitch mode — zbieranie live krain:")
         hexes = _stitch_hexes()
-        if len(hexes) < 50:
+        if len(hexes) < MIN_HEX:
             print(f"BŁĄD: za mało heksów ({len(hexes)}) — safeguard odmawia.", file=sys.stderr)
             sys.exit(1)
 
@@ -160,7 +190,7 @@ def main():
         if r.returncode != 0:
             print("BŁĄD seedowania:", r.stderr, file=sys.stderr)
             sys.exit(1)
-        print(f"Zaseedowano {len(hexes)} heksów (stitch, force={a.force}).")
+        print(f"Zaseedowano {len(hexes)} heksów (stitch, force_all={a.force_all}).")
 
 
 if __name__ == "__main__":

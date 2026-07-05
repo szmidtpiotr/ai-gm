@@ -133,14 +133,19 @@ def get_world_map(
         conn.close()
 
 
-_REGION_META = {
-    "kresy":            {"label": "Kresy",            "status": "live"},
-    "koronne_niziny":   {"label": "Koronne Niziny",   "status": "coming"},
-    "czarnobor":        {"label": "Czarnobór",        "status": "coming"},
-    "siwe_granie":      {"label": "Siwe Granie",      "status": "coming"},
-    "wybrzeze_lez":     {"label": "Wybrzeże Łez",     "status": "coming"},
-    "martwe_pustkowia": {"label": "Martwe Pustkowia", "status": "coming"},
-}
+def _region_file_meta(rkey: str) -> Optional[dict]:
+    """R1 (#1241) — status/label krainy = plik data/regions/region_<key>.json (kanon).
+
+    Zwraca {"label", "status"} z istniejącego pliku lub None gdy pliku brak
+    (nowa kraina). NIGDY nie zwraca hardcode'owanego statusu — snapshot writer
+    przepisuje status zastany w pliku, nie regresuje go."""
+    path = f"/data/regions/region_{rkey}.json"
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return {"label": d.get("label", rkey), "status": d.get("status", "coming")}
 
 
 @router.post("/map/snapshot")
@@ -175,7 +180,17 @@ def snapshot_world_map(
 
         def _write_region(rkey: str, rhexes: list[dict]) -> str:
             stripped = [{k: v for k, v in h.items() if k != "region"} for h in rhexes]
-            meta = _REGION_META.get(rkey, {"label": rkey, "status": "coming"})
+            # Kanon statusu = plik krainy. Nowa kraina (brak pliku) → status z
+            # world_regions (deklaracja), fallback 'coming'. Nigdy nie regresujemy.
+            meta = _region_file_meta(rkey)
+            if meta is None:
+                row = conn.execute(
+                    "SELECT label, status FROM world_regions WHERE key = ?", (rkey,)
+                ).fetchone()
+                meta = {
+                    "label": (row["label"] if row else rkey),
+                    "status": (row["status"] if row else "coming"),
+                }
             data = {
                 "region": rkey, "label": meta["label"], "status": meta["status"],
                 "w": 50, "h": 50,
