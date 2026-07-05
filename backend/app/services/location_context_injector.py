@@ -275,11 +275,18 @@ def build_swiat_block(
     conn: sqlite3.Connection,
     session_flags: dict,
     player_message: str = "",
+    current_location_key: str | None = None,
 ) -> str | None:
     """U29 — Builds the === ŚWIAT === block for the LLM narrator.
 
     Returns None when there's no current_hex in session_flags (no hex context).
     Returns the block string otherwise (always contains at minimum hex coordinates).
+
+    #1209 — when `current_location_key` is set, the block leads with an explicit
+    "GRACZ JEST W" line: the scene happens INSIDE that location, hex terrain is
+    demoted to surroundings-after-leaving. Without it the narrator saw only
+    "teren: forest" + a POI list and narrated the forest while the player sat in
+    a tavern (and echoed the word "hex" into the prose).
 
     Token cap: ~400 tokens (~1600 chars). Priority: hex locations > candidates > neighbors.
     """
@@ -300,12 +307,43 @@ def build_swiat_block(
         or _TERRAIN_ATMOSPHERE.get(hex_type, "")
     )
 
+    # #1209 — resolve the location the player is actually inside
+    cur_loc: dict | None = None
+    if current_location_key:
+        cur_row = conn.execute(
+            "SELECT key, label, description, location_subtype FROM game_locations "
+            "WHERE key = ? AND COALESCE(is_active, 1) = 1",
+            (current_location_key,),
+        ).fetchone()
+        if cur_row:
+            cur_loc = dict(cur_row)
+
     lines = ["=== ŚWIAT ===", f"Hex: q={q} r={r} | teren: {hex_type} | {hex_label}"]
-    if hex_atmosphere:
+
+    if cur_loc:
+        subtype = cur_loc.get("location_subtype") or ""
+        loc_head = f"GRACZ JEST W: [{cur_loc['key']}] {cur_loc['label']}"
+        if subtype:
+            loc_head += f" ({subtype})"
+        loc_head += " — scena dzieje się WEWNĄTRZ tej lokacji, NIE w terenie hexa."
+        lines.append(loc_head)
+        desc = (cur_loc.get("description") or "").strip()
+        if desc:
+            lines.append(f"  Opis: {desc[:160]}")
+        npcs = _get_location_npcs(conn, cur_loc["key"])
+        if npcs:
+            npc_parts = [f"{n['npc_key']} [{n['assignment_type']}]" for n in npcs]
+            lines.append(f"  NPC: {', '.join(npc_parts)}")
+        if hex_atmosphere:
+            lines.append(f"Teren wokół (dopiero po wyjściu z lokacji): {hex_atmosphere}")
+    elif hex_atmosphere:
         lines.append(f"Atmosfera terenu: {hex_atmosphere}")
 
     # ── Lokacje na hexie (priorytet 1) ────────────────────────────────────────
-    locations = _get_locations_on_hex(conn, q, r)
+    locations = [
+        loc for loc in _get_locations_on_hex(conn, q, r)
+        if not (cur_loc and loc.get("key") == cur_loc["key"])  # #1209: no self-dup
+    ]
     if locations:
         lines.append("Lokacje na tym hexie:")
         for loc in locations:
@@ -368,6 +406,11 @@ def build_swiat_block(
                     nb_txt += f" → {nb['location_key']}"
                 neighbor_parts.append(nb_txt)
             lines.append("Sąsiedzi: " + " | ".join(neighbor_parts))
+
+    # #1209 — hex/klucze to nawigacja dla silnika, nie słownictwo świata gry
+    lines.append(
+        "W narracji NIE używaj słów technicznych: „hex”, współrzędnych q/r ani kluczy w [nawiasach]."
+    )
 
     result = "\n".join(lines)
 
