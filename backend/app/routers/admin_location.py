@@ -960,14 +960,9 @@ async def place_location_on_hex(
             raise HTTPException(status_code=404, detail="Hex not found")
         if hex_row["location_key"]:
             raise HTTPException(status_code=409, detail="Hex already has a location assigned")
-        conn.execute(
-            "UPDATE world_hexes SET location_key=? WHERE q=? AND r=? AND is_active=1",
-            (location_key, body.q, body.r),
-        )
-        conn.execute(
-            "UPDATE game_locations SET placement='placed', world_hex_q=?, world_hex_r=? WHERE key=?",
-            (body.q, body.r, location_key),
-        )
+        # #1243: single writer — hex canon + derived cache in one call.
+        from app.services.hex_location_link import link_location_to_hex
+        link_location_to_hex(conn, location_key, body.q, body.r)
         conn.commit()
         return {"ok": True, "key": location_key, "q": body.q, "r": body.r}
     finally:

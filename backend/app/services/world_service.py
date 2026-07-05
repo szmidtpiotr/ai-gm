@@ -718,10 +718,9 @@ def build_camp(
                    'camp', ?, 1)""",
         (key, label, description, parent_id, parent_key, campaign_id, biome),
     )
-    conn.execute(
-        "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ? AND is_active = 1",
-        (key, q, r),
-    )
+    # #1243: single writer — hex canon + derived cache for the temp camp.
+    from app.services.hex_location_link import link_location_to_hex
+    link_location_to_hex(conn, key, q, r)
     conn.commit()
 
     logger.info(

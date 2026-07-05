@@ -673,16 +673,24 @@ async def lifespan(app: FastAPI):
             _backfill_terrain_tags()
         except Exception:
             pass
-        # #992 — sync game_locations.world_hex_q/r from world_hexes.location_key (idempotent).
+        # #1243 (R3) — reconcile the hex↔location link: hex is canon, rebuild the
+        # derived game_locations.world_hex_q/r cache and clear stale/junk pins.
+        # (Supersedes #992's one-directional sync_location_hex_coordinates.)
         try:
-            from app.services.world_service import sync_location_hex_coordinates
+            from app.services.hex_location_link import reconcile_location_hex_links
             _sync_conn = sqlite3.connect(DB_PATH)
             _sync_conn.row_factory = sqlite3.Row
             try:
-                _n = sync_location_hex_coordinates(_sync_conn)
-                if _n:
+                _rep = reconcile_location_hex_links(_sync_conn)
+                if _rep["backfilled"] or _rep["cleared"] or _rep["smears"] or _rep["promoted"]:
                     import structlog as _sl
-                    _sl.get_logger().info("startup_sync_location_hex_coordinates", updated=_n)
+                    _sl.get_logger().info(
+                        "startup_reconcile_location_hex_links",
+                        backfilled=len(_rep["backfilled"]),
+                        promoted=len(_rep["promoted"]),
+                        cleared=len(_rep["cleared"]),
+                        smears=len(_rep["smears"]),
+                    )
             finally:
                 _sync_conn.close()
         except Exception:

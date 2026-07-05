@@ -21,7 +21,14 @@ tavern — the location-drift bug.
 
 Called from: Kuźnia publish + allocate-hex + set-start-hex (eager), and from
 `resolve_starting_hex` at campaign launch (safety net for templates published
-before this fix). Writes game_locations + gm_plan_json only — never world_hexes.
+before this fix).
+
+#1243: the start/hub location now also claims its OVERWORLD hex canon via
+`link_location_to_hex` (hex wins). Previously this wrote only
+`game_locations.world_hex_q/r` — under hex-canon that cache would be cleared by
+`reconcile_location_hex_links` on the next boot, un-anchoring the start location
+(the #1152 drift). Claiming the hex closes that gap at the source. Sub-locations
+stay on the FAZA ML local map (map_level=1) via `local_hex_service`.
 """
 
 from __future__ import annotations
@@ -168,8 +175,11 @@ def ensure_template_start_location(
             (new_key, label, template_id, q, r, now, now),
         )
 
+    from app.services.hex_location_link import link_location_to_hex
+
     if row is None:
         _insert(key)
+        link_location_to_hex(conn, key, q, r)  # #1243: claim hex canon
         conn.commit()
         logger.info(
             "template_start_location_created",
@@ -179,6 +189,8 @@ def ensure_template_start_location(
 
     anchored = row["world_hex_q"] is not None and row["world_hex_r"] is not None
     if anchored and int(row["world_hex_q"]) == q and int(row["world_hex_r"]) == r:
+        link_location_to_hex(conn, key, q, r)  # #1243: ensure hex canon matches cache
+        conn.commit()
         return {"key": key, "status": "ok", "q": q, "r": r}
 
     owned = (
@@ -194,6 +206,7 @@ def ensure_template_start_location(
             "is_active = 1, updated_at = ? WHERE id = ?",
             (q, r, now, row["id"]),
         )
+        link_location_to_hex(conn, key, q, r)  # #1243: claim hex canon
         conn.commit()
         logger.info(
             "template_start_location_anchored",
@@ -207,6 +220,7 @@ def ensure_template_start_location(
     # launching campaign's plan copy, if any).
     new_key = _unique_location_key(conn, key)
     _insert(new_key)
+    link_location_to_hex(conn, new_key, q, r)  # #1243: claim hex canon for the copy
     _rewrite_stored_plan(conn, "campaign_templates", template_id, key, new_key)
     if campaign_id is not None:
         _rewrite_stored_plan(conn, "campaigns", int(campaign_id), key, new_key)
@@ -372,6 +386,11 @@ def ensure_template_location_structure(
             start_key = new_key
         if hub_key == old_key:
             hub_key = new_key
+    # #1243: the hub sits on the overworld start hex — claim hex canon so the
+    # derived cache is not cleared by reconcile on the next boot. (Subs are
+    # map_level=1, handled by local_hex_service below — out of hex-canon scope.)
+    from app.services.hex_location_link import link_location_to_hex
+    link_location_to_hex(conn, hub_key, q, r)
     conn.commit()
 
     # FAZA ML: build the local map now (threshold #993 — needs ≥2 subs)

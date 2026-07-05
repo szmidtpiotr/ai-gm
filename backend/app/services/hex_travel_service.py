@@ -239,29 +239,13 @@ def resolve_location_key_to_hex(
 ) -> tuple[int, int] | None:
     """U30: Resolve a location_key → (q, r).
 
-    Primary: world_hexes.location_key lookup (fast, canonical).
-    Fallback (#992): game_locations.world_hex_q/r when the hex's location_key
-    was displaced (e.g. by a temp_camp overwrite) but game_locations still knows
-    its coordinates.
+    #1243: delegates to the canonical reader. Primary = world_hexes.location_key
+    (hex canon); fallback = game_locations.world_hex_q/r derived cache (log-only —
+    the #992 fallback, kept one phase to catch residual drift).
     Returns None when neither path resolves.
     """
-    if not location_key:
-        return None
-    row = conn.execute(
-        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
-        (location_key,),
-    ).fetchone()
-    if row:
-        return (int(row["q"]), int(row["r"]))
-    # #992 fallback: location may still know its hex even if world_hexes lost the pointer
-    loc = conn.execute(
-        "SELECT world_hex_q, world_hex_r FROM game_locations"
-        " WHERE key = ? AND is_active = 1 AND world_hex_q IS NOT NULL LIMIT 1",
-        (location_key,),
-    ).fetchone()
-    if loc:
-        return (int(loc["world_hex_q"]), int(loc["world_hex_r"]))
-    return None
+    from app.services.hex_location_link import resolve_location_to_hex
+    return resolve_location_to_hex(conn, location_key)
 
 
 def detect_named_destination_hex(
@@ -1056,40 +1040,15 @@ def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | Non
       2. Fallback: a game_location stamped with this hex via world_hex_q/r, preferring
          a top-level macro/settlement over a child sub-location.
     Returns None when no active location is mapped to the hex.
-    """
-    # 1. Canonical world_hexes pairing.
-    try:
-        wh = conn.execute(
-            "SELECT location_key FROM world_hexes "
-            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 "
-            "AND location_key IS NOT NULL AND location_key != '' LIMIT 1",
-            (q, r),
-        ).fetchone()
-    except sqlite3.OperationalError:
-        wh = None
-    if wh:
-        wh_key = wh["location_key"] if isinstance(wh, sqlite3.Row) else wh[0]
-        loc = conn.execute(
-            "SELECT key FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1 LIMIT 1",
-            (wh_key,),
-        ).fetchone()
-        if loc:
-            return loc["key"] if isinstance(loc, sqlite3.Row) else loc[0]
 
-    # 2. Fallback: game_location stamped with this hex.
+    #1243: delegates to the canonical reader (hex canon first, derived cache
+    fallback with drift logging).
+    """
     try:
-        row = conn.execute(
-            "SELECT key FROM game_locations "
-            "WHERE world_hex_q = ? AND world_hex_r = ? AND COALESCE(is_active, 1) = 1 "
-            "ORDER BY (location_type = 'macro') DESC, (parent_key IS NULL) DESC, id "
-            "LIMIT 1",
-            (q, r),
-        ).fetchone()
+        from app.services.hex_location_link import location_on_hex
+        return location_on_hex(conn, q, r, level=0)
     except sqlite3.OperationalError:
         return None
-    if not row:
-        return None
-    return row["key"] if isinstance(row, sqlite3.Row) else row[0]
 
 
 def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int, int] | None":
@@ -1361,11 +1320,10 @@ def resolve_starting_hex(
                 starting_name=starting_location_name,
             )
 
-    if is_new:
-        conn.execute(
-            "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ?",
-            (loc_key, sq, sr),
-        )
+    if is_new and loc_key:
+        # #1243: single writer — sets hex canon + refreshes the derived cache.
+        from app.services.hex_location_link import link_location_to_hex
+        link_location_to_hex(conn, loc_key, sq, sr)
 
     # #1112: atomic position write via canonical service (current_hex + loc_id in one tx)
     if gs:

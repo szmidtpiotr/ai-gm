@@ -1094,16 +1094,11 @@ def _process_location_intent(
                         _cur_hex = _sf_for_hex.get("current_hex")
                         if _cur_hex and isinstance(_cur_hex, dict):
                             _nhq, _nhr = int(_cur_hex.get("q", 0)), int(_cur_hex.get("r", 0))
-                            conn.execute(
-                                """UPDATE world_hexes SET location_key = ?
-                                   WHERE q = ? AND r = ? AND is_active = 1
-                                   AND (location_key IS NULL OR location_key = '')""",
-                                (_loc_key_row["key"], _nhq, _nhr),
-                            )
-                            # BUG-186: stamp hex coords onto game_locations so player hex map resolves
-                            conn.execute(
-                                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ? AND world_hex_q IS NULL",
-                                (_nhq, _nhr, _loc_key_row["key"]),
+                            # #1243 (was BUG-186): single writer — claims the hex only
+                            # if unclaimed, and refreshes the derived game_locations cache.
+                            from app.services.hex_location_link import link_location_to_hex
+                            link_location_to_hex(
+                                conn, _loc_key_row["key"], _nhq, _nhr, only_if_empty=True
                             )
                             # Also update hex_type from location biome if hex is still default 'plains'
                             try:
@@ -3032,15 +3027,11 @@ def _apply_opening_location_intent(
             )
             return
         if loc_q is None and has_hex:
-            conn.execute(
-                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? "
-                "WHERE id = ? AND world_hex_q IS NULL",
-                (int(cur_hex["q"]), int(cur_hex["r"]), int(created["id"])),
-            )
-            conn.execute(
-                "UPDATE world_hexes SET location_key = ? "
-                "WHERE q = ? AND r = ? AND map_level = 0 AND location_key IS NULL",
-                (created["key"], int(cur_hex["q"]), int(cur_hex["r"])),
+            # #1243: single writer — claim the hex if unclaimed + sync derived cache.
+            from app.services.hex_location_link import link_location_to_hex
+            link_location_to_hex(
+                conn, created["key"], int(cur_hex["q"]), int(cur_hex["r"]),
+                only_if_empty=True,
             )
         conn.execute(
             "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",

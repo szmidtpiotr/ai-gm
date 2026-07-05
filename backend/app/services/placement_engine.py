@@ -60,15 +60,10 @@ def try_place_location_on_hex(
 
     chosen_key = rng.choice(matching)
 
-    conn.execute(
-        "UPDATE world_hexes SET location_key=?"
-        " WHERE q=? AND r=? AND map_level=0 AND region=? AND is_active=1",
-        (chosen_key, q, r, region),
-    )
-    conn.execute(
-        "UPDATE game_locations SET placement='placed', world_hex_q=?, world_hex_r=? WHERE key=?",
-        (q, r, chosen_key),
-    )
+    # #1243: single writer — hex canon + derived cache. (region already validated
+    # above, so the extra region predicate the old direct UPDATE carried is moot.)
+    from app.services.hex_location_link import link_location_to_hex
+    link_location_to_hex(conn, chosen_key, q, r)
     conn.commit()
 
     return chosen_key
