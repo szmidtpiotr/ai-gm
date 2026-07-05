@@ -257,6 +257,86 @@ def _fuzzy_match_location(target_label: str, locations: list[dict]) -> Optional[
     return best_match
 
 
+def _norm_pl(s: str) -> str:
+    """Lowercase + strip Polish diacritics for token comparison."""
+    _PL = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+    return (s or "").lower().translate(_PL)
+
+
+def _shares_key_token(target: str, label: str) -> bool:
+    """True when target and label share a significant noun stem (len ≥ 4).
+
+    "kuźnia Brunna" ↔ "Kuźnia na skraju wsi" share "kuzni*" — the building TYPE,
+    which is the signal that ties the phrase to the hub's own forge even though
+    full-string fuzz.ratio is far below threshold.
+    """
+    tt = [t for t in _norm_pl(target).split() if len(t) >= 4]
+    lt = [t for t in _norm_pl(label).split() if len(t) >= 4]
+    for a in tt:
+        for b in lt:
+            n = 0
+            for ca, cb in zip(a, b):
+                if ca != cb:
+                    break
+                n += 1
+            if n >= max(4, int(0.7 * min(len(a), len(b)))):
+                return True
+    return False
+
+
+def _fuzzy_match_location_hub_aware(
+    target_label: str, locations: list[dict], current_loc: Optional[dict]
+) -> Optional[dict]:
+    """#1254: fuzzy match that prefers where the hero actually IS.
+
+    "kuźnia Brunna" inside a settlement used to fuzzy-match a GLOBAL floating macro
+    "Kuźnia Brunna" (no world_hex, outside the settlement) over the hub's own
+    sub-location ``kuznia_na_skraju_wsi`` — the pin (settlement) and the location
+    (foreign floating macro) then diverged.
+
+    A candidate qualifies when it matches by full-string fuzz.ratio (≥ threshold)
+    OR — for hub sub-locations / placed locations only — when it shares the key
+    building token ("kuźnia"). Preference tiers:
+      3. sub-location of the CURRENT hub (parent == hub),
+      2. any location physically placed on a hex (``world_hex_q`` set),
+      1. anything else (only via strong full-string match).
+    When a hub sub-location matches at all, floating macros WITHOUT a hex are
+    excluded outright (never leave the settlement onto a placeless global macro).
+    """
+    hub_id = None
+    if current_loc:
+        if current_loc.get("location_type") == "sub" and current_loc.get("parent_id"):
+            hub_id = current_loc.get("parent_id")
+        else:
+            hub_id = current_loc.get("id")
+
+    scored: list[tuple] = []
+    hub_sub_matched = False
+    for loc in locations:
+        label = loc.get("label") or ""
+        score = fuzz.ratio(target_label.lower(), label.lower())
+        is_placed = loc.get("world_hex_q") is not None
+        is_hub_sub = hub_id is not None and loc.get("parent_id") == hub_id
+        strong = score >= FUZZY_MATCH_THRESHOLD
+        token = (is_hub_sub or is_placed) and _shares_key_token(target_label, label)
+        if not (strong or token):
+            continue
+        is_floating_no_hex = (loc.get("location_type") == "macro") and not is_placed
+        if is_hub_sub:
+            hub_sub_matched = True
+        tier = 3 if is_hub_sub else (2 if is_placed else 1)
+        is_canonical = not loc.get("ai_generated", False)
+        scored.append((tier, is_floating_no_hex, is_canonical, score, loc))
+
+    if not scored:
+        return None
+    # Inside a settlement (a hub sub matched), drop placeless global macros.
+    if hub_sub_matched:
+        scored = [s for s in scored if not s[1]] or scored
+    scored.sort(key=lambda s: (s[0], s[2], s[3]), reverse=True)
+    return scored[0][4]
+
+
 def _ask_llm_if_same_location(target_label: str, existing_label: str) -> bool:
     """
     Zapytaj LLM czy dwie nazwy to ta sama lokalizacja (fallback dla fuzzy match).
@@ -696,9 +776,16 @@ def validate_move(
             all_locs = _find_all_locations()
             canonical_locs = [l for l in all_locs if not l.get("ai_generated")]
             if intent.action == "move":
-                matched = _fuzzy_match_location(intent.target_label, canonical_locs)
+                # #1254: hub-aware — prefer the current settlement's own sub-location
+                # (and placed-on-hex locations) over a similarly-named global floating
+                # macro with no world_hex.
+                matched = _fuzzy_match_location_hub_aware(
+                    intent.target_label, canonical_locs, current_loc
+                )
                 if not matched:
-                    matched = _fuzzy_match_location(intent.target_label, all_locs)
+                    matched = _fuzzy_match_location_hub_aware(
+                        intent.target_label, all_locs, current_loc
+                    )
             else:
                 matched = _fuzzy_match_location(intent.target_label, all_locs)
 
