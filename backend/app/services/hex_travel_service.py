@@ -123,14 +123,20 @@ def find_path(
     goal: tuple[int, int],
     hexes: dict[tuple[int, int], dict],
     hex_type_cfg: dict[str, dict] | None = None,
+    route_mode: str = "direct",
 ) -> list[tuple[int, int]] | None:
     """
     A* from start to goal on hex grid + teleport connections.
     PT8 #1118: step cost = travel_hours from hex_type_cfg (fallback 1.0 when cfg absent).
     Heuristic = hex_distance × 0.5 (admissible: min terrain cost = road 0.5h/hex).
+    PM4 #1223: route_mode="road" multiplies `road`-hex step cost by ROAD_COST_MULT,
+    steering the optimal path onto (and along) roads when a viable one exists.
     Returns ordered list of (q, r) including start and goal, or None if unreachable.
     """
     _MIN_TERRAIN_COST = 0.5  # road — keeps heuristic admissible
+    if route_mode == "road":
+        # road cost drops to 0.5×0.75 → shrink the heuristic floor to stay admissible
+        _MIN_TERRAIN_COST = 0.5 * ROAD_COST_MULT
 
     if start == goal:
         return [start]
@@ -163,6 +169,8 @@ def find_path(
             # PT8: terrain cost from hex_type_cfg; fallback 1.0 when cfg absent
             nb_type = hexes[neighbor].get("hex_type", "plains")
             step_cost = float((hex_type_cfg or {}).get(nb_type, {}).get("travel_hours", 1.0)) or 1.0
+            if route_mode == "road" and nb_type == "road":
+                step_cost *= ROAD_COST_MULT  # PM4: cheaper roads pull the optimal path onto the trakt
             tentative_g = g_score[current] + step_cost
             if tentative_g < g_score.get(neighbor, float("inf")):
                 came_from[neighbor] = current
@@ -195,14 +203,28 @@ DAILY_SOFT_CAP = 8.0        # hours — dusk prompt threshold
 DAILY_HARD_CAP = 12.0       # hours — forced camp threshold
 NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
 
+# PM4 #1223: Route-mode tuning — Numbers Policy (Sandbox-tunable STARTING values).
+# route_mode="road" biases A* onto `road` hexes (cheaper per-hex cost) and halves
+# the encounter chance while ON a road hex. "direct" = classic shortest terrain path.
+ROAD_COST_MULT = 0.75        # road-hex A* step-cost multiplier in route_mode="road"
+ROAD_ENCOUNTER_MULT = 0.5    # encounter-chance multiplier on road hexes (road mode)
+ROAD_CHOICE_MIN_HEXES = 2    # ask direct/road only when destination is farther than this
+ROAD_DETOUR_RADIUS = 3       # a road within this many hexes of the direct path = viable trakt
 
-def _roll_encounter(hex_data: dict, hex_type_cfg: dict[str, dict]) -> bool:
-    """Roll encounter for a hex. Returns True if encounter triggers."""
+
+def _roll_encounter(
+    hex_data: dict, hex_type_cfg: dict[str, dict], chance_mult: float = 1.0
+) -> bool:
+    """Roll encounter for a hex. Returns True if encounter triggers.
+
+    PM4 #1223: ``chance_mult`` scales the final chance (road mode passes
+    ROAD_ENCOUNTER_MULT on road hexes to make the trakt safer).
+    """
     base_chance = float(hex_data.get("encounter_chance") or 0.15)
     # Adjust by hex type if configured
     ht = hex_data.get("hex_type", "plains")
     type_chance = float(hex_type_cfg.get(ht, {}).get("encounter_base_chance") or base_chance)
-    final_chance = max(base_chance, type_chance)
+    final_chance = max(base_chance, type_chance) * chance_mult
     return random.random() < final_chance
 
 
@@ -624,9 +646,15 @@ def resolve_chain_travel(
     to_hex: tuple[int, int],
     character_sheet: dict,
     conn: sqlite3.Connection,
+    route_mode: str = "direct",
 ) -> dict[str, Any]:
     """
     Chain travel from from_hex to to_hex.
+
+    PM4 #1223: ``route_mode`` ∈ {"direct","road"}. "road" biases the A* path onto
+    roads (ROAD_COST_MULT) and halves encounter chance on road hexes
+    (ROAD_ENCOUNTER_MULT). The mode is persisted into ``travel_plan`` so an
+    interrupted trip resumes in the same mode (PT6 #1116).
 
     Returns:
         {
@@ -726,7 +754,7 @@ def resolve_chain_travel(
             "hex_data": dest_data, "teleport_used": None, "item_blocked": None,
         }
 
-    path = find_path(from_hex, to_hex, hexes, hex_type_cfg)
+    path = find_path(from_hex, to_hex, hexes, hex_type_cfg, route_mode=route_mode)
     if path is None:
         return {
             "ok": False,
@@ -794,6 +822,10 @@ def resolve_chain_travel(
         _terrain_cost = float(
             hex_type_cfg.get(_cur_data.get("hex_type", "plains"), {}).get("travel_hours", 1.0)
         ) * _weather_mult  # PT15 #1128: pogoda podnosi koszt godzinowy marszu (teren, nie teleport)
+        # PM4 #1223: on a road in road mode the hero moves faster per hex (ROAD_COST_MULT),
+        # matching the discounted A* cost so total_hours reflects the trakt's speed.
+        if route_mode == "road" and _cur_data.get("hex_type") == "road":
+            _terrain_cost *= ROAD_COST_MULT
         steps.append(
             MovementStep(
                 key=_cur,
@@ -819,7 +851,13 @@ def resolve_chain_travel(
         if night_march:
             _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
             _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
-        if _roll_encounter(_enc_hex_data, hex_type_cfg):
+        # PM4 #1223: travelling by road (route_mode="road") halves encounters on road hexes.
+        _road_mult = (
+            ROAD_ENCOUNTER_MULT
+            if route_mode == "road" and hex_data.get("hex_type") == "road"
+            else 1.0
+        )
+        if _roll_encounter(_enc_hex_data, hex_type_cfg, chance_mult=_road_mult):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
                 return {
@@ -1081,6 +1119,8 @@ def resolve_chain_travel(
                     "step_index": enc_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": "encounter",
+                    # PM4 #1223: resume the trip in the same route mode (direct/road).
+                    "route_mode": route_mode,
                     # #1146: persist the rolled enemy so the deterministic
                     # [COMBAT_START] injection (turns.py) knows whom to spawn even
                     # when the narrator ignores the encounter fact.
@@ -1110,6 +1150,8 @@ def resolve_chain_travel(
                     "step_index": b_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": _budget_reason,
+                    # PM4 #1223: resume the trip in the same route mode (direct/road).
+                    "route_mode": route_mode,
                     # PT-F1 #1135: TTL age counter (see encounter branch above).
                     "age": 0,
                 }
@@ -1774,6 +1816,84 @@ def _record_travel_turn(
     conn.commit()
 
 
+# ── PM4 #1223: route-mode analysis + player choice detection ──────────────────
+
+# Road-choice cue words in the player's answer. "road" → follow the trakt;
+# "direct" → cut straight across the wilds.
+_ROUTE_ROAD_RE = re.compile(
+    r"\b(trakt\w*|drog[aąęio]\w*|gośćc\w*|gościńc\w*|bezpieczn\w*|dłuż\w*|okrężn\w*)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_ROUTE_DIRECT_RE = re.compile(
+    r"\b(prosto|wprost|przełaj|przelaj|na\s+skróty|skrót\w*|skroty|dzicz\w*|"
+    r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def detect_route_choice(player_text: str) -> str | None:
+    """PM4 #1223: classify a player's answer to the direct/road question.
+
+    Returns "road", "direct", or None when the text picks neither (or both,
+    which is treated as ambiguous — the caller re-hints once then defaults).
+    """
+    if not player_text:
+        return None
+    road = bool(_ROUTE_ROAD_RE.search(player_text))
+    direct = bool(_ROUTE_DIRECT_RE.search(player_text))
+    if road and not direct:
+        return "road"
+    if direct and not road:
+        return "direct"
+    return None
+
+
+def analyze_route(
+    from_hex: tuple[int, int],
+    to_hex: tuple[int, int],
+    conn: sqlite3.Connection,
+) -> dict[str, Any]:
+    """PM4 #1223: decide whether the direct/road question is worth asking.
+
+    Returns ``{"dist", "road_alt", "terrain_label"}``:
+      * ``dist``          — hex distance from→to,
+      * ``road_alt``      — a `road` hex sits within ROAD_DETOUR_RADIUS of the
+                            direct A* path (a viable trakt exists),
+      * ``terrain_label`` — Polish label of the dominant non-road terrain the
+                            direct route crosses (for the question text).
+    """
+    dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
+    out = {"dist": dist, "road_alt": False, "terrain_label": "dzicz"}
+    try:
+        hexes = _load_hex_graph(conn)
+        cfg = _load_hex_type_config(conn)
+        path = find_path(from_hex, to_hex, hexes, cfg, route_mode="direct")
+        if not path or len(path) <= 1:
+            return out
+        # dominant non-road terrain along the route
+        counts: dict[str, int] = {}
+        for c in path[1:]:
+            ht = hexes.get(c, {}).get("hex_type", "plains")
+            if ht != "road":
+                counts[ht] = counts.get(ht, 0) + 1
+        if counts:
+            top = max(counts, key=counts.get)
+            out["terrain_label"] = cfg.get(top, {}).get("label") or top
+        # is there a road within reach of the direct path?
+        road_coords = [c for c, d in hexes.items() if d.get("hex_type") == "road"]
+        if road_coords:
+            for pc in path:
+                if any(
+                    hex_distance(pc[0], pc[1], rc[0], rc[1]) <= ROAD_DETOUR_RADIUS
+                    for rc in road_coords
+                ):
+                    out["road_alt"] = True
+                    break
+    except Exception as _ar_err:  # never break a turn over the offer
+        logger.warning("pm4_analyze_route_failed", error=str(_ar_err))
+    return out
+
+
 class TravelError(Exception):
     """Raised by execute_travel; `code` maps to an HTTP status in the wrappers."""
 
@@ -1790,6 +1910,7 @@ def execute_travel(
     *,
     actor: int,
     record_turn: bool = True,
+    route_mode: str = "direct",
 ) -> dict[str, Any]:
     """#1244 (R4): the single travel pipeline every endpoint delegates to.
 
@@ -1863,6 +1984,7 @@ def execute_travel(
         campaign_id=campaign_id, character_id=character_id,
         from_hex=from_hex, to_hex=(dest_q, dest_r),
         character_sheet=sheet, conn=conn,
+        route_mode=route_mode,  # PM4 #1223
     )
 
     # (4) advance in-game clock by hours travelled
