@@ -446,6 +446,9 @@ RAW_MIGRATIONS = [
     # PT9 (#1119) — nocna napaść przy obozie: boost zależny od terenu (0.20 cywilizowany / 0.35 dziki)
     "ALTER TABLE hex_type_config ADD COLUMN camp_encounter_boost REAL NOT NULL DEFAULT 0.20",
     "UPDATE hex_type_config SET camp_encounter_boost = 0.35 WHERE hex_type IN ('forest','mountains','mountain','swamp','cave','ruins','volcanic','tundra','desert','heath')",
+    # R6 (#1246) — hexy faktycznie przebyte trasą podróży → status 'known' (nie discovered).
+    # Persystentny per-kampania flag, czytany przez FOW gate (PM1 #1220).
+    "ALTER TABLE campaign_hex_data ADD COLUMN known INTEGER NOT NULL DEFAULT 0",
 ]
 
 

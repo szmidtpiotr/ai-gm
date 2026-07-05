@@ -694,6 +694,25 @@ def resolve_chain_travel(
                ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
             (campaign_id, q, r),
         )
+
+        # R6 (#1246): hexy faktycznie przebyte trasą (bez celu, który dostaje
+        # discovered wyżej) → status 'known'. Obejmuje kroki wykonane przed
+        # przerwaniem podróży (arrived_index < len(steps)-1). Nie degraduje hexów
+        # już discovered (walka/nocleg zostają odkryte).
+        try:
+            _travelled = {
+                steps[_i].key for _i in range(0, _outcome.arrived_index + 1)
+            } - {arrived_hex}
+            for _tq, _tr in _travelled:
+                conn.execute(
+                    """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, known)
+                       VALUES (?,?,?,1)
+                       ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET known = 1""",
+                    (campaign_id, _tq, _tr),
+                )
+        except Exception:
+            pass
+
         conn.commit()
     except Exception:
         pass
