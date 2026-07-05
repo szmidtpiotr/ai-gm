@@ -52,6 +52,7 @@ from app.routers.rules_content import router as rules_content_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
 from app.routers.rest_sandbox import router as rest_sandbox_router
+from app.routers.scenario_sandbox import router as scenario_sandbox_router
 from app.routers.admin_visual import admin_router as admin_visual_router, public_router as visual_public_router
 from app.routers.admin_ui_texts import admin_router as admin_ui_texts_router, public_router as ui_texts_public_router
 from app.routers.settings import router as settings_router
@@ -815,6 +816,7 @@ app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(sandbox_router, prefix="/api")
 app.include_router(rest_sandbox_router, prefix="/api")
+app.include_router(scenario_sandbox_router, prefix="/api")
 app.include_router(admin_visual_router, prefix="/api")
 app.include_router(visual_public_router, prefix="/api")
 app.include_router(dice_config_admin_router, prefix="/api")
