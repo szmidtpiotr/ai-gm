@@ -1032,6 +1032,7 @@ class LocalGenRequest(BaseModel):
     parent_r: int
     seed: int = 0
     radius: int = 3
+    force: bool = False
 
 
 @router.post("/generate-local")
@@ -1043,11 +1044,52 @@ def generate_local(body: LocalGenRequest, authorization: str | None = Header(def
     conn = _get_db()
     try:
         parent = conn.execute(
-            "SELECT id, hex_type FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            "SELECT id, hex_type, region FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
             (body.parent_q, body.parent_r),
         ).fetchone()
         if not parent:
             raise HTTPException(status_code=404, detail="Parent hex not found")
+
+        # R2 #1242: sub-hexes carrying a location_key are a generated settlement
+        # ring (FAZA ML, local_hex_service) — NOT random terrain. Refuse to wipe
+        # them unless the admin confirms with force=true.
+        settlement_hexes = conn.execute(
+            "SELECT id FROM world_hexes WHERE parent_hex_id = ? AND location_key IS NOT NULL",
+            (parent["id"],),
+        ).fetchall()
+        if settlement_hexes and not body.force:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ten hex ma mapę osady ({len(settlement_hexes)} sublokacji) — "
+                    "wygenerowanie zniszczy ją. Potwierdź, aby nadpisać."
+                ),
+            )
+        if settlement_hexes and body.force:
+            # Clear session_flags.local_hex for any game_session whose local_hex
+            # points at a row we're about to DELETE — otherwise the player hangs
+            # on a hex that no longer exists.
+            _doomed_ids = {
+                int(r["id"])
+                for r in conn.execute(
+                    "SELECT id FROM world_hexes WHERE parent_hex_id = ?",
+                    (parent["id"],),
+                ).fetchall()
+            }
+            for _s in conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE session_flags LIKE '%local_hex%'"
+            ).fetchall():
+                try:
+                    _sf = json.loads(_s["session_flags"] or "{}")
+                except Exception:
+                    continue
+                _lh = _sf.get("local_hex")
+                if _lh and _lh.get("hex_id") in _doomed_ids:
+                    _sf.pop("local_hex", None)
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_sf, ensure_ascii=False), _s["id"]),
+                    )
 
         terrain_rows = conn.execute(
             "SELECT hex_type, spawn_weight, encounter_base_chance FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
@@ -1078,9 +1120,9 @@ def generate_local(body: LocalGenRequest, authorization: str | None = Header(def
         for (q, r), hex_type in biome_map.items():
             conn.execute(
                 """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool,
-                          is_active, map_level, parent_hex_id)
-                   VALUES (?, ?, ?, ?, '[]', 1, 1, ?)""",
-                (q, r, hex_type, 0.15, parent["id"]),
+                          is_active, map_level, parent_hex_id, region)
+                   VALUES (?, ?, ?, ?, '[]', 1, 1, ?, ?)""",
+                (q, r, hex_type, 0.15, parent["id"], parent["region"]),
             )
             hexes_created += 1
 

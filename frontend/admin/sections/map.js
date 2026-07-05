@@ -657,17 +657,35 @@ const _ROW_REGISTRY = {
     }
   }
 
+  // R2 #1242: POST generate-local; on 409 (hex has a settlement local map) show
+  // a confirm dialog and retry with force=true. Throws {__cancelled:true} if the
+  // admin declines, so callers can stay silent instead of toasting an error.
+  async function _genLocalWithForce(payload) {
+    try {
+      return await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify(payload) });
+    } catch(e) {
+      if (e && e.status === 409) {
+        if (!confirm(`${e.message}\n\nNadpisać mimo to?`)) {
+          throw { __cancelled: true };
+        }
+        return await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({ ...payload, force: true }) });
+      }
+      throw e;
+    }
+  }
+
   async function pendingGenSubmap(q, r, btn) {
     const szSel = document.getElementById(`sub-sz-${q}-${r}`);
     const radius = szSel ? parseInt(szSel.value) : 3;
     btn.disabled = true; btn.textContent = '⏳';
     try {
-      await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q: q, parent_r: r, seed: 0, radius}) });
+      await _genLocalWithForce({parent_q: q, parent_r: r, seed: 0, radius});
       await openSubmapModal(q, r);
       _worldLoaded.delete('review');
       await _loadPendingLocations();
     } catch(e) {
-      _showToast(e.message || 'Błąd generowania podmopy.', 'error');
+      if (e && e.__cancelled) { /* admin declined overwrite */ }
+      else _showToast(e.message || 'Błąd generowania podmopy.', 'error');
       btn.disabled = false; btn.textContent = '🏘 Generuj';
     }
   }
@@ -897,10 +915,13 @@ const _ROW_REGISTRY = {
       const radius = parseInt(overlay.querySelector('#smod-sz')?.value || '3');
       btn.disabled = true; btn.textContent = '⏳';
       try {
-        await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q:q, parent_r:r, seed:Math.floor(Math.random()*99999), radius}) });
+        await _genLocalWithForce({parent_q:q, parent_r:r, seed:Math.floor(Math.random()*99999), radius});
         closeModal();
         await openSubmapModal(q, r);
-      } catch(err) { _showToast(err.message||'Błąd.','error'); btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+      } catch(err) {
+        if (err && err.__cancelled) { btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+        else { _showToast(err.message||'Błąd.','error'); btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+      }
     };
   }
 
