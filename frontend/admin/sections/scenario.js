@@ -16,6 +16,7 @@ const SETUP_TEMPLATE = {
   location_name: 'Zaułek w Błotsteinie',
   scene_enemies: [],
   scene_npcs: [],
+  start_combat: false,
   session_flags: {},
   ingame_hours: 9,
   hero_overrides: {},
@@ -154,6 +155,7 @@ export async function init(panel) {
 
   function watch(cid) {
     _pollCid = cid; _pollSince = 0;
+    localStorage.setItem('aigm_scn_watch', String(cid));
     $('scn-log').innerHTML = '';
     renderState(cid, false);
     if ($('scn-poll').checked) {
@@ -172,20 +174,34 @@ export async function init(panel) {
         🕐 ${st.session?.ingame_hours}:00 ·
         wrogowie sceny: ${JSON.stringify(st.session?.scene_enemies || [])}
         ${st.active_combat ? ' · <b style="color:var(--red)">⚔ WALKA AKTYWNA</b>' : ''}`;
-      const blocks = (st.mechanics || []).map(t => {
+      // merge: każda tura z rozmowy + jej ślad mechaniki (mechanika bez tury też widoczna)
+      const mech = {};
+      (st.mechanics || []).forEach(t => { mech[t.turn_number] = t; });
+      const turnNums = [...new Set([
+        ...(st.turns || []).map(t => t.turn_number),
+        ...Object.keys(mech).map(Number),
+      ])].sort((a, b) => a - b);
+      const blocks = turnNums.map(n => {
+        const turn = (st.turns || []).find(t => t.turn_number === n);
+        const t = mech[n] || {};
         const d = t.decision;
         return `
         <div class="card" style="padding:8px;margin-bottom:6px;font-size:12px">
-          <div><b>Tura ${t.turn_number}</b>${d ? ` — intent: <b>${_esc(d.action_type)}</b> → ${_esc(d.route)}${d.gate_blocked ? ` · ⛔ gate: ${_esc(d.gate_reason || '')}` : ''} · handler: ${_esc(d.handler || '')}` : ''}</div>
-          ${(t.dice_rolls || []).map(r =>
+          <div><b>Tura ${n}</b>${d ? ` — intent: <b>${_esc(d.action_type)}</b> → ${_esc(d.route)}${d.gate_blocked ? ` · ⛔ gate: ${_esc(d.gate_reason || '')}` : ''} · handler: ${_esc(d.handler || '')}` : ''}</div>
+          ${turn ? `<div style="color:var(--t3)">🗨 ${_esc((turn.user_text || '').slice(0, 80))} → ${_esc((turn.assistant_text || '').slice(0, 110))}…</div>` : ''}
+          ${((t.dice_rolls) || []).map(r =>
             `<div>🎲 ${_esc(r.roll_type)} [${_esc(r.actor)}] ${_esc(r.notation || '')} = <b>${r.total}</b>${r.dc ? ` vs DC ${r.dc}` : ''} → ${_esc(r.outcome || '')}</div>`).join('')}
-          ${(t.state_changes || []).map(s =>
+          ${((t.state_changes) || []).map(s =>
             `<div>Δ ${_esc(s.resource)}: ${_esc(s.before_val)} → ${_esc(s.after_val)} (${_esc(s.delta)}) — ${_esc(s.cause || '')}</div>`).join('')}
+          ${!d && !(t.dice_rolls || []).length && !(t.state_changes || []).length ? '<div style="color:var(--t3)">— bez śladu mechaniki (czysta narracja)</div>' : ''}
         </div>`;
       }).join('');
       if (incremental) $('scn-log').insertAdjacentHTML('afterbegin', blocks);
-      else $('scn-log').innerHTML = blocks || '<div style="color:var(--t3)">Brak śladu mechaniki (zagraj turę).</div>';
-      const nums = (st.mechanics || []).map(t => t.turn_number);
+      else $('scn-log').innerHTML = blocks || '<div style="color:var(--t3)">Brak tur (zagraj pierwszą turę w UI gracza).</div>';
+      const nums = [
+        ...(st.mechanics || []).map(t => t.turn_number),
+        ...(st.turns || []).map(t => t.turn_number),
+      ];
       if (nums.length) _pollSince = Math.max(_pollSince, ...nums);
     } catch (e) {
       if (!incremental) $('scn-log').innerHTML = `<div style="color:var(--red)">${_esc(e.message)}</div>`;
@@ -193,4 +209,8 @@ export async function init(panel) {
   }
 
   await loadList();
+
+  // F5-persist: wróć do oglądanego scenariusza, jeśli nadal istnieje
+  const saved = parseInt(localStorage.getItem('aigm_scn_watch') || '', 10);
+  if (saved && panel.querySelector(`[data-watch="${saved}"]`)) watch(saved);
 }

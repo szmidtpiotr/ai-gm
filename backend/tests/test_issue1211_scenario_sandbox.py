@@ -357,6 +357,73 @@ def test_state_groups_mechanics_by_turn():
     assert 2 not in nums and 3 in nums
 
 
+def test_prepare_start_combat_calls_engine():
+    """start_combat=True → prawdziwa walka od tury 1 (initiate_combat na klonie),
+    nie tylko pula scene_enemies. Bez tego 'test walki' to teatr narracyjny."""
+    from app.services.scenario_service import prepare_scenario
+
+    db = _make_db()
+    hero_id = _mk_hero(db)
+    calls = {}
+
+    def fake_starter(campaign_id, character_id, enemy_keys):
+        calls["args"] = (campaign_id, character_id, list(enemy_keys))
+        return {"ok": True}
+
+    res = prepare_scenario({
+        "hero_id": hero_id,
+        "scene_enemies": ["bandit"],
+        "start_combat": True,
+    }, conn=db, combat_starter=fake_starter)
+
+    assert calls["args"] == (res["campaign_id"], res["character_id"], ["bandit"])
+    assert res["combat_started"] is True
+
+
+def test_prepare_start_combat_requires_enemies():
+    """start_combat bez scene_enemies → ScenarioError (nie da się zacząć walki z nikim)."""
+    from app.services.scenario_service import prepare_scenario, ScenarioError
+
+    db = _make_db()
+    hero_id = _mk_hero(db)
+    try:
+        prepare_scenario({"hero_id": hero_id, "start_combat": True},
+                         conn=db, combat_starter=lambda *a: {"ok": True})
+        assert False, "expected ScenarioError"
+    except ScenarioError:
+        pass
+
+
+def test_prepare_strips_engine_owned_session_flags():
+    """Flagi silnika (combat_active itp.) wymyślone przez LLM są wycinane z
+    session_flags — inaczej narrator 'widzi walkę', której silnik nie ma.
+    Wycięte klucze lądują w agent_notes."""
+    from app.services.scenario_service import prepare_scenario
+
+    db = _make_db()
+    hero_id = _mk_hero(db)
+
+    res = prepare_scenario({
+        "hero_id": hero_id,
+        "session_flags": {
+            "combat_active": True,
+            "combat_turn": "player",
+            "post_flee_return": True,
+            "moja_flaga_testowa": 1,
+        },
+    }, conn=db)
+
+    gs = db.execute("SELECT session_flags FROM game_sessions WHERE campaign_id = ?",
+                    (res["campaign_id"],)).fetchone()
+    flags = json.loads(gs["session_flags"])
+    assert "combat_active" not in flags
+    assert "combat_turn" not in flags
+    assert "post_flee_return" not in flags
+    assert flags["moja_flaga_testowa"] == 1
+    assert flags["state"] == "NARRATIVE"
+    assert "combat_active" in flags["__scenario__"]["agent_notes"]
+
+
 # ─── draft_scenario_setup — Kreator: issue# + opis → setup przez LLM ─────────
 
 def _mk_catalog(db):

@@ -40,6 +40,11 @@ _SHEET_OVERRIDE_KEYS = {
     "conditions", "arcane_points", "stats", "skills",
 }
 
+# session_flags keys owned by the engine — injecting them without the matching
+# engine state (e.g. combat_active with no active_combat row) desyncs narrator
+# vs mechanics. Stripped from setup.session_flags; use start_combat instead.
+_ENGINE_OWNED_FLAG_PREFIXES = ("combat_", "post_flee", "dungeon_run", "pending_skill_test")
+
 
 class ScenarioError(Exception):
     """Setup impossible (missing hero, bad payload). Router maps to 4xx."""
@@ -167,7 +172,17 @@ def _clone_hero(
 # ── public API ───────────────────────────────────────────────────────────────
 
 
-def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = None) -> dict[str, Any]:
+def _default_combat_starter(campaign_id: int, character_id: int, enemy_keys: list) -> dict:
+    from app.services import combat_service
+
+    return combat_service.initiate_combat(campaign_id, character_id, list(enemy_keys))
+
+
+def prepare_scenario(
+    setup: dict[str, Any],
+    conn: sqlite3.Connection | None = None,
+    combat_starter=None,
+) -> dict[str, Any]:
     """Build an isolated, playable session positioned at the element under test.
 
     setup:
@@ -182,12 +197,19 @@ def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = No
       hero_overrides         — sheet overrides (whitelist) + gold_gp
       gm_plan                — dict → campaigns.gm_plan_json
       opening_narration      — first GM turn text (playable from turn one)
+      start_combat           — True → real initiate_combat on the clone with
+                               scene_enemies (combat UI live from turn one)
       model_id               — LLM override for the campaign (default 'default')
       agent_notes            — what could not be inferred from the issue
     """
     hero_id = int(setup.get("hero_id") or 0)
     if not hero_id:
         raise ScenarioError("hero_id required")
+
+    start_combat = bool(setup.get("start_combat"))
+    scene_enemies = list(setup.get("scene_enemies") or [])
+    if start_combat and not scene_enemies:
+        raise ScenarioError("start_combat requires scene_enemies")
 
     c, own = _use(conn)
     try:
@@ -232,11 +254,22 @@ def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = No
 
         # session row — the scene the engine wakes up in
         flags: dict[str, Any] = {"state": "NARRATIVE"}
-        flags.update(dict(setup.get("session_flags") or {}))
+        requested_flags = dict(setup.get("session_flags") or {})
+        stripped = [k for k in requested_flags
+                    if any(k.startswith(p) for p in _ENGINE_OWNED_FLAG_PREFIXES)]
+        for k in stripped:
+            requested_flags.pop(k)
+        flags.update(requested_flags)
+
+        agent_notes = str(setup.get("agent_notes") or "")
+        if stripped:
+            agent_notes += (("; " if agent_notes else "")
+                            + "wycięto flagi silnika z setupu: " + ", ".join(stripped)
+                            + " (do walki użyj start_combat)")
         flags["__scenario__"] = {
             "issue_number": issue_number,
             "source_hero_id": hero_id,
-            "agent_notes": str(setup.get("agent_notes") or ""),
+            "agent_notes": agent_notes,
         }
 
         current_location_id = None
@@ -260,7 +293,7 @@ def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = No
                 uuid.uuid4().hex,
                 campaign_id,
                 json.dumps(flags, ensure_ascii=False),
-                json.dumps(list(setup.get("scene_enemies") or []), ensure_ascii=False),
+                json.dumps(scene_enemies, ensure_ascii=False),
                 json.dumps(list(setup.get("scene_npcs") or []), ensure_ascii=False),
                 int(setup.get("ingame_hours") or 9),
                 current_location_id,
@@ -289,10 +322,22 @@ def prepare_scenario(setup: dict[str, Any], conn: sqlite3.Connection | None = No
         if own:
             c.close()
 
+    # real combat from turn one — the engine owns the state (active_combat row),
+    # so the player UI shows live combat buttons/banner, not narrated theater.
+    combat_started = False
+    if start_combat:
+        starter = combat_starter or _default_combat_starter
+        try:
+            starter(campaign_id, clone_id, scene_enemies)
+            combat_started = True
+        except Exception as e:
+            raise ScenarioError(f"start_combat failed: {e}") from e
+
     return {
         "campaign_id": campaign_id,
         "character_id": clone_id,
         "source_hero_id": hero_id,
+        "combat_started": combat_started,
         "title": title,
         "hero": {
             "id": clone["id"],
@@ -443,6 +488,7 @@ Zwróć WYŁĄCZNIE poprawny JSON (bez markdown):
    "location_key": "<klucz z katalogu lokacji lub pomiń>",
    "scene_enemies": ["<TYLKO klucze z katalogu wrogów>"],
    "scene_npcs": ["<nazwy NPC jeśli potrzebne>"],
+   "start_combat": <true TYLKO gdy testowany element wymaga AKTYWNEJ walki od pierwszej tury (przyciski walki, ucieczka, obrażenia); wtedy scene_enemies nie może być puste>,
    "session_flags": {},
    "ingame_hours": <0-23>,
    "hero_overrides": {<np. "current_hp": 5 gdy test wymaga rannego bohatera>},
@@ -452,7 +498,9 @@ Zwróć WYŁĄCZNIE poprawny JSON (bez markdown):
  }}
 
 Zasady: scene_enemies wyłącznie z katalogu (puste gdy test bez walki);
-nie wymyślaj pól spoza schematu; wszystko po polsku."""
+session_flags zostaw {} — NIE wymyślaj flag silnika (combat_active itp.),
+stan walki ustawia wyłącznie start_combat; nie wymyślaj pól spoza schematu;
+wszystko po polsku."""
 
 
 def _default_fetch_issue(issue_number: int) -> dict[str, Any] | None:

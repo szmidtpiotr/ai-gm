@@ -74,6 +74,23 @@ test("REGRESSION #1211 — scenario prepare/state/list contract", async ({ page 
   expect(mine, "scenariusz nie widnieje na liście (#1211)").toBeTruthy();
   expect(mine.issue_number).toBe(1211);
 
+  // start_combat=true → realna walka od tury 1 (active_combat w silniku)
+  const prepC = await (await page.request.post("/api/admin/scenario/prepare", {
+    headers: H,
+    data: {
+      hero_id: hero.id,
+      issue_number: 1211,
+      title: "Walka od startu",
+      scene_enemies: ["bandit"],
+      start_combat: true,
+      opening_narration: "Bandyta zastępuje ci drogę!",
+    },
+  })).json();
+  expect(prepC.combat_started, "start_combat nie uruchomił walki (#1211)").toBeTruthy();
+  const stC = await (await page.request.get(
+    `/api/admin/scenario/${prepC.campaign_id}/state`, { headers: H })).json();
+  expect(stC.active_combat, "brak active_combat mimo start_combat (#1211)").toBeTruthy();
+
   // kreator (draft) — kontrakt walidacji: puste wejście = 400 (bez wołania LLM)
   const draftR = await page.request.post("/api/admin/scenario/draft", {
     headers: H, data: {},
