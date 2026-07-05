@@ -767,21 +767,5 @@ def build_location_context(session_id: int) -> str:
         return ""  # Błąd — brak wstrzyknięcia, gra kontynuuje
 
 
-def inject_into_system_prompt(base_prompt: str, session_id: int) -> str:
-    """
-    Wstrzykuje kontekst lokalizacji na początek system promptu.
-    
-    Args:
-        base_prompt: oryginalny system prompt
-        session_id: ID sesji
-    
-    Returns:
-        System prompt z wstrzykniętym kontekstem
-    """
-    location_context = build_location_context(session_id)
-    
-    if not location_context:
-        return base_prompt
-    
-    # Wstrzyknięcie na początek (przed główną treścią)
-    return location_context + "\n\n" + base_prompt
+# R9 (#1249): inject_into_system_prompt removed — zero callers.
+# The active narrator path uses build_location_context_block (game_engine.py).

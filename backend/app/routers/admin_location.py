@@ -341,58 +341,9 @@ async def location_stats(
         conn.close()
 
 
-@router.get("/api/admin/locations/pending")
-async def get_pending_locations(
-    _admin: None = Depends(require_admin_token),
-):
-    """Zwraca lokalizacje AI oczekujące na zatwierdzenie admina."""
-    conn = _get_db_connection()
-    try:
-        rows = conn.execute(
-            """
-            SELECT child.*, parent.label AS parent_label, parent.key AS parent_key
-            FROM game_locations child
-            LEFT JOIN game_locations parent ON parent.id = child.parent_id
-            WHERE COALESCE(child.ai_generated, 0) = 1
-              AND COALESCE(child.approved, 1) = 0
-              AND child.is_active = 1
-            ORDER BY child.created_at DESC
-            """
-        ).fetchall()
-        locations = [dict(row) for row in rows]
-        return {"locations": locations, "count": len(locations)}
-    except sqlite3.Error as e:
-        logger.error("get_pending_locations_error", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
-    finally:
-        conn.close()
-
-
-@router.post("/api/admin/locations/{location_id}/approve")
-async def approve_location(
-    location_id: int,
-    _admin: None = Depends(require_admin_token),
-):
-    """Zatwierdza lokalizację utworzoną automatycznie przez AI."""
-    conn = _get_db_connection()
-    try:
-        cursor = conn.execute(
-            """
-            UPDATE game_locations
-            SET approved = 1, updated_at = datetime('now')
-            WHERE id = ? AND is_active = 1
-            """,
-            (location_id,),
-        )
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail=f"Lokalizacja {location_id} nie istnieje")
-        return {"status": "approved", "id": location_id}
-    except sqlite3.Error as e:
-        logger.error("approve_location_error", error=str(e), location_id=location_id)
-        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
-    finally:
-        conn.close()
+# R9 (#1249): pending-locations approve/reject flow removed — superseded by the
+# world_review.py implementation (POST /api/admin/world/review/{type}/{key}) which
+# the active admin UI (world.js / map.js) actually calls. No frontend consumer.
 
 
 class SafeForRestPatch(BaseModel):
@@ -437,31 +388,7 @@ async def set_location_safe_for_rest_endpoint(
         conn.close()
 
 
-@router.post("/api/admin/locations/{location_id}/reject")
-async def reject_location(
-    location_id: int,
-    _admin: None = Depends(require_admin_token),
-):
-    """Odrzuca lokalizację AI przez soft delete."""
-    conn = _get_db_connection()
-    try:
-        cursor = conn.execute(
-            """
-            UPDATE game_locations
-            SET is_active = 0, updated_at = datetime('now')
-            WHERE id = ?
-            """,
-            (location_id,),
-        )
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail=f"Lokalizacja {location_id} nie istnieje")
-        return {"status": "rejected", "id": location_id}
-    except sqlite3.Error as e:
-        logger.error("reject_location_error", error=str(e), location_id=location_id)
-        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
-    finally:
-        conn.close()
+# R9 (#1249): reject_location removed alongside the pending flow above.
 
 
 # ============================================================================
@@ -798,96 +725,10 @@ async def patch_campaign_session_location(
 
 # ── World Builder endpoints (Phase 08 Task 40) ────────────────────────────
 
-class LocationPositionPatch(BaseModel):
-    map_x: float
-    map_y: float
-
-
-class ConnectionCreate(BaseModel):
-    from_key: str
-    to_key: str
-    travel_hours: int = 1
-    danger_level: str = "normal"  # "normal" or "high"
-    is_bidirectional: bool = True
-
-
-class ConnectionDelete(BaseModel):
-    from_key: str
-    to_key: str
-
-
-@router.patch("/api/admin/locations/{location_key}/position")
-async def patch_location_position(location_key: str, body: LocationPositionPatch,
-                                   _: None = Depends(require_admin_token)):
-    """Save Cytoscape node position for a location."""
-    conn = _get_db_connection()
-    try:
-        conn.execute(
-            "UPDATE game_locations SET map_x = ?, map_y = ? WHERE key = ?",
-            (body.map_x, body.map_y, location_key),
-        )
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.get("/api/admin/locations/connections")
-async def get_connections(_: None = Depends(require_admin_token)):
-    """List all location connections for the world builder graph."""
-    conn = _get_db_connection()
-    try:
-        rows = conn.execute(
-            "SELECT from_location_key as from_key, to_location_key as to_key, "
-            "travel_hours, danger_level, is_bidirectional "
-            "FROM location_connections WHERE is_active = 1"
-        ).fetchall()
-        return {"connections": [dict(r) for r in rows]}
-    finally:
-        conn.close()
-
-
-@router.post("/api/admin/locations/connections")
-async def create_connection(body: ConnectionCreate, _: None = Depends(require_admin_token)):
-    """Create a new connection between two locations."""
-    conn = _get_db_connection()
-    try:
-        conn.execute(
-            """INSERT OR REPLACE INTO location_connections
-               (from_location_key, to_location_key, travel_hours, danger_level, is_bidirectional, is_active)
-               VALUES (?, ?, ?, ?, ?, 1)""",
-            (body.from_key, body.to_key, body.travel_hours, body.danger_level, body.is_bidirectional),
-        )
-        if body.is_bidirectional:
-            conn.execute(
-                """INSERT OR REPLACE INTO location_connections
-                   (from_location_key, to_location_key, travel_hours, danger_level, is_bidirectional, is_active)
-                   VALUES (?, ?, ?, ?, ?, 1)""",
-                (body.to_key, body.from_key, body.travel_hours, body.danger_level, body.is_bidirectional),
-            )
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.post("/api/admin/locations/connections/delete")
-async def delete_connection(body: ConnectionDelete, _: None = Depends(require_admin_token)):
-    """Remove a connection (and its reverse if bidirectional)."""
-    conn = _get_db_connection()
-    try:
-        conn.execute(
-            "DELETE FROM location_connections WHERE from_location_key = ? AND to_location_key = ?",
-            (body.from_key, body.to_key),
-        )
-        conn.execute(
-            "DELETE FROM location_connections WHERE from_location_key = ? AND to_location_key = ?",
-            (body.to_key, body.from_key),
-        )
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
+# R9 (#1249): world-builder graph endpoints removed — location position (Cytoscape)
+# + location_connections CRUD had zero consumers (no frontend/admin/test caller).
+# The active world map is hex-based (admin.py hex-map + hex_world.py); the legacy
+# node-graph "World Builder" (Task 40) is not wired into the modular admin.
 
 
 # ── U28 — Placement engine endpoints ─────────────────────────────────────────
