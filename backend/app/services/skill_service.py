@@ -846,6 +846,8 @@ def resolve_skill_test(
                 "stat_mod": mod_info.get("stat_mod"),
                 "skill_rank": mod_info.get("skill_rank"),
                 "proficiency": mod_info.get("proficiency"),
+                # #1054: bez tego log wygląda jak rzut bez bonusu przewagi (gate +2/+4)
+                "advantage_bonus": mod_info.get("advantage_bonus"),
             },
             total=int(result["player_total"]),
             dc=int(opponent_total),

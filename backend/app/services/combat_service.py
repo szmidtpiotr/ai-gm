@@ -657,7 +657,7 @@ def _should_fire_burst(target: dict[str, Any] | None, *, player_hidden: bool) ->
     return False
 
 
-def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
+def build_advantage_gate(source: str | None, advantage_bonus: int = 2) -> dict[str, Any] | None:
     """D1 (#780): bramka intencji po zdobyciu przewagi pozycyjnej.
 
     Po dowolnej przewadze (sukces Stealth, grapple, wróg ogłuszony/schwytany,
@@ -687,7 +687,8 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
                 "id": "intimidate",
                 "icon": "💬",
                 "label": "Zastraszenie",
-                "hint": "Wymuś uległość bez zabijania — test Zastraszania z bonusem przewagi +2.",
+                # #1054: bonus skaluje się wg jakości Skradania (+2 sukces / +4 kryt).
+                "hint": f"Wymuś uległość bez zabijania — test Zastraszania z bonusem przewagi +{int(advantage_bonus)}.",
                 # #1000: prefiks __GATE: → backend od razu ustawia pending_skill_test
                 # dla 'intimidation' z bonusem +2 i czyści pending_zaskoczony. Bez LLM.
                 "action": "__GATE:intimidate",

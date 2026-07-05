@@ -608,6 +608,55 @@ def _inject_campaign_s11_context(
     first["content"] = f"{first.get('content', '').rstrip()}\n\n{bundle}"
 
 
+def _inject_intimidated_context(conn, campaign_id: int, messages: list) -> None:
+    """#1054 (część 2): trwałość zastraszenia — twarda reguła narratora.
+
+    Wygrany test Zastraszania zapisuje session_flags.intimidated_enemies
+    (turns.py:_apply_intimidation_persistence). Dopóki stan aktywny, narrator
+    dostaje wiążący blok: zastraszony cel spełnia rozsądne żądania, opór wymaga
+    testu przeciwstawnego. Wygasły stan (TTL w turach) jest lazy-usuwany tutaj.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if not row:
+            return
+        sf = json.loads(row["session_flags"] or "{}")
+        entry = sf.get("intimidated_enemies") or {}
+        if not entry:
+            return
+        try:
+            cur_turn = int(conn.execute(
+                "SELECT COALESCE(MAX(turn_number),0) FROM campaign_turns WHERE campaign_id=?",
+                (int(campaign_id),),
+            ).fetchone()[0] or 0)
+        except Exception:
+            cur_turn = 0
+        expires = entry.get("expires_at_turn")
+        if expires is not None and cur_turn > int(expires):
+            sf.pop("intimidated_enemies", None)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                (json.dumps(sf, ensure_ascii=False), int(campaign_id)),
+            )
+            conn.commit()
+            return
+        targets = ", ".join(str(t) for t in (entry.get("targets") or []) if t) or "przeciwnik obecny w scenie"
+        block = (
+            "=== ZASTRASZENIE (MECHANIKA — WIĄŻĄCE) ===\n"
+            f"Cel(e): {targets}. Bohater WYGRAŁ test Zastraszania — cel jest ZASTRASZONY.\n"
+            "- Cel spełnia rozsądne żądania bohatera (oddaje broń, sakiewkę, informacje, ustępuje z drogi).\n"
+            "- Celowi NIE WOLNO stawiać darmowego oporu, grozić ani wyzywać bohatera do walki, dopóki nie zajdzie NOWA okoliczność (przybycie pomocy, odwrócenie uwagi, jawna słabość bohatera).\n"
+            "- Jeśli nowa okoliczność zachodzi i cel próbuje się postawić — NIE rozstrzygaj tego w prozie; opisz próbę i zasygnalizuj, że wynik wymaga testu przeciwstawnego."
+        )
+        ins_at = len(messages) - 1 if messages and messages[-1].get("role") == "user" else len(messages)
+        messages.insert(ins_at, {"role": "system", "content": block})
+    except Exception as err:
+        logger.warning("intimidated_context_inject_failed", error=str(err))
+
+
 def build_narrative_messages(
     conn: sqlite3.Connection | None,
     campaign: sqlite3.Row,
@@ -661,6 +710,8 @@ def build_narrative_messages(
             _inject_location_llm_context(conn, int(campaign["id"]), messages)
             _inject_npc_llm_context(conn, int(campaign["id"]), messages)
             _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
+            # #1054 (część 2): wiążąca reguła narratora dla aktywnego zastraszenia.
+            _inject_intimidated_context(conn, int(campaign["id"]), messages)
 
         # U29 fix: inject === ŚWIAT === block (hex terrain + locations) into the
         # streaming/narrative path. Inserted as a SEPARATE system message just before

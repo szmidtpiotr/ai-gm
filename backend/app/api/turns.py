@@ -144,9 +144,6 @@ def _maybe_clear_surprise_on_location_change(
     except Exception:
         _prev_had_enemies = False
 
-    if _prev_had_enemies:
-        return
-
     try:
         _gsf_lc = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
@@ -154,14 +151,91 @@ def _maybe_clear_surprise_on_location_change(
         ).fetchone()
         if _gsf_lc:
             _sf_lc = json.loads(_gsf_lc["session_flags"] or "{}")
-            if "pending_zaskoczony" in _sf_lc:
-                _sf_lc.pop("pending_zaskoczony")
+            _changed_lc = False
+            # #1054 (część 2): zastraszenie jest per-scena — zmiana lokacji zawsze je kasuje.
+            if "intimidated_enemies" in _sf_lc:
+                _sf_lc.pop("intimidated_enemies")
+                _changed_lc = True
+            if not _prev_had_enemies:
+                for _k_lc in ("pending_zaskoczony", "pending_zaskoczony_quality"):
+                    if _k_lc in _sf_lc:
+                        _sf_lc.pop(_k_lc)
+                        _changed_lc = True
+            if _changed_lc:
                 conn.execute(
                     "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
                     (json.dumps(_sf_lc, ensure_ascii=False), campaign_id),
                 )
     except Exception:
         pass
+
+
+# #1054 (część 2): trwałość zastraszenia + skalowanie bonusu przewagi.
+# Wartości STARTOWE (Numbers Policy) — do tuningu po testach na DEV.
+INTIMIDATION_TTL_TURNS = 6
+GATE_ADVANTAGE_BONUS = 2
+GATE_ADVANTAGE_BONUS_CRIT = 4
+
+
+def _gate_advantage_bonus(session_flags: dict | None) -> int:
+    """#1054: bonus przewagi dla gate'owego Zastraszania wg jakości Skradania.
+
+    Kryt Skradania (sztylet na gardle) musi znaczyć więcej niż sukces na styk."""
+    _q = str((session_flags or {}).get("pending_zaskoczony_quality") or "").lower()
+    return GATE_ADVANTAGE_BONUS_CRIT if "critical" in _q else GATE_ADVANTAGE_BONUS
+
+
+def _apply_intimidation_persistence(
+    conn: "sqlite3.Connection",
+    campaign_id: int,
+    session_flags: dict,
+    pending: dict,
+    result: dict,
+) -> dict | None:
+    """#1054 (część 2): sukces Zastraszania zostawia trwały stan na wrogach sceny.
+
+    Bez tego wygrany test społeczny jest fire-and-forget — narrator w kolejnej
+    turze neguje wynik (sandbox 8888911: bandyta odmawia oddania broni mimo
+    sztyletu na gardle i wygranego testu). Stan wygasa po INTIMIDATION_TTL_TURNS
+    turach lub przy zmianie lokacji (_maybe_clear_surprise_on_location_change).
+    Konsumpcja: game_engine._inject_intimidated_context wiąże narratora regułą.
+    """
+    if str(pending.get("skill_key", "")).lower() != "intimidation":
+        return None
+    if not result.get("success") or result.get("nat1"):
+        return None
+    _targets: list[str] = []
+    try:
+        _se_row = conn.execute(
+            "SELECT scene_enemies FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        for _e in json.loads((_se_row["scene_enemies"] if _se_row else None) or "[]"):
+            if isinstance(_e, dict):
+                _t = str(_e.get("key") or _e.get("name") or "").strip()
+            else:
+                _t = str(_e).strip()
+            if _t:
+                _targets.append(_t)
+    except Exception:
+        _targets = []
+    try:
+        _tn = int(conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0) FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0] or 0)
+    except Exception:
+        _tn = 0
+    entry = {
+        "targets": _targets,
+        "set_turn": _tn,
+        "expires_at_turn": _tn + INTIMIDATION_TTL_TURNS,
+        "outcome": str(result.get("outcome") or ""),
+    }
+    session_flags["intimidated_enemies"] = entry
+    logger.info("intimidation_persistence_set", campaign_id=campaign_id,
+                targets=_targets, expires_at_turn=entry["expires_at_turn"])
+    return entry
 
 
 # K2 fix helpers ──────────────────────────────────────────────────────────────
@@ -1362,6 +1436,7 @@ def _maybe_start_combat_from_gm_tag(
                     for _ek in enemy_keys:
                         cs.apply_condition_to_combatant(campaign_id, _ek, "zaskoczony")
                     _sf.pop("pending_zaskoczony", None)
+                    _sf.pop("pending_zaskoczony_quality", None)
                     _pconn.execute(
                         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                         (_pjson.dumps(_sf, ensure_ascii=False), campaign_id),
@@ -5738,15 +5813,18 @@ def create_turn_stream(
             _gate_sf = json.loads(_gate_sf_row["session_flags"] or "{}") if _gate_sf_row else {}
 
             if _gate_opt == "intimidate":
-                # Deterministyczny test Zastraszania z bonusem +2 za przewagę (bez LLM).
+                # Deterministyczny test Zastraszania z bonusem za przewagę (bez LLM).
+                # #1054: bonus skaluje się wg jakości Skradania (+2 sukces / +4 kryt).
+                _gate_adv = _gate_advantage_bonus(_gate_sf)
                 _gate_sf.pop("pending_zaskoczony", None)
+                _gate_sf.pop("pending_zaskoczony_quality", None)
                 from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
                 import uuid as _guuid
                 _gate_sheet = json.loads(character["sheet_json"] or "{}")
                 _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation")
                 _gate_mod = dict(_gate_mod)
-                _gate_mod["total"] = int(_gate_mod.get("total", 0)) + 2
-                _gate_mod["advantage_bonus"] = 2
+                _gate_mod["total"] = int(_gate_mod.get("total", 0)) + _gate_adv
+                _gate_mod["advantage_bonus"] = _gate_adv
                 _gate_pending = {
                     "skill_test_id": f"st-{_guuid.uuid4().hex[:8]}",
                     "skill_key": "intimidation",
@@ -5777,6 +5855,7 @@ def create_turn_stream(
             else:
                 # withdraw / dialog / unknown — czyść flagę i kontynuuj do LLM z narratywnym tekstem.
                 _gate_sf.pop("pending_zaskoczony", None)
+                _gate_sf.pop("pending_zaskoczony_quality", None)
                 conn.execute(
                     "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
                     (json.dumps(_gate_sf, ensure_ascii=False), campaign_id),
@@ -7234,11 +7313,19 @@ def resolve_skill_test_endpoint(
                     # #1044: only gate when enemies are actually in the scene
                     if _stealth_should_emit_gate(conn, campaign_id):
                         session_flags["pending_zaskoczony"] = True
+                        # #1054: zapamiętaj jakość Skradania — kryt daje +4 w gate zamiast +2.
+                        session_flags["pending_zaskoczony_quality"] = str(result.get("outcome") or "success").lower()
                         logger.info("stealth_success_pending_zaskoczony", campaign_id=campaign_id)
                     else:
                         logger.info("stealth_success_no_scene_enemies_skip_gate", campaign_id=campaign_id)
             except Exception as _sa_err:
                 logger.warning("stealth_zaskoczony_error", error=str(_sa_err))
+
+        # #1054 (część 2): sukces Zastraszania → trwały stan na wrogach sceny.
+        try:
+            _apply_intimidation_persistence(conn, campaign_id, session_flags, pending, result)
+        except Exception as _int_err:
+            logger.warning("intimidation_persistence_error", error=str(_int_err))
 
         # S6 (#586) — haggling → jednorazowy rabat na najbliższą transakcję w sklepie.
         # Mechanika decyduje (stopień testu → mnożnik), LLM tylko narruje (CZĘŚĆ 10).
@@ -7532,7 +7619,7 @@ def resolve_skill_test_endpoint(
             # Any subsequent skill test (intimidation, etc.) must NOT re-emit the gate —
             # that caused the infinite loop when Zastraszenie/Wycofaj was chosen.
             if _sf_st.get("pending_zaskoczony") and str(pending.get("skill_key", "")).lower() == "stealth":
-                _adv_gate = build_advantage_gate("stealth")
+                _adv_gate = build_advantage_gate("stealth", advantage_bonus=_gate_advantage_bonus(_sf_st))
         except Exception as _gate_err:
             logger.warning("advantage_gate_build_error", error=str(_gate_err))
 
