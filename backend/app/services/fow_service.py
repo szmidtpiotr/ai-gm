@@ -178,17 +178,13 @@ def compute_campaign_known_discovered(conn, campaign_id, character_id):
     ).fetchone()
     sf = _j.loads((gs["session_flags"] if gs else None) or "{}")
 
+    # NB: do NOT call resolve_starting_hex here — it is side-effectful (anchors the
+    # campaign start location / can move the hero). The region gazetteer only needs
+    # the region tag: derive it from the current hex, and lean on known_regions
+    # (seeded with the start region at campaign creation, PM2 #1221) for the rest.
     origin_region = None
-    try:
-        from app.services.hex_travel_service import resolve_starting_hex as _rsh
-        _start = _rsh(campaign_id, character_id, None, conn)
-        _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
-        if _srow:
-            origin_region = _srow.get("region")
-    except Exception:
-        pass
     cur = sf.get("current_hex")
-    if not origin_region and cur:
+    if cur:
         _crow = all_hexes_l0.get((int(cur.get("q", 0)), int(cur.get("r", 0))))
         if _crow:
             origin_region = _crow.get("region")
