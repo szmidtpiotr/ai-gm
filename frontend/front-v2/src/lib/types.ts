@@ -33,11 +33,62 @@ export interface Campaign {
   title: string;
   status: string;
   mode: string | null;
+  system_id?: string | null;
+  language?: string | null;
+  owner_user_id?: number | null;
   character_id: number | null;
   character_count: number;
+  created_at?: string | null;
   description: string;
   plan_ready: boolean;
   hero_blocked: boolean;
+  hero_status?: string | null;
+  /** Only present on the single-campaign detail endpoint (owner view). */
+  gm_plan_json?: string | null;
+}
+
+// F-09 — gotowe kampanie z Kuźni (GET /campaign-templates → items).
+export interface CampaignTemplate {
+  id: number;
+  title: string;
+  description?: string | null;
+  atmosphere?: string | null;
+  difficulty_rating?: number | null;
+  play_count?: number | null;
+}
+
+// F-09 — loch (GET /dungeons → dungeons).
+export interface Dungeon {
+  key: string;
+  label?: string | null;
+  name?: string | null;
+  atmosphere?: string | null;
+  loot_tier?: number | null;
+  min_level?: number | null;
+  cooldown?: { ready: boolean; hours_remaining?: number | null } | null;
+}
+
+// #1095 — read-only viewer paged turns.
+export interface TurnHistoryEntry {
+  turn_number: number;
+  user_text?: string | null;
+  assistant_text?: string | null;
+  created_at?: string | null;
+}
+export interface TurnHistoryPage {
+  campaign_id: number;
+  title: string;
+  status: string;
+  total_count: number;
+  turns: TurnHistoryEntry[];
+}
+
+// F-11 — LLM identity preview (POST /characters/{id}/generate-identity).
+export interface IdentityPreview {
+  appearance: string;
+  personality: string;
+  bonds: Array<{ description: string; type: string }>;
+  weaknesses: Array<{ description: string; type: string }>;
 }
 
 export interface LlmSettings {

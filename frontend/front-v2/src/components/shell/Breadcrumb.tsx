@@ -1,5 +1,6 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { CaretRight } from "@phosphor-icons/react";
+import { useHeroes } from "@/hooks/useGameData";
 import { cn } from "@/lib/utils";
 
 interface Crumb {
@@ -7,16 +8,28 @@ interface Crumb {
   to?: string;
 }
 
-// Breadcrumb poza grą (sekcja 11): „Bohaterowie › Wiga › Kampania", człony klikalne.
+// Breadcrumb poza grą (sekcja 11): „Bohaterowie › Wiga z Błotsteinu › …", człony klikalne.
 function useCrumbs(): Crumb[] {
   const { pathname } = useLocation();
   const { heroId } = useParams();
+  const { data: heroes } = useHeroes();
 
-  if (pathname.startsWith("/bohaterowie/") && pathname.includes("/kampanie")) {
+  const heroName =
+    heroes?.find((h) => String(h.id) === String(heroId))?.name ??
+    (heroId ? `Bohater #${heroId}` : "Bohater");
+
+  if (pathname === "/bohaterowie/nowy") {
+    return [{ label: "Bohaterowie", to: "/bohaterowie" }, { label: "Nowy bohater" }];
+  }
+  if (pathname.includes("/historia/")) {
     return [
       { label: "Bohaterowie", to: "/bohaterowie" },
-      { label: heroId ? `Bohater #${heroId}` : "Bohater", to: undefined },
+      { label: heroName, to: `/bohaterowie/${heroId}/kampanie` },
+      { label: "Historia" },
     ];
+  }
+  if (pathname.startsWith("/bohaterowie/") && pathname.includes("/kampanie")) {
+    return [{ label: "Bohaterowie", to: "/bohaterowie" }, { label: heroName }];
   }
   if (pathname === "/bohaterowie") return [{ label: "Bohaterowie" }];
   if (pathname === "/profil")

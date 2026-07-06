@@ -98,7 +98,7 @@ export default function Heroes() {
           ))}
 
           <button
-            onClick={() => navigate("/bohaterowie/nowy/kampanie")}
+            onClick={() => navigate("/bohaterowie/nowy")}
             className="flex min-h-[132px] flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-line-ember bg-ember/[0.03] text-ember-glow transition-colors hover:bg-ember/[0.07]"
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-md border border-line-ember">

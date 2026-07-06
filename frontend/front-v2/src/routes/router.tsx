@@ -12,6 +12,8 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Heroes = lazy(() => import("./pages/Heroes"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const CampaignHistory = lazy(() => import("./pages/CampaignHistory"));
+const CreateCharacter = lazy(() => import("./pages/CreateCharacter"));
 const Game = lazy(() => import("./pages/Game"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -42,7 +44,12 @@ export const router = createBrowserRouter(
           element: <AppShell />,
           children: [
             { path: "bohaterowie", element: <Heroes /> },
+            { path: "bohaterowie/nowy", element: <CreateCharacter /> },
             { path: "bohaterowie/:heroId/kampanie", element: <Campaigns /> },
+            {
+              path: "bohaterowie/:heroId/historia/:campaignId",
+              element: <CampaignHistory />,
+            },
             { path: "gra/:campaignId", element: <Game /> },
             { path: "profil", element: <Profile /> },
             { path: "*", element: <NotFound /> },
