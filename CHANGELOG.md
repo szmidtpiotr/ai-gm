@@ -4,6 +4,48 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.6.0 — 2026-07-06 — Podróże 2.0 + Sandbox Scenariuszy + struktura osady od startu
+
+Duża wersja po v1.5.9. Główny motyw: **remont map i podróżowania (Podróże 2.0)** — mgła wojny, trakty, dwa tryby podróży i mapa działająca palcem na telefonie. Do tego nowe narzędzie do testów (Sandbox Scenariuszy), osada z mapą lokalną już od pierwszej tury, trwałe zastraszenie oraz duża fala napraw i sprzątania kodu z audytu #20.
+
+### Added — Podróże 2.0 (mapy i podróżowanie, #1241–#1258)
+
+- **Trójstanowa mgła wojny** — heksy są teraz *nieznane / odkryte / poznane*. Wejście do nowego regionu odblokowuje jego gazetteer (opis krainy), a wokół bohatera świeci bąbel wiedzy o promieniu 4 heksów. Admin może ustawić globalny promień bąbla i nadpisać stan „poznane" na pojedynczym heksie.
+- **Trakty i granice** — drogi rysują się jako ciągły szlak na mapie gracza aż do krawędzi krain; dodano 4 przejścia graniczne Kresów.
+- **Dwa tryby podróży** — gracz wybiera narracyjnie: *na skróty* (przez dziki teren) albo *traktem* (bezpieczniej, dłużej), z osobnymi profilami wyznaczania trasy.
+- **Jeden silnik podróży** — trzy dawne ścieżki kodu podróży scalone w jeden `execute_travel`; koniec rozjazdów między pinezką a narracją.
+- **Mapa na telefonie** — przesuwanie palcem 1:1 i pinch-zoom na mapie świata i lokalnej; przyciski +/–/dopasuj; koniec „pełzania" ekranu.
+- **Podróż opisowa** — „szukam drogi do mostu" prowadzi do znanego heksu; heksy przebyte trasą stają się „poznane", cel i przystanki pozostają „odkryte".
+
+### Added — Sandbox Scenariuszy (#1211)
+
+- Nowy panel testowy: numer issue + opis → LLM generuje gotowy setup sesji pod testowany element. Deterministyczny start, boczny log mechaniki tura-po-turze, katalog NPC + złoto do testów handlu, deep-link „Graj" wchodzący prosto do czatu scenariusza.
+
+### Added — Struktura osady i start kampanii (#1206–#1209, #1212)
+
+- Szablon kampanii deklaruje strukturę osady (hub + podlokacje) → **mapa lokalna istnieje od pierwszej tury**, nie dopiero po odkryciu (materializacja idempotentna — koniec duplikatów karczmy).
+- Plan kampanii deklaruje **godzinę startową** (`start_hour`) — koniec sztywnego 9:00.
+- Lokacja startowa zakotwiczona na właściwym heksie; blok ŚWIAT pokazuje aktualną lokację (koniec opisu terenu heksa gdy stoisz w karczmie).
+
+### Changed
+
+- **Trwałość zastraszenia (#1054)** — zastraszony wróg pozostaje zastraszony przez 6 tur; bonus przewagi poprawnie skalowany i widoczny w logu.
+- Zamrożono kierunek redesignu **ŻAR** + tokeny design systemu.
+
+### Fixed — audyt code-review #20 + stabilność
+
+- **Jedna warstwa auth admina (#1187)** — domyślny strażnik na wszystkich `/api/admin/*`.
+- **Jedna ochrona podwójnej tury (#1186/#1171)** — blokada po stronie serwera + gracza.
+- **DEV nie stubuje już LLM (#1179)** — koniec odpowiedzi „[E2E] stub" na dev.
+- Naprawy: złoto / walka / sesje (#1157–#1161), odświeżanie JWT (#1172/#1173), restore lobby multiplayer po F5 (#1184), licznik zakupów w sklepie (#1183), podgląd komnaty lochu (#1185), indeksy `campaign_turns` (#1165), centralizacja helperów `stat_modifier`/`proficiency` (#1181).
+- Ożywienie martwych tras admina i gameplayu (#1167–#1170, #1188).
+
+### Removed — sprzątanie (#1176/#1177/#1178)
+
+- Usunięto martwy kod: martwe endpointy + legacy modele Game/Message, osierocony `front/styles.css` (3666 linii) + 14 zrzutów, 11 martwych funkcji player-UI, martwe trasy nginx `/panel` + `/admin_panel`, martwe sekcje admina v2.
+
+---
+
 ## v1.5.9 — 2026-07-04 — Idempotencja migracji (code-review #20, fala 2)
 
 ### Fixed
