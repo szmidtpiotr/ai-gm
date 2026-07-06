@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   User,
   Plus,
@@ -11,6 +12,7 @@ import {
   Warning,
 } from "@phosphor-icons/react";
 import { useHeroes, useCampaigns } from "@/hooks/useGameData";
+import { joinViaToken } from "@/lib/multiplayer";
 import { useAppStore } from "@/store/appStore";
 import type { Hero } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,9 +53,26 @@ function heroGold(h: Hero): number {
 
 export default function Heroes() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const setHero = useAppStore((s) => s.setHero);
   const { data: heroes, isLoading, isError } = useHeroes();
   const { data: campaigns } = useCampaigns();
+
+  // FE15 (#1264): zaproszenie przez link (?join=TOKEN) → dołącz do drużyny i wejdź
+  // do lobby. RootRedirect przekierowuje ?join na /bohaterowie (§11).
+  const joinedRef = useRef(false);
+  useEffect(() => {
+    const token = params.get("join");
+    if (!token || joinedRef.current) return;
+    joinedRef.current = true;
+    joinViaToken(token)
+      .then((d) => navigate(`/druzyna/${d.campaign_id}`, { replace: true }))
+      .catch(() => {
+        const next = new URLSearchParams(params);
+        next.delete("join");
+        setParams(next, { replace: true });
+      });
+  }, [params, navigate, setParams]);
 
   function enterHero(hero: Hero) {
     setHero(hero.id);

@@ -12,6 +12,7 @@ import {
   Warning,
   Star,
   Lock,
+  UsersThree,
 } from "@phosphor-icons/react";
 import {
   useCampaigns,
@@ -24,6 +25,7 @@ import {
   useDeleteCampaign,
 } from "@/hooks/useGameData";
 import { apiFetch } from "@/lib/api";
+import { createLobby } from "@/lib/multiplayer";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -150,6 +152,24 @@ export default function Campaigns() {
     }
   }
 
+  // FE15 (#1264) — utwórz lobby drużynowe (MP) i przejdź do ekranu drużyny (F-13).
+  async function launchMp() {
+    if (!user?.id || !hero) return;
+    setBusy(true);
+    try {
+      const res = await createLobby({
+        title: `Drużyna ${hero.name}`,
+        round_timer_minutes: 1440,
+        max_players: 4,
+      });
+      navigate(`/druzyna/${res.campaign_id}`);
+    } catch (e) {
+      toast((e as Error).message || "Nie udało się utworzyć drużyny", "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmDelete() {
     if (!toDelete) return;
     try {
@@ -187,6 +207,24 @@ export default function Campaigns() {
         />
       </div>
 
+      {/* FE15 (#1264) — sesja drużynowa (MP): utwórz lobby (F-13) */}
+      <button
+        onClick={launchMp}
+        disabled={busy}
+        className="mb-6 flex items-center gap-3 rounded-lg border border-line-ember bg-[rgba(255,122,61,.06)] px-4 py-3 text-left transition-colors hover:bg-[rgba(255,122,61,.1)] disabled:opacity-50"
+      >
+        <UsersThree weight="fill" className="shrink-0 text-ember" size={22} />
+        <span className="min-w-0 flex-1">
+          <span className="block font-serif text-body font-semibold text-text">
+            Drużyna (multiplayer)
+          </span>
+          <span className="block font-ui text-micro text-text-3">
+            Utwórz lobby, zaproś kompanów, grajcie rundami
+          </span>
+        </span>
+        <Play weight="fill" className="shrink-0 text-ember-glow" size={18} />
+      </button>
+
       {/* Aktywne kampanie */}
       <SectionHeader count={active.length}>Aktywne kampanie</SectionHeader>
       {isLoading && <Loading />}
@@ -202,7 +240,11 @@ export default function Campaigns() {
             key={c.id}
             campaign={c}
             userId={user?.id}
-            onPlay={() => enterGame(c.id)}
+            onPlay={() =>
+              c.mode === "multiplayer"
+                ? navigate(`/druzyna/${c.id}`)
+                : enterGame(c.id)
+            }
             onDelete={() => setToDelete(c)}
           />
         ))}

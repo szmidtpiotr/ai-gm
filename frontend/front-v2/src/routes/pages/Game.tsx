@@ -31,6 +31,7 @@ import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
+import { MpGame } from "@/components/game/mp/MpGame";
 import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
 import { useCombatState } from "@/hooks/useCombat";
 import { detectShop } from "@/lib/game";
@@ -74,6 +75,8 @@ export default function Game() {
     combatState.data?.active && combatState.data.combat?.status === "active"
       ? combatState.data.combat
       : null;
+  // FE15 (#1264): tryb drużynowy → rundy MP zamiast solowego turn-flow (walka MP osobno).
+  const isMp = campaign.data?.mode === "multiplayer";
 
   // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
   useEffect(() => {
@@ -187,6 +190,14 @@ export default function Game() {
       ) : gameTab === "journal" ? (
         // FE13 Dziennik + Kronika bohatera (#1262) — zakładka gry.
         <Journal campaignId={campaignId!} characterId={characterId} />
+      ) : gameTab === "story" && isMp ? (
+        // FE15 (#1264): sesja drużynowa — rundy MP + party chat + whispery.
+        <MpGame
+          campaignId={campaignId!}
+          character={character.data}
+          vitals={vitals}
+          stats={stats}
+        />
       ) : gameTab === "story" && activeCombat ? (
         // FE9 walka (#1236): baner + pasek akcji + reakcja SF10 + kość 3D.
         <CombatView

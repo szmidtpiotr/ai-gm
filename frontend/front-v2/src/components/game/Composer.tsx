@@ -20,11 +20,14 @@ export function Composer({
   disabled,
   chips,
   onChip,
+  placeholder = "Co robisz?",
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
   chips: Chip[];
   onChip: (chip: Chip) => void;
+  /** FE15 (#1264): MP nadpisuje podpowiedź stanem rundy (np. „GM tworzy narrację…"). */
+  placeholder?: string;
 }) {
   const [value, setValue] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -109,7 +112,7 @@ export function Composer({
                 submit();
               }
             }}
-            placeholder="Co robisz?"
+            placeholder={placeholder}
             className="max-h-32 min-h-[28px] flex-1 resize-none self-center bg-transparent py-1.5 font-ui text-body text-text outline-none placeholder:italic placeholder:text-text-3"
           />
           {/* paleta komend (F-44) — Ctrl+/ albo ta ikona */}

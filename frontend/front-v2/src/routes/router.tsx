@@ -15,6 +15,8 @@ const Campaigns = lazy(() => import("./pages/Campaigns"));
 const CampaignHistory = lazy(() => import("./pages/CampaignHistory"));
 const CreateCharacter = lazy(() => import("./pages/CreateCharacter"));
 const Game = lazy(() => import("./pages/Game"));
+// FE15 (#1264) — Lobby MP (F-13): team builder, zaproszenia, timer, start.
+const Lobby = lazy(() => import("./pages/Lobby"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 // FE10 (#1237) — publiczny podgląd modali wyników walki (QA/Playwright vs makiety).
@@ -55,6 +57,7 @@ export const router = createBrowserRouter(
               path: "bohaterowie/:heroId/historia/:campaignId",
               element: <CampaignHistory />,
             },
+            { path: "druzyna/:campaignId", element: <Lobby /> },
             { path: "gra/:campaignId", element: <Game /> },
             { path: "profil", element: <Profile /> },
             { path: "*", element: <NotFound /> },
