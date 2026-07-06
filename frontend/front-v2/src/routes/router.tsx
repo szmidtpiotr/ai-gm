@@ -1,9 +1,15 @@
 import { lazy } from "react";
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "@/components/shell/AppShell";
+import { AuthLayout } from "@/components/shell/AuthLayout";
+import { RequireAuth, RootRedirect } from "./guards";
 
 // Lazy per trasa — każdy ekran to osobny bundle (frontend_design.md §2, §4).
 const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Heroes = lazy(() => import("./pages/Heroes"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
 const Game = lazy(() => import("./pages/Game"));
@@ -11,18 +17,37 @@ const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Flow (sekcja 11): Login → Bohaterowie → Kampanie bohatera → Gra.
+// Deep-linki (?campaign / ?join) rozwiązuje RootRedirect na „/".
 export const router = createBrowserRouter(
   [
+    { index: true, element: <RootRedirect /> },
+
+    // Ekrany wejścia — pełnoekranowa scena, bez shellu (publiczne).
     {
-      element: <AppShell />,
+      element: <AuthLayout />,
       children: [
-        { index: true, element: <Navigate to="/bohaterowie" replace /> },
         { path: "login", element: <Login /> },
-        { path: "bohaterowie", element: <Heroes /> },
-        { path: "bohaterowie/:heroId/kampanie", element: <Campaigns /> },
-        { path: "gra/:campaignId", element: <Game /> },
-        { path: "profil", element: <Profile /> },
-        { path: "*", element: <NotFound /> },
+        { path: "rejestracja", element: <Register /> },
+        { path: "weryfikacja-email", element: <VerifyEmail /> },
+        { path: "zapomniane-haslo", element: <ForgotPassword /> },
+        { path: "reset-hasla", element: <ResetPassword /> },
+      ],
+    },
+
+    // Surface gracza — wymaga zalogowania, w shellu (topbar/breadcrumb/tabbar).
+    {
+      element: <RequireAuth />,
+      children: [
+        {
+          element: <AppShell />,
+          children: [
+            { path: "bohaterowie", element: <Heroes /> },
+            { path: "bohaterowie/:heroId/kampanie", element: <Campaigns /> },
+            { path: "gra/:campaignId", element: <Game /> },
+            { path: "profil", element: <Profile /> },
+            { path: "*", element: <NotFound /> },
+          ],
+        },
       ],
     },
   ],
