@@ -153,6 +153,47 @@ export interface TurnResponse {
   [k: string]: unknown;
 }
 
+// ── F-43/F-47 mapa świata + podróż (KROK 4 FE8 #1235) ────────────────────────
+
+export type HexStatus = "discovered" | "known" | "outline" | "unexplored";
+
+// Jeden heks z GET /campaigns/{id}/world-map (widok gracza, z mgłą wojny).
+export interface WorldHex {
+  q: number;
+  r: number;
+  hex_type: string | null;
+  label: string | null;
+  status: HexStatus;
+}
+
+export interface HexTypeCfg {
+  hex_type: string;
+  label: string;
+  map_color: string;
+  map_icon: string;
+}
+
+export interface WorldMapResponse {
+  hexes: WorldHex[];
+  teleport_connections: unknown[];
+  current_hex: { q: number; r: number } | null;
+  hex_types: Record<string, HexTypeCfg>;
+}
+
+// Odpowiedź POST /campaigns/{id}/travel (podzbiór — cinematyka + advance).
+export interface TravelResult {
+  total_hours?: number;
+  clock?: ClockState | null;
+  arrived_hex?: { q: number; r: number } | null;
+  hex_data?: {
+    hex_type?: string | null;
+    label?: string | null;
+    atmosphere?: string | null;
+  } | null;
+  encounter?: { enemy_key?: string | null } | null;
+  [k: string]: unknown;
+}
+
 // Znormalizowana karta rzutu (F-52) — aktor decyduje o stronie/kolorze (sekcja 6).
 export interface RollCardData {
   actor: "player" | "enemy";

@@ -5,6 +5,7 @@ import {
   Backpack,
   BookOpen,
   FlagBanner,
+  MapTrifold,
   Shield,
   Sparkle,
   Target,
@@ -34,3 +35,7 @@ export const SHEET_TABS: GameTabDef[] = [
 export function visibleSheetTabs(hasMana: boolean): GameTabDef[] {
   return SHEET_TABS.filter((t) => !t.manaOnly || hasMana);
 }
+
+// F-43 Mapa świata — zakładka na poziomie gry (po panelach karty, jak w makiecie
+// zar5). Otwierana też z ikony 🗺 w pasku przygody (Topbar). KROK 4 FE8 (#1235).
+export const MAP_TAB: GameTabDef = { key: "map", label: "Mapa", icon: MapTrifold };

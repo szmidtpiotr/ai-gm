@@ -2,12 +2,17 @@
 // karty postaci (F-21/F-54..F-58). Mobile używa dolnego tabbara + górnego scrolla.
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
-import { STORY_TAB, visibleSheetTabs, type GameTabDef } from "@/components/sheet/tabs";
+import {
+  MAP_TAB,
+  STORY_TAB,
+  visibleSheetTabs,
+  type GameTabDef,
+} from "@/components/sheet/tabs";
 
 export function GameRail({ hasMana }: { hasMana: boolean }) {
   const active = useAppStore((s) => s.gameTab);
   const setGameTab = useAppStore((s) => s.setGameTab);
-  const tabs: GameTabDef[] = [STORY_TAB, ...visibleSheetTabs(hasMana)];
+  const tabs: GameTabDef[] = [STORY_TAB, ...visibleSheetTabs(hasMana), MAP_TAB];
 
   return (
     <nav

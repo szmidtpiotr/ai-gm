@@ -23,6 +23,7 @@ import { NarrationLog } from "@/components/game/NarrationLog";
 import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
 import { GameRail } from "@/components/game/GameRail";
+import { WorldMap } from "@/components/game/WorldMap";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
@@ -124,7 +125,10 @@ export default function Game() {
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} />
 
-      {gameTab === "story" ? (
+      {gameTab === "map" ? (
+        // F-43 Mapa świata + podróż (KROK 4 #1235) — własny nagłówek + cinematyka.
+        <WorldMap campaignId={campaignId!} characterId={characterId} />
+      ) : gameTab === "story" ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
             <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

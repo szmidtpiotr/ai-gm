@@ -16,6 +16,11 @@ import { useCampaignClock, useCampaignDetail } from "@/hooks/useGameData";
 // W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
 // BEZ imienia bohatera; HP/Mana są nad dolnym tabbarem (sekcja 5, zamrożone reguły).
 export function Topbar({ inGame }: { inGame: boolean }) {
+  const gameTab = useAppStore((s) => s.gameTab);
+  // F-43: zakładka Mapa niesie własny nagłówek (zegar+pora+lokacja) — chowamy
+  // pasek przygody, by nie dublować zegara (parytet z makietą zar5). KROK 4 (#1235).
+  if (inGame && gameTab === "map") return null;
+
   return (
     <header
       className="sticky top-0 z-40 shrink-0 border-b border-line bg-surface/95 backdrop-blur"
@@ -50,6 +55,7 @@ function NavBar() {
 
 function GameBar() {
   const campaignId = useAppStore((s) => s.currentCampaignId) ?? undefined;
+  const setGameTab = useAppStore((s) => s.setGameTab);
   const clock = useCampaignClock(campaignId);
   const campaign = useCampaignDetail(campaignId);
 
@@ -86,7 +92,7 @@ function GameBar() {
         </div>
       </div>
 
-      <IconBtn label="Mapa">
+      <IconBtn label="Mapa" onClick={() => setGameTab("map")}>
         <MapTrifold size={18} />
       </IconBtn>
       <IconBtn label="Menu">
@@ -96,10 +102,19 @@ function GameBar() {
   );
 }
 
-function IconBtn({ label, children }: { label: string; children: React.ReactNode }) {
+function IconBtn({
+  label,
+  children,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <button
       aria-label={label}
+      onClick={onClick}
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-bg text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
     >
       {children}

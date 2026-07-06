@@ -11,8 +11,10 @@ import type {
   Hero,
   IdentityPreview,
   LlmSettings,
+  TravelResult,
   TurnHistoryPage,
   TurnResponse,
+  WorldMapResponse,
 } from "@/lib/types";
 
 export function useHeroes() {
@@ -126,6 +128,50 @@ export function useSubmitTurn(campaignId: number | undefined) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+    },
+  });
+}
+
+// ── F-43/F-47 mapa świata + podróż (KROK 4 FE8 #1235) ────────────────────────
+
+/**
+ * GET /campaigns/{id}/world-map — heksy z mgłą wojny + aktualna pozycja +
+ * konfiguracja typów terenu. Lekki polling, by nowo odkryte heksy pojawiały
+ * się bez F5 (parytet z ekranem gry).
+ */
+export function useWorldMap(
+  campaignId: number | undefined,
+  characterId: number | undefined,
+) {
+  return useQuery({
+    queryKey: ["world-map", campaignId, characterId],
+    enabled: !!campaignId && !!characterId,
+    queryFn: () =>
+      apiFetch<WorldMapResponse>(
+        `/campaigns/${campaignId}/world-map?character_id=${characterId}`,
+      ),
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/**
+ * POST /campaigns/{id}/travel — podróż do heksa. Po sukcesie unieważnia mapę,
+ * zegar, strumień tur i postać (silnik dopisuje syntetyczną turę + advance scen).
+ */
+export function useTravel(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { characterId: number; q: number; r: number }) =>
+      apiFetch<TravelResult>(`/campaigns/${campaignId}/travel`, {
+        method: "POST",
+        body: { character_id: v.characterId, target_hex: { q: v.q, r: v.r } },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
     },
   });

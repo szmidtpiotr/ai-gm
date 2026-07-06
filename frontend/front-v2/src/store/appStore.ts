@@ -35,7 +35,8 @@ export type GameTab =
   | "skills"
   | "spells"
   | "inventory"
-  | "reputation";
+  | "reputation"
+  | "map";
 
 export interface AppState {
   currentUser: CurrentUser | null;
