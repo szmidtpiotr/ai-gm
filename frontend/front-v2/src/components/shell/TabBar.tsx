@@ -1,46 +1,26 @@
-import { useState } from "react";
-import {
-  BookOpen,
-  UserSquare,
-  Backpack,
-  MapTrifold,
-  Scroll,
-  Sword,
-  type Icon,
-} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
 import { readVitals } from "@/lib/game";
 import { VitalBars } from "@/components/game/Vitals";
-
-interface Tab {
-  key: string;
-  label: string;
-  icon: Icon;
-  pinned?: boolean;
-}
+import {
+  STORY_TAB,
+  visibleSheetTabs,
+  type GameTabDef,
+} from "@/components/sheet/tabs";
 
 // Panele gry = zakładki (nie osobny ekran). „Opowieść" przypięta z lewej,
-// reszta przewija się poziomo (sekcja 5, zamrożone reguły mobilne).
-const TABS: Tab[] = [
-  { key: "story", label: "Opowieść", icon: BookOpen, pinned: true },
-  { key: "character", label: "Postać", icon: UserSquare },
-  { key: "inventory", label: "Ekwipunek", icon: Backpack },
-  { key: "map", label: "Mapa", icon: MapTrifold },
-  { key: "journal", label: "Dziennik", icon: Scroll },
-  { key: "combat", label: "Walka", icon: Sword },
-];
-
+// panele karty postaci przewijają się poziomo (sekcja 5). Wybór trzyma store
+// (współdzielony z desktop railem + górnym scrollem karty). KROK 5 (#1234).
 export function TabBar({ inGame }: { inGame: boolean }) {
-  const [active, setActive] = useState("story");
+  const active = useAppStore((s) => s.gameTab);
+  const setGameTab = useAppStore((s) => s.setGameTab);
   const heroId = useAppStore((s) => s.currentHeroId) ?? undefined;
   const character = useCharacter(inGame ? heroId : undefined);
   if (!inGame) return null;
 
-  const pinned = TABS.filter((t) => t.pinned);
-  const scrollable = TABS.filter((t) => !t.pinned);
   const vitals = readVitals(character.data?.sheet_json);
+  const scrollable = visibleSheetTabs(vitals.hasMana);
 
   return (
     <nav
@@ -53,23 +33,20 @@ export function TabBar({ inGame }: { inGame: boolean }) {
       <div className="flex items-stretch">
         {/* Przypięta Opowieść */}
         <div className="flex shrink-0 border-r border-line">
-          {pinned.map((t) => (
-            <TabButton
-              key={t.key}
-              tab={t}
-              active={active === t.key}
-              onClick={() => setActive(t.key)}
-            />
-          ))}
+          <TabButton
+            tab={STORY_TAB}
+            active={active === STORY_TAB.key}
+            onClick={() => setGameTab(STORY_TAB.key)}
+          />
         </div>
-        {/* Przewijana reszta */}
+        {/* Przewijane panele karty postaci */}
         <div className="flex flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {scrollable.map((t) => (
             <TabButton
               key={t.key}
               tab={t}
               active={active === t.key}
-              onClick={() => setActive(t.key)}
+              onClick={() => setGameTab(t.key)}
             />
           ))}
         </div>
@@ -83,7 +60,7 @@ function TabButton({
   active,
   onClick,
 }: {
-  tab: Tab;
+  tab: GameTabDef;
   active: boolean;
   onClick: () => void;
 }) {

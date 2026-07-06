@@ -27,10 +27,22 @@ export interface LoginPayload {
   refresh_token?: string;
 }
 
+// KROK 5 (#1234) — panele karty postaci to zakładki w obrębie gry, nie osobny
+// ekran. Który panel jest aktywny trzyma client-state (rail desktop / scroll mobile).
+export type GameTab =
+  | "story"
+  | "character"
+  | "skills"
+  | "spells"
+  | "inventory"
+  | "reputation";
+
 export interface AppState {
   currentUser: CurrentUser | null;
   currentHeroId: number | null;
   currentCampaignId: number | null;
+  /** Aktywna zakładka ekranu gry (Opowieść + 5 paneli karty postaci). */
+  gameTab: GameTab;
   /** Placeholdery na przyszłe fale (walka / loch) — kształt wg sekcji 8. */
   activeCombat: unknown | null;
   dungeonRunState: unknown | null;
@@ -38,6 +50,7 @@ export interface AppState {
   setUser: (u: CurrentUser | null) => void;
   setHero: (id: number | null) => void;
   setCampaign: (id: number | null) => void;
+  setGameTab: (t: GameTab) => void;
   /** Persist tokens + user after a successful auth call. */
   login: (payload: LoginPayload) => CurrentUser;
   /** Clear tokens + user (wyloguj). */
@@ -62,12 +75,20 @@ export const useAppStore = create<AppState>((set) => ({
   currentUser: readStoredUser(),
   currentHeroId: null,
   currentCampaignId: null,
+  gameTab: "story",
   activeCombat: null,
   dungeonRunState: null,
 
   setUser: (currentUser) => set({ currentUser }),
   setHero: (currentHeroId) => set({ currentHeroId }),
-  setCampaign: (currentCampaignId) => set({ currentCampaignId }),
+  // Zmiana kampanii → wróć do Opowieści (nie przenoś panelu między grami).
+  setCampaign: (currentCampaignId) =>
+    set((s) =>
+      s.currentCampaignId === currentCampaignId
+        ? { currentCampaignId }
+        : { currentCampaignId, gameTab: "story" },
+    ),
+  setGameTab: (gameTab) => set({ gameTab }),
   login: (payload) => {
     const user = toUser(payload);
     storeSession(payload.access_token, payload.refresh_token, user);
@@ -80,6 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentUser: null,
       currentHeroId: null,
       currentCampaignId: null,
+      gameTab: "story",
       activeCombat: null,
       dungeonRunState: null,
     });

@@ -22,6 +22,8 @@ import type { RollCardData, TurnResponse } from "@/lib/types";
 import { NarrationLog } from "@/components/game/NarrationLog";
 import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
+import { GameRail } from "@/components/game/GameRail";
+import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
 // Topbar (zegar/quest) i dolne paski HP/Mana + tabbar renderuje shell (czyta store).
@@ -30,6 +32,8 @@ export default function Game() {
   const campaignId = raw ? Number(raw) : undefined;
   const setCampaign = useAppStore((s) => s.setCampaign);
   const setHero = useAppStore((s) => s.setHero);
+
+  const gameTab = useAppStore((s) => s.gameTab);
 
   const campaign = useCampaignDetail(campaignId);
   // Detail endpoint nie zwraca character_id — bierzemy aktywnego bohatera z listy
@@ -116,29 +120,39 @@ export default function Game() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <NarrationLog
-            blocks={blocks}
-            pendingRoll={pendingRoll}
-            typing={submit.isPending}
-            heroName={character.data?.name}
+    <div className="flex h-full min-h-0">
+      {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
+      <GameRail hasMana={vitals.hasMana} />
+
+      {gameTab === "story" ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <NarrationLog
+                blocks={blocks}
+                pendingRoll={pendingRoll}
+                typing={submit.isPending}
+                heroName={character.data?.name}
+              />
+            </div>
+            <VitalsRail
+              v={vitals}
+              stats={stats}
+              locationLabel={character.data?.current_location_label}
+            />
+          </div>
+
+          <Composer
+            onSend={send}
+            disabled={submit.isPending}
+            chips={shownChips}
+            onChip={(c) => send(c.text || c.label)}
           />
         </div>
-        <VitalsRail
-          v={vitals}
-          stats={stats}
-          locationLabel={character.data?.current_location_label}
-        />
-      </div>
-
-      <Composer
-        onSend={send}
-        disabled={submit.isPending}
-        chips={shownChips}
-        onChip={(c) => send(c.text || c.label)}
-      />
+      ) : (
+        // Panele karty postaci (F-21/F-54..F-58/F-76/F-78) — zakładki w grze.
+        <CharacterSheet characterId={characterId} />
+      )}
     </div>
   );
 }
