@@ -1918,6 +1918,7 @@ const _wmap = {
   svg:     null,
   confirm: null,
   zoom: 1.4,
+  minZoom: 0.12,         // #1258: zoom out far enough to see the whole Kresy map
   pan:  { x: 180, y: 200 },
   hexTypes: {},
   hexes: [],
@@ -2404,7 +2405,7 @@ function _attachMapTouch(map, render) {
     } else if (e.touches.length >= 2 && pin) {
       const p = pinch(e), r = svg.getBoundingClientRect();
       const mx = p.cx - r.left, my = p.cy - r.top;
-      const nz = Math.max(0.4, Math.min(5, map.zoom * (p.dist / pin.dist)));
+      const nz = Math.max(map.minZoom ?? 0.4, Math.min(5, map.zoom * (p.dist / pin.dist)));
       map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
       map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
       map.zoom = nz;
@@ -2448,7 +2449,7 @@ function initWorldMap() {
     const r = _wmap.svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const f = e.deltaY < 0 ? 1.15 : 0.87;
-    const nz = Math.max(0.4, Math.min(5, _wmap.zoom * f));
+    const nz = Math.max(_wmap.minZoom, Math.min(5, _wmap.zoom * f));
     _wmap.pan.x = mx - (mx - _wmap.pan.x) * (nz / _wmap.zoom);
     _wmap.pan.y = my - (my - _wmap.pan.y) * (nz / _wmap.zoom);
     _wmap.zoom = nz;
@@ -2476,6 +2477,7 @@ const _lmap = {
   confirm: null,
   title:   null,
   zoom: 1.6,
+  minZoom: 0.5,       // #1258: local map is small — don't let it shrink to nothing
   pan:  { x: 0, y: 0 },
   hexes: [],
   currentHex: null,   // { hex_id, q, r, location_key }
