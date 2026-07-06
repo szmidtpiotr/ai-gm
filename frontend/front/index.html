@@ -1918,6 +1918,11 @@
     </div>
     <div class="wmap-canvas-wrap">
       <svg id="wmap-svg" class="wmap-svg"></svg>
+      <div class="map-zoom-ctrl">
+        <button type="button" id="wmap-zoom-in" aria-label="Przybliż">＋</button>
+        <button type="button" id="wmap-zoom-out" aria-label="Oddal">－</button>
+        <button type="button" id="wmap-zoom-fit" aria-label="Cała mapa" title="Pokaż całą mapę">⤢</button>
+      </div>
     </div>
     <!-- PM6 (#1225): legenda trzech stanów mgły wojny -->
     <div class="wmap-legend" id="wmap-legend">
@@ -1945,6 +1950,11 @@
     </div>
     <div class="wmap-canvas-wrap">
       <svg id="lmap-svg" class="wmap-svg lmap-svg" style="overflow:visible"></svg>
+      <div class="map-zoom-ctrl">
+        <button type="button" id="lmap-zoom-in" aria-label="Przybliż">＋</button>
+        <button type="button" id="lmap-zoom-out" aria-label="Oddal">－</button>
+        <button type="button" id="lmap-zoom-fit" aria-label="Cała mapa" title="Pokaż całą mapę">⤢</button>
+      </div>
     </div>
     <div class="lmap-legend">
       <span class="lmap-leg--safe">■ Bezpieczne</span>
@@ -2305,7 +2315,7 @@
   <script src="./js/screens/game.js?v=1186-turnlock"></script>
   <script src="./js/screens/combat_ui.js?v=1177-i1054"></script>
   <script src="./js/multiplayer_ui.js?v=1176-cleanup"></script>
-  <script src="./js/app.js?v=1258b-map-touch-tune"></script>
+  <script src="./js/app.js?v=1258c-map-raf-zoombtns"></script>
   <!-- Full-screen travel cinematic overlay -->
   <div id="travel-cinematic" class="travel-cinematic" hidden>
     <div id="travel-cin-bg" class="travel-cin__bg"></div>

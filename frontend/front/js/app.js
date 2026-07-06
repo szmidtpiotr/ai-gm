@@ -1918,7 +1918,7 @@ const _wmap = {
   svg:     null,
   confirm: null,
   zoom: 1.4,
-  minZoom: 0.12,         // #1258: zoom out far enough to see the whole Kresy map
+  minZoom: 0.08,         // #1258: zoom out far enough to see the whole Kresy map
   pan:  { x: 180, y: 200 },
   hexTypes: {},
   hexes: [],
@@ -2377,48 +2377,88 @@ function _wmClose() {
 }
 
 // Mobile pan + pinch-zoom for the screen-space hex maps (_wmap / _lmap).
-// The maps only had mouse/wheel handlers, so on touch devices they were frozen —
-// you could neither drag nor zoom. One finger pans, two fingers pinch-zoom (same
-// zoom-around-focus math as the wheel handler). stopPropagation keeps these
-// gestures from also firing the panel's swipe-to-close.
+// #1258 v3: the per-touchmove full-SVG rebuild (_wmRender sets innerHTML on every
+// move) starved the gesture on real phones — touchmoves coalesced/dropped, so the
+// map crept only a fraction of the finger travel ("kilka razy przesunąć na 1 hex").
+// Fix: touchmove only updates pan/zoom STATE (cheap) and schedules ONE render per
+// animation frame via rAF. Pinch is initialised inside touchmove too, so a missed
+// 2-finger touchstart never leaves zoom dead. touch-action:none (CSS) keeps the
+// browser from stealing the gesture.
 function _attachMapTouch(map, render) {
   const svg = map.svg;
   if (!svg) return;
-  const pinch = (e) => {
+  const MINZ = map.minZoom ?? 0.4, MAXZ = 5;
+  let raf = 0;
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+  const dist2 = (e) => {
     const a = e.touches[0], b = e.touches[1];
-    return {
-      dist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1,
-      cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2,
-    };
+    return { d: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1,
+             cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
   };
-  let pan = null, pin = null;
+  let panRef = null, pinRef = null;
   svg.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) { pan = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pin = null; }
-    else if (e.touches.length >= 2) { pan = null; pin = pinch(e); }
+    if (e.touches.length >= 2) { panRef = null; pinRef = dist2(e); }
+    else { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pinRef = null; }
     e.stopPropagation();
   }, { passive: true });
   svg.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1 && pan) {
-      map.pan = { x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y };
-      render();
-      e.preventDefault();
-    } else if (e.touches.length >= 2 && pin) {
-      const p = pinch(e), r = svg.getBoundingClientRect();
+    e.preventDefault();
+    if (e.touches.length >= 2) {
+      const p = dist2(e);
+      if (!pinRef) { pinRef = p; return; }        // recover a missed 2-finger start
+      const r = svg.getBoundingClientRect();
       const mx = p.cx - r.left, my = p.cy - r.top;
-      const nz = Math.max(map.minZoom ?? 0.4, Math.min(5, map.zoom * (p.dist / pin.dist)));
+      const nz = Math.max(MINZ, Math.min(MAXZ, map.zoom * (p.d / pinRef.d)));
       map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
       map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
-      map.zoom = nz;
-      pin = p;
-      render();
-      e.preventDefault();
+      map.zoom = nz; pinRef = p; panRef = null;
+      schedule();
+    } else if (e.touches.length === 1) {
+      if (!panRef) { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; return; }
+      map.pan.x = e.touches[0].clientX - panRef.x;
+      map.pan.y = e.touches[0].clientY - panRef.y;
+      schedule();
     }
   }, { passive: false });
-  svg.addEventListener('touchend', (e) => {
-    if (e.touches.length === 1) { pan = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pin = null; }
-    else if (e.touches.length === 0) { pan = null; pin = null; }
+  const onEnd = (e) => {
+    if (e.touches.length === 1) { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pinRef = null; }
+    else if (e.touches.length === 0) { panRef = null; pinRef = null; }
+    schedule();                                     // guarantee the final position renders
     e.stopPropagation();
-  }, { passive: true });
+  };
+  svg.addEventListener('touchend', onEnd, { passive: true });
+  svg.addEventListener('touchcancel', onEnd, { passive: true });
+}
+
+// #1258: zoom in/out around the map centre — used by the on-screen ＋/－ buttons
+// (guaranteed to work even where pinch detection is flaky).
+function _mapZoomStep(map, render, factor) {
+  const svg = map.svg; if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  const mx = r.width / 2, my = r.height / 2;
+  const nz = Math.max(map.minZoom ?? 0.12, Math.min(5, map.zoom * factor));
+  map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
+  map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
+  map.zoom = nz;
+  render();
+}
+
+// #1258: frame the ENTIRE map (all hexes) in view — the "see the whole land" button.
+function _mapFit(map, render) {
+  const svg = map.svg; if (!svg || !map.hexes || !map.hexes.length) return;
+  const pts = map.hexes.map(h => _wmHexToPixel(h.q, h.r));
+  const pad = _WH * 1.5;
+  const minX = Math.min(...pts.map(p => p.x)) - pad, maxX = Math.max(...pts.map(p => p.x)) + pad;
+  const minY = Math.min(...pts.map(p => p.y)) - pad, maxY = Math.max(...pts.map(p => p.y)) + pad;
+  const r = svg.getBoundingClientRect();
+  const w = r.width > 10 ? r.width : (window.innerWidth || 390);
+  const h = r.height > 10 ? r.height : (window.innerHeight || 700) - 160;
+  const cw = Math.max(1, maxX - minX), ch = Math.max(1, maxY - minY);
+  const nz = Math.max(map.minZoom ?? 0.05, Math.min(5, Math.min(w / cw, h / ch) * 0.92));
+  map.zoom = nz;
+  map.pan.x = w / 2 - ((minX + maxX) / 2) * nz;
+  map.pan.y = h / 2 - ((minY + maxY) / 2) * nz;
+  render();
 }
 
 function initWorldMap() {
@@ -2467,6 +2507,11 @@ function initWorldMap() {
 
   // Mobile: one finger pans, two pinch-zoom (parity with mouse/wheel above)
   _attachMapTouch(_wmap, _wmRender);
+
+  // #1258: on-screen zoom controls (guaranteed, pinch-independent)
+  document.getElementById('wmap-zoom-in')?.addEventListener('click', () => _mapZoomStep(_wmap, _wmRender, 1.3));
+  document.getElementById('wmap-zoom-out')?.addEventListener('click', () => _mapZoomStep(_wmap, _wmRender, 1 / 1.3));
+  document.getElementById('wmap-zoom-fit')?.addEventListener('click', () => _mapFit(_wmap, _wmRender));
 }
 
 // ── Local Map Panel — #998 FAZA ML ───────────────────────────────────────────
@@ -2677,6 +2722,11 @@ function initLocalMap() {
 
   // Mobile: one finger pans, two pinch-zoom (same gap as the world map)
   _attachMapTouch(_lmap, _lmRender);
+
+  // #1258: on-screen zoom controls
+  document.getElementById('lmap-zoom-in')?.addEventListener('click', () => _mapZoomStep(_lmap, _lmRender, 1.3));
+  document.getElementById('lmap-zoom-out')?.addEventListener('click', () => _mapZoomStep(_lmap, _lmRender, 1 / 1.3));
+  document.getElementById('lmap-zoom-fit')?.addEventListener('click', () => _mapFit(_lmap, _lmRender));
 }
 
 // ── Spell Picker (Scholar combat) ─────────────────────────────────────────────
