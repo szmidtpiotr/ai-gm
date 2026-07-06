@@ -2242,7 +2242,7 @@ def save_dungeon_checkpoint(campaign_id: int, character_id: int) -> dict:
     try:
         run = flags.get("dungeon_run") or {}
         char = conn.execute(
-            "SELECT sheet_json, gold, gold_gp FROM characters WHERE id = ?", (character_id,)
+            "SELECT sheet_json, gold_gp FROM characters WHERE id = ?", (character_id,)  # #1181: legacy `gold` retired
         ).fetchone()
         if not char:
             return {}
@@ -2265,8 +2265,7 @@ def save_dungeon_checkpoint(campaign_id: int, character_id: int) -> dict:
             "current_hp": sheet.get("current_hp"),
             "max_hp": sheet.get("max_hp"),
             "current_mana": sheet.get("current_mana"),
-            "gold": char["gold"],
-            "gold_gp": char["gold_gp"],
+            "gold_gp": char["gold_gp"],  # #1181: gold_gp is the sole gold column
             "inventory": inventory,
             "xp_lifetime_earned": xp_lifetime,
             "xp_available": xp_available,

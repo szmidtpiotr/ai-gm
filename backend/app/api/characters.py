@@ -141,7 +141,8 @@ def _deep_merge_dicts(base: dict, incoming: dict) -> dict:
 
 
 def _stat_modifier(value: int) -> int:
-    return (int(value) - 10) // 2
+    from app.core.mechanics import stat_modifier as _core
+    return _core(value)
 
 
 def _default_identity_block() -> dict:
@@ -3151,6 +3152,18 @@ def get_character_spells_public(character_id: int):
     """Player-facing: return spell book for a character."""
     from app.services.spell_service import get_character_spells
     return {"spells": get_character_spells(character_id)}
+
+
+@router.get("/spells")
+def get_spell_catalog_public():
+    """#1170 — Public spell catalog for the Scholar level-up modal.
+
+    The player UI (game.js) merges this against a character's known spells to
+    render learn/upgrade rows. Previously the frontend hit a non-existent
+    /api/spells (404 swallowed → empty list); this is the missing endpoint.
+    """
+    from app.services.spell_service import get_spell_catalog
+    return {"spells": get_spell_catalog()}
 
 
 # ─── Crafter NPC endpoints (#466 F6) ─────────────────────────────────────────

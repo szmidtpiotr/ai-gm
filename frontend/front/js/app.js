@@ -114,10 +114,8 @@ const elements = {
     sheetHp: document.getElementById('sheet-hp'),
     sheetHpBar: document.getElementById('sheet-hp-bar'),
     sheetLevel: document.getElementById('sheet-level'),
-    sheetStats: document.getElementById('sheet-stats'),
     sheetSkills: document.getElementById('sheet-skills'),
     sheetGold: document.getElementById('sheet-gold'),
-    sheetInventory: document.getElementById('sheet-inventory'),
 
     // Settings Panel
     settingsPanel: document.getElementById('settings-panel'),
@@ -323,6 +321,11 @@ async function _tryRefreshAccessToken() {
             const data = await r.json();
             if (data?.access_token) {
                 localStorage.setItem('aigm_access_token', data.access_token);
+                // #1172: keep the in-memory authToken (and legacy 'token' key) in sync.
+                // game.js recap/journal/bugreport fetches send `Bearer ${authToken}` —
+                // without this they keep sending the expired token → 401 with no retry.
+                authToken = data.access_token;
+                localStorage.setItem('token', data.access_token);
                 return data.access_token;
             }
         } catch (e) {
@@ -1324,8 +1327,6 @@ function initEventListeners() {
     // Overlay
     elements.overlay?.addEventListener('click', handleOverlayClick);
 
-    // Close settings panel
-    document.getElementById('settings-close-btn')?.addEventListener('click', closeSettings);
 
     // Swipe down to close panels
     initPanelSwipeDown(elements.settingsPanel, closeSettings);
@@ -1361,7 +1362,6 @@ function initEventListeners() {
 
     // Death screen buttons
     document.getElementById('resurrect-btn')?.addEventListener('click', handleResurrect);
-    document.getElementById('death-return-btn')?.addEventListener('click', handleDeathReturn);
 
     // Stage 9 P7 — post-end option buttons, shared between death + victory screens.
     document.addEventListener('click', (e) => {
@@ -1806,6 +1806,14 @@ async function init() {
         await loadHeroes();
         if (!authToken) return; // handleSessionExpired fired during loadHeroes
         if (await consumePendingJoin()) return;
+        // #1211 — deep-link ?campaign= (Sandbox scenariuszy) wins over session restore
+        if (await consumePendingCampaign()) return;
+        // #1184 — restore MP lobby waiting room after F5. If the player was sitting in a
+        // multiplayer lobby, aigm_lobby_id is persisted; re-enter it (closed/deleted lobby
+        // self-heals: tryRestoreLobbySession clears the key and returns false → fall through).
+        if (typeof tryRestoreLobbySession === 'function' && localStorage.getItem('aigm_lobby_id')) {
+            if (await tryRestoreLobbySession()) return;
+        }
         if (await tryRestoreSession()) return;
         if (!authToken) return; // handleSessionExpired fired during tryRestoreSession
         showScreen('heroes');
@@ -1910,6 +1918,7 @@ const _wmap = {
   svg:     null,
   confirm: null,
   zoom: 1.4,
+  minZoom: 0.08,         // #1258: zoom out far enough to see the whole Kresy map
   pan:  { x: 180, y: 200 },
   hexTypes: {},
   hexes: [],
@@ -1971,7 +1980,8 @@ function _wmRender() {
       html += `<polygon class="wm-hex" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wmCorners(sx, sy, rz-1)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
-      if (_wmap.zoom >= 0.9 && cfg.map_icon)
+      // PM5 (#1224): road icon suppressed — trakt czytamy z linii łączącej (niżej).
+      if (_wmap.zoom >= 0.9 && cfg.map_icon && hex.hex_type !== 'road')
         html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
           font-size="${Math.max(10, 13*_wmap.zoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
       // #1106: current hex label always shown, full text, larger font, halo for contrast.
@@ -1987,6 +1997,25 @@ function _wmRender() {
       if (isCurrent)
         html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
           font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
+    } else if (hex.status === 'known') {
+      // PM6 (#1225): 'known' — teren znany z opowieści. Przygaszony fill (kolor terenu
+      // × opacity) + wyblakła ikona; label tylko gdy backend go dał (landmark/kanon).
+      // Wyraźnie różny od 'discovered' (pełny fill) i 'outline' (przezroczysty, kropkowany).
+      const fill = cfg.map_color || '#4a6a4a';
+      html += `<polygon class="wm-hex wm-hex--known" data-q="${hex.q}" data-r="${hex.r}"
+        points="${_wmCorners(sx, sy, rz-1)}"
+        fill="${fill}" fill-opacity="0.4" stroke="#6a5a34" stroke-width="0.7" stroke-dasharray="2,2"
+        style="cursor:pointer"/>`;
+      // PM5 (#1224): road icon suppressed on known too — ciągłość z linii traktu.
+      if (_wmap.zoom >= 0.9 && cfg.map_icon && hex.hex_type !== 'road')
+        html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
+          font-size="${Math.max(10, 13*_wmap.zoom)}" opacity="0.55" style="pointer-events:none">${cfg.map_icon}</text>`;
+      if (hex.label && _wmap.zoom >= 1.0) {
+        const labelText = hex.label.length > 20 ? hex.label.slice(0, 20) + '…' : hex.label;
+        html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
+          font-size="${Math.max(7, 9*_wmap.zoom)}" fill="#9a8a5a" paint-order="stroke" stroke="#000" stroke-width="2.5"
+          style="pointer-events:none">${escapeHtml(labelText)}</text>`;
+      }
     } else {
       // Outline: unvisited adjacent hex
       html += `<polygon class="wm-hex wm-hex--outline" data-q="${hex.q}" data-r="${hex.r}"
@@ -1994,6 +2023,37 @@ function _wmRender() {
         fill="transparent" stroke="#2a2218" stroke-width="0.6" stroke-dasharray="3,2"
         style="cursor:pointer"/>`;
     }
+  }
+
+  // PM5 (#1224): trakt jako CIĄG — linia przez środki sąsiadujących road-hexów.
+  // Każdy road hex (known/discovered) rysuje pół-segment do środka wspólnej krawędzi
+  // z każdym road-sąsiadem; pół-segmenty stykają się → widoczna, ciągła droga.
+  // Kolor z hex_type_config (#c8a86c); known przygaszony, discovered pełny.
+  {
+    const roadPts = new Map();  // "q,r" -> {q,r,sx,sy,known}
+    for (const hex of _wmap.hexes) {
+      if (hex.hex_type !== 'road') continue;
+      if (hex.status !== 'discovered' && hex.status !== 'known') continue;
+      const p = _wmHexToPixel(hex.q, hex.r);
+      const w = _wmWorld(p.x, p.y);
+      roadPts.set(hex.q + ',' + hex.r, { q: hex.q, r: hex.r, sx: w.x, sy: w.y, known: hex.status === 'known' });
+    }
+    const roadCol = (_wmap.hexTypes['road'] || {}).map_color || '#c8a86c';
+    const _AXNB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+    const rw = Math.max(1.6, 2.6 * _wmap.zoom);
+    let roadHtml = '';
+    for (const [, p] of roadPts) {
+      for (const [dq, dr] of _AXNB) {
+        const nb = roadPts.get((p.q + dq) + ',' + (p.r + dr));
+        if (!nb) continue;
+        const mx = (p.sx + nb.sx) / 2, my = (p.sy + nb.sy) / 2;
+        const op = p.known ? 0.5 : 0.9;
+        roadHtml += `<line x1="${p.sx}" y1="${p.sy}" x2="${mx}" y2="${my}"
+          stroke="${roadCol}" stroke-width="${rw}" stroke-linecap="round"
+          stroke-opacity="${op}" style="pointer-events:none"/>`;
+      }
+    }
+    html += roadHtml;
   }
 
   // Teleport connections
@@ -2021,9 +2081,13 @@ function _wmOnHexClick(e) {
   const label = hex.label || `(${q},${r})`;
   const cfg = _wmap.hexTypes[hex.hex_type] || {};
   const typeName = cfg.label || hex.hex_type || '';
+  // PM6 (#1225): 'known' hex = ważny cel podróży, ale bez szczegółów lokacji —
+  // gracz zna go tylko z opowieści, więc pokazujemy sam teren + adnotację.
   const info = hex.status === 'discovered'
     ? typeName
-    : `${typeName} — nieznany teren`;
+    : hex.status === 'known'
+      ? `${typeName || 'Teren'} — znane z opowieści`
+      : `${typeName} — nieznany teren`;
 
   // E21: dungeon hex → skip travel, open dungeon picker directly
   if (hex.hex_type === 'dungeon') {
@@ -2286,6 +2350,15 @@ async function _wmOpen() {
       }
     } catch (_) { /* no local map — fall through to world map */ }
   }
+  _wmOpenWorld();
+}
+
+// #1257: force-open the world map, skipping the #998 auto-redirect to local map.
+// Used by the local-map "← Świat" button so it can escape the sublocation view.
+async function _wmOpenWorld() {
+  if (!currentCampaignId || !characterData?.id) {
+    showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
+  }
   _wmap.panel.removeAttribute('hidden');
   _wmap.panel.style.transform = 'translateX(0)';
 
@@ -2301,6 +2374,91 @@ function _wmClose() {
   setTimeout(() => _wmap.panel.setAttribute('hidden', ''), 280);
   _wmap.confirm.setAttribute('hidden', '');
   _wmap.pendingTravel = null;
+}
+
+// Mobile pan + pinch-zoom for the screen-space hex maps (_wmap / _lmap).
+// #1258 v3: the per-touchmove full-SVG rebuild (_wmRender sets innerHTML on every
+// move) starved the gesture on real phones — touchmoves coalesced/dropped, so the
+// map crept only a fraction of the finger travel ("kilka razy przesunąć na 1 hex").
+// Fix: touchmove only updates pan/zoom STATE (cheap) and schedules ONE render per
+// animation frame via rAF. Pinch is initialised inside touchmove too, so a missed
+// 2-finger touchstart never leaves zoom dead. touch-action:none (CSS) keeps the
+// browser from stealing the gesture.
+function _attachMapTouch(map, render) {
+  const svg = map.svg;
+  if (!svg) return;
+  const MINZ = map.minZoom ?? 0.4, MAXZ = 5;
+  let raf = 0;
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+  const dist2 = (e) => {
+    const a = e.touches[0], b = e.touches[1];
+    return { d: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1,
+             cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
+  };
+  let panRef = null, pinRef = null;
+  svg.addEventListener('touchstart', (e) => {
+    if (e.touches.length >= 2) { panRef = null; pinRef = dist2(e); }
+    else { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pinRef = null; }
+    e.stopPropagation();
+  }, { passive: true });
+  svg.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length >= 2) {
+      const p = dist2(e);
+      if (!pinRef) { pinRef = p; return; }        // recover a missed 2-finger start
+      const r = svg.getBoundingClientRect();
+      const mx = p.cx - r.left, my = p.cy - r.top;
+      const nz = Math.max(MINZ, Math.min(MAXZ, map.zoom * (p.d / pinRef.d)));
+      map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
+      map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
+      map.zoom = nz; pinRef = p; panRef = null;
+      schedule();
+    } else if (e.touches.length === 1) {
+      if (!panRef) { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; return; }
+      map.pan.x = e.touches[0].clientX - panRef.x;
+      map.pan.y = e.touches[0].clientY - panRef.y;
+      schedule();
+    }
+  }, { passive: false });
+  const onEnd = (e) => {
+    if (e.touches.length === 1) { panRef = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pinRef = null; }
+    else if (e.touches.length === 0) { panRef = null; pinRef = null; }
+    schedule();                                     // guarantee the final position renders
+    e.stopPropagation();
+  };
+  svg.addEventListener('touchend', onEnd, { passive: true });
+  svg.addEventListener('touchcancel', onEnd, { passive: true });
+}
+
+// #1258: zoom in/out around the map centre — used by the on-screen ＋/－ buttons
+// (guaranteed to work even where pinch detection is flaky).
+function _mapZoomStep(map, render, factor) {
+  const svg = map.svg; if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  const mx = r.width / 2, my = r.height / 2;
+  const nz = Math.max(map.minZoom ?? 0.12, Math.min(5, map.zoom * factor));
+  map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
+  map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
+  map.zoom = nz;
+  render();
+}
+
+// #1258: frame the ENTIRE map (all hexes) in view — the "see the whole land" button.
+function _mapFit(map, render) {
+  const svg = map.svg; if (!svg || !map.hexes || !map.hexes.length) return;
+  const pts = map.hexes.map(h => _wmHexToPixel(h.q, h.r));
+  const pad = _WH * 1.5;
+  const minX = Math.min(...pts.map(p => p.x)) - pad, maxX = Math.max(...pts.map(p => p.x)) + pad;
+  const minY = Math.min(...pts.map(p => p.y)) - pad, maxY = Math.max(...pts.map(p => p.y)) + pad;
+  const r = svg.getBoundingClientRect();
+  const w = r.width > 10 ? r.width : (window.innerWidth || 390);
+  const h = r.height > 10 ? r.height : (window.innerHeight || 700) - 160;
+  const cw = Math.max(1, maxX - minX), ch = Math.max(1, maxY - minY);
+  const nz = Math.max(map.minZoom ?? 0.05, Math.min(5, Math.min(w / cw, h / ch) * 0.92));
+  map.zoom = nz;
+  map.pan.x = w / 2 - ((minX + maxX) / 2) * nz;
+  map.pan.y = h / 2 - ((minY + maxY) / 2) * nz;
+  render();
 }
 
 function initWorldMap() {
@@ -2331,7 +2489,7 @@ function initWorldMap() {
     const r = _wmap.svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const f = e.deltaY < 0 ? 1.15 : 0.87;
-    const nz = Math.max(0.4, Math.min(5, _wmap.zoom * f));
+    const nz = Math.max(_wmap.minZoom, Math.min(5, _wmap.zoom * f));
     _wmap.pan.x = mx - (mx - _wmap.pan.x) * (nz / _wmap.zoom);
     _wmap.pan.y = my - (my - _wmap.pan.y) * (nz / _wmap.zoom);
     _wmap.zoom = nz;
@@ -2346,6 +2504,14 @@ function initWorldMap() {
     if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
   });
   window.addEventListener('mouseup', () => { _wmap._ds = null; });
+
+  // Mobile: one finger pans, two pinch-zoom (parity with mouse/wheel above)
+  _attachMapTouch(_wmap, _wmRender);
+
+  // #1258: on-screen zoom controls (guaranteed, pinch-independent)
+  document.getElementById('wmap-zoom-in')?.addEventListener('click', () => _mapZoomStep(_wmap, _wmRender, 1.3));
+  document.getElementById('wmap-zoom-out')?.addEventListener('click', () => _mapZoomStep(_wmap, _wmRender, 1 / 1.3));
+  document.getElementById('wmap-zoom-fit')?.addEventListener('click', () => _mapFit(_wmap, _wmRender));
 }
 
 // ── Local Map Panel — #998 FAZA ML ───────────────────────────────────────────
@@ -2356,6 +2522,7 @@ const _lmap = {
   confirm: null,
   title:   null,
   zoom: 1.6,
+  minZoom: 0.5,       // #1258: local map is small — don't let it shrink to nothing
   pan:  { x: 0, y: 0 },
   hexes: [],
   currentHex: null,   // { hex_id, q, r, location_key }
@@ -2521,25 +2688,6 @@ async function _lmRefresh() {
   return data;
 }
 
-async function _lmOpen() {
-  if (!currentCampaignId) return;
-  try {
-    const data = await _lmRefresh();
-    if (!data?.has_local_map) {
-      // Fallthrough to world map if no local map
-      _wmOpen();
-      return;
-    }
-    _lmap.panel.removeAttribute('hidden');
-    _lmap.panel.style.transform = 'translateX(0)';
-    // Defer centering until after layout is applied
-    requestAnimationFrame(() => { _lmCenter(); _lmRender(); });
-  } catch (err) {
-    showToast(err.message || 'Błąd ładowania mapy osady', 'error');
-    _wmOpen(); // fallback to world map
-  }
-}
-
 function _lmClose() {
   _lmap.panel.style.transform = 'translateX(100%)';
   setTimeout(() => _lmap.panel.setAttribute('hidden', ''), 280);
@@ -2557,7 +2705,7 @@ function initLocalMap() {
   document.getElementById('lmap-close-btn')?.addEventListener('click', _lmClose);
   document.getElementById('lmap-back-btn')?.addEventListener('click', () => {
     _lmClose();
-    setTimeout(_wmOpen, 300);
+    setTimeout(_wmOpenWorld, 300);  // #1257: force world map, skip #998 local-map redirect
   });
   document.getElementById('lmap-btn-go')?.addEventListener('click', _lmExecuteTravel);
   document.getElementById('lmap-btn-cancel')?.addEventListener('click', () => {
@@ -2571,6 +2719,14 @@ function initLocalMap() {
   _lmap.panel.addEventListener('touchend', e => {
     if (e.changedTouches[0].clientX - _swipeStartX > 60) _lmClose();
   }, { passive: true });
+
+  // Mobile: one finger pans, two pinch-zoom (same gap as the world map)
+  _attachMapTouch(_lmap, _lmRender);
+
+  // #1258: on-screen zoom controls
+  document.getElementById('lmap-zoom-in')?.addEventListener('click', () => _mapZoomStep(_lmap, _lmRender, 1.3));
+  document.getElementById('lmap-zoom-out')?.addEventListener('click', () => _mapZoomStep(_lmap, _lmRender, 1 / 1.3));
+  document.getElementById('lmap-zoom-fit')?.addEventListener('click', () => _mapFit(_lmap, _lmRender));
 }
 
 // ── Spell Picker (Scholar combat) ─────────────────────────────────────────────
@@ -3110,7 +3266,6 @@ function updateDungeonHUD() {
     const label = document.getElementById('dungeon-hud-label');
     const progress = document.getElementById('dungeon-hud-progress');
     const roomType = document.getElementById('dungeon-hud-room-type');
-    const advBtn = document.getElementById('dungeon-advance-btn');
 
     if (label) label.textContent = `⛏ ${run.dungeon_label || 'Loch'}`;
 
@@ -3143,7 +3298,6 @@ function updateDungeonHUD() {
     if (roomViewBtn) roomViewBtn.hidden = !currentNode?.content?.image_url;
 
     // v2: hide legacy advance-btn (movement via direction buttons)
-    if (advBtn) advBtn.hidden = true;
 
     // Refresh nav + tile scene
     updateDungeonNav(run);
@@ -3751,11 +3905,6 @@ function showDungeonBossChoiceModal(run) {
     document.getElementById('dungeon-boss-exit-btn')?.focus();
 }
 
-function _closeDungeonModals() {
-    ['dungeon-death-modal', 'dungeon-abandon-modal', 'dungeon-resume-modal', 'dungeon-boss-modal']
-        .forEach(id => document.getElementById(id)?.setAttribute('hidden', ''));
-}
-
 // ── Dungeon Map v2 (tile graph) — L11 ────────────────────────────────────────
 
 const ROOM_TYPE_LABELS = {
@@ -4167,9 +4316,6 @@ function initDungeon() {
         _dungeonResolveTile('rest');
     });
 
-    document.getElementById('dungeon-advance-btn')?.addEventListener('click', () => {
-        // Legacy: advance-btn no longer used in v2 but kept for safety
-    });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
     // #1097: soft finale gate — persistent "Zakończ przygodę" menu button + confirm modal
     document.getElementById('finish-campaign-btn')?.addEventListener('click', () => {
@@ -4182,7 +4328,6 @@ function initDungeon() {
         window.finishCampaignFlow?.();
     });
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
-    document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
 
     // #741: środkowy ⊕ D-pada otwiera mapę lochu (skrót pod kciukiem, jak ikona 🗺 w HUD).

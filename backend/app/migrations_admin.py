@@ -247,6 +247,18 @@ ADMIN_MIGRATIONS = [
         FOREIGN KEY (character_id) REFERENCES characters(id)
     )
     """,
+    # #1165 — campaign_turns jest pisana i czytana co turę (57 zapytań WHERE campaign_id,
+    # m.in. turns.py:467 last-3-turns i turns.py:1693/3112 MAX(turn_number)), ale nie miała
+    # żadnego indeksu → pełny skan tabeli. combat_turns/game_events mają swoje; ta była
+    # pominięta. Composite (campaign_id, turn_number) czyni MAX(turn_number) pokrytym.
+    """
+    CREATE INDEX IF NOT EXISTS idx_campaign_turns_campaign_id
+        ON campaign_turns(campaign_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_campaign_turns_campaign_turn
+        ON campaign_turns(campaign_id, turn_number)
+    """,
     """
     CREATE TABLE IF NOT EXISTS user_llm_settings (
         user_id INTEGER PRIMARY KEY,
@@ -2670,8 +2682,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
 
     # ── New tables ────────────────────────────────────────────────────────
 
-    # campaign_members lives in main.py RAW_MIGRATIONS but ALTER TABLE helpers in this
-    # file reference it. CREATE IF NOT EXISTS so standalone run_admin_migrations() works (#943).
+    # campaign_members is CREATEd here (canonical); main.py RAW_MIGRATIONS only ALTERs it
+    # to add multiplayer columns. CREATE IF NOT EXISTS so standalone run_admin_migrations()
+    # works even when RAW hasn't run yet (#943, comment corrected #1178).
     _exec("""
         CREATE TABLE IF NOT EXISTS campaign_members (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3667,6 +3680,37 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('lake',    'Jezioro',     0.0, 0.05, '#3a6a9a', '🏞️', 0, 'biome',   0.00),
         ('bridge',  'Most',        1.0, 0.45, '#7a6a4a', '🌉', 1, 'scatter', 0.00)
     """, "v933-kresy-hex-types")
+
+    # R8 #1248 — border terrain between Kresy and Siwe Granie.
+    # 'grania' = impassable mountain ridge (is_passable=0 → excluded from the travel
+    # graph, forms a wall). 'przelecz' = the single mountain pass (is_passable=1) that
+    # is the only crossing between the two regions. INSERT OR IGNORE = idempotent.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon, is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('grania',   'Grań',      3.0, 0.25, '#5a5a66', '🏔️', 0, 'biome', 0.00),
+        ('przelecz', 'Przełęcz',  2.0, 0.30, '#b0a080', '⛰️', 1, 'path',  0.05)
+    """, "v1248-r8-border-hex-types")
+
+    # R8 #1248 — dzikie przejścia graniczne: 2 przełęcze poza traktem z gwarantowanym
+    # jednorazowym encounterem. encounter_chance=1.0 + pool → walka przy pierwszym
+    # przejściu; combat_service ustawia campaign_hex_data.encounter_cleared=1 po wygranej
+    # (jednorazowo per kampania). location_key wiąże hex z lokacją-flavour (10_locations.sql).
+    # Geometria (grania/przelecz/road) siedzi w data/regions/region_*.json — tu tylko
+    # przywracamy encounter-wiring, którego snapshot region-JSON nie niesie. Idempotentne.
+    _exec("""
+        UPDATE world_hexes SET encounter_chance=1.0,
+            encounter_pool='["wolf","wolf","werewolf"]',
+            location_key='przesmyk_wilczej_grani'
+        WHERE q=4 AND r=-3 AND map_level=0 AND hex_type='przelecz'
+    """, "v1248-r8-enc-pass-wilcza")
+    _exec("""
+        UPDATE world_hexes SET encounter_chance=1.0,
+            encounter_pool='["bandit_thug","bandit","bandit_chief"]',
+            location_key='stara_przelecz_przemytnikow'
+        WHERE q=24 AND r=-13 AND map_level=0 AND hex_type='przelecz'
+    """, "v1248-r8-enc-pass-przemytnicy")
 
     logger.info("v2_schema_migrations_complete")
 
@@ -5330,20 +5374,6 @@ def _ensure_warrior_shared_heal_858(conn: sqlite3.Connection) -> None:
 WHISPER_GPU_HOST_URL = "http://192.168.1.16:8300"
 
 
-def _ensure_voice_config_table(conn: sqlite3.Connection) -> None:
-    """#748 — voice_config była używana przez voice_proxy, lecz nigdy nie powstała,
-    więc zapis ustawień głosu (POST /voice/config) wykraszał na INSERT. Idempotentne."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS voice_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL DEFAULT ''
-        )
-        """
-    )
-    conn.commit()
-
-
 def _ensure_active_voice_host(conn: sqlite3.Connection) -> None:
     """#748 — gdy żaden host głosu nie jest aktywny, proxy fallbackuje na bundlowany
     `voice-service:8300`, którego na DEV nie ma → STT/TTS pada z 'Name or service not
@@ -5785,6 +5815,32 @@ def _ensure_region_schema(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _align_region_status_to_files(conn: sqlite3.Connection, regions_dir: str = "/data/regions") -> None:
+    """R1 (#1241) — kanon statusu krain = pliki data/regions/region_*.json.
+
+    Wyrównuje world_regions.status do statusu zapisanego w pliku krainy (jedyne źródło
+    prawdy). Idempotentne: aktualizuje wiersz tylko gdy status się różni; nigdy nie
+    wstawia (INSERT robi _ensure_region_schema), nigdy nie dotyka world_hexes.
+    Brak katalogu (świeży clone) → no-op, zostają domyślne statusy z seeda.
+    """
+    import glob
+    for path in sorted(glob.glob(os.path.join(regions_dir, "region_*.json"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        key = d.get("region")
+        status = d.get("status")
+        if not key or status not in ("live", "coming", "locked"):
+            continue
+        conn.execute(
+            "UPDATE world_regions SET status = ? WHERE key = ? AND status != ?",
+            (status, key, status),
+        )
+    conn.commit()
+
+
 def _ensure_template_item_columns(conn: sqlite3.Connection) -> None:
     """#1084 — template_id + hidden columns for campaign-scoped reward items in game_config tables."""
     for table in ("game_config_weapons", "game_config_items", "game_config_consumables"):
@@ -6087,7 +6143,6 @@ def run_admin_migrations() -> None:
         _backfill_riddle_exit_conditions(conn)  # #722
         _ensure_consumable_effect_json(conn)  # #771
         _ensure_warrior_shared_heal_858(conn)  # #858
-        _ensure_voice_config_table(conn)  # #748
         _ensure_active_voice_host(conn)  # #748
         _ensure_character_campaign_state(conn)  # #784 G16
         _backfill_character_campaign_state(conn)  # #784 G16
@@ -6108,6 +6163,7 @@ def run_admin_migrations() -> None:
         _ensure_enemy_min_level(conn)  # #1023
         _seed_dwarf_toughness_enemy(conn)  # #1005
         _ensure_region_schema(conn)  # #1028 RM1
+        _align_region_status_to_files(conn)  # #1241 R1 — status krain z plików
         _ensure_item_image_columns(conn)  # #1048
         _migrate_legacy_skill_keys(conn)  # #1052
         _ensure_weapon_consumable_image_columns(conn)  # #1076

@@ -1835,8 +1835,33 @@ _ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 _FORGE_API = os.environ.get("GAME_API_URL", "http://backend:8000/api")
 
 
+def _ensure_admin_token() -> str:
+    """Admin tokens are DB-backed (issued by /admin/dev-login), so a static
+    env token is usually absent. Lazily dev-login once and cache the token."""
+    global _ADMIN_TOKEN
+    if _ADMIN_TOKEN:
+        return _ADMIN_TOKEN
+    attempts = [
+        (os.environ.get("ADMIN_USERNAME", ""), os.environ.get("ADMIN_PASSWORD", "")),
+        ("admin", "admin"),
+        ("demo", "demo"),
+    ]
+    with httpx.Client(timeout=15) as c:
+        for username, password in attempts:
+            if not username:
+                continue
+            r = c.post(
+                f"{_FORGE_API}/admin/dev-login",
+                json={"username": username, "password": password},
+            )
+            if r.status_code == 200:
+                _ADMIN_TOKEN = str(r.json().get("token") or "")
+                return _ADMIN_TOKEN
+    raise RuntimeError("admin dev-login failed — set ADMIN_USERNAME/ADMIN_PASSWORD env")
+
+
 def _admin_headers() -> dict:
-    return {"Content-Type": "application/json", "Authorization": f"Bearer {_ADMIN_TOKEN}"}
+    return {"Content-Type": "application/json", "Authorization": f"Bearer {_ensure_admin_token()}"}
 
 
 def _admin_get(path: str, params: dict | None = None) -> dict:
@@ -2296,6 +2321,81 @@ def get_architecture_map(subsystem: str = "all") -> dict:
         },
         "nodes": result_nodes,
     }
+
+
+# ---------------------------------------------------------------------------
+# Scenario Sandbox (#1211) — deterministic test-session setup + mechanics log
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def scenario_prepare(
+    hero_id: int,
+    issue_number: int = 0,
+    title: str = "",
+    location_name: str = "",
+    location_key: str = "",
+    scene_enemies: Optional[list] = None,
+    scene_npcs: Optional[list] = None,
+    session_flags: Optional[dict] = None,
+    ingame_hours: int = 9,
+    hero_overrides: Optional[dict] = None,
+    gm_plan: Optional[dict] = None,
+    opening_narration: str = "",
+    model_id: str = "default",
+    agent_notes: str = "",
+) -> dict:
+    """
+    Prepare an isolated, playable test session positioned exactly at the game
+    element under test (Scenario Sandbox, issue #1211).
+
+    Workflow for an agent: read the GitHub issue, map its acceptance criteria
+    onto these parameters, call this tool, then play turns with
+    submit_player_turn and inspect the engine with scenario_state.
+
+    Clones the hero (original NEVER modified), creates a disposable
+    '[SBX-SCN]' campaign (the user's previous scenario is purged), seeds
+    scene_enemies/scene_npcs/session_flags/clock/location/GM plan and an
+    opening GM narration so the conversation is playable from turn one.
+    Put anything you could NOT infer from the issue into agent_notes.
+    """
+    body = {
+        "hero_id": hero_id,
+        "issue_number": issue_number or None,
+        "title": title or None,
+        "location_name": location_name or None,
+        "location_key": location_key or None,
+        "scene_enemies": scene_enemies or [],
+        "scene_npcs": scene_npcs or [],
+        "session_flags": session_flags or {},
+        "ingame_hours": ingame_hours,
+        "hero_overrides": hero_overrides or {},
+        "gm_plan": gm_plan or {},
+        "opening_narration": opening_narration,
+        "model_id": model_id,
+        "agent_notes": agent_notes,
+    }
+    return _admin_post("/admin/scenario/prepare", body)
+
+
+@mcp.tool()
+def scenario_state(campaign_id: int, since_turn: int = 0) -> dict:
+    """
+    Side mechanics log for a scenario campaign (#1211): hero/session snapshot,
+    active combat, and the per-turn engine trace — intent decision, dice rolls
+    (d20 + modifiers vs DC), state changes — grouped by turn_number. Use
+    since_turn to poll incrementally (returns turns > since_turn).
+    """
+    return _admin_get(f"/admin/scenario/{campaign_id}/state", {"since_turn": since_turn})
+
+
+@mcp.tool()
+def scenario_list() -> dict:
+    """
+    List active Scenario Sandbox campaigns ('[SBX-SCN]') with their clone
+    character, issue number, agent notes and turn count.
+    """
+    return _admin_get("/admin/scenario/list")
 
 
 # ---------------------------------------------------------------------------

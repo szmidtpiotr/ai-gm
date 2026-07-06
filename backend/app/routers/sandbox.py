@@ -26,7 +26,7 @@ from app.services import combat_service as combat
 DB_PATH = Path("/data/ai_gm.db")
 SANDBOX_TITLE_PREFIX = "[SANDBOX]"
 
-router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/admin/sandbox", tags=["sandbox"])  # auth: warstwa /api/admin (#1187)
 
 
 def _conn() -> sqlite3.Connection:
@@ -41,7 +41,7 @@ def _conn() -> sqlite3.Connection:
 @router.get("/heroes")
 def list_heroes() -> dict[str, Any]:
     """All active heroes the admin can sandbox-test against.
-    Excludes the sandbox clones themselves (name prefixed '[SBX] ')."""
+    Excludes sandbox clones ('[SBX] ') and scenario clones ('[SCN] ', #1211)."""
     with _conn() as c:
         rows = c.execute(
             """
@@ -53,7 +53,9 @@ def list_heroes() -> dict[str, Any]:
             FROM characters
             WHERE is_active = 1
               AND (name NOT LIKE '[SBX] %' OR name IS NULL)
+              AND (name NOT LIKE '[SCN] %' OR name IS NULL)
               AND COALESCE(json_extract(sheet_json,'$.__sandbox_clone__'), 0) = 0
+              AND COALESCE(json_extract(sheet_json,'$.__scenario_clone__'), 0) = 0
             ORDER BY id DESC
             LIMIT 50
             """,

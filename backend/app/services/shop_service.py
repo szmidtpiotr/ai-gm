@@ -16,6 +16,7 @@ from app.services.loot_service import (
 )
 from app.services import haggle_service
 from app.services import night_economy_service as night_econ
+from app.services import npc_memory_service
 
 SELL_RATIO = 0.5
 
@@ -575,6 +576,9 @@ def _reputation_buy_multiplier(conn, character_id: int, npc_id: int | None = Non
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
+        # #1183: remember which campaign this purchase belongs to, so the merchant
+        # NPC's purchase_count can be bumped after the sale succeeds.
+        buy_campaign_id = _campaign_id_for_character(conn, character_id)
         # #1127: night economy — refuse closed shops; flag the black market.
         night_state = _shop_open_state(conn, npc, character_id)
         if not night_state["open"]:
@@ -631,6 +635,19 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         # Best effort rollback of deducted gold.
         apply_character_gold_delta(character_id, price, "shop_purchase_refund")
         raise
+
+    # #1183: sale confirmed — bump this merchant NPC's purchase_count so the GM can
+    # greet a returning customer (rendered via format_known_npcs_block). Best-effort:
+    # a memory-bump failure must never undo a completed purchase.
+    if buy_campaign_id is not None:
+        try:
+            npc_memory_service.increment_npc_purchase_count(
+                campaign_id=buy_campaign_id,
+                npc_id=int(npc_id),
+                npc_name=(str(npc["label"]).strip() or None) if npc["label"] else None,
+            )
+        except Exception:
+            pass
 
     return {
         "gold_gp": int(new_gold),
@@ -726,22 +743,18 @@ def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -
             )
         else:
             conn.execute("DELETE FROM character_inventory WHERE id = ?", (int(row["id"]),))
+        # #1158: kredyt złota + tag anti-farm w TEJ SAMEJ transakcji co usunięcie
+        # przedmiotu — jedno połączenie, jeden commit. Wcześniej DELETE commitował się
+        # (linia 729), a wypłata szła osobnym połączeniem: awaria między nimi niszczyła
+        # przedmiot bez złota i bez kompensacji. change_gold journaluje z meta, więc
+        # item_key trafia w ten sam wiersz logu atomowo (koniec kruchego MAX(id)-taga).
+        from app.services.economy_service import change_gold
+        new_gold = change_gold(
+            conn, int(character_id), int(earned), "shop_sell",
+            meta={"item_key": item_key},
+        )
         conn.commit()
 
-    new_gold = apply_character_gold_delta(character_id, earned, "shop_sell")
-    # Tag the most recent shop_sell log row with item_key for anti-farm tracking
-    try:
-        with _conn() as _c:
-            _c.execute(
-                """UPDATE character_gold_log SET meta_json = ?
-                   WHERE character_id = ? AND source = 'shop_sell'
-                     AND id = (SELECT MAX(id) FROM character_gold_log
-                               WHERE character_id = ? AND source = 'shop_sell')""",
-                (json.dumps({"item_key": item_key}), int(character_id), int(character_id)),
-            )
-            _c.commit()
-    except Exception:
-        pass
     return {
         "gold_gp": int(new_gold),
         "earned_gp": int(earned),

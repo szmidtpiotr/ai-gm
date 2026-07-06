@@ -32,7 +32,7 @@ from app.services.world_service import (
 
 DB_PATH = "/data/ai_gm.db"
 
-router = APIRouter(prefix="/api/admin/world", tags=["admin-world-review"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/api/admin/world", tags=["admin-world-review"])  # auth: warstwa /api/admin (#1187)
 
 
 def _get_db() -> sqlite3.Connection:

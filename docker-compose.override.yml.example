@@ -1,0 +1,17 @@
+# Local live-reload override (#1179).
+# RENAMED from docker-compose.override.yml → .example on purpose:
+# `docker compose up` (without -f) AUTO-MERGES docker-compose.override.yml into
+# the BASE docker-compose.yml (= PROD). That silently mounted host ./backend and
+# forced --reload onto whatever stack you booted, PROD included. Dangerous.
+#
+# To use locally: `cp docker-compose.override.yml.example docker-compose.override.yml`
+# and run plain `docker compose up` in a dev checkout ONLY. Never leave the active
+# override.yml in a PROD checkout. DEV normally uses `-f docker-compose.dev.yml`.
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"

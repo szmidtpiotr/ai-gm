@@ -14,6 +14,8 @@ import random
 import structlog
 from typing import Any
 
+from app.core.mechanics import proficiency_bonus
+
 logger = structlog.get_logger()
 
 
@@ -49,7 +51,8 @@ def parse_dice(dice_str: str) -> int:
 
 
 def stat_modifier(stat: int) -> int:
-    return (int(stat) - 10) // 2
+    from app.core.mechanics import stat_modifier as _core
+    return _core(stat)
 
 
 # ── Main resolver ──────────────────────────────────────────────────────────
@@ -114,7 +117,7 @@ def _resolve_attack(params: dict, ctx: dict) -> dict:
 
     # Combat skill rank
     combat_rank = int(skills.get("melee_attack", skills.get("combat", 0)) or 0)
-    proficiency = 2 if combat_rank >= 3 else 0
+    proficiency = proficiency_bonus(combat_rank)
 
     roll = roll_d20()
     total_atk = roll + stat_mod + combat_rank + proficiency
@@ -183,7 +186,7 @@ def _resolve_skill(params: dict, ctx: dict) -> dict:
     stat_val = int(stats.get(governing_stat, 10))
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
 
     roll = roll_d20()
     total = roll + skill_rank + stat_mod + proficiency
@@ -347,7 +350,7 @@ def _resolve_search(params: dict, ctx: dict) -> dict:
     int_mod = stat_modifier(int(stats.get("INT", 10)))
     skills = sheet.get("skills") or {}
     inv_rank = int(skills.get("investigation", 0))
-    proficiency = 2 if inv_rank >= 3 else 0
+    proficiency = proficiency_bonus(inv_rank)
 
     roll = roll_d20()
     total = roll + int_mod + inv_rank + proficiency

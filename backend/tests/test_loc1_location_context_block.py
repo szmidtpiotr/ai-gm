@@ -58,12 +58,20 @@ def test_build_location_context_block_returns_block(conn: sqlite3.Connection) ->
     assert "village" in block and "Karczma" in block
 
 
-def test_build_location_context_block_none_without_current(conn: sqlite3.Connection) -> None:
+def test_build_location_context_block_wilderness_without_current(conn: sqlite3.Connection) -> None:
+    # #1245 (R5, wariant A): a session with no anchored location no longer returns None
+    # (which let the block vanish silently while === ŚWIAT === still rendered). It now
+    # emits an explicit "wild terrain, no buildings" block so the narrator runs an
+    # outdoor scene instead of inventing a tavern.
     conn.execute(
         "INSERT INTO game_sessions (id, campaign_id, current_location_id) VALUES ('1', 1, NULL)"
     )
     conn.commit()
-    assert build_location_context_block("1", conn) is None
+    block = build_location_context_block("1", conn)
+    assert block is not None
+    assert "[LOCATION CONTEXT]" in block
+    assert "TERENIE DZIKIM" in block
+    assert "wilderness" in block
 
 
 def test_get_session_id_for_campaign(conn: sqlite3.Connection) -> None:

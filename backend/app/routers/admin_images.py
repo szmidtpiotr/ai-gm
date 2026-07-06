@@ -16,7 +16,7 @@ from typing import Any
 
 from app.routers.admin import require_admin_token
 
-router = APIRouter(prefix="/api/admin/images", tags=["admin-images"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(prefix="/api/admin/images", tags=["admin-images"])  # auth: warstwa /api/admin (#1187)
 
 IMAGE_GEN_URL = os.getenv("IMAGE_GEN_URL", "http://192.168.1.170:8765")
 TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))
@@ -132,16 +132,8 @@ async def get_image_gen_status():
         return {"online": False, "url": url, "error": str(ex)}
 
 
-@router.get("/models")
-async def list_models():
-    url = _get_image_gen_url()
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(f"{url}/models")
-            r.raise_for_status()
-            return {"models": r.json()}
-    except Exception as ex:
-        return {"models": [], "error": str(ex)}
+# #1168 — duplicate GET /models removed here; canonical definition (with
+# 503/502 error surfacing) lives further down in this module.
 
 
 class GenerateRequest(BaseModel):

@@ -184,6 +184,10 @@ function filterTableGeneric(input, tableId, nameClass) {
 // ══════════════════════════════════════════════════════════════
 //  Campaign admin commands (_CAMP_CMDS + helpers + _campModalResurrect)
 // ══════════════════════════════════════════════════════════════
+  // #1169 — only commands the backend engine (commands_service.execute_command_logic,
+  // via POST /admin/campaigns/{id}/run-command) actually implements. The legacy
+  // /heal //gold //level //additem //quest… entries had NO backend handler anywhere
+  // and were removed rather than left as dead autocomplete.
   const _CAMP_CMDS = [
     { cmd: '/debug set-hp',          hint: 'N',          desc: 'Ustaw HP postaci' },
     { cmd: '/debug dump-state',       hint: '',           desc: 'Pokaż pełny stan' },
@@ -192,19 +196,8 @@ function filterTableGeneric(input, tableId, nameClass) {
     { cmd: '/debug roll',            hint: '[skill]',     desc: 'Rzut kością' },
     { cmd: '/debug reset-cooldowns', hint: '',           desc: 'Resetuj cooldowny' },
     { cmd: '/debug set-state',       hint: 'NARRATIVE|COMBAT', desc: 'Zmień stan sesji' },
-    { cmd: '/heal',                  hint: '[N|max]',    desc: 'Dodaj HP (domyślnie max)' },
-    { cmd: '/sethp',                 hint: 'N',          desc: 'Ustaw HP na N' },
-    { cmd: '/gold',                  hint: 'N',          desc: 'Dodaj N złota' },
-    { cmd: '/setgold',               hint: 'N',          desc: 'Ustaw złoto na N' },
-    { cmd: '/level',                 hint: 'N',          desc: 'Ustaw poziom' },
-    { cmd: '/stat',                  hint: 'STR|DEX|CON|INT|WIS|CHA N', desc: 'Dodaj do statystyki' },
-    { cmd: '/additem',               hint: 'klucz',      desc: 'Dodaj przedmiot' },
-    { cmd: '/removeitem',            hint: 'klucz',      desc: 'Usuń przedmiot' },
-    { cmd: '/clearinv',              hint: '',           desc: 'Wyczyść ekwipunek' },
-    { cmd: '/questadd',              hint: 'klucz',      desc: 'Dodaj quest' },
-    { cmd: '/questfinish',           hint: 'klucz',      desc: 'Zakończ quest' },
-    { cmd: '/combatend',             hint: '',           desc: 'Zakończ walkę' },
-    { cmd: '/show',                  hint: '',           desc: 'Pokaż stan postaci' },
+    { cmd: '/sheet',                 hint: '',           desc: 'Pokaż kartę postaci' },
+    { cmd: '/help',                  hint: '',           desc: 'Lista komend' },
   ];
 
   let _campCmdSuggestIdx = -1;
@@ -358,10 +351,12 @@ function filterTableGeneric(input, tableId, nameClass) {
       const fill = htColor || typeColors[h.hex_type] || typeColors.default;
       const isCurrent = currentHex && h.q === currentHex.q && h.r === currentHex.r;
       const hexRegionColor = regionColorMap[h.region] || null;
-      let stroke = hexRegionColor ? hexRegionColor + '66' : '#333', strokeW = '0.5';
+      let stroke = hexRegionColor ? hexRegionColor + '66' : '#333', strokeW = '0.5', dash = '';
       if (isCurrent) { stroke = '#ff2222'; strokeW = '2.5'; }
       else if (h.discovered) { stroke = hexRegionColor || '#4a8a4a'; strokeW = '1'; }
-      const opacity = (h.discovered || isCurrent) ? '1' : '0.45';
+      // PM7 (#1226): 'known' (route/override) — amber dashed stroke, distinct from discovered.
+      else if (h.known) { stroke = '#c9a54a'; strokeW = '1'; dash = ' stroke-dasharray="2,1.5"'; }
+      const opacity = (h.discovered || isCurrent) ? '1' : (h.known ? '0.7' : '0.45');
       const indicators = [];
       if (isCurrent) {
         // Red pointer triangle pointing down
@@ -370,7 +365,7 @@ function filterTableGeneric(input, tableId, nameClass) {
       } else if (h.encounter_cleared) indicators.push(`<text x="0" y="3" text-anchor="middle" font-size="7" fill="#4a8" opacity="0.9">✓</text>`);
       if (h.campaign_label) indicators.push(`<circle cx="${(HEX_SIZE*0.5).toFixed(1)}" cy="${-(HEX_SIZE*0.55).toFixed(1)}" r="2.5" fill="#8af" opacity="0.85"/>`);
       return `<g data-q="${h.q}" data-r="${h.r}" transform="translate(${tx},${ty})" style="cursor:pointer" opacity="${opacity}">
-        <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>
+        <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"${dash}/>
         ${indicators.join('')}
       </g>`;
     });
@@ -404,6 +399,9 @@ function filterTableGeneric(input, tableId, nameClass) {
           <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)">
             <input type="checkbox" id="hxe-clear" ${hex.encounter_cleared?'checked':''}> Encounter oczyszczony
           </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)" title="PM7 — wymuś status 'znane z opowieści' na mapie gracza (teren widoczny, bez szczegółów lokacji)">
+            <input type="checkbox" id="hxe-known" ${hex.known?'checked':''}> Znane z opowieści (known)
+          </label>
           <div>
             <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Etykieta kampanii</label>
             <input id="hxe-label" type="text" class="form-input" value="${_esc(hex.campaign_label||'')}" placeholder="np. Ruiny Starego Zamku" style="width:100%">
@@ -411,6 +409,10 @@ function filterTableGeneric(input, tableId, nameClass) {
           <div>
             <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Notatki GM</label>
             <textarea id="hxe-notes" class="form-input" rows="2" style="width:100%;resize:vertical">${_esc(hex.campaign_notes||'')}</textarea>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px" title="Skryptowe zdarzenie narracyjne wyzwalane, gdy gracz wejdzie na ten hex (dotyczy tylko tej kampanii)">Zdarzenie narracyjne (encounter)</label>
+            <textarea id="hxe-narr" class="form-input" rows="2" style="width:100%;resize:vertical" placeholder="np. Zza drzew wyłania się ranny posłaniec…">${_esc(hex.narrative_encounter||'')}</textarea>
           </div>
           <button id="hxe-save" class="btn btn-primary" style="margin-top:4px">Zapisz</button>
         </div>
@@ -420,17 +422,34 @@ function filterTableGeneric(input, tableId, nameClass) {
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     m.querySelector('#hxe-save').addEventListener('click', async () => {
       const newType = m.querySelector('#hxe-type').value;
+      const typeChanged = newType !== (hex.hex_type||'');
+      // R9 (#1249): editing hex_type rewrites the SHARED world map for every
+      // campaign — gate it behind an explicit warning with a blast-radius count.
+      if (typeChanged) {
+        let countMsg = '';
+        try {
+          const c = await apiFetch(`/api/admin/world/hexes/${q}/${r}/campaign-count`);
+          countMsg = `\n\nTen hex ma dane w ${c.on_hex} z ${c.total_campaigns} kampanii.`;
+        } catch(_) { /* count is advisory — proceed to warn regardless */ }
+        const ok = confirm(
+          `⚠ Zmiana typu terenu (${hex.hex_type||'—'} → ${newType}) dotknie WSZYSTKIE kampanie — ` +
+          `to edycja globalnej mapy świata, nie tylko tej kampanii.${countMsg}\n\nKontynuować?`
+        );
+        if (!ok) return;
+      }
       const payload = {
         discovered: m.querySelector('#hxe-disc').checked,
         encounter_cleared: m.querySelector('#hxe-clear').checked,
+        known: m.querySelector('#hxe-known').checked,
         campaign_label: m.querySelector('#hxe-label').value.trim() || null,
         campaign_notes: m.querySelector('#hxe-notes').value.trim() || null,
+        narrative_encounter: m.querySelector('#hxe-narr').value.trim() || null,
       };
       try {
         const promises = [
           apiFetch(`/api/admin/campaigns/${campId}/hex-map/${q}/${r}`, {method:'PATCH', body: JSON.stringify(payload)}),
         ];
-        if (newType !== (hex.hex_type||'')) {
+        if (typeChanged) {
           promises.push(apiFetch(`/api/admin/world/hexes/${q}/${r}`, {method:'PATCH', body: JSON.stringify({hex_type: newType})}));
         }
         await Promise.all(promises);

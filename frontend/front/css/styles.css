@@ -7708,7 +7708,44 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   position: relative;
   overflow: hidden;
 }
-.wmap-svg { width: 100%; height: 100%; background: #060406; display: block; }
+/* touch-action:none — the map owns all touch gestures (custom pan/pinch in JS).
+   Without it mobile browsers claim part of each drag as native scroll, so the
+   map only crept a fraction of the finger travel (needed several swipes/hex). */
+.wmap-svg { width: 100%; height: 100%; background: #060406; display: block; touch-action: none; }
+
+/* #1258: guaranteed zoom controls — work regardless of pinch-gesture quirks.
+   Big tap targets, bottom-right over the canvas. */
+.map-zoom-ctrl {
+  position: absolute; right: 10px; bottom: 12px; z-index: 5;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.map-zoom-ctrl button {
+  width: 44px; height: 44px; border-radius: 10px;
+  border: 1px solid rgba(200,168,108,0.5);
+  background: rgba(18,14,10,0.88); color: #e8d9b0;
+  font-size: 22px; line-height: 1; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.map-zoom-ctrl button:active { background: rgba(60,46,28,0.95); transform: scale(0.94); }
+
+/* PM6 (#1225): legenda trzech stanów mgły wojny */
+.wmap-legend {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  padding: 8px 16px;
+  background: rgba(10,8,6,0.9);
+  border-top: 1px solid #2a2012;
+  font-size: 0.68rem; color: #9a8a6a;
+  flex: 0 0 auto;
+}
+.wmap-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.wmap-legend-swatch {
+  width: 13px; height: 13px; border-radius: 2px; display: inline-block;
+}
+.wmap-legend-swatch--disc { background: #4a6a4a; border: 1px solid #1a1612; }
+.wmap-legend-swatch--known { background: #4a6a4a; opacity: 0.4; border: 1px dashed #6a5a34; }
+.wmap-legend-swatch--outline { background: transparent; border: 1px dashed #2a2218; }
 
 /* Travel confirmation */
 .wmap-confirm {

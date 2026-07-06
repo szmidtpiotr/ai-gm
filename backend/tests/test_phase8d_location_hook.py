@@ -234,67 +234,8 @@ def test_hook_creates_pending_location_when_action_create_override_flag():
         conn.close()
 
 
-def test_pending_locations_endpoint_returns_only_unapproved_ai_locations():
-    headers = _admin_headers()
-    conn = _conn()
-    try:
-        conn.execute("DELETE FROM game_locations WHERE key IN ('pending_ai_loc', 'approved_ai_loc')")
-        conn.execute(
-            """
-            INSERT INTO game_locations (key, label, location_type, ai_generated, approved, is_active)
-            VALUES ('pending_ai_loc', 'Pending AI Loc', 'macro', 1, 0, 1)
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO game_locations (key, label, location_type, ai_generated, approved, is_active)
-            VALUES ('approved_ai_loc', 'Approved AI Loc', 'macro', 1, 1, 1)
-            """
-        )
-        conn.commit()
-
-        resp = client.get("/api/admin/locations/pending", headers=headers)
-
-        assert resp.status_code == 200
-        keys = {row["key"] for row in resp.json()["locations"]}
-        assert "pending_ai_loc" in keys
-        assert "approved_ai_loc" not in keys
-    finally:
-        conn.close()
-
-
-def test_approve_location_endpoint_sets_approved():
-    headers = _admin_headers()
-    conn = _conn()
-    try:
-        loc_id = _location(conn, "approve_ai_loc", "Approve AI Loc", approved=0)
-        conn.execute("UPDATE game_locations SET ai_generated = 1 WHERE id = ?", (loc_id,))
-        conn.commit()
-
-        resp = client.post(f"/api/admin/locations/{loc_id}/approve", headers=headers)
-
-        assert resp.status_code == 200
-        row = conn.execute("SELECT approved FROM game_locations WHERE id = ?", (loc_id,)).fetchone()
-        assert row["approved"] == 1
-    finally:
-        conn.close()
-
-
-def test_reject_location_endpoint_sets_inactive():
-    headers = _admin_headers()
-    conn = _conn()
-    try:
-        loc_id = _location(conn, "reject_ai_loc", "Reject AI Loc", approved=0)
-        conn.execute("UPDATE game_locations SET ai_generated = 1 WHERE id = ?", (loc_id,))
-        conn.commit()
-
-        resp = client.post(f"/api/admin/locations/{loc_id}/reject", headers=headers)
-
-        assert resp.status_code == 200
-        row = conn.execute("SELECT is_active FROM game_locations WHERE id = ?", (loc_id,)).fetchone()
-        assert row["is_active"] == 0
-    finally:
-        conn.close()
+# R9 (#1249): removed 3 tests for the dead pending/approve/reject flow
+# (admin_location.py) — superseded by world_review.py (POST /api/admin/world/review/...).
 
 
 def test_location_integrity_log_records_successful_moves():

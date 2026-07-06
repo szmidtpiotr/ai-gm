@@ -54,10 +54,6 @@ function _statExample(key) {
 function _skillExample(key) {
     return (_creatorHelp?.skills || []).find(s => s.key === key)?.example || '';
 }
-function _archetypeExample(key) {
-    return (_creatorHelp?.archetypes || []).find(a => a.key === key)?.example || '';
-}
-
 function _wizardRender() {
     const step = WIZARD_STEPS[wizardStepNum];
     elements.wizardTitle.textContent = step.title;
@@ -448,12 +444,6 @@ const BOND_TYPES   = ['person','place','object','ideal'];
 const WEAKNESS_TYPES = ['fear','flaw','addiction','trauma'];
 const BOND_TYPE_LABELS     = {person:'Osoba',place:'Miejsce',object:'Przedmiot',ideal:'Ideał'};
 const WEAKNESS_TYPE_LABELS = {fear:'Strach',flaw:'Wada',addiction:'Nałóg',trauma:'Trauma'};
-
-function _typeSelect(id, options, labels, current) {
-    return `<select id="${id}" class="wizard-type-select">${
-        options.map(o => `<option value="${o}"${o===current?' selected':''}>${labels[o]||o}</option>`).join('')
-    }</select>`;
-}
 
 function _renderStep4(c) {
     const p = wizardIdentityPreview;

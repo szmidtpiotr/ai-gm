@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This workspace is an **NFS mount** of `192.168.1.61:/home/piotrszmidt`. The local machine is an editor client only.
 
 - **Never** run `docker compose`, `docker build`, `pytest`, dev servers, or rebuilds locally for this project.
-- All runtime commands run via SSH on `claude@192.168.1.61` (DEV) or `192.168.1.63` (PROD).
+- All runtime commands run via SSH on `claude@192.168.1.61` (DEV) or `192.168.1.62` (PROD).
 - Repo path on DEV server: `/home/piotrszmidt/ai-gm`.
 - Verify dev changes at `https://aigm-dev.studio-colorbox.com/`.
 - Default to the DEV stack (`ai-gm-dev-*` containers); never touch PROD containers (`ai-gm-backend-1`, `ai-gm-frontend-1`) without explicit user request.
@@ -15,8 +15,8 @@ This workspace is an **NFS mount** of `192.168.1.61:/home/piotrszmidt`. The loca
 ## Environment Roles & Branch Flow
 
 - **DEV host** `192.168.1.61` — runs `docker-compose.dev.yml` (containers `ai-gm-dev-backend-1`, `ai-gm-dev-frontend-1`, `ai-gm-dev-test-agent-1`). Branch: `develop`. Ports: frontend `:3002`, backend `:8100`, test-agent `:4000`, voice `:8302`.
-- **PROD host** `192.168.1.63` — runs `docker-compose.yml`. Branch: `main`. Ports: frontend `:3001`, backend `:8000`, voice `:8300`. Observability stack lives here.
-- Promotion: finish on DEV → merge `develop` → `main` → SSH to `.63` → run `./scripts/deploy_prod.sh`. Use `./scripts/deploy_dev.sh` on `.61` for DEV.
+- **PROD host** `192.168.1.62` (hostname `prog-ai-gm`) — runs `docker-compose.yml` (containers `ai-gm-backend-1`, `ai-gm-frontend-1`). Branch: `main`. Ports: frontend `:3001`, backend `:8000`, voice `:8300`. Observability stack lives here. (`.63` is dead — do not use.)
+- Promotion: finish on DEV → merge `develop` → `main` → push `main` triggers GH Actions `deploy-production.yml` on the self-hosted runner (`.62`), which runs `./scripts/deploy_prod.sh` automatically. Use `./scripts/deploy_dev.sh` on `.61` for DEV.
 
 ## Common Commands (run on the relevant remote host)
 
@@ -28,7 +28,7 @@ docker compose -f docker-compose.dev.yml up -d --build backend   # rebuild backe
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans  # rebuild everything
 ./scripts/deploy_dev.sh   # pulls develop, rebuilds, healthchecks :8100
 
-# PROD deploy (on .63)
+# PROD deploy (on .62) — normally auto-runs via GH Actions on push to main
 ./scripts/deploy_prod.sh  # pulls main, rebuilds, healthchecks :8000
 
 # Backend tests — NOTE: inside the container tests live at /app/tests/, NOT backend/tests/

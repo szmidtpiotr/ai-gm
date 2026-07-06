@@ -275,11 +275,18 @@ def build_swiat_block(
     conn: sqlite3.Connection,
     session_flags: dict,
     player_message: str = "",
+    current_location_key: str | None = None,
 ) -> str | None:
     """U29 — Builds the === ŚWIAT === block for the LLM narrator.
 
     Returns None when there's no current_hex in session_flags (no hex context).
     Returns the block string otherwise (always contains at minimum hex coordinates).
+
+    #1209 — when `current_location_key` is set, the block leads with an explicit
+    "GRACZ JEST W" line: the scene happens INSIDE that location, hex terrain is
+    demoted to surroundings-after-leaving. Without it the narrator saw only
+    "teren: forest" + a POI list and narrated the forest while the player sat in
+    a tavern (and echoed the word "hex" into the prose).
 
     Token cap: ~400 tokens (~1600 chars). Priority: hex locations > candidates > neighbors.
     """
@@ -300,12 +307,43 @@ def build_swiat_block(
         or _TERRAIN_ATMOSPHERE.get(hex_type, "")
     )
 
+    # #1209 — resolve the location the player is actually inside
+    cur_loc: dict | None = None
+    if current_location_key:
+        cur_row = conn.execute(
+            "SELECT key, label, description, location_subtype FROM game_locations "
+            "WHERE key = ? AND COALESCE(is_active, 1) = 1",
+            (current_location_key,),
+        ).fetchone()
+        if cur_row:
+            cur_loc = dict(cur_row)
+
     lines = ["=== ŚWIAT ===", f"Hex: q={q} r={r} | teren: {hex_type} | {hex_label}"]
-    if hex_atmosphere:
+
+    if cur_loc:
+        subtype = cur_loc.get("location_subtype") or ""
+        loc_head = f"GRACZ JEST W: [{cur_loc['key']}] {cur_loc['label']}"
+        if subtype:
+            loc_head += f" ({subtype})"
+        loc_head += " — scena dzieje się WEWNĄTRZ tej lokacji, NIE w terenie hexa."
+        lines.append(loc_head)
+        desc = (cur_loc.get("description") or "").strip()
+        if desc:
+            lines.append(f"  Opis: {desc[:160]}")
+        npcs = _get_location_npcs(conn, cur_loc["key"])
+        if npcs:
+            npc_parts = [f"{n['npc_key']} [{n['assignment_type']}]" for n in npcs]
+            lines.append(f"  NPC: {', '.join(npc_parts)}")
+        if hex_atmosphere:
+            lines.append(f"Teren wokół (dopiero po wyjściu z lokacji): {hex_atmosphere}")
+    elif hex_atmosphere:
         lines.append(f"Atmosfera terenu: {hex_atmosphere}")
 
     # ── Lokacje na hexie (priorytet 1) ────────────────────────────────────────
-    locations = _get_locations_on_hex(conn, q, r)
+    locations = [
+        loc for loc in _get_locations_on_hex(conn, q, r)
+        if not (cur_loc and loc.get("key") == cur_loc["key"])  # #1209: no self-dup
+    ]
     if locations:
         lines.append("Lokacje na tym hexie:")
         for loc in locations:
@@ -368,6 +406,11 @@ def build_swiat_block(
                     nb_txt += f" → {nb['location_key']}"
                 neighbor_parts.append(nb_txt)
             lines.append("Sąsiedzi: " + " | ".join(neighbor_parts))
+
+    # #1209 — hex/klucze to nawigacja dla silnika, nie słownictwo świata gry
+    lines.append(
+        "W narracji NIE używaj słów technicznych: „hex”, współrzędnych q/r ani kluczy w [nawiasach]."
+    )
 
     result = "\n".join(lines)
 
@@ -446,6 +489,58 @@ def _collect_related_location_ids(
     return ids
 
 
+def _build_wilderness_context_block(
+    session_id: int | str, conn: sqlite3.Connection
+) -> str | None:
+    """#1245 (R5, wariant A): [LOCATION CONTEXT] for a session with no anchored location.
+
+    The party sits on a bare hex (no named place). Emit an explicit "wild terrain, no
+    buildings" block — grounded in the current hex's terrain when known — so the narrator
+    runs an outdoor scene instead of inventing a tavern/room. Never returns None on the
+    normal path (the block must not silently vanish); falls back to a terrain-less notice.
+    """
+    terrain_pl: str | None = None
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE id = ?",
+            (str(session_id),),
+        ).fetchone()
+        cur = json.loads((gs["session_flags"] if gs else None) or "{}").get("current_hex") or {}
+        if cur.get("q") is not None and cur.get("r") is not None:
+            wh = conn.execute(
+                "SELECT hex_type FROM world_hexes "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (int(cur["q"]), int(cur["r"])),
+            ).fetchone()
+            if wh and wh["hex_type"]:
+                tc = conn.execute(
+                    "SELECT label FROM hex_type_config WHERE hex_type = ?",
+                    (wh["hex_type"],),
+                ).fetchone()
+                terrain_pl = (tc["label"] if tc else None) or str(wh["hex_type"])
+    except sqlite3.OperationalError:
+        terrain_pl = None
+    except Exception:  # noqa: BLE001 — context block must never break a turn
+        terrain_pl = None
+
+    terrain_line = (
+        f'current_location: {{ "key": null, "label": null, "type": "wilderness", '
+        f'"teren": {json.dumps(terrain_pl)} }}'
+        if terrain_pl
+        else 'current_location: { "key": null, "label": null, "type": "wilderness" }'
+    )
+    return "\n".join(
+        [
+            "[LOCATION CONTEXT]",
+            terrain_line,
+            "Bohater jest w TERENIE DZIKIM — brak nazwanej lokacji, żadnych zabudowań "
+            "(osady, karczmy, budynku, wnętrza) w zasięgu wzroku. Prowadź scenę PLENEROWĄ "
+            "zgodną z terenem z bloku === ŚWIAT ===; NIE wymyślaj budynków ani pomieszczeń.",
+            "known_locations: (brak — otwarty teren)",
+        ]
+    )
+
+
 def build_location_context_block(session_id: int | str, conn: sqlite3.Connection) -> str | None:
     """
     Blok [LOCATION CONTEXT] jako osobna wiadomość systemowa dla LLM (8D-LOC-1 REV2).
@@ -456,8 +551,13 @@ def build_location_context_block(session_id: int | str, conn: sqlite3.Connection
         "SELECT current_location_id FROM game_sessions WHERE id = ?",
         (str(session_id),),
     ).fetchone()
+    # #1245 (R5, wariant A): a session with NO anchored location is on a wild hex.
+    # Previously this returned None and the [LOCATION CONTEXT] block vanished silently,
+    # while the === ŚWIAT === block still rendered — inconsistent framing that let the
+    # narrator invent buildings. Emit an explicit wilderness block instead so the pin
+    # (open terrain) and the prompt never disagree.
     if not row or not row["current_location_id"]:
-        return None
+        return _build_wilderness_context_block(session_id, conn)
 
     cur_id = int(row["current_location_id"])
     cur = conn.execute(
@@ -465,7 +565,7 @@ def build_location_context_block(session_id: int | str, conn: sqlite3.Connection
         (cur_id,),
     ).fetchone()
     if not cur:
-        return None
+        return _build_wilderness_context_block(session_id, conn)
 
     rel_ids = _collect_related_location_ids(conn, cur_id, _KNOWN_LOCATION_CAP)
     if cur_id not in rel_ids:
@@ -667,21 +767,5 @@ def build_location_context(session_id: int) -> str:
         return ""  # Błąd — brak wstrzyknięcia, gra kontynuuje
 
 
-def inject_into_system_prompt(base_prompt: str, session_id: int) -> str:
-    """
-    Wstrzykuje kontekst lokalizacji na początek system promptu.
-    
-    Args:
-        base_prompt: oryginalny system prompt
-        session_id: ID sesji
-    
-    Returns:
-        System prompt z wstrzykniętym kontekstem
-    """
-    location_context = build_location_context(session_id)
-    
-    if not location_context:
-        return base_prompt
-    
-    # Wstrzyknięcie na początek (przed główną treścią)
-    return location_context + "\n\n" + base_prompt
+# R9 (#1249): inject_into_system_prompt removed — zero callers.
+# The active narrator path uses build_location_context_block (game_engine.py).

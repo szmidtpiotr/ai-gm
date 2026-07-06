@@ -72,13 +72,6 @@ class TeleportCreate(BaseModel):
     is_bidirectional: int = 1
 
 
-class CampaignHexOverlay(BaseModel):
-    campaign_id: int
-    narrative_encounter: Optional[str] = None
-    campaign_label: Optional[str] = None
-    campaign_notes: Optional[str] = None
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/map")
@@ -133,14 +126,19 @@ def get_world_map(
         conn.close()
 
 
-_REGION_META = {
-    "kresy":            {"label": "Kresy",            "status": "live"},
-    "koronne_niziny":   {"label": "Koronne Niziny",   "status": "coming"},
-    "czarnobor":        {"label": "Czarnobór",        "status": "coming"},
-    "siwe_granie":      {"label": "Siwe Granie",      "status": "coming"},
-    "wybrzeze_lez":     {"label": "Wybrzeże Łez",     "status": "coming"},
-    "martwe_pustkowia": {"label": "Martwe Pustkowia", "status": "coming"},
-}
+def _region_file_meta(rkey: str) -> Optional[dict]:
+    """R1 (#1241) — status/label krainy = plik data/regions/region_<key>.json (kanon).
+
+    Zwraca {"label", "status"} z istniejącego pliku lub None gdy pliku brak
+    (nowa kraina). NIGDY nie zwraca hardcode'owanego statusu — snapshot writer
+    przepisuje status zastany w pliku, nie regresuje go."""
+    path = f"/data/regions/region_{rkey}.json"
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return {"label": d.get("label", rkey), "status": d.get("status", "coming")}
 
 
 @router.post("/map/snapshot")
@@ -175,7 +173,17 @@ def snapshot_world_map(
 
         def _write_region(rkey: str, rhexes: list[dict]) -> str:
             stripped = [{k: v for k, v in h.items() if k != "region"} for h in rhexes]
-            meta = _REGION_META.get(rkey, {"label": rkey, "status": "coming"})
+            # Kanon statusu = plik krainy. Nowa kraina (brak pliku) → status z
+            # world_regions (deklaracja), fallback 'coming'. Nigdy nie regresujemy.
+            meta = _region_file_meta(rkey)
+            if meta is None:
+                row = conn.execute(
+                    "SELECT label, status FROM world_regions WHERE key = ?", (rkey,)
+                ).fetchone()
+                meta = {
+                    "label": (row["label"] if row else rkey),
+                    "status": (row["status"] if row else "coming"),
+                }
             data = {
                 "region": rkey, "label": meta["label"], "status": meta["status"],
                 "w": 50, "h": 50,
@@ -475,27 +483,6 @@ def delete_hex(q: int, r: int, authorization: str | None = Header(default=None))
         )
 
         conn.execute("DELETE FROM world_hexes WHERE q = ? AND r = ?", (q, r))
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.post("/hexes/{q}/{r}/overlay")
-def set_campaign_overlay(q: int, r: int, body: CampaignHexOverlay, authorization: str | None = Header(default=None)):
-    """Set campaign-specific overlay on a hex."""
-    _require_admin(authorization)
-    conn = _get_db()
-    try:
-        conn.execute(
-            """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, narrative_encounter, campaign_label, campaign_notes)
-               VALUES (?,?,?,?,?,?)
-               ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET
-                 narrative_encounter = excluded.narrative_encounter,
-                 campaign_label = excluded.campaign_label,
-                 campaign_notes = excluded.campaign_notes""",
-            (body.campaign_id, q, r, body.narrative_encounter, body.campaign_label, body.campaign_notes),
-        )
         conn.commit()
         return {"ok": True}
     finally:
@@ -1017,6 +1004,7 @@ class LocalGenRequest(BaseModel):
     parent_r: int
     seed: int = 0
     radius: int = 3
+    force: bool = False
 
 
 @router.post("/generate-local")
@@ -1028,11 +1016,52 @@ def generate_local(body: LocalGenRequest, authorization: str | None = Header(def
     conn = _get_db()
     try:
         parent = conn.execute(
-            "SELECT id, hex_type FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            "SELECT id, hex_type, region FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
             (body.parent_q, body.parent_r),
         ).fetchone()
         if not parent:
             raise HTTPException(status_code=404, detail="Parent hex not found")
+
+        # R2 #1242: sub-hexes carrying a location_key are a generated settlement
+        # ring (FAZA ML, local_hex_service) — NOT random terrain. Refuse to wipe
+        # them unless the admin confirms with force=true.
+        settlement_hexes = conn.execute(
+            "SELECT id FROM world_hexes WHERE parent_hex_id = ? AND location_key IS NOT NULL",
+            (parent["id"],),
+        ).fetchall()
+        if settlement_hexes and not body.force:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ten hex ma mapę osady ({len(settlement_hexes)} sublokacji) — "
+                    "wygenerowanie zniszczy ją. Potwierdź, aby nadpisać."
+                ),
+            )
+        if settlement_hexes and body.force:
+            # Clear session_flags.local_hex for any game_session whose local_hex
+            # points at a row we're about to DELETE — otherwise the player hangs
+            # on a hex that no longer exists.
+            _doomed_ids = {
+                int(r["id"])
+                for r in conn.execute(
+                    "SELECT id FROM world_hexes WHERE parent_hex_id = ?",
+                    (parent["id"],),
+                ).fetchall()
+            }
+            for _s in conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE session_flags LIKE '%local_hex%'"
+            ).fetchall():
+                try:
+                    _sf = json.loads(_s["session_flags"] or "{}")
+                except Exception:
+                    continue
+                _lh = _sf.get("local_hex")
+                if _lh and _lh.get("hex_id") in _doomed_ids:
+                    _sf.pop("local_hex", None)
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_sf, ensure_ascii=False), _s["id"]),
+                    )
 
         terrain_rows = conn.execute(
             "SELECT hex_type, spawn_weight, encounter_base_chance FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
@@ -1063,9 +1092,9 @@ def generate_local(body: LocalGenRequest, authorization: str | None = Header(def
         for (q, r), hex_type in biome_map.items():
             conn.execute(
                 """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool,
-                          is_active, map_level, parent_hex_id)
-                   VALUES (?, ?, ?, ?, '[]', 1, 1, ?)""",
-                (q, r, hex_type, 0.15, parent["id"]),
+                          is_active, map_level, parent_hex_id, region)
+                   VALUES (?, ?, ?, ?, '[]', 1, 1, ?, ?)""",
+                (q, r, hex_type, 0.15, parent["id"], parent["region"]),
             )
             hexes_created += 1
 
@@ -1214,98 +1243,6 @@ def assign_hex_location(
         conn.close()
 
 
-# ── Player-facing map endpoint ─────────────────────────────────────────────────
-
-@router.get("/player-map/{campaign_id}")
-def get_player_map(campaign_id: int, character_id: int = 0):
-    """
-    Player world map: only discovered hexes + empty outlines for adjacent unvisited.
-    Also returns campaign overlays for discovered hexes.
-    """
-    conn = _get_db()
-    try:
-        # Get discovered hexes for this campaign
-        discovered = {
-            (r["hex_q"], r["hex_r"]): dict(r)
-            for r in conn.execute(
-                "SELECT * FROM campaign_hex_data WHERE campaign_id = ? AND discovered = 1",
-                (campaign_id,),
-            ).fetchall()
-        }
-
-        if not discovered:
-            return {"hexes": [], "teleport_connections": [], "current_hex": None}
-
-        # Get all placed hexes that are discovered
-        disc_coords = list(discovered.keys())
-        placeholders = ",".join(["(?,?)" for _ in disc_coords])
-        flat = [x for pair in disc_coords for x in pair]
-        discovered_hexes = conn.execute(
-            f"SELECT * FROM world_hexes WHERE is_active = 1 AND (q,r) IN ({placeholders})",
-            flat,
-        ).fetchall() if disc_coords else []
-
-        # Build adjacent "empty outline" hexes (known to exist but unvisited)
-        def hex_neighbors(q, r):
-            directions = [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
-            return [(q+dq, r+dr) for dq, dr in directions]
-
-        outline_coords = set()
-        for (q, r) in discovered.keys():
-            for nq, nr in hex_neighbors(q, r):
-                if (nq, nr) not in discovered:
-                    # Check if hex exists
-                    outline_coords.add((nq, nr))
-
-        result_hexes = []
-        for h in discovered_hexes:
-            d = dict(h)
-            d["encounter_pool"] = json.loads(d.get("encounter_pool") or "[]")
-            d["status"] = "discovered"
-            overlay = discovered.get((d["q"], d["r"]), {})
-            if overlay.get("campaign_label"):
-                d["display_label"] = overlay["campaign_label"]
-            result_hexes.append(d)
-
-        # Add outline stubs
-        existing_coords = {(h["q"], h["r"]) for h in result_hexes}
-        for (q, r) in outline_coords:
-            exists = conn.execute(
-                "SELECT id FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
-                (q, r),
-            ).fetchone()
-            if exists and (q, r) not in existing_coords:
-                result_hexes.append({"q": q, "r": r, "status": "outline", "hex_type": None})
-
-        # Teleport connections (only where at least one endpoint is discovered)
-        teleports = conn.execute(
-            "SELECT * FROM hex_teleport_connections WHERE is_active = 1"
-        ).fetchall()
-        visible_teleports = [
-            dict(t) for t in teleports
-            if (t["from_q"], t["from_r"]) in discovered or (t["to_q"], t["to_r"]) in discovered
-        ]
-
-        # #1112: current_hex read from session_flags (authoritative source)
-        # sheet_json.current_hex is a mirror only; session_flags is always up-to-date
-        _gs_row = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        current_hex = None
-        if _gs_row:
-            import json as _json
-            _sf = _json.loads(_gs_row["session_flags"] or "{}")
-            current_hex = _sf.get("current_hex")  # {q, r}
-
-        return {
-            "hexes": result_hexes,
-            "teleport_connections": visible_teleports,
-            "current_hex": current_hex,
-        }
-    finally:
-        conn.close()
-
 
 # ── Chain travel endpoint ─────────────────────────────────────────────────────
 
@@ -1327,47 +1264,17 @@ def hex_chain_travel(campaign_id: int, req: HexTravelReq,
     dodano guard. Gracze podróżują przez /api/campaigns/{id}/hex-travel (turns.py).
     """
     _require_admin(authorization)
-    import json as _json
-    from app.services.hex_travel_service import resolve_chain_travel
+    # #1244 (R4): delegate to the shared travel pipeline so the admin route
+    # produces identical state to the player routes (origin fallback via
+    # resolve_starting_hex, clock, scenes, synthetic turn — same as /travel).
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    conn = _get_db()
+    target = {"hex": {"q": req.destination_q, "r": req.destination_r}}
+    conn = open_conn()
     try:
-        # Get character sheet
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (req.character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _json.loads(char["sheet_json"] or "{}")
-
-        # Get current hex from session_flags
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _json.loads((gs["session_flags"] if gs else None) or "{}")
-        current_hex_dict = flags.get("current_hex")
-
-        if current_hex_dict:
-            from_hex = (int(current_hex_dict["q"]), int(current_hex_dict["r"]))
-        else:
-            # #1115: no position yet — properly place the player via resolve_starting_hex
-            from app.services.hex_travel_service import resolve_starting_hex as _rsh
-            _start = _rsh(campaign_id, req.character_id, None, conn)
-            from_hex = (_start["q"], _start["r"])
-
-        to_hex = (req.destination_q, req.destination_r)
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id,
-            character_id=req.character_id,
-            from_hex=from_hex,
-            to_hex=to_hex,
-            character_sheet=sheet,
-            conn=conn,
-        )
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=req.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()

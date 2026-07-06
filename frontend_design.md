@@ -117,37 +117,88 @@ Zasady:
 
 ---
 
-## 5. (zarezerwowane) — Notatki z Fazy 0
+## 5. Notatki z Fazy 0 — WYBRANY KIERUNEK: „ŻAR"
 
-> Po wygenerowaniu kierunków wklej tu screeny/linki i decyzję, który kierunek wybrany i dlaczego.
+> Zdecydowano 2026-07-05 (Piotr). Makiety: `temp-img/design-concepts/` (koncepty 1-4 + iteracje zar2…zar9, HTML + PNG mobile/desktop).
 
-- Kierunek wybrany: _do uzupełnienia_
-- Powód: _do uzupełnienia_
+- **Kierunek wybrany: ŻAR** — ciepły mrok, narracja jak książka (serif), akcent = tlący się żar. Odrzucone: RAPORT (za zimny), KARTA (jasny, tylko dzień), MGŁA (pierścienie/glass = za cyberpunkowe do fantasy).
+- **Zasada kontrastu (rdzeń kierunku): kod typu treści temperaturą.** Świat/narracja GM = ciepły dymek z tłem. Akcja gracza = karta ember, wyrównana **do prawej** (czat). Mechanika (rzuty/systemowe) = ciepła konwencja (nie zimna stal — poprawka z v2), mono, tabela, mniejsza. Rzut **gracza** = prawo/ember; rzut **wroga** = lewo/krwawy (konwencja GM). Nat 20 = złoty flash karty, Nat 1 = krwawy.
+- **Zaakceptowane ekrany (komplet trzonu):** login · bohaterowie (hub) · kampanie (breadcrumb + Historia) · kreator (5-krokowy stepper) · profil · ekran gry · karta postaci (staty/umiej./czary) · ekwipunek (sylwetka Diablo-overlap + toggle sylwetka/lista) · mapa (hex + panel podróży) · WALKA (baner kompakt jednokolumnowy — strefy=lekkie nagłówki, uczestnicy jedno pod drugim, zwijanie) · reakcja SF10 · sheet akcji/czarów · kość 3D (three.js ZOSTAJE, tylko reskin karty) · koniec+łup · śmierć · zwycięstwo-loch · level-up · dziennik · sklep · lobby MP · podróż-cinematic · drop-celebration · paleta komend · bug-report.
+- **Reguły mobilne (zamrożone):** topbar bez imienia bohatera (zegar+pora stack + tylko główny quest; dzień+miejsce → zakładka Mapa); HP/Mana = 2 cienkie paski nad dolnym paskiem tabów; dolny pasek tabów przewijany poziomo z **przypiętą** „Opowieścią"; panele = zakładki w obrębie gry (nie osobny ekran); combat oszczędza pionową przestrzeń (baner kompakt + zwijanie). Desktop: przełączanie zakładek karty postaci = lewy pionowy rail; panele mogą być stałym prawym railem.
+- **Ikony:** jeden zestaw — **Phosphor** (web font; `ph` / `ph-fill`). Zastępuje emoji (spójność + brak braków glifów). Portret postaci = art/sylwetka (nie emoji, nie w topbarze).
 
 ---
 
-## 6. Design Tokens (uzupełnić po Fazie 0)
+## 6. Design Tokens — ŻAR (ŹRÓDŁO PRAWDY dla Fazy 1)
 
-> Placeholder. Po wyborze kierunku wklej tu finalne tokeny — staną się źródłem prawdy dla Fazy 1.
+> Finalne po iteracjach zar2→zar9. Do Tailwind theme (`tailwind.config` → `theme.extend.colors` + CSS vars w `:root`).
 
+```css
+:root{
+  /* Powierzchnie — hue stały (ciepły), zmienia się tylko jasność */
+  --bg:            #14100c;   /* kanwa / najgłębsze tło */
+  --surface:       #1e1811;   /* topbar, paski, tabbar */
+  --gm-bubble:     #221a12;   /* tło dymka narracji GM */
+  --player-card:   #2a1f14;   /* karta akcji gracza + karta rzutu gracza (ember) */
+  --mech-card:     #20180f;   /* karta mechaniki/rzutu (ciepła, NIE zimna stal) */
+  --inset:         #0d0a07;   /* wnętrza pasków HP/Mana (inset) */
+
+  /* Tekst — 3 poziomy */
+  --text:          #f2e8d8;   /* primary */
+  --text-2:        #c9b99f;   /* secondary */
+  --text-3:        #8f8069;   /* muted / metadane */
+
+  /* Akcent i semantyka */
+  --ember:         #ff7a3d;   /* akcent główny (żar) — CTA, aktywny aktor, gracz */
+  --ember-glow:    #ffb07a;   /* jaśniejszy żar — hover, highlight, em w prozie */
+  --gold:          #e8c15a;   /* inicjatywa, nagłówki mechaniki, krytyk, złoto */
+  --gold-glow:     #ffdd88;   /* zwycięstwo / krytyk hero */
+  --success:       #a8c983;   /* zieleń (leczenie, gotowy) */
+  --mech-ok:       #c8a24a;   /* „sukces" w karcie rzutu (ciepłe złoto, nie zielone) */
+  --danger:        #e8604f;   /* krew / wróg / porażka */
+  --danger-glow:   #ff8a7a;
+  --mana:          #82a7c7;   /* mana / dystans / chłodny akcent info */
+  --rare:          #b58cf0;   /* item rzadki */
+  --epic:          #e8963c;   /* item epicki */
+
+  /* Obrysy — progresja przez opacity, nie solidny hex */
+  --line:          rgba(242,232,216,.12);
+  --line-soft:     rgba(242,232,216,.06);
+  --line-ember:    rgba(255,122,61,.45);
+  --line-mech:     rgba(232,193,90,.26);
+  --line-danger:   rgba(232,96,79,.40);
+
+  /* Typografia */
+  --font-serif:  'Literata', Georgia, serif;    /* proza GM, tytuły, nazwy */
+  --font-ui:     'Inter', system-ui, sans-serif; /* UI, przyciski, etykiety */
+  --font-mono:   'JetBrains Mono', monospace;    /* liczby, rzuty, kody, HP */
+  /* skala: 11 (mikro) · 13 (label) · 15 (body UI) · 16-17 (proza) · 18-27 (tytuły) */
+
+  /* Promienie */
+  --r-sm: 8px;   /* input, mała ikona */
+  --r-md: 12px;  /* przycisk, karta rzutu */
+  --r-lg: 16px;  /* karta, panel */
+  --r-xl: 20px;  /* modal, arkusz */
+  --r-pill: 999px;
+
+  /* Spacing: baza 4px (4/6/8/12/16/20/24) */
+  /* Depth: głównie obrysy + subtelne tło; cienie tylko dla warstw pływających */
+  --shadow-float: 0 8px 32px rgba(0,0,0,.35);
+  --shadow-modal: 0 24px 70px rgba(0,0,0,.6);
+}
 ```
-Kolory:
-  --bg-primary:      (np. #0a0908)
-  --surface:         ?
-  --accent:          (np. #c9a54a — złoto)
-  --success:         ?
-  --danger:          ?
-  --text-primary:    ?
-  --text-muted:      ?
-Typografia:
-  --font-heading:    (np. Cinzel / Playfair)
-  --font-body:       (np. Lora / IM Fell)
-  skala:             12–24px
-Spacing / radius / cienie: ?
-Dymki: GM vs gracz vs system — kolory/wyrównanie
-```
 
-(Wartości referencyjne ze starego UI: bg `#0a0908`, accent złoto `#c9a54a`, fonty Cinzel/Playfair/IM Fell/Lora. Można wziąć jako punkt wyjścia kierunku "Dark Grimoire".)
+**Ikony:** Phosphor (`@phosphor-icons/web`), warianty `ph` (regular) + `ph-fill`. Jeden zestaw w całym UI.
+
+**Konwencja dymków / kart (rdzeń kontrastu):**
+
+| Typ treści | Wyrównanie | Tło | Font | Znak |
+|---|---|---|---|---|
+| Narracja GM | lewo, max 94% | `--gm-bubble` + lewy border ember | serif | nagłówek „MISTRZ GRY · tura N" (ember) |
+| Akcja gracza | **prawo**, max 82% | gradient ember na `--player-card`, prawy border | serif italic | „TWOJA AKCJA ◀" (ember-glow) |
+| Rzut gracza | **prawo** | `--player-card`, obrys ember, mono | mono | Nat 20 → złoty flash |
+| Rzut wroga | **lewo** | `--gm-bubble`, lewy border krwawy, mono | mono | trafienie → `--danger` |
+| Systemowe | pełna szer., wyśrodk. | kreskowany obrys `--line-mech` | mono | złoto, dyskretne |
 
 ---
 
@@ -201,7 +252,7 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 | F-40 | Porzucenie lochu (L13) | próba porzucenia | potwierdzenie + info restore/cooldown | — |
 | F-41 | Wznowienie lochu (L13) | niedokończony loch | "Kontynuuj" / "Porzuć" | — |
 | F-42 | Boss lochu (L13) | boss pokonany | "Wyjdź z łupem" / "Idź głębiej" | — |
-| F-43 | Mapa świata (panel) | ikona mapy / podróż | SVG hex mapa + potwierdzenie podróży. #1106: nagłówek panelu pokazuje pełną nazwę aktualnego hexa (`_wmUpdateTitle`, aktualizacja przy open/travel); etykieta aktualnego hexa renderowana zawsze (bez progu zoomu, bez slice(0,14)), większy font + halo dla kontrastu; pozostałe hexy: slice 14→20+"…" | — |
+| F-43 | Mapa świata (panel) | ikona mapy / podróż | SVG hex mapa + potwierdzenie podróży. #1106: nagłówek panelu pokazuje pełną nazwę aktualnego hexa (`_wmUpdateTitle`, aktualizacja przy open/travel); etykieta aktualnego hexa renderowana zawsze (bez progu zoomu, bez slice(0,14)), większy font + halo dla kontrastu; pozostałe hexy: slice 14→20+"…". #1258: dotyk na mobile — jeden palec przesuwa, dwa palce zoomują (pinch); wspólny helper `_attachMapTouch(_wmap, _wmRender)` (parytet z myszą/kółkiem); `stopPropagation` na geście, by nie odpalać swipe-to-close panelu. Ten sam helper podpięty do mapy lokalnej (F-ML). #1258b: `touch-action:none` na `.wmap-svg` (przeglądarka nie kradła połowy gestu → pan 1:1 z palcem); min zoom obniżony do `_wmap.minZoom=0.12` (widać całą krainę), mapa lokalna `_lmap.minZoom=0.5` | — |
 | F-44 | Paleta komend | Ctrl+/ / ikona | search, lista komend, nawigacja | — |
 | F-45 | Zaproszenie | przycisk invite | email + wiadomość, submit | — |
 | F-46 | Zgłoszenie buga | FAB (tylko tester) | typ, obserwacja/reprodukcja, submit | — |
@@ -315,6 +366,43 @@ Dymki: GM vs gracz vs system — kolory/wyrównanie
 
 ---
 
+---
+
+## 11. Mapa nawigacji (flow ekranów) — DO WDROŻENIA w osobnym milestone
+
+> Ustalone 2026-07-05 przy redesignie ŻAR. Analiza realnego `app.js`. **Nie wdrażać teraz** — osobny milestone po finalnych ustaleniach wyglądu. Tu = uzgodniony cel.
+
+### Stan obecny (14 ekranów, `showScreen()` `app.js:406`, mapa `app.js:46-61`)
+
+Ścieżka login→gra dla wracającego gracza = **3 kliki** (bohater → kampania → wejście). Auto-restore po F5 (`tryRestoreSession` `app.js:1745`) wchodzi wprost do gry. Deep-link `?campaign=` → prosto do gry; `?join=` → kampanie.
+
+### Problemy (potwierdzone w kodzie)
+
+1. **Dwa niespójne „wyjścia z gry".** `home-btn`/avatar (`app.js:1266`) → **heroes** (pomija kampanie). Powrót do listy kampanii schowany: ☰ → Ustawienia → `go-to-campaigns-btn` (`index.html:1420`, `game.js:5437`).
+2. **Powrót do innej kampanii tego samego bohatera = 4 kliki** (home→heroes→bohater→campaigns→kampania).
+3. **Wymuszony ekran „kampanie" nawet przy 1 aktywnej** (`selectHero` „zawsze pokazuje wybór" `heroes.js:215`), choć restore umie wejść wprost.
+4. **`?join=` wylogowany → register, nie login** (`auth.js:394`) — zaproszony ze starym kontem ląduje na rejestracji.
+5. Onboarding bez „pomiń" (drobiazg, jednorazowy cinematik).
+
+### Cel — nawigacja hierarchiczna + jeden spójny „wstecz"
+
+```
+Login ──► [Bohaterowie] ──► [Kampanie bohatera] ──► Gra
+              ▲  (hub)            ▲                    │
+              └───────────────────┴──── ☰ menu ───────┘
+                     jeden przycisk „Wyjdź z gry"
+```
+
+- **Jeden przycisk wyjścia z gry** → zawsze do **listy kampanii bieżącego bohatera** (nie heroes). Stamtąd „← Bohaterowie" 1 klik. Naprawia #1, #2 (powrót do innej kampanii = 2 kliki).
+- **Auto-wejście gdy bohater ma dokładnie 1 aktywną kampanię** (jak restore); lista tylko przy ≥2. Naprawia #3.
+- **`?join=` wylogowany → login** z notką „masz konto? zaloguj / [nowy gracz — rejestracja]". Naprawia #4.
+- **Breadcrumb w topbarze poza grą**: `Bohaterowie › Wiga › Kampania`, człony klikalne — znosi zgadywanie „gdzie jestem".
+- **Panele w grze (postać/ekwipunek/mapa/dziennik) = zakładki w obrębie gry**, nie osobny `showScreen`. Panel nakłada się na czat, swipe/„wstecz" zamyka do Opowieści — zero utraty kontekstu gry.
+
+---
+
 _Koniec dokumentu. Aktualizuj sekcję 7 przy każdej nowej funkcjonalności frontendu gracza._
 | F-79 | Kronika bohatera | 📖 Kronika na karcie bohatera (#1098) | Modal: LEGENDA (legend_digest) + lista rozdziałów (chapter_summary / outcome / XP / tury) + sekcja blizn porzuceń (abandonment_note) | heroes.js , endpoint GET /characters/{id}/chronicle |
 | F-80 | Przyciski po przerwaniu podróży (PT12) | podróż przerwana (`travel_plan.interrupt_reason` set, brak walki) → composer pokazuje 3 przyciski quick-action: 🧭 Kontynuuj podróż / 😴 Odpocznij / 🔥 Rozbij obóz (#1122) | Klik = akcja mechaniczna (omija loterię LLM): Kontynuuj → `POST /campaigns/{id}/travel-resume` (`handleTravelResume`, resume `travel_plan`; dusk→night_march, forced_camp→disabled „Padłeś ze zmęczenia"); Odpocznij → REST:long; Rozbij obóz → BUILD_CAMP. Przyciski znikają po decyzji (serwer zwraca świeże `suggested_actions`). Proza gracza dalej działa równolegle. Render: `_build_travel_interrupt_actions` (backend suggested_actions) + `sendStructuredAction` (game.js) | #1122 |
+| F-81 | Trójstanowa mgła wojny mapy świata (PM6) | render mapy świata (`_wmRender`, app.js) — trzeci stan `known` obok `discovered`/`outline` | Hex `status:"known"` (backend FOW PM1 #1220) = przygaszony fill (kolor terenu × opacity 0.4) + wyblakła ikona + kropkowany bursztynowy obrys + label tylko dla landmarków. Wyraźnie różny od `discovered` (pełny fill) i `outline` (przezroczysty). Klik = cel podróży bez szczegółów lokacji (info „teren — znane z opowieści"). Legenda 3 stanów pod kanwą (`#wmap-legend`). Zasięg bąbla „known" globalnie regulowany w admin→Mapa→Generuj świat (PM7 #1226, `knowledge_bubble_radius`). Render: `_wmRender`/`_wmOnHexClick` (app.js), CSS `.wmap-legend*` | #1225 |
+| F-82 | Drogi/trakty jako ciąg na mapie świata (PM5) | render mapy świata (`_wmRender`, app.js) — road-hexy known/discovered | Hexy `hex_type:"road"` (gazetteer known od startu w regionie pochodzenia, backend FOW PM1/PM2) rysowane jako **ciągły trakt**: dla każdego road-hexa pół-segment linii do środka wspólnej krawędzi z każdym sąsiadem-drogą (`_AXNB`, 6 kierunków axial) — pół-segmenty stykają się → widoczna, nieprzerwana droga. Kolor z `hex_type_config.map_color` (`#c8a86c`); `discovered` pełny (opacity 0.9), `known` przygaszony (0.5). Ikona 🛤️ na road-hexach wygaszona (ciągłość czytamy z linii). Render: blok „road network" w `_wmRender` (app.js) po pętli hexów, przed teleportami | #1224 |

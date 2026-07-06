@@ -43,6 +43,7 @@ from app.services.client_ui_config import (
     is_slash_command_enabled,
     slash_registry_key_for_dispatch,
 )
+from app.services import turn_lock
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.services.location_config_service import get_bool_flag
@@ -143,9 +144,6 @@ def _maybe_clear_surprise_on_location_change(
     except Exception:
         _prev_had_enemies = False
 
-    if _prev_had_enemies:
-        return
-
     try:
         _gsf_lc = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
@@ -153,14 +151,91 @@ def _maybe_clear_surprise_on_location_change(
         ).fetchone()
         if _gsf_lc:
             _sf_lc = json.loads(_gsf_lc["session_flags"] or "{}")
-            if "pending_zaskoczony" in _sf_lc:
-                _sf_lc.pop("pending_zaskoczony")
+            _changed_lc = False
+            # #1054 (część 2): zastraszenie jest per-scena — zmiana lokacji zawsze je kasuje.
+            if "intimidated_enemies" in _sf_lc:
+                _sf_lc.pop("intimidated_enemies")
+                _changed_lc = True
+            if not _prev_had_enemies:
+                for _k_lc in ("pending_zaskoczony", "pending_zaskoczony_quality"):
+                    if _k_lc in _sf_lc:
+                        _sf_lc.pop(_k_lc)
+                        _changed_lc = True
+            if _changed_lc:
                 conn.execute(
                     "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
                     (json.dumps(_sf_lc, ensure_ascii=False), campaign_id),
                 )
     except Exception:
         pass
+
+
+# #1054 (część 2): trwałość zastraszenia + skalowanie bonusu przewagi.
+# Wartości STARTOWE (Numbers Policy) — do tuningu po testach na DEV.
+INTIMIDATION_TTL_TURNS = 6
+GATE_ADVANTAGE_BONUS = 2
+GATE_ADVANTAGE_BONUS_CRIT = 4
+
+
+def _gate_advantage_bonus(session_flags: dict | None) -> int:
+    """#1054: bonus przewagi dla gate'owego Zastraszania wg jakości Skradania.
+
+    Kryt Skradania (sztylet na gardle) musi znaczyć więcej niż sukces na styk."""
+    _q = str((session_flags or {}).get("pending_zaskoczony_quality") or "").lower()
+    return GATE_ADVANTAGE_BONUS_CRIT if "critical" in _q else GATE_ADVANTAGE_BONUS
+
+
+def _apply_intimidation_persistence(
+    conn: "sqlite3.Connection",
+    campaign_id: int,
+    session_flags: dict,
+    pending: dict,
+    result: dict,
+) -> dict | None:
+    """#1054 (część 2): sukces Zastraszania zostawia trwały stan na wrogach sceny.
+
+    Bez tego wygrany test społeczny jest fire-and-forget — narrator w kolejnej
+    turze neguje wynik (sandbox 8888911: bandyta odmawia oddania broni mimo
+    sztyletu na gardle i wygranego testu). Stan wygasa po INTIMIDATION_TTL_TURNS
+    turach lub przy zmianie lokacji (_maybe_clear_surprise_on_location_change).
+    Konsumpcja: game_engine._inject_intimidated_context wiąże narratora regułą.
+    """
+    if str(pending.get("skill_key", "")).lower() != "intimidation":
+        return None
+    if not result.get("success") or result.get("nat1"):
+        return None
+    _targets: list[str] = []
+    try:
+        _se_row = conn.execute(
+            "SELECT scene_enemies FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        for _e in json.loads((_se_row["scene_enemies"] if _se_row else None) or "[]"):
+            if isinstance(_e, dict):
+                _t = str(_e.get("key") or _e.get("name") or "").strip()
+            else:
+                _t = str(_e).strip()
+            if _t:
+                _targets.append(_t)
+    except Exception:
+        _targets = []
+    try:
+        _tn = int(conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0) FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0] or 0)
+    except Exception:
+        _tn = 0
+    entry = {
+        "targets": _targets,
+        "set_turn": _tn,
+        "expires_at_turn": _tn + INTIMIDATION_TTL_TURNS,
+        "outcome": str(result.get("outcome") or ""),
+    }
+    session_flags["intimidated_enemies"] = entry
+    logger.info("intimidation_persistence_set", campaign_id=campaign_id,
+                targets=_targets, expires_at_turn=entry["expires_at_turn"])
+    return entry
 
 
 # K2 fix helpers ──────────────────────────────────────────────────────────────
@@ -711,6 +786,131 @@ def _inject_location_blocked(assistant_response: str, reason: str) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
+def _run_narrative_travel(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    location_key: str,
+    target_label: str | None,
+    clean_response: str,
+) -> str:
+    """#1245 (R5, wariant A): a narrative move to a location whose pin sits >1 hex
+    away is a REAL journey, not a teleport.
+
+    The old guard (#1043) changed ``current_location_id`` to the destination but froze
+    the map pin — narrator said "you are at the mill" while the pin stayed put. Here we
+    run the unified travel engine (``execute_travel``, R4 #1244): the in-game clock
+    advances, encounters can interrupt the road, the pin advances WITH the hero, and the
+    destination scene loads only on arrival. The GM's arrival-claiming narrative for THIS
+    turn is replaced with a departure/outcome line so the pin and the prose can never
+    diverge, and ``location_intent`` is nulled so the normal apply-path is skipped.
+    """
+    from app.services.hex_travel_service import execute_travel, TravelError
+
+    # Hero-First: one active hero per campaign; fall back to any attached hero.
+    char_row = conn.execute(
+        "SELECT id FROM characters WHERE campaign_id = ? "
+        "ORDER BY (status = 'active') DESC, id LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not char_row:
+        logger.warning(
+            "narrative_travel_no_character",
+            campaign_id=campaign_id,
+            location_key=location_key,
+        )
+        return _inject_location_blocked(clean_response, "brak bohatera do podróży")
+
+    # #1256 (PM4 parity): the intent classifier can route a travel phrase
+    # ("udaję się do X", "chcę dojść do X") down THIS narrative path, which
+    # historically skipped the deterministic direct/road offer that lives on
+    # execute_directional_travel → _pm4_maybe_prompt. Re-run that offer here so
+    # the "prosto przez las czy traktem?" question fires regardless of how the
+    # turn was classified. When it fires we DO NOT travel this turn: the pending
+    # choice is stashed in session_flags (the pre-LLM handler in
+    # execute_directional_travel picks up the player's "idę traktem" answer next
+    # turn) and the narrative is replaced with the player-facing question.
+    try:
+        from app.services.turn_pipeline import _pm4_maybe_prompt
+        from app.services.hex_travel_service import analyze_route
+        _gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        _flags = json.loads((_gs["session_flags"] if _gs else None) or "{}")
+        _cur = _flags.get("current_hex") or {}
+        _dst = conn.execute(
+            "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+            (location_key,),
+        ).fetchone()
+        if _cur.get("q") is not None and _dst is not None:
+            _from = (int(_cur["q"]), int(_cur["r"]))
+            _to = (int(_dst["q"]), int(_dst["r"]))
+            _label = target_label or location_key
+            if _pm4_maybe_prompt(conn, campaign_id, _from, _to, _label, _flags):
+                _terrain = analyze_route(_from, _to, conn).get("terrain_label", "dzicz")
+                try:
+                    _data_q = json.loads(clean_response)
+                except Exception:
+                    _data_q = {}
+                _data_q["narrative"] = (
+                    f"Do „{_label}” można ruszyć prosto przez {_terrain} — szybciej, "
+                    "ale groźniej — albo trzymać się traktu: dłużej, lecz bezpieczniej. "
+                    "Którą drogę wybierasz?"
+                )
+                _data_q["location_intent"] = None
+                logger.info(
+                    "narrative_travel_pm4_prompted",
+                    campaign_id=campaign_id, location_key=location_key,
+                    from_hex=_from, to_hex=_to,
+                )
+                return json.dumps(_data_q, ensure_ascii=False)
+    except Exception as _pm4_err:  # never break a turn over the offer
+        logger.warning("narrative_travel_pm4_error", error=str(_pm4_err), campaign_id=campaign_id)
+
+    try:
+        result = execute_travel(
+            conn, campaign_id, {"location_key": location_key}, actor=int(char_row["id"])
+        )
+    except TravelError as exc:
+        logger.warning(
+            "narrative_travel_failed",
+            campaign_id=campaign_id,
+            location_key=location_key,
+            code=exc.code,
+        )
+        # location not placed / no target → soft-block, never desync the pin.
+        return _inject_location_blocked(clean_response, exc.message)
+
+    label = target_label or location_key
+    hours = result.get("total_hours") or 0
+    enc = result.get("encounter")
+    try:
+        data = json.loads(clean_response)
+    except Exception:
+        data = {}
+
+    if enc:
+        narr = (
+            f"Wyruszasz w drogę ku „{label}”. Po około {hours} h marszu droga zostaje "
+            "przerwana — nie docierasz jeszcze do celu i zatrzymujesz się w otwartym terenie."
+        )
+    else:
+        arrived_place = (result.get("hex_data") or {}).get("label") or label
+        narr = f"Wyruszasz w drogę i po około {hours} h docierasz do „{arrived_place}”."
+
+    data["narrative"] = narr
+    data["location_intent"] = None
+    logger.info(
+        "narrative_travel_completed",
+        campaign_id=campaign_id,
+        location_key=location_key,
+        arrived_hex=result.get("arrived_hex"),
+        encounter=bool(enc),
+        hours=hours,
+    )
+    return json.dumps(data, ensure_ascii=False)
+
+
 def _inject_pre_llm_unknown_location_denial(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -879,10 +1079,43 @@ def _sync_local_hex_narrative_move(
                 # world-road travel_plan — the hero is off the road, so a later
                 # "kontynuuję" must not resume toward the old world destination.
                 _clear_stale_travel_plan(conn, session_id)
+            else:
+                # R7 #1247 leak #2: sub-location but the hub has <2 sub-locs, so
+                # auto_assign_local_hex returned None (no local map exists). The
+                # party is inside a building yet local_hex may still point at the
+                # previous settlement — clear it so the state stays consistent
+                # with GET /local-map returning has_local_map:false. Also drop any
+                # stale road travel_plan since the hero left the road.
+                _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
+                _clear_stale_travel_plan(conn, session_id)
         else:
+            # R7 #1247 leak #1: narrative move to a macro location must also
+            # abandon a pending world-road travel_plan (the sub branch already
+            # does via _clear_stale_travel_plan) — otherwise the plan lingers and
+            # a later "kontynuuję" resumes toward a destination the hero left.
             _set_pos_lh(conn, campaign_id=campaign_id, clear_local_hex=True)
+            _clear_stale_travel_plan(conn, session_id)
     except Exception as _lh_err:
         logger.warning("local_hex_sync_narrative_failed", error=str(_lh_err))
+
+
+def _synthesize_move_intent_from_text(
+    conn: sqlite3.Connection, campaign_id: int, user_text: str
+):
+    """#1253: build a LocationIntent(move) from a player's declared move.
+
+    Uses the hub-aware placed-location resolver so "idę do kuźni" commits to the
+    real placed building even when the narrator returned no location_intent.
+    Returns a LocationIntent or None (no declared move / no placed target).
+    """
+    from app.services.hex_travel_service import resolve_declared_move_target
+    from app.services.location_intent_parser import LocationIntent
+
+    hit = resolve_declared_move_target(user_text, conn, campaign_id)
+    if not hit:
+        return None
+    key, label = hit
+    return LocationIntent(action="move", target_label=label, target_key=key)
 
 
 def _process_location_intent(
@@ -891,10 +1124,16 @@ def _process_location_intent(
     assistant_response: str,
     *,
     skip_post_process: bool = False,
+    user_text: str = "",
 ) -> str:
     """
     Parse GM location_intent, validate it, update current_location_id, and inject
     [LOCATION_BLOCKED] into JSON narrative when movement is rejected.
+
+    #1253: when the narrator describes a march in prose but emits
+    ``location_intent: null`` ("idę/ruszam do X" with no cardinal direction), we
+    synthesise the move from the player's own declaration so the pin/clock/plan
+    still commit — the move must not depend on the LLM remembering to tag it.
     """
     if skip_post_process:
         return assistant_response
@@ -909,6 +1148,23 @@ def _process_location_intent(
     except Exception as exc:
         logger.error("location_intent_parse_hook_error", error=str(exc), campaign_id=campaign_id)
         return assistant_response
+
+    # #1253: no usable LLM move intent → try to recover one from the player's text.
+    _synth_move = False
+    if (not intent or intent.action not in ("move", "create")) and user_text:
+        try:
+            _syn = _synthesize_move_intent_from_text(conn, campaign_id, user_text)
+        except Exception as _syn_err:
+            logger.warning("synth_move_intent_error", error=str(_syn_err), campaign_id=campaign_id)
+            _syn = None
+        if _syn is not None:
+            intent = _syn
+            _synth_move = True
+            logger.info(
+                "narrative_move_synthesized",
+                campaign_id=campaign_id,
+                target_key=getattr(_syn, "target_key", None),
+            )
 
     if not intent or intent.action not in ("move", "create"):
         return assistant_response
@@ -939,7 +1195,11 @@ def _process_location_intent(
             )
             # Resolve world hex for this location (for the world map pin)
             # #1043: guard — narrator cannot teleport >1 hex via location intent
+            # #1245 (R5): a >1-hex jump to a PLACED location is no longer a
+            # half-block (loc changed, pin frozen → desync); it is promoted to a
+            # real journey via execute_travel. _travel_loc_key carries the target.
             _narrative_new_hex: dict | None = None
+            _travel_loc_key: str | None = None
             try:
                 import json as _jloc
                 _loc_row = conn.execute(
@@ -965,8 +1225,12 @@ def _process_location_intent(
                             from app.services.hex_travel_service import hex_distance as _hd
                             _dist = _hd(int(_old_q), int(_old_r), _new_q, _new_r)
                             if _dist > 1:
-                                logger.warning(
-                                    "narrative_hex_jump_blocked_location_intent",
+                                # #1245 (R5, wariant A): promote to a real journey
+                                # rather than the old half-block. execute_travel moves
+                                # the pin (possibly interrupted by an encounter), so the
+                                # map and the narration can never diverge.
+                                logger.info(
+                                    "narrative_hex_jump_promoted_to_travel",
                                     from_hex=(_old_q, _old_r),
                                     to_hex=(_new_q, _new_r),
                                     distance=_dist,
@@ -974,10 +1238,23 @@ def _process_location_intent(
                                     session_id=session_id,
                                 )
                                 _jump_ok = False
+                                _travel_loc_key = _loc_row["key"]
                         if _jump_ok:
                             _narrative_new_hex = {"q": _new_q, "r": _new_r}
             except Exception as _hex_sync_err:
                 logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
+
+            # #1245 (R5): a >1-hex narrative move to a placed location = real travel.
+            # Return here — the unified engine owns position/clock/scene; the direct
+            # set_position below (which would freeze the pin) is intentionally skipped.
+            if _travel_loc_key is not None:
+                return _run_narrative_travel(
+                    conn,
+                    campaign_id,
+                    _travel_loc_key,
+                    getattr(intent, "target_label", None),
+                    clean_response,
+                )
 
             # #1112: atomic position write via canonical service
             from app.services.location_state_service import set_position as _set_pos
@@ -1005,16 +1282,11 @@ def _process_location_intent(
                         _cur_hex = _sf_for_hex.get("current_hex")
                         if _cur_hex and isinstance(_cur_hex, dict):
                             _nhq, _nhr = int(_cur_hex.get("q", 0)), int(_cur_hex.get("r", 0))
-                            conn.execute(
-                                """UPDATE world_hexes SET location_key = ?
-                                   WHERE q = ? AND r = ? AND is_active = 1
-                                   AND (location_key IS NULL OR location_key = '')""",
-                                (_loc_key_row["key"], _nhq, _nhr),
-                            )
-                            # BUG-186: stamp hex coords onto game_locations so player hex map resolves
-                            conn.execute(
-                                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ? AND world_hex_q IS NULL",
-                                (_nhq, _nhr, _loc_key_row["key"]),
+                            # #1243 (was BUG-186): single writer — claims the hex only
+                            # if unclaimed, and refreshes the derived game_locations cache.
+                            from app.services.hex_location_link import link_location_to_hex
+                            link_location_to_hex(
+                                conn, _loc_key_row["key"], _nhq, _nhr, only_if_empty=True
                             )
                             # Also update hex_type from location biome if hex is still default 'plains'
                             try:
@@ -1361,6 +1633,7 @@ def _maybe_start_combat_from_gm_tag(
                     for _ek in enemy_keys:
                         cs.apply_condition_to_combatant(campaign_id, _ek, "zaskoczony")
                     _sf.pop("pending_zaskoczony", None)
+                    _sf.pop("pending_zaskoczony_quality", None)
                     _pconn.execute(
                         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                         (_pjson.dumps(_sf, ensure_ascii=False), campaign_id),
@@ -2942,15 +3215,11 @@ def _apply_opening_location_intent(
             )
             return
         if loc_q is None and has_hex:
-            conn.execute(
-                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? "
-                "WHERE id = ? AND world_hex_q IS NULL",
-                (int(cur_hex["q"]), int(cur_hex["r"]), int(created["id"])),
-            )
-            conn.execute(
-                "UPDATE world_hexes SET location_key = ? "
-                "WHERE q = ? AND r = ? AND map_level = 0 AND location_key IS NULL",
-                (created["key"], int(cur_hex["q"]), int(cur_hex["r"])),
+            # #1243: single writer — claim the hex if unclaimed + sync derived cache.
+            from app.services.hex_location_link import link_location_to_hex
+            link_location_to_hex(
+                conn, created["key"], int(cur_hex["q"]), int(cur_hex["r"]),
+                only_if_empty=True,
             )
         conn.execute(
             "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
@@ -3981,9 +4250,12 @@ def _ct_roll_and_death_save(conn, campaign_id, payload, character, text, turn_id
             # J2: write history row + queue chapter summary generation
             try:
                 from app.services.chapter_summary_service import close_campaign_with_summary
+                from app.services.economy_service import get_character_gold
                 _ch_sheet = json.loads(character["sheet_json"] or "{}")
                 _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
-                _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                # #1159: złoto trzymane tylko w kolumnie characters.gold_gp — sheet_json
+                # nigdy go nie ma, więc stary odczyt dawał gold_at_end=0.
+                _ch_gold = get_character_gold(conn, int(payload.character_id))
                 _ch_turns = conn.execute(
                     "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
                     (campaign_id,),
@@ -4257,6 +4529,9 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         conn=conn,
         campaign_id=campaign_id,
         assistant_response=assistant_text,
+        # #1253: recover a declared move from the player's text when the narrator
+        # emitted none — but only when the pre-LLM fast-path did NOT already move.
+        user_text="" if _u30_move_executed else (text or ""),
     )
 
     # Hex-enter encounter trigger: fire when current_hex changed
@@ -4504,13 +4779,13 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                 conn, _xp_char_id, campaign_id, _dlg_m.group(1).strip(), _xp_turn
             )
         # XS1: [BEAT_COMPLETE:key] tag in narrative
+        # #1207 — mark first (via_llm_tag validates: objective-typed beats close only
+        # through event hooks), grant XP only for a genuinely newly-closed beat.
         for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
-            _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
-            # #1010: the live tor only granted XP before — actually mark the beat
-            # visited so narrative-only scenes flip and the act can complete (#1009).
             try:
                 from app.services.campaign_plan_runtime import mark_beat_visited as _mbv
-                _mbv(campaign_id, _bm.group(1).strip(), _xp_turn, conn)
+                if _mbv(campaign_id, _bm.group(1).strip(), _xp_turn, conn, via_llm_tag=True):
+                    _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
             except Exception as _bmv_err:
                 logger.warning("beat_complete_mark_error", error=str(_bmv_err))
         # E6 (#421): [ARC_ADVANCE:key] tag — jump the active GM-plan arc
@@ -5011,7 +5286,10 @@ def create_turn(
 ):
     conn = get_db()
     turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn")
+    # #1186: in-flight lock — drugi równoległy turn tej samej kampanii → 409 (nie drugi LLM)
+    _lock_key = None
     try:
+        _lock_key = turn_lock.acquire_or_409(campaign_id)
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
 
@@ -5324,6 +5602,7 @@ def create_turn(
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         conn.close()
+        turn_lock.release(_lock_key)
 
 
 # ---------------------------------------------------------------------------
@@ -5359,7 +5638,14 @@ def create_turn_stream(
         "X-Accel-Buffering": "no",
         "X-Turn-Id": turn_id,
     }
+    # #1186: in-flight lock — drugi równoległy POST /turns/stream tej samej kampanii → 409
+    # (nie drugi call LLM). Ścieżka streamująca przekazuje własność locka generatorowi
+    # (`_lock_handed_off`), który zwalnia go w swoim `finally` PO [DONE]; wszystkie krótkie
+    # ścieżki (helpme/roll/command/gate) oraz błędy zwalniają w outer `finally`.
+    _lock_key = None
+    _lock_handed_off = False
     try:
+        _lock_key = turn_lock.acquire_or_409(campaign_id)
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
         llm_config = get_user_llm_settings_full(character["user_id"])
@@ -5549,9 +5835,11 @@ def create_turn_stream(
                 # J2: write history row + queue chapter summary generation
                 try:
                     from app.services.chapter_summary_service import close_campaign_with_summary
+                    from app.services.economy_service import get_character_gold
                     _ch_sheet = json.loads(character["sheet_json"] or "{}")
                     _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
-                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    # #1159: złoto trzymane tylko w kolumnie characters.gold_gp.
+                    _ch_gold = get_character_gold(conn, int(payload.character_id))
                     _ch_turns = conn.execute(
                         "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
                         (campaign_id,),
@@ -5721,15 +6009,18 @@ def create_turn_stream(
             _gate_sf = json.loads(_gate_sf_row["session_flags"] or "{}") if _gate_sf_row else {}
 
             if _gate_opt == "intimidate":
-                # Deterministyczny test Zastraszania z bonusem +2 za przewagę (bez LLM).
+                # Deterministyczny test Zastraszania z bonusem za przewagę (bez LLM).
+                # #1054: bonus skaluje się wg jakości Skradania (+2 sukces / +4 kryt).
+                _gate_adv = _gate_advantage_bonus(_gate_sf)
                 _gate_sf.pop("pending_zaskoczony", None)
+                _gate_sf.pop("pending_zaskoczony_quality", None)
                 from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
                 import uuid as _guuid
                 _gate_sheet = json.loads(character["sheet_json"] or "{}")
                 _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation")
                 _gate_mod = dict(_gate_mod)
-                _gate_mod["total"] = int(_gate_mod.get("total", 0)) + 2
-                _gate_mod["advantage_bonus"] = 2
+                _gate_mod["total"] = int(_gate_mod.get("total", 0)) + _gate_adv
+                _gate_mod["advantage_bonus"] = _gate_adv
                 _gate_pending = {
                     "skill_test_id": f"st-{_guuid.uuid4().hex[:8]}",
                     "skill_key": "intimidation",
@@ -5760,6 +6051,7 @@ def create_turn_stream(
             else:
                 # withdraw / dialog / unknown — czyść flagę i kontynuuj do LLM z narratywnym tekstem.
                 _gate_sf.pop("pending_zaskoczony", None)
+                _gate_sf.pop("pending_zaskoczony_quality", None)
                 conn.execute(
                     "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
                     (json.dumps(_gate_sf, ensure_ascii=False), campaign_id),
@@ -6267,6 +6559,9 @@ def create_turn_stream(
                     campaign_id=campaign_id_val,
                     assistant_response=full_raw,
                     skip_post_process=location_skip_post_location_hook,
+                    # #1253: skip flag is already True when the pre-LLM fast-path moved,
+                    # so passing the player text only recovers a genuinely-missed move.
+                    user_text=(text or ""),
                 )
             finally:
                 hook_conn.close()
@@ -6642,12 +6937,12 @@ def create_turn_stream(
                             _xp_total2 += grant_first_npc_talk(
                                 save_conn, _xp_char_id2, campaign_id_val, _npc_dialogue_key, _xp_turn2
                             )
+                        # #1207 — mark first (via_llm_tag validates), XP only when newly closed.
                         for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
-                            _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
-                            # #1010: mark the beat visited in the streaming tor too.
                             try:
                                 from app.services.campaign_plan_runtime import mark_beat_visited as _mbv2
-                                _mbv2(campaign_id_val, _bm2.group(1).strip(), _xp_turn2, save_conn)
+                                if _mbv2(campaign_id_val, _bm2.group(1).strip(), _xp_turn2, save_conn, via_llm_tag=True):
+                                    _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
                             except Exception as _bmv2_err:
                                 logger.warning("beat_complete_mark_error_stream", error=str(_bmv2_err))
                         # E6 (#421): [ARC_ADVANCE:key] tag in streaming path
@@ -6995,8 +7290,19 @@ def create_turn_stream(
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
+        # #1186: przekaż własność locka generatorowi — zwalnia w `finally` po [DONE]
+        # (albo na rozłączeniu klienta → GeneratorExit). Lock trzymany przez CAŁY żywy
+        # stream LLM, nie tylko do returnu funkcji.
+        _lock_handed_off = True
+
+        def _locked_token_generator():
+            try:
+                yield from token_generator()
+            finally:
+                turn_lock.release(_lock_key)
+
         return StreamingResponse(
-            token_generator(),
+            _locked_token_generator(),
             media_type="text/event-stream",
             headers=stream_headers,
         )
@@ -7005,6 +7311,10 @@ def create_turn_stream(
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         conn.close()
+        # Ścieżki krótkie (helpme/roll/command/gate) i błędy zwalniają tutaj; ścieżka
+        # streamująca oddała lock generatorowi (`_lock_handed_off`) i tu go NIE zwalnia.
+        if not _lock_handed_off:
+            turn_lock.release(_lock_key)
 
 
 @router.post("/campaigns/{campaign_id}/search")
@@ -7202,11 +7512,19 @@ def resolve_skill_test_endpoint(
                     # #1044: only gate when enemies are actually in the scene
                     if _stealth_should_emit_gate(conn, campaign_id):
                         session_flags["pending_zaskoczony"] = True
+                        # #1054: zapamiętaj jakość Skradania — kryt daje +4 w gate zamiast +2.
+                        session_flags["pending_zaskoczony_quality"] = str(result.get("outcome") or "success").lower()
                         logger.info("stealth_success_pending_zaskoczony", campaign_id=campaign_id)
                     else:
                         logger.info("stealth_success_no_scene_enemies_skip_gate", campaign_id=campaign_id)
             except Exception as _sa_err:
                 logger.warning("stealth_zaskoczony_error", error=str(_sa_err))
+
+        # #1054 (część 2): sukces Zastraszania → trwały stan na wrogach sceny.
+        try:
+            _apply_intimidation_persistence(conn, campaign_id, session_flags, pending, result)
+        except Exception as _int_err:
+            logger.warning("intimidation_persistence_error", error=str(_int_err))
 
         # S6 (#586) — haggling → jednorazowy rabat na najbliższą transakcję w sklepie.
         # Mechanika decyduje (stopień testu → mnożnik), LLM tylko narruje (CZĘŚĆ 10).
@@ -7500,7 +7818,7 @@ def resolve_skill_test_endpoint(
             # Any subsequent skill test (intimidation, etc.) must NOT re-emit the gate —
             # that caused the infinite loop when Zastraszenie/Wycofaj was chosen.
             if _sf_st.get("pending_zaskoczony") and str(pending.get("skill_key", "")).lower() == "stealth":
-                _adv_gate = build_advantage_gate("stealth")
+                _adv_gate = build_advantage_gate("stealth", advantage_bonus=_gate_advantage_bonus(_sf_st))
         except Exception as _gate_err:
             logger.warning("advantage_gate_build_error", error=str(_gate_err))
 
@@ -7732,8 +8050,14 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         all_hexes = {
             (int(r["q"]), int(r["r"])): dict(r)
             for r in conn.execute(
-                "SELECT q, r, hex_type, label, atmosphere, encounter_chance FROM world_hexes WHERE is_active = 1"
+                "SELECT q, r, hex_type, label, atmosphere, encounter_chance, region, location_key, map_level "
+                "FROM world_hexes WHERE is_active = 1"
             ).fetchall()
+        }
+        # PM1 (#1220): overworld-only index for the known-FOW layers.
+        all_hexes_l0 = {
+            coord: row for coord, row in all_hexes.items()
+            if int(row.get("map_level") or 0) == 0
         }
 
         # Current hex + auto-placement (must happen BEFORE building result_hexes)
@@ -7754,17 +8078,89 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 except Exception:
                     pass
 
-        # Campaign-specific discovered hexes
+        # Campaign-specific discovered hexes (+ R6 #1246 persisted 'known' rows)
         discovered_coords = set()
+        persisted_known = set()
         campaign_data = {}
         for row in conn.execute(
-            "SELECT hex_q, hex_r, campaign_label, discovered FROM campaign_hex_data WHERE campaign_id = ?",
+            "SELECT hex_q, hex_r, campaign_label, discovered, known FROM campaign_hex_data WHERE campaign_id = ?",
             (campaign_id,),
         ).fetchall():
             q, r = int(row["hex_q"]), int(row["hex_r"])
             if row["discovered"]:
                 discovered_coords.add((q, r))
+            elif row["known"]:
+                persisted_known.add((q, r))
             campaign_data[(q, r)] = dict(row)
+
+        # PM1 (#1220): compute the 'known' FOW layer (W1 region gazetteer +
+        # W2 rolling bubble + W3 world) and merge R6 persisted route hexes.
+        known_coords: set[tuple[int, int]] = set()
+        label_coords: set[tuple[int, int]] = set()
+        try:
+            from app.services.fow_service import compute_known_coords, DEFAULT_BUBBLE_RADIUS, is_landmark_hex
+            canonical_keys = {
+                row["key"] for row in conn.execute(
+                    "SELECT key FROM game_locations WHERE canonical = 1 AND key IS NOT NULL"
+                ).fetchall()
+            }
+            # Origin region = region of the campaign's starting hex (fixed anchor).
+            # #1255: NEVER re-resolve on a read. resolve_starting_hex(..., None, ...) has a
+            # write side effect (set_position) and, for template-less campaigns, used to
+            # randomize the start — so a bare GET of world-map teleported the pin and grew
+            # 'discovered' every call. Derive origin_region from the existing current_hex;
+            # only resolve as a last resort when the campaign genuinely has no position yet.
+            origin_region = None
+            if current_hex:
+                _crow = all_hexes_l0.get((int(current_hex["q"]), int(current_hex["r"])))
+                if _crow:
+                    origin_region = _crow.get("region")
+            if origin_region is None and not current_hex:
+                try:
+                    from app.services.hex_travel_service import resolve_starting_hex as _rsh
+                    _start = _rsh(campaign_id, character_id, None, conn)
+                    _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
+                    if _srow:
+                        origin_region = _srow.get("region")
+                except Exception:
+                    pass
+            # PM2 (#1221): every region the hero has unlocked (start + entered via
+            # travel). W1 gazetteer is computed for EACH of them, not just origin.
+            known_regions: set[str] = set()
+            if origin_region:
+                known_regions.add(origin_region)
+            if gs:
+                try:
+                    _kr = _j.loads(gs["session_flags"] or "{}").get("known_regions")
+                    if isinstance(_kr, list):
+                        known_regions |= {r for r in _kr if r}
+                except Exception:
+                    pass
+            # W2 radius from setting (PM7 admin-UI writes it), fallback DEFAULT 4.
+            bubble_radius = DEFAULT_BUBBLE_RADIUS
+            try:
+                _br = conn.execute(
+                    "SELECT value FROM game_config_meta WHERE key = 'knowledge_bubble_radius' LIMIT 1"
+                ).fetchone()
+                if _br and _br["value"] is not None:
+                    bubble_radius = int(_br["value"])
+            except Exception:
+                pass
+            known_coords, label_coords = compute_known_coords(
+                all_hexes_l0, discovered_coords, origin_region, canonical_keys, bubble_radius,
+                known_regions=known_regions,
+            )
+            # R6 persisted route hexes → known (label only if landmark).
+            for coord in persisted_known:
+                if coord in discovered_coords:
+                    continue
+                known_coords.add(coord)
+                _prow = all_hexes_l0.get(coord)
+                if _prow and is_landmark_hex(_prow, canonical_keys):
+                    label_coords.add(coord)
+        except Exception as _fow_err:
+            logger.warning("fow_known_compute_error", error=str(_fow_err))
+            known_coords, label_coords = set(), set()
 
         # Build result: discovered hexes + adjacent outlines
         result_hexes = []
@@ -7780,11 +8176,26 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "status": "discovered",
             }
             result_hexes.append(h)
-            # Build adjacent unvisited outlines
+            # Build adjacent unvisited outlines (known hexes render as 'known', not outline)
             for dq, dr in _DIRS:
                 nb = (coord[0]+dq, coord[1]+dr)
-                if nb not in discovered_coords and nb in all_hexes:
+                if nb not in discovered_coords and nb not in known_coords and nb in all_hexes:
                     outline_coords.add(nb)
+
+        # PM1 (#1220): emit 'known' hexes — terrain visible, label only for
+        # landmarks/canonical, NEVER location_key or game_locations data.
+        for coord in known_coords:
+            hdata = all_hexes_l0.get(coord, {})
+            cd = campaign_data.get(coord, {})
+            _label = None
+            if coord in label_coords:
+                _label = cd.get("campaign_label") or hdata.get("label")
+            result_hexes.append({
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": _label,
+                "status": "known",
+            })
 
         # Also expose all 6 neighbors of current hex so the player always sees
         # which directions they can travel from where they stand.
@@ -7795,7 +8206,7 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             ch = (int(current_hex["q"]), int(current_hex["r"]))
             for dq, dr in _DIRS:
                 nb = (ch[0]+dq, ch[1]+dr)
-                if nb not in discovered_coords:
+                if nb not in discovered_coords and nb not in known_coords:
                     if nb in all_hexes:
                         outline_coords.add(nb)
                     else:
@@ -7849,123 +8260,28 @@ class TravelPayload(BaseModel):
 
 @router.post("/campaigns/{campaign_id}/travel")
 def player_travel(campaign_id: int, payload: TravelPayload):
-    """U30: Unified travel endpoint — accepts target_hex OR target_location_key."""
-    import json as _j, sqlite3 as _sq
-    from app.services.hex_travel_service import resolve_chain_travel, resolve_location_key_to_hex
+    """U30: Unified travel endpoint — accepts target_hex OR target_location_key.
 
-    character_id = payload.character_id
+    #1244 (R4): thin wrapper over the shared `execute_travel` pipeline — all
+    travel logic (origin/destination resolution, chain travel, clock, scenes,
+    synthetic turn) lives in hex_travel_service so every travel route is identical.
+    """
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    DB_PATH = "/data/ai_gm.db"
-    conn = _sq.connect(DB_PATH)
-    conn.row_factory = _sq.Row
+    if payload.target_hex:
+        target = {"hex": {"q": int(payload.target_hex.get("q", 0)),
+                          "r": int(payload.target_hex.get("r", 0))}}
+    elif payload.target_location_key:
+        target = {"location_key": payload.target_location_key}
+    else:
+        raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
+
+    conn = open_conn()
     try:
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _j.loads(char["sheet_json"] or "{}")
-
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
-        ch = flags.get("current_hex")
-        origin_exists = conn.execute(
-            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
-        ).fetchone()
-
-        # Resolve destination
-        if payload.target_hex:
-            dest_q = int(payload.target_hex.get("q", 0))
-            dest_r = int(payload.target_hex.get("r", 0))
-        elif payload.target_location_key:
-            coords = resolve_location_key_to_hex(payload.target_location_key, conn)
-            if coords is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Location '{payload.target_location_key}' not placed on any hex yet."
-                )
-            dest_q, dest_r = coords
-        else:
-            raise HTTPException(status_code=422, detail="Provide target_hex or target_location_key")
-
-        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0, 0) if origin_exists else (dest_q, dest_r))
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id, character_id=character_id,
-            from_hex=from_hex, to_hex=(dest_q, dest_r),
-            character_sheet=sheet, conn=conn,
-        )
-
-        try:
-            from app.services.clock_service import advance_clock as _advance_clock
-            travel_hours = float(result.get("total_hours") or 0.0)
-            if travel_hours > 0:
-                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
-                conn.commit()
-                result["clock"] = clock_state
-        except Exception as _clk_err:
-            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
-
-        hex_row = conn.execute(
-            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
-            (dest_q, dest_r),
-        ).fetchone()
-        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
-
-        # U31: exit old scene, load new scene if destination hex has a location
-        try:
-            from app.services.world_state_service import enter_location_scene, exit_location_scene
-            exit_location_scene(campaign_id)
-            dest_location_key = result.get("hex_data", {}).get("location_key")
-            if dest_location_key:
-                scene_result = enter_location_scene(campaign_id, dest_location_key)
-                result["scene_loaded"] = scene_result
-        except Exception as _scene_err:
-            logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
-
-        # Record map travel as a narrative turn — without this the LLM conversation
-        # history has no trace of the move and the narrator keeps describing the
-        # previous location/terrain.
-        if result.get("ok"):
-            try:
-                _hd = result.get("hex_data") or {}
-                _arr = result.get("arrived_hex") or {}
-                _terrain = _hd.get("hex_type") or "nieznany"
-                _tcfg = conn.execute(
-                    "SELECT label FROM hex_type_config WHERE hex_type = ?", (_terrain,)
-                ).fetchone()
-                _terrain_pl = (_tcfg["label"] if _tcfg else None) or _terrain
-                _place = _hd.get("label") or ""
-                _hours = result.get("total_hours") or 0
-                _narr = f"Podróżujesz przez świat i docierasz do nowego miejsca. Teren: {_terrain_pl}."
-                if _place:
-                    _narr += f" Miejsce: {_place}."
-                if _hours:
-                    _narr += f" Droga zajęła {_hours} h."
-                _tn_row = conn.execute(
-                    "SELECT COALESCE(MAX(turn_number),0)+1 AS n FROM campaign_turns WHERE campaign_id = ?",
-                    (campaign_id,),
-                ).fetchone()
-                conn.execute(
-                    "INSERT INTO campaign_turns (campaign_id, character_id, user_text, route, assistant_text, turn_number) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (
-                        campaign_id, character_id,
-                        "[Podróż mapą — przemieszczam się na nowy teren]",
-                        "narrative",
-                        _j.dumps({"narrative": _narr}, ensure_ascii=False),
-                        int(_tn_row["n"]),
-                    ),
-                )
-                conn.commit()
-            except Exception as _trec_err:
-                logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
 
@@ -8005,64 +8321,20 @@ def get_campaign_clock(campaign_id: int):
 
 @router.post("/campaigns/{campaign_id}/hex-travel")
 def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
-    """Player-initiated hex chain travel."""
-    import json as _j, sqlite3 as _sq
-    from app.services.hex_travel_service import resolve_chain_travel
+    """Player-initiated hex chain travel.
 
-    character_id = payload.character_id
-    dest_q = payload.destination_q
-    dest_r = payload.destination_r
+    #1244 (R4): alias of /travel — delegates to the shared `execute_travel`
+    pipeline so a hex-travel move now ALSO advances scenes and records a
+    synthetic turn (previously clock-only → narrator was blind to the move).
+    """
+    from app.services.hex_travel_service import execute_travel, open_conn, TravelError
 
-    DB_PATH = "/data/ai_gm.db"
-    conn = _sq.connect(DB_PATH)
-    conn.row_factory = _sq.Row
+    target = {"hex": {"q": payload.destination_q, "r": payload.destination_r}}
+    conn = open_conn()
     try:
-        char = conn.execute(
-            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
-            (character_id, campaign_id),
-        ).fetchone()
-        if not char:
-            raise HTTPException(status_code=404, detail="Character not found")
-        sheet = _j.loads(char["sheet_json"] or "{}")
-
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
-        ch = flags.get("current_hex")
-        origin_exists = conn.execute(
-            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
-        ).fetchone()
-        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0,0) if origin_exists else (dest_q, dest_r))
-
-        result = resolve_chain_travel(
-            campaign_id=campaign_id, character_id=character_id,
-            from_hex=from_hex, to_hex=(dest_q, dest_r),
-            character_sheet=sheet, conn=conn,
-        )
-
-        # T2: Advance the in-game clock by the hours travelled. resolve_chain_travel
-        # already computed total_hours from the path + teleport edges; we just persist
-        # it onto session_flags via the canonical helper.
-        try:
-            from app.services.clock_service import advance_clock as _advance_clock
-            travel_hours = float(result.get("total_hours") or 0.0)
-            if travel_hours > 0:
-                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
-                conn.commit()  # _advance_clock uses caller conn, so we commit here
-                result["clock"] = clock_state  # surface clock display + delta to client
-        except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
-            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
-
-        # E21: flag dungeon hexes so frontend auto-opens dungeon picker.
-        # Check destination (not arrived_hex) — travel may fail but hex is still dungeon.
-        hex_row = conn.execute(
-            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
-            (dest_q, dest_r),
-        ).fetchone()
-        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
-
-        return result
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+    except TravelError as e:
+        _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
+        raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()

@@ -37,8 +37,12 @@ ARCHETYPE_BASE_MANA: dict[str, int] = {
 # ── Core formulas ──────────────────────────────────────────────────────────
 
 def stat_modifier(stat_value: int) -> int:
-    """Standard RPG modifier: (stat - 10) // 2. Integer division toward -inf."""
-    return (int(stat_value) - 10) // 2
+    """Standard RPG modifier: (stat - 10) // 2. Integer division toward -inf.
+
+    Delegates to the single source of truth in ``app.core.mechanics`` (#1181).
+    """
+    from app.core.mechanics import stat_modifier as _core
+    return _core(stat_value)
 
 
 def calculate_hp(archetype: str, con: int, level: int = 1) -> int:

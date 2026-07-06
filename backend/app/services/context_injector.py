@@ -425,7 +425,13 @@ class ContextInjector:
         """
         try:
             from app.services.location_context_injector import build_swiat_block
-            swiat = build_swiat_block(self.conn, session_flags, player_message)
+            # #1209 — the narrator must know the player is INSIDE the anchored
+            # location; without this the block narrated raw hex terrain.
+            _cur_loc_key = self._current_location_key(campaign_id, session_flags) or None
+            swiat = build_swiat_block(
+                self.conn, session_flags, player_message,
+                current_location_key=_cur_loc_key,
+            )
             if swiat:
                 swiat += f"\nPora: {_time_of_day(ingame_hours)}"
                 weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)

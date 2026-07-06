@@ -269,6 +269,35 @@ const _ROW_REGISTRY = {
         card.innerHTML = top5.map(([t,n])=>`<span style="font-size:0.78rem;color:var(--t2)">${_esc(t)}: <strong>${n}</strong></span>`).join(' · ') || '<span style="color:var(--t3);font-size:0.78rem">Brak heksów</span>';
       }
     } catch(_e) {}
+    // PM7 (#1226): load global knowledge-bubble radius into the FOW card.
+    _loadKnowledgeBubble();
+  }
+
+  // ── PM7 (#1226): globalny promień bąbla wiedzy (FOW) ──────────────────────────
+  async function _loadKnowledgeBubble() {
+    const inp = document.getElementById('kbr-radius');
+    if (!inp) return;
+    try {
+      const d = await apiFetch('/api/admin/settings/knowledge-bubble-radius');
+      if (d && d.radius != null) inp.value = d.radius;
+    } catch(_e) {}
+  }
+
+  async function saveKnowledgeBubble() {
+    const inp = document.getElementById('kbr-radius');
+    if (!inp) return;
+    const radius = parseInt(inp.value, 10);
+    if (isNaN(radius) || radius < 0) { _showToast('Podaj poprawny promień (≥0).', 'error'); return; }
+    const btn = document.getElementById('kbr-save-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const d = await apiFetch('/api/admin/settings/knowledge-bubble-radius', {
+        method: 'PUT', body: JSON.stringify({ radius }),
+      });
+      inp.value = d.radius;
+      _showToast(`Zasięg wiedzy = ${d.radius} heksów.`, 'success');
+    } catch(e) { _showToast('Błąd: ' + e.message, 'error'); }
+    finally { if (btn) btn.disabled = false; }
   }
 
 // ── Locations tree + NPC assign ────────────────────────────────────────────────
@@ -657,17 +686,35 @@ const _ROW_REGISTRY = {
     }
   }
 
+  // R2 #1242: POST generate-local; on 409 (hex has a settlement local map) show
+  // a confirm dialog and retry with force=true. Throws {__cancelled:true} if the
+  // admin declines, so callers can stay silent instead of toasting an error.
+  async function _genLocalWithForce(payload) {
+    try {
+      return await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify(payload) });
+    } catch(e) {
+      if (e && e.status === 409) {
+        if (!confirm(`${e.message}\n\nNadpisać mimo to?`)) {
+          throw { __cancelled: true };
+        }
+        return await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({ ...payload, force: true }) });
+      }
+      throw e;
+    }
+  }
+
   async function pendingGenSubmap(q, r, btn) {
     const szSel = document.getElementById(`sub-sz-${q}-${r}`);
     const radius = szSel ? parseInt(szSel.value) : 3;
     btn.disabled = true; btn.textContent = '⏳';
     try {
-      await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q: q, parent_r: r, seed: 0, radius}) });
+      await _genLocalWithForce({parent_q: q, parent_r: r, seed: 0, radius});
       await openSubmapModal(q, r);
       _worldLoaded.delete('review');
       await _loadPendingLocations();
     } catch(e) {
-      _showToast(e.message || 'Błąd generowania podmopy.', 'error');
+      if (e && e.__cancelled) { /* admin declined overwrite */ }
+      else _showToast(e.message || 'Błąd generowania podmopy.', 'error');
       btn.disabled = false; btn.textContent = '🏘 Generuj';
     }
   }
@@ -897,10 +944,13 @@ const _ROW_REGISTRY = {
       const radius = parseInt(overlay.querySelector('#smod-sz')?.value || '3');
       btn.disabled = true; btn.textContent = '⏳';
       try {
-        await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q:q, parent_r:r, seed:Math.floor(Math.random()*99999), radius}) });
+        await _genLocalWithForce({parent_q:q, parent_r:r, seed:Math.floor(Math.random()*99999), radius});
         closeModal();
         await openSubmapModal(q, r);
-      } catch(err) { _showToast(err.message||'Błąd.','error'); btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+      } catch(err) {
+        if (err && err.__cancelled) { btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+        else { _showToast(err.message||'Błąd.','error'); btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+      }
     };
   }
 
@@ -908,7 +958,9 @@ const _ROW_REGISTRY = {
     btn.disabled = true; btn.textContent = '⏳';
     try {
       if (entityType === 'location') {
-        await apiFetch(`/api/locations/${key}`, { method:'PATCH', body: JSON.stringify({ canonical: 1 }) }).catch(()=>{});
+        // #1169 — /api/locations/{key} has no PATCH (405); the partial-update
+        // endpoint that accepts `canonical` is /api/locations/admin/locations/{key}.
+        await apiFetch(`/api/locations/admin/locations/${key}`, { method:'PATCH', body: JSON.stringify({ canonical: 1 }) }).catch(()=>{});
       }
       await apiFetch(`/api/admin/world/review/${entityType}/${key}`, { method:'POST', body: JSON.stringify({ action:'approve' }) });
       _showToast(`Zatwierdzono jako Kanon.`, 'success');
@@ -2449,6 +2501,18 @@ function _sectionHtml() {
             </div>
             <!-- Result -->
             <div id="hexmap-result" style="display:none"></div>
+            <!-- PM7 (#1226): globalny promień bąbla wiedzy (FOW) -->
+            <div class="card" style="padding:16px">
+              <div style="font-weight:600;margin-bottom:6px">Zasięg wiedzy gracza (mgła wojny)</div>
+              <div style="font-size:0.72rem;color:var(--t3);margin-bottom:12px">Promień (w heksach) bąbla „znane z opowieści” wokół pozycji gracza. Większy = gracz zna więcej terenu z wyprzedzenia. Domyślnie 4.</div>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
+                  <input type="number" id="kbr-radius" class="form-input" value="4" min="0" max="20" style="width:90px">
+                </div>
+                <button class="btn btn-primary" id="kbr-save-btn" onclick="saveKnowledgeBubble()">💾 Zapisz zasięg</button>
+              </div>
+            </div>
             <!-- Danger zone -->
             <div class="card" style="padding:16px;border:1px solid var(--red,#dc2626)">
               <div style="font-weight:600;margin-bottom:8px;color:var(--red,#dc2626)">⚠ Strefa niebezpieczna</div>
@@ -2510,6 +2574,7 @@ export async function init(panel) {
   // Expose globals for inline onclick/onchange strings (port 1:1 zachowuje nazwy bare).
   Object.assign(window, {
     filterTableGeneric, filterLocationsType, filterLocationsRegion, openTerrainFormModal, hexmapGenerate,
+    saveKnowledgeBubble,
     hexmapClearWorld, wbCenter, openLocNpcModal, openLocImageModal, reviewEntity,
     approveKanon, openSubmapModal, pendingGenSubmap, saveTerrainForm, terrainPatch,
     mechPatchEdit, _wbApproveLocation, _wbDiscardLocation, _openGenericEjBuilder,

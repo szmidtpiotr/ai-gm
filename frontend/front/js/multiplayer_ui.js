@@ -113,6 +113,10 @@
         const inp = _input();
         if (inp) {
             if (placeholder && inp.placeholder !== placeholder) inp.placeholder = placeholder;
+            // #1173: disable the input element too — Enter bypasses the disabled send
+            // button and would resubmit the round mid-narration. Spectators keep the
+            // input live so they can still type /whisper party-chat commands.
+            inp.disabled = !enabled && !_isSpectator;
         }
         _syncSendBtn();
     }
@@ -528,6 +532,11 @@
             return;
         }
 
+        // #1173: block resubmit while the composer is disabled ("GM tworzy narrację…").
+        // Enter reaches handleSubmit even when the send button is greyed out; without
+        // this guard it resubmits the round and breaks the _pollTimer chain.
+        if (!_sendEnabled) return;
+
         _stopPolling(); // prevent concurrent poll during submit
         inp.value = '';
         _appendUserAction(text); // show immediately as chat bubble
@@ -746,11 +755,6 @@ function setLobbyMaxPlayers(n) {
     document.querySelectorAll('.lf-tile[data-players]').forEach(tile => {
         tile.classList.toggle('lf-tile--on', parseInt(tile.dataset.players) === n);
     });
-}
-
-function setMpTimer(minutes) {
-    const inp = document.getElementById('mp-timer-input');
-    if (inp) { inp.value = minutes; updateMpTimerHint(); }
 }
 
 function updateMpTimerHint() {

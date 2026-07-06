@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.services.actor_stats import parse_stats_json
 from app.services.effect_json_migration import legacy_effect_fields_from_json
 from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
+from app.core.mechanics import proficiency_bonus
 from app.services.event_logger import write_game_event
 from app.services.weapon_rules import (
     load_weapon_row,
@@ -656,7 +657,7 @@ def _should_fire_burst(target: dict[str, Any] | None, *, player_hidden: bool) ->
     return False
 
 
-def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
+def build_advantage_gate(source: str | None, advantage_bonus: int = 2) -> dict[str, Any] | None:
     """D1 (#780): bramka intencji po zdobyciu przewagi pozycyjnej.
 
     Po dowolnej przewadze (sukces Stealth, grapple, wróg ogłuszony/schwytany,
@@ -686,7 +687,8 @@ def build_advantage_gate(source: str | None) -> dict[str, Any] | None:
                 "id": "intimidate",
                 "icon": "💬",
                 "label": "Zastraszenie",
-                "hint": "Wymuś uległość bez zabijania — test Zastraszania z bonusem przewagi +2.",
+                # #1054: bonus skaluje się wg jakości Skradania (+2 sukces / +4 kryt).
+                "hint": f"Wymuś uległość bez zabijania — test Zastraszania z bonusem przewagi +{int(advantage_bonus)}.",
                 # #1000: prefiks __GATE: → backend od razu ustawia pending_skill_test
                 # dla 'intimidation' z bonusem +2 i czyści pending_zaskoczony. Bez LLM.
                 "action": "__GATE:intimidate",
@@ -1142,7 +1144,7 @@ def _try_dodge_reaction(
     # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku).
     p.pop("reaction_declared", None)
     dex_mod = _combatant_stat_modifier(p, sheet=None, stat="DEX")  # kondycje (np. hasted) na combatancie
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     mod_total = int(dex_mod) + skill_rank + proficiency
     d20 = roll_d20()
     from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
@@ -1245,7 +1247,7 @@ def _try_shield_block_reaction(
         return {"reaction": "shield_block", "available": False, "reason": "no_shield",
                 "damage_before": int(dmg), "damage_after": int(dmg)}
     str_mod = _combatant_stat_modifier(p, sheet=None, stat="STR")  # kondycje (np. rage) na combatancie
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     mod_total = int(str_mod) + skill_rank + proficiency
     dc = max(int(attack_roll), 12)
     d20 = roll_d20()
@@ -2666,12 +2668,25 @@ def _resolve_aoe_single_target(
     tgt: dict, enemy: dict,
     damage_die: str, int_mod: int, player_nat20: bool,
     loot_pool_accum: list[dict[str, Any]], out: dict[str, Any],
+    attack_total: int = 0,
 ) -> dict[str, Any]:
     """Rozlicza jeden cel AoE: damage, death, loot, XP, log. Zwraca hit_info."""
     _aoe_detail = roll_dice_detailed(damage_die)
     dmg = max(0, sum(_aoe_detail["rolls"]) + int_mod) if _aoe_detail["rolls"] else max(0, int_mod)
     if player_nat20:
         dmg *= 2
+    # #1160: AoE per-cel przez model obrony #826 — redukcja pancerzem + margin bonus,
+    # jak każda ścieżka single-target (:5954/:7136/:7473). Wcześniej surowy dmg omijał pancerz.
+    _aoe_margin = 0
+    _aoe_armor = 0
+    if dmg > 0:
+        _dm = apply_defense_model(
+            dmg, int(attack_total), int(tgt.get("defense", 0) or 0),
+            ignore_armor=bool(player_nat20),
+        )
+        _aoe_margin = _dm["margin_bonus"]
+        _aoe_armor = _dm["armor_reduction"]
+        dmg = _dm["final"]
     prev_hp = int(tgt.get("hp_current", 0) or 0)
     next_hp = max(0, prev_hp - dmg)
     tgt["hp_current"] = next_hp
@@ -2689,6 +2704,8 @@ def _resolve_aoe_single_target(
         "dead": dead,
         "gold_drop": 0,
         "loot": [],
+        "margin_damage_bonus": _aoe_margin,
+        "armor_reduction": _aoe_armor,
     }
 
     if tgt is enemy:
@@ -2698,6 +2715,10 @@ def _resolve_aoe_single_target(
         out["damage_modifier"] = int_mod
         out["target_hp_remaining"] = next_hp
         out["enemy_dead"] = dead
+        if _aoe_margin:
+            out["margin_damage_bonus"] = _aoe_margin
+        if _aoe_armor:
+            out["armor_reduction"] = _aoe_armor
 
     if dead:
         ek = str(tgt.get("enemy_key") or "")
@@ -2951,6 +2972,7 @@ def _resolve_aoe_spell_in_combat(
             tgt, enemy,
             damage_die, int_mod, player_nat20,
             loot_pool_accum, out,
+            attack_total=attack_total,
         )
         aoe_hits.append(hit_info)
 
@@ -8003,7 +8025,7 @@ def resolve_wrestling(campaign_id: int, target_ref: str | None = None) -> dict[s
             skill_rank = int((sheet.get("skills") or {}).get("wrestling", 0) or 0)
         except (TypeError, ValueError):
             skill_rank = 0
-        proficiency = 2 if skill_rank >= 3 else 0
+        proficiency = proficiency_bonus(skill_rank)
 
         mapping = _load_skill_outcome_mapping(conn, "wrestling")
         stat = str(mapping.get("counter_key") or "STR").upper()

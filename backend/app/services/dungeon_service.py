@@ -412,9 +412,12 @@ def restore_dungeon_checkpoint(campaign_id: int, character_id: int) -> bool:
             thresholds = get_xp_level_thresholds(conn)
             sheet["level"] = max(1, level_from_xp(checkpoint_xp, thresholds))
 
+        # #1181: gold lives ONLY in characters.gold_gp (legacy `gold` column retired).
+        # Fall back to old snapshots that stored the "gold" key before the migration.
+        restored_gold = snap.get("gold_gp", snap.get("gold", 0))
         conn.execute(
-            "UPDATE characters SET sheet_json = ?, gold = ?, gold_gp = ? WHERE id = ?",
-            (json.dumps(sheet, ensure_ascii=False), snap.get("gold", 0), snap.get("gold_gp", 0), character_id),
+            "UPDATE characters SET sheet_json = ?, gold_gp = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), restored_gold, character_id),
         )
 
         inventory = snap.get("inventory") or []

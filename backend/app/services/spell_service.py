@@ -110,6 +110,22 @@ def get_spell(spell_key: str) -> dict | None:
         conn.close()
 
 
+def get_spell_catalog() -> list[dict]:
+    """#1170 — Public catalog of all active spells (for the Scholar level-up modal).
+
+    Returns every learnable spell ordered by tier; each row carries at least
+    ``key``, ``label`` and ``description`` (the fields the level-up UI needs).
+    """
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM game_config_spells WHERE is_active = 1 ORDER BY tier, key"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def get_character_spells(character_id: int) -> list[dict]:
     """Return all spells known by a character with their rank."""
     conn = _get_db()

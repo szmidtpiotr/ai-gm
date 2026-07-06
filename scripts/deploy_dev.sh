@@ -11,6 +11,20 @@ git fetch origin
 git checkout develop
 git pull origin develop
 
+# #1179 — env.test MUST be a file, not a directory. Docker bind-mount
+# (./env.test:/app/env.test) silently creates an empty DIRECTORY on the host
+# if the path is missing → bootstrap_env.py:_load_one_file() skips it
+# (is_file() == False) and AI_TEST_MODE / AI_TEST_STUB_LLM never load.
+# env.test is gitignored, so seed it from env.test.example on every deploy.
+if [ -d env.test ]; then
+  echo "⚠️  env.test is a directory (docker artifact) — replacing with file..."
+  rmdir env.test 2>/dev/null || rm -rf env.test
+fi
+if [ ! -f env.test ]; then
+  echo "🌱 Seeding env.test from env.test.example..."
+  cp env.test.example env.test
+fi
+
 echo "🐳 [2/3] Restart kontenerów dev..."
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
 
@@ -27,7 +41,7 @@ for i in $(seq 1 12); do
   if curl -sf http://localhost:8100/api/healthz > /dev/null; then
     echo "✅ Dev deployment zakończony!"
     echo "🗺  Seed mapy świata (Kresy) — odtworzy z docs/world/world_map_seed.json jeśli world_hexes puste..."
-    python3 scripts/seed_world_map.py || true
+    python3 scripts/seed_world_map.py
     echo "📚 Seed treści gry (#1202) — git seedy -> DB (kanon; wiersze kampanijne nietknięte)..."
     cp data-dev/ai_gm.db "backups/ai_gm_dev_pre_seed_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
     python3 scripts/seed_content.py --apply --db data-dev/ai_gm.db --seeds data/seeds/content || true

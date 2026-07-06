@@ -360,12 +360,19 @@ def get_local_map(campaign_id: int):
         flags = json.loads(session.get("session_flags") or "{}")
         current_local_hex = flags.get("local_hex")
 
+        has_local_map = len(hexes) > 0
+        # R7 #1247 leak #2: when the hub has no local map (<2 sub-locs), never
+        # echo a stale local_hex — it would leave the client thinking the party
+        # is on a hex that doesn't exist. Keep the response internally consistent.
+        if not has_local_map:
+            current_local_hex = None
+
         return {
             "hub_key": hub_key,
             "hub_label": hub_label,
             "hexes": hexes,
             "current_local_hex": current_local_hex,
-            "has_local_map": len(hexes) > 0,
+            "has_local_map": has_local_map,
         }
     finally:
         conn.close()

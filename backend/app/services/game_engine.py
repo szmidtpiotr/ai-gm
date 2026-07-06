@@ -308,12 +308,13 @@ def build_swiat_imperative(
 ) -> str:
     """#750 — Wybiera imperatyw dołączany pod blok === ŚWIAT ===.
 
-    Gdy ``current_location_id`` wskazuje na sub-lokację (``location_type='sub'`` —
-    wnętrze, np. karczma), bohater jest W POMIESZCZENIU na hexie, NIE na otwartym
-    terenie. Twardy imperatyw „bohater PRZEMIEŚCIŁ SIĘ / opisuj teren" błędnie
-    każe LLM porzucić scenę wnętrza i narratować teren hexa (np. las pod karczmą).
-    W tym wypadku ŚWIAT zostaje jako kontekst otoczenia, ale bez nakazu zmiany
-    scenerii. Dla otwartego terenu (macro / brak sub-lokacji) imperatyw bez zmian.
+    Gdy ``current_location_id`` wskazuje na JAKĄKOLWIEK aktywną lokację, bohater
+    jest w konkretnym miejscu na hexie, NIE na otwartym terenie. Twardy imperatyw
+    „bohater PRZEMIEŚCIŁ SIĘ / opisuj teren" błędnie każe LLM porzucić scenę
+    i narratować teren hexa (np. las pod karczmą). #1209: ochrona rozszerzona
+    z ``location_type='sub'`` na każdą zakotwiczoną lokację — karczma startowa
+    z szablonu jest ``macro`` i dostawała imperatyw OUTDOOR, który wypychał
+    narrację do lasu. Imperatyw OUTDOOR zostaje tylko dla sesji bez lokacji.
     """
     if not current_location_id:
         return _SWIAT_IMPERATIVE_OUTDOOR
@@ -325,17 +326,17 @@ def build_swiat_imperative(
         ).fetchone()
     except Exception:
         return _SWIAT_IMPERATIVE_OUTDOOR
-    if not loc or (loc["location_type"] or "") != "sub":
+    if not loc:
         return _SWIAT_IMPERATIVE_OUTDOOR
 
     label = loc["label"]
     loc_txt = f" „{label}”" if label else ""
     return (
-        f"BOHATER JEST WEWNĄTRZ LOKACJI{loc_txt} (sub-lokacja na tym hexie). "
-        "POWYŻSZY BLOK ŚWIAT to teren i otoczenie NA ZEWNĄTRZ — kontekst pomocniczy, "
-        "NIE pozycja bohatera. Kontynuuj bieżącą scenę WEWNĄTRZ lokacji z poprzednich "
-        "tur; NIE narratuj terenu hexa jako obecnego miejsca. Bohater opuszcza wnętrze "
-        "dopiero gdy SAM zadeklaruje wyjście."
+        f"BOHATER JEST W LOKACJI{loc_txt} na tym hexie. "
+        "POWYŻSZY BLOK ŚWIAT to teren i otoczenie WOKÓŁ lokacji — kontekst pomocniczy, "
+        "NIE pozycja bohatera. Kontynuuj bieżącą scenę W TEJ LOKACJI z poprzednich "
+        "tur; NIE narratuj terenu hexa jako obecnego miejsca i NIE używaj słowa „hex” "
+        "w narracji. Bohater opuszcza lokację dopiero gdy SAM zadeklaruje wyjście."
     )
 
 
@@ -607,6 +608,55 @@ def _inject_campaign_s11_context(
     first["content"] = f"{first.get('content', '').rstrip()}\n\n{bundle}"
 
 
+def _inject_intimidated_context(conn, campaign_id: int, messages: list) -> None:
+    """#1054 (część 2): trwałość zastraszenia — twarda reguła narratora.
+
+    Wygrany test Zastraszania zapisuje session_flags.intimidated_enemies
+    (turns.py:_apply_intimidation_persistence). Dopóki stan aktywny, narrator
+    dostaje wiążący blok: zastraszony cel spełnia rozsądne żądania, opór wymaga
+    testu przeciwstawnego. Wygasły stan (TTL w turach) jest lazy-usuwany tutaj.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if not row:
+            return
+        sf = json.loads(row["session_flags"] or "{}")
+        entry = sf.get("intimidated_enemies") or {}
+        if not entry:
+            return
+        try:
+            cur_turn = int(conn.execute(
+                "SELECT COALESCE(MAX(turn_number),0) FROM campaign_turns WHERE campaign_id=?",
+                (int(campaign_id),),
+            ).fetchone()[0] or 0)
+        except Exception:
+            cur_turn = 0
+        expires = entry.get("expires_at_turn")
+        if expires is not None and cur_turn > int(expires):
+            sf.pop("intimidated_enemies", None)
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                (json.dumps(sf, ensure_ascii=False), int(campaign_id)),
+            )
+            conn.commit()
+            return
+        targets = ", ".join(str(t) for t in (entry.get("targets") or []) if t) or "przeciwnik obecny w scenie"
+        block = (
+            "=== ZASTRASZENIE (MECHANIKA — WIĄŻĄCE) ===\n"
+            f"Cel(e): {targets}. Bohater WYGRAŁ test Zastraszania — cel jest ZASTRASZONY.\n"
+            "- Cel spełnia rozsądne żądania bohatera (oddaje broń, sakiewkę, informacje, ustępuje z drogi).\n"
+            "- Celowi NIE WOLNO stawiać darmowego oporu, grozić ani wyzywać bohatera do walki, dopóki nie zajdzie NOWA okoliczność (przybycie pomocy, odwrócenie uwagi, jawna słabość bohatera).\n"
+            "- Jeśli nowa okoliczność zachodzi i cel próbuje się postawić — NIE rozstrzygaj tego w prozie; opisz próbę i zasygnalizuj, że wynik wymaga testu przeciwstawnego."
+        )
+        ins_at = len(messages) - 1 if messages and messages[-1].get("role") == "user" else len(messages)
+        messages.insert(ins_at, {"role": "system", "content": block})
+    except Exception as err:
+        logger.warning("intimidated_context_inject_failed", error=str(err))
+
+
 def build_narrative_messages(
     conn: sqlite3.Connection | None,
     campaign: sqlite3.Row,
@@ -660,6 +710,8 @@ def build_narrative_messages(
             _inject_location_llm_context(conn, int(campaign["id"]), messages)
             _inject_npc_llm_context(conn, int(campaign["id"]), messages)
             _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
+            # #1054 (część 2): wiążąca reguła narratora dla aktywnego zastraszenia.
+            _inject_intimidated_context(conn, int(campaign["id"]), messages)
 
         # U29 fix: inject === ŚWIAT === block (hex terrain + locations) into the
         # streaming/narrative path. Inserted as a SEPARATE system message just before
@@ -676,8 +728,17 @@ def build_narrative_messages(
                 _sw_flags = json.loads((_sw_row["session_flags"] if _sw_row else None) or "{}")
                 _cur_loc_id = _sw_row["current_location_id"] if _sw_row else None
                 _imperative = build_swiat_imperative(conn, _cur_loc_id)
+                # #1209 — the block itself must surface the anchored location too
+                _cur_loc_key = None
+                if _cur_loc_id:
+                    _clk_row = conn.execute(
+                        "SELECT key FROM game_locations WHERE id = ?", (int(_cur_loc_id),)
+                    ).fetchone()
+                    _cur_loc_key = _clk_row["key"] if _clk_row else None
                 from app.services.location_context_injector import build_swiat_block
-                _swiat = build_swiat_block(conn, _sw_flags, user_text)
+                _swiat = build_swiat_block(
+                    conn, _sw_flags, user_text, current_location_key=_cur_loc_key
+                )
                 if _swiat:
                     _swiat_msg = {
                         "role": "system",

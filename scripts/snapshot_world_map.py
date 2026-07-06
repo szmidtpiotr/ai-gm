@@ -20,15 +20,24 @@ ROOT = Path(__file__).resolve().parent.parent
 REGIONS_DIR = ROOT / "data" / "regions"
 LEGACY_SEED = ROOT / "docs" / "world" / "world_map_seed.json"
 
-# Metadane krain (kanon, sekcja 2 FAZA_RM_MAPA_KRAIN.md)
-REGION_META = {
-    "kresy":            {"label": "Kresy",            "status": "live",   "w": 50, "h": 50},
-    "koronne_niziny":   {"label": "Koronne Niziny",   "status": "coming", "w": 50, "h": 50},
-    "czarnobor":        {"label": "Czarnobór",        "status": "coming", "w": 50, "h": 50},
-    "siwe_granie":      {"label": "Siwe Granie",      "status": "live",   "w": 50, "h": 50},  # RM7 — odblokowano
-    "wybrzeze_lez":     {"label": "Wybrzeże Łez",     "status": "coming", "w": 50, "h": 50},
-    "martwe_pustkowia": {"label": "Martwe Pustkowia", "status": "coming", "w": 50, "h": 50},
-}
+def _existing_region_meta(region_key: str) -> dict:
+    """R1 (#1241) — status/label/w/h krainy = istniejący plik region_<key>.json (kanon).
+
+    Snapshot PRZEPISUJE status zastany w pliku — nigdy go nie zmienia. Nowa kraina
+    (brak pliku) → domyślnie status 'coming', 50×50."""
+    p = REGIONS_DIR / f"region_{region_key}.json"
+    if p.exists():
+        try:
+            d = json.load(open(p, encoding="utf-8"))
+            return {
+                "label":  d.get("label", region_key),
+                "status": d.get("status", "coming"),
+                "w":      d.get("w", 50),
+                "h":      d.get("h", 50),
+            }
+        except (OSError, ValueError):
+            pass
+    return {"label": region_key, "status": "coming", "w": 50, "h": 50}
 
 
 def _query_hexes(container: str, region: str | None = None) -> list[dict]:
@@ -46,7 +55,7 @@ def _query_hexes(container: str, region: str | None = None) -> list[dict]:
 
 
 def _save_region(hexes: list[dict], region_key: str) -> Path:
-    meta = REGION_META.get(region_key, {"label": region_key, "status": "coming", "w": 50, "h": 50})
+    meta = _existing_region_meta(region_key)
     # Usuń region z każdego heksa (jest w top-level)
     stripped = [{k: v for k, v in h.items() if k != "region"} for h in hexes]
     data = {

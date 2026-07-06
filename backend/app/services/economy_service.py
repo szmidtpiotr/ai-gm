@@ -226,6 +226,24 @@ def categorize_source(source: str | None) -> str:
     return "other"
 
 
+def get_character_gold(conn: sqlite3.Connection, character_id: int) -> int:
+    """#1159: authoritative gold read — the `characters.gold_gp` column.
+
+    Gold is stored ONLY in `characters.gold_gp` (never mirrored into
+    `sheet_json`), so `gold_at_end` / kronika readers must go through this,
+    not `sheet_json.get("gold_gp"|"gold")` which was always absent → 0.
+    """
+    try:
+        row = conn.execute(
+            "SELECT gold_gp FROM characters WHERE id = ?", (int(character_id),)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    if not row:
+        return 0
+    return int(row[0] or 0)
+
+
 def change_gold(
     conn: sqlite3.Connection,
     character_id: int,

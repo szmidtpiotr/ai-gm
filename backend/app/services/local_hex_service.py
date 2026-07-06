@@ -18,6 +18,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Optional
 
+from app.core.constants import DEFAULT_REGION
+
 import structlog
 
 logger = structlog.get_logger()
@@ -195,7 +197,7 @@ def auto_assign_local_hex(
         safe = bool(subloc["safe_for_rest"])
         encounter_chance = SAFE_ENCOUNTER_CHANCE if safe else RISKY_ENCOUNTER_CHANCE
 
-        parent_region = "kresy"
+        parent_region = DEFAULT_REGION
         if hub_hex_id is not None:
             parent_row = conn.execute(
                 "SELECT region FROM world_hexes WHERE id = ?", (hub_hex_id,)

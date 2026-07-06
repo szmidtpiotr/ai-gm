@@ -895,6 +895,7 @@ function sf8SkillBreakdown(modBreakdown) {
     const add = (label, value) => { const v = num(value); if (v !== 0) parts.push({ label, value: v }); };
     add('Ranga', mb.skill_rank);
     add('Biegłość', mb.proficiency);
+    add('Przewaga', mb.advantage_bonus);  // #1054: bonus z gate po Skradaniu (+2/+4)
     return parts;
 }
 
@@ -1734,7 +1735,6 @@ function buildDice3DBox() {
 // Pre-warm the 3D engine so the first combat roll isn't delayed by asset loading. With
 // recreate-per-roll the first real roll rebuilds the box anyway, but this primes the browser
 // asset cache (textures/lib) so that rebuild is cheap.
-function prewarmDice3D() { try { buildDice3DBox(); } catch (_e) {} }
 
 // Clear any settled 3D dice (called on overlay close). With recreate-per-roll the next roll
 // rebuilds the container outright, so this just wipes the currently-settled dice.

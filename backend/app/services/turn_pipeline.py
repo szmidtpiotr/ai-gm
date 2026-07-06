@@ -63,7 +63,10 @@ _MOVE_VERB_PATTERN = _re_tp.compile(
     r"przechodze|przechodzę|wedruję|wędruję|pojd[eę]|pójd[eę]|idz|chodz|chodzmy|idziemy|"
     # #1142: "maszeruję dalej na zachód" / "wychodzę na trakt" nie łapały się na fast-path
     # → tura-fantom (narracja marszu bez ruchu hexa). Uzupełnione czasowniki marszu.
-    r"maszeruj\w*|wychodz[eę]|pod[ąa]ż\w*|krocz[eę])\b",
+    # PM3 #1222: "kieruję się" (bezpieczny czasownik ruchu). Miękkie warianty
+    # (szukam/udaję/próbuję) obsługiwane wyłącznie przez ścieżkę known-hex z
+    # przyimkiem celu — patrz _PT3_MOVE_VERB_RE + _KNOWN_HEX_DEST_RE.
+    r"maszeruj\w*|wychodz[eę]|pod[ąa]ż\w*|krocz[eę]|kieruj\w*)\b",
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
 
@@ -127,6 +130,21 @@ def detect_vague_move_intent(player_message: str) -> bool:
         if direction_name in text:
             return False
     return True
+
+
+def _region_unlock_hint(tr: dict) -> str:
+    """PM2 (#1221): [SYSTEM:...] narrator hint when a move crossed into a new land.
+
+    ``tr["region_unlocked"]`` is set by resolve_chain_travel on the arrival that
+    first entered a region not yet in ``known_regions``. Empty string otherwise.
+    """
+    ru = tr.get("region_unlocked") or None
+    if not ru:
+        return ""
+    return (
+        f"\n[SYSTEM: Bohater wkracza do krainy {ru.get('label')} — nowy region. "
+        "Wspomnij o rozeznaniu w nowym terenie (pyta ludzi, drogowskazy, mapy).]"
+    )
 
 
 def _build_vague_move_hint(conn: "sqlite3.Connection", session_flags: dict) -> str:
@@ -207,6 +225,105 @@ def _check_travel_desync(
 # resolve directional MOVE intents through ONE helper so "idę na północ" moves the hex
 # on both endpoints, and run ONE guard that records narration↔state desync.
 
+# ── PM4 #1223: direct-vs-road route choice helpers ────────────────────────────
+
+def _pm4_save_flags(conn: "sqlite3.Connection", campaign_id: int, flags: dict) -> None:
+    """Persist the mutated session_flags dict for a campaign."""
+    row = conn.execute(
+        "SELECT id FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), row["id"]),
+        )
+        conn.commit()
+
+
+def _pm4_hex_label(conn: "sqlite3.Connection", q: int, r: int) -> str:
+    """Human label for a destination hex (linked location label > hex label > coords)."""
+    row = conn.execute(
+        "SELECT label, location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+        (q, r),
+    ).fetchone()
+    if row and row["location_key"]:
+        lr = conn.execute(
+            "SELECT label FROM game_locations WHERE key = ? LIMIT 1", (row["location_key"],)
+        ).fetchone()
+        if lr and lr["label"]:
+            return lr["label"]
+    if row and row["label"]:
+        return row["label"]
+    return f"hex ({q},{r})"
+
+
+def _pm4_build_travel_fact(tr: dict, label: str, mode_label: str) -> str:
+    """[SYSTEM:…] narrator fact for a completed route-mode trip (mirrors PT3 facts)."""
+    arr = tr.get("arrived_hex") or {}
+    hex_info = tr.get("hex_data") or {}
+    enc = tr.get("encounter")
+    fact = (
+        f"\n[SYSTEM: Podróż {mode_label} do {label} wykonana mechanicznie: gracz "
+        f"przemieścił się na hex ({arr.get('q')},{arr.get('r')}), "
+        f"teren: {hex_info.get('hex_type', 'nieznany')}, "
+        f"czas podróży: {tr.get('total_hours', 0)}h."
+    )
+    if enc:
+        fact += (
+            f" Podróż przerwana spotkaniem: {enc.get('enemy_key')} — "
+            f"opisz nadejście zagrożenia i ROZPOCZNIJ walkę: OSTATNIA linia "
+            f"odpowiedzi MUSI być wyłącznie tagiem [COMBAT_START:{enc.get('enemy_key')}]."
+        )
+    if tr.get("weather_slowdown"):
+        fact += (
+            f" Pogoda ({tr.get('weather_slowdown')}) spowalniała marsz — "
+            "wpleć trud drogi w opis."
+        )
+    fact += (
+        " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
+        "ruch już rozstrzygnięty mechanicznie.]"
+    )
+    fact += _region_unlock_hint(tr)
+    return fact
+
+
+def _pm4_maybe_prompt(
+    conn: "sqlite3.Connection",
+    campaign_id: int,
+    from_hex: tuple[int, int],
+    to_hex: tuple[int, int],
+    label: str,
+    flags: dict,
+) -> str | None:
+    """Offer the direct/road choice before a long descriptive trip.
+
+    When the destination is >ROAD_CHOICE_MIN_HEXES away AND a viable trakt runs
+    near the direct path, DO NOT move: stash ``pending_travel_choice`` in
+    session_flags and return the question [SYSTEM] fact. Otherwise return None
+    (caller travels straight away).
+    """
+    if flags.get("pending_travel_choice"):
+        return None
+    from app.services.hex_travel_service import analyze_route, ROAD_CHOICE_MIN_HEXES
+    info = analyze_route(from_hex, to_hex, conn)
+    if info["dist"] <= ROAD_CHOICE_MIN_HEXES or not info["road_alt"]:
+        return None
+    flags["pending_travel_choice"] = {
+        "destination": {"q": to_hex[0], "r": to_hex[1]},
+        "label": label,
+        "hinted": 0,
+    }
+    _pm4_save_flags(conn, campaign_id, flags)
+    logger.info(
+        "pm4_route_choice_prompted",
+        campaign_id=campaign_id, to_hex=to_hex, dist=info["dist"],
+    )
+    return (
+        f"\n[SYSTEM: zapytaj gracza — prosto przez {info['terrain_label']} czy traktem "
+        "(dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
+    )
+
+
 def execute_directional_travel(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -230,6 +347,71 @@ def execute_directional_travel(
     flags = json.loads((gs["session_flags"] if gs else None) or "{}")
     cur = flags.get("current_hex") or {"q": 0, "r": 0}
 
+    # PM4 #1223: player is answering a pending direct/road question. Runs BEFORE
+    # detect_move_intent — the answer ("idę traktem" / "na przełaj") carries the
+    # mode but no destination, so the normal move-intent parsers would miss it.
+    pending = flags.get("pending_travel_choice")
+    if pending and not _has_active_combat(conn, campaign_id):
+        from app.services.hex_travel_service import (
+            detect_route_choice as _drc,
+            execute_travel as _exec_pending,
+            TravelError as _TE_pending,
+        )
+        _choice = _drc(player_text)
+        _dest_p = pending.get("destination") or {}
+        _dq_p, _dr_p = int(_dest_p.get("q", 0)), int(_dest_p.get("r", 0))
+        _label_p = pending.get("label") or f"hex ({_dq_p},{_dr_p})"
+        _hinted = int(pending.get("hinted", 0))
+        if _choice is None:
+            if _hinted < 1:
+                # Unclear answer — re-hint exactly ONCE, hero stays put.
+                flags["pending_travel_choice"]["hinted"] = _hinted + 1
+                _pm4_save_flags(conn, campaign_id, flags)
+                return {
+                    "executed": False,
+                    "system_fact": (
+                        f"\n[SYSTEM: gracz nie wskazał wyraźnie trasy do {_label_p}. Zapytaj "
+                        "raz jeszcze krótko: prosto przez dzicz (szybciej, groźniej) czy "
+                        "traktem (dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
+                    ),
+                    "intent": None,
+                }
+            # Already re-hinted once → default to direct (no loop).
+            _choice = "direct"
+        # Execute the deferred trip in the chosen mode, then clear the pending flag.
+        flags.pop("pending_travel_choice", None)
+        _pm4_save_flags(conn, campaign_id, flags)
+        try:
+            tr_p = _exec_pending(
+                conn, campaign_id, {"hex": {"q": _dq_p, "r": _dr_p}},
+                actor=character_id, record_turn=False, route_mode=_choice,
+            )
+        except _TE_pending as _te_p:
+            tr_p = {"ok": False, "error": _te_p.message}
+        except Exception as _te_pg:  # never break a turn
+            logger.warning("pm4_pending_travel_error", error=str(_te_pg), campaign_id=campaign_id)
+            tr_p = {"ok": False, "error": "błąd podróży"}
+        _mode_label = "traktem" if _choice == "road" else "na przełaj przez dzicz"
+        if tr_p.get("ok"):
+            logger.info(
+                "pm4_travel_executed", campaign_id=campaign_id,
+                route_mode=_choice, to_hex=(_dq_p, _dr_p),
+            )
+            return {
+                "executed": True,
+                "system_fact": _pm4_build_travel_fact(tr_p, _label_p, _mode_label),
+                "intent": None,
+            }
+        return {
+            "executed": False,
+            "system_fact": (
+                f"\n[SYSTEM: Gracz ruszył {_mode_label} do {_label_p}, ale mechanika "
+                f"odmówiła: {tr_p.get('error', 'nieprzejezdny teren')}. Opisz przeszkodę "
+                "narracyjnie. NIE opisuj dotarcia do celu.]"
+            ),
+            "intent": None,
+        }
+
     # PT6 #1116: player continues interrupted travel after combat.
     # PT-F1 #1135: never resume while combat is active — "kontynuuję" typed mid-fight
     # must not walk the hero off the combat hex.
@@ -251,6 +433,7 @@ def execute_directional_travel(
             to_hex=(dq_r, dr_r),
             character_sheet=character_sheet,
             conn=conn,
+            route_mode=tp.get("route_mode", "direct"),  # PM4 #1223: resume keeps the mode
         )
         if tr_r.get("ok"):
             try:
@@ -337,8 +520,18 @@ def execute_directional_travel(
 
     mv = detect_move_intent(player_text, cur)
     if not mv:
-        # PT3/#1113: before vague-move hint, check for a named destination on a different hex
-        if detect_vague_move_intent(player_text):
+        # PT3/#1113 + PM3 #1222: descriptive / named-destination travel.
+        # Trigger on either a classic vague-move verb OR a descriptive travel
+        # phrase ("szukam drogi do mostu", "udaję się w stronę wioski") — the
+        # latter carries its own move verb + destination preposition, so soft
+        # verbs never fire on their own.
+        from app.services.hex_travel_service import (
+            _PT3_MOVE_VERB_RE as _pt3_verb_re,
+            _KNOWN_HEX_DEST_RE as _kh_dest_re,
+        )
+        _vague = detect_vague_move_intent(player_text)
+        _dest_phrase = bool(_pt3_verb_re.search(player_text) and _kh_dest_re.search(player_text))
+        if _vague or _dest_phrase:
             from app.services.hex_travel_service import (
                 resolve_player_text_to_location_key,
                 detect_named_destination_hex,
@@ -355,6 +548,14 @@ def execute_directional_travel(
                         (_named_key,),
                     ).fetchone()
                     _loc_label_n = _loc_row_n["label"] if _loc_row_n else _named_key
+                    # PM4 #1223: long trip with a nearby trakt → ask direct/road first.
+                    _pm4_q_n = _pm4_maybe_prompt(
+                        conn, campaign_id,
+                        (int(cur["q"]), int(cur["r"])), (dq_n, dr_n),
+                        _loc_label_n, flags,
+                    )
+                    if _pm4_q_n:
+                        return {"executed": False, "system_fact": _pm4_q_n, "intent": None}
                     tr_n = _rct_named(
                         campaign_id=campaign_id,
                         character_id=character_id,
@@ -399,6 +600,7 @@ def execute_directional_travel(
                             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej"
                             " lokacji — ruch już rozstrzygnięty mechanicznie.]"
                         )
+                        fact_n += _region_unlock_hint(tr_n)
                         logger.info(
                             "pt3_named_destination_travel",
                             campaign_id=campaign_id,
@@ -416,11 +618,105 @@ def execute_directional_travel(
                     return {"executed": False, "system_fact": fact_n, "intent": None}
 
                 # Named dest found but same hex → let LLM handle via location_intent
+                # (the #1253 post-LLM net commits it if the narrator forgets).
                 return {"executed": False, "system_fact": None, "intent": None}
 
-            # No named destination found → fall through to vague hint
-            hint = _build_vague_move_hint(conn, flags)
-            return {"executed": False, "system_fact": hint, "intent": None}
+            # PM3 #1222: canonical resolver found nothing — try the known-hex
+            # descriptive resolver ("do mostu", "w stronę wioski"). Matches known/
+            # discovered hexes by label + Polish hex_type name; travels via the
+            # unified execute_travel (R4) so the pin/clock/scene all advance.
+            from app.services.hex_travel_service import (
+                resolve_player_text_to_known_hex,
+                execute_travel as _exec_travel_kh,
+                TravelError as _TravelError_kh,
+                KNOWN_HEX_UNKNOWN as _KH_UNKNOWN,
+            )
+            _kh = resolve_player_text_to_known_hex(
+                player_text, conn, campaign_id, character_id
+            )
+            if _kh == _KH_UNKNOWN:
+                # Point 4 (#1050 deadlock): a target was named but the hero doesn't
+                # know where it is — do NOT move; tell the narrator to suggest asking
+                # around, and NOT to describe setting out.
+                _mm = _kh_dest_re.search(player_text)
+                _tgt = (_mm.group(1).strip() if _mm else "cel")
+                fact_u = (
+                    f"\n[SYSTEM: gracz szuka drogi do \"{_tgt}\", bohater nie wie gdzie to "
+                    "jest — zasugeruj wypytanie ludzi (karczma, przechodnie, drogowskazy). "
+                    "NIE opisuj wyruszenia — bohater stoi w miejscu.]"
+                )
+                return {"executed": False, "system_fact": fact_u, "intent": None}
+            if _kh:
+                dq_k, dr_k = int(_kh[0]), int(_kh[1])
+                # PM4 #1223: long trip with a nearby trakt → ask direct/road first.
+                _kh_label = _pm4_hex_label(conn, dq_k, dr_k)
+                _pm4_q_k = _pm4_maybe_prompt(
+                    conn, campaign_id,
+                    (int(cur["q"]), int(cur["r"])), (dq_k, dr_k),
+                    _kh_label, flags,
+                )
+                if _pm4_q_k:
+                    return {"executed": False, "system_fact": _pm4_q_k, "intent": None}
+                try:
+                    tr_k = _exec_travel_kh(
+                        conn, campaign_id, {"hex": {"q": dq_k, "r": dr_k}},
+                        actor=character_id, record_turn=False,
+                    )
+                except _TravelError_kh as _te_k:
+                    tr_k = {"ok": False, "error": _te_k.message}
+                except Exception as _te_gen:  # never break a turn
+                    logger.warning("pm3_known_hex_travel_error", error=str(_te_gen), campaign_id=campaign_id)
+                    tr_k = {"ok": False, "error": "błąd podróży"}
+                if tr_k.get("ok"):
+                    arr_k = tr_k.get("arrived_hex") or {}
+                    hex_info_k = tr_k.get("hex_data") or {}
+                    place_k = hex_info_k.get("label") or hex_info_k.get("hex_type") or "cel"
+                    enc_k = tr_k.get("encounter")
+                    fact_k = (
+                        f"\n[SYSTEM: Podróż do „{place_k}” wykonana mechanicznie: gracz "
+                        f"przemieścił się na hex ({arr_k.get('q')},{arr_k.get('r')}), "
+                        f"teren: {hex_info_k.get('hex_type', 'nieznany')}, "
+                        f"czas podróży: {tr_k.get('total_hours', 0)}h."
+                    )
+                    if enc_k:
+                        fact_k += (
+                            f" Podróż przerwana spotkaniem: {enc_k.get('enemy_key')} — "
+                            f"opisz nadejście zagrożenia i ROZPOCZNIJ walkę: OSTATNIA linia "
+                            f"odpowiedzi MUSI być wyłącznie tagiem "
+                            f"[COMBAT_START:{enc_k.get('enemy_key')}]."
+                        )
+                    if tr_k.get("weather_slowdown"):
+                        fact_k += (
+                            f" Pogoda ({tr_k.get('weather_slowdown')}) spowalniała marsz — "
+                            "wpleć trud drogi w opis."
+                        )
+                    fact_k += (
+                        " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej "
+                        "lokacji — ruch już rozstrzygnięty mechanicznie.]"
+                    )
+                    fact_k += _region_unlock_hint(tr_k)
+                    logger.info(
+                        "pm3_known_hex_travel",
+                        campaign_id=campaign_id,
+                        to_hex=(dq_k, dr_k),
+                        from_hex=(cur.get("q"), cur.get("r")),
+                    )
+                    return {"executed": True, "system_fact": fact_k, "intent": None}
+
+                fact_k = (
+                    "\n[SYSTEM: Gracz próbuje dotrzeć do znanego miejsca, ale mechanika "
+                    f"odmówiła: {tr_k.get('error', 'nieprzejezdny teren')}. Opisz przeszkodę "
+                    "narracyjnie. NIE opisuj dotarcia do celu.]"
+                )
+                return {"executed": False, "system_fact": fact_k, "intent": None}
+
+            # No named/known destination → vague hint only when the phrasing was a
+            # genuine bare move ("idę dalej"); a soft dest-phrase that matched nothing
+            # already returned above via KNOWN_HEX_UNKNOWN.
+            if _vague:
+                hint = _build_vague_move_hint(conn, flags)
+                return {"executed": False, "system_fact": hint, "intent": None}
+            return {"executed": False, "system_fact": None, "intent": None}
         return {"executed": False, "system_fact": None, "intent": None}
 
     from app.services.hex_travel_service import resolve_chain_travel
@@ -470,6 +766,7 @@ def execute_directional_travel(
             " Opisz tę podróż w 2-4 zdaniach. NIE przenoś gracza do innej lokacji — "
             "ruch już rozstrzygnięty mechanicznie.]"
         )
+        fact += _region_unlock_hint(tr)
         return {"executed": True, "system_fact": fact, "intent": mv}
 
     fact = (
@@ -1391,7 +1688,8 @@ def _process_beat_signals(
     for signal in mechanic_result.get("beat_signals", []):
         if signal.startswith("BEAT_COMPLETE:"):
             beat_key = signal.split(":", 1)[1]
-            if mark_beat_visited(campaign_id, beat_key, turn_number, conn):
+            # #1207 — LLM-emitted signal: objective-typed beats close only via event hooks
+            if mark_beat_visited(campaign_id, beat_key, turn_number, conn, via_llm_tag=True):
                 xp += grant_beat_complete(conn, character_id, campaign_id, beat_key, turn_number)
     return xp
 
@@ -1603,6 +1901,17 @@ def generate_opening_scene(
             starting_loc_name = None
     starting_loc_name = starting_loc_name or "nieznane miejsce"
 
+    # #1208 — plan-declared starting hour: the opening prose must match the clock
+    # (evening tavern narrated as evening, not a default morning).
+    time_line = ""
+    try:
+        _sh = int(plan.get("start_hour"))
+        if 0 <= _sh <= 23:
+            from app.services.clock_service import _time_of_day_label
+            time_line = f"\n  Pora dnia: {_time_of_day_label(_sh)}, około {_sh:02d}:00"
+    except (TypeError, ValueError):
+        pass
+
     # Build opening scene prompt
     bonds_text = "\n".join(
         f"  - {b.get('description', '')}" for b in (identity.get("bonds") or [])
@@ -1627,11 +1936,12 @@ POSTAĆ:
 KAMPANIA:
   Tytuł aktu 1: {act1.get('title', '')}
   Streszczenie: {act1.get('summary', '')}
-  Miejsce startowe: {starting_loc_name}
+  Miejsce startowe: {starting_loc_name}{time_line}
 
 ZASADY:
 - Napisz 100-200 słów po polsku
 - Umieść postać fizycznie w miejscu startowym
+- Jeśli podano porę dnia — scena dzieje się DOKŁADNIE o tej porze (światło, odgłosy, ruch ludzi)
 - Nawiąż do jednej więzi lub słabości postaci
 - Stwórz napięcie lub ciekawość — coś jest nie tak
 - NIE mów graczowi co ma zrobić

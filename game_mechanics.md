@@ -5481,6 +5481,17 @@ Status: **review/needs-testing** — commity 3639fdd (#777) + fd6b45d (#781) + 4
 
 Status: **review/needs-testing** — TDD 14/14 + Playwright 1/1. Pełny e2e bramki/intimidacji jest LLM-driven (struktura + prompt zweryfikowane jednostkowo). Historyczne kampanie bez wpisów wstecz (poza zakresem).
 
+### #1054 (część 2) — trwałość zastraszenia + skalowanie bonusu przewagi (2026-07-05)
+
+> Sandbox 8888911 pokazał, że wygrany test Zastraszania był fire-and-forget: turę później narrator negował wynik (bandyta odmawiał oddania broni mimo sztyletu na gardle). Zasada nadrzędna: **wygrany test społeczny musi coś znaczyć w kolejnych turach.**
+
+| Decyzja | Co zmieniono | Testy |
+|---|---|---|
+| **Trwały stan** | Sukces Zastraszania → `session_flags.intimidated_enemies` (cele = wrogowie sceny, TTL **6 tur** — wartość startowa, Numbers Policy). Kasowany przy zmianie lokacji (per-scena) i lazy po TTL. | 4 pytest |
+| **Reguła narratora** | Dopóki stan aktywny, narrator dostaje wiążący blok `=== ZASTRASZENIE ===`: cel spełnia rozsądne żądania (broń, sakiewka, informacje); darmowy opór zakazany; opór przy nowej okoliczności → sygnał testu przeciwstawnego, nie proza. | 3 pytest |
+| **Skalowanie bonusu** | Bonus przewagi gate'owego Zastraszania wg jakości Skradania: **+2 sukces / +4 kryt** (`pending_zaskoczony_quality`; wartości startowe). Hint przycisku pokazuje faktyczny bonus. | 3 pytest |
+| **Widoczność bonusu** | `advantage_bonus` zapisywany w `dice_rolls.modifiers` + wiersz „Przewaga" w rozbiciu rzutu (SF8). Wcześniej log wyglądał jak rzut bez bonusu. | 1 pytest + Playwright |
+
 ### #773 — obezwładnienie (grapple) poza walką = ta sama bramka (2026-06-20)
 
 > Rodzeństwo #780. Deklaracja obezwładnienia non-lethal („obezwładniam", „przyciskam do ściany", „zakuwam w kajdany") nie wybucha śmiertelną walką — przechodzi przez bramkę intencji #780 (decyzja Piotra **1A**), nie przez `[COMBAT_START]`.

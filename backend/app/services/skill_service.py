@@ -14,6 +14,7 @@ import sqlite3
 import uuid
 from typing import Optional
 
+from app.core.mechanics import proficiency_bonus
 from app.services.vitality_service import stat_modifier
 from app.services.dice import roll_d20
 
@@ -114,7 +115,7 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     stat_val = int(stats.get(governing_stat, 10))
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
-    proficiency = 2 if skill_rank >= 3 else 0
+    proficiency = proficiency_bonus(skill_rank)
     # PT-D1 (#1124): zmęczenie (exhausted) obniża sumę KAŻDEGO testu o poziom stacka.
     # Data-driven (prymityw test_penalty); krasnolud ignoruje 1. stack.
     try:
@@ -845,6 +846,8 @@ def resolve_skill_test(
                 "stat_mod": mod_info.get("stat_mod"),
                 "skill_rank": mod_info.get("skill_rank"),
                 "proficiency": mod_info.get("proficiency"),
+                # #1054: bez tego log wygląda jak rzut bez bonusu przewagi (gate +2/+4)
+                "advantage_bonus": mod_info.get("advantage_bonus"),
             },
             total=int(result["player_total"]),
             dc=int(opponent_total),

@@ -42,10 +42,28 @@ def apply_gamble_outcome_in_skill_resolution(
         )
         _delta = int(_gamble_summary.get("delta", 0) or 0)
         if _delta:
-            _chg(conn, character_id, _delta, "gamble",
-                 campaign_id=campaign_id,
-                 meta={"stake": _stake, "outcome": result.get("outcome")},
-                 allow_negative=False)
+            try:
+                _chg(conn, character_id, _delta, "gamble",
+                     campaign_id=campaign_id,
+                     meta={"stake": _stake, "outcome": result.get("outcome")},
+                     allow_negative=False)
+            except ValueError:
+                # #1161: przegrana większa niż saldo — ogranicz stratę do bieżącego
+                # złota (przegrywasz co masz), zamiast połykać cały wynik hazardu.
+                if _delta < 0:
+                    from app.services.economy_service import get_character_gold
+                    _cur = int(get_character_gold(conn, character_id))
+                    _capped = -_cur
+                    _gamble_summary["delta"] = _capped
+                    _delta = _capped
+                    if _capped:
+                        _chg(conn, character_id, _capped, "gamble",
+                             campaign_id=campaign_id,
+                             meta={"stake": _stake, "outcome": result.get("outcome"),
+                                   "capped_to_balance": True},
+                             allow_negative=False)
+                else:
+                    raise
         logger.info("gamble_outcome_applied", campaign_id=campaign_id,
                     stake=_stake, delta=_delta,
                     cheat=_gamble_summary.get("cheat_accused"))

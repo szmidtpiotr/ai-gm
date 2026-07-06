@@ -17,15 +17,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
-from sqlmodel import Session, select
 
 from app.core.logging import bind_context, configure_logging, get_logger, reset_request_context
 import app.core.metrics  # noqa: F401 — registers domain Prometheus metrics at startup (G31 #811)
-from app.db import get_session, init_db
-from app.models import Game, Message
+from app.db import init_db
 from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
-from app.services.llm_service import generate_chat
-from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 
 from app.api import (
     auth,
@@ -35,7 +31,6 @@ from app.api import (
     campaigns,
     characters,
     combat,
-    commands,
     friends,
     turns,
     mechanics,
@@ -45,7 +40,6 @@ from app.api import (
 )
 from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
-from app.api.models import router as models_router
 from app.api.version import router as version_router
 from app.api.client_logs import router as client_logs_router
 from app.api.knowledge import router as knowledge_router
@@ -58,6 +52,7 @@ from app.routers.rules_content import router as rules_content_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
 from app.routers.rest_sandbox import router as rest_sandbox_router
+from app.routers.scenario_sandbox import router as scenario_sandbox_router
 from app.routers.admin_visual import admin_router as admin_visual_router, public_router as visual_public_router
 from app.routers.admin_ui_texts import admin_router as admin_ui_texts_router, public_router as ui_texts_public_router
 from app.routers.settings import router as settings_router
@@ -89,6 +84,7 @@ from app.routers.db_lint import router as db_lint_router
 from app.routers.admin_dice_config import admin_router as dice_config_admin_router, public_router as dice_config_public_router
 from app.routers.showcase import router as showcase_router
 from app.routers.local_map import router as local_map_router
+from app.routers.campaign_workshop import router as campaign_workshop_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -96,55 +92,11 @@ DB_PATH = "/data/ai_gm.db"
 logger = get_logger("ai_gm")
 
 
-GAME_SYSTEMS = {
-    "fantasy": {
-        "prompt": SYSTEM_PROMPT_TEXT,
-    },
-    "warhammer": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Warhammer Fantasy Roleplay. "
-            "Odpowiadasz po polsku. Klimat Starego Świata, mrok, brud, chaos, "
-            "intryga. Używaj zasad d100. "
-            "NIGDY nie podawaj graczowi ponumerowanych opcji. NIGDY nie kończ pytaniem Co robisz?"
-        )
-    },
-    "cyberpunk": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Cyberpunk RED. "
-            "Odpowiadasz po polsku. Klimat Night City, edgerunnerzy, "
-            "korporacje, slang cyberpunkowy. "
-            "NIGDY nie podawaj graczowi ponumerowanych opcji. NIGDY nie kończ pytaniem Co robisz?"
-        )
-    },
-    "neuroshima": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Neuroshima. "
-            "Odpowiadasz po polsku. Klimat post-apo Polski, Moloch, "
-            "Hegemonia, brud i przemoc. "
-            "NIGDY nie podawaj graczowi ponumerowanych opcji. NIGDY nie kończ pytaniem Co robisz?"
-        )
-    },
-}
-
-
-class ChatReq(BaseModel):
-    model: str
-    messages: list[dict]
-    game_system: str = "fantasy"
-    game_id: int | None = None
-
-
 class DiceReq(BaseModel):
     dice: str
     character_id: int | None = None
     roll_key: str | None = None
     dc: int | None = None
-
-
-class GameCreateReq(BaseModel):
-    title: str
-    system: str
-    model: str = "gemma3:1b"
 
 
 RAW_MIGRATIONS = [
@@ -494,6 +446,13 @@ RAW_MIGRATIONS = [
     # PT9 (#1119) — nocna napaść przy obozie: boost zależny od terenu (0.20 cywilizowany / 0.35 dziki)
     "ALTER TABLE hex_type_config ADD COLUMN camp_encounter_boost REAL NOT NULL DEFAULT 0.20",
     "UPDATE hex_type_config SET camp_encounter_boost = 0.35 WHERE hex_type IN ('forest','mountains','mountain','swamp','cave','ruins','volcanic','tundra','desert','heath')",
+    # R6 (#1246) — hexy faktycznie przebyte trasą podróży → status 'known' (nie discovered).
+    # Persystentny per-kampania flag, czytany przez FOW gate (PM1 #1220).
+    "ALTER TABLE campaign_hex_data ADD COLUMN known INTEGER NOT NULL DEFAULT 0",
+    # PM7 (#1226) — globalny promień bąbla wiedzy (W2 FOW). Admin-tunable; czytnik
+    # w world-map ma fallback DEFAULT_BUBBLE_RADIUS=4, więc seed jest tylko jawnym
+    # domyślnym rekordem dla admin-UI. INSERT OR IGNORE = uruchamiane raz, nie kasuje edycji.
+    "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('knowledge_bubble_radius', '4')",
 ]
 
 
@@ -721,16 +680,24 @@ async def lifespan(app: FastAPI):
             _backfill_terrain_tags()
         except Exception:
             pass
-        # #992 — sync game_locations.world_hex_q/r from world_hexes.location_key (idempotent).
+        # #1243 (R3) — reconcile the hex↔location link: hex is canon, rebuild the
+        # derived game_locations.world_hex_q/r cache and clear stale/junk pins.
+        # (Supersedes #992's one-directional sync_location_hex_coordinates.)
         try:
-            from app.services.world_service import sync_location_hex_coordinates
+            from app.services.hex_location_link import reconcile_location_hex_links
             _sync_conn = sqlite3.connect(DB_PATH)
             _sync_conn.row_factory = sqlite3.Row
             try:
-                _n = sync_location_hex_coordinates(_sync_conn)
-                if _n:
+                _rep = reconcile_location_hex_links(_sync_conn)
+                if _rep["backfilled"] or _rep["cleared"] or _rep["smears"] or _rep["promoted"]:
                     import structlog as _sl
-                    _sl.get_logger().info("startup_sync_location_hex_coordinates", updated=_n)
+                    _sl.get_logger().info(
+                        "startup_reconcile_location_hex_links",
+                        backfilled=len(_rep["backfilled"]),
+                        promoted=len(_rep["promoted"]),
+                        cleared=len(_rep["cleared"]),
+                        smears=len(_rep["smears"]),
+                    )
             finally:
                 _sync_conn.close()
         except Exception:
@@ -793,6 +760,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
 
+# #1187 — jedna warstwa auth admina. Chroni /api/admin/* domyślnie (świadomy opt-out
+# w ADMIN_AUTH_ALLOWLIST). Rejestrowana PRZED CORS → jest najbardziej wewnętrzną
+# warstwą, więc odpowiedzi 401 przechodzą jeszcze przez CORSMiddleware (nagłówki).
+from app.core.admin_guard import admin_namespace_guard  # noqa: E402
+
+app.middleware("http")(admin_namespace_guard)
+
 
 def _get_cors_origins() -> list[str]:
     raw = os.environ.get("CORS_ORIGINS", "https://aigm-dev.studio-colorbox.com,https://aigm.studio-colorbox.com")
@@ -830,7 +804,6 @@ async def request_logging_middleware(request: Request, call_next):
             elapsed_ms=elapsed_ms,
         )
 
-app.include_router(commands.router, prefix="/api")
 app.include_router(dungeons_router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaign_history.router, prefix="/api")
@@ -851,7 +824,6 @@ app.include_router(knowledge_router, prefix="/api")
 # nieautoryzowany /characters/{id}/sheet poza prefiksem. Wszyscy klienci
 # (frontend API_BASE=/api, MCP GAME_API_URL=.../api) używają /api/*.
 app.include_router(health_router, prefix="/api")
-app.include_router(models_router, prefix="/api")
 app.include_router(version_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(rules_content_router)  # already prefixed with /api internally
@@ -859,6 +831,7 @@ app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(sandbox_router, prefix="/api")
 app.include_router(rest_sandbox_router, prefix="/api")
+app.include_router(scenario_sandbox_router, prefix="/api")
 app.include_router(admin_visual_router, prefix="/api")
 app.include_router(visual_public_router, prefix="/api")
 app.include_router(dice_config_admin_router, prefix="/api")
@@ -893,6 +866,9 @@ app.include_router(party_chat_router, prefix="/api")
 app.include_router(game_mechanics_router)
 app.include_router(db_lint_router)
 app.include_router(local_map_router, prefix="/api")
+# #1167/#1188 — Warsztat kampanii RESTORE (Bank Pomysłów retired). Router
+# already carries the /api/admin/campaigns prefix internally.
+app.include_router(campaign_workshop_router)
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")
@@ -905,42 +881,7 @@ async def root():
     return {"status": "ok"}
 
 
-@app.get("/api/games")
-async def games(session: Session = Depends(get_session)):
-    games = session.exec(select(Game).order_by(Game.updated_at.desc())).all()
-    return games
-
-
-@app.post("/api/games")
-async def create_game(req: GameCreateReq, session: Session = Depends(get_session)):
-    if req.system not in GAME_SYSTEMS:
-        raise HTTPException(status_code=400, detail="Nieznany system gry")
-
-    game = Game(title=req.title, system=req.system, model=req.model)
-    session.add(game)
-    session.commit()
-    session.refresh(game)
-    return game
-
-
-@app.get("/api/games/{game_id}")
-async def get_game(game_id: int, session: Session = Depends(get_session)):
-    game = session.get(Game, game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    messages = session.exec(
-        select(Message).where(Message.game_id == game_id).order_by(Message.created_at.asc())
-    ).all()
-
-    return {
-        "game": game,
-        "messages": messages,
-    }
-
-
 @app.post("/api/gm/dice")
-@app.post("/gm/dice")
 async def gm_dice(req: DiceReq):
     match = re.match(r"(\d*)?d(\d+)([+-]\d+)?", req.dice.strip(), re.I)
     if not match:
@@ -1007,34 +948,3 @@ async def gm_dice(req: DiceReq):
         source="gm_dice",
     )
     return {"dice": req.dice.strip(), "rolls": rolls, "total": total}
-
-
-@app.post("/api/gm/chat")
-async def gm_chat(req: ChatReq, session: Session = Depends(get_session)):
-    if req.game_system not in GAME_SYSTEMS:
-        raise HTTPException(status_code=400, detail="Nieznany system gry")
-
-    messages = [
-        {"role": "system", "content": GAME_SYSTEMS[req.game_system]["prompt"]}
-    ] + req.messages
-
-    try:
-        assistant_content = generate_chat(messages=messages, model=req.model)
-        data = {"message": {"content": assistant_content}}
-
-        if req.game_id:
-            game = session.get(Game, req.game_id)
-            if game:
-                last_user_msg = req.messages[-1]["content"] if req.messages else ""
-                if last_user_msg:
-                    session.add(Message(game_id=req.game_id, role="user", content=last_user_msg))
-
-                if assistant_content:
-                    session.add(Message(game_id=req.game_id, role="assistant", content=assistant_content))
-
-                game.updated_at = datetime.now(timezone.utc)
-                session.commit()
-
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")

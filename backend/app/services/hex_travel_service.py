@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import structlog
 
+from app.core.constants import DEFAULT_REGION
 from app.services.movement_service import (
     MovementProfile,
     MovementStep,
@@ -52,9 +53,9 @@ def _load_live_regions(conn: sqlite3.Connection) -> set[str]:
             "SELECT key FROM world_regions WHERE status = 'live'"
         ).fetchall()
     except sqlite3.OperationalError:
-        return {"kresy"}
+        return {DEFAULT_REGION}
     if not rows:
-        return {"kresy"}
+        return {DEFAULT_REGION}
     return {r["key"] for r in rows}
 
 
@@ -90,7 +91,7 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
         except Exception:
             h["encounter_pool"] = []
         h["teleport_edges"] = []
-        region = h.get("region") or "kresy"
+        region = h.get("region") or DEFAULT_REGION
         hex_type = h.get("hex_type", "plains")
         if region in live_regions and (passable_types is None or hex_type in passable_types):
             hexes[(q, r)] = h
@@ -123,14 +124,20 @@ def find_path(
     goal: tuple[int, int],
     hexes: dict[tuple[int, int], dict],
     hex_type_cfg: dict[str, dict] | None = None,
+    route_mode: str = "direct",
 ) -> list[tuple[int, int]] | None:
     """
     A* from start to goal on hex grid + teleport connections.
     PT8 #1118: step cost = travel_hours from hex_type_cfg (fallback 1.0 when cfg absent).
     Heuristic = hex_distance × 0.5 (admissible: min terrain cost = road 0.5h/hex).
+    PM4 #1223: route_mode="road" multiplies `road`-hex step cost by ROAD_COST_MULT,
+    steering the optimal path onto (and along) roads when a viable one exists.
     Returns ordered list of (q, r) including start and goal, or None if unreachable.
     """
     _MIN_TERRAIN_COST = 0.5  # road — keeps heuristic admissible
+    if route_mode == "road":
+        # road cost drops to 0.5×0.75 → shrink the heuristic floor to stay admissible
+        _MIN_TERRAIN_COST = 0.5 * ROAD_COST_MULT
 
     if start == goal:
         return [start]
@@ -163,6 +170,8 @@ def find_path(
             # PT8: terrain cost from hex_type_cfg; fallback 1.0 when cfg absent
             nb_type = hexes[neighbor].get("hex_type", "plains")
             step_cost = float((hex_type_cfg or {}).get(nb_type, {}).get("travel_hours", 1.0)) or 1.0
+            if route_mode == "road" and nb_type == "road":
+                step_cost *= ROAD_COST_MULT  # PM4: cheaper roads pull the optimal path onto the trakt
             tentative_g = g_score[current] + step_cost
             if tentative_g < g_score.get(neighbor, float("inf")):
                 came_from[neighbor] = current
@@ -195,14 +204,28 @@ DAILY_SOFT_CAP = 8.0        # hours — dusk prompt threshold
 DAILY_HARD_CAP = 12.0       # hours — forced camp threshold
 NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
 
+# PM4 #1223: Route-mode tuning — Numbers Policy (Sandbox-tunable STARTING values).
+# route_mode="road" biases A* onto `road` hexes (cheaper per-hex cost) and halves
+# the encounter chance while ON a road hex. "direct" = classic shortest terrain path.
+ROAD_COST_MULT = 0.75        # road-hex A* step-cost multiplier in route_mode="road"
+ROAD_ENCOUNTER_MULT = 0.5    # encounter-chance multiplier on road hexes (road mode)
+ROAD_CHOICE_MIN_HEXES = 2    # ask direct/road only when destination is farther than this
+ROAD_DETOUR_RADIUS = 3       # a road within this many hexes of the direct path = viable trakt
 
-def _roll_encounter(hex_data: dict, hex_type_cfg: dict[str, dict]) -> bool:
-    """Roll encounter for a hex. Returns True if encounter triggers."""
+
+def _roll_encounter(
+    hex_data: dict, hex_type_cfg: dict[str, dict], chance_mult: float = 1.0
+) -> bool:
+    """Roll encounter for a hex. Returns True if encounter triggers.
+
+    PM4 #1223: ``chance_mult`` scales the final chance (road mode passes
+    ROAD_ENCOUNTER_MULT on road hexes to make the trakt safer).
+    """
     base_chance = float(hex_data.get("encounter_chance") or 0.15)
     # Adjust by hex type if configured
     ht = hex_data.get("hex_type", "plains")
     type_chance = float(hex_type_cfg.get(ht, {}).get("encounter_base_chance") or base_chance)
-    final_chance = max(base_chance, type_chance)
+    final_chance = max(base_chance, type_chance) * chance_mult
     return random.random() < final_chance
 
 
@@ -239,29 +262,13 @@ def resolve_location_key_to_hex(
 ) -> tuple[int, int] | None:
     """U30: Resolve a location_key → (q, r).
 
-    Primary: world_hexes.location_key lookup (fast, canonical).
-    Fallback (#992): game_locations.world_hex_q/r when the hex's location_key
-    was displaced (e.g. by a temp_camp overwrite) but game_locations still knows
-    its coordinates.
+    #1243: delegates to the canonical reader. Primary = world_hexes.location_key
+    (hex canon); fallback = game_locations.world_hex_q/r derived cache (log-only —
+    the #992 fallback, kept one phase to catch residual drift).
     Returns None when neither path resolves.
     """
-    if not location_key:
-        return None
-    row = conn.execute(
-        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
-        (location_key,),
-    ).fetchone()
-    if row:
-        return (int(row["q"]), int(row["r"]))
-    # #992 fallback: location may still know its hex even if world_hexes lost the pointer
-    loc = conn.execute(
-        "SELECT world_hex_q, world_hex_r FROM game_locations"
-        " WHERE key = ? AND is_active = 1 AND world_hex_q IS NOT NULL LIMIT 1",
-        (location_key,),
-    ).fetchone()
-    if loc:
-        return (int(loc["world_hex_q"]), int(loc["world_hex_r"]))
-    return None
+    from app.services.hex_location_link import resolve_location_to_hex
+    return resolve_location_to_hex(conn, location_key)
 
 
 def detect_named_destination_hex(
@@ -305,8 +312,14 @@ def detect_named_destination_hex(
 
 # ── PT3/#1113: named-destination text resolver ────────────────────────────────
 
+# PM3 #1222: descriptive-travel verbs. Beyond the classic movement verbs we add
+# "szukam (drogi)", "kieruję się", "udaję się", "chcę dotrzeć", "próbuję dojść",
+# "podążam". These soft verbs (esp. "udaj*" — the "udaję głupiego" idiom, #763)
+# are ALWAYS paired with a destination preposition (do/ku/w stronę/w kierunku)
+# by the caller, so they never fire on their own → no false move-intent.
 _PT3_MOVE_VERB_RE = re.compile(
-    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy)\w*\b",
+    r"\b(id[ęe]|idz|wr[aó]c|wyrusz|podroz|podróż|jad[ęe]|biegn|zmierzam|ruszam|wchodz|pojd|pójd|chodz|idziemy|"
+    r"szukam|kieruj|udaj|chc[ęe]|prob[uó]j|próbuj|pod[ąa]ż|maszeruj|wychodz)\w*\b",
     re.IGNORECASE | re.UNICODE,
 )
 _PT3_DEST_RE = re.compile(
@@ -314,6 +327,19 @@ _PT3_DEST_RE = re.compile(
     r"(?:\s+[A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,})*)",
     re.UNICODE,
 )
+
+# PM3 #1222: destination phrase for the known-hex resolver — lowercase common
+# nouns allowed (most, rzeka, wioska, trakt, miasto) and the "w stronę / w
+# kierunku" phrasings. Captures 1-4 words after do/ku/w stronę/w kierunku.
+_KNOWN_HEX_DEST_RE = re.compile(
+    r"(?:\bdo\b|\bku\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
+    r"([a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{3,}(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
+    re.UNICODE | re.IGNORECASE,
+)
+
+# Sentinel: a destination phrase was present but nothing known matches it — the
+# hero should ask around rather than wander off (#1222 point 4, deadlock #1050).
+KNOWN_HEX_UNKNOWN = "__KNOWN_HEX_UNKNOWN__"
 
 
 def resolve_player_text_to_location_key(
@@ -362,6 +388,256 @@ def resolve_player_text_to_location_key(
     return best_key if best_score >= 0.4 else None
 
 
+# ── PM3 #1222: known-hex descriptive-travel resolver ──────────────────────────
+
+def _fuzzy_prefix_match(cand: str, target: str) -> bool:
+    """True when two Polish words share enough of a stem to be the same noun.
+
+    Handles declension without a full stemmer: "mostu" ↔ "most", "wioski" ↔
+    "wioska", "rzeki" ↔ "rzeka". Prefix either way, else a common-prefix stem of
+    at least max(3, 60% of the shorter word).
+    """
+    a, b = _normalize(cand), _normalize(target)
+    if not a or not b:
+        return False
+    if a.startswith(b) or b.startswith(a):
+        return True
+    n = 0
+    for ca, cb in zip(a, b):
+        if ca != cb:
+            break
+        n += 1
+    return n >= max(3, int(0.6 * min(len(a), len(b))))
+
+
+def resolve_player_text_to_known_hex(
+    player_text: str,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+) -> "tuple[int, int] | str | None":
+    """PM3 #1222: resolve a descriptive travel phrase to a KNOWN/discovered hex.
+
+    Extends the #1113 canonical resolver to lowercase common-noun destinations
+    ("szukam drogi do mostu", "udaję się w stronę wioski"). The target is matched
+    — with Polish-declension-tolerant prefix matching — against every hex the
+    campaign already *knows* (FOW ``known`` ∪ ``discovered``, #1220), by both the
+    hex ``label`` and the Polish name of its ``hex_type`` (hex_type_config.label).
+
+    Returns:
+      (q, r)               — nearest known hex matching the phrase (≠ current hex),
+      KNOWN_HEX_UNKNOWN    — a destination phrase was present but nothing known
+                             matches it (caller must NOT move — ask around),
+      None                 — no descriptive travel phrase at all (not our case).
+    """
+    # TODO (#1222 pt.5): LLM fallback for target extraction when the regex/fuzzy
+    # path misses a paraphrased destination. turn_intent.py has no target
+    # classifier yet — see to_do_ideas.md. No dedicated extra LLM call for now.
+    if not _PT3_MOVE_VERB_RE.search(player_text):
+        return None
+    m = _KNOWN_HEX_DEST_RE.search(player_text)
+    if not m:
+        return None
+    cand_tokens = [t for t in _normalize(m.group(1)).split() if len(t) >= 3]
+    if not cand_tokens:
+        return None
+
+    try:
+        from app.services.fow_service import compute_campaign_known_discovered
+        known, discovered, all_hexes = compute_campaign_known_discovered(
+            conn, campaign_id, character_id
+        )
+    except Exception as _fow_err:
+        logger.warning("pm3_known_compute_failed", error=str(_fow_err), campaign_id=campaign_id)
+        return KNOWN_HEX_UNKNOWN
+    visible = known | discovered
+    if not visible:
+        return KNOWN_HEX_UNKNOWN
+
+    # Polish hex-type labels (hex_type → label), e.g. bridge → "Most", river → "Rzeka".
+    htcfg: dict[str, str] = {}
+    try:
+        for row in conn.execute(
+            "SELECT hex_type, label FROM hex_type_config WHERE is_active = 1"
+        ).fetchall():
+            htcfg[row["hex_type"]] = row["label"] or ""
+    except Exception:
+        pass
+
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    cur = json.loads((gs["session_flags"] if gs else None) or "{}").get("current_hex") or {"q": 0, "r": 0}
+    cq, cr = int(cur.get("q", 0)), int(cur.get("r", 0))
+
+    matches: list[tuple[int, int]] = []
+    for coord in visible:
+        row = all_hexes.get(coord)
+        if not row:
+            continue
+        names: list[str] = []
+        if row.get("label"):
+            names.append(row["label"])
+        ht = row.get("hex_type")
+        if ht:
+            names.append(htcfg.get(ht, ht))  # Polish label
+            names.append(ht)                 # english key fallback
+        hit = False
+        for name in names:
+            for nt in _normalize(name).split():
+                if any(_fuzzy_prefix_match(ct, nt) for ct in cand_tokens):
+                    hit = True
+                    break
+            if hit:
+                break
+        if hit:
+            matches.append(coord)
+
+    matches = [c for c in matches if c != (cq, cr)]
+    if not matches:
+        return KNOWN_HEX_UNKNOWN
+    matches.sort(key=lambda c: hex_distance(cq, cr, c[0], c[1]))
+    return matches[0]
+
+
+def resolve_declared_move_target(
+    player_text: str,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> "tuple[str, str] | None":
+    """#1253: resolve a player's *declared* move ("idę/ruszam do X") to a PLACED
+    game_location, independently of whether the LLM emitted a location_intent.
+
+    Used as a post-LLM safety net: when the narrator describes a march in prose
+    but returns ``location_intent: null``, we still need to know where the hero
+    said they were going so the move can be committed mechanically.
+
+    Preference order (also the #1254 rule): sub-locations of the CURRENT hub win
+    over anything, then locations physically placed on a hex; floating macros with
+    no ``world_hex`` are excluded when a hub sub-location matches.
+
+    Returns ``(location_key, label)`` or None.
+    """
+    if not _PT3_MOVE_VERB_RE.search(player_text):
+        return None
+    m = _PT3_DEST_RE.search(player_text) or _KNOWN_HEX_DEST_RE.search(player_text)
+    if not m:
+        return None
+    cand = m.group(1).strip()
+    cand_tokens = [t for t in _normalize(cand).split() if len(t) >= 3]
+    if not cand_tokens:
+        return None
+
+    # Current hub: the settlement the hero is in (parent of current sub-loc, or the
+    # current macro itself). Sub-locations of this hub are the strongest match.
+    hub_id: int | None = None
+    try:
+        crow = conn.execute(
+            "SELECT gl.id, gl.location_type, gl.parent_id "
+            "FROM game_locations gl JOIN game_sessions gs ON gs.current_location_id = gl.id "
+            "WHERE gs.campaign_id = ? AND gl.is_active = 1 LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if crow:
+            hub_id = int(crow["parent_id"]) if (crow["location_type"] == "sub" and crow["parent_id"]) else int(crow["id"])
+    except Exception:
+        pass
+
+    rows = conn.execute(
+        "SELECT key, label, location_type, parent_id, world_hex_q FROM game_locations "
+        "WHERE is_active = 1 AND label IS NOT NULL"
+    ).fetchall()
+
+    best: tuple[int, float, str, str] | None = None  # (tier, score, key, label)
+    hub_sub_exists = any(
+        hub_id is not None and r["parent_id"] == hub_id for r in rows
+        if _label_matches_tokens(r["label"], cand_tokens)
+    )
+    for r in rows:
+        if not _label_matches_tokens(r["label"], cand_tokens):
+            continue
+        is_placed = r["world_hex_q"] is not None
+        is_hub_sub = hub_id is not None and r["parent_id"] == hub_id
+        is_floating_no_hex = (r["location_type"] == "macro") and not is_placed
+        # #1254: inside a settlement, never fall onto a floating macro-without-hex.
+        if hub_sub_exists and is_floating_no_hex:
+            continue
+        tier = 3 if is_hub_sub else (2 if is_placed else 1)
+        score = _label_similarity(cand, r["label"])
+        cur_best = best
+        if cur_best is None or (tier, score) > (cur_best[0], cur_best[1]):
+            best = (tier, score, r["key"], r["label"])
+
+    if best is None:
+        return None
+    return (best[2], best[3])
+
+
+def _label_matches_tokens(label: str, cand_tokens: list[str]) -> bool:
+    """True when any candidate token fuzzy-prefix-matches any label token."""
+    if not label:
+        return False
+    label_tokens = _normalize(label).split()
+    return any(
+        _fuzzy_prefix_match(ct, lt) for ct in cand_tokens for lt in label_tokens
+    )
+
+
+# ── PM2 (#1221): region gazetteer unlock ──────────────────────────────────────
+
+def _region_of_hex(conn: sqlite3.Connection, q: int, r: int) -> str | None:
+    """Overworld region tag of hex (q, r), or None if unplaced/unregioned."""
+    row = conn.execute(
+        "SELECT region FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 "
+        "AND is_active = 1 LIMIT 1",
+        (q, r),
+    ).fetchone()
+    return (row["region"] if row and row["region"] else None)
+
+
+def unlock_region_for_hex(
+    conn: sqlite3.Connection, campaign_id: int, q: int, r: int
+) -> dict[str, str] | None:
+    """PM2 (#1221): mark the region containing hex (q, r) as *known* for this
+    campaign so its gazetteer (main landmarks/roads/settlements) becomes visible.
+
+    Cumulative: ``session_flags.known_regions`` only ever grows — a region once
+    unlocked never disappears (return trip to the old land keeps the new one).
+
+    Returns ``{"key", "label"}`` when this call newly unlocks a region (so the
+    caller can fire a narrator hint), else ``None`` (no region, already known, or
+    no session row).
+    """
+    region = _region_of_hex(conn, q, r)
+    if not region:
+        return None
+    gs = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not gs:
+        return None
+    sf = json.loads(gs["session_flags"] or "{}")
+    known = sf.get("known_regions")
+    if not isinstance(known, list):
+        known = []
+    if region in known:
+        return None
+    known.append(region)
+    sf["known_regions"] = known
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+        (json.dumps(sf, ensure_ascii=False), gs["id"]),
+    )
+    label_row = conn.execute(
+        "SELECT label FROM world_regions WHERE key = ? LIMIT 1", (region,)
+    ).fetchone()
+    label = (label_row["label"] if label_row and label_row["label"] else region)
+    logger.info("pm2_region_unlocked", campaign_id=campaign_id, region=region)
+    return {"key": region, "label": label}
+
+
 # ── Main travel resolver ──────────────────────────────────────────────────────
 
 def resolve_chain_travel(
@@ -371,9 +647,15 @@ def resolve_chain_travel(
     to_hex: tuple[int, int],
     character_sheet: dict,
     conn: sqlite3.Connection,
+    route_mode: str = "direct",
 ) -> dict[str, Any]:
     """
     Chain travel from from_hex to to_hex.
+
+    PM4 #1223: ``route_mode`` ∈ {"direct","road"}. "road" biases the A* path onto
+    roads (ROAD_COST_MULT) and halves encounter chance on road hexes
+    (ROAD_ENCOUNTER_MULT). The mode is persisted into ``travel_plan`` so an
+    interrupted trip resumes in the same mode (PT6 #1116).
 
     Returns:
         {
@@ -473,7 +755,7 @@ def resolve_chain_travel(
             "hex_data": dest_data, "teleport_used": None, "item_blocked": None,
         }
 
-    path = find_path(from_hex, to_hex, hexes, hex_type_cfg)
+    path = find_path(from_hex, to_hex, hexes, hex_type_cfg, route_mode=route_mode)
     if path is None:
         return {
             "ok": False,
@@ -541,6 +823,10 @@ def resolve_chain_travel(
         _terrain_cost = float(
             hex_type_cfg.get(_cur_data.get("hex_type", "plains"), {}).get("travel_hours", 1.0)
         ) * _weather_mult  # PT15 #1128: pogoda podnosi koszt godzinowy marszu (teren, nie teleport)
+        # PM4 #1223: on a road in road mode the hero moves faster per hex (ROAD_COST_MULT),
+        # matching the discounted A* cost so total_hours reflects the trakt's speed.
+        if route_mode == "road" and _cur_data.get("hex_type") == "road":
+            _terrain_cost *= ROAD_COST_MULT
         steps.append(
             MovementStep(
                 key=_cur,
@@ -566,7 +852,13 @@ def resolve_chain_travel(
         if night_march:
             _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
             _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
-        if _roll_encounter(_enc_hex_data, hex_type_cfg):
+        # PM4 #1223: travelling by road (route_mode="road") halves encounters on road hexes.
+        _road_mult = (
+            ROAD_ENCOUNTER_MULT
+            if route_mode == "road" and hex_data.get("hex_type") == "road"
+            else 1.0
+        )
+        if _roll_encounter(_enc_hex_data, hex_type_cfg, chance_mult=_road_mult):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
                 return {
@@ -605,6 +897,7 @@ def resolve_chain_travel(
             logger.warning("temp_camp_cleanup_failed", q=from_hex[0], r=from_hex[1], error=str(e))
 
     # Update character's current hex in session_flags
+    _region_unlocked: dict[str, str] | None = None
     try:
         gs = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -623,6 +916,7 @@ def resolve_chain_travel(
                     (_hex_location_key,),
                 ).fetchone()
                 if _ai_check and _ai_check["ai_generated"] == 1:
+                    _prev_location_key = _hex_location_key
                     _aq, _ar = arrived_hex[0], arrived_hex[1]
                     _hex_type = arrived_data.get("hex_type", "plains")
                     conn.execute(
@@ -637,6 +931,17 @@ def resolve_chain_travel(
                         )
                     except Exception:
                         _hex_location_key = None
+                    # R7 #1247 leak #3: we already NULLed the hex's location_key
+                    # above. If the replacement placement failed, restore the
+                    # previous key — otherwise the hero arrives on a hex (and a
+                    # session) with no location at all ("przybycie donikąd").
+                    if not _hex_location_key:
+                        conn.execute(
+                            "UPDATE world_hexes SET location_key = ?"
+                            " WHERE q = ? AND r = ? AND is_active = 1",
+                            (_prev_location_key, _aq, _ar),
+                        )
+                        _hex_location_key = _prev_location_key
 
             # Try placement engine for hexes that have no DB-seeded location
             if not _hex_location_key and arrived_hex != from_hex:
@@ -698,6 +1003,34 @@ def resolve_chain_travel(
                ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
             (campaign_id, q, r),
         )
+
+        # R6 (#1246): hexy faktycznie przebyte trasą (bez celu, który dostaje
+        # discovered wyżej) → status 'known'. Obejmuje kroki wykonane przed
+        # przerwaniem podróży (arrived_index < len(steps)-1). Nie degraduje hexów
+        # już discovered (walka/nocleg zostają odkryte).
+        try:
+            _travelled = {
+                steps[_i].key for _i in range(0, _outcome.arrived_index + 1)
+            } - {arrived_hex}
+            for _tq, _tr in _travelled:
+                conn.execute(
+                    """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, known)
+                       VALUES (?,?,?,1)
+                       ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET known = 1""",
+                    (campaign_id, _tq, _tr),
+                )
+        except Exception:
+            pass
+
+        # PM2 (#1221): entering a new region unlocks its gazetteer. Runs on every
+        # arrival (this is the single choke every travel path funnels through).
+        try:
+            _region_unlocked = unlock_region_for_hex(
+                conn, campaign_id, arrived_hex[0], arrived_hex[1]
+            )
+        except Exception as _ru_err:
+            logger.warning("pm2_region_unlock_failed", error=str(_ru_err))
+
         conn.commit()
     except Exception:
         pass
@@ -787,6 +1120,8 @@ def resolve_chain_travel(
                     "step_index": enc_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": "encounter",
+                    # PM4 #1223: resume the trip in the same route mode (direct/road).
+                    "route_mode": route_mode,
                     # #1146: persist the rolled enemy so the deterministic
                     # [COMBAT_START] injection (turns.py) knows whom to spawn even
                     # when the narrator ignores the encounter fact.
@@ -816,6 +1151,8 @@ def resolve_chain_travel(
                     "step_index": b_idx,
                     "hours_remaining": float(remaining_hexes),
                     "interrupt_reason": _budget_reason,
+                    # PM4 #1223: resume the trip in the same route mode (direct/road).
+                    "route_mode": route_mode,
                     # PT-F1 #1135: TTL age counter (see encounter branch above).
                     "age": 0,
                 }
@@ -844,6 +1181,8 @@ def resolve_chain_travel(
         # PT15 #1128: sygnał dla narratora, gdy pogoda spowalniała marsz
         "weather_multiplier": _weather_mult,
         "weather_slowdown": _weather_type,  # typ pogody, tylko gdy mnożnik > 1.0
+        # PM2 #1221: {"key","label"} gdy ten ruch odblokował nową krainę, else None
+        "region_unlocked": _region_unlocked,
     }
 
 
@@ -1044,48 +1383,23 @@ def _find_location_on_hex(conn: sqlite3.Connection, q: int, r: int) -> str | Non
       2. Fallback: a game_location stamped with this hex via world_hex_q/r, preferring
          a top-level macro/settlement over a child sub-location.
     Returns None when no active location is mapped to the hex.
+
+    #1243: delegates to the canonical reader (hex canon first, derived cache
+    fallback with drift logging).
     """
-    # 1. Canonical world_hexes pairing.
     try:
-        wh = conn.execute(
-            "SELECT location_key FROM world_hexes "
-            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 "
-            "AND location_key IS NOT NULL AND location_key != '' LIMIT 1",
-            (q, r),
-        ).fetchone()
-    except sqlite3.OperationalError:
-        wh = None
-    if wh:
-        wh_key = wh["location_key"] if isinstance(wh, sqlite3.Row) else wh[0]
-        loc = conn.execute(
-            "SELECT key FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1 LIMIT 1",
-            (wh_key,),
-        ).fetchone()
-        if loc:
-            return loc["key"] if isinstance(loc, sqlite3.Row) else loc[0]
-
-    # 2. Fallback: game_location stamped with this hex.
-    try:
-        row = conn.execute(
-            "SELECT key FROM game_locations "
-            "WHERE world_hex_q = ? AND world_hex_r = ? AND COALESCE(is_active, 1) = 1 "
-            "ORDER BY (location_type = 'macro') DESC, (parent_key IS NULL) DESC, id "
-            "LIMIT 1",
-            (q, r),
-        ).fetchone()
+        from app.services.hex_location_link import location_on_hex
+        return location_on_hex(conn, q, r, level=0)
     except sqlite3.OperationalError:
         return None
-    if not row:
-        return None
-    return row["key"] if isinstance(row, sqlite3.Row) else row[0]
 
 
-def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int] | None":
+def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[int, int, int] | None":
     """#1110 — the start_hex assigned to the campaign's source template in the Kuźnia.
 
-    Returns (q, r) when the campaign was launched from a template that has an explicit
-    start_hex_q/r set, else None. Prefers `template_id`, falls back to `source_template_id`
-    (create_campaign stamps the latter).
+    Returns (q, r, template_id) when the campaign was launched from a template that
+    has an explicit start_hex_q/r set, else None. Prefers `template_id`, falls back
+    to `source_template_id` (create_campaign stamps the latter).
     """
     try:
         crow = conn.execute(
@@ -1101,7 +1415,7 @@ def _template_start_hex(conn: sqlite3.Connection, campaign_id: int) -> "tuple[in
         "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?", (tid,)
     ).fetchone()
     if trow and trow["start_hex_q"] is not None and trow["start_hex_r"] is not None:
-        return (int(trow["start_hex_q"]), int(trow["start_hex_r"]))
+        return (int(trow["start_hex_q"]), int(trow["start_hex_r"]), int(tid))
     return None
 
 
@@ -1124,8 +1438,16 @@ def resolve_starting_hex(
     """
     import json as _json
 
-    # When no starting location is given (or sentinel "Start" from reset-progress),
-    # pick one randomly (50% settlement, 50% wilderness) to avoid always-wilderness starts.
+    # #1255: resolve position IDEMPOTENTLY. A bare GET of world-map calls this with
+    # starting_location_name=None; the old code randomized the start FIRST (sentinel →
+    # _pick_random_start_location → label-match to a random hex) and only reused the
+    # existing/prior hex much later, so every read teleported the pin and desynced
+    # hex↔location (the R3/R5 rozjazd). Priority now, highest first:
+    #   1. Existing session current_hex — a placed/resumed campaign never moves.
+    #   2. Kuźnia template start_hex (#1110) — authoritative at creation.
+    #   3. Explicit starting_location_name label-match.
+    #   4. C18 reuse of the owner's prior-campaign hex.
+    #   5. Sentinel random pick — ONLY for a truly new character with zero history.
     _is_sentinel = (
         not starting_location_name
         or not starting_location_name.strip()
@@ -1133,28 +1455,76 @@ def resolve_starting_hex(
         or (starting_location_name.strip().lower().startswith("start ") and
             starting_location_name.strip()[6:].isdigit())
     )
-    if _is_sentinel:
-        starting_location_name = _pick_random_start_location(conn) or None
 
-    # #1110 — an explicit start_hex assigned in the Kuźnia (campaign_templates.start_hex)
+    matched_hex = None
+    _tpl_id: "int | None" = None
+
+    # 1. Existing session position — verbatim reuse (idempotent for resumed campaigns).
+    #    This wins over the template/label/random paths so re-resolving never moves a pin.
+    _existing_hex = None
+    _gs_pos = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if _gs_pos:
+        try:
+            _ch = _json.loads(_gs_pos["session_flags"] or "{}").get("current_hex")
+            if isinstance(_ch, dict) and _ch.get("q") is not None and _ch.get("r") is not None:
+                _existing_hex = (int(_ch["q"]), int(_ch["r"]))
+        except Exception:
+            _existing_hex = None
+    if _existing_hex:
+        _ewh = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+            (_existing_hex[0], _existing_hex[1]),
+        ).fetchone()
+        if _ewh:
+            matched_hex = {
+                "q": _existing_hex[0], "r": _existing_hex[1],
+                "hex_type": _ewh["hex_type"], "label": _ewh["label"],
+            }
+
+    # 2. #1110 — an explicit start_hex assigned in the Kuźnia (campaign_templates.start_hex)
     # is authoritative: it wins over label-matching so the campaign starts exactly where
     # the template says. Only used when that hex exists on the overworld; otherwise fall
     # through to the legacy name-match (backward compatible for campaigns without a hex).
-    matched_hex = None
-    _tpl_hex = _template_start_hex(conn, campaign_id)
-    if _tpl_hex:
-        _twh = conn.execute(
-            "SELECT hex_type, label FROM world_hexes "
-            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
-            (_tpl_hex[0], _tpl_hex[1]),
-        ).fetchone()
-        if _twh:
-            matched_hex = {
-                "q": _tpl_hex[0], "r": _tpl_hex[1],
-                "hex_type": _twh["hex_type"], "label": _twh["label"],
-            }
+    if matched_hex is None:
+        _tpl_hex = _template_start_hex(conn, campaign_id)
+        if _tpl_hex:
+            _twh = conn.execute(
+                "SELECT hex_type, label FROM world_hexes "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (_tpl_hex[0], _tpl_hex[1]),
+            ).fetchone()
+            if _twh:
+                matched_hex = {
+                    "q": _tpl_hex[0], "r": _tpl_hex[1],
+                    "hex_type": _twh["hex_type"], "label": _twh["label"],
+                }
+                _tpl_id = _tpl_hex[2]
 
-    # Try to match existing hex by label (fallback when no template hex applied)
+    # 4-precompute. C18 reuse candidate (owner's prior-campaign hex) — resolved now so it
+    # can pre-empt the random sentinel pick below (a returning owner keeps their world).
+    _reuse_coords = None
+    if matched_hex is None:
+        _owner_row = conn.execute(
+            "SELECT owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        _owner_uid = (
+            int(_owner_row["owner_user_id"])
+            if _owner_row and _owner_row["owner_user_id"] is not None else None
+        )
+        if _owner_uid:
+            _reuse_coords = _find_character_existing_hex(conn, campaign_id, _owner_uid)
+
+    # 5. Sentinel random pick — ONLY when nothing above resolved a hex AND there is no
+    #    prior-campaign hex to reuse. This is the ONLY path that may randomize, and it
+    #    fires solely for a brand-new character with zero history.
+    if _is_sentinel and matched_hex is None and not _reuse_coords:
+        starting_location_name = _pick_random_start_location(conn) or None
+
+    # 3. Try to match existing hex by label (fallback when no anchored/template hex)
     if matched_hex is None and starting_location_name and starting_location_name.strip():
         # #992-ii: ONLY overworld hexes (map_level=0) are valid start/travel nodes.
         # Without this filter the label match could resolve to a map_level=1 LOCAL
@@ -1180,16 +1550,9 @@ def resolve_starting_hex(
         hex_type = matched_hex["hex_type"]
         label = matched_hex["label"]
     else:
-        # C18: prefer an already-discovered hex from same user's previous campaigns
-        owner_row = conn.execute(
-            "SELECT owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
-        ).fetchone()
-        owner_user_id = int(owner_row["owner_user_id"]) if owner_row else None
-        reuse_coords = (
-            _find_character_existing_hex(conn, campaign_id, owner_user_id)
-            if owner_user_id else None
-        )
-
+        # 4. C18: prefer an already-discovered hex from same user's previous campaigns
+        #    (precomputed above so it can pre-empt the random sentinel pick).
+        reuse_coords = _reuse_coords
         if reuse_coords:
             sq, sr = reuse_coords
             wh = conn.execute(
@@ -1269,6 +1632,26 @@ def resolve_starting_hex(
         except Exception as _pe:
             logger.warning("u28_placement_engine_error", error=str(_pe))
 
+    # #1206/#1212 — template launch: materialize the template's locations (settlement
+    # hub + sub-locations with a FAZA ML local map, or the flat start location) and
+    # anchor the session at the story's start location instead of raw hex terrain.
+    # Runs even when an on-hex location was already paired: for a settlement the
+    # on-hex location is the HUB, but the session must start INSIDE the start
+    # sub-location (karczma), not "in the village" generically.
+    if not is_new and _tpl_id is not None:
+        try:
+            from app.services.template_start_anchor import ensure_template_locations
+            _tsl = ensure_template_locations(conn, _tpl_id, campaign_id=campaign_id)
+            if _tsl and int(_tsl["q"]) == sq and int(_tsl["r"]) == sr:
+                loc_key = _tsl["key"]
+                logger.info(
+                    "s17_template_start_location_materialized",
+                    campaign_id=campaign_id, loc_key=loc_key, q=sq, r=sr,
+                    status=_tsl["status"],
+                )
+        except Exception as _tsl_err:
+            logger.warning("template_start_location_error", error=str(_tsl_err))
+
     # #1152: for an EXISTING hex with no on-hex location, never anchor the session
     # to a name-matched or first-canonical location — starting_location_name may be
     # a random pick (sentinel) or a label from a different hex, and anchoring to it
@@ -1327,11 +1710,10 @@ def resolve_starting_hex(
                 starting_name=starting_location_name,
             )
 
-    if is_new:
-        conn.execute(
-            "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ?",
-            (loc_key, sq, sr),
-        )
+    if is_new and loc_key:
+        # #1243: single writer — sets hex canon + refreshes the derived cache.
+        from app.services.hex_location_link import link_location_to_hex
+        link_location_to_hex(conn, loc_key, sq, sr)
 
     # #1112: atomic position write via canonical service (current_hex + loc_id in one tx)
     if gs:
@@ -1355,6 +1737,341 @@ def resolve_starting_hex(
             current_location_id=_start_loc_id,
         )
 
+        # PM2 (#1221): seed known_regions with the start hex's region so the
+        # origin land's gazetteer is unlocked from turn 0 (idempotent — only sets
+        # it when absent, never shrinks it on a resumed campaign).
+        try:
+            _sf_row = conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _sf_row:
+                _sf_kr = json.loads(_sf_row["session_flags"] or "{}")
+                if not isinstance(_sf_kr.get("known_regions"), list):
+                    _origin = _region_of_hex(conn, sq, sr)
+                    _sf_kr["known_regions"] = [_origin] if _origin else []
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_sf_kr, ensure_ascii=False), _sf_row["id"]),
+                    )
+        except Exception as _kr_err:
+            logger.warning("pm2_known_regions_seed_failed", campaign_id=campaign_id, error=str(_kr_err))
+
+        # #1212 — start inside a settlement sub-location: seed the local-map
+        # position (session_flags.local_hex), mirroring #1057's narrative sync.
+        if _start_loc_id is not None and loc_key:
+            try:
+                _sub_row = conn.execute(
+                    "SELECT location_type, parent_key FROM game_locations WHERE id = ?",
+                    (_start_loc_id,),
+                ).fetchone()
+                if _sub_row and (_sub_row["location_type"] or "") == "sub" and _sub_row["parent_key"]:
+                    from app.services.local_hex_service import (
+                        get_local_hex_for_subloc, auto_assign_local_hex,
+                    )
+                    _lh = get_local_hex_for_subloc(conn, loc_key) or auto_assign_local_hex(
+                        conn, loc_key, _sub_row["parent_key"], campaign_id=campaign_id
+                    )
+                    if _lh:
+                        set_position(
+                            conn,
+                            campaign_id=campaign_id,
+                            local_hex={
+                                "hex_id": _lh["id"], "q": _lh["q"], "r": _lh["r"],
+                                "location_key": _lh.get("location_key"),
+                            },
+                        )
+            except Exception as _lh_err:
+                logger.warning("start_local_hex_error", campaign_id=campaign_id, error=str(_lh_err))
+
+        # #1212 — spawning at the start location IS visiting it: close the act-1
+        # visit_location beat that targets it (przybycie_do_karczmy class).
+        if _start_loc_id is not None and loc_key:
+            try:
+                from app.services.campaign_plan_runtime import auto_complete_beats_by_event
+                auto_complete_beats_by_event(campaign_id, "visit_location", loc_key, 1, conn)
+            except Exception as _bt_err:
+                logger.warning("start_visit_beat_error", campaign_id=campaign_id, error=str(_bt_err))
+
+    # #1208 — plan-declared starting hour (evening tavern scene ≠ 09:00). Runs once
+    # here because every campaign-start flow passes through resolve_starting_hex;
+    # init_clock_from_plan itself refuses to touch an already-running clock.
+    try:
+        from app.services.clock_service import init_clock_from_plan
+        _sh = init_clock_from_plan(campaign_id, conn=conn)
+        if _sh is not None:
+            logger.info("clock_start_hour_applied", campaign_id=campaign_id, start_hour=_sh)
+    except Exception as _clk_err:
+        logger.warning("clock_start_hour_error", campaign_id=campaign_id, error=str(_clk_err))
+
     conn.commit()
 
     return {"q": sq, "r": sr, "hex_type": hex_type, "label": label or starting_location_name, "is_new": is_new}
+
+
+# ── #1244 (R4): single travel executor shared by every travel endpoint ────────
+
+
+def open_conn() -> sqlite3.Connection:
+    """Canonical sqlite opener for the travel endpoints (#1244 item 3).
+
+    All three travel routes now open/commit the DB the same way — this helper +
+    `execute_travel` (which owns every commit) so there is one open/commit path.
+    Caller owns closing the connection (wrap in try/finally).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _record_travel_turn(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int, result: dict
+) -> None:
+    """Insert a synthetic narrative turn for a completed map move.
+
+    Without this the LLM conversation history has no trace of the move and the
+    narrator keeps describing the previous location/terrain. Extracted verbatim
+    from the old /travel endpoint so every travel route now records it (#1244).
+    """
+    _hd = result.get("hex_data") or {}
+    _terrain = _hd.get("hex_type") or "nieznany"
+    _tcfg = conn.execute(
+        "SELECT label FROM hex_type_config WHERE hex_type = ?", (_terrain,)
+    ).fetchone()
+    _terrain_pl = (_tcfg["label"] if _tcfg else None) or _terrain
+    _place = _hd.get("label") or ""
+    _hours = result.get("total_hours") or 0
+    _narr = f"Podróżujesz przez świat i docierasz do nowego miejsca. Teren: {_terrain_pl}."
+    if _place:
+        _narr += f" Miejsce: {_place}."
+    if _hours:
+        _narr += f" Droga zajęła {_hours} h."
+    _tn_row = conn.execute(
+        "SELECT COALESCE(MAX(turn_number),0)+1 AS n FROM campaign_turns WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    conn.execute(
+        "INSERT INTO campaign_turns (campaign_id, character_id, user_text, route, assistant_text, turn_number) "
+        "VALUES (?,?,?,?,?,?)",
+        (
+            campaign_id, character_id,
+            "[Podróż mapą — przemieszczam się na nowy teren]",
+            "narrative",
+            json.dumps({"narrative": _narr}, ensure_ascii=False),
+            int(_tn_row["n"]),
+        ),
+    )
+    conn.commit()
+
+
+# ── PM4 #1223: route-mode analysis + player choice detection ──────────────────
+
+# Road-choice cue words in the player's answer. "road" → follow the trakt;
+# "direct" → cut straight across the wilds.
+_ROUTE_ROAD_RE = re.compile(
+    r"\b(trakt\w*|drog[aąęio]\w*|gośćc\w*|gościńc\w*|bezpieczn\w*|dłuż\w*|okrężn\w*)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_ROUTE_DIRECT_RE = re.compile(
+    r"\b(prosto|wprost|przełaj|przelaj|na\s+skróty|skrót\w*|skroty|dzicz\w*|"
+    r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def detect_route_choice(player_text: str) -> str | None:
+    """PM4 #1223: classify a player's answer to the direct/road question.
+
+    Returns "road", "direct", or None when the text picks neither (or both,
+    which is treated as ambiguous — the caller re-hints once then defaults).
+    """
+    if not player_text:
+        return None
+    road = bool(_ROUTE_ROAD_RE.search(player_text))
+    direct = bool(_ROUTE_DIRECT_RE.search(player_text))
+    if road and not direct:
+        return "road"
+    if direct and not road:
+        return "direct"
+    return None
+
+
+def analyze_route(
+    from_hex: tuple[int, int],
+    to_hex: tuple[int, int],
+    conn: sqlite3.Connection,
+) -> dict[str, Any]:
+    """PM4 #1223: decide whether the direct/road question is worth asking.
+
+    Returns ``{"dist", "road_alt", "terrain_label"}``:
+      * ``dist``          — hex distance from→to,
+      * ``road_alt``      — a `road` hex sits within ROAD_DETOUR_RADIUS of the
+                            direct A* path (a viable trakt exists),
+      * ``terrain_label`` — Polish label of the dominant non-road terrain the
+                            direct route crosses (for the question text).
+    """
+    dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
+    out = {"dist": dist, "road_alt": False, "terrain_label": "dzicz"}
+    try:
+        hexes = _load_hex_graph(conn)
+        cfg = _load_hex_type_config(conn)
+        path = find_path(from_hex, to_hex, hexes, cfg, route_mode="direct")
+        if not path or len(path) <= 1:
+            return out
+        # dominant non-road terrain along the route
+        counts: dict[str, int] = {}
+        for c in path[1:]:
+            ht = hexes.get(c, {}).get("hex_type", "plains")
+            if ht != "road":
+                counts[ht] = counts.get(ht, 0) + 1
+        if counts:
+            top = max(counts, key=counts.get)
+            out["terrain_label"] = cfg.get(top, {}).get("label") or top
+        # is there a road within reach of the direct path?
+        road_coords = [c for c, d in hexes.items() if d.get("hex_type") == "road"]
+        if road_coords:
+            for pc in path:
+                if any(
+                    hex_distance(pc[0], pc[1], rc[0], rc[1]) <= ROAD_DETOUR_RADIUS
+                    for rc in road_coords
+                ):
+                    out["road_alt"] = True
+                    break
+    except Exception as _ar_err:  # never break a turn over the offer
+        logger.warning("pm4_analyze_route_failed", error=str(_ar_err))
+    return out
+
+
+class TravelError(Exception):
+    """Raised by execute_travel; `code` maps to an HTTP status in the wrappers."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def execute_travel(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    target: dict,
+    *,
+    actor: int,
+    record_turn: bool = True,
+    route_mode: str = "direct",
+) -> dict[str, Any]:
+    """#1244 (R4): the single travel pipeline every endpoint delegates to.
+
+    One canonical sequence so /travel, /hex-travel (player) and the admin
+    hex-travel route all produce IDENTICAL state (position, scene, turn row,
+    discovered fog):
+      1. resolve origin (session_flags.current_hex, else resolve_starting_hex)
+      2. resolve destination (target hex OR location_key → hex)
+      3. resolve_chain_travel (movement + fog + encounters)
+      4. advance in-game clock by hours travelled
+      5. dungeon_prompt flag for the destination hex
+      6. exit old / enter new location scene
+      7. record a synthetic narrative turn (narrator sees the move)
+
+    Args:
+      conn: open sqlite connection (caller owns open/close; this fn owns commits).
+      campaign_id: campaign.
+      target: {"hex": {"q","r"}} OR {"location_key": str}.
+      actor: character_id performing the travel.
+
+    Returns the resolve_chain_travel result dict enriched with `clock`,
+    `dungeon_prompt` and `scene_loaded`.
+
+    Raises TravelError(code) — code ∈ {character_not_found, no_target,
+    location_not_placed}.
+    """
+    character_id = actor
+
+    char = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
+        (character_id, campaign_id),
+    ).fetchone()
+    if char is None:
+        raise TravelError("character_not_found", "Character not found")
+    sheet = json.loads(char["sheet_json"] or "{}")
+
+    # (2) resolve destination hex
+    dest: "tuple[int, int] | None" = None
+    _th = target.get("hex")
+    _lk = target.get("location_key")
+    if _th:
+        dest = (int(_th["q"]), int(_th["r"]))
+    elif _lk:
+        dest = resolve_location_key_to_hex(_lk, conn)
+        if dest is None:
+            raise TravelError(
+                "location_not_placed",
+                f"Location '{_lk}' not placed on any hex yet.",
+            )
+    if dest is None:
+        raise TravelError("no_target", "Provide target hex or location_key")
+    dest_q, dest_r = dest
+
+    # (1) resolve origin — current_hex if present, else canonical fallback via
+    # resolve_starting_hex (consistent across all endpoints — replaces the old
+    # (0,0)/dest ad-hoc fallbacks in turns.py).
+    gs = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    flags = json.loads((gs["session_flags"] if gs else None) or "{}")
+    ch = flags.get("current_hex")
+    if ch:
+        from_hex = (int(ch["q"]), int(ch["r"]))
+    else:
+        _start = resolve_starting_hex(campaign_id, character_id, None, conn)
+        from_hex = (int(_start["q"]), int(_start["r"]))
+
+    # (3) movement + fog + encounters
+    result = resolve_chain_travel(
+        campaign_id=campaign_id, character_id=character_id,
+        from_hex=from_hex, to_hex=(dest_q, dest_r),
+        character_sheet=sheet, conn=conn,
+        route_mode=route_mode,  # PM4 #1223
+    )
+
+    # (4) advance in-game clock by hours travelled
+    try:
+        from app.services.clock_service import advance_clock as _advance_clock
+        travel_hours = float(result.get("total_hours") or 0.0)
+        if travel_hours > 0:
+            clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
+            conn.commit()
+            result["clock"] = clock_state
+    except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
+        logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
+
+    # (5) dungeon hex flag — check destination (not arrived_hex): travel may fail
+    # but the hex is still a dungeon.
+    hex_row = conn.execute(
+        "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+        (dest_q, dest_r),
+    ).fetchone()
+    result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
+
+    # (6) exit old scene, enter new scene if destination hex has a location
+    try:
+        from app.services.world_state_service import enter_location_scene, exit_location_scene
+        exit_location_scene(campaign_id)
+        dest_location_key = (result.get("hex_data") or {}).get("location_key")
+        if dest_location_key:
+            result["scene_loaded"] = enter_location_scene(campaign_id, dest_location_key)
+    except Exception as _scene_err:  # noqa: BLE001
+        logger.warning("enter_location_scene_failed", error=str(_scene_err), campaign_id=campaign_id)
+
+    # (7) record the move as a synthetic narrative turn.
+    # PM3 #1222: the pre-LLM descriptive-travel path passes record_turn=False —
+    # run_narrative_turn records the real (narrated) turn right after, so a synthetic
+    # "[Podróż mapą]" row here would duplicate it.
+    if result.get("ok") and record_turn:
+        try:
+            _record_travel_turn(conn, campaign_id, character_id, result)
+        except Exception as _trec_err:  # noqa: BLE001
+            logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
+
+    return result

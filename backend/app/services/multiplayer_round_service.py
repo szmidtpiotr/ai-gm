@@ -18,6 +18,7 @@ from typing import Optional
 from app.core.db_runtime import resolve_db_path
 from app.core.logging import get_logger
 from app.services import llm_service
+from app.services import turn_lock
 from app.services.dice import parse_character_sheet, resolve_roll
 from app.services.push_notification_service import send_push, send_push_to_campaign_players
 from app.services.combat_service import apply_mp_default_defense
@@ -609,6 +610,33 @@ def _format_roll_fact_line(fact: dict) -> str:
 
 
 def trigger_narration(round_id: int) -> None:
+    """#1186: per-campaign lock spójny z solo turn-lock — dwie równoległe narracje
+    (double all-submitted trigger / sweep vs submit) nie mogą dwa razy zawołać LLM.
+    Busy → cicho pomiń (inny wątek już prowadzi narrację tej kampanii).
+    """
+    _c = _db()
+    try:
+        _r = _c.execute(
+            "SELECT campaign_id FROM campaign_rounds WHERE id = ?", (round_id,)
+        ).fetchone()
+        _campaign_id = int(_r["campaign_id"]) if _r else None
+    finally:
+        _c.close()
+    if _campaign_id is None:
+        return _trigger_narration_impl(round_id)
+    try:
+        _lk = turn_lock.acquire(_campaign_id)
+    except turn_lock.TurnLockBusy:
+        logger.info("mp_narration_already_in_flight",
+                    round_id=round_id, campaign_id=_campaign_id)
+        return
+    try:
+        return _trigger_narration_impl(round_id)
+    finally:
+        turn_lock.release(_lk)
+
+
+def _trigger_narration_impl(round_id: int) -> None:
     conn = _db()
     try:
         row = conn.execute(

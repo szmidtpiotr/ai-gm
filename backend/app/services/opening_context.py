@@ -20,13 +20,26 @@ def build_opening_plan_context(gm_plan_json: str | None) -> str:
         title = arc.get("title", "")
         road = arc.get("roadmap", "")
         locs = ((arc.get("hooks") or {}).get("locations") or [])
-        if not (title or locs):
+
+        # #1208 — plan-declared starting hour → the opening must be narrated at
+        # that time of day (evening tavern ≠ default morning).
+        time_line = ""
+        try:
+            _sh = int(plan.get("start_hour"))
+            if 0 <= _sh <= 23:
+                from app.services.clock_service import _time_of_day_label
+                time_line = f"\n- Pora startowa: {_time_of_day_label(_sh)}, około {_sh:02d}:00 — scena otwarcia dzieje się DOKŁADNIE o tej porze"
+        except (TypeError, ValueError):
+            pass
+
+        if not (title or locs or time_line):
             return ""
         return (
             "\n\nKontekst kampanii:"
             + (f"\n- Tytuł wątku: {title}" if title else "")
             + (f"\n- Zarys: {road[:200]}" if road else "")
             + (f"\n- Sugerowane lokacje: {', '.join(locs[:3])}" if locs else "")
+            + time_line
             + "\n\nOtwarcie MUSI być spójne z tym kontekstem — wybierz odpowiednie miejsce startowe, NIE las jeśli fabuła tego nie wymaga."
         )
     except Exception:
