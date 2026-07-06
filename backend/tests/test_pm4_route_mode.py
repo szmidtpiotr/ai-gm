@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS world_regions (
 CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY,
     campaign_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active',
     sheet_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS campaign_turns (
@@ -373,3 +374,48 @@ def test_travel_plan_stores_route_mode(conn, monkeypatch):
     assert tp is not None
     assert tp.get("route_mode") == "road"
     assert tp.get("interrupt_reason") == "encounter"
+
+
+# ── #1256: narrative-path travel also offers the direct/road choice ───────────
+# When the intent classifier tags a travel phrase ("udaję się do X") as
+# explore/other, the turn goes down the LLM → R5 _run_narrative_travel path,
+# which historically executed the trip immediately and skipped PM4. The fix
+# re-runs _pm4_maybe_prompt there so the question fires regardless of routing.
+
+def _narr_travel(conn, location_key, label="Vilnograd"):
+    from app.api.turns import _run_narrative_travel
+    clean = json.dumps(
+        {"narrative": "placeholder", "location_intent": {"action": "move"}},
+        ensure_ascii=False,
+    )
+    return _run_narrative_travel(conn, 1, location_key, label, clean)
+
+
+def test_narrative_travel_prompts_route_choice(conn):
+    out = _narr_travel(conn, "vilnograd")
+    data = json.loads(out)
+    assert "Którą drogę wybierasz" in data["narrative"], data
+    assert "traktu" in data["narrative"], data
+    assert data["location_intent"] is None
+    assert _current_hex(conn) == {"q": 0, "r": 0}              # did NOT move
+    assert _flags(conn).get("pending_travel_choice") is not None
+
+
+def test_narrative_prompt_then_road_answer_travels(conn):
+    _narr_travel(conn, "vilnograd")                            # arms the question
+    res = _run(conn, "idę traktem")                            # pre-LLM handler answers
+    assert res["executed"] is True, res
+    assert _current_hex(conn) == {"q": 4, "r": 0}             # reached Vilnograd
+    tp = _flags(conn).get("travel_plan")
+    if tp is not None:  # plan only persists when the trip is interrupted
+        assert tp.get("route_mode") == "road"
+    assert "traktem" in (res["system_fact"] or "")            # narrated as the trakt
+    assert _flags(conn).get("pending_travel_choice") is None   # cleared
+
+
+def test_narrative_short_trip_no_prompt(conn):
+    out = _narr_travel(conn, "brod", label="Bród")            # dist 2 → no ask
+    data = json.loads(out)
+    assert "Którą drogę wybierasz" not in data.get("narrative", "")
+    assert _flags(conn).get("pending_travel_choice") is None
+    assert _current_hex(conn) == {"q": 0, "r": 2}             # travelled straight away

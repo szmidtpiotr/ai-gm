@@ -820,6 +820,53 @@ def _run_narrative_travel(
         )
         return _inject_location_blocked(clean_response, "brak bohatera do podróży")
 
+    # #1256 (PM4 parity): the intent classifier can route a travel phrase
+    # ("udaję się do X", "chcę dojść do X") down THIS narrative path, which
+    # historically skipped the deterministic direct/road offer that lives on
+    # execute_directional_travel → _pm4_maybe_prompt. Re-run that offer here so
+    # the "prosto przez las czy traktem?" question fires regardless of how the
+    # turn was classified. When it fires we DO NOT travel this turn: the pending
+    # choice is stashed in session_flags (the pre-LLM handler in
+    # execute_directional_travel picks up the player's "idę traktem" answer next
+    # turn) and the narrative is replaced with the player-facing question.
+    try:
+        from app.services.turn_pipeline import _pm4_maybe_prompt
+        from app.services.hex_travel_service import analyze_route
+        _gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        _flags = json.loads((_gs["session_flags"] if _gs else None) or "{}")
+        _cur = _flags.get("current_hex") or {}
+        _dst = conn.execute(
+            "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+            (location_key,),
+        ).fetchone()
+        if _cur.get("q") is not None and _dst is not None:
+            _from = (int(_cur["q"]), int(_cur["r"]))
+            _to = (int(_dst["q"]), int(_dst["r"]))
+            _label = target_label or location_key
+            if _pm4_maybe_prompt(conn, campaign_id, _from, _to, _label, _flags):
+                _terrain = analyze_route(_from, _to, conn).get("terrain_label", "dzicz")
+                try:
+                    _data_q = json.loads(clean_response)
+                except Exception:
+                    _data_q = {}
+                _data_q["narrative"] = (
+                    f"Do „{_label}” można ruszyć prosto przez {_terrain} — szybciej, "
+                    "ale groźniej — albo trzymać się traktu: dłużej, lecz bezpieczniej. "
+                    "Którą drogę wybierasz?"
+                )
+                _data_q["location_intent"] = None
+                logger.info(
+                    "narrative_travel_pm4_prompted",
+                    campaign_id=campaign_id, location_key=location_key,
+                    from_hex=_from, to_hex=_to,
+                )
+                return json.dumps(_data_q, ensure_ascii=False)
+    except Exception as _pm4_err:  # never break a turn over the offer
+        logger.warning("narrative_travel_pm4_error", error=str(_pm4_err), campaign_id=campaign_id)
+
     try:
         result = execute_travel(
             conn, campaign_id, {"location_key": location_key}, actor=int(char_row["id"])
