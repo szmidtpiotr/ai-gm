@@ -13,17 +13,25 @@ export function AppShell() {
     <div className="relative z-10 flex h-[100dvh] flex-col">
       <Topbar inGame={inGame} />
 
-      <main
-        className="min-h-0 flex-1 overflow-y-auto"
-        // Zapas na dolny tabbar (mobile). Desktop: tabbar ukryty.
-        style={{ scrollbarGutter: "stable" }}
-      >
-        <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-28 lg:pb-6">
+      {inGame ? (
+        // Gra: pełna wysokość, bez paddingu — ekran gry sam trzyma scroll + composer.
+        <main className="min-h-0 flex-1">
           <Suspense fallback={<RouteFallback />}>
             <Outlet />
           </Suspense>
-        </div>
-      </main>
+        </main>
+      ) : (
+        <main
+          className="min-h-0 flex-1 overflow-y-auto"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-28 lg:pb-6">
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
+          </div>
+        </main>
+      )}
 
       <TabBar inGame={inGame} />
     </div>

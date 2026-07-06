@@ -106,3 +106,58 @@ export interface Chronicle {
   abandonment_note?: string | null;
   [k: string]: unknown;
 }
+
+// ── F-12 ekran gry (KROK 4 #1233) ────────────────────────────────────────────
+
+// GET /campaigns/{id}/clock — zegar świata gry (sekcja 8, strumień).
+export interface ClockState {
+  ingame_hours: number;
+  day: number;
+  hour: number;
+  hour_str: string; // "22:00"
+  period: string; // "Rano" | "Popołudnie" | "Wieczór" | "Noc"
+  display: string; // "Dzień 3, 14:00 Popołudnie"
+}
+
+// GET /characters/{id} — pełny bohater (paski HP/Mana + rail atrybutów).
+export interface CharacterDetail {
+  id: number;
+  campaign_id: number | null;
+  user_id: number | null;
+  name: string;
+  race: string;
+  sheet_json: HeroSheet;
+  current_location_label?: string | null;
+  safe_for_rest?: boolean;
+}
+
+// Element listy quick-action chipów (suggested_actions z odpowiedzi tury).
+export interface SuggestedAction {
+  label?: string | null;
+  text?: string | null;
+  type?: string | null;
+  icon?: string | null;
+  [k: string]: unknown;
+}
+
+// Odpowiedź POST /campaigns/{id}/turns (podzbiór używany przez ekran gry).
+export interface TurnResponse {
+  turn_number?: number;
+  prose?: string;
+  route?: string;
+  result?: Record<string, unknown> | null;
+  suggested_actions?: SuggestedAction[];
+  skill_test_pending?: Record<string, unknown> | null;
+  combat_state?: Record<string, unknown> | null;
+  clock?: ClockState | null;
+  [k: string]: unknown;
+}
+
+// Znormalizowana karta rzutu (F-52) — aktor decyduje o stronie/kolorze (sekcja 6).
+export interface RollCardData {
+  actor: "player" | "enemy";
+  title: string; // "TEST: PERSWAZJA" / "WYJEC — ATAK PAZURAMI"
+  cells: Array<{ k: string; v: string; sum?: boolean; res?: boolean }>;
+  crit?: boolean; // Nat 20 — złoty flash
+  fumble?: boolean; // Nat 1 — krwawy flash
+}

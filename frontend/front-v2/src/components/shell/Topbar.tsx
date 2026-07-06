@@ -1,11 +1,20 @@
 import { Link } from "react-router-dom";
-import { Sun, MapTrifold, List, Flame, UserCircle } from "@phosphor-icons/react";
+import {
+  Sun,
+  MoonStars,
+  MapTrifold,
+  List,
+  Flame,
+  UserCircle,
+  Scroll,
+} from "@phosphor-icons/react";
 import { Breadcrumb } from "./Breadcrumb";
-import { ProgressBar } from "@/components/ui/progress-bar";
+import { useAppStore } from "@/store/appStore";
+import { useCampaignClock, useCampaignDetail } from "@/hooks/useGameData";
 
 // Poza grą: marka + breadcrumb + profil.
-// W grze: kompaktowy „pasek przygody" (zegar+pora stack · główny quest · mapa · menu)
-// + 2 cienkie paski HP/Mana (sekcja 5, zamrożone reguły mobilne).
+// W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
+// BEZ imienia bohatera; HP/Mana są nad dolnym tabbarem (sekcja 5, zamrożone reguły).
 export function Topbar({ inGame }: { inGame: boolean }) {
   return (
     <header
@@ -40,41 +49,60 @@ function NavBar() {
 }
 
 function GameBar() {
+  const campaignId = useAppStore((s) => s.currentCampaignId) ?? undefined;
+  const clock = useCampaignClock(campaignId);
+  const campaign = useCampaignDetail(campaignId);
+
+  const period = clock.data?.period ?? "";
+  const isNight = /noc/i.test(period);
+  const time = clock.data?.hour_str ?? "—:—";
+  const quest = campaign.data?.title ?? "Przygoda";
+
   return (
-    <div>
-      <div className="flex h-12 items-center gap-3 px-4">
-        {/* zegar + pora (stack) */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Sun weight="fill" className="text-gold" size={18} />
-          <div className="leading-tight">
-            <div className="font-mono text-label text-text">08:20</div>
-            <div className="font-ui text-micro text-text-3">Poranek</div>
+    <div className="flex h-12 items-center gap-3 px-3.5">
+      {/* zegar + pora (stack) — z prawym separatorem */}
+      <div className="flex shrink-0 items-center gap-1.5 border-r border-line pr-3">
+        {isNight ? (
+          <MoonStars weight="fill" className="text-mana" size={16} />
+        ) : (
+          <Sun weight="fill" className="text-gold" size={16} />
+        )}
+        <div className="leading-tight">
+          <div className="font-mono text-label font-semibold text-text">{time}</div>
+          <div className="font-ui text-micro text-text-3">{period || "—"}</div>
+        </div>
+      </div>
+
+      {/* TYLKO główny quest (reszta w Dzienniku) */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <Scroll className="shrink-0 text-ember" size={15} />
+        <div className="min-w-0">
+          <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.16em] text-text-3">
+            Główne zadanie
+          </div>
+          <div className="truncate font-serif text-label font-semibold text-text">
+            {quest}
           </div>
         </div>
-        {/* główny quest (tylko jeden) */}
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-serif text-body text-text-2">
-            Odnaleźć zaginionego kupca
-          </div>
-        </div>
-        <button
-          aria-label="Mapa"
-          className="shrink-0 text-text-3 hover:text-ember-glow"
-        >
-          <MapTrifold size={22} />
-        </button>
-        <button
-          aria-label="Menu"
-          className="shrink-0 text-text-3 hover:text-ember-glow"
-        >
-          <List size={22} />
-        </button>
       </div>
-      {/* HP / Mana — 2 cienkie paski nad dolnym tabbarem (tu w topbarze gry) */}
-      <div className="flex gap-2 px-4 pb-2">
-        <ProgressBar kind="hp" value={24} max={30} hairline />
-        <ProgressBar kind="mana" value={8} max={12} hairline />
-      </div>
+
+      <IconBtn label="Mapa">
+        <MapTrifold size={18} />
+      </IconBtn>
+      <IconBtn label="Menu">
+        <List size={18} />
+      </IconBtn>
     </div>
+  );
+}
+
+function IconBtn({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <button
+      aria-label={label}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-bg text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+    >
+      {children}
+    </button>
   );
 }

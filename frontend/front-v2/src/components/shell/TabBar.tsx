@@ -9,6 +9,10 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store/appStore";
+import { useCharacter } from "@/hooks/useGameData";
+import { readVitals } from "@/lib/game";
+import { VitalBars } from "@/components/game/Vitals";
 
 interface Tab {
   key: string;
@@ -30,10 +34,13 @@ const TABS: Tab[] = [
 
 export function TabBar({ inGame }: { inGame: boolean }) {
   const [active, setActive] = useState("story");
+  const heroId = useAppStore((s) => s.currentHeroId) ?? undefined;
+  const character = useCharacter(inGame ? heroId : undefined);
   if (!inGame) return null;
 
   const pinned = TABS.filter((t) => t.pinned);
   const scrollable = TABS.filter((t) => !t.pinned);
+  const vitals = readVitals(character.data?.sheet_json);
 
   return (
     <nav
@@ -41,6 +48,8 @@ export function TabBar({ inGame }: { inGame: boolean }) {
       style={{ paddingBottom: "var(--sa-bottom)" }}
       aria-label="Panele gry"
     >
+      {/* HP/Mana — 2 cienkie paski nad tabbarem (sekcja 5) */}
+      {character.data && <VitalBars v={vitals} />}
       <div className="flex items-stretch">
         {/* Przypięta Opowieść */}
         <div className="flex shrink-0 border-r border-line">

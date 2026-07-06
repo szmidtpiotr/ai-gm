@@ -1,85 +1,153 @@
-import type { ReactNode } from "react";
-import { PaperPlaneRight, Microphone } from "@phosphor-icons/react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { CircleNotch } from "@phosphor-icons/react";
+import {
+  useCampaignDetail,
+  useCampaigns,
+  useCharacter,
+  useSubmitTurn,
+  useTurnStream,
+} from "@/hooks/useGameData";
+import { useAppStore } from "@/store/appStore";
+import {
+  buildLog,
+  chipsFromTurns,
+  normalizeChips,
+  readStats,
+  readVitals,
+  rollFromResult,
+  type Chip,
+} from "@/lib/game";
+import type { RollCardData, TurnResponse } from "@/lib/types";
+import { NarrationLog } from "@/components/game/NarrationLog";
+import { Composer } from "@/components/game/Composer";
+import { VitalsRail } from "@/components/game/Vitals";
 
-// F-12 placeholder — pełny ekran gry (narracja/composer/rzuty) w KROKU 4/8 (#1233).
-// Tu tylko demonstracja konwencji dymków ŻAR (sekcja 6).
+// F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
+// Topbar (zegar/quest) i dolne paski HP/Mana + tabbar renderuje shell (czyta store).
 export default function Game() {
+  const { campaignId: raw } = useParams();
+  const campaignId = raw ? Number(raw) : undefined;
+  const setCampaign = useAppStore((s) => s.setCampaign);
+  const setHero = useAppStore((s) => s.setHero);
+
+  const campaign = useCampaignDetail(campaignId);
+  // Detail endpoint nie zwraca character_id — bierzemy aktywnego bohatera z listy
+  // kampanii (subquery is_active), więc działa też po odświeżeniu / deep-linku.
+  const campaigns = useCampaigns();
+  const characterId =
+    campaigns.data?.find((c) => c.id === campaignId)?.character_id ?? undefined;
+  const character = useCharacter(characterId ?? undefined);
+  const stream = useTurnStream(campaignId);
+  const submit = useSubmitTurn(campaignId);
+
+  // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
+  useEffect(() => {
+    if (campaignId) setCampaign(campaignId);
+  }, [campaignId, setCampaign]);
+  useEffect(() => {
+    if (characterId) setHero(characterId);
+  }, [characterId, setHero]);
+
+  // Ostatnia karta rzutu + chipy z odpowiedzi tury (strumień ich nie niesie).
+  const [pendingRoll, setPendingRoll] = useState<RollCardData | null>(null);
+  const [chips, setChips] = useState<Chip[]>([]);
+
+  function applyResponse(resp: TurnResponse) {
+    setPendingRoll(rollFromResult(resp));
+    setChips(normalizeChips(resp.suggested_actions));
+  }
+
+  function send(text: string) {
+    if (!characterId) return;
+    submit.mutate({ characterId, text }, { onSuccess: applyResponse });
+  }
+
+  // Bootstrap: aktywna kampania bez tur → odpal scenę otwierającą raz.
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !openedRef.current &&
+      characterId &&
+      stream.isSuccess &&
+      (stream.data?.turns?.length ?? 0) === 0 &&
+      !submit.isPending
+    ) {
+      openedRef.current = true;
+      submit.mutate(
+        { characterId, text: "__AI_GM_OPEN" },
+        { onSuccess: applyResponse },
+      );
+    }
+  }, [characterId, stream.isSuccess, stream.data, submit]);
+
+  const blocks = useMemo(
+    () => buildLog(stream.data?.turns ?? []),
+    [stream.data?.turns],
+  );
+  // Chipy: świeże z ostatniego submitu, inaczej z ostatniej tury w strumieniu.
+  const streamChips = useMemo(
+    () => chipsFromTurns(stream.data?.turns ?? []),
+    [stream.data?.turns],
+  );
+  const shownChips = chips.length ? chips : streamChips;
+  const vitals = useMemo(
+    () => readVitals(character.data?.sheet_json),
+    [character.data?.sheet_json],
+  );
+  const stats = useMemo(
+    () => readStats(character.data?.sheet_json),
+    [character.data?.sheet_json],
+  );
+
+  if (
+    campaign.isLoading ||
+    campaigns.isLoading ||
+    (stream.isLoading && !stream.data)
+  ) {
+    return <FullLoader />;
+  }
+  if (!characterId) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center font-serif text-prose text-text-2">
+        Ta kampania nie ma przypisanego bohatera. Wróć do listy kampanii i wybierz postać.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      {/* Narracja GM — lewo, tło, serif */}
-      <Bubble side="gm" header="MISTRZ GRY · tura 12">
-        Mgła wstaje znad traktu. Z oddali dobiega skrzypienie kół — ktoś nadjeżdża,
-        choć droga miała być pusta o tej porze.
-      </Bubble>
-
-      {/* Akcja gracza — prawo, ember, serif italic */}
-      <Bubble side="player" header="TWOJA AKCJA ◀">
-        Chowam się za pniem i obserwuję nadjeżdżający wóz.
-      </Bubble>
-
-      {/* Rzut gracza — prawo, mono */}
-      <Bubble side="roll" header="SKRADANIE · DEX">
-        d20 (14) + 3 + 2 = 19 vs DC 12 — sukces
-      </Bubble>
-
-      {/* Systemowe — wyśrodkowane, kreskowane */}
-      <div className="mx-auto rounded-md border border-dashed border-line-mech px-3 py-1.5 font-mono text-micro text-gold">
-        Zapadł zmierzch — pora nocna
-      </div>
-
-      {/* Composer */}
-      <div className="sticky bottom-2 mt-2 flex items-end gap-2 rounded-lg border border-line bg-surface p-2">
-        <textarea
-          rows={1}
-          placeholder="Co robisz?"
-          className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-body text-text placeholder:text-text-3 focus:outline-none"
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <NarrationLog
+            blocks={blocks}
+            pendingRoll={pendingRoll}
+            typing={submit.isPending}
+            heroName={character.data?.name}
+          />
+        </div>
+        <VitalsRail
+          v={vitals}
+          stats={stats}
+          locationLabel={character.data?.current_location_label}
         />
-        <Button variant="ghost" size="icon" aria-label="Głos">
-          <Microphone size={20} />
-        </Button>
-        <Button size="icon" aria-label="Wyślij">
-          <PaperPlaneRight weight="fill" size={20} />
-        </Button>
       </div>
+
+      <Composer
+        onSend={send}
+        disabled={submit.isPending}
+        chips={shownChips}
+        onChip={(c) => send(c.text || c.label)}
+      />
     </div>
   );
 }
 
-function Bubble({
-  side,
-  header,
-  children,
-}: {
-  side: "gm" | "player" | "roll";
-  header: string;
-  children: ReactNode;
-}) {
-  const isRight = side !== "gm";
+function FullLoader() {
   return (
-    <div className={cn("flex", isRight ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[88%] rounded-lg px-3.5 py-2.5",
-          side === "gm" &&
-            "border-l-2 border-line-ember bg-gm-bubble font-serif text-prose text-text",
-          side === "player" &&
-            "border-r-2 border-line-ember bg-player-card font-serif italic text-prose text-text",
-          side === "roll" &&
-            "border border-line-ember bg-player-card font-mono text-label text-text",
-        )}
-      >
-        <div
-          className={cn(
-            "mb-1 font-ui text-micro uppercase tracking-wide",
-            side === "roll" ? "text-gold" : "text-ember-glow",
-          )}
-        >
-          {header}
-        </div>
-        {children}
-      </div>
+    <div className="flex h-full items-center justify-center gap-2 text-text-3">
+      <CircleNotch className="animate-spin" size={22} />
+      <span className="font-ui text-body">Wczytywanie gry…</span>
     </div>
   );
 }

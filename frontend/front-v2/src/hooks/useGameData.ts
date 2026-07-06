@@ -4,12 +4,15 @@ import { apiFetch } from "@/lib/api";
 import type {
   Campaign,
   CampaignTemplate,
+  CharacterDetail,
   Chronicle,
+  ClockState,
   Dungeon,
   Hero,
   IdentityPreview,
   LlmSettings,
   TurnHistoryPage,
+  TurnResponse,
 } from "@/lib/types";
 
 export function useHeroes() {
@@ -67,6 +70,64 @@ export function useTurnsHistory(
       apiFetch<TurnHistoryPage>(
         `/campaigns/${campaignId}/turns-history?limit=${limit}&offset=${offset}`,
       ),
+  });
+}
+
+// ── F-12 ekran gry (KROK 4 #1233) — strumień tur + zegar + postać ────────────
+
+/** GET /characters/{id} — pełny arkusz (paski HP/Mana + rail atrybutów). */
+export function useCharacter(characterId: number | undefined) {
+  return useQuery({
+    queryKey: ["character", characterId],
+    enabled: !!characterId,
+    queryFn: () => apiFetch<CharacterDetail>(`/characters/${characterId}`),
+  });
+}
+
+/** Zegar świata gry — lekki polling (sekcja 8: strumień tur). */
+export function useCampaignClock(campaignId: number | undefined) {
+  return useQuery({
+    queryKey: ["clock", campaignId],
+    enabled: !!campaignId,
+    queryFn: () => apiFetch<ClockState>(`/campaigns/${campaignId}/clock`),
+    refetchInterval: 20_000,
+  });
+}
+
+/**
+ * Strumień tur — auto-odświeżanie bez F5 (sekcja 8). Polling ~6s;
+ * zatrzymany gdy karta w tle (refetchIntervalInBackground=false).
+ */
+export function useTurnStream(campaignId: number | undefined) {
+  return useQuery({
+    queryKey: ["turn-stream", campaignId],
+    enabled: !!campaignId,
+    queryFn: () =>
+      apiFetch<TurnHistoryPage>(
+        `/campaigns/${campaignId}/turns-history?limit=200`,
+      ),
+    refetchInterval: 6_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/**
+ * POST /campaigns/{id}/turns — wyślij akcję gracza. Po sukcesie unieważnia
+ * strumień tur + zegar + postać → log i paski odświeżają się same.
+ */
+export function useSubmitTurn(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { characterId: number; text: string }) =>
+      apiFetch<TurnResponse>(`/campaigns/${campaignId}/turns`, {
+        method: "POST",
+        body: { character_id: v.characterId, text: v.text },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+    },
   });
 }
 
