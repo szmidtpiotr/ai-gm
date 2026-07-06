@@ -25,6 +25,8 @@ import { VitalsRail } from "@/components/game/Vitals";
 import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
+import { CombatView } from "@/components/game/combat/CombatView";
+import { useCombatState } from "@/hooks/useCombat";
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
 // Topbar (zegar/quest) i dolne paski HP/Mana + tabbar renderuje shell (czyta store).
@@ -45,6 +47,12 @@ export default function Game() {
   const character = useCharacter(characterId ?? undefined);
   const stream = useTurnStream(campaignId);
   const submit = useSubmitTurn(campaignId);
+  // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
+  const combatState = useCombatState(campaignId);
+  const activeCombat =
+    combatState.data?.active && combatState.data.combat?.status === "active"
+      ? combatState.data.combat
+      : null;
 
   // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
   useEffect(() => {
@@ -128,6 +136,19 @@ export default function Game() {
       {gameTab === "map" ? (
         // F-43 Mapa świata + podróż (KROK 4 #1235) — własny nagłówek + cinematyka.
         <WorldMap campaignId={campaignId!} characterId={characterId} />
+      ) : gameTab === "story" && activeCombat ? (
+        // FE9 walka (#1236): baner + pasek akcji + reakcja SF10 + kość 3D.
+        <CombatView
+          campaignId={campaignId!}
+          character={character.data}
+          combat={activeCombat}
+          blocks={blocks}
+          typing={submit.isPending}
+          vitals={vitals}
+          stats={stats}
+          onSend={send}
+          sending={submit.isPending}
+        />
       ) : gameTab === "story" ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">

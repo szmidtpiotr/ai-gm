@@ -129,6 +129,9 @@ export function useSubmitTurn(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
+      // FE9 (#1236): narracja mogła rozpocząć walkę — sprawdź stan combat, by baner
+      // i pasek akcji pojawiły się bez F5 (poll startuje dopiero gdy walka aktywna).
+      qc.invalidateQueries({ queryKey: ["combat", campaignId] });
     },
   });
 }

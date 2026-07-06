@@ -202,3 +202,103 @@ export interface RollCardData {
   crit?: boolean; // Nat 20 — złoty flash
   fumble?: boolean; // Nat 1 — krwawy flash
 }
+
+// ── FE9 walka (#1236 / F-53/F-24..26/F-52/F-70) ──────────────────────────────
+// Kształt z backendu: combat_service._row_to_combat_dict (agent-zmapowane pola).
+
+export type CombatZone = "engaged" | "ranged";
+
+export interface CombatCondition {
+  key?: string;
+  label?: string;
+  runtime?: { level?: number } | null;
+  [k: string]: unknown;
+}
+
+// Jeden uczestnik walki. Aktywny = combat.current_turn === id. Strona = type.
+export interface Combatant {
+  id: string; // "player" | slug wroga | "summon:..."
+  combatant_id?: string;
+  type: "player" | "enemy" | "summon";
+  name?: string;
+  enemy_key?: string;
+  hp_current?: number;
+  hp_max?: number;
+  defense?: number; // DEF / AC
+  initiative_roll?: number | null;
+  zone?: CombatZone;
+  conditions?: CombatCondition[];
+  absorb_hp?: number; // pula absorpcji tarczy (gracz)
+  image_url?: string | null;
+  // reakcja SF10 — obecne tylko na graczu gdy okno otwarte (damage OBCIĘTE po stronie serwera)
+  pending_reaction?: {
+    attack_roll?: number;
+    round?: number;
+    options?: string[];
+    nat20?: boolean;
+    enemy_name?: string;
+  } | null;
+  [k: string]: unknown;
+}
+
+// Snapshot walki (GET /campaigns/{id}/combat → { active, combat }).
+export interface CombatState {
+  id?: number;
+  round?: number;
+  turn_order?: string[];
+  current_turn?: string; // "player" | id combatanta
+  combatants?: Combatant[];
+  status?: "active" | "ended";
+  ended_reason?: "victory" | "fled" | "player_dead" | null;
+  loot_pool?: unknown;
+  [k: string]: unknown;
+}
+
+export interface CombatEnvelope {
+  active: boolean;
+  combat: CombatState | null;
+}
+
+// Odpowiedź POST resolve-attack / enemy-turn / resolve-reaction (podzbiór).
+export interface CombatActionResult {
+  hit?: boolean;
+  blocked?: boolean;
+  block_reason?: "out_of_range" | "no_ammo" | "unsupported_effect" | string;
+  mana_insufficient?: boolean;
+  current_mana?: number;
+  // rzut gracza
+  player_raw_d20?: number;
+  attack_total?: number;
+  player_nat20?: boolean;
+  player_nat1?: boolean;
+  target_name?: string;
+  target_id?: string;
+  enemy_key?: string;
+  // rzut wroga
+  raw_d20?: number;
+  attack_roll?: number;
+  target_ac?: number;
+  enemy_name?: string;
+  // obrażenia / efekt
+  damage?: number;
+  damage_die?: string;
+  damage_rolls?: number[];
+  damage_multiplier?: number;
+  dodged?: boolean;
+  enemy_dead?: boolean;
+  mana_spent?: number;
+  mana_after?: number;
+  spell_type?: "heal" | "effect" | "attack" | "attack_aoe" | string;
+  heal_amount?: number;
+  heal_rolls?: number[];
+  player_hp_remaining?: number;
+  player_incapacitated?: boolean;
+  // okno reakcji SF10
+  reaction_window?: boolean;
+  reaction_options?: string[]; // subset of ["dodge","shield_block"]
+  reaction?: { dodged?: boolean; full_block?: boolean; reduction?: number } | null;
+  // sterowanie pętlą
+  advance_turn?: string | "ended" | "awaiting_reaction";
+  combat_state?: CombatState | null;
+  [k: string]: unknown;
+}

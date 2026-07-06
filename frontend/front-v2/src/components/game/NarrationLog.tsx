@@ -9,12 +9,15 @@ import { RollCard } from "./RollCard";
 export function NarrationLog({
   blocks,
   pendingRoll,
+  combatRolls,
   typing,
   heroName,
   className,
 }: {
   blocks: LogBlock[];
   pendingRoll?: RollCardData | null;
+  /** Efemeryczne karty rzutów walki (F-52) dopisywane pod narracją w trakcie walki. */
+  combatRolls?: RollCardData[];
   typing?: boolean;
   heroName?: string;
   className?: string;
@@ -24,7 +27,7 @@ export function NarrationLog({
   // Auto-scroll na dół gdy dochodzi nowy blok / pojawia się „GM pisze…".
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [blocks.length, typing, pendingRoll]);
+  }, [blocks.length, typing, pendingRoll, combatRolls?.length]);
 
   const lastRollIdx = lastIndex(blocks, (b) => b.kind === "roll");
 
@@ -45,6 +48,9 @@ export function NarrationLog({
         }
       })}
 
+      {combatRolls?.map((r, i) => (
+        <RollCard key={`c-${i}`} roll={r} collapsible={i !== combatRolls.length - 1} />
+      ))}
       {pendingRoll && <RollCard roll={pendingRoll} />}
       {typing && <Typing />}
 
