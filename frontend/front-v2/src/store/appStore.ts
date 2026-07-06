@@ -54,6 +54,10 @@ export interface AppState {
   gameTab: GameTab;
   /** FE12 (#1261) — otwarty sklep (overlay) albo null. */
   shop: ShopContext | null;
+  /** FE14 (#1263 / F-44) — paleta komend otwarta (Ctrl+/ albo ikona w composerze). */
+  paletteOpen: boolean;
+  /** FE14 (#1263) — tekst do wstawienia w composer (komenda z palety, np. /roll). */
+  composerPrefill: string | null;
   /** Placeholdery na przyszłe fale (walka / loch) — kształt wg sekcji 8. */
   activeCombat: unknown | null;
   dungeonRunState: unknown | null;
@@ -64,6 +68,11 @@ export interface AppState {
   setGameTab: (t: GameTab) => void;
   openShop: (ctx: ShopContext) => void;
   closeShop: () => void;
+  openPalette: () => void;
+  closePalette: () => void;
+  togglePalette: () => void;
+  /** Wstaw tekst do composera (paleta → komenda); Composer konsumuje i czyści. */
+  setComposerPrefill: (text: string | null) => void;
   /** Persist tokens + user after a successful auth call. */
   login: (payload: LoginPayload) => CurrentUser;
   /** Clear tokens + user (wyloguj). */
@@ -90,6 +99,8 @@ export const useAppStore = create<AppState>((set) => ({
   currentCampaignId: null,
   gameTab: "story",
   shop: null,
+  paletteOpen: false,
+  composerPrefill: null,
   activeCombat: null,
   dungeonRunState: null,
 
@@ -105,6 +116,10 @@ export const useAppStore = create<AppState>((set) => ({
   setGameTab: (gameTab) => set({ gameTab }),
   openShop: (shop) => set({ shop }),
   closeShop: () => set({ shop: null }),
+  openPalette: () => set({ paletteOpen: true }),
+  closePalette: () => set({ paletteOpen: false }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+  setComposerPrefill: (composerPrefill) => set({ composerPrefill }),
   login: (payload) => {
     const user = toUser(payload);
     storeSession(payload.access_token, payload.refresh_token, user);

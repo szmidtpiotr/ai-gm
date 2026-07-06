@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Microphone,
   PaperPlaneRight,
@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { Chip } from "@/lib/game";
+import { useAppStore } from "@/store/appStore";
 
 const MAX = 500;
 
@@ -27,6 +28,24 @@ export function Composer({
 }) {
   const [value, setValue] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const openPalette = useAppStore((s) => s.openPalette);
+  const prefill = useAppStore((s) => s.composerPrefill);
+  const setComposerPrefill = useAppStore((s) => s.setComposerPrefill);
+
+  // FE14 (#1263): komenda z palety → wstaw tekst, ustaw fokus, wyczyść bufor.
+  useEffect(() => {
+    if (prefill == null) return;
+    setValue(prefill);
+    setComposerPrefill(null);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+      autoGrow();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   function autoGrow() {
     const el = taRef.current;
@@ -93,11 +112,12 @@ export function Composer({
             placeholder="Co robisz?"
             className="max-h-32 min-h-[28px] flex-1 resize-none self-center bg-transparent py-1.5 font-ui text-body text-text outline-none placeholder:italic placeholder:text-text-3"
           />
-          {/* paleta komend (F-44, w osobnej fali) */}
+          {/* paleta komend (F-44) — Ctrl+/ albo ta ikona */}
           <button
             type="button"
             aria-label="Paleta komend"
-            title="Paleta komend"
+            title="Paleta komend (Ctrl+/)"
+            onClick={openPalette}
             className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-text-3 transition-colors hover:text-ember-glow"
           >
             <Command size={16} />

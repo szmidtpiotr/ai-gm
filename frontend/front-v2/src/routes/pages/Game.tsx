@@ -26,11 +26,26 @@ import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
+import { CommandPalette } from "@/components/game/CommandPalette";
+import { BugReportFab } from "@/components/game/BugReportFab";
+import { RecapOverlay } from "@/components/game/RecapOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
 import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
 import { useCombatState } from "@/hooks/useCombat";
 import { detectShop } from "@/lib/game";
+
+// FE14 (#1263): czytelne nazwy ekranów do auto-kontekstu bug-reportu.
+const SCREEN_LABELS: Record<string, string> = {
+  story: "opowieść",
+  character: "karta postaci",
+  skills: "umiejętności",
+  spells: "czary",
+  inventory: "ekwipunek",
+  reputation: "reputacja",
+  map: "mapa świata",
+  journal: "dziennik",
+};
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
 // Topbar (zegar/quest) i dolne paski HP/Mana + tabbar renderuje shell (czyta store).
@@ -122,6 +137,19 @@ export default function Game() {
     [character.data?.sheet_json],
   );
 
+  // FE14 (#1263): auto-kontekst zgłoszenia buga — ostatnia tura + nazwa ekranu.
+  const lastTurn = useMemo(
+    () =>
+      (stream.data?.turns ?? []).reduce(
+        (m, t) => Math.max(m, t.turn_number ?? 0),
+        0,
+      ),
+    [stream.data?.turns],
+  );
+  const screenLabel = activeCombat
+    ? "walka"
+    : SCREEN_LABELS[gameTab] ?? "gra";
+
   if (
     campaign.isLoading ||
     campaigns.isLoading ||
@@ -144,6 +172,11 @@ export default function Game() {
 
       {/* FE12 (#1261): sklep NPC — overlay nad grą, otwierany narracyjnie */}
       <ShopOverlay />
+
+      {/* FE14 (#1263): paleta komend (Ctrl+/) · recap przy wejściu · FAB testera */}
+      <CommandPalette />
+      <RecapOverlay campaignId={campaignId} />
+      <BugReportFab campaignId={campaignId} turnNumber={lastTurn || undefined} screen={screenLabel} />
 
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} />
