@@ -24,10 +24,13 @@ import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
 import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
+import { Journal } from "@/components/game/journal/Journal";
+import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
 import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
 import { useCombatState } from "@/hooks/useCombat";
+import { detectShop } from "@/lib/game";
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
 // Topbar (zegar/quest) i dolne paski HP/Mana + tabbar renderuje shell (czyta store).
@@ -37,6 +40,7 @@ export default function Game() {
   const setCampaign = useAppStore((s) => s.setCampaign);
   const setHero = useAppStore((s) => s.setHero);
   const currentUser = useAppStore((s) => s.currentUser);
+  const openShop = useAppStore((s) => s.openShop);
 
   const gameTab = useAppStore((s) => s.gameTab);
 
@@ -71,6 +75,9 @@ export default function Game() {
   function applyResponse(resp: TurnResponse) {
     setPendingRoll(rollFromResult(resp));
     setChips(normalizeChips(resp.suggested_actions));
+    // FE12 (#1261): narracja mogła otworzyć sklep ([OPEN_SHOP] / open_shop) — overlay.
+    const shop = detectShop(resp);
+    if (shop) openShop(shop);
   }
 
   function send(text: string) {
@@ -135,12 +142,18 @@ export default function Game() {
       {/* FE10 (#1237): awans wykrywany globalnie (XP z walki/questów/odpoczynku) */}
       <LevelUpGate character={character.data} userId={currentUser?.id} />
 
+      {/* FE12 (#1261): sklep NPC — overlay nad grą, otwierany narracyjnie */}
+      <ShopOverlay />
+
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} />
 
       {gameTab === "map" ? (
         // F-43 Mapa świata + podróż (KROK 4 #1235) — własny nagłówek + cinematyka.
         <WorldMap campaignId={campaignId!} characterId={characterId} />
+      ) : gameTab === "journal" ? (
+        // FE13 Dziennik + Kronika bohatera (#1262) — zakładka gry.
+        <Journal campaignId={campaignId!} characterId={characterId} />
       ) : gameTab === "story" && activeCombat ? (
         // FE9 walka (#1236): baner + pasek akcji + reakcja SF10 + kość 3D.
         <CombatView

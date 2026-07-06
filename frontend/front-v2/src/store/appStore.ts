@@ -36,14 +36,24 @@ export type GameTab =
   | "spells"
   | "inventory"
   | "reputation"
-  | "map";
+  | "map"
+  | "journal";
+
+// FE12 Sklep (#1261) — otwierany narracyjnie (turn → open_shop). Overlay nad grą,
+// nie zakładka. Trzymamy klucz NPC + opcjonalną kwestię powitalną (podnagłówek).
+export interface ShopContext {
+  npcKey: string;
+  greeting?: string | null;
+}
 
 export interface AppState {
   currentUser: CurrentUser | null;
   currentHeroId: number | null;
   currentCampaignId: number | null;
-  /** Aktywna zakładka ekranu gry (Opowieść + 5 paneli karty postaci). */
+  /** Aktywna zakładka ekranu gry (Opowieść + panele karty + mapa + dziennik). */
   gameTab: GameTab;
+  /** FE12 (#1261) — otwarty sklep (overlay) albo null. */
+  shop: ShopContext | null;
   /** Placeholdery na przyszłe fale (walka / loch) — kształt wg sekcji 8. */
   activeCombat: unknown | null;
   dungeonRunState: unknown | null;
@@ -52,6 +62,8 @@ export interface AppState {
   setHero: (id: number | null) => void;
   setCampaign: (id: number | null) => void;
   setGameTab: (t: GameTab) => void;
+  openShop: (ctx: ShopContext) => void;
+  closeShop: () => void;
   /** Persist tokens + user after a successful auth call. */
   login: (payload: LoginPayload) => CurrentUser;
   /** Clear tokens + user (wyloguj). */
@@ -77,19 +89,22 @@ export const useAppStore = create<AppState>((set) => ({
   currentHeroId: null,
   currentCampaignId: null,
   gameTab: "story",
+  shop: null,
   activeCombat: null,
   dungeonRunState: null,
 
   setUser: (currentUser) => set({ currentUser }),
   setHero: (currentHeroId) => set({ currentHeroId }),
-  // Zmiana kampanii → wróć do Opowieści (nie przenoś panelu między grami).
+  // Zmiana kampanii → wróć do Opowieści (nie przenoś panelu między grami) + zamknij sklep.
   setCampaign: (currentCampaignId) =>
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story" },
+        : { currentCampaignId, gameTab: "story", shop: null },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
+  openShop: (shop) => set({ shop }),
+  closeShop: () => set({ shop: null }),
   login: (payload) => {
     const user = toUser(payload);
     storeSession(payload.access_token, payload.refresh_token, user);
@@ -103,6 +118,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentHeroId: null,
       currentCampaignId: null,
       gameTab: "story",
+      shop: null,
       activeCombat: null,
       dungeonRunState: null,
     });
@@ -112,6 +128,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentUser: null,
       currentHeroId: null,
       currentCampaignId: null,
+      shop: null,
       activeCombat: null,
       dungeonRunState: null,
     }),

@@ -362,3 +362,39 @@ export function normalizeChips(actions: SuggestedAction[] | undefined): Chip[] {
     .filter((x): x is Chip => x !== null)
     .slice(0, 4);
 }
+
+// ── FE12 Sklep (#1261): wykrycie otwarcia sklepu z odpowiedzi tury ────────────
+// Backend sygnalizuje sklep na kilka sposobów (zależnie od ścieżki): pole
+// open_shop na odpowiedzi lub w result, albo sentinel [OPEN_SHOP]{json} w prozie.
+export interface ShopTrigger {
+  npcKey: string;
+  greeting?: string | null;
+}
+
+function readNpcKey(o: unknown): ShopTrigger | null {
+  if (!o || typeof o !== "object") return null;
+  const r = o as Record<string, unknown>;
+  const key = r.npc_key ?? r.npcKey ?? r.key;
+  if (typeof key !== "string" || !key.trim()) return null;
+  const greeting = r.greeting ?? r.line ?? r.hook;
+  return { npcKey: key, greeting: typeof greeting === "string" ? greeting : null };
+}
+
+export function detectShop(resp: TurnResponse): ShopTrigger | null {
+  const r = resp as Record<string, unknown>;
+  const direct =
+    readNpcKey(r.open_shop) ??
+    readNpcKey((r.result as Record<string, unknown> | undefined)?.open_shop);
+  if (direct) return direct;
+  // Sentinel w prozie: [OPEN_SHOP]{"npc_key":"..."}
+  const prose = typeof resp.prose === "string" ? resp.prose : "";
+  const m = prose.match(/\[OPEN_SHOP\]\s*(\{[^\n]*\})/);
+  if (m) {
+    try {
+      return readNpcKey(JSON.parse(m[1]));
+    } catch {
+      /* zignoruj zły sentinel */
+    }
+  }
+  return null;
+}

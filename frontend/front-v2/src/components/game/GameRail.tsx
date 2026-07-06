@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import {
+  JOURNAL_TAB,
   MAP_TAB,
   STORY_TAB,
   visibleSheetTabs,
@@ -12,7 +13,7 @@ import {
 export function GameRail({ hasMana }: { hasMana: boolean }) {
   const active = useAppStore((s) => s.gameTab);
   const setGameTab = useAppStore((s) => s.setGameTab);
-  const tabs: GameTabDef[] = [STORY_TAB, ...visibleSheetTabs(hasMana), MAP_TAB];
+  const tabs: GameTabDef[] = [STORY_TAB, ...visibleSheetTabs(hasMana), MAP_TAB, JOURNAL_TAB];
 
   return (
     <nav

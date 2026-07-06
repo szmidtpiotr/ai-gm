@@ -4,6 +4,7 @@ import { useCharacter } from "@/hooks/useGameData";
 import { readVitals } from "@/lib/game";
 import { VitalBars } from "@/components/game/Vitals";
 import {
+  JOURNAL_TAB,
   MAP_TAB,
   STORY_TAB,
   visibleSheetTabs,
@@ -21,7 +22,7 @@ export function TabBar({ inGame }: { inGame: boolean }) {
   if (!inGame) return null;
 
   const vitals = readVitals(character.data?.sheet_json);
-  const scrollable = [...visibleSheetTabs(vitals.hasMana), MAP_TAB];
+  const scrollable = [...visibleSheetTabs(vitals.hasMana), MAP_TAB, JOURNAL_TAB];
 
   return (
     <nav

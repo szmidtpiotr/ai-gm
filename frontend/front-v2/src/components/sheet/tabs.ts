@@ -4,6 +4,7 @@
 import {
   Backpack,
   BookOpen,
+  BookOpenText,
   FlagBanner,
   MapTrifold,
   Shield,
@@ -39,3 +40,7 @@ export function visibleSheetTabs(hasMana: boolean): GameTabDef[] {
 // F-43 Mapa świata — zakładka na poziomie gry (po panelach karty, jak w makiecie
 // zar5). Otwierana też z ikony 🗺 w pasku przygody (Topbar). KROK 4 FE8 (#1235).
 export const MAP_TAB: GameTabDef = { key: "map", label: "Mapa", icon: MapTrifold };
+
+// FE13 Dziennik + Kronika (#1262 / F-23/F-58/F-79) — zakładka gry: zadania,
+// wątki, recap „Poprzednio…", kronika bohatera. Po Mapie w railu/tabbarze.
+export const JOURNAL_TAB: GameTabDef = { key: "journal", label: "Dziennik", icon: BookOpenText };
