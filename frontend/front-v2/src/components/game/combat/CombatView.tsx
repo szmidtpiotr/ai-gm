@@ -48,6 +48,8 @@ export function CombatView({
   stats,
   onSend,
   sending,
+  dungeon = false,
+  onDungeonDeath,
 }: {
   campaignId: number;
   character: CharacterDetail | undefined;
@@ -58,6 +60,9 @@ export function CombatView({
   stats: Array<{ k: string; v: number }>;
   onSend: (text: string) => void;
   sending: boolean;
+  // FE16 (#1265): w lochu śmierć = przywrócenie punktu kontrolnego, nie ekran śmierci.
+  dungeon?: boolean;
+  onDungeonDeath?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -299,8 +304,11 @@ export function CombatView({
     if (view?.status === "ended" && !endedRef.current) {
       endedRef.current = true;
       const reason = view.endedReason ?? "";
-      // victory / player_dead → pełny modal (CombatOutcomes); fled → tylko toast.
-      if (reason === "victory" || reason === "player_dead") {
+      // FE16 (#1265): śmierć w lochu → przywrócenie punktu kontrolnego (nie ekran śmierci).
+      if (reason === "player_dead" && dungeon && onDungeonDeath) {
+        onDungeonDeath();
+      } else if (reason === "victory" || reason === "player_dead") {
+        // victory / player_dead → pełny modal (CombatOutcomes); fled → tylko toast.
         setOutcome({ reason, combat: live });
       } else {
         toast(reason === "fled" ? "Walka zakończona — ucieczka." : "Walka zakończona.", "info");

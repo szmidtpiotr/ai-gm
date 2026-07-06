@@ -238,12 +238,19 @@ export function useCreateCampaign() {
 }
 
 export function useAssignHero() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { heroId: number; campaignId: number; userId: number }) =>
       apiFetch(`/characters/${v.heroId}/assign-campaign`, {
         method: "POST",
         body: { campaign_id: v.campaignId, user_id: v.userId },
       }),
+    // Świeżo utworzona kampania (loch/solo) musi trafić do listy zanim Game.tsx
+    // wyliczy z niej character_id — inaczej ekran gry twierdzi „brak bohatera".
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+      qc.invalidateQueries({ queryKey: ["heroes"] });
+    },
   });
 }
 

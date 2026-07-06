@@ -31,6 +31,7 @@ import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
+import { DungeonView } from "@/components/game/dungeon/DungeonView";
 import { MpGame } from "@/components/game/mp/MpGame";
 import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
 import { useCombatState } from "@/hooks/useCombat";
@@ -64,8 +65,12 @@ export default function Game() {
   // Detail endpoint nie zwraca character_id — bierzemy aktywnego bohatera z listy
   // kampanii (subquery is_active), więc działa też po odświeżeniu / deep-linku.
   const campaigns = useCampaigns();
-  const characterId =
+  const storeHeroId = useAppStore((s) => s.currentHeroId);
+  // Loch tworzy świeżą kampanię — lista może być chwilowo nieświeża (staleTime),
+  // więc dla trybu lochu bierzemy bohatera ze store jako fallback (ustawiony przy wejściu).
+  const listCharacterId =
     campaigns.data?.find((c) => c.id === campaignId)?.character_id ?? undefined;
+  const characterId = listCharacterId ?? storeHeroId ?? undefined;
   const character = useCharacter(characterId ?? undefined);
   const stream = useTurnStream(campaignId);
   const submit = useSubmitTurn(campaignId);
@@ -77,6 +82,8 @@ export default function Game() {
       : null;
   // FE15 (#1264): tryb drużynowy → rundy MP zamiast solowego turn-flow (walka MP osobno).
   const isMp = campaign.data?.mode === "multiplayer";
+  // FE16 (#1265): tryb lochu → eksploracja kafelkowa (HUD/d-pad/mapa) + walka + boss.
+  const isDungeon = campaign.data?.mode === "dungeon";
 
   // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
   useEffect(() => {
@@ -190,6 +197,9 @@ export default function Game() {
       ) : gameTab === "journal" ? (
         // FE13 Dziennik + Kronika bohatera (#1262) — zakładka gry.
         <Journal campaignId={campaignId!} characterId={characterId} />
+      ) : gameTab === "story" && isDungeon ? (
+        // FE16 (#1265): tryb lochu — eksploracja + walka + boss/śmierć/porzucenie.
+        <DungeonView campaignId={campaignId!} characterId={characterId} />
       ) : gameTab === "story" && isMp ? (
         // FE15 (#1264): sesja drużynowa — rundy MP + party chat + whispery.
         <MpGame

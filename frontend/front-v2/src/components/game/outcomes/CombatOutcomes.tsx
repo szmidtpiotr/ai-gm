@@ -50,7 +50,7 @@ export function CombatOutcomes({
   const isDeath = reason === "player_dead";
 
   const claim = useClaimLoot(campaignId);
-  const boss = useBossChoice();
+  const boss = useBossChoice(campaignId, characterId);
   const equip = useEquipItem(characterId);
   const xpSnap = useXpSnapshot(characterId, isVictory);
   const dungeon = useDungeonRun(campaignId, isVictory);

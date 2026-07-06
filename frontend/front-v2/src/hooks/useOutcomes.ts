@@ -30,18 +30,25 @@ export function useClaimLoot(campaignId: number | undefined) {
   });
 }
 
-/** POST /dungeons/boss-choice — po pokonaniu bossa: zejdź głębiej / wyjdź. */
-export function useBossChoice() {
+/**
+ * POST /dungeons/boss-choice — po pokonaniu bossa: zejdź głębiej / wyjdź.
+ * Silnik wymaga campaign_id + character_id (DungeonBossChoiceReq) — bez nich 422.
+ */
+export function useBossChoice(
+  campaignId: number | undefined,
+  characterId: number | undefined,
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (choice: "exit" | "go_deeper") =>
       apiFetch<Record<string, unknown>>(`/dungeons/boss-choice`, {
         method: "POST",
-        body: { choice },
+        body: { campaign_id: campaignId, character_id: characterId, choice },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["character"] });
       qc.invalidateQueries({ queryKey: ["dungeon-run"] });
+      qc.invalidateQueries({ queryKey: ["dungeon-run-full", campaignId] });
     },
   });
 }

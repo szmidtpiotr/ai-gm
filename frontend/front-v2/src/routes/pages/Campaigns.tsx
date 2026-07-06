@@ -25,6 +25,12 @@ import {
   useDeleteCampaign,
 } from "@/hooks/useGameData";
 import { apiFetch } from "@/lib/api";
+import {
+  useActiveDungeonRun,
+  useDungeonExit,
+  useDeleteDungeonCampaign,
+} from "@/hooks/useDungeon";
+import { ResumeModal } from "@/components/game/dungeon/DungeonModals";
 import { createLobby } from "@/lib/multiplayer";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
@@ -595,7 +601,51 @@ function LochPicker({
   onClose: () => void;
   onPick: (d: Dungeon) => void;
 }) {
+  const navigate = useNavigate();
   const { data: dungeons, isLoading } = useDungeons(open ? heroId : undefined);
+  // E22/F-42: aktywny (niedokończony) bieg → modal wznowienia zamiast listy.
+  const activeRunQ = useActiveDungeonRun(heroId, open);
+  const activeRun = activeRunQ.data?.active_run ?? null;
+  const runCampaignId = activeRun?.campaign_id;
+  const exit = useDungeonExit(runCampaignId);
+  const del = useDeleteDungeonCampaign();
+  const [resuming, setResuming] = useState(false);
+
+  async function abandonActive() {
+    if (!runCampaignId) return;
+    setResuming(true);
+    try {
+      try {
+        await exit.mutateAsync(heroId);
+      } catch {
+        /* i tak sprzątamy */
+      }
+      try {
+        await del.mutateAsync(runCampaignId);
+      } catch {
+        /* noop */
+      }
+      await activeRunQ.refetch();
+    } finally {
+      setResuming(false);
+    }
+  }
+
+  // Wznowienie ma priorytet — dopóki jest aktywny bieg, pokaż tylko modal.
+  if (open && activeRun && runCampaignId) {
+    return (
+      <ResumeModal
+        run={activeRun}
+        busy={resuming}
+        onContinue={() => {
+          onClose();
+          navigate(`/gra/${runCampaignId}`);
+        }}
+        onAbandon={abandonActive}
+      />
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
