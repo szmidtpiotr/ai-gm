@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ŻAR — Design Tokens (ŹRÓDŁO PRAWDY: frontend_design.md sekcja 6)
+   Finalne po iteracjach zar2→zar9. Nie hardkoduj hexów poza tym blokiem.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Powierzchnie — hue stały (ciepły), zmienia się tylko jasność */
+  --bg: #14100c; /* kanwa / najgłębsze tło */
+  --surface: #1e1811; /* topbar, paski, tabbar */
+  --gm-bubble: #221a12; /* tło dymka narracji GM */
+  --player-card: #2a1f14; /* karta akcji gracza + karta rzutu gracza (ember) */
+  --mech-card: #20180f; /* karta mechaniki/rzutu (ciepła, NIE zimna stal) */
+  --inset: #0d0a07; /* wnętrza pasków HP/Mana (inset) */
+
+  /* Tekst — 3 poziomy */
+  --text: #f2e8d8; /* primary */
+  --text-2: #c9b99f; /* secondary */
+  --text-3: #8f8069; /* muted / metadane */
+
+  /* Akcent i semantyka */
+  --ember: #ff7a3d; /* akcent główny (żar) — CTA, aktywny aktor, gracz */
+  --ember-glow: #ffb07a; /* jaśniejszy żar — hover, highlight, em w prozie */
+  --gold: #e8c15a; /* inicjatywa, nagłówki mechaniki, krytyk, złoto */
+  --gold-glow: #ffdd88; /* zwycięstwo / krytyk hero */
+  --success: #a8c983; /* zieleń (leczenie, gotowy) */
+  --mech-ok: #c8a24a; /* „sukces" w karcie rzutu (ciepłe złoto, nie zielone) */
+  --danger: #e8604f; /* krew / wróg / porażka */
+  --danger-glow: #ff8a7a;
+  --mana: #82a7c7; /* mana / dystans / chłodny akcent info */
+  --rare: #b58cf0; /* item rzadki */
+  --epic: #e8963c; /* item epicki */
+
+  /* Obrysy — progresja przez opacity, nie solidny hex */
+  --line: rgba(242, 232, 216, 0.12);
+  --line-soft: rgba(242, 232, 216, 0.06);
+  --line-ember: rgba(255, 122, 61, 0.45);
+  --line-mech: rgba(232, 193, 90, 0.26);
+  --line-danger: rgba(232, 96, 79, 0.4);
+
+  /* Typografia */
+  --font-serif: "Literata", Georgia, serif; /* proza GM, tytuły, nazwy */
+  --font-ui: "Inter", system-ui, sans-serif; /* UI, przyciski, etykiety */
+  --font-mono: "JetBrains Mono", monospace; /* liczby, rzuty, kody, HP */
+
+  /* Promienie */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* Depth: głównie obrysy + subtelne tło; cienie tylko dla warstw pływających */
+  --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.6);
+
+  /* Safe-area (notch / home indicator) */
+  --sa-top: env(safe-area-inset-top, 0px);
+  --sa-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  /* Ciepła winieta tła — atmosfera „żaru" */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(255, 122, 61, 0.06), transparent 60%),
+      radial-gradient(100% 60% at 50% 120%, rgba(0, 0, 0, 0.5), transparent 55%);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    color: var(--text);
+    margin: 0;
+  }
+
+  ::selection {
+    background: var(--line-ember);
+    color: var(--text);
+  }
+}
+
+/* Cienki, ciepły scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
