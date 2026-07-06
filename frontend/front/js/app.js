@@ -2375,6 +2375,51 @@ function _wmClose() {
   _wmap.pendingTravel = null;
 }
 
+// Mobile pan + pinch-zoom for the screen-space hex maps (_wmap / _lmap).
+// The maps only had mouse/wheel handlers, so on touch devices they were frozen —
+// you could neither drag nor zoom. One finger pans, two fingers pinch-zoom (same
+// zoom-around-focus math as the wheel handler). stopPropagation keeps these
+// gestures from also firing the panel's swipe-to-close.
+function _attachMapTouch(map, render) {
+  const svg = map.svg;
+  if (!svg) return;
+  const pinch = (e) => {
+    const a = e.touches[0], b = e.touches[1];
+    return {
+      dist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1,
+      cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2,
+    };
+  };
+  let pan = null, pin = null;
+  svg.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) { pan = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pin = null; }
+    else if (e.touches.length >= 2) { pan = null; pin = pinch(e); }
+    e.stopPropagation();
+  }, { passive: true });
+  svg.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && pan) {
+      map.pan = { x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y };
+      render();
+      e.preventDefault();
+    } else if (e.touches.length >= 2 && pin) {
+      const p = pinch(e), r = svg.getBoundingClientRect();
+      const mx = p.cx - r.left, my = p.cy - r.top;
+      const nz = Math.max(0.4, Math.min(5, map.zoom * (p.dist / pin.dist)));
+      map.pan.x = mx - (mx - map.pan.x) * (nz / map.zoom);
+      map.pan.y = my - (my - map.pan.y) * (nz / map.zoom);
+      map.zoom = nz;
+      pin = p;
+      render();
+      e.preventDefault();
+    }
+  }, { passive: false });
+  svg.addEventListener('touchend', (e) => {
+    if (e.touches.length === 1) { pan = { x: e.touches[0].clientX - map.pan.x, y: e.touches[0].clientY - map.pan.y }; pin = null; }
+    else if (e.touches.length === 0) { pan = null; pin = null; }
+    e.stopPropagation();
+  }, { passive: true });
+}
+
 function initWorldMap() {
   _wmap.panel   = document.getElementById('world-map-panel');
   _wmap.svg     = document.getElementById('wmap-svg');
@@ -2418,6 +2463,9 @@ function initWorldMap() {
     if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
   });
   window.addEventListener('mouseup', () => { _wmap._ds = null; });
+
+  // Mobile: one finger pans, two pinch-zoom (parity with mouse/wheel above)
+  _attachMapTouch(_wmap, _wmRender);
 }
 
 // ── Local Map Panel — #998 FAZA ML ───────────────────────────────────────────
@@ -2624,6 +2672,9 @@ function initLocalMap() {
   _lmap.panel.addEventListener('touchend', e => {
     if (e.changedTouches[0].clientX - _swipeStartX > 60) _lmClose();
   }, { passive: true });
+
+  // Mobile: one finger pans, two pinch-zoom (same gap as the world map)
+  _attachMapTouch(_lmap, _lmRender);
 }
 
 // ── Spell Picker (Scholar combat) ─────────────────────────────────────────────
