@@ -20,6 +20,8 @@ from app.services.hex_travel_service import (  # noqa: E402
     _load_hex_graph,
     _load_hex_type_config,
     find_path,
+    _roll_encounter,
+    _pick_encounter_enemy,
 )
 
 SCHEMA = """
@@ -136,3 +138,32 @@ def test_no_crossing_when_siwe_not_live():
     assert (5, -3) not in hexes, "hexy niezaktywowanej krainy nie są w grafie"
     path = find_path((5, 1), (5, -3), hexes, cfg)
     assert path is None, "podróż do niezaktywowanej krainy niemożliwa"
+
+
+def test_encounter_pass_guarantees_one_time_combat():
+    """Dzikie przejście: encounter_chance=1.0 + pool → walka pewna (trigger jednorazowego
+    encountera; combat_service czyści hex po wygranej — jednorazowość poza tym testem)."""
+    cfg = {"przelecz": {"encounter_base_chance": 0.30}}
+    enc_hex = {
+        "hex_type": "przelecz",
+        "encounter_chance": 1.0,
+        "encounter_pool": ["wolf", "werewolf"],
+    }
+    # chance=1.0 → zawsze True, niezależnie od losowania
+    assert all(_roll_encounter(enc_hex, cfg) for _ in range(20))
+    assert _pick_encounter_enemy(enc_hex) in ("wolf", "werewolf")
+
+
+def test_two_road_passes_both_crossable():
+    """Dwie przełęcze traktowe w murze — każda daje niezależne przejście Kresy↔Siwe."""
+    conn = _mk_db()
+    # dodaj drugą przełęcz w innej kolumnie (q6) + siwe hex nad nią; zamień grań (6,-1)
+    conn.execute("UPDATE world_hexes SET hex_type='przelecz' WHERE q=6 AND r=-1")
+    conn.commit()
+    hexes = _load_hex_graph(conn)
+    cfg = _load_hex_type_config(conn)
+
+    p1 = find_path((5, 1), (5, -3), hexes, cfg)   # przez (5,-1)
+    p2 = find_path((6, 1), (6, -3), hexes, cfg)   # przez (6,-1)
+    assert p1 is not None and (5, -1) in p1
+    assert p2 is not None and (6, -1) in p2

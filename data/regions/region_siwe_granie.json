@@ -4,7 +4,7 @@
  "status": "live",
  "w": 50,
  "h": 50,
- "note": "DLC paczka FAZY RM — Siwe Granie. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region siwe_granie. Snapshot: scripts/snapshot_world_map.py --region siwe_granie. | R8 #1248: przysunięte +24r do Kresów; granica grania(mur)+przelecz(przejście q24-25).",
+ "note": "DLC paczka FAZY RM — Siwe Granie. Kanon = ten plik w git (commit = zgoda Piotra). Seed: scripts/seed_world_map.py --region siwe_granie. Snapshot: scripts/snapshot_world_map.py --region siwe_granie.",
  "hexes": [
   {
    "q": 48,
@@ -13921,7 +13921,7 @@
   {
    "q": 40,
    "r": -29,
-   "hex_type": "ruins",
+   "hex_type": "road",
    "label": "Czarne Skały",
    "atmosphere": null,
    "encounter_chance": 0.55
@@ -15113,7 +15113,7 @@
   {
    "q": 39,
    "r": -26,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
@@ -15513,7 +15513,7 @@
   {
    "q": 39,
    "r": -25,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
@@ -15581,6 +15581,22 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
+  },
+  {
+   "q": 48,
+   "r": -25,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 49,
+   "r": -25,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   },
   {
    "q": 0,
@@ -15897,7 +15913,7 @@
   {
    "q": 39,
    "r": -24,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
@@ -15951,6 +15967,22 @@
    "encounter_chance": 0.18
   },
   {
+   "q": 46,
+   "r": -24,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 47,
+   "r": -24,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -23,
    "hex_type": "mountain",
@@ -16265,7 +16297,7 @@
   {
    "q": 39,
    "r": -23,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
@@ -16303,6 +16335,22 @@
    "encounter_chance": 0.18
   },
   {
+   "q": 44,
+   "r": -23,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 45,
+   "r": -23,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -22,
    "hex_type": "mountain",
@@ -16617,7 +16665,7 @@
   {
    "q": 39,
    "r": -22,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.18
@@ -16639,6 +16687,22 @@
    "encounter_chance": 0.18
   },
   {
+   "q": 42,
+   "r": -22,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 43,
+   "r": -22,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -21,
    "hex_type": "mountain",
@@ -16953,10 +17017,26 @@
   {
    "q": 39,
    "r": -21,
-   "hex_type": "tundra",
+   "hex_type": "road",
    "label": "ku Kresom",
    "atmosphere": null,
    "encounter_chance": 0.18
+  },
+  {
+   "q": 40,
+   "r": -21,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 41,
+   "r": -21,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   },
   {
    "q": 0,
@@ -17261,6 +17341,22 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.12
+  },
+  {
+   "q": 38,
+   "r": -20,
+   "hex_type": "przelecz",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 39,
+   "r": -20,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   },
   {
    "q": 0,
@@ -17549,6 +17645,22 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.12
+  },
+  {
+   "q": 36,
+   "r": -19,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 37,
+   "r": -19,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   },
   {
    "q": 0,
@@ -17823,6 +17935,22 @@
    "encounter_chance": 0.12
   },
   {
+   "q": 34,
+   "r": -18,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 35,
+   "r": -18,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -17,
    "hex_type": "snow",
@@ -18079,6 +18207,22 @@
    "encounter_chance": 0.12
   },
   {
+   "q": 32,
+   "r": -17,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 33,
+   "r": -17,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -16,
    "hex_type": "mountain",
@@ -18317,6 +18461,22 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.12
+  },
+  {
+   "q": 30,
+   "r": -16,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 31,
+   "r": -16,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   },
   {
    "q": 0,
@@ -18543,6 +18703,22 @@
    "encounter_chance": 0.12
   },
   {
+   "q": 28,
+   "r": -15,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 29,
+   "r": -15,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
    "q": 0,
    "r": -14,
    "hex_type": "mountain",
@@ -18749,1422 +18925,6 @@
    "label": null,
    "atmosphere": null,
    "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 3,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 4,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 5,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 6,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 7,
-   "r": -13,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 8,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 9,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 10,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 11,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 12,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 13,
-   "r": -13,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 14,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 15,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 16,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 17,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 18,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 19,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 20,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 21,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 22,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 23,
-   "r": -13,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 3,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 4,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 5,
-   "r": -12,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 6,
-   "r": -12,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 7,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 8,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 9,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 10,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 11,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 12,
-   "r": -12,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 13,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 14,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 15,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 16,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 17,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 18,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 19,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 20,
-   "r": -12,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 21,
-   "r": -12,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 3,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 4,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 5,
-   "r": -11,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 6,
-   "r": -11,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 7,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 10,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 11,
-   "r": -11,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 12,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 13,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 14,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 15,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 16,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 17,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 18,
-   "r": -11,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 19,
-   "r": -11,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -10,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -10,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -10,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 3,
-   "r": -10,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 4,
-   "r": -10,
-   "hex_type": "snow",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 5,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -10,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 10,
-   "r": -10,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 11,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 12,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 13,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 14,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 15,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 16,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 17,
-   "r": -10,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -9,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -9,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -9,
-   "hex_type": "snow",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 3,
-   "r": -9,
-   "hex_type": "snow",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 4,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 5,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 10,
-   "r": -9,
-   "hex_type": "lake",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.08
-  },
-  {
-   "q": 11,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 12,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 13,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 14,
-   "r": -9,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 15,
-   "r": -9,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -8,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 1,
-   "r": -8,
-   "hex_type": "mountain",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.2
-  },
-  {
-   "q": 2,
-   "r": -8,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 3,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 4,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 5,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 10,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 11,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 12,
-   "r": -8,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 13,
-   "r": -8,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 1,
-   "r": -7,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 2,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 3,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 4,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 5,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 10,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 11,
-   "r": -7,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -6,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 1,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 2,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 3,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 4,
-   "r": -6,
-   "hex_type": "tundra",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.18
-  },
-  {
-   "q": 5,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 8,
-   "r": -6,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 9,
-   "r": -6,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 1,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 2,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 3,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 4,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 5,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 6,
-   "r": -5,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 7,
-   "r": -5,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 1,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 2,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 3,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 4,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 5,
-   "r": -4,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -3,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 1,
-   "r": -3,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 2,
-   "r": -3,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 3,
-   "r": -3,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 0,
-   "r": -2,
-   "hex_type": "river",
-   "label": "ku Kresom",
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 1,
-   "r": -2,
-   "hex_type": "river",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.12
-  },
-  {
-   "q": 2,
-   "r": -2,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 3,
-   "r": -2,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 4,
-   "r": -3,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 5,
-   "r": -3,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 6,
-   "r": -4,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 7,
-   "r": -4,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 8,
-   "r": -5,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 9,
-   "r": -5,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 10,
-   "r": -6,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 11,
-   "r": -6,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 12,
-   "r": -7,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 13,
-   "r": -7,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 14,
-   "r": -8,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 15,
-   "r": -8,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 16,
-   "r": -9,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 17,
-   "r": -9,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 18,
-   "r": -10,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 19,
-   "r": -10,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 20,
-   "r": -11,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 21,
-   "r": -11,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 22,
-   "r": -12,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
-  },
-  {
-   "q": 23,
-   "r": -12,
-   "hex_type": "grania",
-   "label": null,
-   "atmosphere": null,
-   "encounter_chance": 0.25
   },
   {
    "q": 26,
@@ -20183,196 +18943,1436 @@
    "encounter_chance": 0.25
   },
   {
-   "q": 28,
-   "r": -15,
-   "hex_type": "grania",
+   "q": 0,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 29,
-   "r": -15,
-   "hex_type": "grania",
+   "q": 1,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 30,
-   "r": -16,
-   "hex_type": "grania",
+   "q": 2,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 31,
-   "r": -16,
-   "hex_type": "grania",
+   "q": 3,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 32,
-   "r": -17,
-   "hex_type": "grania",
+   "q": 4,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 33,
-   "r": -17,
-   "hex_type": "grania",
+   "q": 5,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 34,
-   "r": -18,
-   "hex_type": "grania",
+   "q": 6,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 35,
-   "r": -18,
-   "hex_type": "grania",
+   "q": 7,
+   "r": -13,
+   "hex_type": "mountain",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.2
   },
   {
-   "q": 36,
-   "r": -19,
-   "hex_type": "grania",
+   "q": 8,
+   "r": -13,
+   "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 37,
-   "r": -19,
-   "hex_type": "grania",
+   "q": 9,
+   "r": -13,
+   "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 38,
-   "r": -20,
-   "hex_type": "grania",
+   "q": 10,
+   "r": -13,
+   "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 39,
-   "r": -20,
-   "hex_type": "grania",
+   "q": 11,
+   "r": -13,
+   "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 40,
-   "r": -21,
-   "hex_type": "grania",
+   "q": 12,
+   "r": -13,
+   "hex_type": "road",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 41,
-   "r": -21,
-   "hex_type": "grania",
+   "q": 13,
+   "r": -13,
+   "hex_type": "tundra",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.18
   },
   {
-   "q": 42,
-   "r": -22,
-   "hex_type": "grania",
+   "q": 14,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 43,
-   "r": -22,
-   "hex_type": "grania",
+   "q": 15,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 44,
-   "r": -23,
-   "hex_type": "grania",
+   "q": 16,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 45,
-   "r": -23,
-   "hex_type": "grania",
+   "q": 17,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 46,
-   "r": -24,
-   "hex_type": "grania",
+   "q": 18,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 47,
-   "r": -24,
-   "hex_type": "grania",
+   "q": 19,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 48,
-   "r": -25,
-   "hex_type": "grania",
+   "q": 20,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
   },
   {
-   "q": 49,
-   "r": -25,
-   "hex_type": "grania",
+   "q": 21,
+   "r": -13,
+   "hex_type": "river",
    "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.25
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 22,
+   "r": -13,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 23,
+   "r": -13,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
   },
   {
    "q": 24,
    "r": -13,
    "hex_type": "przelecz",
-   "label": "Przełęcz Siwej Grani",
+   "label": "Stara Przełęcz Przemytników",
    "atmosphere": null,
-   "encounter_chance": 0.3
+   "encounter_chance": 1.0
   },
   {
    "q": 25,
    "r": -13,
-   "hex_type": "przelecz",
-   "label": "Przełęcz Siwej Grani",
+   "hex_type": "grania",
+   "label": null,
    "atmosphere": null,
-   "encounter_chance": 0.3
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 1,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 2,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 3,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 4,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 5,
+   "r": -12,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 6,
+   "r": -12,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 7,
+   "r": -12,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 8,
+   "r": -12,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 9,
+   "r": -12,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 10,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 11,
+   "r": -12,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 12,
+   "r": -12,
+   "hex_type": "road",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 13,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 14,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 15,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 16,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 17,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 18,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 19,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 20,
+   "r": -12,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 21,
+   "r": -12,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 22,
+   "r": -12,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 23,
+   "r": -12,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 1,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 2,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 3,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 4,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 5,
+   "r": -11,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 6,
+   "r": -11,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 7,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 10,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 11,
+   "r": -11,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 12,
+   "r": -11,
+   "hex_type": "bridge",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 13,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 14,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 15,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 16,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 17,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 18,
+   "r": -11,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 19,
+   "r": -11,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 20,
+   "r": -11,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 21,
+   "r": -11,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -10,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 1,
+   "r": -10,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 2,
+   "r": -10,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 3,
+   "r": -10,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 4,
+   "r": -10,
+   "hex_type": "snow",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 5,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -10,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 10,
+   "r": -10,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 11,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 12,
+   "r": -10,
+   "hex_type": "bridge",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 13,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 14,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 15,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 16,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 17,
+   "r": -10,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 18,
+   "r": -10,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 19,
+   "r": -10,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -9,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 1,
+   "r": -9,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 2,
+   "r": -9,
+   "hex_type": "snow",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 3,
+   "r": -9,
+   "hex_type": "snow",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 4,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 5,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 10,
+   "r": -9,
+   "hex_type": "lake",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.08
+  },
+  {
+   "q": 11,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 12,
+   "r": -9,
+   "hex_type": "bridge",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 13,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 14,
+   "r": -9,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 15,
+   "r": -9,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 16,
+   "r": -9,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 17,
+   "r": -9,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -8,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 1,
+   "r": -8,
+   "hex_type": "mountain",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.2
+  },
+  {
+   "q": 2,
+   "r": -8,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 3,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 5,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 10,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 11,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 12,
+   "r": -8,
+   "hex_type": "bridge",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 13,
+   "r": -8,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 14,
+   "r": -8,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 15,
+   "r": -8,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 1,
+   "r": -7,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 2,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 3,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 5,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 10,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 11,
+   "r": -7,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 12,
+   "r": -7,
+   "hex_type": "przelecz",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 13,
+   "r": -7,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -6,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 1,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 2,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 3,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -6,
+   "hex_type": "tundra",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.18
+  },
+  {
+   "q": 5,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -6,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 9,
+   "r": -6,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 10,
+   "r": -6,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 11,
+   "r": -6,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 1,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 2,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 3,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 5,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -5,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 7,
+   "r": -5,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 8,
+   "r": -5,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 9,
+   "r": -5,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 1,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 2,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 3,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 5,
+   "r": -4,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 6,
+   "r": -4,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 7,
+   "r": -4,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -3,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 1,
+   "r": -3,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 2,
+   "r": -3,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 3,
+   "r": -3,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 4,
+   "r": -3,
+   "hex_type": "przelecz",
+   "label": "Przesmyk Wilczej Grani",
+   "atmosphere": null,
+   "encounter_chance": 1.0
+  },
+  {
+   "q": 5,
+   "r": -3,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 0,
+   "r": -2,
+   "hex_type": "river",
+   "label": "ku Kresom",
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 1,
+   "r": -2,
+   "hex_type": "river",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.12
+  },
+  {
+   "q": 2,
+   "r": -2,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
+  },
+  {
+   "q": 3,
+   "r": -2,
+   "hex_type": "grania",
+   "label": null,
+   "atmosphere": null,
+   "encounter_chance": 0.25
   }
  ]
 }

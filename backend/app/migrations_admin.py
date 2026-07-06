@@ -3693,6 +3693,25 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('przelecz', 'Przełęcz',  2.0, 0.30, '#b0a080', '⛰️', 1, 'path',  0.05)
     """, "v1248-r8-border-hex-types")
 
+    # R8 #1248 — dzikie przejścia graniczne: 2 przełęcze poza traktem z gwarantowanym
+    # jednorazowym encounterem. encounter_chance=1.0 + pool → walka przy pierwszym
+    # przejściu; combat_service ustawia campaign_hex_data.encounter_cleared=1 po wygranej
+    # (jednorazowo per kampania). location_key wiąże hex z lokacją-flavour (10_locations.sql).
+    # Geometria (grania/przelecz/road) siedzi w data/regions/region_*.json — tu tylko
+    # przywracamy encounter-wiring, którego snapshot region-JSON nie niesie. Idempotentne.
+    _exec("""
+        UPDATE world_hexes SET encounter_chance=1.0,
+            encounter_pool='["wolf","wolf","werewolf"]',
+            location_key='przesmyk_wilczej_grani'
+        WHERE q=4 AND r=-3 AND map_level=0 AND hex_type='przelecz'
+    """, "v1248-r8-enc-pass-wilcza")
+    _exec("""
+        UPDATE world_hexes SET encounter_chance=1.0,
+            encounter_pool='["bandit_thug","bandit","bandit_chief"]',
+            location_key='stara_przelecz_przemytnikow'
+        WHERE q=24 AND r=-13 AND map_level=0 AND hex_type='przelecz'
+    """, "v1248-r8-enc-pass-przemytnicy")
+
     logger.info("v2_schema_migrations_complete")
 
 
