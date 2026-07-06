@@ -8058,19 +8058,25 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 ).fetchall()
             }
             # Origin region = region of the campaign's starting hex (fixed anchor).
+            # #1255: NEVER re-resolve on a read. resolve_starting_hex(..., None, ...) has a
+            # write side effect (set_position) and, for template-less campaigns, used to
+            # randomize the start — so a bare GET of world-map teleported the pin and grew
+            # 'discovered' every call. Derive origin_region from the existing current_hex;
+            # only resolve as a last resort when the campaign genuinely has no position yet.
             origin_region = None
-            try:
-                from app.services.hex_travel_service import resolve_starting_hex as _rsh
-                _start = _rsh(campaign_id, character_id, None, conn)
-                _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
-                if _srow:
-                    origin_region = _srow.get("region")
-            except Exception:
-                pass
-            if not origin_region and current_hex:
+            if current_hex:
                 _crow = all_hexes_l0.get((int(current_hex["q"]), int(current_hex["r"])))
                 if _crow:
                     origin_region = _crow.get("region")
+            if origin_region is None and not current_hex:
+                try:
+                    from app.services.hex_travel_service import resolve_starting_hex as _rsh
+                    _start = _rsh(campaign_id, character_id, None, conn)
+                    _srow = all_hexes_l0.get((int(_start["q"]), int(_start["r"])))
+                    if _srow:
+                        origin_region = _srow.get("region")
+                except Exception:
+                    pass
             # PM2 (#1221): every region the hero has unlocked (start + entered via
             # travel). W1 gazetteer is computed for EACH of them, not just origin.
             known_regions: set[str] = set()

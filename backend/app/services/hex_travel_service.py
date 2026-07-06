@@ -1438,8 +1438,16 @@ def resolve_starting_hex(
     """
     import json as _json
 
-    # When no starting location is given (or sentinel "Start" from reset-progress),
-    # pick one randomly (50% settlement, 50% wilderness) to avoid always-wilderness starts.
+    # #1255: resolve position IDEMPOTENTLY. A bare GET of world-map calls this with
+    # starting_location_name=None; the old code randomized the start FIRST (sentinel →
+    # _pick_random_start_location → label-match to a random hex) and only reused the
+    # existing/prior hex much later, so every read teleported the pin and desynced
+    # hex↔location (the R3/R5 rozjazd). Priority now, highest first:
+    #   1. Existing session current_hex — a placed/resumed campaign never moves.
+    #   2. Kuźnia template start_hex (#1110) — authoritative at creation.
+    #   3. Explicit starting_location_name label-match.
+    #   4. C18 reuse of the owner's prior-campaign hex.
+    #   5. Sentinel random pick — ONLY for a truly new character with zero history.
     _is_sentinel = (
         not starting_location_name
         or not starting_location_name.strip()
@@ -1447,30 +1455,76 @@ def resolve_starting_hex(
         or (starting_location_name.strip().lower().startswith("start ") and
             starting_location_name.strip()[6:].isdigit())
     )
-    if _is_sentinel:
-        starting_location_name = _pick_random_start_location(conn) or None
 
-    # #1110 — an explicit start_hex assigned in the Kuźnia (campaign_templates.start_hex)
+    matched_hex = None
+    _tpl_id: "int | None" = None
+
+    # 1. Existing session position — verbatim reuse (idempotent for resumed campaigns).
+    #    This wins over the template/label/random paths so re-resolving never moves a pin.
+    _existing_hex = None
+    _gs_pos = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if _gs_pos:
+        try:
+            _ch = _json.loads(_gs_pos["session_flags"] or "{}").get("current_hex")
+            if isinstance(_ch, dict) and _ch.get("q") is not None and _ch.get("r") is not None:
+                _existing_hex = (int(_ch["q"]), int(_ch["r"]))
+        except Exception:
+            _existing_hex = None
+    if _existing_hex:
+        _ewh = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+            (_existing_hex[0], _existing_hex[1]),
+        ).fetchone()
+        if _ewh:
+            matched_hex = {
+                "q": _existing_hex[0], "r": _existing_hex[1],
+                "hex_type": _ewh["hex_type"], "label": _ewh["label"],
+            }
+
+    # 2. #1110 — an explicit start_hex assigned in the Kuźnia (campaign_templates.start_hex)
     # is authoritative: it wins over label-matching so the campaign starts exactly where
     # the template says. Only used when that hex exists on the overworld; otherwise fall
     # through to the legacy name-match (backward compatible for campaigns without a hex).
-    matched_hex = None
-    _tpl_id: "int | None" = None
-    _tpl_hex = _template_start_hex(conn, campaign_id)
-    if _tpl_hex:
-        _twh = conn.execute(
-            "SELECT hex_type, label FROM world_hexes "
-            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
-            (_tpl_hex[0], _tpl_hex[1]),
-        ).fetchone()
-        if _twh:
-            matched_hex = {
-                "q": _tpl_hex[0], "r": _tpl_hex[1],
-                "hex_type": _twh["hex_type"], "label": _twh["label"],
-            }
-            _tpl_id = _tpl_hex[2]
+    if matched_hex is None:
+        _tpl_hex = _template_start_hex(conn, campaign_id)
+        if _tpl_hex:
+            _twh = conn.execute(
+                "SELECT hex_type, label FROM world_hexes "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (_tpl_hex[0], _tpl_hex[1]),
+            ).fetchone()
+            if _twh:
+                matched_hex = {
+                    "q": _tpl_hex[0], "r": _tpl_hex[1],
+                    "hex_type": _twh["hex_type"], "label": _twh["label"],
+                }
+                _tpl_id = _tpl_hex[2]
 
-    # Try to match existing hex by label (fallback when no template hex applied)
+    # 4-precompute. C18 reuse candidate (owner's prior-campaign hex) — resolved now so it
+    # can pre-empt the random sentinel pick below (a returning owner keeps their world).
+    _reuse_coords = None
+    if matched_hex is None:
+        _owner_row = conn.execute(
+            "SELECT owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        _owner_uid = (
+            int(_owner_row["owner_user_id"])
+            if _owner_row and _owner_row["owner_user_id"] is not None else None
+        )
+        if _owner_uid:
+            _reuse_coords = _find_character_existing_hex(conn, campaign_id, _owner_uid)
+
+    # 5. Sentinel random pick — ONLY when nothing above resolved a hex AND there is no
+    #    prior-campaign hex to reuse. This is the ONLY path that may randomize, and it
+    #    fires solely for a brand-new character with zero history.
+    if _is_sentinel and matched_hex is None and not _reuse_coords:
+        starting_location_name = _pick_random_start_location(conn) or None
+
+    # 3. Try to match existing hex by label (fallback when no anchored/template hex)
     if matched_hex is None and starting_location_name and starting_location_name.strip():
         # #992-ii: ONLY overworld hexes (map_level=0) are valid start/travel nodes.
         # Without this filter the label match could resolve to a map_level=1 LOCAL
@@ -1496,16 +1550,9 @@ def resolve_starting_hex(
         hex_type = matched_hex["hex_type"]
         label = matched_hex["label"]
     else:
-        # C18: prefer an already-discovered hex from same user's previous campaigns
-        owner_row = conn.execute(
-            "SELECT owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
-        ).fetchone()
-        owner_user_id = int(owner_row["owner_user_id"]) if owner_row else None
-        reuse_coords = (
-            _find_character_existing_hex(conn, campaign_id, owner_user_id)
-            if owner_user_id else None
-        )
-
+        # 4. C18: prefer an already-discovered hex from same user's previous campaigns
+        #    (precomputed above so it can pre-empt the random sentinel pick).
+        reuse_coords = _reuse_coords
         if reuse_coords:
             sq, sr = reuse_coords
             wh = conn.execute(
