@@ -2349,6 +2349,15 @@ async function _wmOpen() {
       }
     } catch (_) { /* no local map — fall through to world map */ }
   }
+  _wmOpenWorld();
+}
+
+// #1257: force-open the world map, skipping the #998 auto-redirect to local map.
+// Used by the local-map "← Świat" button so it can escape the sublocation view.
+async function _wmOpenWorld() {
+  if (!currentCampaignId || !characterData?.id) {
+    showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
+  }
   _wmap.panel.removeAttribute('hidden');
   _wmap.panel.style.transform = 'translateX(0)';
 
@@ -2601,7 +2610,7 @@ function initLocalMap() {
   document.getElementById('lmap-close-btn')?.addEventListener('click', _lmClose);
   document.getElementById('lmap-back-btn')?.addEventListener('click', () => {
     _lmClose();
-    setTimeout(_wmOpen, 300);
+    setTimeout(_wmOpenWorld, 300);  // #1257: force world map, skip #998 local-map redirect
   });
   document.getElementById('lmap-btn-go')?.addEventListener('click', _lmExecuteTravel);
   document.getElementById('lmap-btn-cancel')?.addEventListener('click', () => {
