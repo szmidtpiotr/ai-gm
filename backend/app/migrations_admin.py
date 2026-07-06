@@ -3681,6 +3681,18 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         ('bridge',  'Most',        1.0, 0.45, '#7a6a4a', '🌉', 1, 'scatter', 0.00)
     """, "v933-kresy-hex-types")
 
+    # R8 #1248 — border terrain between Kresy and Siwe Granie.
+    # 'grania' = impassable mountain ridge (is_passable=0 → excluded from the travel
+    # graph, forms a wall). 'przelecz' = the single mountain pass (is_passable=1) that
+    # is the only crossing between the two regions. INSERT OR IGNORE = idempotent.
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon, is_passable, placement_mode, location_spawn_chance)
+        VALUES
+        ('grania',   'Grań',      3.0, 0.25, '#5a5a66', '🏔️', 0, 'biome', 0.00),
+        ('przelecz', 'Przełęcz',  2.0, 0.30, '#b0a080', '⛰️', 1, 'path',  0.05)
+    """, "v1248-r8-border-hex-types")
+
     logger.info("v2_schema_migrations_complete")
 
 
