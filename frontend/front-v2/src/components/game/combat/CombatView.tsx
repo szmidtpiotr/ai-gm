@@ -36,6 +36,7 @@ import { CombatActionBar } from "./CombatActionBar";
 import { ActionSheet, type SheetMode, type SpellAction } from "./ActionSheet";
 import { ReactionModal, type ReactionChoice, type ReactionData } from "./ReactionModal";
 import { Dice3DOverlay, type DiceJob } from "./Dice3DOverlay";
+import { CombatOutcomes } from "../outcomes/CombatOutcomes";
 
 export function CombatView({
   campaignId,
@@ -103,9 +104,13 @@ export function CombatView({
   const [sheet, setSheet] = useState<SheetMode | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // FE10 (#1237): modal wyniku walki (victory/player_dead) + akumulatory nagród.
+  const [outcome, setOutcome] = useState<{ reason: string; combat: CombatState } | null>(null);
   const jobSeq = useRef(0);
   const enemyTurnRef = useRef(false);
   const endedRef = useRef(false);
+  const goldAccumRef = useRef(0);
+  const xpAccumRef = useRef(0);
 
   // Cel: trzymaj się żywego wroga; przeskocz na kolejnego po zabiciu.
   useEffect(() => {
@@ -165,6 +170,10 @@ export function CombatView({
         setBusy(false);
         return; // tura NIE skonsumowana
       }
+      // FE10: zbieraj nagrody z zabójczych ciosów (złoto/XP) na potrzeby modalu końca.
+      const aoeGold = (r.aoe_hits ?? []).reduce((s, h) => s + (Number(h.gold_drop) || 0), 0);
+      goldAccumRef.current += (Number(r.gold_drop) || 0) + aoeGold;
+      xpAccumRef.current += Number(r.xp_granted) || 0;
       const face = Number(r.player_raw_d20 ?? d20);
       const card = rollFromPlayerAttack(
         r,
@@ -285,27 +294,28 @@ export function CombatView({
     }
   }
 
-  // ── koniec walki: odśwież narrację + posprzątaj (F-28/F-30 osobno) ──
+  // ── koniec walki: modale wyników (F-27..F-32) lub toast (ucieczka) ──
   useEffect(() => {
     if (view?.status === "ended" && !endedRef.current) {
       endedRef.current = true;
-      const reason = view.endedReason;
-      toast(
-        reason === "victory"
-          ? "Zwycięstwo!"
-          : reason === "player_dead"
-            ? "Poległeś…"
-            : reason === "fled"
-              ? "Walka zakończona — ucieczka."
-              : "Walka zakończona.",
-        reason === "player_dead" ? "danger" : "success",
-      );
+      const reason = view.endedReason ?? "";
+      // victory / player_dead → pełny modal (CombatOutcomes); fled → tylko toast.
+      if (reason === "victory" || reason === "player_dead") {
+        setOutcome({ reason, combat: live });
+      } else {
+        toast(reason === "fled" ? "Walka zakończona — ucieczka." : "Walka zakończona.", "info");
+      }
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
     }
-    if (view?.status === "active") endedRef.current = false;
-  }, [view?.status, view?.endedReason, campaignId, qc, toast]);
+    if (view?.status === "active") {
+      endedRef.current = false;
+      goldAccumRef.current = 0;
+      xpAccumRef.current = 0;
+      setOutcome(null);
+    }
+  }, [view?.status, view?.endedReason, campaignId, qc, toast, live]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -368,6 +378,25 @@ export function CombatView({
       {reaction && <ReactionModal data={reaction} onChoose={onReaction} />}
 
       {diceJob && <Dice3DOverlay job={diceJob} onDone={onDiceDone} />}
+
+      {/* FE10 (#1237): modale wyników walki — koniec+łup / śmierć / loch / drop */}
+      {outcome && (
+        <CombatOutcomes
+          campaignId={campaignId}
+          heroId={character?.id}
+          character={character}
+          reason={outcome.reason}
+          endedCombat={outcome.combat}
+          xpGain={xpAccumRef.current}
+          goldGain={goldAccumRef.current}
+          onDismiss={() => {
+            setOutcome(null);
+            qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+            qc.invalidateQueries({ queryKey: ["character"] });
+            qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+          }}
+        />
+      )}
     </div>
   );
 }

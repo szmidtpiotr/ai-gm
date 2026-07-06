@@ -26,6 +26,7 @@ import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
+import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
 import { useCombatState } from "@/hooks/useCombat";
 
 // F-12 ekran gry (KROK 4 #1233): narracja + composer + rzuty + paski, wg makiety zar4/zar3.
@@ -35,6 +36,7 @@ export default function Game() {
   const campaignId = raw ? Number(raw) : undefined;
   const setCampaign = useAppStore((s) => s.setCampaign);
   const setHero = useAppStore((s) => s.setHero);
+  const currentUser = useAppStore((s) => s.currentUser);
 
   const gameTab = useAppStore((s) => s.gameTab);
 
@@ -130,6 +132,9 @@ export default function Game() {
 
   return (
     <div className="flex h-full min-h-0">
+      {/* FE10 (#1237): awans wykrywany globalnie (XP z walki/questów/odpoczynku) */}
+      <LevelUpGate character={character.data} userId={currentUser?.id} />
+
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} />
 

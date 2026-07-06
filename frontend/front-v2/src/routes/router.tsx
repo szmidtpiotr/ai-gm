@@ -17,12 +17,17 @@ const CreateCharacter = lazy(() => import("./pages/CreateCharacter"));
 const Game = lazy(() => import("./pages/Game"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+// FE10 (#1237) — publiczny podgląd modali wyników walki (QA/Playwright vs makiety).
+const OutcomePreview = lazy(() => import("./pages/OutcomePreview"));
 
 // Flow (sekcja 11): Login → Bohaterowie → Kampanie bohatera → Gra.
 // Deep-linki (?campaign / ?join) rozwiązuje RootRedirect na „/".
 export const router = createBrowserRouter(
   [
     { index: true, element: <RootRedirect /> },
+
+    // FE10 podgląd modali wyników — publiczny, tylko QA wizualne (bez shellu/auth).
+    { path: "podglad/wyniki", element: <OutcomePreview /> },
 
     // Ekrany wejścia — pełnoekranowa scena, bez shellu (publiczne).
     {

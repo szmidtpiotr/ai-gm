@@ -297,8 +297,100 @@ export interface CombatActionResult {
   reaction_window?: boolean;
   reaction_options?: string[]; // subset of ["dodge","shield_block"]
   reaction?: { dodged?: boolean; full_block?: boolean; reduction?: number } | null;
+  // łup / nagrody z zabójczego ciosu (FE10 #1237)
+  loot?: LootItem[];
+  gold_drop?: number;
+  xp_granted?: number;
+  dungeon_boss_loot?: LootItem[] | null;
+  aoe_hits?: Array<{ loot?: LootItem[]; gold_drop?: number; xp_granted?: number }>;
   // sterowanie pętlą
   advance_turn?: string | "ended" | "awaiting_reaction";
   combat_state?: CombatState | null;
   [k: string]: unknown;
+}
+
+// ── FE10 modale wyników walki (#1237 / F-27..F-32) ───────────────────────────
+
+// Wpis puli łupu (combat.loot_pool / result.loot / claim available).
+export interface LootItem {
+  label?: string | null;
+  key?: string | null;
+  source_key?: string | null;
+  source_type?: "item" | "consumable" | "weapon" | string | null;
+  qty?: number | null;
+  quantity?: number | null;
+  rarity?: number | null;
+  is_special?: boolean | null;
+  [k: string]: unknown;
+}
+
+// Diff karta celebracji rzadkiego dropu (build_drop_comparison).
+export interface DropComparison {
+  inventory_id: number;
+  name: string;
+  item_type: "weapon" | "armor" | string;
+  rarity: number;
+  rarity_label: string;
+  is_special: boolean;
+  suggested_slot?: string | null;
+  affixes?: Array<{ name?: string; effects?: Array<{ type?: string; value?: number }> }>;
+  diff?: Record<string, number | null>;
+  [k: string]: unknown;
+}
+
+export interface ClaimLootResult {
+  claimed: Array<{ comparison?: DropComparison | null; [k: string]: unknown }>;
+  available?: LootItem[];
+  selected_indexes?: number[];
+}
+
+// GET /characters/{id}/xp (get_xp_snapshot).
+export interface XpSnapshot {
+  xp_available: number;
+  xp_lifetime_earned: number;
+  stat_point_costs: Record<string, number>;
+  stat_value_ceiling: number;
+  skill_rank_ceiling: number;
+  rank_up_costs?: Record<string, number>;
+}
+
+// GET /campaigns/{id}/death-summary (solo_death_service.death_summary_payload).
+export interface DeathSummary {
+  outcome: "death" | "victory";
+  campaign_id: number;
+  character_id: number;
+  character_name: string;
+  character_class: string;
+  level: number;
+  epitaph: string;
+  death_reason: string;
+  stats: {
+    turn_count?: number;
+    gold?: number;
+    npcs_met?: number;
+    quests_completed?: number;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+}
+
+// GET /characters/{id}/resurrect-preview (resurrection_service.cost_preview).
+export interface ResurrectPreview {
+  enabled: boolean;
+  reason?: string;
+  uses_remaining?: number | null;
+  cost?: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
+}
+
+// GET /campaigns/{id}/dungeon-run.
+export interface DungeonRunState {
+  dungeon_run?: {
+    boss_choice_pending?: boolean;
+    cycle?: number;
+    rooms_cleared?: number;
+    enemies_defeated?: number;
+    label?: string | null;
+    [k: string]: unknown;
+  } | null;
 }
