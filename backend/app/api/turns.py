@@ -8354,8 +8354,10 @@ _TRAVEL_NOTICE_BY_REASON = {
     },
     "encounter": {
         "severity": "warn",
-        "title": "Wyprawa przerwana",
-        "message": "Coś przecięło ci drogę. Zdecyduj: kontynuuj podróż, odpocznij albo rozbij obóz.",
+        "title": "Starcie w drodze",
+        "message": "Nagłe spotkanie w dziczy przerwało twój marsz — nie dotarłeś jeszcze "
+                   "do celu. Zanim ruszysz dalej, zdecyduj: kontynuujesz drogę, "
+                   "odpoczywasz czy rozbijasz obóz.",
     },
 }
 
