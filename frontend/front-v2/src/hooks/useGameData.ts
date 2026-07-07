@@ -167,6 +167,9 @@ export function useSubmitTurn(campaignId: number | undefined) {
       // FE9 (#1236): narracja mogła rozpocząć walkę — sprawdź stan combat, by baner
       // i pasek akcji pojawiły się bez F5 (poll startuje dopiero gdy walka aktywna).
       qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+      // Narracja mogła przenieść na inny hex (np. do osady) → odśwież mapę lokalną,
+      // inaczej submapa nowej osady nie pokaże się (stary cache poprzedniej pozycji).
+      qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
     },
   });
 }
@@ -207,6 +210,7 @@ export function useTravelResume(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["character"] });
       qc.invalidateQueries({ queryKey: ["combat", campaignId] });
       qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+      qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
     },
   });
 }
@@ -357,6 +361,7 @@ export function useTravel(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
       qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+      qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
     },
   });
 }
