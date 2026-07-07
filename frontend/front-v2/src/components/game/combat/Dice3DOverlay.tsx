@@ -90,8 +90,10 @@ export function Dice3DOverlay({
           kość leci przez pełny obszar, jak w starym froncie. */}
       <div id={MOUNT_ID} className="absolute inset-0" />
       {fallback && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <Fallback2D face={job.face} sides={sidesOf(job.notation)} />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-3">
+          {(job.forced && job.forced.length > 1 ? job.forced : [job.face]).map((f, i) => (
+            <Fallback2D key={i} face={f} sides={sidesOf(job.notation)} />
+          ))}
         </div>
       )}
 

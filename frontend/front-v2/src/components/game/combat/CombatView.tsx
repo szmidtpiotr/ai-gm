@@ -124,6 +124,7 @@ export function CombatView({
   // FE10 (#1237): modal wyniku walki (victory/player_dead) + akumulatory nagród.
   const [outcome, setOutcome] = useState<{ reason: string; combat: CombatState } | null>(null);
   const jobSeq = useRef(0);
+  const pendingDmgStageRef = useRef<DiceJob | null>(null);
   const enemyTurnRef = useRef(false);
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
@@ -199,6 +200,20 @@ export function CombatView({
       // combat_state już w cache (mutacja onSuccess) — tura wroga odpali po zamknięciu kości.
       pushCombatState(r.combat_state);
       if (showPlayerDice) {
+        // Kość obrażeń (k6/k8…) jako drugi etap po d20.
+        if (r.hit && !r.dodged && r.damage_rolls?.length && r.damage_die) {
+          jobSeq.current += 1;
+          pendingDmgStageRef.current = {
+            id: jobSeq.current,
+            notation: r.damage_die,
+            forced: r.damage_rolls,
+            face: r.damage_rolls[0] ?? 1,
+            card,
+            actor: "player",
+          };
+        } else {
+          pendingDmgStageRef.current = null;
+        }
         jobSeq.current += 1;
         setDiceJob({
           id: jobSeq.current,
@@ -221,6 +236,13 @@ export function CombatView({
   }
 
   function onDiceDone() {
+    // Sprawdź czy jest zakolejkowany etap kości obrażeń.
+    const dmgStage = pendingDmgStageRef.current;
+    if (dmgStage) {
+      pendingDmgStageRef.current = null;
+      setDiceJob(dmgStage);
+      return; // karta trafi do rolls po zakończeniu etapu obrażeń
+    }
     if (diceJob) setRolls((p) => [...p, diceJob.card]);
     setDiceJob(null);
     // busy był true tylko dla tury gracza
@@ -289,6 +311,20 @@ export function CombatView({
           const enemyCard = rollFromEnemyAttack(r);
           if (showEnemyDice) {
             const d20 = Number(r.raw_d20 ?? 0);
+            // Kość obrażeń wroga jako drugi etap po d20.
+            if (r.hit && !r.dodged && r.damage_rolls?.length && r.damage_die) {
+              jobSeq.current += 1;
+              pendingDmgStageRef.current = {
+                id: jobSeq.current,
+                notation: r.damage_die,
+                forced: r.damage_rolls,
+                face: r.damage_rolls[0] ?? 1,
+                card: enemyCard,
+                actor: "enemy",
+              };
+            } else {
+              pendingDmgStageRef.current = null;
+            }
             jobSeq.current += 1;
             setDiceJob({
               id: jobSeq.current,
