@@ -213,16 +213,113 @@ def _get_or_create_location(
         return None
 
 
+_DIACRITIC_MAP = {
+    "ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n",
+    "ó": "o", "ś": "s", "ź": "z", "ż": "z",
+}
+_NUMERIC_SUFFIX_RE = re.compile(r"^(.+?)_\d{4,}$")
+
+
+def _norm_name(s: str) -> str:
+    """Normalize a display name for fuzzy comparison: lowercase, strip diacritics,
+    collapse non-alphanumerics to single spaces."""
+    s = (s or "").lower().strip()
+    s = "".join(_DIACRITIC_MAP.get(ch, ch) for ch in s)
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    return s
+
+
+def _strip_numeric_suffix(key: str) -> str:
+    """Drop an LLM-invented collision suffix like `brunn_936708` -> `brunn`.
+    Only >=4-digit suffixes are stripped so forge keys (`_2`, `_3`) survive."""
+    m = _NUMERIC_SUFFIX_RE.match(key or "")
+    return m.group(1) if m else (key or "")
+
+
+def _load_plan_roster(conn: sqlite3.Connection, campaign_id: int) -> list[dict]:
+    """Return `gm_plan_json.key_npcs` for the campaign (empty on any miss)."""
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+    except Exception:
+        return []
+    if not row or not row[0]:
+        return []
+    try:
+        plan = json.loads(row[0])
+    except Exception:
+        return []
+    roster = plan.get("key_npcs")
+    return roster if isinstance(roster, list) else []
+
+
+def _match_roster(key: str, name: str, roster: list[dict]) -> dict | None:
+    """Match an incoming NPC (LLM key + name) to a plan roster entry.
+    Matches on base-key equality, or when the incoming name/key tokens are a
+    subset of a roster entry's name tokens (so bare "Brunn" -> "Brunn Żelaznoręki")."""
+    base = _strip_numeric_suffix(key)
+    in_tokens = set(_norm_name(name).split()) if name else set()
+    key_tokens = set(_norm_name(base.replace("_", " ")).split())
+    for entry in roster:
+        rkey = (entry.get("key") or "").strip()
+        if not rkey:
+            continue
+        if base == rkey or key == rkey:
+            return entry
+        r_tokens = set(_norm_name(entry.get("name") or "").split())
+        if not r_tokens:
+            continue
+        if in_tokens and in_tokens <= r_tokens:
+            return entry
+        if key_tokens and key_tokens <= r_tokens:
+            return entry
+    return None
+
+
+def _find_npc_by_name(conn: sqlite3.Connection, name: str) -> dict | None:
+    """Find an existing NPC whose label normalizes to the same string (exact
+    full-name match only — conservative, avoids merging distinct characters)."""
+    nn = _norm_name(name)
+    if not nn:
+        return None
+    for row in conn.execute("SELECT key, label FROM npcs").fetchall():
+        if _norm_name(row[1]) == nn:
+            return {"key": row[0], "label": row[1]}
+    return None
+
+
 def _get_or_create_npc(
     conn: sqlite3.Connection, key: str, params: dict, campaign_id: int
 ) -> dict | None:
-    row = conn.execute(
-        "SELECT key, label FROM npcs WHERE key = ?", (key,)
-    ).fetchone()
-    if row:
-        return dict(row)
+    base_key = _strip_numeric_suffix(key)
+    name = params.get("name") or base_key.replace("_", " ").title()
 
-    name = params.get("name", key.replace("_", " ").title())
+    # 1. Exact key match (incoming or suffix-stripped) — existing behavior.
+    for k in dict.fromkeys((key, base_key)):
+        row = conn.execute(
+            "SELECT key, label FROM npcs WHERE key = ?", (k,)
+        ).fetchone()
+        if row:
+            return {"key": row[0], "label": row[1]}
+
+    # 3. Plan-roster precedence: canonicalize to the planned NPC's key.
+    match = _match_roster(key, name, _load_plan_roster(conn, campaign_id))
+    if match:
+        key = (match.get("key") or base_key).strip()
+        name = match.get("name") or name
+        row = conn.execute(
+            "SELECT key, label FROM npcs WHERE key = ?", (key,)
+        ).fetchone()
+        if row:
+            return {"key": row[0], "label": row[1]}
+    else:
+        # 1b. Name-based dedup for ad-hoc NPCs not in the roster.
+        existing = _find_npc_by_name(conn, name)
+        if existing:
+            return existing
+        key = base_key  # 4. store under the suffix-stripped key
+
     role = params.get("role", "neutral").lower()
     personality_raw = params.get("personality", "")
     location_key = params.get("location_key", "")
