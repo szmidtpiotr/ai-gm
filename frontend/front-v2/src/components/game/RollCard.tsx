@@ -53,7 +53,19 @@ export function RollCard({
               <b className="font-semibold text-text-2">{sum.v}</b>
             </span>
           )}
-          {res && <span className="text-mech-ok">{res.v}</span>}
+          {res && (
+            <span
+              className={cn(
+                res.tone === "bad"
+                  ? "text-danger"
+                  : res.tone === "warn"
+                    ? "text-gold"
+                    : "text-mech-ok",
+              )}
+            >
+              {res.v}
+            </span>
+          )}
           <CaretDown size={12} className="ml-auto" />
         </div>
       )}
@@ -80,7 +92,21 @@ export function RollCard({
                   c.res &&
                     cn(
                       "pt-0.5 text-micro font-semibold uppercase tracking-wide",
-                      roll.crit ? "text-gold" : roll.fumble ? "text-danger" : player ? "text-mech-ok" : "text-danger",
+                      // Nat20/Nat1 mają pierwszeństwo; potem kolor wg skutku dla gracza
+                      // (tone), a na końcu domyślny kolor strony.
+                      roll.crit
+                        ? "text-gold"
+                        : roll.fumble
+                          ? "text-danger"
+                          : c.tone === "ok"
+                            ? "text-mech-ok"
+                            : c.tone === "bad"
+                              ? "text-danger"
+                              : c.tone === "warn"
+                                ? "text-gold"
+                                : player
+                                  ? "text-mech-ok"
+                                  : "text-danger",
                     ),
                 )}
               >

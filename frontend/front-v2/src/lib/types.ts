@@ -216,7 +216,16 @@ export interface TravelResult {
 export interface RollCardData {
   actor: "player" | "enemy";
   title: string; // "TEST: PERSWAZJA" / "WYJEC — ATAK PAZURAMI"
-  cells: Array<{ k: string; v: string; sum?: boolean; res?: boolean }>;
+  cells: Array<{
+    k: string;
+    v: string;
+    sum?: boolean;
+    res?: boolean;
+    // Kolor komórki wyniku wg skutku dla gracza (nie wg strony): ok=zielony (dobrze
+    // — unik udany / 0 HP), bad=czerwony (dostałeś), warn=złoty (neutralnie). Gdy brak,
+    // RollCard bierze domyślny kolor po stronie aktora.
+    tone?: "ok" | "bad" | "warn";
+  }>;
   crit?: boolean; // Nat 20 — złoty flash
   fumble?: boolean; // Nat 1 — krwawy flash
 }

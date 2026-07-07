@@ -64,7 +64,8 @@ function fmt(mod: number): string {
   return (mod >= 0 ? "+" : "") + mod;
 }
 
-/** Rzut ataku/czaru gracza → karta (prawo/ember). Nat20 crit, Nat1 fumble. */
+/** Rzut ataku/czaru gracza → karta (prawo/ember). Nat20 crit, Nat1 fumble.
+ * Kolumna wyniku jest jawna: TRAFIENIE/−X HP (zielony), WRÓG UNIKA / PUDŁO (złoty). */
 export function rollFromPlayerAttack(
   r: CombatActionResult,
   title: string,
@@ -77,18 +78,34 @@ export function rollFromPlayerAttack(
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Suma", v: String(total), sum: true });
 
+  // Etykieta + wartość + kolor zależą od tego, co realnie się stało z Twoim ciosem.
+  let label = "Wynik";
   let resV: string;
-  if (r.blocked) resV = r.mana_insufficient ? "ZA MAŁO MANY" : "POZA ZASIĘGIEM";
-  else if (r.spell_type === "heal") resV = `+${r.heal_amount ?? 0} HP`;
-  else if (r.dodged) resV = "UNIK";
-  else if (r.hit) resV = `−${r.damage ?? 0} HP`;
-  else resV = "PUDŁO";
-  cells.push({ k: r.spell_type === "heal" ? "Lecz." : "Obraż.", v: resV, res: true });
+  let tone: "ok" | "bad" | "warn";
+  if (r.blocked) {
+    resV = r.mana_insufficient ? "ZA MAŁO MANY" : "POZA ZASIĘGIEM";
+    tone = "warn";
+  } else if (r.spell_type === "heal") {
+    label = "Lecz.";
+    resV = `+${r.heal_amount ?? 0} HP`;
+    tone = "ok";
+  } else if (r.dodged) {
+    resV = "WRÓG UNIKA"; // przeciwnik uchylił się przed Twoim ciosem
+    tone = "warn";
+  } else if (r.hit) {
+    label = "Obraż.";
+    resV = `−${r.damage ?? 0} HP`; // trafienie — zadane obrażenia
+    tone = "ok";
+  } else {
+    resV = "PUDŁO";
+    tone = "warn";
+  }
+  cells.push({ k: label, v: resV, res: true, tone });
 
   return { actor: "player", title, cells, crit, fumble };
 }
 
-/** Rzut ataku wroga → karta (lewo/krwawy). */
+/** Rzut ataku wroga (bez okna reakcji) → karta (lewo/krwawy). Kolor wg skutku dla Ciebie. */
 export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   const d20 = Number(r.raw_d20 ?? NaN);
   const total = Number(r.attack_roll ?? NaN);
@@ -99,32 +116,56 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Atak", v: String(total), sum: true });
   if (Number.isFinite(ac)) cells.push({ k: "Obr.", v: String(ac) });
+  // Dostałeś = czerwony; unik/pudło (bez obrażeń) = zielony (dobrze dla Ciebie).
+  const hit = !!r.hit && !r.dodged;
   cells.push({
-    k: r.hit ? "Trafia" : "Wynik",
-    v: r.dodged ? "UNIK" : r.hit ? `−${r.damage ?? 0} HP` : "PUDŁO",
+    k: hit ? "Obraż." : "Wynik",
+    v: r.dodged ? "UNIKASZ" : r.hit ? `−${r.damage ?? 0} HP` : "PUDŁO",
     res: true,
+    tone: hit ? "bad" : "ok",
   });
   const name = String(r.enemy_name || "Wróg").toUpperCase();
   return { actor: "enemy", title: `${name} — ATAK`, cells, crit, fumble };
 }
 
-/** Wynik reakcji SF10 → karta (lewo/krwawy). */
+/** Wynik reakcji SF10 (wróg atakuje, Ty reagujesz) → karta (lewo/krwawy).
+ * Jasno mówi czy unik/blok się udał + koloruje wg skutku dla Ciebie. */
 export function rollFromReaction(
   r: CombatActionResult,
   choice: "take" | "dodge" | "block",
 ): RollCardData {
   const react = r.reaction || {};
+  const dmg = Number(r.damage ?? 0);
   const cells: RollCardData["cells"] = [];
   const label =
     choice === "dodge" ? "UNIK" : choice === "block" ? "BLOK" : "CIOS";
   cells.push({ k: "Reakcja", v: label, sum: true });
+
   let resV: string;
-  if (choice === "dodge" && react.dodged) resV = "0 HP · UNIK";
-  else if (choice === "block") resV = `−${r.damage ?? 0} HP · BLOK`;
-  else resV = `−${r.damage ?? 0} HP`;
-  cells.push({ k: "Skutek", v: resV, res: true });
+  let tone: "ok" | "bad" | "warn";
+  if (choice === "dodge") {
+    if (react.dodged) {
+      resV = "UNIK UDANY · 0 HP"; // uchyliłeś się w całości
+      tone = "ok";
+    } else {
+      resV = `UNIK NIEUDANY · −${dmg} HP`; // nie zdążyłeś — cios dosięga
+      tone = "bad";
+    }
+  } else if (choice === "block") {
+    if (react.full_block || dmg <= 0) {
+      resV = "BLOK PEŁNY · 0 HP"; // tarcza pochłonęła cały cios
+      tone = "ok";
+    } else {
+      resV = `BLOK · −${dmg} HP`; // część obrażeń zablokowana
+      tone = "warn";
+    }
+  } else {
+    resV = `CIOS · −${dmg} HP`; // przyjąłeś na klatę
+    tone = "bad";
+  }
+  cells.push({ k: "Skutek", v: resV, res: true, tone });
   const name = String(r.enemy_name || "Wróg").toUpperCase();
-  return { actor: "enemy", title: `${name} — TRAFIENIE`, cells, fumble: false };
+  return { actor: "enemy", title: `${name} — ATAK`, cells, fumble: false };
 }
 
 export { fmt };
