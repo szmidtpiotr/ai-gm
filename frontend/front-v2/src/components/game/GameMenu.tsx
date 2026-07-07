@@ -1,9 +1,10 @@
 // FE18/FE19 (#1267/#1268) — menu ☰ ekranu gry.
 // Ustawienia: dymki, walka, głos (TTS/STT), bramka finału + strefa admina.
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   X, SpeakerHigh, Microphone, Flag, ChatTeardropText, Sword, Skull,
-  CheckCircle, XCircle, Question,
+  CheckCircle, XCircle, Question, SignOut,
 } from "@phosphor-icons/react";
 import { useAppStore, type GamePrefKey } from "@/store/appStore";
 import { useVoice } from "@/hooks/useVoice";
@@ -16,6 +17,7 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
   const user = useAppStore((s) => s.currentUser);
   const vs = useVoice();
+  const navigate = useNavigate();
 
   if (!open) return null;
 
@@ -34,6 +36,21 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
+
+          {/* ── Nawigacja ────────────────────────────────────────────────── */}
+          <button
+            type="button"
+            onClick={() => { close(); navigate("/bohaterowie"); }}
+            className="mb-4 flex w-full items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3 text-left transition-colors hover:border-line-ember"
+          >
+            <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line bg-surface text-text-2">
+              <SignOut size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-ui text-body font-semibold text-text">Wyjdź z gry</span>
+              <span className="block font-ui text-micro text-text-3">Powrót do listy bohaterów</span>
+            </span>
+          </button>
 
           {/* ── Informacje w dymkach ─────────────────────────────────────── */}
           <SectionHead icon={<ChatTeardropText size={14} />}>Dymki</SectionHead>
