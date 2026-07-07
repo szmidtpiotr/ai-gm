@@ -1,6 +1,29 @@
 import { create } from "zustand";
 import { clearSession, readStoredUser, storeSession } from "@/lib/auth";
 
+export type GamePrefKey =
+  | "gamePrefBubbleName"
+  | "gamePrefBubbleTurn"
+  | "gamePrefBubbleDatetime"
+  | "gamePrefSkipCombatNarr"
+  | "gamePrefDebug";
+
+const PREF_LS: Record<GamePrefKey, [string, boolean]> = {
+  gamePrefBubbleName:     ["bubble_name",               true],
+  gamePrefBubbleTurn:     ["bubble_turn",               true],
+  gamePrefBubbleDatetime: ["bubble_datetime",           true],
+  gamePrefSkipCombatNarr: ["aigm_skip_combat_narrative", false],
+  gamePrefDebug:          ["aigm_debug",                false],
+};
+
+function readPref(lsKey: string, def: boolean): boolean {
+  try {
+    const v = localStorage.getItem(lsKey);
+    if (v === null) return def;
+    return v !== "false" && v !== "0";
+  } catch { return def; }
+}
+
 // Client-state szkielet (Zustand) — kandydaci wg frontend_design.md sekcja 8.
 // Server-state (tury, walka, ekwipunek) NIE tu — trzyma TanStack Query.
 
@@ -47,6 +70,14 @@ export interface ShopContext {
 }
 
 export interface AppState {
+  // Game preferences (localStorage-backed)
+  gamePrefBubbleName: boolean;
+  gamePrefBubbleTurn: boolean;
+  gamePrefBubbleDatetime: boolean;
+  gamePrefSkipCombatNarr: boolean;
+  gamePrefDebug: boolean;
+  setGamePref: (k: GamePrefKey, v: boolean) => void;
+
   currentUser: CurrentUser | null;
   currentHeroId: number | null;
   currentCampaignId: number | null;
@@ -101,6 +132,18 @@ function toUser(p: LoginPayload): CurrentUser {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  // Game prefs — hydrated from localStorage on startup.
+  gamePrefBubbleName:     readPref("bubble_name",               true),
+  gamePrefBubbleTurn:     readPref("bubble_turn",               true),
+  gamePrefBubbleDatetime: readPref("bubble_datetime",           true),
+  gamePrefSkipCombatNarr: readPref("aigm_skip_combat_narrative", false),
+  gamePrefDebug:          readPref("aigm_debug",                false),
+  setGamePref: (k, v) => {
+    const [lsKey] = PREF_LS[k];
+    try { localStorage.setItem(lsKey, v ? "1" : "0"); } catch {}
+    set({ [k]: v } as Partial<AppState>);
+  },
+
   // Hydrate from localStorage so a refresh keeps the player logged in.
   currentUser: readStoredUser(),
   currentHeroId: null,

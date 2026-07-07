@@ -2,7 +2,8 @@
 // FAB widoczny tylko dla testera (is_tester). Bottom-sheet: rodzaj (Błąd/Pomysł/Inne),
 // „Co się stało?" (wymagane), „Jak powtórzyć?" (opcjonalne), auto-kontekst
 // (kampania/tura/ekran), POST /bug-report.
-import { useState } from "react";
+// Draggable góra/dół (touch) — deltaY zapisany w localStorage.
+import { useState, useRef } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Bug,
@@ -25,6 +26,8 @@ const TYPES: { key: ReportType; label: string; icon: Icon; tone: string; onTone:
   { key: "other", label: "Inne", icon: ChatCircle, tone: "text-mana", onTone: "border-line-ember bg-[rgba(255,122,61,0.1)] text-ember-glow" },
 ];
 
+const LS_FAB_DY = "aigm_fab_dy";
+
 export function BugReportFab({
   campaignId,
   turnNumber,
@@ -36,8 +39,27 @@ export function BugReportFab({
 }) {
   const isTester = useAppStore((s) => s.currentUser?.isTester);
   const [open, setOpen] = useState(false);
+  const [deltaY, setDeltaY] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem(LS_FAB_DY) ?? "0", 10) || 0; }
+    catch { return 0; }
+  });
+  const dragRef = useRef<{ startTouchY: number; startDelta: number } | null>(null);
 
   if (!isTester) return null;
+
+  function onTouchStart(e: React.TouchEvent) {
+    dragRef.current = { startTouchY: e.touches[0].clientY, startDelta: deltaY };
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragRef.current) return;
+    const delta = e.touches[0].clientY - dragRef.current.startTouchY;
+    // Clamp: nie wychodź za ekran (ok. -60 w górę, 400 w dół od pozycji startowej)
+    setDeltaY(Math.max(-60, Math.min(400, dragRef.current.startDelta + delta)));
+  }
+  function onTouchEnd() {
+    try { localStorage.setItem(LS_FAB_DY, String(deltaY)); } catch {}
+    dragRef.current = null;
+  }
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -45,10 +67,15 @@ export function BugReportFab({
         <button
           type="button"
           aria-label="Zgłoś problem"
-          title="Zgłoś problem"
+          title="Przeciągnij aby zmienić pozycję. Kliknij aby zgłosić."
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={deltaY !== 0 ? { transform: `translateY(${deltaY}px)` } : undefined}
           // Mobile: pod paskiem przygody (nie zasłania przycisku wyślij w composerze).
+          // Przeciągalne góra/dół — deltaY z localStorage.
           // Desktop: prawy dolny róg (composer wyśrodkowany, brak kolizji).
-          className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12"
+          className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 cursor-grab items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] active:cursor-grabbing lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12 lg:transform-none"
         >
           <Bug weight="fill" size={22} />
         </button>
