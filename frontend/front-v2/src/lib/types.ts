@@ -59,6 +59,8 @@ export interface TravelResumeResult {
   encounter?: { enemy_key?: string | null; enemy_label?: string | null } | null;
   current_clock?: ClockState | null;
   suggested_actions?: SuggestedAction[];
+  /** true gdy wznowienie rozpoczęło walkę (encounter) — front przechodzi do walki. */
+  combat_started?: boolean;
 }
 
 // F-09 — gotowe kampanie z Kuźni (GET /campaign-templates → items).

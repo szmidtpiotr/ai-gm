@@ -20,6 +20,7 @@ import {
   useCharacter,
   useSuggestedActions,
   useTravel,
+  useTravelEstimate,
   useWorldMap,
 } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
@@ -169,6 +170,12 @@ export function WorldMap({
   const estimate = selected
     ? estimateTravel(currentHex, selected, selected.hex_type)
     : null;
+  // Realny czas z backendu (suma travel_hours po trasie) — zgodny z zegarem.
+  const travelEst = useTravelEstimate(
+    campaignId,
+    selected && !selectedIsCurrent ? { q: selected.q, r: selected.r } : undefined,
+  );
+  const estHours = travelEst.data?.hours ?? estimate?.hours ?? 0;
 
   const startTravel = () => {
     if (!selected) return;
@@ -418,7 +425,7 @@ export function WorldMap({
                 {estimate && (
                   <div className="flex px-1.5 py-2.5 font-mono">
                     <TravelStat k="Dystans" v={`${estimate.distance} ${estimate.distance === 1 ? "heks" : "heks."}`} />
-                    <TravelStat k="Czas" v={`~${estimate.hours} h`} />
+                    <TravelStat k="Czas" v={travelEst.isLoading ? "…" : `~${estHours} h`} />
                     <TravelStat k="Teren" v={estimate.difficulty} />
                     <TravelStat k="Spotkanie" v={estimate.encounter} warn={estimate.encounterWarn} last />
                   </div>

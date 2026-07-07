@@ -322,6 +322,23 @@ export function useLocalTravel(campaignId: number | undefined) {
   });
 }
 
+/** GET /campaigns/{id}/travel-estimate — realny czas podróży current→(q,r) (suma
+ * travel_hours po trasie), zgodny z zegarem/narracją (nie heurystyka frontendu). */
+export function useTravelEstimate(
+  campaignId: number | undefined,
+  to: { q: number; r: number } | undefined,
+) {
+  return useQuery({
+    queryKey: ["travel-estimate", campaignId, to?.q, to?.r],
+    enabled: !!campaignId && !!to,
+    staleTime: 60_000,
+    queryFn: () =>
+      apiFetch<{ dist: number | null; hours: number | null }>(
+        `/campaigns/${campaignId}/travel-estimate?to_q=${to!.q}&to_r=${to!.r}`,
+      ),
+  });
+}
+
 /**
  * POST /campaigns/{id}/travel — podróż do heksa. Po sukcesie unieważnia mapę,
  * zegar, strumień tur i postać (silnik dopisuje syntetyczną turę + advance scen).

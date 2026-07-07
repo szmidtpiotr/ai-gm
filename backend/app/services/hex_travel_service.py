@@ -1896,6 +1896,34 @@ def detect_route_choice(player_text: str) -> str | None:
     return None
 
 
+def estimate_route_hours(
+    from_hex: tuple[int, int],
+    to_hex: tuple[int, int],
+    conn: sqlite3.Connection,
+    route_mode: str = "direct",
+) -> dict[str, Any]:
+    """Realny szacunek podróży = suma `travel_hours` po znalezionej trasie (bez
+    ruchu/commitu). Panel podróży pokazywał heurystykę `perHex×dist` (teren CELU),
+    która rozjeżdżała się z narracją/zegarem. Zwraca {dist, hours}."""
+    dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
+    out: dict[str, Any] = {"dist": dist, "hours": float(dist) * 4.0}
+    try:
+        hexes = _load_hex_graph(conn)
+        cfg = _load_hex_type_config(conn)
+        path = find_path(from_hex, to_hex, hexes, cfg, route_mode=route_mode)
+        if not path or len(path) <= 1:
+            return out
+        total = 0.0
+        for c in path[1:]:
+            ht = hexes.get(c, {}).get("hex_type", "plains")
+            total += float((cfg or {}).get(ht, {}).get("travel_hours", 1.0)) or 1.0
+        out["hours"] = round(total, 1)
+        out["dist"] = len(path) - 1
+    except Exception as _er:  # never break UI over an estimate
+        logger.warning("estimate_route_hours_failed", error=str(_er))
+    return out
+
+
 def analyze_route(
     from_hex: tuple[int, int],
     to_hex: tuple[int, int],

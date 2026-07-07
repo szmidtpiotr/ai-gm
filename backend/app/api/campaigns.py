@@ -1164,6 +1164,33 @@ def build_camp(campaign_id: int):
         conn.close()
 
 
+@router.get("/campaigns/{campaign_id}/travel-estimate")
+def travel_estimate(campaign_id: int, to_q: int, to_r: int, mode: str = "direct"):
+    """Realny szacunek czasu podróży current_hex→(to_q,to_r) — do panelu podróży,
+    by CZAS zgadzał się z zegarem/narracją (nie heurystyka frontendu)."""
+    from app.services.hex_travel_service import estimate_route_hours
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        cur = json.loads((gs["session_flags"] if gs else None) or "{}").get("current_hex") or {}
+        if cur.get("q") is None:
+            return {"dist": None, "hours": None}
+        est = estimate_route_hours(
+            (int(cur["q"]), int(cur["r"])), (int(to_q), int(to_r)), conn,
+            route_mode=("road" if mode == "road" else "direct"),
+        )
+        return {"dist": est.get("dist"), "hours": est.get("hours")}
+    except Exception:
+        return {"dist": None, "hours": None}
+    finally:
+        conn.close()
+
+
 @router.post("/campaigns/{campaign_id}/travel-resume")
 def travel_resume(campaign_id: int):
     """PT12 (#1122) — mechanical "Kontynuuj podróż" after a travel interrupt.
@@ -1241,6 +1268,35 @@ def travel_resume(campaign_id: int):
                 (json.dumps(flags, ensure_ascii=False), gs["id"]),
             )
             conn.commit()
+
+        # PT-F1 (#1135): encounter-interrupt z NIEpokonanym wrogiem — „Kontynuuj podróż"
+        # NIE może pominąć spotkania. Zamiast wznawiać marsz, rozpocznij WALKĘ
+        # (deterministycznie). travel_plan zostaje (combat_seen=True) → po walce
+        # kolejne „Kontynuuj podróż" ruszy dalej już bez wroga.
+        if reason.replace("_prompted", "") == "encounter":
+            _enemy_key = tp.get("enemy_key")
+            if _enemy_key and not tp.get("combat_seen"):
+                tp["combat_seen"] = True
+                flags["travel_plan"] = tp
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(flags, ensure_ascii=False), gs["id"]),
+                )
+                conn.commit()
+                from app.services.combat_service import initiate_combat
+                try:
+                    initiate_combat(campaign_id, int(char["id"]), [str(_enemy_key)])
+                except ValueError as _ce:
+                    raise HTTPException(status_code=400, detail=str(_ce)) from None
+                return {
+                    "ok": True,
+                    "message": "Spotkanie zagradza ci drogę — dochodzi do walki!",
+                    "combat_started": True,
+                    "arrived_hex": None,
+                    "encounter": {"enemy_key": _enemy_key},
+                    "current_clock": None,
+                    "suggested_actions": [],
+                }
 
         tr = resolve_chain_travel(
             campaign_id=campaign_id,

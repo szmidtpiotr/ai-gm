@@ -75,6 +75,7 @@ export default function Game() {
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
 
   const gameTab = useAppStore((s) => s.gameTab);
+  const setGameTab = useAppStore((s) => s.setGameTab);
 
   const campaign = useCampaignDetail(campaignId);
   // Detail endpoint nie zwraca character_id — bierzemy aktywnego bohatera z listy
@@ -169,7 +170,15 @@ export default function Game() {
     const act = (c.action || c.text || c.label || "").trim();
     if (act === "TRAVEL_RESUME") {
       travelResume.mutate(undefined, {
-        onSuccess: (r) => setChips(normalizeChips(r.suggested_actions)),
+        onSuccess: (r) => {
+          setChips(normalizeChips(r.suggested_actions));
+          // Encounter: wznowienie rozpoczęło walkę — przejdź do Opowieści (walka tam),
+          // inaczej gracz zostałby na mapie i przegapił rozpoczętą walkę.
+          if (r.combat_started) {
+            setGameTab("story");
+            toast("Spotkanie zagradza drogę — walka!", "danger");
+          }
+        },
         onError: chipError,
       });
       return;
