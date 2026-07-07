@@ -323,8 +323,10 @@ _PT3_MOVE_VERB_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 _PT3_DEST_RE = re.compile(
-    r"\b(?:do|ku)\s+([A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}"
-    r"(?:\s+[A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,})*)",
+    # #1057: przyimek „na" (idę NA Most na Bystrzycy) + łącznik małą literą w nazwie
+    # („Most na Bystrzycy", „Most Czarnej Rzeki") — inaczej łapało tylko „Most".
+    r"\b(?:do|ku|na)\s+([A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}"
+    r"(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
     re.UNICODE,
 )
 
@@ -332,7 +334,7 @@ _PT3_DEST_RE = re.compile(
 # nouns allowed (most, rzeka, wioska, trakt, miasto) and the "w stronę / w
 # kierunku" phrasings. Captures 1-4 words after do/ku/w stronę/w kierunku.
 _KNOWN_HEX_DEST_RE = re.compile(
-    r"(?:\bdo\b|\bku\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
+    r"(?:\bdo\b|\bku\b|\bna\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
     r"([a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{3,}(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
     re.UNICODE | re.IGNORECASE,
 )
@@ -1043,6 +1045,10 @@ def resolve_chain_travel(
         ).fetchone()
         if gs_tp:
             sf_tp = json.loads(gs_tp["session_flags"] or "{}")
+
+            # #1057: podróż po świecie = wyjście z wnętrza osady → wyczyść pozycję
+            # lokalną (inaczej submapa/local_hex zostawał na starej sub-lokacji).
+            sf_tp.pop("local_hex", None)
 
             # PT7: Persist updated daily march budget (always, even on full arrival)
             sf_tp["hours_marched_today"] = hours_marched_today
