@@ -80,8 +80,8 @@ export function LocalMap({
   const groupTransform = `translate(${VB_W / 2 + pan.x} ${VB_H / 2 + pan.y}) scale(${zoom}) translate(${-center.x} ${-center.y})`;
 
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row">
-      <div className="flex min-h-0 flex-1 flex-col lg:min-w-0">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* nagłówek huba */}
         <header
           className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5"

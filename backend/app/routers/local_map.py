@@ -455,6 +455,21 @@ def get_local_map(campaign_id: int):
         # is on a hex that doesn't exist. Keep the response internally consistent.
         if not has_local_map:
             current_local_hex = None
+        else:
+            # Pin „TU": gracz wchodzi do osady na hex wejściowy (pierwszy sub-loc).
+            # Gdy local_hex nieustawiony ALBO nie pasuje do żadnego hexa (np. stare
+            # współrzędne sprzed offsetu) — ustaw na hex wejściowy i zapisz.
+            coords = {(int(h["q"]), int(h["r"])) for h in hexes}
+            cur = current_local_hex or {}
+            if (cur.get("q"), cur.get("r")) not in coords:
+                entry = hexes[0]  # najstarszy sub-loc = wejście
+                current_local_hex = {"q": int(entry["q"]), "r": int(entry["r"])}
+                flags["local_hex"] = current_local_hex
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE campaign_id=?",
+                    (json.dumps(flags, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
 
         return {
             "hub_key": hub_key,
