@@ -6,6 +6,7 @@ import {
   useCampaignDetail,
   useCampaigns,
   useCharacter,
+  useLocalMap,
   useRestLong,
   useSubmitTurn,
   useSuggestedActions,
@@ -34,6 +35,7 @@ import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
 import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
+import { LocalMap } from "@/components/game/LocalMap";
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
@@ -118,6 +120,10 @@ export default function Game() {
   // Ostatnia karta rzutu + chipy z odpowiedzi tury (strumień ich nie niesie).
   const [pendingRoll, setPendingRoll] = useState<RollCardData | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
+  // FAZA ML: mapa lokalna osady. Domyślnie pokazujemy ją w hubie z sub-lokacjami;
+  // forceWorldMap = gracz kliknął „Świat" i chce zobaczyć mapę świata.
+  const [forceWorldMap, setForceWorldMap] = useState(false);
+  const localMap = useLocalMap(campaignId, gameTab === "map");
 
   function applyResponse(resp: TurnResponse) {
     setPendingRoll(rollFromResult(resp));
@@ -219,6 +225,20 @@ export default function Game() {
     [suggested.data],
   );
   const travelNotice = suggested.data?.travel_notice ?? null;
+  // PT7/F-80: fokalny modal w MOMENCIE przerwania podróży — raz na etap
+  // (klucz reason:step). Baner nad composerem zostaje jako trwałe przypomnienie.
+  const [interruptModal, setInterruptModal] = useState<TravelNoticeData | null>(null);
+  const ackInterrupt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!travelNotice) {
+      ackInterrupt.current = null;
+      return;
+    }
+    const key = `${travelNotice.reason}:${travelNotice.step}`;
+    if (ackInterrupt.current === key) return;
+    ackInterrupt.current = key;
+    setInterruptModal(travelNotice);
+  }, [travelNotice]);
   const shownChips = chips.length
     ? chips
     : streamChips.length
@@ -270,6 +290,17 @@ export default function Game() {
         inCombat={!!activeCombat}
       />
 
+      {/* PT7/F-80: fokalny modal przerwania podróży (zmierzch / padasz z sił). */}
+      {interruptModal && (
+        <TravelInterruptModal
+          notice={interruptModal}
+          onResume={() => { setInterruptModal(null); onChip({ label: "Kontynuuj podróż", text: "TRAVEL_RESUME", action: "TRAVEL_RESUME" }, shownChips); }}
+          onRest={() => { setInterruptModal(null); onChip({ label: "Odpocznij", text: "REST:long", action: "REST:long" }, shownChips); }}
+          onCamp={() => { setInterruptModal(null); onChip({ label: "Rozbij obóz", text: "BUILD_CAMP", action: "BUILD_CAMP" }, shownChips); }}
+          onClose={() => setInterruptModal(null)}
+        />
+      )}
+
       {/* FE18/FE19 (#1267/#1268): menu ☰ (głos + finał) + bramka finału (modal/zwycięstwo). */}
       <GameMenu finaleAllowed={finaleAllowed} />
       <FinaleFlow
@@ -292,8 +323,18 @@ export default function Game() {
       <GameRail hasMana={vitals.hasMana} />
 
       {gameTab === "map" ? (
-        // F-43 Mapa świata + podróż (KROK 4 #1235) — własny nagłówek + cinematyka.
-        <WorldMap campaignId={campaignId!} characterId={characterId} />
+        // FAZA ML: w osadzie z sub-lokacjami domyślnie mapa lokalna; „Świat"/„Osada"
+        // przełącza. F-43 mapa świata + podróż (#1235) — własny nagłówek + cinematyka.
+        localMap.data?.has_local_map && !forceWorldMap ? (
+          <LocalMap campaignId={campaignId!} onWorld={() => setForceWorldMap(true)} />
+        ) : (
+          <WorldMap
+            campaignId={campaignId!}
+            characterId={characterId}
+            localAvailable={!!localMap.data?.has_local_map}
+            onOpenLocal={() => setForceWorldMap(false)}
+          />
+        )
       ) : gameTab === "journal" ? (
         // FE13 Dziennik + Kronika bohatera (#1262) — zakładka gry.
         <Journal campaignId={campaignId!} characterId={characterId} />
@@ -365,6 +406,82 @@ function FullLoader() {
     <div className="flex h-full items-center justify-center gap-2 text-text-3">
       <CircleNotch className="animate-spin" size={22} />
       <span className="font-ui text-body">Wczytywanie gry…</span>
+    </div>
+  );
+}
+
+// PT7/F-80 — fokalny modal przerwania podróży: wyjaśnia CO i DLACZEGO + 3 decyzje
+// (Kontynuuj / Odpocznij / Rozbij obóz). Pojawia się raz na etap; baner zostaje.
+function TravelInterruptModal({
+  notice,
+  onResume,
+  onRest,
+  onCamp,
+  onClose,
+}: {
+  notice: TravelNoticeData;
+  onResume: () => void;
+  onRest: () => void;
+  onCamp: () => void;
+  onClose: () => void;
+}) {
+  const danger = notice.severity === "danger";
+  const Icon = danger ? Warning : MoonStars;
+  const dest = notice.destination_label;
+  const hrs = Math.round(notice.hours_remaining || 0);
+  return (
+    <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="travel-interrupt">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-[2] w-full max-w-[420px] overflow-hidden rounded-xl border border-line-ember bg-surface shadow-2xl">
+        <div className={"flex items-center gap-3 border-b border-line px-5 py-4 " + (danger ? "bg-danger/[0.08]" : "bg-ember/[0.07]")}>
+          <Icon weight="fill" size={26} className={danger ? "text-danger" : "text-ember-glow"} />
+          <div className="min-w-0">
+            <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-text-3">
+              Podróż przerwana
+            </div>
+            <div className={"font-serif text-title font-semibold " + (danger ? "text-danger-glow" : "text-text")}>
+              {notice.title}
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-4">
+          <p className="font-serif text-prose leading-relaxed text-text-2">{notice.message}</p>
+          {dest && (
+            <p className="mt-2 font-ui text-micro text-text-3">
+              Cel: <span className="text-text-2">{dest}</span>
+              {hrs > 0 ? ` · zostało ~${hrs} h drogi` : ""}
+            </p>
+          )}
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={!notice.can_resume}
+              onClick={onResume}
+              className="flex items-center justify-center gap-2 rounded-md px-3 py-3 font-ui text-body font-semibold text-white disabled:opacity-40 disabled:shadow-none"
+              style={{ background: "linear-gradient(135deg, #d1602c, var(--ember))", boxShadow: "0 0 16px rgba(255,122,61,.35)" }}
+              title={notice.can_resume ? undefined : "Padłeś ze zmęczenia — najpierw odpocznij."}
+            >
+              🧭 Kontynuuj podróż
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onRest}
+                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line-ember bg-ember/[0.06] px-3 py-2.5 font-ui text-body font-semibold text-ember-glow transition-colors hover:bg-ember/[0.14]"
+              >
+                😴 Odpocznij
+              </button>
+              <button
+                type="button"
+                onClick={onCamp}
+                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+              >
+                🔥 Rozbij obóz
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

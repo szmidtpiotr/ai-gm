@@ -24,6 +24,10 @@ export interface TravelNotice {
   severity: "warn" | "danger";
   title: string;
   message: string;
+  step: number;
+  hours_remaining: number;
+  destination_label: string | null;
+  can_resume: boolean;
 }
 
 /** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) +
@@ -200,6 +204,7 @@ export function useTravelResume(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
       qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });
 }
@@ -217,6 +222,7 @@ export function useBuildCamp(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });
 }
@@ -238,6 +244,7 @@ export function useRestLong(
       qc.invalidateQueries({ queryKey: ["character", characterId] });
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });
 }
@@ -265,6 +272,54 @@ export function useWorldMap(
   });
 }
 
+// FAZA ML — mapa lokalna (sub-lokacje osady jako hex-grid map_level=1 pod hubem).
+export interface LocalHex {
+  id: number;
+  q: number;
+  r: number;
+  hex_type: string | null;
+  label: string | null;
+  location_key: string | null;
+}
+export interface LocalMapResponse {
+  hub_key: string | null;
+  hub_label: string | null;
+  hexes: LocalHex[];
+  current_local_hex: { q: number; r: number } | null;
+  has_local_map: boolean;
+}
+
+/** GET /campaigns/{id}/local-map — hex-grid sub-lokacji huba, w którym stoi drużyna.
+ * `has_local_map=false` gdy hub ma <2 sub-lokacji. */
+export function useLocalMap(campaignId: number | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["local-map", campaignId],
+    enabled: !!campaignId && enabled,
+    queryFn: () => apiFetch<LocalMapResponse>(`/campaigns/${campaignId}/local-map`),
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** POST /campaigns/{id}/local-travel — przejdź do sub-lokacji (+15 min zegara). */
+export function useLocalTravel(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (hexId: number) =>
+      apiFetch<{ moved: boolean; local_hex: { q: number; r: number }; location_key: string }>(
+        `/campaigns/${campaignId}/local-travel`,
+        { method: "POST", body: { hex_id: hexId } },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+    },
+  });
+}
+
 /**
  * POST /campaigns/{id}/travel — podróż do heksa. Po sukcesie unieważnia mapę,
  * zegar, strumień tur i postać (silnik dopisuje syntetyczną turę + advance scen).
@@ -282,6 +337,7 @@ export function useTravel(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });
 }

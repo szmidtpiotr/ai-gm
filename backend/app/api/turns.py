@@ -8351,7 +8351,16 @@ def _travel_notice_for(session_flags: dict) -> dict | None:
     tmpl = _TRAVEL_NOTICE_BY_REASON.get(base)
     if not tmpl:
         return None
-    return {"reason": reason, **tmpl}
+    # step + destination → klucz per-etap (front pokazuje modal raz na przerwanie),
+    # can_resume=False dla forced_camp (musi najpierw odpocząć).
+    return {
+        "reason": reason,
+        "step": int(tp.get("step_index", 0) or 0),
+        "hours_remaining": float(tp.get("hours_remaining", 0) or 0),
+        "destination_label": tp.get("destination_label"),
+        "can_resume": not base.startswith("forced_camp"),
+        **tmpl,
+    }
 
 
 @router.get("/campaigns/{campaign_id}/suggested-actions")

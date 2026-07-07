@@ -41,9 +41,12 @@ const MAX_ZOOM = 3.0;
 interface Props {
   campaignId: number;
   characterId: number;
+  /** FAZA ML: gdy hub ma mapę lokalną — pokaż przełącznik „Osada". */
+  localAvailable?: boolean;
+  onOpenLocal?: () => void;
 }
 
-export function WorldMap({ campaignId, characterId }: Props) {
+export function WorldMap({ campaignId, characterId, localAvailable, onOpenLocal }: Props) {
   const setGameTab = useAppStore((s) => s.setGameTab);
   const map = useWorldMap(campaignId, characterId);
   const clock = useCampaignClock(campaignId);
@@ -196,6 +199,15 @@ export function WorldMap({ campaignId, characterId }: Props) {
               {locationLabel}
             </div>
           </div>
+          {localAvailable && onOpenLocal && (
+            <button
+              onClick={onOpenLocal}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-line-ember bg-ember/[0.08] px-3 font-ui text-label text-ember-glow transition-colors hover:bg-ember/[0.16]"
+            >
+              <MapPinSimpleArea size={15} />
+              Osada
+            </button>
+          )}
           <button
             aria-label="Zamknij mapę"
             onClick={() => setGameTab("story")}
