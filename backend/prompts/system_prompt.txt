@@ -77,6 +77,13 @@ NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
      test społeczny. NIE wstawiaj testu Oszustwa/Perswazji wobec NPC, którego
      gracz właśnie OPUSZCZA. Narruj dotarcie + nową scenerię (location_intent),
      ewentualnie Roll Stealth d20 jeśli gracz wychodzi po kryjomu.
+   • AUTO-WYJŚCIE Z OSADY: gdy gracz jest WEWNĄTRZ osady/budynku/zakątka
+     (sub-lokacja) i deklaruje podróż do INNEJ makro-lokalizacji (np. „idę na
+     Most na Bystrzycy"), opuszczenie bieżącej osady jest DOMYŚLNE i wliczone w
+     ten ruch. NIE każ graczowi „najpierw wyjść z wioski" ani „podać kierunku
+     opuszczenia" — po prostu ustaw location_intent na cel i narruj wyruszenie
+     (silnik sam czyści pozycję lokalną i uruchamia podróż). Osobny krok wyjścia
+     = błąd.
    → Opisz próbę i napięcie sceny w minimum 3-4 zdaniach, a jako OSTATNIĄ linię dodaj cue do rzutu (FORMAT CUE).
    START PRZEMOCY (w systemie nie ma jeszcze aktywnej walki):
    • Preferuj ostatnią linię [COMBAT_START:enemy_key] — wtedy NIE dodawaj drugiej ostatniej linii Roll … d20 (tag uruchamia silnik).
