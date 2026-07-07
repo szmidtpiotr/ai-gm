@@ -125,6 +125,7 @@ export function CombatView({
   const [outcome, setOutcome] = useState<{ reason: string; combat: CombatState } | null>(null);
   const jobSeq = useRef(0);
   const pendingDmgStageRef = useRef<DiceJob | null>(null);
+  const pendingReactionRef = useRef<ReactionData | null>(null);
   const enemyTurnRef = useRef(false);
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
@@ -236,12 +237,21 @@ export function CombatView({
   }
 
   function onDiceDone() {
-    // Sprawdź czy jest zakolejkowany etap kości obrażeń.
+    // Sprawdź czy jest zakolejkowany etap kości obrażeń (tylko bez reakcji).
     const dmgStage = pendingDmgStageRef.current;
     if (dmgStage) {
       pendingDmgStageRef.current = null;
       setDiceJob(dmgStage);
       return; // karta trafi do rolls po zakończeniu etapu obrażeń
+    }
+    // Sprawdź czy po animacji d20 wroga czeka okno reakcji (SF10 + showEnemyDice).
+    const pendingReaction = pendingReactionRef.current;
+    if (pendingReaction) {
+      pendingReactionRef.current = null;
+      if (diceJob) setRolls((p) => [...p, diceJob.card]);
+      setDiceJob(null);
+      setReaction(pendingReaction);
+      return;
     }
     if (diceJob) setRolls((p) => [...p, diceJob.card]);
     setDiceJob(null);
@@ -300,17 +310,37 @@ export function CombatView({
       .mutateAsync()
       .then((r) => {
         pushCombatState(r.combat_state);
+        const d20 = Number(r.raw_d20 ?? 0);
         if (r.reaction_window) {
-          setReaction({
+          // SF10: okno reakcji — ale najpierw pokazujemy animację d20 wroga (gdy włączona),
+          // a dopiero po jej zakończeniu otwieramy modal. Bez animacji: od razu modal.
+          const reactionData: ReactionData = {
             enemyName: r.enemy_name ?? "Wróg",
             options: r.reaction_options ?? [],
             attackRoll: r.attack_roll ?? null,
             playerDefense: view.player?.defense ?? null,
-          });
+          };
+          if (showEnemyDice) {
+            pendingReactionRef.current = reactionData;
+            pendingDmgStageRef.current = null;
+            jobSeq.current += 1;
+            setDiceJob({
+              id: jobSeq.current,
+              notation: "1d20",
+              forced: [d20],
+              face: d20,
+              card: rollFromEnemyAttack(r),
+              actor: "enemy",
+              crit: d20 === 20,
+              fumble: d20 === 1,
+            });
+          } else {
+            setReaction(reactionData);
+          }
         } else {
           const enemyCard = rollFromEnemyAttack(r);
+          pendingReactionRef.current = null;
           if (showEnemyDice) {
-            const d20 = Number(r.raw_d20 ?? 0);
             // Kość obrażeń wroga jako drugi etap po d20.
             if (r.hit && !r.dodged && r.damage_rolls?.length && r.damage_die) {
               jobSeq.current += 1;
