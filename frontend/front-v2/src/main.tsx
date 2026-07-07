@@ -20,6 +20,14 @@ import "./index.css";
 import { queryClient } from "./lib/queryClient";
 import { router } from "./routes/router";
 import { ToastProvider } from "./components/ui/toast";
+import { initClog } from "./lib/clog";
+import { registerServiceWorker } from "./lib/pwa";
+
+// FE17 (#1266) — RUM (F-74): buforuje zdarzenia → POST /api/client-logs.
+// Init przed renderem, żeby złapać wczesne błędy i page_loaded.
+initClog();
+// FE17 (#1266) — PWA (F-73): rejestracja service workera (offline shell + push).
+registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

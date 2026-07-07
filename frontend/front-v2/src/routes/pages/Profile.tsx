@@ -17,6 +17,7 @@ import {
 import { useAppStore } from "@/store/appStore";
 import { useHeroes, useLlmSettings } from "@/hooks/useGameData";
 import { useToast } from "@/components/ui/toast";
+import { PushButton } from "@/components/PushButton";
 
 // F-07 Profil gracza. Makieta 1:1 → zar8-profil.html.
 export default function Profile() {
@@ -93,6 +94,7 @@ export default function Profile() {
             />
             <Row icon={Palette} title="Wygląd" sub="Motyw, czcionka, rozmiar" onClick={soon} />
             <Row icon={ShieldCheck} title="Bezpieczeństwo" sub="Hasło, sesje" onClick={soon} />
+            <PushButton />
           </div>
         </section>
       </div>
