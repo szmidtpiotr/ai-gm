@@ -27,6 +27,9 @@ const TYPES: { key: ReportType; label: string; icon: Icon; tone: string; onTone:
 ];
 
 const LS_FAB_DY = "aigm_fab_dy";
+// Próg w px — ruch powyżej tego to drag, poniżej to tap (zapobiega otwieraniu
+// dialogu po przeciągnięciu, bo browser emituje syntetyczny click po touchend).
+const DRAG_THRESHOLD = 6;
 
 export function BugReportFab({
   campaignId,
@@ -43,43 +46,53 @@ export function BugReportFab({
     try { return parseInt(localStorage.getItem(LS_FAB_DY) ?? "0", 10) || 0; }
     catch { return 0; }
   });
-  const dragRef = useRef<{ startTouchY: number; startDelta: number } | null>(null);
+  // Ref zamiast stanu — unikamy stale closure w onTouchEnd + flagujemy drag.
+  const dragRef = useRef<{ startTouchY: number; startDelta: number; moved: boolean } | null>(null);
+  const deltaYRef = useRef(deltaY);
 
   if (!isTester) return null;
 
+  function updateDy(v: number) {
+    deltaYRef.current = v;
+    setDeltaY(v);
+  }
+
   function onTouchStart(e: React.TouchEvent) {
-    dragRef.current = { startTouchY: e.touches[0].clientY, startDelta: deltaY };
+    dragRef.current = { startTouchY: e.touches[0].clientY, startDelta: deltaYRef.current, moved: false };
   }
   function onTouchMove(e: React.TouchEvent) {
     if (!dragRef.current) return;
     const delta = e.touches[0].clientY - dragRef.current.startTouchY;
-    // Clamp: nie wychodź za ekran (ok. -60 w górę, 400 w dół od pozycji startowej)
-    setDeltaY(Math.max(-60, Math.min(400, dragRef.current.startDelta + delta)));
+    if (Math.abs(delta) >= DRAG_THRESHOLD) dragRef.current.moved = true;
+    // Clamp: ~60px w górę / 400px w dół od pozycji domyślnej
+    updateDy(Math.max(-60, Math.min(400, dragRef.current.startDelta + delta)));
   }
   function onTouchEnd() {
-    try { localStorage.setItem(LS_FAB_DY, String(deltaY)); } catch {}
+    try { localStorage.setItem(LS_FAB_DY, String(deltaYRef.current)); } catch {}
     dragRef.current = null;
+  }
+  function handleClick() {
+    // Browser wysyła syntetyczny click po touchend — blokujemy go gdy był drag.
+    if (dragRef.current?.moved) return;
+    setOpen(true);
   }
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
-      <DialogPrimitive.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Zgłoś problem"
-          title="Przeciągnij aby zmienić pozycję. Kliknij aby zgłosić."
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          style={deltaY !== 0 ? { transform: `translateY(${deltaY}px)` } : undefined}
-          // Mobile: pod paskiem przygody (nie zasłania przycisku wyślij w composerze).
-          // Przeciągalne góra/dół — deltaY z localStorage.
-          // Desktop: prawy dolny róg (composer wyśrodkowany, brak kolizji).
-          className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 cursor-grab items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] active:cursor-grabbing lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12 lg:transform-none"
-        >
-          <Bug weight="fill" size={22} />
-        </button>
-      </DialogPrimitive.Trigger>
+      {/* Nie używamy Trigger asChild — zarządzamy open ręcznie żeby drag nie otwierał dialogu */}
+      <button
+        type="button"
+        aria-label="Zgłoś problem"
+        title="Przeciągnij aby zmienić pozycję. Kliknij aby zgłosić."
+        onClick={handleClick}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={deltaY !== 0 ? { transform: `translateY(${deltaY}px)` } : undefined}
+        className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 cursor-grab items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] active:cursor-grabbing lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12 lg:transform-none"
+      >
+        <Bug weight="fill" size={22} />
+      </button>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/[.62] animate-fade-in" />
         <DialogPrimitive.Content
