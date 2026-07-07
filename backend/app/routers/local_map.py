@@ -24,7 +24,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.local_hex_service import (
+    LOCAL_MAP_THRESHOLD,
     LOCAL_TRAVEL_MINUTES,
+    auto_assign_local_hex,
+    count_active_sublocs,
     get_hub_hex_id,
     get_local_hexes,
     get_local_hex_for_subloc,
@@ -34,7 +37,11 @@ from app.services.movement_service import (
     MovementStep,
     run_step_sequence,
 )
-from app.services.world_service import maybe_lazy_enrich_subloc
+from app.services.world_service import (
+    SETTLEMENT_SUBLOC_DEFAULTS,
+    generate_sublocs_for_settlement,
+    maybe_lazy_enrich_subloc,
+)
 from app.core.logging import get_logger
 
 DB_PATH = "/data/ai_gm.db"
@@ -68,6 +75,78 @@ def _hub_key_for_location(loc: dict) -> Optional[str]:
     if loc.get("location_type") == "sub":
         return loc.get("parent_key")
     return loc["key"]
+
+
+def _slug(text: str) -> str:
+    import re, unicodedata
+    t = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    t = re.sub(r"[^a-zA-Z0-9]+", "_", t).strip("_").lower()
+    return t or "osada"
+
+
+def _ensure_settlement_local_map(
+    conn: sqlite3.Connection, campaign_id: int, flags: dict
+) -> Optional[str]:
+    """Lazy FAZA ML (#1212): gdy drużyna stoi na hexie-osadzie (village/town/city/…)
+    bez sub-lokacji, wygeneruj zakątki wg typu + hexy map_level=1. Dzięki temu KAŻDA
+    odwiedzona osada dostaje mapę lokalną, nie tylko te zatwierdzone w adminie.
+    Zwraca hub_key lub None (hex nie jest osadą). Idempotentne."""
+    cur = flags.get("current_hex") or {}
+    q, r = cur.get("q"), cur.get("r")
+    if q is None or r is None:
+        return None
+    hx = conn.execute(
+        "SELECT id, hex_type, label, location_key FROM world_hexes "
+        "WHERE q=? AND r=? AND map_level=0 AND is_active=1 LIMIT 1",
+        (int(q), int(r)),
+    ).fetchone()
+    if not hx:
+        return None
+    subtypes = SETTLEMENT_SUBLOC_DEFAULTS.get(str(hx["hex_type"] or ""))
+    if not subtypes:
+        return None  # nie osada — brak mapy lokalnej
+
+    hub_key = hx["location_key"]
+    label = hx["label"] or f"Osada {q},{r}"
+    if not hub_key:
+        base = _slug(label)
+        hub_key = base
+        i = 2
+        while conn.execute("SELECT 1 FROM game_locations WHERE key=?", (hub_key,)).fetchone():
+            hub_key = f"{base}_{i}"
+            i += 1
+        conn.execute(
+            "INSERT INTO game_locations (key,label,location_type,world_hex_q,world_hex_r,"
+            "approved,review_status,is_active,created_by,ai_generated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (hub_key, label, "macro", int(q), int(r), 1, "permanent", 1, "auto_generated", 0),
+        )
+        conn.execute("UPDATE world_hexes SET location_key=? WHERE id=?", (hub_key, hx["id"]))
+        conn.commit()
+    else:
+        # get_hub_hex_id wymaga kotwicy world_hex_q/r na lokacji-hubie.
+        conn.execute(
+            "UPDATE game_locations SET world_hex_q=?, world_hex_r=? "
+            "WHERE key=? AND (world_hex_q IS NULL OR world_hex_r IS NULL)",
+            (int(q), int(r), hub_key),
+        )
+        conn.commit()
+
+    if count_active_sublocs(conn, hub_key) < LOCAL_MAP_THRESHOLD:
+        picks = list(subtypes)[:4]
+        generate_sublocs_for_settlement(conn, hub_key, picks)
+        first = conn.execute(
+            "SELECT key FROM game_locations WHERE parent_key=? AND is_active=1 ORDER BY id ASC LIMIT 1",
+            (hub_key,),
+        ).fetchone()
+        if first:
+            auto_assign_local_hex(conn, first["key"], hub_key, campaign_id)
+        conn.commit()
+        logger.info(
+            "settlement_local_map_generated",
+            campaign_id=campaign_id, hub_key=hub_key, subtypes=picks,
+        )
+    return hub_key
 
 
 def _check_local_encounter(target: dict, cleared_local_hexes: list) -> Optional[dict]:
@@ -336,15 +415,23 @@ def get_local_map(campaign_id: int):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
+        flags = json.loads(session.get("session_flags") or "{}")
+
+        # 1) hub z bieżącej lokacji (jeśli drużyna „w" lokacji).
+        hub_key: Optional[str] = None
         current_loc_id = session.get("current_location_id")
-        if not current_loc_id:
-            return {"hub_key": None, "hub_label": None, "hexes": [], "current_local_hex": None, "has_local_map": False}
+        if current_loc_id:
+            loc = _get_location(conn, current_loc_id)
+            if loc:
+                hub_key = _hub_key_for_location(loc)
 
-        loc = _get_location(conn, current_loc_id)
-        if not loc:
-            return {"hub_key": None, "hub_label": None, "hexes": [], "current_local_hex": None, "has_local_map": False}
+        # 2) fallback + lazy-gen z bieżącego HEXA osady (Kamionka itp. bez lokacji /
+        #    bez sub-lokacji). Idempotentne: generuje tylko gdy <2 sub-loki.
+        if not hub_key or count_active_sublocs(conn, hub_key) < LOCAL_MAP_THRESHOLD:
+            gen_hub = _ensure_settlement_local_map(conn, campaign_id, flags)
+            if gen_hub:
+                hub_key = gen_hub
 
-        hub_key = _hub_key_for_location(loc)
         if not hub_key:
             return {"hub_key": None, "hub_label": None, "hexes": [], "current_local_hex": None, "has_local_map": False}
 
@@ -356,8 +443,7 @@ def get_local_map(campaign_id: int):
 
         hexes = get_local_hexes(conn, hub_key)
 
-        # Current local hex: read from session_flags.local_hex
-        flags = json.loads(session.get("session_flags") or "{}")
+        # Current local hex: read from session_flags.local_hex (flags już wczytane).
         current_local_hex = flags.get("local_hex")
 
         # Próg FAZA ML: mapa lokalna ma sens od ≥2 sub-lokacji. Pojedynczy samotny

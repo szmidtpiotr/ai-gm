@@ -133,12 +133,19 @@ def _next_local_coords(
     else:
         existing = []
     taken = {(int(r["q"]), int(r["r"])) for r in existing}
-    for coords in _LOCAL_HEX_RING:
+    # UNIQUE(q,r,map_level,region) jest region-szeroki, a wiele hubów dzieli region
+    # (RM3: region dziedziczy po hexie-rodzicu). Bez separacji dwa huby kolidowałyby
+    # na (0,0) itd. Namespace per hub = offset q o parent_hex_id*100 (id unikat →
+    # gridy się nie nakładają; LocalMap i tak centruje na heksach, więc absolutne
+    # współrzędne nie mają znaczenia dla renderu).
+    base_q = ((int(parent_hex_id) % 2000) * 30) if parent_hex_id is not None else 0
+    for dq, dr in _LOCAL_HEX_RING:
+        coords = (base_q + dq, dr)
         if coords not in taken:
             return coords
-    # Overflow beyond predefined ring — use row index as offset
+    # Overflow beyond predefined ring — indeksowy fallback w tym samym namespace.
     n = len(taken)
-    return (n // 5, n % 5)
+    return (base_q + n // 5, n % 5)
 
 
 # ── Core assignment ───────────────────────────────────────────────────────────
