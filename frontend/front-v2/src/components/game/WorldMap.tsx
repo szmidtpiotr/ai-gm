@@ -18,6 +18,7 @@ import {
 import {
   useCampaignClock,
   useCharacter,
+  useSuggestedActions,
   useTravel,
   useWorldMap,
 } from "@/hooks/useGameData";
@@ -44,14 +45,33 @@ interface Props {
   /** FAZA ML: gdy hub ma mapę lokalną — pokaż przełącznik „Osada". */
   localAvailable?: boolean;
   onOpenLocal?: () => void;
+  /** Akcje bieżącego heksa (kontekstowy modal): odpoczynek / obóz. */
+  onRest?: () => void;
+  onCamp?: () => void;
 }
 
-export function WorldMap({ campaignId, characterId, localAvailable, onOpenLocal }: Props) {
+export function WorldMap({
+  campaignId,
+  characterId,
+  localAvailable,
+  onOpenLocal,
+  onRest,
+  onCamp,
+}: Props) {
   const setGameTab = useAppStore((s) => s.setGameTab);
   const map = useWorldMap(campaignId, characterId);
   const clock = useCampaignClock(campaignId);
   const character = useCharacter(characterId);
   const travel = useTravel(campaignId);
+  // Kontekstowe akcje bieżącego heksa — z bieżących suggested_actions.
+  const suggested = useSuggestedActions(campaignId, characterId, true);
+  const restAction = suggested.data?.suggested_actions?.find(
+    (a) => (a.action || a.text) === "REST:long",
+  );
+  const canRestHere = restAction?.enabled === true;
+  const canCampHere = suggested.data?.suggested_actions?.some(
+    (a) => (a.action || a.text) === "BUILD_CAMP",
+  ) ?? false;
 
   const hexes = map.data?.hexes ?? [];
   const hexTypes = map.data?.hex_types ?? {};
@@ -113,15 +133,11 @@ export function WorldMap({ campaignId, characterId, localAvailable, onOpenLocal 
     atmosphere: string | null;
   } | null>(null);
 
-  const selectHex = (h: WorldHex) => {
-    if (currentHex && h.q === currentHex.q && h.r === currentHex.r) return;
-    if (h.status === "outline" || h.status === "unexplored") {
-      // Znany kierunek bez danych — pozwól podróżować „w nieznane".
-      setSelected(h);
-      return;
-    }
-    setSelected(h);
-  };
+  // Klik w heks otwiera modal opcji: bieżący heks → akcje lokalne (osada/odpoczynek/
+  // obóz), inny heks → podróż. „w nieznane" (outline) też dozwolone.
+  const selectHex = (h: WorldHex) => setSelected(h);
+  const selectedIsCurrent =
+    !!selected && !!currentHex && selected.q === currentHex.q && selected.r === currentHex.r;
 
   const realLabel = (h: WorldHex | null): string | null => {
     if (!h?.label) return null;
@@ -304,82 +320,111 @@ export function WorldMap({ campaignId, characterId, localAvailable, onOpenLocal 
         </div>
       </div>
 
-      {/* Panel podróży (desktop prawy słupek / mobile pod mapą) */}
-      <aside className="shrink-0 border-t border-line px-4 pb-5 pt-1 lg:w-[360px] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:px-4 lg:pt-4">
-        {selected && estimate ? (
-          <div className="overflow-hidden rounded-xl border border-line-ember bg-[var(--player-card)]">
-            <div className="flex items-center gap-2.5 border-b border-line-soft px-3.5 py-3">
+      {/* Modal opcji heksa — bieżący heks: akcje lokalne; inny heks: podróż. */}
+      {selected && (
+        <div className="fixed inset-0 z-[56] flex items-center justify-center p-6" data-testid="hex-modal">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelected(null)} />
+          <div className="relative z-[2] w-full max-w-[400px] overflow-hidden rounded-xl border border-line-ember bg-surface shadow-2xl">
+            <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-ember bg-[rgba(255,122,61,.12)] text-ember-glow">
                 <MapPinSimpleArea size={18} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="truncate font-serif text-title font-semibold text-text">
                   {realLabel(selected) ||
-                    (selected.hex_type
-                      ? hexTypes[selected.hex_type]?.label
-                      : null) ||
+                    (selected.hex_type ? hexTypes[selected.hex_type]?.label : null) ||
                     "Nieznany teren"}
                 </div>
                 <div className="font-ui text-micro text-text-2">
-                  {(selected.hex_type
-                    ? hexTypes[selected.hex_type]?.label
-                    : "Nieznany teren") ?? "Nieznany teren"}
-                  {selected.status === "known" && (
+                  {selectedIsCurrent
+                    ? "Jesteś tutaj"
+                    : (selected.hex_type ? hexTypes[selected.hex_type]?.label : "Nieznany teren") ?? "Nieznany teren"}
+                  {!selectedIsCurrent && selected.status === "known" && (
                     <span className="text-ember-glow"> · cel z opowieści ⚑</span>
                   )}
                 </div>
               </div>
+              <button aria-label="Zamknij" onClick={() => setSelected(null)} className="text-text-3 hover:text-text">
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="flex px-1.5 py-2.5 font-mono">
-              <TravelStat k="Dystans" v={`${estimate.distance} ${estimate.distance === 1 ? "heks" : "heks."}`} />
-              <TravelStat k="Czas" v={`~${estimate.hours} h`} />
-              <TravelStat k="Teren" v={estimate.difficulty} />
-              <TravelStat k="Spotkanie" v={estimate.encounter} warn={estimate.encounterWarn} last />
-            </div>
-
-            {isNight && (
-              <div className="mx-3.5 mb-3 flex items-center gap-2 rounded-md border border-line-danger bg-[rgba(232,96,79,.06)] px-3 py-2 font-ui text-micro text-text">
-                <MoonStars className="shrink-0 text-danger" size={15} />
-                Podróż nocą — zmęczenie rośnie szybciej, gorsza widoczność.
+            {selectedIsCurrent ? (
+              // Akcje bieżącego heksa
+              <div className="flex flex-col gap-2 p-4">
+                {localAvailable && onOpenLocal && (
+                  <ModalAction
+                    icon={<MapPinSimpleArea size={18} />}
+                    label="Wejdź do osady"
+                    sub="Mapa lokalna — zakątki i sub-lokacje"
+                    onClick={() => { setSelected(null); onOpenLocal(); }}
+                  />
+                )}
+                {canRestHere && onRest && (
+                  <ModalAction
+                    icon={<MoonStars size={18} />}
+                    label="Odpocznij"
+                    sub="Długi odpoczynek — pełne HP/mana, +8 h"
+                    onClick={() => { setSelected(null); onRest(); }}
+                  />
+                )}
+                {canCampHere && onCamp && (
+                  <ModalAction
+                    icon={<Path size={18} />}
+                    label="Rozbij obóz"
+                    sub="Tymczasowy obóz pozwoli odpocząć (więcej spotkań)"
+                    onClick={() => { setSelected(null); onCamp(); }}
+                  />
+                )}
+                {!localAvailable && !canRestHere && !canCampHere && (
+                  <p className="py-2 text-center font-ui text-body text-text-3">
+                    Brak dostępnych akcji w tym miejscu.
+                  </p>
+                )}
               </div>
+            ) : (
+              // Podróż do wybranego heksa
+              <>
+                {estimate && (
+                  <div className="flex px-1.5 py-2.5 font-mono">
+                    <TravelStat k="Dystans" v={`${estimate.distance} ${estimate.distance === 1 ? "heks" : "heks."}`} />
+                    <TravelStat k="Czas" v={`~${estimate.hours} h`} />
+                    <TravelStat k="Teren" v={estimate.difficulty} />
+                    <TravelStat k="Spotkanie" v={estimate.encounter} warn={estimate.encounterWarn} last />
+                  </div>
+                )}
+                {isNight && (
+                  <div className="mx-3.5 mb-3 flex items-center gap-2 rounded-md border border-line-danger bg-[rgba(232,96,79,.06)] px-3 py-2 font-ui text-micro text-text">
+                    <MoonStars className="shrink-0 text-danger" size={15} />
+                    Podróż nocą — zmęczenie rośnie szybciej, gorsza widoczność.
+                  </div>
+                )}
+                <div className="px-4 pb-4 pt-1">
+                  <button
+                    onClick={startTravel}
+                    disabled={travel.isPending}
+                    className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-3 font-ui text-body font-semibold text-white disabled:opacity-60"
+                    style={{
+                      background: "linear-gradient(135deg, #d1602c, var(--ember))",
+                      boxShadow: "0 0 16px rgba(255,122,61,.35)",
+                    }}
+                  >
+                    <Path size={17} />
+                    {travel.isPending
+                      ? "W drodze…"
+                      : `Podróżuj do ${realLabel(selected) || (selected.hex_type ? hexTypes[selected.hex_type]?.label : "celu") || "celu"}`}
+                  </button>
+                  {travel.isError && (
+                    <div className="mt-2 rounded-md border border-line-danger bg-[rgba(232,96,79,.06)] px-3 py-2 font-ui text-micro text-danger-glow">
+                      {(travel.error as Error)?.message || "Błąd podróży"}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-
-            <div className="flex gap-2 px-3.5 pb-3.5 pt-1">
-              <button
-                onClick={startTravel}
-                disabled={travel.isPending}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 font-ui text-body font-semibold text-white disabled:opacity-60"
-                style={{
-                  background: "linear-gradient(135deg, #d1602c, var(--ember))",
-                  boxShadow: "0 0 16px rgba(255,122,61,.35)",
-                }}
-              >
-                <Path size={17} />
-                {travel.isPending
-                  ? "W drodze…"
-                  : `Podróżuj do ${realLabel(selected) || (selected.hex_type ? hexTypes[selected.hex_type]?.label : "celu") || "celu"}`}
-              </button>
-              <button
-                aria-label="Anuluj"
-                onClick={() => setSelected(null)}
-                className="flex shrink-0 items-center justify-center rounded-md border border-line bg-bg px-4 py-3 text-text-2"
-              >
-                <X size={16} />
-              </button>
-            </div>
           </div>
-        ) : (
-          <div className="rounded-xl border border-line bg-surface px-4 py-6 text-center font-ui text-body text-text-3">
-            Dotknij heksa na mapie, aby zaplanować podróż.
-          </div>
-        )}
-        {travel.isError && (
-          <div className="mt-3 rounded-md border border-line-danger bg-[rgba(232,96,79,.06)] px-3 py-2 font-ui text-micro text-danger-glow">
-            {(travel.error as Error)?.message || "Błąd podróży"}
-          </div>
-        )}
-      </aside>
+        </div>
+      )}
 
       {cinematic && (
         <TravelCinematic
@@ -514,6 +559,34 @@ function mix(hex: string, factor = 0.32): string {
   const g = Math.round(((n >> 8) & 0xff) * factor);
   const b = Math.round((n & 0xff) * factor);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function ModalAction({
+  icon,
+  label,
+  sub,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-md border border-line-ember bg-ember/[0.06] px-3.5 py-3 text-left transition-colors hover:border-ember hover:bg-ember/[0.12]"
+    >
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line-ember bg-bg text-ember-glow">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-ui text-body font-semibold text-text">{label}</span>
+        <span className="block font-ui text-micro text-text-3">{sub}</span>
+      </span>
+    </button>
+  );
 }
 
 function MapTool({
