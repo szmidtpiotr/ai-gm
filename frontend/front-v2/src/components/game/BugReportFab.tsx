@@ -3,7 +3,7 @@
 // „Co się stało?" (wymagane), „Jak powtórzyć?" (opcjonalne), auto-kontekst
 // (kampania/tura/ekran), POST /bug-report.
 // Draggable góra/dół (touch) — deltaY zapisany w localStorage.
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Bug,
@@ -46,34 +46,56 @@ export function BugReportFab({
     try { return parseInt(localStorage.getItem(LS_FAB_DY) ?? "0", 10) || 0; }
     catch { return 0; }
   });
-  // Ref zamiast stanu — unikamy stale closure w onTouchEnd + flagujemy drag.
-  const dragRef = useRef<{ startTouchY: number; startDelta: number; moved: boolean } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // activeDrag: stan aktywnego gestu (startTouchY + startDelta).
+  const activeDrag = useRef<{ startTouchY: number; startDelta: number } | null>(null);
+  // wasDrag: czy ostatni dotyk był przeciągnięciem — blokuje syntetyczny click.
+  const wasDrag = useRef(false);
   const deltaYRef = useRef(deltaY);
+
+  // Listenery w useEffect z { passive: false } — tylko tak można wywołać preventDefault
+  // na touchmove. React.onTouchMove jest zawsze pasywny → przeglądarka scrolluje
+  // jednocześnie z drag = szarpanie FAB.
+  useEffect(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+
+    function onTouchStart(e: TouchEvent) {
+      wasDrag.current = false;
+      activeDrag.current = { startTouchY: e.touches[0].clientY, startDelta: deltaYRef.current };
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (!activeDrag.current) return;
+      const delta = e.touches[0].clientY - activeDrag.current.startTouchY;
+      if (Math.abs(delta) >= DRAG_THRESHOLD) {
+        wasDrag.current = true;
+        e.preventDefault(); // blokuj scroll strony podczas przeciągania FAB
+      }
+      const next = Math.max(-60, Math.min(400, activeDrag.current.startDelta + delta));
+      deltaYRef.current = next;
+      setDeltaY(next);
+    }
+    function onTouchEnd() {
+      activeDrag.current = null;
+      try { localStorage.setItem(LS_FAB_DY, String(deltaYRef.current)); } catch {}
+      // wasDrag.current zostaje true — handleClick (syntetyczny click po touchend) go odczyta
+    }
+
+    btn.addEventListener("touchstart", onTouchStart, { passive: true });
+    btn.addEventListener("touchmove", onTouchMove, { passive: false });
+    btn.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      btn.removeEventListener("touchstart", onTouchStart);
+      btn.removeEventListener("touchmove", onTouchMove);
+      btn.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
 
   if (!isTester) return null;
 
-  function updateDy(v: number) {
-    deltaYRef.current = v;
-    setDeltaY(v);
-  }
-
-  function onTouchStart(e: React.TouchEvent) {
-    dragRef.current = { startTouchY: e.touches[0].clientY, startDelta: deltaYRef.current, moved: false };
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    if (!dragRef.current) return;
-    const delta = e.touches[0].clientY - dragRef.current.startTouchY;
-    if (Math.abs(delta) >= DRAG_THRESHOLD) dragRef.current.moved = true;
-    // Clamp: ~60px w górę / 400px w dół od pozycji domyślnej
-    updateDy(Math.max(-60, Math.min(400, dragRef.current.startDelta + delta)));
-  }
-  function onTouchEnd() {
-    try { localStorage.setItem(LS_FAB_DY, String(deltaYRef.current)); } catch {}
-    dragRef.current = null;
-  }
   function handleClick() {
-    // Browser wysyła syntetyczny click po touchend — blokujemy go gdy był drag.
-    if (dragRef.current?.moved) return;
+    // Browser wysyła syntetyczny click po touchend — odrzuć gdy był drag.
+    if (wasDrag.current) { wasDrag.current = false; return; }
     setOpen(true);
   }
 
@@ -81,14 +103,15 @@ export function BugReportFab({
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       {/* Nie używamy Trigger asChild — zarządzamy open ręcznie żeby drag nie otwierał dialogu */}
       <button
+        ref={btnRef}
         type="button"
         aria-label="Zgłoś problem"
         title="Przeciągnij aby zmienić pozycję. Kliknij aby zgłosić."
         onClick={handleClick}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        style={deltaY !== 0 ? { transform: `translateY(${deltaY}px)` } : undefined}
+        style={{
+          transform: deltaY !== 0 ? `translateY(${deltaY}px)` : undefined,
+          touchAction: "none", // blokuj domyślne gesty przeglądarki (scroll/pan) na FAB
+        }}
         className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 cursor-grab items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] active:cursor-grabbing lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12 lg:transform-none"
       >
         <Bug weight="fill" size={22} />
