@@ -8,6 +8,7 @@ import {
   useCharacter,
   useRestLong,
   useSubmitTurn,
+  useSuggestedActions,
   useTravel,
   useTravelResume,
   useTurnStream,
@@ -203,12 +204,24 @@ export default function Game() {
     () => buildLog(stream.data?.turns ?? []),
     [stream.data?.turns],
   );
-  // Chipy: świeże z ostatniego submitu, inaczej z ostatniej tury w strumieniu.
+  // Chipy: świeże z ostatniego submitu, inaczej z ostatniej tury w strumieniu,
+  // a gdy tura ich nie niosła (backend nie zapisuje suggested_actions per-tura) —
+  // dobierz z bieżącego stanu kampanii (/suggested-actions), by pille były
+  // widoczne od razu po wejściu/odświeżeniu (w tym „Rozbij obóz"/„Odpocznij").
   const streamChips = useMemo(
     () => chipsFromTurns(stream.data?.turns ?? []),
     [stream.data?.turns],
   );
-  const shownChips = chips.length ? chips : streamChips;
+  const suggested = useSuggestedActions(campaignId, characterId, !activeCombat);
+  const fetchedChips = useMemo(
+    () => normalizeChips(suggested.data),
+    [suggested.data],
+  );
+  const shownChips = chips.length
+    ? chips
+    : streamChips.length
+      ? streamChips
+      : fetchedChips;
   const vitals = useMemo(
     () => readVitals(character.data?.sheet_json),
     [character.data?.sheet_json],

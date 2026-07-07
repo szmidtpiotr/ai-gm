@@ -8319,6 +8319,51 @@ def get_campaign_clock(campaign_id: int):
     return get_clock_state(campaign_id)
 
 
+@router.get("/campaigns/{campaign_id}/suggested-actions")
+def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = None):
+    """Bieżące podpowiedzi akcji (quick-action chips) dla stanu kampanii.
+
+    POST /turns zwraca `suggested_actions`, ale są ulotne (nie zapisujemy ich
+    per-tura) — po wejściu do gry / odświeżeniu UI nie ma z czego odtworzyć
+    pili. Ten endpoint przelicza je z bieżących `session_flags`, dzięki czemu
+    ekran gry pokazuje podpowiedzi (w tym „Rozbij obóz"/„Odpocznij") od razu.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        sf: dict = {}
+        sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if sf_row and sf_row["session_flags"]:
+            sf = json.loads(sf_row["session_flags"] or "{}")
+
+        cid = character_id
+        if cid is None:
+            c_row = conn.execute(
+                "SELECT id FROM characters WHERE campaign_id=? ORDER BY id LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            cid = int(c_row["id"]) if c_row else None
+        if cid is None:
+            return {"suggested_actions": []}
+
+        actions = build_suggested_actions(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=int(cid),
+            game_state=sf.get("state", "NARRATIVE"),
+            session_flags=sf,
+        )
+        return {"suggested_actions": actions}
+    except Exception as exc:  # never break the game screen on chip errors
+        logger.warning("get_suggested_actions_error", campaign_id=campaign_id, error=str(exc))
+        return {"suggested_actions": []}
+    finally:
+        conn.close()
+
+
 @router.post("/campaigns/{campaign_id}/hex-travel")
 def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
     """Player-initiated hex chain travel.

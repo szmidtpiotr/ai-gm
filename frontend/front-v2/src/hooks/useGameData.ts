@@ -11,12 +11,32 @@ import type {
   Hero,
   IdentityPreview,
   LlmSettings,
+  SuggestedAction,
   TravelResult,
   TravelResumeResult,
   TurnHistoryPage,
   TurnResponse,
   WorldMapResponse,
 } from "@/lib/types";
+
+/** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) dla
+ * stanu kampanii. Pozwala pokazać pille na wejściu/po reload (POST /turns zwraca
+ * je tylko ulotnie). Nie odpytujemy podczas walki (chips walki idą innym torem). */
+export function useSuggestedActions(
+  campaignId: number | undefined,
+  characterId: number | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["suggested-actions", campaignId],
+    enabled: !!campaignId && enabled,
+    queryFn: () =>
+      apiFetch<{ suggested_actions: SuggestedAction[] }>(
+        `/campaigns/${campaignId}/suggested-actions${characterId ? `?character_id=${characterId}` : ""}`,
+      ),
+    select: (d) => d.suggested_actions ?? [],
+  });
+}
 
 export function useHeroes() {
   return useQuery({

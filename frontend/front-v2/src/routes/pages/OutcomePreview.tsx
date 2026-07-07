@@ -6,7 +6,6 @@ import type { DropComparison, LootItem } from "@/lib/types";
 import { CombatEndModal } from "@/components/game/outcomes/CombatEndModal";
 import { DeathScreen } from "@/components/game/outcomes/DeathScreen";
 import { DungeonVictoryModal } from "@/components/game/outcomes/DungeonVictoryModal";
-import { LevelUpModal } from "@/components/game/outcomes/LevelUpModal";
 import { DropCelebration } from "@/components/game/outcomes/DropCelebration";
 
 const LOOT: LootItem[] = [
@@ -80,26 +79,7 @@ export default function OutcomePreview() {
           onExit={noop}
         />
       )}
-      {m === "levelup" && (
-        <LevelUpModal
-          level={5}
-          hpGain={6}
-          manaGain={3}
-          arcaneGain={1}
-          stats={[
-            { k: "STR", v: 8, newV: 9, affordable: true },
-            { k: "DEX", v: 12, newV: 13, affordable: true },
-            { k: "CON", v: 10, newV: 11, affordable: true },
-            { k: "INT", v: 16, newV: 17, affordable: true },
-            { k: "WIS", v: 14, newV: 15, affordable: true },
-            { k: "CHA", v: 13, newV: 14, affordable: true },
-          ]}
-          pointsAvailable={1}
-          unlockedSpells={[{ label: "Wyssanie życia", tier: 2 }]}
-          committing={false}
-          onConfirm={noop}
-        />
-      )}
+      {/* levelup: modal wycofany (F-27 V2 [D12] — awans przez ekran AdvancementScreen, nie modal) */}
       {m === "drop" && (
         <DropCelebration drop={DROP} equipping={false} onEquip={noop} onClose={noop} />
       )}
