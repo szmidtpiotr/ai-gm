@@ -140,6 +140,25 @@ def _build_narrative_actions(
     session_flags: dict,
 ) -> list[SuggestedAction]:
     """Priority: NPCs first, exits, SEARCH, REST — capped at MAX_ACTIONS."""
+    # PM4 #1223: gdy czeka wybór trasy (pending_travel_choice, ustawiony przez
+    # _pm4_maybe_prompt) — pokaż 2 klikalne opcje zamiast pytania tekstem. Tekst
+    # akcji trafia w detect_route_choice (wprost/przełaj→direct, trakt→road).
+    _ptc = session_flags.get("pending_travel_choice")
+    if isinstance(_ptc, dict) and _ptc.get("destination"):
+        _lbl = str(_ptc.get("label") or "cel").strip() or "cel"
+        return [
+            SuggestedAction(
+                label="Na wprost, przełajem",
+                action=f"Idę na wprost, przełajem do {_lbl}.",
+                enabled=True, icon="🌲", type="route_choice",
+            ),
+            SuggestedAction(
+                label="Trzymam się traktu",
+                action=f"Idę traktem do {_lbl}.",
+                enabled=True, icon="🛤️", type="route_choice",
+            ),
+        ]
+
     # PT12 (#1122): a paused journey replaces the normal pills with 3 decision buttons.
     interrupt = _build_travel_interrupt_actions(session_flags)
     if interrupt:

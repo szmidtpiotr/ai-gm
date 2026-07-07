@@ -290,6 +290,28 @@ export default function Game() {
     ackInterrupt.current = key;
     setInterruptModal(travelNotice);
   }, [travelNotice]);
+  // PM4: modal wyboru trasy również po wejściu/odświeżeniu (pending_travel_choice
+  // przetrwa jako suggested_actions type=route_choice), nie tylko po submicie tury.
+  const routeAck = useRef<string | null>(null);
+  useEffect(() => {
+    const routes = (suggested.data?.suggested_actions ?? []).filter(
+      (a) => a.type === "route_choice",
+    );
+    if (routes.length < 2) {
+      routeAck.current = null;
+      return;
+    }
+    const key = routes.map((r) => r.action ?? r.label).join("|");
+    if (routeAck.current === key) return;
+    routeAck.current = key;
+    setRouteChoice(
+      routes.map((a) => ({
+        label: String(a.label ?? ""),
+        action: String(a.action ?? a.text ?? ""),
+        icon: a.icon ?? undefined,
+      })),
+    );
+  }, [suggested.data]);
   const shownChips = chips.length
     ? chips
     : streamChips.length
