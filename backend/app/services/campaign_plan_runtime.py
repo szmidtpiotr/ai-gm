@@ -1006,15 +1006,17 @@ def get_narrator_context_block(campaign_id: int, conn: sqlite3.Connection) -> st
         note = plan.get("deviation_note", "")
         lines.append(f"Deviation: {level}" + (f" — {note}" if note else ""))
 
-    # Key NPCs alive
+    # Key NPCs alive — include role so narrator never confuses identities
     npcs = plan.get("key_npcs", [])
-    alive_npcs = [
-        n.get("name", n.get("key", "?"))
-        for n in npcs
-        if n.get("alive", True) and n.get("importance") in ("critical", "supporting")
-    ]
-    if alive_npcs:
-        lines.append(f"Key NPCs (alive): {', '.join(alive_npcs[:4])}")
+    alive_npc_entries = []
+    for n in npcs:
+        if n.get("alive", True) and n.get("importance") in ("critical", "supporting"):
+            name = n.get("name", n.get("key", "?"))
+            role = (n.get("role") or "").strip()
+            entry = f"{name} [{role}]" if role else name
+            alive_npc_entries.append(entry)
+    if alive_npc_entries:
+        lines.append(f"Key NPCs (alive): {'; '.join(alive_npc_entries[:4])}")
 
     # E9 (#424) — story gravity: nudge the narrator when a beat has stalled.
     try:
