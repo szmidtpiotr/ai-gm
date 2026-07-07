@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   User,
@@ -10,10 +10,12 @@ import {
   Moon,
   CircleNotch,
   Warning,
+  Trash,
 } from "@phosphor-icons/react";
-import { useHeroes, useCampaigns } from "@/hooks/useGameData";
+import { useHeroes, useCampaigns, useDeleteHero } from "@/hooks/useGameData";
 import { joinViaToken } from "@/lib/multiplayer";
 import { useAppStore } from "@/store/appStore";
+import { useToast } from "@/components/ui/toast";
 import type { Hero } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +57,28 @@ export default function Heroes() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const setHero = useAppStore((s) => s.setHero);
+  const userId = useAppStore((s) => s.currentUser?.id);
   const { data: heroes, isLoading, isError } = useHeroes();
   const { data: campaigns } = useCampaigns();
+  const deleteHero = useDeleteHero();
+  const { toast } = useToast();
+  // Bohater do usunięcia (modal potwierdzenia) — usuwa też powiązane kampanie.
+  const [pendingDelete, setPendingDelete] = useState<Hero | null>(null);
+
+  function confirmDelete() {
+    if (!pendingDelete || userId == null) return;
+    deleteHero.mutate(
+      { heroId: pendingDelete.id, userId },
+      {
+        onSuccess: () => {
+          toast("Bohater i powiązane kampanie usunięte.", "success");
+          setPendingDelete(null);
+        },
+        onError: (e) =>
+          toast(e instanceof Error ? e.message : "Nie udało się usunąć bohatera.", "danger"),
+      },
+    );
+  }
 
   // FE15 (#1264): zaproszenie przez link (?join=TOKEN) → dołącz do drużyny i wejdź
   // do lobby. RootRedirect przekierowuje ?join na /bohaterowie (§11).
@@ -113,7 +135,12 @@ export default function Heroes() {
       {heroes && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {heroes.map((h) => (
-            <HeroCard key={h.id} hero={h} onEnter={() => enterHero(h)} />
+            <HeroCard
+              key={h.id}
+              hero={h}
+              onEnter={() => enterHero(h)}
+              onDelete={() => setPendingDelete(h)}
+            />
           ))}
 
           <button
@@ -128,11 +155,63 @@ export default function Heroes() {
           </button>
         </div>
       )}
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" data-testid="hero-delete-modal">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => !deleteHero.isPending && setPendingDelete(null)}
+          />
+          <div className="relative z-[2] w-full max-w-[380px] rounded-xl border border-line-danger bg-surface p-6 text-center">
+            <Warning weight="fill" size={40} className="mx-auto text-danger" />
+            <h2 className="mt-3 font-serif text-title-lg font-semibold text-text">Usunąć bohatera?</h2>
+            <p className="mt-2 font-serif text-prose leading-relaxed text-text-2">
+              <b className="text-text">{pendingDelete.name}</b> oraz wszystkie powiązane kampanie zostaną
+              trwale usunięte. Tej operacji nie można cofnąć.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                type="button"
+                disabled={deleteHero.isPending}
+                onClick={() => setPendingDelete(null)}
+                className="flex-1 rounded-md border border-line bg-bg py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember disabled:opacity-50"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                data-testid="hero-delete-confirm"
+                disabled={deleteHero.isPending}
+                onClick={confirmDelete}
+                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line-danger bg-danger/[0.12] py-2.5 font-ui text-body font-semibold text-danger transition-colors hover:bg-danger/20 disabled:opacity-60"
+              >
+                {deleteHero.isPending ? (
+                  <>
+                    <CircleNotch className="animate-spin" size={16} /> Usuwam…
+                  </>
+                ) : (
+                  <>
+                    <Trash size={16} /> Usuń
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function HeroCard({ hero, onEnter }: { hero: Hero; onEnter: () => void }) {
+function HeroCard({
+  hero,
+  onEnter,
+  onDelete,
+}: {
+  hero: Hero;
+  onEnter: () => void;
+  onDelete: () => void;
+}) {
   const inCampaign = hero.hero_status === "in_campaign" && !!hero.campaign_id;
   const inDungeon = hero.hero_status === "in_dungeon";
   const active = inCampaign || inDungeon;
@@ -140,10 +219,21 @@ function HeroCard({ hero, onEnter }: { hero: Hero; onEnter: () => void }) {
   const gold = heroGold(hero);
 
   return (
+    <div className="relative">
+      {/* Usuń bohatera — poza kartą (nie zagnieżdżamy przycisku w przycisku). */}
+      <button
+        type="button"
+        aria-label={`Usuń bohatera ${hero.name}`}
+        title="Usuń bohatera"
+        onClick={onDelete}
+        className="absolute right-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-md border border-line bg-surface/90 text-text-3 backdrop-blur transition-colors hover:border-line-danger hover:text-danger"
+      >
+        <Trash size={15} />
+      </button>
     <button
       onClick={onEnter}
       className={cn(
-        "group relative flex gap-3.5 overflow-hidden rounded-lg border bg-mech-card p-3.5 text-left transition-colors",
+        "group relative flex w-full gap-3.5 overflow-hidden rounded-lg border bg-mech-card p-3.5 text-left transition-colors",
         active
           ? "border-line-ember shadow-float"
           : "border-line hover:border-line-ember",
@@ -161,7 +251,7 @@ function HeroCard({ hero, onEnter }: { hero: Hero; onEnter: () => void }) {
       </span>
 
       <div className="relative z-10 min-w-0 flex-1 pb-8">
-        <div className="truncate font-serif text-title font-semibold text-text">
+        <div className="truncate pr-8 font-serif text-title font-semibold text-text">
           {hero.name}
         </div>
         <div className="mt-0.5 truncate font-ui text-micro text-text-2">
@@ -209,5 +299,6 @@ function HeroCard({ hero, onEnter }: { hero: Hero; onEnter: () => void }) {
         <Play weight="fill" size={13} /> {active ? "Graj" : "Wznów"}
       </span>
     </button>
+    </div>
   );
 }

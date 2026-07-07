@@ -46,7 +46,9 @@ export function BugReportFab({
           type="button"
           aria-label="Zgłoś problem"
           title="Zgłoś problem"
-          className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] lg:bottom-6"
+          // Mobile: pod paskiem przygody (nie zasłania przycisku wyślij w composerze).
+          // Desktop: prawy dolny róg (composer wyśrodkowany, brak kolizji).
+          className="fixed right-3 top-[calc(var(--sa-top)+3.75rem)] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-line-ember bg-gradient-to-br from-[#d1602c] to-ember text-white shadow-[0_0_16px_rgba(255,122,61,0.4)] lg:right-4 lg:top-auto lg:bottom-6 lg:h-12 lg:w-12"
         >
           <Bug weight="fill" size={22} />
         </button>

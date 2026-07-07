@@ -315,6 +315,22 @@ export function useCreateCampaign() {
   });
 }
 
+/** DELETE /characters/{id} — usuń bohatera (kaskadowo powiązane kampanie). */
+export function useDeleteHero() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { heroId: number; userId: number }) =>
+      apiFetch<{ ok: boolean; deleted_id: number; name: string }>(
+        `/characters/${v.heroId}?user_id=${v.userId}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["heroes"] });
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+}
+
 export function useAssignHero() {
   const qc = useQueryClient();
   return useMutation({
