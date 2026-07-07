@@ -23,6 +23,16 @@ import { ToastProvider } from "./components/ui/toast";
 import { initClog } from "./lib/clog";
 import { registerServiceWorker } from "./lib/pwa";
 
+// Viewport height fix: iOS Safari nie aktualizuje dvh po schowaniu klawiatury —
+// --app-h śledzi visualViewport.height i łata lukę pod contentem (#1278-ish).
+function _syncVH() {
+  const h = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty("--app-h", `${h}px`);
+}
+_syncVH();
+window.visualViewport?.addEventListener("resize", _syncVH);
+window.addEventListener("resize", _syncVH);
+
 // FE17 (#1266) — RUM (F-74): buforuje zdarzenia → POST /api/client-logs.
 // Init przed renderem, żeby złapać wczesne błędy i page_loaded.
 initClog();

@@ -10,7 +10,7 @@ export function AppShell() {
   const inGame = pathname.startsWith("/gra/");
 
   return (
-    <div className="relative z-10 flex h-[100dvh] flex-col">
+    <div className="relative z-10 flex flex-col" style={{ height: "var(--app-h, 100dvh)" }}>
       <Topbar inGame={inGame} />
 
       {inGame ? (
