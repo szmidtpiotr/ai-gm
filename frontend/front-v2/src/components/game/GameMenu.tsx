@@ -16,8 +16,11 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
   const close = useAppStore((s) => s.closeGameMenu);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
   const user = useAppStore((s) => s.currentUser);
+  const heroId = useAppStore((s) => s.currentHeroId);
   const vs = useVoice();
   const navigate = useNavigate();
+  // §11: wyjście z gry → zawsze lista kampanii bieżącego bohatera (nie heroes).
+  const exitTo = heroId != null ? `/bohaterowie/${heroId}/kampanie` : "/bohaterowie";
 
   if (!open) return null;
 
@@ -40,7 +43,8 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
           {/* ── Nawigacja ────────────────────────────────────────────────── */}
           <button
             type="button"
-            onClick={() => { close(); navigate("/bohaterowie"); }}
+            data-testid="menu-exit-game"
+            onClick={() => { close(); navigate(exitTo); }}
             className="mb-4 flex w-full items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3 text-left transition-colors hover:border-line-ember"
           >
             <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line bg-surface text-text-2">
@@ -48,7 +52,7 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-ui text-body font-semibold text-text">Wyjdź z gry</span>
-              <span className="block font-ui text-micro text-text-3">Powrót do listy bohaterów</span>
+              <span className="block font-ui text-micro text-text-3">Powrót do listy kampanii</span>
             </span>
           </button>
 
