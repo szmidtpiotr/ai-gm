@@ -2,13 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CircleNotch } from "@phosphor-icons/react";
 import {
+  useBuildCamp,
   useCampaignDetail,
   useCampaigns,
   useCharacter,
+  useRestLong,
   useSubmitTurn,
+  useTravel,
+  useTravelResume,
   useTurnStream,
 } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
+import { useToast } from "@/components/ui/toast";
+import { voice } from "@/lib/voice";
+import { GameMenu } from "@/components/game/GameMenu";
+import { FinaleCard, FinaleFlow } from "@/components/game/FinaleFlow";
 import {
   buildLog,
   chipsFromTurns,
@@ -58,6 +66,7 @@ export default function Game() {
   const setHero = useAppStore((s) => s.setHero);
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
+  const setFinishFlow = useAppStore((s) => s.setFinishFlow);
 
   const gameTab = useAppStore((s) => s.gameTab);
 
@@ -74,6 +83,12 @@ export default function Game() {
   const character = useCharacter(characterId ?? undefined);
   const stream = useTurnStream(campaignId);
   const submit = useSubmitTurn(campaignId);
+  // F-80 (#1268): mechaniczne akcje po przerwaniu podróży (omijają narratora).
+  const travelResume = useTravelResume(campaignId);
+  const buildCamp = useBuildCamp(campaignId);
+  const restLong = useRestLong(campaignId, characterId, currentUser?.id);
+  const travel = useTravel(campaignId);
+  const { toast } = useToast();
   // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
   const combatState = useCombatState(campaignId);
   const activeCombat =
@@ -84,6 +99,11 @@ export default function Game() {
   const isMp = campaign.data?.mode === "multiplayer";
   // FE16 (#1265): tryb lochu → eksploracja kafelkowa (HUD/d-pad/mapa) + walka + boss.
   const isDungeon = campaign.data?.mode === "dungeon";
+
+  // F-77 (#1268): bramka finału. Widoczna gdy cel osiągnięty; w MP tylko gospodarz.
+  const finaleAllowed =
+    !!campaign.data?.finale_available &&
+    (!isMp || campaign.data?.host_user_id == null || campaign.data?.host_user_id === currentUser?.id);
 
   // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
   useEffect(() => {
@@ -103,11 +123,62 @@ export default function Game() {
     // FE12 (#1261): narracja mogła otworzyć sklep ([OPEN_SHOP] / open_shop) — overlay.
     const shop = detectShop(resp);
     if (shop) openShop(shop);
+    // F-72 (#1267): lektor czyta świeżą narrację GM (no-op gdy TTS wyłączony).
+    if (typeof resp.prose === "string" && resp.prose.trim()) voice.speak(resp.prose);
   }
 
   function send(text: string) {
     if (!characterId) return;
     submit.mutate({ characterId, text }, { onSuccess: applyResponse });
+  }
+
+  // F-80 (#1268): klik w chip. Mechaniczne akcje (podróż/obóz/odpoczynek) omijają
+  // narratora i wołają dedykowane endpointy; reszta idzie jako akcja tury.
+  function chipError(err: unknown) {
+    toast(err instanceof Error ? err.message : "Nie udało się wykonać akcji.", "danger");
+  }
+  function onChip(c: Chip, current: Chip[]) {
+    if (!characterId) return;
+    const act = (c.action || c.text || c.label || "").trim();
+    if (act === "TRAVEL_RESUME") {
+      travelResume.mutate(undefined, {
+        onSuccess: (r) => setChips(normalizeChips(r.suggested_actions)),
+        onError: chipError,
+      });
+      return;
+    }
+    if (act === "BUILD_CAMP") {
+      // Po rozbiciu obozu: usuń „Rozbij obóz", odblokuj „Odpocznij" (parytet ze starym UI).
+      buildCamp.mutate(undefined, {
+        onSuccess: () =>
+          setChips(
+            current
+              .filter((x) => (x.action || x.text) !== "BUILD_CAMP")
+              .map((x) =>
+                (x.action || x.text) === "REST:long"
+                  ? { ...x, enabled: true, reason: undefined }
+                  : x,
+              ),
+          ),
+        onError: chipError,
+      });
+      return;
+    }
+    if (act === "REST:long") {
+      restLong.mutate(undefined, { onSuccess: () => setChips([]), onError: chipError });
+      return;
+    }
+    if (act.startsWith("TRAVEL:")) {
+      const [, q, r] = act.split(":");
+      const qq = Number(q);
+      const rr = Number(r);
+      if (Number.isFinite(qq) && Number.isFinite(rr)) {
+        travel.mutate({ characterId, q: qq, r: rr }, { onSuccess: () => setChips([]), onError: chipError });
+        return;
+      }
+    }
+    // Domyślnie: strukturalny ciąg akcji lub wolny tekst jako tura.
+    send(act);
   }
 
   // Bootstrap: aktywna kampania bez tur → odpal scenę otwierającą raz.
@@ -180,6 +251,16 @@ export default function Game() {
       {/* FE10 (#1237): awans wykrywany globalnie (XP z walki/questów/odpoczynku) */}
       <LevelUpGate character={character.data} userId={currentUser?.id} />
 
+      {/* FE18/FE19 (#1267/#1268): menu ☰ (głos + finał) + bramka finału (modal/zwycięstwo). */}
+      <GameMenu finaleAllowed={finaleAllowed} />
+      <FinaleFlow
+        campaignId={campaignId!}
+        heroId={characterId}
+        heroName={character.data?.name ?? "Bohater"}
+        heroLevel={vitals.level}
+        turnCount={lastTurn || undefined}
+      />
+
       {/* FE12 (#1261): sklep NPC — overlay nad grą, otwierany narracyjnie */}
       <ShopOverlay />
 
@@ -231,6 +312,8 @@ export default function Game() {
                 typing={submit.isPending}
                 heroName={character.data?.name}
               />
+              {/* F-77: karta bramki finału w logu (cel osiągnięty). */}
+              {finaleAllowed && <FinaleCard onFinish={() => setFinishFlow("confirm")} />}
             </div>
             <VitalsRail
               v={vitals}
@@ -243,7 +326,7 @@ export default function Game() {
             onSend={send}
             disabled={submit.isPending}
             chips={shownChips}
-            onChip={(c) => send(c.text || c.label)}
+            onChip={(c) => onChip(c, shownChips)}
           />
         </div>
       ) : (

@@ -56,6 +56,10 @@ export interface AppState {
   shop: ShopContext | null;
   /** FE14 (#1263 / F-44) — paleta komend otwarta (Ctrl+/ albo ikona w composerze). */
   paletteOpen: boolean;
+  /** FE19 (#1268 / F-77) — menu ☰ ekranu gry otwarte. */
+  gameMenuOpen: boolean;
+  /** FE19 (#1268 / F-77) — etap bramki finału: modal potwierdzenia / ekran zwycięstwa. */
+  finishFlow: "idle" | "confirm" | "victory";
   /** FE14 (#1263) — tekst do wstawienia w composer (komenda z palety, np. /roll). */
   composerPrefill: string | null;
   /** Placeholdery na przyszłe fale (walka / loch) — kształt wg sekcji 8. */
@@ -71,6 +75,10 @@ export interface AppState {
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
+  openGameMenu: () => void;
+  closeGameMenu: () => void;
+  toggleGameMenu: () => void;
+  setFinishFlow: (f: "idle" | "confirm" | "victory") => void;
   /** Wstaw tekst do composera (paleta → komenda); Composer konsumuje i czyści. */
   setComposerPrefill: (text: string | null) => void;
   /** Persist tokens + user after a successful auth call. */
@@ -100,6 +108,8 @@ export const useAppStore = create<AppState>((set) => ({
   gameTab: "story",
   shop: null,
   paletteOpen: false,
+  gameMenuOpen: false,
+  finishFlow: "idle",
   composerPrefill: null,
   activeCombat: null,
   dungeonRunState: null,
@@ -111,7 +121,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", shop: null },
+        : { currentCampaignId, gameTab: "story", shop: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   openShop: (shop) => set({ shop }),
@@ -119,6 +129,10 @@ export const useAppStore = create<AppState>((set) => ({
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+  openGameMenu: () => set({ gameMenuOpen: true }),
+  closeGameMenu: () => set({ gameMenuOpen: false }),
+  toggleGameMenu: () => set((s) => ({ gameMenuOpen: !s.gameMenuOpen })),
+  setFinishFlow: (finishFlow) => set({ finishFlow }),
   setComposerPrefill: (composerPrefill) => set({ composerPrefill }),
   login: (payload) => {
     const user = toUser(payload);

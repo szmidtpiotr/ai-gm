@@ -349,6 +349,11 @@ export interface Chip {
   label: string;
   text: string;
   icon?: string;
+  /** Strukturalny ciąg akcji z backendu (SEARCH / TRAVEL_RESUME / BUILD_CAMP / …). */
+  action?: string;
+  /** F-80: przycisk może być wyłączony (np. Kontynuuj podróż po forced_camp). */
+  enabled?: boolean;
+  reason?: string;
 }
 
 export function normalizeChips(actions: SuggestedAction[] | undefined): Chip[] {
@@ -357,10 +362,20 @@ export function normalizeChips(actions: SuggestedAction[] | undefined): Chip[] {
     .map((a): Chip | null => {
       const label = (a.label || a.text || "").trim();
       if (!label) return null;
-      return { label, text: (a.text || a.label || "").trim(), icon: a.icon ?? undefined };
+      const action = (a.action || a.text || a.label || "").trim();
+      return {
+        label,
+        // `text` = to, co wysyłamy jako wolny tekst (fallback); mechaniczne akcje
+        // routuje Game.onChip po `action`.
+        text: (a.text || a.action || a.label || "").trim(),
+        action: action || undefined,
+        icon: a.icon ?? undefined,
+        enabled: a.enabled !== false,
+        reason: a.reason ?? undefined,
+      };
     })
     .filter((x): x is Chip => x !== null)
-    .slice(0, 4);
+    .slice(0, 5);
 }
 
 // ── FE12 Sklep (#1261): wykrycie otwarcia sklepu z odpowiedzi tury ────────────

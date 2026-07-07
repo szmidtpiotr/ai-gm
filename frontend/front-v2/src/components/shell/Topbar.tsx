@@ -56,6 +56,7 @@ function NavBar() {
 function GameBar() {
   const campaignId = useAppStore((s) => s.currentCampaignId) ?? undefined;
   const setGameTab = useAppStore((s) => s.setGameTab);
+  const toggleGameMenu = useAppStore((s) => s.toggleGameMenu);
   const clock = useCampaignClock(campaignId);
   const campaign = useCampaignDetail(campaignId);
 
@@ -95,7 +96,7 @@ function GameBar() {
       <IconBtn label="Mapa" onClick={() => setGameTab("map")}>
         <MapTrifold size={18} />
       </IconBtn>
-      <IconBtn label="Menu">
+      <IconBtn label="Menu" onClick={toggleGameMenu}>
         <List size={18} />
       </IconBtn>
     </div>

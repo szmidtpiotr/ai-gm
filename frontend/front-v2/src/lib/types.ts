@@ -45,6 +45,20 @@ export interface Campaign {
   hero_status?: string | null;
   /** Only present on the single-campaign detail endpoint (owner view). */
   gm_plan_json?: string | null;
+  /** F-77 (#1268) — #1009/#1097 bramka finału otwarta (cel przygody osiągnięty). */
+  finale_available?: boolean;
+  /** MP: gospodarz sesji (finał tylko dla niego). Solo → null. */
+  host_user_id?: number | null;
+}
+
+// Odpowiedź POST /campaigns/{id}/travel-resume (PT12 #1122).
+export interface TravelResumeResult {
+  ok: boolean;
+  message?: string;
+  arrived_hex?: { q: number; r: number } | null;
+  encounter?: { enemy_key?: string | null; enemy_label?: string | null } | null;
+  current_clock?: ClockState | null;
+  suggested_actions?: SuggestedAction[];
 }
 
 // F-09 — gotowe kampanie z Kuźni (GET /campaign-templates → items).
@@ -135,6 +149,10 @@ export interface CharacterDetail {
 export interface SuggestedAction {
   label?: string | null;
   text?: string | null;
+  /** Strukturalny ciąg akcji (T33 / suggested_actions.py) — SEARCH, TRAVEL_RESUME, … */
+  action?: string | null;
+  enabled?: boolean | null;
+  reason?: string | null;
   type?: string | null;
   icon?: string | null;
   [k: string]: unknown;

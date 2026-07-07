@@ -12,6 +12,7 @@ import type {
   IdentityPreview,
   LlmSettings,
   TravelResult,
+  TravelResumeResult,
   TurnHistoryPage,
   TurnResponse,
   WorldMapResponse,
@@ -132,6 +133,83 @@ export function useSubmitTurn(campaignId: number | undefined) {
       // FE9 (#1236): narracja mogła rozpocząć walkę — sprawdź stan combat, by baner
       // i pasek akcji pojawiły się bez F5 (poll startuje dopiero gdy walka aktywna).
       qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+    },
+  });
+}
+
+// ── F-77 bramka finału (#1268 / #1097) ───────────────────────────────────────
+
+/** POST /campaigns/{id}/finish — gracz kończy przygodę (bramka #1009 otwarta). */
+export function useFinishCampaign(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; campaign_id: number; ended_at?: string }>(
+        `/campaigns/${campaignId}/finish`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+      qc.invalidateQueries({ queryKey: ["heroes"] });
+    },
+  });
+}
+
+// ── F-80 przyciski po przerwaniu podróży (#1268 / PT12 #1122) ─────────────────
+
+/** POST /campaigns/{id}/travel-resume — mechaniczne „Kontynuuj podróż". */
+export function useTravelResume(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<TravelResumeResult>(`/campaigns/${campaignId}/travel-resume`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+      qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+    },
+  });
+}
+
+/** POST /campaigns/{id}/build-camp — mechaniczne „Rozbij obóz". */
+export function useBuildCamp(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; current_clock?: ClockState | null }>(
+        `/campaigns/${campaignId}/build-camp`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+    },
+  });
+}
+
+/** POST /characters/{id}/rest — długi odpoczynek („Odpocznij" po przerwaniu). */
+export function useRestLong(
+  campaignId: number | undefined,
+  characterId: number | undefined,
+  userId: number | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<Record<string, unknown>>(
+        `/characters/${characterId}/rest?type=long&user_id=${userId ?? ""}`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
     },
   });
 }

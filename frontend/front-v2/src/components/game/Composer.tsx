@@ -6,10 +6,14 @@ import {
   Sword,
   Shield,
   Sparkle,
+  SpeakerHigh,
+  Stop,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { Chip } from "@/lib/game";
 import { useAppStore } from "@/store/appStore";
+import { voice } from "@/lib/voice";
+import { useVoice } from "@/hooks/useVoice";
 
 const MAX = 500;
 
@@ -34,6 +38,29 @@ export function Composer({
   const openPalette = useAppStore((s) => s.openPalette);
   const prefill = useAppStore((s) => s.composerPrefill);
   const setComposerPrefill = useAppStore((s) => s.setComposerPrefill);
+
+  // F-72 (#1267) głos: mic dyktuje (STT), overlay „Czytam…" (TTS). onSend przez ref,
+  // by callback transkrypcji zawsze widział świeżą funkcję bez re-subskrypcji.
+  const vs = useVoice();
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
+  useEffect(() => {
+    voice.onTranscript = (text, autosend) => {
+      setValue(text);
+      requestAnimationFrame(() => {
+        taRef.current?.focus();
+        autoGrow();
+      });
+      if (autosend && text.trim()) {
+        onSendRef.current(text.trim());
+        setValue("");
+      }
+    };
+    return () => {
+      voice.onTranscript = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // FE14 (#1263): komenda z palety → wstaw tekst, ustaw fokus, wyczyść bufor.
   useEffect(() => {
@@ -67,33 +94,69 @@ export function Composer({
 
   return (
     <div className="shrink-0 border-t border-line bg-surface px-3.5 pb-2 pt-2.5">
+      {/* F-72: overlay „Czytam…" (TTS aktywny) — z przyciskiem zatrzymania. */}
+      {vs.playing && (
+        <div className="mx-auto mb-2 flex max-w-[660px] items-center gap-2 rounded-md border border-line-ember bg-ember/[0.08] px-3 py-1.5">
+          <SpeakerHigh className="animate-pulse text-ember-glow" size={15} />
+          <span className="flex-1 font-ui text-micro text-ember-glow">Czytam narrację…</span>
+          <button
+            type="button"
+            onClick={() => vs.stopPlayback()}
+            aria-label="Zatrzymaj czytanie"
+            className="flex h-6 w-6 items-center justify-center rounded-sm text-ember-glow hover:text-text"
+          >
+            <Stop weight="fill" size={13} />
+          </button>
+        </div>
+      )}
+
       {/* quick-action chips */}
       {chips.length > 0 && (
         <div className="mx-auto mb-2 flex max-w-[660px] flex-wrap gap-2">
-          {chips.map((c, i) => (
-            <button
-              key={i}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChip(c)}
-              className="flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3.5 py-2 font-ui text-label text-text transition-colors hover:border-line-ember hover:text-ember-glow disabled:opacity-50"
-            >
-              <ChipIcon label={c.label} />
-              {c.label}
-            </button>
-          ))}
+          {chips.map((c, i) => {
+            const off = disabled || c.enabled === false;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={off}
+                title={c.enabled === false ? c.reason || undefined : undefined}
+                onClick={() => onChip(c)}
+                className="flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3.5 py-2 font-ui text-label text-text transition-colors hover:border-line-ember hover:text-ember-glow disabled:opacity-50 disabled:hover:border-line disabled:hover:text-text"
+              >
+                {c.icon ? <span aria-hidden>{c.icon}</span> : <ChipIcon label={c.label} />}
+                {c.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
       <div className="mx-auto flex max-w-[660px] items-end gap-2">
-        {/* mic — STT placeholder (F-72, w osobnej fali) */}
+        {/* mic — dyktowanie STT (F-72 #1267). Pulsuje na czerwono w trakcie nagrania. */}
         <button
           type="button"
-          aria-label="Dyktowanie (wkrótce)"
-          title="Dyktowanie głosem — wkrótce"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line bg-bg text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+          aria-label={vs.recording ? "Zatrzymaj dyktowanie" : "Dyktuj głosem"}
+          title={
+            vs.sttLocked
+              ? "Głos wyłączony przez administratora"
+              : !vs.available
+                ? "Głos chwilowo niedostępny"
+                : vs.recording
+                  ? "Nagrywam — kliknij, aby zatrzymać"
+                  : "Dyktuj głosem"
+          }
+          disabled={vs.sttLocked || !vs.available}
+          onClick={() => vs.toggleStt()}
+          data-testid="composer-mic"
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition-colors disabled:opacity-40",
+            vs.recording
+              ? "animate-pulse border-line-danger bg-danger/[0.12] text-danger"
+              : "border-line bg-bg text-text-2 hover:border-line-ember hover:text-ember-glow",
+          )}
         >
-          <Microphone size={19} />
+          <Microphone weight={vs.recording ? "fill" : "regular"} size={19} />
         </button>
 
         <div className="flex flex-1 items-end gap-1.5 rounded-lg border border-line bg-bg pl-3.5 pr-1.5 py-1.5 focus-within:border-line-ember focus-within:shadow-[0_0_0_3px_rgba(255,122,61,.1)]">
