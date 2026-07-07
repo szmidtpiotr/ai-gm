@@ -8423,7 +8423,20 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
             game_state=sf.get("state", "NARRATIVE"),
             session_flags=sf,
         )
-        return {"suggested_actions": actions, "travel_notice": _travel_notice_for(sf)}
+        # can_rest: gracz może odpocząć TYLKO w safe_for_rest (karczma/osada) albo
+        # po rozbiciu obozu. Steruje widocznością przycisku „Odpocznij" w modalu
+        # przerwania podróży (bez tego widniał zawsze, choć w dziczy rest się nie da).
+        notice = _travel_notice_for(sf)
+        if notice is not None:
+            can_rest = False
+            if gs_row and gs_row["current_location_id"]:
+                _ls = conn.execute(
+                    "SELECT safe_for_rest FROM game_locations WHERE id=?",
+                    (gs_row["current_location_id"],),
+                ).fetchone()
+                can_rest = bool(_ls and _ls["safe_for_rest"])
+            notice["can_rest"] = can_rest
+        return {"suggested_actions": actions, "travel_notice": notice}
     except Exception as exc:  # never break the game screen on chip errors
         logger.warning("get_suggested_actions_error", campaign_id=campaign_id, error=str(exc))
         return {"suggested_actions": [], "travel_notice": None}

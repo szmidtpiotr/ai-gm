@@ -28,6 +28,8 @@ export interface TravelNotice {
   hours_remaining: number;
   destination_label: string | null;
   can_resume: boolean;
+  /** Czy gracz może odpocząć TU (safe_for_rest / karczma / po obozie). */
+  can_rest?: boolean;
 }
 
 /** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) +

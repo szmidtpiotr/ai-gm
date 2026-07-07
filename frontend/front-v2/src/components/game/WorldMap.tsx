@@ -153,7 +153,13 @@ export function WorldMap({ campaignId, characterId, localAvailable, onOpenLocal 
       {
         onSuccess: (res) => {
           const atmo = res.hex_data?.atmosphere ?? null;
-          setCinematic((c) => (c ? { ...c, atmosphere: atmo } : c));
+          // Zastąp szacunek REALNYM czasem z backendu (suma wag terenu po trasie),
+          // by liczba w cinematyce zgadzała się z zegarem/narracją.
+          const realHours =
+            typeof res.total_hours === "number" ? res.total_hours : null;
+          setCinematic((c) =>
+            c ? { ...c, atmosphere: atmo, hours: realHours ?? c.hours } : c,
+          );
         },
       },
     );

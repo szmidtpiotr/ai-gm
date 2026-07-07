@@ -110,9 +110,9 @@ export function Composer({
         </div>
       )}
 
-      {/* quick-action chips */}
+      {/* quick-action chips — jeden poziomy rząd z przewijaniem (bez zawijania) */}
       {chips.length > 0 && (
-        <div className="mx-auto mb-2 flex max-w-[660px] flex-wrap gap-2">
+        <div className="mx-auto mb-2 flex max-w-[660px] gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {chips.map((c, i) => {
             const off = disabled || c.enabled === false;
             return (
@@ -122,7 +122,7 @@ export function Composer({
                 disabled={off}
                 title={c.enabled === false ? c.reason || undefined : undefined}
                 onClick={() => onChip(c)}
-                className="flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3.5 py-2 font-ui text-label text-text transition-colors hover:border-line-ember hover:text-ember-glow disabled:opacity-50 disabled:hover:border-line disabled:hover:text-text"
+                className="flex shrink-0 items-center gap-1.5 rounded-pill border border-line bg-surface px-3.5 py-2 font-ui text-label text-text transition-colors hover:border-line-ember hover:text-ember-glow disabled:opacity-50 disabled:hover:border-line disabled:hover:text-text"
               >
                 {c.icon ? <span aria-hidden>{c.icon}</span> : <ChipIcon label={c.label} />}
                 {c.label}

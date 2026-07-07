@@ -465,6 +465,10 @@ function TravelInterruptModal({
   const dest = /^hex \(|^\(-?\d+,-?\d+\)$/.test(rawDest) ? null : rawDest || null;
   const hrs = Math.round(notice.hours_remaining || 0);
   const alreadyCamped = notice.reason === "camped";
+  // Odpoczynek możliwy tylko w bezpiecznym miejscu (karczma/osada) lub po obozie.
+  const canRest = alreadyCamped || notice.can_rest === true;
+  // Obóz oferujemy, gdy tu NIE bezpiecznie i jeszcze nie rozbity (to on odblokuje rest).
+  const canCamp = !alreadyCamped && !canRest;
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="travel-interrupt">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -499,24 +503,33 @@ function TravelInterruptModal({
             >
               🧭 Kontynuuj podróż
             </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onRest}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line-ember bg-ember/[0.06] px-3 py-2.5 font-ui text-body font-semibold text-ember-glow transition-colors hover:bg-ember/[0.14]"
-              >
-                😴 Odpocznij
-              </button>
-              {!alreadyCamped && (
-                <button
-                  type="button"
-                  onClick={onCamp}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
-                >
-                  🔥 Rozbij obóz
-                </button>
-              )}
-            </div>
+            {(canRest || canCamp) && (
+              <div className="flex gap-2">
+                {canRest && (
+                  <button
+                    type="button"
+                    onClick={onRest}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line-ember bg-ember/[0.06] px-3 py-2.5 font-ui text-body font-semibold text-ember-glow transition-colors hover:bg-ember/[0.14]"
+                  >
+                    😴 Odpocznij
+                  </button>
+                )}
+                {canCamp && (
+                  <button
+                    type="button"
+                    onClick={onCamp}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+                  >
+                    🔥 Rozbij obóz
+                  </button>
+                )}
+              </div>
+            )}
+            {canCamp && (
+              <p className="mt-1 text-center font-ui text-micro text-text-3">
+                Odpoczniesz dopiero po rozbiciu obozu albo w bezpiecznym miejscu.
+              </p>
+            )}
           </div>
         </div>
       </div>
