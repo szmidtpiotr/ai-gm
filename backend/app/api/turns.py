@@ -8353,11 +8353,15 @@ def _travel_notice_for(session_flags: dict) -> dict | None:
         return None
     # step + destination → klucz per-etap (front pokazuje modal raz na przerwanie),
     # can_resume=False dla forced_camp (musi najpierw odpocząć).
+    # Ukryj surowy koordynat („hex (12,-6)") jako cel — bez nazwy → None.
+    dest = tp.get("destination_label")
+    if isinstance(dest, str) and (dest.startswith("hex (") or re.match(r"^\(-?\d+,-?\d+\)$", dest)):
+        dest = None
     return {
         "reason": reason,
         "step": int(tp.get("step_index", 0) or 0),
         "hours_remaining": float(tp.get("hours_remaining", 0) or 0),
-        "destination_label": tp.get("destination_label"),
+        "destination_label": dest,
         "can_resume": not base.startswith("forced_camp"),
         **tmpl,
     }

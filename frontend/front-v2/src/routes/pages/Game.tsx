@@ -159,7 +159,7 @@ export default function Game() {
     if (act === "BUILD_CAMP") {
       // Po rozbiciu obozu: usuń „Rozbij obóz", odblokuj „Odpocznij" (parytet ze starym UI).
       buildCamp.mutate(undefined, {
-        onSuccess: () =>
+        onSuccess: () => {
           setChips(
             current
               .filter((x) => (x.action || x.text) !== "BUILD_CAMP")
@@ -168,7 +168,21 @@ export default function Game() {
                   ? { ...x, enabled: true, reason: undefined }
                   : x,
               ),
-          ),
+          );
+          // Feedback + kolejny krok (działa też na zakładce Mapa, gdzie nie widać
+          // pili): obóz zbudowany → modal pyta „co dalej" (Odpocznij/Kontynuuj).
+          toast("Obóz rozbity — teraz możesz bezpiecznie odpocząć.", "success");
+          setInterruptModal({
+            reason: "camped",
+            severity: "warn",
+            title: "Obóz rozbity",
+            message: "Rozpaliłeś ognisko i rozłożyłeś posłanie. Odpocznij, by odzyskać siły — albo ruszaj dalej.",
+            step: -1,
+            hours_remaining: 0,
+            destination_label: null,
+            can_resume: true,
+          });
+        },
         onError: chipError,
       });
       return;
@@ -446,8 +460,11 @@ function TravelInterruptModal({
 }) {
   const danger = notice.severity === "danger";
   const Icon = danger ? Warning : MoonStars;
-  const dest = notice.destination_label;
+  // Ukryj surowy koordynat („hex (12,-6)") — pokaż cel tylko gdy ma prawdziwą nazwę.
+  const rawDest = notice.destination_label || "";
+  const dest = /^hex \(|^\(-?\d+,-?\d+\)$/.test(rawDest) ? null : rawDest || null;
   const hrs = Math.round(notice.hours_remaining || 0);
+  const alreadyCamped = notice.reason === "camped";
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="travel-interrupt">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -490,13 +507,15 @@ function TravelInterruptModal({
               >
                 😴 Odpocznij
               </button>
-              <button
-                type="button"
-                onClick={onCamp}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
-              >
-                🔥 Rozbij obóz
-              </button>
+              {!alreadyCamped && (
+                <button
+                  type="button"
+                  onClick={onCamp}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+                >
+                  🔥 Rozbij obóz
+                </button>
+              )}
             </div>
           </div>
         </div>
