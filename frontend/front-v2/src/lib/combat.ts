@@ -78,7 +78,7 @@ export function rollFromPlayerAttack(
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Suma", v: String(total), sum: true });
 
-  // Etykieta + wartość + kolor zależą od tego, co realnie się stało z Twoim ciosem.
+  // Etykieta + wartość + kolor zależają od tego, co realnie się stało z Twoim ciosem.
   let label = "Wynik";
   let resV: string;
   let tone: "ok" | "bad" | "warn";
@@ -86,6 +86,11 @@ export function rollFromPlayerAttack(
     resV = r.mana_insufficient ? "ZA MAŁO MANY" : "POZA ZASIĘGIEM";
     tone = "warn";
   } else if (r.spell_type === "heal") {
+    // Kości leczenia (np. 1d8) przed sumą.
+    if (r.heal_rolls?.length && r.damage_die) {
+      const sides = Number(r.damage_die.split("d")[1] || 6);
+      for (const rv of r.heal_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
+    }
     label = "Lecz.";
     resV = `+${r.heal_amount ?? 0} HP`;
     tone = "ok";
@@ -93,6 +98,11 @@ export function rollFromPlayerAttack(
     resV = "WRÓG UNIKA"; // przeciwnik uchylił się przed Twoim ciosem
     tone = "warn";
   } else if (r.hit) {
+    // Kości obrażeń (np. 2d6) widoczne przed sumą.
+    if (r.damage_rolls?.length && r.damage_die) {
+      const sides = Number(r.damage_die.split("d")[1] || 6);
+      for (const rv of r.damage_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
+    }
     label = "Obraż.";
     resV = `−${r.damage ?? 0} HP`; // trafienie — zadane obrażenia
     tone = "ok";
@@ -116,8 +126,12 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Atak", v: String(total), sum: true });
   if (Number.isFinite(ac)) cells.push({ k: "Obr.", v: String(ac) });
-  // Dostałeś = czerwony; unik/pudło (bez obrażeń) = zielony (dobrze dla Ciebie).
+  // Kości obrażeń wroga (np. 1d6) widoczne gdy trafił.
   const hit = !!r.hit && !r.dodged;
+  if (hit && r.damage_rolls?.length && r.damage_die) {
+    const sides = Number(r.damage_die.split("d")[1] || 6);
+    for (const rv of r.damage_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
+  }
   cells.push({
     k: hit ? "Obraż." : "Wynik",
     v: r.dodged ? "UNIKASZ" : r.hit ? `−${r.damage ?? 0} HP` : "PUDŁO",

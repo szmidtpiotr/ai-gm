@@ -6,6 +6,8 @@ export type GamePrefKey =
   | "gamePrefBubbleTurn"
   | "gamePrefBubbleDatetime"
   | "gamePrefSkipCombatNarr"
+  | "gamePrefShowPlayerDice"
+  | "gamePrefShowEnemyDice"
   | "gamePrefDebug";
 
 const PREF_LS: Record<GamePrefKey, [string, boolean]> = {
@@ -13,6 +15,8 @@ const PREF_LS: Record<GamePrefKey, [string, boolean]> = {
   gamePrefBubbleTurn:     ["bubble_turn",               true],
   gamePrefBubbleDatetime: ["bubble_datetime",           true],
   gamePrefSkipCombatNarr: ["aigm_skip_combat_narrative", false],
+  gamePrefShowPlayerDice: ["aigm_show_player_dice",     true],
+  gamePrefShowEnemyDice:  ["aigm_show_enemy_dice",      true],
   gamePrefDebug:          ["aigm_debug",                false],
 };
 
@@ -75,6 +79,8 @@ export interface AppState {
   gamePrefBubbleTurn: boolean;
   gamePrefBubbleDatetime: boolean;
   gamePrefSkipCombatNarr: boolean;
+  gamePrefShowPlayerDice: boolean;
+  gamePrefShowEnemyDice: boolean;
   gamePrefDebug: boolean;
   setGamePref: (k: GamePrefKey, v: boolean) => void;
 
@@ -141,6 +147,8 @@ export const useAppStore = create<AppState>((set) => ({
   gamePrefBubbleTurn:     readPref("bubble_turn",               true),
   gamePrefBubbleDatetime: readPref("bubble_datetime",           true),
   gamePrefSkipCombatNarr: readPref("aigm_skip_combat_narrative", false),
+  gamePrefShowPlayerDice: readPref("aigm_show_player_dice",     true),
+  gamePrefShowEnemyDice:  readPref("aigm_show_enemy_dice",      true),
   gamePrefDebug:          readPref("aigm_debug",                false),
   setGamePref: (k, v) => {
     const [lsKey] = PREF_LS[k];

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   X, SpeakerHigh, Microphone, Flag, ChatTeardropText, Sword, Skull,
-  CheckCircle, XCircle, Question, SignOut,
+  CheckCircle, XCircle, Question, SignOut, Cube,
 } from "@phosphor-icons/react";
 import { useAppStore, type GamePrefKey } from "@/store/appStore";
 import { useVoice } from "@/hooks/useVoice";
@@ -68,6 +68,17 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
             pkey="gamePrefSkipCombatNarr"
             label="Szybka walka (bez narracji)"
             sub="Tylko wynik mechaniczny, bez tekstu GM"
+          />
+          <SectionHead icon={<Cube size={14} />}>Kostki</SectionHead>
+          <PrefToggle
+            pkey="gamePrefShowPlayerDice"
+            label="Animacja kości — Twój atak"
+            sub="Rzut 3D kości d20 przy każdym ataku gracza"
+          />
+          <PrefToggle
+            pkey="gamePrefShowEnemyDice"
+            label="Animacja kości — atak wroga"
+            sub="Rzut 3D kości d20 przy turze przeciwnika"
           />
 
           {/* ── Głos (F-72) ─────────────────────────────────────────────── */}

@@ -19,6 +19,7 @@ import {
   rollFromReaction,
 } from "@/lib/combat";
 import type { RollCardData } from "@/lib/types";
+import { useAppStore } from "@/store/appStore";
 import {
   useCombatState,
   useResolveAttack,
@@ -67,6 +68,8 @@ export function CombatView({
   const { toast } = useToast();
   const qc = useQueryClient();
   const characterId = character?.id;
+  const showPlayerDice = useAppStore((s) => s.gamePrefShowPlayerDice);
+  const showEnemyDice  = useAppStore((s) => s.gamePrefShowEnemyDice);
 
   // Query pollowany co 2s (tylko gdy aktywna) — Game.tsx już go trzyma, tu współdzielony.
   const combatQ = useCombatState(campaignId);
@@ -193,18 +196,24 @@ export function CombatView({
         r,
         title ?? (spellKey ? `${title ?? "CZAR"}` : "ATAK"),
       );
-      jobSeq.current += 1;
-      setDiceJob({
-        id: jobSeq.current,
-        notation: "1d20",
-        forced: [face],
-        face,
-        card,
-        crit: !!r.player_nat20,
-        fumble: !!r.player_nat1,
-      });
       // combat_state już w cache (mutacja onSuccess) — tura wroga odpali po zamknięciu kości.
       pushCombatState(r.combat_state);
+      if (showPlayerDice) {
+        jobSeq.current += 1;
+        setDiceJob({
+          id: jobSeq.current,
+          notation: "1d20",
+          forced: [face],
+          face,
+          card,
+          actor: "player",
+          crit: !!r.player_nat20,
+          fumble: !!r.player_nat1,
+        });
+      } else {
+        setRolls((p) => [...p, card]);
+        setBusy(false);
+      }
     } catch {
       toast("Błąd akcji.", "danger");
       setBusy(false);
@@ -214,7 +223,8 @@ export function CombatView({
   function onDiceDone() {
     if (diceJob) setRolls((p) => [...p, diceJob.card]);
     setDiceJob(null);
-    setBusy(false);
+    // busy był true tylko dla tury gracza
+    if (!diceJob || diceJob.actor !== "enemy") setBusy(false);
   }
 
   async function doMove() {
@@ -276,7 +286,23 @@ export function CombatView({
             playerDefense: view.player?.defense ?? null,
           });
         } else {
-          setRolls((p) => [...p, rollFromEnemyAttack(r)]);
+          const enemyCard = rollFromEnemyAttack(r);
+          if (showEnemyDice) {
+            const d20 = Number(r.raw_d20 ?? 0);
+            jobSeq.current += 1;
+            setDiceJob({
+              id: jobSeq.current,
+              notation: "1d20",
+              forced: [d20],
+              face: d20,
+              card: enemyCard,
+              actor: "enemy",
+              crit: d20 === 20,
+              fumble: d20 === 1,
+            });
+          } else {
+            setRolls((p) => [...p, enemyCard]);
+          }
         }
       })
       .catch(() => {})

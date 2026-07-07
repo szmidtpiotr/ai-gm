@@ -16,6 +16,7 @@ export interface DiceJob {
   crit?: boolean;
   fumble?: boolean;
   face: number; // wartość do pokazania w kości fallback 2D
+  actor?: "player" | "enemy"; // kto rzuca — decyduje czy busy=false po animacji
 }
 
 const MOUNT_ID = "dice3d-mount";
