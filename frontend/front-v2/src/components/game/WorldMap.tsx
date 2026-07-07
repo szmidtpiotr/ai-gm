@@ -34,8 +34,9 @@ import { TravelCinematic } from "./TravelCinematic";
 
 const VB_W = 340;
 const VB_H = 320;
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 2.4;
+// MIN 0.2 → można oddalić do widoku pełnej krainy; MAX 3.0 → bliski zoom detali.
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 3.0;
 
 interface Props {
   campaignId: number;
@@ -169,7 +170,7 @@ export function WorldMap({ campaignId, characterId }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col lg:flex-row">
       {/* Nagłówek: zegar+pora+lokacja + zamknij (mobile pełna szer.) */}
-      <div className="flex flex-col lg:min-w-0 lg:flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:min-w-0">
         <header
           className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5"
           style={{ paddingTop: "max(10px, var(--sa-top))" }}
@@ -204,10 +205,10 @@ export function WorldMap({ campaignId, characterId }: Props) {
           </button>
         </header>
 
-        {/* Mapa */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Mapa — wypełnia całą dostępną wysokość (mobile: pełny ekran, desktop: lewy panel) */}
+        <div className="flex min-h-0 flex-1 flex-col p-3">
           <div
-            className="relative overflow-hidden rounded-lg border border-line p-3"
+            className="relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line"
             style={{
               background:
                 "radial-gradient(70% 60% at 50% 40%, rgba(255,122,61,.06), transparent 70%), var(--surface)",
@@ -227,14 +228,15 @@ export function WorldMap({ campaignId, characterId }: Props) {
             </div>
 
             {map.isLoading ? (
-              <div className="flex h-64 items-center justify-center font-ui text-body text-text-3">
+              <div className="flex h-full w-full items-center justify-center font-ui text-body text-text-3">
                 Wczytywanie mapy…
               </div>
             ) : (
               <svg
                 viewBox={`0 0 ${VB_W} ${VB_H}`}
-                className="block w-full touch-none select-none"
-                style={{ height: "auto", cursor: drag.current ? "grabbing" : "grab" }}
+                preserveAspectRatio="xMidYMid meet"
+                className="block h-full w-full touch-none select-none"
+                style={{ cursor: drag.current ? "grabbing" : "grab" }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -272,14 +274,14 @@ export function WorldMap({ campaignId, characterId }: Props) {
                 </g>
               </svg>
             )}
+          </div>
 
-            {/* legenda */}
-            <div className="flex flex-wrap gap-x-4 gap-y-2.5 px-1 pb-1 pt-3 font-ui text-micro text-text-2">
-              <LegendDot className="border-ember bg-[#3a2413]" label="Twoja pozycja" />
-              <LegendDot className="border-[#7fa860] bg-[#1e2716]" label="Odkryte" />
-              <LegendDot className="border-mana bg-[#162530]" label="Znane z opowieści" />
-              <LegendDot className="border-dashed border-line bg-[#171009]" label="Nieodkryte" />
-            </div>
+          {/* legenda — pod mapą, nie kradnie wysokości kanwy */}
+          <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-2 px-1 pt-3 font-ui text-micro text-text-2">
+            <LegendDot className="border-ember bg-[#3a2413]" label="Twoja pozycja" />
+            <LegendDot className="border-[#7fa860] bg-[#1e2716]" label="Odkryte" />
+            <LegendDot className="border-mana bg-[#162530]" label="Znane z opowieści" />
+            <LegendDot className="border-dashed border-line bg-[#171009]" label="Nieodkryte" />
           </div>
         </div>
       </div>

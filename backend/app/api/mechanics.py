@@ -152,12 +152,14 @@ def get_creator_help():
 
 @router.get("/mechanics/skills")
 def get_public_skills():
-    """Skill catalog for autocomplete (key, label, linked_stat). No auth required."""
+    """Skill catalog (key, label, linked_stat, description). No auth required.
+    Powers the sheet Skills panel tooltip + advancement screen (V2)."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT key, label, linked_stat FROM game_config_skills ORDER BY label"
+            "SELECT key, label, linked_stat, description, rank_ceiling "
+            "FROM game_config_skills ORDER BY label"
         ).fetchall()
         return {"skills": [dict(r) for r in rows]}
     finally:

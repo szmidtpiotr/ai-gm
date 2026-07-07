@@ -42,6 +42,26 @@ export function useSpellCatalog(enabled: boolean) {
   });
 }
 
+export interface PublicSkill {
+  key: string;
+  label: string;
+  linked_stat: string;
+  description: string | null;
+  rank_ceiling: number | null;
+}
+
+/** GET /mechanics/skills → publiczny katalog umiejętności (label/cecha/opis).
+ * Zasila tooltip opisu w panelu Umiejętności + ekran awansu (V2). */
+export function usePublicSkills(enabled = true) {
+  return useQuery({
+    queryKey: ["public-skills"],
+    enabled,
+    staleTime: 10 * 60_000, // config, rzadko się zmienia
+    queryFn: () => apiFetch<{ skills: PublicSkill[] }>(`/mechanics/skills`),
+    select: (d) => d.skills ?? [],
+  });
+}
+
 /** GET /characters/{id}/reputation → standing per region. */
 export function useReputation(characterId: number | undefined) {
   return useQuery({
