@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CircleNotch, MoonStars, Warning } from "@phosphor-icons/react";
+import { CircleNotch, MoonStars, Path, Warning } from "@phosphor-icons/react";
 import {
   useBuildCamp,
   useCampaignDetail,
@@ -125,10 +125,27 @@ export default function Game() {
   // forceWorldMap = gracz kliknął „Świat" i chce zobaczyć mapę świata.
   const [forceWorldMap, setForceWorldMap] = useState(false);
   const localMap = useLocalMap(campaignId, gameTab === "map");
+  // PM4: wybór trasy (na wprost / traktem) jako modal z 2 przyciskami zamiast
+  // pytania tekstem. Wypełniany, gdy tura zwróci suggested_actions type=route_choice.
+  const [routeChoice, setRouteChoice] = useState<
+    { label: string; action: string; icon?: string }[] | null
+  >(null);
 
   function applyResponse(resp: TurnResponse) {
     setPendingRoll(rollFromResult(resp));
     setChips(normalizeChips(resp.suggested_actions));
+    const routes = (resp.suggested_actions ?? []).filter(
+      (a) => a.type === "route_choice",
+    );
+    if (routes.length >= 2) {
+      setRouteChoice(
+        routes.map((a) => ({
+          label: String(a.label ?? ""),
+          action: String(a.action ?? a.text ?? ""),
+          icon: a.icon ?? undefined,
+        })),
+      );
+    }
     // FE12 (#1261): narracja mogła otworzyć sklep ([OPEN_SHOP] / open_shop) — overlay.
     const shop = detectShop(resp);
     if (shop) openShop(shop);
@@ -334,6 +351,15 @@ export default function Game() {
         />
       )}
 
+      {/* PM4: modal wyboru trasy (na wprost / traktem) — 2 przyciski zamiast tekstu. */}
+      {routeChoice && (
+        <RouteChoiceModal
+          options={routeChoice}
+          onPick={(action) => { setRouteChoice(null); send(action); }}
+          onClose={() => setRouteChoice(null)}
+        />
+      )}
+
       {/* FE18/FE19 (#1267/#1268): menu ☰ (głos + finał) + bramka finału (modal/zwycięstwo). */}
       <GameMenu finaleAllowed={finaleAllowed} />
       <FinaleFlow
@@ -442,6 +468,48 @@ function FullLoader() {
     <div className="flex h-full items-center justify-center gap-2 text-text-3">
       <CircleNotch className="animate-spin" size={22} />
       <span className="font-ui text-body">Wczytywanie gry…</span>
+    </div>
+  );
+}
+
+// PM4 — modal wyboru trasy do celu: „na wprost" (szybciej/groźniej) vs „traktem"
+// (dłużej/bezpieczniej). Klik = wysyła odpowiedź tekstową, którą rozpoznaje backend.
+function RouteChoiceModal({
+  options,
+  onPick,
+  onClose,
+}: {
+  options: { label: string; action: string; icon?: string }[];
+  onPick: (action: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[57] flex items-center justify-center p-6" data-testid="route-choice">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-[2] w-full max-w-[420px] overflow-hidden rounded-xl border border-line-ember bg-surface shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-line bg-ember/[0.07] px-5 py-4">
+          <Path weight="fill" size={24} className="text-ember-glow" />
+          <div className="min-w-0">
+            <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-text-3">
+              Wybór drogi
+            </div>
+            <div className="font-serif text-title font-semibold text-text">Którą drogą ruszasz?</div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 p-4">
+          {options.map((o, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onPick(o.action)}
+              className="flex items-center gap-3 rounded-md border border-line-ember bg-ember/[0.06] px-3.5 py-3 text-left transition-colors hover:border-ember hover:bg-ember/[0.12]"
+            >
+              {o.icon && <span className="shrink-0 text-lg" aria-hidden>{o.icon}</span>}
+              <span className="font-ui text-body font-semibold text-text">{o.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

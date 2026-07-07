@@ -858,6 +858,24 @@ def _run_narrative_travel(
                     "Którą drogę wybierasz?"
                 )
                 _data_q["location_intent"] = None
+                # PM4: zamiast wymuszać wpisanie odpowiedzi — 2 klikalne przyciski.
+                # Tekst akcji trafia w detect_route_choice (wprost→direct, trakt→road).
+                _data_q["suggested_actions"] = [
+                    {
+                        "label": f"Na wprost przez {_terrain}",
+                        "action": f"Idę na wprost, przełajem do {_label}.",
+                        "enabled": True,
+                        "icon": "🌲",
+                        "type": "route_choice",
+                    },
+                    {
+                        "label": "Trzymam się traktu",
+                        "action": f"Idę traktem do {_label}.",
+                        "enabled": True,
+                        "icon": "🛤️",
+                        "type": "route_choice",
+                    },
+                ]
                 logger.info(
                     "narrative_travel_pm4_prompted",
                     campaign_id=campaign_id, location_key=location_key,
