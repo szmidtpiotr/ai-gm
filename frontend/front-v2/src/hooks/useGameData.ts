@@ -19,9 +19,18 @@ import type {
   WorldMapResponse,
 } from "@/lib/types";
 
-/** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) dla
- * stanu kampanii. Pozwala pokazać pille na wejściu/po reload (POST /turns zwraca
- * je tylko ulotnie). Nie odpytujemy podczas walki (chips walki idą innym torem). */
+export interface TravelNotice {
+  reason: string;
+  severity: "warn" | "danger";
+  title: string;
+  message: string;
+}
+
+/** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) +
+ * deterministyczny komunikat podróży (`travel_notice`: zmierzch / padasz z sił /
+ * wyprawa przerwana) dla stanu kampanii. Pozwala pokazać pille i baner „musisz
+ * odpocząć" na wejściu/po reload (POST /turns zwraca je tylko ulotnie, a narrator
+ * LLM bywa niekonsekwentny). Nie odpytujemy podczas walki (chips walki inaczej). */
 export function useSuggestedActions(
   campaignId: number | undefined,
   characterId: number | undefined,
@@ -31,10 +40,9 @@ export function useSuggestedActions(
     queryKey: ["suggested-actions", campaignId],
     enabled: !!campaignId && enabled,
     queryFn: () =>
-      apiFetch<{ suggested_actions: SuggestedAction[] }>(
+      apiFetch<{ suggested_actions: SuggestedAction[]; travel_notice: TravelNotice | null }>(
         `/campaigns/${campaignId}/suggested-actions${characterId ? `?character_id=${characterId}` : ""}`,
       ),
-    select: (d) => d.suggested_actions ?? [],
   });
 }
 

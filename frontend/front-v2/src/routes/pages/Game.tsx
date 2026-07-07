@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CircleNotch } from "@phosphor-icons/react";
+import { CircleNotch, MoonStars, Warning } from "@phosphor-icons/react";
 import {
   useBuildCamp,
   useCampaignDetail,
@@ -12,6 +12,7 @@ import {
   useTravel,
   useTravelResume,
   useTurnStream,
+  type TravelNotice as TravelNoticeData,
 } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
@@ -214,9 +215,10 @@ export default function Game() {
   );
   const suggested = useSuggestedActions(campaignId, characterId, !activeCombat);
   const fetchedChips = useMemo(
-    () => normalizeChips(suggested.data),
+    () => normalizeChips(suggested.data?.suggested_actions),
     [suggested.data],
   );
+  const travelNotice = suggested.data?.travel_notice ?? null;
   const shownChips = chips.length
     ? chips
     : streamChips.length
@@ -339,6 +341,10 @@ export default function Game() {
             />
           </div>
 
+          {/* PT7/F-80: deterministyczny baner podróży (zmierzch / padasz z sił) —
+              niezależny od narracji LLM; znika po Odpocznij/Rozbij obóz. */}
+          {travelNotice && <TravelNotice notice={travelNotice} />}
+
           <Composer
             onSend={send}
             disabled={submit.isPending}
@@ -359,6 +365,41 @@ function FullLoader() {
     <div className="flex h-full items-center justify-center gap-2 text-text-3">
       <CircleNotch className="animate-spin" size={22} />
       <span className="font-ui text-body">Wczytywanie gry…</span>
+    </div>
+  );
+}
+
+// PT7/F-80 — baner podróży: „musisz odpocząć / zapada zmierzch". Deterministyczny
+// (z travel_plan.interrupt_reason), nie zależy od tego, czy narrator go opisze.
+function TravelNotice({ notice }: { notice: TravelNoticeData }) {
+  const danger = notice.severity === "danger";
+  const Icon = danger ? Warning : MoonStars;
+  return (
+    <div
+      className={
+        "mx-auto mb-2 flex max-w-[660px] items-start gap-2.5 rounded-md border px-3.5 py-2.5 " +
+        (danger
+          ? "border-line-danger bg-danger/[0.08]"
+          : "border-line-ember bg-ember/[0.07]")
+      }
+      role="status"
+    >
+      <Icon
+        weight="fill"
+        size={17}
+        className={"mt-px shrink-0 " + (danger ? "text-danger" : "text-ember-glow")}
+      />
+      <div className="min-w-0">
+        <div
+          className={
+            "font-ui text-label font-semibold " +
+            (danger ? "text-danger-glow" : "text-ember-glow")
+          }
+        >
+          {notice.title}
+        </div>
+        <div className="font-serif text-micro leading-relaxed text-text-2">{notice.message}</div>
+      </div>
     </div>
   );
 }

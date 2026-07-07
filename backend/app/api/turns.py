@@ -8319,6 +8319,41 @@ def get_campaign_clock(campaign_id: int):
     return get_clock_state(campaign_id)
 
 
+# Deterministyczny komunikat „musisz odpocząć / zapada zmierzch" wyliczany z
+# travel_plan.interrupt_reason — niezależny od tego, czy narrator LLM go opisze.
+_TRAVEL_NOTICE_BY_REASON = {
+    "dusk": {
+        "severity": "warn",
+        "title": "Zapada zmierzch",
+        "message": "Za tobą 8h marszu. Rozbij obóz albo maszeruj dalej — nocny marsz "
+                   "zwiększa ryzyko napaści (×1.5) i pogłębia zmęczenie.",
+    },
+    "forced_camp": {
+        "severity": "danger",
+        "title": "Padasz z sił",
+        "message": "12h marszu wyczerpało cię do cna — wymuszony obóz. Musisz odpocząć, "
+                   "zanim ruszysz w dalszą drogę.",
+    },
+    "encounter": {
+        "severity": "warn",
+        "title": "Wyprawa przerwana",
+        "message": "Coś przecięło ci drogę. Zdecyduj: kontynuuj podróż, odpocznij albo rozbij obóz.",
+    },
+}
+
+
+def _travel_notice_for(session_flags: dict) -> dict | None:
+    tp = session_flags.get("travel_plan")
+    if not isinstance(tp, dict):
+        return None
+    reason = str(tp.get("interrupt_reason") or "")
+    base = reason.replace("_prompted", "")  # dusk_prompted → dusk
+    tmpl = _TRAVEL_NOTICE_BY_REASON.get(base)
+    if not tmpl:
+        return None
+    return {"reason": reason, **tmpl}
+
+
 @router.get("/campaigns/{campaign_id}/suggested-actions")
 def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = None):
     """Bieżące podpowiedzi akcji (quick-action chips) dla stanu kampanii.
@@ -8347,7 +8382,7 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
             ).fetchone()
             cid = int(c_row["id"]) if c_row else None
         if cid is None:
-            return {"suggested_actions": []}
+            return {"suggested_actions": [], "travel_notice": _travel_notice_for(sf)}
 
         actions = build_suggested_actions(
             conn=conn,
@@ -8356,10 +8391,10 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
             game_state=sf.get("state", "NARRATIVE"),
             session_flags=sf,
         )
-        return {"suggested_actions": actions}
+        return {"suggested_actions": actions, "travel_notice": _travel_notice_for(sf)}
     except Exception as exc:  # never break the game screen on chip errors
         logger.warning("get_suggested_actions_error", campaign_id=campaign_id, error=str(exc))
-        return {"suggested_actions": []}
+        return {"suggested_actions": [], "travel_notice": None}
     finally:
         conn.close()
 
