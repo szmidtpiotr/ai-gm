@@ -360,7 +360,10 @@ def get_local_map(campaign_id: int):
         flags = json.loads(session.get("session_flags") or "{}")
         current_local_hex = flags.get("local_hex")
 
-        has_local_map = len(hexes) > 0
+        # Próg FAZA ML: mapa lokalna ma sens od ≥2 sub-lokacji. Pojedynczy samotny
+        # hex renderował się jako „dziwna" pusta mapa — poniżej progu klient
+        # pokazuje mapę świata (has_local_map=False). Zgodne z docstringiem.
+        has_local_map = len(hexes) >= 2
         # R7 #1247 leak #2: when the hub has no local map (<2 sub-locs), never
         # echo a stale local_hex — it would leave the client thinking the party
         # is on a hex that doesn't exist. Keep the response internally consistent.

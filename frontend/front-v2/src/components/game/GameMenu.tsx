@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   X, SpeakerHigh, Microphone, Flag, ChatTeardropText, Sword, Skull,
-  CheckCircle, XCircle, Question, SignOut, ArrowFatUp,
+  CheckCircle, XCircle, Question, SignOut,
 } from "@phosphor-icons/react";
 import { useAppStore, type GamePrefKey } from "@/store/appStore";
 import { useVoice } from "@/hooks/useVoice";
@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
   const open = useAppStore((s) => s.gameMenuOpen);
   const close = useAppStore((s) => s.closeGameMenu);
-  const openAdvancement = useAppStore((s) => s.openAdvancement);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
   const user = useAppStore((s) => s.currentUser);
   const heroId = useAppStore((s) => s.currentHeroId);
@@ -42,21 +41,6 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
         <div className="flex-1 overflow-y-auto p-4">
 
           {/* ── Nawigacja ────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            data-testid="menu-advancement"
-            onClick={openAdvancement}
-            className="mb-2 flex w-full items-center gap-3 rounded-md border border-line-ember bg-ember/[0.06] px-3.5 py-3 text-left transition-colors hover:border-ember"
-          >
-            <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line-ember bg-bg text-ember-glow">
-              <ArrowFatUp weight="fill" size={18} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-ui text-body font-semibold text-ember-glow">Awansuj postać</span>
-              <span className="block font-ui text-micro text-text-3">Wydaj PD na statystyki, umiejętności, magię</span>
-            </span>
-          </button>
-
           <button
             type="button"
             data-testid="menu-exit-game"

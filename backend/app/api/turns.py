@@ -8376,12 +8376,31 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
     conn.row_factory = sqlite3.Row
     try:
         sf: dict = {}
-        sf_row = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+        gs_row = conn.execute(
+            "SELECT id, session_flags, current_location_id FROM game_sessions WHERE campaign_id=? LIMIT 1",
             (campaign_id,),
         ).fetchone()
-        if sf_row and sf_row["session_flags"]:
-            sf = json.loads(sf_row["session_flags"] or "{}")
+        if gs_row and gs_row["session_flags"]:
+            sf = json.loads(gs_row["session_flags"] or "{}")
+
+        # Self-heal: drużyna dotarła do bezpiecznej lokacji (safe_for_rest), ale
+        # travel_plan.interrupt_reason został jako stale („dusk"/„forced_camp") →
+        # gra myśli, że wciąż trwa nocny marsz. Skutek: modal/baner przerwania +
+        # pill „Rozbij obóz" (który 409-uje „hex już bezpieczny"). Gdy stoimy w
+        # miejscu safe_for_rest, przerwanie jest bezprzedmiotowe — czyścimy plan.
+        tp = sf.get("travel_plan")
+        if isinstance(tp, dict) and tp.get("interrupt_reason") and gs_row and gs_row["current_location_id"]:
+            loc_safe = conn.execute(
+                "SELECT safe_for_rest FROM game_locations WHERE id=?",
+                (gs_row["current_location_id"],),
+            ).fetchone()
+            if loc_safe and loc_safe["safe_for_rest"]:
+                sf.pop("travel_plan", None)
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE id=?",
+                    (json.dumps(sf, ensure_ascii=False), gs_row["id"]),
+                )
+                conn.commit()
 
         cid = character_id
         if cid is None:

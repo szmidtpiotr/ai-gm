@@ -70,6 +70,7 @@ export default function Game() {
   const setHero = useAppStore((s) => s.setHero);
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
+  const openAdvancement = useAppStore((s) => s.openAdvancement);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
 
   const gameTab = useAppStore((s) => s.gameTab);
@@ -173,7 +174,25 @@ export default function Game() {
       return;
     }
     if (act === "REST:long") {
-      restLong.mutate(undefined, { onSuccess: () => setChips([]), onError: chipError });
+      restLong.mutate(undefined, {
+        onSuccess: (r) => {
+          setChips([]);
+          // Rest nie tworzy tury narracji → daj widoczny feedback (inaczej „nic
+          // się nie dzieje"). Awans TYLKO w trakcie odpoczynku (jak stara wersja).
+          const hpA = Number(r?.hp_after ?? 0);
+          const manaA = Number(r?.mana_after ?? 0);
+          const hasMana = Number(r?.mana_before ?? 0) > 0 || manaA > 0;
+          const lvl = r?.leveled_up ? ` · awans na poziom ${r?.new_level}!` : "";
+          toast(
+            `Odpoczynek zakończony — minęło 8 h, HP ${hpA}${hasMana ? `, mana ${manaA}` : ""}.${lvl}`,
+            "success",
+          );
+          const enc = r?.camp_encounter as { triggered?: boolean } | undefined;
+          if (enc?.triggered) toast("Coś zakłóciło obóz w nocy…", "danger");
+          if (Number(r?.xp_available ?? 0) >= 30) openAdvancement();
+        },
+        onError: chipError,
+      });
       return;
     }
     if (act.startsWith("TRAVEL:")) {

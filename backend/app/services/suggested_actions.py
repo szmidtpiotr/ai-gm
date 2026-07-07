@@ -162,6 +162,18 @@ def _build_narrative_actions(
     if travel_pills:
         actions.extend(travel_pills[:2])
 
+    # Bezpieczeństwo liczone raz (potrzebne wcześnie, by REST nie wypadł przez cap).
+    current_hex = session_flags.get("current_hex") or {}
+    hex_q = current_hex.get("q")
+    hex_r = current_hex.get("r")
+    has_hex = hex_q is not None and hex_r is not None
+    safe = _is_safe_for_rest(conn, current_loc_key) or (has_hex and _is_hex_safe_for_rest(conn, hex_q, hex_r))
+
+    # 0) REST wysoko, gdy tu bezpiecznie — w osadzie/gospodzie „Odpocznij" to główna
+    # akcja i nie może wypaść przez cap MAX_ACTIONS zajęty przez NPC/wyjścia/SEARCH.
+    if safe and len(actions) < MAX_ACTIONS:
+        actions.append(SuggestedAction(label="Odpocznij", action="REST:long", enabled=True))
+
     # 1) NPCs present at current location
     if current_loc_key and len(actions) < MAX_ACTIONS:
         npc_actions = _get_npc_actions(conn, current_loc_key)
@@ -182,13 +194,9 @@ def _build_narrative_actions(
             enabled=True,
         ))
 
-    # 4) REST — safe if EITHER session location OR current hex location allows it
-    current_hex = session_flags.get("current_hex") or {}
-    hex_q = current_hex.get("q")
-    hex_r = current_hex.get("r")
-    has_hex = hex_q is not None and hex_r is not None
-    safe = _is_safe_for_rest(conn, current_loc_key) or (has_hex and _is_hex_safe_for_rest(conn, hex_q, hex_r))
-    if len(actions) < MAX_ACTIONS:
+    # 4) REST (fallback) — gdy nie dodane wyżej (np. niebezpieczna lokacja): pokaż
+    # wyłączone „Odpocznij" z powodem, chyba że już jest na liście.
+    if len(actions) < MAX_ACTIONS and not any(a.action == "REST:long" for a in actions):
         actions.append(SuggestedAction(
             label="Odpocznij",
             action="REST:long",
