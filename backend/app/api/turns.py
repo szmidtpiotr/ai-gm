@@ -8353,11 +8353,9 @@ _TRAVEL_NOTICE_BY_REASON = {
                    "zanim ruszysz w dalszą drogę.",
     },
     "encounter": {
-        "severity": "warn",
-        "title": "Starcie w drodze",
-        "message": "Nagłe spotkanie w dziczy przerwało twój marsz — nie dotarłeś jeszcze "
-                   "do celu. Zanim ruszysz dalej, zdecyduj: kontynuujesz drogę, "
-                   "odpoczywasz czy rozbijasz obóz.",
+        "severity": "danger",
+        "title": "Zasadzka w drodze",
+        "message": "Ktoś zagrodził ci drogę — dochodzi do starcia. Stań do walki.",
     },
 }
 

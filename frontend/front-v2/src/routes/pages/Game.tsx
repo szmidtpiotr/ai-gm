@@ -583,10 +583,13 @@ function TravelInterruptModal({
   const dest = /^hex \(|^\(-?\d+,-?\d+\)$/.test(rawDest) ? null : rawDest || null;
   const hrs = Math.round(notice.hours_remaining || 0);
   const alreadyCamped = notice.reason === "camped";
+  // Spotkanie w drodze = zasadzka → przycisk WALCZ (startuje walkę); obóz/odpoczynek
+  // nie mają sensu pod atakiem. onResume dla encountera inicjuje walkę (backend).
+  const isEncounter = notice.reason.startsWith("encounter");
   // Odpoczynek możliwy tylko w bezpiecznym miejscu (karczma/osada) lub po obozie.
-  const canRest = alreadyCamped || notice.can_rest === true;
+  const canRest = !isEncounter && (alreadyCamped || notice.can_rest === true);
   // Obóz oferujemy, gdy tu NIE bezpiecznie i jeszcze nie rozbity (to on odblokuje rest).
-  const canCamp = !alreadyCamped && !canRest;
+  const canCamp = !isEncounter && !alreadyCamped && !canRest;
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="travel-interrupt">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -613,13 +616,20 @@ function TravelInterruptModal({
           <div className="mt-4 flex flex-col gap-2">
             <button
               type="button"
-              disabled={!notice.can_resume}
+              disabled={!isEncounter && !notice.can_resume}
               onClick={onResume}
               className="flex items-center justify-center gap-2 rounded-md px-3 py-3 font-ui text-body font-semibold text-white disabled:opacity-40 disabled:shadow-none"
-              style={{ background: "linear-gradient(135deg, #d1602c, var(--ember))", boxShadow: "0 0 16px rgba(255,122,61,.35)" }}
-              title={notice.can_resume ? undefined : "Padłeś ze zmęczenia — najpierw odpocznij."}
+              style={{
+                background: isEncounter
+                  ? "linear-gradient(135deg, #c0392b, var(--danger, #e8604f))"
+                  : "linear-gradient(135deg, #d1602c, var(--ember))",
+                boxShadow: isEncounter
+                  ? "0 0 16px rgba(232,96,79,.4)"
+                  : "0 0 16px rgba(255,122,61,.35)",
+              }}
+              title={!isEncounter && !notice.can_resume ? "Padłeś ze zmęczenia — najpierw odpocznij." : undefined}
             >
-              🧭 Kontynuuj podróż
+              {isEncounter ? "⚔ Walcz" : "🧭 Kontynuuj podróż"}
             </button>
             {(canRest || canCamp) && (
               <div className="flex gap-2">
