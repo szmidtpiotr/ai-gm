@@ -89,6 +89,56 @@ export function useSpendStat(characterId: number | undefined, userId: number | u
   });
 }
 
+/** POST /characters/{id}/xp/spend-skill — kup +1 rangę umiejętności (F-27 V2). */
+export function useSpendSkill(characterId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (skillKey: string) =>
+      apiFetch<{ ok: boolean; xp_available?: number }>(
+        `/characters/${characterId}/xp/spend-skill`,
+        { method: "POST", body: { skill_key: skillKey } },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+      qc.invalidateQueries({ queryKey: ["xp-snapshot", characterId] });
+    },
+  });
+}
+
+/** POST /characters/{id}/xp/spend-spell-learn — naucz się nowego czaru (F-27 V2, Scholar). */
+export function useSpendSpellLearn(characterId: number | undefined, userId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (spellKey: string) =>
+      apiFetch<{ ok: boolean; xp_available?: number }>(
+        `/characters/${characterId}/xp/spend-spell-learn`,
+        { method: "POST", body: { spell_key: spellKey, user_id: userId } },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+      qc.invalidateQueries({ queryKey: ["xp-snapshot", characterId] });
+      qc.invalidateQueries({ queryKey: ["spells", characterId] });
+    },
+  });
+}
+
+/** POST /characters/{id}/xp/spend-spell-upgrade — podnieś rangę znanego czaru (F-27 V2). */
+export function useSpendSpellUpgrade(characterId: number | undefined, userId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (spellKey: string) =>
+      apiFetch<{ ok: boolean; xp_available?: number }>(
+        `/characters/${characterId}/xp/spend-spell-upgrade`,
+        { method: "POST", body: { spell_key: spellKey, user_id: userId } },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+      qc.invalidateQueries({ queryKey: ["xp-snapshot", characterId] });
+      qc.invalidateQueries({ queryKey: ["spells", characterId] });
+    },
+  });
+}
+
 /** GET /campaigns/{id}/death-summary — epitafium + statystyki (tylko gdy ended). */
 export function useDeathSummary(campaignId: number | undefined, enabled: boolean) {
   return useQuery({

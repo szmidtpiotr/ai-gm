@@ -41,7 +41,7 @@ import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
 import { DungeonView } from "@/components/game/dungeon/DungeonView";
 import { MpGame } from "@/components/game/mp/MpGame";
-import { LevelUpGate } from "@/components/game/outcomes/LevelUpGate";
+import { AdvancementScreen } from "@/components/game/outcomes/AdvancementScreen";
 import { useCombatState } from "@/hooks/useCombat";
 import { detectShop } from "@/lib/game";
 
@@ -248,8 +248,12 @@ export default function Game() {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* FE10 (#1237): awans wykrywany globalnie (XP z walki/questów/odpoczynku) */}
-      <LevelUpGate character={character.data} userId={currentUser?.id} />
+      {/* F-27 V2 (TASK_25 [D12]): awans RĘCZNY (przycisk ⬆️ Awansuj) — bez auto-modala. */}
+      <AdvancementScreen
+        characterId={characterId}
+        userId={currentUser?.id}
+        inCombat={!!activeCombat}
+      />
 
       {/* FE18/FE19 (#1267/#1268): menu ☰ (głos + finał) + bramka finału (modal/zwycięstwo). */}
       <GameMenu finaleAllowed={finaleAllowed} />

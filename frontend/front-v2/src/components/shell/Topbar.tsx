@@ -7,10 +7,15 @@ import {
   Flame,
   UserCircle,
   Scroll,
+  ArrowFatUp,
 } from "@phosphor-icons/react";
 import { Breadcrumb } from "./Breadcrumb";
 import { useAppStore } from "@/store/appStore";
 import { useCampaignClock, useCampaignDetail } from "@/hooks/useGameData";
+import { useXpSnapshot } from "@/hooks/useOutcomes";
+
+// Minimalny koszt zakupu (stat/skill 0→1) — poniżej nie ma czego wydać.
+const MIN_ADVANCE_COST = 30;
 
 // Poza grą: marka + breadcrumb + profil.
 // W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
@@ -55,10 +60,15 @@ function NavBar() {
 
 function GameBar() {
   const campaignId = useAppStore((s) => s.currentCampaignId) ?? undefined;
+  const heroId = useAppStore((s) => s.currentHeroId) ?? undefined;
   const setGameTab = useAppStore((s) => s.setGameTab);
   const toggleGameMenu = useAppStore((s) => s.toggleGameMenu);
+  const openAdvancement = useAppStore((s) => s.openAdvancement);
   const clock = useCampaignClock(campaignId);
   const campaign = useCampaignDetail(campaignId);
+  // F-27 V2: badge ⬆️ Awansuj gdy są PD do wydania (soft-nudge, nie blokada).
+  const xp = useXpSnapshot(heroId);
+  const canAdvance = (xp.data?.xp_available ?? 0) >= MIN_ADVANCE_COST;
 
   const period = clock.data?.period ?? "";
   const isNight = /noc/i.test(period);
@@ -93,6 +103,17 @@ function GameBar() {
         </div>
       </div>
 
+      {canAdvance && (
+        <button
+          aria-label="Awansuj"
+          onClick={openAdvancement}
+          data-testid="btn-awansuj"
+          className="flex h-9 shrink-0 items-center gap-1 rounded-md border border-line-ember bg-ember/[0.1] px-2.5 text-ember-glow transition-colors hover:bg-ember/[0.2]"
+        >
+          <ArrowFatUp weight="fill" size={16} className="animate-pulse" />
+          <span className="font-ui text-micro font-semibold">Awans</span>
+        </button>
+      )}
       <IconBtn label="Mapa" onClick={() => setGameTab("map")}>
         <MapTrifold size={18} />
       </IconBtn>
