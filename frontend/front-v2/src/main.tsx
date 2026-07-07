@@ -23,15 +23,21 @@ import { ToastProvider } from "./components/ui/toast";
 import { initClog } from "./lib/clog";
 import { registerServiceWorker } from "./lib/pwa";
 
-// Viewport height fix: iOS Safari nie aktualizuje dvh po schowaniu klawiatury —
-// --app-h śledzi visualViewport.height i łata lukę pod contentem (#1278-ish).
+// Viewport height fix: iOS Safari — visualViewport.height zmienia się zarówno przy
+// klawiaturze (~300px) jak i przy chowaniu URL bara (~50px). Reagujemy tylko na
+// klawiaturę (delta > 100px). peakVH = dotychczasowe maksimum = pełna wysokość
+// bez klawiatury. focusout łapie zamknięcie klawiatury gdy resize nie odpala.
+let _peakVH = window.visualViewport?.height ?? window.innerHeight;
 function _syncVH() {
   const h = window.visualViewport?.height ?? window.innerHeight;
-  document.documentElement.style.setProperty("--app-h", `${h}px`);
+  if (h > _peakVH) _peakVH = h;
+  const effective = (_peakVH - h) > 100 ? h : _peakVH;
+  document.documentElement.style.setProperty("--app-h", `${effective}px`);
 }
 _syncVH();
 window.visualViewport?.addEventListener("resize", _syncVH);
 window.addEventListener("resize", _syncVH);
+document.addEventListener("focusout", () => setTimeout(_syncVH, 100));
 
 // FE17 (#1266) — RUM (F-74): buforuje zdarzenia → POST /api/client-logs.
 // Init przed renderem, żeby złapać wczesne błędy i page_loaded.
