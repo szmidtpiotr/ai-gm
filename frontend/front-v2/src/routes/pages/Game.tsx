@@ -321,11 +321,15 @@ export default function Game() {
       })),
     );
   }, [suggested.data]);
-  const shownChips = chips.length
-    ? chips
-    : streamChips.length
-      ? streamChips
-      : fetchedChips;
+  // Priorytet: grounded pille z /suggested-actions (deterministyczne, zawsze zgodne
+  // z bieżącą lokacją — NPC/wyjścia/podróż/rest/interrupt/route). Dopiero gdy endpoint
+  // pusty — pille z submitu/strumienia (LLM bywa niezgodny z lokacją: „kuźnia Brunna"
+  // przy Rudniku). suggested-actions jest inwalidowany po każdej turze/podróży.
+  const shownChips = fetchedChips.length
+    ? fetchedChips
+    : chips.length
+      ? chips
+      : streamChips;
   const vitals = useMemo(
     () => readVitals(character.data?.sheet_json),
     [character.data?.sheet_json],

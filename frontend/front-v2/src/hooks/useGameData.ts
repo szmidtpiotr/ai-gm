@@ -170,6 +170,9 @@ export function useSubmitTurn(campaignId: number | undefined) {
       // Narracja mogła przenieść na inny hex (np. do osady) → odśwież mapę lokalną,
       // inaczej submapa nowej osady nie pokaże się (stary cache poprzedniej pozycji).
       qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
+      // Odśwież grounded pille (zależą od lokacji/stanu — inaczej pokazują stare
+      // podpowiedzi niezgodne z nową lokacją).
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });
 }
