@@ -78,49 +78,48 @@ export function Dice3DOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-0 px-6"
+      className="fixed inset-0 z-50 overflow-hidden"
       style={{
         background:
           "radial-gradient(60% 45% at 50% 38%, rgba(232,193,90,.14), transparent 62%), rgba(8,6,4,.86)",
       }}
       onClick={() => phase === "result" && finish()}
     >
-      {/* scena 3D (kanwa dice-box montuje się w #dice3d-mount) */}
-      <div className="relative flex h-[230px] w-full max-w-[360px] items-center justify-center">
-        <div
-          className="absolute bottom-6 h-10 w-[230px] rounded-[50%] blur-[4px]"
-          style={{
-            background:
-              "radial-gradient(ellipse, rgba(232,193,90,.18), transparent 70%)",
-          }}
-        />
-        <div id={MOUNT_ID} className="absolute inset-0" />
-        {fallback && <Fallback2D face={job.face} sides={sidesOf(job.notation)} />}
-      </div>
-
-      {critLine && phase === "result" && (
-        <div
-          className={cn(
-            "my-1 flex items-center gap-2.5 font-serif text-title-lg font-semibold",
-            job.crit ? "text-gold" : "text-danger",
-          )}
-          style={{ textShadow: "0 0 20px rgba(232,193,90,.4)" }}
-        >
-          {job.crit && <Sparkle weight="fill" size={20} />} {critLine}
-          {job.crit && <Sparkle weight="fill" size={20} />}
+      {/* scena 3D na CAŁY ekran (kanwa dice-box montuje się w #dice3d-mount) —
+          kość leci przez pełny obszar, jak w starym froncie. */}
+      <div id={MOUNT_ID} className="absolute inset-0" />
+      {fallback && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <Fallback2D face={job.face} sides={sidesOf(job.notation)} />
         </div>
       )}
 
-      {/* karta wyniku — zwija się do feedu */}
-      {phase === "result" && (
-        <div className="w-full max-w-[360px] animate-fade-in">
-          <RollCard roll={job.card} />
-        </div>
-      )}
+      {/* Warstwa treści nad sceną — nie przechwytuje kliknięć (root łapie „dotknij"). */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-0 px-6 pb-[max(1.5rem,var(--sa-bottom))]">
+        {critLine && phase === "result" && (
+          <div
+            className={cn(
+              "my-1 flex items-center gap-2.5 font-serif text-title-lg font-semibold",
+              job.crit ? "text-gold" : "text-danger",
+            )}
+            style={{ textShadow: "0 0 20px rgba(232,193,90,.4)" }}
+          >
+            {job.crit && <Sparkle weight="fill" size={20} />} {critLine}
+            {job.crit && <Sparkle weight="fill" size={20} />}
+          </div>
+        )}
 
-      <div className="mt-3 flex items-center gap-1.5 font-ui text-[11.5px] text-text-3">
-        <Cube size={13} className="text-ember" />
-        {phase === "rolling" ? "Kość leci…" : "Dotknij, aby kontynuować"}
+        {/* karta wyniku — zwija się do feedu */}
+        {phase === "result" && (
+          <div className="w-full max-w-[360px] animate-fade-in">
+            <RollCard roll={job.card} />
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center gap-1.5 font-ui text-[11.5px] text-text-3">
+          <Cube size={13} className="text-ember" />
+          {phase === "rolling" ? "Kość leci…" : "Dotknij, aby kontynuować"}
+        </div>
       </div>
     </div>
   );
