@@ -368,6 +368,7 @@ export default function Game() {
             onOpenLocal={() => setForceWorldMap(false)}
             onRest={() => onChip({ label: "Odpocznij", text: "REST:long", action: "REST:long" }, shownChips)}
             onCamp={() => onChip({ label: "Rozbij obóz", text: "BUILD_CAMP", action: "BUILD_CAMP" }, shownChips)}
+            onResume={() => onChip({ label: "Kontynuuj podróż", text: "TRAVEL_RESUME", action: "TRAVEL_RESUME" }, shownChips)}
           />
         )
       ) : gameTab === "journal" ? (

@@ -45,9 +45,10 @@ interface Props {
   /** FAZA ML: gdy hub ma mapę lokalną — pokaż przełącznik „Osada". */
   localAvailable?: boolean;
   onOpenLocal?: () => void;
-  /** Akcje bieżącego heksa (kontekstowy modal): odpoczynek / obóz. */
+  /** Akcje bieżącego heksa (kontekstowy modal): odpoczynek / obóz / wznów podróż. */
   onRest?: () => void;
   onCamp?: () => void;
+  onResume?: () => void;
 }
 
 export function WorldMap({
@@ -57,6 +58,7 @@ export function WorldMap({
   onOpenLocal,
   onRest,
   onCamp,
+  onResume,
 }: Props) {
   const setGameTab = useAppStore((s) => s.setGameTab);
   const map = useWorldMap(campaignId, characterId);
@@ -71,6 +73,9 @@ export function WorldMap({
   const canRestHere = restAction?.enabled === true;
   const canCampHere = suggested.data?.suggested_actions?.some(
     (a) => (a.action || a.text) === "BUILD_CAMP",
+  ) ?? false;
+  const canResume = suggested.data?.suggested_actions?.some(
+    (a) => (a.action || a.text) === "TRAVEL_RESUME",
   ) ?? false;
 
   const hexes = map.data?.hexes ?? [];
@@ -89,7 +94,10 @@ export function WorldMap({
   // ── zoom / pan ─────────────────────────────────────────────────────────────
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  // Śledzimy start + czy pointer się ruszył (drag vs klik). BEZ setPointerCapture —
+  // capture przechwytywał `click` na desktopie → klik w heks nie działał.
+  const drag = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
+  const movedRef = useRef(false);
 
   const center = useMemo(() => {
     if (currentHex) return hexToPixel(currentHex.q, currentHex.r);
@@ -109,15 +117,25 @@ export function WorldMap({
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y, sx: e.clientX, sy: e.clientY };
+    movedRef.current = false;
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
+    if (
+      Math.abs(e.clientX - drag.current.sx) > 5 ||
+      Math.abs(e.clientY - drag.current.sy) > 5
+    ) {
+      movedRef.current = true;
+    }
     setPan({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y });
   };
   const onPointerUp = () => {
     drag.current = null;
+    // Reset po cyklu, aby kolejny klik nie był blokowany przez poprzedni drag.
+    requestAnimationFrame(() => {
+      movedRef.current = false;
+    });
   };
   const onWheel = (e: React.WheelEvent) => {
     const next = zoom * (e.deltaY < 0 ? 1.12 : 0.89);
@@ -135,7 +153,11 @@ export function WorldMap({
 
   // Klik w heks otwiera modal opcji: bieżący heks → akcje lokalne (osada/odpoczynek/
   // obóz), inny heks → podróż. „w nieznane" (outline) też dozwolone.
-  const selectHex = (h: WorldHex) => setSelected(h);
+  // Klik (nie drag) w heks otwiera modal. Przeciąganie mapy nie ma otwierać modala.
+  const selectHex = (h: WorldHex) => {
+    if (movedRef.current) return;
+    setSelected(h);
+  };
   const selectedIsCurrent =
     !!selected && !!currentHex && selected.q === currentHex.q && selected.r === currentHex.r;
 
@@ -193,9 +215,9 @@ export function WorldMap({
   const groupTransform = `translate(${VB_W / 2 + pan.x} ${VB_H / 2 + pan.y}) scale(${zoom}) translate(${-center.x} ${-center.y})`;
 
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
       {/* Nagłówek: zegar+pora+lokacja + zamknij (mobile pełna szer.) */}
-      <div className="flex min-h-0 flex-1 flex-col lg:min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header
           className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5"
           style={{ paddingTop: "max(10px, var(--sa-top))" }}
@@ -352,6 +374,14 @@ export function WorldMap({
             {selectedIsCurrent ? (
               // Akcje bieżącego heksa
               <div className="flex flex-col gap-2 p-4">
+                {canResume && onResume && (
+                  <ModalAction
+                    icon={<Path size={18} />}
+                    label="Kontynuuj podróż"
+                    sub="Wznów przerwaną wyprawę do celu"
+                    onClick={() => { setSelected(null); onResume(); }}
+                  />
+                )}
                 {localAvailable && onOpenLocal && (
                   <ModalAction
                     icon={<MapPinSimpleArea size={18} />}
@@ -376,7 +406,7 @@ export function WorldMap({
                     onClick={() => { setSelected(null); onCamp(); }}
                   />
                 )}
-                {!localAvailable && !canRestHere && !canCampHere && (
+                {!canResume && !localAvailable && !canRestHere && !canCampHere && (
                   <p className="py-2 text-center font-ui text-body text-text-3">
                     Brak dostępnych akcji w tym miejscu.
                   </p>

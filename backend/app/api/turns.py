@@ -8387,11 +8387,12 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
         if gs_row and gs_row["session_flags"]:
             sf = json.loads(gs_row["session_flags"] or "{}")
 
-        # Self-heal: drużyna dotarła do bezpiecznej lokacji (safe_for_rest), ale
-        # travel_plan.interrupt_reason został jako stale („dusk"/„forced_camp") →
-        # gra myśli, że wciąż trwa nocny marsz. Skutek: modal/baner przerwania +
-        # pill „Rozbij obóz" (który 409-uje „hex już bezpieczny"). Gdy stoimy w
-        # miejscu safe_for_rest, przerwanie jest bezprzedmiotowe — czyścimy plan.
+        # Self-heal przerwanej podróży w bezpiecznym miejscu (safe_for_rest):
+        #  • DOTARŁ do celu → wyczyść cały travel_plan (podróż skończona).
+        #  • BEZPIECZNA PAUZA po drodze (obóz/karczma, ale nie cel) → zdejmij tylko
+        #    interrupt_reason (modal przestaje wyskakiwać), ale ZACHOWAJ travel_plan,
+        #    by dało się wznowić („Kontynuuj podróż"). Wcześniej kasowaliśmy cały plan
+        #    przy każdym safe miejscu → po Rozbij obóz gubił się cel = brak powrotu.
         tp = sf.get("travel_plan")
         if isinstance(tp, dict) and tp.get("interrupt_reason") and gs_row and gs_row["current_location_id"]:
             loc_safe = conn.execute(
@@ -8399,7 +8400,17 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
                 (gs_row["current_location_id"],),
             ).fetchone()
             if loc_safe and loc_safe["safe_for_rest"]:
-                sf.pop("travel_plan", None)
+                dest = tp.get("destination_hex") or {}
+                cur = sf.get("current_hex") or {}
+                arrived = (
+                    cur.get("q") is not None
+                    and dest.get("q") == cur.get("q")
+                    and dest.get("r") == cur.get("r")
+                )
+                if arrived:
+                    sf.pop("travel_plan", None)
+                else:
+                    tp["interrupt_reason"] = None  # pauza — plan zostaje do wznowienia
                 conn.execute(
                     "UPDATE game_sessions SET session_flags=? WHERE id=?",
                     (json.dumps(sf, ensure_ascii=False), gs_row["id"]),

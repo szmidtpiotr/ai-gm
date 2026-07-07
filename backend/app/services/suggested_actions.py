@@ -162,6 +162,27 @@ def _build_narrative_actions(
     if travel_pills:
         actions.extend(travel_pills[:2])
 
+    # Podróż wstrzymana (po obozie/odpoczynku): interrupt_reason zdjęty, ale cel
+    # nadal w travel_plan → pozwól WZNOWIĆ. Bez tego po „Rozbij obóz→Odpocznij"
+    # gracz nie miał jak wrócić na trasę.
+    _tp = session_flags.get("travel_plan")
+    if (
+        isinstance(_tp, dict)
+        and not _tp.get("interrupt_reason")
+        and (_tp.get("destination_hex") or _tp.get("destination_key"))
+        and len(actions) < MAX_ACTIONS
+    ):
+        _dl = str(_tp.get("destination_label") or "").strip()
+        if _dl.startswith("hex (") or not _dl:
+            _dl = ""
+        actions.insert(0, SuggestedAction(
+            label=f"Kontynuuj podróż{(' → ' + _dl) if _dl else ''}",
+            action="TRAVEL_RESUME",
+            enabled=True,
+            icon="🧭",
+            type="travel",
+        ))
+
     # Bezpieczeństwo liczone raz (potrzebne wcześnie, by REST nie wypadł przez cap).
     current_hex = session_flags.get("current_hex") or {}
     hex_q = current_hex.get("q")
