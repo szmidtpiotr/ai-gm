@@ -73,6 +73,15 @@ export function CombatView({
   const live = combatQ.data?.combat ?? combat;
   const view = useMemo(() => readCombat(live), [live]);
 
+  // HP na pasku żywotności (prawy rail) MUSI zgadzać się z banerem walki: podczas
+  // walki źródłem prawdy jest combatant (sheet_json bywa nieodświeżony do końca
+  // walki). Bez tego rail pokazywał pełne HP mimo obrażeń w walce (rozjazd).
+  const combatVitals = useMemo(() => {
+    const p = view?.player;
+    if (!p || typeof p.hp_current !== "number") return vitals;
+    return { ...vitals, hp: p.hp_current, maxHp: p.hp_max ?? vitals.maxHp };
+  }, [view?.player, vitals]);
+
   const attack = useResolveAttack(campaignId);
   const zoneChange = useZoneChange(campaignId);
   const flee = useFlee(campaignId);
@@ -344,7 +353,7 @@ export function CombatView({
             heroName={character?.name}
           />
         </div>
-        <VitalsRail v={vitals} stats={stats} locationLabel={character?.current_location_label} />
+        <VitalsRail v={combatVitals} stats={stats} locationLabel={character?.current_location_label} />
       </div>
 
       {/* pasek akcji walki + composer prozy (proza działa równolegle) */}
