@@ -246,6 +246,7 @@ function LocalTile({
   const label = hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label) ? hex.label : null;
   return (
     <g onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ cursor: "pointer" }}>
+      <title>{label || "Zakątek osady"}</title>
       <polygon
         points={hexPoints(x, y)}
         fill={fill}
@@ -265,7 +266,21 @@ function LocalTile({
         </text>
       )}
       {!current && label && (
-        <text x={x} y={y + 24} textAnchor="middle" className="font-ui" style={{ fill: "var(--text-2)", fontSize: 8, fontWeight: 600 }}>
+        <text
+          x={x}
+          y={y + 25}
+          textAnchor="middle"
+          className="font-ui"
+          style={{
+            fill: "#f2e8d8",
+            fontSize: 9,
+            fontWeight: 700,
+            stroke: "#0c0906",
+            strokeWidth: 2.6,
+            paintOrder: "stroke",
+            strokeLinejoin: "round",
+          }}
+        >
           {label.length > 16 ? `${label.slice(0, 16)}…` : label}
         </text>
       )}

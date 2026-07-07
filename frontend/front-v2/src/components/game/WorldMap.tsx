@@ -515,12 +515,19 @@ function HexTile({
     opacity = 0.6;
   }
 
+  // Nazwane heksy (osady/landmarki) wyróżniamy: obwódka pod ikoną + jaśniejszy
+  // (złoty) kolor, żeby odcinały się od generycznego terenu.
+  const isNamed = !!hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label);
+  const tooltip = isNamed ? hex.label! : hex.hex_type || "Nieznany teren";
+
   const Icon = terrainIcon(hex.hex_type);
   const iconColor = isCurrent
     ? "var(--ember-glow)"
-    : known
-      ? "#a9c6dd"
-      : "var(--text-2)";
+    : isNamed
+      ? "var(--gold)"
+      : known
+        ? "#a9c6dd"
+        : "var(--text-2)";
 
   return (
     <g
@@ -530,6 +537,8 @@ function HexTile({
       }}
       style={{ cursor: "pointer" }}
     >
+      {/* natywny tooltip po najechaniu (desktop) */}
+      <title>{tooltip}</title>
       <polygon
         points={hexPoints(x, y)}
         fill={fill}
@@ -539,10 +548,22 @@ function HexTile({
         opacity={opacity}
         filter={isCurrent ? "url(#hexglow)" : undefined}
       />
+      {/* obwódka pod ikoną nazwanego heksa — wyróżnienie osady/landmarku */}
+      {isNamed && hasTerrain && !isCurrent && (
+        <circle
+          cx={x}
+          cy={y}
+          r={12}
+          fill="rgba(20,16,12,.55)"
+          stroke="var(--gold)"
+          strokeWidth={1.4}
+          style={{ pointerEvents: "none" }}
+        />
+      )}
       {hasTerrain && (
         <foreignObject x={x - 11} y={y - 11} width={22} height={22} style={{ pointerEvents: "none" }}>
           <div className="flex h-full w-full items-center justify-center">
-            <Icon size={17} color={iconColor} weight={isCurrent ? "fill" : "regular"} />
+            <Icon size={17} color={iconColor} weight={isCurrent || isNamed ? "fill" : "regular"} />
           </div>
         </foreignObject>
       )}
@@ -565,15 +586,24 @@ function HexTile({
           ▸ TU
         </text>
       )}
-      {!isCurrent && hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label) && (
+      {!isCurrent && isNamed && (
         <text
           x={x}
-          y={y + 24}
+          y={y + 25}
           textAnchor="middle"
           className="font-ui"
-          style={{ fill: "var(--text-2)", fontSize: 8, fontWeight: 600 }}
+          style={{
+            fill: "#f2e8d8",
+            fontSize: 9,
+            fontWeight: 700,
+            // halo — ciemny obrys pod tekstem, czytelny na każdym tle
+            stroke: "#0c0906",
+            strokeWidth: 2.6,
+            paintOrder: "stroke",
+            strokeLinejoin: "round",
+          }}
         >
-          {hex.label.length > 16 ? `${hex.label.slice(0, 16)}…` : hex.label}
+          {hex.label!.length > 16 ? `${hex.label!.slice(0, 16)}…` : hex.label}
         </text>
       )}
     </g>

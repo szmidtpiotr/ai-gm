@@ -2056,8 +2056,12 @@ def character_rest(
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        # Hero-First używa 'active', starszy kod 'in_campaign' — akceptuj oba (+ loch).
+        # Bez tego odpoczynek 404-ował „Character not in campaign" dla bohaterów 'active'.
         char = conn.execute(
-            "SELECT id, campaign_id FROM characters WHERE id = ? AND status = 'in_campaign'",
+            "SELECT id, campaign_id FROM characters "
+            "WHERE id = ? AND campaign_id IS NOT NULL "
+            "AND status IN ('in_campaign', 'active', 'in_dungeon')",
             (character_id,),
         ).fetchone()
         if not char:
