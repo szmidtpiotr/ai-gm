@@ -36,6 +36,7 @@ import { VitalsRail } from "@/components/game/Vitals";
 import { GameRail } from "@/components/game/GameRail";
 import { WorldMap } from "@/components/game/WorldMap";
 import { LocalMap } from "@/components/game/LocalMap";
+import { EndedCampaignScreen } from "@/components/game/outcomes/EndedCampaignScreen";
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
@@ -328,6 +329,17 @@ export default function Game() {
       <div className="flex h-full items-center justify-center px-6 text-center font-serif text-prose text-text-2">
         Ta kampania nie ma przypisanego bohatera. Wróć do listy kampanii i wybierz postać.
       </div>
+    );
+  }
+  // Kampania zakończona (śmierć / finisz) — pokaż ekran końca zamiast martwego
+  // czatu (POST /turns zwraca 410). Poza aktywną walką nic tego nie renderowało.
+  if (campaign.data?.status === "ended") {
+    return (
+      <EndedCampaignScreen
+        campaignId={campaignId!}
+        heroId={characterId}
+        character={character.data}
+      />
     );
   }
 
