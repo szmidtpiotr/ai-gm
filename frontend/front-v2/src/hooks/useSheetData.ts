@@ -75,6 +75,46 @@ export function useReputation(characterId: number | undefined) {
   });
 }
 
+export interface InventoryItemDetail {
+  id: number;
+  quantity: number;
+  equipped: number;
+  kind: "weapon" | "consumable" | "item";
+  item_type: string;
+  name: string;
+  description: string | null;
+  value_gp: number;
+  note: string | null;
+  image_url: string | null;
+  durability: { current: number; max: number; pct: number; broken: boolean } | null;
+  weapon?: {
+    damage_die: string | null;
+    linked_stat: string | null;
+    weapon_type: string | null;
+    attack_bonus: number;
+  };
+  consumable?: {
+    effect_type: string | null;
+    effect_value: number | null;
+    effect_dice: string | null;
+  };
+  affixes?: Array<{ key: string; label: string; bonus_stat?: string; bonus_value?: number }>;
+}
+
+/** GET /inventory/{charId}/{invId}/detail — pełny opis przedmiotu (obraz, opis, notatka). */
+export function useInventoryDetail(
+  characterId: number | undefined,
+  inventoryId: number | null,
+) {
+  return useQuery({
+    queryKey: ["inventory-detail", characterId, inventoryId],
+    enabled: !!characterId && inventoryId !== null,
+    queryFn: () =>
+      apiFetch<InventoryItemDetail>(`/inventory/${characterId}/${inventoryId}/detail`),
+    staleTime: 30_000,
+  });
+}
+
 /**
  * POST /inventory/{id}/equip — załóż/zdejmij (slot=null → zdejmij). Po sukcesie
  * unieważnia ekwipunek + arkusz (paski obrony/udźwig zależą od założonych rzeczy).

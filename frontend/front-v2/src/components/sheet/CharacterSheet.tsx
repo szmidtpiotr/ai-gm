@@ -60,6 +60,7 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
           items={inventory.data}
           loading={inventory.isLoading}
           busy={equip.isPending}
+          characterId={characterId}
           onEquip={(id, slot) => equip.mutate({ inventoryId: id, slot })}
         />
       )}

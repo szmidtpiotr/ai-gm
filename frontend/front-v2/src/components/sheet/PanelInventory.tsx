@@ -1,15 +1,18 @@
 // F-55/F-76/F-78 · Ekwipunek — sylwetka Diablo-overlap (itemy nachodzą na ciało),
 // toggle Sylwetka/Lista, plecak grupowany (zużywalne/sprzęt), przedmioty fabularne
-// (collapsible). Equip/zdejmij przez klik. Makieta: zar5-ekwipunek.html.
+// (collapsible). Klik na item otwiera modal z obrazem + opisem wygenerowanym przez backend.
+// Equip/zdejmij dostępny z poziomu modala. Makieta: zar5-ekwipunek.html.
 import { useState } from "react";
 import {
   CaretDown,
   CircleNotch,
   Coins,
+  Info,
   ListBullets,
   Person,
   Scales,
   Scroll,
+  X,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
@@ -23,6 +26,10 @@ import {
 import { readVitals } from "@/lib/game";
 import type { HeroSheet } from "@/lib/types";
 import { SecHead, PanelScroll, itemIcon, SLOT_ICON } from "./sheetUi";
+import {
+  useInventoryDetail,
+  type InventoryItemDetail,
+} from "@/hooks/useSheetData";
 
 // Pozycje slotów na sylwetce (procenty wg makiety zar5) — nachodzą na figurę.
 const DOLL_POS: Record<string, { top: string; left: string; small?: boolean }> = {
@@ -42,19 +49,34 @@ export function PanelInventory({
   loading,
   onEquip,
   busy,
+  characterId,
 }: {
   sheet: HeroSheet | undefined;
   items: InventoryItem[] | undefined;
   loading: boolean;
   onEquip: (inventoryId: number, slot: string | null) => void;
   busy: boolean;
+  characterId: number | undefined;
 }) {
   const [view, setView] = useState<"doll" | "list">("doll");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const v = readVitals(sheet);
   const { equipped, backpack } = splitInventory(items ?? []);
   const bag = groupBackpack(backpack);
   const defense = readDefense(sheet);
   const carry = readCarry(sheet);
+
+  function handleEquipFromModal(detail: InventoryItemDetail) {
+    if (detail.equipped) {
+      onEquip(detail.id, null);
+    } else {
+      const item = items?.find((i) => i.id === detail.id);
+      const slot = item ? targetSlotFor(item) : null;
+      if (slot) onEquip(detail.id, slot);
+    }
+    setSelectedId(null);
+  }
 
   if (loading) {
     return (
@@ -68,91 +90,312 @@ export function PanelInventory({
   }
 
   return (
-    <PanelScroll>
-      {/* Sakiewka: złoto + udźwig */}
-      <div className="mb-4 flex gap-2">
-        <Pouch icon={<Coins weight="fill" size={18} className="text-gold" />} k="Złoto" val={`${v.gold} gp`} />
-        <Pouch icon={<Scales size={18} className="text-gold" />} k="Udźwig" val={carry} />
-      </div>
+    <>
+      <PanelScroll>
+        {/* Sakiewka: złoto + udźwig */}
+        <div className="mb-4 flex gap-2">
+          <Pouch icon={<Coins weight="fill" size={18} className="text-gold" />} k="Złoto" val={`${v.gold} gp`} />
+          <Pouch icon={<Scales size={18} className="text-gold" />} k="Udźwig" val={carry} />
+        </div>
 
-      <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-[380px_1fr]">
-        {/* ── Na ciele ── */}
-        <section className="mb-6">
-          <div className="mb-3 flex items-center gap-2.5">
-            <SecHead>Na ciele</SecHead>
-            <div className="ml-auto flex gap-0.5 rounded-md border border-line bg-bg p-0.5">
-              <ToggleBtn on={view === "doll"} onClick={() => setView("doll")}>
-                <Person size={14} /> Sylwetka
-              </ToggleBtn>
-              <ToggleBtn on={view === "list"} onClick={() => setView("list")}>
-                <ListBullets size={14} /> Lista
-              </ToggleBtn>
-            </div>
-          </div>
-
-          {view === "doll" ? (
-            <Doll equipped={equipped} onEquip={onEquip} busy={busy} />
-          ) : (
-            <EquippedList equipped={equipped} onEquip={onEquip} busy={busy} />
-          )}
-
-          {/* Podsumowanie obrony */}
-          <div className="mx-auto mt-3.5 flex max-w-[340px] overflow-hidden rounded-md border border-line-mech bg-mech-card font-mono lg:max-w-none">
-            <DefCell k="Redukcja" v={String(defense.reduction)} />
-            <DefCell k="Obrona" v={String(defense.base)} />
-            <DefCell k="Inicjat." v={fmtSigned(defense.initiative)} />
-            <DefCell k="Zasięg" v={defense.zone} last />
-          </div>
-        </section>
-
-        {/* ── Plecak + fabularne ── */}
-        <div>
+        <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-[380px_1fr]">
+          {/* ── Na ciele ── */}
           <section className="mb-6">
-            <SecHead>
-              Plecak{" "}
-              <span className="font-normal normal-case tracking-normal text-text-3">
-                {backpack.length} rzeczy
-              </span>
-            </SecHead>
-            {bag.consumables.length > 0 && (
-              <>
-                <SubHead>Zużywalne</SubHead>
-                <Bag items={bag.consumables} onEquip={onEquip} busy={busy} />
-              </>
+            <div className="mb-3 flex items-center gap-2.5">
+              <SecHead>Na ciele</SecHead>
+              <div className="ml-auto flex gap-0.5 rounded-md border border-line bg-bg p-0.5">
+                <ToggleBtn on={view === "doll"} onClick={() => setView("doll")}>
+                  <Person size={14} /> Sylwetka
+                </ToggleBtn>
+                <ToggleBtn on={view === "list"} onClick={() => setView("list")}>
+                  <ListBullets size={14} /> Lista
+                </ToggleBtn>
+              </div>
+            </div>
+
+            {view === "doll" ? (
+              <Doll equipped={equipped} onSelect={setSelectedId} busy={busy} />
+            ) : (
+              <EquippedList equipped={equipped} onSelect={setSelectedId} busy={busy} />
             )}
-            {bag.gear.length > 0 && (
-              <>
-                <SubHead>Sprzęt i broń</SubHead>
-                <Bag items={bag.gear} onEquip={onEquip} busy={busy} />
-              </>
-            )}
-            {backpack.length === 0 && (
-              <p className="rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
-                Plecak jest pusty.
-              </p>
-            )}
+
+            {/* Podsumowanie obrony */}
+            <div className="mx-auto mt-3.5 flex max-w-[340px] overflow-hidden rounded-md border border-line-mech bg-mech-card font-mono lg:max-w-none">
+              <DefCell k="Redukcja" v={String(defense.reduction)} />
+              <DefCell k="Obrona" v={String(defense.base)} />
+              <DefCell k="Inicjat." v={fmtSigned(defense.initiative)} />
+              <DefCell k="Zasięg" v={defense.zone} last />
+            </div>
           </section>
 
-          {bag.lore.length > 0 && (
-            <section>
-              <SecHead>Przedmioty fabularne</SecHead>
-              <LoreGroup label="Zwoje, mapy i listy" items={bag.lore} />
+          {/* ── Plecak + fabularne ── */}
+          <div>
+            <section className="mb-6">
+              <SecHead>
+                Plecak{" "}
+                <span className="font-normal normal-case tracking-normal text-text-3">
+                  {backpack.length} rzeczy
+                </span>
+              </SecHead>
+              {bag.consumables.length > 0 && (
+                <>
+                  <SubHead>Zużywalne</SubHead>
+                  <Bag items={bag.consumables} onSelect={setSelectedId} busy={busy} />
+                </>
+              )}
+              {bag.gear.length > 0 && (
+                <>
+                  <SubHead>Sprzęt i broń</SubHead>
+                  <Bag items={bag.gear} onSelect={setSelectedId} busy={busy} />
+                </>
+              )}
+              {backpack.length === 0 && (
+                <p className="rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
+                  Plecak jest pusty.
+                </p>
+              )}
             </section>
+
+            {bag.lore.length > 0 && (
+              <section>
+                <SecHead>Przedmioty fabularne</SecHead>
+                <LoreGroup label="Zwoje, mapy i listy" items={bag.lore} onSelect={setSelectedId} />
+              </section>
+            )}
+          </div>
+        </div>
+      </PanelScroll>
+
+      {selectedId !== null && (
+        <ItemDetailModal
+          characterId={characterId}
+          inventoryId={selectedId}
+          items={items}
+          busy={busy}
+          onClose={() => setSelectedId(null)}
+          onEquip={handleEquipFromModal}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Modal szczegółów przedmiotu ──────────────────────────────────────────────
+function ItemDetailModal({
+  characterId,
+  inventoryId,
+  items,
+  busy,
+  onClose,
+  onEquip,
+}: {
+  characterId: number | undefined;
+  inventoryId: number;
+  items: InventoryItem[] | undefined;
+  busy: boolean;
+  onClose: () => void;
+  onEquip: (detail: InventoryItemDetail) => void;
+}) {
+  const { data: detail, isLoading } = useInventoryDetail(characterId, inventoryId);
+  const item = items?.find((i) => i.id === inventoryId);
+  const slot = item ? targetSlotFor(item) : null;
+  const isEquipped = !!(detail?.equipped);
+  const canEquip = !!slot || isEquipped;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-sm rounded-t-2xl border border-line bg-surface p-5 shadow-modal sm:rounded-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 text-text-3 hover:text-text"
+          aria-label="Zamknij"
+        >
+          <X size={20} />
+        </button>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-text-3">
+            <CircleNotch className="animate-spin" size={20} />
+            <span className="font-ui text-body">Ładowanie…</span>
+          </div>
+        ) : detail ? (
+          <ItemDetailBody
+            detail={detail}
+            canEquip={canEquip}
+            isEquipped={isEquipped}
+            busy={busy}
+            onEquip={onEquip}
+          />
+        ) : (
+          <p className="py-8 text-center font-serif text-body text-text-3">
+            Brak danych o przedmiocie.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ItemDetailBody({
+  detail,
+  canEquip,
+  isEquipped,
+  busy,
+  onEquip,
+}: {
+  detail: InventoryItemDetail;
+  canEquip: boolean;
+  isEquipped: boolean;
+  busy: boolean;
+  onEquip: (d: InventoryItemDetail) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Obrazek + tytuł */}
+      <div className="flex gap-4">
+        {detail.image_url ? (
+          <img
+            src={detail.image_url}
+            alt={detail.name}
+            className="h-24 w-24 shrink-0 rounded-lg border border-line object-cover shadow-md"
+          />
+        ) : (
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-line bg-bg text-text-3">
+            <Info size={32} />
+          </div>
+        )}
+        <div className="min-w-0">
+          <h2 className="font-serif text-title text-text">{detail.name}</h2>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <ItemKindBadge kind={detail.kind} />
+            {detail.value_gp > 0 && (
+              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-gold">
+                {detail.value_gp} gp
+              </span>
+            )}
+            {detail.quantity > 1 && (
+              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-2">
+                ×{detail.quantity}
+              </span>
+            )}
+          </div>
+          {detail.weapon && (
+            <div className="mt-2 font-mono text-[11px] text-text-2">
+              {detail.weapon.damage_die && <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>}
+              {detail.weapon.linked_stat && <span className="ml-2">cecha: {detail.weapon.linked_stat}</span>}
+              {detail.weapon.attack_bonus !== 0 && (
+                <span className="ml-2">
+                  trafienie: {detail.weapon.attack_bonus > 0 ? "+" : ""}{detail.weapon.attack_bonus}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
-    </PanelScroll>
+
+      {/* Opis fabularny */}
+      {detail.description && (
+        <p className="rounded-md border border-line-soft bg-bg px-3.5 py-3 font-serif text-[13px] leading-relaxed text-text-2">
+          {detail.description}
+        </p>
+      )}
+
+      {/* Nota (zdolności specjalne) */}
+      {detail.note && (
+        <div className="rounded-md border border-line-ember bg-[rgba(255,122,61,0.06)] px-3.5 py-3">
+          <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-ember">
+            Zdolności specjalne
+          </div>
+          <p className="font-serif text-[13px] leading-relaxed text-text-2">{detail.note}</p>
+        </div>
+      )}
+
+      {/* Afiksy */}
+      {detail.affixes && detail.affixes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {detail.affixes.map((a) => (
+            <span
+              key={a.key}
+              className="rounded border border-line bg-bg px-2 py-1 font-mono text-[10px] text-ember-glow"
+            >
+              {a.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Trwałość */}
+      {detail.durability && (
+        <div>
+          <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-text-3">
+            Trwałość
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-line">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                detail.durability.pct < 40 ? "bg-danger" : "bg-ember",
+              )}
+              style={{ width: `${detail.durability.pct}%` }}
+            />
+          </div>
+          <div className="mt-1 font-mono text-[10px] text-text-3">
+            {detail.durability.current}/{detail.durability.max}
+            {detail.durability.broken && (
+              <span className="ml-2 text-danger">zepsuta</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Akcja */}
+      {canEquip && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onEquip(detail)}
+          className={cn(
+            "mt-1 w-full rounded-lg border px-4 py-2.5 font-ui text-[13px] font-semibold transition-colors disabled:opacity-50",
+            isEquipped
+              ? "border-line text-text-2 hover:border-ember hover:text-ember-glow"
+              : "border-ember bg-[rgba(255,122,61,0.12)] text-ember-glow hover:bg-[rgba(255,122,61,0.2)]",
+          )}
+        >
+          {isEquipped ? "Zdejmij" : "Załóż"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ItemKindBadge({ kind }: { kind: string }) {
+  const labels: Record<string, string> = {
+    weapon: "Broń",
+    consumable: "Zużywalne",
+    item: "Przedmiot",
+  };
+  return (
+    <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-ui text-[10px] text-text-3">
+      {labels[kind] ?? kind}
+    </span>
   );
 }
 
 // ── Sylwetka (Diablo-overlap) ────────────────────────────────────────────────
 function Doll({
   equipped,
-  onEquip,
+  onSelect,
   busy,
 }: {
   equipped: EquippedMap;
-  onEquip: (id: number, slot: string | null) => void;
+  onSelect: (id: number) => void;
   busy: boolean;
 }) {
   return (
@@ -178,7 +421,7 @@ function Doll({
             item={it}
             slot={slot}
             pos={pos}
-            onEquip={onEquip}
+            onSelect={onSelect}
             busy={busy}
           />
         );
@@ -192,14 +435,14 @@ function DollSlot({
   item,
   slot,
   pos,
-  onEquip,
+  onSelect,
   busy,
 }: {
   label: string;
   item: InventoryItem | undefined;
   slot: string;
   pos: { top: string; left: string; small?: boolean };
-  onEquip: (id: number, slot: string | null) => void;
+  onSelect: (id: number) => void;
   busy: boolean;
 }) {
   const Icon = item ? itemIcon(item) : SLOT_ICON[slot];
@@ -209,8 +452,8 @@ function DollSlot({
     <button
       type="button"
       disabled={!item || busy}
-      onClick={() => item && onEquip(item.id, null)}
-      title={item ? `${item.label} — kliknij, by zdjąć` : `${label} (pusty)`}
+      onClick={() => item && onSelect(item.id)}
+      title={item ? `${item.label} — kliknij, by zobaczyć szczegóły` : `${label} (pusty)`}
       className={cn(
         "absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[11px] border shadow-[0_3px_12px_rgba(0,0,0,.55)] backdrop-blur-[1px] transition-colors",
         item
@@ -223,7 +466,15 @@ function DollSlot({
       <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-bg px-1 text-[7px] font-bold uppercase tracking-[0.1em] text-text-3">
         {label}
       </span>
-      {Icon && <Icon size={pos.small ? 18 : 24} weight={item ? "regular" : "regular"} />}
+      {item?.image_url ? (
+        <img
+          src={item.image_url}
+          alt={item.label}
+          className="h-full w-full rounded-[10px] object-cover"
+        />
+      ) : (
+        Icon && <Icon size={pos.small ? 18 : 24} weight="regular" />
+      )}
       {dur && (
         <span className="absolute inset-x-1.5 -bottom-[3px] h-[3px] overflow-hidden rounded-[2px] bg-[#3a2a1a]">
           <span
@@ -238,11 +489,11 @@ function DollSlot({
 
 function EquippedList({
   equipped,
-  onEquip,
+  onSelect,
   busy,
 }: {
   equipped: EquippedMap;
-  onEquip: (id: number, slot: string | null) => void;
+  onSelect: (id: number) => void;
   busy: boolean;
 }) {
   return (
@@ -258,8 +509,12 @@ function EquippedList({
               it ? "border-line-soft bg-surface" : "border-dashed border-line-soft bg-transparent opacity-60",
             )}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-line bg-bg text-ember-glow">
-              {Icon && <Icon size={16} />}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-bg text-ember-glow">
+              {it?.image_url ? (
+                <img src={it.image_url} alt={it.label} className="h-full w-full object-cover" />
+              ) : (
+                Icon && <Icon size={16} />
+              )}
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-3">{label}</div>
@@ -269,10 +524,10 @@ function EquippedList({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => onEquip(it.id, null)}
+                onClick={() => onSelect(it.id)}
                 className="shrink-0 rounded-md border border-line px-2.5 py-1 font-ui text-[11px] text-text-2 hover:border-line-ember hover:text-ember-glow disabled:opacity-50"
               >
-                Zdejmij
+                Szczegóły
               </button>
             )}
           </div>
@@ -285,40 +540,45 @@ function EquippedList({
 // ── Plecak (siatka) ──────────────────────────────────────────────────────────
 function Bag({
   items,
-  onEquip,
+  onSelect,
   busy,
 }: {
   items: InventoryItem[];
-  onEquip: (id: number, slot: string | null) => void;
+  onSelect: (id: number) => void;
   busy: boolean;
 }) {
   return (
     <div className="mb-3 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
       {items.map((it) => {
         const Icon = itemIcon(it);
-        const slot = targetSlotFor(it);
-        const equippable = !!slot;
         return (
           <button
             key={it.id}
             type="button"
-            disabled={!equippable || busy}
-            onClick={() => slot && onEquip(it.id, slot)}
-            title={equippable ? `${it.label} — kliknij, by założyć` : it.label}
-            className={cn(
-              "relative flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-line bg-surface p-1 text-center transition-colors",
-              equippable ? "cursor-pointer hover:border-line-ember" : "cursor-default",
-            )}
+            disabled={busy}
+            onClick={() => onSelect(it.id)}
+            title={it.label}
+            className="relative flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-line bg-surface p-1 text-center transition-colors hover:border-line-ember"
           >
             {it.quantity > 1 && (
               <span className="absolute right-0.5 top-0.5 rounded border border-line bg-[rgba(20,16,12,0.9)] px-1 font-mono text-[8.5px] font-semibold text-text">
                 ×{it.quantity}
               </span>
             )}
-            <Icon size={19} className="text-text-2" />
-            <span className="line-clamp-2 text-[8.5px] font-medium leading-tight text-text-3">
-              {it.label}
-            </span>
+            {it.image_url ? (
+              <img
+                src={it.image_url}
+                alt={it.label}
+                className="h-full w-full rounded object-cover"
+              />
+            ) : (
+              <>
+                <Icon size={19} className="text-text-2" />
+                <span className="line-clamp-2 text-[8.5px] font-medium leading-tight text-text-3">
+                  {it.label}
+                </span>
+              </>
+            )}
           </button>
         );
       })}
@@ -326,7 +586,15 @@ function Bag({
   );
 }
 
-function LoreGroup({ label, items }: { label: string; items: InventoryItem[] }) {
+function LoreGroup({
+  label,
+  items,
+  onSelect,
+}: {
+  label: string;
+  items: InventoryItem[];
+  onSelect: (id: number) => void;
+}) {
   return (
     <details className="mb-1.5 overflow-hidden rounded-md border border-line-soft bg-surface" open>
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-2.5 text-label font-semibold text-text-2 [&::-webkit-details-marker]:hidden">
@@ -335,13 +603,15 @@ function LoreGroup({ label, items }: { label: string; items: InventoryItem[] }) 
         <CaretDown size={11} className="ml-auto text-text-3" />
       </summary>
       {items.map((it) => (
-        <div
+        <button
           key={it.id}
-          className="flex items-center gap-2.5 border-t border-line-soft px-3.5 py-2 text-[12.5px] text-text-2"
+          type="button"
+          onClick={() => onSelect(it.id)}
+          className="flex w-full items-center gap-2.5 border-t border-line-soft px-3.5 py-2 text-[12.5px] text-text-2 hover:bg-[rgba(255,255,255,0.03)]"
         >
           {it.label}
           {it.quantity > 1 && <em className="ml-auto text-[11px] not-italic text-text-3">×{it.quantity}</em>}
-        </div>
+        </button>
       ))}
     </details>
   );
