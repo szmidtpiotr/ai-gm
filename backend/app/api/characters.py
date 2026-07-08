@@ -2084,6 +2084,91 @@ def character_rest(
         conn.close()
 
 
+# ── #1290 WAIT-3 — Czekanie (deterministyczny przeskok czasu) ────────────────
+
+_WAIT_VALID_TARGETS = frozenset({
+    "dawn", "day", "dusk", "night",
+    "next_dawn", "next_day", "next_dusk", "next_night",
+})
+_WAIT_MAX_HOURS = 24  # startowa wartość, tunable via game_config_meta
+
+
+@router.post("/characters/{character_id}/wait")
+def character_wait(
+    character_id: int,
+    target: str | None = Query(None, description="Docelowa pora: dawn/dusk/night/day/next_dawn/…"),
+    hours: int | None = Query(None, ge=1, le=_WAIT_MAX_HOURS, description="Alternatywnie: liczba godzin (1-24)"),
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(default=None),
+):
+    """#1290 WAIT-3 — Deterministyczne czekanie do pory dnia lub przez N godzin.
+
+    Wymaga bezpiecznej lokacji (safe_for_rest). Blokowane w trakcie walki.
+    Nie leczy HP/many — to wyłącznie przeskok zegara.
+
+    Returns: {ok, delta_hours, new_clock: {day, hour, hour_str, period, display}}
+    """
+    resolve_authed_user_id(authorization, user_id)
+
+    if not target and not hours:
+        raise HTTPException(status_code=422, detail="Podaj target (pora dnia) lub hours (liczba godzin)")
+    if target and target not in _WAIT_VALID_TARGETS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nieprawidłowy target '{target}'. Dozwolone: {sorted(_WAIT_VALID_TARGETS)}",
+        )
+
+    from app.services.rest_service import _is_safe_for_character, _in_combat
+    from app.services.clock_service import advance_clock, get_clock_state, minutes_to_reach_phase
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, campaign_id FROM characters "
+            "WHERE id = ? AND campaign_id IS NOT NULL "
+            "AND status IN ('in_campaign', 'active', 'in_dungeon')",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not in campaign")
+        campaign_id = int(char["campaign_id"])
+
+        if _in_combat(campaign_id, conn):
+            raise HTTPException(status_code=409, detail="in_combat")
+
+        if not _is_safe_for_character(character_id, campaign_id, conn):
+            raise HTTPException(status_code=400, detail="not_safe_for_rest")
+
+        clock = get_clock_state(campaign_id, conn=conn)
+        if target:
+            delta_min = minutes_to_reach_phase(clock["hour"], target)
+            if delta_min == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Już jesteś w porze '{target}'. Użyj next_{target} by czekać do kolejnego wystąpienia.",
+                )
+        else:
+            delta_min = (hours or 1) * 60
+
+        new_clock = advance_clock(campaign_id, minutes=delta_min, reason="wait", conn=conn)
+        conn.commit()
+
+        return {
+            "ok": True,
+            "delta_hours": new_clock.get("delta_hours", 0),
+            "new_clock": {
+                "day": new_clock["day"],
+                "hour": new_clock["hour"],
+                "hour_str": new_clock["hour_str"],
+                "period": new_clock["period"],
+                "display": new_clock["display"],
+            },
+        }
+    finally:
+        conn.close()
+
+
 # ── #973 R4 — Kowalskie oko: akcja Reperuj (krasnoludy) ──────────────────────
 
 DWARF_REPAIR_COST_GP = 20  # złoto za akcję Reperuj (startowo, tunable)
