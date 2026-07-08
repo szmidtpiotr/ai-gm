@@ -908,7 +908,6 @@ function openPendingWeaponEditModal(item) {
       <div class="form-row"><label class="form-label">Stat bazowy</label>
         <select id="pw-stat" class="field-input">${STATS.map(s=>`<option value="${s}"${(p.linked_stat||'STR')===s?' selected':''}>${s}</option>`).join('')}</select>
       </div>
-      <div class="form-row"><label class="form-label">Bonus ataku</label><input id="pw-atk" class="field-input" type="number" value="${p.attack_bonus??0}"></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pw-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka</label><textarea id="pw-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
     </div>
@@ -933,7 +932,6 @@ async function savePendingWeapon(key, btn) {
     weapon_type: g('pw-type')?.value || 'melee',
     damage_die: dieVal,
     linked_stat: g('pw-stat')?.value || 'STR',
-    attack_bonus: parseInt(g('pw-atk')?.value) || 0,
     description: g('pw-desc')?.value?.trim() || null,
     note: g('pw-note')?.value?.trim() || null,
   };

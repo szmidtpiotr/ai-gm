@@ -226,7 +226,6 @@ class WeaponPatchReq(_BaseModel):
     damage_die: str | None = None
     weapon_type: str | None = None
     linked_stat: str | None = None
-    attack_bonus: int | None = None
     description: str | None = None
     note: str | None = None
 
