@@ -1,6 +1,7 @@
 // F-55/F-76/F-78 · Ekwipunek — sylwetka Diablo-overlap, plecak jako wąskie paski
 // grupowane jak w starym frontendzie: Zużywalne / Sprzęt i broń / Fabularne.
-// Klik na rząd → modal ze zdjęciem + opisem. Inline: Załóż/Użyj.
+// Klik na rząd → modal ze zdjęciem + opisem. Inline: Załóż/Użyj + ✕ usuń.
+// Stacking: identyczne itemy (ten sam key) scalane w jeden rząd z sumą qty.
 // Modal: Załóż/Zdejmij (z live listy), Użyj, Usuń.
 import { useState } from "react";
 import {
@@ -31,6 +32,28 @@ import {
   useDropItem,
   type InventoryItemDetail,
 } from "@/hooks/useSheetData";
+
+// ── Stacking identycznych itemów ─────────────────────────────────────────────
+interface StackedItem extends InventoryItem {
+  allIds: number[];   // wszystkie inventory_id w stosie (drop usuwa pierwszy)
+  totalQty: number;   // suma quantity
+}
+
+function stackItems(items: InventoryItem[]): StackedItem[] {
+  const map = new Map<string, StackedItem>();
+  for (const it of items) {
+    // Klucz stosu: key > label (dla narrative items bez key)
+    const stackKey = (it.key || it.label || String(it.id)).toLowerCase().trim();
+    if (map.has(stackKey)) {
+      const ex = map.get(stackKey)!;
+      ex.allIds.push(it.id);
+      ex.totalQty += it.quantity || 1;
+    } else {
+      map.set(stackKey, { ...it, allIds: [it.id], totalQty: it.quantity || 1 });
+    }
+  }
+  return [...map.values()];
+}
 
 const DOLL_POS: Record<string, { top: string; left: string; small?: boolean }> = {
   head: { top: "11%", left: "50%" },
@@ -163,6 +186,7 @@ export function PanelInventory({
               onSelect={setSelectedId}
               onEquip={onEquip}
               onUse={handleUse}
+              onDrop={handleDrop}
               busy={actionBusy}
             />
           )}
@@ -173,11 +197,12 @@ export function PanelInventory({
               onSelect={setSelectedId}
               onEquip={onEquip}
               onUse={handleUse}
+              onDrop={handleDrop}
               busy={actionBusy}
             />
           )}
           {bag.lore.length > 0 && (
-            <LoreSection items={bag.lore} onSelect={setSelectedId} />
+            <LoreSection items={bag.lore} onSelect={setSelectedId} onDrop={handleDrop} />
           )}
         </section>
       </PanelScroll>
@@ -205,6 +230,7 @@ function BagSection({
   onSelect,
   onEquip,
   onUse,
+  onDrop,
   busy,
 }: {
   label: string;
@@ -212,16 +238,18 @@ function BagSection({
   onSelect: (id: number) => void;
   onEquip: (id: number, slot: string | null) => void;
   onUse: (id: number) => void;
+  onDrop: (id: number) => void;
   busy: boolean;
 }) {
+  const stacked = stackItems(items);
   return (
     <div className="mb-4 mt-3 first:mt-2">
       <div className="mb-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3">
         {label}
       </div>
       <div className="flex flex-col gap-1">
-        {items.map((it) => (
-          <ItemRow key={it.id} it={it} onSelect={onSelect} onEquip={onEquip} onUse={onUse} busy={busy} />
+        {stacked.map((it) => (
+          <ItemRow key={it.id} it={it} onSelect={onSelect} onEquip={onEquip} onUse={onUse} onDrop={onDrop} busy={busy} />
         ))}
       </div>
     </div>
@@ -233,12 +261,14 @@ function ItemRow({
   onSelect,
   onEquip,
   onUse,
+  onDrop,
   busy,
 }: {
-  it: InventoryItem;
+  it: StackedItem;
   onSelect: (id: number) => void;
   onEquip: (id: number, slot: string | null) => void;
   onUse: (id: number) => void;
+  onDrop: (id: number) => void;
   busy: boolean;
 }) {
   const Icon = itemIcon(it);
@@ -246,9 +276,10 @@ function ItemRow({
   const slot = targetSlotFor(it);
   const canEquipInline = !!slot;
   const canUseInline = !!it.can_use;
+  const isQuest = it.item_type === "quest";
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-line bg-surface transition-colors hover:border-line-ember">
+    <div className="flex items-center gap-1 rounded-md border border-line bg-surface transition-colors hover:border-line-ember">
       {/* Klikalna lewa strona → modal */}
       <button
         type="button"
@@ -276,20 +307,20 @@ function ItemRow({
             </span>
           )}
         </span>
-        {it.quantity > 1 && (
+        {it.totalQty > 1 && (
           <span className="shrink-0 rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] font-semibold text-text-2">
-            ×{it.quantity}
+            ×{it.totalQty}
           </span>
         )}
       </button>
 
-      {/* Inline akcja (prawa strona) */}
+      {/* Inline akcja */}
       {canEquipInline && (
         <button
           type="button"
           disabled={busy}
           onClick={() => onEquip(it.id, slot)}
-          className="mr-2 shrink-0 rounded border border-ember/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-ember-glow transition-colors hover:border-ember hover:bg-[rgba(255,122,61,0.12)] disabled:opacity-50"
+          className="shrink-0 rounded border border-ember/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-ember-glow transition-colors hover:border-ember hover:bg-[rgba(255,122,61,0.12)] disabled:opacity-50"
         >
           Załóż
         </button>
@@ -299,9 +330,26 @@ function ItemRow({
           type="button"
           disabled={busy}
           onClick={() => onUse(it.id)}
-          className="mr-2 shrink-0 rounded border border-emerald-700/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-emerald-400 transition-colors hover:bg-[rgba(16,185,129,0.1)] disabled:opacity-50"
+          className="shrink-0 rounded border border-emerald-700/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-emerald-400 transition-colors hover:bg-[rgba(16,185,129,0.1)] disabled:opacity-50"
         >
           Użyj
+        </button>
+      )}
+      {/* ✕ usuń — zawsze widoczny poza quest */}
+      {!isQuest && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            const name = it.label;
+            if (window.confirm(`Wyrzucić „${name}"? Tej operacji nie można cofnąć.`)) {
+              onDrop(it.id);
+            }
+          }}
+          title="Wyrzuć przedmiot"
+          className="mr-1.5 shrink-0 px-1.5 py-1 text-text-3 transition-colors hover:text-danger disabled:opacity-50"
+        >
+          ✕
         </button>
       )}
     </div>
@@ -309,35 +357,49 @@ function ItemRow({
 }
 
 // ── Przedmioty fabularne ─────────────────────────────────────────────────────
-function LoreSection({ items, onSelect }: { items: InventoryItem[]; onSelect: (id: number) => void }) {
+function LoreSection({ items, onSelect, onDrop }: { items: InventoryItem[]; onSelect: (id: number) => void; onDrop: (id: number) => void }) {
+  const stacked = stackItems(items);
   return (
     <div className="mb-4 mt-3">
       <details className="overflow-hidden rounded-md border border-line-soft bg-surface">
         <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 [&::-webkit-details-marker]:hidden">
           Fabularne
-          <span className="font-normal normal-case tracking-normal">({items.length})</span>
+          <span className="font-normal normal-case tracking-normal">({stacked.length})</span>
           <CaretDown size={11} className="ml-auto" />
         </summary>
         <div className="flex flex-col gap-0.5 p-1.5 pt-0">
-          {items.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              onClick={() => onSelect(it.id)}
-              className="flex items-center gap-3 rounded border border-transparent px-2.5 py-2 text-left hover:border-line-soft hover:bg-bg"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
-                {it.image_url ? (
-                  <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                  <Info size={13} />
+          {stacked.map((it) => (
+            <div key={it.id} className="flex items-center gap-1 rounded border border-transparent hover:border-line-soft hover:bg-bg">
+              <button
+                type="button"
+                onClick={() => onSelect(it.id)}
+                className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-left"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
+                  {it.image_url ? (
+                    <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ) : (
+                    <Info size={13} />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">{it.label}</span>
+                {it.totalQty > 1 && (
+                  <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.totalQty}</span>
                 )}
-              </span>
-              <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">{it.label}</span>
-              {it.quantity > 1 && (
-                <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.quantity}</span>
-              )}
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Wyrzucić „${it.label}"? Tej operacji nie można cofnąć.`)) {
+                    onDrop(it.id);
+                  }
+                }}
+                title="Wyrzuć przedmiot"
+                className="mr-1 shrink-0 px-1.5 py-1 text-text-3 transition-colors hover:text-danger"
+              >
+                ✕
+              </button>
+            </div>
           ))}
         </div>
       </details>
