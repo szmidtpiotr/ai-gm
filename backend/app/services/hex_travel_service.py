@@ -392,23 +392,44 @@ def resolve_player_text_to_location_key(
 
 # ── PM3 #1222: known-hex descriptive-travel resolver ──────────────────────────
 
+_VOWELS = frozenset("aeiouąęó")
+
+
+def _vowel_ext_ok(ext: str) -> bool:
+    """True when extension looks like a Polish inflection (short, vowel-start)."""
+    return not ext or (len(ext) <= 3 and ext[0] in _VOWELS)
+
+
 def _fuzzy_prefix_match(cand: str, target: str) -> bool:
     """True when two Polish words share enough of a stem to be the same noun.
 
     Handles declension without a full stemmer: "mostu" ↔ "most", "wioski" ↔
     "wioska", "rzeki" ↔ "rzeka". Prefix either way, else a common-prefix stem of
     at least max(3, 60% of the shorter word).
+
+    Guard: when one word is a prefix of the other, the extension must begin with
+    a vowel (normal inflection like -u/-a/-i/-ą). A consonant-start extension
+    indicates a different morpheme (e.g. "karczmarza" starts with "karczma" but
+    the extension "rza" is a person-noun suffix, not an inflection of the
+    place-noun "karczma"). Same guard applied in the fallthrough common-prefix
+    path when the full shorter word is a prefix of the longer word.
     """
     a, b = _normalize(cand), _normalize(target)
     if not a or not b:
         return False
-    if a.startswith(b) or b.startswith(a):
-        return True
+    if a.startswith(b):
+        return _vowel_ext_ok(a[len(b):])
+    if b.startswith(a):
+        return _vowel_ext_ok(b[len(a):])
     n = 0
     for ca, cb in zip(a, b):
         if ca != cb:
             break
         n += 1
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    # When the full shorter word is a common prefix → same vowel-extension guard.
+    if n == len(shorter):
+        return _vowel_ext_ok(longer[len(shorter):])
     return n >= max(3, int(0.6 * min(len(a), len(b))))
 
 
