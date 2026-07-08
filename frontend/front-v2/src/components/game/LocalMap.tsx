@@ -195,8 +195,9 @@ export function LocalMap({
             )}
             {hexTooltip && (
               <div
-                className="pointer-events-none absolute z-10 max-w-[200px] rounded-lg border border-line bg-surface/95 px-3 py-2 shadow-xl"
+                className="pointer-events-none absolute z-[50] max-w-[200px] rounded-lg border border-line px-3 py-2 shadow-xl"
                 style={{
+                  background: "rgba(30,24,17,0.97)",
                   left: hexTooltip.x,
                   top: hexTooltip.y,
                   transform: [
