@@ -1,7 +1,7 @@
 // F-55/F-76/F-78 · Ekwipunek — sylwetka Diablo-overlap (itemy nachodzą na ciało),
-// toggle Sylwetka/Lista, plecak grupowany (zużywalne/sprzęt), przedmioty fabularne
-// (collapsible). Klik na item otwiera modal z obrazem + opisem wygenerowanym przez backend.
-// Equip/zdejmij dostępny z poziomu modala. Makieta: zar5-ekwipunek.html.
+// toggle Sylwetka/Lista, plecak jako wąskie paski groupowane wg typu (broń/zbroja /
+// zużywalne / przedmioty / fabularne). Klik → modal z obrazem + opisem z backendu.
+// Makieta: zar5-ekwipunek.html.
 import { useState } from "react";
 import {
   CaretDown,
@@ -11,13 +11,11 @@ import {
   ListBullets,
   Person,
   Scales,
-  Scroll,
   X,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
   DOLL_SLOTS,
-  groupBackpack,
   splitInventory,
   targetSlotFor,
   type EquippedMap,
@@ -43,6 +41,38 @@ const DOLL_POS: Record<string, { top: string; left: string; small?: boolean }> =
   feet: { top: "87%", left: "50%" },
 };
 
+// ── Grupowanie plecaka wg item_type ─────────────────────────────────────────
+const WEAPON_TYPES = new Set(["weapon"]);
+const ARMOR_TYPES = new Set(["armor", "shield"]);
+const CONSUMABLE_TYPES = new Set(["consumable", "potion", "food"]);
+const LORE_TYPES = new Set(["quest", "map", "book", "note", "key", "scroll"]);
+
+interface BagSections {
+  weapons: InventoryItem[];
+  armor: InventoryItem[];
+  consumables: InventoryItem[];
+  items: InventoryItem[];
+  lore: InventoryItem[];
+}
+
+function groupByType(backpack: InventoryItem[]): BagSections {
+  const weapons: InventoryItem[] = [];
+  const armor: InventoryItem[] = [];
+  const consumables: InventoryItem[] = [];
+  const items: InventoryItem[] = [];
+  const lore: InventoryItem[] = [];
+  for (const it of backpack) {
+    const t = (it.item_type || "").toLowerCase();
+    if (WEAPON_TYPES.has(t)) weapons.push(it);
+    else if (ARMOR_TYPES.has(t)) armor.push(it);
+    else if (CONSUMABLE_TYPES.has(t)) consumables.push(it);
+    else if (LORE_TYPES.has(t)) lore.push(it);
+    else items.push(it);
+  }
+  return { weapons, armor, consumables, items, lore };
+}
+
+// ── Główny panel ─────────────────────────────────────────────────────────────
 export function PanelInventory({
   sheet,
   items,
@@ -63,7 +93,7 @@ export function PanelInventory({
 
   const v = readVitals(sheet);
   const { equipped, backpack } = splitInventory(items ?? []);
-  const bag = groupBackpack(backpack);
+  const sections = groupByType(backpack);
   const defense = readDefense(sheet);
   const carry = readCarry(sheet);
 
@@ -89,6 +119,8 @@ export function PanelInventory({
     );
   }
 
+  const backpackCount = backpack.length;
+
   return (
     <>
       <PanelScroll>
@@ -98,72 +130,66 @@ export function PanelInventory({
           <Pouch icon={<Scales size={18} className="text-gold" />} k="Udźwig" val={carry} />
         </div>
 
-        <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-[380px_1fr]">
-          {/* ── Na ciele ── */}
-          <section className="mb-6">
-            <div className="mb-3 flex items-center gap-2.5">
-              <SecHead>Na ciele</SecHead>
-              <div className="ml-auto flex gap-0.5 rounded-md border border-line bg-bg p-0.5">
-                <ToggleBtn on={view === "doll"} onClick={() => setView("doll")}>
-                  <Person size={14} /> Sylwetka
-                </ToggleBtn>
-                <ToggleBtn on={view === "list"} onClick={() => setView("list")}>
-                  <ListBullets size={14} /> Lista
-                </ToggleBtn>
-              </div>
+        {/* ── Na ciele ── */}
+        <section className="mb-6">
+          <div className="mb-3 flex items-center gap-2.5">
+            <SecHead>Na ciele</SecHead>
+            <div className="ml-auto flex gap-0.5 rounded-md border border-line bg-bg p-0.5">
+              <ToggleBtn on={view === "doll"} onClick={() => setView("doll")}>
+                <Person size={14} /> Sylwetka
+              </ToggleBtn>
+              <ToggleBtn on={view === "list"} onClick={() => setView("list")}>
+                <ListBullets size={14} /> Lista
+              </ToggleBtn>
             </div>
-
-            {view === "doll" ? (
-              <Doll equipped={equipped} onSelect={setSelectedId} busy={busy} />
-            ) : (
-              <EquippedList equipped={equipped} onSelect={setSelectedId} busy={busy} />
-            )}
-
-            {/* Podsumowanie obrony */}
-            <div className="mx-auto mt-3.5 flex max-w-[340px] overflow-hidden rounded-md border border-line-mech bg-mech-card font-mono lg:max-w-none">
-              <DefCell k="Redukcja" v={String(defense.reduction)} />
-              <DefCell k="Obrona" v={String(defense.base)} />
-              <DefCell k="Inicjat." v={fmtSigned(defense.initiative)} />
-              <DefCell k="Zasięg" v={defense.zone} last />
-            </div>
-          </section>
-
-          {/* ── Plecak + fabularne ── */}
-          <div>
-            <section className="mb-6">
-              <SecHead>
-                Plecak{" "}
-                <span className="font-normal normal-case tracking-normal text-text-3">
-                  {backpack.length} rzeczy
-                </span>
-              </SecHead>
-              {bag.consumables.length > 0 && (
-                <>
-                  <SubHead>Zużywalne</SubHead>
-                  <Bag items={bag.consumables} onSelect={setSelectedId} busy={busy} />
-                </>
-              )}
-              {bag.gear.length > 0 && (
-                <>
-                  <SubHead>Sprzęt i broń</SubHead>
-                  <Bag items={bag.gear} onSelect={setSelectedId} busy={busy} />
-                </>
-              )}
-              {backpack.length === 0 && (
-                <p className="rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
-                  Plecak jest pusty.
-                </p>
-              )}
-            </section>
-
-            {bag.lore.length > 0 && (
-              <section>
-                <SecHead>Przedmioty fabularne</SecHead>
-                <LoreGroup label="Zwoje, mapy i listy" items={bag.lore} onSelect={setSelectedId} />
-              </section>
-            )}
           </div>
-        </div>
+
+          {view === "doll" ? (
+            <Doll equipped={equipped} onSelect={setSelectedId} busy={busy} />
+          ) : (
+            <EquippedList equipped={equipped} onSelect={setSelectedId} busy={busy} />
+          )}
+
+          {/* Podsumowanie obrony */}
+          <div className="mx-auto mt-3.5 flex max-w-[340px] overflow-hidden rounded-md border border-line-mech bg-mech-card font-mono lg:max-w-none">
+            <DefCell k="Redukcja" v={String(defense.reduction)} />
+            <DefCell k="Obrona" v={String(defense.base)} />
+            <DefCell k="Inicjat." v={fmtSigned(defense.initiative)} />
+            <DefCell k="Zasięg" v={defense.zone} last />
+          </div>
+        </section>
+
+        {/* ── Plecak ── */}
+        <section>
+          <SecHead>
+            Plecak{" "}
+            <span className="font-normal normal-case tracking-normal text-text-3">
+              {backpackCount} {backpackCount === 1 ? "rzecz" : "rzeczy"}
+            </span>
+          </SecHead>
+
+          {backpackCount === 0 && (
+            <p className="mt-2 rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
+              Plecak jest pusty.
+            </p>
+          )}
+
+          {sections.weapons.length > 0 && (
+            <ItemSection label="Broń" items={sections.weapons} onSelect={setSelectedId} busy={busy} />
+          )}
+          {sections.armor.length > 0 && (
+            <ItemSection label="Zbroja i tarcze" items={sections.armor} onSelect={setSelectedId} busy={busy} />
+          )}
+          {sections.consumables.length > 0 && (
+            <ItemSection label="Zużywalne" items={sections.consumables} onSelect={setSelectedId} busy={busy} />
+          )}
+          {sections.items.length > 0 && (
+            <ItemSection label="Przedmioty" items={sections.items} onSelect={setSelectedId} busy={busy} />
+          )}
+          {sections.lore.length > 0 && (
+            <LoreSection items={sections.lore} onSelect={setSelectedId} />
+          )}
+        </section>
       </PanelScroll>
 
       {selectedId !== null && (
@@ -177,6 +203,132 @@ export function PanelInventory({
         />
       )}
     </>
+  );
+}
+
+// ── Sekcja plecaka (wąskie paski) ────────────────────────────────────────────
+function ItemSection({
+  label,
+  items,
+  onSelect,
+  busy,
+}: {
+  label: string;
+  items: InventoryItem[];
+  onSelect: (id: number) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="mb-1.5 mt-3 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 first:mt-0">
+        {label}
+      </div>
+      <div className="flex flex-col gap-1">
+        {items.map((it) => (
+          <ItemRow key={it.id} it={it} onSelect={onSelect} busy={busy} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ItemRow({
+  it,
+  onSelect,
+  busy,
+}: {
+  it: InventoryItem;
+  onSelect: (id: number) => void;
+  busy: boolean;
+}) {
+  const Icon = itemIcon(it);
+  const dur = it.durability;
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onSelect(it.id)}
+      title={it.label}
+      className="flex w-full cursor-pointer items-center gap-3 rounded-md border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-ember hover:bg-[rgba(255,122,61,0.04)] disabled:opacity-50"
+    >
+      {/* Miniaturka 32×32 */}
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
+        {it.image_url ? (
+          <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <Icon size={16} />
+        )}
+      </span>
+
+      {/* Nazwa */}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-ui text-[13px] font-medium text-text">
+          {it.label}
+        </span>
+        {dur && (
+          <span className="mt-1 block h-[3px] w-full overflow-hidden rounded-full bg-line">
+            <span
+              className={cn("block h-full rounded-full", dur.pct < 40 ? "bg-danger" : "bg-ember-glow")}
+              style={{ width: `${dur.pct}%` }}
+            />
+          </span>
+        )}
+      </span>
+
+      {/* Liczba sztuk */}
+      {it.quantity > 1 && (
+        <span className="shrink-0 rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] font-semibold text-text-2">
+          ×{it.quantity}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ── Przedmioty fabularne (collapsible) ───────────────────────────────────────
+function LoreSection({
+  items,
+  onSelect,
+}: {
+  items: InventoryItem[];
+  onSelect: (id: number) => void;
+}) {
+  return (
+    <div className="mb-4">
+      <details className="overflow-hidden rounded-md border border-line-soft bg-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 [&::-webkit-details-marker]:hidden">
+          Fabularne
+          <span className="ml-1 font-normal normal-case tracking-normal text-text-3">
+            ({items.length})
+          </span>
+          <CaretDown size={11} className="ml-auto text-text-3" />
+        </summary>
+        <div className="flex flex-col gap-1 p-1.5 pt-0">
+          {items.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => onSelect(it.id)}
+              className="flex items-center gap-3 rounded border border-transparent px-2.5 py-2 text-left hover:border-line-soft hover:bg-bg"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
+                {it.image_url ? (
+                  <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <Info size={13} />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">
+                {it.label}
+              </span>
+              {it.quantity > 1 && (
+                <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.quantity}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -288,9 +440,13 @@ function ItemDetailBody({
           </div>
           {detail.weapon && (
             <div className="mt-2 font-mono text-[11px] text-text-2">
-              {detail.weapon.damage_die && <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>}
-              {detail.weapon.linked_stat && <span className="ml-2">cecha: {detail.weapon.linked_stat}</span>}
-              {detail.weapon.attack_bonus !== 0 && (
+              {detail.weapon.damage_die && (
+                <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>
+              )}
+              {detail.weapon.linked_stat && (
+                <span className="ml-2">cecha: {detail.weapon.linked_stat}</span>
+              )}
+              {!!detail.weapon.attack_bonus && (
                 <span className="ml-2">
                   trafienie: {detail.weapon.attack_bonus > 0 ? "+" : ""}{detail.weapon.attack_bonus}
                 </span>
@@ -380,6 +536,7 @@ function ItemKindBadge({ kind }: { kind: string }) {
     weapon: "Broń",
     consumable: "Zużywalne",
     item: "Przedmiot",
+    armor: "Zbroja",
   };
   return (
     <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-ui text-[10px] text-text-3">
@@ -407,7 +564,6 @@ function Doll({
           "radial-gradient(58% 42% at 50% 26%, rgba(255,122,61,.14), transparent 68%), linear-gradient(180deg,#241a11,#171009)",
       }}
     >
-      {/* figura */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <Person weight="fill" size={260} className="max-h-[80%] max-w-[80%] text-[rgba(255,190,140,0.16)]" />
       </div>
@@ -467,11 +623,7 @@ function DollSlot({
         {label}
       </span>
       {item?.image_url ? (
-        <img
-          src={item.image_url}
-          alt={item.label}
-          className="h-full w-full rounded-[10px] object-cover"
-        />
+        <img src={item.image_url} alt={item.label} className="h-full w-full rounded-[10px] object-cover" />
       ) : (
         Icon && <Icon size={pos.small ? 18 : 24} weight="regular" />
       )}
@@ -490,14 +642,13 @@ function DollSlot({
 function EquippedList({
   equipped,
   onSelect,
-  busy,
 }: {
   equipped: EquippedMap;
   onSelect: (id: number) => void;
   busy: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       {DOLL_SLOTS.map(({ slot, label }) => {
         const it = equipped[slot];
         const Icon = it ? itemIcon(it) : SLOT_ICON[slot];
@@ -505,11 +656,15 @@ function EquippedList({
           <div
             key={slot}
             className={cn(
-              "flex items-center gap-3 rounded-md border px-3 py-2.5",
-              it ? "border-line-soft bg-surface" : "border-dashed border-line-soft bg-transparent opacity-60",
+              "flex items-center gap-3 rounded-md border px-3 py-2",
+              it
+                ? "cursor-pointer border-line-soft bg-surface hover:border-line-ember"
+                : "border-dashed border-line-soft bg-transparent opacity-50",
             )}
+            onClick={() => it && onSelect(it.id)}
+            role={it ? "button" : undefined}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-bg text-ember-glow">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-ember-glow">
               {it?.image_url ? (
                 <img src={it.image_url} alt={it.label} className="h-full w-full object-cover" />
               ) : (
@@ -518,102 +673,15 @@ function EquippedList({
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-3">{label}</div>
-              <div className="truncate text-label font-medium text-text">{it?.label ?? "— pusty —"}</div>
+              <div className="truncate font-ui text-[13px] font-medium text-text">{it?.label ?? "— pusty —"}</div>
             </div>
             {it && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onSelect(it.id)}
-                className="shrink-0 rounded-md border border-line px-2.5 py-1 font-ui text-[11px] text-text-2 hover:border-line-ember hover:text-ember-glow disabled:opacity-50"
-              >
-                Szczegóły
-              </button>
+              <span className="shrink-0 font-ui text-[10px] text-text-3">›</span>
             )}
           </div>
         );
       })}
     </div>
-  );
-}
-
-// ── Plecak (siatka) ──────────────────────────────────────────────────────────
-function Bag({
-  items,
-  onSelect,
-  busy,
-}: {
-  items: InventoryItem[];
-  onSelect: (id: number) => void;
-  busy: boolean;
-}) {
-  return (
-    <div className="mb-3 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-      {items.map((it) => {
-        const Icon = itemIcon(it);
-        return (
-          <button
-            key={it.id}
-            type="button"
-            disabled={busy}
-            onClick={() => onSelect(it.id)}
-            title={it.label}
-            className="relative flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-line bg-surface p-1 text-center transition-colors hover:border-line-ember"
-          >
-            {it.quantity > 1 && (
-              <span className="absolute right-0.5 top-0.5 rounded border border-line bg-[rgba(20,16,12,0.9)] px-1 font-mono text-[8.5px] font-semibold text-text">
-                ×{it.quantity}
-              </span>
-            )}
-            {it.image_url ? (
-              <img
-                src={it.image_url}
-                alt={it.label}
-                className="h-full w-full rounded object-cover"
-              />
-            ) : (
-              <>
-                <Icon size={19} className="text-text-2" />
-                <span className="line-clamp-2 text-[8.5px] font-medium leading-tight text-text-3">
-                  {it.label}
-                </span>
-              </>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function LoreGroup({
-  label,
-  items,
-  onSelect,
-}: {
-  label: string;
-  items: InventoryItem[];
-  onSelect: (id: number) => void;
-}) {
-  return (
-    <details className="mb-1.5 overflow-hidden rounded-md border border-line-soft bg-surface" open>
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-2.5 text-label font-semibold text-text-2 [&::-webkit-details-marker]:hidden">
-        <Scroll size={15} className="text-ember" />
-        {label} ({items.length})
-        <CaretDown size={11} className="ml-auto text-text-3" />
-      </summary>
-      {items.map((it) => (
-        <button
-          key={it.id}
-          type="button"
-          onClick={() => onSelect(it.id)}
-          className="flex w-full items-center gap-2.5 border-t border-line-soft px-3.5 py-2 text-[12.5px] text-text-2 hover:bg-[rgba(255,255,255,0.03)]"
-        >
-          {it.label}
-          {it.quantity > 1 && <em className="ml-auto text-[11px] not-italic text-text-3">×{it.quantity}</em>}
-        </button>
-      ))}
-    </details>
   );
 }
 
@@ -650,14 +718,6 @@ function ToggleBtn({
     >
       {children}
     </button>
-  );
-}
-
-function SubHead({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-2 mt-3.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 first:mt-0">
-      {children}
-    </div>
   );
 }
 
