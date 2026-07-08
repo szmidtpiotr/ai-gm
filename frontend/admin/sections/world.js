@@ -807,6 +807,15 @@ function openPendingEnemyEditModal(item) {
       <div class="form-row"><label class="form-label">Drop %</label><input id="pe-drop" class="field-input" type="number" min="0" max="100" value="${p.drop_chance!=null?Math.round(p.drop_chance*100):''}"></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pe-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
       <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="pe-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
+      <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;margin-top:2px">
+        <label class="form-label">Łup (${_esc(p.loot_table_key||'—')})</label>
+        <input type="hidden" id="pe-loot-key" value="${_esc(p.loot_table_key||'')}">
+        <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+          <div><label class="form-label" style="font-size:0.68rem">Złoto min</label><input id="pe-gmin" class="field-input" type="number" min="0" style="width:80px" value="${p.loot_gold_min??0}"></div>
+          <div><label class="form-label" style="font-size:0.68rem">Złoto max</label><input id="pe-gmax" class="field-input" type="number" min="0" style="width:80px" value="${p.loot_gold_max??0}"></div>
+          <button type="button" class="btn btn-secondary" id="pe-loot-btn" ${p.loot_table_key?'':'disabled'} onclick="window._worldOpenLootEntries('${_esc(p.loot_table_key||'')}','${_esc(p.label||p.key)}')">🎁 Wpisy łupu (<span id="pe-loot-count">${p.loot_entries_count??0}</span>)</button>
+        </div>
+      </div>
     </div>
     <div class="modal-foot" style="flex-wrap:wrap;gap:6px">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
@@ -844,8 +853,14 @@ async function savePendingEnemy(key, btn) {
     description: g('pe-desc')?.value?.trim() || null,
     note: g('pe-note')?.value?.trim() || null,
   };
+  const lootTableKey = g('pe-loot-key')?.value?.trim();
   try {
     await apiFetch(`/api/admin/enemies/${key}`, { method: 'PATCH', body: JSON.stringify(body) });
+    if (lootTableKey) {
+      const gMin = parseInt(g('pe-gmin')?.value, 10) || 0;
+      const gMax = parseInt(g('pe-gmax')?.value, 10) || 0;
+      await apiFetch(`/api/admin/loot-tables/${lootTableKey}`, { method: 'PATCH', body: JSON.stringify({ gold_min: gMin, gold_max: gMax }) });
+    }
     await apiFetch(`/api/admin/world/review/enemy/${key}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) });
     btn.closest('.modal-overlay').remove();
     _loaded.delete('pending'); _loaded.delete('enemies');

@@ -12,6 +12,7 @@ Handles:
 from __future__ import annotations
 
 import json
+import random
 import re
 import sqlite3
 import structlog
@@ -410,6 +411,7 @@ def _get_or_create_enemy(
         )
         conn.commit()
         logger.info("create_enemy_tag_processed", key=key, campaign_id=campaign_id)
+        _auto_populate_enemy_loot(conn, key, tier, name)
         return {"key": key, "label": name, "tier": tier, "review_status": "pending_review"}
     except Exception as e:
         logger.warning("create_enemy_failed", key=key, error=str(e))
@@ -1115,11 +1117,16 @@ def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, tier, hp_base, ac_base, attack_bonus, dex_modifier,
-                      damage_die, damage_type, xp_award, drop_chance, min_level,
-                      description, note, image_url, review_status, created_at
-               FROM game_config_enemies WHERE review_status = 'pending_review'
-               ORDER BY rowid DESC LIMIT 100"""
+            """SELECT e.key, e.label, e.tier, e.hp_base, e.ac_base, e.attack_bonus, e.dex_modifier,
+                      e.damage_die, e.damage_type, e.xp_award, e.drop_chance, e.min_level,
+                      e.description, e.note, e.image_url, e.review_status, e.created_at,
+                      e.loot_table_key, lt.gold_min AS loot_gold_min, lt.gold_max AS loot_gold_max,
+                      (SELECT COUNT(*) FROM game_config_loot_entries le
+                        WHERE le.loot_table_key = e.loot_table_key) AS loot_entries_count
+               FROM game_config_enemies e
+               LEFT JOIN game_config_loot_tables lt ON lt.key = e.loot_table_key
+               WHERE e.review_status = 'pending_review'
+               ORDER BY e.rowid DESC LIMIT 100"""
         ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
@@ -1137,7 +1144,10 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
     try:
         conn.execute(f"UPDATE {table} SET review_status = 'permanent' WHERE key = ?", (key,))
         if entity_type == "enemy":
-            _ensure_enemy_loot_table(conn, key)
+            # Safety net for pending enemies created before auto-loot existed at
+            # tag-creation time — no-ops if entries are already there.
+            erow = conn.execute("SELECT tier, label FROM game_config_enemies WHERE key = ?", (key,)).fetchone()
+            _auto_populate_enemy_loot(conn, key, (erow["tier"] if erow else None) or "standard", (erow["label"] if erow else key) or key)
         if entity_type == "weapon":
             # Approve globally: clear campaign_id so weapon is available everywhere
             conn.execute(
@@ -1199,6 +1209,112 @@ def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
         )
     except Exception:
         pass
+
+
+# Starting values (Numbers Policy — Sandbox-tunable, see #1284 loot auto-population).
+# rarity band + gold range sampled from the existing catalog per enemy tier so a
+# freshly LLM-created enemy has a non-empty loot table before an admin ever looks at it.
+_ENEMY_LOOT_TIER_CONFIG = {
+    "weak":     {"rarity": (1, 1), "gold": (1, 5),    "weapon_chance": 0.0,  "n_entries": 2},
+    "standard": {"rarity": (1, 2), "gold": (5, 15),   "weapon_chance": 0.15, "n_entries": 2},
+    "elite":    {"rarity": (2, 3), "gold": (15, 40),  "weapon_chance": 0.35, "n_entries": 3},
+    "boss":     {"rarity": (3, 5), "gold": (40, 100), "weapon_chance": 0.6,  "n_entries": 3},
+}
+
+
+def _auto_populate_enemy_loot(conn: sqlite3.Connection, enemy_key: str, tier: str, label: str) -> None:
+    """Heuristically fill a freshly-created enemy's loot table from the existing
+    item/consumable/weapon catalog, matched by rarity band to the enemy tier.
+    No LLM call — deterministic-cost, safe to run inline during tag processing.
+    Idempotent: no-ops if the loot table already has entries (never clobbers
+    admin edits on re-approve or duplicate tag processing)."""
+    try:
+        cfg = _ENEMY_LOOT_TIER_CONFIG.get(tier, _ENEMY_LOOT_TIER_CONFIG["standard"])
+        _ensure_enemy_loot_table(conn, enemy_key)
+        row = conn.execute(
+            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?", (enemy_key,)
+        ).fetchone()
+        lt_key = row["loot_table_key"] if row else None
+        if not lt_key:
+            return
+
+        existing = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_config_loot_entries WHERE loot_table_key = ?", (lt_key,)
+        ).fetchone()
+        if existing and existing["n"] > 0:
+            return
+
+        gold_row = conn.execute(
+            "SELECT gold_min, gold_max FROM game_config_loot_tables WHERE key = ?", (lt_key,)
+        ).fetchone()
+        if gold_row and (gold_row["gold_min"] or 0) == 0 and (gold_row["gold_max"] or 0) == 0:
+            g_min, g_max = cfg["gold"]
+            conn.execute(
+                "UPDATE game_config_loot_tables SET gold_min = ?, gold_max = ? WHERE key = ?",
+                (g_min, g_max, lt_key),
+            )
+        # upsert_loot_entry() below opens its own connection — commit first so it
+        # can see the loot table row we just ensured/updated on `conn`.
+        conn.commit()
+
+        r_min, r_max = cfg["rarity"]
+        pool = conn.execute(
+            """
+            SELECT * FROM (
+                SELECT key, 'item' AS src FROM game_config_items
+                WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                  AND COALESCE(review_status,'permanent') = 'permanent'
+                  AND item_type NOT IN ('quest', 'narrative')
+                  AND rarity BETWEEN ? AND ?
+                UNION ALL
+                SELECT key, 'consumable' AS src FROM game_config_consumables
+                WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                  AND rarity BETWEEN ? AND ?
+            ) ORDER BY RANDOM() LIMIT 20
+            """,
+            (r_min, r_max, r_min, r_max),
+        ).fetchall()
+        candidates = [dict(r) for r in pool]
+
+        if candidates and random.random() < cfg["weapon_chance"]:
+            wrow = conn.execute(
+                """SELECT key FROM game_config_weapons
+                   WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                     AND COALESCE(review_status,'permanent') = 'permanent'
+                     AND rarity BETWEEN ? AND ?
+                   ORDER BY RANDOM() LIMIT 1""",
+                (r_min, r_max),
+            ).fetchone()
+            if wrow:
+                candidates = candidates[: cfg["n_entries"] - 1] + [{"key": wrow["key"], "src": "weapon"}]
+
+        weights = [45, 30, 20, 15]
+        from app.services.admin_config import upsert_loot_entry
+
+        for i, cand in enumerate(candidates[: cfg["n_entries"]]):
+            kwargs = {"item_key": None, "consumable_key": None, "weapon_key": None}
+            if cand["src"] == "item":
+                kwargs["item_key"] = cand["key"]
+            elif cand["src"] == "consumable":
+                kwargs["consumable_key"] = cand["key"]
+            else:
+                kwargs["weapon_key"] = cand["key"]
+            try:
+                upsert_loot_entry(
+                    lt_key,
+                    weight=weights[i] if i < len(weights) else 15,
+                    qty_min=1,
+                    qty_max=1,
+                    **kwargs,
+                )
+            except ValueError:
+                continue
+        logger.info(
+            "enemy_loot_auto_populated", enemy_key=enemy_key, loot_table_key=lt_key,
+            tier=tier, n_entries=min(len(candidates), cfg["n_entries"]),
+        )
+    except Exception as e:
+        logger.warning("enemy_loot_auto_populate_failed", enemy_key=enemy_key, error=str(e))
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
