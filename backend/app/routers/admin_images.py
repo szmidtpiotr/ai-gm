@@ -703,6 +703,20 @@ class ItemGenerateRequest(BaseModel):
     prompt: str | None = None  # custom prompt override; None → LLM builds from item metadata
 
 
+@router.get("/item/missing")
+async def list_items_missing_images():
+    """List active items without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT key, label, item_type, description, image_url, image_gen_prompt "
+            "FROM game_config_items "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY key"
+        ).fetchall()
+    return {"items": [dict(r) for r in rows], "count": len(rows)}
+
+
 @router.post("/item/{key}/generate")
 async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=None)):
     """Generate icon for an item. Saves image_url + image_gen_prompt to DB.
