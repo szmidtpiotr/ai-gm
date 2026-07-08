@@ -566,10 +566,19 @@ Masz dwa pola (użyj JEDNEGO, w zależności od deklaracji gracza):
 1. `advance_to_time_of_day` (string) — docelowa pora dnia. Użyj gdy gracz czeka
    "do zmroku / świtu / nocy / rana". Silnik sam policzy, ile czasu minie, i
    trafi dokładnie w tę porę. Dozwolone wartości:
+
+   Standardowe (przeskakują do BIEŻĄCEJ pory — jeśli już jesteś w tej porze, brak skoku):
    - `dawn`  — rano / świt
    - `day`   — południe / popołudnie
    - `dusk`  — zmrok / wieczór
    - `night` — noc
+
+   Wariant "następny" (zawsze skacze do KOLEJNEGO wystąpienia pory, nawet jeśli
+   jesteś w niej teraz — użyj gdy gracz mówi "do następnego świtu / jutra rana"):
+   - `next_dawn`  — do następnego świtu (jutro rano)
+   - `next_dusk`  — do następnego zmroku
+   - `next_night` — do następnej nocy
+   - `next_day`   — do następnego dnia (południe)
 
 2. `time_advance_minutes` (liczba 0–1440) — surowa liczba minut gry, gdy czas
    mija bez konkretnej pory docelowej:
@@ -583,6 +592,15 @@ Przykład — gracz: "czekam pod murem do zmroku":
   "narrative": "Siadasz w cieniu muru i czekasz. Słońce powoli opada, cienie się wydłużają, aż niebo przybiera barwy zmroku...",
   "location_intent": null,
   "advance_to_time_of_day": "dusk"
+}
+```
+
+Przykład — gracz: "czekam do następnego świtu" (gracz jest rano → chce poczekać do JUTRA):
+```json
+{
+  "narrative": "Zamawiasz kolejny kufel i siedzisz w karczmie. Godziny mijają powoli, wieczór przechodzi w noc, aż wreszcie blade światło świtu sączy się przez okiennice...",
+  "location_intent": null,
+  "advance_to_time_of_day": "next_dawn"
 }
 ```
 

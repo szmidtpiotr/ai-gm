@@ -88,22 +88,45 @@ _PHASE_ALIASES = {
     "zmrok": "dusk", "wieczór": "dusk", "wieczor": "dusk",
     "zachód": "dusk", "zachod": "dusk", "zmierzch": "dusk",
     "noc": "night", "północ": "night", "polnoc": "night",
+    # #1289 — "next occurrence" variants: always jump to the NEXT cycle even when
+    # already inside the target phase (e.g. waiting at dawn for tomorrow's dawn).
+    "next_dawn": "dawn", "next_day": "day", "next_dusk": "dusk", "next_night": "night",
+    "następny świt": "dawn", "nastepny swit": "dawn",
+    "następny zmrok": "dusk", "nastepny zmrok": "dusk",
 }
+
+# Aliases that force next-occurrence semantics regardless of current phase.
+_NEXT_OCCURRENCE_ALIASES: frozenset[str] = frozenset({
+    "next_dawn", "next_day", "next_dusk", "next_night",
+    "następny świt", "nastepny swit",
+    "następny zmrok", "nastepny zmrok",
+})
 
 
 def minutes_to_reach_phase(current_hour: int, target: str) -> int:
     """Minutes to fast-forward from `current_hour` (0–23) to the start of the
-    target time-of-day phase. Returns 0 when the target is unknown or we are
-    already inside that phase (no jump needed)."""
+    target time-of-day phase.
+
+    Returns 0 when target is unknown.
+    Returns 0 when already inside the target phase (standard aliases) — no jump needed.
+    Returns minutes-to-next-occurrence when using a next_* alias (#1289) — always jumps
+    to the START of the phase in the next 24h cycle even if already in that phase.
+    """
     from app.services.time_of_day_service import get_time_of_day_phase
 
-    key = _PHASE_ALIASES.get(str(target or "").strip().lower())
+    raw = str(target or "").strip().lower()
+    force_next = raw in _NEXT_OCCURRENCE_ALIASES
+    key = _PHASE_ALIASES.get(raw)
     if not key:
         return 0
     cur = int(current_hour) % 24
-    if get_time_of_day_phase(cur) == key:
+    if not force_next and get_time_of_day_phase(cur) == key:
         return 0
     delta_hours = (_PHASE_START_HOUR[key] - cur) % 24
+    # If cur is exactly at phase start and we're not forcing next, delta==0 means "here".
+    # If forcing next and delta==0 (exactly at phase boundary), advance full 24h.
+    if delta_hours == 0:
+        delta_hours = 24
     return delta_hours * 60
 
 
