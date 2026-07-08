@@ -199,6 +199,7 @@ class ContextInjector:
                 self._build_world_block(session_flags, ingame_hours, player_message, campaign_id),
                 self._build_stale_block(session_flags),
                 self._build_entities_block(npcs, combat_roster),
+                self._build_plan_enemy_keys_block(campaign_id),
                 self._build_mechanic_block(action_type, mechanic_result),
                 self._build_character_state_block(character, active_conditions),
                 self._build_tone_block(tone),
@@ -598,6 +599,68 @@ class ContextInjector:
         if not has_content:
             lines.append("Brak postaci w tej lokacji.")
 
+        return "\n".join(lines)
+
+    def _build_plan_enemy_keys_block(self, campaign_id: int) -> str:
+        """#1284 — surface this campaign's plan-specific enemy keys to the narrator.
+
+        The static system_prompt only lists 10 generic keys and forbids inventing
+        new ones. Named plan bosses (materialized into game_config_enemies by
+        materialize_plan_enemies) would otherwise be unreachable — the LLM would map
+        them onto a generic key. Listing the real, playable keys here lets the
+        narrator emit [COMBAT_START:<key>] for the actual boss so _fetch_enemy_row
+        resolves the full stat block + loot instead of a 12HP/11AC stand-in.
+
+        Only keys that actually exist and are active in game_config_enemies are
+        listed, so we never point the narrator at a non-playable key.
+        """
+        try:
+            row = self.conn.execute(
+                "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            if not row or not row[0]:
+                return ""
+            plan = json.loads(row[0])
+            plan_enemies = plan.get("key_enemies") or []
+            if not plan_enemies:
+                return ""
+            keys = [str(e.get("key") or "").strip() for e in plan_enemies if isinstance(e, dict)]
+            keys = [k for k in keys if k]
+            if not keys:
+                return ""
+            placeholders = ",".join("?" for _ in keys)
+            live = {
+                r["key"]: dict(r)
+                for r in self.conn.execute(
+                    f"""SELECT key, label, tier FROM game_config_enemies
+                        WHERE key IN ({placeholders}) AND COALESCE(is_active, 1) = 1""",
+                    keys,
+                ).fetchall()
+            }
+            if not live:
+                return ""
+        except Exception:
+            return ""
+
+        lines = [
+            "=== WROGOWIE TEJ KAMPANII (dodatkowe DOZWOLONE klucze [COMBAT_START]) ===",
+            "Oprócz standardowych kluczy z kontraktu, w TEJ kampanii możesz też użyć "
+            "poniższych — to konkretni, nazwani przeciwnicy z planu. Gdy walka dotyczy "
+            "którejś z tych postaci, użyj DOKŁADNIE jej klucza (nie mapuj na generyczny "
+            "typ, nie wymyślaj wariantu):",
+        ]
+        for e in plan_enemies:
+            if not isinstance(e, dict):
+                continue
+            k = str(e.get("key") or "").strip()
+            meta = live.get(k)
+            if not meta:
+                continue
+            name = meta.get("label") or e.get("name") or k
+            tier = meta.get("tier") or e.get("tier") or "standard"
+            lines.append(f"- {k} — {name} ({tier})")
+        if len(lines) <= 2:
+            return ""
         return "\n".join(lines)
 
     def _build_content_index_block(self, mechanic_result: dict) -> str:
