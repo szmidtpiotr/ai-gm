@@ -542,12 +542,7 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
                 new_loc_id = int(new_loc_row["id"])
 
         # Read current local hex id before updating — for already-here guard (#1115)
-        _pre_sf = json.loads(
-            (conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                (campaign_id,),
-            ).fetchone() or {}).get("session_flags") or "{}"
-        )
+        _pre_sf = json.loads(session.get("session_flags") or "{}")
         current_hex_id = (_pre_sf.get("local_hex") or {}).get("hex_id")
 
         # #1112: atomic position write via canonical service
@@ -564,12 +559,11 @@ def local_travel(campaign_id: int, body: LocalTravelRequest):
             current_location_id=new_loc_id,
         )
         # Keep local reference in sync for the return value
-        flags = json.loads(
-            (conn.execute(
-                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                (campaign_id,),
-            ).fetchone() or {}).get("session_flags") or "{}"
-        )
+        _sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = json.loads(_sf_row["session_flags"] if _sf_row else "{}")
 
         # Advance clock +15 min — skip when player is already at target hex (#1115)
         clock_state: dict = {}
