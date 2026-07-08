@@ -434,7 +434,7 @@ class ContextInjector:
                 current_location_key=_cur_loc_key,
             )
             if swiat:
-                swiat += f"\nPora: {_time_of_day(ingame_hours)}"
+                swiat += f"\nCzas: {_clock_display(ingame_hours)}"
                 weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
                 if weather:
                     swiat += f"\n{weather}"
@@ -467,7 +467,7 @@ class ContextInjector:
                 lines.append(f"Atmosfera: {atmosphere}")
         else:
             lines.append("Lokacja: nieznana")
-        lines.append(f"Pora: {_time_of_day(ingame_hours)}")
+        lines.append(f"Czas: {_clock_display(ingame_hours)}")
         weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
         if weather:
             lines.append(weather)
@@ -1189,3 +1189,11 @@ def _time_of_day(ingame_hours: int) -> str:
     if 20 <= hour < 23:
         return "zmierzch"
     return "noc"
+
+
+def _clock_display(ingame_hours: int) -> str:
+    """Full clock string injected into narrator context: 'Dzień 3, 09:00 (rano)'."""
+    h = int(ingame_hours)
+    day = (h // 24) + 1
+    hour = h % 24
+    return f"Dzień {day}, {hour:02d}:00 ({_time_of_day(h)})"
