@@ -31,6 +31,7 @@ from app.services.local_hex_service import (
     get_hub_hex_id,
     get_local_hexes,
     get_local_hex_for_subloc,
+    normalize_hub_local_hexes,
 )
 from app.services.movement_service import (
     MovementProfile,
@@ -441,6 +442,8 @@ def get_local_map(campaign_id: int):
         ).fetchone()
         hub_label = hub_row["label"] if hub_row else hub_key
 
+        # Self-heal legacy (pre-namespace) local hexes before they're ever rendered.
+        normalize_hub_local_hexes(conn, hub_key)
         hexes = get_local_hexes(conn, hub_key)
 
         # Current local hex: read from session_flags.local_hex (flags już wczytane).

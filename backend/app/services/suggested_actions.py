@@ -306,9 +306,10 @@ def _build_travel_pills(
                     obj_val = (beat.get("objective_value") or "").strip()
                     if not obj_val:
                         continue
-                    # Find hex for this location (by label or key)
+                    # Find hex + display label for this location (by label or key) —
+                    # objective_value is a raw game_locations.key, never show it raw.
                     hex_row = conn.execute(
-                        """SELECT wh.q, wh.r FROM world_hexes wh
+                        """SELECT wh.q, wh.r, gl.label FROM world_hexes wh
                            JOIN game_locations gl ON gl.key = wh.location_key
                            WHERE (gl.label = ? OR gl.key = ?)
                              AND wh.is_active = 1
@@ -318,6 +319,7 @@ def _build_travel_pills(
                     if not hex_row:
                         continue
                     tq, tr = int(hex_row[0]), int(hex_row[1])
+                    dest_label = str(hex_row[2] or "").strip() or obj_val
                     if tq == q_int and tr == r_int:
                         continue  # already here
                     action_key = f"TRAVEL:{tq}:{tr}"
@@ -325,7 +327,7 @@ def _build_travel_pills(
                         continue
                     seen_actions.add(action_key)
                     pills.append(SuggestedAction(
-                        label=f"📜 → {obj_val}",
+                        label=f"📜 → {dest_label}",
                         action=action_key,
                         enabled=True,
                         type="travel",
