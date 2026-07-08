@@ -1317,6 +1317,90 @@ def _auto_populate_enemy_loot(conn: sqlite3.Connection, enemy_key: str, tier: st
         logger.warning("enemy_loot_auto_populate_failed", enemy_key=enemy_key, error=str(e))
 
 
+_PLAN_ENEMY_TIER_XP = {"weak": 10, "standard": 25, "elite": 50, "boss": 150}
+
+
+def materialize_plan_enemies(
+    conn: sqlite3.Connection,
+    enemies: list[dict],
+    *,
+    created_by: str = "llm_plan",
+    template_id: int | None = None,
+    review_status: str = "pending_review",
+) -> list[dict]:
+    """#1284 — turn a GM plan's `key_enemies` into real, playable
+    `game_config_enemies` rows so LLM-planned bosses/enemies are actually usable in
+    combat instead of dead plan-only fiction.
+
+    Used by the Nowa Kampania / Regeneruj-plan auto-plan-gen path
+    (`gm_plan_generation_service.generate_initial_gm_plan_v2_with_retries`). The
+    Kuźnia template path keeps its own `_auto_create_forge_enemies` wrapper (which
+    additionally clamps HP/AC by template difficulty) — left untouched to avoid
+    regression.
+
+    Each NEW enemy is inserted with `review_status='pending_review'` (playable at
+    once via `[COMBAT_START:key]`, and surfaced in admin → Świat → Oczekujące,
+    which already shows loot info per #1283) and gets an auto-populated loot table
+    via `_auto_populate_enemy_loot`. Idempotent: keys that already exist are left
+    untouched. Returns the list of freshly created enemies.
+    """
+    created: list[dict] = []
+    for e in enemies or []:
+        if not isinstance(e, dict):
+            continue
+        key = (e.get("key") or "").strip()
+        if not key:
+            continue
+        name = (e.get("name") or "").strip() or key.replace("_", " ").title()
+        tier = (e.get("tier") or "standard").lower()
+        if tier not in ("weak", "standard", "elite", "boss"):
+            tier = "standard"
+
+        # Sanity clamps — PlotEnemy defaults are already sane, but guard against
+        # LLM hallucinated stats. Starting values (#1284 Numbers Policy).
+        try:
+            hp = int(e.get("hp_base") or 20)
+        except (TypeError, ValueError):
+            hp = 20
+        try:
+            ac = int(e.get("ac_base") or 12)
+        except (TypeError, ValueError):
+            ac = 12
+        hp = max(5, min(hp, 300))
+        ac = max(8, min(ac, 22))
+        damage_die = e.get("damage_die") or "1d6"
+        xp = _PLAN_ENEMY_TIER_XP.get(tier, 25)
+
+        # Idempotent: never touch an existing enemy (may be admin-edited).
+        if conn.execute(
+            "SELECT 1 FROM game_config_enemies WHERE key = ?", (key,)
+        ).fetchone():
+            continue
+
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_enemies
+                   (key, label, tier, hp_base, ac_base, attack_bonus, damage_die,
+                    damage_bonus, attacks_per_turn, xp_award, description, note,
+                    is_active, review_status, created_by, template_id)
+                   VALUES (?, ?, ?, ?, ?, 0, ?, 0, 1, ?, ?, ?, 1, ?, ?, ?)""",
+                (key, name, tier, hp, ac, damage_die, xp,
+                 e.get("description") or "", e.get("note") or "",
+                 review_status, created_by, template_id),
+            )
+            conn.commit()
+            _auto_populate_enemy_loot(conn, key, tier, name)
+            created.append({"key": key, "name": name, "tier": tier})
+            logger.info(
+                "plan_enemy_materialized", enemy_key=key, tier=tier, created_by=created_by
+            )
+        except Exception as ex:
+            logger.warning("plan_enemy_materialize_failed", enemy_key=key, error=str(ex))
+    if created:
+        logger.info("plan_enemies_materialized_batch", count=len(created), created_by=created_by)
+    return created
+
+
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
     table = {
         "location": "game_locations", "npc": "npcs",
