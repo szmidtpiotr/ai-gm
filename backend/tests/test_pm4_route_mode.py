@@ -339,17 +339,17 @@ def test_choice_direct_travels_via_wilds(conn):
     assert _flags(conn).get("pending_travel_choice") is None
 
 
-def test_unclear_answer_rehints_once_then_defaults(conn):
+def test_unclear_answer_rehints_once_then_cancels(conn):
     _run(conn, "udaję się do Vilnogradu")
     # 1st unclear → re-hint, still standing
     r1 = _run(conn, "hmm nie wiem")
     assert r1["executed"] is False
     assert _flags(conn)["pending_travel_choice"]["hinted"] == 1
     assert _current_hex(conn) == {"q": 0, "r": 0}
-    # 2nd unclear → default direct, move happens, pending cleared
+    # 2nd unclear → cancel pending travel (not force-direct), hero stays put
     r2 = _run(conn, "eee")
-    assert r2["executed"] is True, r2
-    assert _current_hex(conn) == {"q": 4, "r": 0}
+    assert r2["executed"] is False, r2
+    assert _current_hex(conn) == {"q": 0, "r": 0}
     assert _flags(conn).get("pending_travel_choice") is None
 
 

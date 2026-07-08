@@ -1883,16 +1883,23 @@ _ROUTE_DIRECT_RE = re.compile(
     r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b",
     re.IGNORECASE | re.UNICODE,
 )
+_ROUTE_CANCEL_RE = re.compile(
+    r"\b(rezygnuj\w*|zostaj\w*|zostan\w*|anuluj\w*|odwołuj\w*|nie\s+podróżuj\w*|"
+    r"nie\s+ide\w*|nie\s+idę|nie\s+wyruszam|zostań|zostaję|nie\s+teraz)\b",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def detect_route_choice(player_text: str) -> str | None:
     """PM4 #1223: classify a player's answer to the direct/road question.
 
-    Returns "road", "direct", or None when the text picks neither (or both,
-    which is treated as ambiguous — the caller re-hints once then defaults).
+    Returns "road", "direct", "cancel", or None when the text picks neither
+    (or both, which is treated as ambiguous — caller re-hints once then cancels).
     """
     if not player_text:
         return None
+    if _ROUTE_CANCEL_RE.search(player_text):
+        return "cancel"
     road = bool(_ROUTE_ROAD_RE.search(player_text))
     direct = bool(_ROUTE_DIRECT_RE.search(player_text))
     if road and not direct:

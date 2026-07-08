@@ -362,22 +362,31 @@ def execute_directional_travel(
         _dq_p, _dr_p = int(_dest_p.get("q", 0)), int(_dest_p.get("r", 0))
         _label_p = pending.get("label") or f"hex ({_dq_p},{_dr_p})"
         _hinted = int(pending.get("hinted", 0))
+        if _choice == "cancel" or (_choice is None and _hinted >= 1):
+            # Player explicitly cancelled OR second non-answer → abandon pending travel.
+            flags.pop("pending_travel_choice", None)
+            _pm4_save_flags(conn, campaign_id, flags)
+            return {
+                "executed": False,
+                "system_fact": (
+                    f"\n[SYSTEM: gracz zrezygnował z podróży do {_label_p}. "
+                    "Kontynuuj narrację normalnie — gracz zostaje w obecnej lokacji.]"
+                ),
+                "intent": None,
+            }
         if _choice is None:
-            if _hinted < 1:
-                # Unclear answer — re-hint exactly ONCE, hero stays put.
-                flags["pending_travel_choice"]["hinted"] = _hinted + 1
-                _pm4_save_flags(conn, campaign_id, flags)
-                return {
-                    "executed": False,
-                    "system_fact": (
-                        f"\n[SYSTEM: gracz nie wskazał wyraźnie trasy do {_label_p}. Zapytaj "
-                        "raz jeszcze krótko: prosto przez dzicz (szybciej, groźniej) czy "
-                        "traktem (dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
-                    ),
-                    "intent": None,
-                }
-            # Already re-hinted once → default to direct (no loop).
-            _choice = "direct"
+            # First unclear answer — re-hint exactly once, hero stays put.
+            flags["pending_travel_choice"]["hinted"] = _hinted + 1
+            _pm4_save_flags(conn, campaign_id, flags)
+            return {
+                "executed": False,
+                "system_fact": (
+                    f"\n[SYSTEM: gracz nie wskazał wyraźnie trasy do {_label_p}. Zapytaj "
+                    "raz jeszcze krótko: prosto przez dzicz (szybciej, groźniej) czy "
+                    "traktem (dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
+                ),
+                "intent": None,
+            }
         # Execute the deferred trip in the chosen mode, then clear the pending flag.
         flags.pop("pending_travel_choice", None)
         _pm4_save_flags(conn, campaign_id, flags)

@@ -146,7 +146,8 @@ def _build_narrative_actions(
     _ptc = session_flags.get("pending_travel_choice")
     if isinstance(_ptc, dict) and _ptc.get("destination"):
         _lbl = str(_ptc.get("label") or "cel").strip() or "cel"
-        return [
+        _hinted = int(_ptc.get("hinted", 0))
+        actions_ptc = [
             SuggestedAction(
                 label="Na wprost, przełajem",
                 action=f"Idę na wprost, przełajem do {_lbl}.",
@@ -158,6 +159,13 @@ def _build_narrative_actions(
                 enabled=True, icon="🛤️", type="route_choice",
             ),
         ]
+        if _hinted >= 1:
+            actions_ptc.append(SuggestedAction(
+                label="Zostaję tutaj",
+                action="Rezygnuję z podróży. Zostaję tutaj.",
+                enabled=True, icon="🏠", type="route_choice",
+            ))
+        return actions_ptc
 
     # PT12 (#1122): a paused journey replaces the normal pills with 3 decision buttons.
     interrupt = _build_travel_interrupt_actions(session_flags)
