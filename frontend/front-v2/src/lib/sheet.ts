@@ -338,7 +338,7 @@ export function groupBackpack(backpack: InventoryItem[]): BagGroups {
 export function targetSlotFor(it: InventoryItem): string | null {
   const t = (it.item_type || "").toLowerCase();
   if (t === "weapon") {
-    if (it.weapon_slot === "off_hand") return "off_hand";
+    if (it.weapon_slot === "off_hand" || it.weapon_slot === "off_hand_only") return "off_hand";
     return "main_hand";
   }
   if (t === "armor") {
