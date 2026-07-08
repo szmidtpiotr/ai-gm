@@ -404,6 +404,11 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              d.get("tier", "standard"), d.get("damage_type", "physical"),
              now, now),
         )
+        try:
+            from app.services.world_service import _auto_populate_enemy_loot
+            _auto_populate_enemy_loot(conn, key, d.get("tier", "standard"), label)
+        except Exception:
+            pass
         return table, cur.lastrowid
 
     elif htype == "npc":
@@ -1364,6 +1369,11 @@ def _auto_create_forge_enemies(
                     now,
                 ),
             )
+            try:
+                from app.services.world_service import _auto_populate_enemy_loot
+                _auto_populate_enemy_loot(conn, key, tier, e.get("name") or key)
+            except Exception:
+                pass
             created.append({"key": key, "name": e.get("name") or key})
         except Exception:
             pass

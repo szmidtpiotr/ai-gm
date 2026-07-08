@@ -2527,6 +2527,33 @@ def _backfill_enemy_loot_tables(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_backfill_enemy_loot_tables_failed", error=str(e))
 
 
+def _backfill_enemy_loot_entries(conn: sqlite3.Connection) -> None:
+    """#1283 — populate loot entries for active enemies whose loot table exists
+    but has zero entries (e.g. Forge-created story enemies from before the
+    auto-populate fix, or ones left empty by _backfill_enemy_loot_tables above).
+
+    Idempotent: _auto_populate_enemy_loot() no-ops per-enemy once entries exist.
+    """
+    try:
+        from app.services.world_service import _auto_populate_enemy_loot
+
+        rows = conn.execute(
+            """
+            SELECT e.key, e.tier, e.label FROM game_config_enemies e
+            WHERE e.is_active = 1 AND e.loot_table_key IS NOT NULL AND e.loot_table_key != ''
+              AND (SELECT COUNT(*) FROM game_config_loot_entries le
+                    WHERE le.loot_table_key = e.loot_table_key) = 0
+            """
+        ).fetchall()
+        if not rows:
+            return
+        for row in rows:
+            _auto_populate_enemy_loot(conn, row["key"], row["tier"] or "standard", row["label"] or row["key"])
+        logger.info("admin_migration_backfill_enemy_loot_entries", count=len(rows))
+    except Exception as e:
+        logger.warning("admin_migration_backfill_enemy_loot_entries_failed", error=str(e))
+
+
 def _backfill_enemy_stats_json(conn: sqlite3.Connection) -> None:
     """S2 (#582) — seed stats_json for enemies that don't have one yet.
 
@@ -6111,6 +6138,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
         _backfill_enemy_loot_tables(conn)
+        _backfill_enemy_loot_entries(conn)
         _backfill_enemy_stats_json(conn)
         _ensure_user_llm_settings_mode(conn)
         _ensure_dungeon_tile_l1_columns(conn)

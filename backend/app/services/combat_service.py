@@ -1717,6 +1717,10 @@ def _create_pending_combat_enemy(
             (enemy_key, name),
         )
         logger.info("combat_pending_enemy_created", enemy_key=enemy_key)
+        # #1283 — same auto-loot heuristic as the [CREATE_ENEMY] tag path: this
+        # combat-triggered creation is the one that actually fires in live play.
+        from app.services.world_service import _auto_populate_enemy_loot
+        _auto_populate_enemy_loot(conn, enemy_key, "standard", name)
     except Exception as e:  # pragma: no cover - defensive
         logger.warning("combat_pending_enemy_create_failed", enemy_key=enemy_key, error=str(e))
         return None
