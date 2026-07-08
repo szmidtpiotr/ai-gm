@@ -117,13 +117,16 @@ function Typing() {
   );
 }
 
-// Proza serif z podświetleniem *kursywy* (em) na ember-glow, wg makiety.
+// Proza serif. Wyróżnienia (wg system_prompt §FORMAT):
+//   *kursywa*        → <em> ember-glow (nacisk),
+//   — kwestia NPC    → linia dialogu: złoto + kursywa + lewy obrys (mowa),
+//   „tekst pisany"   → cytat pisany: gold-glow kursywa (listy/inskrypcje).
 function Prose({ text, heroName }: { text: string; heroName?: string }) {
-  const html = renderEmphasis(text, heroName);
+  const html = renderNarration(text, heroName);
   return (
     <div
-      className="whitespace-pre-wrap font-serif text-prose leading-[1.72] text-text [&_em]:italic [&_em]:text-ember-glow"
-      // Tylko własny escape + <em> — bez wstrzykiwania surowego HTML z LLM.
+      className="font-serif text-prose leading-[1.72] text-text [&_.para]:mb-2 [&_.para:last-child]:mb-0 [&_em]:italic [&_em]:text-ember-glow [&_.speech]:my-1.5 [&_.speech]:block [&_.speech]:border-l-2 [&_.speech]:border-l-line-mech [&_.speech]:pl-2.5 [&_.speech]:italic [&_.speech]:text-gold [&_.quote]:italic [&_.quote]:text-gold-glow"
+      // Tylko własny escape + kontrolowane <em>/<span> — bez surowego HTML z LLM.
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -136,10 +139,32 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
-// «cytaty» i *gwiazdki* → <em>. Wejście najpierw escapowane (bez XSS z narracji).
-function renderEmphasis(text: string, _heroName?: string): string {
-  let s = escapeHtml(text);
+// *gwiazdki* i «cytaty» → <em>. Wejście musi być już escapowane.
+function renderEmphasis(s: string): string {
   s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   s = s.replace(/«([^»]+)»/g, "«<em>$1</em>»");
   return s;
+}
+
+// Render narracji akapit po akapicie z wyróżnieniem dialogów kolorem.
+function renderNarration(text: string, _heroName?: string): string {
+  return text
+    .split(/\n+/)
+    .map((para) => {
+      const t = para.trim();
+      if (!t) return "";
+      const html = renderEmphasis(escapeHtml(t));
+      // Kwestia NPC (polska konwencja: myślnik na początku) → linia mowy.
+      if (/^[—–]\s/.test(t)) {
+        return `<span class="speech">${html}</span>`;
+      }
+      // Inline cytat pisany „..." → wyróżnienie cytatu.
+      const withQuotes = html.replace(
+        /„([^”]{1,300})”/g,
+        '<span class="quote">„$1”</span>',
+      );
+      return `<span class="para block">${withQuotes}</span>`;
+    })
+    .filter(Boolean)
+    .join("");
 }
