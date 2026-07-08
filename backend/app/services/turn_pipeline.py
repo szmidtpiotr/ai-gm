@@ -70,6 +70,27 @@ _MOVE_VERB_PATTERN = _re_tp.compile(
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
 
+# ── Temporal idiom guard (prevent solar/clock phrases from triggering direction scan) ───
+# "wschód słońca" (sunrise), "zachód słońca" (sunset), "o północy" (midnight),
+# "w południe" / "po południu" (noon/afternoon) must NOT fire direction keywords.
+# Handles Polish diacritics + ASCII transliterations (wschod slonca etc.).
+_TEMPORAL_IDIOM_RE = _re_tp.compile(
+    # sunrise / sunset
+    r"(?:wsch[oó]d|wschod)\w*\s+(?:s[łl]o[ńn]c|slonc)\w*"
+    r"|(?:zach[oó]d|zachod)\w*\s+(?:s[łl]o[ńn]c|slonc)\w*"
+    # midnight: o północy, przed północą, po północy
+    r"|\bo\s+p[oó][łl]noc\w+"
+    r"|\bprzed\s+p[oó][łl]noc\w+"
+    r"|\bpo\s+p[oó][łl]noc\w+"
+    # noon / afternoon: w południe, o południu, przed południem, po południu
+    r"|\bw\s+po[łl]udni[eu]\b"
+    r"|\bo\s+po[łl]udni\w+"
+    r"|\bprzed\s+po[łl]udni\w+"
+    r"|\bpo\s+po[łl]udni\w+",
+    _re_tp.IGNORECASE | _re_tp.UNICODE,
+)
+
+
 _TRAVEL_NARRATIVE_MARKERS = _re_tp.compile(
     r"\b(wyruszasz?|podróżuj[ea]sz?|wyruszasz?|przemierzasz?|idziesz|wędrujesz?|"
     r"zmierzasz?|docierasz?|przybywa[sj]|wkraczasz?|opuszczasz?|opuszc[za]sz?|"
@@ -90,6 +111,7 @@ def detect_move_intent(
     neighbors: {"north": (q,r), ...} — caller provides reachable neighbors.
     """
     text = player_message.strip().lower()
+    text = _TEMPORAL_IDIOM_RE.sub(" ", text)  # strip "wschód słońca", "w południe", etc.
 
     # Must contain a movement verb
     if not _MOVE_VERB_PATTERN.search(text):
@@ -124,6 +146,7 @@ def detect_vague_move_intent(player_message: str) -> bool:
     instead of inventing a destination.
     """
     text = player_message.strip().lower()
+    text = _TEMPORAL_IDIOM_RE.sub(" ", text)  # strip "wschód słońca", "w południe", etc.
     if not _MOVE_VERB_PATTERN.search(text):
         return False
     for direction_name in _DIRECTION_KEYWORDS:
