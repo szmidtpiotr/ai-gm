@@ -1,6 +1,7 @@
 // F-55/F-76/F-78 · Ekwipunek — sylwetka Diablo-overlap, plecak jako wąskie paski
 // grupowane jak w starym frontendzie: Zużywalne / Sprzęt i broń / Fabularne.
-// Klik → modal ze zdjęciem + opisem z backendu. Przyciski: Załóż/Zdejmij, Użyj, Usuń.
+// Klik na rząd → modal ze zdjęciem + opisem. Inline: Załóż/Użyj.
+// Modal: Załóż/Zdejmij (z live listy), Użyj, Usuń.
 import { useState } from "react";
 import {
   CaretDown,
@@ -69,22 +70,26 @@ export function PanelInventory({
   const defense = readDefense(sheet);
   const carry = readCarry(sheet);
 
-  function handleEquipFromModal(detail: InventoryItemDetail) {
-    if (detail.equipped) {
-      onEquip(detail.id, null);
+  const actionBusy = busy || useItem.isPending || dropItem.isPending;
+
+  // Equip/unequip: read state from live list item (not stale detail cache)
+  function handleEquipFromModal(inventoryId: number) {
+    const item = items?.find((i) => i.id === inventoryId);
+    if (!item) return;
+    if (item.equipped) {
+      onEquip(inventoryId, null);
     } else {
-      const item = items?.find((i) => i.id === detail.id);
-      const slot = item ? targetSlotFor(item) : null;
-      if (slot) onEquip(detail.id, slot);
+      const slot = targetSlotFor(item);
+      if (slot) onEquip(inventoryId, slot);
     }
     setSelectedId(null);
   }
 
-  function handleUseFromModal(inventoryId: number) {
+  function handleUse(inventoryId: number) {
     useItem.mutate(inventoryId, { onSuccess: () => setSelectedId(null) });
   }
 
-  function handleDropFromModal(inventoryId: number) {
+  function handleDrop(inventoryId: number) {
     dropItem.mutate(inventoryId, { onSuccess: () => setSelectedId(null) });
   }
 
@@ -123,9 +128,9 @@ export function PanelInventory({
           </div>
 
           {view === "doll" ? (
-            <Doll equipped={equipped} onSelect={setSelectedId} busy={busy} />
+            <Doll equipped={equipped} onSelect={setSelectedId} busy={actionBusy} />
           ) : (
-            <EquippedList equipped={equipped} onSelect={setSelectedId} busy={busy} />
+            <EquippedList equipped={equipped} onSelect={setSelectedId} busy={actionBusy} />
           )}
 
           <div className="mx-auto mt-3.5 flex max-w-[340px] overflow-hidden rounded-md border border-line-mech bg-mech-card font-mono lg:max-w-none">
@@ -152,10 +157,24 @@ export function PanelInventory({
           )}
 
           {bag.consumables.length > 0 && (
-            <BagSection label="Zużywalne" items={bag.consumables} onSelect={setSelectedId} busy={busy} />
+            <BagSection
+              label="Zużywalne"
+              items={bag.consumables}
+              onSelect={setSelectedId}
+              onEquip={onEquip}
+              onUse={handleUse}
+              busy={actionBusy}
+            />
           )}
           {bag.gear.length > 0 && (
-            <BagSection label="Sprzęt i broń" items={bag.gear} onSelect={setSelectedId} busy={busy} />
+            <BagSection
+              label="Sprzęt i broń"
+              items={bag.gear}
+              onSelect={setSelectedId}
+              onEquip={onEquip}
+              onUse={handleUse}
+              busy={actionBusy}
+            />
           )}
           {bag.lore.length > 0 && (
             <LoreSection items={bag.lore} onSelect={setSelectedId} />
@@ -167,12 +186,12 @@ export function PanelInventory({
         <ItemDetailModal
           characterId={characterId}
           inventoryId={selectedId}
-          items={items}
-          busy={busy || useItem.isPending || dropItem.isPending}
+          listItem={items?.find((i) => i.id === selectedId)}
+          busy={actionBusy}
           onClose={() => setSelectedId(null)}
           onEquip={handleEquipFromModal}
-          onUse={handleUseFromModal}
-          onDrop={handleDropFromModal}
+          onUse={handleUse}
+          onDrop={handleDrop}
         />
       )}
     </>
@@ -184,11 +203,15 @@ function BagSection({
   label,
   items,
   onSelect,
+  onEquip,
+  onUse,
   busy,
 }: {
   label: string;
   items: InventoryItem[];
   onSelect: (id: number) => void;
+  onEquip: (id: number, slot: string | null) => void;
+  onUse: (id: number) => void;
   busy: boolean;
 }) {
   return (
@@ -198,7 +221,7 @@ function BagSection({
       </div>
       <div className="flex flex-col gap-1">
         {items.map((it) => (
-          <ItemRow key={it.id} it={it} onSelect={onSelect} busy={busy} />
+          <ItemRow key={it.id} it={it} onSelect={onSelect} onEquip={onEquip} onUse={onUse} busy={busy} />
         ))}
       </div>
     </div>
@@ -208,58 +231,85 @@ function BagSection({
 function ItemRow({
   it,
   onSelect,
+  onEquip,
+  onUse,
   busy,
 }: {
   it: InventoryItem;
   onSelect: (id: number) => void;
+  onEquip: (id: number, slot: string | null) => void;
+  onUse: (id: number) => void;
   busy: boolean;
 }) {
   const Icon = itemIcon(it);
   const dur = it.durability;
+  const slot = targetSlotFor(it);
+  const canEquipInline = !!slot;
+  const canUseInline = !!it.can_use;
+
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => onSelect(it.id)}
-      className="flex w-full items-center gap-3 rounded-md border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-ember hover:bg-[rgba(255,122,61,0.04)] disabled:opacity-50"
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
-        {it.image_url ? (
-          <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <Icon size={16} />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-ui text-[13px] font-medium text-text">
-          {it.label}
+    <div className="flex items-center gap-2 rounded-md border border-line bg-surface transition-colors hover:border-line-ember">
+      {/* Klikalna lewa strona → modal */}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onSelect(it.id)}
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left disabled:opacity-50"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
+          {it.image_url ? (
+            <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <Icon size={16} />
+          )}
         </span>
-        {dur && (
-          <span className="mt-1 block h-[3px] w-full overflow-hidden rounded-full bg-line">
-            <span
-              className={cn("block h-full rounded-full", dur.pct < 40 ? "bg-danger" : "bg-ember-glow")}
-              style={{ width: `${dur.pct}%` }}
-            />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-ui text-[13px] font-medium text-text">
+            {it.label}
+          </span>
+          {dur && (
+            <span className="mt-1 block h-[3px] w-full overflow-hidden rounded-full bg-line">
+              <span
+                className={cn("block h-full rounded-full", dur.pct < 40 ? "bg-danger" : "bg-ember-glow")}
+                style={{ width: `${dur.pct}%` }}
+              />
+            </span>
+          )}
+        </span>
+        {it.quantity > 1 && (
+          <span className="shrink-0 rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] font-semibold text-text-2">
+            ×{it.quantity}
           </span>
         )}
-      </span>
-      {it.quantity > 1 && (
-        <span className="shrink-0 rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] font-semibold text-text-2">
-          ×{it.quantity}
-        </span>
+      </button>
+
+      {/* Inline akcja (prawa strona) */}
+      {canEquipInline && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onEquip(it.id, slot)}
+          className="mr-2 shrink-0 rounded border border-ember/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-ember-glow transition-colors hover:border-ember hover:bg-[rgba(255,122,61,0.12)] disabled:opacity-50"
+        >
+          Załóż
+        </button>
       )}
-    </button>
+      {canUseInline && !canEquipInline && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onUse(it.id)}
+          className="mr-2 shrink-0 rounded border border-emerald-700/50 px-2.5 py-1 font-ui text-[11px] font-semibold text-emerald-400 transition-colors hover:bg-[rgba(16,185,129,0.1)] disabled:opacity-50"
+        >
+          Użyj
+        </button>
+      )}
+    </div>
   );
 }
 
 // ── Przedmioty fabularne ─────────────────────────────────────────────────────
-function LoreSection({
-  items,
-  onSelect,
-}: {
-  items: InventoryItem[];
-  onSelect: (id: number) => void;
-}) {
+function LoreSection({ items, onSelect }: { items: InventoryItem[]; onSelect: (id: number) => void }) {
   return (
     <div className="mb-4 mt-3">
       <details className="overflow-hidden rounded-md border border-line-soft bg-surface">
@@ -283,9 +333,7 @@ function LoreSection({
                   <Info size={13} />
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">
-                {it.label}
-              </span>
+              <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">{it.label}</span>
               {it.quantity > 1 && (
                 <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.quantity}</span>
               )}
@@ -301,7 +349,7 @@ function LoreSection({
 function ItemDetailModal({
   characterId,
   inventoryId,
-  items,
+  listItem,
   busy,
   onClose,
   onEquip,
@@ -310,19 +358,20 @@ function ItemDetailModal({
 }: {
   characterId: number | undefined;
   inventoryId: number;
-  items: InventoryItem[] | undefined;
+  listItem: InventoryItem | undefined;
   busy: boolean;
   onClose: () => void;
-  onEquip: (detail: InventoryItemDetail) => void;
+  onEquip: (id: number) => void;
   onUse: (id: number) => void;
   onDrop: (id: number) => void;
 }) {
   const { data: detail, isLoading } = useInventoryDetail(characterId, inventoryId);
-  const listItem = items?.find((i) => i.id === inventoryId);
+
+  // isEquipped read from live list (not stale detail cache)
+  const isEquipped = !!(listItem?.equipped);
   const slot = listItem ? targetSlotFor(listItem) : null;
-  const isEquipped = !!(detail?.equipped);
   const canEquip = !!slot || isEquipped;
-  const canUse = !!(listItem?.can_use);
+  const canUse = !!(listItem?.can_use) && !isEquipped;
   const isQuest = listItem?.item_type === "quest";
 
   return (
@@ -334,11 +383,7 @@ function ItemDetailModal({
         className="relative w-full max-w-sm rounded-t-2xl border border-line bg-surface p-5 shadow-modal sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 text-text-3 hover:text-text"
-        >
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-3 hover:text-text">
           <X size={20} />
         </button>
 
@@ -354,14 +399,12 @@ function ItemDetailModal({
             isEquipped={isEquipped}
             isQuest={isQuest}
             busy={busy}
-            onEquip={onEquip}
-            onUse={onUse}
-            onDrop={onDrop}
+            onEquip={() => onEquip(inventoryId)}
+            onUse={() => onUse(inventoryId)}
+            onDrop={() => onDrop(inventoryId)}
           />
         ) : (
-          <p className="py-8 text-center font-serif text-body text-text-3">
-            Brak danych o przedmiocie.
-          </p>
+          <p className="py-8 text-center font-serif text-body text-text-3">Brak danych o przedmiocie.</p>
         )}
       </div>
     </div>
@@ -385,20 +428,16 @@ function ItemDetailBody({
   isEquipped: boolean;
   isQuest: boolean;
   busy: boolean;
-  onEquip: (d: InventoryItemDetail) => void;
-  onUse: (id: number) => void;
-  onDrop: (id: number) => void;
+  onEquip: () => void;
+  onUse: () => void;
+  onDrop: () => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {/* Obrazek + nagłówek */}
+      {/* Obraz + nagłówek */}
       <div className="flex gap-4">
         {detail.image_url ? (
-          <img
-            src={detail.image_url}
-            alt={detail.name}
-            className="h-24 w-24 shrink-0 rounded-lg border border-line object-cover shadow-md"
-          />
+          <img src={detail.image_url} alt={detail.name} className="h-24 w-24 shrink-0 rounded-lg border border-line object-cover shadow-md" />
         ) : (
           <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-line bg-bg text-text-3">
             <Info size={32} />
@@ -409,69 +448,50 @@ function ItemDetailBody({
           <div className="mt-1 flex flex-wrap gap-1.5">
             <KindBadge kind={detail.kind} />
             {detail.value_gp > 0 && (
-              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-gold">
-                {detail.value_gp} gp
-              </span>
+              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-gold">{detail.value_gp} gp</span>
             )}
             {detail.quantity > 1 && (
-              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-2">
-                ×{detail.quantity}
-              </span>
+              <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-2">×{detail.quantity}</span>
             )}
           </div>
           {detail.weapon && (
             <div className="mt-2 font-mono text-[11px] text-text-2">
-              {detail.weapon.damage_die && (
-                <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>
-              )}
+              {detail.weapon.damage_die && <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>}
               {detail.weapon.linked_stat && <span className="ml-2">cecha: {detail.weapon.linked_stat}</span>}
               {!!detail.weapon.attack_bonus && (
-                <span className="ml-2">
-                  trafienie: {detail.weapon.attack_bonus > 0 ? "+" : ""}{detail.weapon.attack_bonus}
-                </span>
+                <span className="ml-2">trafienie: {detail.weapon.attack_bonus > 0 ? "+" : ""}{detail.weapon.attack_bonus}</span>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Opis */}
       {detail.description && (
         <p className="rounded-md border border-line-soft bg-bg px-3.5 py-3 font-serif text-[13px] leading-relaxed text-text-2">
           {detail.description}
         </p>
       )}
 
-      {/* Zdolności specjalne */}
       {detail.note && (
         <div className="rounded-md border border-line-ember bg-[rgba(255,122,61,0.06)] px-3.5 py-3">
-          <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-ember">
-            Zdolności specjalne
-          </div>
+          <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-ember">Zdolności specjalne</div>
           <p className="font-serif text-[13px] leading-relaxed text-text-2">{detail.note}</p>
         </div>
       )}
 
-      {/* Afiksy */}
       {detail.affixes && detail.affixes.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {detail.affixes.map((a) => (
-            <span key={a.key} className="rounded border border-line bg-bg px-2 py-1 font-mono text-[10px] text-ember-glow">
-              {a.label}
-            </span>
+            <span key={a.key} className="rounded border border-line bg-bg px-2 py-1 font-mono text-[10px] text-ember-glow">{a.label}</span>
           ))}
         </div>
       )}
 
-      {/* Trwałość */}
       {detail.durability && (
         <div>
           <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-text-3">Trwałość</div>
           <div className="h-1.5 overflow-hidden rounded-full bg-line">
-            <div
-              className={cn("h-full rounded-full", detail.durability.pct < 40 ? "bg-danger" : "bg-ember")}
-              style={{ width: `${detail.durability.pct}%` }}
-            />
+            <div className={cn("h-full rounded-full", detail.durability.pct < 40 ? "bg-danger" : "bg-ember")} style={{ width: `${detail.durability.pct}%` }} />
           </div>
           <div className="mt-1 font-mono text-[10px] text-text-3">
             {detail.durability.current}/{detail.durability.max}
@@ -486,7 +506,7 @@ function ItemDetailBody({
           <button
             type="button"
             disabled={busy}
-            onClick={() => onEquip(detail)}
+            onClick={onEquip}
             className={cn(
               "w-full rounded-lg border px-4 py-2.5 font-ui text-[13px] font-semibold transition-colors disabled:opacity-50",
               isEquipped
@@ -497,11 +517,11 @@ function ItemDetailBody({
             {isEquipped ? "Zdejmij" : "Załóż"}
           </button>
         )}
-        {canUse && !isEquipped && (
+        {canUse && (
           <button
             type="button"
             disabled={busy}
-            onClick={() => onUse(detail.id)}
+            onClick={onUse}
             className="w-full rounded-lg border border-emerald-700/50 bg-[rgba(16,185,129,0.08)] px-4 py-2.5 font-ui text-[13px] font-semibold text-emerald-400 transition-colors hover:bg-[rgba(16,185,129,0.15)] disabled:opacity-50"
           >
             Użyj
@@ -511,7 +531,7 @@ function ItemDetailBody({
           <button
             type="button"
             disabled={busy}
-            onClick={() => onDrop(detail.id)}
+            onClick={onDrop}
             className="w-full rounded-lg border border-line px-4 py-2.5 font-ui text-[13px] text-text-3 transition-colors hover:border-danger hover:text-danger disabled:opacity-50"
           >
             Usuń z ekwipunku
@@ -525,13 +545,11 @@ function ItemDetailBody({
 function KindBadge({ kind }: { kind: string }) {
   const labels: Record<string, string> = { weapon: "Broń", consumable: "Zużywalne", item: "Przedmiot", armor: "Zbroja" };
   return (
-    <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-ui text-[10px] text-text-3">
-      {labels[kind] ?? kind}
-    </span>
+    <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-ui text-[10px] text-text-3">{labels[kind] ?? kind}</span>
   );
 }
 
-// ── Sylwetka ──────────────────────────────────────────────────────────────────
+// ── Sylwetka ─────────────────────────────────────────────────────────────────
 function Doll({ equipped, onSelect, busy }: { equipped: EquippedMap; onSelect: (id: number) => void; busy: boolean }) {
   return (
     <div
@@ -548,9 +566,7 @@ function Doll({ equipped, onSelect, busy }: { equipped: EquippedMap; onSelect: (
   );
 }
 
-function DollSlot({
-  label, item, slot, pos, onSelect, busy,
-}: {
+function DollSlot({ label, item, slot, pos, onSelect, busy }: {
   label: string; item: InventoryItem | undefined; slot: string;
   pos: { top: string; left: string; small?: boolean };
   onSelect: (id: number) => void; busy: boolean;
@@ -570,9 +586,7 @@ function DollSlot({
       )}
       style={{ top: pos.top, left: pos.left, width: size, height: size }}
     >
-      <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-bg px-1 text-[7px] font-bold uppercase tracking-[0.1em] text-text-3">
-        {label}
-      </span>
+      <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-bg px-1 text-[7px] font-bold uppercase tracking-[0.1em] text-text-3">{label}</span>
       {item?.image_url ? (
         <img src={item.image_url} alt={item.label} className="h-full w-full rounded-[10px] object-cover" />
       ) : (
@@ -587,7 +601,7 @@ function DollSlot({
   );
 }
 
-function EquippedList({ equipped, onSelect }: { equipped: EquippedMap; onSelect: (id: number) => void; busy: boolean }) {
+function EquippedList({ equipped, onSelect, busy }: { equipped: EquippedMap; onSelect: (id: number) => void; busy: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {DOLL_SLOTS.map(({ slot, label }) => {
@@ -600,7 +614,7 @@ function EquippedList({ equipped, onSelect }: { equipped: EquippedMap; onSelect:
               "flex items-center gap-3 rounded-md border px-3 py-2",
               it ? "cursor-pointer border-line-soft bg-surface hover:border-line-ember" : "border-dashed border-line-soft bg-transparent opacity-50",
             )}
-            onClick={() => it && onSelect(it.id)}
+            onClick={() => it && !busy && onSelect(it.id)}
             role={it ? "button" : undefined}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-ember-glow">
@@ -661,7 +675,7 @@ function readDefense(sheet: HeroSheet | undefined) {
   const s = (sheet ?? {}) as Record<string, unknown>;
   const def = (s.defense ?? {}) as Record<string, unknown>;
   const base = Number(def.base ?? def.ac ?? 10) || 10;
-  const mods = ((s.stat_modifiers ?? {}) as Record<string, unknown>);
+  const mods = (s.stat_modifiers ?? {}) as Record<string, unknown>;
   const dex = Number(mods.DEX ?? 0) || 0;
   return { base, reduction: Math.max(0, base - 10), initiative: dex, zone: String(s.zone ?? "").toUpperCase() === "RANGED" ? "DYSTANS" : "ZWARCIE" };
 }
