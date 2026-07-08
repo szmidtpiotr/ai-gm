@@ -804,7 +804,7 @@ async function savePendingEnemy(key, btn) {
   if (!dieVal) { _showToast('Kość obrażeń jest wymagana (np. 1d6).', 'error'); return; }
   btn.disabled = true; btn.textContent = '⏳';
   const body = {
-    label, key,
+    label,
     tier: g('pe-tier')?.value,
     damage_type: g('pe-dmgtype')?.value,
     hp_base: parseInt(g('pe-hp')?.value) || null,
