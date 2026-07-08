@@ -721,8 +721,10 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    # Priority: provided prompt > saved prompt > LLM-built prompt
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    # Priority: provided prompt > (if force: skip cache) > saved prompt > LLM-built prompt
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         item_type = row.get("item_type") or "misc"
@@ -752,7 +754,7 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
                 "dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
             )
 
-    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    steps = req.steps if req.steps is not None else max(8, int(_read_visual("image_gen.steps", 8)))
     width = req.width if req.width is not None else 512
     height = req.height if req.height is not None else 512
 
@@ -809,7 +811,9 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         weapon_type = row.get("weapon_type") or "melee"
@@ -896,7 +900,9 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         effect_type = row.get("effect_type") or "misc"
@@ -926,7 +932,7 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
                 "dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
             )
 
-    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    steps = req.steps if req.steps is not None else max(8, int(_read_visual("image_gen.steps", 8)))
     width = req.width if req.width is not None else 512
     height = req.height if req.height is not None else 512
 
