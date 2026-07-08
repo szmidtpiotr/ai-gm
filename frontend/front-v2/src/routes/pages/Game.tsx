@@ -28,6 +28,7 @@ import {
   readVitals,
   rollFromResult,
   type Chip,
+  type LogBlock,
 } from "@/lib/game";
 import type { RollCardData, TurnResponse } from "@/lib/types";
 import { NarrationLog } from "@/components/game/NarrationLog";
@@ -123,6 +124,9 @@ export default function Game() {
   // Ostatnia karta rzutu + chipy z odpowiedzi tury (strumień ich nie niesie).
   const [pendingRoll, setPendingRoll] = useState<RollCardData | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
+  // #1086 port: ulotne bąbelki ukończenia questa/beatu — nie są zapisywane w historii tur.
+  const [completionBlocks, setCompletionBlocks] = useState<LogBlock[]>([]);
+  const completionSeq = useRef(0);
   // FAZA ML: mapa lokalna osady. Domyślnie pokazujemy ją w hubie z sub-lokacjami;
   // forceWorldMap = gracz kliknął „Świat" i chce zobaczyć mapę świata.
   const [forceWorldMap, setForceWorldMap] = useState(false);
@@ -153,6 +157,20 @@ export default function Game() {
     if (shop) openShop(shop);
     // F-72 (#1267): lektor czyta świeżą narrację GM (no-op gdy TTS wyłączony).
     if (typeof resp.prose === "string" && resp.prose.trim()) voice.speak(resp.prose);
+    // #1086 port: dymki ukończenia questa/beatu (nie zapisywane w historii tur).
+    const newBlocks: LogBlock[] = [
+      ...(resp.completed_beats ?? []).map((b) => ({
+        kind: "completion" as const,
+        id: `cmp-${completionSeq.current++}`,
+        text: `✓ Cel wykonany: ${b.label ?? b.key}`,
+      })),
+      ...(resp.completed_quests ?? []).map((q) => ({
+        kind: "completion" as const,
+        id: `cmp-${completionSeq.current++}`,
+        text: q.xp ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`,
+      })),
+    ];
+    if (newBlocks.length) setCompletionBlocks((prev) => [...prev, ...newBlocks]);
   }
 
   function send(text: string) {
@@ -268,8 +286,8 @@ export default function Game() {
   }, [characterId, stream.isSuccess, stream.data, submit]);
 
   const blocks = useMemo(
-    () => buildLog(stream.data?.turns ?? []),
-    [stream.data?.turns],
+    () => [...buildLog(stream.data?.turns ?? []), ...completionBlocks],
+    [stream.data?.turns, completionBlocks],
   );
   // Chipy: świeże z ostatniego submitu, inaczej z ostatniej tury w strumieniu,
   // a gdy tura ich nie niosła (backend nie zapisuje suggested_actions per-tura) —

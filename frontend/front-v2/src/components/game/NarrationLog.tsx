@@ -42,6 +42,8 @@ export function NarrationLog({
             return <PlayerAction key={b.id} text={b.text} />;
           case "system":
             return <SystemBand key={b.id} text={b.text} />;
+          case "completion":
+            return <CompletionBand key={b.id} text={b.text} />;
           case "roll":
             return (
               <RollCard key={b.id} roll={b.roll} collapsible={i !== lastRollIdx} />
@@ -102,6 +104,15 @@ function PlayerAction({ text }: { text: string }) {
 function SystemBand({ text }: { text: string }) {
   return (
     <div className="mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border border-dashed border-line-mech bg-[rgba(232,193,90,.04)] px-3 py-1.5 font-mono text-micro text-gold">
+      {text}
+    </div>
+  );
+}
+
+// Ukończenie questa/beatu — zielona ramka, ✓ prefix, mono.
+function CompletionBand({ text }: { text: string }) {
+  return (
+    <div className="mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-1.5 font-mono text-micro text-emerald-400 animate-fade-in">
       {text}
     </div>
   );

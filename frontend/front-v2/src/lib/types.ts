@@ -170,6 +170,8 @@ export interface TurnResponse {
   skill_test_pending?: Record<string, unknown> | null;
   combat_state?: Record<string, unknown> | null;
   clock?: ClockState | null;
+  completed_beats?: Array<{ key: string; label?: string }>;
+  completed_quests?: Array<{ title: string; xp?: number }>;
   [k: string]: unknown;
 }
 
