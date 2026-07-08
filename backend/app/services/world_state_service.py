@@ -229,35 +229,76 @@ def build_snapshot(campaign_id: int) -> dict:
     """Build snapshot dict from current campaign state.
 
     Gathers: scene_enemies, scene_npcs, active_quests, player_conditions,
-    turn_number, and campaign_id.
+    turn_number, campaign_id, and full character state for rollback support.
     """
     ws = get_world_state_flags(campaign_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        # Get highest turn_number for this campaign
         turn_row = conn.execute(
-            """SELECT MAX(turn_number) as max_turn FROM campaign_turns
-               WHERE campaign_id = ?""",
+            "SELECT MAX(turn_number) as max_turn FROM campaign_turns WHERE campaign_id = ?",
             (campaign_id,),
         ).fetchone()
         turn_number = turn_row["max_turn"] or 0 if turn_row else 0
-        # D6 (#381) — narrative_state lives in session_flags JSON (not a dedicated
-        # column), so read it here for the snapshot / Stan Świata / Inspector.
+
+        # D6 (#381) — narrative_state lives in session_flags JSON
         narrative_state: dict = {}
+        session_flags_json = None
+        session_location_id = None
         sf_row = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            "SELECT session_flags, current_location_id FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
         ).fetchone()
-        if sf_row and sf_row["session_flags"]:
+        if sf_row:
+            session_flags_json = sf_row["session_flags"]
+            session_location_id = sf_row["current_location_id"]
             try:
                 narrative_state = (json.loads(sf_row["session_flags"]) or {}).get("narrative_state") or {}
             except (json.JSONDecodeError, TypeError):
                 narrative_state = {}
+
+        char_row = conn.execute(
+            "SELECT id, sheet_json, gold_gp FROM characters WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not char_row:
+            char_row = conn.execute(
+                "SELECT id, sheet_json, gold_gp FROM characters WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+
+        char_id = char_sheet_json = char_gold_gp = None
+        char_inventory: list = []
+        char_active_conditions: list = []
+        if char_row:
+            char_id = char_row["id"]
+            char_sheet_json = char_row["sheet_json"]
+            char_gold_gp = char_row["gold_gp"]
+            char_inventory = [
+                dict(r) for r in conn.execute(
+                    "SELECT item_key, weapon_key, consumable_key, quantity, equipped, slot, meta_json"
+                    " FROM character_inventory WHERE character_id = ?",
+                    (char_id,),
+                ).fetchall()
+            ]
+            char_active_conditions = [
+                dict(r) for r in conn.execute(
+                    "SELECT condition_type, severity, rounds_remaining, expires_at, source, effect_json"
+                    " FROM character_conditions WHERE character_id = ?",
+                    (char_id,),
+                ).fetchall()
+            ]
+
+        plan_row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        gm_plan_json = plan_row["gm_plan_json"] if plan_row else None
+
     finally:
         conn.close()
 
-    snapshot = {
+    return {
         "campaign_id": campaign_id,
         "turn_number": turn_number,
         "scene_enemies": ws.get("scene_enemies", []),
@@ -266,8 +307,15 @@ def build_snapshot(campaign_id: int) -> dict:
         "player_conditions": ws.get("player_conditions", []),
         "scene_cleared": ws.get("scene_cleared", False),
         "narrative_state": narrative_state,
+        "char_id": char_id,
+        "char_sheet_json": char_sheet_json,
+        "char_gold_gp": char_gold_gp,
+        "char_inventory": char_inventory,
+        "char_active_conditions": char_active_conditions,
+        "session_flags_json": session_flags_json,
+        "session_location_id": session_location_id,
+        "gm_plan_json": gm_plan_json,
     }
-    return snapshot
 
 
 def _sync_player_conditions(campaign_id: int) -> None:

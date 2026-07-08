@@ -743,7 +743,10 @@ function filterTableGeneric(input, tableId, nameClass) {
             return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
-                <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                <span style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                  <button class="rb-btn" data-turn="${t.turn_number||t.id}" style="font-size:0.65rem;color:var(--t3);background:none;border:1px solid rgba(107,114,128,.25);border-radius:3px;padding:1px 6px;cursor:pointer" title="Cofnij kampanię do tej tury">⏪</button>
+                </span>
               </div>
               <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_clamp(t.user_text||'')}</div>
               ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_clamp(narrative)}</div>` : ''}
@@ -754,7 +757,10 @@ function filterTableGeneric(input, tableId, nameClass) {
             return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
-                <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                <span style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                  <button class="rb-btn" data-turn="${t.turn_number||t.id}" style="font-size:0.65rem;color:var(--t3);background:none;border:1px solid rgba(107,114,128,.25);border-radius:3px;padding:1px 6px;cursor:pointer" title="Cofnij kampanię do tej tury">⏪</button>
+                </span>
               </div>
               <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_clamp(t.user_text||'')}</div>
               <div style="font-size:0.78rem;color:var(--t3)">${_clamp(narrative)}</div>
@@ -789,6 +795,22 @@ function filterTableGeneric(input, tableId, nameClass) {
               _turnsOffset = nextOffset;
               _reRender();
             } catch(e2) { olderBtn.disabled = false; olderBtn.textContent = 'Błąd'; }
+          });
+          panel.querySelectorAll('.rb-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const tn = parseInt(btn.dataset.turn, 10);
+              if (!confirm(`Cofnąć kampanię do tury ${tn}?\n\nTo usunie wszystkie tury po tej i przywróci stan postaci ze snapshotu.\nOperacja NIEODWRACALNA.`)) return;
+              btn.disabled = true; btn.textContent = '⏳';
+              try {
+                const res = await apiFetch(`/api/admin/campaigns/${campId}/rollback`, { method:'POST', body: JSON.stringify({turn_number: tn}) });
+                _showToast(`✓ Cofnięto do tury ${res.rolled_back_to_turn} · usunięto ${res.turns_deleted} tur`, 'success');
+                const freshD = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`);
+                _turnsItems = freshD.items || [];
+                _turnsTotal = freshD.total_count || _turnsItems.length;
+                _turnsOffset = 0;
+                _reRender();
+              } catch(e2) { _showToast('Błąd cofania: ' + e2.message, 'error'); btn.disabled = false; btn.textContent = '⏪'; }
+            });
           });
         };
 
