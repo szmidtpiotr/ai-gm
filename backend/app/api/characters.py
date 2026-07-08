@@ -1647,7 +1647,8 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
 
     row = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, race
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, race,
+               COALESCE(gold_gp, 0) AS gold_gp
         FROM characters
         WHERE id = ?
         """,
@@ -1674,11 +1675,14 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
 
     item = dict(row)
     item.setdefault("race", "human")
+    gold_gp = int(item.pop("gold_gp", 0) or 0)
     try:
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
         item["sheet_json"] = {}
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
+    # Gold stored in dedicated column (never in sheet_json) — inject for frontend readVitals
+    item["sheet_json"]["gold_gp"] = gold_gp
 
     # Stage 2C X5: include safe_for_rest based on current session location
     item["safe_for_rest"] = False
