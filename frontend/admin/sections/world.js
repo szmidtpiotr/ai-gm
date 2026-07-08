@@ -4,6 +4,7 @@
  */
 import { apiFetch } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { rowCheck, toggleAll } from '../shared/selection.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 const _loaded = new Set();
@@ -586,6 +587,7 @@ async function _loadBestiaryPending() {
     if (badge) { badge.textContent = total || ''; badge.style.display = total ? '' : 'none'; }
     if (!total) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie, bronie, przedmioty i lokacje zatwierdzone.</div></div>';
+      rowCheck('pending');
       return;
     }
     const _formatDate = (iso) => {
@@ -597,7 +599,7 @@ async function _loadBestiaryPending() {
     };
     const _pn = (label, key) => `<div class="td-name">${_esc(label||key)}</div><div class="td-muted" style="font-size:0.7rem;margin-top:1px">${_esc(key)}</div>`;
     const mkNpcRow = p => `<tr>
-      <td class="col-check"><input type="checkbox"></td>
+      <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="npc" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.name||p.key)}">${_pn(p.label||p.name, p.key)}</td>
       <td data-sort-val="NPC" data-label="Typ"><span class="badge badge-green">NPC</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.npc_type||p.role||'')}" data-label="Rola">${_esc(p.npc_type||p.role||'—')}</td>
@@ -610,7 +612,7 @@ async function _loadBestiaryPending() {
       </td>
     </tr>`;
     const mkEnemyRow = p => `<tr>
-      <td class="col-check"><input type="checkbox"></td>
+      <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="enemy" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Wróg" data-label="Typ"><span class="badge badge-red">Wróg</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.tier||'')}" data-label="Tier">${_esc(p.tier||'—')}</td>
@@ -623,7 +625,7 @@ async function _loadBestiaryPending() {
       </td>
     </tr>`;
     const mkWeaponRow = p => `<tr>
-      <td class="col-check"><input type="checkbox"></td>
+      <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="weapon" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Broń" data-label="Typ"><span class="badge badge-amber">Broń</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.weapon_type||p.damage_die||'')}" data-label="Rola">${_esc(p.weapon_type||p.damage_die||'—')}</td>
@@ -636,7 +638,7 @@ async function _loadBestiaryPending() {
       </td>
     </tr>`;
     const mkItemRow = p => `<tr>
-      <td class="col-check"><input type="checkbox"></td>
+      <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="item" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="${p.pending_category==='trivial'?'Drobiazg':'Przedmiot'}" data-label="Typ">${p.pending_category==='trivial'
         ? '<span class="badge" style="background:rgba(120,120,120,0.18);color:var(--t3)" title="Heurystyka: wygląda na śmieć narracyjny (U6)">🍂 Drobiazg</span>'
@@ -651,7 +653,7 @@ async function _loadBestiaryPending() {
       </td>
     </tr>`;
     const mkLocationRow = p => `<tr>
-      <td class="col-check"><input type="checkbox"></td>
+      <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="location" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Lokacja" data-label="Typ"><span class="badge badge-green" style="background:rgba(60,120,200,0.15);color:#7aadff">Lokacja</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.location_type||p.location_subtype||'')}" data-label="Typ lok.">${_esc(p.location_subtype||p.location_type||'—')}</td>
@@ -664,7 +666,7 @@ async function _loadBestiaryPending() {
     </tr>`;
     container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table" id="bestiary-pending-table">
       <thead><tr>
-        <th class="col-check"></th>
+        <th class="col-check"><input type="checkbox" id="pending-check-all" onchange="toggleAll('pending', this)"></th>
         <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
         <th><div class="th-inner">Typ</div></th>
         <th><div class="th-inner">Rola/Tier/Typ lok.</div></th>
@@ -674,6 +676,7 @@ async function _loadBestiaryPending() {
       </tr></thead>
       <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow), ...locations.map(mkLocationRow)].join('')}</tbody>
     </table></div>`;
+    rowCheck('pending');
   } catch(e) {
     container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
   }
@@ -693,6 +696,29 @@ async function reviewEntityBestiary(entityType, key, action, btn) {
   } catch(e) {
     _showToast(e.message || 'Błąd.', 'error');
     btn.disabled = false; btn.textContent = action === 'approve' ? '✓ Zatwierdź' : '✕ Odrzuć';
+  }
+}
+
+async function _bulkDiscardPending(btn) {
+  const checked = [...document.querySelectorAll('.pending-row-check:checked')];
+  if (!checked.length) { _showToast('Nic nie zaznaczone.', 'warn'); return; }
+  if (!confirm(`Odrzucić ${checked.length} oczekując(ą/e/ych) pozycję(-e)? Operacji nie da się cofnąć.`)) return;
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const cb of checked) {
+    const type = cb.dataset.type, key = cb.dataset.key;
+    if (!type || !key) { fail++; continue; }
+    try {
+      await apiFetch(`/api/admin/world/review/${type}/${key}`, { method: 'POST', body: JSON.stringify({ action: 'discard' }) });
+      ok++;
+    } catch { fail++; }
+  }
+  _showToast(`Odrzucono ${ok}${fail ? ' (błąd: ' + fail + ')' : ''}.`, fail ? 'warn' : 'success');
+  btn.disabled = false;
+  _loaded.delete('pending');
+  await _loadBestiaryPending();
+  if (window.__adminShell && window.__adminShell._loadPendingCount) {
+    await window.__adminShell._loadPendingCount();
   }
 }
 
@@ -1656,6 +1682,10 @@ function _sectionHtml() {
 
       <!-- Oczekujące -->
       <div class="stab-panel" id="wtab-pending">
+        <div class="selection-bar" id="pending-sel-bar">
+          <span class="sel-count" id="pending-sel-count">0 zaznaczonych</span>
+          <button class="btn btn-sm btn-danger" onclick="window._worldBulkDiscardPending(this)">🗑 Odrzuć zaznaczone</button>
+        </div>
         <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem" id="world-pending-container">Ładowanie…</div>
       </div>
     </div>`;
@@ -1698,6 +1728,9 @@ export async function init(panel) {
   window._worldSavePendingWeapon = (key, btn) => savePendingWeapon(key, btn);
   window._worldPendingFillAI     = (type, key, btn) => _pendingFillAI(type, key, btn);
   window._worldPendingGenItemImage = (key, btn) => _pendingGenItemImage(key, btn);
+  window._worldBulkDiscardPending  = (btn) => _bulkDiscardPending(btn);
+  window.rowCheck   = rowCheck;
+  window.toggleAll  = toggleAll;
   window.eiOpenGallery  = (key) => eiOpenGallery(key);
   window.eiPickGallery  = (key, enc) => eiPickGallery(key, enc);
   window.niOpenGallery  = (id) => niOpenGallery(id);
