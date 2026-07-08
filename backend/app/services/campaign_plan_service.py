@@ -224,6 +224,18 @@ SCHEMAT JSON (wypełnij każde pole):
       "visited": false
     }
   ],
+  "key_enemies": [
+    {
+      "key": "enemy_key_slug",
+      "name": "string — nazwa wroga (po polsku)",
+      "tier": "standard",
+      "hp_base": 20,
+      "ac_base": 12,
+      "damage_die": "1d6",
+      "description": "string — wygląd i styl walki",
+      "note": "string — specjalne zdolności (opcjonalnie)"
+    }
+  ],
   "active_act": 1,
   "scene_log": [],
   "deviations": [],
@@ -244,6 +256,7 @@ ZASADY OBOWIĄZKOWE:
 6. Antagonista/główny konflikt musi dotykać co najmniej jednej Słabości bohatera.
 7. Klucze NPC i lokacji (pola "key") muszą być lowercase_slug bez spacji, np. "innkeeper_boris", "loc_graustein".
 8. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w planie), "summary". Gdzie sensowne dodaj "objective_type" (kill_enemy/visit_location/talk_to_npc/find_item) + "objective_value" (slug celu). "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
+9. WROGOWIE (key_enemies): lista 1-3 głównych antagonistów/bossów kampanii (nie zwykłych wrogów — tylko kluczowe postacie z którymi walka jest częścią fabuły). "key" to lowercase_slug; "tier": weak/standard/elite/boss. Lista może być pusta tylko gdy kampania nie przewiduje żadnej walki.
 """
 
 
