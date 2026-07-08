@@ -2118,7 +2118,7 @@ def character_wait(
             detail=f"Nieprawidłowy target '{target}'. Dozwolone: {sorted(_WAIT_VALID_TARGETS)}",
         )
 
-    from app.services.rest_service import _is_safe_for_character, _in_combat
+    from app.services.rest_service import _is_safe_for_character, _has_active_combat as _in_combat
     from app.services.clock_service import advance_clock, get_clock_state, minutes_to_reach_phase
 
     conn = sqlite3.connect(DB_PATH)
