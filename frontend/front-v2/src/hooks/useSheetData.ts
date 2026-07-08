@@ -110,8 +110,41 @@ export function useInventoryDetail(
     queryKey: ["inventory-detail", characterId, inventoryId],
     enabled: !!characterId && inventoryId !== null,
     queryFn: () =>
-      apiFetch<InventoryItemDetail>(`/inventory/${characterId}/${inventoryId}/detail`),
+      apiFetch<{ ok: boolean; data: InventoryItemDetail }>(
+        `/inventory/${characterId}/${inventoryId}/detail`,
+      ),
+    select: (d) => d.data,
     staleTime: 30_000,
+  });
+}
+
+/** POST /inventory/{charId}/use — użyj zużywalnego. */
+export function useUseItem(characterId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (inventoryId: number) =>
+      apiFetch<{ ok: boolean }>(`/inventory/${characterId}/use`, {
+        method: "POST",
+        body: { inventory_id: inventoryId },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory", characterId] });
+      qc.invalidateQueries({ queryKey: ["character", characterId] });
+    },
+  });
+}
+
+/** DELETE /inventory/{charId}/{invId} — wyrzuć przedmiot. */
+export function useDropItem(characterId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (inventoryId: number) =>
+      apiFetch<{ ok: boolean }>(`/inventory/${characterId}/${inventoryId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory", characterId] });
+    },
   });
 }
 
