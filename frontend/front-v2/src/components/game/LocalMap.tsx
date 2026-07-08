@@ -2,13 +2,14 @@
 // Parytet ze starym UI (app.js _lmRefresh/initLocalMap): nagłówek huba, hex-grid
 // sub-lokacji, aktualna pozycja glow, klik = przejdź (+15 min), „← Świat" wraca
 // na mapę świata. Endpoint: GET /local-map + POST /local-travel.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Globe, MapPinSimpleArea, Minus, Plus, X } from "@phosphor-icons/react";
 import { useLocalMap, useLocalTravel } from "@/hooks/useGameData";
 import type { LocalHex } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
 import { hexPoints, hexToPixel, terrainIcon } from "@/lib/worldmap";
 import { useToast } from "@/components/ui/toast";
+import { TravelCinematic } from "./TravelCinematic";
 
 const VB_W = 340;
 const VB_H = 320;
@@ -88,12 +89,29 @@ export function LocalMap({
 
   const isCurrent = (h: LocalHex) => !!cur && h.q === cur.q && h.r === cur.r;
 
+  const [cinematic, setCinematic] = useState<{ from: string; dest: string } | null>(null);
+
+  useEffect(() => {
+    if (cinematic && !travel.isPending) {
+      const t = setTimeout(() => setCinematic(null), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [cinematic, travel.isPending]);
+
   const go = (h: LocalHex) => {
     if (movedRef.current || travel.isPending) return;
     if (isCurrent(h)) return;
+    const fromHex = hexes.find((x) => isCurrent(x));
+    setCinematic({
+      from: fromHex?.label || hubLabel,
+      dest: h.label || "Zakątek osady",
+    });
     travel.mutate(h.id, {
       onSuccess: () => {},
-      onError: (e) => toast(e instanceof Error ? e.message : "Nie można tam przejść.", "danger"),
+      onError: (e) => {
+        setCinematic(null);
+        toast(e instanceof Error ? e.message : "Nie można tam przejść.", "danger");
+      },
     });
   };
 
@@ -248,6 +266,15 @@ export function LocalMap({
           );
         })()}
       </aside>
+
+      {cinematic && (
+        <TravelCinematic
+          fromLabel={cinematic.from}
+          destLabel={cinematic.dest}
+          progressMs={2000}
+          onDone={() => setCinematic(null)}
+        />
+      )}
     </div>
   );
 }

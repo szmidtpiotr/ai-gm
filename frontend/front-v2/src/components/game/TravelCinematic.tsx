@@ -11,6 +11,8 @@ export interface TravelCinematicProps {
   hours?: number | null;
   isNight?: boolean;
   time?: string;
+  /** Progress bar fill duration in ms. Default 6000. Use 2000 for local travel. */
+  progressMs?: number;
   onDone: () => void;
 }
 
@@ -21,6 +23,7 @@ export function TravelCinematic({
   hours,
   isNight,
   time,
+  progressMs = 6000,
   onDone,
 }: TravelCinematicProps) {
   // Pasek 0→100% w tle podróży (wizualny, nie mierzy realnego czasu backendu).
@@ -79,8 +82,9 @@ export function TravelCinematic({
             }}
           >
             <div
-              className="h-full rounded-[4px] transition-[width] duration-[6000ms] ease-linear"
+              className="h-full rounded-[4px] ease-linear transition-[width]"
               style={{
+                transitionDuration: `${progressMs}ms`,
                 width: `${progress}%`,
                 background: "linear-gradient(90deg, #5f8fb0, #a9c6dd)",
                 boxShadow: "0 0 10px rgba(130,167,199,.5)",
