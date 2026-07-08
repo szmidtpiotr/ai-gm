@@ -93,6 +93,20 @@ export function WorldMap({
     character.data?.current_location_label ?? "W drodze przez Kresy";
 
   // ── zoom / pan ─────────────────────────────────────────────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+  type HexTooltip = { label: string; sub: string; x: number; y: number; flipX: boolean; flipY: boolean };
+  const [hexTooltip, setHexTooltip] = useState<HexTooltip | null>(null);
+
+  const onHexHoverIn = useCallback((label: string, sub: string, e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setHexTooltip({ label, sub, x, y, flipX: x > rect.width * 0.62, flipY: y < 60 });
+  }, []);
+
+  const onHexHoverOut = useCallback(() => setHexTooltip(null), []);
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   // Śledzimy start + czy pointer się ruszył (drag vs klik). BEZ setPointerCapture —
@@ -120,6 +134,7 @@ export function WorldMap({
   const onPointerDown = (e: React.PointerEvent) => {
     drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y, sx: e.clientX, sy: e.clientY };
     movedRef.current = false;
+    setHexTooltip(null);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
@@ -271,6 +286,7 @@ export function WorldMap({
         {/* Mapa — wypełnia całą dostępną wysokość (mobile: pełny ekran, desktop: lewy panel) */}
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <div
+            ref={containerRef}
             className="relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line"
             style={{
               background:
@@ -331,11 +347,33 @@ export function WorldMap({
                       isSelected={
                         !!selected && h.q === selected.q && h.r === selected.r
                       }
+                      terrainLabel={h.hex_type ? hexTypes[h.hex_type]?.label : undefined}
+                      onHoverIn={onHexHoverIn}
+                      onHoverOut={onHexHoverOut}
                       onClick={() => selectHex(h)}
                     />
                   ))}
                 </g>
               </svg>
+            )}
+            {/* Tooltip hexów — poza SVG, zero kolizji z sąsiednimi hexami */}
+            {hexTooltip && (
+              <div
+                className="pointer-events-none absolute z-10 max-w-[200px] rounded-lg border border-line bg-surface/95 px-3 py-2 shadow-xl"
+                style={{
+                  left: hexTooltip.x,
+                  top: hexTooltip.y,
+                  transform: [
+                    hexTooltip.flipX ? "translateX(calc(-100% - 12px))" : "translateX(12px)",
+                    hexTooltip.flipY ? "translateY(12px)" : "translateY(calc(-100% - 12px))",
+                  ].join(" "),
+                }}
+              >
+                <div className="font-ui text-label font-semibold text-text">{hexTooltip.label}</div>
+                {hexTooltip.sub && (
+                  <div className="font-ui text-micro text-text-3">{hexTooltip.sub}</div>
+                )}
+              </div>
             )}
           </div>
 
@@ -484,12 +522,18 @@ function HexTile({
   color,
   isCurrent,
   isSelected,
+  terrainLabel,
+  onHoverIn,
+  onHoverOut,
   onClick,
 }: {
   hex: WorldHex;
   color?: string;
   isCurrent: boolean;
   isSelected: boolean;
+  terrainLabel?: string;
+  onHoverIn: (label: string, sub: string, e: React.MouseEvent) => void;
+  onHoverOut: () => void;
   onClick: () => void;
 }) {
   const { x, y } = hexToPixel(hex.q, hex.r);
@@ -525,7 +569,6 @@ function HexTile({
   // Nazwane heksy (osady/landmarki) wyróżniamy: obwódka pod ikoną + jaśniejszy
   // (złoty) kolor, żeby odcinały się od generycznego terenu.
   const isNamed = !!hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label);
-  const tooltip = isNamed ? hex.label! : hex.hex_type || "Nieznany teren";
 
   const Icon = terrainIcon(hex.hex_type);
   const iconColor = isCurrent
@@ -542,10 +585,20 @@ function HexTile({
         e.stopPropagation();
         onClick();
       }}
+      onMouseEnter={(e) => {
+        const label = isNamed ? hex.label! : (terrainLabel || "Nieznany teren");
+        const sub = isCurrent
+          ? `Twoja pozycja${terrainLabel ? ` · ${terrainLabel}` : ""}`
+          : known
+            ? `${terrainLabel || "Teren"} · znane z opowieści`
+            : discovered
+              ? terrainLabel || "Odkryte"
+              : "Nieodkryte terytorium";
+        onHoverIn(label, sub, e);
+      }}
+      onMouseLeave={onHoverOut}
       style={{ cursor: "pointer" }}
     >
-      {/* natywny tooltip po najechaniu (desktop) */}
-      <title>{tooltip}</title>
       <polygon
         points={hexPoints(x, y)}
         fill={fill}
@@ -581,37 +634,6 @@ function HexTile({
             <FlagBanner size={13} color="var(--ember-glow)" weight="fill" />
           </div>
         </foreignObject>
-      )}
-      {isCurrent && (
-        <text
-          x={x}
-          y={y + 26}
-          textAnchor="middle"
-          className="font-ui"
-          style={{ fill: "var(--ember-glow)", fontSize: 9, fontWeight: 700 }}
-        >
-          ▸ TU
-        </text>
-      )}
-      {!isCurrent && isNamed && (
-        <text
-          x={x}
-          y={y + 25}
-          textAnchor="middle"
-          className="font-ui"
-          style={{
-            fill: "#f2e8d8",
-            fontSize: 9,
-            fontWeight: 700,
-            // halo — ciemny obrys pod tekstem, czytelny na każdym tle
-            stroke: "#0c0906",
-            strokeWidth: 2.6,
-            paintOrder: "stroke",
-            strokeLinejoin: "round",
-          }}
-        >
-          {hex.label!.length > 16 ? `${hex.label!.slice(0, 16)}…` : hex.label}
-        </text>
       )}
     </g>
   );
