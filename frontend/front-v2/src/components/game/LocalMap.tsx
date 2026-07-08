@@ -47,8 +47,8 @@ export function LocalMap({
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const drag = useRef<{ x: number; y: number } | null>(null);
-  const [selected, setSelected] = useState<LocalHex | null>(null);
+  const drag = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
+  const movedRef = useRef(false);
 
   const center = useMemo(() => {
     if (cur) return hexToPixel(cur.q, cur.r);
@@ -66,16 +66,20 @@ export function LocalMap({
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y, sx: e.clientX, sy: e.clientY };
+    movedRef.current = false;
     setHexTooltip(null);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
+    if (Math.abs(e.clientX - drag.current.sx) > 5 || Math.abs(e.clientY - drag.current.sy) > 5) {
+      movedRef.current = true;
+    }
     setPan({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y });
   };
   const onPointerUp = () => {
     drag.current = null;
+    requestAnimationFrame(() => { movedRef.current = false; });
   };
   const onWheel = (e: React.WheelEvent) => {
     const next = zoom * (e.deltaY < 0 ? 1.12 : 0.89);
@@ -85,9 +89,10 @@ export function LocalMap({
   const isCurrent = (h: LocalHex) => !!cur && h.q === cur.q && h.r === cur.r;
 
   const go = (h: LocalHex) => {
+    if (movedRef.current || travel.isPending) return;
     if (isCurrent(h)) return;
     travel.mutate(h.id, {
-      onSuccess: () => setSelected(null),
+      onSuccess: () => {},
       onError: (e) => toast(e instanceof Error ? e.message : "Nie można tam przejść.", "danger"),
     });
   };
@@ -184,10 +189,9 @@ export function LocalMap({
                       key={h.id}
                       hex={h}
                       current={isCurrent(h)}
-                      selected={!!selected && selected.id === h.id}
                       onHoverIn={onHexHoverIn}
                       onHoverOut={onHexHoverOut}
-                      onClick={() => setSelected(h)}
+                      onClick={() => go(h)}
                     />
                   ))}
                 </g>
@@ -216,50 +220,33 @@ export function LocalMap({
         </div>
       </div>
 
-      {/* panel wybranej sub-lokacji */}
-      <aside className="shrink-0 border-t border-line px-4 pb-5 pt-1 lg:w-[340px] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pt-4">
-        {selected ? (
-          <div className="overflow-hidden rounded-xl border border-line-ember bg-[var(--player-card)]">
-            <div className="flex items-center gap-2.5 border-b border-line-soft px-3.5 py-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-ember bg-[rgba(255,122,61,.12)] text-ember-glow">
-                <MapPinSimpleArea size={18} />
-              </div>
-              <div className="min-w-0">
-                <div className="truncate font-serif text-title font-semibold text-text">
-                  {selected.label || "Zakątek osady"}
+      {/* panel — aktualna lokacja + podpowiedź */}
+      <aside className="shrink-0 border-t border-line px-4 pb-5 pt-1 lg:w-[300px] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pt-4">
+        {(() => {
+          const curHex = hexes.find((h) => isCurrent(h));
+          return curHex ? (
+            <div className="rounded-xl border border-line-ember bg-[var(--player-card)] px-3.5 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line-ember bg-[rgba(255,122,61,.12)] text-ember-glow">
+                  <MapPinSimpleArea size={16} />
                 </div>
-                <div className="font-ui text-micro text-text-2">
-                  {isCurrent(selected) ? "Jesteś tutaj" : "Sub-lokacja"}
+                <div className="min-w-0">
+                  <div className="font-ui text-[9px] font-semibold uppercase tracking-widest text-text-3">Jesteś w</div>
+                  <div className="truncate font-serif text-body font-semibold text-text">
+                    {curHex.label || "Zakątek osady"}
+                  </div>
                 </div>
               </div>
+              <p className="mt-2.5 font-ui text-micro text-text-3">
+                {travel.isPending ? "Przemieszczam się…" : "Kliknij zakątek na mapie, aby tam przejść (+15 min)."}
+              </p>
             </div>
-            <div className="flex gap-2 px-3.5 py-3.5">
-              <button
-                onClick={() => go(selected)}
-                disabled={isCurrent(selected) || travel.isPending}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 font-ui text-body font-semibold text-white disabled:opacity-50"
-                style={{
-                  background: "linear-gradient(135deg, #d1602c, var(--ember))",
-                  boxShadow: "0 0 16px rgba(255,122,61,.35)",
-                }}
-              >
-                <MapPinSimpleArea size={17} />
-                {isCurrent(selected) ? "Jesteś tutaj" : travel.isPending ? "Idę…" : "Przejdź (+15 min)"}
-              </button>
-              <button
-                aria-label="Anuluj"
-                onClick={() => setSelected(null)}
-                className="flex shrink-0 items-center justify-center rounded-md border border-line bg-bg px-4 py-3 text-text-2"
-              >
-                <X size={16} />
-              </button>
+          ) : (
+            <div className="rounded-xl border border-line bg-surface px-4 py-6 text-center font-ui text-body text-text-3">
+              Kliknij zakątek osady, aby tam przejść.
             </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-line bg-surface px-4 py-6 text-center font-ui text-body text-text-3">
-            Dotknij zakątka osady, aby tam przejść.
-          </div>
-        )}
+          );
+        })()}
       </aside>
     </div>
   );
@@ -268,14 +255,12 @@ export function LocalMap({
 function LocalTile({
   hex,
   current,
-  selected,
   onHoverIn,
   onHoverOut,
   onClick,
 }: {
   hex: LocalHex;
   current: boolean;
-  selected: boolean;
   onHoverIn: (label: string, sub: string, e: React.MouseEvent) => void;
   onHoverOut: () => void;
   onClick: () => void;
@@ -288,16 +273,15 @@ function LocalTile({
   return (
     <g
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      onMouseEnter={(e) => onHoverIn(label || "Zakątek osady", current ? "Twoja pozycja" : "Sub-lokacja", e)}
+      onMouseEnter={(e) => onHoverIn(label || "Zakątek osady", current ? "Twoja pozycja" : "Sub-lokacja (+15 min)", e)}
       onMouseLeave={onHoverOut}
-      style={{ cursor: "pointer" }}
+      style={{ cursor: current ? "default" : "pointer" }}
     >
       <polygon
         points={hexPoints(x, y)}
         fill={fill}
-        stroke={selected ? "var(--ember-glow)" : stroke}
-        strokeWidth={current || selected ? 2.5 : 1.4}
-        strokeDasharray={selected ? "5 3" : undefined}
+        stroke={stroke}
+        strokeWidth={current ? 2.5 : 1.4}
         filter={current ? "url(#lhexglow)" : undefined}
       />
       <foreignObject x={x - 11} y={y - 11} width={22} height={22} style={{ pointerEvents: "none" }}>
