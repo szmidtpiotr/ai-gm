@@ -97,6 +97,8 @@ export interface AppState {
   gameMenuOpen: boolean;
   /** F-27 V2 — ekran awansu (wydawanie PD) otwarty. Awans ręczny, nie auto-modal. */
   advancementOpen: boolean;
+  /** #1291 WAIT-4 — modal wyboru pory czekania otwarty. */
+  waitOpen: boolean;
   /** FE19 (#1268 / F-77) — etap bramki finału: modal potwierdzenia / ekran zwycięstwa. */
   finishFlow: "idle" | "confirm" | "victory";
   /** FE14 (#1263) — tekst do wstawienia w composer (komenda z palety, np. /roll). */
@@ -119,6 +121,8 @@ export interface AppState {
   toggleGameMenu: () => void;
   openAdvancement: () => void;
   closeAdvancement: () => void;
+  openWait: () => void;
+  closeWait: () => void;
   setFinishFlow: (f: "idle" | "confirm" | "victory") => void;
   /** Wstaw tekst do composera (paleta → komenda); Composer konsumuje i czyści. */
   setComposerPrefill: (text: string | null) => void;
@@ -165,6 +169,7 @@ export const useAppStore = create<AppState>((set) => ({
   paletteOpen: false,
   gameMenuOpen: false,
   advancementOpen: false,
+  waitOpen: false,
   finishFlow: "idle",
   composerPrefill: null,
   activeCombat: null,
@@ -190,6 +195,8 @@ export const useAppStore = create<AppState>((set) => ({
   toggleGameMenu: () => set((s) => ({ gameMenuOpen: !s.gameMenuOpen })),
   openAdvancement: () => set({ advancementOpen: true, gameMenuOpen: false }),
   closeAdvancement: () => set({ advancementOpen: false }),
+  openWait: () => set({ waitOpen: true, paletteOpen: false }),
+  closeWait: () => set({ waitOpen: false }),
   setFinishFlow: (finishFlow) => set({ finishFlow }),
   setComposerPrefill: (composerPrefill) => set({ composerPrefill }),
   login: (payload) => {

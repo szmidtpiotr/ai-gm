@@ -8,6 +8,7 @@ import {
   Campfire,
   Cube,
   DiceFive,
+  Hourglass,
   MagnifyingGlass,
   MapTrifold,
   Shield,
@@ -30,6 +31,8 @@ interface Command {
   prefill?: string;
   /** przełączenie zakładki gry (nawigacja). */
   tab?: GameTab;
+  /** strukturalna akcja chipu — wysyłana przez setComposerPrefill jako akcja (np. WAIT:open). */
+  action?: string;
 }
 
 const COMMANDS: Command[] = [
@@ -88,6 +91,15 @@ const COMMANDS: Command[] = [
     keyLabel: "/rest",
     prefill: "/rest",
   },
+  {
+    id: "wait",
+    group: "Odpoczynek",
+    icon: Hourglass,
+    title: "Czekaj",
+    subtitle: "Przesuń czas do wybranej pory",
+    keyLabel: "/wait",
+    action: "WAIT:open",
+  },
 ];
 
 function isEditableTarget(el: EventTarget | null): boolean {
@@ -103,6 +115,7 @@ export function CommandPalette() {
   const togglePalette = useAppStore((s) => s.togglePalette);
   const setGameTab = useAppStore((s) => s.setGameTab);
   const setComposerPrefill = useAppStore((s) => s.setComposerPrefill);
+  const openWait = useAppStore((s) => s.openWait);
 
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
@@ -148,6 +161,8 @@ export function CommandPalette() {
     closePalette();
     if (cmd.tab) {
       setGameTab(cmd.tab);
+    } else if (cmd.action === "WAIT:open") {
+      openWait();
     } else if (cmd.prefill) {
       setComposerPrefill(cmd.prefill);
     }

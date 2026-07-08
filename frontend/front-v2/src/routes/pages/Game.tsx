@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CircleNotch, MoonStars, Path, Warning } from "@phosphor-icons/react";
+import { CircleNotch, Hourglass, MoonStars, Path, Warning } from "@phosphor-icons/react";
 import {
   useBuildCamp,
   useCampaignDetail,
@@ -13,6 +13,7 @@ import {
   useTravel,
   useTravelResume,
   useTurnStream,
+  useWait,
   type TravelNotice as TravelNoticeData,
 } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/appStore";
@@ -73,6 +74,9 @@ export default function Game() {
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
+  const openWait = useAppStore((s) => s.openWait);
+  const closeWait = useAppStore((s) => s.closeWait);
+  const waitOpen = useAppStore((s) => s.waitOpen);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
 
   const gameTab = useAppStore((s) => s.gameTab);
@@ -95,6 +99,7 @@ export default function Game() {
   const travelResume = useTravelResume(campaignId);
   const buildCamp = useBuildCamp(campaignId);
   const restLong = useRestLong(campaignId, characterId, currentUser?.id);
+  const waitMutation = useWait(campaignId, characterId, currentUser?.id);
   const travel = useTravel(campaignId);
   const { toast } = useToast();
   // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
@@ -239,6 +244,29 @@ export default function Game() {
       });
       return;
     }
+    if (act === "WAIT:open") {
+      openWait();
+      return;
+    }
+    if (act.startsWith("WAIT:")) {
+      const target = act.slice(5); // e.g. "dawn", "next_dawn", "hours:6"
+      const hoursMatch = target.match(/^hours:(\d+)$/);
+      const params = hoursMatch
+        ? { hours: Number(hoursMatch[1]) }
+        : { target };
+      waitMutation.mutate(params, {
+        onSuccess: (r) => {
+          toast(`Czas mija — minęło ${r.delta_hours} h. Teraz: ${r.new_clock.display}.`, "success");
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { message?: string })?.message ?? "Błąd czekania";
+          if (msg.includes("not_safe_for_rest")) toast("Czekaj w bezpiecznym miejscu (karczma, osada).", "info");
+          else if (msg.includes("in_combat")) toast("Nie możesz czekać w trakcie walki.", "danger");
+          else toast(msg, "danger");
+        },
+      });
+      return;
+    }
     if (act === "REST:long") {
       restLong.mutate(undefined, {
         onSuccess: (r) => {
@@ -350,11 +378,20 @@ export default function Game() {
   // z bieżącą lokacją — NPC/wyjścia/podróż/rest/interrupt/route). Dopiero gdy endpoint
   // pusty — pille z submitu/strumienia (LLM bywa niezgodny z lokacją: „kuźnia Brunna"
   // przy Rudniku). suggested-actions jest inwalidowany po każdej turze/podróży.
-  const shownChips = fetchedChips.length
+  const baseChips = fetchedChips.length
     ? fetchedChips
     : chips.length
       ? chips
       : streamChips;
+  // #1291 WAIT-4 — dodaj chip Czekaj gdy safe_for_rest i nie ma walki (deterministyczny,
+  // nie pochodzi z LLM — zawsze obecny w bezpiecznej lokacji).
+  const shownChips = useMemo(() => {
+    const safeHere = character.data?.safe_for_rest === true && !activeCombat;
+    if (!safeHere) return baseChips;
+    const hasWait = baseChips.some((c) => (c.action ?? c.text ?? "").startsWith("WAIT"));
+    if (hasWait) return baseChips;
+    return [...baseChips, { label: "⏳ Czekaj…", text: "WAIT:open", action: "WAIT:open", enabled: true }];
+  }, [baseChips, character.data?.safe_for_rest, activeCombat]);
   const vitals = useMemo(
     () => readVitals(character.data?.sheet_json),
     [character.data?.sheet_json],
@@ -411,6 +448,14 @@ export default function Game() {
         userId={currentUser?.id}
         inCombat={!!activeCombat}
       />
+
+      {/* #1291 WAIT-4: modal wyboru pory czekania. */}
+      {waitOpen && (
+        <WaitModal
+          onPick={(act) => { closeWait(); onChip({ label: "Czekaj", text: act, action: act }, shownChips); }}
+          onClose={closeWait}
+        />
+      )}
 
       {/* PT7/F-80: fokalny modal przerwania podróży (zmierzch / padasz z sił). */}
       {interruptModal && (
@@ -720,6 +765,51 @@ function TravelNotice({ notice }: { notice: TravelNoticeData }) {
           {notice.title}
         </div>
         <div className="font-serif text-micro leading-relaxed text-text-2">{notice.message}</div>
+      </div>
+    </div>
+  );
+}
+
+// #1291 WAIT-4 — modal wyboru pory czekania.
+const WAIT_OPTIONS = [
+  { label: "Do świtu", action: "WAIT:next_dawn", icon: "🌅" },
+  { label: "Do południa", action: "WAIT:day", icon: "☀️" },
+  { label: "Do zmroku", action: "WAIT:dusk", icon: "🌇" },
+  { label: "Do nocy", action: "WAIT:next_night", icon: "🌙" },
+  { label: "2 godziny", action: "WAIT:hours:2", icon: "⌛" },
+  { label: "6 godzin", action: "WAIT:hours:6", icon: "⌛" },
+];
+
+function WaitModal({ onPick, onClose }: { onPick: (act: string) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="wait-modal">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-[2] w-full max-w-[380px] overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-line bg-surface px-5 py-4">
+          <Hourglass weight="fill" size={22} className="text-ember-glow" />
+          <div className="min-w-0">
+            <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-text-3">
+              Czekanie
+            </div>
+            <div className="font-serif text-title font-semibold text-text">Jak długo czekasz?</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-4">
+          {WAIT_OPTIONS.map((o) => (
+            <button
+              key={o.action}
+              type="button"
+              onClick={() => onPick(o.action)}
+              className="flex items-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+            >
+              <span aria-hidden>{o.icon}</span>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-line px-5 pb-4 pt-2 text-center font-ui text-micro text-text-3">
+          Czekanie nie leczy HP. Wymaga bezpiecznej lokacji.
+        </div>
       </div>
     </div>
   );

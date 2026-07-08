@@ -258,6 +258,37 @@ export function useRestLong(
   });
 }
 
+// ── #1291 WAIT-4 — Czekanie do pory dnia ────────────────────────────────────
+
+export interface WaitResult {
+  ok: boolean;
+  delta_hours: number;
+  new_clock: { day: number; hour: number; hour_str: string; period: string; display: string };
+}
+
+/** POST /characters/{id}/wait — przesuwa zegar bez leczenia (safe_for_rest required). */
+export function useWait(
+  campaignId: number | undefined,
+  characterId: number | undefined,
+  userId: number | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { target?: string; hours?: number }) =>
+      apiFetch<WaitResult>(
+        `/characters/${characterId}/wait?user_id=${userId ?? ""}` +
+          (params.target ? `&target=${encodeURIComponent(params.target)}` : "") +
+          (params.hours ? `&hours=${params.hours}` : ""),
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+    },
+  });
+}
+
 // ── F-43/F-47 mapa świata + podróż (KROK 4 FE8 #1235) ────────────────────────
 
 /**
