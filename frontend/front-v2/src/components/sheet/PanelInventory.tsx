@@ -43,7 +43,7 @@ function stackItems(items: InventoryItem[]): StackedItem[] {
   const map = new Map<string, StackedItem>();
   for (const it of items) {
     // Klucz stosu: key > label (dla narrative items bez key)
-    const stackKey = (it.key || it.label || String(it.id)).toLowerCase().trim();
+    const stackKey = (it.label || it.key || String(it.id)).toLowerCase().trim();
     if (map.has(stackKey)) {
       const ex = map.get(stackKey)!;
       ex.allIds.push(it.id);
