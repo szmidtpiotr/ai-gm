@@ -44,6 +44,8 @@ export function NarrationLog({
             return <SystemBand key={b.id} text={b.text} />;
           case "completion":
             return <CompletionBand key={b.id} text={b.text} />;
+          case "gold":
+            return <GoldBubble key={b.id} delta={b.delta} label={b.label} />;
           case "roll":
             return (
               <RollCard key={b.id} roll={b.roll} collapsible={i !== lastRollIdx} />
@@ -105,6 +107,18 @@ function SystemBand({ text }: { text: string }) {
   return (
     <div className="mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border border-dashed border-line-mech bg-[rgba(232,193,90,.04)] px-3 py-1.5 font-mono text-micro text-gold">
       {text}
+    </div>
+  );
+}
+
+// Transakcja złotem — ikona monet, złote tło, mono. Tylko sukcesy (delta < 0 = wydane).
+function GoldBubble({ delta, label }: { delta: number; label: string }) {
+  const sign = delta > 0 ? "+" : "";
+  return (
+    <div className="mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border border-gold/40 bg-[rgba(232,193,90,.06)] px-3 py-1.5 font-mono text-micro text-gold animate-fade-in">
+      <span>💰</span>
+      <span>{sign}{delta} zł</span>
+      {label && <span className="text-text-3">— {label}</span>}
     </div>
   );
 }

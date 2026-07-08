@@ -172,6 +172,7 @@ export interface TurnResponse {
   clock?: ClockState | null;
   completed_beats?: Array<{ key: string; label?: string }>;
   completed_quests?: Array<{ title: string; xp?: number }>;
+  gold_events?: Array<{ delta: number; label: string; source?: string; service_key?: string }>;
   [k: string]: unknown;
 }
 

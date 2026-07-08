@@ -169,6 +169,13 @@ export default function Game() {
         id: `cmp-${completionSeq.current++}`,
         text: q.xp ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`,
       })),
+      // C12 (#1101): dymki transakcji złotem (SPEND_GOLD success events).
+      ...(resp.gold_events ?? []).map((ev) => ({
+        kind: "gold" as const,
+        id: `gold-${completionSeq.current++}`,
+        delta: ev.delta,
+        label: ev.label,
+      })),
     ];
     if (newBlocks.length) setCompletionBlocks((prev) => [...prev, ...newBlocks]);
   }

@@ -68,7 +68,8 @@ export type LogBlock =
   | { kind: "gm"; id: string; text: string; turn: number }
   | { kind: "system"; id: string; text: string }
   | { kind: "roll"; id: string; roll: RollCardData }
-  | { kind: "completion"; id: string; text: string };
+  | { kind: "completion"; id: string; text: string }
+  | { kind: "gold"; id: string; delta: number; label: string };
 
 // Sztuczne komendy / puste akcje otwierające — nie pokazujemy jako dymka gracza.
 function isVisiblePlayerText(t: string | null | undefined): boolean {
