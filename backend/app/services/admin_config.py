@@ -1062,6 +1062,7 @@ def list_weapons() -> list[dict]:
                ammo_key,
                description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
+               image_url, image_gen_prompt,
                COALESCE(campaign_id, NULL) AS campaign_id,
                COALESCE(review_status, 'permanent') AS review_status
         FROM game_config_weapons
@@ -2593,7 +2594,8 @@ def list_consumables() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
-               note, is_active, locked_at, created_at, updated_at
+               note, is_active, locked_at, created_at, updated_at,
+               image_url, image_gen_prompt
         FROM game_config_items
         WHERE item_type = 'consumable'
         ORDER BY label COLLATE NOCASE ASC, key ASC
