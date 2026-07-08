@@ -356,53 +356,106 @@ function ItemRow({
   );
 }
 
-// ── Przedmioty fabularne ─────────────────────────────────────────────────────
+// ── Przedmioty fabularne — podkategorie jak w starym frontendzie ─────────────
+const LORE_SUBCATS: { key: string; label: string; test: RegExp }[] = [
+  {
+    key: "scrolls",
+    label: "Zwoje i pergaminy",
+    test: /pergamin|zwój|zwoj|list|pismo|manuskrypt|skrawek|świstek|swistek|kartka|notatka|wiadomość|wiadomosc|rozkaz|ulotka|liścik|liscik|doniesienie|raport|wypis|przepustka|zezwolenie|dokument/i,
+  },
+  {
+    key: "books",
+    label: "Księgi i traktaty",
+    test: /księga|ksiega|książka|ksiazka|kodeks|kronika|traktat|tome|zapis|dziennik|pamiętnik|pamietnik|grimuar|grimoire|atlas|bestiariusz/i,
+  },
+  { key: "keys", label: "Klucze", test: /klucz/i },
+  { key: "quest", label: "Przedmioty fabularne", test: /^$/ },
+  { key: "misc", label: "Inne przedmioty", test: /^$/ },
+];
+
+function loreCatKey(it: InventoryItem): string {
+  const lab = it.label || it.key || "";
+  if (LORE_SUBCATS[0].test.test(lab)) return "scrolls";
+  if (LORE_SUBCATS[1].test.test(lab)) return "books";
+  if (LORE_SUBCATS[2].test.test(lab)) return "keys";
+  if (it.item_type === "quest") return "quest";
+  return "misc";
+}
+
 function LoreSection({ items, onSelect, onDrop }: { items: InventoryItem[]; onSelect: (id: number) => void; onDrop: (id: number) => void }) {
-  const stacked = stackItems(items);
+  // Rozdziel po podkategorii, stackuj w każdej
+  const groups: Record<string, StackedItem[]> = {};
+  for (const it of items) {
+    const cat = loreCatKey(it);
+    if (!groups[cat]) groups[cat] = [];
+    const existing = groups[cat];
+    const stackKey = (it.label || it.key || String(it.id)).toLowerCase().trim();
+    const found = existing.find((s) => (s.label || s.key || "").toLowerCase().trim() === stackKey);
+    if (found) {
+      found.allIds.push(it.id);
+      found.totalQty += it.quantity || 1;
+    } else {
+      existing.push({ ...it, allIds: [it.id], totalQty: it.quantity || 1 });
+    }
+  }
+
+  const totalStacked = Object.values(groups).reduce((n, g) => n + g.length, 0);
+
   return (
     <div className="mb-4 mt-3">
-      <details className="overflow-hidden rounded-md border border-line-soft bg-surface">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 [&::-webkit-details-marker]:hidden">
-          Fabularne
-          <span className="font-normal normal-case tracking-normal">({stacked.length})</span>
-          <CaretDown size={11} className="ml-auto" />
-        </summary>
-        <div className="flex flex-col gap-0.5 p-1.5 pt-0">
-          {stacked.map((it) => (
-            <div key={it.id} className="flex items-center gap-1 rounded border border-transparent hover:border-line-soft hover:bg-bg">
-              <button
-                type="button"
-                onClick={() => onSelect(it.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-left"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
-                  {it.image_url ? (
-                    <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  ) : (
-                    <Info size={13} />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">{it.label}</span>
-                {it.totalQty > 1 && (
-                  <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.totalQty}</span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm(`Wyrzucić „${it.label}"? Tej operacji nie można cofnąć.`)) {
-                    onDrop(it.id);
-                  }
-                }}
-                title="Wyrzuć przedmiot"
-                className="mr-1 shrink-0 px-1.5 py-1 text-text-3 transition-colors hover:text-danger"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      </details>
+      <div className="mb-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3">
+        Fabularne <span className="font-normal normal-case tracking-normal">({totalStacked})</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {LORE_SUBCATS.map(({ key, label }) => {
+          const group = groups[key];
+          if (!group?.length) return null;
+          return (
+            <details key={key} className="overflow-hidden rounded-md border border-line-soft bg-surface">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3 [&::-webkit-details-marker]:hidden">
+                {label}
+                <span className="font-normal normal-case tracking-normal">({group.length})</span>
+                <CaretDown size={11} className="ml-auto" />
+              </summary>
+              <div className="flex flex-col gap-0.5 p-1.5 pt-0">
+                {group.map((it) => (
+                  <div key={it.id} className="flex items-center gap-1 rounded border border-transparent hover:border-line-soft hover:bg-bg">
+                    <button
+                      type="button"
+                      onClick={() => onSelect(it.id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-left"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-line bg-bg text-text-3">
+                        {it.image_url ? (
+                          <img src={it.image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        ) : (
+                          <Info size={13} />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-serif text-[12.5px] text-text-2">{it.label}</span>
+                      {it.totalQty > 1 && (
+                        <span className="shrink-0 font-mono text-[10px] text-text-3">×{it.totalQty}</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Wyrzucić „${it.label}"? Tej operacji nie można cofnąć.`)) {
+                          onDrop(it.id);
+                        }
+                      }}
+                      title="Wyrzuć przedmiot"
+                      className="mr-1 shrink-0 px-1.5 py-1 text-text-3 transition-colors hover:text-danger"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -318,8 +318,7 @@ export interface BagGroups {
   gear: InventoryItem[];
   lore: InventoryItem[];
 }
-const LORE_TYPES = new Set(["quest", "map", "book", "note", "key", "scroll"]);
-const CONSUMABLE_TYPES = new Set(["consumable", "food", "potion"]);
+const EQUIPPABLE_TYPES = new Set(["weapon", "armor", "shield"]);
 
 export function groupBackpack(backpack: InventoryItem[]): BagGroups {
   const consumables: InventoryItem[] = [];
@@ -327,9 +326,9 @@ export function groupBackpack(backpack: InventoryItem[]): BagGroups {
   const lore: InventoryItem[] = [];
   for (const it of backpack) {
     const t = (it.item_type || "").toLowerCase();
-    if (LORE_TYPES.has(t)) lore.push(it);
-    else if (CONSUMABLE_TYPES.has(t)) consumables.push(it);
-    else gear.push(it);
+    if (EQUIPPABLE_TYPES.has(t)) gear.push(it);
+    else if (it.can_use) consumables.push(it);
+    else lore.push(it);
   }
   return { consumables, gear, lore };
 }
