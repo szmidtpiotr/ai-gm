@@ -31,6 +31,20 @@ export function LocalMap({
   const cur = map.data?.current_local_hex ?? null;
   const hubLabel = map.data?.hub_label ?? "Osada";
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  type HexTooltip = { label: string; sub: string; x: number; y: number; flipX: boolean; flipY: boolean };
+  const [hexTooltip, setHexTooltip] = useState<HexTooltip | null>(null);
+
+  const onHexHoverIn = useCallback((label: string, sub: string, e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setHexTooltip({ label, sub, x, y, flipX: x > rect.width * 0.62, flipY: y < 60 });
+  }, []);
+
+  const onHexHoverOut = useCallback(() => setHexTooltip(null), []);
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number } | null>(null);
@@ -54,6 +68,7 @@ export function LocalMap({
   const onPointerDown = (e: React.PointerEvent) => {
     drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setHexTooltip(null);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
@@ -115,6 +130,7 @@ export function LocalMap({
         {/* kanwa */}
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <div
+            ref={containerRef}
             className="relative flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line"
             style={{
               background:
@@ -169,11 +185,31 @@ export function LocalMap({
                       hex={h}
                       current={isCurrent(h)}
                       selected={!!selected && selected.id === h.id}
+                      onHoverIn={onHexHoverIn}
+                      onHoverOut={onHexHoverOut}
                       onClick={() => setSelected(h)}
                     />
                   ))}
                 </g>
               </svg>
+            )}
+            {hexTooltip && (
+              <div
+                className="pointer-events-none absolute z-10 max-w-[200px] rounded-lg border border-line bg-surface/95 px-3 py-2 shadow-xl"
+                style={{
+                  left: hexTooltip.x,
+                  top: hexTooltip.y,
+                  transform: [
+                    hexTooltip.flipX ? "translateX(calc(-100% - 12px))" : "translateX(12px)",
+                    hexTooltip.flipY ? "translateY(12px)" : "translateY(calc(-100% - 12px))",
+                  ].join(" "),
+                }}
+              >
+                <div className="font-ui text-label font-semibold text-text">{hexTooltip.label}</div>
+                {hexTooltip.sub && (
+                  <div className="font-ui text-micro text-text-3">{hexTooltip.sub}</div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -232,11 +268,15 @@ function LocalTile({
   hex,
   current,
   selected,
+  onHoverIn,
+  onHoverOut,
   onClick,
 }: {
   hex: LocalHex;
   current: boolean;
   selected: boolean;
+  onHoverIn: (label: string, sub: string, e: React.MouseEvent) => void;
+  onHoverOut: () => void;
   onClick: () => void;
 }) {
   const { x, y } = hexToPixel(hex.q, hex.r);
@@ -245,8 +285,12 @@ function LocalTile({
   const stroke = current ? "var(--ember)" : "rgba(242,232,216,.16)";
   const label = hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label) ? hex.label : null;
   return (
-    <g onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ cursor: "pointer" }}>
-      <title>{label || "Zakątek osady"}</title>
+    <g
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onMouseEnter={(e) => onHoverIn(label || "Zakątek osady", current ? "Twoja pozycja" : "Sub-lokacja", e)}
+      onMouseLeave={onHoverOut}
+      style={{ cursor: "pointer" }}
+    >
       <polygon
         points={hexPoints(x, y)}
         fill={fill}
@@ -260,30 +304,6 @@ function LocalTile({
           <Icon size={17} color={current ? "var(--ember-glow)" : "var(--text-2)"} weight={current ? "fill" : "regular"} />
         </div>
       </foreignObject>
-      {current && (
-        <text x={x} y={y + 26} textAnchor="middle" className="font-ui" style={{ fill: "var(--ember-glow)", fontSize: 9, fontWeight: 700 }}>
-          ▸ TU
-        </text>
-      )}
-      {!current && label && (
-        <text
-          x={x}
-          y={y + 25}
-          textAnchor="middle"
-          className="font-ui"
-          style={{
-            fill: "#f2e8d8",
-            fontSize: 9,
-            fontWeight: 700,
-            stroke: "#0c0906",
-            strokeWidth: 2.6,
-            paintOrder: "stroke",
-            strokeLinejoin: "round",
-          }}
-        >
-          {label.length > 16 ? `${label.slice(0, 16)}…` : label}
-        </text>
-      )}
     </g>
   );
 }
