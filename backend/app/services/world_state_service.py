@@ -25,6 +25,134 @@ _WORLD_STATE_COLUMNS = {
 }
 
 
+# ── Snapshot table registry (pełny zrzut stanu tury) ───────────────────────────
+# Rollback = przywrócenie stanu z snapshotu. Zamiast ręcznie dobieranej listy pól
+# (która gubiła questy, scenę, czary, reputację), snapshot zrzuca PEŁNE wiersze
+# wszystkich tabel z tego rejestru. Dodanie nowej mechaniki = jeden wpis tutaj.
+#
+# scope:
+#   "campaign_fk"  → wiersze WHERE campaign_id = <campaign_id>
+#   "campaign_pk"  → wiersz  WHERE id          = <campaign_id>
+#   "character_fk" → wiersze WHERE character_id = <char_id>
+#   "character_pk" → wiersz  WHERE id           = <char_id>
+# mode:
+#   "replace"        → DELETE (scope) + INSERT wszystkich zapisanych wierszy
+#   "update_columns" → UPDATE tylko `columns` na istniejącym wierszu (identity-safe)
+SNAPSHOT_TABLES: list[dict] = [
+    # ── child rows: pełna wymiana w obrębie scope ──
+    {"table": "character_inventory",  "scope": "character_fk", "mode": "replace"},
+    {"table": "character_conditions", "scope": "character_fk", "mode": "replace"},
+    {"table": "character_quests",     "scope": "character_fk", "mode": "replace"},
+    {"table": "character_spells",     "scope": "character_fk", "mode": "replace"},
+    {"table": "character_reputation", "scope": "character_fk", "mode": "replace", "optional": True},
+    {"table": "active_combat",        "scope": "campaign_fk",  "mode": "replace", "optional": True},
+    # ── identity rows: aktualizacja tylko zmiennych kolumn ──
+    {"table": "characters", "scope": "character_pk", "mode": "update_columns",
+     "columns": ["sheet_json", "gold_gp", "location", "visited_location_keys",
+                 "hero_status", "legend_digest", "legend_digest_count"]},
+    {"table": "game_sessions", "scope": "campaign_fk", "mode": "update_columns",
+     "columns": ["current_location_id", "session_flags", "scene_enemies", "scene_npcs",
+                 "scene_cleared", "active_quests", "player_conditions", "ingame_hours"]},
+    {"table": "campaigns", "scope": "campaign_pk", "mode": "update_columns",
+     "columns": ["gm_plan_json", "engine_private_json", "party_hex_q", "party_hex_r",
+                 "plan_degraded", "finale_available"]},
+]
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone() is not None
+
+
+def _scope_sql(scope: str) -> str:
+    return {
+        "campaign_fk": "campaign_id = ?",
+        "campaign_pk": "id = ?",
+        "character_fk": "character_id = ?",
+        "character_pk": "id = ?",
+    }[scope]
+
+
+def _scope_param(scope: str, campaign_id: int, char_id: Any) -> Any:
+    return campaign_id if scope.startswith("campaign") else char_id
+
+
+def capture_snapshot_tables(conn: sqlite3.Connection, campaign_id: int, char_id: Any) -> dict:
+    """Zrzuć pełne wiersze (SELECT *) wszystkich tabel z rejestru dla tej kampanii/postaci."""
+    tables: dict[str, list] = {}
+    for spec in SNAPSHOT_TABLES:
+        t = spec["table"]
+        param = _scope_param(spec["scope"], campaign_id, char_id)
+        if param is None:
+            continue  # brak postaci → pomiń tabele per-postać
+        if spec.get("optional") and not _table_exists(conn, t):
+            continue
+        rows = [dict(r) for r in conn.execute(
+            f"SELECT * FROM {t} WHERE {_scope_sql(spec['scope'])}", (param,)
+        ).fetchall()]
+        tables[t] = rows
+    return tables
+
+
+def restore_snapshot(conn: sqlite3.Connection, snap_data: dict, campaign_id: int) -> dict:
+    """Przywróć PEŁNY stan gry ze snapshotu wg rejestru tabel.
+
+    Caller trzyma transakcję (commit/rollback po stronie wołającego).
+    Zwraca {"restored": {tabela: liczba}} lub {"legacy": True} dla starych
+    snapshotów bez bloku `tables` (caller użyje ścieżki zgodności).
+    """
+    tables = snap_data.get("tables")
+    if not tables:
+        return {"legacy": True}
+    char_id = snap_data.get("char_id")
+    restored: dict[str, int] = {}
+    for spec in SNAPSHOT_TABLES:
+        t = spec["table"]
+        if t not in tables:
+            continue
+        param = _scope_param(spec["scope"], campaign_id, char_id)
+        if param is None:
+            continue
+        if spec.get("optional") and not _table_exists(conn, t):
+            continue
+        rows = tables[t] or []
+        scope_sql = _scope_sql(spec["scope"])
+        if spec["mode"] == "replace":
+            conn.execute(f"DELETE FROM {t} WHERE {scope_sql}", (param,))
+            for row in rows:
+                cols = [c for c in row.keys() if c != "id"]  # PK re-autoincrement
+                if not cols:
+                    continue
+                placeholders = ", ".join("?" for _ in cols)
+                conn.execute(
+                    f"INSERT INTO {t} ({', '.join(cols)}) VALUES ({placeholders})",
+                    [row[c] for c in cols],
+                )
+            restored[t] = len(rows)
+        else:  # update_columns — nie ruszaj tożsamości/statusu wiersza
+            if not rows:
+                continue
+            row = rows[0]
+            cols = [c for c in spec["columns"] if c in row]
+            if not cols:
+                continue
+            assignments = ", ".join(f"{c} = ?" for c in cols)
+            conn.execute(
+                f"UPDATE {t} SET {assignments} WHERE {scope_sql}",
+                [row[c] for c in cols] + [param],
+            )
+            restored[t] = 1
+    return {"restored": restored}
+
+
+def get_db():
+    """Otwórz połączenie SQLite (Row factory) do snapshot DB. Caller zamyka."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def get_world_state_flags(campaign_id: int) -> dict:
     """Return the 5 live World State fields for a campaign.
 
@@ -295,12 +423,16 @@ def build_snapshot(campaign_id: int) -> dict:
         ).fetchone()
         gm_plan_json = plan_row["gm_plan_json"] if plan_row else None
 
+        # Pełny zrzut stanu tury wg rejestru — autorytatywne źródło dla rollbacku.
+        snapshot_tables = capture_snapshot_tables(conn, campaign_id, char_id)
+
     finally:
         conn.close()
 
     return {
         "campaign_id": campaign_id,
         "turn_number": turn_number,
+        "tables": snapshot_tables,
         "scene_enemies": ws.get("scene_enemies", []),
         "scene_npcs": ws.get("scene_npcs", []),
         "active_quests": ws.get("active_quests", []),

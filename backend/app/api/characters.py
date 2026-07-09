@@ -2079,6 +2079,13 @@ def character_rest(
             err = result.get("error", "unknown")
             code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted", "in_combat") else 500
             raise HTTPException(status_code=code, detail=err)
+        # Snapshot po odpoczynku — inaczej rollback do „teraz" cofał do starszej
+        # lokacji (teleport). Każda akcja zmieniająca stan zapisuje snapshot.
+        try:
+            from app.services.world_state_service import auto_save_snapshot
+            auto_save_snapshot(campaign_id, source=f"rest_{type}")
+        except Exception:
+            pass
         return result
     finally:
         conn.close()
@@ -2153,6 +2160,13 @@ def character_wait(
 
         new_clock = advance_clock(campaign_id, minutes=delta_min, reason="wait", conn=conn)
         conn.commit()
+
+        # Snapshot po czekaniu — patrz komentarz w /rest (ochrona przed teleportem).
+        try:
+            from app.services.world_state_service import auto_save_snapshot
+            auto_save_snapshot(campaign_id, source="wait")
+        except Exception:
+            pass
 
         return {
             "ok": True,

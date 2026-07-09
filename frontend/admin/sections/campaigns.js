@@ -718,6 +718,16 @@ function filterTableGeneric(input, tableId, nameClass) {
         let _turnsOffset = 0;
         let _turnsTotal = 0;
         let _turnsDebug = false;
+        let _snapTurns = new Set();   // tury z dostępnym snapshotem (⏪ tylko dla nich)
+
+        // ⏪ tylko gdy istnieje snapshot dla tej tury; inaczej wyszarzony znacznik.
+        const _rbBtn = (t) => {
+          const tn = t.turn_number || t.id;
+          if (_snapTurns.has(tn)) {
+            return `<button class="rb-btn" data-turn="${tn}" style="font-size:0.65rem;color:var(--t3);background:none;border:1px solid rgba(107,114,128,.25);border-radius:3px;padding:1px 6px;cursor:pointer" title="Cofnij kampanię do tej tury (snapshot dostępny)">⏪</button>`;
+          }
+          return `<span style="font-size:0.65rem;color:var(--t4,#555);border:1px solid rgba(107,114,128,.12);border-radius:3px;padding:1px 6px" title="Brak snapshotu dla tej tury — nie można cofnąć dokładnie tutaj">⏪</span>`;
+        };
 
         const _clamp = (text, lines=5) => {
           if (!text) return '';
@@ -745,7 +755,7 @@ function filterTableGeneric(input, tableId, nameClass) {
                 <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
                 <span style="display:flex;align-items:center;gap:6px">
                   <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
-                  <button class="rb-btn" data-turn="${t.turn_number||t.id}" style="font-size:0.65rem;color:var(--t3);background:none;border:1px solid rgba(107,114,128,.25);border-radius:3px;padding:1px 6px;cursor:pointer" title="Cofnij kampanię do tej tury">⏪</button>
+                  ${_rbBtn(t)}
                 </span>
               </div>
               <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_clamp(t.user_text||'')}</div>
@@ -759,7 +769,7 @@ function filterTableGeneric(input, tableId, nameClass) {
                 <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
                 <span style="display:flex;align-items:center;gap:6px">
                   <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
-                  <button class="rb-btn" data-turn="${t.turn_number||t.id}" style="font-size:0.65rem;color:var(--t3);background:none;border:1px solid rgba(107,114,128,.25);border-radius:3px;padding:1px 6px;cursor:pointer" title="Cofnij kampanię do tej tury">⏪</button>
+                  ${_rbBtn(t)}
                 </span>
               </div>
               <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_clamp(t.user_text||'')}</div>
@@ -796,27 +806,51 @@ function filterTableGeneric(input, tableId, nameClass) {
               _reRender();
             } catch(e2) { olderBtn.disabled = false; olderBtn.textContent = 'Błąd'; }
           });
+          const _doRollback = async (btn, tn, allowFallback) => {
+            btn.disabled = true; btn.textContent = '⏳';
+            try {
+              const res = await apiFetch(`/api/admin/campaigns/${campId}/rollback`, {
+                method:'POST', body: JSON.stringify({turn_number: tn, allow_fallback: !!allowFallback}) });
+              const fb = res.used_fallback ? ' (fallback na starszy snapshot)' : '';
+              _showToast(`✓ Cofnięto do tury ${res.rolled_back_to_turn} · usunięto ${res.turns_deleted} tur${fb}`, 'success');
+              const [freshD, snap] = await Promise.all([
+                apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`),
+                apiFetch(`/api/admin/campaigns/${campId}/rollback/available`).catch(()=>({turns:[]})),
+              ]);
+              _turnsItems = freshD.items || [];
+              _turnsTotal = freshD.total_count || _turnsItems.length;
+              _turnsOffset = 0;
+              _snapTurns = new Set((snap.turns||[]).map(Number));
+              _reRender();
+            } catch(e2) {
+              // 409 no_exact_snapshot → zaproponuj fallback na najbliższy wcześniejszy.
+              const det = e2 && e2.detail;
+              if (e2 && e2.status === 409 && det && det.error === 'no_exact_snapshot' && !allowFallback) {
+                const avail = (det.available_turns||[]).join(', ') || 'brak';
+                if (confirm(`Brak dokładnego snapshotu dla tury ${tn}.\nDostępne tury: ${avail}.\n\nCofnąć do NAJBLIŻSZEGO wcześniejszego snapshotu? (uwaga: wyląduje na starszym stanie)`)) {
+                  return _doRollback(btn, tn, true);
+                }
+                btn.disabled = false; btn.textContent = '⏪'; return;
+              }
+              _showToast('Błąd cofania: ' + (e2.message||e2), 'error'); btn.disabled = false; btn.textContent = '⏪';
+            }
+          };
           panel.querySelectorAll('.rb-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
               const tn = parseInt(btn.dataset.turn, 10);
-              if (!confirm(`Cofnąć kampanię do tury ${tn}?\n\nTo usunie wszystkie tury po tej i przywróci stan postaci ze snapshotu.\nOperacja NIEODWRACALNA.`)) return;
-              btn.disabled = true; btn.textContent = '⏳';
-              try {
-                const res = await apiFetch(`/api/admin/campaigns/${campId}/rollback`, { method:'POST', body: JSON.stringify({turn_number: tn}) });
-                _showToast(`✓ Cofnięto do tury ${res.rolled_back_to_turn} · usunięto ${res.turns_deleted} tur`, 'success');
-                const freshD = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`);
-                _turnsItems = freshD.items || [];
-                _turnsTotal = freshD.total_count || _turnsItems.length;
-                _turnsOffset = 0;
-                _reRender();
-              } catch(e2) { _showToast('Błąd cofania: ' + e2.message, 'error'); btn.disabled = false; btn.textContent = '⏪'; }
+              if (!confirm(`Cofnąć kampanię do tury ${tn}?\n\nTo usunie wszystkie tury po tej i przywróci PEŁNY stan gry ze snapshotu\n(postać, ekwipunek, questy, czary, scena, lokacja/hex, plan GM).\nOperacja NIEODWRACALNA.`)) return;
+              _doRollback(btn, tn, false);
             });
           });
         };
 
-        const d = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`);
+        const [d, snap0] = await Promise.all([
+          apiFetch(`/api/admin/campaigns/${campId}/turns?limit=${ADMIN_PAGE}&offset=0`),
+          apiFetch(`/api/admin/campaigns/${campId}/rollback/available`).catch(()=>({turns:[]})),
+        ]);
         _turnsItems = d.items || [];
         _turnsTotal = d.total_count || _turnsItems.length;
+        _snapTurns = new Set((snap0.turns||[]).map(Number));
         if (!_turnsItems.length) { panel.innerHTML = '<p style="text-align:center;padding:24px;color:var(--t3)">Brak tur.</p>'; return; }
         _reRender();
       } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
