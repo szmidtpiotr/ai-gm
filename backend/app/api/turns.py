@@ -7910,7 +7910,10 @@ def resolve_skill_test_endpoint(
             stealth_hint = (
                 " Skradanie się powiodło — opisz, że bohater pozostaje niezauważony i ma przewagę "
                 "pozycji (cień, dystans, moment zaskoczenia w zanadrzu). NIE zakładaj kolejnej akcji "
-                "gracza (ataku, ciosu, rozmowy) ani rozlewu krwi — zostaw sytuację otwartą, decyzja należy do gracza."
+                "gracza (ataku, ciosu, rozmowy) ani rozlewu krwi. Jeśli z deklaracji gracza NIE wynika "
+                "jasno, CO chce osiągnąć skradaniem (atak z zaskoczenia, podsłuch, kradzież, ominięcie, "
+                "obserwacja), ZAKOŃCZ narrację krótkim, naturalnym pytaniem w głosie Mistrza Gry — co "
+                "bohater chce teraz zrobić z tą przewagą — zamiast rozstrzygać to za gracza."
             )
 
         narrator_prompt = (
