@@ -3974,6 +3974,25 @@ def admin_get_campaign_known_npcs(campaign_id: int, _: None = Depends(require_ad
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/enemies")
+def admin_get_campaign_enemies(campaign_id: int, _: None = Depends(require_admin_token)):
+    """#1296 — roster of the campaign's planned enemies + materialization status.
+
+    Mirrors known-npcs: surfaces gm_plan_json.key_enemies joined with
+    game_config_enemies so the admin sees which planned foes are actually playable
+    (materialized + active) vs plan-only fiction (MISSING).
+    """
+    from app.services.world_service import get_campaign_plan_enemies
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        enemies = get_campaign_plan_enemies(conn, campaign_id)
+        return {"enemies": enemies, "count": len(enemies)}
+    finally:
+        conn.close()
+
+
 @router.get("/admin/campaigns/{campaign_id}/tag-error-count")
 def admin_get_tag_error_count(campaign_id: int, _: None = Depends(require_admin_token)):
     """U5 (#528): Return LLM tag error count for a campaign (for Campaign Monitor badge)."""

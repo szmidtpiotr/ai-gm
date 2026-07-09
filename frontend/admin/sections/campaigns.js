@@ -474,7 +474,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         </div>
       </div>
       <div class="camp-modal-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0;flex-wrap:wrap">
-        ${['overview','plan','turns','dice','state','decisions','events','quests','map','npcs','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',quests:'🎯 Questy+XP',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
+        ${['overview','plan','turns','dice','state','decisions','events','quests','map','npcs','enemies','workshop','world','inspector'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',dice:'🎲 Rzuty',state:'📊 Stan',decisions:'🧭 Decyzje',events:'🗓 Zdarzenia',quests:'🎯 Questy+XP',map:'Mapa',npcs:'👥 Znani NPC',enemies:'⚔ Przeciwnicy',workshop:'Warsztat',world:'🌍 Stan Świata',inspector:'🔍 Inspector'}[t]}</button>`).join('')}
       </div>
       <div class="modal-body" style="flex:1;overflow-y:auto;padding:0" id="camp-modal-body">
         <div id="ctab-overview" style="padding:16px"><div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div></div>
@@ -487,6 +487,7 @@ function filterTableGeneric(input, tableId, nameClass) {
         <div id="ctab-quests"   style="padding:0;display:none"></div>
         <div id="ctab-map"      style="padding:16px;display:none"></div>
         <div id="ctab-npcs"     style="padding:16px;display:none"></div>
+        <div id="ctab-enemies"  style="padding:16px;display:none"></div>
         <div id="ctab-workshop" style="padding:16px;display:none;height:420px;display:none;flex-direction:column;gap:8px"></div>
         <div id="ctab-world"       style="padding:16px;display:none"></div>
         <div id="ctab-inspector"   style="padding:16px;display:none;font-family:monospace;font-size:0.8rem"></div>
@@ -977,6 +978,35 @@ function filterTableGeneric(input, tableId, nameClass) {
               </div>
               ${n.description ? `<div style="font-size:0.78rem;color:var(--t2);margin-top:6px">${_esc(n.description.slice(0,200))}${n.description.length>200?'…':''}</div>` : ''}
               ${n.last_interaction ? `<div style="font-size:0.7rem;color:var(--t3);margin-top:4px">Ostatnia interakcja: ${_esc(_timeAgo(n.last_interaction))}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`;
+      } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
+    }
+
+    else if (tab === 'enemies') {
+      try {
+        const d = await apiFetch(`/api/admin/campaigns/${campId}/enemies`);
+        const enemies = d.enemies || [];
+        if (!enemies.length) { panel.innerHTML = '<div style="color:var(--t3);padding:20px;text-align:center">Plan tej kampanii nie definiuje przeciwników (key_enemies).</div>'; return; }
+        const tierCls = { weak:'badge-gray', standard:'badge-amber', elite:'badge-red', boss:'badge-red' };
+        panel.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+          ${enemies.map(e => {
+            let statLabel, statCls;
+            if (!e.materialized) { statLabel = 'MISSING (nie-playable)'; statCls = 'badge-red'; }
+            else if (e.is_active) { statLabel = e.review_status === 'pending' ? 'Playable (pending)' : 'Playable'; statCls = 'badge-green'; }
+            else { statLabel = 'Nieaktywny'; statCls = 'badge-gray'; }
+            const stats = e.materialized ? `HP ${e.hp_base??'?'} · AC ${e.ac_base??'?'}` : '—';
+            const loot = e.loot_table_key ? ` · 🎁 ${_esc(e.loot_table_key)}${e.drop_chance!=null?` (${Math.round(e.drop_chance*100)}%)`:''}` : '';
+            return `<div class="card" style="padding:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                <div>
+                  <div style="font-weight:600">${_esc(e.name||e.key)} <span class="badge ${tierCls[e.tier]||'badge-amber'}" style="margin-left:6px">${_esc(e.tier||'standard')}</span></div>
+                  <div style="font-size:0.72rem;color:var(--t3);margin-top:2px">${_esc(e.key)}${e.importance?` · ${_esc(e.importance)}`:''}${e.alive===false?' · 💀 martwy':''}</div>
+                </div>
+                <span class="badge ${statCls}">${statLabel}</span>
+              </div>
+              <div style="font-size:0.74rem;color:var(--t2);margin-top:6px">${stats}${loot}</div>
             </div>`;
           }).join('')}
         </div>`;

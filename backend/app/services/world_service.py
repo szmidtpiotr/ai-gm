@@ -1401,6 +1401,77 @@ def materialize_plan_enemies(
     return created
 
 
+def get_campaign_plan_enemies(
+    conn: sqlite3.Connection, campaign_id: int
+) -> list[dict]:
+    """#1296 — roster of a campaign's planned enemies + materialization status.
+
+    Reads `gm_plan_json.key_enemies` and LEFT-JOINs each against
+    `game_config_enemies` so the admin can see, per enemy: whether it is actually
+    a playable catalog row (`materialized`), its live stats, review status and loot
+    table. Plan-only fiction (never materialized) is returned with
+    `materialized=False` so it can be flagged as non-playable in the UI.
+    """
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return []
+    if not row or not row[0]:
+        return []
+    try:
+        plan = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    except (TypeError, ValueError):
+        return []
+    plan_enemies = (plan or {}).get("key_enemies") or []
+    if not isinstance(plan_enemies, list):
+        return []
+
+    roster: list[dict] = []
+    for e in plan_enemies:
+        if not isinstance(e, dict):
+            continue
+        key = str(e.get("key") or "").strip()
+        if not key:
+            continue
+        entry: dict = {
+            "key": key,
+            "name": str(e.get("name") or key.replace("_", " ").title()),
+            "tier": e.get("tier") or "standard",
+            "importance": e.get("importance"),
+            "alive": e.get("alive", True),
+            "materialized": False,
+            "hp_base": None,
+            "ac_base": None,
+            "is_active": None,
+            "review_status": None,
+            "loot_table_key": None,
+            "drop_chance": None,
+        }
+        try:
+            cat = conn.execute(
+                """SELECT label, tier, hp_base, ac_base, is_active, review_status,
+                          loot_table_key, drop_chance
+                   FROM game_config_enemies WHERE key = ?""",
+                (key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            cat = None
+        if cat:
+            entry["materialized"] = True
+            entry["name"] = cat["label"] or entry["name"]
+            entry["tier"] = cat["tier"] or entry["tier"]
+            entry["hp_base"] = cat["hp_base"]
+            entry["ac_base"] = cat["ac_base"]
+            entry["is_active"] = cat["is_active"]
+            entry["review_status"] = cat["review_status"]
+            entry["loot_table_key"] = cat["loot_table_key"]
+            entry["drop_chance"] = cat["drop_chance"]
+        roster.append(entry)
+    return roster
+
+
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
     table = {
         "location": "game_locations", "npc": "npcs",

@@ -708,6 +708,21 @@ def _trigger_narration_impl(round_id: int) -> None:
     except Exception as e:
         logger.warning("mp_world_state_context_failed", round_id=round_id, error=str(e)[:100])
 
+    # #1296 — parytet z solo: podaj narratorowi MP DOZWOLONE klucze [COMBAT_START]
+    # z planu (reużycie tej samej funkcji co ContextInjector), żeby nie wymyślał
+    # wrogów losowo tylko sięgał po zmaterializowanych, nazwanych przeciwników.
+    try:
+        from app.services.context_injector import build_plan_enemy_keys_block
+        conn_en = _db()
+        try:
+            _enemy_block = build_plan_enemy_keys_block(conn_en, campaign_id)
+        finally:
+            conn_en.close()
+        if _enemy_block:
+            ws_context = (ws_context or "") + _enemy_block + "\n\n"
+    except Exception as e:
+        logger.warning("mp_plan_enemy_keys_failed", round_id=round_id, error=str(e)[:100])
+
     # G5 #789 — sort by initiative, detect conflicts
     action_dicts = [
         {
