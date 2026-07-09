@@ -37,6 +37,7 @@ from app.api import (
     inventory,
     npcs,
     shop,
+    services_shop,
 )
 from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
@@ -815,6 +816,7 @@ app.include_router(characters.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
 app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
+app.include_router(services_shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(friends.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")

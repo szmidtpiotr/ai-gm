@@ -91,6 +91,8 @@ export interface AppState {
   gameTab: GameTab;
   /** FE12 (#1261) — otwarty sklep (overlay) albo null. */
   shop: ShopContext | null;
+  /** #1292 — otwarty modal Usług (klucz lokacji) albo null. Mechaniczny, omija LLM. */
+  services: string | null;
   /** FE14 (#1263 / F-44) — paleta komend otwarta (Ctrl+/ albo ikona w composerze). */
   paletteOpen: boolean;
   /** FE19 (#1268 / F-77) — menu ☰ ekranu gry otwarte. */
@@ -113,6 +115,8 @@ export interface AppState {
   setGameTab: (t: GameTab) => void;
   openShop: (ctx: ShopContext) => void;
   closeShop: () => void;
+  openServices: (locationKey: string) => void;
+  closeServices: () => void;
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
@@ -166,6 +170,7 @@ export const useAppStore = create<AppState>((set) => ({
   currentCampaignId: null,
   gameTab: "story",
   shop: null,
+  services: null,
   paletteOpen: false,
   gameMenuOpen: false,
   advancementOpen: false,
@@ -182,11 +187,13 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", shop: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", shop: null, services: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   openShop: (shop) => set({ shop }),
   closeShop: () => set({ shop: null }),
+  openServices: (locationKey) => set({ services: locationKey }),
+  closeServices: () => set({ services: null }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
@@ -213,6 +220,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentCampaignId: null,
       gameTab: "story",
       shop: null,
+      services: null,
       activeCombat: null,
       dungeonRunState: null,
     });
@@ -223,6 +231,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentHeroId: null,
       currentCampaignId: null,
       shop: null,
+      services: null,
       activeCombat: null,
       dungeonRunState: null,
     }),

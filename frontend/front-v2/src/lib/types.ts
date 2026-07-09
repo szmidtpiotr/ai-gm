@@ -173,6 +173,8 @@ export interface TurnResponse {
   completed_beats?: Array<{ key: string; label?: string }>;
   completed_quests?: Array<{ title: string; xp?: number }>;
   gold_events?: Array<{ delta: number; label: string; source?: string; service_key?: string }>;
+  /** #1292 — deterministyczny skrót: otwórz modal Usługi zamiast narracji (bez LLM). */
+  open_services?: string;
   [k: string]: unknown;
 }
 

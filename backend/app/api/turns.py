@@ -2543,6 +2543,36 @@ def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | N
     return None
 
 
+def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: str) -> dict | None:
+    """#1292: deterministic pre-LLM shortcut — explicit purchase-intent free text at a
+    location that offers game_config_services opens the Services modal directly.
+
+    No LLM call, no turn persisted (mirrors the TRAVEL_RESUME/BUILD_CAMP chip pattern —
+    a mechanical action, not a narrated beat). The SAME modal is also reachable via the
+    "Usługi" suggested_actions chip (suggested_actions.py) without typing anything.
+    Returns a minimal dict for the frontend to open the modal, or None to fall through
+    to the normal narrative/LLM turn flow.
+    """
+    from app.services.spend_gold_service import _FOOD_ORDER_VERB_RE as _svc_order_verb_re
+    from app.services.location_services import SERVICE_NOUN_RE
+    t = text or ""
+    # "co MASZ DO zaoferowania" is a browse-the-menu question — opens on its own.
+    # Any other purchase verb (kupuję/zamawiam/proszę o/...) needs a co-occurring
+    # service noun (nocleg/piwo/naprawa/uzdrowienie/...), else "kupuję miecz" while
+    # standing in a tavern would wrongly open Usługi instead of reaching the narrator.
+    is_browse_ask = bool(re.search(r"\bmasz\s+do\b", t, re.IGNORECASE))
+    has_order_verb = bool(_TRADE_USER_INTENT_RE.search(t) or _svc_order_verb_re.search(t))
+    if not (is_browse_ask or (has_order_verb and SERVICE_NOUN_RE.search(t))):
+        return None
+    loc_key = _current_location_key(conn, campaign_id)
+    if not loc_key:
+        return None
+    from app.services.location_services import get_available_service_keys
+    if not get_available_service_keys(conn, loc_key):
+        return None
+    return {"route": "services_shortcut", "open_services": loc_key, "prose": None}
+
+
 def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
     """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
     if current_key:
@@ -5504,6 +5534,11 @@ def create_turn(
                 turn_id=turn_id,
             )
 
+        if not roll_request:
+            _svc_shortcut = _maybe_services_shortcut(conn, campaign_id, text)
+            if _svc_shortcut is not None:
+                return _svc_shortcut
+
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
         # ── Skill routing (R1.2 — #872) ─────────────────────────────────────
@@ -6242,6 +6277,22 @@ def create_turn_stream(
                         )
             except Exception as _pre_err_s:
                 logger.warning("pre_llm_keyword_scan_stream_error: %s", str(_pre_err_s))
+
+        # #1292: deterministic services shortcut (stream tor) — see _maybe_services_shortcut.
+        if not roll_request:
+            _svc_shortcut_s = _maybe_services_shortcut(conn, campaign_id, text)
+            if _svc_shortcut_s is not None:
+                _svc_shortcut_json = json.dumps(_svc_shortcut_s, ensure_ascii=False)
+
+                def services_shortcut_stream():
+                    yield f"data: [CMD_JSON]{_svc_shortcut_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    services_shortcut_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
 
         # #777: record turn decision in streaming path (was only in JSON path)
         if not roll_request:

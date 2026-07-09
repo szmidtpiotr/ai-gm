@@ -41,6 +41,7 @@ import { LocalMap } from "@/components/game/LocalMap";
 import { EndedCampaignScreen } from "@/components/game/outcomes/EndedCampaignScreen";
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
+import { ServicesOverlay } from "@/components/game/ServicesOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
 import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
@@ -73,6 +74,7 @@ export default function Game() {
   const setHero = useAppStore((s) => s.setHero);
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
+const openServices = useAppStore((s) => s.openServices);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
   const closeWait = useAppStore((s) => s.closeWait);
@@ -143,6 +145,13 @@ export default function Game() {
   >(null);
 
   function applyResponse(resp: TurnResponse) {
+    // #1292: deterministyczny skrót tekstowy ("zamawiam nocleg" itp.) przechwycony
+    // PRZED wysłaniem do LLM — backend nie narrował, nie ma tury do zastosowania,
+    // tylko otwórz modal Usług.
+    if (resp.open_services) {
+      openServices(resp.open_services);
+      return;
+    }
     setPendingRoll(rollFromResult(resp));
     setChips(normalizeChips(resp.suggested_actions));
     const routes = (resp.suggested_actions ?? []).filter(
@@ -249,6 +258,11 @@ export default function Game() {
     }
     if (act === "WAIT:open") {
       openWait();
+      return;
+    }
+    // #1292: modal Usług — deterministyczny, zero LLM. Klucz lokacji zaszyty w akcji.
+    if (act.startsWith("OPEN_SERVICES:")) {
+      openServices(act.slice("OPEN_SERVICES:".length));
       return;
     }
     if (act.startsWith("WAIT:")) {
@@ -492,6 +506,9 @@ export default function Game() {
 
       {/* FE12 (#1261): sklep NPC — overlay nad grą, otwierany narracyjnie */}
       <ShopOverlay />
+
+      {/* #1292: modal Usług — deterministyczny (chip "Usługi" / skrót tekstowy), omija LLM */}
+      <ServicesOverlay />
 
       {/* FE14 (#1263): paleta komend (Ctrl+/) · recap przy wejściu · FAB testera */}
       <CommandPalette />

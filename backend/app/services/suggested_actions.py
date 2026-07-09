@@ -222,6 +222,16 @@ def _build_narrative_actions(
     if safe and len(actions) < MAX_ACTIONS:
         actions.append(SuggestedAction(label="Odpocznij", action="REST:long", enabled=True))
 
+    # #1292: Usługi (nocleg/jedzenie/naprawa/uzdrowienie/stajnia/przewodnik/posłaniec) —
+    # deterministyczny modal, bez narratora. Wysoki priorytet (tuż po REST) żeby nie
+    # wypadł z capu w karczmie/kuźni pełnej NPC-ów i wyjść.
+    if current_loc_key and len(actions) < MAX_ACTIONS:
+        from app.services.location_services import get_available_service_keys
+        if get_available_service_keys(conn, current_loc_key):
+            actions.append(SuggestedAction(
+                label="Usługi", action=f"OPEN_SERVICES:{current_loc_key}", enabled=True, icon="🛎",
+            ))
+
     # 1) NPCs present at current location
     if current_loc_key and len(actions) < MAX_ACTIONS:
         npc_actions = _get_npc_actions(conn, current_loc_key)
