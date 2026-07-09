@@ -2,7 +2,7 @@
 // Mirror wzorca useShop.ts, ale usługi (game_config_services) zamiast towaru NPC.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { ServicesData } from "@/lib/services";
+import type { ServicesBatchResult, ServicesData } from "@/lib/services";
 
 /** GET /services/at-location/{key}?character_id — usługi dostępne tutaj + złoto gracza. */
 export function useServicesAtLocation(locationKey: string | undefined, characterId: number | undefined) {
@@ -18,20 +18,21 @@ export function useServicesAtLocation(locationKey: string | undefined, character
   });
 }
 
-interface BuyVars {
-  serviceKey: string;
+interface BuyBatchVars {
+  serviceKeys: string[];
   characterId: number;
 }
 
-/** POST /services/{key}/buy → { data: { gold_gp, paid_gp, label } }. */
-export function useBuyService(locationKey: string | undefined, characterId: number | undefined) {
+/** POST /services/buy-batch → { data: { items, total_paid_gp, gold_gp } }. Zakup wieloraki
+ * (multi-select → podsumowanie → potwierdzenie), atomowy po stronie backendu. */
+export function useBuyServicesBatch(locationKey: string | undefined, characterId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: BuyVars) =>
-      apiFetch<{ ok: boolean; data: { gold_gp: number; paid_gp: number; label: string } }>(
-        `/services/${v.serviceKey}/buy`,
-        { method: "POST", body: { character_id: v.characterId } },
-      ),
+    mutationFn: (v: BuyBatchVars) =>
+      apiFetch<{ ok: boolean; data: ServicesBatchResult }>(`/services/buy-batch`, {
+        method: "POST",
+        body: { character_id: v.characterId, service_keys: v.serviceKeys },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["services", locationKey, characterId] });
       qc.invalidateQueries({ queryKey: ["character", characterId] });

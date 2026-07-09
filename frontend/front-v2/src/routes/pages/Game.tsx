@@ -74,7 +74,7 @@ export default function Game() {
   const setHero = useAppStore((s) => s.setHero);
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
-const openServices = useAppStore((s) => s.openServices);
+  const openServices = useAppStore((s) => s.openServices);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
   const closeWait = useAppStore((s) => s.closeWait);
@@ -201,6 +201,18 @@ const openServices = useAppStore((s) => s.openServices);
     if (!characterId) return;
     submit.mutate({ characterId, text }, { onSuccess: applyResponse });
   }
+
+  // #1292: po zamknięciu modala Usług — ukryta tura prosi narratora o krótki opis
+  // odbioru (zakup już opłacony mechanicznie w modalu, ta tura tylko narruje).
+  const servicesReceiptPending = useAppStore((s) => s.servicesReceiptPending);
+  const setServicesReceiptPending = useAppStore((s) => s.setServicesReceiptPending);
+  useEffect(() => {
+    if (servicesReceiptPending && characterId) {
+      submit.mutate({ characterId, text: servicesReceiptPending }, { onSuccess: applyResponse });
+      setServicesReceiptPending(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servicesReceiptPending, characterId]);
 
   // F-80 (#1268): klik w chip. Mechaniczne akcje (podróż/obóz/odpoczynek) omijają
   // narratora i wołają dedykowane endpointy; reszta idzie jako akcja tury.

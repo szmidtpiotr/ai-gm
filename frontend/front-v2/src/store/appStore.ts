@@ -93,6 +93,9 @@ export interface AppState {
   shop: ShopContext | null;
   /** #1292 — otwarty modal Usług (klucz lokacji) albo null. Mechaniczny, omija LLM. */
   services: string | null;
+  /** #1292 — po zamknięciu modala Usług: ukryta tura proszona o narrację odbioru
+   *  (zakup już opłacony mechanicznie). Game.tsx konsumuje i czyści. */
+  servicesReceiptPending: string | null;
   /** FE14 (#1263 / F-44) — paleta komend otwarta (Ctrl+/ albo ikona w composerze). */
   paletteOpen: boolean;
   /** FE19 (#1268 / F-77) — menu ☰ ekranu gry otwarte. */
@@ -117,6 +120,7 @@ export interface AppState {
   closeShop: () => void;
   openServices: (locationKey: string) => void;
   closeServices: () => void;
+  setServicesReceiptPending: (text: string | null) => void;
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
@@ -171,6 +175,7 @@ export const useAppStore = create<AppState>((set) => ({
   gameTab: "story",
   shop: null,
   services: null,
+  servicesReceiptPending: null,
   paletteOpen: false,
   gameMenuOpen: false,
   advancementOpen: false,
@@ -194,6 +199,7 @@ export const useAppStore = create<AppState>((set) => ({
   closeShop: () => set({ shop: null }),
   openServices: (locationKey) => set({ services: locationKey }),
   closeServices: () => set({ services: null }),
+  setServicesReceiptPending: (servicesReceiptPending) => set({ servicesReceiptPending }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
@@ -221,6 +227,7 @@ export const useAppStore = create<AppState>((set) => ({
       gameTab: "story",
       shop: null,
       services: null,
+      servicesReceiptPending: null,
       activeCombat: null,
       dungeonRunState: null,
     });
@@ -232,6 +239,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentCampaignId: null,
       shop: null,
       services: null,
+      servicesReceiptPending: null,
       activeCombat: null,
       dungeonRunState: null,
     }),

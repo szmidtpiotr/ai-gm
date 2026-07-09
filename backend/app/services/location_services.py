@@ -151,3 +151,48 @@ def buy_service(conn: sqlite3.Connection, character_id: int, service_key: str) -
     )
     conn.commit()
     return {"gold_gp": new_gold, "paid_gp": cost, "label": row["label"], "service_key": service_key}
+
+
+def buy_services_batch(conn: sqlite3.Connection, character_id: int, service_keys: list[str]) -> dict:
+    """Multi-select cart checkout: verify the FULL cart is affordable up front (atomic —
+    never charge a partial cart), then deduct each item individually (own ledger row,
+    same accounting as buy_service). Raises ValueError on any missing key or
+    insufficient total gold — no state changed in either case.
+    """
+    if not service_keys:
+        raise ValueError("empty_cart")
+
+    placeholders = ",".join("?" * len(service_keys))
+    rows = conn.execute(
+        f"SELECT key, label, cost_gp FROM game_config_services "
+        f"WHERE key IN ({placeholders}) AND is_active = 1",
+        service_keys,
+    ).fetchall()
+    by_key = {r["key"]: r for r in rows}
+    missing = [k for k in service_keys if k not in by_key]
+    if missing:
+        raise ValueError("service_not_found")
+
+    total_cost = sum(int(by_key[k]["cost_gp"]) for k in service_keys)
+
+    gold_row = conn.execute(
+        "SELECT gold_gp FROM characters WHERE id = ? LIMIT 1", (character_id,)
+    ).fetchone()
+    if not gold_row:
+        raise ValueError("character_not_found")
+    if int(gold_row["gold_gp"] or 0) < total_cost:
+        raise ValueError("insufficient_gold")
+
+    from app.services.economy_service import change_gold
+    items: list[dict] = []
+    new_gold = int(gold_row["gold_gp"] or 0)
+    for k in service_keys:
+        row = by_key[k]
+        cost = int(row["cost_gp"])
+        new_gold = change_gold(
+            conn, character_id, -cost, "service",
+            meta={"service_key": k, "source": "services_modal_batch"},
+        )
+        items.append({"key": k, "label": row["label"], "cost_gp": cost})
+    conn.commit()
+    return {"items": items, "total_paid_gp": total_cost, "gold_gp": new_gold}

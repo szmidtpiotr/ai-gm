@@ -750,6 +750,11 @@ _TRADE_USER_INTENT_RE = re.compile(
     re.IGNORECASE,
 )
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
+# #1292: hidden turn submitted after a Services-modal batch purchase, asking the
+# narrator for flavour text on what was received. Starts with "[" so
+# isVisiblePlayerText() (frontend) hides the player bubble; payment already
+# happened mechanically, so the SPEND_GOLD block must be skipped for this turn.
+_SERVICES_RECEIPT_PREFIX = "[SERVICES_RECEIPT:"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 
@@ -2553,9 +2558,14 @@ def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: s
     Returns a minimal dict for the frontend to open the modal, or None to fall through
     to the normal narrative/LLM turn flow.
     """
+    t = text or ""
+    # A SERVICES_RECEIPT turn narrates a purchase ALREADY made via the modal — its
+    # own wording ("zapłacił", "posiłek", ...) would otherwise re-match the checks
+    # below and bounce straight back into re-opening the modal instead of narrating.
+    if t.startswith(_SERVICES_RECEIPT_PREFIX):
+        return None
     from app.services.spend_gold_service import _FOOD_ORDER_VERB_RE as _svc_order_verb_re
     from app.services.location_services import SERVICE_NOUN_RE
-    t = text or ""
     # "co MASZ DO zaoferowania" is a browse-the-menu question — opens on its own.
     # Any other purchase verb (kupuję/zamawiam/proszę o/...) needs a co-occurring
     # service noun (nocleg/piwo/naprawa/uzdrowienie/...), else "kupuję miecz" while
@@ -4947,21 +4957,26 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
 
     # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
     _gold_events_ns: list = []
-    try:
-        from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
-        _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
-        # #1101: collect visible gold_events for the 💰 chat bubble (parity with stream tor)
-        _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id, collect_events=_gold_events_ns)
-        clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
-        # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
-        from app.services.spend_gold_service import food_purchase_safety_net as _food_net_ns
-        if _food_net_ns(
-            text, conn, payload.character_id,
-            already_charged=bool(_gold_events_ns), collect_events=_gold_events_ns,
-        ):
-            conn.commit()
-    except Exception as _sg_ns_err:
-        logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
+    # #1292: SERVICES_RECEIPT turns narrate a purchase ALREADY paid for via the
+    # Services modal (location_services.buy_services_batch) — skip both the tag
+    # parser and the food-safety-net entirely, else a hallucinated [SPEND_GOLD] tag
+    # (or the receipt text itself, which names food/drink words) would charge twice.
+    if not text.startswith(_SERVICES_RECEIPT_PREFIX):
+        try:
+            from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
+            _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
+            # #1101: collect visible gold_events for the 💰 chat bubble (parity with stream tor)
+            _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id, collect_events=_gold_events_ns)
+            clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
+            # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+            from app.services.spend_gold_service import food_purchase_safety_net as _food_net_ns
+            if _food_net_ns(
+                text, conn, payload.character_id,
+                already_charged=bool(_gold_events_ns), collect_events=_gold_events_ns,
+            ):
+                conn.commit()
+        except Exception as _sg_ns_err:
+            logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
 
     # U6 (#530): pre-check grant_item_labels — items going to pending get narration correction
     try:
@@ -6812,28 +6827,30 @@ def create_turn_stream(
                 except Exception as _qse:
                     logger.warning("quest_suggest_parse_error", error=str(_qse))
                 # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
-                try:
-                    from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg
-                    _sg_conn = get_db()
+                # #1292: skip entirely for SERVICES_RECEIPT turns (already paid mechanically).
+                if not (user_text_val or "").startswith(_SERVICES_RECEIPT_PREFIX):
                     try:
-                        _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
-                        # #1101: collect visible gold_events for the 💰 chat bubble
-                        _gold_events_s = []
-                        _sg_narr_clean = _apply_sg(
-                            _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
-                        )
-                        # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
-                        from app.services.spend_gold_service import food_purchase_safety_net as _food_net_s
-                        _food_net_s(
-                            user_text_val, _sg_conn, character_id_val,
-                            already_charged=bool(_gold_events_s), collect_events=_gold_events_s,
-                        )
-                        _sg_conn.commit()
-                    finally:
-                        _sg_conn.close()
-                    clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
-                except Exception as _sge:
-                    logger.warning("spend_gold_parse_error", error=str(_sge))
+                        from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg
+                        _sg_conn = get_db()
+                        try:
+                            _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
+                            # #1101: collect visible gold_events for the 💰 chat bubble
+                            _gold_events_s = []
+                            _sg_narr_clean = _apply_sg(
+                                _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
+                            )
+                            # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+                            from app.services.spend_gold_service import food_purchase_safety_net as _food_net_s
+                            _food_net_s(
+                                user_text_val, _sg_conn, character_id_val,
+                                already_charged=bool(_gold_events_s), collect_events=_gold_events_s,
+                            )
+                            _sg_conn.commit()
+                        finally:
+                            _sg_conn.close()
+                        clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
+                    except Exception as _sge:
+                        logger.warning("spend_gold_parse_error", error=str(_sge))
                 # Final safety-net (stream): strip every residual mechanic tag from the
                 # player-visible narrative. QUEST_COMPLETE / BEAT_COMPLETE / ARC_ADVANCE are
                 # parsed from full_raw but never removed by strip_narrative_tags, so they
