@@ -3,6 +3,7 @@
 import type {
   HeroSheet,
   RollCardData,
+  SkillTestPending,
   SuggestedAction,
   TurnHistoryEntry,
   TurnResponse,
@@ -342,6 +343,43 @@ export function rollFromResult(resp: TurnResponse | undefined): RollCardData | n
     cells,
     crit,
     fumble,
+  };
+}
+
+// ── #1299 narracyjny test → karta rzutu + committed d20 (dla kości 3D) ────────
+// Karta liczy sukces po stronie klienta (committed_d20 + mod ≥ DC) TYLKO do
+// podglądu w overlayu. Werdykt autorytatywny (margines / opposed / omen) przychodzi
+// z /skill-test/resolve i trafia do logu jako narracja GM.
+export function skillTestCard(pending: SkillTestPending): {
+  card: RollCardData;
+  committed: number;
+} {
+  const raw = num(pending.committed_d20, 10);
+  const committed = Math.max(1, Math.min(20, Math.round(raw)));
+  const mod = num(pending.modifier_breakdown?.total, 0);
+  const dc = num(pending.dc ?? pending.counter?.dc, 12);
+  const total = committed + mod;
+  const nat20 = committed === 20;
+  const nat1 = committed === 1;
+  const success = nat20 || (!nat1 && total >= dc);
+  const name = (pending.skill_label ?? pending.skill_key ?? "Umiejętność").toUpperCase();
+
+  const cells: RollCardData["cells"] = [
+    { k: "d20", v: String(committed) },
+    { k: "Mod", v: (mod >= 0 ? "+" : "") + mod },
+    { k: "Suma", v: String(total), sum: true },
+    { k: "DC", v: String(dc) },
+    {
+      k: "Wynik",
+      v: nat20 ? "KRYTYK" : nat1 ? "PECH" : success ? "SUKCES" : "PORAŻKA",
+      res: true,
+      tone: nat1 || !success ? "bad" : "ok",
+    },
+  ];
+
+  return {
+    card: { actor: "player", title: `TEST: ${name}`, cells, crit: nat20, fumble: nat1 },
+    committed,
   };
 }
 

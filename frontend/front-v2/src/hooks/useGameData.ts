@@ -11,6 +11,7 @@ import type {
   Hero,
   IdentityPreview,
   LlmSettings,
+  SkillTestResolveResponse,
   SuggestedAction,
   TravelResult,
   TravelResumeResult,
@@ -172,6 +173,35 @@ export function useSubmitTurn(campaignId: number | undefined) {
       qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
       // Odśwież grounded pille (zależą od lokacji/stanu — inaczej pokazują stare
       // podpowiedzi niezgodne z nową lokacją).
+      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+    },
+  });
+}
+
+/**
+ * POST /campaigns/{id}/skill-test/resolve — #1299: rozwiąż narracyjny test
+ * umiejętności. Backend używa serwerowego committed_d20 (anty-cheat) i zwraca
+ * prozę + wynik. Wołane po zakończeniu animacji kości. Invalidacje jak w submit,
+ * by narracja i pille odświeżyły się same.
+ */
+export function useResolveSkillTest(campaignId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { characterId: number; skillTestId: string; d20: number }) =>
+      apiFetch<SkillTestResolveResponse>(`/campaigns/${campaignId}/skill-test/resolve`, {
+        method: "POST",
+        body: {
+          character_id: v.characterId,
+          skill_test_id: v.skillTestId,
+          d20_roll: v.d20,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
+      qc.invalidateQueries({ queryKey: ["clock", campaignId] });
+      qc.invalidateQueries({ queryKey: ["character"] });
+      qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+      qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
       qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
     },
   });

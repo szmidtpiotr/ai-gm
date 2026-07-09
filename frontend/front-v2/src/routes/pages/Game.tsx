@@ -7,6 +7,7 @@ import {
   useCampaigns,
   useCharacter,
   useLocalMap,
+  useResolveSkillTest,
   useRestLong,
   useSubmitTurn,
   useSuggestedActions,
@@ -28,10 +29,11 @@ import {
   readStats,
   readVitals,
   rollFromResult,
+  skillTestCard,
   type Chip,
   type LogBlock,
 } from "@/lib/game";
-import type { RollCardData, TurnResponse } from "@/lib/types";
+import type { RollCardData, SkillTestPending, TurnResponse } from "@/lib/types";
 import { NarrationLog } from "@/components/game/NarrationLog";
 import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
@@ -47,6 +49,7 @@ import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
+import { Dice3DOverlay, type DiceJob } from "@/components/game/combat/Dice3DOverlay";
 import { DungeonView } from "@/components/game/dungeon/DungeonView";
 import { MpGame } from "@/components/game/mp/MpGame";
 import { AdvancementScreen } from "@/components/game/outcomes/AdvancementScreen";
@@ -97,6 +100,8 @@ export default function Game() {
   const character = useCharacter(characterId ?? undefined);
   const stream = useTurnStream(campaignId);
   const submit = useSubmitTurn(campaignId);
+  // #1299: narracyjny test umiejętności — kość 3D jak w walce (Dice3DOverlay).
+  const resolveSkill = useResolveSkillTest(campaignId);
   // F-80 (#1268): mechaniczne akcje po przerwaniu podróży (omijają narratora).
   const travelResume = useTravelResume(campaignId);
   const buildCamp = useBuildCamp(campaignId);
@@ -131,6 +136,11 @@ export default function Game() {
   // Ostatnia karta rzutu + chipy z odpowiedzi tury (strumień ich nie niesie).
   const [pendingRoll, setPendingRoll] = useState<RollCardData | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
+  // #1299: kość 3D dla narracyjnego testu umiejętności (ten sam silnik co walka).
+  // skillJob steruje overlayem; skillPendingRef trzyma id testu do resolve po animacji.
+  const [skillJob, setSkillJob] = useState<DiceJob | null>(null);
+  const skillJobSeq = useRef(0);
+  const skillPendingRef = useRef<string | null>(null);
   // #1086 port: ulotne bąbelki ukończenia questa/beatu — nie są zapisywane w historii tur.
   const [completionBlocks, setCompletionBlocks] = useState<LogBlock[]>([]);
   const completionSeq = useRef(0);
@@ -150,6 +160,25 @@ export default function Game() {
     // tylko otwórz modal Usług.
     if (resp.open_services) {
       openServices(resp.open_services);
+      return;
+    }
+    // #1299: silnik zdecydował o narracyjnym rzucie — backend zwraca skill_test_pending
+    // (proza null). Odpal kość 3D jak w walce; wynik rozwiąże się po animacji (onSkillDiceDone).
+    const stp = resp.skill_test_pending as SkillTestPending | null | undefined;
+    if (stp?.skill_test_id) {
+      const { card, committed } = skillTestCard(stp);
+      skillJobSeq.current += 1;
+      skillPendingRef.current = stp.skill_test_id;
+      // Baner „KRYTYCZNE TRAFIENIE" jest walczny — dla testu zostawiamy tylko poświatę
+      // karty (card.crit/fumble), więc job.crit/fumble = false.
+      setSkillJob({
+        id: skillJobSeq.current,
+        notation: "1d20",
+        forced: [committed],
+        face: committed,
+        card,
+        actor: "player",
+      });
       return;
     }
     setPendingRoll(rollFromResult(resp));
@@ -200,6 +229,29 @@ export default function Game() {
   function send(text: string) {
     if (!characterId) return;
     submit.mutate({ characterId, text }, { onSuccess: applyResponse });
+  }
+
+  // #1299: animacja kości skończona → rozwiąż test na serwerze (autorytatywny
+  // committed_d20). Narracja GM wpadnie do logu przez invalidację turn-stream;
+  // tu tylko odświeżamy chipy (bramka przewagi po sukcesie Skradania) + lektor.
+  function onSkillDiceDone() {
+    const skillTestId = skillPendingRef.current;
+    const committed = skillJob?.forced?.[0] ?? 10;
+    skillPendingRef.current = null;
+    setSkillJob(null);
+    if (!skillTestId || !characterId) return;
+    resolveSkill.mutate(
+      { characterId, skillTestId, d20: committed },
+      {
+        onSuccess: (r) => {
+          const gate = r.advantage_gate?.options;
+          setChips(normalizeChips(gate && gate.length ? gate : r.suggested_actions));
+          if (typeof r.prose === "string" && r.prose.trim()) voice.speak(r.prose);
+        },
+        onError: (e) =>
+          toast(e instanceof Error ? e.message : "Nie udało się rozwiązać testu.", "danger"),
+      },
+    );
   }
 
   // #1292: po zamknięciu modala Usług — ukryta tura prosi narratora o krótki opis
@@ -527,6 +579,10 @@ export default function Game() {
       <RecapOverlay campaignId={campaignId} />
       <BugReportFab campaignId={campaignId} turnNumber={lastTurn || undefined} screen={screenLabel} />
 
+      {/* #1299: kość 3D narracyjnego testu umiejętności — ten sam overlay co walka,
+          fixed inset-0 z-50, więc leży nad grą niezależnie od zakładki. */}
+      {skillJob && <Dice3DOverlay job={skillJob} onDone={onSkillDiceDone} />}
+
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
       <GameRail hasMana={vitals.hasMana} />
 
@@ -599,7 +655,7 @@ export default function Game() {
 
           <Composer
             onSend={send}
-            disabled={submit.isPending}
+            disabled={submit.isPending || !!skillJob || resolveSkill.isPending}
             chips={shownChips}
             onChip={(c) => onChip(c, shownChips)}
           />

@@ -167,7 +167,7 @@ export interface TurnResponse {
   route?: string;
   result?: Record<string, unknown> | null;
   suggested_actions?: SuggestedAction[];
-  skill_test_pending?: Record<string, unknown> | null;
+  skill_test_pending?: SkillTestPending | null;
   combat_state?: Record<string, unknown> | null;
   clock?: ClockState | null;
   completed_beats?: Array<{ key: string; label?: string }>;
@@ -175,6 +175,51 @@ export interface TurnResponse {
   gold_events?: Array<{ delta: number; label: string; source?: string; service_key?: string }>;
   /** #1292 — deterministyczny skrót: otwórz modal Usługi zamiast narracji (bez LLM). */
   open_services?: string;
+  [k: string]: unknown;
+}
+
+// ── F-52/#1299 narracyjny test umiejętności (dice popup jak w walce) ──────────
+// Backend (turn_skill_router) zwraca to w odpowiedzi tury, gdy trzeba rzucić kością.
+// committed_d20 jest zablokowany serwerowo (anty-cheat) — klient tylko go animuje.
+export interface SkillTestPending {
+  skill_test_id: string;
+  skill_key?: string;
+  skill_label?: string;
+  committed_d20?: number;
+  dc?: number;
+  modifier_breakdown?: { total?: number; [k: string]: unknown };
+  counter?: { counter_type?: string; dc?: number; [k: string]: unknown };
+  [k: string]: unknown;
+}
+
+// Mechaniczny wynik z POST /skill-test/resolve (autorytatywny, z serwera).
+export interface SkillTestResult {
+  skill_key?: string;
+  skill_label?: string;
+  d20_roll?: number;
+  modifier?: number;
+  player_total?: number;
+  margin?: number;
+  outcome?: string;
+  nat20?: boolean;
+  nat1?: boolean;
+  success?: boolean;
+  [k: string]: unknown;
+}
+
+// Odpowiedź POST /campaigns/{id}/skill-test/resolve.
+export interface SkillTestResolveResponse {
+  prose?: string;
+  skill_test_result?: SkillTestResult;
+  turn_number?: number;
+  suggested_actions?: SuggestedAction[];
+  // D1 (#780): po sukcesie Skradania — bramka przewagi (Atak/Zastraszenie/Wycofaj).
+  advantage_gate?: {
+    source?: string;
+    title?: string;
+    options?: SuggestedAction[];
+    [k: string]: unknown;
+  } | null;
   [k: string]: unknown;
 }
 
