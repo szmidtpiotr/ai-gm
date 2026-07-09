@@ -554,34 +554,39 @@ def resolve_declared_move_target(
 
     # Current hub: the settlement the hero is in (parent of current sub-loc, or the
     # current macro itself). Sub-locations of this hub are the strongest match.
-    hub_id: int | None = None
+    # #1292: sub-locations are linked to their hub via ``parent_key`` (string), NOT
+    # ``parent_id`` — the latter is left NULL when the campaign plan materialises
+    # subs, so the old parent_id logic never matched and the #1254 hub-sub boost was
+    # dead. That let a player's "idę do kuźni" resolve to a floating orphan macro
+    # (e.g. another campaign's "Kuźnia") instead of the plan's "Kuźnia na skraju wsi".
+    hub_key: str | None = None
     try:
         crow = conn.execute(
-            "SELECT gl.id, gl.location_type, gl.parent_id "
+            "SELECT gl.key, gl.location_type, gl.parent_key "
             "FROM game_locations gl JOIN game_sessions gs ON gs.current_location_id = gl.id "
             "WHERE gs.campaign_id = ? AND gl.is_active = 1 LIMIT 1",
             (campaign_id,),
         ).fetchone()
         if crow:
-            hub_id = int(crow["parent_id"]) if (crow["location_type"] == "sub" and crow["parent_id"]) else int(crow["id"])
+            hub_key = crow["parent_key"] if (crow["location_type"] == "sub" and crow["parent_key"]) else crow["key"]
     except Exception:
         pass
 
     rows = conn.execute(
-        "SELECT key, label, location_type, parent_id, world_hex_q FROM game_locations "
+        "SELECT key, label, location_type, parent_key, world_hex_q FROM game_locations "
         "WHERE is_active = 1 AND label IS NOT NULL"
     ).fetchall()
 
     best: tuple[int, float, str, str] | None = None  # (tier, score, key, label)
     hub_sub_exists = any(
-        hub_id is not None and r["parent_id"] == hub_id for r in rows
+        hub_key is not None and r["parent_key"] == hub_key for r in rows
         if _label_matches_tokens(r["label"], cand_tokens)
     )
     for r in rows:
         if not _label_matches_tokens(r["label"], cand_tokens):
             continue
         is_placed = r["world_hex_q"] is not None
-        is_hub_sub = hub_id is not None and r["parent_id"] == hub_id
+        is_hub_sub = hub_key is not None and r["parent_key"] == hub_key
         is_floating_no_hex = (r["location_type"] == "macro") and not is_placed
         # #1254: inside a settlement, never fall onto a floating macro-without-hex.
         if hub_sub_exists and is_floating_no_hex:
