@@ -4751,6 +4751,24 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             logger.info("roll_cue_skipped_combat_roll_turn", campaign_id=campaign_id)
     elif _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
         _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
+        # #1299: the narrator frequently embeds "Roll <skill> d20" as the LAST line
+        # of the `narrative` string instead of emitting a separate `roll_cue` field.
+        # Scan the extracted narrative tail and STRIP the line — otherwise the cue
+        # both leaks into the displayed prose AND never fires the dice popup.
+        if not _raw_cue:
+            import re as _rc_re_j
+            _cue_lines = (_narrative_for_cues or "").rstrip().splitlines()
+            for _i in range(len(_cue_lines) - 1, -1, -1):
+                _ls = _cue_lines[_i].strip()
+                if not _ls:
+                    continue
+                if _rc_re_j.match(r"^Roll\s+.+?\s+d\d+$", _ls, _rc_re_j.IGNORECASE):
+                    _raw_cue = _ls
+                    _narr_str = "\n".join(_cue_lines[:_i]).rstrip()
+                    _narrative_for_cues = _narr_str
+                    clean_assistant = _repack_narrative(clean_assistant, _narr_str, _parsed_json)
+                    logger.info("roll_cue_narrative_tail_json_fallback", cue=_raw_cue)
+                break  # only inspect the last non-empty line
     elif not _parsed_json and not _skill_pending_narrator:
         import re as _rc_re_pre
         _tail_text = (clean_assistant or "").rstrip()
@@ -6953,6 +6971,19 @@ def create_turn_stream(
                         # 2) roll_cue in parsed JSON (if tag intercept didn't fire)
                         if not _sk_pending_s and _parsed_json_s and _text_is_action_attempt(user_text_val):
                             _raw_cue_s = str(_parsed_json_s.get("roll_cue") or "").strip()
+                            # #1299: cue embedded as the last narrative line instead of a
+                            # roll_cue field — scan the narrative tail (parity w/ non-stream).
+                            if not _raw_cue_s:
+                                import re as _rc_re_sj
+                                _narr_sj = str(_parsed_json_s.get("narrative") or "")
+                                for _ls_sj in reversed(_narr_sj.rstrip().splitlines()):
+                                    _lss_sj = _ls_sj.strip()
+                                    if not _lss_sj:
+                                        continue
+                                    if _rc_re_sj.match(r"^Roll\s+.+?\s+d\d+$", _lss_sj, _rc_re_sj.IGNORECASE):
+                                        _raw_cue_s = _lss_sj
+                                        logger.info("roll_cue_narrative_tail_json_fallback_stream", cue=_raw_cue_s)
+                                    break  # only the last non-empty line
                             if _raw_cue_s:
                                 import re as _rc_re_s
                                 _cm_s = _rc_re_s.match(r"^Roll (.+?) d\d+$", _raw_cue_s, _rc_re_s.IGNORECASE)

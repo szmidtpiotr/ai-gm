@@ -94,6 +94,14 @@ function isSentinelProse(s: string): boolean {
   return /^__AI_GM/i.test(t) || /^_{2}[A-Z0-9_]+_{2}$/.test(t);
 }
 
+// #1299: narrator czasem dokleja "Roll <skill> d20" jako OSTATNIĄ linię narracji
+// zamiast pola roll_cue. Backend to przechwytuje (odpala popup) i tnie, ale defensywnie
+// usuwamy też tu — inaczej wyciek pokazuje się w logu (stare tury sprzed fixu +
+// tor strumieniowy, który już wysłał tokeny na żywo). Gracz nie ma widzieć tej dyrektywy.
+function stripTrailingRollCue(s: string): string {
+  return s.replace(/\s*(?:\n|^)Roll\s+[^\n]+?\s+d\d+\s*$/i, "").trimEnd();
+}
+
 function cleanProse(text: string): string {
   let s = (text || "").trim();
   if (!s || isSentinelProse(s)) return "";
@@ -104,7 +112,7 @@ function cleanProse(text: string): string {
       const o = JSON.parse(s) as Record<string, unknown>;
       const f =
         o.narration ?? o.narrative ?? o.prose ?? o.text ?? o.message ?? o.story;
-      if (typeof f === "string" && f.trim()) return f.trim();
+      if (typeof f === "string" && f.trim()) return stripTrailingRollCue(f.trim());
     } catch {
       /* nie-poprawny JSON → tnij regexem poniżej */
     }
@@ -119,13 +127,13 @@ function cleanProse(text: string): string {
       /^\{\s*"(narration|narrative|prose|text|message|story)"\s*:\s*"/,
       "",
     ); // wiodące `{"narration": "`
-    if (head) return head.trim();
+    if (head) return stripTrailingRollCue(head.trim());
   }
 
   // (3b) samodzielny blok JSON w nowej linii na końcu
   const brace = s.lastIndexOf("\n{");
   if (brace > 0 && s.trimEnd().endsWith("}")) s = s.slice(0, brace).trim();
-  return s;
+  return stripTrailingRollCue(s);
 }
 
 // Chipy z ostatniej tury GM (gdy odpowiedź live jeszcze ich nie dała) — parsuje
