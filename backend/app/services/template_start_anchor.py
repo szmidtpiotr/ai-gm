@@ -392,9 +392,13 @@ def ensure_template_location_structure(
     hub_key = _materialize(struct["hub"], is_hub=True)
     sub_keys = [_materialize(s, is_hub=False) for s in struct["subs"]]
 
-    # apply conflict renames to template + campaign plan copies (and start_key)
+    # apply conflict renames to THIS campaign's plan copy only (and start_key).
+    # #1292: renaming campaign_templates here was a bug — a key collision hit by
+    # ONE campaign launch (e.g. a stray foreign location happening to share a key)
+    # permanently mutated the SHARED, reusable template in the Forge, poisoning
+    # every future campaign started from it with the renamed key forever. The
+    # conflict is per-launch and must stay scoped to this campaign's own copy.
     for old_key, new_key in renames:
-        _rewrite_stored_plan(conn, "campaign_templates", template_id, old_key, new_key)
         if campaign_id is not None:
             _rewrite_stored_plan(conn, "campaigns", int(campaign_id), old_key, new_key)
         if start_key == old_key:
