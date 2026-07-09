@@ -636,7 +636,7 @@ export default function Game() {
               <NarrationLog
                 blocks={blocks}
                 pendingRoll={pendingRoll}
-                typing={submit.isPending}
+                typing={submit.isPending || resolveSkill.isPending}
                 heroName={character.data?.name}
               />
               {/* F-77: karta bramki finału w logu (cel osiągnięty). */}

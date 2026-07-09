@@ -265,6 +265,41 @@ function rollFromObj(o: Record<string, unknown>): RollCardData {
   return { actor: enemy ? "enemy" : "player", title: `TEST: ${title}`, cells, crit, fumble };
 }
 
+// #1299: wiersz rzutu z backendu "[Rzut: <skill> — <d20> <±mod> = <suma>[ vs …] — <wynik>]"
+// jest persystowany jako user_text, ale ukryty przez isVisiblePlayerText (`[`-prefix).
+// Zamień go na kartę rzutu, żeby po animacji kości nazwa+liczby zostały widoczne w logu
+// (parytet z walką) — inaczej widać samą narrację GM i gracz myśli, że coś się zawiesiło.
+const RZUT_RE =
+  /^\[Rzut:\s*(.+?)\s+[—–-]\s+(\d+)\s+([+\-−]\d+)\s+=\s+(\d+)(.*?)\s+[—–-]\s+([^\]]+)\]\s*$/;
+
+export function rollFromRzutLine(text: string | null | undefined): RollCardData | null {
+  if (!text) return null;
+  const m = text.trim().match(RZUT_RE);
+  if (!m) return null;
+  const label = m[1].trim();
+  const d20 = parseInt(m[2], 10);
+  const mod = m[3].replace("−", "-");
+  const total = m[4];
+  const outcome = m[6].trim();
+  const lo = outcome.toLowerCase();
+  const crit = d20 === 20 || lo.includes("krytyczny sukces") || lo.startsWith("naturalny 20");
+  const fumble = d20 === 1 || lo.includes("krytyczna porażka") || lo.startsWith("naturalny 1");
+  const success = crit || lo.startsWith("sukces");
+
+  const cells: RollCardData["cells"] = [
+    { k: "d20", v: String(d20) },
+    { k: "Mod", v: mod },
+    { k: "Suma", v: total, sum: true },
+    {
+      k: "Wynik",
+      v: crit ? "KRYTYK" : fumble ? "PECH" : success ? "SUKCES" : "PORAŻKA",
+      res: true,
+      tone: success ? "ok" : "bad",
+    },
+  ];
+  return { actor: "player", title: `TEST: ${label.toUpperCase()}`, cells, crit, fumble };
+}
+
 export function buildLog(turns: TurnHistoryEntry[]): LogBlock[] {
   const blocks: LogBlock[] = [];
   for (const t of turns) {
@@ -274,6 +309,10 @@ export function buildLog(turns: TurnHistoryEntry[]): LogBlock[] {
         id: `p-${t.turn_number}`,
         text: t.user_text!.trim(),
       });
+    } else {
+      // #1299: ukryty player-text może być wierszem rzutu → karta w logu.
+      const rc = rollFromRzutLine(t.user_text);
+      if (rc) blocks.push({ kind: "roll", id: `rr-${t.turn_number}`, roll: rc });
     }
 
     const raw = (t.assistant_text || "").trim();
