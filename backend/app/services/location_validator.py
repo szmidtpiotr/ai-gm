@@ -302,13 +302,24 @@ def _fuzzy_match_location_hub_aware(
       1. anything else (only via strong full-string match).
     When a hub sub-location matches at all, floating macros WITHOUT a hex are
     excluded outright (never leave the settlement onto a placeless global macro).
+
+    #1292/#9998881: sub-locations materialized from a campaign template are linked
+    to their hub via ``parent_key`` (string), not ``parent_id`` — the latter is
+    often left NULL. Match on both so a hub sub-location is still recognized when
+    only parent_key is populated (mirrors the fix already applied to
+    hex_travel_service.resolve_declared_move_target).
     """
     hub_id = None
+    hub_key = None
     if current_loc:
-        if current_loc.get("location_type") == "sub" and current_loc.get("parent_id"):
+        if current_loc.get("location_type") == "sub" and (
+            current_loc.get("parent_id") or current_loc.get("parent_key")
+        ):
             hub_id = current_loc.get("parent_id")
+            hub_key = current_loc.get("parent_key")
         else:
             hub_id = current_loc.get("id")
+            hub_key = current_loc.get("key")
 
     scored: list[tuple] = []
     hub_sub_matched = False
@@ -316,7 +327,9 @@ def _fuzzy_match_location_hub_aware(
         label = loc.get("label") or ""
         score = fuzz.ratio(target_label.lower(), label.lower())
         is_placed = loc.get("world_hex_q") is not None
-        is_hub_sub = hub_id is not None and loc.get("parent_id") == hub_id
+        is_hub_sub = (hub_id is not None and loc.get("parent_id") == hub_id) or (
+            hub_key is not None and loc.get("parent_key") == hub_key
+        )
         strong = score >= FUZZY_MATCH_THRESHOLD
         token = (is_hub_sub or is_placed) and _shares_key_token(target_label, label)
         if not (strong or token):
