@@ -6969,6 +6969,45 @@ def create_turn_stream(
                                             "counter": _gc(save_conn, _canonical_s),
                                             "modifier_breakdown": _csmi(_char_sh_s, _canonical_s),
                                         }
+                        # 3) plain-text tail fallback — LLM emitted plain prose (no JSON
+                        # envelope) ending with an English "Roll <skill> d20" line and no
+                        # [SKILL_TEST] tag. The non-streaming path scans this tail
+                        # (see #53 fix 3); the streaming path previously did not, so these
+                        # turns produced a visible "Roll Stealth d20" line but NO dice
+                        # popup ("brak rzutu"). Mirror the non-streaming tail scan here.
+                        if not _sk_pending_s and not _parsed_json_s and _text_is_action_attempt(user_text_val):
+                            import re as _rc_re_st
+                            _tail_st = (clean_text or "").rstrip()
+                            _cue_line_st = ""
+                            for _line_st in reversed(_tail_st.splitlines()):
+                                _ls_st = _line_st.strip()
+                                if not _ls_st:
+                                    continue
+                                if _rc_re_st.match(r"^Roll\s+.+?\s+d\d+$", _ls_st, _rc_re_st.IGNORECASE):
+                                    _cue_line_st = _ls_st
+                                    logger.info("roll_cue_plain_text_fallback_stream", cue=_cue_line_st)
+                                break  # only inspect the last non-empty line
+                            if _cue_line_st:
+                                _cm_st = _rc_re_st.match(r"^Roll (.+?) d\d+$", _cue_line_st, _rc_re_st.IGNORECASE)
+                                if _cm_st:
+                                    _cue_name_st = _cm_st.group(1).strip()
+                                    _canonical_st = resolve_test_name(_cue_name_st)
+                                    if _canonical_st is None:
+                                        _norm_st = _cue_name_st.lower().replace(" ", "_")
+                                        _cue_db_st = save_conn.execute(
+                                            "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
+                                            (_norm_st,),
+                                        ).fetchone()
+                                        if _cue_db_st:
+                                            _canonical_st = _norm_st
+                                    if _canonical_st and not is_attack_test(_canonical_st) and not _is_combat_class_skill(_canonical_st):
+                                        _sk_pending_s = {
+                                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                                            "skill_key": _canonical_st,
+                                            "skill_label": _sl(_canonical_st),
+                                            "counter": _gc(save_conn, _canonical_st),
+                                            "modifier_breakdown": _csmi(_char_sh_s, _canonical_st),
+                                        }
                         if _sk_pending_s and not _skill_test_source_allowed(user_text_val):
                             logger.info("skill_test_skipped_combat_roll_turn",
                                         skill=_sk_pending_s.get("skill_key"),
