@@ -4916,10 +4916,12 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
 
     # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
+    _gold_events_ns: list = []
     try:
         from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
         _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
-        _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id)
+        # #1101: collect visible gold_events for the 💰 chat bubble (parity with stream tor)
+        _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id, collect_events=_gold_events_ns)
         clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
     except Exception as _sg_ns_err:
         logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
@@ -5301,6 +5303,25 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     # #1097: finale-gate opened this turn — one-shot chat card trigger.
     if locals().get("_finale_transition_ns"):
         out["finale_available"] = True
+
+    # #1086: beat/quest completion chat bubbles — parity with the streaming tor.
+    # ŻAR (front-v2) submits via this non-streaming endpoint, so without this the
+    # "✓ Cel wykonany / ✓ Quest" bubbles never surface in the player UI.
+    try:
+        from app.services.turn_notifications import collect_turn_notifications as _ctn_ns
+        _notif_meta_ns = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key='gm_plan_notifications_enabled' LIMIT 1"
+        ).fetchone()
+        _notif_enabled_ns = str((_notif_meta_ns[0] if _notif_meta_ns else "") or "").strip() not in ("0", "false", "no")
+        _notif_ns = _ctn_ns(campaign_id, int(_xp_turn), conn, enabled=_notif_enabled_ns)
+        if _notif_ns:
+            out.update(_notif_ns)
+    except Exception as _notif_ns_err:
+        logger.warning("turn_notifications_nonstream_error", error=str(_notif_ns_err))
+
+    # C12 (#1101): gold transaction bubbles (SPEND_GOLD success events) — parity with stream.
+    if locals().get("_gold_events_ns"):
+        out["gold_events"] = _gold_events_ns
 
     return out
 
