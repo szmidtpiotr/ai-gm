@@ -316,20 +316,34 @@ def ensure_template_location_structure(
         # start sub = safe (tavern-like start); other subs default risky
         safe = 1 if is_hub or key == start_key else 0
 
+        # #1292 — resolve the hub's integer id so sub-locations carry BOTH parent_key
+        # AND parent_id. The hub is materialized before the subs, so its row exists.
+        # Without parent_id, every parent_id-based location path (declared-move hub-sub
+        # resolver, rest anchor, etc.) silently failed and "idę do X" resolved to
+        # foreign floating orphans instead of the plan's own sub-locations.
+        parent_id = None
+        if parent_key:
+            _prow = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+                (parent_key,),
+            ).fetchone()
+            if _prow:
+                parent_id = _prow["id"]
+
         row = conn.execute(
             "SELECT id, key, world_hex_q, world_hex_r, created_by, source_campaign_id, "
-            "location_type, parent_key FROM game_locations WHERE key = ?",
+            "location_type, parent_key, parent_id FROM game_locations WHERE key = ?",
             (key,),
         ).fetchone()
         if row is None:
             conn.execute(
                 """INSERT INTO game_locations
-                   (key, label, description, location_type, parent_key,
+                   (key, label, description, location_type, parent_key, parent_id,
                     review_status, is_active, ai_generated, created_by,
                     source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
-                (key, label, desc, loc_type, parent_key,
+                   VALUES (?, ?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
+                (key, label, desc, loc_type, parent_key, parent_id,
                  template_id, safe, hex_q, hex_r, now, now),
             )
             return key
@@ -340,6 +354,7 @@ def ensure_template_location_structure(
         if (
             (row["location_type"] or "macro") == loc_type
             and (row["parent_key"] or None) == parent_key
+            and (row["parent_id"] if row["parent_id"] is not None else None) == parent_id
             and (row["world_hex_q"] is None) == (hex_q is None)
             and (
                 hex_q is None
@@ -349,22 +364,22 @@ def ensure_template_location_structure(
             return key
         if _template_owns_row(row, template_id, q, r):
             conn.execute(
-                "UPDATE game_locations SET location_type = ?, parent_key = ?, "
+                "UPDATE game_locations SET location_type = ?, parent_key = ?, parent_id = ?, "
                 "world_hex_q = ?, world_hex_r = ?, is_active = 1, updated_at = ? "
                 "WHERE id = ?",
-                (loc_type, parent_key, hex_q, hex_r, now, row["id"]),
+                (loc_type, parent_key, parent_id, hex_q, hex_r, now, row["id"]),
             )
             return key
         # foreign row under this key → #1206 conflict rule: copy + rename in plans
         new_key = _unique_location_key(conn, key)
         conn.execute(
             """INSERT INTO game_locations
-               (key, label, description, location_type, parent_key,
+               (key, label, description, location_type, parent_key, parent_id,
                 review_status, is_active, ai_generated, created_by,
                 source_campaign_id, safe_for_rest, world_hex_q, world_hex_r,
                 created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
-            (new_key, label, desc, loc_type, parent_key,
+               VALUES (?, ?, ?, ?, ?, ?, 'pending', 1, 1, 'forge', ?, ?, ?, ?, ?, ?)""",
+            (new_key, label, desc, loc_type, parent_key, parent_id,
              template_id, safe, hex_q, hex_r, now, now),
         )
         renames.append((key, new_key))
