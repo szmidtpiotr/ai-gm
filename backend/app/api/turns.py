@@ -3753,6 +3753,31 @@ def create_turn_log(
                 error=str(_nm_err),
             )
 
+    # #1295 (Warstwa 2) — deterministic closed-vocab capture: any known entity
+    # (plan.key_npcs name ∪ catalog npcs.label) named in the narration is added to
+    # the roster even if the LLM emitted no [NPC_MEMORY]/npc_met tag. Idempotent;
+    # non-fatal. Truly-novel names still rely on the tag (deliberate boundary).
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.npc_memory_service import capture_known_names_in_narration
+
+            _captured = capture_known_names_in_narration(
+                conn, campaign_id, assistant_text, turn_num=int(turn_number)
+            )
+            if _captured:
+                conn.commit()
+                logger.info(
+                    "npc_captured_from_narration",
+                    campaign_id=campaign_id,
+                    count=len(_captured),
+                )
+        except Exception as _cap_err:
+            logger.warning(
+                "npc_capture_from_narration_failed",
+                campaign_id=campaign_id,
+                error=str(_cap_err),
+            )
+
     # D6 (#381) — persist Narrative State into session_flags (World State), so the
     # compressed block can be injected on later turns for continuity.
     if route == "narrative" and (_narr_events or _narr_seeds):

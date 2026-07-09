@@ -648,6 +648,14 @@ def _trigger_narration_impl(round_id: int) -> None:
         campaign_id = int(row["campaign_id"])
         round_number = int(row["round_number"])
 
+        # #1294 (Warstwa 1) — seed the plan's key_npcs into the known-NPC roster
+        # for MP campaigns too. Idempotent; non-fatal.
+        try:
+            from app.services.npc_memory_service import seed_known_npcs_from_plan
+            seed_known_npcs_from_plan(conn, campaign_id)
+        except Exception:
+            pass
+
         actions = conn.execute(
             "SELECT character_name, action_text, user_id, initiative_roll, character_id "
             "FROM campaign_round_actions WHERE round_id = ? ORDER BY submitted_at",

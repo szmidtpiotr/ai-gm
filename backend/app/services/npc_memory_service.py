@@ -17,6 +17,10 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
+import structlog
+
+logger = structlog.get_logger()
+
 DB_PATH = Path("/data/ai_gm.db")
 
 # Cap exposed to MG. More history → bigger prompt → no real upside since the
@@ -471,3 +475,201 @@ def append_npc_memory(
     finally:
         if managed:
             conn.close()
+
+
+# ── #1294 (Warstwa 1) — seed roster from the GM plan ──────────────────────────
+# The plan's `key_npcs[]` is the authored/generated cast. Seeding it into
+# campaign_known_npcs removes the reliance on the LLM voluntarily emitting
+# `[NPC_MEMORY]` / `npc_met` for NPCs that were designed up-front. Idempotent, so
+# it's safe to call on every turn (backfills existing campaigns on next turn) and
+# from every mode's turn path (new campaign / template / MP).
+
+# Importance tiers that earn a roster row. `minor` = background flavour, skipped.
+SEED_IMPORTANCE = ("critical", "supporting")
+
+
+def _load_plan(conn: sqlite3.Connection, campaign_id: int) -> dict[str, Any]:
+    """Best-effort read of a campaign's gm_plan_json. Returns {} on any miss."""
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return {}
+    if not row:
+        return {}
+    raw = row["gm_plan_json"] if "gm_plan_json" in row.keys() else row[0]
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def seed_known_npcs_from_plan(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    *,
+    importance_tiers: tuple[str, ...] = SEED_IMPORTANCE,
+) -> list[str]:
+    """Seed campaign_known_npcs from `gm_plan_json.key_npcs`.
+
+    Seeds NPCs whose `importance` is in `importance_tiers` and that are not
+    flagged `alive=False`. Delegates to `record_npc_met` (idempotent on
+    (campaign_id, npc_name)), so repeat calls are no-ops and the catalog `npc_id`
+    is linked when the plan name/key matches an `npcs` row. Returns the list of
+    NPC names that were newly created this call. Non-fatal by design.
+    """
+    plan = _load_plan(conn, campaign_id)
+    key_npcs = plan.get("key_npcs")
+    if not isinstance(key_npcs, list):
+        return []
+
+    created: list[str] = []
+    for n in key_npcs:
+        if not isinstance(n, dict):
+            continue
+        name = str(n.get("name") or "").strip()
+        if not name:
+            continue
+        if n.get("alive") is False:
+            continue
+        importance = str(n.get("importance") or "").strip().lower()
+        if importance and importance not in importance_tiers:
+            continue
+        try:
+            res = record_npc_met(
+                campaign_id=campaign_id,
+                name=name,
+                role=(str(n.get("role")).strip() if n.get("role") else None),
+                notes=(importance or None),
+                conn=conn,
+            )
+            if res.get("ok") and res.get("new"):
+                created.append(name)
+        except Exception as ex:  # never let seeding break a turn
+            logger.warning(
+                "known_npc_seed_failed", campaign_id=campaign_id, name=name, error=str(ex)
+            )
+    if created:
+        logger.info(
+            "known_npcs_seeded_from_plan", campaign_id=campaign_id, count=len(created)
+        )
+    return created
+
+
+# ── #1295 (Warstwa 2) — deterministic capture from narration ─────────────────
+# Closed-vocabulary scan (plan.key_npcs names ∪ npcs.label). No NER: a narrated
+# name only becomes a roster row if it is already a known entity somewhere. Truly
+# novel names still rely on the [NPC_MEMORY] tag — a deliberate boundary that
+# avoids false positives from arbitrary prose.
+
+# A name must be at least this long to be used as a match token (guards against
+# noisy 1-2 char fragments matching everywhere).
+_MIN_TOKEN_LEN = 3
+
+
+def _match_tokens(name: str) -> list[str]:
+    """Return the strings to word-boundary match for a display name.
+
+    Full name plus, for multi-word names, the leading token (the given name) so
+    that "Brunn" matches the roster entry "Brunn Żelaznoręki".
+    """
+    name = (name or "").strip()
+    if not name:
+        return []
+    tokens = [name]
+    parts = name.split()
+    if len(parts) > 1 and len(parts[0]) >= _MIN_TOKEN_LEN:
+        tokens.append(parts[0])
+    return tokens
+
+
+def capture_known_names_in_narration(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    text: str,
+    *,
+    turn_num: int | None = None,
+) -> list[str]:
+    """Scan narration for known-entity names and record any not yet in the roster.
+
+    Vocabulary = plan.key_npcs names ∪ catalog npcs.label. Matching is
+    word-boundary, case-insensitive. Idempotent against the current roster.
+    Returns the list of names newly recorded this call.
+    """
+    text = text or ""
+    if not text.strip():
+        return []
+
+    # Build the vocabulary: (match_tokens, canonical_name, role).
+    entries: list[tuple[list[str], str, str | None]] = []
+    seen_vocab: set[str] = set()
+
+    plan = _load_plan(conn, campaign_id)
+    for n in plan.get("key_npcs") or []:
+        if not isinstance(n, dict):
+            continue
+        if n.get("alive") is False:
+            continue
+        name = str(n.get("name") or "").strip()
+        if not name or name.lower() in seen_vocab:
+            continue
+        seen_vocab.add(name.lower())
+        entries.append(
+            (_match_tokens(name), name, str(n.get("role")).strip() if n.get("role") else None)
+        )
+
+    try:
+        for row in conn.execute(
+            "SELECT label FROM npcs WHERE label IS NOT NULL AND TRIM(label) != ''"
+        ):
+            label = str(row["label"]).strip()
+            if not label or label.lower() in seen_vocab:
+                continue
+            seen_vocab.add(label.lower())
+            entries.append((_match_tokens(label), label, None))
+    except sqlite3.OperationalError:
+        pass  # npcs table absent — plan-only vocab still works
+
+    known = {
+        str(r["npc_name"]).lower()
+        for r in conn.execute(
+            "SELECT npc_name FROM campaign_known_npcs WHERE campaign_id = ?", (campaign_id,)
+        )
+        if r["npc_name"]
+    }
+
+    captured: list[str] = []
+    for tokens, name, role in entries:
+        if name.lower() in known:
+            continue
+        hit = any(
+            re.search(rf"(?<!\w){re.escape(tok)}(?!\w)", text, re.IGNORECASE)
+            for tok in tokens
+        )
+        if not hit:
+            continue
+        try:
+            record_npc_met(
+                campaign_id=campaign_id,
+                name=name,
+                role=role,
+                first_met_turn=turn_num,
+                conn=conn,
+            )
+            known.add(name.lower())
+            captured.append(name)
+        except Exception as ex:
+            logger.warning(
+                "known_npc_capture_failed", campaign_id=campaign_id, name=name, error=str(ex)
+            )
+    if captured:
+        logger.info(
+            "known_npcs_captured_from_narration",
+            campaign_id=campaign_id,
+            count=len(captured),
+        )
+    return captured
