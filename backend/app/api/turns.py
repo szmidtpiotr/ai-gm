@@ -1230,8 +1230,17 @@ def _process_location_intent(
                     (result.resolved_location_id,),
                 ).fetchone()
                 if _loc_row and _loc_row["key"]:
+                    # #1293: only the WORLD map (map_level=0) drives the world pin.
+                    # A settlement sub-location (kuźnia, karczma) has only a LOCAL
+                    # map hex (map_level=1) whose q/r live in a separate coordinate
+                    # space (7000s). Without this filter that local hex was picked
+                    # up here, produced an absurd hex_distance (7343), and the move
+                    # was wrongly promoted to a failing cross-world journey — the
+                    # pin never moved. Sub-location moves must fall through to the
+                    # local_hex sync below, not the world-hex block.
                     _hex_row = conn.execute(
-                        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+                        "SELECT q, r FROM world_hexes WHERE location_key = ? "
+                        "AND is_active = 1 AND COALESCE(map_level, 0) = 0 LIMIT 1",
                         (_loc_row["key"],),
                     ).fetchone()
                     if _hex_row:

@@ -803,8 +803,32 @@ def validate_move(
                 matched = _fuzzy_match_location(intent.target_label, all_locs)
 
             if matched:
+                # #1293: a hub-aware match to a sub-location of the CURRENT settlement
+                # is already contextually anchored — the token path (_shares_key_token)
+                # deliberately accepts low fuzz.ratio ("kuźnia Brunna" ↔ "Kuźnia na
+                # skraju wsi") for the hub's own building. Re-gating it through the LLM
+                # same-location tie-break below undid exactly that: the LLM answers NIE
+                # on the surface-name difference, matched→None, and the player was
+                # stranded at the tavern despite the narration of arrival. Trust the
+                # hub-sub match and skip the LLM tie-break for it.
+                _hub_id = (
+                    current_loc.get("parent_id")
+                    if current_loc.get("location_type") == "sub"
+                    else current_loc.get("id")
+                )
+                _hub_key = (
+                    current_loc.get("parent_key")
+                    if current_loc.get("location_type") == "sub"
+                    else current_loc.get("key")
+                )
+                _matched_is_hub_sub = (
+                    _hub_id is not None and matched.get("parent_id") == _hub_id
+                ) or (_hub_key is not None and matched.get("parent_key") == _hub_key)
+
                 # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases)
-                if fuzz.ratio(intent.target_label.lower(), matched["label"].lower()) < 95:
+                if intent.action == "move" and _matched_is_hub_sub:
+                    pass  # hub-aware token match — trust it, no LLM re-gate
+                elif fuzz.ratio(intent.target_label.lower(), matched["label"].lower()) < 95:
                     # Niedokładny match — zapytaj LLM
                     if not _ask_llm_if_same_location(intent.target_label, matched["label"]):
                         # LLM mówi że to inne miejsce
