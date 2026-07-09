@@ -2,7 +2,8 @@
 // BRAK auto-modala: awans ręczny przez przycisk ⬆️ Awansuj. 3 zakładki:
 // Statystyki / Umiejętności / Magia. Wydawanie PD natychmiast (bez potwierdzeń).
 import { useState } from "react";
-import { X, ArrowFatUp, Sparkle } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import { X, ArrowFatUp, Sparkle, CaretDown } from "@phosphor-icons/react";
 import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
 import {
@@ -21,6 +22,16 @@ import type { HeroSheet } from "@/lib/types";
 const STAT_LABEL: Record<string, string> = {
   STR: "Siła", DEX: "Zręczność", CON: "Kondycja", INT: "Intelekt",
   WIS: "Roztropność", CHA: "Charyzma", LCK: "Szczęście",
+};
+// Opisy 7 zablokowanych cech (lustro _CREATOR_STATS w backend/app/api/mechanics.py).
+const STAT_DESC: Record<string, string> = {
+  STR: "Obrażenia wręcz, atletyka, dźwiganie, forsowanie drzwi.",
+  DEX: "Inicjatywa, skradanie, uniki, ataki finezyjne i dystansowe.",
+  CON: "Punkty życia, odporność na trucizny i ból, wytrzymałość.",
+  INT: "Magia arkanów, wiedza, badanie, alchemia.",
+  WIS: "Percepcja, przetrwanie, medycyna, odporność na strach.",
+  CHA: "Perswazja, zastraszanie, negocjacje, przywództwo.",
+  LCK: "Rzuty losowe, jakość łupów, szanse ucieczki i zdarzenia losowe.",
 };
 const SPELL_LEARN_COST = 75;
 const SPELL_UPGRADE_COST: Record<number, number> = { 2: 50, 3: 100 };
@@ -175,10 +186,7 @@ function StatsTab({
         const atMax = s.v >= ceiling;
         const canBuy = !disabled && !atMax && Number.isFinite(cost) && avail >= cost;
         return (
-          <div
-            key={s.k}
-            className="flex items-center gap-3 rounded-md border border-line-soft bg-bg px-3.5 py-2.5"
-          >
+          <ExpandRow key={s.k} desc={STAT_DESC[s.k] ?? null}>
             <span className="w-9 font-mono text-label font-semibold text-text-3">{s.k}</span>
             <span className="flex-1 font-ui text-label text-text">{STAT_LABEL[s.k] ?? s.k}</span>
             <span className="font-mono text-body font-semibold text-text">{s.v}</span>
@@ -189,7 +197,7 @@ function StatsTab({
               atMax={atMax}
               onClick={() => onBuy(s.k)}
             />
-          </div>
+          </ExpandRow>
         );
       })}
     </div>
@@ -226,10 +234,7 @@ function SkillsTab({
         const atMax = s.rank >= s.cap;
         const canBuy = !disabled && !atMax && Number.isFinite(cost) && avail >= cost;
         return (
-          <div
-            key={s.key}
-            className="flex items-center gap-3 rounded-md border border-line-soft bg-bg px-3.5 py-2.5"
-          >
+          <ExpandRow key={s.key} desc={s.description || null}>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-ui text-label text-text">{s.label}</span>
               <span className="font-mono text-[10px] text-text-3">{s.linked_stat}</span>
@@ -248,7 +253,7 @@ function SkillsTab({
               ))}
             </div>
             <BuyBtn cost={atMax ? null : cost} can={canBuy} atMax={atMax} onClick={() => onBuy(s.key)} />
-          </div>
+          </ExpandRow>
         );
       })}
     </div>
@@ -286,10 +291,7 @@ function MagicTab({
         const atMax = isKnown && sp.rank >= SPELL_MAX_RANK;
         const canBuy = !disabled && !atMax && !!cost && avail >= cost;
         return (
-          <div
-            key={sp.key}
-            className="flex items-center gap-3 rounded-md border border-line-soft bg-bg px-3.5 py-2.5"
-          >
+          <ExpandRow key={sp.key} desc={sp.description || null}>
             <Sparkle size={16} className={isKnown ? "shrink-0 text-ember" : "shrink-0 text-text-3"} />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-ui text-label text-text">{sp.label}</span>
@@ -304,9 +306,38 @@ function MagicTab({
               label={isKnown ? undefined : "Ucz"}
               onClick={() => (isKnown ? onUpgrade(sp.key) : onLearn(sp.key))}
             />
-          </div>
+          </ExpandRow>
         );
       })}
+    </div>
+  );
+}
+
+// ── Wiersz z rozwijanym opisem ────────────────────────────────────────────────
+// Tap w karetkę rozwija opis cechy/umiejętności/czaru (wzór: PanelSkills F-54).
+function ExpandRow({ desc, children }: { desc: string | null; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-md border border-line-soft bg-bg">
+      <div className="flex items-center gap-3 px-3.5 py-2.5">
+        {children}
+        {desc && (
+          <button
+            type="button"
+            aria-label={open ? "Zwiń opis" : "Rozwiń opis"}
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="shrink-0 text-text-3 transition-colors hover:text-text-2"
+          >
+            <CaretDown size={13} className={cn("transition-transform", open && "rotate-180")} />
+          </button>
+        )}
+      </div>
+      {desc && open && (
+        <p className="border-t border-line-soft bg-surface px-3.5 py-2.5 font-serif text-micro leading-relaxed text-text-2">
+          {desc}
+        </p>
+      )}
     </div>
   );
 }
