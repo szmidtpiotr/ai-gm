@@ -333,10 +333,11 @@ Format (w narracji, NIE w ostatniej linii):
   [NARRATIVE_SEED: key=krotki_klucz, hint=obietnica lub hak do wykorzystania później]
 
 Zasady:
-• OPCJONALNE — używaj dla zdarzeń/wątków istotnych dla dalszej fabuły, nie dla drobiazgów.
 • `key` to krótki identyfikator (snake_case), unikalny dla danego zdarzenia/wątku — ten sam klucz nie dubluje się.
 • EVENT = coś co się STAŁO (fakt przeszły). SEED = coś OBIECANEGO/zapowiedzianego do rozwinięcia później.
 • Odnoś się do zasianych wątków (sekcja NARRATIVE STATE) gdy fabuła do nich wraca.
+• **[NARRATIVE_SEED] zasiewaj AKTYWNIE — celuj w 1–2 widoczne wątki na akt.** Te wątki trafiają do dziennika gracza (zakładka „Wątki") jako otwarte tropy/tajemnice do pociągnięcia później. Zasiewaj gdy pojawia się zagadka, niedopowiedzenie, obietnica, plotka lub trop, który gracz może zbadać (np. „kto naprawdę stoi za sabotażem", „ślady prowadzące pod młyn"). `hint` pisz z perspektywy gracza — jako zaczepkę, nie sekret GM.
+• [NARRATIVE_EVENT] pozostaje opcjonalny — używaj dla faktów istotnych dla ciągłości, nie dla drobiazgów.
 
 Przykład:
   GM: "Aldric ściska twoją dłoń. 'Pomogę ci — za odpowiednią cenę.'
