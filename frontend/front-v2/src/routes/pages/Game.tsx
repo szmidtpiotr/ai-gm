@@ -182,7 +182,10 @@ export default function Game() {
         label: ev.label,
       })),
     ];
-    if (newBlocks.length) setCompletionBlocks((prev) => [...prev, ...newBlocks]);
+    // Żyją tylko do końca TEJ tury — trwały zapis jest w Dzienniku (Zadania/Wątki/
+    // Kronika), więc nadpisujemy (nie doklejamy), inaczej stary dymek wisi w oknie
+    // czatu w nieskończoność, przesuwając się pod każdą kolejną turę.
+    setCompletionBlocks(newBlocks);
   }
 
   function send(text: string) {
