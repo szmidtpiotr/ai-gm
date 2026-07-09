@@ -4923,6 +4923,13 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         # #1101: collect visible gold_events for the 💰 chat bubble (parity with stream tor)
         _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id, collect_events=_gold_events_ns)
         clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
+        # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+        from app.services.spend_gold_service import food_purchase_safety_net as _food_net_ns
+        if _food_net_ns(
+            text, conn, payload.character_id,
+            already_charged=bool(_gold_events_ns), collect_events=_gold_events_ns,
+        ):
+            conn.commit()
     except Exception as _sg_ns_err:
         logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
 
@@ -6763,6 +6770,12 @@ def create_turn_stream(
                         _gold_events_s = []
                         _sg_narr_clean = _apply_sg(
                             _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
+                        )
+                        # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+                        from app.services.spend_gold_service import food_purchase_safety_net as _food_net_s
+                        _food_net_s(
+                            user_text_val, _sg_conn, character_id_val,
+                            already_charged=bool(_gold_events_s), collect_events=_gold_events_s,
                         )
                         _sg_conn.commit()
                     finally:

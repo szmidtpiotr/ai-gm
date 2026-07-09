@@ -209,3 +209,85 @@ def apply_spend_gold_to_narrative(
             result = result.replace(tag_str, refusal, 1)
 
     return result.strip()
+
+
+# ── #1292: food/drink purchase safety-net ────────────────────────────────────
+# The narrator is meant to emit [SPEND_GOLD:tavern_meal|tavern_drink] when the
+# hero buys food/drink in a tavern (system_prompt rule), but it frequently forgets
+# — the meal is served free and no 💰 bubble appears. This deterministic net
+# mirrors skill_check_safety_net: on an *explicit* purchase phrase, when the hero
+# can afford it and the narrator did NOT already charge this turn, deduct the price.
+
+# Explicit purchase verbs (imperative / present — avoids subjunctive "chciałbym").
+_FOOD_ORDER_VERB_RE = re.compile(
+    r"\b(zamawiam|zamówi[ćeęą]\w*|kupuj[ęe]|kupi[ćeęą]\w*|płac[ęe]|zapłac\w*|"
+    r"proszę o|biorę|bierz[ee])\b",
+    re.IGNORECASE,
+)
+_FOOD_NOUN_RE = re.compile(
+    r"\b(straw[aęy]\w*|jedzeni\w*|posił\w*|obiad\w*|kolacj\w*|śniadani\w*|"
+    r"gulasz\w*|zup[aęy]\w*|chleb\w*|miski\w*|miskę)\b",
+    re.IGNORECASE,
+)
+_DRINK_NOUN_RE = re.compile(
+    r"\b(piw[aoęy]\w*|kufel\w*|kufl\w*|napój\w*|napoj\w*|wina?\b|winem|"
+    r"miód\w*|miod\w*|gorzał\w*|trunk\w*|kielisz\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def food_purchase_safety_net(
+    player_text: Optional[str],
+    conn: sqlite3.Connection,
+    character_id: int,
+    already_charged: bool,
+    collect_events: Optional[list] = None,
+) -> bool:
+    """Auto-charge a tavern meal/drink the narrator forgot to bill.
+
+    Fires only when ALL hold:
+      • the narrator did NOT already emit a SPEND_GOLD charge this turn,
+      • the player text has an explicit purchase verb + a food/drink noun,
+      • the hero can afford the resolved service (tavern_meal if any food noun,
+        else tavern_drink).
+
+    Returns True when a charge was applied (caller must commit). Appends a gold_event
+    to `collect_events` for the 💰 bubble. Never raises — a miss just returns False.
+    """
+    if already_charged or not player_text:
+        return False
+    try:
+        if not _FOOD_ORDER_VERB_RE.search(player_text):
+            return False
+        has_food = bool(_FOOD_NOUN_RE.search(player_text))
+        has_drink = bool(_DRINK_NOUN_RE.search(player_text))
+        if not (has_food or has_drink):
+            return False
+        # Food (with or without drink) → meal; drink only → drink.
+        key = "tavern_meal" if has_food else "tavern_drink"
+        cost = _get_service_cost(conn, key)
+        if cost is None:
+            return False
+        row = conn.execute(
+            "SELECT gold_gp FROM characters WHERE id = ? LIMIT 1", (character_id,)
+        ).fetchone()
+        if not row or int(row["gold_gp"] or 0) < cost:
+            return False  # can't afford → leave to narrator, no forced refusal
+        from app.services.economy_service import change_gold
+        new_gold = change_gold(
+            conn, character_id, -cost, "service",
+            meta={"service_key": key, "source": "food_safety_net"},
+        )
+        logger.info("food_purchase_safety_net_charged", character_id=character_id,
+                    service_key=key, cost=cost, new_gold=new_gold)
+        if collect_events is not None:
+            collect_events.append({
+                "delta": -cost,
+                "label": _get_service_label(conn, key),
+                "source": "service",
+                "service_key": key,
+            })
+        return True
+    except Exception as exc:
+        logger.warning("food_purchase_safety_net_error", error=str(exc))
+        return False
