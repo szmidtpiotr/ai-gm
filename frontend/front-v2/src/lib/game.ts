@@ -290,22 +290,36 @@ export function rollFromRzutLine(text: string | null | undefined): RollCardData 
   const total = m[4];
   const outcome = m[6].trim();
   const lo = outcome.toLowerCase();
-  const crit = d20 === 20 || lo.includes("krytyczny sukces") || lo.startsWith("naturalny 20");
-  const fumble = d20 === 1 || lo.includes("krytyczna porażka") || lo.startsWith("naturalny 1");
-  const success = crit || lo.startsWith("sukces");
+  // #1299: złoty KRYTYK / krwawy PECH tylko dla PRAWDZIWEGO nat20/nat1 (d20=20/1).
+  // Skala testu (#581) ma osobny „Krytyczny sukces/porażka" wg marginesu (≥5) — to
+  // MOCNY wynik, ale NIE nat20; pokazujemy go jako SUKCES+/PORAŻKA− bez złotej poświaty,
+  // inaczej gracz widzi „KRYTYK" przy d20=14 i myśli, że to błąd.
+  const nat20 = d20 === 20 || lo.startsWith("naturalny 20");
+  const nat1 = d20 === 1 || lo.startsWith("naturalny 1");
+  const marginCritSucc = !nat20 && lo.includes("krytyczny sukces");
+  const marginCritFail = !nat1 && lo.includes("krytyczna porażka");
+  const success = nat20 || marginCritSucc || lo.startsWith("sukces");
+
+  const verdict = nat20
+    ? "KRYTYK"
+    : nat1
+      ? "PECH"
+      : marginCritSucc
+        ? "SUKCES+"
+        : marginCritFail
+          ? "PORAŻKA−"
+          : success
+            ? "SUKCES"
+            : "PORAŻKA";
 
   const cells: RollCardData["cells"] = [
     { k: "d20", v: String(d20) },
     { k: "Mod", v: mod },
     { k: "Suma", v: total, sum: true },
-    {
-      k: "Wynik",
-      v: crit ? "KRYTYK" : fumble ? "PECH" : success ? "SUKCES" : "PORAŻKA",
-      res: true,
-      tone: success ? "ok" : "bad",
-    },
+    { k: "Wynik", v: verdict, res: true, tone: success ? "ok" : "bad" },
   ];
-  return { actor: "player", title: `TEST: ${label.toUpperCase()}`, cells, crit, fumble };
+  // crit/fumble = tylko złota/krwawa poświata karty → zarezerwowane dla nat20/nat1.
+  return { actor: "player", title: `TEST: ${label.toUpperCase()}`, cells, crit: nat20, fumble: nat1 };
 }
 
 export function buildLog(turns: TurnHistoryEntry[]): LogBlock[] {
@@ -408,20 +422,32 @@ export function skillTestCard(pending: SkillTestPending): {
   const total = committed + mod;
   const nat20 = committed === 20;
   const nat1 = committed === 1;
+  const margin = total - dc;
   const success = nat20 || (!nat1 && total >= dc);
+  // #581/#1299: margin ≥5 = „Krytyczny sukces" (mocny), ale NIE nat20 → SUKCES+ bez
+  // złotej poświaty. Złoty KRYTYK / krwawy PECH tylko dla nat20/nat1.
+  const marginCritSucc = !nat20 && success && margin >= 5;
+  const marginCritFail = !nat1 && !success && margin <= -5;
   const name = (pending.skill_label ?? pending.skill_key ?? "Umiejętność").toUpperCase();
+
+  const verdict = nat20
+    ? "KRYTYK"
+    : nat1
+      ? "PECH"
+      : marginCritSucc
+        ? "SUKCES+"
+        : marginCritFail
+          ? "PORAŻKA−"
+          : success
+            ? "SUKCES"
+            : "PORAŻKA";
 
   const cells: RollCardData["cells"] = [
     { k: "d20", v: String(committed) },
     { k: "Mod", v: (mod >= 0 ? "+" : "") + mod },
     { k: "Suma", v: String(total), sum: true },
     { k: "DC", v: String(dc) },
-    {
-      k: "Wynik",
-      v: nat20 ? "KRYTYK" : nat1 ? "PECH" : success ? "SUKCES" : "PORAŻKA",
-      res: true,
-      tone: nat1 || !success ? "bad" : "ok",
-    },
+    { k: "Wynik", v: verdict, res: true, tone: success ? "ok" : "bad" },
   ];
 
   return {

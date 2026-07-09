@@ -7903,9 +7903,14 @@ def resolve_skill_test_endpoint(
                 "i przewagę gracza, ale NIE umieszczaj żadnych tagów w nawiasach kwadratowych."
             )
         elif str(pending.get("skill_key", "")).lower() == "stealth" and result.get("success"):
+            # #1299: NIE zakładaj walki. Wcześniej hint mówił "przewaga zadziała w momencie
+            # rozpoczęcia walki" → narrator dopisywał "gdy poleje się krew, pierwszy cios…"
+            # przy zwykłym śledzeniu. Opisz sam skutek skradania; wybór kolejnej akcji
+            # (atak/zastraszenie/wycofanie/dalsza obserwacja) należy do gracza (bramka przewagi).
             stealth_hint = (
-                " Skradanie się powiodło — opisz że bohater jest w cieniu, nieświadom wrogów; "
-                "przewaga zaskoczenia zadziała w momencie rozpoczęcia walki."
+                " Skradanie się powiodło — opisz, że bohater pozostaje niezauważony i ma przewagę "
+                "pozycji (cień, dystans, moment zaskoczenia w zanadrzu). NIE zakładaj kolejnej akcji "
+                "gracza (ataku, ciosu, rozmowy) ani rozlewu krwi — zostaw sytuację otwartą, decyzja należy do gracza."
             )
 
         narrator_prompt = (
