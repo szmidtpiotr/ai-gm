@@ -223,13 +223,24 @@ Zasady:
 • **Tytuł musi być IDENTYCZNY** z tytułem z bloku === QUESTY === w kontekście (kopiuj dosłownie, z polskimi znakami i spacjami).
 • Emituj tag w narracji NATYCHMIAST gdy cel questa jest osiągnięty — nie czekaj na kolejną turę.
 • Emituj TYLKO gdy quest jest fabularnie zamknięty — nie przy częściowym postępie.
+• **CEL questa to zdanie po tytule (np. „Ustal, kto szkodzi kuźni i dlaczego").** Zamknij quest DOPIERO gdy to zdanie jest FAKTYCZNIE spełnione — pytanie ma odpowiedź, przedmiot jest oddany, sprawca ujawniony, miejsce osiągnięte. Dopóki cel nie jest spełniony, quest ZOSTAJE otwarty.
+• **NIE zamykaj questa gdy bohater dopiero: przyjmuje zlecenie, zgadza się pomóc, dostaje wskazówkę/trop, poznaje pierwszego świadka, albo rusza w drogę.** To jest POCZĄTEK questa, nie jego koniec.
+• **NIGDY nie emituj [QUEST_COMPLETE] w tej samej turze, w której quest został zaproponowany / pojawił się na liście.** Nowo otwarty quest wymaga co najmniej kilku tur realnego śledztwa/działania zanim można go zamknąć.
+• **Quest ≠ scena (beat).** Jeden quest zwykle rozciąga się na WIELE beatów całego aktu. Domknięcie jednej sceny ([BEAT_COMPLETE]) — nawet sceny wprowadzającej czy „szeptów/plotek" — NIE oznacza ukończenia questa. Beat domykaj tagiem beata; quest zamykaj osobno, dopiero gdy jego cel jest spełniony.
 • Silnik usunie tag z tekstu widocznego dla gracza, zaktualizuje status questa i przyzna nagrodę XP.
 • Jeśli w jednej turze ukończono kilka questów — emituj osobny tag dla każdego.
 
-Przykład (quest „Nocna przesyłka" z bloku QUESTY):
+Przykład POPRAWNY (quest „Nocna przesyłka" — cel: dostarcz pakunek strażnikowi — zostaje spełniony):
   GM: "Strażnik bierze pakunek i sprawdza pieczęć.
        [QUEST_COMPLETE:Nocna przesyłka]
        'Wszystko się zgadza. Twoja zapłata.' Rzuca ci sakiewkę."
+
+❌ Anti-przykład (quest „Szepty kuźni" — cel: ustal, kto szkodzi kuźni i dlaczego):
+  Brunn przyjmuje bohatera na czeladnika i wskazuje pierwszy trop („zacznij od Tomy").
+  To DOPIERO przyjęcie zlecenia — śledztwo się nie zaczęło, sprawca nieznany.
+  → NIE emituj [QUEST_COMPLETE:Szepty kuźni]. Możesz domknąć scenę wprowadzającą
+     tagiem beata (np. [BEAT_COMPLETE:szepty_o_kuzni]), ale quest ZOSTAJE otwarty
+     aż bohater faktycznie ustali, kto i dlaczego szkodzi kuźni.
 
 ## BEAT_COMPLETE — domykanie scen fabularnych planu
 
