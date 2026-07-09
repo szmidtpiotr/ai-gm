@@ -4963,6 +4963,19 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     except Exception as _u6_err:
         logger.warning("u6_rejection_correction_error", error=str(_u6_err))
 
+    # Final safety-net: strip every residual mechanic tag from the player-visible
+    # narrative. QUEST_COMPLETE / BEAT_COMPLETE / ARC_ADVANCE are parsed (XP + plan
+    # hooks) but never removed by strip_narrative_tags (which only clears NARRATIVE_*),
+    # so they leaked into the story text. All parsers (XP, quest_suggest, spend_gold,
+    # unknown-tag detection) have run by this point, so a blanket strip is safe and
+    # future-proof against any newly added tag.
+    try:
+        from app.services.llm_tag_parser import strip_all_mechanic_tags as _strip_all
+        _fin_narr, _fin_pjson = _extract_narrative_for_cues(clean_assistant)
+        clean_assistant = _repack_narrative(clean_assistant, _strip_all(_fin_narr), _fin_pjson)
+    except Exception as _fin_strip_err:
+        logger.warning("final_mechanic_tag_strip_error", error=str(_fin_strip_err))
+
     log = _persist_narrative_turn(
         conn=conn,
         campaign_id=campaign_id,
@@ -6736,6 +6749,16 @@ def create_turn_stream(
                     clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
                 except Exception as _sge:
                     logger.warning("spend_gold_parse_error", error=str(_sge))
+                # Final safety-net (stream): strip every residual mechanic tag from the
+                # player-visible narrative. QUEST_COMPLETE / BEAT_COMPLETE / ARC_ADVANCE are
+                # parsed from full_raw but never removed by strip_narrative_tags, so they
+                # leaked into the story. All parsers have run here → blanket strip is safe.
+                try:
+                    from app.services.llm_tag_parser import strip_all_mechanic_tags as _strip_all_s
+                    _fin_narr_s, _fin_pjson_s = _extract_narrative_for_cues(clean_text)
+                    clean_text = _repack_narrative(clean_text, _strip_all_s(_fin_narr_s), _fin_pjson_s)
+                except Exception as _fin_strip_s_err:
+                    logger.warning("final_mechanic_tag_strip_stream_error", error=str(_fin_strip_s_err))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(

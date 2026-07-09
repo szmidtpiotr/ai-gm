@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { cn, stripMechanicTags } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import type { LogBlock } from "@/lib/game";
 import type { RollCardData } from "@/lib/types";
@@ -173,7 +173,7 @@ function renderEmphasis(s: string): string {
 
 // Render narracji akapit po akapicie z wyróżnieniem dialogów kolorem.
 function renderNarration(text: string, _heroName?: string): string {
-  return text
+  return stripMechanicTags(text)
     .split(/\n+/)
     .map((para) => {
       const t = para.trim();

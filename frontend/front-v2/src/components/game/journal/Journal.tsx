@@ -21,7 +21,7 @@ import {
   Trophy,
   type Icon,
 } from "@phosphor-icons/react";
-import { cn } from "@/lib/utils";
+import { cn, stripMechanicTags } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
 import { useHeroChronicle, useJournal, useRecap, useRegenRecap } from "@/hooks/useJournal";
@@ -145,8 +145,8 @@ function QuestsTab({
 
 function RecapCard({ recap }: { recap: RecapData }) {
   const text =
-    recap.summary?.trim() ||
-    recap.recent_turns?.find((t) => t.gm)?.gm ||
+    stripMechanicTags(recap.summary?.trim()) ||
+    stripMechanicTags(recap.recent_turns?.find((t) => t.gm)?.gm) ||
     "Twoja opowieść dopiero się rozkręca.";
   const days = recap.hours_since_last != null ? Math.floor(recap.hours_since_last / 24) : 0;
   return (
@@ -188,7 +188,7 @@ function QuestCard({ quest, main }: { quest: JournalQuest; main?: boolean }) {
           {quest.title}
         </div>
         {quest.narrative && (
-          <div className="mt-1 text-label leading-snug text-text-2">{quest.narrative}</div>
+          <div className="mt-1 text-label leading-snug text-text-2">{stripMechanicTags(quest.narrative)}</div>
         )}
         {main && (
           <div className="mt-2 flex items-center gap-2 text-label">
