@@ -289,9 +289,6 @@ def maybe_complete_campaign(
     if already_open:
         return False
 
-    if not is_plan_complete(get_plan(campaign_id, conn)):
-        return False
-
     # #1011 refinement: only active *main* quests block victory. Side quests are
     # optional threads — a legally-skipped side quest must not strand the finale.
     active_quests = conn.execute(
@@ -302,6 +299,31 @@ def maybe_complete_campaign(
     ).fetchone()[0]
     if active_quests > 0:
         return False
+
+    plan = get_plan(campaign_id, conn)
+    trigger = "all_acts_and_quests"
+    if not is_plan_complete(plan):
+        # #1300 — quest-driven finale fallback. The act pointer advances only when
+        # objective-typed beats close via their event hooks, but those hooks match
+        # against plan entities (talk_to_npc / visit_location / find_item keys) that
+        # are frequently never materialized as real game entities (same class as
+        # #1284 for enemies). A player can then finish every main quest — the real
+        # player-facing contract — yet the plan's acts strand, locking a completed
+        # story out of its ending. Open the finale when every main quest is resolved
+        # AND the player has completed at least as many main quests as the plan has
+        # acts (a proportional "story clearly done" signal that cannot fire on an
+        # early-game transient 0-active window). Planless campaigns (num_acts == 0)
+        # still never auto-win.
+        completed_main = conn.execute(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE character_id = ? AND campaign_id = ? AND status = 'completed' "
+            "AND COALESCE(quest_type, 'main') = 'main'",
+            (character_id, campaign_id),
+        ).fetchone()[0]
+        num_acts = len((plan or {}).get("acts") or []) if isinstance(plan, dict) else 0
+        if not (num_acts >= 1 and completed_main >= num_acts):
+            return False
+        trigger = "quests_only_beats_stranded"
 
     conn.execute(
         "UPDATE campaigns SET finale_available = 1 WHERE id = ?",
@@ -330,7 +352,7 @@ def maybe_complete_campaign(
         int(campaign_id),
         int(character_id),
         None,
-        {"turn": turn_number, "trigger": "all_acts_and_quests"},
+        {"turn": turn_number, "trigger": trigger},
     )
     logger.info(
         "campaign_finale_available",
@@ -887,6 +909,32 @@ def auto_complete_talk_to_npc(
             for tok in _strip_pl(key).split("_"):
                 if len(tok) >= 4 and tok in norm_text:
                     engaged = key
+                    break
+            if engaged:
+                break
+
+    # #1300 — plan-aware fallback. When the scene NPC was never registered in
+    # location_npc_assignments (an unmaterialized plan entity — the same gap
+    # #1284 fixed for enemies), the location lookup above can never resolve it,
+    # so the talk_to_npc beat strands forever and blocks the act/finale. Match
+    # the player's text directly against the talk_to_npc beats' own
+    # objective_value keys so each beat is self-sufficient and carries its own
+    # target. Any-act scan (not just the active one) mirrors auto_complete_beats_by_event.
+    if not engaged and player_text:
+        norm_text = _strip_pl(player_text)
+        plan = get_plan(campaign_id, conn)
+        for act in (plan or {}).get("acts", []):
+            for beat in act.get("key_beats", []):
+                if not isinstance(beat, dict) or beat.get("visited"):
+                    continue
+                if beat.get("objective_type") != "talk_to_npc":
+                    continue
+                obj_value = beat.get("objective_value") or ""
+                for tok in _strip_pl(obj_value).split("_"):
+                    if len(tok) >= 4 and tok in norm_text:
+                        engaged = obj_value
+                        break
+                if engaged:
                     break
             if engaged:
                 break
