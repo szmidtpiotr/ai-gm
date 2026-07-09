@@ -127,7 +127,12 @@ def build_plan_enemy_keys_block(conn: sqlite3.Connection, campaign_id: int) -> s
         "Oprócz standardowych kluczy z kontraktu, w TEJ kampanii możesz też użyć "
         "poniższych — to konkretni, nazwani przeciwnicy z planu. Gdy walka dotyczy "
         "którejś z tych postaci, użyj DOKŁADNIE jej klucza (nie mapuj na generyczny "
-        "typ, nie wymyślaj wariantu):",
+        "typ, nie wymyślaj wariantu).",
+        "WAŻNE — SPÓJNOŚĆ IMION: gdy wprowadzasz którąkolwiek z tych postaci do "
+        "NARRACJI (nawet zanim dojdzie do walki), nazywaj ją DOKŁADNIE jej imieniem "
+        "z poniższej listy. NIE wymyślaj dla niej nowego imienia, nazwiska ani "
+        "przydomka — inaczej gracz pozna ją pod jednym imieniem, a karta wroga "
+        "pokaże inne. Lista (imię — klucz [COMBAT_START] — tier):",
     ]
     for e in plan_enemies:
         if not isinstance(e, dict):
@@ -138,7 +143,7 @@ def build_plan_enemy_keys_block(conn: sqlite3.Connection, campaign_id: int) -> s
             continue
         name = meta.get("label") or e.get("name") or k
         tier = meta.get("tier") or e.get("tier") or "standard"
-        lines.append(f"- {k} — {name} ({tier})")
+        lines.append(f"- {name} — klucz: {k} — {tier}")
     if len(lines) <= 2:
         return ""
     return "\n".join(lines)
