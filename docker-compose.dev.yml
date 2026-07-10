@@ -44,6 +44,11 @@ services:
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL:-mailto:admin@studio-colorbox.com}
+      # #883 N1 — Telegram easy-click linking (values in .env on host, gitignored).
+      # Create bot via @BotFather → paste token + username; delivery no-ops until set.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       # #866 — public base URL for email links (invite / verify / reset).

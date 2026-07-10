@@ -1225,6 +1225,16 @@ ADMIN_MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # #883 N1 — one-time Telegram easy-click link tokens (/start <token> → chat_id).
+    # DDL mirrored in telegram_link_service.SCHEMA_SQL (keep in sync).
+    """
+    CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        used_at    TEXT
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [

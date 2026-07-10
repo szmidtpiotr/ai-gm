@@ -18,6 +18,7 @@ import { useAppStore } from "@/store/appStore";
 import { useHeroes, useLlmSettings } from "@/hooks/useGameData";
 import { useToast } from "@/components/ui/toast";
 import { PushButton } from "@/components/PushButton";
+import { TelegramConnect } from "@/components/TelegramConnect";
 
 // F-07 Profil gracza. Makieta 1:1 → zar8-profil.html.
 export default function Profile() {
@@ -94,6 +95,13 @@ export default function Profile() {
             />
             <Row icon={Palette} title="Wygląd" sub="Motyw, czcionka, rozmiar" onClick={soon} />
             <Row icon={ShieldCheck} title="Bezpieczeństwo" sub="Hasło, sesje" onClick={soon} />
+          </div>
+        </section>
+
+        <section className="lg:col-span-2">
+          <SectionHead>Powiadomienia</SectionHead>
+          <div className="grid gap-2 lg:grid-cols-2">
+            <TelegramConnect />
             <PushButton />
           </div>
         </section>
