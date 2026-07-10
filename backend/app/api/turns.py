@@ -2861,6 +2861,51 @@ def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[st
     return None
 
 
+def _resolve_grant_map_item(
+    conn: sqlite3.Connection, campaign_id: int, label: str
+) -> str | None:
+    """#1310 — a narrator-granted map must be the USABLE materialized map item
+    (``item_type='map'`` + map_reveal ``effect_json`` → "Użyj" button), never a
+    ``misc`` pending narrative row. When the GM hands over a map whose label does
+    not exactly hit the catalog, match it to a plan reward flagged ``is_map`` (by
+    slug of the reward's label or key) and return that reward's ``granted_key``.
+    Returns None when there is no map reward or the key is not a live map item.
+    """
+    if not label:
+        return None
+    try:
+        from app.services.campaign_plan_service import _slugify_beat
+        from app.services.campaign_plan_runtime import get_plan
+    except Exception:
+        return None
+    try:
+        plan = get_plan(campaign_id, conn) or {}
+    except Exception:
+        return None
+    want = _slugify_beat(str(label))
+    if not want:
+        return None
+    for rw in plan.get("rewards") or []:
+        if not isinstance(rw, dict) or not rw.get("is_map"):
+            continue
+        gk = rw.get("granted_key")
+        if not gk:
+            continue
+        slugs = {
+            _slugify_beat(str(rw.get("label") or "")),
+            _slugify_beat(str(rw.get("key") or "")),
+        }
+        if want in slugs:
+            row = conn.execute(
+                "SELECT key FROM game_config_items "
+                "WHERE key = ? AND item_type = 'map' AND is_active = 1 LIMIT 1",
+                (str(gk),),
+            ).fetchone()
+            if row:
+                return str(gk)
+    return None
+
+
 def apply_grant_gold_to_character(
     conn: sqlite3.Connection, *, character_id: int, amount: int,
     source: str = "narrative_gold_grant", campaign_id: int | None = None,
@@ -5107,6 +5152,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     for _gil in grant_item_labels:
         _gil_desc = grant_item_descriptions.get(_gil)
         _resolved = _resolve_grant_catalog_item(conn, _gil)
+        _map_key = None if _resolved else _resolve_grant_map_item(conn, campaign_id, _gil)  # #1310
         if _resolved:
             from app.services.loot_service import grant_loot_to_character
             grant_loot_to_character(int(payload.character_id),
@@ -5114,6 +5160,13 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                                     source="gm_grant_item")
             logger.info("grant_item_catalog", character_id=payload.character_id,
                         item_key=_resolved["item_key"], label=_gil)
+        elif _map_key:
+            from app.services.loot_service import grant_loot_to_character
+            grant_loot_to_character(int(payload.character_id),
+                                    [{"item_key": _map_key, "quantity": 1}],
+                                    source="gm_grant_map")
+            logger.info("grant_item_map", character_id=payload.character_id,
+                        item_key=_map_key, label=_gil)
         elif _is_weapon_label(_gil):
             _grant_narrative_weapon(conn, campaign_id=campaign_id,
                                     character_id=payload.character_id, label=_gil, source="gm")
@@ -7125,6 +7178,7 @@ def create_turn_stream(
                     for _gil in grant_item_labels:
                         _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
+                        _map_key = None if _resolved else _resolve_grant_map_item(save_conn, campaign_id_val, _gil)  # #1310
                         if _resolved:
                             from app.services.loot_service import grant_loot_to_character
                             grant_loot_to_character(int(character_id_val),
@@ -7132,6 +7186,13 @@ def create_turn_stream(
                                                     source="gm_grant_item")
                             logger.info("grant_item_catalog", character_id=character_id_val,
                                         item_key=_resolved["item_key"], label=_gil)
+                        elif _map_key:
+                            from app.services.loot_service import grant_loot_to_character
+                            grant_loot_to_character(int(character_id_val),
+                                                    [{"item_key": _map_key, "quantity": 1}],
+                                                    source="gm_grant_map")
+                            logger.info("grant_item_map", character_id=character_id_val,
+                                        item_key=_map_key, label=_gil)
                         elif _is_weapon_label(_gil):
                             _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
                                                     character_id=character_id_val, label=_gil, source="gm")
