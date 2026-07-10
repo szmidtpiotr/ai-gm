@@ -691,7 +691,6 @@ function DollSlot({ label, item, slot, pos, onSelect, busy }: {
 }) {
   const Icon = item ? itemIcon(item) : SLOT_ICON[slot];
   const dur = item?.durability;
-  const size = pos.small ? 42 : 56;
   return (
     <button
       type="button"
@@ -702,13 +701,13 @@ function DollSlot({ label, item, slot, pos, onSelect, busy }: {
         "absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[11px] border shadow-[0_3px_12px_rgba(0,0,0,.55)] backdrop-blur-[1px] transition-colors",
         item ? "border-line bg-[rgba(20,15,10,0.72)] text-ember-glow hover:border-ember" : "border-dashed border-line bg-[rgba(20,15,10,0.4)] text-text-3 cursor-default",
       )}
-      style={{ top: pos.top, left: pos.left, width: size, height: size }}
+      style={{ top: pos.top, left: pos.left, width: pos.small ? "12.5%" : "16.5%", aspectRatio: "1 / 1" }}
     >
       <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-bg px-1 text-[7px] font-bold uppercase tracking-[0.1em] text-text-3">{label}</span>
       {item?.image_url ? (
         <img src={item.image_url} alt={item.label} className="h-full w-full rounded-[10px] object-cover" />
       ) : (
-        Icon && <Icon size={pos.small ? 18 : 24} />
+        Icon && <Icon className="w-[43%] h-[43%]" />
       )}
       {dur && (
         <span className="absolute inset-x-1.5 -bottom-[3px] h-[3px] overflow-hidden rounded-[2px] bg-[#3a2a1a]">
