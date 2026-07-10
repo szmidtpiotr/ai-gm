@@ -8502,6 +8502,40 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             logger.warning("fow_known_compute_error", error=str(_fow_err))
             known_coords, label_coords = set(), set()
 
+        # #1311 — POI/quest metadata for discovered hexes. A named location keeps its
+        # name in game_locations.label (world_hexes.label is usually NULL), so resolve
+        # it here; otherwise the map shows location hexes as anonymous terrain. Only for
+        # DISCOVERED hexes — the 'known' fog layer must not leak location identity (PM1).
+        _disc_lks = {
+            all_hexes.get(c, {}).get("location_key") for c in discovered_coords
+        }
+        _disc_lks.discard(None)
+        loc_labels: dict[str, str] = {}
+        if _disc_lks:
+            _ph = ",".join("?" * len(_disc_lks))
+            for _lr in conn.execute(
+                f"SELECT key, label FROM game_locations WHERE is_active = 1 AND key IN ({_ph})",
+                tuple(_disc_lks),
+            ).fetchall():
+                if _lr["label"]:
+                    loc_labels[_lr["key"]] = _lr["label"]
+        # Current quest targets = location keys of not-yet-visited visit_location beats.
+        quest_targets: set = set()
+        try:
+            _prow = conn.execute(
+                "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            _plan = _j.loads(_prow["gm_plan_json"] or "{}") if _prow and _prow["gm_plan_json"] else {}
+            for _act in _plan.get("acts") or []:
+                for _b in (_act.get("key_beats") or []) if isinstance(_act, dict) else []:
+                    if (isinstance(_b, dict)
+                            and _b.get("objective_type") == "visit_location"
+                            and not _b.get("visited")
+                            and _b.get("objective_value")):
+                        quest_targets.add(str(_b["objective_value"]))
+        except Exception:
+            pass
+
         # Build result: discovered hexes + adjacent outlines
         result_hexes = []
         outline_coords = set()
@@ -8509,11 +8543,17 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         for coord in discovered_coords:
             hdata = all_hexes.get(coord, {})
             cd = campaign_data.get(coord, {})
+            _lk = hdata.get("location_key")
             h = {
                 "q": coord[0], "r": coord[1],
                 "hex_type": hdata.get("hex_type", "plains"),
-                "label": cd.get("campaign_label") or hdata.get("label"),
+                "label": cd.get("campaign_label") or hdata.get("label")
+                         or (loc_labels.get(_lk) if _lk else None),
                 "status": "discovered",
+                "location_key": _lk,
+                "is_poi": bool(_lk),
+                "is_quest": bool(_lk and _lk in quest_targets),
+                "has_note": bool(cd.get("campaign_label")),
             }
             result_hexes.append(h)
             # Build adjacent unvisited outlines (known hexes render as 'known', not outline)

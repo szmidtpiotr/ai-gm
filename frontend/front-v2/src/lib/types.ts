@@ -234,6 +234,12 @@ export interface WorldHex {
   hex_type: string | null;
   label: string | null;
   status: HexStatus;
+  // #1311 — POI/quest metadata (discovered hexes only; the 'known' fog layer never
+  // leaks location identity). Let the map render location hexes distinctly from terrain.
+  location_key?: string | null;
+  is_poi?: boolean;
+  is_quest?: boolean;
+  has_note?: boolean;
 }
 
 export interface HexTypeCfg {

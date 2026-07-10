@@ -12,6 +12,7 @@ import {
   Path,
   Plus,
   Minus,
+  Star,
   Sun,
   X,
 } from "@phosphor-icons/react";
@@ -589,15 +590,21 @@ function HexTile({
   // Nazwane heksy (osady/landmarki) wyróżniamy: obwódka pod ikoną + jaśniejszy
   // (złoty) kolor, żeby odcinały się od generycznego terenu.
   const isNamed = !!hex.label && !/^\([-\d]+,[-\d]+\)$/.test(hex.label);
+  // #1311 — lokacja (POI) i cel questa jako jawne flagi z backendu (fallback: label).
+  // Bez tego heks z lokacją wyglądał jak zwykły teren (world_hexes.label = NULL).
+  const isPoi = (hex.is_poi ?? isNamed) && (discovered || known);
+  const isQuest = !!hex.is_quest;
 
   const Icon = terrainIcon(hex.hex_type);
   const iconColor = isCurrent
     ? "var(--ember-glow)"
-    : isNamed
-      ? "var(--gold)"
-      : known
-        ? "#a9c6dd"
-        : "var(--text-2)";
+    : isQuest
+      ? "var(--ember-glow)"
+      : isPoi || isNamed
+        ? "var(--gold)"
+        : known
+          ? "#a9c6dd"
+          : "var(--text-2)";
 
   return (
     <g
@@ -629,32 +636,59 @@ function HexTile({
         opacity={opacity}
         filter={isCurrent ? "url(#hexglow)" : undefined}
       />
-      {/* obwódka pod ikoną nazwanego heksa — wyróżnienie osady/landmarku */}
-      {isNamed && hasTerrain && !isCurrent && (
+      {/* #1311 — obwódka pod ikoną POI: cel questa bursztynowy z poświatą, zwykła
+          lokacja złota. Odcina heks z lokacją od generycznego terenu. */}
+      {isPoi && hasTerrain && !isCurrent && (
         <circle
           cx={x}
           cy={y}
-          r={12}
-          fill="rgba(20,16,12,.55)"
-          stroke="var(--gold)"
-          strokeWidth={1.4}
+          r={12.5}
+          fill="rgba(20,16,12,.6)"
+          stroke={isQuest ? "var(--ember-glow)" : "var(--gold)"}
+          strokeWidth={isQuest ? 2 : 1.4}
+          filter={isQuest ? "url(#hexglow)" : undefined}
           style={{ pointerEvents: "none" }}
         />
       )}
       {hasTerrain && (
         <foreignObject x={x - 11} y={y - 11} width={22} height={22} style={{ pointerEvents: "none" }}>
           <div className="flex h-full w-full items-center justify-center">
-            <Icon size={17} color={iconColor} weight={isCurrent || isNamed ? "fill" : "regular"} />
+            <Icon size={17} color={iconColor} weight={isCurrent || isPoi ? "fill" : "regular"} />
           </div>
         </foreignObject>
       )}
-      {/* flaga celu na NAZWANYCH heksach znanych z opowieści */}
-      {namedTarget && (
+      {/* #1311 — badge celu questa: gwiazda nad heksem (bursztyn) */}
+      {isQuest && !isCurrent && (
+        <foreignObject x={x - 8} y={y - 27} width={16} height={16} style={{ pointerEvents: "none" }}>
+          <div className="flex h-full w-full items-center justify-center">
+            <Star size={14} color="var(--ember-glow)" weight="fill" />
+          </div>
+        </foreignObject>
+      )}
+      {/* flaga celu na NAZWANYCH heksach znanych z opowieści (fog 'known') */}
+      {namedTarget && !isQuest && (
         <foreignObject x={x - 8} y={y - 26} width={16} height={16} style={{ pointerEvents: "none" }}>
           <div className="flex h-full w-full items-center justify-center">
             <FlagBanner size={13} color="var(--ember-glow)" weight="fill" />
           </div>
         </foreignObject>
+      )}
+      {/* #1311 — nazwa lokacji zawsze widoczna pod heksem POI (nie tylko w hoverze),
+          by odkryte lokacje były czytelne na pierwszy rzut oka. */}
+      {isPoi && !!hex.label && (discovered || isCurrent) && (
+        <text
+          x={x}
+          y={y + 22}
+          textAnchor="middle"
+          fontSize={7.5}
+          fill={isQuest ? "var(--ember-glow)" : "var(--gold)"}
+          stroke="rgba(10,7,4,.85)"
+          strokeWidth={0.5}
+          paintOrder="stroke"
+          style={{ pointerEvents: "none", fontWeight: 600 }}
+        >
+          {hex.label.length > 22 ? hex.label.slice(0, 21) + "…" : hex.label}
+        </text>
       )}
     </g>
   );
