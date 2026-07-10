@@ -2861,6 +2861,75 @@ def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[st
     return None
 
 
+def _reveal_maps_on_grant(
+    conn: sqlite3.Connection, campaign_id: int, granted_labels: list[str]
+) -> None:
+    """#1308 — obtaining a map reveals its depicted world-map locations immediately,
+    regardless of source (narrator grant, loot). Belt-and-suspenders alongside the
+    deterministic reward-spine reveal (fires on beat close) and the use-from-inventory
+    reveal (#1123). Two match paths, both idempotent:
+
+      1. The granted item resolves to a catalog item whose ``effect_json`` carries a
+         map_reveal payload → reveal that payload.
+      2. The granted label matches (by key/slug) a plan reward flagged ``is_map`` or
+         carrying ``reveals`` → reveal those location keys. This catches a
+         narrator-improvised map handed over as a plain item (e.g. "Mapa Popiołu")
+         that corresponds to a planned map reward.
+
+    Best-effort; never raises into the turn flow.
+    """
+    if not granted_labels:
+        return
+    try:
+        from app.services.map_reveal_service import extract_map_payload, reveal_from_payload
+        from app.services.campaign_plan_service import _slugify_beat
+    except Exception:
+        return
+
+    reward_maps: dict[str, list[str]] = {}
+    try:
+        from app.services.campaign_plan_runtime import get_plan
+        plan = get_plan(campaign_id, conn) or {}
+        for rw in plan.get("rewards") or []:
+            if not isinstance(rw, dict):
+                continue
+            revs = [str(k) for k in (rw.get("reveals") or []) if k]
+            if not revs or not (rw.get("is_map") or rw.get("category") == "item"):
+                continue
+            for token in (rw.get("key"), rw.get("label")):
+                if token:
+                    reward_maps[_slugify_beat(str(token))] = revs
+    except Exception:
+        pass
+
+    for label in granted_labels:
+        # path 1 — catalog item effect_json
+        try:
+            item = _resolve_grant_catalog_item(conn, label)
+            if item and item.get("item_key"):
+                row = conn.execute(
+                    "SELECT effect_json FROM game_config_items WHERE key = ?",
+                    (item["item_key"],),
+                ).fetchone()
+                payload = extract_map_payload(row["effect_json"]) if row else None
+                if payload:
+                    reveal_from_payload(campaign_id, payload, conn=conn)
+                    continue
+        except Exception:
+            pass
+        # path 2 — plan reward match by slug
+        revs = reward_maps.get(_slugify_beat(str(label)))
+        if revs:
+            try:
+                reveal_from_payload(campaign_id, {"mode": "location", "list": revs}, conn=conn)
+            except Exception:
+                pass
+    try:
+        conn.commit()
+    except Exception:
+        pass
+
+
 def apply_grant_gold_to_character(
     conn: sqlite3.Connection, *, character_id: int, amount: int,
     source: str = "narrative_gold_grant", campaign_id: int | None = None,
@@ -5134,6 +5203,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                 conn.commit()
             except Exception:
                 pass
+        _reveal_maps_on_grant(conn, campaign_id, grant_item_labels)  # #1308
     if grant_gold_amount is not None:
         new_total = apply_grant_gold_to_character(
             conn,
@@ -7153,6 +7223,7 @@ def create_turn_stream(
                                 save_conn.commit()
                             except Exception:
                                 pass
+                        _reveal_maps_on_grant(save_conn, campaign_id_val, grant_item_labels)  # #1308
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
                             save_conn,

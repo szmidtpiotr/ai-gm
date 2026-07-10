@@ -119,6 +119,16 @@ class PlotLocation(BaseModel):
     name: str
     role: str
     visited: bool = False
+    # #1306 — these were silently dropped by model_dump() (the fields the Kuźnia
+    # prompt asks for but the schema never declared). Without `scale`/`parent` the
+    # settlement structure (#1212) is lost on every generated plan → flat fallback
+    # → wrong start_hex (the first visit_location target instead of the town hub).
+    # `hex_q`/`hex_r` let #1307 mirror the placed overworld coords back into the plan.
+    description: str = ""
+    scale: Literal["hub", "sub", "standalone"] | None = None
+    parent: str | None = None
+    hex_q: int | None = None
+    hex_r: int | None = None
 
 
 class PlotEnemy(BaseModel):
@@ -151,6 +161,12 @@ class PlotReward(BaseModel):
     story_hook: str = ""
     mechanical_effect: str = ""
     rarity: int = 3
+    # #1308 — map rewards. `is_map` flags the reward as a fog-of-war map; `reveals`
+    # lists the plan location keys it depicts. Materialization builds an item whose
+    # effect_json carries a map_reveal(mode="location") payload, and the reward-spine
+    # reveals those locations for the campaign the moment the map is obtained.
+    is_map: bool = False
+    reveals: list[str] = []
 
     @model_validator(mode="before")
     @classmethod

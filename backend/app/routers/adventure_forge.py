@@ -1783,13 +1783,49 @@ def _materialize_plan_rewards(
             (nk, label, "relic", 100 * rarity, rarity, desc, note, efx, template_id, now, now))
         return nk
 
+    def _create_map_item(rw: dict) -> "str | None":
+        """#1308 — materialize a map reward as a functional item whose effect_json
+        reveals the depicted plan locations (mode=location, drift-proof). Ships
+        approved (no review queue) so the reveal works the moment it is granted."""
+        reveals = [str(k) for k in (rw.get("reveals") or []) if k]
+        if not reveals:
+            return None
+        label = (rw.get("label") or "Mapa").strip()
+        desc = (rw.get("story_hook") or rw.get("mechanical_effect") or "").strip()
+        efx = json.dumps(
+            {"effects": [{"type": "map_reveal", "mode": "location", "list": reveals}]},
+            ensure_ascii=False,
+        )
+        nk = _uniq("game_config_items", f"tpl{template_id}_{_slugify(rw.get('key') or label)}")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,effect_json,"
+            "template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,1,1,1,'permanent',?,?)",
+            (nk, label, "map", 25, 2, desc, "Odsłania fragment mapy świata.", efx,
+             template_id, now, now))
+        return nk
+
+    summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0,
+               "pending_keys": [], "maps": 0}
+    tier_rarity = {"minor": (1, 2), "notable": (3, 3)}
+
+    # #1308 — map rewards first: any reward flagged is_map / carrying `reveals` becomes
+    # a functional map item (skipped by the tier pool logic below via `granted_key`).
+    for rw in rewards:
+        if isinstance(rw, dict) and not rw.get("granted_key") and (rw.get("is_map") or rw.get("reveals")):
+            gk = _create_map_item(rw)
+            if gk:
+                rw["granted_key"] = gk
+                rw["is_map"] = True
+                rw["category"] = "item"
+                summary["maps"] += 1
+
     by_tier: dict[str, list] = {"signature": [], "notable": [], "minor": []}
     for rw in rewards:
+        if isinstance(rw, dict) and rw.get("granted_key"):
+            continue  # already materialized (e.g. map) — don't pool-clone over it
         if isinstance(rw, dict) and rw.get("tier") in by_tier:
             by_tier[rw["tier"]].append(rw)
-
-    summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0, "pending_keys": []}
-    tier_rarity = {"minor": (1, 2), "notable": (3, 3)}
 
     # Signatures (cap to budget; force ≥budget count).
     sig_list = by_tier["signature"][: budget["signature"]]
@@ -1895,7 +1931,8 @@ SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w 
     {{"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}}
   ],
   "rewards": [
-    {{"key": "slug_nagrody", "label": "Nazwa nagrody", "tier": "signature|notable|minor", "category": "weapon|item|consumable", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "loot|quest_reward|npc_gift|discovery", "story_hook": "czemu ta nagroda pasuje do fabuły", "mechanical_effect": "KONKRETNY efekt — broń: +2 obrażenia / wysysa 1 HP na trafienie; relikt-item: +1 do CHA / +2 pancerz / pozwala otwierać zamki bez wprawy / wyostrza skradanie"}}
+    {{"key": "slug_nagrody", "label": "Nazwa nagrody", "tier": "signature|notable|minor", "category": "weapon|item|consumable", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "loot|quest_reward|npc_gift|discovery", "story_hook": "czemu ta nagroda pasuje do fabuły", "mechanical_effect": "KONKRETNY efekt — broń: +2 obrażenia / wysysa 1 HP na trafienie; relikt-item: +1 do CHA / +2 pancerz / pozwala otwierać zamki bez wprawy / wyostrza skradanie"}},
+    {{"key": "mapa_slug", "label": "Nazwa mapy", "tier": "minor", "category": "item", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "npc_gift|discovery", "story_hook": "skąd mapa i co przedstawia", "mechanical_effect": "odsłania mapę świata", "is_map": true, "reveals": ["klucz_lokacji_którą_mapa_odsłania", "..."]}}
   ],
   "active_act": 1,
   "scene_log": [],
@@ -1929,6 +1966,7 @@ ZASADY:
    - UMIEJĘTNOŚĆ działającą OD ZERA (nawet gdy bohater jej nie wykupił) — opisz CZASOWNIKIEM/rzeczownikiem umiejętności, np. "pozwala otwierać zamki bez wprawy" (wytrych), "wyostrza skradanie", "dodaje charyzmy/perswazji w rozmowach", "pomaga tropić", "wspomaga leczenie ran". Silnik przełoży opis na twardy efekt (klucz statystyki/umiejętności) — dlatego pisz konkretnie, słowami wskazującymi statystykę lub umiejętność.
    Przynajmniej signature powinien mieć wyrazisty, tematyczny efekt pasywny (jeśli to nie broń — zrób go reliktem-itemem ze statystyką lub umiejętnością pasującą do fabuły).
 15. WIĄZANIE NAGRÓD Z BEATAMI: rozłóż nagrody po całej kampanii, NIE tylko na finał. Każdą nagrodę przypnij do konkretnego beatu przez "source_beat" (klucz beatu) ORAZ ustaw temu beatowi pole "reward_key" = "key" tej nagrody. Signature przypnij do beatu krytycznego w ostatnim akcie. Gracz dostaje łup w momencie domknięcia tego beatu — dlatego każdy akt (poza być może pierwszym) powinien wydać co najmniej jedną nagrodę.
+16. MAPY (odsłanianie mgły): jeśli fabuła daje graczowi MAPĘ (np. mapa do lochu/ruin, plan okolicy od NPC), zrób z niej nagrodę z "category": "item", "is_map": true oraz "reveals": [lista kluczy key_locations, które ta mapa POKAZUJE na mapie świata]. Zdobycie takiej mapy odsłania te lokacje we mgle wojny (gracz zobaczy je na mapie). Przypnij ją "source_beat"+"reward_key" jak każdą nagrodę (mapa "do X" wchodzi w akcie, w którym gracz ma ruszyć do X). NIE licz mapy do limitów signature/notable/minor — to osobny, dodatkowy przedmiot narzędziowy.
 """
 
 

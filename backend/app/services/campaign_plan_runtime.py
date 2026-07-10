@@ -814,6 +814,15 @@ def pop_reward_toasts(campaign_id: int, conn: sqlite3.Connection) -> list:
     return [t for t in toasts if isinstance(t, str)]
 
 
+def _location_labels(plan: dict) -> dict:
+    """key → display name from plan.key_locations (#1308 map-reveal toasts)."""
+    return {
+        str(l.get("key")): str(l.get("name") or l.get("key"))
+        for l in (plan.get("key_locations") or [])
+        if isinstance(l, dict) and l.get("key")
+    }
+
+
 def _grant_beat_reward(
     campaign_id: int,
     beat: dict,
@@ -862,6 +871,27 @@ def _grant_beat_reward(
     tier_word = {"signature": "wyjątkowy", "notable": "cenny", "minor": "drobny"}.get(tier, "")
     toast = f"🎁 Zdobywasz {tier_word} przedmiot: **{label}**.".replace("  ", " ")
     plan.setdefault("_reward_toasts", []).append(toast)
+
+    # #1308 — a map reward reveals its depicted locations on the world map the moment
+    # it is obtained. Deterministic (fires when the beat closes), independent of the
+    # narrator remembering to hand the item over. Idempotent via reveal_hexes.
+    reveals = [str(k) for k in (rw.get("reveals") or []) if k]
+    if reveals and (rw.get("is_map") or rw.get("category") == "item"):
+        try:
+            from app.services.map_reveal_service import reveal_from_payload
+            res = reveal_from_payload(
+                campaign_id, {"mode": "location", "list": reveals}, conn=conn
+            )
+            if res.get("count"):
+                names = ", ".join(
+                    _location_labels(plan).get(k, k) for k in reveals
+                )
+                plan["_reward_toasts"].append(f"🗺 Mapa odsłania: {names}.")
+                logger.info("map_reward_revealed", campaign_id=campaign_id,
+                            reward_key=rk, count=res["count"], reveals=reveals)
+        except Exception:
+            logger.exception("map_reward_reveal_failed",
+                             campaign_id=campaign_id, reward_key=rk)
     logger.info(
         "beat_reward_granted",
         campaign_id=campaign_id,

@@ -79,6 +79,68 @@ def _start_location_from_plan(plan: dict) -> "tuple[str, str] | None":
     return None
 
 
+def _flat_start_location_from_plan(plan: dict) -> "tuple[str, str] | None":
+    """#1306 — start location for a FLAT plan (no hub/sub structure).
+
+    Fixes the desync where the first ``visit_location`` beat of act 1 (a TRAVEL
+    TARGET — the first dungeon) was mistaken for the START. The player physically
+    begins where act 1 opens: the town/hub, usually the location of the opening
+    ``talk_to_npc`` beat, which is ``key_locations[0]`` by Kuźnia convention.
+
+    Priority:
+      1. Explicit ``scale=="hub"`` (authoritative once #1306 stops the schema drop).
+      2. If act 1 has a non-optional ``talk_to_npc`` beat → ``key_locations[0]``
+         (you start where you meet people — the hub — NOT the place you must go).
+      3. A pure ``visit_location`` opener (no social beat) → that target (legacy
+         "you start by arriving somewhere" adventures).
+      4. ``key_locations[0]``.
+      5. First ``visit_location`` beat (last resort).
+
+    Settlement plans use ``_start_location_from_plan`` (sub-start) unchanged.
+    """
+    if not isinstance(plan, dict):
+        return None
+    key_locations = [
+        loc for loc in (plan.get("key_locations") or []) if isinstance(loc, dict)
+    ]
+    labels = {
+        str(loc.get("key")): str(loc.get("name") or loc.get("key"))
+        for loc in key_locations
+        if loc.get("key")
+    }
+
+    def _ret(key: str) -> "tuple[str, str]":
+        return key, labels.get(key, key)
+
+    # 1. explicit hub
+    for loc in key_locations:
+        if loc.get("scale") == "hub" and loc.get("key"):
+            return _ret(str(loc["key"]))
+
+    acts = plan.get("acts") or []
+    first_act = acts[0] if acts and isinstance(acts[0], dict) else {}
+    beats = [
+        b for b in (first_act.get("key_beats") or [])
+        if isinstance(b, dict) and not b.get("optional")
+    ]
+    has_social = any(b.get("objective_type") == "talk_to_npc" for b in beats)
+    visit_targets = [
+        str(b["objective_value"]) for b in beats
+        if b.get("objective_type") == _OBJ_VISIT and b.get("objective_value")
+    ]
+
+    # 2. social opener → the hub/town (first listed key_location), never the travel target
+    if has_social and key_locations and key_locations[0].get("key"):
+        return _ret(str(key_locations[0]["key"]))
+    # 3. pure visit-first opener
+    if visit_targets:
+        return _ret(visit_targets[0])
+    # 4. hub-by-convention
+    if key_locations and key_locations[0].get("key"):
+        return _ret(str(key_locations[0]["key"]))
+    return None
+
+
 def _unique_location_key(conn: sqlite3.Connection, base: str) -> str:
     key, i = base, 2
     while conn.execute("SELECT 1 FROM game_locations WHERE key = ?", (key,)).fetchone():
@@ -151,7 +213,7 @@ def ensure_template_start_location(
     except Exception:
         return None
 
-    start = _start_location_from_plan(plan)
+    start = _flat_start_location_from_plan(plan)  # #1306 — hub, not travel target
     if not start:
         return None
     key, label = start
@@ -533,9 +595,15 @@ def _overworld_macro_locations(plan: dict) -> "list[dict]":
         return []
     locs = [l for l in (plan.get("key_locations") or []) if isinstance(l, dict) and l.get("key")]
     hub_key = next((str(l["key"]) for l in locs if l.get("scale") == "hub"), None)
+    # #1306 — exclude whichever location sits on the start hex: the settlement sub
+    # start AND the flat hub start (they differ by plan shape). Placing either on an
+    # overworld hex again would duplicate the start location off its anchor.
     start = _start_location_from_plan(plan)
-    start_key = start[0] if start else None
-    anchored = {k for k in (hub_key, start_key) if k}
+    flat_start = _flat_start_location_from_plan(plan)
+    anchored = {
+        k for k in (hub_key, start[0] if start else None,
+                    flat_start[0] if flat_start else None) if k
+    }
     return [
         l for l in locs
         if l.get("scale") != "sub" and str(l["key"]) not in anchored
@@ -647,6 +715,61 @@ def ensure_plan_location_hexes(
     return {"assigned": assigned, "reused": reused, "unplaced": unplaced}
 
 
+def sync_plan_location_hexes(
+    conn: sqlite3.Connection,
+    template_id: int,
+    campaign_id: "int | None" = None,
+) -> "dict | None":
+    """#1307 — mirror each placed macro-location's overworld hex back into the
+    stored plan's ``key_locations[].hex_q/hex_r``.
+
+    After `ensure_plan_location_hexes` / the settlement pass the hexes live in
+    ``world_hexes.location_key`` (canon) and ``game_locations.world_hex_q/r``, but
+    the plan JSON still shows ``None`` — so anything reading the plan (admin
+    monitor, narrator context, distance sanity) sees no coordinates. This reads the
+    canon via `resolve_location_to_hex` and writes it into the plan JSON for the
+    template and, when given, the launching campaign's own copy. Idempotent; never
+    touches `world_hexes` (Piotr-owned). Returns {"synced": n} or None.
+    """
+    from app.services.hex_location_link import resolve_location_to_hex
+
+    def _apply(table: str, row_id: int) -> int:
+        row = conn.execute(
+            f"SELECT gm_plan_json FROM {table} WHERE id = ?", (row_id,)
+        ).fetchone()
+        raw = row["gm_plan_json"] if row else None
+        if not raw:
+            return 0
+        try:
+            plan = json.loads(raw)
+        except Exception:
+            return 0
+        changed = 0
+        for loc in plan.get("key_locations") or []:
+            if not isinstance(loc, dict) or not loc.get("key"):
+                continue
+            hx = resolve_location_to_hex(conn, str(loc["key"]))
+            if hx is None:
+                continue
+            if loc.get("hex_q") != hx[0] or loc.get("hex_r") != hx[1]:
+                loc["hex_q"], loc["hex_r"] = hx[0], hx[1]
+                changed += 1
+        if changed:
+            conn.execute(
+                f"UPDATE {table} SET gm_plan_json = ? WHERE id = ?",
+                (json.dumps(plan, ensure_ascii=False), row_id),
+            )
+        return changed
+
+    synced = _apply("campaign_templates", template_id)
+    if campaign_id is not None:
+        synced += _apply("campaigns", int(campaign_id))
+    conn.commit()
+    logger.info("plan_location_hexes_synced", template_id=template_id,
+                campaign_id=campaign_id, synced=synced)
+    return {"synced": synced}
+
+
 def ensure_template_locations(
     conn: sqlite3.Connection,
     template_id: int,
@@ -674,5 +797,15 @@ def ensure_template_locations(
     except Exception as _plh_err:
         logger.warning(
             "plan_location_hexes_error", template_id=template_id, error=str(_plh_err)
+        )
+    # #1307 — mirror the now-placed hexes back into the plan JSON so key_locations
+    # carries real coordinates (template + launching campaign copy).
+    try:
+        synced = sync_plan_location_hexes(conn, template_id, campaign_id=campaign_id)
+        if synced and isinstance(result, dict):
+            result["plan_location_hexes_synced"] = synced.get("synced", 0)
+    except Exception as _sync_err:
+        logger.warning(
+            "plan_location_hexes_sync_error", template_id=template_id, error=str(_sync_err)
         )
     return result
