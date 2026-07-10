@@ -301,6 +301,13 @@ function ItemRow({
           <span className="block truncate font-ui text-[13px] font-medium text-text">
             {it.label}
           </span>
+          {it.stat_tags && it.stat_tags.length > 0 && (
+            <span className="mt-0.5 flex flex-wrap gap-1.5">
+              {it.stat_tags.map((t) => (
+                <span key={t} className="font-mono text-[10px] text-ember-glow">{t}</span>
+              ))}
+            </span>
+          )}
           {dur && (
             <span className="mt-1 block h-[3px] w-full overflow-hidden rounded-full bg-line">
               <span
@@ -691,26 +698,38 @@ function DollSlot({ label, item, slot, pos, onSelect, busy }: {
 }) {
   const Icon = item ? itemIcon(item) : SLOT_ICON[slot];
   const dur = item?.durability;
+  const tags = item?.stat_tags ?? [];
+  const statLine = tags.slice(0, 2).join(" · ");
   return (
     <button
       type="button"
       disabled={!item || busy}
       onClick={() => item && onSelect(item.id)}
-      title={item ? `${item.label} — szczegóły` : `${label} (pusty)`}
+      title={item ? `${item.label}${statLine ? ` · ${statLine}` : ""} — szczegóły` : `${label} (pusty)`}
       className={cn(
-        "absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[11px] border shadow-[0_3px_12px_rgba(0,0,0,.55)] backdrop-blur-[1px] transition-colors",
+        "absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-[11px] border shadow-[0_3px_12px_rgba(0,0,0,.55)] backdrop-blur-[1px] transition-colors overflow-hidden",
         item ? "border-line bg-[rgba(20,15,10,0.72)] text-ember-glow hover:border-ember" : "border-dashed border-line bg-[rgba(20,15,10,0.4)] text-text-3 cursor-default",
       )}
       style={{ top: pos.top, left: pos.left, width: pos.small ? "12.5%" : "16.5%", aspectRatio: "1 / 1" }}
     >
       <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-bg px-1 text-[7px] font-bold uppercase tracking-[0.1em] text-text-3">{label}</span>
       {item?.image_url ? (
-        <img src={item.image_url} alt={item.label} className="h-full w-full rounded-[10px] object-cover" />
+        <img src={item.image_url} alt={item.label} className="h-full w-full object-cover" />
       ) : (
         Icon && <Icon className="w-[43%] h-[43%]" />
       )}
-      {dur && (
+      {statLine && (
+        <span className="absolute inset-x-0 bottom-0 bg-black/65 py-[2px] text-center font-mono text-[6.5px] leading-none text-ember-glow">
+          {statLine}
+        </span>
+      )}
+      {dur && !statLine && (
         <span className="absolute inset-x-1.5 -bottom-[3px] h-[3px] overflow-hidden rounded-[2px] bg-[#3a2a1a]">
+          <span className={cn("block h-full", dur.pct < 40 ? "bg-danger" : "bg-ember")} style={{ width: `${dur.pct}%` }} />
+        </span>
+      )}
+      {dur && statLine && (
+        <span className="absolute inset-x-0 bottom-[14px] h-[2px] overflow-hidden bg-[#3a2a1a]">
           <span className={cn("block h-full", dur.pct < 40 ? "bg-danger" : "bg-ember")} style={{ width: `${dur.pct}%` }} />
         </span>
       )}
@@ -740,6 +759,13 @@ function EquippedList({ equipped, onSelect, busy }: { equipped: EquippedMap; onS
             <div className="min-w-0 flex-1">
               <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-3">{label}</div>
               <div className="truncate font-ui text-[13px] font-medium text-text">{it?.label ?? "— pusty —"}</div>
+              {it?.stat_tags && it.stat_tags.length > 0 && (
+                <div className="mt-0.5 flex flex-wrap gap-1.5">
+                  {it.stat_tags.map((t) => (
+                    <span key={t} className="font-mono text-[10px] text-ember-glow">{t}</span>
+                  ))}
+                </div>
+              )}
             </div>
             {it && <span className="shrink-0 font-ui text-[10px] text-text-3">›</span>}
           </div>

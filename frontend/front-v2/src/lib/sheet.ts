@@ -252,6 +252,7 @@ export interface InventoryItem {
   covered_slots: string[];
   durability: { current: number; max: number; pct: number; broken: boolean } | null;
   image_url: string | null;
+  stat_tags?: string[];
 }
 
 // Kanoniczne sloty sylwetki (Diablo-overlap) + które klucze slotów backendu je

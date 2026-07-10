@@ -1082,6 +1082,65 @@ def get_character_inventory(character_id: int) -> list[dict]:
         except sqlite3.OperationalError:
             pass
 
+        # Stat tags for inline display on doll/list: damage die (weapons), AC (armor), effects (relics).
+        stat_tags_by_inv_id: dict[int, list[str]] = {}
+        try:
+            _wk_stat = list({r["weapon_key"] for r in rows if r["weapon_key"]})
+            _ik_stat = list({
+                r["item_key"] for r in rows
+                if r["item_key"] and r["item_key"] != "__narrative__"
+                and str(_rget(r, "item_kind") or "").lower() in ("armor", "relic")
+            })
+            _weapon_stat_d: dict[str, tuple] = {}
+            _item_stat_d: dict[str, dict] = {}
+            if _wk_stat:
+                _ph = ",".join("?" * len(_wk_stat))
+                for _wr in conn.execute(
+                    f"SELECT key, damage_die, linked_stat FROM game_config_weapons WHERE key IN ({_ph})",
+                    _wk_stat,
+                ).fetchall():
+                    _weapon_stat_d[_wr["key"]] = (_wr["damage_die"], _wr["linked_stat"])
+            if _ik_stat:
+                _ph = ",".join("?" * len(_ik_stat))
+                for _ir in conn.execute(
+                    f"SELECT key, ac_bonus, effect_json FROM game_config_items WHERE key IN ({_ph})",
+                    _ik_stat,
+                ).fetchall():
+                    _item_stat_d[_ir["key"]] = {"ac": int(_ir["ac_bonus"] or 0), "ej": _ir["effect_json"]}
+            for _r in rows:
+                _tags: list[str] = []
+                _kind = str(_rget(_r, "item_kind") or "").lower()
+                if _r["weapon_key"] and _r["weapon_key"] in _weapon_stat_d:
+                    _die, _lstat = _weapon_stat_d[_r["weapon_key"]]
+                    if _die and _lstat:
+                        _tags.append(f"{_die} {_lstat}")
+                    elif _die:
+                        _tags.append(str(_die))
+                elif _r["item_key"] and _r["item_key"] in _item_stat_d:
+                    _sd = _item_stat_d[_r["item_key"]]
+                    if _kind == "armor" and _sd["ac"] > 0:
+                        _tags.append(f"+{_sd['ac']} AC")
+                    elif _kind == "relic":
+                        try:
+                            _obj = json.loads(_sd["ej"] or "null")
+                            _effs = _obj.get("effects", []) if isinstance(_obj, dict) else []
+                            for _ef in _effs[:4]:
+                                _et = str(_ef.get("type", ""))
+                                _ev = int(_ef.get("value", 0))
+                                if _et == "static_stat_modifier" and _ef.get("stat"):
+                                    _s = str(_ef["stat"]).upper()
+                                    _tags.append(f"{_s}+{_ev}" if _ev >= 0 else f"{_s}{_ev}")
+                                elif _et == "static_skill_modifier" and _ef.get("skill"):
+                                    _sk = str(_ef["skill"])[:6]
+                                    _tags.append(f"{_sk}+{_ev}" if _ev >= 0 else f"{_sk}{_ev}")
+                                elif _et == "ac_bonus" and _ev:
+                                    _tags.append(f"+{_ev} AC")
+                        except Exception:
+                            pass
+                stat_tags_by_inv_id[int(_r["id"])] = _tags
+        except Exception:
+            pass
+
     from app.services.durability_service import durability_view
 
     out: list[dict] = []
@@ -1108,6 +1167,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "can_use": False,
                 "description": meta.get("description"),
                 "is_narrative": True,
+                "stat_tags": [],
             })
             continue
         is_ammo = False  # #764: amunicja (strzały/bełty) — consumable, ale bez akcji „użyj"
@@ -1201,6 +1261,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                     else image_url_by_consumable_key.get(key) if item_type == "consumable"
                     else image_url_by_item_key.get(key)
                 ),
+                "stat_tags": stat_tags_by_inv_id.get(int(r["id"]), []),
             }
         )
     return out
