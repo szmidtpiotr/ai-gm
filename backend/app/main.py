@@ -742,6 +742,9 @@ async def lifespan(app: FastAPI):
                 )
                 await _asyncio.to_thread(sweep_expired_rounds)
                 await _asyncio.to_thread(sweep_expired_combat_turns)
+                # N4 (#886) — email absentees about overdue turns (de-duped per round).
+                from app.services.notify_digest_service import send_overdue_turn_digests
+                await _asyncio.to_thread(send_overdue_turn_digests)
             except Exception as _e:
                 logger.warning("mp_sweep_error", error=str(_e)[:200])
             await _asyncio.sleep(30)

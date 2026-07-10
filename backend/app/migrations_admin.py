@@ -1235,6 +1235,14 @@ ADMIN_MIGRATIONS = [
         used_at    TEXT
     )
     """,
+    # #886 N4 — one overdue-turn email digest per round (de-dup marker).
+    # DDL mirrored in notify_digest_service.SCHEMA_SQL (keep in sync).
+    """
+    CREATE TABLE IF NOT EXISTS round_digest_sent (
+        round_id INTEGER PRIMARY KEY,
+        sent_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
