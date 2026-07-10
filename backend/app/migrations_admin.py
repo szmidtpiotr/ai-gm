@@ -6159,7 +6159,6 @@ def run_admin_migrations() -> None:
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
         _patch_campaign_template_endings_and_optional(conn)  # #1019
-        seed_test_trylogia_template(conn)  # #1021
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds

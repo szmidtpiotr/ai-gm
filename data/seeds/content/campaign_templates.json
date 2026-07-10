@@ -55,24 +55,5 @@
     "required_npc_keys": "[\"brunn\"]",
     "required_beats": "[\"przybycie_do_karczmy\", \"brunn_prosi_o_pomoc\", \"szepty_o_kuzni\", \"oględziny_kuzni\", \"znalezienie_przecietego_miecha\", \"rozmowa_z_toma\", \"trop_na_skradziony_opal\", \"wyprawa_pod_mlyn\", \"nocna_proba_sabotazu\", \"starcie_z_wyrostkami\", \"ponowne_rozpalenie_kuzni\"]",
     "player_visible": 1
-  },
-  {
-    "id": 141,
-    "title": "[TEST] Przejazd 2-akty — trylogia #1009",
-    "description": "Minimalna grywalna kampania testowa (2 akty × 1 beat) do deterministycznego przejazdu trybem Playwright — test-bed maszynerii wygranej #1009–#1020.",
-    "difficulty_rating": 1,
-    "atmosphere": "testowa, neutralna",
-    "gm_plan_json": "{\"title\": \"[TEST] Przejazd 2-akty — trylogia #1009\", \"premise\": \"Minimalny deterministyczny test-bed trylogii: dotrzyj gdziekolwiek, porozmawiaj z kimkolwiek — i kampania się domyka zwycięstwem.\", \"acts\": [{\"id\": \"act_1_reach\", \"number\": 1, \"title\": \"Akt 1 — W drogę\", \"label\": \"Akt 1 — W drogę\", \"summary\": \"Bohater wyrusza i dociera do pierwszego miejsca na trasie.\", \"status\": \"active\", \"completed\": false, \"key_beats\": [{\"beat_key\": \"reach_first_place\", \"label\": \"Dotrzyj do pierwszego miejsca\", \"summary\": \"Dotarcie do dowolnej lokacji domyka ten beat.\", \"objective_type\": \"visit_location\", \"objective_value\": \"\", \"optional\": false}]}, {\"id\": \"act_2_elder\", \"number\": 2, \"title\": \"Akt 2 — Starszy osady\", \"label\": \"Akt 2 — Starszy osady\", \"summary\": \"Bohater spotyka starszego osady i wymienia kilka słów.\", \"status\": \"pending\", \"completed\": false, \"key_beats\": [{\"beat_key\": \"meet_the_elder\", \"label\": \"Porozmawiaj ze starszym\", \"summary\": \"Rozmowa z dowolnym NPC domyka ten beat.\", \"objective_type\": \"talk_to_npc\", \"objective_value\": \"\", \"optional\": false}]}], \"arcs\": [{\"id\": \"act_1_reach\", \"number\": 1, \"title\": \"Akt 1 — W drogę\", \"label\": \"Akt 1 — W drogę\", \"summary\": \"Bohater wyrusza i dociera do pierwszego miejsca na trasie.\", \"status\": \"active\", \"completed\": false, \"key_beats\": [{\"beat_key\": \"reach_first_place\", \"label\": \"Dotrzyj do pierwszego miejsca\", \"summary\": \"Dotarcie do dowolnej lokacji domyka ten beat.\", \"objective_type\": \"visit_location\", \"objective_value\": \"\", \"optional\": false}]}, {\"id\": \"act_2_elder\", \"number\": 2, \"title\": \"Akt 2 — Starszy osady\", \"label\": \"Akt 2 — Starszy osady\", \"summary\": \"Bohater spotyka starszego osady i wymienia kilka słów.\", \"status\": \"pending\", \"completed\": false, \"key_beats\": [{\"beat_key\": \"meet_the_elder\", \"label\": \"Porozmawiaj ze starszym\", \"summary\": \"Rozmowa z dowolnym NPC domyka ten beat.\", \"objective_type\": \"talk_to_npc\", \"objective_value\": \"\", \"optional\": false}]}], \"active_act\": 1, \"active_arc_id\": \"act_1_reach\", \"endings\": [{\"id\": \"ending_primary\", \"type\": \"primary\", \"title\": \"Próba przebyta\", \"summary\": \"Bohater dotarł do celu i poznał starszego osady. Pierwsza próba została przebyta — droga przed nim stoi otworem.\", \"requirements\": [\"meet_the_elder\"]}], \"key_npcs\": [], \"key_locations\": [], \"deviations\": [], \"branches\": [], \"scene_log\": [], \"engine_private\": {}}",
-    "hook_ids": "[]",
-    "status": "published",
-    "play_count": 7,
-    "created_by": "seed",
-    "created_at": "2026-07-02 14:45:03",
-    "start_hex_q": 38,
-    "start_hex_r": 7,
-    "adventure_idea_id": null,
-    "required_npc_keys": "[\"brunn_082511\"]",
-    "required_beats": "[\"start_beat_082511\"]",
-    "player_visible": 1
   }
 ]
