@@ -123,6 +123,48 @@ def _build(conn: sqlite3.Connection, character_id: int) -> str:
         (character_id,),
     ).fetchall()
 
+    # #1304 (opcja A) — flavour descriptions of held items so the narrator can react
+    # faithfully when a player declares e.g. "używam lunety by dostrzec, co dalej".
+    # Descriptions live in TWO tables: game_items (seeds like the Luneta) AND
+    # game_config_items (Kuźnia reward-spine / forge items — tpl<N>_* keys). We union
+    # both so template-creator items are covered, not just seeds. Capped to keep the
+    # prompt lean; kept in a SEPARATE section from the mechanical facts above, with an
+    # explicit guardrail: the description is colour only, no roll bonuses / mechanics.
+    if _has_game_items_table(conn):
+        flavour_rows = conn.execute(
+            """WITH held AS (
+                   SELECT item_key, MAX(acquired_at) AS acq
+                   FROM character_inventory
+                   WHERE character_id = ? AND item_key IS NOT NULL
+                         AND item_key != '__narrative__'
+                   GROUP BY item_key
+               )
+               SELECT COALESCE(gi.label, gci.label, h.item_key) AS label,
+                      COALESCE(gi.description, gci.description) AS description,
+                      COALESCE(gi.rarity, gci.rarity, 0) AS rarity, h.acq
+               FROM held h
+               LEFT JOIN game_items gi ON gi.key = h.item_key
+               LEFT JOIN game_config_items gci ON gci.key = h.item_key
+               WHERE TRIM(COALESCE(gi.description, gci.description, '')) != ''
+               ORDER BY rarity DESC, h.acq DESC
+               LIMIT 30""",
+            (character_id,),
+        ).fetchall()
+    else:
+        flavour_rows = conn.execute(
+            """SELECT COALESCE(gci.label, ci.item_key) AS label, gci.description,
+                      COALESCE(gci.rarity, 0) AS rarity, MAX(ci.acquired_at) AS acq
+               FROM character_inventory ci
+               JOIN game_config_items gci ON gci.key = ci.item_key
+               WHERE ci.character_id = ? AND ci.item_key IS NOT NULL
+                     AND ci.item_key != '__narrative__'
+                     AND TRIM(COALESCE(gci.description, '')) != ''
+               GROUP BY gci.key
+               ORDER BY rarity DESC, acq DESC
+               LIMIT 30""",
+            (character_id,),
+        ).fetchall()
+
     lines = ["[EKWIPUNEK POSTACI — FAKTY MECHANICZNE]"]
 
     if equipped_weapons:
@@ -151,5 +193,36 @@ def _build(conn: sqlite3.Connection, character_id: int) -> str:
         narr_parts = [r["label"] for r in narrative_rows if r["label"]]
         if narr_parts:
             lines.append(f"[Kluczowe przedmioty fabularne: {'; '.join(narr_parts)}]")
+
+    # #1304 — separate flavour section (see query above). Guardrail line is explicit so the
+    # LLM treats these as narrative colour, never as a mechanical licence.
+    # Dedupe by label (multiple keys can share a label, e.g. two identical pergaminy)
+    # and drop empty placeholder descriptions ("Narracyjny przedmiot: <label>" carries no
+    # colour). Cap at 6 lines so the prompt stays lean.
+    flavour_out: list[tuple[str, str]] = []
+    seen_labels: set[str] = set()
+    for r in flavour_rows:
+        label = (r["label"] or "").strip()
+        desc = (r["description"] or "").strip()
+        if not label or label in seen_labels:
+            continue
+        if not desc or desc.lower().startswith("narracyjny przedmiot:"):
+            continue
+        seen_labels.add(label)
+        if len(desc) > 220:
+            desc = desc[:217].rstrip() + "…"
+        flavour_out.append((label, desc))
+        if len(flavour_out) >= 6:
+            break
+
+    if flavour_out:
+        lines.append("")
+        lines.append(
+            "[PRZEDMIOTY FABULARNE — opis wyłącznie dla kolorytu narracji; "
+            "gdy gracz deklaruje użycie takiego przedmiotu, opisz efekt zgodnie z jego opisem, "
+            "ale NIE przyznawaj bonusów do rzutów ani efektów mechanicznych — mechanika należy do silnika]"
+        )
+        for label, desc in flavour_out:
+            lines.append(f"- {label}: {desc}")
 
     return "\n".join(lines)
