@@ -169,8 +169,8 @@ def _deliver_web_push(user_id, prefs, title, body, url) -> bool:
         conn.close()
     if not n:
         return False
-    pns.send_push(user_id, title, body, url)
-    return True
+    # Real send result → dispatcher falls through to email if no push lands.
+    return bool(pns.send_push(user_id, title, body, url))
 
 
 def _deliver_email(user_id, prefs, title, body, url) -> bool:
