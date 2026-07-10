@@ -131,11 +131,13 @@ export interface UseItemResult {
 export function useUseItem(characterId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
+    // Endpoint zawija odpowiedź w {ok, data} — rozpakuj do UseItemResult, by
+    // caller (PanelInventory) czytał map_reveal/item bezpośrednio z góry.
     mutationFn: (inventoryId: number) =>
-      apiFetch<UseItemResult>(`/inventory/${characterId}/use`, {
+      apiFetch<{ ok: boolean; data: UseItemResult }>(`/inventory/${characterId}/use`, {
         method: "POST",
         body: { inventory_id: inventoryId },
-      }),
+      }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory", characterId] });
       qc.invalidateQueries({ queryKey: ["character", characterId] });
