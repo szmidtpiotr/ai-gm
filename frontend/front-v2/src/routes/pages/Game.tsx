@@ -219,6 +219,12 @@ export default function Game() {
         id: `cmp-${completionSeq.current++}`,
         text: q.xp ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`,
       })),
+      // #1312: dostany przedmiot — ten sam zielony dymek co ukończenie beatu/questa.
+      ...(resp.granted_items ?? []).map((it) => ({
+        kind: "completion" as const,
+        id: `cmp-${completionSeq.current++}`,
+        text: `🎒 Otrzymano: ${it.label}`,
+      })),
       // C12 (#1101): dymki transakcji złotem (SPEND_GOLD success events).
       ...(resp.gold_events ?? []).map((ev) => ({
         kind: "gold" as const,

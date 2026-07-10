@@ -5492,6 +5492,11 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     if locals().get("_gold_events_ns"):
         out["gold_events"] = _gold_events_ns
 
+    # #1312: granted-item chat bubbles — narrator gave the player an item this turn.
+    # Same green band as beat/quest completion (front-v2 CompletionBand).
+    if grant_item_labels:
+        out["granted_items"] = [{"label": _l} for _l in grant_item_labels]
+
     return out
 
 
@@ -7214,6 +7219,8 @@ def create_turn_stream(
                                 save_conn.commit()
                             except Exception:
                                 pass
+                    # #1312: stash granted-item labels for the [DONE] payload → green bubble.
+                    _granted_items_s = [{"label": _l} for _l in grant_item_labels] if grant_item_labels else []
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
                             save_conn,
@@ -7439,6 +7446,10 @@ def create_turn_stream(
                     _ge_s = locals().get("_gold_events_s")
                     if _ge_s:
                         done_payload["gold_events"] = _ge_s
+                    # #1312: granted-item green bubbles (parity with non-stream).
+                    _gi_s = locals().get("_granted_items_s")
+                    if _gi_s:
+                        done_payload["granted_items"] = _gi_s
                     # BUG-02: include current clock so frontend updates immediately
                     try:
                         from app.services.clock_service import get_clock_state as _gcs
