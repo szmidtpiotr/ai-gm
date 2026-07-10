@@ -4509,12 +4509,13 @@ def initiate_combat(
         _ov_sc(conn, campaign_id, int(character_id), sheet)
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
-        # #1302: passive relic bonuses (equipped relic slots) — AC + stats work in
-        # combat exactly like out of combat. Fetched once; applied to AC, the seven
-        # ability stats, and DEX-driven initiative below.
+        # #1302: passive bonuses from ALL equipped items (armour/relic/amulet/off-hand)
+        # — AC + stats work in combat exactly like out of combat. Main-hand weapon is
+        # EXCLUDED here because it's applied separately below (avoid double-count).
+        # Applied to AC, the seven ability stats, and DEX-driven initiative.
         try:
-            from app.services.equipment_effects_service import get_equipment_bonuses as _get_relic_bonuses
-            _relic = _get_relic_bonuses(int(character_id), conn)
+            from app.services.equipment_effects_service import get_equipment_bonuses as _get_equip_bonuses
+            _relic = _get_equip_bonuses(int(character_id), conn, exclude_slots=("main_hand",))
         except Exception:
             _relic = {"stats": {}, "skills": {}, "ac": 0}
         _relic_ac = int(_relic.get("ac") or 0)

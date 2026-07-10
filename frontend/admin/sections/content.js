@@ -349,7 +349,7 @@ async function _loadItems() {
     const d = await apiFetch('/api/admin/items');
     const items = (d.items||[]).filter(it => it.item_type!=='armor' && it.item_type!=='consumable');
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--t3)">Brak przedmiotów</td></tr>`; return; }
-    const typeMap = {tool:{l:'Narzędzie',c:'badge-slate'}, magic:{l:'Magiczne',c:'badge-blue'}, special:{l:'Specjalne',c:'badge-amber'}, quest:{l:'Questowe',c:'badge-red'}};
+    const typeMap = {tool:{l:'Narzędzie',c:'badge-slate'}, magic:{l:'Magiczne',c:'badge-blue'}, special:{l:'Specjalne',c:'badge-amber'}, quest:{l:'Questowe',c:'badge-red'}, relic:{l:'⭐ Relikt',c:'badge-blue'}};
     tbody.innerHTML = items.map(it => {
       const t = typeMap[it.item_type] || {l:it.item_type||'—',c:'badge-slate'};
       const enc = encodeURIComponent(JSON.stringify(it));
@@ -430,7 +430,11 @@ const _EFFECT_TYPES = [
   },
   {
     value: 'static_stat_modifier', label: 'Modyfikator statystyki', fields: ['stat', 'value'],
-    tooltip: 'Modyfikator statystyki aplikowany na start walki (liczba całkowita, może być ujemna).\nNp. +2 = bonus do statystyki, -1 = klątwa/osłabienie.',
+    tooltip: 'Bonus do statystyki z założonego przedmiotu — działa w walce I poza walką (testy).\nWartość = PUNKTY statystyki (np. +2 do CHA: 12→14). Ujemna = klątwa.',
+  },
+  {
+    value: 'static_skill_modifier', label: 'Modyfikator umiejętności ⭐', fields: ['skill', 'value'],
+    tooltip: 'Bonus do rangi umiejętności z założonego przedmiotu (np. magiczny wytrych → lockpick +2).\nDziała nawet gdy postać NIE ma wykupionej umiejętności — nadaje ją od zera. Klucz umiejętności = game_config_skills.key (np. lockpick, stealth, persuasion).',
   },
   {
     value: 'apply_condition', label: 'Aplikuj kondycję', fields: ['condition_key', 'duration_rounds'],
@@ -508,6 +512,10 @@ function _buildExtraFields(tdef, e) {
       return `<select class="form-input effect-stat" style="width:80px" title="${_esc(tdef.tooltip||'')}">
         ${_STATS.map(s => `<option${e.stat===s?' selected':''}>${s}</option>`).join('')}
       </select>`;
+    }
+    if (f === 'skill') {
+      // #1302: klucz umiejętności (game_config_skills.key). Wolny tekst — admin wpisuje np. lockpick.
+      return `<input class="form-input effect-skill" type="text" placeholder="np. lockpick, stealth, persuasion" value="${_esc(e.skill||'')}" style="width:190px" title="${_esc(tdef.tooltip||'')}">`;
     }
     if (f === 'condition_key') {
       const conds = _conditionsCache || [];
@@ -595,6 +603,9 @@ function _readEffects(container, effectTypesHint) {
     }
     if (tdef.fields.includes('stat')) {
       e.stat = row.querySelector('.effect-stat')?.value || 'STR';
+    }
+    if (tdef.fields.includes('skill')) {
+      e.skill = (row.querySelector('.effect-skill')?.value || '').trim().toLowerCase();
     }
     if (tdef.fields.includes('condition_key')) {
       e.condition_key = (row.querySelector('.effect-cond-key')?.value || '').trim();

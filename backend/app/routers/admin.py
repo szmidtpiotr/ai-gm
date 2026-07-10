@@ -1718,7 +1718,7 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative, relic",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
@@ -1787,7 +1787,7 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative, relic",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None

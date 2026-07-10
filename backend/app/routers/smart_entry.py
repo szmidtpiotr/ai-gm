@@ -215,6 +215,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "type": "single_choice",
                 "question": "Jaki to rodzaj przedmiotu?",
                 "options": [
+                    {"label": "relic", "description": "Relikt / artefakt — zakładany w slot reliktu, daje pasywne bonusy (staty/AC/umiejętności) z effect_json"},
                     {"label": "armor", "description": "Zbroja / ochrona"},
                     {"label": "accessory", "description": "Akcesoria (pierścień, amulet)"},
                     {"label": "misc", "description": "Różne przedmioty"},

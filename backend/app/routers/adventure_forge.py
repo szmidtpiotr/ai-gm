@@ -1588,6 +1588,35 @@ _STAT_KEYWORDS = [
     ("LCK", ("szczęś", "fart", "luck")),
 ]
 
+# #1302: prose keyword → skill key (game_config_skills.key). Item relics can GRANT
+# a skill from nothing (magic lockpick → lockpick), even if the hero never bought
+# it. First match wins. Keys must match real game_config_skills.key values.
+_SKILL_KEYWORDS = [
+    ("lockpick", ("wytrych", "zamk", "kłódk", "otwiera zam", "złodziejsk")),
+    ("stealth", ("skrad", "ukryci", "cień", "niewidzial", "cichociem", "bezszelest")),
+    ("persuasion", ("perswa", "przekon", "namow", "dyplomac", "krasomów")),
+    ("deception", ("oszust", "blef", "kłamstw", "podstęp", "iluzj")),
+    ("intimidation", ("zastrasz", "groźb", "onieśmiel", "postrach", "trwog")),
+    ("awareness", ("spostrzeg", "czujn", "uważn", "wyczul")),
+    ("investigation", ("śledztw", "dochodzeni", "badani", "poszlak")),
+    ("medicine", ("lecz", "medyc", "uzdraw", "opatr", "zielarstw")),
+    ("survival", ("przetrwani", "obóz", "puszcz", "dzicz")),
+    ("tracking", ("tropi", "trop", "ślad", "pościg")),
+    ("pickpocket", ("kieszonk", "zwędz")),
+    ("athletics", ("atletyk", "siłow wysił", "krzepa")),
+    ("acrobatics", ("akrobac", "salto", "balans")),
+    ("lore", ("erudycj", "księg wiedz", "uczonoś")),
+    ("arcana", ("arkan", "magiczn wiedz")),
+]
+
+
+def _match_skill_effect(txt: str, rarity: int) -> "dict | None":
+    """First skill keyword hit → static_skill_modifier effect (or None)."""
+    for skill, keys in _SKILL_KEYWORDS:
+        if any(k in txt for k in keys):
+            return {"type": "static_skill_modifier", "skill": skill, "value": 1 if rarity < 5 else 2}
+    return None
+
 
 def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: str) -> "str | None":
     """Map a signature's prose effect to a valid effect_json.
@@ -1602,11 +1631,14 @@ def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: 
     effects: list[dict] = []
 
     if category == "item":
-        # Passive relic: stats + AC only (not a weapon → no damage/heal hooks).
+        # Passive relic: stats + AC + skills (not a weapon → no damage/heal hooks).
         for stat, keys in _STAT_KEYWORDS:
             if any(k in txt for k in keys):
                 effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1 if r < 5 else 2})
                 break
+        _sk = _match_skill_effect(txt, r)  # #1302: relikt może NADAĆ umiejętność
+        if _sk:
+            effects.append(_sk)
         if any(k in txt for k in ("pancerz", "obron", "tarcz", "armor", " ac", "ochron")):
             effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
         if not effects:
@@ -1627,6 +1659,9 @@ def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: 
         if any(k in txt for k in keys):
             effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1})
             break
+    _sk = _match_skill_effect(txt, r)  # #1302: broń-relikt może też nadać umiejętność
+    if _sk:
+        effects.append(_sk)
     if not effects:
         # Guarantee a signature weapon is mechanically special even if the prose was vague.
         effects.append({"type": "damage_bonus", "value": r - 2})

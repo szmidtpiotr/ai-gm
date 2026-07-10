@@ -22,7 +22,7 @@ from typing import Any, Callable
 DEFAULT_THRESHOLD = 80
 
 _VALID_TIERS = {"weak", "standard", "elite", "boss"}
-_VALID_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative"}
+_VALID_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative", "relic"}
 _VALID_STATS = {"STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"}
 _DICE_RE = re.compile(r"^\d*d\d+$", re.IGNORECASE)
 

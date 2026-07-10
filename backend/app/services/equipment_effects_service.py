@@ -3,15 +3,19 @@
 Today only WEAPONS have a mechanical hook: the combat engine reads a weapon's
 `effect_json` (#461/#462). A relic/item (e.g. "Rozbita Gwiazda") is mechanically
 dead — its `effect_json` is ignored everywhere. This service is the single
-chokepoint that fixes that: it aggregates the `effect_json` of a character's
-EQUIPPED relic-slot items into one "effective bonus" bundle that every roll path
-consumes — skill tests, saves, combat — plus the character card.
+chokepoint that fixes that: it aggregates the `effect_json` of ALL of a
+character's EQUIPPED items (weapon, armour, relic, amulet…) into one "effective
+bonus" bundle that every roll path consumes — skill tests, saves, combat — plus
+the character card.
 
 Design decisions (locked with Piotr, 2026-07-10):
-  * Activation: item must be EQUIPPED in a relic slot (relic1/relic2), not merely
-    carried. Two relic slots.
-  * Stacking: SUM. Two +CHA relics = +2 CHA.
+  * Activation: item must be EQUIPPED (any slot), not merely carried. Relics get
+    two dedicated slots (relic1/relic2); every other equipped item counts too, so
+    a fine breastplate can grant +CHA, a magic lockpick can grant a skill, etc.
+  * Stacking: SUM. Two +CHA items = +2 CHA.
   * Scope: generic across all 7 stats, skills, and AC — CHA was only an example.
+  * Combat applies the main-hand weapon separately (damage/heal/stat/AC), so the
+    combat caller passes exclude_slots=('main_hand',) to avoid double-counting.
 
 Effect types honored (same schema as weapons):
   * static_stat_modifier {stat, value}   → stat POINTS (STR/DEX/CON/INT/WIS/CHA/LCK)
@@ -58,36 +62,58 @@ def _row_get(row: Any, key: str) -> Any:
         return None
 
 
-def _relic_effect_lists(character_id: int, conn: sqlite3.Connection) -> list[list[dict]]:
-    """One merged effect list per equipped relic-slot inventory row.
+def _equipped_effect_lists(
+    character_id: int, conn: sqlite3.Connection, exclude_slots: "tuple[str, ...]" = ()
+) -> list[list[dict]]:
+    """One merged effect list per EQUIPPED inventory row (any slot).
 
-    effect_json source per row: the base item's `game_config_items.effect_json`
-    (where Forge signatures land), falling back to the unified `game_items` table.
-    Robust to older DBs missing the `game_item_key` column / `game_items` table.
+    #1302 (rozszerzenie, Piotr 2026-07-10): każdy założony przedmiot — broń,
+    pancerz, relikt, amulet — z pasywnym effect_json wnosi bonusy. effect_json
+    source per row: `game_config_items.effect_json` (itemy/pancerz + Forge
+    signatures), `game_config_weapons.effect_json` (broń), fallback do unified
+    `game_items`. `exclude_slots` pomija sloty liczone już gdzie indziej (walka
+    aplikuje broń głównej ręki osobno → exclude 'main_hand' tam).
+
+    Robust to older DBs missing `game_item_key` / `game_items` / `effect_json`.
     """
-    placeholders = ",".join(["?"] * len(RELIC_SLOTS))
+    exclude = {str(s).strip().lower() for s in exclude_slots}
     # Try the rich query first (game_items join); fall back if that table/column is absent.
     queries = [
-        f"""
-        SELECT gi.effect_json AS item_effect,
-               gt.effect_json AS game_item_effect
+        """
+        SELECT ci.slot AS slot,
+               gci.effect_json AS item_effect,
+               gcw.effect_json AS weap_effect,
+               gt.effect_json  AS game_item_effect
         FROM character_inventory ci
-        LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-        LEFT JOIN game_items gt        ON gt.key = COALESCE(ci.game_item_key, ci.item_key)
-        WHERE ci.character_id = ? AND ci.equipped = 1 AND ci.slot IN ({placeholders})
+        LEFT JOIN game_config_items gci   ON gci.key = ci.item_key
+        LEFT JOIN game_config_weapons gcw ON gcw.key = ci.weapon_key
+        LEFT JOIN game_items gt           ON gt.key = COALESCE(ci.game_item_key, ci.item_key, ci.weapon_key)
+        WHERE ci.character_id = ? AND ci.equipped = 1
         """,
-        f"""
-        SELECT gi.effect_json AS item_effect,
+        """
+        SELECT ci.slot AS slot,
+               gci.effect_json AS item_effect,
+               gcw.effect_json AS weap_effect,
                NULL AS game_item_effect
         FROM character_inventory ci
-        LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-        WHERE ci.character_id = ? AND ci.equipped = 1 AND ci.slot IN ({placeholders})
+        LEFT JOIN game_config_items gci   ON gci.key = ci.item_key
+        LEFT JOIN game_config_weapons gcw ON gcw.key = ci.weapon_key
+        WHERE ci.character_id = ? AND ci.equipped = 1
+        """,
+        """
+        SELECT ci.slot AS slot,
+               gci.effect_json AS item_effect,
+               NULL AS weap_effect,
+               NULL AS game_item_effect
+        FROM character_inventory ci
+        LEFT JOIN game_config_items gci ON gci.key = ci.item_key
+        WHERE ci.character_id = ? AND ci.equipped = 1
         """,
     ]
     rows = None
     for q in queries:
         try:
-            rows = conn.execute(q, (character_id, *RELIC_SLOTS)).fetchall()
+            rows = conn.execute(q, (character_id,)).fetchall()
             break
         except sqlite3.OperationalError:
             continue
@@ -96,8 +122,13 @@ def _relic_effect_lists(character_id: int, conn: sqlite3.Connection) -> list[lis
 
     out: list[list[dict]] = []
     for r in rows:
-        # Prefer the config-table effect_json; fall back to the unified game_items one.
+        slot = str(_row_get(r, "slot") or "").strip().lower()
+        if slot in exclude:
+            continue
+        # Prefer item, then weapon, then the unified game_items effect_json.
         effects = _decode_effects(_row_get(r, "item_effect"))
+        if not effects:
+            effects = _decode_effects(_row_get(r, "weap_effect"))
         if not effects:
             effects = _decode_effects(_row_get(r, "game_item_effect"))
         if effects:
@@ -105,11 +136,16 @@ def _relic_effect_lists(character_id: int, conn: sqlite3.Connection) -> list[lis
     return out
 
 
-def get_equipment_bonuses(character_id: int, conn: sqlite3.Connection) -> dict:
-    """Aggregate equipped-relic effects into one bundle.
+def get_equipment_bonuses(
+    character_id: int, conn: sqlite3.Connection, exclude_slots: "tuple[str, ...]" = ()
+) -> dict:
+    """Aggregate ALL equipped-item passive effects into one bundle.
 
     Returns ``{"stats": {STAT: points}, "skills": {skill: rank}, "ac": int}``.
-    Empty dicts / 0 when the character wears no relics. Never raises.
+    Empty dicts / 0 when nothing worn carries effects. Never raises. Only passive
+    types are read here — weapon-only `damage_bonus`/`heal_on_hit` are ignored.
+    Pass ``exclude_slots`` to skip slots already handled elsewhere (combat passes
+    ``('main_hand',)`` because it applies the main-hand weapon separately).
     """
     stats: dict[str, int] = {}
     skills: dict[str, int] = {}
@@ -119,7 +155,7 @@ def get_equipment_bonuses(character_id: int, conn: sqlite3.Connection) -> dict:
     except (TypeError, ValueError):
         return {"stats": stats, "skills": skills, "ac": ac}
 
-    for effects in _relic_effect_lists(cid, conn):
+    for effects in _equipped_effect_lists(cid, conn, exclude_slots):
         for e in effects:
             etype = str(e.get("type") or "").strip()
             try:

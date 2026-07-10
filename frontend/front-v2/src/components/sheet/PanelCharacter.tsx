@@ -84,7 +84,7 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
                 </div>
                 {bonus > 0 && (
                   <div className="mt-0.5 text-[8px] font-medium uppercase tracking-wide text-ember">
-                    z reliktu
+                    z ekwipunku
                   </div>
                 )}
               </div>
