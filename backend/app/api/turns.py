@@ -4953,6 +4953,15 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     except Exception as _strip_err:
         logger.warning("narrative_tag_strip_error", error=str(_strip_err))
 
+    # #1301 — surface mid-campaign reward grants queued this turn as narrator toasts.
+    try:
+        from app.services.campaign_plan_runtime import pop_reward_toasts as _pop_toasts
+        _rtoasts = _pop_toasts(campaign_id, conn)
+        if _rtoasts:
+            clean_assistant = (clean_assistant or "").rstrip() + "\n\n" + "\n".join(_rtoasts)
+    except Exception as _rt_err:
+        logger.warning("reward_toast_surface_error", error=str(_rt_err))
+
     # U30.4 (#578): anti-desync guard — flag when the narrator claims travel but no
     # mechanical move happened this turn. Records `travel_narrated_without_move`.
     try:
@@ -7245,6 +7254,15 @@ def create_turn_stream(
                             save_conn.commit()
                     except Exception as _xs_err2:
                         logger.warning("narrative_xp_hooks_stream_error", error=str(_xs_err2))
+                    # #1301 — drain reward toasts (streaming tor): append to persisted text
+                    # so the grant is recorded on the turn even though the stream already flushed.
+                    try:
+                        from app.services.campaign_plan_runtime import pop_reward_toasts as _pop_toasts2
+                        _rtoasts2 = _pop_toasts2(campaign_id_val, save_conn)
+                        if _rtoasts2:
+                            persisted_assistant_text = (persisted_assistant_text or "").rstrip() + "\n\n" + "\n".join(_rtoasts2)
+                    except Exception as _rt_err2:
+                        logger.warning("reward_toast_surface_stream_error", error=str(_rt_err2))
                     # BUG-04 (stream): parse gm_note / scene_advance / gm_plan_update
                     try:
                         from app.services.gm_plan_schema import normalize_gm_plan

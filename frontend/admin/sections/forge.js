@@ -2119,6 +2119,7 @@ async function openTemplateEditor(id) {
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
     _renderTplItems(_tplEditorPlan.key_items || []);
+    _renderTplRewards(_tplEditorPlan.rewards || [], (_tplEditorPlan.acts || []).length);  // #1301
     _renderTplValidation();  // #1109 — plan health panel in Przegląd
     _loadTplDbItems();
     const ep = _tplEditorPlan.engine_private || {};
@@ -3024,6 +3025,47 @@ function _renderTplEndings(endings) {
   ).join('');
 }
 
+// #1301 — read-only reward spine: shows the loot axis (act → reward) with tier badges
+// and flags a campaign that hands out nothing mid-run. Source of truth stays the plan.
+function _renderTplRewards(rewards, actCount) {
+  const el = document.getElementById('tpl-rewards-spine');
+  if (!el) return;
+  rewards = Array.isArray(rewards) ? rewards : [];
+  const TIER = {
+    signature: { label: 'SYGNATURA', color: 'var(--amber)', glyph: '★' },
+    notable:   { label: 'CENNA',     color: 'var(--blue)',  glyph: '◆' },
+    minor:     { label: 'DROBNA',    color: 'var(--t3)',    glyph: '•' },
+  };
+  if (!rewards.length) {
+    el.innerHTML = '<div class="card" style="padding:12px;border-left:3px solid var(--t3)">' +
+      '<div style="font-size:0.8rem;color:var(--t2)">🎁 Brak nagród w planie — wygeneruj plan, aby zbudować kręgosłup łupów.</div></div>';
+    return;
+  }
+  // mid-campaign flag: a reward pinned to a beat (source_beat) counts as in-run
+  const midRun = rewards.filter(r => r && r.source_beat).length;
+  const noMidRun = midRun === 0;
+  const rows = rewards.slice().sort((a,b)=>(a.act||0)-(b.act||0)).map(r => {
+    const t = TIER[r.tier] || TIER.minor;
+    const pending = r.tier === 'signature' && r.category !== 'consumable';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:0.7rem;font-weight:700;color:var(--t3);width:34px">Akt ' + (r.act||'?') + '</span>' +
+      '<span style="font-size:0.68rem;font-weight:700;color:' + t.color + ';width:78px">' + t.glyph + ' ' + t.label + '</span>' +
+      '<span style="flex:1;font-size:0.82rem;color:var(--t1)">' + _esc(r.label||r.key||'—') +
+        (r.mechanical_effect ? ' <span style="color:var(--t3);font-size:0.74rem">— ' + _esc(r.mechanical_effect) + '</span>' : '') + '</span>' +
+      '<span style="font-size:0.66rem;color:var(--t3)">' + _esc(r.category||'') + '</span>' +
+      (pending ? '<span style="font-size:0.64rem;color:var(--amber);border:1px solid var(--amber);border-radius:var(--r);padding:1px 5px">do zatwierdzenia</span>' : '') +
+    '</div>';
+  }).join('');
+  el.innerHTML = '<div class="card" style="padding:12px' + (noMidRun ? ';border-left:3px solid var(--amber)' : '') + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div style="font-size:0.83rem;font-weight:600;color:var(--t1)">🎁 Kręgosłup łupów — oś nagród</div>' +
+      '<div style="font-size:0.72rem;color:var(--t3)">' + rewards.length + ' nagród · ' + (actCount||'?') + ' aktów</div>' +
+    '</div>' +
+    (noMidRun ? '<div style="font-size:0.74rem;color:var(--amber);margin-bottom:8px">⚠ Żadna nagroda nie jest przypięta do beatu — gracz dostanie łup dopiero na końcu. Przypnij nagrody do beatów (source_beat).</div>' : '') +
+    rows +
+  '</div>';
+}
+
 function _addTplReq(endIdx) {
   const input = document.getElementById('tpl-end-req-input-' + endIdx);
   if (!input || !input.value.trim()) return;
@@ -3235,6 +3277,7 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     _renderTplEnemies(_tplEditorPlan.key_enemies || []);
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
+    _renderTplRewards(d.rewards || _tplEditorPlan.rewards || [], (_tplEditorPlan.acts || []).length);  // #1301
     _renderTplValidation();  // #1109 — refresh plan health after regeneration
     await _loadTplDbItems();  // #1084 — reload DB items after generate-plan (auto-assigned rewards)
     // #1085 — populate klimat/beat/npc fields from auto-fill (only when currently empty)
@@ -3949,6 +3992,8 @@ function _sectionHtml() {
 
         <!-- Tab: Przedmioty -->
         <div id="tpl-tab-items" style="display:none">
+          <!-- #1301 — kręgosłup łupów (oś nagród akt→nagroda), read-only -->
+          <div id="tpl-rewards-spine" style="margin-bottom:14px"></div>
           <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div class="card" style="padding:14px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">

@@ -146,6 +146,8 @@ def mark_beat_visited(
                     beat["visited"] = True
                     beat["visited_at_turn"] = turn_number
                     changed = True
+                    # #1301 — narrative-close beats (signature often pins here) grant too.
+                    _grant_beat_reward(campaign_id, beat, plan, turn_number, conn)
             elif isinstance(beat, str) and beat == beat_key:
                 # Simple string format — convert to dict
                 pass
@@ -794,6 +796,83 @@ def validate_winnable_plan(plan: dict | None) -> dict:
     }
 
 
+def pop_reward_toasts(campaign_id: int, conn: sqlite3.Connection) -> list:
+    """#1301 — drain the queued reward toasts for a campaign (set by _grant_beat_reward
+    on beat close). Returns the list of narrator lines and clears them so they surface
+    exactly once. Empty list when none pending."""
+    plan = get_plan(campaign_id, conn)
+    if not plan:
+        return []
+    toasts = plan.get("_reward_toasts") or []
+    if not toasts:
+        return []
+    plan["_reward_toasts"] = []
+    try:
+        save_plan(campaign_id, plan, conn)
+    except Exception:
+        logger.exception("pop_reward_toasts_save_failed", campaign_id=campaign_id)
+    return [t for t in toasts if isinstance(t, str)]
+
+
+def _grant_beat_reward(
+    campaign_id: int,
+    beat: dict,
+    plan: dict,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> "dict | None":
+    """#1301 — when a beat with `reward_key` closes, grant its linked reward to the
+    party's inventory (mid-campaign loot) and queue a narrator toast on the plan.
+
+    Idempotent via `beat['reward_granted']`. Resolves the reward from plan.rewards[]
+    (materialized at forge time with `granted_key` → a real game_config_* row). Grants
+    to every character in the campaign (story rewards are party-level). Returns the
+    reward info dict when a grant happened, else None."""
+    rk = beat.get("reward_key")
+    if not rk or beat.get("reward_granted"):
+        return None
+    rewards = plan.get("rewards") or []
+    rw = next((r for r in rewards if isinstance(r, dict) and r.get("key") == rk), None)
+    if not rw:
+        return None
+    granted_key = rw.get("granted_key")
+    if not granted_key:
+        return None
+    category = (rw.get("category") or "item").lower()
+    item_type = "weapon" if category == "weapon" else ("consumable" if category == "consumable" else "item")
+    try:
+        from app.services.economy_service import add_to_inventory
+        chars = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ?", (campaign_id,)
+        ).fetchall()
+        granted_any = False
+        for c in chars:
+            cid = c[0] if not isinstance(c, sqlite3.Row) else c["id"]
+            if add_to_inventory(cid, granted_key, 1, source="beat_reward", conn=conn, item_type=item_type):
+                granted_any = True
+        if not granted_any:
+            return None
+    except Exception:
+        logger.exception("beat_reward_grant_failed", campaign_id=campaign_id, reward_key=rk)
+        return None
+    beat["reward_granted"] = True
+    beat["reward_granted_at_turn"] = turn_number
+    label = rw.get("label") or granted_key
+    tier = rw.get("tier") or "notable"
+    tier_word = {"signature": "wyjątkowy", "notable": "cenny", "minor": "drobny"}.get(tier, "")
+    toast = f"🎁 Zdobywasz {tier_word} przedmiot: **{label}**.".replace("  ", " ")
+    plan.setdefault("_reward_toasts", []).append(toast)
+    logger.info(
+        "beat_reward_granted",
+        campaign_id=campaign_id,
+        beat_key=beat.get("beat_key"),
+        reward_key=rk,
+        granted_key=granted_key,
+        tier=tier,
+    )
+    return {"label": label, "tier": tier, "category": category, "granted_key": granted_key}
+
+
 def auto_complete_beats_by_event(
     campaign_id: int,
     event_type: str,
@@ -840,6 +919,8 @@ def auto_complete_beats_by_event(
                 event_type=event_type,
                 target=target_name,
             )
+            # #1301 — grant the beat's linked reward mid-campaign (idempotent).
+            _grant_beat_reward(campaign_id, beat, plan, turn_number, conn)
 
     if changed:
         skipped_keys = _check_and_advance_act(plan, conn)

@@ -56,6 +56,9 @@ class PlotBeat(BaseModel):
     objective_type: Literal["kill_enemy", "visit_location", "talk_to_npc", "find_item"] | None = None
     objective_value: str | None = None
     optional: bool = False
+    # #1301 — reward spine: when this beat closes, the linked reward (by key into
+    # CampaignPlan.rewards[].key) is granted to the player's inventory mid-campaign.
+    reward_key: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -130,6 +133,39 @@ class PlotEnemy(BaseModel):
     note: str = ""
 
 
+class PlotReward(BaseModel):
+    """#1301 — a story-anchored reward in the plan's loot spine.
+
+    `tier` drives materialization: signature → bespoke unique pushed to pending
+    review (rarity ≥4, real effect_json); notable/minor → pool clone by tier.
+    `act`/`source_beat` drive mid-campaign pacing — the reward enters play when
+    its beat closes, not only at the finale. `mechanical_effect` is a descriptive
+    hint the deterministic mapper turns into a safe effect_json for signatures."""
+    key: str
+    label: str
+    tier: Literal["signature", "notable", "minor"] = "notable"
+    category: Literal["weapon", "item", "consumable"] = "item"
+    act: int = 1
+    source_beat: str | None = None
+    acquisition: Literal["loot", "quest_reward", "npc_gift", "discovery"] = "quest_reward"
+    story_hook: str = ""
+    mechanical_effect: str = ""
+    rarity: int = 3
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, v: Any) -> Any:
+        """Derive a slug key from label when the LLM omits it; tolerate bare strings."""
+        if isinstance(v, str):
+            return {"key": _slugify_beat(v), "label": v}
+        if isinstance(v, dict):
+            d = dict(v)
+            if not d.get("key"):
+                d["key"] = _slugify_beat(str(d.get("label") or d.get("mechanical_effect") or ""))
+            return d
+        return v
+
+
 class EnginePrivate(BaseModel):
     secret_predisposition_hint: str
     hidden_twist: str
@@ -144,6 +180,7 @@ class CampaignPlan(BaseModel):
     key_npcs: list[PlotNPC]
     key_locations: list[PlotLocation]
     key_enemies: list[PlotEnemy] = []
+    rewards: list[PlotReward] = []  # #1301 — loot spine, materialized after gen
     active_act: int = 1
     scene_log: list[str] = []
     deviations: list[str] = []

@@ -1552,15 +1552,263 @@ def _auto_assign_reward_items(
     return assigned
 
 
+# ── #1301 Reward spine: budget → bespoke signatures + pool notable/minor ───────
+
+def _compute_reward_budget(act_count: int, difficulty_rating: int) -> dict:
+    """Reward budget scaled to campaign scope. All STARTING values (Numbers Policy):
+    a long/hard campaign earns more and higher-rarity loot than a short one-shot.
+    Engine floor — the LLM designs within it, the engine tops up if it undershoots."""
+    ac = max(1, int(act_count or 1))
+    diff = max(1, min(5, int(difficulty_rating or 3)))
+    if ac <= 2:
+        rarity_ceiling = 3
+    elif ac <= 4:
+        rarity_ceiling = 4
+    else:
+        rarity_ceiling = 5
+    if diff >= 4:
+        rarity_ceiling = min(5, rarity_ceiling + 1)
+    return {
+        "signature": 1,
+        "notable": max(1, ac - 1),
+        "minor": ac // 2,
+        "rarity_ceiling": rarity_ceiling,
+    }
+
+
+# Constrained vocabulary → safe weapon effect_json. LLM writes prose in
+# `mechanical_effect`; we never trust it to emit raw effect_json (balance + validity).
+_STAT_KEYWORDS = [
+    ("STR", ("sił", "krzep", "str")),
+    ("DEX", ("zręcz", "zwinn", "dex")),
+    ("CON", ("kondycj", "wytrzym", "con")),
+    ("INT", ("intelig", "wied", "int")),
+    ("WIS", ("mądro", "spost", "wis")),
+    ("CHA", ("charyzm", "urok", "cha")),
+    ("LCK", ("szczęś", "fart", "luck")),
+]
+
+
+def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: str) -> "str | None":
+    """Map a signature's prose effect to a valid effect_json. Only `weapon` carries a
+    real combat hook (#461/#462: damage_bonus/heal_on_hit/ac_bonus/static_stat_modifier),
+    so we generate effect_json for weapons; item/consumable signatures stay narrative
+    high-rarity relics (their power is rarity + value, tuned in review). Returns None
+    when there is no mechanical hook to attach."""
+    if category != "weapon":
+        return None
+    txt = (mechanical_effect or "").lower()
+    r = max(4, min(5, int(rarity or 4)))
+    effects: list[dict] = []
+    if any(k in txt for k in ("obraże", "dmg", "damage", "ostrz", "cios", "rani")):
+        effects.append({"type": "damage_bonus", "value": r - 2})  # r4→+2, r5→+3
+    if any(k in txt for k in ("wysysa", "życia", "lifesteal", "wampir", "leczy", "krew")):
+        effects.append({"type": "heal_on_hit", "value": 1 if r < 5 else 2})
+    if any(k in txt for k in ("pancerz", "obron", "tarcz", "armor", " ac")):
+        effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+    for stat, keys in _STAT_KEYWORDS:
+        if any(k in txt for k in keys):
+            effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1})
+            break
+    if not effects:
+        # Guarantee a signature weapon is mechanically special even if the prose was vague.
+        effects.append({"type": "damage_bonus", "value": r - 2})
+    return json.dumps({"schema_version": 1, "effects": effects}, ensure_ascii=False)
+
+
+def _materialize_plan_rewards(
+    conn: sqlite3.Connection,
+    template_id: int,
+    plan_public: dict,
+    difficulty_rating: int,
+    act_count: int,
+) -> dict:
+    """#1301 — turn plan.rewards[] into real template-scoped game rows and mutate
+    plan_public in place so each reward carries `granted_key` (→ runtime grant) and
+    each linked beat can resolve its reward. Signatures → bespoke PENDING uniques
+    (rarity ≥4, real effect_json). Notable/minor → pool clones by tier. Falls back to
+    pool draws when the LLM under-delivers vs the budget floor."""
+    budget = _compute_reward_budget(act_count, difficulty_rating)
+    now = datetime.utcnow().isoformat()
+    rewards = plan_public.get("rewards") or []
+    if not isinstance(rewards, list):
+        rewards = []
+        plan_public["rewards"] = rewards
+
+    def _uniq(table: str, base: str) -> str:
+        key, i = base, 2
+        while conn.execute(f"SELECT 1 FROM {table} WHERE key = ?", (key,)).fetchone():
+            key = f"{base}_{i}"; i += 1
+        return key
+
+    def _pool_clone(category: str, rmin: int, rmax: int, label_hint: str | None) -> "tuple[str,str] | None":
+        """Clone one random pool row of `category` in [rmin,rmax] as a hidden approved
+        template item. Returns (granted_key, label) or None when the pool is empty."""
+        if category == "weapon":
+            row = conn.execute(
+                "SELECT key,label,damage_die,weapon_type,linked_stat,allowed_classes,rarity,description,note "
+                "FROM game_config_weapons WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+                "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+            if not row:
+                return None
+            nk = _uniq("game_config_weapons", f"tpl{template_id}_{row['key']}")
+            conn.execute(
+                "INSERT INTO game_config_weapons (key,label,damage_die,weapon_type,linked_stat,allowed_classes,"
+                "rarity,description,note,template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,0,1,'permanent',?,?)",
+                (nk, row["label"], row["damage_die"], row["weapon_type"], row["linked_stat"],
+                 row["allowed_classes"], row["rarity"], row["description"], row["note"], template_id, now, now))
+            return nk, row["label"]
+        if category == "consumable":
+            row = conn.execute(
+                "SELECT key,label,effect_type,effect_dice,effect_bonus,effect_target,base_price,rarity,description "
+                "FROM game_config_consumables WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+                "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+            if not row:
+                return None
+            nk = _uniq("game_config_consumables", f"tpl{template_id}_{row['key']}")
+            conn.execute(
+                "INSERT INTO game_config_consumables (key,label,effect_type,effect_dice,effect_bonus,effect_target,"
+                "base_price,rarity,description,template_id,hidden,ai_generated,approved,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,0,1,?,?)",
+                (nk, row["label"], row["effect_type"] or "misc", row["effect_dice"], row["effect_bonus"] or 0,
+                 row["effect_target"] or "self", row["base_price"] or 0, row["rarity"], row["description"],
+                 template_id, now, now))
+            return nk, row["label"]
+        # item
+        row = conn.execute(
+            "SELECT key,label,item_type,value_gp,rarity,description "
+            "FROM game_config_items WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+            "AND is_active=1 AND approved=1 AND item_type != 'armor' ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+        if not row:
+            return None
+        nk = _uniq("game_config_items", f"tpl{template_id}_{row['key']}")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,"
+            "template_id,hidden,ai_generated,approved,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,0,1,?,?)",
+            (nk, row["label"], row["item_type"], row["value_gp"] or 0, row["rarity"], row["description"],
+             template_id, now, now))
+        return nk, row["label"]
+
+    def _create_signature(rw: dict) -> "str | None":
+        """Create a bespoke PENDING unique from the plan reward. rarity clamped ≥4."""
+        category = (rw.get("category") or "weapon").lower()
+        if category not in ("weapon", "item", "consumable"):
+            category = "weapon"
+        label = (rw.get("label") or "Relikt").strip()
+        rarity = max(4, min(5, int(budget["rarity_ceiling"])))
+        desc = (rw.get("story_hook") or rw.get("mechanical_effect") or "").strip()
+        note = (rw.get("mechanical_effect") or "").strip()
+        base = _slugify(rw.get("key") or label)
+        if category == "weapon":
+            nk = _uniq("game_config_weapons", f"tpl{template_id}_{base}")
+            efx = _build_signature_effect_json(note, rarity, "weapon")
+            conn.execute(
+                "INSERT INTO game_config_weapons (key,label,damage_die,weapon_type,linked_stat,allowed_classes,"
+                "rarity,description,note,effect_json,template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
+                (nk, label, "1d8" if rarity < 5 else "1d10", "melee", "STR", "warrior,rogue,scholar",
+                 rarity, desc, note, efx, template_id, now, now))
+            return nk
+        if category == "consumable":
+            # Consumables have no review_status column → no pending queue; ship functional.
+            nk = _uniq("game_config_consumables", f"tpl{template_id}_{base}")
+            conn.execute(
+                "INSERT INTO game_config_consumables (key,label,effect_type,effect_dice,effect_bonus,effect_target,"
+                "base_price,rarity,description,template_id,hidden,ai_generated,approved,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,1,1,?,?)",
+                (nk, label, "heal_hp", "2d6" if rarity < 5 else "3d6", 0, "self", 0, rarity, desc,
+                 template_id, now, now))
+            return nk
+        nk = _uniq("game_config_items", f"tpl{template_id}_{base}")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,"
+            "template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
+            (nk, label, "quest", 100 * rarity, rarity, desc, note, template_id, now, now))
+        return nk
+
+    by_tier: dict[str, list] = {"signature": [], "notable": [], "minor": []}
+    for rw in rewards:
+        if isinstance(rw, dict) and rw.get("tier") in by_tier:
+            by_tier[rw["tier"]].append(rw)
+
+    summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0, "pending_keys": []}
+    tier_rarity = {"minor": (1, 2), "notable": (3, 3)}
+
+    # Signatures (cap to budget; force ≥budget count).
+    sig_list = by_tier["signature"][: budget["signature"]]
+    if not sig_list and budget["signature"]:
+        # LLM gave none — promote the best notable, else synthesize a generic one.
+        promoted = by_tier["notable"][0] if by_tier["notable"] else {
+            "key": "signature_relict", "label": "Relikt Przygody", "category": "weapon",
+            "act": act_count, "mechanical_effect": "+2 do obrażeń", "tier": "signature"}
+        promoted = dict(promoted); promoted["tier"] = "signature"
+        promoted.setdefault("category", "weapon")
+        rewards.append(promoted)
+        sig_list = [promoted]
+        summary["fallback_added"] += 1
+    for rw in sig_list:
+        gk = _create_signature(rw)
+        if gk:
+            rw["granted_key"] = gk
+            rw["tier"] = "signature"
+            summary["signature"] += 1
+            summary["pending_keys"].append(gk)
+
+    # Notable + minor from pool by tier.
+    for tier in ("notable", "minor"):
+        want = budget[tier]
+        have = by_tier[tier][:want]
+        for rw in have:
+            cat = (rw.get("category") or "item").lower()
+            rmin, rmax = tier_rarity[tier]
+            res = _pool_clone(cat if cat in ("weapon", "item", "consumable") else "item", rmin, rmax, rw.get("label"))
+            if res:
+                rw["granted_key"] = res[0]
+                summary[tier] += 1
+        # Fallback top-up: LLM under-delivered this tier → synth from pool (no source_beat).
+        deficit = want - len(have)
+        for _ in range(max(0, deficit)):
+            rmin, rmax = tier_rarity[tier]
+            res = _pool_clone("weapon" if tier == "notable" else "item", rmin, rmax, None)
+            if res:
+                rewards.append({
+                    "key": _uniq_reward_key(rewards, res[0]), "label": res[1], "tier": tier,
+                    "category": "weapon" if tier == "notable" else "item",
+                    "act": act_count, "granted_key": res[0], "acquisition": "loot",
+                    "story_hook": "", "mechanical_effect": "", "source_beat": None})
+                summary[tier] += 1
+                summary["fallback_added"] += 1
+
+    return summary
+
+
+def _uniq_reward_key(rewards: list, base: str) -> str:
+    existing = {r.get("key") for r in rewards if isinstance(r, dict)}
+    key, i = base, 2
+    while key in existing:
+        key = f"{base}_{i}"; i += 1
+    return key
+
+
 # ── Generate full CampaignPlan for a template ─────────────────────────────────
 
-def _build_generate_plan_system_prompt(act_count: int) -> str:
+def _build_generate_plan_system_prompt(act_count: int, budget: dict | None = None) -> str:
     """Build the generate-plan system prompt with exactly act_count act entries in the schema.
-    Showing the correct number in the example is the only reliable way to get LLMs to honour it."""
+    Showing the correct number in the example is the only reliable way to get LLMs to honour it.
+    `budget` (#1301) tells the LLM how many rewards of each tier to design so the loot spine
+    scales with campaign size; the engine still validates + tops up afterwards."""
+    b = budget or {}
+    sig_n = b.get("signature", 1)
+    not_n = b.get("notable", max(1, act_count - 1))
+    min_n = b.get("minor", act_count // 2)
+    rarity_ceiling = b.get("rarity_ceiling", 4)
     acts_entries = ",\n    ".join(
         f'{{"number": {i}, "title": "string", "summary": "string", '
         '"key_beats": [{"beat_key": "slug_beatu", "summary": "string — co się dzieje", '
-        '"objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false}], '
+        '"objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false, '
+        '"reward_key": "slug_nagrody lub null"}], '
         '"completed": false}'
         for i in range(1, act_count + 1)
     )
@@ -1591,6 +1839,9 @@ SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w 
   "key_enemies": [
     {{"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}}
   ],
+  "rewards": [
+    {{"key": "slug_nagrody", "label": "Nazwa nagrody", "tier": "signature|notable|minor", "category": "weapon|item|consumable", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "loot|quest_reward|npc_gift|discovery", "story_hook": "czemu ta nagroda pasuje do fabuły", "mechanical_effect": "opis efektu (np. +2 obrażenia, wysysa 1 HP na trafienie, +1 pancerz)"}}
+  ],
   "active_act": 1,
   "scene_log": [],
   "deviations": [],
@@ -1616,6 +1867,8 @@ ZASADY:
 11. DOMYKALNOŚĆ (KRYTYCZNE): każdy beat krytyczny (optional: false) MUSI dać się domknąć — albo ma "objective_type"+"objective_value" (auto-domknięcie), albo "narrative_close": true (domknięcie sygnałem MG). Beat krytyczny bez żadnego z tych pól zablokuje kampanię. Dla scen czysto fabularnych (walka bez konkretnego wroga w bazie, rozmowa, decyzja) ustaw "narrative_close": true.
 12. PORA STARTOWA: "start_hour" (liczba 0-23) to godzina, o której dzieje się scena otwarcia — wybierz ją ŚWIADOMIE pod klimat pierwszej sceny (gwarna wieczorna karczma → 19-20, świt na trakcie → 6, nocna ucieczka → 23), nie ustawiaj odruchowo poranka. Zegar gry startuje dokładnie o tej godzinie.
 13. STRUKTURA OSADY: jeśli przygoda toczy się w osadzie (wieś/miasteczko) z co najmniej 2 miejscami-budynkami (karczma, kuźnia, młyn, świątynia, sklep...), dodaj do key_locations OSADĘ ze "scale": "hub" (nazwij ją zgodnie z konwencją świata — mieszanka słowiańsko-germańska, np. Czarnstein, Wilczburg), a każdemu budynkowi daj "scale": "sub" + "parent": <klucz huba>. Miejsca POZA osadą (jaskinia, ruiny, leśny obóz, samotna wieża) → "scale": "standalone". Punkt startowy przygody to zwykle sub wewnątrz huba. Beaty visit_location celują w suby/standalone, nie w hub.
+14. NAGRODY (rewards) — KRĘGOSŁUP ŁUPÓW: zaprojektuj DOKŁADNIE {sig_n} nagrodę tieru "signature", {not_n} tieru "notable" i {min_n} tieru "minor". Signature = kluczowy artefakt/relikt fabuły (zwykle powiązany z głównym MacGuffinem przygody), wchodzi w OSTATNIM akcie. Notable = solidny łup na koniec kolejnych aktów. Minor = drobne znaleziska poboczne. Każda nagroda MUSI mieć: unikalny "key" (lowercase_slug), tematyczną "label", "tier", "category", "act" (w którym akcie wchodzi do gry), "story_hook" i "mechanical_effect" (KONKRETNY efekt — np. "+2 do obrażeń", "wysysa 1 HP przy trafieniu", "+1 pancerz", "+1 do STR"). Rarity nie ustawiaj — nada je silnik (sufit rarity: {rarity_ceiling}).
+15. WIĄZANIE NAGRÓD Z BEATAMI: rozłóż nagrody po całej kampanii, NIE tylko na finał. Każdą nagrodę przypnij do konkretnego beatu przez "source_beat" (klucz beatu) ORAZ ustaw temu beatowi pole "reward_key" = "key" tej nagrody. Signature przypnij do beatu krytycznego w ostatnim akcie. Gracz dostaje łup w momencie domknięcia tego beatu — dlatego każdy akt (poza być może pierwszym) powinien wydać co najmniej jedną nagrodę.
 """
 
 
@@ -1713,8 +1966,12 @@ def forge_generate_template_plan(
         else:
             final_act_count = 5
 
+        # #1301 — reward budget scaled to campaign scope; feeds the prompt so the LLM
+        # designs the right number of tiers, and the engine validates/tops up afterwards.
+        reward_budget = _compute_reward_budget(final_act_count, tpl["difficulty_rating"])
+
         messages = [
-            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count)},
+            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count, reward_budget)},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -1746,6 +2003,18 @@ def forge_generate_template_plan(
                 # beat lacking objective_type/narrative_close gets a GM narrative close.
                 from app.services.campaign_plan_runtime import ensure_beats_closable
                 ensure_beats_closable(plan_public)
+                # #1301 — materialize the reward spine BEFORE storing the plan so every
+                # reward's `granted_key` (and any fallback top-ups) persist into gm_plan_json;
+                # the runtime beat→grant path (FAZA 4) reads these back from the DB.
+                reward_summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0, "pending_keys": []}
+                try:
+                    reward_summary = _materialize_plan_rewards(
+                        conn, template_id, plan_public,
+                        difficulty_rating=int(tpl["difficulty_rating"] or 3),
+                        act_count=final_act_count,
+                    )
+                except Exception:
+                    logger.exception("reward_spine_materialize_failed", template_id=template_id)
                 plan_json = json.dumps(plan_public, ensure_ascii=False)
                 conn.execute(
                     "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
@@ -1769,20 +2038,15 @@ def forge_generate_template_plan(
 
                 conn.commit()
 
-                # #1084 — auto-assign reward items (only when no items already linked)
-                auto_items: list[dict] = []
-                try:
-                    existing_items = conn.execute(
-                        "SELECT COUNT(*) FROM game_config_weapons WHERE template_id = ?",
-                        (template_id,),
-                    ).fetchone()[0]
-                    if existing_items == 0:
-                        auto_items = _auto_assign_reward_items(
-                            conn, template_id, tpl["difficulty_rating"]
-                        )
-                        conn.commit()
-                except Exception:
-                    pass  # reward items are non-fatal
+                # #1301 — reward spine already materialized above (before plan store).
+                # Kept `auto_assigned_items` in the response for the forge UI, now sourced
+                # from the plan's rewards[] with their granted_key.
+                auto_items = [
+                    {"category": rw.get("category"), "key": rw.get("granted_key"),
+                     "name": rw.get("label"), "tier": rw.get("tier")}
+                    for rw in (plan_public.get("rewards") or [])
+                    if isinstance(rw, dict) and rw.get("granted_key")
+                ]
 
                 # #1085 — auto-create pending enemies from key_enemies (HP/AC clamped by difficulty)
                 auto_enemies: list[dict] = []
@@ -1830,6 +2094,8 @@ def forge_generate_template_plan(
                     "auto_created_enemies": auto_enemies,
                     "auto_created_npcs": auto_npcs,
                     "auto_created_locations": auto_locations,
+                    "reward_summary": reward_summary,  # #1301
+                    "rewards": plan_public.get("rewards") or [],  # #1301
                 }
             except Exception as e:
                 last_err = str(e)
