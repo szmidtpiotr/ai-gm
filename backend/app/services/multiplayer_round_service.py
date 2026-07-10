@@ -993,16 +993,23 @@ def _trigger_narration_impl(round_id: int) -> None:
     except Exception as e:
         logger.warning("mp_world_state_snapshot_failed", campaign_id=campaign_id, error=str(e)[:100])
 
+    # N2b (#884) — fan out over the unified dispatcher (telegram > web_push > email)
+    # instead of web-push-only. Anti-spam: online (in-session) members are skipped.
     try:
-        from app.services.push_notification_service import send_push_to_campaign_players
-        send_push_to_campaign_players(
+        from app.services.notification_service import notify_campaign_players
+        res = notify_campaign_players(
             campaign_id,
+            "twoja_tura",
             "Narracja gotowa 📜",
             "Mistrz Gry opisał rundę. Czas na Twoją kolejną akcję!",
             url="/",
         )
+        logger.info("mp_round_notify", campaign_id=campaign_id,
+                    targeted=len(res.get("targeted", [])),
+                    delivered=len(res.get("delivered", [])),
+                    skipped_online=res.get("skipped_online", 0))
     except Exception as e:
-        logger.warning("push_narration_failed", error=str(e)[:100])
+        logger.warning("mp_round_notify_failed", error=str(e)[:100])
 
 
 def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
