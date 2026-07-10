@@ -19,6 +19,8 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
   const v = readVitals(sheet);
   const mods = readStatMods(sheet);
   const conditions = readConditions(sheet);
+  // #1302: pasywne bonusy z założonych reliktów (staty), by pokazać wartość efektywną.
+  const relicStats = readRelicStatBonus(sheet);
   // Podświetlamy atrybuty z najwyższym modyfikatorem (jak w makiecie).
   const maxMod = Math.max(0, ...STAT_KEYS.map((k) => mods[k] ?? 0));
 
@@ -50,25 +52,41 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
         <div className="grid grid-cols-4 gap-2 lg:grid-cols-7">
           {STAT_KEYS.map((k) => {
             const val = readStatValue(sheet, k);
-            const mod = mods[k] ?? 0;
+            const bonus = relicStats[k] ?? 0;
+            const effVal = val + bonus;
+            const mod = bonus ? Math.floor((effVal - 10) / 2) : mods[k] ?? 0;
             const hi = maxMod > 0 && mod === maxMod;
             return (
               <div
                 key={k}
                 className={cn(
                   "rounded-md border px-1 py-2.5 text-center",
-                  hi
-                    ? "border-line-ember bg-gradient-to-b from-[rgba(255,122,61,0.08)] to-transparent"
-                    : "border-line bg-surface",
+                  bonus
+                    ? "border-line-ember bg-gradient-to-b from-[rgba(255,122,61,0.12)] to-transparent"
+                    : hi
+                      ? "border-line-ember bg-gradient-to-b from-[rgba(255,122,61,0.08)] to-transparent"
+                      : "border-line bg-surface",
                 )}
               >
                 <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-text-3">
                   {k}
                 </div>
-                <div className="mt-0.5 font-mono text-[19px] font-medium text-text">{val}</div>
-                <div className={cn("font-mono text-[11px]", hi ? "text-ember-glow" : "text-text-3")}>
+                <div className="mt-0.5 font-mono text-[19px] font-medium text-text">
+                  {effVal}
+                  {bonus > 0 && (
+                    <span className="ml-0.5 align-super text-[9px] text-ember-glow">
+                      +{bonus}
+                    </span>
+                  )}
+                </div>
+                <div className={cn("font-mono text-[11px]", hi || bonus ? "text-ember-glow" : "text-text-3")}>
                   {fmtMod(mod)}
                 </div>
+                {bonus > 0 && (
+                  <div className="mt-0.5 text-[8px] font-medium uppercase tracking-wide text-ember">
+                    z reliktu
+                  </div>
+                )}
               </div>
             );
           })}
@@ -103,6 +121,21 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
       </section>
     </PanelScroll>
   );
+}
+
+// #1302: {STAT: punkty} bonusu z założonych reliktów (backend: sheet.equipment_bonuses.stats).
+function readRelicStatBonus(sheet: HeroSheet | undefined): Record<string, number> {
+  const eq = (((sheet ?? {}) as Record<string, unknown>).equipment_bonuses ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const stats = (eq.stats ?? {}) as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(stats)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n !== 0) out[k.toUpperCase()] = n;
+  }
+  return out;
 }
 
 function readStatValue(sheet: HeroSheet | undefined, k: string): number {

@@ -4509,7 +4509,20 @@ def initiate_combat(
         _ov_sc(conn, campaign_id, int(character_id), sheet)
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
-        dex_mod = _stat_mod(sheet, "DEX")
+        # #1302: passive relic bonuses (equipped relic slots) — AC + stats work in
+        # combat exactly like out of combat. Fetched once; applied to AC, the seven
+        # ability stats, and DEX-driven initiative below.
+        try:
+            from app.services.equipment_effects_service import get_equipment_bonuses as _get_relic_bonuses
+            _relic = _get_relic_bonuses(int(character_id), conn)
+        except Exception:
+            _relic = {"stats": {}, "skills": {}, "ac": 0}
+        _relic_ac = int(_relic.get("ac") or 0)
+        if _relic_ac:
+            ac += _relic_ac
+        _relic_stats = _relic.get("stats") or {}
+        dex_mod = (int(_ability_stats_seven(sheet).get("DEX", 10) or 10)
+                   + int(_relic_stats.get("DEX", 0) or 0) - 10) // 2
         # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
         from app.services.fatigue_service import compute_initiative_penalty
         init_player = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
@@ -4542,6 +4555,11 @@ def initiate_combat(
             for _st, _delta in _amods.items():
                 if _st in ability_stats:
                     ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + _delta
+        # #1302: relic static_stat_modifier — equipped relic-slot items raise stats in combat.
+        if _relic_stats:
+            for _st, _delta in _relic_stats.items():
+                if _st in ability_stats:
+                    ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + int(_delta or 0)
 
         combatants: list[dict[str, Any]] = [
             {

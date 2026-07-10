@@ -1590,16 +1590,33 @@ _STAT_KEYWORDS = [
 
 
 def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: str) -> "str | None":
-    """Map a signature's prose effect to a valid effect_json. Only `weapon` carries a
-    real combat hook (#461/#462: damage_bonus/heal_on_hit/ac_bonus/static_stat_modifier),
-    so we generate effect_json for weapons; item/consumable signatures stay narrative
-    high-rarity relics (their power is rarity + value, tuned in review). Returns None
-    when there is no mechanical hook to attach."""
-    if category != "weapon":
-        return None
+    """Map a signature's prose effect to a valid effect_json.
+
+    #1302: item relics now carry a real PASSIVE hook too (static_stat_modifier /
+    ac_bonus), consumed by equipment_effects_service when the relic is equipped —
+    stats/AC work in combat AND out of combat. Weapons keep their full combat
+    vocabulary (damage_bonus/heal_on_hit/ac_bonus/static_stat_modifier). Consumables
+    stay effect-less here (returns None). The stat keyword mapper is shared."""
     txt = (mechanical_effect or "").lower()
     r = max(4, min(5, int(rarity or 4)))
     effects: list[dict] = []
+
+    if category == "item":
+        # Passive relic: stats + AC only (not a weapon → no damage/heal hooks).
+        for stat, keys in _STAT_KEYWORDS:
+            if any(k in txt for k in keys):
+                effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1 if r < 5 else 2})
+                break
+        if any(k in txt for k in ("pancerz", "obron", "tarcz", "armor", " ac", "ochron")):
+            effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+        if not effects:
+            # Guarantee a signature relic is mechanically special even if prose was vague.
+            effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+        return json.dumps({"schema_version": 1, "effects": effects}, ensure_ascii=False)
+
+    if category != "weapon":
+        return None
+
     if any(k in txt for k in ("obraże", "dmg", "damage", "ostrz", "cios", "rani")):
         effects.append({"type": "damage_bonus", "value": r - 2})  # r4→+2, r5→+3
     if any(k in txt for k in ("wysysa", "życia", "lifesteal", "wampir", "leczy", "krew")):
@@ -1720,12 +1737,15 @@ def _materialize_plan_rewards(
                 (nk, label, "heal_hp", "2d6" if rarity < 5 else "3d6", 0, "self", 0, rarity, desc,
                  template_id, now, now))
             return nk
+        # #1302: item signature carries a passive effect_json (static_stat_modifier/ac_bonus)
+        # so an equipped relic is mechanically alive, not just flavour.
         nk = _uniq("game_config_items", f"tpl{template_id}_{base}")
+        efx = _build_signature_effect_json(note, rarity, "item")
         conn.execute(
-            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,"
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,effect_json,"
             "template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
-            (nk, label, "quest", 100 * rarity, rarity, desc, note, template_id, now, now))
+            "VALUES (?,?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
+            (nk, label, "relic", 100 * rarity, rarity, desc, note, efx, template_id, now, now))
         return nk
 
     by_tier: dict[str, list] = {"signature": [], "notable": [], "minor": []}

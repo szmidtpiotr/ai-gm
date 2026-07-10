@@ -39,7 +39,13 @@ _SLOT_VALUES = {
     "back",
     "main_hand",
     "off_hand",
+    # #1302: two dedicated relic slots for passive-effect items.
+    "relic1",
+    "relic2",
 }
+
+# #1302: relic slots in equip order (auto-pick fills the first free one).
+_RELIC_SLOTS = ("relic1", "relic2")
 
 # Stage 5 E1/E2/E4: armor_coverage enum → which slots a single equipped row
 # claims. 'full' anchors to torso but locks all four limbs simultaneously.
@@ -1972,7 +1978,9 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
     # panel admina (heroes.js „Załóż") i ścieżkę cheat. Manekin gracza nie ma slotu 'armor',
     # więc generyczny slot byłby niewidoczny — tu mapujemy go na anatomiczny slot.
     auto_armor = s in ("auto", "armor")
-    if not auto_armor and s not in _SLOT_VALUES:
+    # #1302: 'relic' sentinel = "equip in the first free relic slot".
+    relic_target = s == "relic" or s in _RELIC_SLOTS
+    if not auto_armor and not relic_target and s not in _SLOT_VALUES:
         raise ValueError("invalid slot")
 
     with _conn() as conn:
@@ -2007,7 +2015,23 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
         slots_to_free: list[str] = [s]
         anchor_slot = s
 
-        if is_armor:
+        if relic_target:
+            # #1302: relics are non-weapon, non-armor items worn in a relic slot.
+            if is_weapon or is_armor:
+                raise ValueError("relic slot accepts only non-weapon, non-armor items")
+            if s == "relic":
+                occupied = {
+                    str(r["slot"])
+                    for r in conn.execute(
+                        "SELECT slot FROM character_inventory WHERE character_id = ? AND equipped = 1 "
+                        "AND slot IN (?, ?)",
+                        (cid, *_RELIC_SLOTS),
+                    ).fetchall()
+                }
+                s = next((rs for rs in _RELIC_SLOTS if rs not in occupied), _RELIC_SLOTS[0])
+            anchor_slot = s
+            slots_to_free = [s]
+        elif is_armor:
             if coverage and coverage not in _VALID_ARMOR_COVERAGE:
                 raise ValueError(f"invalid armor_coverage '{coverage}'")
             if auto_armor:

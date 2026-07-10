@@ -265,6 +265,9 @@ export const DOLL_SLOTS = [
   { slot: "hands", label: "Dłonie" },
   { slot: "legs", label: "Nogi" },
   { slot: "feet", label: "Buty" },
+  // #1302: dwa sloty reliktów — pasywne bonusy (staty/AC/umiejętności) w walce i poza nią.
+  { slot: "relic1", label: "Relikt I" },
+  { slot: "relic2", label: "Relikt II" },
 ] as const;
 
 const SLOT_ALIASES: Record<string, string> = {
@@ -285,6 +288,8 @@ const SLOT_ALIASES: Record<string, string> = {
   legs: "legs",
   feet: "feet",
   boots: "feet",
+  relic1: "relic1",
+  relic2: "relic2",
 };
 
 export interface EquippedMap {
@@ -318,7 +323,7 @@ export interface BagGroups {
   gear: InventoryItem[];
   lore: InventoryItem[];
 }
-const EQUIPPABLE_TYPES = new Set(["weapon", "armor", "shield"]);
+const EQUIPPABLE_TYPES = new Set(["weapon", "armor", "shield", "relic"]);
 
 export function groupBackpack(backpack: InventoryItem[]): BagGroups {
   const consumables: InventoryItem[] = [];
@@ -347,5 +352,7 @@ export function targetSlotFor(it: InventoryItem): string | null {
   }
   if (t === "shield") return "off_hand";
   if (t === "amulet" || t === "ring") return "amulet";
+  // #1302: relikty → slot reliktu ('relic' = backend auto-wybiera wolny relic1/relic2).
+  if (t === "relic" || t === "trinket" || t === "artifact") return "relic";
   return null; // nie do założenia
 }

@@ -1683,6 +1683,13 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
     # Gold stored in dedicated column (never in sheet_json) — inject for frontend readVitals
     item["sheet_json"]["gold_gp"] = gold_gp
+    # #1302: passive relic bonuses so the card can show effective stats ("CHA 12 (+2 z reliktu)").
+    # Non-destructive — raw stats untouched; the UI adds base + bonus.
+    try:
+        from app.services.equipment_effects_service import get_equipment_bonuses
+        item["sheet_json"]["equipment_bonuses"] = get_equipment_bonuses(character_id, conn)
+    except Exception:
+        pass
 
     # Stage 2C X5: include safe_for_rest based on current session location
     item["safe_for_rest"] = False
@@ -1730,18 +1737,26 @@ def get_character_sheet(character_id: int, user_id: int):
         (character_id,),
     ).fetchone()
 
-    conn.close()
-
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Character not found")
     if int(row["user_id"]) != int(user_id):
+        conn.close()
         raise HTTPException(status_code=403, detail="Not your hero")
 
     try:
         sheet_json = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
     except Exception:
         sheet_json = {}
-    return {"sheet_json": _strip_hidden_fields(sheet_json)}
+    sheet_json = _strip_hidden_fields(sheet_json)
+    # #1302: passive relic bonuses for the effective-stats display on the card.
+    try:
+        from app.services.equipment_effects_service import get_equipment_bonuses
+        sheet_json["equipment_bonuses"] = get_equipment_bonuses(character_id, conn)
+    except Exception:
+        pass
+    conn.close()
+    return {"sheet_json": sheet_json}
 
 
 @router.get("/characters/{character_id}/reputation")

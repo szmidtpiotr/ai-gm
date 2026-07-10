@@ -60,7 +60,8 @@ def route_skill_turn(
         from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
         char_sheet = json.loads(character["sheet_json"] or "{}")
         sk = _skill_action_m
-        mod_info = calc_skill_modifier_info(char_sheet, sk)
+        # #1302: pass conn+character_id so equipped-relic stat/skill bonuses fold in.
+        mod_info = calc_skill_modifier_info(char_sheet, sk, conn=conn, character_id=character_id)
         counter = _get_counter(conn, sk)
         _pending = {
             "skill_test_id": f"st-{_uuid.uuid4().hex[:8]}",
@@ -330,7 +331,7 @@ def route_skill_turn(
                         "skill_key": _pre_match,
                         "skill_label": _skill_label(_pre_match),
                         "counter": _get_counter(conn, _pre_match),
-                        "modifier_breakdown": calc_skill_modifier_info(_char_sh_pre, _pre_match),
+                        "modifier_breakdown": calc_skill_modifier_info(_char_sh_pre, _pre_match, conn=conn, character_id=character_id),
                     }
                     gs_row_pre = conn.execute(
                         "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",

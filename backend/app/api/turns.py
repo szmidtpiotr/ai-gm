@@ -4838,7 +4838,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                         "skill_key": _sk2,
                         "skill_label": _skill_label(_sk2),
                         "counter": _get_counter(conn, _sk2),
-                        "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2),
+                        "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2, conn=conn, character_id=payload.character_id),
                     }
                     # Store in session
                     try:
@@ -6190,7 +6190,7 @@ def create_turn_stream(
                 from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
                 import uuid as _guuid
                 _gate_sheet = json.loads(character["sheet_json"] or "{}")
-                _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation")
+                _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation", conn=conn, character_id=payload.character_id)
                 _gate_mod = dict(_gate_mod)
                 _gate_mod["total"] = int(_gate_mod.get("total", 0)) + _gate_adv
                 _gate_mod["advantage_bonus"] = _gate_adv
@@ -6322,7 +6322,7 @@ def create_turn_stream(
                             "skill_key": _pre_match_s,
                             "skill_label": _skill_label(_pre_match_s),
                             "counter": _get_counter(conn, _pre_match_s),
-                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s, conn=conn, character_id=payload.character_id),
                         }
                         gs_row_s = conn.execute(
                             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",

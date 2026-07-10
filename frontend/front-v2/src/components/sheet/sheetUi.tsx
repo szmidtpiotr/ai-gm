@@ -19,6 +19,7 @@ import {
   Pants,
   Scroll,
   Shield,
+  Sparkle,
   Sword,
   TShirt,
   type Icon,
@@ -58,6 +59,7 @@ export function itemIcon(it: InventoryItem): Icon {
   if (k.includes("staff") || k.includes("wand") || k.includes("lask")) return MagicWand;
   if (t === "weapon") return Sword;
   if (t === "consumable" || t === "food") return Bread;
+  if (t === "relic" || t === "trinket" || t === "artifact") return Sparkle;
   if (t === "quest" || t === "scroll" || t === "note") return Scroll;
   if (t === "armor") return TShirt;
   if (t === "shield") return Shield;
@@ -74,6 +76,8 @@ export const SLOT_ICON: Record<string, Icon> = {
   hands: Hand,
   legs: Pants,
   feet: Boot,
+  relic1: Sparkle,
+  relic2: Sparkle,
 };
 
 export const SPELL_TYPE_ICON: Record<string, Icon> = {

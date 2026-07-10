@@ -64,6 +64,9 @@ const DOLL_POS: Record<string, { top: string; left: string; small?: boolean }> =
   hands: { top: "57%", left: "81%" },
   legs: { top: "63%", left: "50%" },
   feet: { top: "87%", left: "50%" },
+  // #1302: sloty reliktów po bokach nóg (małe).
+  relic1: { top: "75%", left: "19%", small: true },
+  relic2: { top: "75%", left: "81%", small: true },
 };
 
 export function PanelInventory({
@@ -789,10 +792,13 @@ function fmtSigned(n: number) { return (n >= 0 ? "+" : "") + n; }
 function readDefense(sheet: HeroSheet | undefined) {
   const s = (sheet ?? {}) as Record<string, unknown>;
   const def = (s.defense ?? {}) as Record<string, unknown>;
-  const base = Number(def.base ?? def.ac ?? 10) || 10;
+  // #1302: relikty (equipment_bonuses.ac) podnoszą pancerz — w walce i na karcie.
+  const eq = (s.equipment_bonuses ?? {}) as Record<string, unknown>;
+  const relicAc = Number(eq.ac ?? 0) || 0;
+  const base = (Number(def.base ?? def.ac ?? 10) || 10) + relicAc;
   const mods = (s.stat_modifiers ?? {}) as Record<string, unknown>;
   const dex = Number(mods.DEX ?? 0) || 0;
-  return { base, reduction: Math.max(0, base - 10), initiative: dex, zone: String(s.zone ?? "").toUpperCase() === "RANGED" ? "DYSTANS" : "ZWARCIE" };
+  return { base, reduction: Math.max(0, base - 10), initiative: dex, relicAc, zone: String(s.zone ?? "").toUpperCase() === "RANGED" ? "DYSTANS" : "ZWARCIE" };
 }
 
 function readCarry(sheet: HeroSheet | undefined): string {
