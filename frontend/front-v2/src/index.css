@@ -110,6 +110,27 @@
   }
 }
 
+/* #1309 — animacja „wjazdu" heksów odsłoniętych przedmiotem-mapą (Mapa świata).
+   Krótki beat (0.6 s), potem fade-in + złoto-bursztynowy puls poświaty (~2 s razem).
+   `both` trzyma stan 0% podczas opóźnienia, więc heks jest niewidoczny, zanim wjedzie. */
+@keyframes hexReveal {
+  0% { opacity: 0; }
+  35% { opacity: 1; }
+  100% { opacity: 1; }
+}
+@keyframes hexRevealGlow {
+  0% { filter: drop-shadow(0 0 0 rgba(232, 193, 90, 0)); }
+  45% { filter: drop-shadow(0 0 7px rgba(255, 176, 122, 0.95)); }
+  100% { filter: drop-shadow(0 0 0 rgba(232, 193, 90, 0)); }
+}
+.hex-just-revealed {
+  animation:
+    hexReveal 2s ease-out 0.6s both,
+    hexRevealGlow 2s ease-out 0.6s both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 /* Cienki, ciepły scrollbar */
 * {
   scrollbar-width: thin;

@@ -62,6 +62,21 @@ export function WorldMap({
   onResume,
 }: Props) {
   const setGameTab = useAppStore((s) => s.setGameTab);
+  // #1309 — heksy świeżo odsłonięte przez przedmiot-mapę: animujemy ich „wjazd".
+  // Lokalny set seedowany z mapReveal.ts, kasowany po ~2,5 s (koniec animacji).
+  const mapReveal = useAppStore((s) => s.mapReveal);
+  const [revealSet, setRevealSet] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!mapReveal?.hexes?.length) {
+      setRevealSet(new Set());
+      return;
+    }
+    setRevealSet(new Set(mapReveal.hexes.map(([q, r]) => `${q},${r}`)));
+    const t = setTimeout(() => setRevealSet(new Set()), 2500);
+    return () => clearTimeout(t);
+    // Retrigger po każdym nowym odsłonięciu (świeży ts → nowy obiekt mapReveal).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReveal?.ts]);
   const map = useWorldMap(campaignId, characterId);
   const clock = useCampaignClock(campaignId);
   const character = useCharacter(characterId);
@@ -347,6 +362,7 @@ export function WorldMap({
                       isSelected={
                         !!selected && h.q === selected.q && h.r === selected.r
                       }
+                      justRevealed={revealSet.has(`${h.q},${h.r}`)}
                       terrainLabel={h.hex_type ? hexTypes[h.hex_type]?.label : undefined}
                       onHoverIn={onHexHoverIn}
                       onHoverOut={onHexHoverOut}
@@ -523,6 +539,7 @@ function HexTile({
   color,
   isCurrent,
   isSelected,
+  justRevealed,
   terrainLabel,
   onHoverIn,
   onHoverOut,
@@ -532,6 +549,8 @@ function HexTile({
   color?: string;
   isCurrent: boolean;
   isSelected: boolean;
+  /** #1309 — heks świeżo odsłonięty przedmiotem-mapą → animacja „wjazdu" (poświata). */
+  justRevealed?: boolean;
   terrainLabel?: string;
   onHoverIn: (label: string, sub: string, e: React.MouseEvent) => void;
   onHoverOut: () => void;
@@ -582,6 +601,7 @@ function HexTile({
 
   return (
     <g
+      className={justRevealed ? "hex-just-revealed" : undefined}
       onClick={(e) => {
         e.stopPropagation();
         onClick();

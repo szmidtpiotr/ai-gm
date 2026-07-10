@@ -118,18 +118,30 @@ export function useInventoryDetail(
   });
 }
 
-/** POST /inventory/{charId}/use — użyj zużywalnego. */
+/** Odpowiedź POST /inventory/{charId}/use — zużywalne LUB przedmiot-mapa.
+ * Mapa: consumed=false + map_reveal z listą odsłoniętych heksów (do animacji). */
+export interface UseItemResult {
+  ok?: boolean;
+  item?: { item_type?: string };
+  map_reveal?: { mode: string; count: number; revealed_hexes: [number, number][] };
+  narrative?: string;
+}
+
+/** POST /inventory/{charId}/use — użyj zużywalnego albo przedmiotu-mapy. */
 export function useUseItem(characterId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inventoryId: number) =>
-      apiFetch<{ ok: boolean }>(`/inventory/${characterId}/use`, {
+      apiFetch<UseItemResult>(`/inventory/${characterId}/use`, {
         method: "POST",
         body: { inventory_id: inventoryId },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory", characterId] });
       qc.invalidateQueries({ queryKey: ["character", characterId] });
+      // Przedmiot-mapa odsłania heksy → odśwież mapę świata (klucz ["world-map", ...])
+      // po prefiksie, bo tu nie mamy campaignId — inaczej nowe heksy nie doczytają się.
+      qc.invalidateQueries({ queryKey: ["world-map"] });
     },
   });
 }

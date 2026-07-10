@@ -148,6 +148,13 @@ export default function Game() {
   // forceWorldMap = gracz kliknął „Świat" i chce zobaczyć mapę świata.
   const [forceWorldMap, setForceWorldMap] = useState(false);
   const localMap = useLocalMap(campaignId, gameTab === "map");
+  // #1309 — użycie przedmiotu-mapy odsłania heksy: PanelInventory przełącza na
+  // zakładkę Mapa i ustawia mapReveal; tu wymuszamy mapę ŚWIATA (nie lokalną osadę),
+  // by gracz zobaczył wjeżdżające nowe heksy.
+  const mapReveal = useAppStore((s) => s.mapReveal);
+  useEffect(() => {
+    if (mapReveal) setForceWorldMap(true);
+  }, [mapReveal]);
   // PM4: wybór trasy (na wprost / traktem) jako modal z 2 przyciskami zamiast
   // pytania tekstem. Wypełniany, gdy tura zwróci suggested_actions type=route_choice.
   const [routeChoice, setRouteChoice] = useState<

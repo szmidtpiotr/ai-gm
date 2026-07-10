@@ -24,6 +24,8 @@ import {
   type InventoryItem,
 } from "@/lib/sheet";
 import { readVitals } from "@/lib/game";
+import { useAppStore } from "@/store/appStore";
+import { useToast } from "@/components/ui/toast";
 import type { HeroSheet } from "@/lib/types";
 import { SecHead, PanelScroll, itemIcon, SLOT_ICON } from "./sheetUi";
 import {
@@ -87,6 +89,11 @@ export function PanelInventory({
   const [view, setView] = useState<"doll" | "list">("doll");
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  // #1309 — przedmiot-mapa: „Użyj" otwiera Mapę świata i animuje nowe heksy.
+  const setGameTab = useAppStore((s) => s.setGameTab);
+  const setMapReveal = useAppStore((s) => s.setMapReveal);
+  const { toast } = useToast();
+
   const useItem = useUseItem(characterId);
   const dropItem = useDropItem(characterId);
 
@@ -112,7 +119,23 @@ export function PanelInventory({
   }
 
   function handleUse(inventoryId: number) {
-    useItem.mutate(inventoryId, { onSuccess: () => setSelectedId(null) });
+    useItem.mutate(inventoryId, {
+      onSuccess: (data) => {
+        setSelectedId(null);
+        // #1309 — przedmiot-mapa NIE jest zużywany: przełącz na Mapę świata i
+        // zaznacz odsłonięte heksy do animacji „wjechania".
+        const revealed = data?.map_reveal?.revealed_hexes;
+        if (data?.item?.item_type === "map" && revealed?.length) {
+          setGameTab("map");
+          setMapReveal(revealed);
+          toast(
+            data.narrative?.trim() ||
+              `Odsłonięto ${data.map_reveal?.count ?? revealed.length} heksów.`,
+            "success",
+          );
+        }
+      },
+    });
   }
 
   function handleDrop(inventoryId: number) {
