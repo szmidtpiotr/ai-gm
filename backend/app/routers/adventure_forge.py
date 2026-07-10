@@ -2086,6 +2086,42 @@ def forge_generate_template_plan(
                         (idea_id, template_id),
                     )
 
+                # #1303 — reconcile required_beats / required_npc_keys against the freshly
+                # regenerated plan. Each regeneration emits brand-new LLM-invented beat_keys
+                # (and often different key_npcs), so a required_* list curated for a PRIOR plan
+                # goes stale: validate_template_publish then reports every orphaned key as a
+                # "missing beat/npc" error (e.g. 23 phantom errors after a regenerate) even
+                # though the new plan is itself valid & winnable. Prune to keys that still exist
+                # in the new plan; keep the surviving subset so an admin's curation isn't lost.
+                try:
+                    new_beat_keys = {
+                        b.get("beat_key")
+                        for a in (plan_public.get("acts") or [])
+                        for b in (a.get("key_beats") or [])
+                        if isinstance(b, dict) and b.get("beat_key")
+                    }
+                    new_npc_keys = {
+                        n.get("key")
+                        for n in (plan_public.get("key_npcs") or [])
+                        if isinstance(n, dict) and n.get("key")
+                    }
+                    prev_beats = json.loads(tpl["required_beats"] or "[]") if "required_beats" in tpl.keys() else []
+                    prev_npcs = json.loads(tpl["required_npc_keys"] or "[]") if "required_npc_keys" in tpl.keys() else []
+                    kept_beats = [b for b in prev_beats if b in new_beat_keys]
+                    kept_npcs = [n for n in prev_npcs if n in new_npc_keys]
+                    if kept_beats != prev_beats:
+                        conn.execute(
+                            "UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
+                            (json.dumps(kept_beats, ensure_ascii=False), template_id),
+                        )
+                    if kept_npcs != prev_npcs:
+                        conn.execute(
+                            "UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
+                            (json.dumps(kept_npcs, ensure_ascii=False), template_id),
+                        )
+                except Exception:
+                    logger.exception("required_keys_reconcile_failed", template_id=template_id)
+
                 # Auto-fill npc keys, beat keys, atmosphere (#1085)
                 # Convert sqlite3.Row → dict so _auto_fill_plan_fields can call .get() (#1081)
                 _fill = _auto_fill_plan_fields(
