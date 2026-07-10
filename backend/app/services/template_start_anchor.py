@@ -434,6 +434,219 @@ def ensure_template_location_structure(
     return {"hub_key": hub_key, "start_key": start_key, "sub_keys": sub_keys, "q": q, "r": r}
 
 
+# ── Overworld hex placement for the plan's OTHER macro locations ──────────────
+# The hub/start location sits on the template start hex (handled above) and
+# sub-locations live on the FAZA ML local map (map_level=1). Every OTHER macro
+# location in the plan (a distant dungeon, ruins, a second settlement) is a
+# floating orphan unless it is placed on its own overworld hex — the travel /
+# distance engine cannot route to a location with no world hex (same class of
+# bug as the bogus-distance #1293). `ensure_plan_location_hexes` gives each such
+# location a free hex in a ring around the start, spread apart.
+
+_HEX_DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+_RING_MIN = 2          # keep plan locations off the start hex's immediate skirt
+_RING_MAX = 6          # …but within a short travel radius
+_PREFERRED_TYPES = {"town", "plains", "forest"}
+
+
+def _hex_dist(q1: int, r1: int, q2: int, r2: int) -> int:
+    """Axial hex distance."""
+    return (abs(q1 - q2) + abs(r1 - r2) + abs((q1 + r1) - (q2 + r2))) // 2
+
+
+def _free_overworld_hexes(
+    conn: sqlite3.Connection, template_id: int, exclude: "set[tuple[int, int]]"
+) -> "list[dict]":
+    """Every active overworld hex free for a plan location.
+
+    Hard exclusions (identical to #1094 so the Kresy world map — Piotr-owned — is
+    never touched): named POI (non-empty label), a hex already claimed by an
+    active game_location, another template's start hex, and anything in `exclude`.
+    """
+    taken = set(exclude)
+    for row in conn.execute(
+        "SELECT start_hex_q, start_hex_r FROM campaign_templates "
+        "WHERE start_hex_q IS NOT NULL AND id != ?",
+        (template_id,),
+    ).fetchall():
+        taken.add((int(row["start_hex_q"]), int(row["start_hex_r"])))
+    try:
+        for row in conn.execute(
+            "SELECT world_hex_q, world_hex_r FROM game_locations "
+            "WHERE world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL AND is_active = 1"
+        ).fetchall():
+            taken.add((int(row["world_hex_q"]), int(row["world_hex_r"])))
+    except sqlite3.Error:
+        pass
+
+    out: list[dict] = []
+    for row in conn.execute(
+        "SELECT q, r, hex_type, label FROM world_hexes WHERE map_level = 0 AND is_active = 1"
+    ).fetchall():
+        q, r = int(row["q"]), int(row["r"])
+        if (row["label"] or "").strip():
+            continue
+        if (q, r) in taken:
+            continue
+        out.append({"q": q, "r": r, "hex_type": row["hex_type"] or ""})
+    return out
+
+
+def _pick_plan_hex(
+    free: "list[dict]",
+    start_q: int,
+    start_r: int,
+    chosen: "list[tuple[int, int]]",
+    min_spacing: int,
+) -> "dict | None":
+    """Pick the best free hex for a plan location: inside the [RING_MIN, RING_MAX]
+    ring around the start, spread from already-chosen locations (>= min_spacing
+    preferred, enforced when possible), mild preference for hospitable terrain."""
+    best = None
+    best_score = -1e18
+    for h in free:
+        q, r = h["q"], h["r"]
+        d_start = _hex_dist(q, r, start_q, start_r)
+        min_chosen = min((_hex_dist(q, r, cq, cr) for cq, cr in chosen), default=999)
+        # spacing: heavily reward keeping locations apart (fixes "za blisko siebie")
+        spacing_score = min(min_chosen, min_spacing) * 1000 + min_chosen
+        # ring: penalise hexes outside [RING_MIN, RING_MAX] by how far off they are
+        if d_start < _RING_MIN:
+            ring_pen = (_RING_MIN - d_start) * 300
+        elif d_start > _RING_MAX:
+            ring_pen = (d_start - _RING_MAX) * 120
+        else:
+            ring_pen = 0
+        pref = 30 if h["hex_type"] in _PREFERRED_TYPES else 0
+        score = spacing_score - ring_pen + pref
+        if score > best_score:
+            best_score = score
+            best = h
+    return best
+
+
+def _overworld_macro_locations(plan: dict) -> "list[dict]":
+    """key_locations that need their OWN overworld hex: everything that is not a
+    sub-location (those go on the local map) and not the hub/start (already on the
+    start hex). Returns the raw loc dicts, order preserved."""
+    if not isinstance(plan, dict):
+        return []
+    locs = [l for l in (plan.get("key_locations") or []) if isinstance(l, dict) and l.get("key")]
+    hub_key = next((str(l["key"]) for l in locs if l.get("scale") == "hub"), None)
+    start = _start_location_from_plan(plan)
+    start_key = start[0] if start else None
+    anchored = {k for k in (hub_key, start_key) if k}
+    return [
+        l for l in locs
+        if l.get("scale") != "sub" and str(l["key"]) not in anchored
+    ]
+
+
+def ensure_plan_location_hexes(
+    conn: sqlite3.Connection,
+    template_id: int,
+    *,
+    force: bool = False,
+    min_spacing: int = 2,
+) -> "dict | None":
+    """Give every OTHER macro location in the plan its own free overworld hex.
+
+    - Reused locations (a row that already carries a world-hex canon) keep their
+      hex and are reported under `reused` — never moved (answers "sprawdzaj w
+      bazie czy lokacje mają już przydzielony globalny hex").
+    - Fresh locations get a free hex in a ring around the start, spread apart.
+    - `force=True` (admin "rozrzuć ponownie") first releases the hexes this
+      template's plan locations currently hold, then re-allocates all of them with
+      `min_spacing` — used to spread out locations the auto-pass packed too close.
+
+    Writes via `link_location_to_hex` so the placement survives
+    `reconcile_location_hex_links`. Idempotent. Returns
+    {"assigned": [...], "reused": [...], "unplaced": [...]} or None when the
+    template has no start hex / no macro locations to place.
+    """
+    from app.services.hex_location_link import (
+        link_location_to_hex,
+        resolve_location_to_hex,
+    )
+
+    tpl = conn.execute(
+        "SELECT start_hex_q, start_hex_r, gm_plan_json FROM campaign_templates WHERE id = ?",
+        (template_id,),
+    ).fetchone()
+    if not tpl or tpl["start_hex_q"] is None or tpl["start_hex_r"] is None:
+        return None
+    try:
+        plan = json.loads(tpl["gm_plan_json"] or "{}")
+    except Exception:
+        return None
+
+    macro = _overworld_macro_locations(plan)
+    if not macro:
+        return {"assigned": [], "reused": [], "unplaced": []}
+
+    start_q, start_r = int(tpl["start_hex_q"]), int(tpl["start_hex_r"])
+    labels = {
+        str(l["key"]): str(l.get("name") or l["key"])
+        for l in (plan.get("key_locations") or [])
+        if isinstance(l, dict) and l.get("key")
+    }
+
+    assigned: list[dict] = []
+    reused: list[dict] = []
+    unplaced: list[dict] = []
+    chosen: list[tuple[int, int]] = [(start_q, start_r)]  # start hex is off-limits
+
+    for loc in macro:
+        key = str(loc["key"])
+        row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1", (key,)
+        ).fetchone()
+        if row is None:
+            # stub not created yet (e.g. plan changed) — skip; a later publish/launch
+            # pass will create it and re-run this allocator.
+            unplaced.append({"key": key, "name": labels.get(key, key), "reason": "no_location_row"})
+            continue
+
+        existing = resolve_location_to_hex(conn, key)
+        if existing is not None and not force:
+            chosen.append(existing)
+            reused.append({"key": key, "name": labels.get(key, key),
+                           "q": existing[0], "r": existing[1]})
+            continue
+
+        if existing is not None and force:
+            # release the old hex canon so the slot frees up for re-allocation
+            conn.execute(
+                "UPDATE world_hexes SET location_key = NULL "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (existing[0], existing[1]),
+            )
+            conn.execute(
+                "UPDATE game_locations SET world_hex_q = NULL, world_hex_r = NULL "
+                "WHERE key = ? AND is_active = 1",
+                (key,),
+            )
+
+        free = _free_overworld_hexes(conn, template_id, exclude=set(chosen))
+        pick = _pick_plan_hex(free, start_q, start_r, chosen, min_spacing)
+        if pick is None:
+            unplaced.append({"key": key, "name": labels.get(key, key), "reason": "no_free_hex"})
+            continue
+        link_location_to_hex(conn, key, pick["q"], pick["r"])
+        chosen.append((pick["q"], pick["r"]))
+        assigned.append({"key": key, "name": labels.get(key, key),
+                         "q": pick["q"], "r": pick["r"], "hex_type": pick["hex_type"]})
+
+    conn.commit()
+    logger.info(
+        "plan_location_hexes_ensured",
+        template_id=template_id,
+        assigned=len(assigned), reused=len(reused), unplaced=len(unplaced),
+        force=force,
+    )
+    return {"assigned": assigned, "reused": reused, "unplaced": unplaced}
+
+
 def ensure_template_locations(
     conn: sqlite3.Connection,
     template_id: int,
@@ -442,10 +655,24 @@ def ensure_template_locations(
     """#1206 + #1212 — one entry point for template location materialization.
 
     Settlement-structured plans (hub+subs) get the full FAZA ML treatment;
-    flat plans fall back to the single anchored start location.
+    flat plans fall back to the single anchored start location. In both cases the
+    plan's OTHER macro locations then get their own overworld hexes so the travel
+    engine can route to them.
     """
     struct = ensure_template_location_structure(conn, template_id, campaign_id=campaign_id)
     if struct:
-        return {"key": struct["start_key"], "status": "settlement",
-                "q": struct["q"], "r": struct["r"], **struct}
-    return ensure_template_start_location(conn, template_id, campaign_id=campaign_id)
+        result = {"key": struct["start_key"], "status": "settlement",
+                  "q": struct["q"], "r": struct["r"], **struct}
+    else:
+        result = ensure_template_start_location(conn, template_id, campaign_id=campaign_id)
+
+    # Place the plan's remaining macro locations on their own overworld hexes.
+    try:
+        placed = ensure_plan_location_hexes(conn, template_id)
+        if placed and isinstance(result, dict):
+            result["plan_location_hexes"] = placed
+    except Exception as _plh_err:
+        logger.warning(
+            "plan_location_hexes_error", template_id=template_id, error=str(_plh_err)
+        )
+    return result

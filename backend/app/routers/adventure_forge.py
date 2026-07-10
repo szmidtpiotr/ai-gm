@@ -2179,6 +2179,46 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # location creation is non-fatal
 
+                # Auto-allocate a start hex at plan-generation time (not just at
+                # publish) so the template — and every location placed relative to
+                # it below — is grounded on the world map from the first draft.
+                start_hex_info: dict | None = None
+                try:
+                    cur_hex = conn.execute(
+                        "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?",
+                        (template_id,),
+                    ).fetchone()
+                    if cur_hex and cur_hex["start_hex_q"] is None:
+                        best_hex = _allocate_hex_for_template(conn, template_id)
+                        if best_hex is not None:
+                            conn.execute(
+                                "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
+                                (best_hex["q"], best_hex["r"], template_id),
+                            )
+                            conn.commit()
+                            start_hex_info = {
+                                "q": best_hex["q"], "r": best_hex["r"],
+                                "hex_type": best_hex.get("hex_type"),
+                                "is_fallback": bool(best_hex.get("is_fallback")),
+                            }
+                    elif cur_hex:
+                        start_hex_info = {"q": int(cur_hex["start_hex_q"]),
+                                          "r": int(cur_hex["start_hex_r"])}
+                except Exception:
+                    pass  # start-hex allocation is non-fatal (publish gate is the backstop)
+
+                # Materialize the plan's start location on the start hex AND place
+                # every other macro location on its own free overworld hex, so the
+                # travel engine can route to them. Idempotent, non-fatal.
+                plan_location_hexes: dict | None = None
+                try:
+                    from app.services.template_start_anchor import ensure_template_locations
+                    _tsl = ensure_template_locations(conn, template_id)
+                    if isinstance(_tsl, dict):
+                        plan_location_hexes = _tsl.get("plan_location_hexes")
+                except Exception as _tsl_err:
+                    logger.warning("generate_plan_location_hex_error", error=str(_tsl_err))
+
                 return {
                     "ok": True,
                     "template_id": template_id,
@@ -2190,6 +2230,8 @@ def forge_generate_template_plan(
                     "auto_created_enemies": auto_enemies,
                     "auto_created_npcs": auto_npcs,
                     "auto_created_locations": auto_locations,
+                    "start_hex": start_hex_info,
+                    "plan_location_hexes": plan_location_hexes,
                     "reward_summary": reward_summary,  # #1301
                     "rewards": plan_public.get("rewards") or [],  # #1301
                 }
@@ -3156,5 +3198,187 @@ def forge_deallocate_hex(template_id: int, _: None = Depends(_require_admin)):
         )
         conn.commit()
         return {"ok": True, "template_id": template_id}
+    finally:
+        conn.close()
+
+
+# ── Plan macro-location placement (admin relocation of world-map locations) ────
+
+@router.get("/templates/{template_id}/location-hexes")
+def forge_location_hexes(template_id: int, _: None = Depends(_require_admin)):
+    """List the plan's overworld macro locations with their current world hex,
+    plus the full hex-availability grid — data for the 'Rozmieszczenie lokacji'
+    map picker so an admin can relocate any location that landed too close."""
+    from app.services.template_start_anchor import _overworld_macro_locations
+    from app.services.hex_location_link import resolve_location_to_hex
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, start_hex_q, start_hex_r, gm_plan_json FROM campaign_templates WHERE id = ?",
+            (template_id,),
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        try:
+            plan = json.loads(tpl["gm_plan_json"] or "{}")
+        except Exception:
+            plan = {}
+        macro = _overworld_macro_locations(plan)
+        labels = {
+            str(l["key"]): str(l.get("name") or l["key"])
+            for l in (plan.get("key_locations") or [])
+            if isinstance(l, dict) and l.get("key")
+        }
+        locations = []
+        for loc in macro:
+            key = str(loc["key"])
+            row = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1", (key,)
+            ).fetchone()
+            hx = resolve_location_to_hex(conn, key) if row else None
+            locations.append({
+                "key": key,
+                "name": labels.get(key, key),
+                "q": hx[0] if hx else None,
+                "r": hx[1] if hx else None,
+                "placed": hx is not None,
+                "exists": row is not None,
+            })
+        start = None
+        if tpl["start_hex_q"] is not None:
+            start = {"q": int(tpl["start_hex_q"]), "r": int(tpl["start_hex_r"])}
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "start_hex": start,
+            "locations": locations,
+            "hexes": _hex_availability(conn, template_id),
+        }
+    finally:
+        conn.close()
+
+
+class SetLocationHexReq(BaseModel):
+    location_key: str
+    q: int
+    r: int
+
+
+@router.post("/templates/{template_id}/location-hexes/set")
+def forge_set_location_hex(
+    template_id: int, req: SetLocationHexReq, _: None = Depends(_require_admin)
+):
+    """Relocate ONE plan macro location to a chosen free overworld hex.
+
+    Rejects a hex occupied by a named POI, another location, or any template's
+    start hex (the location's OWN current hex is allowed — a no-op re-confirm).
+    world_hexes rows are never created/deleted (Kresy map is Piotr-owned)."""
+    from app.services.template_start_anchor import _overworld_macro_locations
+    from app.services.hex_location_link import link_location_to_hex, resolve_location_to_hex
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, gm_plan_json FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        try:
+            plan = json.loads(tpl["gm_plan_json"] or "{}")
+        except Exception:
+            plan = {}
+        macro_keys = {str(l["key"]) for l in _overworld_macro_locations(plan)}
+        if req.location_key not in macro_keys:
+            raise HTTPException(
+                status_code=422,
+                detail="Lokacja nie jest makro-lokacją planu (hub/sub nie są przenoszone tu).",
+            )
+        row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (req.location_key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=422, detail="Lokacja nie istnieje jeszcze w bazie.")
+
+        # Validate the target hex exists on the world map.
+        hx = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 LIMIT 1",
+            (req.q, req.r),
+        ).fetchone()
+        if hx is None:
+            raise HTTPException(status_code=422, detail="Hex nie istnieje na mapie świata.")
+
+        current = resolve_location_to_hex(conn, req.location_key)
+        is_own = current is not None and current == (req.q, req.r)
+        if not is_own:
+            if (hx["label"] or "").strip():
+                raise HTTPException(status_code=409, detail="Hex to nazwany POI — wybierz wolny hex.")
+            # occupied by another active location?
+            occ = conn.execute(
+                "SELECT key FROM game_locations WHERE world_hex_q = ? AND world_hex_r = ? "
+                "AND is_active = 1 AND key != ? LIMIT 1",
+                (req.q, req.r, req.location_key),
+            ).fetchone()
+            if occ:
+                raise HTTPException(status_code=409, detail="Hex zajęty przez inną lokację.")
+            # occupied by any template's start hex?
+            st = conn.execute(
+                "SELECT id FROM campaign_templates WHERE start_hex_q = ? AND start_hex_r = ? LIMIT 1",
+                (req.q, req.r),
+            ).fetchone()
+            if st:
+                raise HTTPException(status_code=409, detail="Hex zajęty jako start szablonu.")
+
+        # release the old hex canon, then claim the new one
+        if current is not None and not is_own:
+            conn.execute(
+                "UPDATE world_hexes SET location_key = NULL "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (current[0], current[1]),
+            )
+        link_location_to_hex(conn, req.location_key, req.q, req.r)
+        conn.commit()
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "location_key": req.location_key,
+            "q": req.q, "r": req.r,
+            "hex_type": hx["hex_type"],
+            "atypical": (hx["hex_type"] or "") not in ("town", "plains", "forest"),
+        }
+    finally:
+        conn.close()
+
+
+class RerollLocationHexesReq(BaseModel):
+    min_spacing: int = 3
+
+
+@router.post("/templates/{template_id}/location-hexes/reroll")
+def forge_reroll_location_hexes(
+    template_id: int,
+    req: RerollLocationHexesReq | None = None,
+    _: None = Depends(_require_admin),
+):
+    """Re-scatter ALL of the plan's macro locations with a wider minimum spacing —
+    the fix for auto-placement that packed them too close together."""
+    from app.services.template_start_anchor import ensure_plan_location_hexes
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, start_hex_q FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        if tpl["start_hex_q"] is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Szablon nie ma jeszcze startowego hexa — przydziel start najpierw.",
+            )
+        spacing = max(1, int((req.min_spacing if req else 3)))
+        result = ensure_plan_location_hexes(conn, template_id, force=True, min_spacing=spacing)
+        if result is None:
+            raise HTTPException(status_code=422, detail="Brak makro-lokacji planu do rozmieszczenia.")
+        return {"ok": True, "template_id": template_id, **result}
     finally:
         conn.close()
