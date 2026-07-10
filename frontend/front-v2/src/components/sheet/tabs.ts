@@ -9,7 +9,6 @@ import {
   MapTrifold,
   Shield,
   Sparkle,
-  Target,
   type Icon,
 } from "@phosphor-icons/react";
 import type { GameTab } from "@/store/appStore";
@@ -24,10 +23,9 @@ export interface GameTabDef {
 
 export const STORY_TAB: GameTabDef = { key: "story", label: "Opowieść", icon: BookOpen };
 
-// 5 paneli karty postaci (kolejność jak w makiecie zar5 lewego railu).
+// 4 panele karty postaci — Postać wchłonęła Umiejętności (jedna zakładka).
 export const SHEET_TABS: GameTabDef[] = [
   { key: "character", label: "Postać", icon: Shield },
-  { key: "skills", label: "Umiejętności", icon: Target },
   { key: "spells", label: "Czary", icon: Sparkle, manaOnly: true },
   { key: "inventory", label: "Ekwipunek", icon: Backpack },
   { key: "reputation", label: "Reputacja & opis", icon: FlagBanner },

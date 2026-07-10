@@ -59,7 +59,6 @@ export interface LoginPayload {
 export type GameTab =
   | "story"
   | "character"
-  | "skills"
   | "spells"
   | "inventory"
   | "reputation"

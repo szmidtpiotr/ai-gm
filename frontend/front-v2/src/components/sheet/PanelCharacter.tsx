@@ -1,8 +1,11 @@
-// F-21 · Postać — żywotność (HP/Mana/XP) + atrybuty (7, z modyfikatorami) + stan.
-// Makieta: zar2-postac.html (sekcje Żywotność / Atrybuty / Stan).
+// F-21/F-54 · Postać + Umiejętności — żywotność, atrybuty, stan, wyuczone skille.
+// Umiejętności wchłonięte z osobnej zakładki (jedna zakładka = mniej przełączeń).
+import { useState } from "react";
+import { CaretDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { readConditions, readStatMods } from "@/lib/sheet";
+import { readConditions, readStatMods, readSkills, PROFICIENCY_RANK } from "@/lib/sheet";
 import { readVitals } from "@/lib/game";
+import { usePublicSkills } from "@/hooks/useSheetData";
 import type { HeroSheet } from "@/lib/types";
 import { SecHead, PanelScroll } from "./sheetUi";
 
@@ -23,6 +26,19 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
   const relicStats = readRelicStatBonus(sheet);
   // Podświetlamy atrybuty z najwyższym modyfikatorem (jak w makiecie).
   const maxMod = Math.max(0, ...STAT_KEYS.map((k) => mods[k] ?? 0));
+
+  // Umiejętności — tylko wyuczone (ranga ≥ 1), tap rozwija opis.
+  const skills = readSkills(sheet).filter((s) => s.rank >= 1);
+  const catalog = usePublicSkills();
+  const descOf = (key: string) => catalog.data?.find((c) => c.key === key)?.description ?? null;
+  const [openSkills, setOpenSkills] = useState<Set<string>>(new Set());
+  const toggleSkill = (key: string) =>
+    setOpenSkills((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   return (
     <PanelScroll>
@@ -93,7 +109,7 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
         </div>
       </section>
 
-      <section>
+      <section className="mb-6">
         <SecHead>Stan</SecHead>
         {conditions.length === 0 ? (
           <p className="rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
@@ -116,6 +132,76 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SecHead>
+          Umiejętności <span className="ml-1 font-normal normal-case tracking-normal text-text-3">★ = biegłość (+2)</span>
+        </SecHead>
+        {skills.length === 0 ? (
+          <p className="rounded-md border border-line-soft bg-surface px-3.5 py-3 font-serif text-label text-text-3">
+            Brak wyuczonych umiejętności.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-1.5 lg:grid-cols-2 lg:gap-x-4">
+            {skills.map((s) => {
+              const desc = descOf(s.key);
+              const isOpen = openSkills.has(s.key);
+              return (
+                <div
+                  key={s.key}
+                  className="overflow-hidden rounded-md border border-line-soft bg-surface"
+                >
+                  <button
+                    type="button"
+                    onClick={() => desc && toggleSkill(s.key)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left",
+                      desc && "transition-colors hover:bg-inset",
+                    )}
+                    aria-expanded={desc ? isOpen : undefined}
+                  >
+                    <span className="flex-1 text-label font-medium text-text">
+                      {s.label}
+                      {s.proficient && <span className="ml-1.5 align-[2px] text-[10px] text-ember">★</span>}
+                    </span>
+                    <span className="font-mono text-[10px] tracking-wide text-text-3">{s.stat}</span>
+                    <div className="flex gap-1">
+                      {Array.from({ length: PROFICIENCY_RANK }).map((_, i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            i < s.rank
+                              ? "bg-ember shadow-[0_0_6px_rgba(255,122,61,.6)]"
+                              : "bg-inset shadow-[inset_0_0_0_1px_var(--line)]",
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <span className="w-9 text-right font-mono text-label font-medium text-ember-glow">
+                      {(s.bonus >= 0 ? "+" : "") + s.bonus}
+                    </span>
+                    {desc && (
+                      <CaretDown
+                        size={13}
+                        className={cn(
+                          "shrink-0 text-text-3 transition-transform",
+                          isOpen && "rotate-180",
+                        )}
+                      />
+                    )}
+                  </button>
+                  {desc && isOpen && (
+                    <p className="border-t border-line-soft bg-bg px-3.5 py-2.5 font-serif text-micro leading-relaxed text-text-2">
+                      {desc}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

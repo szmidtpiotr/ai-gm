@@ -13,7 +13,6 @@ import {
 import { readVitals } from "@/lib/game";
 import { visibleSheetTabs } from "./tabs";
 import { PanelCharacter } from "./PanelCharacter";
-import { PanelSkills } from "./PanelSkills";
 import { PanelSpells } from "./PanelSpells";
 import { PanelInventory } from "./PanelInventory";
 import { PanelReputation } from "./PanelReputation";
@@ -43,7 +42,6 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
     // scroll usunięty — dublował się i wychodził poza szerokość ekranu. Desktop = rail.
     <div className="flex min-h-0 flex-1 flex-col">
       {active === "character" && <PanelCharacter sheet={sheet} />}
-      {active === "skills" && <PanelSkills sheet={sheet} />}
       {active === "spells" && (
         <PanelSpells
           sheet={sheet}
