@@ -75,11 +75,13 @@ export function WorldMap({
     }
     setRevealSet(new Set(mapReveal.hexes.map(([q, r]) => `${q},${r}`)));
     // #1196 — wyśrodkuj widok na pierwszym odsłoniętym heksie (skok „Użyj" mapy
-    // skarbu na jego cel). Jednorazowy pan — gracz może potem przesunąć swobodnie.
+    // skarbu na jego cel). Focus wchodzi wprost do transformacji zamiast pan —
+    // odporne na timing: `center` przelicza się po dociągnięciu danych mapy,
+    // a pan liczony względem starego center lądował poza mapą (pusty widok).
     const [fq, fr] = mapReveal.hexes[0];
-    const fp = hexToPixel(fq, fr);
+    setFocusPx(hexToPixel(fq, fr));
     setZoom(1);
-    setPan({ x: center.x - fp.x, y: center.y - fp.y });
+    setPan({ x: 0, y: 0 });
     const t = setTimeout(() => setRevealSet(new Set()), 2500);
     return () => clearTimeout(t);
     // Retrigger po każdym nowym odsłonięciu (świeży ts → nowy obiekt mapReveal).
@@ -132,6 +134,8 @@ export function WorldMap({
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // #1196 — punkt, na który celuje viewport zamiast pozycji gracza (skok „Użyj").
+  const [focusPx, setFocusPx] = useState<{ x: number; y: number } | null>(null);
   // Śledzimy start + czy pointer się ruszył (drag vs klik). BEZ setPointerCapture —
   // capture przechwytywał `click` na desktopie → klik w heks nie działał.
   const drag = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
@@ -152,6 +156,7 @@ export function WorldMap({
   const recenter = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setFocusPx(null); // wróć do pozycji gracza
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -257,7 +262,8 @@ export function WorldMap({
     }
   }, [cinematic, travel.isPending]);
 
-  const groupTransform = `translate(${VB_W / 2 + pan.x} ${VB_H / 2 + pan.y}) scale(${zoom}) translate(${-center.x} ${-center.y})`;
+  const viewCenter = focusPx ?? center;
+  const groupTransform = `translate(${VB_W / 2 + pan.x} ${VB_H / 2 + pan.y}) scale(${zoom}) translate(${-viewCenter.x} ${-viewCenter.y})`;
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
