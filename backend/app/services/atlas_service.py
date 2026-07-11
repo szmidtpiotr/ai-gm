@@ -106,6 +106,7 @@ def get_atlas(character_id: Any, conn: sqlite3.Connection | None = None) -> dict
         ]
 
         rumors = _rumor_summary(c, cid)
+        treasures = _treasure_summary(c, cid)
 
         return {
             "hexes": {
@@ -116,6 +117,7 @@ def get_atlas(character_id: Any, conn: sqlite3.Connection | None = None) -> dict
             },
             "locations": {"discovered": location_count},
             "rumors": rumors,
+            "treasure_sites": treasures,
         }
     except Exception as e:
         logger.warning("atlas_get_failed", character_id=character_id, error=str(e))
@@ -141,9 +143,28 @@ def _rumor_summary(conn: sqlite3.Connection, character_id: int) -> dict[str, Any
     return {"heard": heard, "confirmed": confirmed, "entries": entries}
 
 
+def _treasure_summary(conn: sqlite3.Connection, character_id: int) -> dict[str, Any]:
+    """#1196 — treasures this hero has dug up (found). Empty if table missing."""
+    try:
+        rows = conn.execute(
+            "SELECT label, region, hex_q, hex_r, found_at FROM world_treasures "
+            "WHERE found_by_character_id = ? AND state = 'found' ORDER BY found_at DESC",
+            (character_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {"found": 0, "entries": []}
+    entries = [
+        {"label": r["label"] or "Skarb", "region": r["region"],
+         "hex": {"q": r["hex_q"], "r": r["hex_r"]}, "found_at": r["found_at"]}
+        for r in rows
+    ]
+    return {"found": len(entries), "entries": entries}
+
+
 def _empty_atlas() -> dict[str, Any]:
     return {
         "hexes": {"discovered": 0, "total": 0, "pct": 0, "regions": []},
         "locations": {"discovered": 0},
         "rumors": {"heard": 0, "confirmed": 0, "entries": []},
+        "treasure_sites": {"found": 0, "entries": []},
     }

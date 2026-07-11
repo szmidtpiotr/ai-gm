@@ -55,6 +55,25 @@ def _pick_target(conn: sqlite3.Connection, campaign_id: int,
     except sqlite3.OperationalError:
         open_targets = set()
 
+    # 0 — an incomplete treasure map the hero already holds (#1196): a rumour that
+    # the rest of the map surfaced nearby. Highest priority — directly actionable.
+    try:
+        _tr = conn.execute(
+            """
+            SELECT wt.id, wt.label FROM world_treasures wt
+            WHERE wt.character_id = ? AND wt.state = 'buried'
+              AND (SELECT COUNT(*) FROM character_map_fragments f
+                   WHERE f.treasure_id = wt.id AND f.character_id = wt.character_id) < wt.total_parts
+            ORDER BY wt.id LIMIT 1
+            """,
+            (character_id,),
+        ).fetchone()
+        if _tr and ("treasure_site", str(_tr["id"])) not in open_targets:
+            return {"target_type": "treasure_site", "target_key": str(_tr["id"]),
+                    "label": _tr["label"] or "mapa skarbu"}
+    except sqlite3.OperationalError:
+        pass
+
     # 1 — unvisited plan locations
     row = conn.execute(
         "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
@@ -106,6 +125,8 @@ def _pick_target(conn: sqlite3.Connection, campaign_id: int,
 _FLAVOUR = {
     "location": "W karczmie szepczą, że warto zajrzeć do {label} — podobno kryje niejedno.",
     "enemy": "Przy kuflu ktoś klnie na {label} — mówią, że grasują gdzieś w okolicy.",
+    "treasure_site": "Ktoś przy ogniu wspomina, że resztę takiej mapy jak twoja "
+                     "widziano nieopodal — może uda się dokończyć zbiór.",
     None: "Krążą po karczmie plotki i niesprawdzone wieści — nic konkretnego.",
 }
 

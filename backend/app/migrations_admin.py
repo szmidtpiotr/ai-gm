@@ -6249,7 +6249,7 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
     try:
         tables = conn.execute(
             """
-            SELECT t.key FROM game_config_loot_tables t
+            SELECT DISTINCT t.key FROM game_config_loot_tables t
             JOIN game_config_enemies e ON e.loot_table_key = t.key
             WHERE t.is_active = 1 AND COALESCE(e.tier, 'standard') != 'boss'
               AND t.key NOT IN (
@@ -6262,7 +6262,7 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
         for row in tables:
             conn.execute(
                 """
-                INSERT INTO game_config_loot_entries
+                INSERT OR IGNORE INTO game_config_loot_entries
                     (loot_table_key, item_key, weight, qty_min, qty_max, game_item_key)
                 VALUES (?, 'fragment_mapy_skarbow', 4, 1, 1, 'fragment_mapy_skarbow')
                 """,

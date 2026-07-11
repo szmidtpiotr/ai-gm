@@ -281,6 +281,53 @@ def _generate_treasure(conn: sqlite3.Connection, campaign_id: int, character_id:
     return int(cur.lastrowid)
 
 
+def admin_place_treasure(conn: sqlite3.Connection, *, character_id: int, campaign_id: int,
+                         hex_q: int, hex_r: int, label: str | None = None,
+                         loot_table_key: str | None = None, guardian: str | None = None,
+                         dc: int = DEFAULT_DIG_DC, total_parts: int = 1,
+                         gold_bonus: int = 0, loot_tier_bonus: int | None = None,
+                         gold_mult: float | None = None,
+                         extra_loot_rolls: int | None = None) -> Optional[int]:
+    """Admin/event: bury a treasure on a chosen hex and hand the completed map to a
+    hero (fragments 1..total_parts), so it shows on their map and is diggable."""
+    _gm, _ex, _tb = _scaling_for_parts(total_parts)
+    gold_mult = _gm if gold_mult is None else gold_mult
+    extra_loot_rolls = _ex if extra_loot_rolls is None else extra_loot_rolls
+    loot_tier_bonus = _tb if loot_tier_bonus is None else loot_tier_bonus
+    rrow = conn.execute(
+        "SELECT region FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 LIMIT 1",
+        (hex_q, hex_r),
+    ).fetchone()
+    region = rrow["region"] if rrow else None
+    if not loot_table_key:
+        loot_table_key = _pick_loot_table(conn, region)
+    map_key = "tm_admin_" + uuid.uuid4().hex[:8]
+    cur = conn.execute(
+        """
+        INSERT INTO world_treasures
+            (map_key, label, hex_q, hex_r, map_level, region, loot_table_key,
+             guardian_enemy_key, dc, total_parts, loot_tier_bonus, gold_mult,
+             extra_loot_rolls, gold_bonus, character_id, campaign_id, state,
+             created_by, created_at)
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'buried', 'admin', ?)
+        """,
+        (map_key, label or "Mapa skarbu", hex_q, hex_r, region, loot_table_key,
+         guardian, int(dc), int(total_parts), int(loot_tier_bonus), float(gold_mult),
+         int(extra_loot_rolls), int(gold_bonus), character_id, campaign_id, _now_iso()),
+    )
+    tid = int(cur.lastrowid)
+    for p in range(1, int(total_parts) + 1):
+        conn.execute(
+            "INSERT OR IGNORE INTO character_map_fragments "
+            "(character_id, campaign_id, treasure_id, part_no, acquired_at, source) "
+            "VALUES (?, ?, ?, ?, ?, 'admin')",
+            (character_id, campaign_id, tid, p, _now_iso()),
+        )
+    _finalize_treasure(conn, tid)
+    conn.commit()
+    return tid
+
+
 def _collected(conn: sqlite3.Connection, character_id: int, treasure_id: int) -> int:
     row = conn.execute(
         "SELECT COUNT(*) AS n FROM character_map_fragments "
