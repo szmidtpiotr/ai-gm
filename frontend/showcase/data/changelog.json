@@ -1,269 +1,270 @@
 {
- "generated_from": "CHANGELOG.md",
- "entries": [
-  {
-   "version": "v1.8.0",
-   "date": "2026-07-11",
-   "when": "lipiec 2026",
-   "title": "Relikty, powiadomienia i walka z prawdziwą głębią",
-   "highlights": [
-    "Nowy interfejs gracza ŻAR jest teraz głównym frontem gry — wchodzisz przez /graj/, stary interfejs pozostaje pod /old/",
-    "Relikty i magiczne przedmioty dają pasywne moce: podnoszą cechy, umiejętności i pancerz — w walce i poza nią; bohater ma dwa sloty na relikty",
-    "Walka z głębią: test odwagi przy starciu z przerażającym wrogiem, lokacje trafień przy ciosach krytycznych i uczciwe zasady ucieczki z walki",
-    "Powiadomienia o twojej turze: Telegram (łączenie jednym kliknięciem), push w przeglądarce i e-mail — a grę można zainstalować jak aplikację",
-    "Samouczek „Pierwsze Kroki”: po stworzeniu pierwszego bohatera gra proponuje krótką przygodę uczącą podstaw — rozmowy, walki, handlu i mapy (można pominąć)",
-    "Zegar świata: gra zna dzień i godzinę, pory dnia mają znaczenie, a przycisk Czekaj pozwala przeczekać do świtu, zmierzchu albo umówionej pory",
-    "Usługi w osadach kupujesz z cennika jednym kliknięciem: nocleg, posiłek, naprawa u kowala, uzdrowiciel — bez przegadywania z narratorem",
-    "Mapy znalezione w świecie odkrywają fragmenty krainy przy użyciu, a heksy zadań są podświetlone na mapie świata",
-    "Remont ekwipunku: łączenie identycznych przedmiotów, podgląd z obrazkiem i opisem, premie widoczne na lalce postaci",
-    "Kuźnia przygód wplata nagrody w plan kampanii — łup jest częścią opowieści, skalowany do długości i trudności przygody"
-   ]
-  },
-  {
-   "version": "v1.7.1",
-   "date": "2026-07-06",
-   "when": "lipiec 2026",
-   "title": "Podróże 2.0 — mgła wojny, trakty i prawdziwe wędrówki",
-   "highlights": [
-    "Mgła wojny w trzech stanach: nieznane / poznane / odkryte — wokół bohatera świeci bąbel wiedzy o promieniu 4 heksów",
-    "Trakty rysują się na mapie jako ciągły szlak; wybierasz podróż traktem (bezpieczniej, mniej spotkań) albo na skróty przez dzicz",
-    "Dzień ma budżet marszu: po 8 godzinach zmierzch każe szukać noclegu, po 12 obóz jest przymusowy — a marsz ponad siły kończy się zmęczeniem",
-    "Po drodze zdarzają się spotkania: pół na pół walka albo scena fabularna; nocą ryzyko rośnie, na trakcie maleje",
-    "Mapa działa palcem na telefonie: przesuwanie 1:1, szczypanie do zoomu, przyciski +/− i dopasowanie widoku",
-    "Osada ma mapę lokalną już od pierwszej tury, a kampania zaczyna się o godzinie ustalonej w planie — koniec sztywnego 9:00"
-   ]
-  },
-  {
-   "version": "v1.7.0",
-   "date": "2026-07-02",
-   "when": "lipiec 2026",
-   "title": "Reputacja — świat pamięta twoje czyny",
-   "highlights": [
-    "Bohater buduje reputację w krainie: wygrane przygody podnoszą standing, śmierć go lekko nadszarpuje",
-    "Ceny u kupców zależą od reputacji — dobra sława daje zniżki, zła nalicza narzut",
-    "NPC i zleceniodawcy odnoszą się do bohatera zgodnie z jego reputacją — od pomocy po wrogość",
-    "Anty-farm: porzucenie przygody po zdobyciu łupu obniża reputację w tej krainie (łup i doświadczenie zostają — bohater jest ważniejszy niż kampania)",
-    "Na start liczy się reputacja regionalna (Kresy); wpływ frakcyjny — u gildii i rodów — nadejdzie z rozszerzeniem"
-   ]
-  },
-  {
-   "version": "v1.6.0",
-   "date": "2026-06-26",
-   "when": "czerwiec 2026",
-   "title": "Grywalne krasnoludy — nowa rasa z własną magią i cechami rasowymi",
-   "highlights": [
-    "Nowy Krok 0 w kreatorze postaci: wybierasz rasę przed archetype — Człowiek lub Krasnolud",
-    "Krasnolud ma własne modyfikatory statystyk: +2 KON, +1 SIŁ, −1 CHA, −1 ZRĘ — i widać je na karcie postaci",
-    "Twardy jak kamień: krasnolud przyjmuje o 2 obrażenia mniej od trucizny, mroku i Rdzenia",
-    "Kowalskie oko: 15% zniżki w każdym sklepie + możliwość reperowania się za 20 złota (+20 PŻ)",
-    "Wzrok górnika: w lochach krasnolud widzi lepiej (+3), człowiek gorzej w ciemności (−4)",
-    "Rdzeń-magia: uczony-krasnolud korzysta z 6 ekskluzywnych czarów Rdzenia (vein_tremor, rdzen_shield...); miscast na Nat1 i Nat2 z wyjątkowym opisem (krew z uszu, pulsacja w kościach)",
-    "Narrator jest świadomy rasy bohatera: reaguje na enklawy krasnoludów w stolicy, wioski górnicze i historię Czarnego Hutmana"
-   ]
-  },
-  {
-   "version": "v1.5.3",
-   "date": "2026-06-23",
-   "when": "czerwiec 2026",
-   "title": "Tryb wieloosobowy działa od początku do końca + trwała mapa świata",
-   "highlights": [
-    "Multiplayer od A do Z: z ekranu kampanii wchodzisz do poczekalni, zapraszasz znajomych i gracie razem — lobby i czat drużyny działają płynnie, także na telefonie",
-    "Czat drużyny: wiadomości do wszystkich oraz prywatne szepty do jednej osoby",
-    "Mapa świata stała się trwała — ma swój kanon, który przeżywa każdą aktualizację gry; mistrz może ją edytować i zapisać jednym przyciskiem",
-    "Przerzut statystyk bohatera potaniał i ma jasne koszty (100 / 350 / 700 złota) — taniej niż zatwierdzenie nowego losowania"
-   ]
-  },
-  {
-   "version": "v1.5.2",
-   "date": "2026-06-22",
-   "when": "czerwiec 2026",
-   "title": "Multiplayer ukończony + czary maga (rozszerzono o 8 zaklęć) + interaktywna Księga Zasad + nawigacja w lochach",
-   "highlights": [
-    "Bohater może uczestniczyć w kilku sesjach multiplayer jednocześnie — każda ma własne HP i manę",
-    "Walka w trybie wieloosobowym odbywa się w turach — każdy gracz ma swoją kolejkę",
-    "Każda akcja w multiplayer przechodzi przez dwa etapy: najpierw mechanika oblicza wynik, potem AI opisuje co się stało",
-    "Licznik czasu w walce: masz 2 minuty na swoją turę. Powiadomienie przypomni, kiedy czas twojego ruchu"
-   ]
-  },
-  {
-   "version": "v1.5.1",
-   "date": "2026-06-21",
-   "when": "czerwiec 2026",
-   "title": "Multiplayer — zaproszenia przez link, walka oburęczna i chwytanie przeciwnika, poprawki lochów",
-   "highlights": [
-    "System automatycznie kończy turę gracza po upłynięciu czasu — nieaktywne rundy są zamykane",
-    "licznik ostrzeżeń o nieobecności gracza",
-    "ręczny vote-to-kick w multiplayer",
-    "Wszyscy gracze w sesji widzą ten sam stan świata — zmiany jednego gracza są natychmiast widoczne dla pozostałych"
-   ]
-  },
-  {
-   "version": "v1.5.0",
-   "date": "2026-06-20",
-   "when": "czerwiec 2026",
-   "title": "Panel administratora na telefon, nowy model obrony w walce, walka oburęczna i amunicja, wprowadzenie do lochów",
-   "highlights": [
-    "Jeden rzut decyduje, czy cios trafia. Pancerz zmniejsza obrażenia zamiast blokować trafienie — koniec sytuacji, gdzie gracz był karany dwa razy za jeden cios",
-    "Im wyżej wyrzucisz ponad wymagany próg, tym więcej obrażeń zadajesz (+1 za każde 5 punktów nadwyżki). Wynik 20 na kości podwaja obrażenia osobno",
-    "Nowy silnik obliczania walki — wartości startowe będą dostrajane na podstawie testów rozgrywki",
-    "Interfejs walki pokazuje teraz, jak wróg próbuje uniknąć ciosu i jak działa redukcja pancerza — więcej informacji podczas starcia"
-   ]
-  },
-  {
-   "version": "v1.4.0",
-   "date": "2026-06-16",
-   "when": "czerwiec 2026",
-   "title": "Lochy z mapą kafelkową, narzędzia diagnostyczne dla deweloperów, poprawki walki i lokacji",
-   "highlights": [
-    "Lochy generują się proceduralnie — każda sesja to inna mapa. Tryb „idź głębiej” pozwala schodzić kolejne poziomy bez końca",
-    "Ponad 40 grafik kafelków krypty z kategorią nieumarłych — nowe klimaty wizualne dla lochów",
-    "Generator domyka wszystkie narysowane drzwi na styku segmentów; endless styk tylko na drzwiach zapasowych z retry",
-    "Dungeon UI: loch-scoped narration, osobny widok gracza podczas lochu"
-   ]
-  },
-  {
-   "version": "v1.3.2",
-   "date": "2026-06-15",
-   "when": "czerwiec 2026",
-   "title": "System umiejętności i stanów, balans klas, nowe informacje zwrotne w walce, podgląd bohatera w panelu",
-   "highlights": [
-    "Nowy system umiejętności i stanów — efekty tymczasowe działają teraz spójnie w całej grze",
-    "Karty rzutu pokazują teraz margines sukcesu i opcję przerzutu. Stany postaci widoczne w podglądzie",
-    "FAZA B (Blok 1+2) — balans 3 klas + czary maga Faza 1 : przebalansowanie wojownika/maga/łotrzyka; pierwsza fala czarów maga; łotrzyk dostaje bonus DEX+2/LCK+1 z",
-    "FAZA SF — warstwy feedbacku walki (SF5–SF9): kamień, krytyki ; walka mobilna — pasek 3-filarowy + bottom sheet akcji (SF1/SF2)"
-   ]
-  },
-  {
-   "version": "v1.3.1",
-   "date": "2026-06-14",
-   "when": "czerwiec 2026",
-   "title": "Ekonomia i sklep, ujednolicenie systemu przedmiotów, poprawki użyteczności",
-   "highlights": [
-    "Wszystkie przedmioty — broń, zbroja, eliksiry — są teraz w jednym, spójnym systemie",
-    "Poprawiono proces wdrażania nowej zawartości gry — nowe kampanie i przedmioty są łatwiejsze do dodania",
-    "Cost preview + ekrany gracza : modal sklepu (kup/sprzedaj, saldo po, nadpodaż), pasek trwałości w ekwipunku/karcie/slotach, ostrzeżenie ≤20% w HUD walki, napraw",
-    "Nowa karta nagrody po zdobyciu wyjątkowego przedmiotu — pokazuje kolor rzadkości i specjalne właściwości"
-   ]
-  },
-  {
-   "version": "v1.3.0",
-   "date": "2026-06-13",
-   "when": "czerwiec 2026",
-   "title": "Instrukcje dla AI o mechanice walki, mapa świata z hexami, zablokowanie schematu efektów",
-   "highlights": [
-    "Odkrywanie nowego heksa na mapie świata automatycznie generuje lokacje pasujące do terenu",
-    "Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy",
-    "Kliknięcie heksa na mapie = natychmiastowa podróż — gra rozstrzyga ruch przed przekazaniem go AI, co eliminuje niespójności",
-    "Po wejściu do lokacji NPC i wrogowie są pobierani z bazy danych — koniec losowych, niespójnych spotkań"
-   ]
-  },
-  {
-   "version": "v1.2.7",
-   "date": "2026-06-11",
-   "when": "czerwiec 2026",
-   "title": "System właściwości przedmiotów, konstruktor efektów ekonomicznych, wydawanie złota, poprawki",
-   "highlights": [
-    "Nowy system efektów w walce: premie do obrażeń, leczenie przy trafieniu, bonus do pancerza i inne — wszystkie działają przez jeden spójny mechanizm",
-    "Wrogowie upuszczają przedmioty ze specjalnymi właściwościami dopasowanymi do poziomu lochu",
-    "Każdy wróg ma przypisany poziom łupów — gra automatycznie dobiera właściwości upuszczanego ekwipunku",
-    "Panel administratora: pełne zarządzanie właściwościami przedmiotów (dodawanie, edycja, usuwanie)"
-   ]
-  },
-  {
-   "version": "v1.2.6",
-   "date": "2026-06-10",
-   "when": "czerwiec 2026",
-   "title": "Pełna zawartość lochów, wprowadzenie dla nowych graczy, zaklęcia Uczonego, poprawki",
-   "highlights": [
-    "Można teraz rzucać niebojowe zaklęcia poza walką — np. Magiczne Światło podczas eksploracji",
-    "czar [zaklęcie] slash command z podpowiedziami (autocomplete z ikonami i kosztem many)",
-    "Przyciski „Rzuć / Lecz / Użyj\" w zakładce Zaklęcia — atak zablokowany poza walką",
-    "Magiczne Światło (magic_light) — nowe zaklęcie narracyjne tier 1, koszt many 0; backfill do wszystkich istniejących Uczonych"
-   ]
-  },
-  {
-   "version": "v1.2.5",
-   "date": "2026-06-09",
-   "when": "czerwiec 2026",
-   "title": "Nowy panel administracyjny — ukończony",
-   "highlights": [
-    "Nowy panel administracyjny zastąpił stary — modularny, szybszy i łatwiejszy do rozbudowy",
-    "Kuźnia (Forge) portowana do /admin/#forge jako ES moduł ; admin3 wycofany z zerową funkcjonalnością",
-    "Ekran logowania natywny w /admin/ — doLogin/doLogout, token w localStorage",
-    "Naprawiono stabilność połączeń długotrwałych sesji — nie rozłączają się po dłuższej ciszy"
-   ]
-  },
-  {
-   "version": "v1.2.4",
-   "date": "2026-06-08",
-   "when": "czerwiec 2026",
-   "title": "Nowy panel administracyjny + wybór motywu wizualnego przy starcie",
-   "highlights": [
-    "FADM (cała faza): nowy modularny panel admin /admin/ — port wszystkich sekcji z monolitu admin3 : overview, mechanics, content, world, map, campaigns, dungeons,",
-    "onboarding — wybór motywu wizualnego (dark_fantasy / classic), zapis per user w game_mode_flags, stosowany przy każdym logowaniu",
-    "Centrum kampanii — 5 trybów gry: Nowa kampania, Kontynuuj, Loch, Loch z mapą kafelkową, Multiplayer",
-    "Ekran profilu: zmiana adresu email, lista znajomych i ustawienia połączenia z własnym modelem AI"
-   ]
-  },
-  {
-   "version": "v1.2.3",
-   "date": "2026-06-07",
-   "when": "czerwiec 2026",
-   "title": "Automatyczne testy akceptacyjne — nowe narzędzia dla zespołu",
-   "highlights": [
-    "Harness testów akceptacyjnych – (pytest + Playwright), uruchamialny z admin3 → Narzędzia → 🎭 Playwright — każde zadanie jako osobny test",
-    "Panel Playwright w admin3 odpala wszystkie suity (regression / acceptance / admin3) z UI; skan rekursywny + run po pliku lub grupie",
-    "Smoke testy admin3 (dev-login + 14 sekcji bocznego menu)",
-    "Regression Playwright dla (STORY_STALE) i (zegar in-game)"
-   ]
-  },
-  {
-   "version": "v1.2.2",
-   "date": "2026-06-07",
-   "when": "czerwiec 2026",
-   "title": "Faza 1 Core Loop",
-   "highlights": [
-    "Inventory context injection — LLM dostaje faktyczny ekwipunek postaci per turę (koniec halucynacji \"straciłeś wszystko\")",
-    "Nowe kampanie startują na wcześniej odkrytych hexach (nie na pustkowiu)",
-    "Bohater wchodzi w nową kampanię z pełnym HP i maną",
-    "Systemowe tagi QUEST_SUGGEST, SPEND_GOLD, mechaniczne śledzenie questów, reguła złota w system_prompt"
-   ]
-  },
-  {
-   "version": "v1.2.1",
-   "date": "2026-06-06",
-   "when": "czerwiec 2026",
-   "title": "Faza 1: World Loop Core",
-   "highlights": [
-    "STORY_STALE: po 5 turach bez zmiany lokacji LLM sugeruje ruch",
-    "Walidacja ruchu mechaniczna: hex, terrain, World State update",
-    "Gate walki: sprawdzanie scene_enemies przed każdym ATTACK",
-    "wound_penalty utility: unifikacja hp_current/hp_max → roll modifier"
-   ]
-  },
-  {
-   "version": "v1.1.0",
-   "date": "2026-06-05",
-   "when": "czerwiec 2026",
-   "title": "Faza 0: World State Machine",
-   "highlights": [
-    "World State Machine (WSM) — action validation gate",
-    "WSM: MOVEMENT action with hex validation",
-    "Gate mechanic (locked gates, key items, quests)",
-    "NPC memory per campaign (first-talk flag, persistent attitude)"
-   ]
-  },
-  {
-   "version": "v1.0.0",
-   "date": "2026-06-01",
-   "when": "czerwiec 2026",
-   "title": "Faza -1: Cleanup & Foundation",
-   "highlights": [
-    "Git version tagging system (v1.0.0, v1.1.0-dev, v1-stable)",
-    "Maintenance notification middleware + player banner",
-    "Admin panel v3 routing (/admin3/)",
-    "Game config seed to git; player data stays private"
-   ]
-  }
- ]
+  "generated_from": "CHANGELOG.md",
+  "entries": [
+    {
+      "version": "v1.8.0",
+      "date": "2026-07-11",
+      "when": "lipiec 2026",
+      "title": "Relikty, powiadomienia i walka z prawdziwą głębią",
+      "highlights": [
+        "Nowy interfejs gracza ŻAR jest teraz głównym frontem gry — wchodzisz przez /graj/, stary interfejs pozostaje pod /old/",
+        "Relikty i magiczne przedmioty dają pasywne moce: podnoszą cechy, umiejętności i pancerz — w walce i poza nią; bohater ma dwa sloty na relikty",
+        "Walka z głębią: test odwagi przy starciu z przerażającym wrogiem, lokacje trafień przy ciosach krytycznych i uczciwe zasady ucieczki z walki",
+        "Powiadomienia o twojej turze: Telegram (łączenie jednym kliknięciem), push w przeglądarce i e-mail — a grę można zainstalować jak aplikację",
+        "Samouczek „Pierwsze Kroki”: po stworzeniu pierwszego bohatera gra proponuje krótką przygodę uczącą podstaw — rozmowy, walki, handlu i mapy (można pominąć)",
+        "Zegar świata: gra zna dzień i godzinę, pory dnia mają znaczenie, a przycisk Czekaj pozwala przeczekać do świtu, zmierzchu albo umówionej pory",
+        "Usługi w osadach kupujesz z cennika jednym kliknięciem: nocleg, posiłek, naprawa u kowala, uzdrowiciel — bez przegadywania z narratorem",
+        "Mapy znalezione w świecie odkrywają fragmenty krainy przy użyciu, a heksy zadań są podświetlone na mapie świata",
+        "Remont ekwipunku: łączenie identycznych przedmiotów, podgląd z obrazkiem i opisem, premie widoczne na lalce postaci",
+        "Kuźnia przygód wplata nagrody w plan kampanii — łup jest częścią opowieści, skalowany do długości i trudności przygody",
+        "Mapy skarbów: fragmenty map wypadają z wrogów i od podejrzanych typów na czarnym rynku, kompletna mapa wskazuje heks ze skrytką — dojdź tam, przeszukaj teren i wykop łup (czasem strzeżony)"
+      ]
+    },
+    {
+      "version": "v1.7.1",
+      "date": "2026-07-06",
+      "when": "lipiec 2026",
+      "title": "Podróże 2.0 — mgła wojny, trakty i prawdziwe wędrówki",
+      "highlights": [
+        "Mgła wojny w trzech stanach: nieznane / poznane / odkryte — wokół bohatera świeci bąbel wiedzy o promieniu 4 heksów",
+        "Trakty rysują się na mapie jako ciągły szlak; wybierasz podróż traktem (bezpieczniej, mniej spotkań) albo na skróty przez dzicz",
+        "Dzień ma budżet marszu: po 8 godzinach zmierzch każe szukać noclegu, po 12 obóz jest przymusowy — a marsz ponad siły kończy się zmęczeniem",
+        "Po drodze zdarzają się spotkania: pół na pół walka albo scena fabularna; nocą ryzyko rośnie, na trakcie maleje",
+        "Mapa działa palcem na telefonie: przesuwanie 1:1, szczypanie do zoomu, przyciski +/− i dopasowanie widoku",
+        "Osada ma mapę lokalną już od pierwszej tury, a kampania zaczyna się o godzinie ustalonej w planie — koniec sztywnego 9:00"
+      ]
+    },
+    {
+      "version": "v1.7.0",
+      "date": "2026-07-02",
+      "when": "lipiec 2026",
+      "title": "Reputacja — świat pamięta twoje czyny",
+      "highlights": [
+        "Bohater buduje reputację w krainie: wygrane przygody podnoszą standing, śmierć go lekko nadszarpuje",
+        "Ceny u kupców zależą od reputacji — dobra sława daje zniżki, zła nalicza narzut",
+        "NPC i zleceniodawcy odnoszą się do bohatera zgodnie z jego reputacją — od pomocy po wrogość",
+        "Anty-farm: porzucenie przygody po zdobyciu łupu obniża reputację w tej krainie (łup i doświadczenie zostają — bohater jest ważniejszy niż kampania)",
+        "Na start liczy się reputacja regionalna (Kresy); wpływ frakcyjny — u gildii i rodów — nadejdzie z rozszerzeniem"
+      ]
+    },
+    {
+      "version": "v1.6.0",
+      "date": "2026-06-26",
+      "when": "czerwiec 2026",
+      "title": "Grywalne krasnoludy — nowa rasa z własną magią i cechami rasowymi",
+      "highlights": [
+        "Nowy Krok 0 w kreatorze postaci: wybierasz rasę przed archetype — Człowiek lub Krasnolud",
+        "Krasnolud ma własne modyfikatory statystyk: +2 KON, +1 SIŁ, −1 CHA, −1 ZRĘ — i widać je na karcie postaci",
+        "Twardy jak kamień: krasnolud przyjmuje o 2 obrażenia mniej od trucizny, mroku i Rdzenia",
+        "Kowalskie oko: 15% zniżki w każdym sklepie + możliwość reperowania się za 20 złota (+20 PŻ)",
+        "Wzrok górnika: w lochach krasnolud widzi lepiej (+3), człowiek gorzej w ciemności (−4)",
+        "Rdzeń-magia: uczony-krasnolud korzysta z 6 ekskluzywnych czarów Rdzenia (vein_tremor, rdzen_shield...); miscast na Nat1 i Nat2 z wyjątkowym opisem (krew z uszu, pulsacja w kościach)",
+        "Narrator jest świadomy rasy bohatera: reaguje na enklawy krasnoludów w stolicy, wioski górnicze i historię Czarnego Hutmana"
+      ]
+    },
+    {
+      "version": "v1.5.3",
+      "date": "2026-06-23",
+      "when": "czerwiec 2026",
+      "title": "Tryb wieloosobowy działa od początku do końca + trwała mapa świata",
+      "highlights": [
+        "Multiplayer od A do Z: z ekranu kampanii wchodzisz do poczekalni, zapraszasz znajomych i gracie razem — lobby i czat drużyny działają płynnie, także na telefonie",
+        "Czat drużyny: wiadomości do wszystkich oraz prywatne szepty do jednej osoby",
+        "Mapa świata stała się trwała — ma swój kanon, który przeżywa każdą aktualizację gry; mistrz może ją edytować i zapisać jednym przyciskiem",
+        "Przerzut statystyk bohatera potaniał i ma jasne koszty (100 / 350 / 700 złota) — taniej niż zatwierdzenie nowego losowania"
+      ]
+    },
+    {
+      "version": "v1.5.2",
+      "date": "2026-06-22",
+      "when": "czerwiec 2026",
+      "title": "Multiplayer ukończony + czary maga (rozszerzono o 8 zaklęć) + interaktywna Księga Zasad + nawigacja w lochach",
+      "highlights": [
+        "Bohater może uczestniczyć w kilku sesjach multiplayer jednocześnie — każda ma własne HP i manę",
+        "Walka w trybie wieloosobowym odbywa się w turach — każdy gracz ma swoją kolejkę",
+        "Każda akcja w multiplayer przechodzi przez dwa etapy: najpierw mechanika oblicza wynik, potem AI opisuje co się stało",
+        "Licznik czasu w walce: masz 2 minuty na swoją turę. Powiadomienie przypomni, kiedy czas twojego ruchu"
+      ]
+    },
+    {
+      "version": "v1.5.1",
+      "date": "2026-06-21",
+      "when": "czerwiec 2026",
+      "title": "Multiplayer — zaproszenia przez link, walka oburęczna i chwytanie przeciwnika, poprawki lochów",
+      "highlights": [
+        "System automatycznie kończy turę gracza po upłynięciu czasu — nieaktywne rundy są zamykane",
+        "licznik ostrzeżeń o nieobecności gracza",
+        "ręczny vote-to-kick w multiplayer",
+        "Wszyscy gracze w sesji widzą ten sam stan świata — zmiany jednego gracza są natychmiast widoczne dla pozostałych"
+      ]
+    },
+    {
+      "version": "v1.5.0",
+      "date": "2026-06-20",
+      "when": "czerwiec 2026",
+      "title": "Panel administratora na telefon, nowy model obrony w walce, walka oburęczna i amunicja, wprowadzenie do lochów",
+      "highlights": [
+        "Jeden rzut decyduje, czy cios trafia. Pancerz zmniejsza obrażenia zamiast blokować trafienie — koniec sytuacji, gdzie gracz był karany dwa razy za jeden cios",
+        "Im wyżej wyrzucisz ponad wymagany próg, tym więcej obrażeń zadajesz (+1 za każde 5 punktów nadwyżki). Wynik 20 na kości podwaja obrażenia osobno",
+        "Nowy silnik obliczania walki — wartości startowe będą dostrajane na podstawie testów rozgrywki",
+        "Interfejs walki pokazuje teraz, jak wróg próbuje uniknąć ciosu i jak działa redukcja pancerza — więcej informacji podczas starcia"
+      ]
+    },
+    {
+      "version": "v1.4.0",
+      "date": "2026-06-16",
+      "when": "czerwiec 2026",
+      "title": "Lochy z mapą kafelkową, narzędzia diagnostyczne dla deweloperów, poprawki walki i lokacji",
+      "highlights": [
+        "Lochy generują się proceduralnie — każda sesja to inna mapa. Tryb „idź głębiej” pozwala schodzić kolejne poziomy bez końca",
+        "Ponad 40 grafik kafelków krypty z kategorią nieumarłych — nowe klimaty wizualne dla lochów",
+        "Generator domyka wszystkie narysowane drzwi na styku segmentów; endless styk tylko na drzwiach zapasowych z retry",
+        "Dungeon UI: loch-scoped narration, osobny widok gracza podczas lochu"
+      ]
+    },
+    {
+      "version": "v1.3.2",
+      "date": "2026-06-15",
+      "when": "czerwiec 2026",
+      "title": "System umiejętności i stanów, balans klas, nowe informacje zwrotne w walce, podgląd bohatera w panelu",
+      "highlights": [
+        "Nowy system umiejętności i stanów — efekty tymczasowe działają teraz spójnie w całej grze",
+        "Karty rzutu pokazują teraz margines sukcesu i opcję przerzutu. Stany postaci widoczne w podglądzie",
+        "FAZA B (Blok 1+2) — balans 3 klas + czary maga Faza 1 : przebalansowanie wojownika/maga/łotrzyka; pierwsza fala czarów maga; łotrzyk dostaje bonus DEX+2/LCK+1 z",
+        "FAZA SF — warstwy feedbacku walki (SF5–SF9): kamień, krytyki ; walka mobilna — pasek 3-filarowy + bottom sheet akcji (SF1/SF2)"
+      ]
+    },
+    {
+      "version": "v1.3.1",
+      "date": "2026-06-14",
+      "when": "czerwiec 2026",
+      "title": "Ekonomia i sklep, ujednolicenie systemu przedmiotów, poprawki użyteczności",
+      "highlights": [
+        "Wszystkie przedmioty — broń, zbroja, eliksiry — są teraz w jednym, spójnym systemie",
+        "Poprawiono proces wdrażania nowej zawartości gry — nowe kampanie i przedmioty są łatwiejsze do dodania",
+        "Cost preview + ekrany gracza : modal sklepu (kup/sprzedaj, saldo po, nadpodaż), pasek trwałości w ekwipunku/karcie/slotach, ostrzeżenie ≤20% w HUD walki, napraw",
+        "Nowa karta nagrody po zdobyciu wyjątkowego przedmiotu — pokazuje kolor rzadkości i specjalne właściwości"
+      ]
+    },
+    {
+      "version": "v1.3.0",
+      "date": "2026-06-13",
+      "when": "czerwiec 2026",
+      "title": "Instrukcje dla AI o mechanice walki, mapa świata z hexami, zablokowanie schematu efektów",
+      "highlights": [
+        "Odkrywanie nowego heksa na mapie świata automatycznie generuje lokacje pasujące do terenu",
+        "Blok [ŚWIAT] dla LLM: hex + lokacje z opisami + NPC + sąsiedzi + kandydaci z bazy",
+        "Kliknięcie heksa na mapie = natychmiastowa podróż — gra rozstrzyga ruch przed przekazaniem go AI, co eliminuje niespójności",
+        "Po wejściu do lokacji NPC i wrogowie są pobierani z bazy danych — koniec losowych, niespójnych spotkań"
+      ]
+    },
+    {
+      "version": "v1.2.7",
+      "date": "2026-06-11",
+      "when": "czerwiec 2026",
+      "title": "System właściwości przedmiotów, konstruktor efektów ekonomicznych, wydawanie złota, poprawki",
+      "highlights": [
+        "Nowy system efektów w walce: premie do obrażeń, leczenie przy trafieniu, bonus do pancerza i inne — wszystkie działają przez jeden spójny mechanizm",
+        "Wrogowie upuszczają przedmioty ze specjalnymi właściwościami dopasowanymi do poziomu lochu",
+        "Każdy wróg ma przypisany poziom łupów — gra automatycznie dobiera właściwości upuszczanego ekwipunku",
+        "Panel administratora: pełne zarządzanie właściwościami przedmiotów (dodawanie, edycja, usuwanie)"
+      ]
+    },
+    {
+      "version": "v1.2.6",
+      "date": "2026-06-10",
+      "when": "czerwiec 2026",
+      "title": "Pełna zawartość lochów, wprowadzenie dla nowych graczy, zaklęcia Uczonego, poprawki",
+      "highlights": [
+        "Można teraz rzucać niebojowe zaklęcia poza walką — np. Magiczne Światło podczas eksploracji",
+        "czar [zaklęcie] slash command z podpowiedziami (autocomplete z ikonami i kosztem many)",
+        "Przyciski „Rzuć / Lecz / Użyj\" w zakładce Zaklęcia — atak zablokowany poza walką",
+        "Magiczne Światło (magic_light) — nowe zaklęcie narracyjne tier 1, koszt many 0; backfill do wszystkich istniejących Uczonych"
+      ]
+    },
+    {
+      "version": "v1.2.5",
+      "date": "2026-06-09",
+      "when": "czerwiec 2026",
+      "title": "Nowy panel administracyjny — ukończony",
+      "highlights": [
+        "Nowy panel administracyjny zastąpił stary — modularny, szybszy i łatwiejszy do rozbudowy",
+        "Kuźnia (Forge) portowana do /admin/#forge jako ES moduł ; admin3 wycofany z zerową funkcjonalnością",
+        "Ekran logowania natywny w /admin/ — doLogin/doLogout, token w localStorage",
+        "Naprawiono stabilność połączeń długotrwałych sesji — nie rozłączają się po dłuższej ciszy"
+      ]
+    },
+    {
+      "version": "v1.2.4",
+      "date": "2026-06-08",
+      "when": "czerwiec 2026",
+      "title": "Nowy panel administracyjny + wybór motywu wizualnego przy starcie",
+      "highlights": [
+        "FADM (cała faza): nowy modularny panel admin /admin/ — port wszystkich sekcji z monolitu admin3 : overview, mechanics, content, world, map, campaigns, dungeons,",
+        "onboarding — wybór motywu wizualnego (dark_fantasy / classic), zapis per user w game_mode_flags, stosowany przy każdym logowaniu",
+        "Centrum kampanii — 5 trybów gry: Nowa kampania, Kontynuuj, Loch, Loch z mapą kafelkową, Multiplayer",
+        "Ekran profilu: zmiana adresu email, lista znajomych i ustawienia połączenia z własnym modelem AI"
+      ]
+    },
+    {
+      "version": "v1.2.3",
+      "date": "2026-06-07",
+      "when": "czerwiec 2026",
+      "title": "Automatyczne testy akceptacyjne — nowe narzędzia dla zespołu",
+      "highlights": [
+        "Harness testów akceptacyjnych – (pytest + Playwright), uruchamialny z admin3 → Narzędzia → 🎭 Playwright — każde zadanie jako osobny test",
+        "Panel Playwright w admin3 odpala wszystkie suity (regression / acceptance / admin3) z UI; skan rekursywny + run po pliku lub grupie",
+        "Smoke testy admin3 (dev-login + 14 sekcji bocznego menu)",
+        "Regression Playwright dla (STORY_STALE) i (zegar in-game)"
+      ]
+    },
+    {
+      "version": "v1.2.2",
+      "date": "2026-06-07",
+      "when": "czerwiec 2026",
+      "title": "Faza 1 Core Loop",
+      "highlights": [
+        "Inventory context injection — LLM dostaje faktyczny ekwipunek postaci per turę (koniec halucynacji \"straciłeś wszystko\")",
+        "Nowe kampanie startują na wcześniej odkrytych hexach (nie na pustkowiu)",
+        "Bohater wchodzi w nową kampanię z pełnym HP i maną",
+        "Systemowe tagi QUEST_SUGGEST, SPEND_GOLD, mechaniczne śledzenie questów, reguła złota w system_prompt"
+      ]
+    },
+    {
+      "version": "v1.2.1",
+      "date": "2026-06-06",
+      "when": "czerwiec 2026",
+      "title": "Faza 1: World Loop Core",
+      "highlights": [
+        "STORY_STALE: po 5 turach bez zmiany lokacji LLM sugeruje ruch",
+        "Walidacja ruchu mechaniczna: hex, terrain, World State update",
+        "Gate walki: sprawdzanie scene_enemies przed każdym ATTACK",
+        "wound_penalty utility: unifikacja hp_current/hp_max → roll modifier"
+      ]
+    },
+    {
+      "version": "v1.1.0",
+      "date": "2026-06-05",
+      "when": "czerwiec 2026",
+      "title": "Faza 0: World State Machine",
+      "highlights": [
+        "World State Machine (WSM) — action validation gate",
+        "WSM: MOVEMENT action with hex validation",
+        "Gate mechanic (locked gates, key items, quests)",
+        "NPC memory per campaign (first-talk flag, persistent attitude)"
+      ]
+    },
+    {
+      "version": "v1.0.0",
+      "date": "2026-06-01",
+      "when": "czerwiec 2026",
+      "title": "Faza -1: Cleanup & Foundation",
+      "highlights": [
+        "Git version tagging system (v1.0.0, v1.1.0-dev, v1-stable)",
+        "Maintenance notification middleware + player banner",
+        "Admin panel v3 routing (/admin3/)",
+        "Game config seed to git; player data stays private"
+      ]
+    }
+  ]
 }
