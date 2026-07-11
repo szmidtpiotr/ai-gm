@@ -21,7 +21,7 @@
 | Próg podglądu HP (tier 2) | 5 zabójstw | |
 | Próg +1 do trafienia (tier 3) | 15 zabójstw | wpis do Księgi Zasad |
 | Wielkość bonusu | +1 | stała, nie skaluje się |
-| Kredyt za zabójstwo w MP | tylko zabójca | reguła startowa; „cała drużyna" = ewentualny tuning |
+| Kredyt za zabójstwo w MP | **wszyscy uczestnicy walki** | decyzja Piotra 2026-07-11 (wspólne trofeum); helper `_credit_bestiary_kill` |
 | DC plotki (quest_rumor) | 8 (istniejące) | bez zmian |
 
 ## Architektura — fakty z rekonesansu (nie odkrywaj ponownie)
