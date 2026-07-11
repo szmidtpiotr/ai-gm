@@ -4,12 +4,12 @@
 
 ## 0. Decyzje projektowe (przyjęte defaulty — Piotr może nadpisać)
 
-| # | Decyzja | Wybór |
+| # | Decyzja | Wybór (POTWIERDZONE przez Piotra 2026-07-11, poza D3) |
 |---|---|---|
-| D1 | Zasięg skarbu | Skarby **generowane** są per bohater (`character_id` na `world_treasures`) — każdy poluje na swoje, zero kolizji. Skarby **zakopane przez admina** mają `character_id=NULL` = globalne, jednorazowe (kto pierwszy). |
-| D2 | Kanały zdobywania fragmentów v1 | (a) loot z wrogów, (b) plotki (`treasure_site`). Sklep / czarny rynek → **out of scope v1** (osobny etap E7 opcjonalny). |
-| D3 | Generator | Deterministyczny (bez LLM), on-demand: pierwszy fragment dla bohatera tworzy skarb. Plus ręczne zakopywanie admina z zakładki Mapa. |
-| D4 | Akcja kopania | Free-text intent („kopię", „szukam skrytki") łapany deterministycznie przed LLM **+** przycisk „Szukaj skrytki" w modalu hexa na mapie gracza (ŻAR). |
+| D1 | Zasięg skarbu | **Jednorazowe, per bohater.** Skarby generowane mają `character_id` = bohater który zbiera fragmenty; wykop = `state='found'`, znika. Zero kolizji między graczami. Skarby zakopane przez admina też jednorazowe; mogą mieć `character_id=NULL` (otwarte, kto pierwszy) LUB przypisane do konkretnego bohatera na event. |
+| D2 | Kanały zdobywania fragmentów v1 | **Wszystkie trzy w v1:** (a) loot z wrogów, (b) plotki (`treasure_site`), (c) sklep / czarny rynek nocny. E7 **wchodzi do v1**, nie jest opcjonalny. |
+| D3 | Generator — **OCZEKUJE decyzji A/B** | Model A („na żądanie": pierwszy fragment tworzy skarb pod gracza) vs Model B („rozstawione z góry": fragment wskazuje istniejący skarb). Rekomendacja: **A dla generowanych**, B ręcznie dla adminowych. Do potwierdzenia przed E2. |
+| D4 | Akcja kopania | **Fabularnie, bez przycisku.** Wejście = tekst gracza („kopię", „szukam skrytki") łapany deterministycznie przed LLM. Rozstrzygnięcie mechaniczne (test percepcji + strażnik + wykop). Znacznik ✕ na mapie + wpis w ekwipunku („cel: heks q,r") jako **wskazówka gdzie** — zostają. |
 
 Dodatkowe rozstrzygnięcie względem treści issue: issue proponuje „fragment jako item z flagą". Zwiad wykazał, że ścieżka grantu (`grant_loot_to_character`, `loot_service.py:891-916`) **stackuje po `item_key`** — różne fragmenty by się zlewały, a drop/sell psułby kolekcję. Dlatego **model hybrydowy**:
 - w loot tables fragment jest zwykłym wpisem `item_key='fragment_mapy_skarbow'` (XOR nietknięty, zero zmian w schemacie loot entries),
@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS character_map_fragments (
 CREATE INDEX IF NOT EXISTS idx_char_map_fragments ON character_map_fragments(character_id);
 ```
 
-Katalogowy item-nośnik (seed w migracji, `created_by='seed'`): `game_config_items` key `fragment_mapy_skarbow`, `item_type='quest'`, label „Fragment mapy skarbów", opis fabularny, `value_gp=0` (nie pojawi się w sklepach — filtr `value_gp<=0` w `shop_service.py:512` działa na naszą korzyść w v1), `approved=1`, `review_status='permanent'`.
+Katalogowy item-nośnik (seed w migracji, `created_by='seed'`): `game_config_items` key `fragment_mapy_skarbow`, `item_type='quest'`, label „Fragment mapy skarbów", opis fabularny, `approved=1`, `review_status='permanent'`.
+- `value_gp=0` → nie pojawia się w zwykłych sklepach (filtr `value_gp<=0`, `shop_service.py:512`) — dobrze, fragmenty nie mają być w normalnym handlu.
+- **Kanał czarnego rynku (E6, D2):** fragment na czarnym rynku wymaga jawnej pozycji w stocku ze zdefiniowaną ceną. Ponieważ filtr odrzuca `value_gp<=0`, użyj osobnego wpisu z ceną (np. `shop_inventory_json` shady-NPC z jawną `price_gp`) albo drobnego rozszerzenia `buy_item` które po zakupie wywoła `treasure_service.grant_fragment(source='shop')` zamiast wkładać item do ekwipunku (analogicznie do przechwycenia grantu lootu). Szczegół do rozstrzygnięcia w E6.
 
 ## 3. Backend service — `treasure_service.py` (E2)
 
@@ -110,7 +112,7 @@ Nowy plik `backend/app/services/treasure_service.py`. Kontrakt jak `bestiary_ser
 
 Gracz (`backend/app/api/characters.py` + `turns.py`):
 - `GET /api/characters/{id}/treasure-maps` → `get_treasure_maps` (obok atlasu, `characters.py:~1221`).
-- `POST /api/campaigns/{id}/treasure/dig` — ścieżka przycisku (D4); ta sama logika co shortcut.
+- Kopanie idzie wyłącznie przez intent w turze (`_maybe_dig_shortcut`, D4 fabularne) — **brak osobnego endpointu przycisku**.
 - Rozszerz per-hex payload `get_campaign_world_map` (`turns.py:8558-8568`) o `is_treasure: bool` — tylko dla heksów kompletnych, niewykopanych map bohatera.
 
 Admin (`backend/app/routers/hex_world.py` lub `admin.py`):
@@ -124,7 +126,7 @@ Admin (`backend/app/routers/hex_world.py` lub `admin.py`):
 Build na `.61` (`sudo npm run build`), dist bind-mounted.
 
 1. **WorldMap** — pole `is_treasure` w `WorldHex` (`types.ts:235`), badge ✕ (Phosphor `XCircle`/`Crosshair`, styl ember) wzorem gwiazdki questowej (`WorldMap.tsx:661-667`) + pozycja w legendzie (`:399-404`).
-2. **Modal hexa** (`WorldMap.tsx:409-520`) — gdy `is_treasure` i gracz stoi na heksie → przycisk „Szukaj skrytki" → `POST .../treasure/dig` → odpowiedź z `skill_test_pending` przekazana do istniejącego flow popupu kości (wzorzec konsumpcji #1299).
+2. **Modal hexa** (`WorldMap.tsx:409-520`) — gdy `is_treasure` i gracz stoi na heksie → **podpowiedź tekstowa** „Tu może być zakopana skrytka — spróbuj przeszukać" (bez przycisku akcji; D4 fabularne). Gracz wraca do composera i pisze że kopie. (Znacznik ✕ + wpis w ekwipunku niosą „gdzie".)
 3. **PanelInventory** — nowa pod-sekcja „Mapy skarbów" w bloku Fabularne: karta per skarb, licznik `2/3`, po skompletowaniu „Cel: heks (q,r) — region"; dane z `GET /treasure-maps` (nowy hook obok `useSheetData`).
 4. Toast po zdobyciu fragmentu — wzorzec extra-payload `map_reveal` (`useSheetData.ts:121-128`, `PanelInventory.tsx:121-139`).
 
@@ -178,8 +180,8 @@ Playwright (`ai_test_agent/playwright/` — bind-mounted, żywe od razu):
 | E3 | Endpointy gracza + admin + plotki + atlas | E2 |
 | E4 | ŻAR: badge ✕, modal hexa, sekcja ekwipunku, toast | E3 |
 | E5 | Admin UI: zakop skarb, monitor kampanii | E3 |
-| E6 | Pytest + Playwright + Księga + ledger + issue record | E2–E5 |
-| E7 (opcjonalny, za zgodą) | Sklep/czarny rynek: fragment kupowalny u podejrzanych typów nocą | E1–E3 |
+| E6 | Sklep/czarny rynek (D2): fragment kupowalny u podejrzanych typów nocą — `location_tags` + night_economy | E1–E3 |
+| E7 | Pytest + Playwright + Księga + ledger + issue record | E2–E6 |
 
 ## 13. Out of scope (za issue)
 
