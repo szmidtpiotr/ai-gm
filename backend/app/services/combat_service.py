@@ -6289,6 +6289,9 @@ def _attack_try_reaction(
             out["reaction"] = _dodge
             if _dodge.get("dodged"):
                 dmg = 0
+                # Top-level flaga dla frontendu — pomija animację kości obrażeń
+                # i pokazuje UNIKASZ zamiast −0 HP (parytet ze ścieżką gracza).
+                out["dodged"] = True
         else:
             # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
             # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
@@ -7587,7 +7590,15 @@ def _resolve_enemy_attack_turn(
             logger.warning("armor_durability_decrement_error", error=str(_dur_err))
         expr = (enemy.get("damage_dice") or "1d6").strip().lower()
         # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
-        dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+        # Rzut detaliczny (jak w _attack_compute_damage) — frontend potrzebuje
+        # pojedynczych wyników kości (damage_rolls) do animacji NdX obrażeń wroga.
+        _dmg_detail = roll_dice_detailed(expr)
+        _dmg_mod = _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus")
+        dmg = (max(0, sum(_dmg_detail["rolls"]) + _dmg_mod)
+               if _dmg_detail["rolls"] else max(0, _dmg_mod))
+        out["damage_die"] = _dmg_detail["die"] or expr
+        out["damage_rolls"] = _dmg_detail["rolls"]
+        out["damage_modifier"] = _dmg_mod
         dmg, _dodge, _block, _react_early = _attack_try_reaction(
             p, row, out, conn, ch_id, sheet, attack_roll, raw, enemy, combatants, campaign_id, dmg,
         )

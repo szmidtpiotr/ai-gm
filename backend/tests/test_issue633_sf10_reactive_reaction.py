@@ -115,6 +115,8 @@ def test_hit_opens_reaction_window_not_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)        # attack_roll 20 trafia
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is True
@@ -136,6 +138,8 @@ def test_resolve_reaction_take_applies_full_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         combat_service.resolve_attack(1, 0, attacker="enemy")
         out = combat_service.resolve_reaction(1, "take")
@@ -150,6 +154,8 @@ def test_resolve_reaction_dodge_success_negates(tmp_path, monkeypatch):
     """choice=dodge z wysokim rzutem → 0 obrażeń."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=0)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     # atak: raw 10 → attack_roll 10 (trafia AC 10); unik: 18 + DEX2 + rank2 = 22 vs 10 → sukces
     rolls = iter([10, 18])
     monkeypatch.setattr(combat_service, "roll_d20", lambda: next(rolls))
@@ -174,6 +180,8 @@ def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=0, shield_block_rank=0, shield=False, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [5], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is True
@@ -193,6 +201,8 @@ def test_one_reaction_per_round(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1, reaction_used_round=1)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction_window") is not True
