@@ -3,6 +3,7 @@
 // mobile dolny tabbar (TabBar). Jedno źródło = spójne etykiety/ikony.
 import {
   Backpack,
+  BookBookmark,
   BookOpen,
   BookOpenText,
   FlagBanner,
@@ -29,6 +30,8 @@ export const SHEET_TABS: GameTabDef[] = [
   { key: "spells", label: "Czary", icon: Sparkle, manaOnly: true },
   { key: "inventory", label: "Ekwipunek", icon: Backpack },
   { key: "reputation", label: "Reputacja & opis", icon: FlagBanner },
+  // #1191 — Bestiariusz + Atlas Kresów (kolekcje odkryć, cross-kampanijne).
+  { key: "collections", label: "Kolekcje", icon: BookBookmark },
 ];
 
 export function visibleSheetTabs(hasMana: boolean): GameTabDef[] {

@@ -180,3 +180,65 @@ export function useEquipItem(characterId: number | undefined) {
     },
   });
 }
+
+// ─── #1191 Bestiariusz + Atlas Kresów ─────────────────────────────────────────
+
+export interface BestiaryEntry {
+  locked: boolean;
+  enemy_key?: string;
+  name?: string;
+  description?: string | null;
+  lore_text?: string | null;
+  image_url?: string | null;
+  kills?: number;
+  unlocked_tier?: number;
+  first_kill_at?: string | null;
+  next_threshold?: number | null;
+  hp_max?: number | null;
+}
+export interface BestiaryResponse {
+  entries: BestiaryEntry[];
+  summary: { unlocked: number; total: number; pct: number };
+}
+
+/** GET /characters/{id}/bestiary — pełny katalog wrogów + progresja wiedzy. */
+export function useBestiary(characterId: number | undefined) {
+  return useQuery({
+    queryKey: ["bestiary", characterId],
+    enabled: !!characterId,
+    staleTime: 60_000,
+    queryFn: () => apiFetch<BestiaryResponse>(`/characters/${characterId}/bestiary`),
+  });
+}
+
+export interface AtlasResponse {
+  hexes: {
+    discovered: number;
+    total: number;
+    pct: number;
+    regions: { region: string; discovered: number }[];
+  };
+  locations: { discovered: number };
+  rumors: {
+    heard: number;
+    confirmed: number;
+    entries: {
+      rumor_text: string;
+      target_type: string | null;
+      target_key: string | null;
+      status: string;
+      heard_at: string;
+      confirmed_at: string | null;
+    }[];
+  };
+}
+
+/** GET /characters/{id}/atlas — cross-kampanijne statystyki eksploracji. */
+export function useAtlas(characterId: number | undefined) {
+  return useQuery({
+    queryKey: ["atlas", characterId],
+    enabled: !!characterId,
+    staleTime: 60_000,
+    queryFn: () => apiFetch<AtlasResponse>(`/characters/${characterId}/atlas`),
+  });
+}

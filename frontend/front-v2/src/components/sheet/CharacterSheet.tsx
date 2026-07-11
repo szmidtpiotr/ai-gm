@@ -16,6 +16,7 @@ import { PanelCharacter } from "./PanelCharacter";
 import { PanelSpells } from "./PanelSpells";
 import { PanelInventory } from "./PanelInventory";
 import { PanelReputation } from "./PanelReputation";
+import { PanelCollections } from "./PanelCollections";
 
 export function CharacterSheet({ characterId }: { characterId: number | undefined }) {
   const panel = useAppStore((s) => s.gameTab);
@@ -63,6 +64,7 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
         />
       )}
       {active === "reputation" && <PanelReputation sheet={sheet} reputation={reputation.data} />}
+      {active === "collections" && <PanelCollections characterId={characterId} />}
     </div>
   );
 }

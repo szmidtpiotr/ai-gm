@@ -56,6 +56,8 @@ function useCombatMutation<V>(
         });
       }
       qc.invalidateQueries({ queryKey: ["character"] });
+      // #1191 — kills feed the Bestiariusz; refresh it after every combat action.
+      qc.invalidateQueries({ queryKey: ["bestiary"] });
     },
   });
 }
