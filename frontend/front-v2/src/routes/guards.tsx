@@ -31,6 +31,8 @@ export function RootRedirect() {
   if (!authed) {
     // Zaproszony gość ze starym kontem ląduje na logowaniu (poprawka flow #4).
     if (join) return <Navigate to={`/login?join=${encodeURIComponent(join)}`} replace />;
+    // Deep-link scenariusza (admin ▶ Graj) — zachowaj campaign przez logowanie.
+    if (campaign) return <Navigate to={`/login?campaign=${encodeURIComponent(campaign)}`} replace />;
     return <Navigate to="/login" replace />;
   }
 

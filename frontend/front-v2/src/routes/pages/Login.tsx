@@ -13,6 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [params] = useSearchParams();
   const join = params.get("join");
+  const campaign = params.get("campaign");
   const navigate = useNavigate();
   const login = useLogin();
 
@@ -23,7 +24,8 @@ export default function Login() {
       {
         onSuccess: () => {
           // Deep-link: po zalogowaniu wróć do celu zaproszenia / gry (§11).
-          if (join) navigate(`/bohaterowie?join=${encodeURIComponent(join)}`, { replace: true });
+          if (campaign) navigate(`/gra/${encodeURIComponent(campaign)}`, { replace: true });
+          else if (join) navigate(`/bohaterowie?join=${encodeURIComponent(join)}`, { replace: true });
           else navigate("/bohaterowie", { replace: true });
         },
       },
