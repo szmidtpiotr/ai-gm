@@ -2,6 +2,38 @@
  "generated_from": "CHANGELOG.md",
  "entries": [
   {
+   "version": "v1.8.0",
+   "date": "2026-07-11",
+   "when": "lipiec 2026",
+   "title": "Relikty, powiadomienia i walka z prawdziwą głębią",
+   "highlights": [
+    "Nowy interfejs gracza ŻAR jest teraz głównym frontem gry — wchodzisz przez /graj/, stary interfejs pozostaje pod /old/",
+    "Relikty i magiczne przedmioty dają pasywne moce: podnoszą cechy, umiejętności i pancerz — w walce i poza nią; bohater ma dwa sloty na relikty",
+    "Walka z głębią: test odwagi przy starciu z przerażającym wrogiem, lokacje trafień przy ciosach krytycznych i uczciwe zasady ucieczki z walki",
+    "Powiadomienia o twojej turze: Telegram (łączenie jednym kliknięciem), push w przeglądarce i e-mail — a grę można zainstalować jak aplikację",
+    "Samouczek „Pierwsze Kroki”: po stworzeniu pierwszego bohatera gra proponuje krótką przygodę uczącą podstaw — rozmowy, walki, handlu i mapy (można pominąć)",
+    "Zegar świata: gra zna dzień i godzinę, pory dnia mają znaczenie, a przycisk Czekaj pozwala przeczekać do świtu, zmierzchu albo umówionej pory",
+    "Usługi w osadach kupujesz z cennika jednym kliknięciem: nocleg, posiłek, naprawa u kowala, uzdrowiciel — bez przegadywania z narratorem",
+    "Mapy znalezione w świecie odkrywają fragmenty krainy przy użyciu, a heksy zadań są podświetlone na mapie świata",
+    "Remont ekwipunku: łączenie identycznych przedmiotów, podgląd z obrazkiem i opisem, premie widoczne na lalce postaci",
+    "Kuźnia przygód wplata nagrody w plan kampanii — łup jest częścią opowieści, skalowany do długości i trudności przygody"
+   ]
+  },
+  {
+   "version": "v1.7.1",
+   "date": "2026-07-06",
+   "when": "lipiec 2026",
+   "title": "Podróże 2.0 — mgła wojny, trakty i prawdziwe wędrówki",
+   "highlights": [
+    "Mgła wojny w trzech stanach: nieznane / poznane / odkryte — wokół bohatera świeci bąbel wiedzy o promieniu 4 heksów",
+    "Trakty rysują się na mapie jako ciągły szlak; wybierasz podróż traktem (bezpieczniej, mniej spotkań) albo na skróty przez dzicz",
+    "Dzień ma budżet marszu: po 8 godzinach zmierzch każe szukać noclegu, po 12 obóz jest przymusowy — a marsz ponad siły kończy się zmęczeniem",
+    "Po drodze zdarzają się spotkania: pół na pół walka albo scena fabularna; nocą ryzyko rośnie, na trakcie maleje",
+    "Mapa działa palcem na telefonie: przesuwanie 1:1, szczypanie do zoomu, przyciski +/− i dopasowanie widoku",
+    "Osada ma mapę lokalną już od pierwszej tury, a kampania zaczyna się o godzinie ustalonej w planie — koniec sztywnego 9:00"
+   ]
+  },
+  {
    "version": "v1.7.0",
    "date": "2026-07-02",
    "when": "lipiec 2026",

@@ -4,7 +4,49 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
-## v1.6.0 — 2026-07-06 — Podróże 2.0 + Sandbox Scenariuszy + struktura osady od startu
+## v1.8.0 — 2026-07-11 — ŻAR głównym interfejsem + relikty + powiadomienia + głębia walki + samouczek
+
+Duża wersja po v1.6.0 (numer v1.7.0 zajęty przez publiczny wpis o reputacji w changelogu wizytówki). Główne motywy: **ŻAR staje się głównym frontem gry**, przedmioty z pasywnymi mocami (relikty), wielokanałowe powiadomienia o turze, port głębi walki z combat_v2 oraz samouczek dla nowych graczy.
+
+### Added — ŻAR głównym frontem gry (#1314)
+
+- Przekierowanie adresów: `/` → wizytówka, `/graj/` → ŻAR (dawny `/v2/`), stary interfejs przeniesiony na `/old/`.
+- Pełny remont ekwipunku w ŻAR: stackowanie identycznych przedmiotów, modal szczegółów z obrazkiem i opisem, tagi statystyk na lalce postaci i liście, podkategorie fabularne, przyciski Użyj/Usuń.
+- Zakładki Postać + Umiejętności scalone w jedną; opisy cech/umiejętności/czarów w ekranie awansu.
+- Popup kości 3D przy narracyjnych testach umiejętności (#1299) — parytet ze starym frontem.
+- Zielone bąbelki potwierdzeń: beat/quest/złoto/przedmiot od narratora (#1312, #187f6be3).
+
+### Added — głębia walki z combat_v2 (#1210 → #826)
+
+- **Test odwagi** przy wejściu do walki z przerażającym wrogiem, **lokacje trafień** przy krytykach (z warunkami ran) i **zasady ucieczki** z walki — przeniesione addytywnie do żywego `combat_service`.
+
+### Added — relikty i kręgosłup łupów (#1301, #1302)
+
+- Każdy założony przedmiot może dawać pasywne efekty: statystyki, umiejętności, pancerz — w walce i poza nią; dwa sloty na relikty (`equipment_effects_service`).
+- Kuźnia wplata nagrody w plan kampanii (budżet wg liczby aktów i trudności); Smart Entry i prompt Kuźni uczą LLM generować relikty ze statami.
+- Narrator czyta opisy przedmiotów fabularnych z ekwipunku (#1304).
+
+### Added — powiadomienia o turze, epik #602 (N1–N5)
+
+- Telegram easy-click: deep-link + QR + webhook (#883); fan-out powiadomień rund MP przez wspólny dispatcher z anty-spamem (#884); web push jako realny kanał (#885); e-mailowy digest zaległych tur co 30 min (#886); instalowalność PWA w ŻAR (#887).
+
+### Added — samouczek dla nowych graczy (#1080)
+
+- Ukryty szablon kampanii „Pierwsze Kroki": auto-proponowany po stworzeniu pierwszego bohatera, etapy E1–E6, można pominąć (archiwizacja).
+
+### Added — mapa i świat
+
+- Podświetlenie heksów POI/questów na mapie świata (#1311); mapa-przedmiot odkrywa heksy przy UŻYCIU z animacją (#1309, #1310).
+- Kuźnia: trwałość mapy i startu — scale/parent/hex zachowane w planie, start w hubie osady (#1306–#1308); makro-lokacje planu dostają heksy świata + relokacja w adminie (#1305).
+- Modal Usług: mechaniczny zakup karczma/kowal/uzdrowiciel z koszykiem, bez pośrednictwa narratora; deterministyczne doliczanie posiłku w karczmie.
+- Zegar gry: pełna godzina w kontekście LLM (#1288), czekanie do świtu/zmierzchu (#1289), przycisk **Czekaj** + endpoint `wait` (#1290, #1291).
+
+### Fixed — narracja i plan kampanii
+
+- Znani NPC seedowani z planu GM + deterministyczne wychwytywanie z narracji (#1294, #1295); roster wrogów kampanii + parytet wiedzy w MP (#1296); wymuszenie kanonicznego imienia wroga (#1297).
+- Stripowanie tagów mechanicznych z tekstu gracza i narracji (#1292); bramka finału z fallbackiem questowym (#1300); regenerate-plan przycina osierocone required_beats (#1303).
+- Desync pinezki mapy lokalnej (#1293); ucieczka idiomu czasowego („wschód słońca" ≠ ruch na wschód); rollback stanu kampanii o X tur w adminie.
+
 
 Duża wersja po v1.5.9. Główny motyw: **remont map i podróżowania (Podróże 2.0)** — mgła wojny, trakty, dwa tryby podróży i mapa działająca palcem na telefonie. Do tego nowe narzędzie do testów (Sandbox Scenariuszy), osada z mapą lokalną już od pierwszej tury, trwałe zastraszenie oraz duża fala napraw i sprzątania kodu z audytu #20.
 

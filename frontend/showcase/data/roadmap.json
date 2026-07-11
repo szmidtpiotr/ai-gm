@@ -2,21 +2,26 @@
   "kolumny": [
     { "status": "Gotowe", "items": [
       "Silnik kości k20, cechy i biegłości",
-      "Walka strefowa (zwarcie/dystans, pancerz, obrażenia)",
+      "Walka strefowa — zwarcie/dystans, pancerz, lokacje trafień, ucieczka",
       "Magia uczonego — mana, rangi zaklęć, miscast",
+      "Podróże 2.0 — mapa świata z mgłą wojny, trakty, obozy i zmęczenie",
+      "Grywalne krasnoludy z własną Rdzeń-magią",
+      "Reputacja regionalna — świat pamięta twoje czyny",
+      "Relikty i pasywne moce ekwipunku",
       "Lochy kafelkowe z proceduralnymi mapami",
       "Tryb multiplayer — wspólne sesje",
+      "Nowy interfejs gracza ŻAR + samouczek dla nowych graczy",
+      "Powiadomienia o twojej turze — Telegram, push, e-mail",
       "Żywa Księga Zasad zgodna z silnikiem"
     ]},
     { "status": "W toku", "items": [
       "Balansowanie klas i dopracowywanie liczb",
-      "Strona-wizytówka projektu (ta, którą czytasz)",
-      "Porządkowanie i optymalizacja silnika gry",
-      "Panel mobilny administracji"
+      "Kuźnia przygód — generator całych kampanii z nagrodami",
+      "Porządkowanie i optymalizacja silnika gry"
     ]},
     { "status": "Planowane", "items": [
       "Głos postaci i lektor oraz generowanie ilustracji do przygód",
-      "Nieludzkie ludy — krasnoludy, elfy jako żywe frakcje",
+      "Kolejne ludy — elfy i inne nieludzkie rasy",
       "Mapa świata z wieloma krainami (rozszerzenia w stylu DLC)",
       "Eksport przygody jako książka",
       "Konto wspólne dla strony i gry"

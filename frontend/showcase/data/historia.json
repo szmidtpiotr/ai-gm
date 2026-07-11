@@ -1,5 +1,5 @@
 {
- "generated_from": "git log (2026-04-09 → 2026-06-22) + CHANGELOG.md + milestones",
+ "generated_from": "git log (2026-04-09 → 2026-07-11) + CHANGELOG.md + milestones",
  "intro": "Kronika tego, jak z jednego pomysłu — Mistrza Gry, który nigdy nie śpi — narodził się żywy silnik gry. To nie jest lista funkcji, tylko historia myślenia: które koncepcje ustąpiły lepszym, co okazało się ślepym zaułkiem, i dlaczego raz po raz przepisywaliśmy rzeczy, które „już działały”.",
  "stages": [
   {
@@ -58,9 +58,19 @@
    "body": "Dojrzała gra zaczęła potrzebować dwóch rzeczy, których prototyp nigdy nie potrzebuje: jednego źródła prawdy o zasadach i jednego źródła prawdy o świecie. Powstała interaktywna Księga Zasad — żywy dokument, zawsze zgodny z silnikiem, z żelazną zasadą: każda zmiana reguły widocznej dla gracza aktualizuje Księgę w tym samym kroku. Księga opisuje grę, ale nigdy jej nie definiuje — prawdą pozostaje kod. Równolegle spisaliśmy kanon świata w tonie heroic-dark: jeden kontynent, sześć krain, pęknięty Rdzeń pod ziemią, z którego przecieka magia i groza.\n\nNajświeższy etap to wielkie porządki w kodzie: rozbicie rozrośniętych plików na mniejsze, wyspecjalizowane moduły — żeby każdy fragment systemu robił jedną rzecz dobrze — sam główny plik interfejsu gracza skurczył się z ponad czternastu tysięcy linii do jednej trzeciej. To powtórka lekcji z panelu administracyjnego: tempo dodawania nowych rzeczy zależy od tego, jak czysty jest fundament."
   },
   {
-   "when": "czerwiec 2026 — dziś",
+   "when": "czerwiec 2026 — multiplayer",
    "title": "Wspólna gra i trwały świat",
-   "body": "Najnowszy etap otworzył grę na innych ludzi. Tryb wieloosobowy działa teraz od początku do końca: z ekranu kampanii wchodzisz do poczekalni, zapraszasz znajomych linkiem i gracie razem — z czatem drużyny, prywatnymi szeptami i turową walką, w której każdy ma swoją kolejkę. Wszystko działa też wygodnie na telefonie.\n\nRównolegle świat dostał własną, trwałą mapę. Wcześniej dane mapy ginęły przy każdym porządkowaniu bazy; teraz mapa ma swój kanon zapisany na stałe — mistrz może ją edytować i utrwalić jednym przyciskiem, a żadna aktualizacja gry jej nie skasuje.\n\nDziś AI-GM jest tym, czym pierwszego dnia nie był: nie czatem udającym grę, lecz prawdziwym silnikiem gry, który mówi ludzkim głosem. A ta wizytówka, którą właśnie czytasz, jest jego najmłodszym rozdziałem."
+   "body": "Najnowszy etap otworzył grę na innych ludzi. Tryb wieloosobowy działa teraz od początku do końca: z ekranu kampanii wchodzisz do poczekalni, zapraszasz znajomych linkiem i gracie razem — z czatem drużyny, prywatnymi szeptami i turową walką, w której każdy ma swoją kolejkę. Wszystko działa też wygodnie na telefonie.\n\nRównolegle świat dostał własną, trwałą mapę. Wcześniej dane mapy ginęły przy każdym porządkowaniu bazy; teraz mapa ma swój kanon zapisany na stałe — mistrz może ją edytować i utrwalić jednym przyciskiem, a żadna aktualizacja gry jej nie skasuje."
+  },
+  {
+   "when": "przełom czerwca i lipca 2026 — bohater ponad kampanią",
+   "title": "Krasnoludy, reputacja i przedmioty z historią",
+   "body": "Kolejny etap przesunął środek ciężkości z pojedynczej przygody na samego bohatera. Do gry weszła druga grywalna rasa — krasnolud, z własnymi modyfikatorami cech, zniżką u kupców, wzrokiem górnika w lochach i surowszą, potężniejszą odmianą magii czerpaną prosto z Rdzenia. Wybór rasy stał się pierwszym krokiem tworzenia postaci.\n\nŚwiat zaczął też pamiętać. System reputacji sprawia, że kraina ocenia twoje czyny: wygrane przygody budują sławę, porzucone — ją nadszarpują, a ceny u kupców i ton rozmów z NPC zależą od tego, kim jesteś w oczach regionu. Bohater dostał własną kronikę, która podąża za nim między kampaniami — legenda rośnie, blizny zostają.\n\nEkwipunek przestał być tylko cyferką obrażeń. Relikty i magiczne przedmioty dają teraz pasywne moce — podnoszą cechy, umiejętności i pancerz, w walce i poza nią — a Kuźnia przygód wplata nagrody w plan kampanii, żeby łup był częścią opowieści, a nie losowym dodatkiem."
+  },
+  {
+   "when": "lipiec 2026 — dziś",
+   "title": "Podróże 2.0, nowy interfejs i gra, która sama uczy",
+   "body": "Najnowszy etap to remont samego podróżowania. Mapa świata dostała mgłę wojny w trzech stanach — nieznane, odkryte, poznane — trakty rysujące się jako ciągły szlak i dwa tryby podróży: bezpieczniej traktem albo na skróty przez dzicz. Doba ma budżet marszu, teren ma swój koszt w godzinach, o zmierzchu trzeba pomyśleć o obozie, a marsz ponad siły kończy się zmęczeniem. W grze tyka też prawdziwy zegar: pory dnia mają znaczenie, a bohater może po prostu poczekać — do świtu, do zmierzchu, na umówione spotkanie.\n\nRównolegle gracz dostał zupełnie nowy interfejs — ŻAR — który stał się głównym frontem gry: cieplejszy wizualnie, szybszy, z pełnoprawnym ekwipunkiem, lalką postaci, mapą lokalną osad i kartami rzutów jak przy stole. Walka zyskała głębię z prawdziwego RPG: test odwagi przy starciu z przerażającym wrogiem, lokacje trafień przy krytykach i uczciwe zasady ucieczki.\n\nA żeby próg wejścia przestał być murem, gra sama uczy nowych graczy: po stworzeniu pierwszego bohatera proponuje krótką kampanię-samouczek „Pierwsze Kroki”. O swojej turze dowiesz się nawet z daleka — powiadomieniem na Telegramie, pushem w przeglądarce albo e-mailem. Dziś AI-GM jest tym, czym pierwszego dnia nie był: nie czatem udającym grę, lecz prawdziwym silnikiem gry, który mówi ludzkim głosem."
   }
  ]
 }
