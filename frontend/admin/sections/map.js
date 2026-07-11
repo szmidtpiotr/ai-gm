@@ -1683,6 +1683,7 @@ const _ROW_REGISTRY = {
         <button class="primary-btn" id="wbd-save" style="flex:1;font-size:0.72rem;padding:5px 8px">Zapisz</button>
         <button class="secondary-btn" id="wbd-tp" style="font-size:0.72rem;padding:5px 8px" title="Połącz z innym hexem">⤷</button>
       </div>
+      <button class="secondary-btn" id="wbd-treasure" style="width:100%;margin-top:6px;font-size:0.72rem;padding:5px 8px" title="Zakop skarb dla bohatera (mapa trafia do jego Map skarbów)">🗺 Zakop skarb</button>
       ${cfg.has_submap ? `<div style="display:flex;gap:4px;margin-top:6px"><select id="wbd-local-sz" style="background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:0.68rem;flex-shrink:0"><option value="1">S (7)</option><option value="2">M (19)</option><option value="3" selected>L (37)</option><option value="4">XL (61)</option></select><button id="wbd-gen-local" style="flex:1;font-size:0.7rem;padding:5px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">🏘️ Generuj podmapę</button></div>` : ''}
       <div style="margin-top:10px;font-size:0.68rem;color:var(--t3)">Połączenia specjalne:</div>
       ${myTps.length ? myTps.map(t => {
@@ -1716,6 +1717,25 @@ const _ROW_REGISTRY = {
     p.querySelector('#wbd-tp').onclick = () => {
       _wbDrawingTp = { q: hex.q, r: hex.r };
       _showToast('Kliknij docelowy hex. Kliknij ten sam → anuluj.', 'info');
+    };
+    // #1196 — zakop skarb na tym hexie dla wskazanego bohatera (event content).
+    const _treBtn = p.querySelector('#wbd-treasure');
+    if (_treBtn) _treBtn.onclick = async () => {
+      const cid = window.prompt('ID bohatera (character_id), który dostanie mapę:');
+      if (!cid) return;
+      const parts = parseInt(window.prompt('Liczba części mapy (1 = cała naraz):', '1') || '1') || 1;
+      const label = window.prompt('Nazwa skarbu (opcjonalnie):', 'Mapa skarbu') || 'Mapa skarbu';
+      const guardian = window.prompt('Klucz strażnika (opcjonalnie, puste = brak):', '') || null;
+      try {
+        const res = await apiFetch('/api/admin/world/treasures', {
+          method: 'POST',
+          body: JSON.stringify({
+            hex_q: hex.q, hex_r: hex.r, character_id: parseInt(cid),
+            total_parts: parts, label, guardian_enemy_key: guardian,
+          }),
+        });
+        _showToast(`Skarb zakopany (#${res.treasure_id}) — mapa trafiła do bohatera ${cid}.`, 'success');
+      } catch (e) { _showToast(e.message || 'Błąd zakopywania', 'error'); }
     };
     p.querySelectorAll('.wbd-del-tp').forEach(b => b.onclick = async () => {
       const id = parseInt(b.dataset.id);
