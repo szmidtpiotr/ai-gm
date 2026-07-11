@@ -2,14 +2,26 @@
 
 > Plan dla agenta implementującego. Zwiad kodu wykonany 2026-07-11 — wszystkie odwołania file:line zweryfikowane w kodzie na branchu `develop`. Sam nie zmieniaj decyzji projektowych D1–D4 bez zgody Piotra.
 
+## DLA AGENTA — jak wykonać
+
+**Wszystkie decyzje D1–D4 domknięte (Piotr, 2026-07-11). Można kodować.**
+
+1. Rób **etap po etapie** wg §12 (E1→E7), w kolejności — każdy etap ma zależności.
+2. TDD: pytest **tylko dla nowych plików** (docker cp na `ai-gm-dev-backend-1`, `pytest tests/test_treasure_*.py -v`) — **nigdy pełna suita** (Piotr uruchamia ją sam).
+3. Backend = kod bake'owany: po zmianie Pythona rebuild na `.61` — `docker compose -f docker-compose.dev.yml up -d --build backend`.
+4. Frontend ŻAR = `frontend/front-v2/`, build na `.61` (`sudo npm run build`), dist bind-mounted. **Nie dotykaj `frontend/front/`** (zamrożony).
+5. Weryfikuj na `https://aigm-dev.studio-colorbox.com/`. Commity na `develop`, push przez `.61` (`sudo -u piotrszmidt git push`).
+6. Na koniec: implementation-record issue wg szablonu #18 (labels `enhancement` + `needs-testing` + `review`), komentarz z SHA na #1196.
+7. **Pułapki krytyczne:** `world_hexes` (map_level=0) **tylko odczyt** (mapa Kresów Piotra); import-cycle loot↔treasure = importy lokalne w funkcji; test ciosu strażnika idzie ścieżką reakcji (#1313) — testuj przez serwis, nie pełną turę; fragment-nośnik nie może trafić do `loot_snapshot_json` skarbu.
+
 ## 0. Decyzje projektowe (przyjęte defaulty — Piotr może nadpisać)
 
 | # | Decyzja | Wybór (POTWIERDZONE przez Piotra 2026-07-11, poza D3) |
 |---|---|---|
 | D1 | Zasięg skarbu | **Jednorazowe, per bohater.** Skarby generowane mają `character_id` = bohater który zbiera fragmenty; wykop = `state='found'`, znika. Zero kolizji między graczami. Skarby zakopane przez admina też jednorazowe; mogą mieć `character_id=NULL` (otwarte, kto pierwszy) LUB przypisane do konkretnego bohatera na event. |
 | D2 | Kanały zdobywania fragmentów v1 | **Wszystkie trzy w v1:** (a) loot z wrogów, (b) plotki (`treasure_site`), (c) sklep / czarny rynek nocny. E7 **wchodzi do v1**, nie jest opcjonalny. |
-| D3 | Generator — **OCZEKUJE decyzji A/B** | Model A („na żądanie": pierwszy fragment tworzy skarb pod gracza) vs Model B („rozstawione z góry": fragment wskazuje istniejący skarb). Rekomendacja: **A dla generowanych**, B ręcznie dla adminowych. Do potwierdzenia przed E2. |
-| D4 | Akcja kopania | **Fabularnie, bez przycisku.** Wejście = tekst gracza („kopię", „szukam skrytki") łapany deterministycznie przed LLM. Rozstrzygnięcie mechaniczne (test percepcji + strażnik + wykop). Znacznik ✕ na mapie + wpis w ekwipunku („cel: heks q,r") jako **wskazówka gdzie** — zostają. |
+| D3 | Generator | **Model A — w pełni automatyczny, admin nie musi brać udziału.** Gdy gracz **skompletuje mapę** (dowolnym kanałem D2), system: (1) losuje loot **jak drop po zabiciu przeciwnika** (`roll_loot` z tabeli tieru region+1) i **zamraża go** na rekordzie skarbu, (2) ustala **heks** gdzie leży skarb. Gdy gracz tam dotrze, **LLM prowadzi narracyjnie** (hint wstrzyknięty deterministycznie) i buduje historię, a gracz musi **znaleźć** skarb (test percepcji + opcjonalny strażnik). Ręczne zakopywanie admina zostaje jako **opcjonalne narzędzie eventowe**, nie jest wymagane do działania feature'u. |
+| D4 | Akcja kopania + znacznik | **Fabularnie, bez przycisku akcji.** Heks ze skarbem jest **wyraźnie oznaczony na mapie** jako „nieodkryty skarb" (jak znaczniki na mapie lokacji którą robiliśmy). Wejście = tekst gracza („kopię", „szukam skrytki") łapany deterministycznie przed LLM; rozstrzygnięcie mechaniczne (test percepcji + strażnik + wykop). **Po znalezieniu skarbu znacznik z mapy znika** (`state='found'` → `is_treasure=false`). |
 
 Dodatkowe rozstrzygnięcie względem treści issue: issue proponuje „fragment jako item z flagą". Zwiad wykazał, że ścieżka grantu (`grant_loot_to_character`, `loot_service.py:891-916`) **stackuje po `item_key`** — różne fragmenty by się zlewały, a drop/sell psułby kolekcję. Dlatego **model hybrydowy**:
 - w loot tables fragment jest zwykłym wpisem `item_key='fragment_mapy_skarbow'` (XOR nietknięty, zero zmian w schemacie loot entries),
@@ -48,13 +60,15 @@ CREATE TABLE IF NOT EXISTS world_treasures (
   hex_r INTEGER NOT NULL,
   map_level INTEGER NOT NULL DEFAULT 0,          -- v1: zawsze 0 (out of scope: mapy lokalne)
   region TEXT,
-  loot_table_key TEXT NOT NULL,
-  gold_bonus INTEGER NOT NULL DEFAULT 0,          -- dodatkowe złoto ponad tabelę
+  loot_table_key TEXT,                            -- źródło rzutu przy kompletowaniu; NULL dla adminowego z jawnym snapshotem
+  loot_snapshot_json TEXT,                        -- D3: loot ZAMROŻONY w chwili skompletowania mapy (rzut jak drop z wroga)
+  gold_snapshot INTEGER NOT NULL DEFAULT 0,       -- złoto zamrożone przy kompletowaniu
+  gold_bonus INTEGER NOT NULL DEFAULT 0,          -- dodatkowe złoto ponad snapshot (np. event admina)
   guardian_enemy_key TEXT,                        -- NULL = bez strażnika
   dc INTEGER NOT NULL DEFAULT 12,                 -- test odnalezienia (Medium)
   total_fragments INTEGER NOT NULL DEFAULT 3,
-  character_id INTEGER,                           -- D1: NULL = globalny (admin), inaczej per bohater
-  state TEXT NOT NULL DEFAULT 'buried',           -- buried | found
+  character_id INTEGER,                           -- D1: bohater który zbiera; NULL tylko dla otwartego eventu admina
+  state TEXT NOT NULL DEFAULT 'buried',           -- buried | found  (buried = na mapie ✕; found = znika)
   created_by TEXT NOT NULL DEFAULT 'generated',   -- generated | admin
   created_at TEXT DEFAULT (datetime('now')),
   found_at TEXT,
@@ -85,16 +99,19 @@ Katalogowy item-nośnik (seed w migracji, `created_by='seed'`): `game_config_ite
 Nowy plik `backend/app/services/treasure_service.py`. Kontrakt jak `bestiary_service`/`rumor_service`: **DB-error tolerant, nigdy nie wywala tury** (try/except + log).
 
 - `grant_fragment(conn, character_id, campaign_id, source='loot') -> dict | None`
-  1. Znajdź `world_treasures` `state='buried'` dla bohatera (`character_id = ? OR character_id IS NULL`) z niekompletnym zestawem fragmentów.
-  2. Brak → `_generate_treasure(conn, campaign_id, character_id)`.
-  3. INSERT kolejnego `fragment_no`; zwróć `{treasure_id, fragment_no, total, complete: bool, hint_region}` — do hinta narratora i toasta.
-- `_generate_treasure(...)` — deterministyczny (D3): losuj heks z `world_hexes` `map_level=0 AND is_active=1 AND location_key IS NULL`, preferuj region bieżącej pozycji, wyklucz heks startowy i heksy istniejących skarbów bohatera; `loot_table_key` = tabela regionu tieru +1 (fallback: najlepsza istniejąca aktywna tabela — NIE twórz nowych tabel w locie); `guardian_enemy_key` = 50% szans, losowy nie-boss z `encounter_pool` heksu lub regionu; `dc=12`.
-- `get_treasure_maps(conn, character_id) -> dict` — fragmenty zgrupowane per skarb: `{treasure_id, fragments: n/total, complete, state}`; **współrzędne heksu ujawniane tylko gdy `complete`**.
-- `attempt_dig(conn, campaign_id, character_id) -> dict` — bramki (kolejno): kompletna mapa istnieje → jej heks == `session_flags.current_hex` → `state='buried'`. Zwraca `{eligible: false, reason}` albo buduje `pending_skill_test` (percepcja/WIS, `dc` skarbu) wzorcem `turn_skill_router.py:53-91` z `source='treasure_dig'` + `treasure_id` w pending.
-- `resolve_dig_success(conn, campaign_id, character_id, treasure_id) -> dict` — wywoływane po sukcesie testu:
-  - strażnik istnieje i żyje → `initiate_combat(campaign_id, character_id, [guardian_enemy_key])` + zapisz `session_flags.pending_treasure_loot = {treasure_id}`; loot wydany dopiero po zwycięstwie (hook w okolicy `_credit_bestiary_kill` / ścieżki zakończenia walki — agent: znajdź miejsce, gdzie combat kończy się zwycięstwem i wydawany jest loot wroga, tam skonsumuj flagę),
+  1. Znajdź `world_treasures` `state='buried'` bohatera (`character_id = ?`) z niekompletnym zestawem fragmentów.
+  2. Brak → `_generate_treasure(conn, campaign_id, character_id)` (tworzy pusty skarb: heks + strażnik + dc, **bez** snapshotu lootu).
+  3. INSERT kolejnego `fragment_no`.
+  4. **Jeśli to był ostatni fragment (komplet):** `_finalize_treasure(...)` — losuje loot **jak drop z wroga** (`roll_loot`-style bezpośrednio z `get_loot_table(loot_table_key)`, bez bramki `drop_chance`) + `roll_gold_drop`, **zamraża** w `loot_snapshot_json` / `gold_snapshot`. Od tej chwili skarb ma znany heks i znaną zawartość, `is_treasure=true` na mapie.
+  5. Zwróć `{treasure_id, fragment_no, total, complete: bool, hint_region, hex?}` — heks tylko gdy `complete`. Do toasta + wpisu w ekwipunku.
+- `_generate_treasure(...)` — deterministyczny (D3, bez LLM): losuj heks z `world_hexes` `map_level=0 AND is_active=1 AND location_key IS NULL`, preferuj region bieżącej pozycji, wyklucz heks startowy + heksy istniejących skarbów bohatera; `loot_table_key` = tabela regionu tieru +1 (fallback: najlepsza istniejąca aktywna tabela — **NIE** twórz nowych tabel w locie); `guardian_enemy_key` = 50% szans, losowy nie-boss z `encounter_pool` heksu lub regionu; `dc=12`.
+- `get_treasure_maps(conn, character_id) -> dict` — fragmenty zgrupowane per skarb: `{treasure_id, fragments: n/total, complete, state, hex?}`; **współrzędne heksu ujawniane tylko gdy `complete`**.
+- `maybe_treasure_arrival_hint(conn, campaign_id, character_id, q, r) -> str | None` — **narracyjne prowadzenie (D3):** wywoływane przy wejściu na heks (obok `check_hex_enter_trigger`, `turn_intent.py:44`). Jeśli na `(q,r)` leży `state='buried'` skarb bohatera z **kompletną** mapą → zwróć hint dla narratora („W tym miejscu wg mapy ukryty jest skarb — poprowadź gracza, niech go szuka; nie ujawniaj wprost lokalizacji"). Hint wstrzykiwany jak `rumor_text` (`turn_pipeline.py:1216`), żeby LLM zbudował scenę.
+- `attempt_dig(conn, campaign_id, character_id) -> dict` — bramki (kolejno): kompletna mapa istnieje → jej heks == `session_flags.current_hex` → `state='buried'`. Zwraca `{eligible: false, reason}` (→ fall-through do zwykłej tury) albo buduje `pending_skill_test` (percepcja/WIS, `dc` skarbu) wzorcem `turn_skill_router.py:53-91` z `source='treasure_dig'` + `treasure_id` w pending.
+- `resolve_dig_success(conn, campaign_id, character_id, treasure_id) -> dict` — po sukcesie testu:
+  - strażnik istnieje i żyje → `initiate_combat(campaign_id, character_id, [guardian_enemy_key])` + `session_flags.pending_treasure_loot = {treasure_id}`; wypłata dopiero po zwycięstwie (hook przy zakończeniu walki zwycięstwem — agent: znajdź gdzie combat kończy się wygraną i wydawany jest loot wroga, tam skonsumuj flagę → `_payout`),
   - bez strażnika → od razu `_payout(...)`.
-- `_payout(...)` — `roll_loot` ze wskazanej tabeli (bez bramki `drop_chance` wroga — roll bezpośrednio z `get_loot_table`) + `roll_gold_drop` + `gold_bonus` → `grant_loot_to_character(source='treasure')`; `state='found'`, `found_at`, `found_by_character_id`; `confirm_rumors_for(campaign_id, 'treasure_site', str(treasure_id))`; zwróć podsumowanie do narracji.
+- `_payout(...)` — wydaj **zamrożony snapshot** (`loot_snapshot_json` + `gold_snapshot` + `gold_bonus`) przez `grant_loot_to_character(source='treasure')` (fragment-nośnik NIE może być w snapshocie — żeby nie zapętlić przechwycenia); `state='found'`, `found_at`, `found_by_character_id`; `confirm_rumors_for(campaign_id, 'treasure_site', str(treasure_id))`; zwróć podsumowanie do narracji. **`state='found'` → znacznik ✕ znika z mapy (D4).**
 - Porażka testu: tura mija, skarb zostaje `buried`, można próbować ponownie (bez limitu w v1 — Numbers Policy).
 
 **Integracja grantu (przechwycenie):** w `grant_loot_to_character` (`loot_service.py:891-916`, gałąź stack-by-item_key) — jeśli `item_key == 'fragment_mapy_skarbow'` → zamiast INSERT/UPDATE inventory wywołaj `treasure_service.grant_fragment(...)` i dodaj do zwracanej listy wpis `{label: 'Fragment mapy skarbów (n/3)', item_type: 'quest', ...}`. Uwaga na import cycle (loot→treasure→loot przy payout): payout woła `grant_loot_to_character` — fragment nie może być w tabeli lootu skarbu, a import w funkcji (local import), jak robią to inne serwisy.
@@ -107,6 +124,7 @@ Nowy plik `backend/app/services/treasure_service.py`. Kontrakt jak `bestiary_ser
 - Trigger: regex słów kluczowych („kopię", „wykopuję", „odkopuję", „rozkopuję", „szukam skrytki", „szukam schowka", „szukam skarbu") — word-boundary, case-insensitive.
 - Deleguje do `treasure_service.attempt_dig`. Gdy `eligible=false` → **fall through do normalnej tury LLM** (żadnego bloku — gracz może kopać narracyjnie gdzie chce, po prostu nie ma tam skrytki). Gdy eligible → zwróć `skill_test_pending` (istniejący popup kości ŻAR skonsumuje — #1299).
 - Rozszerz resolve testu (`turns.py:7742`) o gałąź `pending.source == 'treasure_dig'` → `resolve_dig_success` / narracja porażki.
+- **Narracyjne prowadzenie (D3):** przy wejściu na heks — obok `check_hex_enter_trigger` (`turn_intent.py:44`) wywołaj `treasure_service.maybe_treasure_arrival_hint(...)`; zwrócony hint dopnij do podpowiedzi narratora tą samą drogą co `rumor_text` (`turn_pipeline.py:1216`), by LLM zbudował scenę odnalezienia skarbu.
 
 ## 5. Endpointy (E2/E3)
 
@@ -125,7 +143,7 @@ Admin (`backend/app/routers/hex_world.py` lub `admin.py`):
 
 Build na `.61` (`sudo npm run build`), dist bind-mounted.
 
-1. **WorldMap** — pole `is_treasure` w `WorldHex` (`types.ts:235`), badge ✕ (Phosphor `XCircle`/`Crosshair`, styl ember) wzorem gwiazdki questowej (`WorldMap.tsx:661-667`) + pozycja w legendzie (`:399-404`).
+1. **WorldMap** — pole `is_treasure` w `WorldHex` (`types.ts:235`), **wyraźny znacznik nieodkrytego skarbu** ✕ (Phosphor `XCircle`/`Crosshair`, styl ember, wyraźniejszy niż POI — to ma się rzucać w oczy jak znaczniki na mapie lokacji) wzorem gwiazdki questowej (`WorldMap.tsx:661-667`) + pozycja w legendzie (`:399-404`). Backend daje `is_treasure=true` **tylko** dla heksów z `state='buried'` kompletnej mapy bohatera — po `state='found'` flaga znika, więc **znacznik automatycznie schodzi z mapy (D4)**.
 2. **Modal hexa** (`WorldMap.tsx:409-520`) — gdy `is_treasure` i gracz stoi na heksie → **podpowiedź tekstowa** „Tu może być zakopana skrytka — spróbuj przeszukać" (bez przycisku akcji; D4 fabularne). Gracz wraca do composera i pisze że kopie. (Znacznik ✕ + wpis w ekwipunku niosą „gdzie".)
 3. **PanelInventory** — nowa pod-sekcja „Mapy skarbów" w bloku Fabularne: karta per skarb, licznik `2/3`, po skompletowaniu „Cel: heks (q,r) — region"; dane z `GET /treasure-maps` (nowy hook obok `useSheetData`).
 4. Toast po zdobyciu fragmentu — wzorzec extra-payload `map_reveal` (`useSheetData.ts:121-128`, `PanelInventory.tsx:121-139`).
