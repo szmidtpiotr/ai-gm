@@ -218,16 +218,9 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
                 (cid,),
             ).fetchall()
         }
-        entries: list[dict[str, Any]] = []
-        unlocked = 0
-        for e in enemies:
-            p = prog.get(e["key"])
-            if not p or int(p["kills"]) < 1:
-                entries.append({"locked": True})
-                continue
-            unlocked += 1
+        def _unlocked_entry(e, p, campaign_unique=False):
             tier = int(p["unlocked_tier"])
-            entry: dict[str, Any] = {
+            entry = {
                 "locked": False,
                 "enemy_key": e["key"],
                 "name": e["label"],
@@ -241,11 +234,43 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
             }
             if tier >= HP_VISIBLE_TIER:
                 entry["hp_max"] = e["hp_base"]
-            entries.append(entry)
+            if campaign_unique:
+                entry["campaign_unique"] = True
+            return entry
+
+        entries: list[dict[str, Any]] = []
+        unlocked = 0
+        canonical_keys = set()
+        for e in enemies:
+            canonical_keys.add(e["key"])
+            p = prog.get(e["key"])
+            if not p or int(p["kills"]) < 1:
+                entries.append({"locked": True})
+                continue
+            unlocked += 1
+            entries.append(_unlocked_entry(e, p))
+
         total = len(enemies)
         pct = round(100 * unlocked / total) if total else 0
+
+        # Campaign-unique trophies (#1191): enemies this hero actually defeated
+        # that are NOT in the canonical roster (forge / per-adventure mobs). Shown
+        # as bonus unlocked entries so a kill is never lost, but NOT counted in the
+        # collection total/pct (which stays the canonical denominator).
+        bonus_keys = [k for k in prog if k not in canonical_keys and int(prog[k]["kills"]) >= 1]
+        bonus = 0
+        if bonus_keys:
+            ph = ",".join("?" for _ in bonus_keys)
+            for e in c.execute(
+                f"SELECT key, label, description, lore_text, image_url, hp_base, tier "
+                f"FROM game_config_enemies WHERE key IN ({ph})",
+                (*bonus_keys,),
+            ).fetchall():
+                entries.append(_unlocked_entry(e, prog[e["key"]], campaign_unique=True))
+                bonus += 1
+
         return {"entries": entries,
-                "summary": {"unlocked": unlocked, "total": total, "pct": pct}}
+                "summary": {"unlocked": unlocked, "total": total, "pct": pct, "bonus": bonus}}
     except Exception as e:
         logger.warning("bestiary_get_failed", error=str(e))
         return {"entries": [], "summary": {"unlocked": 0, "total": 0, "pct": 0}}

@@ -135,7 +135,7 @@ def test_get_bestiary_locked_and_unlocked(conn, monkeypatch):
     for _ in range(5):
         bs.record_kill(7, "goblin", conn=conn)  # tier 2 → hp visible
     result = bs.get_bestiary(7)
-    assert result["summary"] == {"unlocked": 1, "total": 2, "pct": 50}
+    assert result["summary"] == {"unlocked": 1, "total": 2, "pct": 50, "bonus": 0}
     by_lock = {e.get("locked") for e in result["entries"]}
     assert by_lock == {True, False}
     unlocked = next(e for e in result["entries"] if not e["locked"])
@@ -173,6 +173,25 @@ def test_get_bestiary_excludes_non_permanent_from_total(conn, monkeypatch):
     assert result["summary"]["total"] == 2  # only goblin + orc (permanent + active)
     keys = {e.get("enemy_key") for e in result["entries"] if not e["locked"]}
     assert "wip" not in keys and "rej" not in keys and "off" not in keys
+
+
+def test_get_bestiary_shows_killed_forge_enemy_as_bonus(conn, monkeypatch):
+    """A killed non-canonical (forge/pending) enemy appears as a campaign_unique
+    bonus entry but does NOT inflate the canonical total."""
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    conn.execute(
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) "
+        "VALUES ('wicek','Wicek Młynarczyk','Herszt wyrostków',18,'elite','pending',1)")
+    conn.commit()
+    bs.record_kill(7, "wicek", conn=conn)  # hero actually killed the forge boss
+    conn.commit()
+    r = bs.get_bestiary(7)
+    assert r["summary"]["total"] == 2      # canonical denominator unchanged
+    assert r["summary"]["bonus"] == 1
+    bonus = [e for e in r["entries"] if e.get("campaign_unique")]
+    assert len(bonus) == 1
+    assert bonus[0]["name"] == "Wicek Młynarczyk"
+    assert bonus[0]["kills"] == 1
 
 
 # ── MP kill credit: all participants (#1191 follow-up) ───────────────────────

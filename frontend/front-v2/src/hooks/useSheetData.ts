@@ -195,10 +195,11 @@ export interface BestiaryEntry {
   first_kill_at?: string | null;
   next_threshold?: number | null;
   hp_max?: number | null;
+  campaign_unique?: boolean;
 }
 export interface BestiaryResponse {
   entries: BestiaryEntry[];
-  summary: { unlocked: number; total: number; pct: number };
+  summary: { unlocked: number; total: number; pct: number; bonus?: number };
 }
 
 /** GET /characters/{id}/bestiary — pełny katalog wrogów + progresja wiedzy. */

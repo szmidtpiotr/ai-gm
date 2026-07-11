@@ -66,7 +66,12 @@ function Bestiary({ characterId }: { characterId: number | undefined }) {
   return (
     <>
       <SecHead>
-        Bestiariusz {s && <span className="ml-auto text-label">{s.unlocked}/{s.total} · {s.pct}%</span>}
+        Bestiariusz {s && (
+          <span className="ml-auto text-label">
+            {s.unlocked}/{s.total} · {s.pct}%
+            {s.bonus ? <span className="text-ember"> · +{s.bonus} kampanijne</span> : null}
+          </span>
+        )}
       </SecHead>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
         {entries.map((e, i) =>
@@ -116,6 +121,11 @@ function BestiaryCard({ entry, onClick }: { entry: BestiaryEntry; onClick: () =>
         >
           <badge.icon size={13} weight="fill" />
         </span>
+        {entry.campaign_unique && (
+          <span className="absolute left-1 top-1 rounded bg-bg/80 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-ember backdrop-blur" title="Unikat kampanijny">
+            kampania
+          </span>
+        )}
       </div>
       <div className="px-2 py-1.5">
         <div className="truncate font-ui text-[12px] font-bold text-text">{entry.name}</div>

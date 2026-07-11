@@ -1125,8 +1125,8 @@ def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
                         WHERE le.loot_table_key = e.loot_table_key) AS loot_entries_count
                FROM game_config_enemies e
                LEFT JOIN game_config_loot_tables lt ON lt.key = e.loot_table_key
-               WHERE e.review_status = 'pending_review'
-               ORDER BY e.rowid DESC LIMIT 100"""
+               WHERE e.review_status IN ('pending_review', 'pending')
+               ORDER BY e.rowid DESC LIMIT 200"""
         ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
