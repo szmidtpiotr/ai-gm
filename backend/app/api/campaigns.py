@@ -577,12 +577,19 @@ def get_campaign_turns_player(
     conn.row_factory = sqlite3.Row
     try:
         camp = conn.execute(
-            "SELECT id, owner_user_id, title, status FROM campaigns WHERE id = ?",
+            "SELECT id, owner_user_id, title, status, mode FROM campaigns WHERE id = ?",
             (campaign_id,),
         ).fetchone()
         if not camp:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        if effective_uid and int(camp["owner_user_id"]) != int(effective_uid):
+        # Scenario Sandbox (#1211) campaigns are disposable, admin-only test
+        # sessions whose clone hero is owned by a synthetic source-hero user. The
+        # `▶ Graj` deep-link is meant to be played by whichever dev is logged in,
+        # so do NOT owner-gate them (otherwise the narration log 403-loops for any
+        # account other than the clone owner — the "LLM nic nie pisze + okno się
+        # odświeża" symptom).
+        _scenario = str(camp["mode"] or "").lower() == "scenario"
+        if not _scenario and effective_uid and int(camp["owner_user_id"]) != int(effective_uid):
             raise HTTPException(status_code=403, detail="Not your campaign")
 
         total_count = conn.execute(
