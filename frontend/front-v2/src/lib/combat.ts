@@ -103,8 +103,8 @@ export function rollFromPlayerAttack(
       const sides = Number(r.damage_die.split("d")[1] || 6);
       for (const rv of r.damage_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
     }
-    label = "Obraż.";
-    resV = `−${r.damage ?? 0} HP`; // trafienie — zadane obrażenia
+    label = "Wynik";
+    resV = `${r.damage ?? 0} Obr.`; // trafienie — zadane obrażenia
     tone = "ok";
   } else {
     resV = "PUDŁO";
@@ -133,8 +133,8 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
     for (const rv of r.damage_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
   }
   cells.push({
-    k: hit ? "Obraż." : "Wynik",
-    v: r.dodged ? "UNIKASZ" : r.hit ? `−${r.damage ?? 0} HP` : "PUDŁO",
+    k: "Wynik",
+    v: r.dodged ? "UNIKASZ" : r.hit ? `${r.damage ?? 0} Obr.` : "PUDŁO",
     res: true,
     tone: hit ? "bad" : "ok",
   });
@@ -174,22 +174,22 @@ export function rollFromReaction(
   let tone: "ok" | "bad" | "warn";
   if (choice === "dodge") {
     if (react.dodged) {
-      resV = "UNIK UDANY · 0 HP"; // uchyliłeś się w całości
+      resV = "UNIK UDANY · 0 Obr."; // uchyliłeś się w całości
       tone = "ok";
     } else {
-      resV = `UNIK NIEUDANY · −${dmg} HP`; // nie zdążyłeś — cios dosięga
+      resV = `UNIK NIEUDANY · ${dmg} Obr.`; // nie zdążyłeś — cios dosięga
       tone = "bad";
     }
   } else if (choice === "block") {
     if (react.full_block || dmg <= 0) {
-      resV = "BLOK PEŁNY · 0 HP"; // tarcza pochłonęła cały cios
+      resV = "BLOK PEŁNY · 0 Obr."; // tarcza pochłonęła cały cios
       tone = "ok";
     } else {
-      resV = `BLOK · −${dmg} HP`; // część obrażeń zablokowana
+      resV = `BLOK · ${dmg} Obr.`; // część obrażeń zablokowana
       tone = "warn";
     }
   } else {
-    resV = `CIOS · −${dmg} HP`; // przyjąłeś na klatę
+    resV = `CIOS · ${dmg} Obr.`; // przyjąłeś na klatę
     tone = "bad";
   }
   cells.push({ k: "Skutek", v: resV, res: true, tone });

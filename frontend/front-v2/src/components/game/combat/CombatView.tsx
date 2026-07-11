@@ -75,7 +75,36 @@ export function CombatView({
   // Query pollowany co 2s (tylko gdy aktywna) — Game.tsx już go trzyma, tu współdzielony.
   const combatQ = useCombatState(campaignId);
   const live = combatQ.data?.combat ?? combat;
-  const view = useMemo(() => readCombat(live), [live]);
+
+  // Zamrożenie WYŚWIETLANEGO HP na czas animacji kości: cache trzyma świeży stan
+  // (logika tury, poll), ale banner + rail pokazują HP sprzed ciosu, aż do modalu
+  // obrażeń. Snapshot = mapa id→hp_current sprzed mutacji; zwalniany po ostatnim etapie.
+  const [hpFreeze, setHpFreeze] = useState<Map<string, number> | null>(null);
+  const view = useMemo(() => {
+    let cs = live;
+    if (cs && hpFreeze) {
+      cs = {
+        ...cs,
+        combatants: (cs.combatants ?? []).map((c) =>
+          c?.id != null && hpFreeze.has(String(c.id))
+            ? { ...c, hp_current: hpFreeze.get(String(c.id))! }
+            : c,
+        ),
+      };
+    }
+    return readCombat(cs);
+  }, [live, hpFreeze]);
+
+  // Snapshot HP z aktualnego cache (PRZED mutacją) — do zamrożenia wyświetlania.
+  function snapshotHp(): Map<string, number> {
+    const cs =
+      qc.getQueryData<{ combat?: CombatState }>(["combat", campaignId])?.combat ?? live;
+    const m = new Map<string, number>();
+    for (const c of cs?.combatants ?? []) {
+      if (c?.id != null) m.set(String(c.id), Number(c.hp_current ?? 0));
+    }
+    return m;
+  }
 
   // HP na pasku żywotności (prawy rail) MUSI zgadzać się z banerem walki: podczas
   // walki źródłem prawdy jest combatant (sheet_json bywa nieodświeżony do końca
@@ -168,6 +197,9 @@ export function CombatView({
     if (!target) return;
     setSheet(null);
     setBusy(true);
+    // Zamroź wyświetlane HP zanim mutacja wpisze nowy stan do cache (onSuccess) —
+    // HP na pasku/liczbach zmieni się dopiero po modalu obrażeń.
+    if (showPlayerDice) setHpFreeze(snapshotHp());
     // Pre-roll d20 po stronie klienta (parytet z front/: /api/gm/dice) — kość 3D
     // ląduje na tej samej wartości, którą backend liczy do trafienia (raw_d20).
     const d20 = 1 + Math.floor(Math.random() * 20);
@@ -187,6 +219,7 @@ export function CombatView({
               : "Akcja zablokowana.",
           "danger",
         );
+        setHpFreeze(null);
         setBusy(false);
         return; // tura NIE skonsumowana
       }
@@ -236,6 +269,7 @@ export function CombatView({
       }
     } catch {
       toast("Błąd akcji.", "danger");
+      setHpFreeze(null);
       setBusy(false);
     }
   }
@@ -254,11 +288,16 @@ export function CombatView({
       pendingReactionRef.current = null;
       if (diceJob) setRolls((p) => [...p, diceJob.card]);
       setDiceJob(null);
+      // Okno reakcji: HP jeszcze nietknięte (dmg pending) — zwolnij zamrożenie,
+      // rozliczenie obrażeń nastąpi w resolve_reaction.
+      setHpFreeze(null);
       setReaction(pendingReaction);
       return;
     }
     if (diceJob) setRolls((p) => [...p, diceJob.card]);
     setDiceJob(null);
+    // Ostatni etap kości — teraz odsłoń realne HP (po modalu obrażeń).
+    setHpFreeze(null);
     // busy był true tylko dla tury gracza
     if (!diceJob || diceJob.actor !== "enemy") setBusy(false);
   }
@@ -310,6 +349,9 @@ export function CombatView({
     if (view.isPlayerTurn) return;
     if (busy || diceJob || reaction || enemyTurnRef.current) return;
     enemyTurnRef.current = true;
+    // Zamroź HP zanim tura wroga wpisze nowy stan do cache — pasek/liczby
+    // zmienią się dopiero po modalu obrażeń wroga.
+    if (showEnemyDice) setHpFreeze(snapshotHp());
     enemyTurn
       .mutateAsync()
       .then((r) => {
@@ -379,7 +421,9 @@ export function CombatView({
           }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setHpFreeze(null);
+      })
       .finally(() => {
         enemyTurnRef.current = false;
       });
