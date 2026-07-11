@@ -181,11 +181,26 @@ def _current_hex(conn: sqlite3.Connection, campaign_id: int) -> Optional[tuple[i
     return None
 
 
+def _hexdist(a: tuple[int, int], b: tuple[int, int]) -> int:
+    dq, dr = a[0] - b[0], a[1] - b[1]
+    return (abs(dq) + abs(dq + dr) + abs(dr)) // 2
+
+
+# Ring around the explored world where a generated treasure is buried: far enough
+# to be a real trip, close enough to sit inside the map the player knows exists.
+TREASURE_RING_MIN = 3
+TREASURE_RING_MAX = 12
+
+
 def _pick_treasure_hex(conn: sqlite3.Connection, character_id: int,
                        campaign_id: int) -> Optional[dict]:
-    """Pick an empty overworld hex, preferring the current region."""
-    cur = _current_hex(conn, campaign_id)
-    # hexes already used by this hero's treasures (avoid stacking)
+    """Pick an empty overworld hex ANCHORED to the campaign's explored area.
+
+    Anchors = the player's current hex + every discovered/known campaign hex. The
+    treasure lands in a ring [3,12] around them so it is reachable and inside the
+    known world — never a far-flung outlier (fixes the blank-map bug where a random
+    stray hex at the map's edge was chosen when current_hex was unknown).
+    """
     used = {
         (int(r["hex_q"]), int(r["hex_r"]))
         for r in conn.execute(
@@ -193,30 +208,49 @@ def _pick_treasure_hex(conn: sqlite3.Connection, character_id: int,
             (character_id,),
         ).fetchall()
     }
-    region = None
+    anchors: list[tuple[int, int]] = []
+    cur = _current_hex(conn, campaign_id)
     if cur is not None:
-        rrow = conn.execute(
-            "SELECT region FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 LIMIT 1",
-            (cur[0], cur[1]),
-        ).fetchone()
-        region = rrow["region"] if rrow else None
+        anchors.append(cur)
         used.add(cur)  # never bury under the player's feet
+    try:
+        for r in conn.execute(
+            "SELECT hex_q, hex_r FROM campaign_hex_data "
+            "WHERE campaign_id = ? AND (COALESCE(discovered,0)=1 OR COALESCE(known,0)=1)",
+            (campaign_id,),
+        ).fetchall():
+            anchors.append((int(r["hex_q"]), int(r["hex_r"])))
+    except sqlite3.OperationalError:
+        pass
 
-    def _candidates(where_region: bool) -> list[sqlite3.Row]:
-        sql = (
-            "SELECT q, r, region, encounter_pool FROM world_hexes "
-            "WHERE map_level = 0 AND is_active = 1 AND location_key IS NULL"
-        )
-        params: list[Any] = []
-        if where_region and region:
-            sql += " AND region = ?"
-            params.append(region)
-        return conn.execute(sql, params).fetchall()
-
-    rows = _candidates(True) or _candidates(False)
-    pool = [r for r in rows if (int(r["q"]), int(r["r"])) not in used]
-    if not pool:
+    rows = conn.execute(
+        "SELECT q, r, region, encounter_pool FROM world_hexes "
+        "WHERE map_level = 0 AND is_active = 1 AND location_key IS NULL"
+    ).fetchall()
+    empty = [r for r in rows if (int(r["q"]), int(r["r"])) not in used]
+    if not empty:
         return None
+
+    def _in_ring(row: sqlite3.Row, lo: int, hi: int) -> bool:
+        c = (int(row["q"]), int(row["r"]))
+        return any(lo <= _hexdist(c, a) <= hi for a in anchors)
+
+    pool: list[sqlite3.Row] = []
+    if anchors:
+        pool = [r for r in empty if _in_ring(r, TREASURE_RING_MIN, TREASURE_RING_MAX)]
+        if not pool:  # widen the ring
+            pool = [r for r in empty if _in_ring(r, 1, TREASURE_RING_MAX * 2)]
+        if not pool:  # anything inside the anchors' bounding box (+4 margin)
+            aq = [a[0] for a in anchors]
+            ar = [a[1] for a in anchors]
+            qlo, qhi = min(aq) - 4, max(aq) + 4
+            rlo, rhi = min(ar) - 4, max(ar) + 4
+            pool = [r for r in empty
+                    if qlo <= int(r["q"]) <= qhi and rlo <= int(r["r"]) <= rhi]
+    if not pool:
+        # No anchors / nothing nearby → prefer real map hexes (region set) over strays.
+        pool = [r for r in empty if r["region"]] or empty
+
     chosen = random.choice(pool)
     return {
         "q": int(chosen["q"]),
