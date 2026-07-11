@@ -6,7 +6,7 @@
 // (`1d20@15`) → kość ląduje na wartości już wylosowanej przez backend, i nie ma buga
 // „drugi rzut niewidoczny" (#829). To wciąż silnik three.js/cannon ze starego front/.
 
-const BASE = import.meta.env.BASE_URL || "/"; // "/v2/" na DEV
+const BASE = import.meta.env.BASE_URL || "/"; // "/graj/" na DEV
 const ASSET_PATH = `${BASE}vendor/dice-box-threejs/`;
 const UMD_SRC = `${ASSET_PATH}dice-box-threejs.umd.js`;
 

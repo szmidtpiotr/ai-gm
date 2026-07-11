@@ -70,7 +70,7 @@ export default function Lobby() {
 
   async function genLink() {
     const res = await inviteLink.mutateAsync();
-    setLinkUrl(`${location.origin}/v2/?join=${res.token}`);
+    setLinkUrl(`${location.origin}/graj/?join=${res.token}`);
   }
 
   function copyCode() {

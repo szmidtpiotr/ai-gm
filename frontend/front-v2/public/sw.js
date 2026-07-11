@@ -2,7 +2,7 @@
  *
  * Two jobs:
  *   1) PWA offline shell — precache the app shell, runtime-cache built assets so
- *      /v2/ opens (and re-opens) without the network; navigations fall back to
+ *      /graj/ opens (and re-opens) without the network; navigations fall back to
  *      the cached index shell when offline.
  *   2) Web Push — receive push events + handle notification clicks (ported from
  *      the legacy /sw.js).
@@ -15,7 +15,7 @@
 const VERSION = 'v2-fe17-1';
 const SHELL_CACHE = 'aigm-v2-shell-' + VERSION;
 const ASSET_CACHE = 'aigm-v2-assets-' + VERSION;
-const BASE = '/v2/';
+const BASE = '/graj/';
 
 // Stable, always-present shell files (public/ assets — not fingerprinted).
 const SHELL_ASSETS = [
@@ -63,7 +63,7 @@ self.addEventListener('fetch', (event) => {
   // Never touch cross-origin (fonts CDN etc.) or the API — always live network.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
-  // Only manage our own /v2/ subtree.
+  // Only manage our own /graj/ subtree.
   if (!url.pathname.startsWith(BASE)) return;
 
   // Navigations → network-first, fall back to cached shell (offline SPA boot).

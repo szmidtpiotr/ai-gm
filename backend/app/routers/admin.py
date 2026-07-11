@@ -4162,7 +4162,7 @@ def admin_create_invite(
         conn.commit()
 
         base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+        invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
 
         return {
             "ok": True,
@@ -4570,7 +4570,7 @@ def player_create_invite(
         inviter_name = (inviter["display_name"] or inviter["username"]) if inviter else "Gracz"
 
         base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+        invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
 
         # Send invite email
         from app.services.email_service import send_invite_email
@@ -4703,7 +4703,7 @@ def admin_send_invite_email(
 
     from app.services.email_service import send_invite_email as _send_invite_email
     base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-    invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+    invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
     ok = _send_invite_email(
         to=row["email"],
         inviter_name=req.inviter_name,

@@ -22,9 +22,9 @@ export interface PushStep {
 
 export type PushProgress = (steps: PushStep[]) => void;
 
-const SW_URL = "/v2/sw.js";
-const SW_SCOPE = "/v2/";
-const ICON = "/v2/icon-192.png";
+const SW_URL = "/graj/sw.js";
+const SW_SCOPE = "/graj/";
+const ICON = "/graj/icon-192.png";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);

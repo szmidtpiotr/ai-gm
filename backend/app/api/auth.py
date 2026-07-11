@@ -492,7 +492,7 @@ def register(req: RegisterReq):
         )
         conn.commit()
 
-        verify_link = f"{_base_url()}/verify-email?token={verify_token}"
+        verify_link = f"{_base_url()}/graj/weryfikacja-email?token={verify_token}"
         inviter = conn.execute(
             "SELECT username, display_name FROM users WHERE id = ? LIMIT 1",
             (inv["created_by"],),
@@ -607,7 +607,7 @@ def resend_verification(authorization: str | None = Header(default=None)):
         )
         conn.commit()
 
-        verify_link = f"{_base_url()}/verify-email?token={token}"
+        verify_link = f"{_base_url()}/graj/weryfikacja-email?token={token}"
         from app.services.email_service import send_verification_email
         send_verification_email(user["email"], verify_link)
         return {"ok": True}
@@ -636,7 +636,7 @@ def forgot_password(req: ForgotPasswordReq):
                 (user["id"], token, _expires_iso(RESET_EXPIRY_HOURS)),
             )
             conn.commit()
-            reset_link = f"{_base_url()}/reset-password?token={token}"
+            reset_link = f"{_base_url()}/graj/reset-hasla?token={token}"
             from app.services.email_service import send_password_reset_email
             send_password_reset_email(email, reset_link)
         # Always 200 — never reveal whether email exists

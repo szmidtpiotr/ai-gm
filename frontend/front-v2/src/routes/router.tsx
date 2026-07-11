@@ -66,5 +66,5 @@ export const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: "/v2" },
+  { basename: "/graj" },
 );

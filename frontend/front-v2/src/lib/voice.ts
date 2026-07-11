@@ -5,7 +5,7 @@
 // przez subskrypcję (React hook useVoice), a transkrypcja przez callback onTranscript.
 //
 // Endpointy głosu żyją pod /voice/* (poza /api) — nginx routuje je do backendu tak
-// samo dla /v2/ jak dla starego frontu, więc używamy ścieżek względem hosta.
+// samo dla /graj/ jak dla starego frontu, więc używamy ścieżek względem hosta.
 
 const LS_TTS = "voice_tts_enabled";
 const LS_STT_AUTOSEND = "voice_stt_autosend";
