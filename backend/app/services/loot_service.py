@@ -837,9 +837,12 @@ def grant_loot_to_character(
     src = str(source or "loot").strip() or "loot"
     granted: list[dict] = []
     with _conn() as conn:
-        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        ch = conn.execute(
+            "SELECT id, campaign_id FROM characters WHERE id = ?", (cid,)
+        ).fetchone()
         if not ch:
             raise ValueError("character not found")
+        _camp_id = int(ch["campaign_id"] or 0)
 
         # U25 (#575): boss-drop pity — decide once whether this kill forces an affix.
         force_affix = False
@@ -852,6 +855,29 @@ def grant_loot_to_character(
             if not isinstance(raw, dict):
                 continue
             qty = max(1, int(raw.get("quantity") or 1))
+
+            # #1196 D6: treasure-map carriers are intercepted into world_treasures /
+            # character_map_fragments instead of leaving a dead inventory row.
+            _raw_key = str(
+                raw.get("weapon_key") or raw.get("item_key") or raw.get("consumable_key") or ""
+            ).strip()
+            if _raw_key:
+                from app.services import treasure_service
+                if treasure_service.is_treasure_map_key(_raw_key):
+                    prog = treasure_service.grant_map_item(
+                        conn, cid, _camp_id, _raw_key, source=src
+                    )
+                    if prog is not None:
+                        granted.append({
+                            "label": prog.get("map_label") or "Mapa skarbu",
+                            "item_type": "treasure_map",
+                            "quantity": 1,
+                            "source": src,
+                            "key": _raw_key,
+                            "map_progress": prog,
+                        })
+                    continue
+
             cat = _catalog_entry(conn, raw)
             if not cat:
                 logger.warning("loot_catalog_key_missing", character_id=cid, loot_item=raw)

@@ -6134,6 +6134,155 @@ def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
         logger.warning("rumor_schema_skipped", error=str(e))
 
 
+def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
+    """#1196 E1 — Mapy skarbów: treasure records + per-character map fragments.
+
+    `world_treasures` = one row per map/treasure (identity = id/map_key, NOT name,
+    per D5). `total_parts=1` means the whole map is granted at once (D6). Loot is
+    frozen on completion (D3) and scales with total_parts (D7). Carrier items use
+    item_type='treasure_map' so grant_loot_to_character can intercept them into
+    these tables instead of leaving a dead inventory row. Idempotent.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS world_treasures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                map_key TEXT,
+                label TEXT,
+                hex_q INTEGER NOT NULL,
+                hex_r INTEGER NOT NULL,
+                map_level INTEGER NOT NULL DEFAULT 0,
+                region TEXT,
+                loot_table_key TEXT,
+                loot_snapshot_json TEXT,
+                gold_snapshot INTEGER NOT NULL DEFAULT 0,
+                gold_bonus INTEGER NOT NULL DEFAULT 0,
+                guardian_enemy_key TEXT,
+                dc INTEGER NOT NULL DEFAULT 12,
+                total_parts INTEGER NOT NULL DEFAULT 1,
+                loot_tier_bonus INTEGER NOT NULL DEFAULT 0,
+                gold_mult REAL NOT NULL DEFAULT 1.0,
+                extra_loot_rolls INTEGER NOT NULL DEFAULT 0,
+                character_id INTEGER,
+                campaign_id INTEGER,
+                state TEXT NOT NULL DEFAULT 'buried',
+                created_by TEXT NOT NULL DEFAULT 'generated',
+                created_at TEXT DEFAULT (datetime('now')),
+                found_at TEXT,
+                found_by_character_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_hex "
+            "ON world_treasures(hex_q, hex_r, map_level)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_char "
+            "ON world_treasures(character_id, state)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_mapkey "
+            "ON world_treasures(map_key, character_id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_map_fragments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                campaign_id INTEGER,
+                treasure_id INTEGER NOT NULL,
+                part_no INTEGER NOT NULL,
+                acquired_at TEXT DEFAULT (datetime('now')),
+                source TEXT DEFAULT 'loot',
+                UNIQUE(character_id, treasure_id, part_no)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_char_map_fragments "
+            "ON character_map_fragments(character_id, treasure_id)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_schema_skipped", error=str(e))
+
+    # Carrier catalog items (item_type='treasure_map' triggers grant interception).
+    try:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_items
+                (key, label, item_type, description, value_gp, weight, is_active,
+                 approved, review_status, created_by)
+            VALUES
+                ('fragment_mapy_skarbow', 'Fragment mapy skarbów', 'treasure_map',
+                 'Postrzępiony skrawek mapy. Sam w sobie bezużyteczny — dopiero w komplecie zdradza, gdzie ukryto skarb.',
+                 0, 0, 1, 1, 'permanent', 'seed')
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_items
+                (key, label, item_type, description, value_gp, weight, is_active,
+                 approved, review_status, created_by)
+            VALUES
+                ('treasure_map', 'Mapa skarbu', 'treasure_map',
+                 'Wytarta mapa z zaznaczonym X. Prowadzi do ukrytego skarbu gdzieś w świecie.',
+                 0, 0, 1, 1, 'permanent', 'seed')
+            """
+        )
+        # Existing treasure_map row may still be item_type='quest' — flip it so the
+        # grant interception fires (fixes [SBX-SCN] #1196: unclickable dead item).
+        conn.execute(
+            "UPDATE game_config_items SET item_type='treasure_map' "
+            "WHERE key IN ('treasure_map','fragment_mapy_skarbow')"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_carrier_seed_skipped", error=str(e))
+
+    # Unified catalog mirror (game_items.kind) so _catalog_entry resolves cleanly.
+    try:
+        conn.execute(
+            "UPDATE game_items SET kind='treasure_map' "
+            "WHERE key IN ('treasure_map','fragment_mapy_skarbow')"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        msg = str(e).lower()
+        if "no such table" not in msg and "no such column" not in msg:
+            logger.warning("treasure_game_items_kind_skipped", error=str(e))
+
+    # Seed the generic fragment into a handful of non-boss enemy loot tables so it
+    # drops during normal play (weight 4 = ~4%). Idempotent via NOT-present guard.
+    try:
+        tables = conn.execute(
+            """
+            SELECT t.key FROM game_config_loot_tables t
+            JOIN game_config_enemies e ON e.loot_table_key = t.key
+            WHERE t.is_active = 1 AND COALESCE(e.is_boss, 0) = 0
+              AND t.key NOT IN (
+                SELECT loot_table_key FROM game_config_loot_entries
+                WHERE item_key = 'fragment_mapy_skarbow'
+              )
+            ORDER BY t.key ASC LIMIT 20
+            """
+        ).fetchall()
+        for row in tables:
+            conn.execute(
+                """
+                INSERT INTO game_config_loot_entries
+                    (loot_table_key, item_key, weight, qty_min, qty_max, game_item_key)
+                VALUES (?, 'fragment_mapy_skarbow', 4, 1, 1, 'fragment_mapy_skarbow')
+                """,
+                (row["key"],),
+            )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_loot_seed_skipped", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6293,6 +6442,7 @@ def run_admin_migrations() -> None:
         _drop_legacy_content_columns_1202(conn)  # #1202 B — DEV↔PROD schema align
         _ensure_bestiary_schema(conn)  # #1191 E1 — Bestiariusz kill counters
         _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
+        _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
