@@ -621,7 +621,7 @@ def get_treasure_maps(conn: sqlite3.Connection, character_id: int) -> dict:
         rows = conn.execute(
             """
             SELECT wt.id, wt.label, wt.total_parts, wt.state, wt.hex_q, wt.hex_r,
-                   wt.region,
+                   wt.region, wt.campaign_id,
                    (SELECT COUNT(*) FROM character_map_fragments f
                     WHERE f.treasure_id = wt.id AND f.character_id = ?) AS collected
             FROM world_treasures wt
@@ -650,6 +650,13 @@ def get_treasure_maps(conn: sqlite3.Connection, character_id: int) -> dict:
         if complete and r["state"] == "buried":
             entry["hex"] = {"q": int(r["hex_q"]), "r": int(r["hex_r"])}
             entry["region"] = r["region"]
+            # distance from the hero's position — the map view centres on the
+            # treasure, so without this the goal can look deceptively close.
+            cur = _current_hex(conn, int(r["campaign_id"] or 0))
+            if cur is not None:
+                entry["distance_hexes"] = _hexdist(
+                    cur, (int(r["hex_q"]), int(r["hex_r"]))
+                )
         maps.append(entry)
     return {"maps": maps}
 

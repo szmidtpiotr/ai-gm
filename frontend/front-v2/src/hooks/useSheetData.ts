@@ -29,6 +29,9 @@ export interface TreasureMapRow {
   state: string;
   hex?: { q: number; r: number };
   region?: string;
+  /** Dystans w heksach od pozycji bohatera (mapa centruje na celu — bez tego cel
+   *  wygląda myląco blisko). */
+  distance_hexes?: number;
 }
 
 /** GET /characters/{id}/treasure-maps → mapy skarbów bohatera (#1196). */

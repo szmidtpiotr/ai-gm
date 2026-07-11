@@ -454,6 +454,9 @@ function TreasureMapsSection({ characterId }: { characterId: number | undefined 
                   <span className="text-[11px] text-[#f2c14e]">
                     Cel: heks {m.hex.q},{m.hex.r}
                     {m.region ? ` — ${m.region}` : ""}
+                    {typeof m.distance_hexes === "number"
+                      ? ` · ${m.distance_hexes} heks${m.distance_hexes === 1 ? "" : "ów"} drogi`
+                      : ""}
                   </span>
                 ) : (
                   <span className="text-[11px] text-emerald-400">Kompletna</span>
