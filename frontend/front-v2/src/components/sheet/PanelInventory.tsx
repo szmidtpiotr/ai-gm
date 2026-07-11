@@ -32,7 +32,9 @@ import {
   useInventoryDetail,
   useUseItem,
   useDropItem,
+  useTreasureMaps,
   type InventoryItemDetail,
+  type TreasureMapRow,
 } from "@/hooks/useSheetData";
 
 // ── Stacking identycznych itemów ─────────────────────────────────────────────
@@ -230,6 +232,7 @@ export function PanelInventory({
           {bag.lore.length > 0 && (
             <LoreSection items={bag.lore} onSelect={setSelectedId} onDrop={handleDrop} />
           )}
+          <TreasureMapsSection characterId={characterId} />
         </section>
       </PanelScroll>
 
@@ -413,6 +416,45 @@ function loreCatKey(it: InventoryItem): string {
   if (LORE_SUBCATS[2].test.test(lab)) return "keys";
   if (it.item_type === "quest") return "quest";
   return "misc";
+}
+
+// #1196 — Mapy skarbów: zbierane fragmenty i kompletne mapy (osobne źródło,
+// nie plecak — grant przechwytywany do treasure-tabel). Licznik per treasure_id.
+function TreasureMapsSection({ characterId }: { characterId: number | undefined }) {
+  const { data: maps } = useTreasureMaps(characterId);
+  if (!maps || maps.length === 0) return null;
+  return (
+    <div className="mb-4 mt-3">
+      <div className="mb-1.5 font-ui text-[10px] font-semibold uppercase tracking-[.12em] text-[#f2c14e]">
+        Mapy skarbów
+      </div>
+      <div className="flex flex-col gap-1">
+        {maps.map((m: TreasureMapRow) => (
+          <div
+            key={m.treasure_id}
+            className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
+          >
+            <span className="font-bold text-[#f2c14e]">✕</span>
+            <span className="flex-1 text-sm text-text-1">{m.map_label}</span>
+            {m.complete ? (
+              m.hex ? (
+                <span className="text-[11px] text-[#f2c14e]">
+                  Cel: heks {m.hex.q},{m.hex.r}
+                  {m.region ? ` — ${m.region}` : ""}
+                </span>
+              ) : (
+                <span className="text-[11px] text-emerald-400">Kompletna</span>
+              )
+            ) : (
+              <span className="text-[11px] text-text-3">
+                {m.collected}/{m.total_parts} części
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function LoreSection({ items, onSelect, onDrop }: { items: InventoryItem[]; onSelect: (id: number) => void; onDrop: (id: number) => void }) {

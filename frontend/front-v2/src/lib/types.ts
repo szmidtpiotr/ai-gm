@@ -244,6 +244,8 @@ export interface WorldHex {
   is_poi?: boolean;
   is_quest?: boolean;
   has_note?: boolean;
+  // #1196 — hex holds this hero's completed, still-buried treasure map (✕ marker).
+  is_treasure?: boolean;
 }
 
 export interface HexTypeCfg {

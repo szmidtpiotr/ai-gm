@@ -15,6 +15,7 @@ import {
   Star,
   Sun,
   X,
+  XCircle,
 } from "@phosphor-icons/react";
 import {
   useCampaignClock,
@@ -594,6 +595,7 @@ function HexTile({
   // Bez tego heks z lokacją wyglądał jak zwykły teren (world_hexes.label = NULL).
   const isPoi = (hex.is_poi ?? isNamed) && (discovered || known);
   const isQuest = !!hex.is_quest;
+  const isTreasure = !!hex.is_treasure; // #1196 — nieodkryty skarb na tym heksie
 
   const Icon = terrainIcon(hex.hex_type);
   const iconColor = isCurrent
@@ -662,6 +664,14 @@ function HexTile({
         <foreignObject x={x - 8} y={y - 27} width={16} height={16} style={{ pointerEvents: "none" }}>
           <div className="flex h-full w-full items-center justify-center">
             <Star size={14} color="var(--ember-glow)" weight="fill" />
+          </div>
+        </foreignObject>
+      )}
+      {/* #1196 — znacznik nieodkrytego skarbu: wyraźny ✕ nad heksem */}
+      {isTreasure && (
+        <foreignObject x={x - 11} y={y - 30} width={22} height={22} style={{ pointerEvents: "none" }}>
+          <div className="flex h-full w-full items-center justify-center animate-pulse">
+            <XCircle size={19} color="#f2c14e" weight="fill" />
           </div>
         </foreignObject>
       )}

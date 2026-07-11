@@ -20,6 +20,28 @@ export function useInventory(characterId: number | undefined) {
   });
 }
 
+export interface TreasureMapRow {
+  treasure_id: number;
+  map_label: string;
+  collected: number;
+  total_parts: number;
+  complete: boolean;
+  state: string;
+  hex?: { q: number; r: number };
+  region?: string;
+}
+
+/** GET /characters/{id}/treasure-maps → mapy skarbów bohatera (#1196). */
+export function useTreasureMaps(characterId: number | undefined) {
+  return useQuery({
+    queryKey: ["treasure-maps", characterId],
+    enabled: !!characterId,
+    queryFn: () =>
+      apiFetch<{ maps: TreasureMapRow[] }>(`/characters/${characterId}/treasure-maps`),
+    select: (d) => d.maps ?? [],
+  });
+}
+
 /** GET /characters/{id}/spells → znane czary (z rangą). */
 export function useSpells(characterId: number | undefined) {
   return useQuery({
