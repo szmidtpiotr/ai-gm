@@ -1225,6 +1225,19 @@ def get_character_atlas(character_id: int):
     return atlas_service.get_atlas(character_id)
 
 
+@router.get("/characters/{character_id}/treasure-maps")
+def get_character_treasure_maps(character_id: int):
+    """#1196 — treasure maps / fragments the hero is collecting (per treasure_id)."""
+    from app.services import treasure_service
+    import sqlite3
+    conn = sqlite3.connect(treasure_service.TREASURE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return treasure_service.get_treasure_maps(conn, character_id)
+    finally:
+        conn.close()
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.

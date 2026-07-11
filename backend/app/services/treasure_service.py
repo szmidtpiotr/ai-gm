@@ -37,6 +37,7 @@ _AUTHORED_PREFIX = "tm_"
 DEFAULT_GENERIC_PARTS = 3
 DEFAULT_DIG_DC = 12
 GUARDIAN_CHANCE = 0.5
+DIG_SKILL_KEY = "investigation"  # Dochodzenie — przeszukanie skrytki
 
 
 def _conn() -> sqlite3.Connection:
@@ -211,7 +212,7 @@ def _pick_loot_table(conn: sqlite3.Connection, region: str | None) -> Optional[s
             """
             SELECT t.key FROM game_config_loot_tables t
             JOIN game_config_enemies e ON e.loot_table_key = t.key
-            WHERE t.is_active = 1 AND COALESCE(e.is_boss, 0) = 0
+            WHERE t.is_active = 1 AND COALESCE(e.tier, 'standard') != 'boss'
             """
         ).fetchall()
     except sqlite3.OperationalError:
@@ -237,7 +238,7 @@ def _pick_guardian(conn: sqlite3.Connection, encounter_pool: str | None,
         return random.choice(pool)
     try:
         rows = conn.execute(
-            "SELECT key FROM game_config_enemies WHERE COALESCE(is_boss,0)=0 "
+            "SELECT key FROM game_config_enemies WHERE COALESCE(tier,'standard')!='boss' "
             "AND is_active = 1 ORDER BY RANDOM() LIMIT 1"
         ).fetchall()
     except sqlite3.OperationalError:
@@ -567,7 +568,7 @@ def attempt_dig(conn: sqlite3.Connection, campaign_id: int, character_id: int) -
         "eligible": True,
         "treasure_id": int(t["id"]),
         "dc": int(t["dc"] or DEFAULT_DIG_DC),
-        "skill_key": "percepcja",
+        "skill_key": DIG_SKILL_KEY,
     }
 
 

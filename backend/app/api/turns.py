@@ -2592,6 +2592,55 @@ def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: s
     return {"route": "services_shortcut", "open_services": loc_key, "prose": None}
 
 
+_DIG_INTENT_RE = re.compile(
+    r"\b(kopi[eę]|wykopuj[eę]|odkopuj[eę]|rozkopuj[eę]|przekopuj[eę]|"
+    r"szukam\s+(skrytk|schowk|skarb)|przeszukuj[eę]\s+(skrytk|schowk|ziemi))",
+    re.IGNORECASE,
+)
+
+
+def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
+                        text: str) -> dict | None:
+    """#1196 D4 — deterministic pre-LLM dig action. When the hero stands on a hex
+    holding their completed treasure map and writes a dig/search intent, issue a
+    server-committed search test (investigation). Otherwise fall through so the
+    player can 'dig' narratively anywhere with no cache.
+    """
+    if not text or not _DIG_INTENT_RE.search(text):
+        return None
+    from app.services import treasure_service
+    dig = treasure_service.attempt_dig(conn, campaign_id, int(character["id"]))
+    if not dig.get("eligible"):
+        return None
+    from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+    from app.services.turn.turn_skill_router import _commit_pending_skill_test
+    sk = dig["skill_key"]
+    char_sheet = json.loads(character["sheet_json"] or "{}")
+    mod_info = calc_skill_modifier_info(char_sheet, sk, conn=conn, character_id=int(character["id"]))
+    pending = {
+        "skill_test_id": f"st-{uuid.uuid4().hex[:8]}",
+        "skill_key": sk,
+        "skill_label": _skill_label(sk),
+        "counter": _get_counter(conn, sk),
+        "modifier_breakdown": mod_info,
+        "dc": int(dig["dc"]),
+        "source": "treasure_dig",
+        "treasure_id": int(dig["treasure_id"]),
+    }
+    gs_row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    _sf = json.loads(gs_row["session_flags"] or "{}") if gs_row else {}
+    _sf = _commit_pending_skill_test(pending, _sf)
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(_sf, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    return {"skill_test_pending": pending, "prose": None, "route": "skill_test"}
+
+
 def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
     """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
     if current_key:
@@ -5671,10 +5720,25 @@ def create_turn(
                 turn_id=turn_id,
             )
 
+        # #1196 — pay out a treasure whose guardian has just been defeated
+        # (guarded dig spawns combat; loot is granted once that fight ends).
+        try:
+            from app.services import treasure_service as _tsv_pre
+            from app.services.combat_service import get_active_combat as _gac_pre
+            if _gac_pre(campaign_id) is None:
+                _tsv_pre.consume_pending_treasure_loot(conn, campaign_id, payload.character_id)
+        except Exception:
+            pass
+
         if not roll_request:
             _svc_shortcut = _maybe_services_shortcut(conn, campaign_id, text)
             if _svc_shortcut is not None:
                 return _svc_shortcut
+
+            # #1196 D4 — deterministic dig action (treasure map) before LLM.
+            _dig = _maybe_dig_shortcut(conn, campaign_id, character, text)
+            if _dig is not None:
+                return _with_turn_trace(_dig, turn_id)
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
@@ -7814,6 +7878,20 @@ def resolve_skill_test_endpoint(
         session_flags.pop("pending_skill_test", None)
         session_flags["state"] = "NARRATIVE"
 
+        # #1196 D4 — treasure dig test resolved. On success, pay out the frozen
+        # loot (or spawn the guardian fight). Failure = the cache stays buried.
+        _treasure_reward = None
+        if str(pending.get("source", "")).lower() == "treasure_dig" and \
+                result.get("success") and not result.get("nat1"):
+            try:
+                from app.services import treasure_service as _tsv
+                _treasure_reward = _tsv.resolve_dig_success(
+                    conn, campaign_id, int(payload.character_id),
+                    int(pending.get("treasure_id") or 0),
+                )
+            except Exception as _tderr:
+                logger.warning("treasure_dig_resolve_error", error=str(_tderr))
+
         # S11 (#606): nieudany test z aktywnym `inspired` → stash kontekstu pod przerzut
         # gracza (keep-best). Endpoint /skill-test/reroll rzuca nowy serwerowy d20.
         if result.get("reroll_available"):
@@ -8187,6 +8265,8 @@ def resolve_skill_test_endpoint(
         }
         if _adv_gate:
             _resp["advantage_gate"] = _adv_gate
+        if _treasure_reward:
+            _resp["treasure_reward"] = _treasure_reward
         return _resp
     finally:
         conn.close()
@@ -8547,6 +8627,23 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         except Exception:
             pass
 
+        # #1196 — hexes holding this hero's completed, still-buried treasure map.
+        treasure_coords: set = set()
+        try:
+            _tchar = int(character_id or 0)
+            if _tchar <= 0:
+                _crow = conn.execute(
+                    "SELECT id FROM characters WHERE campaign_id = ? ORDER BY id LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                _tchar = int(_crow["id"]) if _crow else 0
+            if _tchar > 0:
+                from app.services import treasure_service as _tsv_map
+                for _th in _tsv_map.get_treasure_hexes_for_map(conn, _tchar):
+                    treasure_coords.add((int(_th["q"]), int(_th["r"])))
+        except Exception as _tre_err:
+            logger.warning("treasure_map_flag_error", error=str(_tre_err))
+
         # Build result: discovered hexes + adjacent outlines
         result_hexes = []
         outline_coords = set()
@@ -8565,6 +8662,7 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "is_poi": bool(_lk),
                 "is_quest": bool(_lk and _lk in quest_targets),
                 "has_note": bool(cd.get("campaign_label")),
+                "is_treasure": coord in treasure_coords,
             }
             result_hexes.append(h)
             # Build adjacent unvisited outlines (known hexes render as 'known', not outline)

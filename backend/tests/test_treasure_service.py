@@ -46,7 +46,7 @@ def _make_db() -> sqlite3.Connection:
             qty_max INTEGER, game_item_key TEXT
         );
         CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, is_boss INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
+            key TEXT PRIMARY KEY, tier TEXT DEFAULT 'standard', is_active INTEGER DEFAULT 1,
             loot_table_key TEXT
         );
         CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT);
@@ -63,8 +63,8 @@ def _make_db() -> sqlite3.Connection:
                  "VALUES ('loot_goblin',1,10,10)")
     conn.execute("INSERT INTO game_config_loot_entries (loot_table_key,item_key,weight,qty_min,qty_max) "
                  "VALUES ('loot_goblin','ruda_zelaza',100,1,1)")
-    conn.execute("INSERT INTO game_config_enemies (key,is_boss,is_active,loot_table_key) "
-                 "VALUES ('goblin',0,1,'loot_goblin')")
+    conn.execute("INSERT INTO game_config_enemies (key,tier,is_active,loot_table_key) "
+                 "VALUES ('goblin','weak',1,'loot_goblin')")
     conn.execute("INSERT INTO characters (id,campaign_id,gold) VALUES (900,7,0)")
     conn.execute("INSERT INTO game_sessions (campaign_id,session_flags) VALUES (7,?)",
                  (json.dumps({"current_hex": {"q": 5, "r": 5}}),))
@@ -143,7 +143,7 @@ def test_attempt_dig_gating():
     conn.commit()
     res = ts.attempt_dig(conn, 7, 900)
     assert res["eligible"] is True
-    assert res["skill_key"] == "percepcja"
+    assert res["skill_key"] == ts.DIG_SKILL_KEY
     assert res["dc"] == ts.DEFAULT_DIG_DC
 
 

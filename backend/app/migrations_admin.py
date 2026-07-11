@@ -6209,27 +6209,29 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
         logger.warning("treasure_schema_skipped", error=str(e))
 
     # Carrier catalog items (item_type='treasure_map' triggers grant interception).
+    # NOTE: detection is key-based (is_treasure_map_key), so game_items.kind stays a
+    # valid enum ('item') — we do NOT touch it (CHECK constraint forbids new values).
     try:
         conn.execute(
             """
             INSERT OR IGNORE INTO game_config_items
-                (key, label, item_type, description, value_gp, weight, is_active,
-                 approved, review_status, created_by)
+                (key, label, item_type, description, value_gp, is_active,
+                 approved, review_status)
             VALUES
                 ('fragment_mapy_skarbow', 'Fragment mapy skarbów', 'treasure_map',
                  'Postrzępiony skrawek mapy. Sam w sobie bezużyteczny — dopiero w komplecie zdradza, gdzie ukryto skarb.',
-                 0, 0, 1, 1, 'permanent', 'seed')
+                 0, 1, 1, 'permanent')
             """
         )
         conn.execute(
             """
             INSERT OR IGNORE INTO game_config_items
-                (key, label, item_type, description, value_gp, weight, is_active,
-                 approved, review_status, created_by)
+                (key, label, item_type, description, value_gp, is_active,
+                 approved, review_status)
             VALUES
                 ('treasure_map', 'Mapa skarbu', 'treasure_map',
                  'Wytarta mapa z zaznaczonym X. Prowadzi do ukrytego skarbu gdzieś w świecie.',
-                 0, 0, 1, 1, 'permanent', 'seed')
+                 0, 1, 1, 'permanent')
             """
         )
         # Existing treasure_map row may still be item_type='quest' — flip it so the
@@ -6242,18 +6244,6 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError as e:
         logger.warning("treasure_carrier_seed_skipped", error=str(e))
 
-    # Unified catalog mirror (game_items.kind) so _catalog_entry resolves cleanly.
-    try:
-        conn.execute(
-            "UPDATE game_items SET kind='treasure_map' "
-            "WHERE key IN ('treasure_map','fragment_mapy_skarbow')"
-        )
-        conn.commit()
-    except sqlite3.OperationalError as e:
-        msg = str(e).lower()
-        if "no such table" not in msg and "no such column" not in msg:
-            logger.warning("treasure_game_items_kind_skipped", error=str(e))
-
     # Seed the generic fragment into a handful of non-boss enemy loot tables so it
     # drops during normal play (weight 4 = ~4%). Idempotent via NOT-present guard.
     try:
@@ -6261,7 +6251,7 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
             """
             SELECT t.key FROM game_config_loot_tables t
             JOIN game_config_enemies e ON e.loot_table_key = t.key
-            WHERE t.is_active = 1 AND COALESCE(e.is_boss, 0) = 0
+            WHERE t.is_active = 1 AND COALESCE(e.tier, 'standard') != 'boss'
               AND t.key NOT IN (
                 SELECT loot_table_key FROM game_config_loot_entries
                 WHERE item_key = 'fragment_mapy_skarbow'
