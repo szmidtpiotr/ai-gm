@@ -296,6 +296,7 @@ def list_campaigns():
             c.status,
             c.created_at,
             c.gm_plan_json,
+            c.is_tutorial,
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
             (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id,
             (SELECT ch.status FROM characters ch WHERE ch.campaign_id = c.id AND ch.status IN ('dead', 'in_campaign') LIMIT 1) AS hero_status
@@ -348,6 +349,8 @@ def list_campaigns():
                 plan_ready = bool(title or premise or roadmap)
         item["description"] = description
         item["plan_ready"] = plan_ready
+        # #1080 — expose tutorial flag so ŻAR can badge + show "skip" button.
+        item["is_tutorial"] = bool(item.get("is_tutorial"))
         # E5 (#420) — mark campaigns with dead heroes as blocked
         hero_status = item.get("hero_status")
         item["hero_blocked"] = hero_status == "dead"
@@ -876,6 +879,122 @@ def create_campaign(req: CampaignCreateRequest):
     # clears the UI automatically because the campaign_id changes.
     # The backend does not maintain an in-memory chat state.
     return out
+
+
+# #1080 — hidden tutorial template, seeded via data/seeds/content/campaign_templates.json
+# (status='published', player_visible=0). Looked up by title+created_by so the
+# onboarding launch never depends on a hardcoded numeric id.
+ONBOARDING_TEMPLATE_TITLE = "Pierwsze Kroki"
+
+
+class OnboardingStartRequest(BaseModel):
+    character_id: int
+    user_id: int | None = None
+
+
+@router.post("/onboarding/start")
+def start_onboarding(req: OnboardingStartRequest, authorization: str | None = Header(default=None)):
+    """#1080 — launch the hidden tutorial campaign for a brand-new player.
+
+    ŻAR calls this right after the first hero is finalized, but only when the user
+    has zero campaigns. The COUNT gate makes it self-guarding: any existing
+    campaign (active, archived tutorial, whatever) → 409, so an established player
+    is never onboarded twice. Reuses the normal template-launch + hero-assign path.
+    """
+    user_id = resolve_authed_user_id(authorization, req.user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        hero = conn.execute(
+            "SELECT id, user_id FROM characters WHERE id = ? AND is_active = 1",
+            (req.character_id,),
+        ).fetchone()
+        if not hero or int(hero["user_id"]) != int(user_id):
+            raise HTTPException(status_code=404, detail="Bohater nie znaleziony lub nie należy do ciebie")
+
+        existing = conn.execute(
+            "SELECT COUNT(*) FROM campaigns WHERE owner_user_id = ?",
+            (user_id,),
+        ).fetchone()[0]
+        if existing:
+            raise HTTPException(status_code=409, detail="Gracz ma już kampanię — onboarding pomijany")
+
+        tpl = conn.execute(
+            "SELECT id FROM campaign_templates "
+            "WHERE title = ? AND created_by = 'seed' AND status = 'published' LIMIT 1",
+            (ONBOARDING_TEMPLATE_TITLE,),
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Szablon onboardingu nie jest zaseedowany")
+        template_id = int(tpl["id"])
+    finally:
+        conn.close()
+
+    # Reuse the full launch (copies plan, stamps source_template_id, seeds narrative
+    # state) + assign (session, starting hex, HP reset). Each opens its own conn.
+    created = create_campaign(CampaignCreateRequest(
+        title="Wprowadzenie — Pierwsze Kroki",
+        system_id="fantasy",
+        model_id="default",
+        owner_user_id=int(user_id),
+        language="pl",
+        mode="solo",
+        status="active",
+        template_id=template_id,
+        is_tutorial=True,
+    ))
+    campaign_id = int(created["id"])
+
+    from app.api.characters import assign_hero_to_campaign
+    assign_hero_to_campaign(req.character_id, {"campaign_id": campaign_id, "user_id": int(user_id)})
+
+    logger.info("onboarding_started", user_id=int(user_id),
+                character_id=int(req.character_id), campaign_id=campaign_id)
+    return {"ok": True, "campaign_id": campaign_id}
+
+
+@router.post("/campaigns/{campaign_id}/skip-tutorial")
+def skip_tutorial(
+    campaign_id: int,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
+    """#1080 — abandon the tutorial campaign. Archives it (KEEPS the row so the
+    onboarding COUNT gate never re-fires) and frees the hero (Hero-First:
+    campaign_id=NULL, status='idle') so the player drops into normal campaign choice.
+    """
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id, owner_user_id, is_tutorial FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Kampania nie znaleziona")
+        if int(row["owner_user_id"]) != int(uid):
+            raise HTTPException(status_code=403, detail="To nie twoja kampania")
+        if not row["is_tutorial"]:
+            raise HTTPException(status_code=409, detail="To nie jest kampania samouczka")
+
+        conn.execute("BEGIN")
+        conn.execute(
+            "UPDATE campaigns SET status = 'archived', ended_at = datetime('now') WHERE id = ?",
+            (campaign_id,),
+        )
+        conn.execute(
+            "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE campaign_id = ?",
+            (campaign_id,),
+        )
+        conn.commit()
+        logger.info("onboarding_skipped", user_id=int(uid), campaign_id=campaign_id)
+        return {"ok": True, "campaign_id": campaign_id}
+    except HTTPException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @router.post("/campaigns/{campaign_id}/reset")

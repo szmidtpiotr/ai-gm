@@ -42,6 +42,8 @@ export interface Campaign {
   description: string;
   plan_ready: boolean;
   hero_blocked: boolean;
+  /** #1080 — hidden onboarding tutorial campaign (badge + "skip" button). */
+  is_tutorial?: boolean;
   hero_status?: string | null;
   /** Only present on the single-campaign detail endpoint (owner view). */
   gm_plan_json?: string | null;

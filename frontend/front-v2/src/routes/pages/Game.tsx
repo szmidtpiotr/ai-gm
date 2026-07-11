@@ -125,6 +125,9 @@ export default function Game() {
     !!campaign.data?.finale_available &&
     (!isMp || campaign.data?.host_user_id == null || campaign.data?.host_user_id === currentUser?.id);
 
+  // #1080 — is this the onboarding tutorial? (flag lives on the list endpoint)
+  const isTutorial = !!campaigns.data?.find((c) => c.id === campaignId)?.is_tutorial;
+
   // Zsynchronizuj store, by topbar/tabbar mogły czytać zegar/quest/HP.
   useEffect(() => {
     if (campaignId) setCampaign(campaignId);
@@ -572,7 +575,7 @@ export default function Game() {
       )}
 
       {/* FE18/FE19 (#1267/#1268): menu ☰ (głos + finał) + bramka finału (modal/zwycięstwo). */}
-      <GameMenu finaleAllowed={finaleAllowed} />
+      <GameMenu finaleAllowed={finaleAllowed} isTutorial={isTutorial} campaignId={campaignId} />
       <FinaleFlow
         campaignId={campaignId!}
         heroId={characterId}

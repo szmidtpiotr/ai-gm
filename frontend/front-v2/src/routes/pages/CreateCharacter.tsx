@@ -19,7 +19,9 @@ import {
   useCreateCharacter,
   useGenerateIdentity,
   useFinalizeSheet,
+  useCampaigns,
 } from "@/hooks/useGameData";
+import { apiFetch } from "@/lib/api";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -86,6 +88,7 @@ export default function CreateCharacter() {
   const user = useAppStore((s) => s.currentUser);
   const currentCampaignId = useAppStore((s) => s.currentCampaignId);
   const setHero = useAppStore((s) => s.setHero);
+  const { data: campaigns } = useCampaigns();
 
   const createChar = useCreateCharacter();
   const genIdentity = useGenerateIdentity();
@@ -249,6 +252,26 @@ export default function CreateCharacter() {
 
     setHero(hero.id);
     toast(`Bohater ${hero.name} gotowy!`, "success");
+
+    // #1080 — brand-new player (no pre-selected campaign, owns zero campaigns) →
+    // auto-launch the hidden onboarding tutorial and drop straight into it.
+    // Any failure falls through to normal navigation — never block hero creation.
+    if (!currentCampaignId && user?.id) {
+      const mine = (campaigns ?? []).filter((c) => c.owner_user_id === user.id);
+      if (mine.length === 0) {
+        try {
+          const res = await apiFetch<{ ok: boolean; campaign_id: number }>(
+            "/onboarding/start",
+            { method: "POST", body: { character_id: hero.id, user_id: user.id } },
+          );
+          navigate(`/gra/${res.campaign_id}`);
+          return;
+        } catch {
+          // fall through to standard navigation below
+        }
+      }
+    }
+
     if (currentCampaignId) navigate(`/gra/${currentCampaignId}`);
     else navigate(`/bohaterowie/${hero.id}/kampanie`);
   }

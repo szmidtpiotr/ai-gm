@@ -1,17 +1,25 @@
 // FE18/FE19 (#1267/#1268) — menu ☰ ekranu gry.
 // Ustawienia: dymki, walka, głos (TTS/STT), bramka finału + strefa admina.
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   X, SpeakerHigh, Microphone, Flag, ChatTeardropText, Sword, Skull,
-  CheckCircle, XCircle, Question, SignOut, Cube,
+  CheckCircle, XCircle, Question, SignOut, Cube, FastForward,
 } from "@phosphor-icons/react";
 import { useAppStore, type GamePrefKey } from "@/store/appStore";
 import { useVoice } from "@/hooks/useVoice";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
+export function GameMenu({
+  finaleAllowed,
+  isTutorial = false,
+  campaignId,
+}: {
+  finaleAllowed: boolean;
+  isTutorial?: boolean;
+  campaignId?: number;
+}) {
   const open = useAppStore((s) => s.gameMenuOpen);
   const close = useAppStore((s) => s.closeGameMenu);
   const setFinishFlow = useAppStore((s) => s.setFinishFlow);
@@ -19,8 +27,27 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
   const heroId = useAppStore((s) => s.currentHeroId);
   const vs = useVoice();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   // §11: wyjście z gry → zawsze lista kampanii bieżącego bohatera (nie heroes).
   const exitTo = heroId != null ? `/bohaterowie/${heroId}/kampanie` : "/bohaterowie";
+
+  // #1080 — pomiń samouczek: archiwizuj kampanię, zwolnij bohatera, wróć do wyboru.
+  async function skipTutorial() {
+    if (campaignId == null) return;
+    if (!window.confirm("Pominąć wprowadzenie? Bohater trafi do wyboru kampanii.")) return;
+    try {
+      await apiFetch(`/campaigns/${campaignId}/skip-tutorial`, {
+        method: "POST",
+        body: { user_id: user?.id },
+      });
+    } catch {
+      // best-effort — i tak wychodzimy do listy kampanii
+    }
+    qc.invalidateQueries({ queryKey: ["campaigns"] });
+    qc.invalidateQueries({ queryKey: ["heroes"] });
+    close();
+    navigate(exitTo);
+  }
 
   if (!open) return null;
 
@@ -55,6 +82,24 @@ export function GameMenu({ finaleAllowed }: { finaleAllowed: boolean }) {
               <span className="block font-ui text-micro text-text-3">Powrót do listy kampanii</span>
             </span>
           </button>
+
+          {/* #1080 — pomiń wprowadzenie (tylko w kampanii samouczka) */}
+          {isTutorial && (
+            <button
+              type="button"
+              data-testid="menu-skip-tutorial"
+              onClick={skipTutorial}
+              className="mb-4 flex w-full items-center gap-3 rounded-md border border-line-ember bg-ember/[0.06] px-3.5 py-3 text-left transition-colors hover:border-ember"
+            >
+              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md border border-line-ember bg-bg text-ember-glow">
+                <FastForward weight="fill" size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-ui text-body font-semibold text-ember-glow">Pomiń wprowadzenie</span>
+                <span className="block font-ui text-micro text-text-3">Przejdź od razu do wyboru kampanii</span>
+              </span>
+            </button>
+          )}
 
           {/* ── Informacje w dymkach ─────────────────────────────────────── */}
           <SectionHead icon={<ChatTeardropText size={14} />}>Dymki</SectionHead>

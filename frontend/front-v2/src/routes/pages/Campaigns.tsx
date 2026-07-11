@@ -408,8 +408,15 @@ function ActiveCampaignCard({
           {brewing ? <CircleNotch className="animate-spin" /> : <PawPrint weight="fill" />}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-serif text-title font-semibold text-text">
-            {title}
+          <div className="flex items-center gap-2">
+            <span className="truncate font-serif text-title font-semibold text-text">
+              {title}
+            </span>
+            {campaign.is_tutorial && (
+              <span className="shrink-0 rounded-pill border border-line-ember bg-ember/[0.08] px-2 py-0.5 font-ui text-[9.5px] font-bold uppercase tracking-wide text-ember-glow">
+                Wprowadzenie
+              </span>
+            )}
           </div>
           <div className="mt-0.5 truncate font-ui text-micro text-text-2">{sub}</div>
         </div>
