@@ -2,7 +2,6 @@
 import json
 import random
 import sys
-from unittest.mock import patch
 
 sys.path.insert(0, "/app")
 
@@ -105,48 +104,28 @@ def test_melee_attack_legacy_key_takes_precedence():
 # ─── XP spend strict catalog check ───────────────────────────────────────────
 
 
-def _mock_catalog(keys):
-    """Return a mock config_service.get_runtime_config() that has only the given skill keys."""
-    return {"skills": [{"key": k} for k in keys]}
+# _skill_known_in_catalog validates against the LIVE game_config_skills table
+# (same source as /mechanics/skills the UI reads). Legacy dice-test names were
+# removed from that table by #1052, so they stay rejected without any mocking.
 
 
 def test_xp_catalog_rejects_melee_attack():
-    """_skill_known_in_catalog must reject melee_attack (not in catalog) — strict check."""
-    with patch(
-        "app.services.xp_service.config_service.get_runtime_config",
-        return_value=_mock_catalog(_CATALOG_KEYS),
-    ):
-        assert not xp_service._skill_known_in_catalog("melee_attack")
+    """_skill_known_in_catalog must reject melee_attack — removed from table (#1052)."""
+    assert not xp_service._skill_known_in_catalog("melee_attack")
 
 
 def test_xp_catalog_rejects_ranged_attack():
-    with patch(
-        "app.services.xp_service.config_service.get_runtime_config",
-        return_value=_mock_catalog(_CATALOG_KEYS),
-    ):
-        assert not xp_service._skill_known_in_catalog("ranged_attack")
+    assert not xp_service._skill_known_in_catalog("ranged_attack")
 
 
 def test_xp_catalog_rejects_spell_attack():
-    with patch(
-        "app.services.xp_service.config_service.get_runtime_config",
-        return_value=_mock_catalog(_CATALOG_KEYS),
-    ):
-        assert not xp_service._skill_known_in_catalog("spell_attack")
+    assert not xp_service._skill_known_in_catalog("spell_attack")
 
 
 def test_xp_catalog_accepts_attack():
-    """attack IS in catalog → allowed for XP spending."""
-    with patch(
-        "app.services.xp_service.config_service.get_runtime_config",
-        return_value=_mock_catalog(_CATALOG_KEYS),
-    ):
-        assert xp_service._skill_known_in_catalog("attack")
+    """attack IS in the game_config_skills table → allowed for XP spending."""
+    assert xp_service._skill_known_in_catalog("attack")
 
 
 def test_xp_catalog_accepts_pickpocket():
-    with patch(
-        "app.services.xp_service.config_service.get_runtime_config",
-        return_value=_mock_catalog(_CATALOG_KEYS),
-    ):
-        assert xp_service._skill_known_in_catalog("pickpocket")
+    assert xp_service._skill_known_in_catalog("pickpocket")
