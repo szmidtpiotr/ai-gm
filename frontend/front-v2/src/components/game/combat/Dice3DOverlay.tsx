@@ -90,7 +90,7 @@ export function Dice3DOverlay({
         background:
           "radial-gradient(60% 45% at 50% 38%, rgba(232,193,90,.14), transparent 62%), rgba(8,6,4,.86)",
       }}
-      onClick={() => phase === "result" && finish()}
+      onClick={() => phase === "rolling" ? setPhase("result") : finish()}
     >
       {/* scena 3D na CAŁY ekran (kanwa dice-box montuje się w #dice3d-mount) —
           kość leci przez pełny obszar, jak w starym froncie. */}
@@ -154,7 +154,7 @@ export function Dice3DOverlay({
 
         <div className="mt-3 flex items-center gap-1.5 font-ui text-[11.5px] text-text-3">
           <Cube size={13} className="text-ember" />
-          {phase === "rolling" ? "Kość leci…" : "Dotknij, aby kontynuować"}
+          {phase === "rolling" ? "Dotknij, aby pominąć" : "Dotknij, aby kontynuować"}
         </div>
       </div>
     </div>
