@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { EnvelopeOpen, CheckCircle, ArrowClockwise } from "@phosphor-icons/react";
+import { EnvelopeOpen, EnvelopeSimple, CheckCircle, ArrowClockwise } from "@phosphor-icons/react";
 import { AuthBrand } from "@/components/shell/AuthLayout";
-import { FormNotice } from "@/components/ui/field";
+import { Field, FormNotice } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { useVerifyEmail } from "@/hooks/useAuth";
 import { apiFetch, APIError } from "@/lib/api";
 
 // F-03 Weryfikacja e-mail. Z linku (?token=) auto-potwierdza; bez tokenu —
-// ekran „sprawdź skrzynkę" + ponowne wysłanie.
+// ekran „sprawdź skrzynkę" + ponowne wysłanie. #895: ponowne wysłanie idzie
+// publicznym endpointem po adresie e-mail (bez tokenu), by rozbić deadlock
+// niezweryfikowanego konta z wygasłym linkiem.
 export default function VerifyEmail() {
   const [params] = useSearchParams();
   const token = params.get("token");
@@ -16,6 +18,8 @@ export default function VerifyEmail() {
   const verify = useVerifyEmail();
   const fired = useRef(false);
   const [resent, setResent] = useState<null | "ok" | "err">(null);
+  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState(params.get("email") ?? "");
 
   useEffect(() => {
     if (token && !fired.current) {
@@ -29,15 +33,30 @@ export default function VerifyEmail() {
   }, [token, verify, navigate]);
 
   async function resend() {
+    const addr = email.trim().toLowerCase();
+    if (!addr || !addr.includes("@")) {
+      setResent("err");
+      return;
+    }
+    setBusy(true);
     try {
-      await apiFetch("/auth/resend-verification", { method: "POST" });
+      // Publiczny wariant: zawsze 200, rate-limit 120s po stronie serwera.
+      await apiFetch("/auth/resend-verification-public", {
+        method: "POST",
+        body: { email: addr },
+        anon: true,
+      });
       setResent("ok");
     } catch {
       setResent("err");
+    } finally {
+      setBusy(false);
     }
   }
 
   const err = verify.error as APIError | null;
+  // Ponowne wysłanie ma sens dopóki adres nie został właśnie potwierdzony.
+  const showResend = !verify.isSuccess;
 
   return (
     <div className="text-center">
@@ -76,17 +95,33 @@ export default function VerifyEmail() {
         )}
 
         {resent === "ok" && (
-          <FormNotice kind="success">Nowy link został wysłany.</FormNotice>
+          <FormNotice kind="success">
+            Jeśli konto wymaga weryfikacji, nowy link jest już w drodze. Sprawdź
+            skrzynkę (także spam).
+          </FormNotice>
         )}
         {resent === "err" && (
           <FormNotice kind="error">
-            Nie udało się wysłać. Zaloguj się i spróbuj ponownie.
+            Podaj poprawny adres e-mail konta, aby wysłać nowy link.
           </FormNotice>
         )}
 
-        <Button variant="secondary" onClick={resend}>
-          <ArrowClockwise size={18} /> Wyślij link ponownie
-        </Button>
+        {showResend && (
+          <>
+            <Field
+              icon={EnvelopeSimple}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="Adres e-mail konta"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Button variant="secondary" onClick={resend} disabled={busy}>
+              <ArrowClockwise size={18} /> {busy ? "Wysyłam…" : "Wyślij link ponownie"}
+            </Button>
+          </>
+        )}
 
         <Link to="/login" className="font-ui text-label text-text-3 hover:text-ember-glow">
           Wróć do logowania

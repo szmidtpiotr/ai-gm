@@ -342,6 +342,24 @@ def _expires_iso(hours: int) -> str:
     return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
+def _token_age_seconds(expires_at: str) -> float | None:
+    """Seconds since a verification token was issued.
+
+    The ``email_verification_tokens`` table has no ``created_at`` column (#895),
+    so we reconstruct the issue time from ``expires_at`` — every token is created
+    with ``expires_at = now + VERIFY_EXPIRY_HOURS``. Returns ``None`` if the stamp
+    can't be parsed (treat as "no recent token" → do not throttle).
+    """
+    try:
+        exp = datetime.fromisoformat(str(expires_at).replace(" ", "T"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        created = exp - timedelta(hours=VERIFY_EXPIRY_HOURS)
+        return (datetime.now(timezone.utc) - created).total_seconds()
+    except Exception:
+        return None
+
+
 def _is_expired(expires_at: str) -> bool:
     try:
         dt = datetime.fromisoformat(str(expires_at).replace(" ", "T"))
@@ -579,21 +597,20 @@ def resend_verification(authorization: str | None = Header(default=None)):
         if not user or user["email_verified_at"]:
             return {"ok": True, "message": "Już zweryfikowany"}
 
-        # Rate limit: 1 per 2 minutes
+        # Rate limit: 1 per 2 minutes.
+        # NOTE: the tokens table has no ``created_at`` column (#895) — derive the
+        # issue time from ``expires_at`` (created = expires − VERIFY_EXPIRY_HOURS).
         recent = conn.execute(
             """
-            SELECT created_at FROM email_verification_tokens
+            SELECT expires_at FROM email_verification_tokens
             WHERE user_id = ? AND used_at IS NULL
             ORDER BY id DESC LIMIT 1
             """,
             (user_id,),
         ).fetchone()
         if recent:
-            created = datetime.fromisoformat(str(recent["created_at"]).replace(" ", "T"))
-            if created.tzinfo is None:
-                created = created.replace(tzinfo=timezone.utc)
-            elapsed = (datetime.now(timezone.utc) - created).total_seconds()
-            if elapsed < 120:
+            elapsed = _token_age_seconds(recent["expires_at"])
+            if elapsed is not None and elapsed < 120:
                 wait = int(120 - elapsed)
                 raise HTTPException(
                     status_code=429,
@@ -611,6 +628,62 @@ def resend_verification(authorization: str | None = Header(default=None)):
         from app.services.email_service import send_verification_email
         send_verification_email(user["email"], verify_link)
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+class ResendVerificationPublicReq(BaseModel):
+    email: str
+
+
+@router.post("/auth/resend-verification-public")
+def resend_verification_public(req: ResendVerificationPublicReq):
+    """#895 — public resend of the verification link, keyed by email (no auth).
+
+    Breaks the login-gate deadlock: an onboarded, unverified user whose link expired
+    cannot log in (403 email_unverified, no token) and therefore cannot reach the
+    authenticated /auth/resend-verification. This endpoint mirrors forgot-password —
+    always returns 200 (never reveals existence), and is rate-limited 1 per 120s.
+    """
+    email = (req.email or "").strip().lower()
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        user = conn.execute(
+            "SELECT id, email, email_verified_at FROM users "
+            "WHERE LOWER(email) = ? AND is_active = 1 LIMIT 1",
+            (email,),
+        ).fetchone()
+        # Only act on a real, still-unverified account. Always 200 regardless.
+        if user and not user["email_verified_at"]:
+            user_id = int(user["id"])
+            # Rate limit: 1 per 2 minutes (shared with authenticated resend).
+            # Derive age from expires_at — no created_at column exists (#895).
+            recent = conn.execute(
+                """
+                SELECT expires_at FROM email_verification_tokens
+                WHERE user_id = ? AND used_at IS NULL
+                ORDER BY id DESC LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+            throttled = False
+            if recent:
+                elapsed = _token_age_seconds(recent["expires_at"])
+                if elapsed is not None and elapsed < 120:
+                    throttled = True
+            if not throttled:
+                token = secrets.token_hex(32)
+                conn.execute(
+                    "INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+                    (user_id, token, _expires_iso(VERIFY_EXPIRY_HOURS)),
+                )
+                conn.commit()
+                verify_link = f"{_base_url()}/graj/weryfikacja-email?token={token}"
+                from app.services.email_service import send_verification_email
+                send_verification_email(user["email"], verify_link)
+        # Always 200 — never reveal whether email exists or is already verified.
+        return {"ok": True, "message": "Jeśli konto wymaga weryfikacji, wyślemy nowy link."}
     finally:
         conn.close()
 

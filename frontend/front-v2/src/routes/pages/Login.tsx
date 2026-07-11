@@ -91,6 +91,16 @@ export default function Login() {
           </FormNotice>
         )}
 
+        {/* #895 — wyjście z deadlocku: niezweryfikowane konto może wysłać nowy link. */}
+        {err?.status === 403 && (
+          <Link
+            to={`/weryfikacja-email?email=${encodeURIComponent(username.trim())}`}
+            className="text-center font-ui text-[12.5px] font-semibold text-ember-glow hover:underline"
+          >
+            Wyślij ponownie link weryfikacyjny
+          </Link>
+        )}
+
         <Button type="submit" size="lg" className="mt-2" disabled={login.isPending}>
           <SignIn weight="fill" size={18} />
           {login.isPending ? "Wchodzę…" : "Wejdź do gry"}
