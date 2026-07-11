@@ -625,6 +625,17 @@ def maybe_treasure_arrival_hint(conn: sqlite3.Connection, campaign_id: int,
     )
 
 
+def maybe_treasure_arrival_cue(conn: sqlite3.Connection, campaign_id: int,
+                               character_id: int, q: int, r: int) -> Optional[str]:
+    """Player-facing cue appended on arriving at a hex holding their treasure (D3).
+    Nudges the player to search without revealing the exact spot."""
+    t = _complete_treasure_at(conn, character_id, q, r)
+    if not t:
+        return None
+    return ("*Wyjmujesz mapę — znak ✕ wypada właśnie tutaj. Gdzieś w pobliżu "
+            "ukryto skrytkę. Rozejrzyj się i zacznij kopać albo przeszukiwać teren.*")
+
+
 def attempt_dig(conn: sqlite3.Connection, campaign_id: int, character_id: int) -> dict:
     """Deterministic dig attempt (D4). Returns eligibility / a pending skill test."""
     cur = _current_hex(conn, campaign_id)

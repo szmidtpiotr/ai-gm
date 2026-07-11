@@ -4754,6 +4754,19 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     # Snapshot hex after location intent processing (for hex_changed signal)
     _hex_after_enc = _snapshot_hex(conn, campaign_id)
 
+    # #1196 D3 — arriving on the hero's treasure hex → append a search cue so the
+    # player knows to dig here (the deterministic dig intent then resolves it).
+    try:
+        if _hex_after_enc and _hex_after_enc != _hex_before_enc:
+            from app.services import treasure_service as _tsv_arr
+            _cue = _tsv_arr.maybe_treasure_arrival_cue(
+                conn, campaign_id, payload.character_id,
+                int(_hex_after_enc.get("q", 0)), int(_hex_after_enc.get("r", 0)))
+            if _cue:
+                assistant_text = (assistant_text or "") + "\n\n" + _cue
+    except Exception as _arr_err:
+        logger.warning("treasure_arrival_cue_error", error=str(_arr_err))
+
     # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
     _char_sh = json.loads(character["sheet_json"] or "{}")
     assistant_text, _skill_pending_narrator = _intercept_narrator_skill_tags(
