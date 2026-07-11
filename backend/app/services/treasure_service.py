@@ -63,15 +63,17 @@ def is_treasure_map_key(item_key: str, item_type: str | None = None) -> bool:
     return k.startswith(_AUTHORED_PREFIX)
 
 
-# Label heuristic for LLM/narrator-invented treasure maps ("Mapa do skrytki",
-# "Mapa skarbu", …). Fog-reveal maps use item_type='map' and are excluded.
+# Label heuristic for LLM/narrator-invented treasure maps. Narrator item names
+# are too varied for a two-word pattern ("Mapa do skrytki", "Podejrzanie świeża
+# mapa", …) — ANY narrative item whose label mentions a map is treated as a
+# treasure map. Real fog-reveal maps are catalog items (item_type='map') and go
+# through their own grant path, so they never reach this heuristic.
 _MAP_WORD_RE = re.compile(r"\bmap\w*\b", re.IGNORECASE)
-_TREASURE_WORD_RE = re.compile(r"skarb|skrytk|schow|skrzyn|kryj[oó]wk|kufr", re.IGNORECASE)
 
 
 def looks_like_treasure_map(item_key: str = "", item_type: str | None = None,
                             label: str | None = None) -> bool:
-    """Broad detector: carrier key/type OR a map-flavoured treasure label.
+    """Broad detector: carrier key/type OR any map-named narrator label.
 
     A fog-reveal map (item_type='map' + map_reveal effect) is NEVER a treasure map.
     """
@@ -79,8 +81,7 @@ def looks_like_treasure_map(item_key: str = "", item_type: str | None = None,
         return True
     if (item_type or "").strip().lower() == "map":
         return False
-    lbl = str(label or "")
-    return bool(_MAP_WORD_RE.search(lbl) and _TREASURE_WORD_RE.search(lbl))
+    return bool(_MAP_WORD_RE.search(str(label or "")))
 
 
 # ---------------------------------------------------------------------------
