@@ -191,6 +191,10 @@ def _hexdist(a: tuple[int, int], b: tuple[int, int]) -> int:
 TREASURE_RING_MIN = 3
 TREASURE_RING_MAX = 12
 
+# A dug-up treasure never pays less than this (per map part) — sparse enemy loot
+# tables would otherwise leave the chest empty. STARTING value, Sandbox-tunable.
+TREASURE_GOLD_FLOOR = 30
+
 
 def _pick_treasure_hex(conn: sqlite3.Connection, character_id: int,
                        campaign_id: int) -> Optional[dict]:
@@ -393,22 +397,66 @@ def _collected(conn: sqlite3.Connection, character_id: int, treasure_id: int) ->
 
 
 def _finalize_treasure(conn: sqlite3.Connection, treasure_id: int) -> None:
-    """Roll & freeze loot on the treasure (D3), scaled by parts (D7)."""
+    """Roll & freeze loot on the treasure (D3), scaled by parts (D7).
+
+    A treasure is NEVER empty: sparse enemy tables often roll nothing, so we
+    guarantee at least one real item and floor the gold — a dug-up chest must feel
+    like a reward, not a weak-mob drop.
+    """
     t = conn.execute("SELECT * FROM world_treasures WHERE id = ?", (treasure_id,)).fetchone()
     if not t or t["loot_snapshot_json"]:
         return  # already finalized
     table_key = t["loot_table_key"]
+    total_parts = max(1, int(t["total_parts"] or 1))
     rolls = 1 + int(t["extra_loot_rolls"] or 0)
     loot: list[dict] = []
     gold = 0
     for _ in range(rolls):
         loot.extend(_roll_table(conn, table_key))
         gold += _roll_gold(conn, table_key)
+    if not loot:  # never hand the player an empty chest
+        guar = _guaranteed_item(conn, table_key)
+        if guar:
+            loot.append(guar)
     gold = int(round(gold * float(t["gold_mult"] or 1.0)))
+    gold = max(gold, TREASURE_GOLD_FLOOR * total_parts)  # floor — treasures pay out
     conn.execute(
         "UPDATE world_treasures SET loot_snapshot_json = ?, gold_snapshot = ? WHERE id = ?",
         (json.dumps(loot), gold, treasure_id),
     )
+
+
+def _guaranteed_item(conn: sqlite3.Connection, table_key: str) -> Optional[dict]:
+    """A fallback item so a treasure is never empty: the table's best non-map entry,
+    else a common healing consumable."""
+    try:
+        rows = conn.execute(
+            "SELECT item_key, weapon_key, consumable_key, qty_min, qty_max "
+            "FROM game_config_loot_entries WHERE loot_table_key = ? "
+            "ORDER BY weight DESC", (table_key,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    for r in rows:
+        ik = str(r["item_key"] or "")
+        if ik in _GENERIC_FRAGMENT_KEYS or ik in _WHOLE_MAP_KEYS:
+            continue
+        if not (r["item_key"] or r["weapon_key"] or r["consumable_key"]):
+            continue
+        qmin = max(1, int(r["qty_min"] or 1))
+        qmax = max(qmin, int(r["qty_max"] or qmin))
+        return {"item_key": r["item_key"], "weapon_key": r["weapon_key"],
+                "consumable_key": r["consumable_key"], "quantity": random.randint(qmin, qmax)}
+    for key in ("potion_healing_minor", "potion_healing", "bandage", "bandaz"):
+        try:
+            hit = conn.execute(
+                "SELECT key FROM game_config_items WHERE key = ? AND is_active = 1", (key,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            hit = None
+        if hit:
+            return {"item_key": key, "quantity": 1}
+    return None
 
 
 # ---------------------------------------------------------------------------

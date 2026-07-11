@@ -93,7 +93,7 @@ def test_whole_map_from_npc_completes_instantly():
     t = conn.execute("SELECT * FROM world_treasures").fetchone()
     assert t["state"] == "buried"
     assert t["loot_snapshot_json"] is not None
-    assert t["gold_snapshot"] == 10  # gold_mult 1.0 for 1 part
+    assert t["gold_snapshot"] == ts.TREASURE_GOLD_FLOOR  # raw 10 floored to 30 (never empty)
 
 
 def test_generic_fragments_accumulate_same_map():
@@ -165,13 +165,13 @@ def test_payout_no_guardian(monkeypatch):
 
     res = ts.resolve_dig_success(conn, 7, 900, tid)
     assert res["resolved"] is True
-    assert res["gold"] == 10
+    assert res["gold"] == ts.TREASURE_GOLD_FLOOR  # 10 raw floored to 30
     t = conn.execute("SELECT state, found_by_character_id FROM world_treasures WHERE id = ?", (tid,)).fetchone()
     assert t["state"] == "found"
     assert t["found_by_character_id"] == 900
     # gold credited to the hero
     g = conn.execute("SELECT gold FROM characters WHERE id = 900").fetchone()["gold"]
-    assert g == 10
+    assert g == ts.TREASURE_GOLD_FLOOR
     # one-time: second payout attempt finds nothing
     res2 = ts.resolve_dig_success(conn, 7, 900, tid)
     assert res2["resolved"] is False

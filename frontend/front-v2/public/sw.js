@@ -12,7 +12,7 @@
  * lazily on first fetch instead of listing them here.
  */
 
-const VERSION = 'v2-fe17-1';
+const VERSION = 'v2-fe17-2';
 const SHELL_CACHE = 'aigm-v2-shell-' + VERSION;
 const ASSET_CACHE = 'aigm-v2-assets-' + VERSION;
 const BASE = '/graj/';
