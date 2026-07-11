@@ -3023,6 +3023,22 @@ def _grant_narrative_item_to_inventory(
     given_at: str | None = None,
 ) -> None:
     """Store a free-form narrative item directly in character_inventory (T46)."""
+    # #1196 — treasure-map label → treasure system (not a dead narrative row).
+    try:
+        from app.services import treasure_service as _tsv_ni2
+        if _tsv_ni2.looks_like_treasure_map(item_type=item_type, label=label):
+            _crow = conn.execute(
+                "SELECT campaign_id FROM characters WHERE id = ?", (int(character_id),)
+            ).fetchone()
+            _camp = int((_crow[0] if _crow else 0) or 0)
+            _prog = _tsv_ni2.grant_map_item(conn, int(character_id), _camp,
+                                            "treasure_map", source="npc", label=label)
+            if _prog is not None:
+                logger.info("treasure_map_from_narrative_item", character_id=character_id, label=label)
+                return
+    except Exception as _tm_err2:
+        logger.warning("treasure_map_narrative_item_route_failed", label=label, error=str(_tm_err2))
+
     meta: dict = {"item_type": item_type}
     if description:
         meta["description"] = description
@@ -3168,6 +3184,19 @@ def _grant_pending_item(
     Returns the new item key, or None on failure (caller falls back to a plain
     narrative inventory row).
     """
+    # #1196 — LLM/narrator-invented treasure map ("Mapa do skrytki", …) → route
+    # into the treasure system instead of a dead narrative item.
+    try:
+        from app.services import treasure_service as _tsv_ni
+        if _tsv_ni.looks_like_treasure_map(label=label):
+            _prog = _tsv_ni.grant_map_item(conn, int(character_id), int(campaign_id or 0),
+                                           "treasure_map", source="npc", label=label)
+            if _prog is not None:
+                logger.info("treasure_map_from_narrator", character_id=character_id, label=label)
+                return "treasure_map"
+    except Exception as _tm_err:
+        logger.warning("treasure_map_narrator_route_failed", label=label, error=str(_tm_err))
+
     import re as _re
     import time as _time
     slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -60,6 +61,26 @@ def is_treasure_map_key(item_key: str, item_type: str | None = None) -> bool:
     if k in _WHOLE_MAP_KEYS or k in _GENERIC_FRAGMENT_KEYS:
         return True
     return k.startswith(_AUTHORED_PREFIX)
+
+
+# Label heuristic for LLM/narrator-invented treasure maps ("Mapa do skrytki",
+# "Mapa skarbu", …). Fog-reveal maps use item_type='map' and are excluded.
+_MAP_WORD_RE = re.compile(r"\bmap\w*\b", re.IGNORECASE)
+_TREASURE_WORD_RE = re.compile(r"skarb|skrytk|schow|skrzyn|kryj[oó]wk|kufr", re.IGNORECASE)
+
+
+def looks_like_treasure_map(item_key: str = "", item_type: str | None = None,
+                            label: str | None = None) -> bool:
+    """Broad detector: carrier key/type OR a map-flavoured treasure label.
+
+    A fog-reveal map (item_type='map' + map_reveal effect) is NEVER a treasure map.
+    """
+    if is_treasure_map_key(item_key, item_type):
+        return True
+    if (item_type or "").strip().lower() == "map":
+        return False
+    lbl = str(label or "")
+    return bool(_MAP_WORD_RE.search(lbl) and _TREASURE_WORD_RE.search(lbl))
 
 
 # ---------------------------------------------------------------------------
@@ -380,9 +401,10 @@ def _lookup_effect_json(conn: sqlite3.Connection, item_key: str) -> Optional[dic
 
 def grant_map_item(conn: sqlite3.Connection, character_id: int, campaign_id: int,
                    item_key: str, effect_json: dict | None = None,
-                   source: str = "loot") -> Optional[dict]:
+                   source: str = "loot", label: str | None = None) -> Optional[dict]:
     """Route a treasure-map carrier grant into the treasure tables (D6).
 
+    `label` overrides the displayed map name (used for LLM/narrator whole maps).
     Returns a toast dict {treasure_id, map_label, part_no, collected,
     total_parts, complete, hex?} or None on failure.
     """
@@ -445,7 +467,7 @@ def grant_map_item(conn: sqlite3.Connection, character_id: int, campaign_id: int
             # (a) whole map (NPC/LLM bare treasure_map) → one part, instant complete
             total_parts = 1
             treasure_id = _generate_treasure(
-                conn, camp, cid, total_parts=1, created_by="npc",
+                conn, camp, cid, total_parts=1, created_by="npc", label=label,
             )
 
         if treasure_id is None:
