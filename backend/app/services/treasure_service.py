@@ -646,10 +646,12 @@ def get_treasure_maps(conn: sqlite3.Connection, character_id: int) -> dict:
             "total_parts": total,
             "complete": complete,
             "state": r["state"],
+            # kraina widoczna od pierwszego fragmentu (wskazówka dokąd);
+            # dokładny heks zdradza dopiero komplet (mapa świata po „Użyj").
+            "region": r["region"],
         }
         if complete and r["state"] == "buried":
             entry["hex"] = {"q": int(r["hex_q"]), "r": int(r["hex_r"])}
-            entry["region"] = r["region"]
             # distance from the hero's position — the map view centres on the
             # treasure, so without this the goal can look deceptively close.
             cur = _current_hex(conn, int(r["campaign_id"] or 0))

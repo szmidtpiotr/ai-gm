@@ -449,23 +449,12 @@ function TreasureMapsSection({ characterId }: { characterId: number | undefined 
             <span className="font-bold text-[#f2c14e]">✕</span>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm text-text-1">{m.map_label}</span>
-              {m.complete ? (
-                m.hex ? (
-                  <span className="text-[11px] text-[#f2c14e]">
-                    Cel: heks {m.hex.q},{m.hex.r}
-                    {m.region ? ` — ${m.region}` : ""}
-                    {typeof m.distance_hexes === "number"
-                      ? ` · ${m.distance_hexes} heks${m.distance_hexes === 1 ? "" : "ów"} drogi`
-                      : ""}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-emerald-400">Kompletna</span>
-                )
-              ) : (
-                <span className="text-[11px] text-text-3">
-                  {m.collected}/{m.total_parts} części
-                </span>
-              )}
+              {/* kraina + licznik części; dokładny heks NIE jest zdradzany na karcie —
+                  komplet pokazuje cel dopiero na mapie świata (przycisk Użyj). */}
+              <span className={`text-[11px] ${m.complete ? "text-[#f2c14e]" : "text-text-3"}`}>
+                {m.region ? `${m.region} · ` : ""}
+                {m.collected}/{m.total_parts}
+              </span>
             </div>
             {m.complete && m.hex && (
               <button
