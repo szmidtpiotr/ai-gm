@@ -198,7 +198,7 @@ Audyt przeszedł cały codebase i sklasyfikował pliki jako aktywne / dead / nie
 | Voice service (Piper/TTS/STT) | `voice-service/` | **708 MB** | Outsourcowane, Piper obsolete — zastąpiony własnym rozwiązaniem |
 | Observability stack (Grafana/Loki) | `observability/`, `observability-dev/`, `observability-data/` | **~266 MB** | Zastąpiony własną implementacją w backendzie (2026-06-05) |
 | Legacy admin panel v2 | `frontend/admin_panel_v2/` | małe | Zastąpiony przez v3 |
-| Dead service | `backend/app/services/combat_v2_service.py` | 637 linii | Nigdy nie importowany |
+| ~~Dead service~~ Referencja (#1210) | `backend/app/services/combat_v2_service.py` | 637 linii | **NIE USUWAĆ.** Port w toku (#1210): fear/hit-location/flee wdrożone do `combat_service.py`; death-save ladder czeka na wpięcie po balansie na Sandboxie. Prototyp = referencja do czasu domknięcia. |
 | Temp images | `temp-img/` | 4.6 MB | Scratch space |
 | Output dir | `output/` | 140 KB | Śmieci |
 
@@ -241,7 +241,7 @@ ssh claude@192.168.1.61 'cd /home/piotrszmidt/ai-gm && \
 
 # Na lokalnie (przez sshfs):
 rm -rf frontend/admin_panel_v2/
-rm backend/app/services/combat_v2_service.py
+# combat_v2_service.py — NIE usuwać: port #1210 w toku (patrz notka wyżej), zostaje jako referencja.
 ```
 
 **Migracja admin2 → admin3 (więcej niż `rm`):**
@@ -2627,6 +2627,27 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 | C5 | `wound_penalty()` działa na `hp_current/hp_max` dowolnego combatanta (nie tylko sheet) | 1 |
 | C6 | Symetria ran — podpiąć karę wroga w `resolve_enemy_attack` | 1 |
 | D6 | (opcja, niski prio) Wizualne linie frontu w UI stref zamiast kolumn tekstowych | 2 |
+
+---
+
+### #1210 — Mechaniki V2 przeniesione z prototypu (2026-07-11)
+
+Port `combat_v2_service.py` (prototyp, referencja) → `combat_service.py` (żywy #826). Warstwa
+deterministyczna (silnik decyduje, LLM narruje). Wszystkie liczby STARTOWE, strojne na Sandboxie.
+
+| Mechanika | Reguła (wartości startowe) | Status |
+|---|---|---|
+| **Strach / Groza** | Wróg z `fear_aura` przy wejściu do walki wymusza rzut (czysty d20, „los") vs `fear_dc` (dflt 12). Porażka → `frightened`; kolejna porażka eskaluje `frightened → panicked → break`; Nat 1 przeskakuje 2 stopnie; Nat 20 zawsze zdaje. | ✅ wdrożone |
+| **Trafienie w lokację** | Krytyk (Nat 20) rzuca d6 lokacji → warunek na trafionym. Gracz→wróg: `stunned`/`bleeding`/`disarmed`/`hobbled`. Wróg→gracz: `dazed`/`winded`/`arm_wound`/`leg_wound`. Czas 1–3 rundy. | ✅ wdrożone |
+| **Ucieczka (flee)** | Akcja gracza `POST /combat/flee`: opposed DEX (gracz vs najlepszy żywy wróg). `leg_wound` −2, `hobbled` = blokada. Sukces kończy walkę (`fled`), porażka/blokada zużywa turę. | ✅ wdrożone |
+| **Rosnące DC death-save** | Kolejne padnięcie na 0 HP w tej samej walce: DC `[10, 13, 16, 19]` (czysty d20, bez CON). Nat 1 = 2 porażki, 3 porażki = śmierć. | ⏸ logika + testy gotowe (`get_death_save_dc`/`resolve_death_save_outcome`), **wpięcie do żywego przepływu 0 HP odłożone** — zmienia rdzeń śmierci, wymaga balansu na Sandboxie (osobny follow-up). |
+
+6 warunków ran doseedowanych do `game_config_conditions` (deploy-durable: `main.py` RAW_MIGRATIONS
++ `scripts/seed_crit_conditions.py`). `leg_wound`/`hobbled` czytane po kluczu w
+`flee_penalty_from_conditions`; reszta foldu je się w silnik przez `static_stat_modifier` (S18).
+
+Helpery (Sandbox-tunable stałe): `DEATH_SAVE_DC_LADDER`, `HIT_LOCATION_TABLE`,
+`PLAYER_CRIT_CONDITIONS`/`ENEMY_CRIT_CONDITIONS`, `FEAR_LADDER`/`FEAR_DC_DEFAULT`.
 
 ---
 

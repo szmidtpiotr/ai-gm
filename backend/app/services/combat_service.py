@@ -4668,6 +4668,10 @@ def initiate_combat(
         turn_order = [t[0] for t in turn_slots]
         current = turn_order[0] if turn_order else "player"
 
+        # #1210: Strach/Groza przy wejściu do walki — wróg z fear_aura wymusza rzut
+        # (czysty d20, „los") vs fear_dc; porażka nakłada frightened na gracza PRZED zapisem.
+        _fear_entry = apply_fear_on_entry(conn, campaign_id, combatants)
+
         conn.execute("DELETE FROM active_combat WHERE campaign_id = ?", (campaign_id,))
         _save_combat_row(
             conn,
@@ -4742,6 +4746,28 @@ def initiate_combat(
         set_world_state_flags(campaign_id, scene_enemies=enemy_entries)
     except Exception:
         pass
+
+    # #1210: dołącz wynik testu Grozy do zwrotki (narrator/UI); zaloguj gdy strach padł.
+    if _fear_entry is not None:
+        out["fear_on_entry"] = _fear_entry
+        if _fear_entry.get("condition"):
+            try:
+                with _conn() as _fc:
+                    _cid_row = _fc.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ?", (campaign_id,)
+                    ).fetchone()
+                    if _cid_row:
+                        _cid = int(_cid_row["id"])
+                        log_combat_turn(
+                            _fc, combat_id=_cid, campaign_id=campaign_id,
+                            turn_number=_next_combat_log_sequence(_fc, _cid),
+                            actor="system", event_type="fear",
+                            roll_value=int(_fear_entry.get("roll") or 0),
+                            narrative=json.dumps(_fear_entry, ensure_ascii=False),
+                        )
+                        _fc.commit()
+            except Exception:
+                pass
 
     return out
 
@@ -5444,6 +5470,296 @@ ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = czę�
                               # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
 
 
+# ─── #1210: mechaniki V2 (port z combat_v2_service.py) ───────────────────────
+# Warstwa deterministyczna — silnik decyduje, LLM narruje po rozliczeniu.
+# Wszystkie liczby STARTOWE (Numbers Policy #826), strojne na Sandboxie.
+
+# Death-save: rosnące DC za każde padnięcie na 0 HP w tej samej walce (czysty d20, bez CON).
+DEATH_SAVE_DC_LADDER = [10, 13, 16, 19]
+DEATH_SAVE_MAX_FAILURES = 3   # 3. porażka = śmierć
+
+# Groza: domyślne DC rzutu WIS gdy wróg ma fear_aura ale nie ma własnego fear_dc.
+FEAR_DC_DEFAULT = 12
+# Eskalacja strachu — kolejna porażka przesuwa o jeden stopień (Nat 1 o dwa).
+FEAR_LADDER = [None, "frightened", "panicked", "break"]
+FEAR_CONDITION_DURATION = 2   # rundy
+
+# Hit-location (d6) przy krytyku → warunek na trafionym.
+HIT_LOCATION_TABLE = {
+    1: "head",
+    2: "torso",
+    3: "right_arm",
+    4: "left_arm",
+    5: "right_leg",
+    6: "left_leg",
+}
+# Krytyk WROGA w gracza (on_player=True): (condition_key, rundy).
+PLAYER_CRIT_CONDITIONS = {
+    "head":      ("dazed",     1),   # traci następną akcję
+    "torso":     ("winded",    2),   # -2 do akcji siłowych
+    "right_arm": ("arm_wound", 3),   # -1 do ataku
+    "left_arm":  ("arm_wound", 3),
+    "right_leg": ("leg_wound", 3),   # -2 do rzutu na ucieczkę
+    "left_leg":  ("leg_wound", 3),
+}
+# Krytyk GRACZA we wroga (on_player=False): (condition_key, rundy).
+ENEMY_CRIT_CONDITIONS = {
+    "head":      ("stunned",  1),    # pomija turę
+    "torso":     ("bleeding", 3),    # DoT 1/rundę
+    "right_arm": ("disarmed", 3),    # -2 do obrażeń
+    "left_arm":  ("disarmed", 3),
+    "right_leg": ("hobbled",  3),    # nie może uciec
+    "left_leg":  ("hobbled",  3),
+}
+# Modyfikatory ucieczki od warunków na uciekającym (pkt 2 wpływa na pkt 4).
+FLEE_CONDITION_PENALTY = {"leg_wound": -2}   # kara do opposed-DEX
+FLEE_BLOCKING_CONDITIONS = {"hobbled"}       # całkowicie blokują ucieczkę
+
+
+def get_death_save_dc(death_save_count: int) -> int:
+    """DC rzutu na przeżycie za N-te padnięcie na 0 HP w tej walce (1-indeksowane).
+    Poza drabiną → zostaje na ostatnim (najwyższym) szczeblu."""
+    idx = min(int(death_save_count) - 1, len(DEATH_SAVE_DC_LADDER) - 1)
+    return DEATH_SAVE_DC_LADDER[max(0, idx)]
+
+
+def resolve_death_save_outcome(d20: int, dc: int, current_failures: int) -> dict[str, Any]:
+    """Czysty d20 (bez modyfikatorów). Nat 20 = przeżycie, Nat 1 = 2 porażki,
+    zwykła porażka = 1. ``DEATH_SAVE_MAX_FAILURES`` porażek = śmierć."""
+    d20 = int(d20)
+    nat20 = d20 == 20
+    nat1 = d20 == 1
+    success = nat20 or (not nat1 and d20 >= int(dc))
+    failures_added = 0 if success else (2 if nat1 else 1)
+    total_failures = int(current_failures) + failures_added
+    dead = total_failures >= DEATH_SAVE_MAX_FAILURES
+    if success:
+        outcome = "SURVIVED"
+    elif dead:
+        outcome = "DEAD"
+    else:
+        outcome = "FAILED"
+    return {
+        "outcome": outcome,
+        "roll": d20,
+        "dc": int(dc),
+        "success": success,
+        "nat20": nat20,
+        "nat1": nat1,
+        "failures_added": failures_added,
+        "total_failures": total_failures,
+        "dead": dead,
+        "hp_restored": 1 if (success and not dead) else 0,
+    }
+
+
+def crit_location_from_d6(d6: int) -> str:
+    """d6 → nazwa trafionej lokacji."""
+    return HIT_LOCATION_TABLE[int(d6)]
+
+
+def crit_condition_for_location(location: str, *, on_player: bool) -> tuple[str, int]:
+    """Zwraca (condition_key, rundy) dla lokacji. on_player=True → warunek na graczu
+    (krytyk wroga), False → warunek na wrogu (krytyk gracza)."""
+    table = PLAYER_CRIT_CONDITIONS if on_player else ENEMY_CRIT_CONDITIONS
+    return table[location]
+
+
+def resolve_fear_outcome(d20: int, dc: int, current_fear: str | None) -> dict[str, Any]:
+    """Rzut WIS na Grozę (czysty d20, „los" per decyzje projektowe). 3-stopniowa
+    eskalacja: None → frightened → panicked → break. Nat 1 przeskakuje 2 stopnie,
+    Nat 20 zawsze zdaje."""
+    d20 = int(d20)
+    nat20 = d20 == 20
+    nat1 = d20 == 1
+    success = nat20 or (not nat1 and d20 >= int(dc))
+    if success:
+        return {"outcome": "SUCCESS", "roll": d20, "dc": int(dc),
+                "condition": None, "nat20": nat20, "nat1": nat1}
+    try:
+        cur_idx = FEAR_LADDER.index(current_fear)
+    except ValueError:
+        cur_idx = 0
+    step = 2 if nat1 else 1
+    new_idx = min(cur_idx + step, len(FEAR_LADDER) - 1)
+    new_idx = max(new_idx, 1)  # porażka zawsze co najmniej frightened
+    return {
+        "outcome": "FAILURE",
+        "roll": d20,
+        "dc": int(dc),
+        "condition": FEAR_LADDER[new_idx],
+        "duration_rounds": FEAR_CONDITION_DURATION,
+        "nat20": nat20,
+        "nat1": nat1,
+    }
+
+
+def flee_penalty_from_conditions(conditions: list) -> tuple[int, bool]:
+    """(kara do rzutu, zablokowane) na podstawie warunków uciekającego.
+    hobbled → blokada; leg_wound → -2. Warunki jako listy dictów {key:...}."""
+    penalty = 0
+    blocked = False
+    for c in conditions or []:
+        key = str((c or {}).get("key") if isinstance(c, dict) else c or "").strip().lower()
+        if key in FLEE_BLOCKING_CONDITIONS:
+            blocked = True
+        penalty += FLEE_CONDITION_PENALTY.get(key, 0)
+    return penalty, blocked
+
+
+def resolve_flee_outcome(player_total: int, enemy_total: int) -> dict[str, Any]:
+    """Opposed DEX: ucieczka gdy rzut gracza > rzut wroga (obrońca wygrywa remis)."""
+    fled = int(player_total) > int(enemy_total)
+    return {
+        "outcome": "SUCCESS" if fled else "FAILURE",
+        "player_total": int(player_total),
+        "enemy_total": int(enemy_total),
+        "fled": fled,
+    }
+
+
+# ─── #1210: warstwa DB/pętla — łączy logikę z żywym modelem #826 (MP-safe) ───
+
+def _roll_d6() -> int:
+    return random.randint(1, 6)
+
+
+def _apply_crit_condition_inplace(
+    conn: sqlite3.Connection, combatant: dict, condition_key: str
+) -> bool:
+    """Dołóż warunek z katalogu (effect_json + czas trwania) do listy conditions
+    combatanta IN-PLACE. Caller persystuje combatants. Zwraca True gdy dodano nowy.
+    Reużywa `_build_condition_entry` — ten sam mechaniczny wpis co [APPLY_CONDITION]."""
+    conds = combatant.get("conditions")
+    if not isinstance(conds, list):
+        conds = []
+    key_lo = str(condition_key).strip().lower()
+    if any(isinstance(c, dict) and str(c.get("key", "")).strip().lower() == key_lo for c in conds):
+        combatant["conditions"] = conds
+        return False  # już obecny — nie duplikujemy
+    entry = _build_condition_entry(conn, key_lo, applied_at="crit_hit_location")
+    if entry is None:
+        combatant["conditions"] = conds
+        return False  # brak w katalogu (invalid_reference)
+    conds.append(entry)
+    combatant["conditions"] = conds
+    return True
+
+
+def roll_crit_hit_location(
+    conn: sqlite3.Connection, target: dict, *, on_player: bool
+) -> dict[str, Any]:
+    """#1210 pkt 2 — na krytyku (Nat 20) rzuca lokalizację (d6) i dokłada warunek
+    na trafionym combatancie IN-PLACE. on_player=True → gracz (krytyk wroga),
+    False → wróg (krytyk gracza). Zwraca info do narratora."""
+    d6 = _roll_d6()
+    location = crit_location_from_d6(d6)
+    cond_key, duration = crit_condition_for_location(location, on_player=on_player)
+    applied = _apply_crit_condition_inplace(conn, target, cond_key)
+    return {
+        "location": location,
+        "d6": d6,
+        "condition": cond_key,
+        "duration_rounds": duration,
+        "applied": applied,
+        "on_player": on_player,
+    }
+
+
+def apply_fear_on_entry(
+    conn: sqlite3.Connection, campaign_id: int, combatants: list[dict]
+) -> dict[str, Any] | None:
+    """#1210 pkt 1 — Strach/Groza przy wejściu do walki. Jeśli któryś wróg ma
+    `fear_aura`, gracz rzuca (czysty d20 — „los", per decyzja projektowa prototypu)
+    przeciw najwyższemu `fear_dc`. Porażka → frightened (eskalacja przy kolejnych
+    porażkach w turach). Mutuje combatanta gracza IN-PLACE. Zwraca info lub None."""
+    fear_dc = 0
+    source_name = None
+    seen: dict[str, tuple[int, int]] = {}
+    for c in combatants:
+        if not isinstance(c, dict) or c.get("type") != "enemy":
+            continue
+        ek = str(c.get("enemy_key") or "").strip()
+        if not ek:
+            continue
+        if ek not in seen:
+            row = conn.execute(
+                "SELECT fear_aura, fear_dc, label FROM game_config_enemies WHERE key = ?",
+                (ek,),
+            ).fetchone()
+            aura = int((row["fear_aura"] if row else 0) or 0)
+            dc = int((row["fear_dc"] if row else FEAR_DC_DEFAULT) or FEAR_DC_DEFAULT)
+            seen[ek] = (aura, dc)
+            if aura and dc > fear_dc:
+                fear_dc = dc
+                source_name = (row["label"] if row else None) or c.get("name") or ek
+        else:
+            aura, dc = seen[ek]
+            if aura and dc > fear_dc:
+                fear_dc = dc
+    if fear_dc <= 0:
+        return None  # brak aury strachu
+    player = _find_active_player_combatant(combatants) or _find_combatant(combatants, "player")
+    if not player:
+        return None
+    raw = roll_d20()
+    out = resolve_fear_outcome(raw, fear_dc, current_fear=None)
+    out["fear_source"] = source_name
+    if out.get("condition"):
+        _apply_crit_condition_inplace(conn, player, out["condition"])
+    return out
+
+
+def resolve_player_flee(campaign_id: int) -> dict[str, Any]:
+    """#1210 pkt 4 — akcja gracza: ucieczka z walki. Opposed DEX (gracz vs najlepszy
+    żywy wróg), modyfikowany warunkami: leg_wound -2, hobbled = blokada. Sukces kończy
+    walkę (`end_combat` reason='fled'); porażka/blokada zużywa turę."""
+    snap = get_active_combat(campaign_id)
+    if not snap:
+        return {"ok": False, "reason": "no_active_combat"}
+    combatants = snap.get("combatants") or []
+    player = _find_active_player_combatant(combatants) or _find_combatant(combatants, "player")
+    if not player:
+        return {"ok": False, "reason": "player_not_found"}
+
+    penalty, blocked = flee_penalty_from_conditions(player.get("conditions") or [])
+    if blocked:
+        try:
+            advance_turn(campaign_id)
+        except Exception:
+            pass
+        return {
+            "ok": True, "fled": False, "blocked": True, "reason": "hobbled",
+            "combat_state": load_combat_snapshot(campaign_id),
+        }
+
+    player_dex = _combatant_stat_modifier(player, sheet=None, stat="DEX")
+    max_enemy_dex = 0
+    for c in combatants:
+        if isinstance(c, dict) and c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0:
+            max_enemy_dex = max(max_enemy_dex, _combatant_stat_modifier(c, sheet=None, stat="DEX"))
+
+    raw_p = roll_d20()
+    raw_e = roll_d20()
+    player_total = raw_p + player_dex + penalty
+    enemy_total = raw_e + max_enemy_dex
+    out = resolve_flee_outcome(player_total, enemy_total)
+    out.update({
+        "ok": True,
+        "player_raw": raw_p, "player_dex_mod": player_dex, "flee_penalty": penalty,
+        "enemy_raw": raw_e, "enemy_dex_mod": max_enemy_dex, "blocked": False,
+    })
+    if out["fled"]:
+        end_combat(campaign_id, "fled")
+    else:
+        try:
+            advance_turn(campaign_id)
+        except Exception:
+            pass
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
+
+
 def _armor_value(defense_stat: int) -> int:
     """#826 pkt.2: pancerz jako liczba redukcji obrażeń (część `ac_base`/AC ponad nieopancerzony próg)."""
     return max(0, int(defense_stat or 0) - ARMOR_REDUCTION_OFFSET)
@@ -6095,6 +6411,9 @@ def _attack_apply_effects(
     if _a_conds:
         _prev_conds = list(out.get("weapon_conditions_applied") or [])
         out["weapon_conditions_applied"] = _prev_conds + _a_conds
+    # #1210: krytyk gracza (Nat 20) → trafienie w lokację → warunek na wrogu.
+    if player_raw == 20:
+        out["crit_hit_location"] = roll_crit_hit_location(conn, enemy, on_player=False)
     return dmg
 
 
@@ -7233,6 +7552,9 @@ def _resolve_enemy_attack_turn(
                                                         "enemy_name": out.get("enemy_name")})
             except Exception:
                 pass
+        # #1210: krytyk wroga (Nat 20) → trafienie w lokację → warunek na graczu.
+        if raw == 20:
+            out["crit_hit_location"] = roll_crit_hit_location(conn, p, on_player=True)
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp
@@ -7545,6 +7867,9 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                                                         "enemy_name": out.get("enemy_name")})
             except Exception:
                 pass
+        # #1210: krytyk wroga (Nat 20 z pending) → lokacja → warunek na graczu (ścieżka reakcji).
+        if bool(pending.get("nat20")):
+            out["crit_hit_location"] = roll_crit_hit_location(conn, p, on_player=True)
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp

@@ -203,6 +203,33 @@ RAW_MIGRATIONS = [
         "'{\"forced_action\":\"flee\",\"duration\":\"encounter\"}', "
         "'Pęknięcie psychiczne. Bohater musi próbować ucieczki każdej rundy aż do końca starcia.'"
     ")",
+    # 2026-07-11 #1210: 6 warunków ran krytycznych (hit-location). Deploy-durable seed
+    # (idempotent). Mirror `scripts/seed_crit_conditions.py`. leg_wound/hobbled czytane
+    # po kluczu w combat_service.flee_penalty_from_conditions; reszta foldu je się w silnik (S18).
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'disarmed', 'Rozbrojony',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"damage_bonus","value":-2,"expires":"duration_rounds:3"}]}',
+        'Broń wytrącona z dłoni — ciosy słabsze. -2 do obrażeń na 3 rundy.')""",
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'hobbled', 'Okulawiony',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"flee_block","expires":"duration_rounds:3"}]}',
+        'Noga bezużyteczna — nie da się uciec. Blokuje ucieczkę na 3 rundy.')""",
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'dazed', 'Oszołomiony',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"skip_turn","duration_rounds":1}]}',
+        'Cios w głowę zamroczył — traci następną akcję.')""",
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'winded', 'Bez tchu',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:2"}]}',
+        'Cios w tors wybił powietrze — akcje siłowe słabsze. STR -2 na 2 rundy.')""",
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'arm_wound', 'Rana ramienia',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"attack_bonus","value":-1,"expires":"duration_rounds:3"}]}',
+        'Rozcięte ramię — ręka słabnie. -1 do ataku na 3 rundy.')""",
+    """INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES (
+        'leg_wound', 'Rana nogi',
+        '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"flee_penalty","value":-2,"expires":"duration_rounds:3"}]}',
+        'Rozcięta noga — ucieczka utrudniona. -2 do rzutu na ucieczkę na 3 rundy.')""",
     # 2026-05-19 Stage 2A follow-up: visual settings table + time-of-day overlay seeds.
     """CREATE TABLE IF NOT EXISTS game_config_visual (
         key TEXT PRIMARY KEY,

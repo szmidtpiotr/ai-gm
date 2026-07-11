@@ -161,6 +161,16 @@ def post_zone_change(campaign_id: int):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/campaigns/{campaign_id}/combat/flee")
+def post_flee(campaign_id: int):
+    """#1210 — Player attempts to flee combat (opposed DEX vs best enemy).
+    leg_wound → -2, hobbled → blocked. Success ends combat (fled); failure consumes the turn."""
+    res = combat.resolve_player_flee(campaign_id)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("reason") or "flee_failed")
+    return res
+
+
 class UseConsumableRequest(BaseModel):
     inventory_id: int
 
