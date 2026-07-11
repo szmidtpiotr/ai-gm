@@ -199,9 +199,16 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
         return {"entries": [], "summary": {"unlocked": 0, "total": 0, "pct": 0}}
     c = _conn()
     try:
+        # Only LIVE, approved content — mirrors the weapons convention. Excludes
+        # pending / pending_review / discarded and disabled enemies so the
+        # player's completion total/pct reflects catalogue they can actually
+        # encounter (#1191 sync fix).
         enemies = c.execute(
             "SELECT key, label, description, lore_text, image_url, hp_base, tier "
-            "FROM game_config_enemies ORDER BY COALESCE(tier, 0), label"
+            "FROM game_config_enemies "
+            "WHERE COALESCE(review_status, 'permanent') = 'permanent' "
+            "AND COALESCE(is_active, 1) = 1 "
+            "ORDER BY COALESCE(tier, 0), label"
         ).fetchall()
         prog = {
             r["enemy_key"]: r
@@ -282,7 +289,9 @@ def get_showcase_bestiary(user_id: Any = None) -> dict[str, Any]:
         enemies = c.execute(
             "SELECT key, label, description, lore_text, image_url, tier "
             "FROM game_config_enemies "
-            "WHERE image_url IS NOT NULL AND image_url != '' "
+            "WHERE COALESCE(review_status, 'permanent') = 'permanent' "
+            "AND COALESCE(is_active, 1) = 1 "
+            "AND image_url IS NOT NULL AND image_url != '' "
             "ORDER BY COALESCE(tier, 0), label"
         ).fetchall()
 

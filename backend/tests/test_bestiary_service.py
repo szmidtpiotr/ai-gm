@@ -32,14 +32,15 @@ def conn():
         """
         CREATE TABLE game_config_enemies (
             key TEXT PRIMARY KEY, label TEXT, description TEXT,
-            lore_text TEXT, image_url TEXT, hp_base INTEGER, tier TEXT
+            lore_text TEXT, image_url TEXT, hp_base INTEGER, tier TEXT,
+            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1
         )
         """
     )
     c.executemany(
-        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier) VALUES (?,?,?,?,?)",
-        [("goblin", "Goblin", "Mały drań", 12, "1"),
-         ("orc", "Ork", "Duży drań", 30, "2")],
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań", 12, "1", "permanent", 1),
+         ("orc", "Ork", "Duży drań", 30, "2", "permanent", 1)],
     )
     c.commit()
     yield c
@@ -158,6 +159,22 @@ def test_get_bestiary_empty_for_unknown_hero(conn, monkeypatch):
     assert all(e["locked"] for e in result["entries"])
 
 
+def test_get_bestiary_excludes_non_permanent_from_total(conn, monkeypatch):
+    """#1191 sync fix: pending/discarded/inactive enemies must not inflate total."""
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    conn.executemany(
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?)",
+        [("wip", "WIP", "x", 5, "1", "pending", 1),
+         ("rej", "Rej", "x", 5, "1", "discarded", 1),
+         ("off", "Off", "x", 5, "1", "permanent", 0)],
+    )
+    conn.commit()
+    result = bs.get_bestiary(7)
+    assert result["summary"]["total"] == 2  # only goblin + orc (permanent + active)
+    keys = {e.get("enemy_key") for e in result["entries"] if not e["locked"]}
+    assert "wip" not in keys and "rej" not in keys and "off" not in keys
+
+
 # ── MP kill credit: all participants (#1191 follow-up) ───────────────────────
 
 def _kills(conn, cid, ek="goblin"):
@@ -213,14 +230,16 @@ def showcase_conn():
         """
         CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT, UNIQUE(character_id,enemy_key));
         CREATE TABLE characters (id INTEGER PRIMARY KEY, user_id INTEGER);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT);
+        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT, review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1);
         """
     )
     c.executemany(
-        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier) VALUES (?,?,?,?,?,?)",
-        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "1"),
-         ("orc", "Ork", "Duży drań.", "", "/img/orc.png", "2"),
-         ("noimg", "Bezobrazek", "x", "y", None, "1")],  # no portrait → excluded
+        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "1", "permanent", 1),
+         ("orc", "Ork", "Duży drań.", "", "/img/orc.png", "2", "permanent", 1),
+         ("noimg", "Bezobrazek", "x", "y", None, "1", "permanent", 1),  # no portrait → excluded
+         ("pending_one", "Oczekujący", "z", "z", "/img/p.png", "1", "pending", 1),  # not approved → excluded
+         ("discarded_one", "Odrzucony", "z", "z", "/img/d.png", "1", "discarded", 1)],  # rejected → excluded
     )
     # user 5 has two heroes; hero 1 killed goblin ×3, hero 2 killed goblin ×2
     c.execute("INSERT INTO characters (id,user_id) VALUES (1,5)")
@@ -262,3 +281,11 @@ def test_showcase_authed_unknown_user_all_locked(showcase_conn, monkeypatch):
     r = bs.get_showcase_bestiary(999)
     assert r["summary"]["defeated"] == 0
     assert all(not e["defeated"] for e in r["entries"])
+
+
+def test_showcase_excludes_pending_and_discarded(showcase_conn, monkeypatch):
+    """Non-permanent enemies (even with a portrait) never reach the showcase."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    keys = {e["enemy_key"] for e in bs.get_showcase_bestiary(None)["entries"]}
+    assert "pending_one" not in keys and "discarded_one" not in keys
+    assert keys == {"goblin", "orc"}
