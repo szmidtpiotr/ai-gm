@@ -287,6 +287,23 @@ def _next_threshold(kills: int) -> int | None:
     return None
 
 
+# Combat-zone heuristic mirrored from combat_service._default_zone_for_enemy so
+# the showcase can label melee (zwarcie) vs ranged (dystans) without importing
+# the whole combat module. Keep in sync with _RANGED_ENEMY_KEYWORDS there.
+_SHOWCASE_RANGED_KEYWORDS = (
+    "archer", "arch", "bowman", "crossbow", "mage", "magus", "wizard",
+    "sorcerer", "warlock", "shaman", "priest", "cleric", "caster",
+    "necromancer", "witch", "sniper", "ranger",
+    "łucznik", "kusznik", "mag", "czarodziej", "kapłan", "łucznicz",
+)
+
+
+def _enemy_zone(key: str | None, label: str | None) -> str:
+    """'ranged' (dystans) if key/label hints a caster/archer, else 'engaged' (zwarcie)."""
+    needle = f"{key or ''} {label or ''}".lower()
+    return "ranged" if any(k in needle for k in _SHOWCASE_RANGED_KEYWORDS) else "engaged"
+
+
 def _first_sentence(text: str | None) -> str:
     """First sentence of a lore/description string, for the public teaser."""
     if not text:
@@ -303,16 +320,20 @@ def _first_sentence(text: str | None) -> str:
 def get_showcase_bestiary(user_id: Any = None) -> dict[str, Any]:
     """#1191 / #915 — bestiary for the public showcase page.
 
-    Anonymous: every enemy that has a portrait, exposing name + portrait + a
-    one-sentence teaser (NO full lore/description/stats). When a logged-in game
-    account is supplied (unified auth, #915), enemies that account's heroes have
-    defeated are enriched with full description + lore + total kill count and
-    flagged `defeated: true` (aggregated across ALL the account's heroes).
+    Visibility model (Piotr, 2026-07-11): coarse combat descriptors — name,
+    portrait, one-sentence teaser, ZONE (zwarcie/dystans) and ATTACK TYPE — are
+    exposed for EVERY enemy so the page is searchable/filterable by anyone. The
+    FULL stat card (HP, armor, attack, 7 stats, tier, level, full lore) is added
+    ONLY for enemies the logged-in account's heroes have defeated. Aggregated
+    across ALL the account's heroes (unified auth #915).
     """
     c = _conn()
     try:
         enemies = c.execute(
-            "SELECT key, label, description, lore_text, image_url, tier "
+            "SELECT key, label, description, lore_text, image_url, tier, "
+            "hp_base, ac_base, attack_bonus, damage_die, damage_bonus, "
+            "attacks_per_turn, damage_type, stats_json, min_level, xp_award, "
+            "fear_aura, fear_dc "
             "FROM game_config_enemies "
             "WHERE COALESCE(review_status, 'permanent') = 'permanent' "
             "AND COALESCE(is_active, 1) = 1 "
@@ -341,24 +362,49 @@ def get_showcase_bestiary(user_id: Any = None) -> dict[str, Any]:
             except Exception as e:
                 logger.warning("showcase_bestiary_user_join_failed", error=str(e))
 
+        import json as _json
         entries: list[dict[str, Any]] = []
         for e in enemies:
+            # Coarse descriptors — visible for everyone (searchable/filterable).
             base = {
                 "enemy_key": e["key"],
                 "name": e["label"],
                 "image_url": e["image_url"],
                 "teaser": _first_sentence(e["lore_text"] or e["description"]),
+                "zone": _enemy_zone(e["key"], e["label"]),
+                "damage_type": e["damage_type"] or "physical",
                 "defeated": False,
             }
             if e["key"] in defeated:
-                base["defeated"] = True
-                base["kills"] = defeated[e["key"]]
-                base["description"] = e["description"]
-                base["lore_text"] = e["lore_text"] or e["description"]
+                # Full character card — only for defeated enemies.
+                try:
+                    stats = _json.loads(e["stats_json"]) if e["stats_json"] else {}
+                except (TypeError, ValueError):
+                    stats = {}
+                base.update({
+                    "defeated": True,
+                    "kills": defeated[e["key"]],
+                    "description": e["description"],
+                    "lore_text": e["lore_text"] or e["description"],
+                    "tier": e["tier"],
+                    "hp_base": e["hp_base"],
+                    "ac_base": e["ac_base"],
+                    "attack_bonus": e["attack_bonus"],
+                    "damage_die": e["damage_die"],
+                    "damage_bonus": e["damage_bonus"],
+                    "attacks_per_turn": e["attacks_per_turn"],
+                    "min_level": e["min_level"],
+                    "xp_award": e["xp_award"],
+                    "fear_aura": bool(e["fear_aura"]) if e["fear_aura"] is not None else False,
+                    "fear_dc": e["fear_dc"],
+                    "stats": stats,
+                })
             entries.append(base)
 
         total = len(entries)
-        defeated_count = len(defeated)
+        # Count only defeats that actually appear in the shown catalogue — a
+        # killed key that is non-canonical / forge / stale must not inflate the %.
+        defeated_count = sum(1 for e in entries if e["defeated"])
         return {
             "entries": entries,
             "authenticated": uid is not None,

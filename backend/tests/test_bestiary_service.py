@@ -249,16 +249,24 @@ def showcase_conn():
         """
         CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT, UNIQUE(character_id,enemy_key));
         CREATE TABLE characters (id INTEGER PRIMARY KEY, user_id INTEGER);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT, review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1);
+        CREATE TABLE game_config_enemies (
+            key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT,
+            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1,
+            hp_base INTEGER, ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER,
+            attacks_per_turn INTEGER, damage_type TEXT, stats_json TEXT, min_level INTEGER, xp_award INTEGER,
+            fear_aura INTEGER, fear_dc INTEGER);
         """
     )
+    _st = '{"STR":12,"DEX":8,"CON":11,"INT":6,"WIS":9,"CHA":7,"LCK":10}'
     c.executemany(
-        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?,?)",
-        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "1", "permanent", 1),
-         ("orc", "Ork", "Duży drań.", "", "/img/orc.png", "2", "permanent", 1),
-         ("noimg", "Bezobrazek", "x", "y", None, "1", "permanent", 1),  # no portrait → excluded
-         ("pending_one", "Oczekujący", "z", "z", "/img/p.png", "1", "pending", 1),  # not approved → excluded
-         ("discarded_one", "Odrzucony", "z", "z", "/img/d.png", "1", "discarded", 1)],  # rejected → excluded
+        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier,review_status,is_active,"
+        "hp_base,ac_base,attack_bonus,damage_die,damage_type,stats_json,min_level) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "standard", "permanent", 1, 12, 11, 2, "1d6", "physical", _st, 1),
+         ("orc_mag", "Ork Mag", "Duży drań.", "", "/img/orc.png", "elite", "permanent", 1, 30, 12, 4, "1d8", "magical", _st, 3),
+         ("noimg", "Bezobrazek", "x", "y", None, "weak", "permanent", 1, 5, 10, 0, "1d4", "physical", _st, 1),  # no portrait → excluded
+         ("pending_one", "Oczekujący", "z", "z", "/img/p.png", "standard", "pending", 1, 10, 10, 1, "1d6", "physical", _st, 1),  # excluded
+         ("discarded_one", "Odrzucony", "z", "z", "/img/d.png", "standard", "discarded", 1, 10, 10, 1, "1d6", "physical", _st, 1)],  # excluded
     )
     # user 5 has two heroes; hero 1 killed goblin ×3, hero 2 killed goblin ×2
     c.execute("INSERT INTO characters (id,user_id) VALUES (1,5)")
@@ -290,9 +298,12 @@ def test_showcase_authed_enriches_defeated_aggregated(showcase_conn, monkeypatch
     assert gob["defeated"] is True
     assert gob["kills"] == 5            # 3 + 2 across both heroes of the account
     assert gob["lore_text"]            # full lore unlocked
-    orc = next(e for e in r["entries"] if e["enemy_key"] == "orc")
+    orc = next(e for e in r["entries"] if e["enemy_key"] == "orc_mag")
     assert orc["defeated"] is False    # not killed → still teaser-only
     assert "lore_text" not in orc
+    assert "hp_base" not in orc        # undefeated → no stat card
+    assert orc["zone"] == "ranged"     # 'mag' keyword → dystans (coarse, shown to all)
+    assert orc["damage_type"] == "magical"
 
 
 def test_showcase_authed_unknown_user_all_locked(showcase_conn, monkeypatch):
@@ -307,4 +318,30 @@ def test_showcase_excludes_pending_and_discarded(showcase_conn, monkeypatch):
     monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
     keys = {e["enemy_key"] for e in bs.get_showcase_bestiary(None)["entries"]}
     assert "pending_one" not in keys and "discarded_one" not in keys
-    assert keys == {"goblin", "orc"}
+    assert keys == {"goblin", "orc_mag"}
+
+
+def test_showcase_defeated_count_ignores_non_catalogue_kills(showcase_conn, monkeypatch):
+    """A killed key that isn't in the shown catalogue (forge/stale) must NOT
+    inflate summary.defeated (regression: was len(defeated) over raw kills)."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    # user 5's hero 1 also 'killed' a non-catalogue key
+    showcase_conn.execute(
+        "INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) "
+        "VALUES (1,'forge_ghost',3,1)")
+    showcase_conn.commit()
+    r = bs.get_showcase_bestiary(5)
+    assert r["summary"]["defeated"] == 1  # only goblin (in catalogue), not forge_ghost
+    assert not any(e["enemy_key"] == "forge_ghost" for e in r["entries"])
+
+
+def test_showcase_defeated_gets_full_card(showcase_conn, monkeypatch):
+    """Defeated enemy exposes the full stat card; coarse fields shown for all."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(5)  # user 5 killed goblin
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["defeated"] is True
+    assert gob["hp_base"] == 12 and gob["ac_base"] == 11
+    assert gob["tier"] == "standard" and gob["damage_die"] == "1d6"
+    assert gob["stats"]["STR"] == 12
+    assert gob["zone"] == "engaged" and gob["damage_type"] == "physical"
