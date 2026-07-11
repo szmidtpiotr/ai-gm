@@ -8713,9 +8713,16 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 if nb not in discovered_coords and nb not in known_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
+        # #1196 — the hero's treasure hex must be visible even through fog (the map
+        # marker + "Użyj" jump target). Emit it via a dedicated block below; keep it
+        # out of the known/outline/unexplored loops to avoid a duplicate tile.
+        _treasure_only = {tc for tc in treasure_coords if tc not in discovered_coords}
+
         # PM1 (#1220): emit 'known' hexes — terrain visible, label only for
         # landmarks/canonical, NEVER location_key or game_locations data.
         for coord in known_coords:
+            if coord in _treasure_only:
+                continue
             hdata = all_hexes_l0.get(coord, {})
             cd = campaign_data.get(coord, {})
             _label = None
@@ -8744,11 +8751,27 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                         _unexplored_coords.add(nb)
 
         for coord in outline_coords:
+            if coord in _treasure_only:
+                continue
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "outline",
                                   "hex_type": None, "label": None})
         for coord in _unexplored_coords:
+            if coord in _treasure_only:
+                continue
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "unexplored",
                                   "hex_type": None, "label": None})
+
+        # #1196 — dedicated treasure marker tiles (visible through fog so the map
+        # always shows the ✕ goal + the "Użyj" jump has something to centre on).
+        for coord in _treasure_only:
+            hdata = all_hexes_l0.get(coord) or all_hexes.get(coord) or {}
+            result_hexes.append({
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": None,
+                "status": "known",
+                "is_treasure": True,
+            })
 
         # Teleport connections (only where at least one endpoint is discovered)
         teleports = [dict(t) for t in conn.execute(
