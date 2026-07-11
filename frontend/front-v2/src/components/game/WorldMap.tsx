@@ -67,6 +67,7 @@ export function WorldMap({
   // #1309 — heksy świeżo odsłonięte przez przedmiot-mapę: animujemy ich „wjazd".
   // Lokalny set seedowany z mapReveal.ts, kasowany po ~2,5 s (koniec animacji).
   const mapReveal = useAppStore((s) => s.mapReveal);
+  const clearMapReveal = useAppStore((s) => s.clearMapReveal);
   const [revealSet, setRevealSet] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     if (!mapReveal?.hexes?.length) {
@@ -82,7 +83,12 @@ export function WorldMap({
     setFocusPx(hexToPixel(fq, fr));
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    const t = setTimeout(() => setRevealSet(new Set()), 2500);
+    const t = setTimeout(() => {
+      setRevealSet(new Set());
+      // #1196 — skonsumowane: bez tego każde kolejne otwarcie zakładki Mapa
+      // re-centrowałoby na skarbie (mapReveal wisiał w store na stałe).
+      clearMapReveal();
+    }, 2500);
     return () => clearTimeout(t);
     // Retrigger po każdym nowym odsłonięciu (świeży ts → nowy obiekt mapReveal).
     // eslint-disable-next-line react-hooks/exhaustive-deps

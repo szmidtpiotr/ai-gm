@@ -124,6 +124,8 @@ export interface AppState {
   setGameTab: (t: GameTab) => void;
   /** #1309 — ustaw heksy do animacji odsłonięcia (stempluje świeży ts). */
   setMapReveal: (hexes: [number, number][]) => void;
+  /** #1196 — wyczyść po skonsumowaniu (inaczej każde otwarcie mapy re-centruje). */
+  clearMapReveal: () => void;
   /** #1196 — wymuś/zwolnij mapę świata. */
   setMapView: (v: "auto" | "world") => void;
   openShop: (ctx: ShopContext) => void;
@@ -208,6 +210,7 @@ export const useAppStore = create<AppState>((set) => ({
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
+  clearMapReveal: () => set({ mapReveal: null }),
   setMapView: (mapView) => set({ mapView }),
   openShop: (shop) => set({ shop }),
   closeShop: () => set({ shop: null }),

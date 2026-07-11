@@ -625,7 +625,7 @@ def get_treasure_maps(conn: sqlite3.Connection, character_id: int) -> dict:
                    (SELECT COUNT(*) FROM character_map_fragments f
                     WHERE f.treasure_id = wt.id AND f.character_id = ?) AS collected
             FROM world_treasures wt
-            WHERE wt.character_id = ?
+            WHERE wt.character_id = ? AND wt.state = 'buried'
               AND EXISTS (SELECT 1 FROM character_map_fragments f
                           WHERE f.treasure_id = wt.id AND f.character_id = ?)
             ORDER BY wt.id DESC
