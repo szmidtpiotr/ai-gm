@@ -142,6 +142,21 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   return { actor: "enemy", title: `${name} — ATAK`, cells, crit, fumble };
 }
 
+/** Etap d20 (na trafienie) dwuetapowej animacji kości: karta BEZ kości i wartości
+ * obrażeń — pokazuje tylko czy cios siadł. Pełna karta (z −X HP) wyświetla się
+ * dopiero po drugim etapie (kość obrażeń), żeby nie zdradzać wyniku przed rzutem. */
+export function toHitStageCard(full: RollCardData, hit: boolean): RollCardData {
+  const forPlayer = full.actor === "player";
+  const cells = full.cells.filter((c) => !c.res && !/^k\d+$/.test(c.k));
+  cells.push({
+    k: "Wynik",
+    v: hit ? "TRAFIENIE" : "PUDŁO",
+    res: true,
+    tone: hit ? (forPlayer ? "ok" : "bad") : forPlayer ? "warn" : "ok",
+  });
+  return { ...full, cells };
+}
+
 /** Wynik reakcji SF10 (wróg atakuje, Ty reagujesz) → karta (lewo/krwawy).
  * Jasno mówi czy unik/blok się udał + koloruje wg skutku dla Ciebie. */
 export function rollFromReaction(

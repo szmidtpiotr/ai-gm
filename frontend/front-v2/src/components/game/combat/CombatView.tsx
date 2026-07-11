@@ -17,6 +17,7 @@ import {
   rollFromPlayerAttack,
   rollFromEnemyAttack,
   rollFromReaction,
+  toHitStageCard,
 } from "@/lib/combat";
 import type { RollCardData } from "@/lib/types";
 import { useAppStore } from "@/store/appStore";
@@ -211,6 +212,7 @@ export function CombatView({
             face: r.damage_rolls[0] ?? 1,
             card,
             actor: "player",
+            stage: "damage",
           };
         } else {
           pendingDmgStageRef.current = null;
@@ -221,8 +223,10 @@ export function CombatView({
           notation: "1d20",
           forced: [face],
           face,
-          card,
+          // Etap d20 nie zdradza obrażeń — pełna karta dopiero po kości obrażeń.
+          card: pendingDmgStageRef.current ? toHitStageCard(card, true) : card,
           actor: "player",
+          stage: "attack",
           crit: !!r.player_nat20,
           fumble: !!r.player_nat1,
         });
@@ -331,6 +335,7 @@ export function CombatView({
               face: d20,
               card: rollFromEnemyAttack(r),
               actor: "enemy",
+              stage: "attack",
               crit: d20 === 20,
               fumble: d20 === 1,
             });
@@ -351,6 +356,7 @@ export function CombatView({
                 face: r.damage_rolls[0] ?? 1,
                 card: enemyCard,
                 actor: "enemy",
+                stage: "damage",
               };
             } else {
               pendingDmgStageRef.current = null;
@@ -361,8 +367,10 @@ export function CombatView({
               notation: "1d20",
               forced: [d20],
               face: d20,
-              card: enemyCard,
+              // Etap d20 nie zdradza obrażeń — pełna karta dopiero po kości obrażeń.
+              card: pendingDmgStageRef.current ? toHitStageCard(enemyCard, true) : enemyCard,
               actor: "enemy",
+              stage: "attack",
               crit: d20 === 20,
               fumble: d20 === 1,
             });

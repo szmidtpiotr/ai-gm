@@ -2,7 +2,7 @@
 // (lib/dice3d.ts, recreate-per-roll) — po zatrzymaniu odsłania kartę rzutu, potem zwija
 // się do feedu (wołający dostaje `onDone`). Fallback 2D gdy WebGL/silnik padnie.
 import { useEffect, useRef, useState } from "react";
-import { Sparkle, Cube } from "@phosphor-icons/react";
+import { Sparkle, Cube, Sword, Skull } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { RollCardData } from "@/lib/types";
 import { rollDice3D, type Dice3DConfig } from "@/lib/dice3d";
@@ -17,6 +17,7 @@ export interface DiceJob {
   fumble?: boolean;
   face: number; // wartość do pokazania w kości fallback 2D
   actor?: "player" | "enemy"; // kto rzuca — decyduje czy busy=false po animacji
+  stage?: "attack" | "damage"; // etap dwufazowego rzutu (d20 na trafienie / kość obrażeń)
 }
 
 const MOUNT_ID = "dice3d-mount";
@@ -77,6 +78,11 @@ export function Dice3DOverlay({
       ? "PECH — KOMPLIKACJA"
       : null;
 
+  // Akcent czyj rzut + etap — gracz (złoto) vs przeciwnik (krwawy).
+  const enemyRoll = job.actor === "enemy";
+  const stageLabel =
+    job.stage === "damage" ? "OBRAŻENIA" : job.stage === "attack" ? "NA TRAFIENIE" : null;
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden"
@@ -94,6 +100,33 @@ export function Dice3DOverlay({
           {(job.forced && job.forced.length > 1 ? job.forced : [job.face]).map((f, i) => (
             <Fallback2D key={i} face={f} sides={sidesOf(job.notation)} />
           ))}
+        </div>
+      )}
+
+      {/* Baner aktora rzutu — od razu wiadomo czy leci kość gracza, czy wroga. */}
+      {job.actor && (
+        <div className="pointer-events-none absolute inset-x-0 top-[max(2.25rem,var(--sa-top))] flex justify-center px-6">
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-md border px-4 py-1.5 font-ui text-[12px] font-semibold uppercase tracking-[.14em]",
+              enemyRoll
+                ? "border-danger/70 bg-[rgba(58,14,10,.78)] text-danger"
+                : "border-gold/70 bg-[rgba(56,42,22,.78)] text-gold",
+            )}
+            style={{
+              boxShadow: enemyRoll
+                ? "0 0 22px rgba(232,96,79,.28)"
+                : "0 0 22px rgba(232,193,90,.28)",
+            }}
+          >
+            {enemyRoll ? <Skull weight="fill" size={15} /> : <Sword weight="fill" size={15} />}
+            {enemyRoll ? "RZUT PRZECIWNIKA" : "TWÓJ RZUT"}
+            {stageLabel && (
+              <span className={cn("font-normal", enemyRoll ? "text-danger/70" : "text-gold/70")}>
+                · {stageLabel}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
