@@ -74,6 +74,12 @@ export function WorldMap({
       return;
     }
     setRevealSet(new Set(mapReveal.hexes.map(([q, r]) => `${q},${r}`)));
+    // #1196 — wyśrodkuj widok na pierwszym odsłoniętym heksie (skok „Użyj" mapy
+    // skarbu na jego cel). Jednorazowy pan — gracz może potem przesunąć swobodnie.
+    const [fq, fr] = mapReveal.hexes[0];
+    const fp = hexToPixel(fq, fr);
+    setZoom(1);
+    setPan({ x: center.x - fp.x, y: center.y - fp.y });
     const t = setTimeout(() => setRevealSet(new Set()), 2500);
     return () => clearTimeout(t);
     // Retrigger po każdym nowym odsłonięciu (świeży ts → nowy obiekt mapReveal).

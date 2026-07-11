@@ -422,7 +422,16 @@ function loreCatKey(it: InventoryItem): string {
 // nie plecak — grant przechwytywany do treasure-tabel). Licznik per treasure_id.
 function TreasureMapsSection({ characterId }: { characterId: number | undefined }) {
   const { data: maps } = useTreasureMaps(characterId);
+  const setGameTab = useAppStore((s) => s.setGameTab);
+  const setMapReveal = useAppStore((s) => s.setMapReveal);
   if (!maps || maps.length === 0) return null;
+
+  // „Użyj" — otwórz mapę świata i wyśrodkuj + podświetl heks skarbu (#1196).
+  const openOnMap = (hex: { q: number; r: number }) => {
+    setMapReveal([[hex.q, hex.r]]); // wymusza świat + glow + centrowanie (WorldMap)
+    setGameTab("map");
+  };
+
   return (
     <div className="mb-4 mt-3">
       <div className="mb-1.5 font-ui text-[10px] font-semibold uppercase tracking-[.12em] text-[#f2c14e]">
@@ -435,20 +444,31 @@ function TreasureMapsSection({ characterId }: { characterId: number | undefined 
             className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5"
           >
             <span className="font-bold text-[#f2c14e]">✕</span>
-            <span className="flex-1 text-sm text-text-1">{m.map_label}</span>
-            {m.complete ? (
-              m.hex ? (
-                <span className="text-[11px] text-[#f2c14e]">
-                  Cel: heks {m.hex.q},{m.hex.r}
-                  {m.region ? ` — ${m.region}` : ""}
-                </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm text-text-1">{m.map_label}</span>
+              {m.complete ? (
+                m.hex ? (
+                  <span className="text-[11px] text-[#f2c14e]">
+                    Cel: heks {m.hex.q},{m.hex.r}
+                    {m.region ? ` — ${m.region}` : ""}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-emerald-400">Kompletna</span>
+                )
               ) : (
-                <span className="text-[11px] text-emerald-400">Kompletna</span>
-              )
-            ) : (
-              <span className="text-[11px] text-text-3">
-                {m.collected}/{m.total_parts} części
-              </span>
+                <span className="text-[11px] text-text-3">
+                  {m.collected}/{m.total_parts} części
+                </span>
+              )}
+            </div>
+            {m.complete && m.hex && (
+              <button
+                type="button"
+                onClick={() => openOnMap(m.hex!)}
+                className="shrink-0 rounded-md border border-[#f2c14e]/50 px-2.5 py-1 text-xs font-semibold text-[#f2c14e] transition-colors hover:bg-[#f2c14e]/10"
+              >
+                Użyj
+              </button>
             )}
           </div>
         ))}
