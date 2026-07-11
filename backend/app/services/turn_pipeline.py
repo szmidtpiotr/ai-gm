@@ -1199,9 +1199,26 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
                 if _ok
                 else "Sytuacja rozeszła się po kościach, ale zostawiła ślad."
             )
+            # #1191 E4 — a successful quest_rumor leaves a persistent, confirmable
+            # Atlas rumor pointing at a deterministic target. Never breaks the turn.
+            _rumor_line = ""
+            if _ev == "quest_rumor" and _ok:
+                try:
+                    from app.services import rumor_service
+                    _hero = conn.execute(
+                        "SELECT id FROM characters WHERE campaign_id = ? "
+                        "AND COALESCE(is_active,1)=1 ORDER BY id LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if _hero:
+                        _r = rumor_service.create_rumor(campaign_id, _hero["id"], conn=conn)
+                        if _r and _r.get("rumor_text"):
+                            _rumor_line = f" Treść plotki: {_r['rumor_text']}"
+                except Exception as _e:
+                    logger.warning("rumor_hook_failed", error=str(_e))
             hint = (
                 f"\n[SYSTEM: W drodze do {dest_label} zaszło drobne zdarzenie: {_flavor}. "
-                f"{_res} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
+                f"{_res}{_rumor_line} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
             )
         else:
             # combat / combat_escalated — #1147: the fight has to actually HAPPEN

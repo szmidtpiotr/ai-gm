@@ -1208,6 +1208,23 @@ def get_character_chronicle(character_id: int):
         conn.close()
 
 
+@router.get("/characters/{character_id}/bestiary")
+def get_character_bestiary(character_id: int):
+    """#1191 E3 — Bestiariusz: full enemy catalogue with the hero's unlock tiers.
+
+    Locked entries (0 kills) return only {locked: true} — no name/key leak.
+    """
+    from app.services import bestiary_service
+    return bestiary_service.get_bestiary(character_id)
+
+
+@router.get("/characters/{character_id}/atlas")
+def get_character_atlas(character_id: int):
+    """#1191 E3 — Atlas Kresów: cross-campaign exploration stats for this hero."""
+    from app.services import atlas_service
+    return atlas_service.get_atlas(character_id)
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.

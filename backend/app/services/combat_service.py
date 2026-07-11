@@ -1914,6 +1914,20 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         if isinstance(_pr, dict) and "damage" in _pr:
             _pr = {k: v for k, v in _pr.items() if k != "damage"}
             _c["pending_reaction"] = _pr
+    # #1191 E2 — "wiedza łowcy" tier 2: expose enemy HP for types the hero has
+    # hunted enough. Flag each enemy combatant; MP uses the row owner's tiers.
+    try:
+        from app.services import bestiary_service as _bs
+        _hero_id = row["character_id"]
+        _eks = [str(_c.get("enemy_key") or "") for _c in _combatants
+                if _c.get("type") == "enemy" and _c.get("enemy_key")]
+        if _hero_id and _eks:
+            _tiers = _bs.get_entry_tiers(_hero_id, _eks)
+            for _c in _combatants:
+                if _c.get("type") == "enemy" and _c.get("enemy_key"):
+                    _c["hp_visible"] = _tiers.get(str(_c["enemy_key"]), 0) >= _bs.HP_VISIBLE_TIER
+    except Exception:
+        pass
     d: dict[str, Any] = {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
@@ -2760,6 +2774,20 @@ def _resolve_aoe_single_target(
 
     if dead:
         ek = str(tgt.get("enemy_key") or "")
+        # #1191 E1 — Bestiariusz: credit the killing hero (AOE path). No-op safe.
+        if ek and ch_id:
+            try:
+                from app.services.bestiary_service import record_kill
+                _bk = record_kill(ch_id, ek, conn=conn)
+                if _bk.get("tier_up"):
+                    out.setdefault("bestiary_tier_up", {
+                        "enemy_key": ek,
+                        "unlocked_tier": _bk.get("unlocked_tier"),
+                    })
+                from app.services import rumor_service as _rs
+                _rs.confirm_rumors_for(campaign_id, "enemy", ek, conn=conn)
+            except Exception:
+                pass
         # U25 (#575): flaga boss kill (pity timer afiksów)
         if str(tgt.get("tier") or "").strip().lower() == "boss":
             try:
@@ -6758,6 +6786,16 @@ def _resolve_player_attack_turn(
             out["durability_attack_penalty"] = _dur_atk_pen
     except Exception:
         pass
+    # #1191 E2 — "wiedza łowcy": +1 to-hit vs an enemy type the hero has hunted
+    # to tier 3 (15 kills). Mirrors proficiency; shown in the roll breakdown.
+    try:
+        from app.services.bestiary_service import hunter_hit_bonus as _hunter_fn
+        _hunter_bonus = _hunter_fn(ch_id, card_key, conn=conn)
+        if _hunter_bonus:
+            roll_result = int(roll_result) + _hunter_bonus
+            out["hunter_knowledge_bonus"] = _hunter_bonus
+    except Exception:
+        pass
     player_nat20 = player_raw == 20
     player_nat1 = player_raw == 1
     dodge_roll: dict[str, Any] | None = None
@@ -6932,6 +6970,21 @@ def _resolve_player_attack_turn(
         if dead:
             enemy["dead"] = True
             ek = str(enemy.get("enemy_key") or "")
+            # #1191 E1 — Bestiariusz: credit the killing hero (ch_id). MP credits
+            # only the killer per Numbers Policy. Never raises into the turn.
+            if ek and ch_id:
+                try:
+                    from app.services.bestiary_service import record_kill
+                    _bk = record_kill(ch_id, ek, conn=conn)
+                    if _bk.get("tier_up"):
+                        out["bestiary_tier_up"] = {
+                            "enemy_key": ek,
+                            "unlocked_tier": _bk.get("unlocked_tier"),
+                        }
+                    from app.services import rumor_service as _rs
+                    _rs.confirm_rumors_for(campaign_id, "enemy", ek, conn=conn)
+                except Exception:
+                    pass
             # U25 (#575): flag boss kills so post-combat loot claim can drive
             # the affix pity timer (guaranteed affix after a dry streak).
             if str(enemy.get("tier") or "").strip().lower() == "boss":

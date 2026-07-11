@@ -260,6 +260,13 @@ def enter_location_scene(campaign_id: int, location_key: str) -> dict:
             for _ in range(int(row["max_count"])):
                 if random.random() < float(row["spawn_chance"]):
                     scene_enemies.append({"key": row["enemy_key"], "name": row["name"]})
+        # #1191 E4 — entering a location confirms any open rumor about it.
+        try:
+            from app.services import rumor_service
+            rumor_service.confirm_rumors_for(campaign_id, "location", location_key, conn=conn)
+            conn.commit()
+        except Exception:
+            pass
     finally:
         conn.close()
 

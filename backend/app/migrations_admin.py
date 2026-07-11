@@ -6062,6 +6062,78 @@ def _drop_legacy_content_columns_1202(conn: sqlite3.Connection) -> None:
                 )
 
 
+def _ensure_bestiary_schema(conn: sqlite3.Connection) -> None:
+    """#1191 E1 — Bestiariusz: per-character kill counters per enemy type.
+
+    Idempotent. `character_bestiary` aggregates kills across ALL campaigns of a
+    hero (Hero-First model) via character_id. `unlocked_tier` is derived from
+    kills (0 none / 1 basic entry / 2 HP preview / 3 +1 to-hit). `lore_text` on
+    game_config_enemies is optional flavour prose (fallback = description).
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_bestiary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                enemy_key TEXT NOT NULL,
+                kills INTEGER NOT NULL DEFAULT 0,
+                first_kill_at TEXT,
+                last_kill_at TEXT,
+                unlocked_tier INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(character_id, enemy_key)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bestiary_char "
+            "ON character_bestiary(character_id)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("bestiary_schema_skipped", error=str(e))
+    # optional lore column on enemies (idempotent)
+    try:
+        conn.execute("ALTER TABLE game_config_enemies ADD COLUMN lore_text TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        msg = str(e).lower()
+        if "duplicate column" not in msg and "no such table" not in msg:
+            raise
+
+
+def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
+    """#1191 E4 — Atlas plotki: persistent rumors per character.
+
+    A successful `quest_rumor` social encounter records a rumor pointing at a
+    deterministic target (location / hex / enemy type). Discovering that target
+    later flips status heard→confirmed. Idempotent.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_rumors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                campaign_id INTEGER NOT NULL,
+                rumor_text TEXT NOT NULL,
+                target_type TEXT,
+                target_key TEXT,
+                status TEXT NOT NULL DEFAULT 'heard',
+                heard_at TEXT NOT NULL,
+                confirmed_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rumors_char "
+            "ON character_rumors(character_id, status)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("rumor_schema_skipped", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6219,6 +6291,8 @@ def run_admin_migrations() -> None:
         _ensure_encounter_catalog(conn)  # #1130 PT-D4a
         _backfill_local_hex_encounter_chance(conn)  # #1147
         _drop_legacy_content_columns_1202(conn)  # #1202 B — DEV↔PROD schema align
+        _ensure_bestiary_schema(conn)  # #1191 E1 — Bestiariusz kill counters
+        _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
