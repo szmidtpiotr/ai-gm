@@ -156,3 +156,109 @@ def test_get_bestiary_empty_for_unknown_hero(conn, monkeypatch):
     result = bs.get_bestiary(999)
     assert result["summary"]["unlocked"] == 0
     assert all(e["locked"] for e in result["entries"])
+
+
+# ── MP kill credit: all participants (#1191 follow-up) ───────────────────────
+
+def _kills(conn, cid, ek="goblin"):
+    row = conn.execute(
+        "SELECT kills FROM character_bestiary WHERE character_id=? AND enemy_key=?",
+        (cid, ek)).fetchone()
+    return row["kills"] if row else 0
+
+
+def test_credit_solo_only_killer(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    combatants = [
+        {"id": "player", "type": "player"},
+        {"id": "goblin_01", "type": "enemy", "enemy_key": "goblin"},
+    ]
+    out = {}
+    _credit_bestiary_kill(conn, combatants, 7, 100, "goblin", out)
+    assert _kills(conn, 7) == 1
+
+
+def test_credit_mp_all_participants(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    # 3-player party; killer is player 7. All three get the kill.
+    combatants = [
+        {"id": "player:7", "type": "player"},
+        {"id": "player:8", "type": "player"},
+        {"id": "player:9", "type": "player"},
+        {"id": "orc_01", "type": "enemy", "enemy_key": "goblin"},
+    ]
+    out = {}
+    _credit_bestiary_kill(conn, combatants, 7, 100, "goblin", out)
+    assert _kills(conn, 7) == 1
+    assert _kills(conn, 8) == 1
+    assert _kills(conn, 9) == 1
+    # tier-up surfaced for the killer only
+    assert out.get("bestiary_tier_up", {}).get("enemy_key") == "goblin"
+
+
+def test_credit_noop_without_enemy_key(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    out = {}
+    _credit_bestiary_kill(conn, [{"id": "player:7", "type": "player"}], 7, 100, "", out)
+    assert conn.execute("SELECT COUNT(*) FROM character_bestiary").fetchone()[0] == 0
+
+
+# ── Showcase bestiary (#1191 / #915): public teaser + per-account enrichment ──
+
+@pytest.fixture()
+def showcase_conn():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(
+        """
+        CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT, UNIQUE(character_id,enemy_key));
+        CREATE TABLE characters (id INTEGER PRIMARY KEY, user_id INTEGER);
+        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT);
+        """
+    )
+    c.executemany(
+        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier) VALUES (?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "1"),
+         ("orc", "Ork", "Duży drań.", "", "/img/orc.png", "2"),
+         ("noimg", "Bezobrazek", "x", "y", None, "1")],  # no portrait → excluded
+    )
+    # user 5 has two heroes; hero 1 killed goblin ×3, hero 2 killed goblin ×2
+    c.execute("INSERT INTO characters (id,user_id) VALUES (1,5)")
+    c.execute("INSERT INTO characters (id,user_id) VALUES (2,5)")
+    c.execute("INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) VALUES (1,'goblin',3,1)")
+    c.execute("INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) VALUES (2,'goblin',2,1)")
+    c.commit()
+    yield c
+    c.close()
+
+
+def test_showcase_anon_teaser_no_lore_leak(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(None)
+    assert r["authenticated"] is False
+    assert r["summary"]["total"] == 2  # noimg excluded
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["teaser"] == "Goblin skrada się nocą."   # first sentence only
+    assert gob["defeated"] is False
+    assert "lore_text" not in gob and "description" not in gob  # anon must not get full text
+
+
+def test_showcase_authed_enriches_defeated_aggregated(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(5)
+    assert r["authenticated"] is True
+    assert r["summary"]["defeated"] == 1
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["defeated"] is True
+    assert gob["kills"] == 5            # 3 + 2 across both heroes of the account
+    assert gob["lore_text"]            # full lore unlocked
+    orc = next(e for e in r["entries"] if e["enemy_key"] == "orc")
+    assert orc["defeated"] is False    # not killed → still teaser-only
+    assert "lore_text" not in orc
+
+
+def test_showcase_authed_unknown_user_all_locked(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(999)
+    assert r["summary"]["defeated"] == 0
+    assert all(not e["defeated"] for e in r["entries"])

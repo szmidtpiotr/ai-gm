@@ -2774,20 +2774,8 @@ def _resolve_aoe_single_target(
 
     if dead:
         ek = str(tgt.get("enemy_key") or "")
-        # #1191 E1 — Bestiariusz: credit the killing hero (AOE path). No-op safe.
-        if ek and ch_id:
-            try:
-                from app.services.bestiary_service import record_kill
-                _bk = record_kill(ch_id, ek, conn=conn)
-                if _bk.get("tier_up"):
-                    out.setdefault("bestiary_tier_up", {
-                        "enemy_key": ek,
-                        "unlocked_tier": _bk.get("unlocked_tier"),
-                    })
-                from app.services import rumor_service as _rs
-                _rs.confirm_rumors_for(campaign_id, "enemy", ek, conn=conn)
-            except Exception:
-                pass
+        # #1191 — Bestiariusz: credit kill (AOE path; solo=killer, MP=all).
+        _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
         # U25 (#575): flaga boss kill (pity timer afiksów)
         if str(tgt.get("tier") or "").strip().lower() == "boss":
             try:
@@ -5210,6 +5198,40 @@ def _mp_player_char_id(actor_id: str) -> int | None:
         return None
 
 
+def _credit_bestiary_kill(conn, combatants, killer_ch_id, campaign_id, enemy_key, out) -> None:
+    """#1191 — record an enemy kill in the Bestiariusz + confirm matching rumors.
+
+    Solo: credits the killer. MP (#1191 follow-up): credits EVERY player that
+    took part in the fight — all `player:{id}` combatants, alive or downed —
+    per Piotr's decision (shared trophy). Never raises into the combat turn.
+    """
+    if not enemy_key:
+        return
+    try:
+        from app.services.bestiary_service import record_kill
+        credited: list[int] = []
+        if _is_mp_combat(combatants):
+            for c in combatants:
+                if c.get("type") == "player":
+                    cid = _mp_player_char_id(str(c.get("id") or ""))
+                    if cid is not None:
+                        credited.append(cid)
+        if not credited and killer_ch_id:
+            credited = [int(killer_ch_id)]
+        for cid in dict.fromkeys(credited):  # dedup, preserve order
+            bk = record_kill(cid, enemy_key, conn=conn)
+            # surface tier-up for the killer so the UI can toast
+            if killer_ch_id and cid == int(killer_ch_id) and bk.get("tier_up"):
+                out.setdefault("bestiary_tier_up", {
+                    "enemy_key": enemy_key,
+                    "unlocked_tier": bk.get("unlocked_tier"),
+                })
+        from app.services import rumor_service as _rs
+        _rs.confirm_rumors_for(campaign_id, "enemy", enemy_key, conn=conn)
+    except Exception:
+        pass
+
+
 def initiate_combat_mp(
     campaign_id: int,
     character_ids: list[int],
@@ -6970,21 +6992,8 @@ def _resolve_player_attack_turn(
         if dead:
             enemy["dead"] = True
             ek = str(enemy.get("enemy_key") or "")
-            # #1191 E1 — Bestiariusz: credit the killing hero (ch_id). MP credits
-            # only the killer per Numbers Policy. Never raises into the turn.
-            if ek and ch_id:
-                try:
-                    from app.services.bestiary_service import record_kill
-                    _bk = record_kill(ch_id, ek, conn=conn)
-                    if _bk.get("tier_up"):
-                        out["bestiary_tier_up"] = {
-                            "enemy_key": ek,
-                            "unlocked_tier": _bk.get("unlocked_tier"),
-                        }
-                    from app.services import rumor_service as _rs
-                    _rs.confirm_rumors_for(campaign_id, "enemy", ek, conn=conn)
-                except Exception:
-                    pass
+            # #1191 — Bestiariusz: credit kill (solo=killer, MP=all participants).
+            _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
             # U25 (#575): flag boss kills so post-combat loot claim can drive
             # the affix pity timer (guaranteed affix after a dry streak).
             if str(enemy.get("tier") or "").strip().lower() == "boss":

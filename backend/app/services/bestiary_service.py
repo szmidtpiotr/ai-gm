@@ -253,3 +253,90 @@ def _next_threshold(kills: int) -> int | None:
         if kills < need:
             return need
     return None
+
+
+def _first_sentence(text: str | None) -> str:
+    """First sentence of a lore/description string, for the public teaser."""
+    if not text:
+        return ""
+    t = text.strip()
+    for sep in (". ", "! ", "? "):
+        i = t.find(sep)
+        if i != -1:
+            return t[: i + 1].strip()
+    # single sentence — trim to a safe length
+    return (t[:160].rstrip() + "…") if len(t) > 160 else t
+
+
+def get_showcase_bestiary(user_id: Any = None) -> dict[str, Any]:
+    """#1191 / #915 — bestiary for the public showcase page.
+
+    Anonymous: every enemy that has a portrait, exposing name + portrait + a
+    one-sentence teaser (NO full lore/description/stats). When a logged-in game
+    account is supplied (unified auth, #915), enemies that account's heroes have
+    defeated are enriched with full description + lore + total kill count and
+    flagged `defeated: true` (aggregated across ALL the account's heroes).
+    """
+    c = _conn()
+    try:
+        enemies = c.execute(
+            "SELECT key, label, description, lore_text, image_url, tier "
+            "FROM game_config_enemies "
+            "WHERE image_url IS NOT NULL AND image_url != '' "
+            "ORDER BY COALESCE(tier, 0), label"
+        ).fetchall()
+
+        defeated: dict[str, int] = {}
+        uid = None
+        if user_id is not None:
+            try:
+                uid = int(user_id)
+            except (TypeError, ValueError):
+                uid = None
+        if uid is not None:
+            try:
+                rows = c.execute(
+                    "SELECT b.enemy_key, SUM(b.kills) AS kills "
+                    "FROM character_bestiary b "
+                    "JOIN characters ch ON ch.id = b.character_id "
+                    "WHERE ch.user_id = ? AND b.kills >= 1 "
+                    "GROUP BY b.enemy_key",
+                    (uid,),
+                ).fetchall()
+                defeated = {r["enemy_key"]: int(r["kills"]) for r in rows}
+            except Exception as e:
+                logger.warning("showcase_bestiary_user_join_failed", error=str(e))
+
+        entries: list[dict[str, Any]] = []
+        for e in enemies:
+            base = {
+                "enemy_key": e["key"],
+                "name": e["label"],
+                "image_url": e["image_url"],
+                "teaser": _first_sentence(e["lore_text"] or e["description"]),
+                "defeated": False,
+            }
+            if e["key"] in defeated:
+                base["defeated"] = True
+                base["kills"] = defeated[e["key"]]
+                base["description"] = e["description"]
+                base["lore_text"] = e["lore_text"] or e["description"]
+            entries.append(base)
+
+        total = len(entries)
+        defeated_count = len(defeated)
+        return {
+            "entries": entries,
+            "authenticated": uid is not None,
+            "summary": {
+                "total": total,
+                "defeated": defeated_count,
+                "pct": round(100 * defeated_count / total) if total else 0,
+            },
+        }
+    except Exception as e:
+        logger.warning("showcase_bestiary_failed", error=str(e))
+        return {"entries": [], "authenticated": False,
+                "summary": {"total": 0, "defeated": 0, "pct": 0}}
+    finally:
+        c.close()

@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/showcase.css?v=12">
+<link rel="stylesheet" href="assets/css/showcase.css?v=13">
 </head>
 <body>
 
@@ -36,11 +36,13 @@
     <a href="#jak-gra">Jak się gra</a>
     <a href="#multiplayer">Multiplayer</a>
     <a href="#swiat">Świat</a>
+    <a href="bestiariusz.html">Bestiariusz</a>
     <a href="/rules/">Księga Zasad</a>
     <a href="#historia">Historia</a>
     <a href="#faq">FAQ</a>
     <a href="changelog.html">Co nowego</a>
   </div>
+  <span class="nav-auth" id="nav-auth"></span>
   <a class="nav-cta" href="/graj/">ZAGRAJ</a>
   <button class="nav-toggle" aria-label="Menu">☰</button>
 </div></nav>
@@ -196,6 +198,26 @@
 
 <!-- Umami analytics (#914 W13) — self-hosted on :3100 -->
 <script defer src="http://192.168.1.61:3100/script.js" data-website-id="b3e65e72-07bf-4a0b-b860-783cf1a0dc95"></script>
+<script src="assets/js/showcase-auth.js?v=1"></script>
 <script src="assets/js/showcase.js?v=13"></script>
+<script>
+  // #915 — nav auth chip (login / user + logout), shared game session.
+  (function () {
+    var el = document.getElementById("nav-auth");
+    if (!el || !window.AIGMAuth) return;
+    var esc = function (s) { return String(s || "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+    window.AIGMAuth.onChange(function (u) {
+      if (u) {
+        el.innerHTML = '<span class="nav-user">▸ ' + esc(u.displayName || u.username) +
+          '</span><button class="nav-logout" type="button">Wyloguj</button>';
+        el.querySelector(".nav-logout").onclick = function () { window.AIGMAuth.logout(); };
+      } else {
+        el.innerHTML = '<button class="nav-login" type="button">Zaloguj</button>';
+        el.querySelector(".nav-login").onclick = function () { window.AIGMAuth.openLogin(); };
+      }
+    });
+  })();
+</script>
 </body>
 </html>

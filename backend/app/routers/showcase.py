@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.core.db_runtime import resolve_db_path
+from app.core.jwt_auth import current_user_optional
 from app.services.admin_auth import verify_admin_token
 
 router = APIRouter()
@@ -49,6 +50,22 @@ def subscribe_email(req: SubscribeRequest):
     finally:
         conn.close()
     return {"ok": True}
+
+
+@router.get("/api/showcase/bestiary")
+def showcase_bestiary(user=Depends(current_user_optional)):
+    """#1191 / #915 — public bestiary gallery. Anonymous: portrait + name +
+    one-sentence teaser. Logged-in game account (unified auth #915): enemies the
+    account's heroes have defeated are enriched with full lore + kill count.
+    """
+    from app.services.bestiary_service import get_showcase_bestiary
+    uid = None
+    if user:
+        try:
+            uid = int(user.get("sub"))
+        except (TypeError, ValueError):
+            uid = None
+    return get_showcase_bestiary(uid)
 
 
 @router.get("/api/admin/showcase/{content}")
