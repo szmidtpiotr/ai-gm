@@ -92,6 +92,9 @@ export interface AppState {
   /** #1309 — użycie przedmiotu-mapy: heksy do „wjechania" animacją na mapie świata.
    *  `ts` pozwala retriggerować animację przy powtórnym odsłonięciu tych samych heksów. */
   mapReveal: { hexes: [number, number][]; ts: number } | null;
+  /** #1196 — wymuszenie mapy ŚWIATA (nie lokalnej osady) po kliknięciu „Użyj" na
+   *  mapie skarbu. Czytane wprost w renderze — niezależne od efektu forceWorldMap. */
+  mapView: "auto" | "world";
   /** FE12 (#1261) — otwarty sklep (overlay) albo null. */
   shop: ShopContext | null;
   /** #1292 — otwarty modal Usług (klucz lokacji) albo null. Mechaniczny, omija LLM. */
@@ -121,6 +124,8 @@ export interface AppState {
   setGameTab: (t: GameTab) => void;
   /** #1309 — ustaw heksy do animacji odsłonięcia (stempluje świeży ts). */
   setMapReveal: (hexes: [number, number][]) => void;
+  /** #1196 — wymuś/zwolnij mapę świata. */
+  setMapView: (v: "auto" | "world") => void;
   openShop: (ctx: ShopContext) => void;
   closeShop: () => void;
   openServices: (locationKey: string) => void;
@@ -179,6 +184,7 @@ export const useAppStore = create<AppState>((set) => ({
   currentCampaignId: null,
   gameTab: "story",
   mapReveal: null,
+  mapView: "auto",
   shop: null,
   services: null,
   servicesReceiptPending: null,
@@ -198,10 +204,11 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", mapReveal: null, shop: null, services: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
+  setMapView: (mapView) => set({ mapView }),
   openShop: (shop) => set({ shop }),
   closeShop: () => set({ shop: null }),
   openServices: (locationKey) => set({ services: locationKey }),

@@ -155,9 +155,17 @@ export default function Game() {
   // zakładkę Mapa i ustawia mapReveal; tu wymuszamy mapę ŚWIATA (nie lokalną osadę),
   // by gracz zobaczył wjeżdżające nowe heksy.
   const mapReveal = useAppStore((s) => s.mapReveal);
+  // #1196 — „Użyj" mapy skarbu wymusza mapę świata deterministycznie (czytane
+  // wprost w renderze, bez wyścigu z efektem forceWorldMap / cache mapy lokalnej).
+  const mapView = useAppStore((s) => s.mapView);
+  const setMapView = useAppStore((s) => s.setMapView);
   useEffect(() => {
     if (mapReveal) setForceWorldMap(true);
   }, [mapReveal]);
+  // Wyjście z mapy zwalnia pin świata — następne otwarcie mapy działa normalnie.
+  useEffect(() => {
+    if (gameTab !== "map" && mapView === "world") setMapView("auto");
+  }, [gameTab, mapView, setMapView]);
   // PM4: wybór trasy (na wprost / traktem) jako modal z 2 przyciskami zamiast
   // pytania tekstem. Wypełniany, gdy tura zwróci suggested_actions type=route_choice.
   const [routeChoice, setRouteChoice] = useState<
@@ -605,14 +613,14 @@ export default function Game() {
       {gameTab === "map" ? (
         // FAZA ML: w osadzie z sub-lokacjami domyślnie mapa lokalna; „Świat"/„Osada"
         // przełącza. F-43 mapa świata + podróż (#1235) — własny nagłówek + cinematyka.
-        localMap.data?.has_local_map && !forceWorldMap ? (
+        localMap.data?.has_local_map && !forceWorldMap && mapView !== "world" ? (
           <LocalMap campaignId={campaignId!} onWorld={() => setForceWorldMap(true)} />
         ) : (
           <WorldMap
             campaignId={campaignId!}
             characterId={characterId}
             localAvailable={!!localMap.data?.has_local_map}
-            onOpenLocal={() => setForceWorldMap(false)}
+            onOpenLocal={() => { setForceWorldMap(false); setMapView("auto"); }}
             onRest={() => onChip({ label: "Odpocznij", text: "REST:long", action: "REST:long" }, shownChips)}
             onCamp={() => onChip({ label: "Rozbij obóz", text: "BUILD_CAMP", action: "BUILD_CAMP" }, shownChips)}
             onResume={() => onChip({ label: "Kontynuuj podróż", text: "TRAVEL_RESUME", action: "TRAVEL_RESUME" }, shownChips)}

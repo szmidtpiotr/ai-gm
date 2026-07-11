@@ -424,11 +424,14 @@ function TreasureMapsSection({ characterId }: { characterId: number | undefined 
   const { data: maps } = useTreasureMaps(characterId);
   const setGameTab = useAppStore((s) => s.setGameTab);
   const setMapReveal = useAppStore((s) => s.setMapReveal);
+  const setMapView = useAppStore((s) => s.setMapView);
   if (!maps || maps.length === 0) return null;
 
-  // „Użyj" — otwórz mapę świata i wyśrodkuj + podświetl heks skarbu (#1196).
+  // „Użyj" — otwórz mapę ŚWIATA (nie lokalną osadę) i wyśrodkuj + podświetl heks
+  // skarbu (#1196). mapView='world' wymusza świat deterministycznie w renderze.
   const openOnMap = (hex: { q: number; r: number }) => {
-    setMapReveal([[hex.q, hex.r]]); // wymusza świat + glow + centrowanie (WorldMap)
+    setMapView("world");
+    setMapReveal([[hex.q, hex.r]]); // glow + centrowanie (WorldMap)
     setGameTab("map");
   };
 
