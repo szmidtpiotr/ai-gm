@@ -1069,6 +1069,27 @@ def _on_zero_hp_save(
     return None
 
 
+def _apply_death_save_ladder(
+    combatant: dict[str, Any], out: dict[str, Any], *, d20: int | None = None,
+) -> dict[str, Any]:
+    """#1313: rzut na śmierć z rosnącym DC (drabina 10/13/16/19). Wpinany PO nieudanej
+    kondycji `on_zero_hp_save`. Czysty d20 (bez modyfikatorów). Sukces / porażka poniżej
+    ``DEATH_SAVE_MAX_FAILURES`` → gracz zostaje na 1 HP („dying"); tyle porażek → śmierć
+    (nieprzytomność jak dziś). Liczniki (`death_save_count`, `death_failures`) żyją na
+    combatancie (`p`) → per-postać, MP-safe, persystowane przez _persist_combatants.
+    """
+    count = int(combatant.get("death_save_count", 0) or 0) + 1
+    combatant["death_save_count"] = count
+    dc = get_death_save_dc(count)
+    raw = int(d20) if d20 is not None else int(roll_d20())
+    prior_fail = int(combatant.get("death_failures", 0) or 0)
+    res = resolve_death_save_outcome(raw, dc, prior_fail)
+    combatant["death_failures"] = int(res["total_failures"])
+    res["death_save_count"] = count
+    out["death_save"] = res
+    return res
+
+
 # ─── S15 (#610): system reakcji + skill `dodge`. Okno reakcji PRZED aplikacją obrażeń.
 
 def _record_reaction_rolls(campaign_id, character_id, combat_id, round_n, out) -> None:
@@ -1099,6 +1120,19 @@ def _record_reaction_rolls(campaign_id, character_id, combat_id, round_n, out) -
                 outcome="success" if save.get("saved") else "fail",
                 meta={"round": round_n, "stat": save.get("stat"),
                       "condition": save.get("condition_key")},
+            )
+        # #1313: rzut drabiny na śmierć (rosnące DC) → karta UI „death save".
+        ds = out.get("death_save") or {}
+        if ds and ds.get("roll") is not None:
+            _rec_roll(
+                campaign_id=campaign_id, roll_type="death_save", character_id=character_id,
+                combat_id=combat_id, actor="player", notation="1d20",
+                raw_rolls=[int(ds["roll"])], total=int(ds.get("roll") or 0),
+                dc=int(ds.get("dc") or 0),
+                outcome=str(ds.get("outcome") or "").lower(),
+                meta={"round": round_n, "death_save_count": ds.get("death_save_count"),
+                      "total_failures": ds.get("total_failures"),
+                      "nat20": ds.get("nat20"), "nat1": ds.get("nat1")},
             )
     except Exception:
         pass
@@ -4574,6 +4608,8 @@ def initiate_combat(
                 "initiative_roll": init_player,
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
+                "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
+                "death_failures": 0,
             }
         ]
 
@@ -5212,6 +5248,8 @@ def initiate_combat_mp(
                 "initiative_roll": init_roll,
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
+                "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
+                "death_failures": 0,
             })
             # Tie-break: lower list index wins (first player in list wins ties)
             turn_slots.append((actor_id, init_roll, idx))
@@ -7519,6 +7557,11 @@ def _resolve_enemy_attack_turn(
                 out["on_zero_hp_save"] = save_res
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
+            # #1313: brak ratunku kondycją → rzut drabiny na śmierć (rosnące DC).
+            if next_hp <= 0 and not (save_res and save_res.get("saved")):
+                _ds = _apply_death_save_ladder(p, out)
+                if not _ds["dead"]:
+                    next_hp = 1   # SURVIVED lub FAILED<3 → zostaje na 1 HP („dying")
         _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), int(row["round"] or 1), out)
         # #853: strukturalny rejestr — obrażenia wroga na graczu
         try:
@@ -7856,6 +7899,11 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["on_zero_hp_save"] = save_res
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
+            # #1313: brak ratunku kondycją → rzut drabiny na śmierć (ścieżka reakcji).
+            if next_hp <= 0 and not (save_res and save_res.get("saved")):
+                _ds = _apply_death_save_ladder(p, out)
+                if not _ds["dead"]:
+                    next_hp = 1   # SURVIVED lub FAILED<3 → zostaje na 1 HP („dying")
         _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), round_n, out)
         # #761: rejestr zmiany HP gracza (cios wroga — ścieżka reakcji)
         if next_hp != prev:
