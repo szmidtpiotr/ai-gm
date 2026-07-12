@@ -19,6 +19,25 @@ TEMPLATE_FALLBACK_BASE_PROB = 0.5
 MP_ENEMY_PER_PLAYER = 1.0   # multiplicative: count × party_size (capped)
 MP_ENEMY_COUNT_CAP = 4      # max extra enemies per enemy type above solo baseline
 
+# ── BL-A2 (#1328) — kompozycyjny generator spotkań ────────────────────────────
+# Zamiast wyłącznie ręcznych szablonów: buduj spotkanie z puli wrogów pod budżet
+# zagrożenia. Pula = world_scope='global' AND review_status='permanent' AND
+# is_active=1 + dopasowanie terenu + pasmo poziomów. Wszystkie liczby to STARTING
+# VALUES (Numbers Policy) — budżet i split strojlne z game_config_meta, wagi threat
+# to stałe kodu strojone w Sandboxie. Power Score wejdzie w BL-A5 (#1332).
+THREAT_W_HP = 1.0           # waga punktów życia w wartości zagrożenia wroga
+THREAT_W_DPR = 2.0          # waga średnich obrażeń/turę (dpr)
+THREAT_W_ATK = 1.0          # waga premii do trafienia
+THREAT_W_AC = 0.5           # waga redukcji z pancerza (ac_base − 10)
+THREAT_BUDGET_BASE = 30.0        # budżet zagrożenia na poziomie 1 (≈1 silny/2 słabych)
+THREAT_BUDGET_PER_LEVEL = 25.0   # przyrost budżetu na każdy poziom bohatera powyżej 1
+COMPOSITION_BASE_PROB = 0.5      # bazowa szansa odpalenia kompozycji (× dwell), parytet z szablonem
+DEFAULT_COMPOSITION_SPLIT = 0.5  # szansa: kompozycja vs ręczny szablon (start 50/50)
+# Wzorce kompozycji i ich wagi losowania (herszt wymaga ≥2 różnych tierów).
+_COMPOSITION_PATTERNS = ("solo", "wataha", "herszt")
+_COMPOSITION_PATTERN_WEIGHTS = (0.35, 0.40, 0.25)
+_TIER_RANK = {"weak": 0, "standard": 1, "elite": 2, "boss": 3}
+
 
 def _slugify(text: str) -> str:
     text = unicodedata.normalize("NFD", str(text).lower())
@@ -163,30 +182,54 @@ def maybe_inject_encounter(
             _settle = 3
         dwell = dwell_chance_multiplier(sf.get("turns_at_location", 0), settle_turns=_settle)
 
-        # 2. Get hex context for biome/pool filtering
+        # 2. Get hex context for biome/pool filtering.
+        #    BL-A2 (#1328): the live world_hexes column is `encounter_pool`; some
+        #    test schemas use `forge_encounter_pool`. Read whichever exists so the
+        #    whole injector (hex_type → composition/catalog) isn't dead when the
+        #    forge column is absent (was: hard-coded forge_encounter_pool → always
+        #    threw on the real DB → zero auto-encounters). forge_* still wins where
+        #    present, preserving its priority.
         hex_type = None
         hex_pool = []
         if q is not None and r is not None:
+            pool_col = _world_hex_pool_column(conn)
+            select_cols = f"hex_type, {pool_col} AS pool_json" if pool_col else "hex_type"
             hex_row = conn.execute(
-                "SELECT hex_type, forge_encounter_pool FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+                f"SELECT {select_cols} FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
                 (q, r),
             ).fetchone()
             if hex_row:
                 hex_type = hex_row["hex_type"]
-                try:
-                    hex_pool = json.loads(hex_row["forge_encounter_pool"] or "[]")
-                except Exception:
-                    hex_pool = []
+                if pool_col:
+                    try:
+                        hex_pool = json.loads(hex_row["pool_json"] or "[]")
+                    except Exception:
+                        hex_pool = []
 
         # 2b. PT-D4d (#1133) — kanoniczny katalog (game_config_encounters) jest
         #     nadrzędnym źródłem combatu dla danego biomu/poziomu. Gdy katalog ma
         #     pasujący rekord — rozstrzyga on ten dobór (trafi lub nie); pusty
         #     katalog → spadamy do legacy puli adventure_hooks (zero regresji).
         if hex_type:
+            _cat_level = _hero_level_for_campaign(conn, campaign_id)
+            # BL-A2 (#1328) — split ręczny szablon vs kompozycja (start 50/50,
+            # game_config_meta). Gdy los wskaże kompozycję i pula global/permanent
+            # dla terenu+pasma nie jest pusta — buduj spotkanie z wrogów; inaczej
+            # (albo pusta pula) spadamy do katalogu szablonów (bez marnowania tury).
+            if random.random() < _composition_split(conn):
+                try:
+                    composed = encounter_composer(
+                        conn, level=_cat_level, hex_type=hex_type
+                    )
+                except Exception:
+                    composed = None
+                if composed:
+                    return _fire_composed_combat(
+                        conn, campaign_id, sf, trigger, composed, dwell
+                    )
             cat_row = None
             try:
                 from app.services import encounter_catalog_service as _cat
-                _cat_level = _hero_level_for_campaign(conn, campaign_id)
                 cat_row = _cat.draw_combat(conn, hex_type, _cat_level)
             except Exception:
                 cat_row = None
@@ -354,6 +397,52 @@ def _fire_catalog_combat(
     return True
 
 
+def _fire_composed_combat(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    sf: dict,
+    trigger: str,
+    composed: dict,
+    dwell: float,
+) -> bool:
+    """BL-A2 (#1328) — wstrzyknij skomponowane spotkanie (jak _fire_catalog_combat).
+
+    Szansa odpalenia = COMPOSITION_BASE_PROB × dwell (parytet z fallbackiem szablonu).
+    Wrogowie pochodzą z game_config_enemies (realne rekordy) — ensure_* jest bezpieczne
+    (idempotentne). Skala liczebności #824 działa na wyniku. Zwraca True gdy wstrzyknięto.
+    """
+    if random.random() > COMPOSITION_BASE_PROB * dwell:
+        return False
+    enc = {
+        "label": composed.get("label"),
+        "source": "composed",
+        "composition_pattern": composed.get("composition_pattern"),
+        "trigger": trigger,
+        "enemies": composed.get("enemies") or [],
+        "threat_budget": composed.get("threat_budget"),
+        "threat_spent": composed.get("threat_spent"),
+    }
+    enc = ensure_encounter_enemies_in_db(conn, enc)
+    party_size = _party_size_for_campaign(conn, campaign_id)
+    if enc.get("enemies"):
+        enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
+    sf["active_encounter"] = enc
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(sf, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    logger.info(
+        "encounter_composed_injected",
+        trigger=trigger,
+        pattern=composed.get("composition_pattern"),
+        campaign_id=campaign_id,
+        threat_budget=composed.get("threat_budget"),
+        threat_spent=composed.get("threat_spent"),
+    )
+    return True
+
+
 def _is_robbery(enc: dict) -> bool:
     """U24 — czy kandydat to napad (robbery)."""
     try:
@@ -451,6 +540,23 @@ def dwell_chance_multiplier(turns_at_location, settle_turns: int = 3) -> float:
     return max(0.1, 1.0 - 0.18 * (extra + 1))
 
 
+def _world_hex_pool_column(conn: sqlite3.Connection) -> str | None:
+    """BL-A2 (#1328) — nazwa kolumny puli forge na world_hexes.
+
+    Live DB ma `encounter_pool`; część schematów testowych ma `forge_encounter_pool`.
+    Zwraca `forge_encounter_pool` gdy istnieje (zachowuje jej priorytet), inaczej
+    `encounter_pool`, inaczej None (brak kolumny puli)."""
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(world_hexes)")}
+    except sqlite3.OperationalError:
+        return None
+    if "forge_encounter_pool" in cols:
+        return "forge_encounter_pool"
+    if "encounter_pool" in cols:
+        return "encounter_pool"
+    return None
+
+
 def _parse_tags(raw) -> list[str]:
     """location_tags może być JSON array albo CSV. Zwraca lowercase listę."""
     if not raw:
@@ -525,6 +631,202 @@ def _scale_enemy_counts(enemies: list, party_size: int) -> list:
         scaled = min(base * party_size, base + MP_ENEMY_COUNT_CAP)
         result.append({**e, "count": scaled})
     return result
+
+
+# ── BL-A2 (#1328) — kompozycyjny generator spotkań ────────────────────────────
+
+def _avg_die(die_str) -> float:
+    """Średnia wartość rzutu kością zapisanego jako '1d6' / 'd8' / '2d4'."""
+    m = re.match(r"\s*(\d*)\s*d\s*(\d+)", str(die_str or "").strip(), re.IGNORECASE)
+    if not m:
+        return 3.0
+    n = int(m.group(1) or 1)
+    faces = int(m.group(2) or 6)
+    return n * (faces + 1) / 2.0
+
+
+def enemy_threat_value(enemy: dict) -> float:
+    """BL-A2 (#1328) — wartość zagrożenia wroga z jego statów bojowych.
+
+    Spójna miara siły użyta przy budowaniu spotkania pod budżet: życie + średnie
+    obrażenia/turę (uwzględnia damage_bonus i attacks_per_turn) + premia do trafienia
+    + redukcja z pancerza. Wagi to STARTING VALUES (strojenie w Sandboxie). BL-A5
+    (#1332) podmieni budżet na f(Power Score) — ta funkcja pozostaje.
+    """
+    hp = float(enemy.get("hp_base") or 1)
+    atk = float(enemy.get("attack_bonus") or 0)
+    dmg_bonus = float(enemy.get("damage_bonus") or 0)
+    apt = max(1, int(enemy.get("attacks_per_turn") or 1))
+    ac = float(enemy.get("ac_base") or 10)
+    dpr = (_avg_die(enemy.get("damage_die")) + dmg_bonus) * apt
+    armor = max(0.0, ac - 10.0)
+    return round(
+        hp * THREAT_W_HP + dpr * THREAT_W_DPR + atk * THREAT_W_ATK + armor * THREAT_W_AC,
+        2,
+    )
+
+
+def _meta_float(conn: sqlite3.Connection, key: str, default: float) -> float:
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ? LIMIT 1", (key,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return default
+    if not row:
+        return default
+    try:
+        return float(row[0])
+    except (TypeError, ValueError):
+        return default
+
+
+def threat_budget_for_level(conn: sqlite3.Connection, level: int) -> float:
+    """BL-A2 (#1328) — budżet zagrożenia dla poziomu bohatera (solo baseline).
+
+    f(level) = base + per_level × (level − 1). Skalowanie liczebności per drużyna
+    (#824) działa NA wyniku kompozycji, więc budżet celuje w solo. BL-A5 podmieni na
+    f(Power Score). base/per_level strojlne z game_config_meta.
+    """
+    base = _meta_float(conn, "encounter_threat_budget_base", THREAT_BUDGET_BASE)
+    per = _meta_float(conn, "encounter_threat_budget_per_level", THREAT_BUDGET_PER_LEVEL)
+    return max(1.0, base + per * (max(1, int(level or 1)) - 1))
+
+
+def _composition_split(conn: sqlite3.Connection) -> float:
+    """Szansa wyboru kompozycji zamiast ręcznego szablonu (start 50/50)."""
+    v = _meta_float(conn, "encounter_composition_split", DEFAULT_COMPOSITION_SPLIT)
+    return min(1.0, max(0.0, v))
+
+
+def eligible_enemy_pool(
+    conn: sqlite3.Connection, *, level: int, hex_type: str | None
+) -> list[dict]:
+    """BL-A2 (#1328) — pula wrogów do kompozycji.
+
+    TYLKO world_scope='global' AND review_status='permanent' AND is_active=1
+    (nigdy template/campaign/pending) + dopasowanie terenu (hex_type∈terrain_tags,
+    pusty terrain_tags = generyczny wróg) + pasmo poziomów (min_level/max_level;
+    NULL = brak ograniczenia). Każdy rekord dostaje policzone `threat`.
+    """
+    try:
+        rows = conn.execute(
+            """
+            SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+                   damage_bonus, attacks_per_turn, tier, min_level, max_level,
+                   terrain_tags
+            FROM game_config_enemies
+            WHERE world_scope = 'global'
+              AND review_status = 'permanent'
+              AND is_active = 1
+              AND (min_level IS NULL OR min_level <= ?)
+              AND (max_level IS NULL OR max_level >= ?)
+            """,
+            (int(level), int(level)),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    lt = (hex_type or "").strip().lower()
+    out: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        tags = _parse_tags(d.get("terrain_tags"))
+        if tags and lt and lt not in tags:
+            continue  # ma teren, ale nie pasuje do bieżącego hexa
+        d["threat"] = enemy_threat_value(d)
+        out.append(d)
+    return out
+
+
+def _enc_enemy(d: dict, count: int) -> dict:
+    return {
+        "enemy_key": d["key"],
+        "name": d.get("label") or d["key"],
+        "count": max(1, int(count)),
+        "tier": d.get("tier") or "standard",
+    }
+
+
+def _pick_pattern(pool: list[dict], rng) -> str:
+    """Wybierz wzorzec kompozycji; herszt wymaga ≥2 różnych tierów."""
+    tiers = {d.get("tier") for d in pool}
+    patterns = list(_COMPOSITION_PATTERNS)
+    weights = list(_COMPOSITION_PATTERN_WEIGHTS)
+    if len(tiers) < 2:
+        idx = patterns.index("herszt")
+        patterns.pop(idx)
+        weights.pop(idx)
+    return rng.choices(patterns, weights=weights, k=1)[0]
+
+
+def encounter_composer(
+    conn: sqlite3.Connection,
+    *,
+    level: int,
+    hex_type: str | None,
+    rng=random,
+) -> dict | None:
+    """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
+
+    Wzorce: `solo` (1 wróg ~budżet), `wataha` (2–4 × ten sam), `herszt+poplecznicy`
+    (1 wyższy tier + 2–3 niżsi). Zwraca dict `active_encounter` albo None gdy pula
+    pusta. Liczebność jeszcze BEZ skalowania #824 — to robi się na wyniku.
+    """
+    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type)
+    if not pool:
+        return None
+    budget = threat_budget_for_level(conn, level)
+    pattern = _pick_pattern(pool, rng)
+
+    enemies: list[dict] = []
+    if pattern == "solo":
+        # wróg najbliższy budżetowi (górny pułap 1.25×), preferuj mocniejszych
+        fits = [d for d in pool if d["threat"] <= budget * 1.25]
+        chosen = max(fits, key=lambda d: d["threat"]) if fits else min(pool, key=lambda d: d["threat"])
+        # trochę różnorodności: losuj spośród najmocniejszych pasujących
+        top = sorted(fits or pool, key=lambda d: d["threat"], reverse=True)[:4]
+        chosen = rng.choice(top) if top else chosen
+        enemies = [_enc_enemy(chosen, 1)]
+
+    elif pattern == "wataha":
+        # słabsza połowa puli → gromada 2–4 tego samego wroga pod budżet
+        weaker = sorted(pool, key=lambda d: d["threat"])[: max(1, len(pool) // 2)]
+        base = rng.choice(weaker)
+        n = int(round(budget / max(1.0, base["threat"])))
+        n = min(4, max(2, n))
+        enemies = [_enc_enemy(base, n)]
+
+    else:  # herszt + poplecznicy
+        by_tier = sorted(pool, key=lambda d: (_TIER_RANK.get(d.get("tier"), 1), d["threat"]))
+        leader = by_tier[-1]  # najwyższy tier/threat
+        minion_pool = [
+            d for d in pool
+            if _TIER_RANK.get(d.get("tier"), 1) < _TIER_RANK.get(leader.get("tier"), 1)
+        ] or [d for d in pool if d["key"] != leader["key"]]
+        if not minion_pool:
+            enemies = [_enc_enemy(leader, 1)]
+        else:
+            minion = rng.choice(minion_pool)
+            remaining = max(0.0, budget - leader["threat"])
+            n = int(round(remaining / max(1.0, minion["threat"])))
+            n = min(3, max(2, n))
+            enemies = [_enc_enemy(leader, 1), _enc_enemy(minion, n)]
+
+    threat_spent = round(
+        sum(next((d["threat"] for d in pool if d["key"] == e["enemy_key"]), 0.0) * e["count"]
+            for e in enemies),
+        2,
+    )
+    label = enemies[0]["name"] if len(enemies) == 1 and enemies[0]["count"] == 1 else "Grupa wrogów"
+    return {
+        "label": label,
+        "source": "composed",
+        "composition_pattern": pattern,
+        "enemies": enemies,
+        "threat_budget": round(budget, 2),
+        "threat_spent": threat_spent,
+    }
 
 
 def match_encounter_templates(
