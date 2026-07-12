@@ -6,7 +6,7 @@
 >
 > Trzy sekcje: **CO ROBIMY TERAZ** · **OSTATNIO ZROBIONE** · **UWAŻAJ (pułapki)**.
 
-_Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
+_Ostatnia aktualizacja: 2026-07-12 (sesja BL-B1 #1333 — loot 2.0 tiery)_
 
 ---
 
@@ -25,6 +25,10 @@ _Ostatnia aktualizacja: 2026-06-19 (sesja #742 playwright-test-report)_
 ---
 
 ## ✅ OSTATNIO ZROBIONE (ostatnie sesje)
+
+**FAZA BL — Bestie i Łupy 2.0 (milestone #26):** silnik kompozycyjny spotkań + loot 2.0.
+- **#1333 BL-B1 (Krok 7 / bramka S7)** — loot tierowy: drop wroga = **unia** tabeli per-wróg (unikaty) + wspólnej tabeli tierowej (`loot_tier_weak/standard/elite/boss`), deduplikacja po kluczu. Migracja idempotentna wycięła 52 generyki z 79 tabel per-wróg → seed 259→235 wpisów. `loot_tier` bywa zaśmiecony słowami loch-tierów → fallback na enum `tier`. 6/6 pytest, realny drop na Demo. Wymagało S6 (#1345 SMOKE-A pool-widen, zaliczone). review+needs-testing.
+- Wcześniej: #1345 S6 (pool-widen), #1332 rangi wroga, #1331 Power Score, #1330/#1329 admin/anti-repeat.
 
 **Audyt kampanii #99791 (A–D) — domknięty:**
 - #775 — zapłata „mieszek z monetami" dawała 0 zł → parser grant_item→grant_gold (łamało ekonomię).
