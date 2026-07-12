@@ -107,15 +107,19 @@ def _mk_conn(weather_flags: dict | None = None):
     return c
 
 
+@pytest.fixture(autouse=True)
+def _no_encounters(monkeypatch):
+    # Determinism: fixture hexes are safe (encounter_chance handled by the #1128
+    # safe-zone fix), but keep encounter rolls fully off so a future data/config
+    # tweak can't flake these time-based assertions. monkeypatch (NOT raw module
+    # assignment) so the stub is torn down and never leaks into other test files.
+    import app.services.hex_travel_service as hts
+    monkeypatch.setattr(hts, "_roll_encounter", lambda *a, **k: False)
+
+
 def _travel(conn, to=(4, 0)):
-    from app.services import hex_travel_service as hts
-    # Determinism: fixture sets encounter_chance=0.0, but _roll_encounter treats
-    # explicit 0.0 as unset (`or 0.15`) and #1146 fallback pools supply a default
-    # enemy even for empty pools — random bandit encounters were interrupting the
-    # march mid-route and flaking these time-based assertions. Weather tests care
-    # only about hour costs, so disable encounter rolls entirely.
-    hts._roll_encounter = lambda *a, **k: False
-    return hts.resolve_chain_travel(
+    from app.services.hex_travel_service import resolve_chain_travel
+    return resolve_chain_travel(
         campaign_id=1, character_id=None,
         from_hex=(0, 0), to_hex=to,
         character_sheet={}, conn=conn,

@@ -220,11 +220,24 @@ def _roll_encounter(
 
     PM4 #1223: ``chance_mult`` scales the final chance (road mode passes
     ROAD_ENCOUNTER_MULT on road hexes to make the trakt safer).
+
+    #1128 fix: an explicit ``0`` — either on the hex (``encounter_chance``) or on
+    its terrain type (``encounter_base_chance``, e.g. town/village/castle) — is a
+    deliberate *safe zone* and short-circuits to no encounter. The old
+    ``or 0.15`` / ``or base`` idioms treated ``0.0`` as "unset", so authored safe
+    hexes and settlements still rolled ~15% (you could be ambushed standing in a
+    town). A genuinely missing/None value still defaults to 0.15.
     """
-    base_chance = float(hex_data.get("encounter_chance") or 0.15)
-    # Adjust by hex type if configured
+    raw_hex = hex_data.get("encounter_chance")
     ht = hex_data.get("hex_type", "plains")
-    type_chance = float(hex_type_cfg.get(ht, {}).get("encounter_base_chance") or base_chance)
+    raw_type = hex_type_cfg.get(ht, {}).get("encounter_base_chance")
+
+    # Explicit 0 anywhere = deliberate safe zone (settlements, authored refuges).
+    if raw_hex == 0 or raw_type == 0:
+        return False
+
+    base_chance = float(raw_hex) if raw_hex is not None else 0.15
+    type_chance = float(raw_type) if raw_type is not None else base_chance
     final_chance = max(base_chance, type_chance) * chance_mult
     return random.random() < final_chance
 
@@ -878,7 +891,10 @@ def resolve_chain_travel(
         # PT7: apply night_march encounter multiplier before rolling
         _enc_hex_data = hex_data
         if night_march:
-            _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
+            # #1128: keep explicit 0 (safe hex) safe — don't let `or 0.15`
+            # resurrect a zeroed chance before the night multiplier.
+            _raw = hex_data.get("encounter_chance")
+            _orig_chance = float(_raw) if _raw is not None else 0.15
             _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
         # PM4 #1223: travelling by road (route_mode="road") halves encounters on road hexes.
         _road_mult = (
