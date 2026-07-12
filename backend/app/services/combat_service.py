@@ -1014,6 +1014,15 @@ def _combatant_stat_modifier(
                     except (TypeError, ValueError):
                         pass
 
+    # BL-A6 (#1332): flat `damage_bonus` na combatancie wroga (ranga elitarny +1,
+    # a także bazowe game_config_enemies.damage_bonus). Ścieżka gracza używa statów
+    # z sheet, więc dokładamy tylko dla wroga (sheet=None). Zero regresji: pole domyślnie brak.
+    if stat_key == "DAMAGE_BONUS" and not isinstance(sheet, dict):
+        try:
+            base += int(combatant.get("damage_bonus") or 0)
+        except (TypeError, ValueError):
+            pass
+
     return base
 
 
@@ -1956,12 +1965,22 @@ def _roll_card_enemy_identity(
     # #567: generic placeholder labels never reach the player as the literal "Wróg".
     _GENERIC_LABELS = {"wróg", "wrog", "enemy", "przeciwnik", "unknown attacker", "unknown_attacker"}
 
+    # BL-A6 (#1332): prefiks rangi na etykiecie kart COMBAT_ROLL (from_row bierze
+    # bazowy label z DB, więc bez tego ranga znikałaby z feedu walki). Idempotentne.
+    _rank = normalize_enemy_rank(enemy.get("rank"))
+    _rank_pfx = (ENEMY_RANK_PREFIXES[_rank] + ": ") if _rank else ""
+
+    def _pfx(lab: str) -> str:
+        if _rank_pfx and lab and not lab.startswith(_rank_pfx):
+            return _rank_pfx + lab
+        return lab
+
     def from_row(r: sqlite3.Row) -> tuple[str, str]:
         k = str(r["key"])
         lab = str(r["label"] or r["key"] or "").strip() or k
         if lab.lower() in _GENERIC_LABELS:
             lab = "Napastnik"
-        return k, lab
+        return k, _pfx(lab)
 
     candidates: list[str] = []
     if ek and ek.lower() != "enemy":
@@ -1981,10 +2000,10 @@ def _roll_card_enemy_identity(
             return from_row(row)
 
     if inferred:
-        return inferred, nm or "Nieznany wróg"
+        return inferred, _pfx(nm) or "Nieznany wróg"
     if ek and ek.lower() != "enemy":
-        return ek, nm or "Nieznany wróg"
-    return (inferred or ek or "unknown"), nm or "Nieznany wróg"
+        return ek, _pfx(nm) or "Nieznany wróg"
+    return (inferred or ek or "unknown"), _pfx(nm) or "Nieznany wróg"
 
 
 def _parse_loot_pool_column(raw: Any) -> list[dict[str, Any]]:
@@ -4704,12 +4723,89 @@ def _save_combat_row(
     )
 
 
+# ── BL-A6 (#1332) — rangi wariantów wroga (normal/weteran/elitarny) ───────────
+# Deterministyczne mnożniki nakładane W MOMENCIE SPAWNU na combatant JSON — rekord
+# w game_config_enemies NIETKNIĘTY. Jeden bandyta obsługuje pasma 1–10 bez duplikatów
+# i bez rubber-bandingu. Mnożniki to STARTING VALUES (Numbers Policy) — strojone z
+# game_config_meta (klucz 'enemy_rank_multipliers'), tuning w Sandboxie na klonach [SBX].
+ENEMY_RANK_PREFIXES = {"weteran": "Weteran", "elitarny": "Elitarny"}
+DEFAULT_ENEMY_RANK_MULTIPLIERS: "dict[str, dict[str, float]]" = {
+    "weteran":  {"hp": 1.3, "attack_bonus": 1.0, "damage_bonus": 0.0, "xp": 1.3, "drop_chance": 1.0},
+    "elitarny": {"hp": 1.6, "attack_bonus": 2.0, "damage_bonus": 1.0, "xp": 1.6, "drop_chance": 1.5},
+}
+
+
+def get_enemy_rank_multipliers(conn: sqlite3.Connection) -> "dict[str, dict[str, float]]":
+    """Mnożniki rang z game_config_meta.enemy_rank_multipliers (JSON) scalone z domyślnymi."""
+    out = {r: dict(v) for r, v in DEFAULT_ENEMY_RANK_MULTIPLIERS.items()}
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'enemy_rank_multipliers' LIMIT 1"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return out
+    if not row or not row[0]:
+        return out
+    try:
+        raw = json.loads(row[0])
+    except (ValueError, TypeError):
+        return out
+    if isinstance(raw, dict):
+        for rank, fields in raw.items():
+            if rank in out and isinstance(fields, dict):
+                for k in out[rank]:
+                    if k in fields:
+                        try:
+                            out[rank][k] = float(fields[k])
+                        except (TypeError, ValueError):
+                            pass
+    return out
+
+
+def normalize_enemy_rank(rank: Any) -> "str | None":
+    """Kanoniczna ranga ('weteran'/'elitarny') albo None dla normal/nieznanej."""
+    r = str(rank or "").strip().lower()
+    return r if r in ENEMY_RANK_PREFIXES else None
+
+
+def apply_enemy_rank(
+    combatant: "dict[str, Any]", rank: Any, multipliers: "dict | None" = None
+) -> "dict[str, Any]":
+    """BL-A6 (#1332) — nałóż mnożniki rangi na zbudowany combatant wroga (in place).
+
+    Zmienia: hp_current/hp_max (×hp), attack_bonus (+atk), damage_bonus (flat: elita +1),
+    xp_award (×xp), drop_chance (×drop, cap 1.0), prefiks nazwy ("Weteran: …"/"Elitarny: …"),
+    zapisuje `rank` w combatancie (przeżywa save/load — cały dict serializowany do active_combat).
+    Normal/None → bez zmian. Idempotentne po fladze `rank` (nie nakłada mnożnika dwa razy)."""
+    r = normalize_enemy_rank(rank)
+    if not r or combatant.get("rank"):
+        return combatant
+    m = (multipliers or DEFAULT_ENEMY_RANK_MULTIPLIERS).get(r) or {}
+    hp = max(1, int(round(int(combatant.get("hp_max") or 1) * float(m.get("hp", 1.0)))))
+    combatant["hp_max"] = hp
+    combatant["hp_current"] = hp
+    combatant["attack_bonus"] = int(combatant.get("attack_bonus") or 0) + int(round(float(m.get("attack_bonus", 0))))
+    dmg_b = int(round(float(m.get("damage_bonus", 0))))
+    if dmg_b:
+        combatant["damage_bonus"] = int(combatant.get("damage_bonus") or 0) + dmg_b
+    combatant["xp_award"] = int(round(int(combatant.get("xp_award") or 0) * float(m.get("xp", 1.0))))
+    dc = float(combatant.get("drop_chance") if combatant.get("drop_chance") is not None else 1.0)
+    combatant["drop_chance"] = min(1.0, round(dc * float(m.get("drop_chance", 1.0)), 4))
+    combatant["rank"] = r
+    prefix = ENEMY_RANK_PREFIXES[r]
+    nm = str(combatant.get("name") or "").strip()
+    if nm and not nm.startswith(prefix + ":"):
+        combatant["name"] = f"{prefix}: {nm}"
+    return combatant
+
+
 def initiate_combat(
     campaign_id: int,
     character_id: int,
     enemy_keys: list[str],
     _dungeon_enemy_overrides: "dict[str, dict] | None" = None,
     _dungeon_first_combat: bool = False,
+    _rank_by_key: "dict[str, str] | None" = None,
 ) -> dict[str, Any]:
     if not enemy_keys:
         raise ValueError("enemy_keys required")
@@ -4845,41 +4941,53 @@ def initiate_combat(
                 xp_award_e = int(er["xp_award"] or 0)
             except (KeyError, IndexError, TypeError, ValueError):
                 xp_award_e = 0
-            combatants.append(
-                {
-                    "id": slug,
-                    "type": "enemy",
-                    "enemy_key": er["key"],
-                    "name": (er["label"] or er["key"]).strip(),
-                    "hp_current": hp_max_e,
-                    "hp_max": hp_max_e,
-                    "defense": ac_e,
-                    "attack_bonus": _atk,
-                    "dex_modifier": int(er["dex_modifier"] or 0),
-                    "damage_dice": _dmg_dice,
-                    "damage_stat": "STR",
-                    # #864: ożyw martwe pole — wróg z attacks_per_turn>1 atakuje N razy/turę
-                    # (pętla w resolve_enemy_followup_attacks). Default 1 = zero regresji.
-                    "attacks_per_turn": int(
-                        (er["attacks_per_turn"] if "attacks_per_turn" in er.keys() else 1) or 1
-                    ),
-                    "initiative_roll": init_e,
-                    "conditions": [],
-                    "loot_table_key": er["loot_table_key"],
-                    "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
-                    "xp_award": xp_award_e,
-                    "tier": str(er["tier"] or "standard"),
-                    "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
-                    "zone": _default_zone_for_enemy(er["key"], er["label"]),
-                    # Stored now for opposed checks in upcoming [S1b] formulas (T30).
-                    "skills": _parse_enemy_skills(er["skills_json"]),
-                    # S2 (#582): 7 ability stats for opposed skill checks (S4). NULL/missing
-                    # → every stat defaults to 10 (parse_stats_json), zero combat regression.
-                    "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
-                    # L20b (#724): portrait URL for player-facing modal + initiative chip thumbnail.
-                    "image_url": er["image_url"] if "image_url" in er.keys() else None,
-                }
-            )
+            # BL-A6 (#1332): ranga wariantu (weteran/elitarny) z composera — mnożniki
+            # nakładane po zbudowaniu combatanta (rekord bazowy nietknięty). Gdy ranga
+            # jest, a bazowy xp_award = 0 (XP z tabeli tierów), rozwiąż go PRZED mnożeniem,
+            # by ×1.3/×1.6 miało na czym zadziałać.
+            _rank = normalize_enemy_rank((_rank_by_key or {}).get(ek))
+            if _rank and xp_award_e <= 0:
+                try:
+                    from app.services.xp_service import resolve_enemy_defeat_xp_amount as _rx
+                    xp_award_e, _ = _rx(conn, catalog_xp_award=0, tier=str(er["tier"] or "standard"))
+                except Exception:
+                    xp_award_e = 0
+            enemy_c = {
+                "id": slug,
+                "type": "enemy",
+                "enemy_key": er["key"],
+                "name": (er["label"] or er["key"]).strip(),
+                "hp_current": hp_max_e,
+                "hp_max": hp_max_e,
+                "defense": ac_e,
+                "attack_bonus": _atk,
+                "dex_modifier": int(er["dex_modifier"] or 0),
+                "damage_dice": _dmg_dice,
+                "damage_stat": "STR",
+                # #864: ożyw martwe pole — wróg z attacks_per_turn>1 atakuje N razy/turę
+                # (pętla w resolve_enemy_followup_attacks). Default 1 = zero regresji.
+                "attacks_per_turn": int(
+                    (er["attacks_per_turn"] if "attacks_per_turn" in er.keys() else 1) or 1
+                ),
+                "initiative_roll": init_e,
+                "conditions": [],
+                "loot_table_key": er["loot_table_key"],
+                "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
+                "xp_award": xp_award_e,
+                "tier": str(er["tier"] or "standard"),
+                "loot_tier": er["loot_tier"] if "loot_tier" in er.keys() else None,
+                "zone": _default_zone_for_enemy(er["key"], er["label"]),
+                # Stored now for opposed checks in upcoming [S1b] formulas (T30).
+                "skills": _parse_enemy_skills(er["skills_json"]),
+                # S2 (#582): 7 ability stats for opposed skill checks (S4). NULL/missing
+                # → every stat defaults to 10 (parse_stats_json), zero combat regression.
+                "stats": parse_stats_json(er["stats_json"] if "stats_json" in er.keys() else None),
+                # L20b (#724): portrait URL for player-facing modal + initiative chip thumbnail.
+                "image_url": er["image_url"] if "image_url" in er.keys() else None,
+            }
+            if _rank:
+                apply_enemy_rank(enemy_c, _rank, get_enemy_rank_multipliers(conn))
+            combatants.append(enemy_c)
             turn_slots.append((slug, init_e, idx))
 
         # Sort: highest initiative first; ties: player wins (lower tie-break value sorts first after negating init)

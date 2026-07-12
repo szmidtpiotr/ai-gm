@@ -851,13 +851,42 @@ def eligible_enemy_pool(
     return out
 
 
-def _enc_enemy(d: dict, count: int) -> dict:
-    return {
+def _enc_enemy(d: dict, count: int, rank: str | None = None) -> dict:
+    e = {
         "enemy_key": d["key"],
         "name": d.get("label") or d["key"],
         "count": max(1, int(count)),
         "tier": d.get("tier") or "standard",
     }
+    if rank:
+        e["rank"] = rank
+    return e
+
+
+# ── BL-A6 (#1332) — rangi wariantów wroga w composerze ────────────────────────
+# Gdy budżet zagrożenia przewyższa NAJMOCNIEJSZEGO wroga puli (pasmo/teren), composer
+# podnosi RANGĘ pojedynczego wroga zamiast sięgać po wyższy tier — „najpierw ranga,
+# potem wyższy tier". Progi = krotność budżet/threat najmocniejszego. STARTING VALUES
+# (Numbers Policy), strojlne z game_config_meta.
+RANK_VETERAN_RATIO = 1.5   # budżet ≥ 1.5× threat najmocniejszego → weteran
+RANK_ELITE_RATIO = 2.0     # budżet ≥ 2.0× → elitarny
+
+
+def _rank_for_budget(conn: sqlite3.Connection, budget: float, threat: float, is_pool_top: bool) -> str | None:
+    """Ranga dla pojedynczego wroga, gdy jego threat mocno nie domyka budżetu.
+
+    Tylko dla NAJMOCNIEJSZEGO wroga puli (`is_pool_top`) — inaczej composer wybrałby
+    silniejszego wroga zamiast rangi. Zwraca 'elitarny'/'weteran'/None."""
+    if not is_pool_top or threat <= 0:
+        return None
+    ratio = float(budget) / float(threat)
+    elite = _meta_float(conn, "encounter_rank_elite_ratio", RANK_ELITE_RATIO)
+    vet = _meta_float(conn, "encounter_rank_veteran_ratio", RANK_VETERAN_RATIO)
+    if ratio >= elite:
+        return "elitarny"
+    if ratio >= vet:
+        return "weteran"
+    return None
 
 
 def _pick_pattern(pool: list[dict], rng) -> str:
@@ -873,12 +902,13 @@ def _pick_pattern(pool: list[dict], rng) -> str:
 
 
 def _compose_enemies(
-    pool: list[dict], budget: float, rng, penalty_keys: set, penalty: float
+    conn: sqlite3.Connection, pool: list[dict], budget: float, rng, penalty_keys: set, penalty: float
 ) -> tuple[str, list[dict]]:
     """Jedno złożenie spotkania: wybór wzorca + wrogów. Kara wagi ×penalty (BL-A3
     #1329) dla wrogów obecnych w historii przy losowanych wyborach. Zwraca
     (pattern, enemies)."""
     pattern = _pick_pattern(pool, rng)
+    pool_top_threat = max((d["threat"] for d in pool), default=0.0)  # BL-A6
 
     if pattern == "solo":
         # wróg najbliższy budżetowi (górny pułap 1.25×), preferuj mocniejszych
@@ -888,7 +918,12 @@ def _compose_enemies(
         chosen = _penalized_choice(top, rng, penalty_keys, penalty) or max(
             base_pool, key=lambda d: d["threat"]
         )
-        enemies = [_enc_enemy(chosen, 1)]
+        # BL-A6 (#1332): budżet mocno przewyższa najmocniejszego → ranga zamiast tieru.
+        rank = _rank_for_budget(
+            conn, budget, float(chosen["threat"]),
+            is_pool_top=float(chosen["threat"]) >= pool_top_threat,
+        )
+        enemies = [_enc_enemy(chosen, 1, rank)]
 
     elif pattern == "wataha":
         # słabsza połowa puli → gromada 2–4 tego samego wroga pod budżet
@@ -906,13 +941,22 @@ def _compose_enemies(
             if _TIER_RANK.get(d.get("tier"), 1) < _TIER_RANK.get(leader.get("tier"), 1)
         ] or [d for d in pool if d["key"] != leader["key"]]
         if not minion_pool:
-            enemies = [_enc_enemy(leader, 1)]
+            leader_rank = _rank_for_budget(
+                conn, budget, float(leader["threat"]),
+                is_pool_top=float(leader["threat"]) >= pool_top_threat,
+            )
+            enemies = [_enc_enemy(leader, 1, leader_rank)]
         else:
             minion = _penalized_choice(minion_pool, rng, penalty_keys, penalty) or minion_pool[0]
             remaining = max(0.0, budget - leader["threat"])
             n = int(round(remaining / max(1.0, minion["threat"])))
             n = min(3, max(2, n))
-            enemies = [_enc_enemy(leader, 1), _enc_enemy(minion, n)]
+            # BL-A6: herszt (najmocniejszy) dostaje rangę, gdy sam budżet lidera go nie domyka.
+            leader_rank = _rank_for_budget(
+                conn, budget, float(leader["threat"]),
+                is_pool_top=float(leader["threat"]) >= pool_top_threat,
+            )
+            enemies = [_enc_enemy(leader, 1, leader_rank), _enc_enemy(minion, n)]
 
     return pattern, enemies
 
@@ -958,7 +1002,7 @@ def encounter_composer(
     enemies: list[dict] | None = None
     fallback: tuple[str, list[dict]] | None = None
     for _ in range(6):  # twarda blokada powtórki z rzędu (chyba że brak alternatyw)
-        p, e = _compose_enemies(pool, budget, rng, penalty_keys, penalty)
+        p, e = _compose_enemies(conn, pool, budget, rng, penalty_keys, penalty)
         if not e:
             continue
         if fallback is None:
@@ -971,12 +1015,19 @@ def encounter_composer(
             return None
         pattern, enemies = fallback
 
+    # BL-A6 (#1332): ranga podnosi realny threat (hp) — uwzględnij w bookkeepingu budżetu.
+    _RANK_THREAT_FACTOR = {"weteran": 1.3, "elitarny": 1.6}
     threat_spent = round(
-        sum(next((d["threat"] for d in pool if d["key"] == e["enemy_key"]), 0.0) * e["count"]
+        sum(next((d["threat"] for d in pool if d["key"] == e["enemy_key"]), 0.0)
+            * e["count"] * _RANK_THREAT_FACTOR.get(e.get("rank"), 1.0)
             for e in enemies),
         2,
     )
-    label = enemies[0]["name"] if len(enemies) == 1 and enemies[0]["count"] == 1 else "Grupa wrogów"
+    _lead = enemies[0]
+    _lead_label = _lead["name"]
+    if _lead.get("rank"):
+        _lead_label = f"{_lead['rank'].capitalize()}: {_lead_label}"
+    label = _lead_label if len(enemies) == 1 and _lead["count"] == 1 else "Grupa wrogów"
     logger.info(
         "encounter_composed",
         pattern=pattern,

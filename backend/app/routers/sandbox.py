@@ -320,14 +320,21 @@ def reset_hero(payload: dict = Body(...)) -> dict[str, Any]:
 @router.post("/start-combat")
 def start_combat(payload: dict = Body(...)) -> dict[str, Any]:
     """Wrap `combat_service.initiate_combat` with no narrative dressing.
-    Body: `{campaign_id, character_id, enemy_keys: [str]}`."""
+    Body: `{campaign_id, character_id, enemy_keys: [str], ranks?: {enemy_key: 'weteran'|'elitarny'}}`.
+    BL-A6 (#1332): `ranks` pozwala testować wariant weterana/elity w Sandboxie."""
     cid = int(payload.get("campaign_id") or 0)
     char_id = int(payload.get("character_id") or 0)
     enemies = list(payload.get("enemy_keys") or [])
     if not cid or not char_id or not enemies:
         raise HTTPException(status_code=400, detail="campaign_id, character_id, enemy_keys required")
+    _ranks_raw = payload.get("ranks") or {}
+    ranks = {
+        str(k): str(v).strip().lower()
+        for k, v in _ranks_raw.items()
+        if str(v).strip().lower() in ("weteran", "elitarny")
+    } if isinstance(_ranks_raw, dict) else {}
     try:
-        res = combat.initiate_combat(cid, char_id, enemies)
+        res = combat.initiate_combat(cid, char_id, enemies, _rank_by_key=ranks or None)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "combat_state": combat.load_combat_snapshot(cid), "initiate": res}

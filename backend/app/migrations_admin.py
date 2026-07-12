@@ -4248,6 +4248,30 @@ def _ensure_pending_category_column(conn: sqlite3.Connection) -> None:
             pass  # ignore all errors (table may not exist yet in tests)
 
 
+def _seed_enemy_rank_multipliers(conn: sqlite3.Connection) -> None:
+    """BL-A6 (#1332): seed domyślnych mnożników rang wroga do game_config_meta.
+
+    Deterministyczne mnożniki nakładane przy spawnie (weteran/elitarny) — rekord
+    w game_config_enemies nietknięty. STARTING VALUES (Numbers Policy), tuning w Sandboxie."""
+    import json as _json
+    default = {
+        "weteran":  {"hp": 1.3, "attack_bonus": 1, "damage_bonus": 0, "xp": 1.3, "drop_chance": 1.0},
+        "elitarny": {"hp": 1.6, "attack_bonus": 2, "damage_bonus": 1, "xp": 1.6, "drop_chance": 1.5},
+    }
+    try:
+        existing = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'enemy_rank_multipliers' LIMIT 1"
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('enemy_rank_multipliers', ?)",
+                (_json.dumps(default),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
 def _ensure_xp_level_thresholds(conn: sqlite3.Connection) -> None:
     """F18 (#478): seed default non-linear XP thresholds into game_config_meta."""
     import json as _json
@@ -6581,6 +6605,7 @@ def run_admin_migrations() -> None:
         _ensure_bestiary_schema(conn)  # #1191 E1 — Bestiariusz kill counters
         _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
         _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
+        _seed_enemy_rank_multipliers(conn)  # #1332 BL-A6 — rangi wariantów wroga
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

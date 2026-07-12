@@ -1607,12 +1607,38 @@ def _maybe_start_combat_from_gm_tag(
     except Exception as _mp_err:
         logger.warning("combat_gm_tag_mp_routing_error", campaign_id=campaign_id, error=str(_mp_err))
 
+    # BL-A6 (#1332): odzyskaj rangi wariantów (weteran/elitarny) ze skomponowanego
+    # spotkania (composer zapisał je w session_flags.active_encounter.enemies) i podaj
+    # do initiate_combat — ranga przetrwa most COMBAT_START (który niesie tylko klucze).
+    _rank_by_key: "dict[str, str]" = {}
     try:
-        combat_state = cs.initiate_combat(campaign_id, character_id, enemy_keys)
+        import json as _rkj
+        with sqlite3.connect(DB_PATH) as _rkconn:
+            _rkconn.row_factory = sqlite3.Row
+            _rk_row = _rkconn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchone()
+        if _rk_row and _rk_row["session_flags"]:
+            _rk_sf = _rkj.loads(_rk_row["session_flags"]) or {}
+            for _en in ((_rk_sf.get("active_encounter") or {}).get("enemies") or []):
+                _ekk = str(_en.get("enemy_key") or "").strip()
+                _rkk = str(_en.get("rank") or "").strip().lower()
+                if _ekk and _rkk in ("weteran", "elitarny"):
+                    _rank_by_key[_ekk] = _rkk
+    except Exception as _rk_err:
+        logger.warning("combat_rank_recovery_error", campaign_id=campaign_id, error=str(_rk_err))
+
+    try:
+        combat_state = cs.initiate_combat(
+            campaign_id, character_id, enemy_keys,
+            _rank_by_key=_rank_by_key or None,
+        )
         logger.info(
             "combat_gm_tag_started",
             campaign_id=campaign_id,
             enemy_keys=enemy_keys,
+            enemy_ranks=_rank_by_key or None,
             combat_id=combat_state.get("id"),
         )
         # Round-5 smoke (#1146/#1147): consume the pending engine encounter the
