@@ -202,9 +202,9 @@ def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
 
 
 def test_resolve_attack_no_skill_no_reaction(tmp_path, monkeypatch):
-    """Skill-gated: bez skilla dodge → reakcja niedostępna; #826: rozstrzyga pojedynczy
-    pasywny unik d20+DEX (d20=18 + DEX 0 = 18 < atak 28 → trafienie), obrażenia przez nowy
-    model: 7 baza + 3 margines (atak 28 − pac 10), pancerz 0 → 10."""
+    """Skill-gated: bez skilla dodge → brak wyszkolonej reakcji. T5-5e (#1351): single-player
+    otwiera okno take-only (opcje puste), a resolve_reaction("take") nalicza obrażenia przez
+    nowy model #826: 7 baza + 3 margines (atak 28 − pac 10), pancerz 0 → 10."""
     db = _combat_db(tmp_path, declared="dodge", skill_rank=0)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
@@ -212,9 +212,11 @@ def test_resolve_attack_no_skill_no_reaction(tmp_path, monkeypatch):
                         lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out.get("reaction") is None or out.get("reaction", {}).get("available") is not True
-    assert out["damage"] == 10                 # 7 baza + 3 margines (#826)
-    assert out.get("margin_damage_bonus") == 3
+        assert out.get("reaction_window") is True
+        assert out.get("reaction_options") == []
+        res = combat_service.resolve_reaction(1, "take")
+    assert res["damage"] == 10                  # 7 baza + 3 margines (#826)
+    assert res.get("margin_damage_bonus") == 3
 
 
 def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):

@@ -273,13 +273,17 @@ def test_enemy_attack_globe_zeroes_damage(tmp_path):
 # ─── Backward compatibility ──────────────────────────────────────────────────
 
 def test_enemy_attack_without_reaction_state_still_damages(tmp_path):
-    """Brak stanu reakcji → cios wroga zadaje obrażenia normalnie (S15/B10 nietknięte)."""
+    """Brak stanu reakcji → cios wroga zadaje obrażenia normalnie (S15/B10 nietknięte).
+    T5-5e (#1351): single-player bez wyszkolonej reakcji otwiera okno take-only; obrażenia
+    naliczane po resolve_reaction("take")."""
     db = _combat_db(tmp_path, mana=10, current_turn="goblin")
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)), \
          patch.object(combat_service, "roll_d20", lambda *a, **k: 18), \
          patch.object(combat_service, "roll_damage_dice", lambda *a, **k: 5):
         out = combat_service.resolve_attack(1, None, attacker="enemy", raw_d20=None)
-    assert out.get("hit") is True
+        assert out.get("hit") is True
+        if out.get("reaction_window"):
+            out = combat_service.resolve_reaction(1, "take")
     assert int(out.get("damage") or 0) > 0
     assert int(out.get("player_hp_remaining") or 0) < 12
 

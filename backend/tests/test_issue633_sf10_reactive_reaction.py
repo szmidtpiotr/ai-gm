@@ -180,15 +180,13 @@ def test_resolve_reaction_dodge_success_negates(tmp_path, monkeypatch):
     assert _combatant_hp(db) == 20
 
 
-# ─── Brak dostępnej reakcji → natychmiastowe obrażenia (backward-compat) ───────
+# ─── Brak dostępnej reakcji → okno take-only (T5-5e #1351, single-player) ──────
 
-def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
-    """Brak dodge i tarczy → brak okna reakcji, obrażenia naliczone od razu.
-
-    #826: AC nie jest już progiem trafienia — bez reakcji rozstrzyga pojedynczy pasywny
-    unik d20+DEX (tu d20=10 + DEX_mod 2 = 12 < atak 20 → trafienie). Obrażenia bazowe 5
-    + margines (atak 20 − obrona pac 10 = 10 → 2 progi po 5 → +2), pancerz 0 (ac_base 10
-    → armor max(0,10−10)=0). Razem 7."""
+def test_no_skill_no_shield_opens_take_only_window(tmp_path, monkeypatch):
+    """T5-5e (#1351): w single-player brak dodge/tarczy NIE nalicza już obrażeń po cichu —
+    otwiera się okno reakcji z pustą listą opcji (jedyna decyzja „Przyjmij"). Silnik nie
+    rzuca uniku za gracza (`player_evasion` znika z SP). Po resolve_reaction("take")
+    obrażenia: 5 baza + 2 margines (#826), pancerz 0 → 7."""
     db = _combat_db(tmp_path, dodge_rank=0, shield_block_rank=0, shield=False, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
@@ -196,21 +194,24 @@ def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
                         lambda *a, **k: {"die": "1d6", "rolls": [5], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out["hit"] is True
-    assert out.get("reaction_window") is not True
-    assert out["damage"] == 7          # 5 baza + 2 margines (#826), pancerz 0
-    assert out.get("margin_damage_bonus") == 2
+        assert out["hit"] is True
+        assert out.get("reaction_window") is True
+        assert out.get("reaction_options") == []
+        assert out.get("player_evasion") is None
+        assert _combatant_hp(db) == 20            # obrażenia wstrzymane do okna
+        res = combat_service.resolve_reaction(1, "take")
+    assert res["damage"] == 7                      # 5 baza + 2 margines (#826), pancerz 0
+    assert res.get("margin_damage_bonus") == 2
     assert _combatant_hp(db) == 13
 
 
 # ─── 1 reakcja/rundę ──────────────────────────────────────────────────────────
 
 def test_one_reaction_per_round(tmp_path, monkeypatch):
-    """#1322: cap 1/rundę działa PRZY SWARMIE (≥2 wrogów). Reakcja zużyta w rundzie →
-    drugi cios (od drugiego wroga) bez okna, obrażenia od razu.
-
-    #826: reakcja zużyta → ścieżka bez reakcji (pasywny unik d20+DEX 12 < atak 20 → trafia).
-    6 baza + 2 margines (atak 20 − pac 10), pancerz 0 → 8."""
+    """#1322: cap 1/rundę wyczerpuje opcje obronne PRZY SWARMIE (≥2 wrogów) —
+    `reaction_options` puste. T5-5e (#1351): w single-player okno i tak się otwiera
+    (take-only), zamiast cichego naliczenia. resolve_reaction("take") → te same
+    obrażenia: 6 baza + 2 margines (atak 20 − pac 10), pancerz 0 → 8."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1,
                     reaction_used_round=1, second_enemy=True)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
@@ -219,8 +220,10 @@ def test_one_reaction_per_round(tmp_path, monkeypatch):
                         lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out.get("reaction_window") is not True
-    assert out["damage"] == 8          # 6 baza + 2 margines (#826)
+        assert out.get("reaction_window") is True
+        assert out.get("reaction_options") == []      # cap wyczerpany → tylko „Przyjmij"
+        res = combat_service.resolve_reaction(1, "take")
+    assert res["damage"] == 8          # 6 baza + 2 margines (#826)
     assert _combatant_hp(db) == 12
 
 
@@ -235,9 +238,10 @@ def test_single_enemy_reaction_available_every_attack(tmp_path, monkeypatch):
     assert "dodge" in (out.get("reaction_options") or [])
 
 
-def test_dodge_critfail_lockout_blocks_even_single_enemy(tmp_path, monkeypatch):
-    """#1322: lockout po krytycznej porażce uniku ZOSTAJE — blokuje całą następną rundę
-    nawet przy jednym wrogu (kara utrzymana, decyzja Piotra)."""
+def test_dodge_critfail_lockout_disables_options_single_enemy(tmp_path, monkeypatch):
+    """#1322: lockout po krytycznej porażce uniku ZOSTAJE — wyszarza opcje obronne całą
+    następną rundę nawet przy jednym wrogu (`reaction_options` puste). T5-5e (#1351):
+    w single-player okno reakcji i tak się otwiera (take-only)."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=3)
     # ustaw lockout na bieżącą rundę (jak po CRITICAL_FAILURE uniku w rundzie 2)
     conn = sqlite3.connect(str(db))
@@ -255,7 +259,8 @@ def test_dodge_critfail_lockout_blocks_even_single_enemy(tmp_path, monkeypatch):
                         lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out.get("reaction_window") is not True   # lockout → brak okna mimo 1 wroga
+    assert out.get("reaction_window") is True          # SP → okno mimo lockoutu
+    assert out.get("reaction_options") == []           # lockout → opcje obronne wyszarzone
 
 
 # ─── #826: gracz z reakcją dostaje OKNO uniku nawet na słaby cios ──────────────

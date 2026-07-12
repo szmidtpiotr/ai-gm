@@ -53,28 +53,33 @@ def _combat_db(tmp_path):
 
 
 def test_enemy_hit_exposes_damage_rolls(tmp_path, monkeypatch):
-    """Trafienie wroga (bez okna reakcji — brak skilla/tarczy) niesie damage_die
-    i damage_rolls zgodne z naliczonymi obrażeniami bazowymi."""
+    """Trafienie wroga niesie damage_die i damage_rolls zgodne z obrażeniami bazowymi.
+    T5-5e (#1351): single-player bez skilla/tarczy otwiera okno take-only — damage_die/
+    damage_rolls są już w odpowiedzi resolve_attack (liczone przed oknem), a wynikowe
+    obrażenia po resolve_reaction("take")."""
     db = _combat_db(tmp_path)
-    monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)  # atak 28 vs unik 18 → hit
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)  # atak 28, hit (raw != 1)
     monkeypatch.setattr(combat_service, "roll_dice_detailed",
                         lambda *a, **k: {"die": "2d6", "rolls": [4, 3], "sides": 6, "n": 2})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out["hit"] is True
-    assert out.get("reaction_window") is not True
-    assert out["damage_die"] == "2d6"
-    assert out["damage_rolls"] == [4, 3]
+        assert out["hit"] is True
+        assert out.get("reaction_window") is True
+        assert out["damage_die"] == "2d6"
+        assert out["damage_rolls"] == [4, 3]
+        res = combat_service.resolve_reaction(1, "take")
     # baza 7 (4+3) + margines #826 (atak 28 − obrona 10 → +3), pancerz 0 → 10
-    assert out["damage"] == 10
+    assert res["damage"] == 10
 
 
 def test_enemy_miss_has_no_damage_rolls(tmp_path, monkeypatch):
-    """Pudło wroga: brak damage_rolls → frontend nie odpala drugiego etapu animacji."""
+    """Pudło wroga: brak damage_rolls → frontend nie odpala drugiego etapu animacji.
+    T5-5e (#1351): w single-player wróg pudłuje WYŁĄCZNIE przy Nat 1 (raw=1) — pasywny
+    unik zniknął, silnik nie rozstrzyga uniku za gracza."""
     db = _combat_db(tmp_path)
-    monkeypatch.setattr(combat_service, "roll_d20", lambda: 2)
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 1)   # Nat 1 wroga = auto-pudło
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
-        with patch.object(combat_service, "compute_enemy_attack_hit", lambda *a, **k: False):
-            out = combat_service.resolve_attack(1, 0, attacker="enemy")
+        out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is False
+    assert out.get("reaction_window") is not True
     assert "damage_rolls" not in out

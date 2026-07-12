@@ -6581,7 +6581,12 @@ def _attack_resolve_defense(
     """
     _round_now826 = int(row["round"] or 1)
     _enemy_ct = len(_living_enemy_ids(combatants)) if combatants is not None else None
-    if _reaction_options(conn, ch_id, p, sheet, _round_now826, enemy_count=_enemy_ct):
+    # T5-5e (#1351): w single-player silnik NIGDY nie rzuca uniku za gracza — okno
+    # reakcji otwiera się ZAWSZE (poza Nat 1 wroga), także gdy `_reaction_options` puste
+    # (jedyną opcją „Przyjmij"). Auto-evasion (`player_evasion`) zostaje wyłącznie dla MP
+    # (sweep nieobecnych: combatant `player:N`).
+    _sp_1351 = combatants is not None and not _is_mp_combat(combatants)
+    if _sp_1351 or _reaction_options(conn, ch_id, p, sheet, _round_now826, enemy_count=_enemy_ct):
         hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
         out["target_evasion"] = None
     else:
@@ -6631,7 +6636,11 @@ def _attack_try_reaction(
     _opts = _reaction_options(
         conn, ch_id, p, sheet, _round_now, enemy_count=len(_living_enemy_ids(combatants)),
     )
-    if _opts and not p.get("pending_reaction") and not _b16_negated:
+    # T5-5e (#1351): single-player → okno reakcji ZAWSZE, nawet przy pustych `_opts`
+    # (postać bez skilli / cap #1322 wyczerpany / lockout → jedyna decyzja „Przyjmij").
+    # MP zachowuje starą bramkę (okno tylko gdy realne opcje; reszta = auto-evasion).
+    _sp_1351 = not _is_mp_combat(combatants)
+    if (_opts or _sp_1351) and not p.get("pending_reaction") and not _b16_negated:
         p["pending_reaction"] = {
             "damage": int(dmg),
             "attack_roll": int(attack_roll),

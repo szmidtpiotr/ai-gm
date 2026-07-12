@@ -307,8 +307,11 @@ def test_resolve_attack_no_shield_no_reaction(tmp_path, monkeypatch):
                         lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
-    assert out.get("reaction") is None or out["reaction"].get("available") is not True
-    assert out["damage"] == 8  # 6 base + 2 margin (#826)
+        # T5-5e (#1351): single-player bez tarczy → okno take-only (opcje puste),
+        # obrażenia po resolve_reaction("take"): 6 base + 2 margin (#826) → 8
+        assert out.get("reaction_options") == []
+        res = combat_service.resolve_reaction(1, "take")
+    assert res["damage"] == 8  # 6 base + 2 margin (#826)
 
 
 def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
