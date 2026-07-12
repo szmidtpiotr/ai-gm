@@ -2625,6 +2625,54 @@ _DIG_INTENT_RE = re.compile(
 )
 
 
+def _maybe_herb_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
+                         text: str) -> dict | None:
+    """#1337 BL-C2 — deterministyczne zbieranie ziół w podróży.
+
+    Gdy gracz deklaruje zbieranie ziół, wystaw test WIS (survival) z DC wg terenu
+    hexa i źródłem ``herb_gathering`` — rozstrzygnięcie (1–3 zioła / Nat20 rzadkie /
+    Nat1 obrażenie) dzieje się w /skill-test/resolve. Cooldown 1/hex/dzień gry:
+    kolejna próba tego samego dnia zwraca komunikat „ogołocone" bez testu.
+    """
+    from app.services import herb_gathering_service as _herb
+    if not _herb.is_gather_intent(text):
+        return None
+    plan = _herb.prepare_gather(conn, campaign_id)
+    if plan.get("cooldown_hit"):
+        return {"prose": plan.get("msg"), "route": "herb_cooldown"}
+
+    from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+    from app.services.turn.turn_skill_router import _commit_pending_skill_test
+    sk = _herb.GATHER_SKILL_KEY
+    char_sheet = json.loads(character["sheet_json"] or "{}")
+    mod_info = calc_skill_modifier_info(char_sheet, sk, conn=conn, character_id=int(character["id"]))
+    dc = int(plan["dc"])
+    pending = {
+        "skill_test_id": f"st-{uuid.uuid4().hex[:8]}",
+        "skill_key": sk,
+        "skill_label": _skill_label(sk),
+        "counter": {"counter_type": "dc", "dc": dc},
+        "modifier_breakdown": mod_info,
+        "dc": dc,
+        "source": "herb_gathering",
+        "hex_key": plan.get("hex_key"),
+        "game_day": plan.get("game_day"),
+        "terrain": plan.get("terrain"),
+    }
+    gs_row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    _sf = json.loads(gs_row["session_flags"] or "{}") if gs_row else {}
+    _sf = _commit_pending_skill_test(pending, _sf)
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(_sf, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    return {"skill_test_pending": pending, "prose": None, "route": "skill_test"}
+
+
 def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
                         text: str) -> dict | None:
     """#1196 D4 — deterministic pre-LLM dig action. When the hero stands on a hex
@@ -5808,6 +5856,11 @@ def create_turn(
             if _dig is not None:
                 return _with_turn_trace(_dig, turn_id)
 
+            # #1337 BL-C2 — deterministic herb-gathering action before LLM.
+            _herb_sc = _maybe_herb_shortcut(conn, campaign_id, character, text)
+            if _herb_sc is not None:
+                return _with_turn_trace(_herb_sc, turn_id)
+
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
         # ── Skill routing (R1.2 — #872) ─────────────────────────────────────
@@ -7960,6 +8013,19 @@ def resolve_skill_test_endpoint(
             except Exception as _tderr:
                 logger.warning("treasure_dig_resolve_error", error=str(_tderr))
 
+        # #1337 BL-C2 — herb-gathering test resolved. Grant 1–3 herbs by margin
+        # (Nat20 → extra rare, Nat1 → 1 poison damage), set per-hex/day cooldown.
+        _herb_reward = None
+        if str(pending.get("source", "")).lower() == "herb_gathering":
+            try:
+                from app.services import herb_gathering_service as _herb_rs
+                _herb_reward = _herb_rs.resolve_gather(
+                    conn, campaign_id, int(payload.character_id),
+                    pending, result, session_flags,
+                )
+            except Exception as _hgerr:
+                logger.warning("herb_gather_resolve_error", error=str(_hgerr))
+
         # S11 (#606): nieudany test z aktywnym `inspired` → stash kontekstu pod przerzut
         # gracza (keep-best). Endpoint /skill-test/reroll rzuca nowy serwerowy d20.
         if result.get("reroll_available"):
@@ -8085,6 +8151,14 @@ def resolve_skill_test_endpoint(
         # S7 (#601): gamble result feeds the narrator the gold flow (mechanika
         # already moved the gold via change_gold). Crit-fail → cheating accusation.
         skill_ctx += _build_gamble_narrator_ctx(_gamble_summary)
+
+        # #1337 BL-C2: herb-gathering flavour — tell narrator WHAT was found (no numbers).
+        if _herb_reward is not None:
+            try:
+                from app.services import herb_gathering_service as _herb_hint
+                skill_ctx += _herb_hint.build_narrator_hint(_herb_reward)
+            except Exception:
+                pass
 
         # S11 (#606) — zły omen klątwy: udany test przerzucony na gorszy. Narrator dostaje
         # sygnał, by oddać złowrogi traf losu (BEZ podawania liczb/kości).
@@ -8335,6 +8409,8 @@ def resolve_skill_test_endpoint(
             _resp["advantage_gate"] = _adv_gate
         if _treasure_reward:
             _resp["treasure_reward"] = _treasure_reward
+        if _herb_reward is not None:
+            _resp["herb_reward"] = _herb_reward
         return _resp
     finally:
         conn.close()
