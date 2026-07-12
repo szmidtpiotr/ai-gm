@@ -44,6 +44,11 @@ export function CombatEndModal({
 }) {
   const xp = xpProgress(lifetime, xpGain);
   const hasLoot = loot.length > 0;
+  // T6 (#1352): trzy warianty tonu popupu łupu.
+  //  (a) normalny  → jest ≥1 pozycja 'rolled' → siatka jak dotąd
+  //  (b) consolation → same drobiazgi → „Przeszukujesz ciało. Niewiele przy sobie miał: …"
+  //  (c) awaryjnie pusto (nie powinno się zdarzyć) → „Nie miał nic przy sobie"
+  const consolationOnly = hasLoot && loot.every((it) => it.origin === "consolation");
   // Animacja przyrostu: segment gain rośnie od 0 do docelowej szerokości po montażu.
   const [grown, setGrown] = useState(false);
   useEffect(() => {
@@ -97,16 +102,32 @@ export function CombatEndModal({
 
         {/* siatka łupu */}
         {hasLoot && (
-          <div className="px-[18px] pb-2 pt-4">
+          <div className="px-[18px] pb-2 pt-4" data-testid={consolationOnly ? "loot-consolation" : "loot-rolled"}>
             <div className="mb-[11px] flex items-center gap-[9px] font-ui text-[10.5px] font-bold uppercase tracking-[0.2em] text-ember">
-              <TreasureChest size={14} /> Łup
+              <TreasureChest size={14} /> {consolationOnly ? "Niewiele przy sobie miał" : "Łup"}
               <span className="h-px flex-1 bg-line-soft" />
             </div>
+            {consolationOnly && (
+              <div className="mb-[11px] font-ui text-[12px] italic leading-snug text-text-3">
+                Przeszukujesz ciało. Niewiele przy sobie miał:
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               {loot.map((it, i) => (
                 <LootCell key={i} item={it} />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* T6 (#1352) — awaryjnie: pusto (nie powinno się zdarzyć — backend gwarantuje drobiazg) */}
+        {!hasLoot && (
+          <div className="px-[18px] pb-2 pt-4" data-testid="loot-empty">
+            <div className="mb-[11px] flex items-center gap-[9px] font-ui text-[10.5px] font-bold uppercase tracking-[0.2em] text-text-3">
+              <TreasureChest size={14} /> Łup
+              <span className="h-px flex-1 bg-line-soft" />
+            </div>
+            <div className="font-ui text-[12.5px] italic text-text-3">Nie miał nic przy sobie.</div>
           </div>
         )}
 

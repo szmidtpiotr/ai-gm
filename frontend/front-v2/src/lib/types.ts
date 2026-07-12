@@ -458,6 +458,9 @@ export interface LootItem {
   quantity?: number | null;
   rarity?: number | null;
   is_special?: boolean | null;
+  // T6 (#1352): 'rolled' = łup z tabeli wroga, 'consolation' = gwarantowany drobiazg
+  // przy pustym losowaniu. Steruje tonem modala końca walki.
+  origin?: "rolled" | "consolation" | string | null;
   [k: string]: unknown;
 }
 

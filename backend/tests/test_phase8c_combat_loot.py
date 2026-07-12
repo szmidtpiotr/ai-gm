@@ -177,10 +177,17 @@ class TestCombatLootIntegration(unittest.TestCase):
     @patch("app.services.loot_service.roll_loot", return_value=[])
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
     @patch("app.services.combat_service.roll_d20", return_value=1)
-    def test_enemy_death_no_loot_table_returns_empty_list(self, _d20, _dmg, _roll):
+    def test_enemy_death_empty_roll_yields_consolation(self, _d20, _dmg, _roll):
+        # T6 (#1352): pusty roll → NIE puste ręce. Loot modal dostaje jeden
+        # drobiazg consolation (nigdy ciche przejście do chatu). Kontrakt
+        # „no_loot_table → []" świadomie zastąpiony gwarantowanym minimum.
         cs.initiate_combat(1, 1, ["bandit"])
         out = cs.resolve_attack(1, 20, attacker="player")
         self.assertTrue(out.get("enemy_dead"))
-        self.assertEqual(out.get("loot"), [])
+        loot = out.get("loot") or []
+        self.assertEqual(len(loot), 1)
+        self.assertEqual(loot[0].get("origin"), "consolation")
         st = out.get("combat_state") or {}
-        self.assertEqual(st.get("loot_pool") or [], [])
+        pool = st.get("loot_pool") or []
+        self.assertEqual(len(pool), 1)
+        self.assertEqual(pool[0].get("origin"), "consolation")

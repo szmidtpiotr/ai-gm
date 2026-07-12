@@ -693,6 +693,79 @@ def roll_loot(enemy_key: str) -> list[dict]:
     return rolled
 
 
+# T6 (#1352) — gwarantowany drop minimalny po zwycięstwie.
+# Gdy losowanie łupu wroga daje zero (pudło drop_chance albo każdy wpis spudłował),
+# gracz i tak dostaje jedną narracyjną/bezwartościową pozycję z puli `loot_trash_common`
+# (content-as-code, created_by='seed'), oznaczoną origin='consolation'. Puste ręce bez
+# słowa = gracz czuje się oszukany (decyzja designowa Piotra 2026-07-12). Trafione łupy
+# z tabeli wroga dostają origin='rolled', żeby front mógł zróżnicować ton modala.
+CONSOLATION_LOOT_TABLE_KEY = "loot_trash_common"
+# Fallback gdy tabela drobiazgów niezaseedowana — STARTING values, sandbox-tunable.
+CONSOLATION_FALLBACK_COPPER_MIN = 1
+CONSOLATION_FALLBACK_COPPER_MAX = 4
+
+
+def _roll_consolation_drop(conn: sqlite3.Connection) -> dict:
+    """Jedna pozycja gwarantowanego minimalnego dropu (origin='consolation').
+
+    Preferuje losowy aktywny wpis z tabeli `loot_trash_common` (realny klucz katalogu →
+    grantowalny, polska etykieta z DB). Fallback: syntetyczny narracyjny drobiazg
+    „garść miedziaków" gdy tabela nieobecna/pusta, żeby wynik NIGDY nie był pusty.
+    """
+    try:
+        rows = conn.execute(
+            """
+            SELECT e.item_key, e.consumable_key, e.weapon_key, e.qty_min, e.qty_max
+            FROM game_config_loot_entries e
+            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+            WHERE e.loot_table_key = ? AND t.is_active = 1
+            ORDER BY e.id ASC
+            """,
+            (CONSOLATION_LOOT_TABLE_KEY,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    if rows:
+        e = random.choice(rows)
+        qmin = max(1, int(_rget(e, "qty_min") or 1))
+        qmax = max(qmin, int(_rget(e, "qty_max") or qmin))
+        return {
+            "item_key": _rget(e, "item_key"),
+            "weapon_key": _rget(e, "weapon_key"),
+            "consumable_key": _rget(e, "consumable_key"),
+            "quantity": random.randint(qmin, qmax),
+            "origin": "consolation",
+        }
+    # Fallback — narracyjny drobiazg (display-only, gdy seed nieobecny).
+    coppers = random.randint(CONSOLATION_FALLBACK_COPPER_MIN, CONSOLATION_FALLBACK_COPPER_MAX)
+    return {
+        "item_key": "__narrative__",
+        "label": f"garść miedziaków ({coppers})",
+        "quantity": 1,
+        "origin": "consolation",
+    }
+
+
+def roll_loot_with_consolation(enemy_key: str) -> list[dict]:
+    """T6 (#1352) — roll_loot() z gwarancją minimalnego dropu.
+
+    Zawsze niepusty dla realnego wroga: trafione łupy → origin='rolled'; jeśli
+    losowanie dało zero → dokładnie jedna pozycja origin='consolation'. Pusty/nieznany
+    klucz → [] (bez consolation dla nie-wroga). Solo victory path walki używa tej
+    funkcji zamiast surowego roll_loot(). Dungeon/MP → osobne issue (spec T6 pkt 4).
+    """
+    ek = str(enemy_key or "").strip()
+    if not ek:
+        return []
+    rolled = roll_loot(ek)
+    if rolled:
+        for r in rolled:
+            r["origin"] = "rolled"
+        return rolled
+    with _conn() as conn:
+        return [_roll_consolation_drop(conn)]
+
+
 def roll_loot_for_class(enemy_key: str, archetype: str) -> list[dict]:
     """G10 (#795) — Roll loot for a specific player archetype.
 

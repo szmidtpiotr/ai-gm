@@ -2099,5 +2099,49 @@
     "qty_min": 1,
     "qty_max": 2,
     "game_item_key": null
+  },
+  {
+    "id": 192,
+    "loot_table_key": "loot_trash_common",
+    "item_key": "broken_pouch",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 100,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 193,
+    "loot_table_key": "loot_trash_common",
+    "item_key": "chipped_knife",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 100,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 194,
+    "loot_table_key": "loot_trash_common",
+    "item_key": "bone_die",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 100,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 195,
+    "loot_table_key": "loot_trash_common",
+    "item_key": "torn_map_scrap",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 100,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
   }
 ]

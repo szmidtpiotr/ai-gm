@@ -2078,17 +2078,27 @@ def _preview_loot_from_roll_items(
                 item_type = "item"
             if not key:
                 continue
-            label = _lookup_loot_label(conn, item_type, key) or key.replace("_", " ")
-            out.append(
-                {
-                    "label": label,
-                    "item_type": item_type,
-                    "quantity": qty,
-                    "source": "loot",
-                    "key": key,
-                    "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
-                }
+            # T6 (#1352): narracyjny fallback consolation ma gotową etykietę (item_key
+            # '__narrative__' nie ma wpisu w katalogu) — użyj jej zamiast key.replace.
+            label = (
+                str(raw.get("label") or "").strip()
+                or _lookup_loot_label(conn, item_type, key)
+                or key.replace("_", " ")
             )
+            entry = {
+                "label": label,
+                "item_type": item_type,
+                "quantity": qty,
+                "source": "loot",
+                "key": key,
+                "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
+            }
+            # T6 (#1352): przenieś znacznik rolled/consolation do loot_pool, żeby front
+            # mógł dobrać ton modala („Niewiele przy sobie miał: …").
+            origin = raw.get("origin")
+            if origin in ("rolled", "consolation"):
+                entry["origin"] = origin
+            out.append(entry)
         return out
     finally:
         if _owns_conn:
@@ -3043,10 +3053,11 @@ def _resolve_aoe_single_target(
         if ek and ch_id:
             try:
                 from app.services.loot_service import (
-                    apply_character_gold_delta, roll_gold_drop, roll_loot,
+                    apply_character_gold_delta, roll_gold_drop, roll_loot_with_consolation,
                 )
                 _loot_tier = str(tgt.get("loot_tier") or "") or None
-                loot_items = roll_loot(ek)
+                # T6 (#1352): każde ciało coś ma — consolation gdy losowanie puste.
+                loot_items = roll_loot_with_consolation(ek)
                 tgt_loot = (
                     _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
                     if loot_items else []
@@ -7407,7 +7418,7 @@ def _resolve_player_attack_turn(
                         distribute_mp_loot,
                         grant_loot_to_character,
                         roll_gold_drop,
-                        roll_loot,
+                        roll_loot_with_consolation,
                     )
                     _enemy_loot_tier = str(enemy.get("loot_tier") or "") or None
 
@@ -7437,12 +7448,13 @@ def _resolve_player_attack_turn(
                             out["mp_loot"][_cid_int] = {"gold": _pgold, "items": _ploot}
                             loot.extend(_ploot)
                     else:
-                        # Solo path — unchanged
-                        loot_items = roll_loot(ek)
-                        if loot_items:
-                            loot = _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
-                        else:
-                            loot = []
+                        # Solo path — T6 (#1352): consolation zapewnia niepusty loot_pool
+                        # (rolled) albo jeden narracyjny drobiazg (consolation).
+                        loot_items = roll_loot_with_consolation(ek)
+                        loot = (
+                            _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
+                            if loot_items else []
+                        )
                         gold_drop = int(roll_gold_drop(ek) or 0)
                         if gold_drop > 0:
                             apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
