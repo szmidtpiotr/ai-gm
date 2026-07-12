@@ -161,13 +161,19 @@ export function toHitStageCard(full: RollCardData, hit: boolean): RollCardData {
  * Jasno mówi czy unik/blok się udał + koloruje wg skutku dla Ciebie. */
 export function rollFromReaction(
   r: CombatActionResult,
-  choice: "take" | "dodge" | "block",
+  choice: "take" | "dodge" | "block" | "ward",
 ): RollCardData {
   const react = r.reaction || {};
   const dmg = Number(r.damage ?? 0);
   const cells: RollCardData["cells"] = [];
   const label =
-    choice === "dodge" ? "UNIK" : choice === "block" ? "BLOK" : "CIOS";
+    choice === "dodge"
+      ? "UNIK"
+      : choice === "block"
+        ? "BLOK"
+        : choice === "ward"
+          ? "BARIERA"
+          : "CIOS";
   cells.push({ k: "Reakcja", v: label, sum: true });
 
   let resV: string;
@@ -187,6 +193,15 @@ export function rollFromReaction(
     } else {
       resV = `BLOK · ${dmg} Obr.`; // część obrażeń zablokowana
       tone = "warn";
+    }
+  } else if (choice === "ward") {
+    // #1324: Arkanowa Bariera — test INT, mana pobrana niezależnie od wyniku.
+    if (react.warded) {
+      resV = "BARIERA · 0 Obr."; // cios rozbił się o magiczną osłonę
+      tone = "ok";
+    } else {
+      resV = `BARIERA PRZEBITA · ${dmg} Obr.`; // test nieudany — cios przechodzi, mana i tak zeszła
+      tone = "bad";
     }
   } else {
     resV = `CIOS · ${dmg} Obr.`; // przyjąłeś na klatę

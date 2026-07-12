@@ -403,15 +403,19 @@ export interface CombatActionResult {
   player_incapacitated?: boolean;
   // okno reakcji SF10
   reaction_window?: boolean;
-  reaction_options?: string[]; // subset of ["dodge","shield_block"]
+  reaction_options?: string[]; // subset of ["dodge","shield_block","arcane_ward"]
   reaction?: {
     dodged?: boolean;
     full_block?: boolean;
+    warded?: boolean; // #1324: Arkanowa Bariera — cios znegowany testem INT
     reduction?: number;
     available?: boolean;
-    d20?: number; // surowy rzut testu uniku/bloku — do animacji kości reakcji
+    d20?: number; // surowy rzut testu uniku/bloku/bariery — do animacji kości reakcji
     dodge_total?: number;
     block_total?: number;
+    ward_total?: number; // #1324
+    mana_cost?: number; // #1324: koszt many pobrany za próbę bariery
+    current_mana?: number; // #1324: pula many po reakcji
   } | null;
   // łup / nagrody z zabójczego ciosu (FE10 #1237)
   loot?: LootItem[];

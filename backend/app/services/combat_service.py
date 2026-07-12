@@ -1202,6 +1202,97 @@ def _try_dodge_reaction(
     }
 
 
+# ─── #1324: reakcja `arcane_ward` (Arkanowa Bariera) — odpowiednik Uniku dla maga.
+# Test INT vs rzut ataku wroga, opłacany maną (koszt schodzi ZAWSZE, niezależnie od wyniku —
+# to hazard tej reakcji, parytet z „mana wydana na próbę" #1323). Reużywa silnik stopnia S1.
+
+def _try_arcane_ward_reaction(
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    attack_roll: int,
+    round_n: int,
+    *,
+    campaign_id: int | None = None,
+    ch_id: int | None = None,
+    combat_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Okno reakcji Arkanowej Bariery — wołane gdy cios wroga TRAFIŁ, PRZED aplikacją obrażeń.
+
+    Pre-deklaracja (``p['reaction_declared'] == 'arcane_ward'``) konsumowana przy pierwszym
+    trafieniu w rundzie (raz/rundę, XOR z dodge/block). Gate: skill ``arcane_ward`` rank ≥ 1
+    (skill na sheet) ORAZ ``current_mana ≥ ARCANE_WARD_MANA_COST``. Test INT (d20 + INT_mod +
+    skill_rank + proficiency) przeciw WYNIKOWI ATAKU wroga (``attack_roll`` jako DC), stopień
+    liczony silnikiem S1 (``_derive_outcome``):
+      • sukces (margines ≥ 0)        → ``warded=True`` (cios znegowany, 0 obrażeń)
+      • porażka (margines < 0)        → ``warded=False`` (pełne obrażenia idą dalej)
+      • krytyczna porażka (≤ −5)      → ``reaction_locked_round = round_n + 1`` (parytet Uniku)
+
+    Koszt many (``ARCANE_WARD_MANA_COST``, startowo 1) schodzi ZAWSZE przy podjęciu próby —
+    także przy porażce (hazard). Zwraca ``None`` (silnik idzie normalną ścieżką obrażeń), gdy
+    brak deklaracji / brak skilla. Gdy zablokowane w tej rundzie — dict ``available=False``.
+    Gdy brak many mimo deklaracji — dict ``available=False`` (gate, mana nietknięta).
+
+    Rzut ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTY — to osobny rzut; margines
+    dotyczy wyłącznie testu bariery (sam jest testem umiejętności).
+    """
+    if str(p.get("reaction_declared") or "") != "arcane_ward":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("arcane_ward", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Lockout po wcześniejszej krytycznej porażce — deklaracja i tak skonsumowana, mana nietknięta.
+    if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        p.pop("reaction_declared", None)
+        return {"reaction": "arcane_ward", "available": False, "locked": True, "warded": False}
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku/gate'u).
+    p.pop("reaction_declared", None)
+    # Gate many: bez wystarczającej puli bariera niedostępna (mana nie schodzi).
+    cost = int(ARCANE_WARD_MANA_COST)
+    try:
+        current_mana = int((sheet.get("current_mana") if isinstance(sheet, dict) else 0) or 0)
+    except (TypeError, ValueError):
+        current_mana = 0
+    if current_mana < cost:
+        return {"reaction": "arcane_ward", "available": False, "reason": "no_mana",
+                "current_mana": current_mana, "mana_cost": cost}
+    # Debit many ZAWSZE (koszt próby) — best-effort state-log gdy podano kontekst kampanii.
+    from app.services.spell_service import check_and_deduct_mana as _deduct_mana
+    _ok, new_mana = _deduct_mana(
+        sheet, cost, campaign_id=campaign_id, character_id=ch_id,
+        combat_id=combat_id, cause="reaction_arcane_ward",
+    )
+    int_mod = _combatant_stat_modifier(p, sheet=None, stat="INT")  # kondycje na combatancie
+    proficiency = proficiency_bonus(skill_rank)
+    mod_total = int(int_mod) + skill_rank + proficiency
+    d20 = roll_d20()
+    from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
+    outcome = _derive_outcome(d20, mod_total, int(attack_roll))
+    warded = bool(outcome["success"])
+    locked_next = outcome["outcome"] == "CRITICAL_FAILURE"
+    if locked_next:
+        p["reaction_locked_round"] = int(round_n) + 1
+    return {
+        "reaction": "arcane_ward",
+        "available": True,
+        "warded": warded,
+        "d20": int(d20),
+        "ward_total": int(outcome["player_total"]),
+        "attack_roll": int(attack_roll),
+        "margin": int(outcome["margin"]),
+        "outcome": outcome["outcome"],
+        "locked_next_round": locked_next,
+        "int_mod": int(int_mod),
+        "skill_rank": skill_rank,
+        "mana_cost": cost,
+        "current_mana": int(new_mana),
+    }
+
+
 # ─── S16 (#611): reakcja `shield_block` — druga reakcja w systemie (reużywa frameworku S15).
 
 def _player_has_shield_equipped(conn: Any, char_id: int | None) -> tuple[bool, int | None]:
@@ -5556,6 +5647,8 @@ MARGIN_DAMAGE_BONUS = 1       # +1 dmg za próg (BACKUP w #826: +1 KOŚĆ — gd
 ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = część `ac_base`/AC ponad
                               # nieopancerzony próg (AC 10). OFFSET=0 → literalne ac_base ze spec #826
                               # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
+ARCANE_WARD_MANA_COST = 1     # #1324: koszt many za PRÓBĘ Arkanowej Bariery (schodzi ZAWSZE,
+                              # niezależnie od wyniku testu). Wartość STARTOWA — strój na Sandboxie.
 
 
 # ─── #1210: mechaniki V2 (port z combat_v2_service.py) ───────────────────────
@@ -6036,6 +6129,14 @@ def _reaction_options(
             has_shield, _ = _player_has_shield_equipped(conn, ch_id)
             if has_shield:
                 opts.append("shield_block")
+    except (TypeError, ValueError):
+        pass
+    # #1324: Arkanowa Bariera — gate: skill arcane_ward ≥ 1 ORAZ mana ≥ koszt próby.
+    try:
+        if int(skills.get("arcane_ward", 0) or 0) >= 1:
+            current_mana = int(sheet.get("current_mana", 0) or 0)
+            if current_mana >= int(ARCANE_WARD_MANA_COST):
+                opts.append("arcane_ward")
     except (TypeError, ValueError):
         pass
     return opts
@@ -7902,7 +8003,9 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
     ch = str(choice or "take").strip().lower()
     if ch == "block":
         ch = "shield_block"
-    if ch not in {"take", "dodge", "shield_block"}:
+    if ch == "ward":
+        ch = "arcane_ward"
+    if ch not in {"take", "dodge", "shield_block", "arcane_ward"}:
         raise ValueError(f"unknown reaction choice: {choice}")
 
     with _conn() as conn:
@@ -7937,6 +8040,7 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                                "enemy_name": str(pending.get("enemy_name") or "Wróg")}
         _dodge = None
         _block = None
+        _ward = None
 
         if ch == "dodge":
             p["reaction_declared"] = "dodge"
@@ -7952,6 +8056,17 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["reaction"] = _block
                 if _block.get("available"):
                     dmg = int(_block.get("damage_after", dmg))
+        elif ch == "arcane_ward":
+            # #1324: Arkanowa Bariera — test INT za manę; sukces = 0 obrażeń.
+            p["reaction_declared"] = "arcane_ward"
+            _ward = _try_arcane_ward_reaction(
+                p, sheet, attack_roll, round_n,
+                campaign_id=campaign_id, ch_id=ch_id, combat_id=int(row["id"]),
+            )
+            if _ward is not None:
+                out["reaction"] = _ward
+                if _ward.get("available") and _ward.get("warded"):
+                    dmg = 0
         # ch == "take": dmg bez zmian
 
         # zużycie reakcji w rundzie + zamknięcie okna
@@ -8017,17 +8132,19 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
         cid = int(row["id"])
-        # log reakcji (unik/blok) — Sandbox/UI pokazuje test i wynik
-        _react = _dodge if _dodge is not None else _block
+        # log reakcji (unik/blok/bariera) — Sandbox/UI pokazuje test i wynik
+        _react = _dodge if _dodge is not None else (_block if _block is not None else _ward)
         if _react is not None and _react.get("available"):
             tn_r = _next_combat_log_sequence(conn, cid)
             log_combat_turn(
                 conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn_r,
                 actor="player", event_type="reaction",
-                roll_value=int(_react.get("dodge_total") or _react.get("block_total") or 0),
+                roll_value=int(_react.get("dodge_total") or _react.get("block_total")
+                               or _react.get("ward_total") or 0),
                 damage=int(out.get("damage") or 0), hp_after=next_hp,
                 target_id="player", target_name=str(p.get("name") or "Bohater"),
-                hit=bool(_react.get("dodged") or _react.get("full_block") or (_react.get("reduction") or 0) > 0),
+                hit=bool(_react.get("dodged") or _react.get("warded") or _react.get("full_block")
+                         or (_react.get("reduction") or 0) > 0),
                 narrative=json.dumps({**_react, "choice": ch}, ensure_ascii=False),
             )
         else:

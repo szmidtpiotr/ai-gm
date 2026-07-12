@@ -2,10 +2,10 @@
 // Timer-ring odlicza; brak wyboru = auto „Przyjmij cios" (parytet z silnikiem, choice
 // default „take"). Liczba obrażeń CELOWO ukryta — wybór pozostaje zakładem (decyzja Piotra).
 import { useEffect, useRef, useState } from "react";
-import { Wind, ShieldCheck, HandPalm, PawPrint } from "@phosphor-icons/react";
+import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
-export type ReactionChoice = "take" | "dodge" | "block";
+export type ReactionChoice = "take" | "dodge" | "block" | "ward";
 
 export interface ReactionData {
   enemyName: string;
@@ -50,6 +50,7 @@ export function ReactionModal({
   const offset = RING_LEN * (1 - left / WINDOW_S);
   const hasDodge = data.options.includes("dodge");
   const hasBlock = data.options.includes("shield_block");
+  const hasWard = data.options.includes("arcane_ward"); // #1324: Arkanowa Bariera
 
   return (
     <div
@@ -128,6 +129,21 @@ export function ReactionModal({
               onClick={() => fire("block")}
             />
           )}
+          {hasWard && (
+            <Choice
+              variant="ward"
+              icon={<Sparkle weight="fill" size={21} />}
+              name="Arkanowa Bariera"
+              desc="Test intelektu — całość albo nic. Sukces = 0 obrażeń. Mana schodzi zawsze."
+              meta={
+                <>
+                  d20+INT
+                  <br />1 many
+                </>
+              }
+              onClick={() => fire("ward")}
+            />
+          )}
           <Choice
             variant="take"
             icon={<HandPalm weight="fill" size={21} />}
@@ -178,19 +194,22 @@ function Choice({
   meta,
   onClick,
 }: {
-  variant: "dodge" | "block" | "take";
+  variant: "dodge" | "block" | "ward" | "take";
   icon: React.ReactNode;
   name: string;
   desc: string;
   meta: React.ReactNode;
   onClick: () => void;
 }) {
+  // #1324: bariera dzieli paletę many (niebieski) z unikiem — obie to test „całość albo nic".
   const tint =
     variant === "take"
       ? "border-[rgba(232,96,79,.3)]"
       : variant === "block"
         ? "border-line-ember"
-        : "border-line";
+        : variant === "ward"
+          ? "border-[rgba(130,167,199,.35)]"
+          : "border-line";
   const iconCls =
     variant === "take"
       ? "bg-[rgba(232,96,79,.12)] text-danger-glow"
