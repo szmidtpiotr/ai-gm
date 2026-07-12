@@ -486,6 +486,16 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r13-wyprawa">Wyprawa i wykopanie</a></li>
         </ul>
       </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">XIV</span><span class="ttl">Rzemiosło</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r14">Wprowadzenie</a></li>
+          <li><a href="#r14-komponenty">Komponenty</a></li>
+          <li><a href="#r14-zbieranie">Zbieranie ziół</a></li>
+          <li><a href="#r14-przepisy">Przepisy u rzemieślnika</a></li>
+          <li><a href="#r14-ulepszenie">Ulepszenie broni</a></li>
+        </ul>
+      </li>
     </ul>
     <div class="toc-empty">Brak wyników.</div>
   </nav>
@@ -2473,8 +2483,111 @@ document.addEventListener('DOMContentLoaded',function(){
       twojego ekwipunku i sakwy, znak ✕ znika z mapy, a miejsce zostaje odnotowane w
       <b>Atlasie</b> bohatera.</p>
 
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ XIV — RZEMIOSŁO ════════════════ -->
+    <section id="r14">
+      <p class="eyebrow">Rozdział XIV</p>
+      <h1><span class="num">XIV · Świat</span>Rzemiosło</h1>
+      <p class="subtitle">Po co zbierasz śmieciowy łup</p>
+      <hr class="rule">
+
+      <figure class="hero">
+        <img src="img/ch-rzemioslo.png" alt="Krasnoludzki kowal przy palenisku, bohater podaje kły i rudę nad warsztatem z ziołami i flakonami">
+        <div class="cap">Wojownik nie jest płatnerzem. Nosi materiał — resztę robi ten, kto zna się na rzeczy.</div>
+      </figure>
+
+      <p class="lede dropcap">Kły wilka, garść ziół z leśnej polany, kawał rudy z pokonanego trolla —
+      dawniej sprzedawało się to kupcowi za grosze i szło dalej. Teraz taki „śmieciowy" łup ma
+      <strong>odbiornik</strong>: u kowala i zielarza w osadzie zamienisz go w miksturę, w naprawę
+      pancerza albo w ostrzejsze ostrze. Ty <strong>dostarczasz materiał</strong> — rękodzieło wykonuje
+      rzemieślnik, za drobną opłatą. Bohater nie staje przy kowadle; nosi to, czego kowalowi trzeba.</p>
+
+      <h2 id="r14-komponenty">Komponenty</h2>
+      <p>Zbieractwo zaczyna się od <span class="gloss" tabindex="0">komponentów<span class="tip"><span class="tip-h">Komponent</span>Zwykły
+      przedmiot z flagą „składnik" — kieł, skóra, ruda, zioło. Działa jak każdy inny przedmiot: leży
+      w ekwipunku, wypada z łupu, można go kupić i sprzedać. Jego jedyna dodatkowa rola to być
+      wsadem do przepisu.</span></span> — kłów, skór, rud, ziół. To zwyczajne przedmioty: wypadają
+      z pokonanych bestii (kieł ze zwierza, skóra z wilka), leżą w terenie, można je kupić i sprzedać
+      jak wszystko inne. W ekwipunku poznasz je po znaczku <b>🧩</b> — to sygnał, że przedmiot nie jest
+      śmieciem, lecz wsadem do rękodzieła. Zbieraj je świadomie: bestiariusz mówi <em>co</em> upoluje
+      dany składnik, rzemiosło mówi <em>po co</em>.</p>
+
+      <h2 id="r14-zbieranie">Zbieranie ziół</h2>
+      <figure class="illus right"><img src="img/skl-medicine.png" alt="Bohater zbiera zioła na leśnej polanie"><figcaption>W lesie zioła same się proszą — na jałowej grani trzeba wiedzieć, gdzie patrzeć.</figcaption></figure>
+      <p>Ziół nie kupisz tak łatwo jak reszty — najczęściej <strong>zbierasz je sam</strong> w drodze.
+      Gdy w podróży napiszesz, że <b>szukasz ziół</b>, zdajesz test <b>Mądrości</b> na
+      umiejętność <b>Przetrwanie</b> (Rozdział III). <span class="gloss" tabindex="0">Trudność zależy od
+      terenu<span class="tip"><span class="tip-h">DC wg terenu</span>Las, bagno, brzeg rzeki — Łatwy
+      (DC&nbsp;8). Równiny, wzgórza, wrzosowiska — Średni (DC&nbsp;12). Góry, przełęcze, śnieg —
+      Trudny (DC&nbsp;16).</span></span> heksu, na którym stoisz: w lesie czy nad wodą runo obradza,
+      w górach trzeba się nabiedzić.</p>
+      <p>Udany test daje <b>1 do 3 ziół</b> — im wyżej pobijesz próg, tym pełniejsza garść (dodatkowe
+      zioło za każde pełne 5 punktów ponad Trudność). <b>Sukces krytyczny (naturalna 20)</b> dorzuca
+      <em>rzadki</em> okaz. <b>Porażka krytyczna (naturalna 1)</b> to trująca pomyłka — sięgasz po nie
+      to, co trzeba, i tracisz 1 punkt życia. Po udanej zbiórce miejsce jest <b>na resztę dnia
+      ogołocone</b>: kolejną garść zbierzesz tu dopiero nazajutrz — albo od razu, ale gdzie indziej.</p>
+
+      <div class="card">
+        <p class="card-h">Karta testu · Zbieranie ziół</p>
+        <table class="test-card">
+          <tbody>
+            <tr><td>Cecha i umiejętność</td><td class="dc">Mądrość · Przetrwanie</td></tr>
+            <tr><td>Trudność — las / bagno / rzeka</td><td class="dc">Łatwy 8</td></tr>
+            <tr><td>Trudność — równiny / wzgórza</td><td class="dc">Średni 12</td></tr>
+            <tr><td>Trudność — góry / przełęcz / śnieg</td><td class="dc">Trudny 16</td></tr>
+            <tr><td>Nagroda</td><td class="dc">1–3 zioła (+1 co 5 pkt ponad próg)</td></tr>
+            <tr><td>Naturalna 20</td><td class="dc" style="color:#9bb56a">+ rzadkie zioło</td></tr>
+            <tr><td>Naturalna 1</td><td class="dc" style="color:#c07a64">trująca pomyłka, −1 HP</td></tr>
+            <tr><td>Cooldown</td><td class="dc">1× na heks, na dobę gry</td></tr>
+          </tbody>
+        </table>
+        <p class="ex">Stoisz na leśnym heksie (DC&nbsp;8). Piszesz: „Rozglądam się za ziołami pod
+        drzewami". Rzut na Przetrwanie: <span class="ex">15 + 3 = 18</span>. Margines 10 ponad próg
+        → <b>3 zioła</b> lądują w plecaku ze znaczkiem 🧩.</p>
+      </div>
+
+      <h2 id="r14-przepisy">Przepisy u rzemieślnika</h2>
+      <p>W osadzie <span class="gloss" tabindex="0">rzemieślnik<span class="tip"><span class="tip-h">Rzemieślnik</span>Kowal
+      albo zielarz w osadzie. Zna zestaw przepisów — który zna który, decyduje świat. To on wykonuje
+      pracę; ty tylko przynosisz składniki i płacisz za usługę.</span></span> — kowal albo zielarz —
+      zna kilka <span class="gloss" tabindex="0">przepisów<span class="tip"><span class="tip-h">Przepis</span>Recepta:
+      lista komponentów na wejściu → gotowy wynik na wyjściu, plus koszt usługi w złocie. Widzisz go
+      w zakładce „Rzemiosło" u rzemieślnika; podświetla się, gdy masz wszystkie składniki.</span></span>.
+      Każdy przepis to prosta wymiana: <b>składniki → wynik + drobna opłata</b>. Otwierasz zakładkę
+      <b>„Rzemiosło"</b> u rzemieślnika i widzisz listę — przepis, na który masz komplet komponentów,
+      podświetla się na zielono.</p>
+      <table>
+        <caption>Przepisy startowe (orientacyjnie — strojone w testach)</caption>
+        <thead><tr><th>Wynik</th><th>Składniki</th><th>Rzemieślnik</th><th>Opłata</th></tr></thead>
+        <tbody>
+          <tr><td>Mikstura lecznicza</td><td>2× zioło lecznicze + 1× korzeń</td><td>Zielarz</td><td class="dc">5 GP</td></tr>
+          <tr><td>Naprawa pancerza</td><td>2× skóra wilka</td><td>Kowal</td><td class="dc">8 GP</td></tr>
+          <tr><td>Ostrzenie broni (+1 obrażeń)</td><td>1× kieł wilczy + 1× ruda żelaza</td><td>Kowal</td><td class="dc">15 GP</td></tr>
+        </tbody>
+      </table>
+      <p>Mikstura z ziół wychodzi <b>taniej niż kupno</b> gotowej u uzdrowiciela — o to właśnie chodzi:
+      własny łup zamienia się w realną oszczędność. <b>Krasnolud</b> ma tu przewagę: jego
+      <em>kowalskie oko</em> (Rozdział X) obniża opłatę za usługę u kowala o 15% — ostrzenie, które
+      kosztuje 15 GP, jego kosztuje 13.</p>
+
+      <h2 id="r14-ulepszenie">Ulepszenie broni</h2>
+      <p>Najsłodszy z przepisów to <span class="gloss" tabindex="0">ostrzenie broni<span class="tip"><span class="tip-h">Ulepszenie broni</span>Jednorazowe,
+      trwałe +1 do obrażeń nałożone na <b>ten jeden egzemplarz</b> broni. Nie kumuluje się: raz
+      podbita broń drugiego ostrzenia nie przyjmie.</span></span>: kieł bestii i kawał rudy w rękach
+      kowala zamieniają się w <strong>trwałe +1 do obrażeń</strong> twojego oręża. To ulepszenie
+      siedzi <b>na konkretnym egzemplarzu</b> — sprzedasz broń, znika razem z nią. I działa
+      <b>tylko raz</b>: raz naostrzonego miecza nie da się naostrzyć na +2. Prosty, płytki zysk —
+      taki właśnie ma być. Ulepszoną broń możesz od razu sprawdzić w Piaskownicy admina, zanim
+      wyruszysz w bój.</p>
+      <p class="aside">Rzemiosło jest z założenia <b>płytkie</b> — żadnych drzewek rozwoju ani zawodu
+      rzemieślnika dla bohatera. Ma jeden cel: domknąć pętlę <em>łup → ekonomia</em>, żeby nic, co
+      zdejmiesz z wroga czy zbierzesz w trawie, nie było bezużyteczne.</p>
+
       <footer>
-        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIII</span><br>
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIV</span><br>
         Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
       </footer>
     </section>
