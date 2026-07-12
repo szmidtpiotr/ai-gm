@@ -3492,6 +3492,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE game_config_enemies ADD COLUMN fear_dc INTEGER NOT NULL DEFAULT 12", "v2-enemies-fear-dc")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN skills_json TEXT NOT NULL DEFAULT '{}'", "v2-enemies-skills-json")
     _exec("ALTER TABLE game_config_enemies ADD COLUMN loot_tier TEXT DEFAULT NULL", "v2-enemies-loot-tier")
+    # #1327 BL-A1 — enemy metadata for compositional encounter selection.
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN terrain_tags TEXT DEFAULT NULL", "v2-enemies-terrain-tags")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN max_level INTEGER DEFAULT NULL", "v2-enemies-max-level")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN world_scope TEXT NOT NULL DEFAULT 'global'", "v2-enemies-world-scope")
 
     # ── ALTER TABLE: game_sessions ────────────────────────────────────────
 
@@ -5805,6 +5809,147 @@ def _seed_dwarf_toughness_enemy(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_enemy_terrain_scope_bands(conn: sqlite3.Connection) -> None:
+    """#1327 BL-A1 — backfill world_scope for all enemies + terrain/level-band data pass
+    over the 59 global (seed) enemies.
+
+    Two idempotent passes:
+
+    1. **world_scope backfill** (all 112 rows) — template-origin enemies must never leak
+       into the global travel pool (spoilers, "same boss twice"):
+         created_by='forge' OR template_id IS NOT NULL → 'template'
+         created_by='llm_plan'                          → 'campaign'
+         everything else (created_by NULL = seed)       → 'global'
+       Gated so it only touches rows still at the DEFAULT 'global' the first time.
+
+    2. **terrain + level-band data pass** (global enemies only) — content-as-code seed
+       (#1202): committed = approved. Gated on `terrain_tags IS NULL` so it runs exactly
+       once (bosses keep max_level NULL = 10+, so that column can't be the gate) and never
+       clobbers later admin edits (Świat → wrogowie). Numbers Policy — starting
+       bands 1–2 / 3–5 / 6–9 / 10+ (tunable per enemy in admin):
+         weak                 → 1–2
+         standard, hp_base<16 → 1–2
+         standard, hp_base>=16→ 3–5   (fills the old 2–5 difficulty cliff)
+         elite                → 6–9
+         boss                 → 10+   (max_level stays NULL = open-ended)
+    """
+    # ── Pass 1: world_scope backfill (idempotent — only rows still at default) ──
+    try:
+        conn.execute(
+            "UPDATE game_config_enemies SET world_scope = 'template' "
+            "WHERE world_scope = 'global' AND (created_by = 'forge' OR template_id IS NOT NULL)"
+        )
+        conn.execute(
+            "UPDATE game_config_enemies SET world_scope = 'campaign' "
+            "WHERE world_scope = 'global' AND created_by = 'llm_plan'"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        # Columns may not exist yet on a partial/test DB — schema pass fills them first.
+        logger.debug("enemy_world_scope_backfill_skipped", reason=str(e))
+        return
+
+    # ── Pass 2: terrain + level-band data pass over global (seed) enemies ──
+    # terrain dictionary = hex_type + template location_tags:
+    #   forest,road,mountain,swamp,city,dungeon,plains,ruins,cave,river,hills,castle,wilderness
+    TERRAIN = {
+        # weak
+        "kobold": "cave,dungeon,mountain",
+        "giant_rat": "dungeon,cave,city",
+        "goblin": "forest,cave,hills",
+        "goblin_archer": "forest,hills",
+        "cultist": "dungeon,ruins,swamp",
+        "imp": "dungeon,ruins",
+        "bandit_thug": "road,forest",
+        "slime": "swamp,cave,dungeon",
+        "zombie": "swamp,ruins,dungeon",
+        # standard
+        "old_man": "city,road",
+        "enemy": "road,wilderness",
+        "wolf": "forest,hills,wilderness",
+        "skeleton": "dungeon,ruins",
+        "goblin_u31": "forest,cave,hills",
+        "unknown_attacker": "wilderness,road",
+        "bandit": "road,forest,plains",
+        "ogr": "hills,cave",
+        "thug": "city,road",
+        "s2_pw_bandyta_lucznik": "road,forest",
+        "s2_pw_custom_stats": "wilderness",
+        "s4_pw_kaplan": "dungeon,city,ruins",
+        "nozownik_testowy": "city",
+        "bandyta_uliczny": "city",
+        "dark_mage": "ruins,dungeon,city",
+        "harpy": "mountain,hills,ruins",
+        "guard": "city,castle,road",
+        "orc_shaman": "plains,hills",
+        "giant_spider": "forest,cave,dungeon",
+        "ghost": "ruins,castle,dungeon",
+        "brigand": "road,hills,forest",
+        "dark_elf": "forest,cave,dungeon",
+        "s4_pw_osilek": "city,road",
+        "orc": "plains,hills,mountain",
+        "assassin": "city,ruins",
+        "lizardman": "swamp,river",
+        "wraith": "ruins,dungeon,swamp",
+        "ghoul": "dungeon,ruins,swamp",
+        "mercenary": "road,city,plains",
+        "orc_warrior": "plains,hills,mountain",
+        "werewolf": "forest,wilderness,hills",
+        "cave_bear": "cave,mountain,forest",
+        # elite
+        "troll": "swamp,cave,hills",
+        "witch": "swamp,forest,cave",
+        "dark_priest": "dungeon,ruins,castle",
+        "shadow_stalker": "dungeon,ruins,city",
+        "bandit_chief": "road,forest,ruins",
+        "vampire": "castle,ruins,city",
+        "undead_champion": "ruins,castle,dungeon",
+        "orc_warchief": "plains,hills,mountain",
+        "ogre": "hills,mountain,cave",
+        "golem_stone": "mountain,dungeon,ruins",
+        "wyvern": "mountain,hills",
+        "vampire_master": "castle,ruins",
+        # boss
+        "krypta_opiekun": "dungeon,ruins",
+        "ancient_troll": "swamp,mountain,cave",
+        "lich": "dungeon,ruins,castle",
+        "demon_lord": "dungeon,ruins,castle",
+        "iron_golem": "dungeon,castle,ruins",
+        "dragon_young": "mountain,ruins,cave",
+    }
+
+    try:
+        rows = conn.execute(
+            "SELECT key, tier, hp_base FROM game_config_enemies "
+            "WHERE world_scope = 'global' AND terrain_tags IS NULL"
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        logger.debug("enemy_terrain_band_pass_skipped", reason=str(e))
+        return
+
+    updated = 0
+    for key, tier, hp_base in rows:
+        hp = hp_base or 0
+        if tier == "weak":
+            min_lv, max_lv = 1, 2
+        elif tier == "standard":
+            min_lv, max_lv = (1, 2) if hp < 16 else (3, 5)
+        elif tier == "elite":
+            min_lv, max_lv = 6, 9
+        elif tier == "boss":
+            min_lv, max_lv = 10, None  # 10+ open-ended
+        else:
+            min_lv, max_lv = 1, 2
+        terrain = TERRAIN.get(key, "wilderness")
+        conn.execute(
+            "UPDATE game_config_enemies SET terrain_tags = ?, min_level = ?, max_level = ? WHERE key = ?",
+            (terrain, min_lv, max_lv, key),
+        )
+        updated += 1
+    conn.commit()
+    logger.info("enemy_terrain_scope_bands_datapass", updated=updated)
+
+
 def _ensure_region_schema(conn: sqlite3.Connection) -> None:
     """RM1 (#1028) — world_regions table + 6-region seed + world_hexes indexes."""
     conn.execute("""
@@ -6419,6 +6564,7 @@ def run_admin_migrations() -> None:
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
         _ensure_enemy_min_level(conn)  # #1023
+        _ensure_enemy_terrain_scope_bands(conn)  # #1327 BL-A1
         _seed_dwarf_toughness_enemy(conn)  # #1005
         _ensure_region_schema(conn)  # #1028 RM1
         _align_region_status_to_files(conn)  # #1241 R1 — status krain z plików
