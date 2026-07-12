@@ -66,6 +66,9 @@ TIER_ENTRIES: dict[str, list[tuple[str, str, int, int, int]]] = {
         ("item", "waterskin", 30, 1, 1),
         ("item", "potion_healing_minor", 22, 1, 1),
         ("weapon", "dagger", 12, 1, 1),
+        # #1335 BL-B3: crafting components (defs seeded by seed_components_1335.py).
+        ("item", "kiel_szczurzy", 15, 1, 2),
+        ("item", "korzen_zmornika", 12, 1, 1),
     ],
     "loot_tier_standard": [
         ("item", "bandage", 45, 1, 2),
@@ -75,6 +78,13 @@ TIER_ENTRIES: dict[str, list[tuple[str, str, int, int, int]]] = {
         ("item", "potion_healing_standard", 22, 1, 1),
         ("item", "antidote", 20, 1, 1),
         ("weapon", "shortsword", 15, 1, 1),
+        # #1334 BL-B2: fragment_mapy_skarbow lives ONLY in tier tables now.
+        ("item", "fragment_mapy_skarbow", 5, 1, 1),
+        # #1335 BL-B3: components.
+        ("item", "wolf_pelt", 15, 1, 1),
+        ("item", "ruda_zelaza", 14, 1, 1),
+        ("item", "korzen_zmornika", 12, 1, 1),
+        ("item", "kapelusz_bledunia", 10, 1, 1),
     ],
     "loot_tier_elite": [
         ("item", "potion_healing_standard", 40, 1, 2),
@@ -85,6 +95,12 @@ TIER_ENTRIES: dict[str, list[tuple[str, str, int, int, int]]] = {
         ("item", "oil_flask", 20, 1, 1),
         ("weapon", "longsword", 14, 1, 1),
         ("item", "scale_mail", 12, 1, 1),
+        ("item", "fragment_mapy_skarbow", 10, 1, 1),
+        # #1335 BL-B3: components.
+        ("item", "bear_hide", 14, 1, 1),
+        ("item", "ruda_miedzi", 12, 1, 1),
+        ("item", "esencja_cienia", 10, 1, 1),
+        ("item", "odprysk_obsydianu", 8, 1, 1),
     ],
     "loot_tier_boss": [
         ("item", "potion_healing_standard", 45, 1, 2),
@@ -94,6 +110,11 @@ TIER_ENTRIES: dict[str, list[tuple[str, str, int, int, int]]] = {
         ("weapon", "longsword", 20, 1, 1),
         ("item", "scale_mail", 18, 1, 1),
         ("item", "holy_water", 15, 1, 1),
+        ("item", "fragment_mapy_skarbow", 15, 1, 1),
+        # #1335 BL-B3: components.
+        ("item", "esencja_cienia", 15, 1, 1),
+        ("item", "esencja_upiora", 12, 1, 1),
+        ("item", "odprysk_obsydianu", 10, 1, 1),
     ],
 }
 

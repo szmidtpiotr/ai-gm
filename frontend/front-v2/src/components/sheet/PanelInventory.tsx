@@ -37,6 +37,19 @@ import {
   type TreasureMapRow,
 } from "@/hooks/useSheetData";
 
+// #1335 — polskie etykiety typów komponentów (badge 🧩).
+const COMPONENT_TYPE_LABELS: Record<string, string> = {
+  pelt: "skóra",
+  fang: "kieł",
+  herb: "zioło",
+  ore: "ruda",
+  essence: "esencja",
+  part: "część",
+};
+function componentTypeLabel(t: string | null | undefined): string {
+  return COMPONENT_TYPE_LABELS[(t || "").toLowerCase()] || "komponent";
+}
+
 // ── Stacking identycznych itemów ─────────────────────────────────────────────
 interface StackedItem extends InventoryItem {
   allIds: number[];   // wszystkie inventory_id w stosie (drop usuwa pierwszy)
@@ -229,6 +242,17 @@ export function PanelInventory({
               busy={actionBusy}
             />
           )}
+          {bag.components.length > 0 && (
+            <BagSection
+              label="🧩 Komponenty"
+              items={bag.components}
+              onSelect={setSelectedId}
+              onEquip={onEquip}
+              onUse={handleUse}
+              onDrop={handleDrop}
+              busy={actionBusy}
+            />
+          )}
           {bag.lore.length > 0 && (
             <LoreSection items={bag.lore} onSelect={setSelectedId} onDrop={handleDrop} />
           )}
@@ -324,8 +348,16 @@ function ItemRow({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-ui text-[13px] font-medium text-text">
-            {it.label}
+          <span className="flex items-center gap-1.5 truncate font-ui text-[13px] font-medium text-text">
+            <span className="truncate">{it.label}</span>
+            {it.is_component && (
+              <span
+                title={componentTypeLabel(it.component_type)}
+                className="shrink-0 rounded border border-amber-700/50 bg-[rgba(180,120,40,0.12)] px-1 py-px font-mono text-[9px] font-semibold text-amber-300"
+              >
+                🧩 {componentTypeLabel(it.component_type)}
+              </span>
+            )}
           </span>
           {it.stat_tags && it.stat_tags.length > 0 && (
             <span className="mt-0.5 flex flex-wrap gap-1.5">

@@ -88,6 +88,17 @@
     "gold_max": 40
   },
   {
+    "key": "loot_cave_bear",
+    "label": "Łupy: Niedźwiedź Jaskiniowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
     "key": "loot_czarny_hask",
     "label": "Łupy: Czarny Hask",
     "description": "",
@@ -108,6 +119,28 @@
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 1,
     "gold_max": 8
+  },
+  {
+    "key": "loot_giant_rat",
+    "label": "Łupy: Olbrzymi Szczur",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_giant_spider",
+    "label": "Łupy: Olbrzymi Pająk",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
   },
   {
     "key": "loot_goblin",
@@ -319,6 +352,17 @@
     "gold_max": 15
   },
   {
+    "key": "loot_lizardman",
+    "label": "Łupy: Jaszczuroludek",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
     "key": "loot_marek_voss_final",
     "label": "Łupy: Marek Voss i wierni popiołu",
     "description": "",
@@ -491,8 +535,8 @@
     "locked_at": null,
     "created_at": "2026-07-08 11:23:10",
     "updated_at": "2026-07-08 11:31:42",
-    "gold_min": 40,
-    "gold_max": 100
+    "gold_min": 0,
+    "gold_max": 0
   },
   {
     "key": "loot_s2_pw_bandyta_lucznik",
@@ -591,7 +635,7 @@
     "created_at": "2026-06-11 12:19:44",
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 0,
-    "gold_max": 3
+    "gold_max": 0
   },
   {
     "key": "loot_spaczony_prorok",
@@ -623,8 +667,8 @@
     "locked_at": null,
     "created_at": "2026-07-10 17:55:12",
     "updated_at": "2026-07-10 17:55:12",
-    "gold_min": 5,
-    "gold_max": 15
+    "gold_min": 0,
+    "gold_max": 0
   },
   {
     "key": "loot_szepczacy_odlamek",
@@ -647,6 +691,50 @@
     "updated_at": "2026-06-13 16:14:05",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_tier_boss",
+    "label": "Tier: Boss (wróg boss)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_elite",
+    "label": "Tier: Elitarny (wróg elite)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_standard",
+    "label": "Tier: Standardowy (wróg standard)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_weak",
+    "label": "Tier: Słaby (wróg weak)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
   },
   {
     "key": "loot_treasure",
@@ -734,7 +822,7 @@
     "created_at": "2026-06-11 12:19:44",
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 0,
-    "gold_max": 2
+    "gold_max": 0
   },
   {
     "key": "loot_wynaturzony_trup",
@@ -867,49 +955,5 @@
     "updated_at": "2026-07-02 09:58:03",
     "gold_min": 5,
     "gold_max": 15
-  },
-  {
-    "key": "loot_tier_weak",
-    "label": "Tier: Słaby (wróg weak)",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
-  },
-  {
-    "key": "loot_tier_standard",
-    "label": "Tier: Standardowy (wróg standard)",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
-  },
-  {
-    "key": "loot_tier_elite",
-    "label": "Tier: Elitarny (wróg elite)",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
-  },
-  {
-    "key": "loot_tier_boss",
-    "label": "Tier: Boss (wróg boss)",
-    "description": "",
-    "is_active": 1,
-    "locked_at": null,
-    "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
   }
 ]

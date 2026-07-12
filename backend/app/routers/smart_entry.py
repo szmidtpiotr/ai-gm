@@ -201,7 +201,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
     },
     "game_config_items": {
         "required": ["key", "label", "item_type", "value_gp"],
-        "optional": ["ac_bonus", "armor_coverage", "effect_json"],
+        "optional": ["ac_bonus", "armor_coverage", "effect_json", "is_component", "component_type"],
         "fields": {
             "key": {
                 "type": "text",
@@ -219,6 +219,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                     {"label": "armor", "description": "Zbroja / ochrona"},
                     {"label": "accessory", "description": "Akcesoria (pierścień, amulet)"},
                     {"label": "misc", "description": "Różne przedmioty"},
+                    {"label": "material", "description": "Surowiec / komponent rzemieślniczy (skóry, kły, rudy, esencje) — ustaw is_component=1 + component_type"},
                     {"label": "key_item", "description": "Przedmiot fabularny / klucz"},
                     {"label": "map", "description": "Mapa — użycie odkrywa fragment mgły wojny (effect_json: mode radius/region/hexes)"},
                 ],
@@ -251,6 +252,26 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             "effect_json": {
                 "type": "text",
                 "question": "Opisz efekt przedmiotu w formacie JSON (opcjonalnie), np. {\"type\": \"heal\", \"amount\": 5}.",
+            },
+            "is_component": {
+                "type": "single_choice",
+                "question": "Czy to komponent rzemieślniczy (surowiec do wytwarzania)?",
+                "options": [
+                    {"label": "0", "description": "Nie — zwykły przedmiot"},
+                    {"label": "1", "description": "Tak — komponent (pokaż z badge 🧩 w osobnej sekcji ekwipunku)"},
+                ],
+            },
+            "component_type": {
+                "type": "single_choice",
+                "question": "Rodzaj komponentu (tylko gdy is_component=1).",
+                "options": [
+                    {"label": "pelt", "description": "Skóra / futro (skóra wilcza, łuska jaszczura)"},
+                    {"label": "fang", "description": "Kieł / ząb / pazur"},
+                    {"label": "herb", "description": "Zioło / grzyb / korzeń"},
+                    {"label": "ore", "description": "Ruda / minerał / kruszec"},
+                    {"label": "essence", "description": "Esencja / posoka / gruczoł magiczny"},
+                    {"label": "part", "description": "Część / szczątek (pył kostny, sadło, jedwab)"},
+                ],
             },
         },
     },

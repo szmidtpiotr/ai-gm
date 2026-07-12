@@ -33,7 +33,10 @@
     "image_url": "/images/tiles/aigm_1782903649_aigm_00862_.png",
     "image_gen_prompt": "worn leather satchel, alchemist pouch, measured powder packets, small glass oil vials, tied cords, weathered brown leather, stitched seams, compact utility bag, subtle rune-marked tags, matte texture, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "essence",
+    "created_by": null
   },
   {
     "key": "alchemist_fire",
@@ -69,7 +72,10 @@
     "image_url": "/images/tiles/aigm_1783541888_aigm_00946_.png",
     "image_gen_prompt": "thick oily liquid, glass vial, sealed container, black viscous substance, reflective surface, smoky residue, throwable incendiary oil, subtle ember glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "ancient_scroll",
@@ -105,7 +111,10 @@
     "image_url": "/images/tiles/aigm_1782903668_aigm_00863_.png",
     "image_gen_prompt": "ancient darkened parchment scroll, faded arcane script, brittle curled edges, aged stained paper, mysterious runic writing, subtle dust, ominous relic, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "antidote",
@@ -141,7 +150,10 @@
     "image_url": "/images/tiles/aigm_1783541906_aigm_00947_.png",
     "image_gen_prompt": "small glass vial, cloudy liquid, murky pale green potion, bitter antidote, cork stopper, worn metal clasp, subtle sediment, translucent glass, faint alchemical glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "arrows",
@@ -177,7 +189,10 @@
     "image_url": "/images/tiles/aigm_1783541924_aigm_00948_.png",
     "image_gen_prompt": "bundle of arrows, wooden shafts, iron arrowheads, feather fletching, rustic quiver ammo, worn texture, simple craftsmanship, practical hunting arrows, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "backpack",
@@ -213,7 +228,10 @@
     "image_url": "/images/tiles/aigm_1782900785_aigm_00809_.png",
     "image_gen_prompt": "large leather backpack, shoulder straps, rugged brown hide, weathered texture, spacious pack, buckles, flap closure, travel gear, utilitarian design, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "bandage",
@@ -249,7 +267,10 @@
     "image_url": "/images/tiles/aigm_1783541942_aigm_00949_.png",
     "image_gen_prompt": "clean linen bandage roll, pale cloth, tightly wrapped scroll, soft woven texture, simple field dressing, slightly frayed edges, utilitarian, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "bear_hide",
@@ -285,7 +306,10 @@
     "image_url": "/images/tiles/aigm_1782903689_aigm_00864_.png",
     "image_gen_prompt": "thick brown bear hide, shaggy dense fur, rugged pelt, folded animal skin, coarse texture, natural leather underside, heavy raw material, earthy brown tones, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "pelt",
+    "created_by": null
   },
   {
     "key": "bedroll",
@@ -321,7 +345,10 @@
     "image_url": "/images/tiles/aigm_1782903627_aigm_00861_.png",
     "image_gen_prompt": "rolled bedroll, twisted straw mattress, folded rough wool blanket, travel bedding, worn fabric, coarse texture, earthy tones, rustic, practical camping gear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "belt_pouch",
@@ -357,7 +384,10 @@
     "image_url": "/images/tiles/aigm_1782900803_aigm_00810_.png",
     "image_gen_prompt": "small leather belt pouch, worn brown leather, drawstring closure, compact rounded shape, rustic stitching, soft creased texture, practical coin pouch, subtle metallic clasp, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "bolts",
@@ -393,7 +423,10 @@
     "image_url": "/images/tiles/aigm_1783541960_aigm_00950_.png",
     "image_gen_prompt": "crossbow bolts, simple ammunition, iron arrowheads, wooden shafts, leather fletching, bundled projectiles, worn metal, rough wood texture, utilitarian design, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "bone_dust",
@@ -429,7 +462,10 @@
     "image_url": "/images/tiles/aigm_1782903710_aigm_00865_.png",
     "image_gen_prompt": "fine bone powder, pale ivory dust, aged skeletal remains, gritty texture, small heap, scattered particles, necromantic reagent, subtle eerie glow, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "part",
+    "created_by": null
   },
   {
     "key": "breastplate",
@@ -465,7 +501,10 @@
     "image_url": "/images/tiles/aigm_1782900103_aigm_00773_.png",
     "image_gen_prompt": "steel breastplate, torso armor, abdominal plate, leather straps, segmented design, polished steel, worn edges, functional shape, flexible arm clearance, subtle scratches, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "brigandine",
@@ -501,7 +540,10 @@
     "image_url": "/images/tiles/aigm_1782900122_aigm_00774_.png",
     "image_gen_prompt": "plain canvas vest, concealed steel plate inserts, rugged cloth armor, sleeveless padded jerkin, worn fabric texture, muted brown-gray tones, practical medieval design, subtle metallic rigidity, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "caltrops_bag",
@@ -537,7 +579,10 @@
     "image_url": "/images/tiles/aigm_1782900492_aigm_00793_.png",
     "image_gen_prompt": "small leather pouch, spilled iron caltrops, sharp four-pronged spikes, worn metal, rugged texture, utilitarian design, scattered arrangement, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "chain_hauberk",
@@ -573,7 +618,10 @@
     "image_url": "/images/tiles/aigm_1782900141_aigm_00775_.png",
     "image_gen_prompt": "full chainmail hauberk, knee-length, attached hood, interlinked steel rings, heavy armor, worn metal texture, utilitarian design, muted silver-gray, rugged craftsmanship, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "chainmail_shirt",
@@ -609,7 +657,10 @@
     "image_url": "/images/tiles/aigm_1782900160_aigm_00776_.png",
     "image_gen_prompt": "short chainmail hauberk, waist-length, riding slit, interlinked steel rings, rugged medieval armor, dense mesh texture, functional silhouette, worn metal sheen, subtle highlights, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "chisel",
@@ -645,7 +696,10 @@
     "image_url": "/images/tiles/aigm_1782900912_aigm_00816_.png",
     "image_gen_prompt": "sharp steel chisel, narrow beveled tip, cylindrical metal shaft, worn utilitarian tool, scratched steel texture, cold metallic sheen, rugged simple design, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "climbing_kit",
@@ -681,7 +735,10 @@
     "image_url": "/images/tiles/aigm_1782900510_aigm_00794_.png",
     "image_gen_prompt": "climbing kit, iron hook, steel pitons, rugged hammer, coiled rope, worn leather satchel, weathered metal, utilitarian shapes, rough textures, adventurer gear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "cloth_robes",
@@ -717,7 +774,10 @@
     "image_url": "/images/tiles/aigm_1782900178_aigm_00777_.png",
     "image_gen_prompt": "loose woolen robes, thick coarse fabric, silver runic embroidery, flowing layered garment, worn hems, mystical arcane details, soft folds, subtle sheen, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "crowbar",
@@ -753,7 +813,10 @@
     "image_url": "/images/tiles/aigm_1782900930_aigm_00817_.png",
     "image_gen_prompt": "steel crowbar, forked tip, rugged metal rod, worn steel, scratched surface, utilitarian tool, heavy blunt shape, grimy texture, realistic wear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "demon_skull",
@@ -789,7 +852,10 @@
     "image_url": "/images/tiles/aigm_1782903730_aigm_00866_.png",
     "image_gen_prompt": "tar-black skull, three eye sockets, curved horns, demonic relic, charred bone, sulfur-stained surface, ominous sheen, ancient decay, sinister contours, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "dice_set",
@@ -825,7 +891,10 @@
     "image_url": "/images/tiles/aigm_1782900821_aigm_00811_.png",
     "image_gen_prompt": "four carved bone dice, worn ivory bone, engraved pips, slightly uneven edges, aged surface, subtle cracks, handmade, suspiciously weighted, matte texture, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "dragon_scale_shard",
@@ -861,7 +930,10 @@
     "image_url": "/images/tiles/aigm_1782903750_aigm_00867_.png",
     "image_gen_prompt": "small dragon scale, armored plate, rare crafting material, dark emerald chitin, metallic sheen, rugged curved shape, nearly indestructible texture, subtle scratches, glossy surface, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "part",
+    "created_by": null
   },
   {
     "key": "family_locket",
@@ -897,7 +969,10 @@
     "image_url": "/images/tiles/aigm_1783541978_aigm_00951_.png",
     "image_gen_prompt": "silver locket medallion, oval pendant, miniature portrait of woman and child, engraved inner letters, polished silver, antique metal, delicate hinge, worn edges, subtle tarnish, intricate frame, soft highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "fishing_net",
@@ -933,7 +1008,10 @@
     "image_url": "/images/tiles/aigm_1782900949_aigm_00818_.png",
     "image_gen_prompt": "woven fishing net, coarse rope fibers, hand-spaced knots, broad mesh pattern, rugged utility tool, tangled drape, weathered texture, muted brown, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "fishing_rod",
@@ -969,7 +1047,10 @@
     "image_url": "/images/tiles/aigm_1782900967_aigm_00819_.png",
     "image_gen_prompt": "simple fishing rod, flax fiber line, wooden pole, rustic handmade tool, slender shape, worn texture, humble materials, practical design, subtle highlights, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "focus_crystal",
@@ -1005,7 +1086,10 @@
     "image_url": "/images/tiles/aigm_1783541997_aigm_00952_.png",
     "image_gen_prompt": "small emerald crystal, faceted gemstone shard, glowing green core, translucent mineral, polished edges, subtle arcane aura, faint mana energy, handheld size, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "fragment_mapy_skarbow",
@@ -1041,7 +1125,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "full_plate",
@@ -1077,7 +1164,10 @@
     "image_url": "/images/tiles/aigm_1782900197_aigm_00778_.png",
     "image_gen_prompt": "full plate knight armor, hundreds of articulated steel plates, polished tempered metal, imposing silhouette, enclosed helmet, layered pauldrons, engraved edges, realistic wear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "fur_mantle",
@@ -1113,7 +1203,10 @@
     "image_url": "/images/tiles/aigm_1782900215_aigm_00779_.png",
     "image_gen_prompt": "thick wolf fur cloak, heavy winter mantle, rugged pelt texture, gray-brown fur, broad shoulders, primitive stitching, cold-weather survival gear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "golden_idol",
@@ -1149,7 +1242,10 @@
     "image_url": "/images/tiles/aigm_1783542014_aigm_00953_.png",
     "image_gen_prompt": "small golden idol, faceless deity figurine, strange staring eyes, ancient sacred statue, compact ornate shape, polished worn gold, subtle sinister aura, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "grappling_hook",
@@ -1185,7 +1281,10 @@
     "image_url": "/images/tiles/aigm_1782900528_aigm_00795_.png",
     "image_gen_prompt": "iron grappling hook, three prongs, rugged metal, worn iron, five-meter rope, coiled line, utilitarian design, scratched texture, subtle rust, sharp curved teeth, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "great_helm",
@@ -1221,7 +1320,10 @@
     "image_url": "/images/tiles/aigm_1782900233_aigm_00780_.png",
     "image_gen_prompt": "closed steel helmet, full head armor, narrow eye slits, smooth forged metal, rounded visor, polished steel, battle-worn scratches, muted reflections, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "half_plate",
@@ -1257,7 +1359,10 @@
     "image_url": "/images/tiles/aigm_1782900251_aigm_00781_.png",
     "image_gen_prompt": "full plate cuirass, polished steel plates, torso armor, shoulder pauldrons, thigh guards, segmented design, battle-worn metal, sleek agile silhouette, reflective surface, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "hammer_small",
@@ -1293,7 +1398,10 @@
     "image_url": "/images/tiles/aigm_1782900985_aigm_00820_.png",
     "image_gen_prompt": "steel hammer, wooden handle, rugged utilitarian tool, worn metal head, rectangular striking face, slightly scuffed surface, simple craftsmanship, realistic proportions, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "healing_herb",
@@ -1329,7 +1437,10 @@
     "image_url": "/images/tiles/aigm_1783542032_aigm_00954_.png",
     "image_gen_prompt": "bundle of dried herbs, wrapped in rough linen cloth, tied with twine, earthy green and brown tones, brittle leaves, rustic medicinal poultice, organic texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "herb",
+    "created_by": null
   },
   {
     "key": "health_potion_small",
@@ -1365,7 +1476,10 @@
     "image_url": "/images/tiles/aigm_1783542049_aigm_00955_.png",
     "image_gen_prompt": "small glass vial, red herbal liquid, cork stopper, slender ampoule, translucent glass, subtle sediment, warm glow, healing potion, glossy highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "hide_armor",
@@ -1401,7 +1515,10 @@
     "image_url": "/images/tiles/aigm_1782900270_aigm_00782_.png",
     "image_gen_prompt": "crude hide armor, stitched animal pelts, reinforced bone plates, rugged leather cuirass, primitive tribal design, rough texture, worn edges, earthy brown tones, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "holy_symbol",
@@ -1437,7 +1554,10 @@
     "image_url": "/images/tiles/aigm_1783542067_aigm_00956_.png",
     "image_gen_prompt": "wooden or silver holy symbol pendant, chain necklace, sacred emblem, worn polished surface, engraved icon, subtle glow, protective charm, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "holy_water",
@@ -1473,7 +1593,10 @@
     "image_url": "/images/tiles/aigm_1783542085_aigm_00957_.png",
     "image_gen_prompt": "small glass vial, cork stopper with engraved prayer, holy liquid, faint golden glow, clear glass, slender shape, sacred, subtle reflections, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "hooded_cloak",
@@ -1509,7 +1632,10 @@
     "image_url": "/images/tiles/aigm_1782900288_aigm_00783_.png",
     "image_gen_prompt": "wool cloak, deep hood, face-concealing silhouette, weathered fabric, rain-soaked texture, simple common garment, muted brown tones, soft folds, urban traveler attire, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "hourglass",
@@ -1545,7 +1671,10 @@
     "image_url": "/images/tiles/aigm_1782900546_aigm_00796_.png",
     "image_gen_prompt": "glass hourglass, wooden frame, polished oak, flowing sand, uneven sand stream, warped time effect, subtle magical distortion, antique, translucent glass, engraved wood, mystical glow, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "hunting_horn",
@@ -1581,7 +1710,10 @@
     "image_url": "/images/tiles/aigm_1782900565_aigm_00797_.png",
     "image_gen_prompt": "polished bovine horn, brass mouthpiece, curved signal horn, smooth keratin texture, worn metal rim, rustic craftsmanship, subtle highlights, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "incense_bundle",
@@ -1617,7 +1749,10 @@
     "image_url": "/images/tiles/aigm_1782900839_aigm_00812_.png",
     "image_gen_prompt": "bundle of myrrh and resin incense sticks, tied twine, charred tips, aromatic smoke wisps, earthy brown, brittle texture, ritual funerary offering, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "ink_quill_set",
@@ -1653,7 +1788,10 @@
     "image_url": "/images/tiles/aigm_1782901003_aigm_00821_.png",
     "image_gen_prompt": "small glass ink bottle, black ink, cork stopper, three sharpened quill pens, pale feathers, worn writing tools, medieval stationery, subtle reflections, fine texture, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "iron_helm",
@@ -1689,7 +1827,10 @@
     "image_url": "/images/tiles/aigm_1782900307_aigm_00784_.png",
     "image_gen_prompt": "conical nasal helmet, steel, simple medieval design, pointed crown, protective nose guard, worn metal, scratched surface, dull sheen, narrow eye openings, practical armor, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "iron_ore",
@@ -1725,7 +1866,10 @@
     "image_url": "/images/tiles/aigm_1783542104_aigm_00958_.png",
     "image_gen_prompt": "heavy rough ore stone, metallic veins, iron-rich rock, dark gray mineral, jagged shape, rugged texture, dull sheen, raw blacksmith material, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "iron_spikes_10",
@@ -1761,7 +1905,10 @@
     "image_url": "/images/tiles/aigm_1782900584_aigm_00798_.png",
     "image_gen_prompt": "ten iron wedges, rugged forged iron, tapered triangular spikes, worn metal texture, utilitarian climbing gear, slightly rusted, scratched surfaces, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "lantern_hooded",
@@ -1797,7 +1944,10 @@
     "image_url": "/images/tiles/aigm_1782900602_aigm_00799_.png",
     "image_gen_prompt": "brass lantern, glass pane walls, hinged metal shutter, enclosed frame, warm worn metal, reflective glass, sturdy handle, utilitarian design, subtle patina, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "leather_armor",
@@ -1833,7 +1983,10 @@
     "image_url": "/images/tiles/aigm_1782900326_aigm_00785_.png",
     "image_gen_prompt": "studded tanned cowhide armor, linen underlayer, rugged leather jerkin, flexible scout chestpiece, matte worn texture, hand-stitched seams, practical hunter gear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "leather_boots",
@@ -1869,7 +2022,10 @@
     "image_url": "/images/tiles/aigm_1782900344_aigm_00786_.png",
     "image_gen_prompt": "tall lace-up boots, rugged leather, worn brown hide, sturdy soles, reinforced stitching, mud-stained, scuffed texture, practical travel footwear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "leather_cap",
@@ -1905,7 +2061,10 @@
     "image_url": "/images/tiles/aigm_1782900362_aigm_00787_.png",
     "image_gen_prompt": "simple leather hood, stiff cured leather, rugged shape, weatherproof, dark brown, creased texture, practical design, light head protection, worn edges, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "leather_gloves",
@@ -1941,7 +2100,10 @@
     "image_url": "/images/tiles/aigm_1782900381_aigm_00788_.png",
     "image_gen_prompt": "soft leather gloves, practical hand protection, fitted shape, supple worn hide, reinforced palms, textured grip surface, subtle stitching, matte finish, muted brown tones, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "leatherarmor",
@@ -1977,7 +2139,10 @@
     "image_url": "/images/tiles/aigm_1782900399_aigm_00789_.png",
     "image_gen_prompt": "light body armor, simple leather cuirass, worn brown leather, fitted chestpiece, subtle stitching, practical design, matte texture, modest shoulder guards, rugged medieval craftsmanship, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "lockpicks",
@@ -2013,7 +2178,10 @@
     "image_url": "/images/tiles/aigm_1782901020_aigm_00822_.png",
     "image_gen_prompt": "thin hardened lockpicks, steel hooks, slender metal tools, polished edges, leather case, rolled pouch, worn brown leather, subtle scratches, rogue utility, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "lute",
@@ -2049,7 +2217,10 @@
     "image_url": "/images/tiles/aigm_1782900620_aigm_00800_.png",
     "image_gen_prompt": "wooden lute, six strings, polished oak body, pear-shaped instrument, carved soundhole, worn edges, bardic charm, subtle runic engravings, warm brown woodgrain, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "magiczny_wytrych",
@@ -2085,7 +2256,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "mana_potion",
@@ -2121,7 +2295,10 @@
     "image_url": "/images/tiles/aigm_1783542122_aigm_00959_.png",
     "image_gen_prompt": "azure liquid, round ampoule, small glass vial, cork stopper, translucent potion, minty essence, pale lime tint, smooth curved shape, glossy reflections, faint magical glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "manacles",
@@ -2157,7 +2334,10 @@
     "image_url": "/images/tiles/aigm_1782900639_aigm_00801_.png",
     "image_gen_prompt": "heavy iron shackles, small iron key, wrist manacles, thick circular bands, rough forged metal, worn surface, sturdy chain link, cold steel sheen, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "map_okolice_cieszburg",
@@ -2193,7 +2373,10 @@
     "image_url": "/images/tiles/aigm_1783542140_aigm_00960_.png",
     "image_gen_prompt": "tattered parchment map, aged vellum, frayed edges, faded ink roads, tiny settlement markings, hand-drawn cartography, creases, worn texture, muted sepia tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "mapa_kresow",
@@ -2229,7 +2412,10 @@
     "image_url": "/images/tiles/aigm_1783542158_aigm_00961_.png",
     "image_gen_prompt": "aged parchment map, hand-drawn cartography, detailed regional landscape, hex grid markings, inked coastlines, mountain sketches, worn edges, rolled corners, rare artifact, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "mapa_okolic",
@@ -2265,7 +2451,10 @@
     "image_url": "/images/tiles/aigm_1783542176_aigm_00962_.png",
     "image_gen_prompt": "aged parchment scroll, partially unrolled map, faded ink terrain markings, hexagonal grid hints, worn edges, yellowed paper, curled corners, ancient cartography, subtle magical reveal, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "merchant_garb",
@@ -2301,7 +2490,10 @@
     "image_url": "/images/tiles/aigm_1782900657_aigm_00802_.png",
     "image_gen_prompt": "sturdy discreet scout clothing, fine wool cloth, urban stealth outfit, muted dark tones, layered tunic and hood, practical fit, soft worn texture, subtle stitching, realistic fabric folds, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "mirror_small",
@@ -2337,7 +2529,10 @@
     "image_url": "/images/tiles/aigm_1782900675_aigm_00803_.png",
     "image_gen_prompt": "polished steel mirror, wooden frame, handheld inspection mirror, round reflective surface, smooth metal sheen, worn dark wood, practical tool, subtle scratches, realistic reflections, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_ci_ki_mieszek_z_monetami_99791_7589",
@@ -2373,7 +2568,10 @@
     "image_url": "/images/tiles/aigm_1783542194_aigm_00963_.png",
     "image_gen_prompt": "heavy coin pouch, worn brown leather, bulging round shape, tied drawstring, visible gold coins, rough texture, weighty, subtle metallic gleam, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_26_61206",
@@ -2409,7 +2607,10 @@
     "image_url": "/images/tiles/aigm_1783542213_aigm_00964_.png",
     "image_gen_prompt": "iron key, simple medieval design, worn iron, dark metallic surface, elongated shaft, single tooth bit, circular bow, scratched texture, subtle rust, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_16327",
@@ -2445,7 +2646,10 @@
     "image_url": "/images/tiles/aigm_1783542230_aigm_00965_.png",
     "image_gen_prompt": "iron key, simple warded key, rustic medieval design, dark forged metal, worn surface, scratched texture, elongated shaft, single tooth, small ring handle, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_19828",
@@ -2481,7 +2685,10 @@
     "image_url": "/images/tiles/aigm_1783542249_aigm_00966_.png",
     "image_gen_prompt": "iron key, simple old chamber key, forged iron, elongated shaft, single bit, worn metal, scratched surface, rustic, matte finish, subtle tarnish, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_21226",
@@ -2517,7 +2724,10 @@
     "image_url": "/images/tiles/aigm_1783542267_aigm_00967_.png",
     "image_gen_prompt": "iron key, simple warded shape, aged metal, worn surface, scratched texture, utilitarian design, medieval style, subtle rust, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_22838",
@@ -2553,7 +2763,10 @@
     "image_url": "/images/tiles/aigm_1783542285_aigm_00968_.png",
     "image_gen_prompt": "iron key, simple warded key, rustic forged metal, aged iron, worn surface, scratched texture, utilitarian shape, medieval design, subtle tarnish, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_23643",
@@ -2589,7 +2802,10 @@
     "image_url": "/images/tiles/aigm_1783542303_aigm_00969_.png",
     "image_gen_prompt": "simple heavy key, dark iron, worn metal, long shaft, large toothed bit, rustic wooden tag, carved diagonal marks, rough texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_43817",
@@ -2625,7 +2841,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_8888931_45225",
@@ -2661,7 +2880,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_izby_na_pi_tr_1000021_1254",
@@ -2697,7 +2919,10 @@
     "image_url": "/images/tiles/aigm_1783542320_aigm_00970_.png",
     "image_gen_prompt": "simple iron key, worn metal, slightly tarnished, classic long shaft, single-tooth bit, scratched surface, chipped wooden keychain, rustic, aged texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_kraty_99791_21811",
@@ -2733,7 +2958,10 @@
     "image_url": "/images/tiles/aigm_1783542338_aigm_00971_.png",
     "image_gen_prompt": "heavy iron key, simple utilitarian design, long shaft, rectangular teeth, worn metal, dark patina, scratched surface, cold steel sheen, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_pokoju_99791_57830",
@@ -2769,7 +2997,10 @@
     "image_url": "/images/tiles/aigm_1783542356_aigm_00972_.png",
     "image_gen_prompt": "iron room key, simple wrought iron, old metal, elongated shaft, single ornate tooth, round bow, worn texture, tarnished surface, subtle rust, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_klucz_do_pokoju_99791_57952",
@@ -2805,7 +3036,10 @@
     "image_url": "/images/tiles/aigm_1783542375_aigm_00973_.png",
     "image_gen_prompt": "iron room key, simple old iron, long narrow shaft, single tooth bit, oval bow, worn metal, scratched texture, slightly tarnished, subtle highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_medalion_na_rzemyku_99791_91963",
@@ -2841,7 +3075,10 @@
     "image_url": "/images/tiles/aigm_1783542393_aigm_00974_.png",
     "image_gen_prompt": "small heavy iron medallion, worn pendant, tarnished metal, scratched surface, shrine symbol crossed by black slash, edge notches, abraded back, faint letter trace, broken seal mark, grim relic, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_medalion_na_rzemyku_99791_94580",
@@ -2877,7 +3114,10 @@
     "image_url": "/images/tiles/aigm_1783542411_aigm_00975_.png",
     "image_gen_prompt": "small heavy medallion, tarnished bronze, crude circular pendant, broken chain loop, one-eyed symbol engraving, worn scratched surface, grimy patina, rugged bandit token, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_medalion_ze_znakiem_ka_99791_5711",
@@ -2913,7 +3153,10 @@
     "image_url": "/images/tiles/aigm_1783542428_aigm_00976_.png",
     "image_gen_prompt": "iron medallion, shrine emblem engraving, circular pendant, worn metal, tarnished iron, rough texture, ancient religious symbol, subtle patina, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_elazny_medalion_ze_znakiem_ka_99791_5861",
@@ -2949,7 +3192,10 @@
     "image_url": "/images/tiles/aigm_1783542446_aigm_00977_.png",
     "image_gen_prompt": "iron medallion, shrine sigil, circular pendant, aged metal, worn surface, engraved emblem, tarnished iron, subtle scratches, medieval relic, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_klucz_do_piwnicy_30_75241",
@@ -2985,7 +3231,10 @@
     "image_url": "/images/tiles/aigm_1783542464_aigm_00978_.png",
     "image_gen_prompt": "old cellar key, iron, worn metal, long shaft, simple bow, rustic, tarnished, scratched texture, medieval, utilitarian, subtle rust, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_klucz_do_piwnicy_63_6138",
@@ -3021,7 +3270,10 @@
     "image_url": "/images/tiles/aigm_1783542482_aigm_00979_.png",
     "image_gen_prompt": "old basement key, wrought iron, rustic metal, long shaft, simple bow, aged texture, tarnished, worn edges, subtle scratches, moody shadows, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_klucz_do_piwnicy_63_6153",
@@ -3057,7 +3309,10 @@
     "image_url": "/images/tiles/aigm_1783542499_aigm_00980_.png",
     "image_gen_prompt": "old cellar key, forged iron, rustic metal, long shaft, simple bow, worn edges, tarnished surface, medieval utility, subtle scratches, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_kr_tki_kawa_ek_sznura_99791_83480",
@@ -3093,7 +3348,10 @@
     "image_url": "/images/tiles/aigm_1782894375_aigm_00736_.png",
     "image_gen_prompt": "worn rope segment, frayed cord, coarse hemp fiber, dirty beige, loosely coiled, rough texture, weathered, bandit stash, dim moody lighting, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_kr_tki_kawa_ek_sznura_99791_84145",
@@ -3129,7 +3387,10 @@
     "image_url": "/images/tiles/aigm_1783542517_aigm_00981_.png",
     "image_gen_prompt": "worn rope segment, frayed hemp cord, short coiled strand, rough fibrous texture, dirty beige, weathered, concealed stash item, subtle wear, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_ma_y_mieszek_z_zap_at_99791_7761",
@@ -3165,7 +3426,10 @@
     "image_url": "/images/tiles/aigm_1783542535_aigm_00982_.png",
     "image_gen_prompt": "small coin pouch, worn brown leather, tied drawstring, bulging with coins, soft creases, rustic texture, subtle metal glint, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_mapa_do_skrytki_2_77770008_85422",
@@ -3201,7 +3465,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_mapa_do_skrytki_77770008_85058",
@@ -3237,7 +3504,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_mapa_popio_u_9998883_96639",
@@ -3273,7 +3543,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_p_kni_ty_medalion_ze_znakiem_k_99791_24728",
@@ -3309,7 +3582,10 @@
     "image_url": "/images/tiles/aigm_1783542554_aigm_00983_.png",
     "image_gen_prompt": "cracked medallion, shrine symbol engraving, tarnished bronze, circular pendant, chipped edges, weathered surface, aged patina, worn metal texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_p_kni_ty_medalion_ze_znakiem_k_99791_25791",
@@ -3345,7 +3621,10 @@
     "image_url": "/images/tiles/aigm_1783542572_aigm_00984_.png",
     "image_gen_prompt": "cracked medallion, shrine symbol engraving, tarnished silver, worn metal, chipped edges, aged patina, circular pendant, hairline fractures, scratched surface, dull sheen, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_pergamin_o_zaginionych_z_brodu_1000004_7687",
@@ -3381,7 +3660,10 @@
     "image_url": "/images/tiles/aigm_1783542590_aigm_00985_.png",
     "image_gen_prompt": "aged parchment notice, folded paper sheet, dark ink handwriting, wax seal residue, worn edges, creased texture, weathered surface, medieval bounty poster, subtle stains, muted brown tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_pergamin_o_zaginionych_z_brodu_1000004_7773",
@@ -3417,7 +3699,10 @@
     "image_url": "/images/tiles/aigm_1783542607_aigm_00986_.png",
     "image_gen_prompt": "aged parchment notice, curled edges, worn paper, dark ink handwriting, wax seal, slightly torn corners, weathered texture, medieval bounty poster, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_podejrzanie_wie_a_mapa_77770014_91764",
@@ -3453,7 +3738,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_poplamiony_wistek_99791_83480",
@@ -3489,7 +3777,10 @@
     "image_url": "/images/tiles/aigm_1783542625_aigm_00987_.png",
     "image_gen_prompt": "folded paper note, greasy stains, worn parchment, creased edges, hidden pocket item, dirty surface, subtle discoloration, aged texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_poplamiony_wistek_99791_84145",
@@ -3525,7 +3816,10 @@
     "image_url": "/images/tiles/aigm_1783542643_aigm_00988_.png",
     "image_gen_prompt": "folded paper scrap, greasy stains, worn parchment, creased edges, hidden note, weathered texture, smudged surface, muted beige tones, subtle grime, soft shadows, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_portki_bandyty_8888916_81940",
@@ -3561,7 +3855,10 @@
     "image_url": "/images/tiles/aigm_1783542667_aigm_00989_.png",
     "image_gen_prompt": "ragged bandit trousers, worn coarse fabric, patched linen, dark brown cloth, frayed hems, loose fit, dirt-stained texture, simple rope belt, rugged folds, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_prosta_sakiewka_bandyty_99791_83480",
@@ -3597,7 +3894,10 @@
     "image_url": "/images/tiles/aigm_1783542686_aigm_00990_.png",
     "image_gen_prompt": "small leather pouch, worn brown leather, tied tight knot, belt-worn, rugged, weathered texture, slightly bulging, creased surface, bandit loot, rustic, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_prosta_sakiewka_bandyty_99791_84145",
@@ -3633,7 +3933,10 @@
     "image_url": "/images/tiles/aigm_1783542703_aigm_00991_.png",
     "image_gen_prompt": "small leather pouch, worn brown leather, tied tight knot, cinched opening, rough texture, scavenged bandit loot, slightly weathered, realistic stitching, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_skrawek_pergaminu_ze_znakiem_p_999964_594",
@@ -3669,7 +3972,10 @@
     "image_url": "/images/tiles/aigm_1783542722_aigm_00992_.png",
     "image_gen_prompt": "crumpled map fragment, torn parchment, weathered paper, cliff line sketch, crescent symbol embedded in triangle, faded ink, creased texture, subtle grime, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_skrawek_pergaminu_ze_znakiem_p_999972_22241",
@@ -3705,7 +4011,10 @@
     "image_url": "/images/tiles/aigm_1783542742_aigm_00993_.png",
     "image_gen_prompt": "weathered damp parchment scrap, sketched lone tree, forked trunk, crude rune mark, vertical line with three notches, smeared ink, frayed edges, stained paper, mysterious note, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_stara_szmata_26_67996",
@@ -3741,7 +4050,10 @@
     "image_url": "/images/tiles/aigm_1783542760_aigm_00994_.png",
     "image_gen_prompt": "old rag, worn cloth scrap, frayed edges, faded beige fabric, dirty stains, torn textile, crumpled shape, rough texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_stary_kamie_26_66255",
@@ -3777,7 +4089,10 @@
     "image_url": "/images/tiles/aigm_1783542778_aigm_00995_.png",
     "image_gen_prompt": "ancient stone, worn rock fragment, rough surface, weathered edges, gray mineral, irregular shape, matte texture, subtle cracks, muted tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_sucha_ga_zka_26_66999",
@@ -3813,7 +4128,10 @@
     "image_url": "/images/tiles/aigm_1783542796_aigm_00996_.png",
     "image_gen_prompt": "dry twig, thin brittle branch, weathered wood, rough bark, twisted shape, desiccated texture, earthy brown tones, subtle cracks, natural organic form, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_suchy_li_26_66638",
@@ -3849,7 +4167,10 @@
     "image_url": "/images/tiles/aigm_1783542814_aigm_00997_.png",
     "image_gen_prompt": "dry leaf, curled organic shape, brittle texture, desaturated brown, delicate veins, weathered edges, lightweight, natural decay, subtle shadow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_szkic_mokrego_duktu_999972_21975",
@@ -3885,7 +4206,10 @@
     "image_url": "/images/tiles/aigm_1783542832_aigm_00998_.png",
     "image_gen_prompt": "crude hand-drawn map sketch, worn parchment scrap, charcoal markings, rough lines, damp forest path, old tree stump, small cross marker, smudged texture, frayed edges, muted sepia tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_szkic_tuneli_kopalni_99816_98428",
@@ -3921,7 +4245,10 @@
     "image_url": "/images/tiles/aigm_1783542850_aigm_00999_.png",
     "image_gen_prompt": "aged mine tunnel sketch, worn parchment map, hand-drawn ink lines, rolled edges, creases, smudges, faded markings, rough paper texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_z_o_ony_pergamin_99791_33345",
@@ -3957,7 +4284,10 @@
     "image_url": "/images/tiles/aigm_1783542868_aigm_01000_.png",
     "image_gen_prompt": "folded parchment note, aged paper, creased edges, handwritten ink, wax smudge, cryptic signature mark, small sketched map, worn texture, subtle shadows, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_z_o_ony_skrawek_papieru_99791_18294",
@@ -3993,7 +4323,10 @@
     "image_url": "/images/tiles/aigm_1783542886_aigm_01001_.png",
     "image_gen_prompt": "folded damp paper note, soot-stained parchment, weathered edges, creased surface, handwritten message, smudged ink, fragile texture, miner's note, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zawini_tko_z_suchym_chlebem_28_74007",
@@ -4029,7 +4362,10 @@
     "image_url": "/images/tiles/aigm_1783542904_aigm_01002_.png",
     "image_gen_prompt": "small cloth bundle, dry bread loaf, wrapped parcel, coarse linen fabric, rustic twine, worn texture, humble peasant item, muted earthy tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zbr_zowia_y_eton_z_czarnym_zna_99791_83295",
@@ -4065,7 +4401,10 @@
     "image_url": "/images/tiles/aigm_1783542922_aigm_01003_.png",
     "image_gen_prompt": "small dirty token, scorched crossed-circle symbol, worn metal disc, tarnished iron, scratched surface, soot stains, rough edges, grimy texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zbr_zowia_y_eton_z_czarnym_zna_99791_84145",
@@ -4101,7 +4440,10 @@
     "image_url": "/images/tiles/aigm_1783542940_aigm_01004_.png",
     "image_gen_prompt": "small dirty token, scorched crossed-circle symbol, worn metal, round shape, scratched surface, tarnished edges, grimy texture, subtle ash marks, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zmi_ty_pergamin_ze_szkicem_wie_28_73911",
@@ -4137,7 +4479,10 @@
     "image_url": "/images/tiles/aigm_1783542958_aigm_01005_.png",
     "image_gen_prompt": "hand-drawn tower sketch, aged parchment, rough ink lines, red-marked chamber, handwritten note, worn paper, creases, slightly torn edges, top-down architectural doodle, muted sepia tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zw_glona_ksi_ga_99791_24728",
@@ -4173,7 +4518,10 @@
     "image_url": "/images/tiles/aigm_1783542989_aigm_01006_.png",
     "image_gen_prompt": "burned bloodstained ritual note, charred parchment pages, glued sheets, scorched edges, cryptic markings, ominous sigil, aged paper texture, dark red stains, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "narrative_item_zw_glona_ksi_ga_99791_25791",
@@ -4209,7 +4557,10 @@
     "image_url": "/images/tiles/aigm_1783543008_aigm_01007_.png",
     "image_gen_prompt": "charred ritual note, burnt parchment pages, blackened edges, stitched spine, cryptic ink script, singed paper texture, fragile curled sheets, ominous occult document, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "noble_garb",
@@ -4245,7 +4596,10 @@
     "image_url": "/images/tiles/aigm_1782900693_aigm_00804_.png",
     "image_gen_prompt": "rich noble garment, luxurious wool coat, fur collar, tailored silhouette, elegant folds, dark muted fabric, subtle embroidery, refined trim, soft texture, understated aristocratic style, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "oil_flask",
@@ -4281,7 +4635,10 @@
     "image_url": "/images/tiles/aigm_1782900712_aigm_00805_.png",
     "image_gen_prompt": "clay oil flask, round bulbous vessel, narrow neck, cork stopper, weathered earthenware, matte ceramic, soot stains, oily residue, utilitarian, fragile, warm amber hints, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "padded_armor",
@@ -4317,7 +4674,10 @@
     "image_url": "/images/tiles/aigm_1782900417_aigm_00790_.png",
     "image_gen_prompt": "thick quilted gambeson layer, padded cloth armor, hemp stuffing, rough linen fabric, stitched panels, bulky soft shape, muted brown beige tones, worn texture, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "parchment_sheets",
@@ -4353,7 +4713,10 @@
     "image_url": "/images/tiles/aigm_1782894178_aigm_00735_.png",
     "image_gen_prompt": "stack of ten parchment sheets, smooth refined paper, pale beige, neatly aligned, rectangular corners, subtle curled edges, soft fibrous texture, gentle warm highlights, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "plate_gauntlets",
@@ -4389,7 +4752,10 @@
     "image_url": "/images/tiles/aigm_1782900435_aigm_00791_.png",
     "image_gen_prompt": "segmented metal plate gauntlets, leather backing, reinforced backhand guard, articulated fingers, clenched fist design, worn steel, rugged texture, practical defensive armor, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "plate_sabatons",
@@ -4425,7 +4791,10 @@
     "image_url": "/images/tiles/aigm_1782900453_aigm_00792_.png",
     "image_gen_prompt": "steel knight sabatons, sharp pointed toes, heavy plated armor, reinforced greaves, polished worn steel, battle-scratched metal, rugged texture, menacing silhouette, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_giant_strength",
@@ -4461,7 +4830,10 @@
     "image_url": "/images/tiles/aigm_1783543028_aigm_01008_.png",
     "image_gen_prompt": "dense brown potion, stone jug, squat rounded vessel, carved rock stopper, rough mineral surface, heavy strength elixir, earthy liquid, subtle glow, worn texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_haste",
@@ -4497,7 +4869,10 @@
     "image_url": "/images/tiles/aigm_1783543046_aigm_01009_.png",
     "image_gen_prompt": "pale green glowing liquid, softly pulsing potion, small glass vial, sleek silhouette, translucent fluid, subtle luminescence, alchemical elixir, reflective highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_healing_major",
@@ -4533,7 +4908,10 @@
     "image_url": "/images/tiles/aigm_1783543065_aigm_01010_.png",
     "image_gen_prompt": "large alchemist potion flask, rare healing elixir, thick glass bottle, deep crimson liquid, ornate metal stopper, reinforced neck, glossy reflections, viscous glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_healing_minor",
@@ -4569,7 +4947,10 @@
     "image_url": "/images/tiles/aigm_1783543084_aigm_01011_.png",
     "image_gen_prompt": "small glass vial, red herbal liquid, cork stopper, slim ampoule shape, translucent glass, subtle sediment, warm glow, healing potion, worn texture, reflective highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_healing_standard",
@@ -4605,7 +4986,10 @@
     "image_url": "/images/tiles/aigm_1783543102_aigm_01012_.png",
     "image_gen_prompt": "ruby red healing potion vial, full glass flask, iron-tinted liquid, linden blossom essence, elegant narrow bottle, cork stopper, glossy glass, subtle glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_mana_major",
@@ -4641,7 +5025,10 @@
     "image_url": "/images/tiles/aigm_1783543120_aigm_01013_.png",
     "image_gen_prompt": "large flask, dark navy potion, shimmering sparkles, nearly full bottle, arcane essence, thick glass, ornate stopper, glossy surface, mystical glow, swirling liquid, rare consumable, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_mana_minor",
@@ -4677,7 +5064,10 @@
     "image_url": "/images/tiles/aigm_1783543138_aigm_01014_.png",
     "image_gen_prompt": "azure liquid, round ampoule, small glass vial, cork stopper, translucent potion, smooth curved shape, glossy surface, subtle magical glow, mint-lime essence, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_mana_standard",
@@ -4713,7 +5103,10 @@
     "image_url": "/images/tiles/aigm_1783543161_aigm_01015_.png",
     "image_gen_prompt": "navy blue mana elixir, glass vial, rounded bottle, silver stopper, glowing liquid, herbal essence, translucent glass, subtle bubbles, polished surface, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_resistance",
@@ -4749,7 +5142,10 @@
     "image_url": "/images/tiles/aigm_1783543179_aigm_01016_.png",
     "image_gen_prompt": "cloudy whitish potion, opaque alchemical liquid, small glass vial, rounded bottle, pale ivory contents, subtle sediment, cork stopper, worn glass texture, protective elixir, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_stamina",
@@ -4785,7 +5181,10 @@
     "image_url": "/images/tiles/aigm_1783543197_aigm_01017_.png",
     "image_gen_prompt": "small glass vial, green herbal liquid, faint hop aroma, cork stopper, alchemical potion, translucent fluid, subtle bubbles, worn label, rustic handcrafted bottle, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_stealth",
@@ -4821,7 +5220,10 @@
     "image_url": "/images/tiles/aigm_1783543215_aigm_01018_.png",
     "image_gen_prompt": "small glass vial, gray odorless liquid, muted swirling essence, subtle shadow aura, stealth potion, simple stopper, worn glass, matte texture, faint smoky wisps, mysterious dim glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "potion_strength",
@@ -4857,7 +5259,10 @@
     "image_url": "/images/tiles/aigm_1783543233_aigm_01019_.png",
     "image_gen_prompt": "murky brown potion, bull blood scent, squat glass vial, cork stopper, viscous liquid, muddy translucence, crude alchemical brew, worn leather wrap, faint crimson undertone, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "rope_hemp",
@@ -4893,7 +5298,10 @@
     "image_url": "/images/tiles/aigm_1782900731_aigm_00806_.png",
     "image_gen_prompt": "coiled hemp rope, braided fibers, rough texture, natural tan, sturdy climbing rope, thick twisted cord, practical utility gear, realistic wear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "satchel",
@@ -4929,7 +5337,10 @@
     "image_url": "/images/tiles/aigm_1782900857_aigm_00813_.png",
     "image_gen_prompt": "leather shoulder satchel, multiple compartments, weathered brown hide, flap closure, stitched seams, brass buckles, rolled scrolls, folded maps, small alchemist tools, worn texture, practical travel bag, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scale_mail",
@@ -4965,7 +5376,10 @@
     "image_url": "/images/tiles/aigm_1782902123_aigm_00855_.png",
     "image_gen_prompt": "scale armor, hundreds of overlapping metal scales, leather backing, tarnished steel, serpentine pattern, rugged texture, battle-worn, flexible cuirass, muted metallic sheen, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scroll_fireball",
@@ -5001,7 +5415,10 @@
     "image_url": "/images/tiles/aigm_1783543251_aigm_01020_.png",
     "image_gen_prompt": "thick scroll, rolled parchment, red pigment runes, arcane fire spell, fiery aura, ember sparks, charred edges, aged paper texture, explosive magic, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scroll_light",
@@ -5037,7 +5454,10 @@
     "image_url": "/images/tiles/aigm_1783543269_aigm_01021_.png",
     "image_gen_prompt": "small parchment scroll, handwritten magical formula, aged paper, curled edges, worn texture, faint glowing aura, warm torch-like light, subtle arcane ink, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scroll_magic_bolt",
@@ -5073,7 +5493,10 @@
     "image_url": "/images/tiles/aigm_1783543287_aigm_01022_.png",
     "image_gen_prompt": "ancient scroll, rolled parchment, glowing ink runes, arcane inscriptions, magical sigil, faint blue aura, weathered paper texture, enchanted consumable, mystical energy, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scroll_mend",
@@ -5109,7 +5532,10 @@
     "image_url": "/images/tiles/aigm_1783543305_aigm_01023_.png",
     "image_gen_prompt": "ancient healing scroll, rolled parchment, silver runic script, faint magical glow, worn edges, soft mystical aura, delicate fibers, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "scroll_shield",
@@ -5145,7 +5571,10 @@
     "image_url": "/images/tiles/aigm_1783543323_aigm_01024_.png",
     "image_gen_prompt": "magic scroll, thin bamboo binding, rolled parchment, translucent energy shield aura, glowing runes, whispered spell effect, worn paper texture, pale arcane light, protective enchantment, subtle mystical haze, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "shovel",
@@ -5181,7 +5610,10 @@
     "image_url": "/images/tiles/aigm_1782901040_aigm_00823_.png",
     "image_gen_prompt": "sturdy shovel, wooden handle, iron spade blade, worn metal, practical tool, simple rugged design, dirt-stained texture, realistic proportions, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "signet_ring",
@@ -5217,7 +5649,10 @@
     "image_url": "/images/tiles/aigm_1783543341_aigm_01025_.png",
     "image_gen_prompt": "gold signet ring, engraved griffin holding sword emblem, noble heraldic design, polished metal, circular band, ornate carving, subtle wear, reflective highlights, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "silk_thread",
@@ -5253,7 +5688,10 @@
     "image_url": "/images/tiles/aigm_1783543359_aigm_01026_.png",
     "image_gen_prompt": "thin silk thread spool, delicate southern silk, pale ivory fiber, tightly wound roll, subtle sheen, fine texture, lightweight crafting material, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "silver_circlet",
@@ -5289,7 +5727,10 @@
     "image_url": "/images/tiles/aigm_1782902146_aigm_00856_.png",
     "image_gen_prompt": "thin silver circlet, delicate diadem, small turquoise gem, elegant minimalist design, polished metal, subtle engraved details, refined craftsmanship, faint mystical aura, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "small_chest",
@@ -5325,7 +5766,10 @@
     "image_url": "/images/tiles/aigm_1782900876_aigm_00814_.png",
     "image_gen_prompt": "wooden lockbox, iron-banded chest, small padlock, rectangular casket, aged oak wood, worn metal fittings, rugged texture, subtle gold hint, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "smoke_bomb",
@@ -5361,7 +5805,10 @@
     "image_url": "/images/tiles/aigm_1783543376_aigm_01027_.png",
     "image_gen_prompt": "small clay smoke bomb, spherical pellet, cracked earthenware, powdered herbs, rustic fuse cap, dusty texture, muted brown, smoke-emitting, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "sobering_draught",
@@ -5397,7 +5844,10 @@
     "image_url": "/images/tiles/aigm_1783543395_aigm_01028_.png",
     "image_gen_prompt": "small glass vial, bitter herbal potion, murky green liquid, cork stopper, rustic apothecary bottle, sediment, medicinal brew, faint glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "soft_slippers",
@@ -5433,7 +5883,10 @@
     "image_url": "/images/tiles/aigm_1782902169_aigm_00857_.png",
     "image_gen_prompt": "soft sheepskin slippers, supple leather, low-cut footwear, muted beige, worn edges, silent stealth design, cozy fur lining, matte texture, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "spyglass",
@@ -5469,7 +5922,10 @@
     "image_url": "/images/tiles/aigm_1782900749_aigm_00807_.png",
     "image_gen_prompt": "brass spyglass, three lenses, extended collapsible tube, polished metal, engraved rings, nautical instrument, precise craftsmanship, warm metallic sheen, subtle wear, focused optics, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "studded_leather",
@@ -5505,7 +5961,10 @@
     "image_url": "/images/tiles/aigm_1782902192_aigm_00858_.png",
     "image_gen_prompt": "studded leather armor, hundreds of iron rivets, rugged cuirass, dark brown worn leather, reinforced chestpiece, dense metal studs, battle-scarred texture, subtle metallic glint, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tinderbox",
@@ -5541,7 +6000,10 @@
     "image_url": "/images/tiles/aigm_1783541332_aigm_00942_.png",
     "image_gen_prompt": "small leather tinder pouch, worn brown hide, flint striker, tinder bundle, dry kindling sticks, compact rugged kit, weathered texture, practical survival gear, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "torch",
@@ -5577,7 +6039,10 @@
     "image_url": "/images/tiles/aigm_1782895499_aigm_00739_.png",
     "image_gen_prompt": "tar-soaked flax bundle, wooden stick torch, wrapped fibrous head, black sticky resin, rough wood grain, smoky blazing flame, orange firelight, charred texture, medieval survival tool, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI, game item icon, isolated on dark background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl122_potion_healing_standard",
@@ -5613,7 +6078,10 @@
     "image_url": "/images/tiles/aigm_1783543413_aigm_01029_.png",
     "image_gen_prompt": "small glass vial, full of ruby red liquid, healing potion, cork stopper, translucent glass, glossy reflections, delicate shape, subtle herbal essence, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl122_potion_resistance",
@@ -5649,7 +6117,10 @@
     "image_url": "/images/tiles/aigm_1783543431_aigm_01030_.png",
     "image_gen_prompt": "murky whitish potion, small glass vial, pale opaque liquid, subtle sediment, cork stopper, rugged alchemical bottle, matte surface, protective elixir, faint cold glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 122,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl129_dice_set",
@@ -5685,7 +6156,10 @@
     "image_url": "/images/tiles/aigm_1783543448_aigm_01031_.png",
     "image_gen_prompt": "four carved bone dice, aged ivory, slightly weighted, engraved pips, worn edges, smooth polished texture, small gambling set, subtle ominous aura, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 129,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl129_mana_potion",
@@ -5721,7 +6195,10 @@
     "image_url": "/images/tiles/aigm_1783543466_aigm_01032_.png",
     "image_gen_prompt": "azure liquid, round ampoule, glass vial, cork stopper, minty essence, lime tint, alchemical potion, translucent, smooth curved shape, subtle glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl132_alchemical_reagent",
@@ -5757,7 +6234,10 @@
     "image_url": "/images/tiles/aigm_1783543484_aigm_01033_.png",
     "image_gen_prompt": "worn leather satchel, alchemist pouch, measured powder packets, small oil vials, corked bottles, rune-inscribing kit, buckled flap, weathered texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 132,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl132_potion_healing_standard",
@@ -5793,7 +6273,10 @@
     "image_url": "/images/tiles/aigm_1783543502_aigm_01034_.png",
     "image_gen_prompt": "small glass vial, full of ruby red liquid, healing potion, cork stopper, translucent glass, glossy surface, subtle metallic tint, delicate shape, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl134_potion_haste",
@@ -5829,7 +6312,10 @@
     "image_url": "/images/tiles/aigm_1783543520_aigm_01035_.png",
     "image_gen_prompt": "pale green glowing liquid, small glass vial, faint pulsing light, translucent fluid, subtle magical shimmer, swift alchemy potion, smooth rounded bottle, cork stopper, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl134_scroll_light",
@@ -5865,7 +6351,10 @@
     "image_url": "/images/tiles/aigm_1783543538_aigm_01036_.png",
     "image_gen_prompt": "rolled parchment scroll, short handwritten formula, aged paper, worn edges, tied loosely, magical glow aura, torch-like illumination, warm amber light, subtle arcane ink, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 134,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl135_ancient_scroll",
@@ -5901,7 +6390,10 @@
     "image_url": "/images/tiles/aigm_1783543556_aigm_01037_.png",
     "image_gen_prompt": "ancient darkened parchment scroll, archaic indecipherable script, brittle curled edges, aged stained paper, mysterious runic writing, weathered texture, subtle sepia tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 135,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl135_potion_stamina",
@@ -5937,7 +6429,10 @@
     "image_url": "/images/tiles/aigm_1783543575_aigm_01038_.png",
     "image_gen_prompt": "small glass vial, green herbal liquid, faint hop aroma, simple cork stopper, rustic apothecary potion, translucent bottle, subtle sediment, worn surface, soft glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl136_parchment_sheets",
@@ -5973,7 +6468,10 @@
     "image_url": "/images/tiles/aigm_1783543593_aigm_01039_.png",
     "image_gen_prompt": "stack of ten parchment sheets, smooth vellum, neatly aligned pages, pale beige paper, soft curled edges, clean surface, subtle fiber texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 136,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl136_scroll_shield",
@@ -6009,7 +6507,10 @@
     "image_url": "/images/tiles/aigm_1783543611_aigm_01040_.png",
     "image_gen_prompt": "magic scroll, thin bamboo binding, rolled parchment, engraved runes, translucent energy shield aura, protective spell, faint glowing words, worn texture, pale paper, subtle mystical shimmer, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl137_signet_ring",
@@ -6045,7 +6546,10 @@
     "image_url": "/images/tiles/aigm_1783543629_aigm_01041_.png",
     "image_gen_prompt": "gold signet ring, engraved gryphon holding sword emblem, noble heraldic design, polished metal, circular band, subtle wear, intricate carving, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 137,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl137_sobering_draught",
@@ -6081,7 +6585,10 @@
     "image_url": "/images/tiles/aigm_1783543646_aigm_01042_.png",
     "image_gen_prompt": "small glass vial, bitter herbal potion, murky green liquid, cork stopper, rustic apothecary bottle, sediment particles, medicinal herbs, worn glass, subtle glow, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl138_potion_resistance",
@@ -6117,7 +6624,10 @@
     "image_url": "/images/tiles/aigm_1783543665_aigm_01043_.png",
     "image_gen_prompt": "murky whitish potion, cloudy liquid, small glass vial, rounded bottle, cork stopper, pale opaque glow, alchemical elixir, subtle sediment, worn glass texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl138_vial_of_acid",
@@ -6153,7 +6663,10 @@
     "image_url": "/images/tiles/aigm_1783543683_aigm_01044_.png",
     "image_gen_prompt": "glass vial, cloudy steaming acid, corrosive liquid, sealed flask, translucent glass, bubbling surface, toxic fumes, worn stopper, alchemical consumable, harsh reflections, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 138,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl141_fishing_net",
@@ -6189,7 +6702,10 @@
     "image_url": "/images/tiles/aigm_1783543701_aigm_01045_.png",
     "image_gen_prompt": "woven fishing net, coarse rope fiber, hand-spaced knots, circular cast net, rugged texture, practical tool, tangled edges, muted natural tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 141,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl141_potion_healing_standard",
@@ -6225,7 +6741,10 @@
     "image_url": "/images/tiles/aigm_1783543719_aigm_01046_.png",
     "image_gen_prompt": "full glass vial, ruby red liquid, healing potion, cork stopper, slender bottle, translucent glass, glossy surface, subtle reflections, faint floral motif, iron-toned alchemical essence, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_alchemist_fire",
@@ -6261,7 +6780,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_antidote",
@@ -6297,7 +6819,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_bone_dust",
@@ -6333,7 +6858,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_chisel",
@@ -6369,7 +6897,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_crowbar",
@@ -6405,7 +6936,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull",
@@ -6441,7 +6975,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_2",
@@ -6477,7 +7014,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_3",
@@ -6513,7 +7053,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_4",
@@ -6549,7 +7092,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_5",
@@ -6585,7 +7131,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_6",
@@ -6621,7 +7170,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_demon_skull_7",
@@ -6657,7 +7209,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_dragon_scale_shard",
@@ -6693,7 +7248,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_golden_idol",
@@ -6729,7 +7287,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_golden_idol_2",
@@ -6765,7 +7326,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_golden_idol_3",
@@ -6801,7 +7365,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_golden_idol_4",
@@ -6837,7 +7404,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_healing_herb",
@@ -6873,7 +7443,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_health_potion_small",
@@ -6909,7 +7482,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_health_potion_small_2",
@@ -6945,7 +7521,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_health_potion_small_3",
@@ -6981,7 +7560,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_holy_water",
@@ -7017,7 +7599,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_holy_water_2",
@@ -7053,7 +7638,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_incense_bundle",
@@ -7089,7 +7677,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_ink_quill_set",
@@ -7125,7 +7716,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_mana_potion",
@@ -7161,7 +7755,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_mapa_popiolu",
@@ -7197,7 +7794,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_mapa_sanktuarium_peknietego_nieba",
@@ -7233,7 +7833,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_mapa_szlaku_rozbitej_gwiazdy",
@@ -7269,7 +7872,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_mapa_szlaku_rozbitej_gwiazdy_2",
@@ -7305,7 +7911,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_giant_strength",
@@ -7341,7 +7950,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_giant_strength_2",
@@ -7377,7 +7989,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_giant_strength_3",
@@ -7413,7 +8028,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_healing_major",
@@ -7449,7 +8067,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_healing_major_2",
@@ -7485,7 +8106,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_healing_major_3",
@@ -7521,7 +8145,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_healing_major_4",
@@ -7557,7 +8184,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_mana_major",
@@ -7593,7 +8223,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_mana_major_2",
@@ -7629,7 +8262,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_mana_major_3",
@@ -7665,7 +8301,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_potion_resistance",
@@ -7701,7 +8340,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda",
@@ -7737,7 +8379,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_2",
@@ -7773,7 +8418,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_3",
@@ -7809,7 +8457,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_calosc",
@@ -7845,7 +8496,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_calosc_2",
@@ -7881,7 +8535,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_pelna",
@@ -7917,7 +8574,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_rozbita_gwiazda_pelna_pieczec",
@@ -7953,7 +8613,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_fireball",
@@ -7989,7 +8652,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_fireball_2",
@@ -8025,7 +8691,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_fireball_3",
@@ -8061,7 +8730,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_fireball_4",
@@ -8097,7 +8769,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_fireball_5",
@@ -8133,7 +8808,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_light",
@@ -8169,7 +8847,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_magic_bolt",
@@ -8205,7 +8886,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_scroll_mend",
@@ -8241,7 +8925,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass",
@@ -8277,7 +8964,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass_2",
@@ -8313,7 +9003,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass_3",
@@ -8349,7 +9042,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass_4",
@@ -8385,7 +9081,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass_5",
@@ -8421,7 +9120,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_spyglass_6",
@@ -8457,7 +9159,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_tpl122_potion_healing_standard",
@@ -8493,7 +9198,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_tpl134_potion_haste",
@@ -8529,7 +9237,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": 142,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl142_vial_of_acid",
@@ -8565,7 +9276,10 @@
     "image_url": null,
     "image_gen_prompt": null,
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl2_demon_skull",
@@ -8601,7 +9315,10 @@
     "image_url": "/images/tiles/aigm_1783543737_aigm_01047_.png",
     "image_gen_prompt": "tar-black skull, three eye sockets, curved horns, demonic relic, charred bone, sulfurous aura, ominous, worn surface, rare quest item, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": 2,
-    "hidden": 1
+    "hidden": 1,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "tpl2_potion_healing_major",
@@ -8637,7 +9354,10 @@
     "image_url": "/images/tiles/aigm_1783543755_aigm_01048_.png",
     "image_gen_prompt": "large alchemist potion flask, thick glass bottle, bulbous shape, crimson liquid, faint inner glow, cork stopper, worn metal bands, blood-restoring elixir, glossy surface, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "travelers_cloak",
@@ -8673,7 +9393,10 @@
     "image_url": "/images/tiles/aigm_1782902235_aigm_00859_.png",
     "image_gen_prompt": "oiled wool cloak, travel mantle, hooded, heavy drape, weatherproof fabric, dark brown, matte greasy texture, rugged folds, worn edges, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "treasure_map",
@@ -8709,7 +9432,10 @@
     "image_url": "/images/tiles/aigm_1783543772_aigm_01049_.png",
     "image_gen_prompt": "worn leather map scrap, hand-drawn markings, faded ink, marked X, forest sketch, moss-covered paths, frayed edges, creased surface, aged texture, muted earthy tones, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "vial_of_acid",
@@ -8745,7 +9471,10 @@
     "image_url": "/images/tiles/aigm_1783543790_aigm_01050_.png",
     "image_gen_prompt": "glass vial, cloudy steaming acid, corrosive liquid, sealed flask, translucent glass, bubbling surface, toxic fumes, worn stopper, alchemical consumable, harsh reflections, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "waterskin",
@@ -8781,7 +9510,10 @@
     "image_url": "/images/tiles/aigm_1782900895_aigm_00815_.png",
     "image_gen_prompt": "leather waterskin, rugged flask, four-liter capacity, brown worn hide, stitched seams, rounded pouch shape, tied neck, weathered texture, practical travel item, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "whetstone",
@@ -8817,7 +9549,10 @@
     "image_url": "/images/tiles/aigm_1782901058_aigm_00824_.png",
     "image_gen_prompt": "gray whetstone, sharpening stone, rough rectangular slab, worn edges, fine gritty texture, matte stone surface, utilitarian tool, subtle scratches, muted highlights, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "wizard_robe",
@@ -8853,7 +9588,10 @@
     "image_url": "/images/tiles/aigm_1782902258_aigm_00860_.png",
     "image_gen_prompt": "heavy silk robe, dark silk fabric, silver embroidered runes, reinforced hems, flowing layered garment, arcane glow, subtle magical aura, ornate stitching, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 0,
+    "component_type": null,
+    "created_by": null
   },
   {
     "key": "wolf_pelt",
@@ -8889,6 +9627,555 @@
     "image_url": "/images/tiles/aigm_1783543808_aigm_01051_.png",
     "image_gen_prompt": "raw black wolf pelt, attached wolf head, visible sharp claws, coarse fur, rugged hide, bloodstained edges, trophy skin, natural leather texture, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI, dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI",
     "template_id": null,
-    "hidden": 0
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "pelt",
+    "created_by": null
+  },
+  {
+    "key": "kiel_wilczy",
+    "label": "Kieł wilczy",
+    "item_type": "material",
+    "description": "Zakrzywiony kieł wyrwany z pyska wilka. Rzeźbiarze run i płatnerze cenią go za twardość.",
+    "value_gp": 6,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 6,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "fang",
+    "created_by": "seed"
+  },
+  {
+    "key": "gruczol_pajeczy",
+    "label": "Gruczoł jadowy pająka",
+    "item_type": "material",
+    "description": "Nabrzmiały gruczoł ścięty tuż za szczękoczułkami. Sączy się z niego mętny jad.",
+    "value_gp": 12,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 12,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "essence",
+    "created_by": "seed"
+  },
+  {
+    "key": "jedwab_pajeczy",
+    "label": "Pajęczy jedwab",
+    "item_type": "material",
+    "description": "Zwój lepkiej, srebrzystej nici zdartej z gniazda. Mocniejszy niż lniana przędza.",
+    "value_gp": 10,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 10,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "part",
+    "created_by": "seed"
+  },
+  {
+    "key": "kiel_szczurzy",
+    "label": "Kieł szczurzy",
+    "item_type": "material",
+    "description": "Żółty siekacz olbrzymiego szczura. Drobny, lecz ostry jak igła.",
+    "value_gp": 3,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 3,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "fang",
+    "created_by": "seed"
+  },
+  {
+    "key": "luska_jaszczura",
+    "label": "Łuska jaszczura",
+    "item_type": "material",
+    "description": "Twarda, rogowa łuska zdarta z grzbietu jaszczuroludka. Lśni oliwkowo.",
+    "value_gp": 8,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 8,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "pelt",
+    "created_by": "seed"
+  },
+  {
+    "key": "sadlo_niedzwiedzie",
+    "label": "Sadło niedźwiedzie",
+    "item_type": "material",
+    "description": "Warstwa tłustego sadła. Palona daje długo tlący się olej, w maściach koi rany.",
+    "value_gp": 10,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 10,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "part",
+    "created_by": "seed"
+  },
+  {
+    "key": "krew_wilkolaka",
+    "label": "Krew wilkołaka",
+    "item_type": "material",
+    "description": "Czarna, dymiąca posoka bestii. W zamkniętej fioli wciąż pulsuje ciepłem.",
+    "value_gp": 30,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 30,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "essence",
+    "created_by": "seed"
+  },
+  {
+    "key": "ruda_zelaza",
+    "label": "Ruda żelaza",
+    "item_type": "material",
+    "description": "Bryła rudej skały żyłkowanej metalem. Surowiec dla każdej kuźni.",
+    "value_gp": 9,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 9,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "ore",
+    "created_by": "seed"
+  },
+  {
+    "key": "ruda_miedzi",
+    "label": "Ruda miedzi",
+    "item_type": "material",
+    "description": "Zielonkawa gruda z połyskiem. Miękka, łatwa do wytopu na stopy i okucia.",
+    "value_gp": 6,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 6,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "ore",
+    "created_by": "seed"
+  },
+  {
+    "key": "odprysk_obsydianu",
+    "label": "Odprysk obsydianu",
+    "item_type": "material",
+    "description": "Ostry jak brzytwa okruch czarnego szkła wulkanicznego. Kruchy, lecz tnący.",
+    "value_gp": 14,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 14,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "ore",
+    "created_by": "seed"
+  },
+  {
+    "key": "esencja_cienia",
+    "label": "Esencja cienia",
+    "item_type": "material",
+    "description": "Kłąb zimnej mgły zamknięty w krysztale. Wije się i ucieka od światła.",
+    "value_gp": 25,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 25,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "essence",
+    "created_by": "seed"
+  },
+  {
+    "key": "esencja_upiora",
+    "label": "Esencja upiora",
+    "item_type": "material",
+    "description": "Blada poświata zdarta z rozpraszającego się nieumarłego. Chłodzi dłoń przez szkło.",
+    "value_gp": 22,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 22,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "essence",
+    "created_by": "seed"
+  },
+  {
+    "key": "korzen_zmornika",
+    "label": "Korzeń zmornika",
+    "item_type": "material",
+    "description": "Sękaty korzeń grzęzawiskowego zioła. Gorzki, lecz zbija gorączkę i krzepi krew.",
+    "value_gp": 7,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 7,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "herb",
+    "created_by": "seed"
+  },
+  {
+    "key": "kapelusz_bledunia",
+    "label": "Kapelusz bledunia",
+    "item_type": "material",
+    "description": "Blady kapelusz leśnego grzyba rosnącego w cieniu głazów. Suszony wchodzi do wywarów.",
+    "value_gp": 6,
+    "effect_json": null,
+    "is_active": 0,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "note": null,
+    "weight_kg": 0.3,
+    "ac_bonus": 0,
+    "charges": 0,
+    "ai_generated": 0,
+    "approved": 1,
+    "allowed_classes": "[]",
+    "armor_coverage": null,
+    "rarity": 1,
+    "effect_type": null,
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "source_exclusive": null,
+    "campaign_id": null,
+    "review_status": "permanent",
+    "min_level": 1,
+    "location_tags": null,
+    "price_gp": 6,
+    "pending_category": null,
+    "image_url": null,
+    "image_gen_prompt": null,
+    "template_id": null,
+    "hidden": 0,
+    "is_component": 1,
+    "component_type": "herb",
+    "created_by": "seed"
   }
 ]

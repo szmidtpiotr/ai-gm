@@ -253,6 +253,9 @@ export interface InventoryItem {
   durability: { current: number; max: number; pct: number; broken: boolean } | null;
   image_url: string | null;
   stat_tags?: string[];
+  // #1335 BL-B3 — komponenty rzemieślnicze (skóry, kły, rudy, esencje).
+  is_component?: boolean;
+  component_type?: string | null;
 }
 
 // Kanoniczne sloty sylwetki (Diablo-overlap) + które klucze slotów backendu je
@@ -322,6 +325,7 @@ export function splitInventory(items: InventoryItem[]): {
 export interface BagGroups {
   consumables: InventoryItem[];
   gear: InventoryItem[];
+  components: InventoryItem[];
   lore: InventoryItem[];
 }
 const EQUIPPABLE_TYPES = new Set(["weapon", "armor", "shield", "relic"]);
@@ -329,14 +333,17 @@ const EQUIPPABLE_TYPES = new Set(["weapon", "armor", "shield", "relic"]);
 export function groupBackpack(backpack: InventoryItem[]): BagGroups {
   const consumables: InventoryItem[] = [];
   const gear: InventoryItem[] = [];
+  const components: InventoryItem[] = [];
   const lore: InventoryItem[] = [];
   for (const it of backpack) {
     const t = (it.item_type || "").toLowerCase();
-    if (EQUIPPABLE_TYPES.has(t)) gear.push(it);
+    // #1335 — komponenty rzemieślnicze mają własny kubełek (przed equip/consume/lore).
+    if (it.is_component) components.push(it);
+    else if (EQUIPPABLE_TYPES.has(t)) gear.push(it);
     else if (it.can_use) consumables.push(it);
     else lore.push(it);
   }
-  return { consumables, gear, lore };
+  return { consumables, gear, components, lore };
 }
 
 // Slot docelowy przy equipowaniu z plecaka (klik) — wg typu/weapon_slot.

@@ -1165,7 +1165,9 @@ def get_character_inventory(character_id: int) -> list[dict]:
             durability_by_id = {}
 
         # #1049: batch-fetch image_url from game_config_items for item rows (no SQL builder change).
+        # #1335: same pass surfaces is_component / component_type (crafting-material class).
         image_url_by_item_key: dict[str, str | None] = {}
+        component_by_item_key: dict[str, tuple[int, str | None]] = {}
         try:
             _item_keys = list({
                 r["item_key"] for r in rows
@@ -1174,11 +1176,24 @@ def get_character_inventory(character_id: int) -> list[dict]:
             })
             if _item_keys:
                 _ph = ",".join("?" * len(_item_keys))
-                for _ir in conn.execute(
-                    f"SELECT key, image_url FROM game_config_items WHERE key IN ({_ph})",
-                    _item_keys,
-                ).fetchall():
-                    image_url_by_item_key[_ir["key"]] = _ir["image_url"]
+                # is_component/component_type may be missing on legacy/test DBs → try, fall back.
+                try:
+                    _cur = conn.execute(
+                        f"SELECT key, image_url, is_component, component_type "
+                        f"FROM game_config_items WHERE key IN ({_ph})",
+                        _item_keys,
+                    ).fetchall()
+                    for _ir in _cur:
+                        image_url_by_item_key[_ir["key"]] = _ir["image_url"]
+                        component_by_item_key[_ir["key"]] = (
+                            int(_ir["is_component"] or 0), _ir["component_type"]
+                        )
+                except sqlite3.OperationalError:
+                    for _ir in conn.execute(
+                        f"SELECT key, image_url FROM game_config_items WHERE key IN ({_ph})",
+                        _item_keys,
+                    ).fetchall():
+                        image_url_by_item_key[_ir["key"]] = _ir["image_url"]
         except sqlite3.OperationalError:
             pass
 
@@ -1387,6 +1402,8 @@ def get_character_inventory(character_id: int) -> list[dict]:
                     else image_url_by_consumable_key.get(key) if item_type == "consumable"
                     else image_url_by_item_key.get(key)
                 ),
+                "is_component": bool(component_by_item_key.get(key, (0, None))[0]),
+                "component_type": component_by_item_key.get(key, (0, None))[1],
                 "stat_tags": stat_tags_by_inv_id.get(int(r["id"]), []),
             }
         )

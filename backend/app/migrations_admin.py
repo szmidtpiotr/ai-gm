@@ -6107,6 +6107,29 @@ def _ensure_item_image_columns(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _ensure_item_component_columns(conn: sqlite3.Connection) -> None:
+    """#1335 BL-B3 — komponenty rzemieślnicze jako klasa itemów.
+
+    is_component (0/1) + component_type (pelt/fang/herb/ore/essence/part) on
+    game_config_items. created_by is added too so the seed marker created_by='seed'
+    has a column to land in (the table historically lacked authorship tracking).
+    """
+    for sql in [
+        "ALTER TABLE game_config_items ADD COLUMN is_component INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE game_config_items ADD COLUMN component_type TEXT",
+        "ALTER TABLE game_config_items ADD COLUMN created_by TEXT",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "duplicate column" in msg or "no such table" in msg:
+                pass
+            else:
+                raise
+
+
 def _migrate_legacy_skill_keys(conn: sqlite3.Connection) -> None:
     """#1052 — remap legacy sheet_json.skills keys to catalog keys.
 
@@ -6606,6 +6629,7 @@ def run_admin_migrations() -> None:
         _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
         _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
         _seed_enemy_rank_multipliers(conn)  # #1332 BL-A6 — rangi wariantów wroga
+        _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

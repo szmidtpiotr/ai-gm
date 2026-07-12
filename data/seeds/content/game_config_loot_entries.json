@@ -266,17 +266,6 @@
   {
     "id": 25,
     "loot_table_key": "loot_skeleton",
-    "item_key": "bone_dust",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 55,
-    "qty_min": 1,
-    "qty_max": 2,
-    "game_item_key": null
-  },
-  {
-    "id": 26,
-    "loot_table_key": "loot_skeleton",
     "item_key": null,
     "consumable_key": null,
     "weapon_key": "dagger",
@@ -286,7 +275,7 @@
     "game_item_key": null
   },
   {
-    "id": 27,
+    "id": 26,
     "loot_table_key": "loot_troll",
     "item_key": "leather_armor",
     "consumable_key": null,
@@ -297,7 +286,7 @@
     "game_item_key": null
   },
   {
-    "id": 28,
+    "id": 27,
     "loot_table_key": "loot_troll",
     "item_key": null,
     "consumable_key": null,
@@ -308,18 +297,7 @@
     "game_item_key": null
   },
   {
-    "id": 29,
-    "loot_table_key": "loot_wolf",
-    "item_key": "wolf_pelt",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 75,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": null
-  },
-  {
-    "id": 30,
+    "id": 28,
     "loot_table_key": "loot_guard",
     "item_key": "chainmail_shirt",
     "consumable_key": null,
@@ -330,7 +308,7 @@
     "game_item_key": null
   },
   {
-    "id": 31,
+    "id": 29,
     "loot_table_key": "loot_guard",
     "item_key": null,
     "consumable_key": null,
@@ -341,7 +319,7 @@
     "game_item_key": null
   },
   {
-    "id": 32,
+    "id": 30,
     "loot_table_key": "loot_enemy",
     "item_key": "bandage",
     "consumable_key": null,
@@ -352,7 +330,7 @@
     "game_item_key": null
   },
   {
-    "id": 33,
+    "id": 31,
     "loot_table_key": "loot_enemy",
     "item_key": "torch",
     "consumable_key": null,
@@ -363,7 +341,7 @@
     "game_item_key": null
   },
   {
-    "id": 34,
+    "id": 32,
     "loot_table_key": "loot_enemy",
     "item_key": null,
     "consumable_key": null,
@@ -374,7 +352,7 @@
     "game_item_key": null
   },
   {
-    "id": 35,
+    "id": 33,
     "loot_table_key": "loot_unknown_attacker",
     "item_key": "smoke_bomb",
     "consumable_key": null,
@@ -385,7 +363,7 @@
     "game_item_key": null
   },
   {
-    "id": 36,
+    "id": 34,
     "loot_table_key": "loot_unknown_attacker",
     "item_key": null,
     "consumable_key": null,
@@ -396,7 +374,7 @@
     "game_item_key": null
   },
   {
-    "id": 37,
+    "id": 35,
     "loot_table_key": "loot_goblin_u31",
     "item_key": null,
     "consumable_key": null,
@@ -407,7 +385,7 @@
     "game_item_key": null
   },
   {
-    "id": 38,
+    "id": 36,
     "loot_table_key": "loot_ogr",
     "item_key": null,
     "consumable_key": null,
@@ -418,18 +396,18 @@
     "game_item_key": null
   },
   {
-    "id": 39,
+    "id": 37,
     "loot_table_key": "loot_thug",
     "item_key": "travelers_cloak",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 40,
+    "id": 38,
     "loot_table_key": "loot_thug",
     "item_key": null,
     "consumable_key": null,
@@ -440,7 +418,7 @@
     "game_item_key": null
   },
   {
-    "id": 41,
+    "id": 39,
     "loot_table_key": "loot_s2_pw_bandyta_lucznik",
     "item_key": "tpl2_potion_healing_major",
     "consumable_key": null,
@@ -451,7 +429,7 @@
     "game_item_key": null
   },
   {
-    "id": 42,
+    "id": 40,
     "loot_table_key": "loot_s2_pw_custom_stats",
     "item_key": "tpl137_sobering_draught",
     "consumable_key": null,
@@ -462,7 +440,7 @@
     "game_item_key": null
   },
   {
-    "id": 43,
+    "id": 41,
     "loot_table_key": "loot_s2_pw_custom_stats",
     "item_key": null,
     "consumable_key": null,
@@ -473,7 +451,7 @@
     "game_item_key": null
   },
   {
-    "id": 44,
+    "id": 42,
     "loot_table_key": "loot_s4_pw_osilek",
     "item_key": null,
     "consumable_key": "focus_crystal",
@@ -484,7 +462,7 @@
     "game_item_key": null
   },
   {
-    "id": 45,
+    "id": 43,
     "loot_table_key": "loot_s4_pw_osilek",
     "item_key": "studded_leather",
     "consumable_key": null,
@@ -495,7 +473,7 @@
     "game_item_key": null
   },
   {
-    "id": 46,
+    "id": 44,
     "loot_table_key": "loot_s4_pw_kaplan",
     "item_key": null,
     "consumable_key": null,
@@ -506,7 +484,7 @@
     "game_item_key": null
   },
   {
-    "id": 47,
+    "id": 45,
     "loot_table_key": "loot_nozownik_testowy",
     "item_key": "tpl138_potion_resistance",
     "consumable_key": null,
@@ -517,7 +495,7 @@
     "game_item_key": null
   },
   {
-    "id": 48,
+    "id": 46,
     "loot_table_key": "loot_bandyta_uliczny",
     "item_key": "hide_armor",
     "consumable_key": null,
@@ -528,7 +506,7 @@
     "game_item_key": null
   },
   {
-    "id": 49,
+    "id": 47,
     "loot_table_key": "loot_bandyta_uliczny",
     "item_key": "scroll_shield",
     "consumable_key": null,
@@ -539,18 +517,18 @@
     "game_item_key": null
   },
   {
-    "id": 50,
+    "id": 48,
     "loot_table_key": "loot_wyrostki_spod_mlyna",
     "item_key": "whetstone",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 51,
+    "id": 49,
     "loot_table_key": "loot_wyrostki_spod_mlyna",
     "item_key": "tpl2_potion_healing_major",
     "consumable_key": null,
@@ -561,18 +539,18 @@
     "game_item_key": null
   },
   {
-    "id": 52,
+    "id": 50,
     "loot_table_key": "loot_wyrostki_spod_mlyna_2",
     "item_key": "soft_slippers",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 53,
+    "id": 51,
     "loot_table_key": "loot_herszt_wyrostkow",
     "item_key": "great_helm",
     "consumable_key": null,
@@ -583,7 +561,7 @@
     "game_item_key": null
   },
   {
-    "id": 54,
+    "id": 52,
     "loot_table_key": "loot_herszt_wyrostkow",
     "item_key": null,
     "consumable_key": "focus_crystal",
@@ -594,7 +572,7 @@
     "game_item_key": null
   },
   {
-    "id": 55,
+    "id": 53,
     "loot_table_key": "loot_herszt_wyrostkow",
     "item_key": null,
     "consumable_key": null,
@@ -605,18 +583,18 @@
     "game_item_key": null
   },
   {
-    "id": 56,
+    "id": 54,
     "loot_table_key": "loot_wyrostki_spod_mlyna_3",
     "item_key": "hunting_horn",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 57,
+    "id": 55,
     "loot_table_key": "loot_wyrostki_spod_mlyna_4",
     "item_key": "tpl137_sobering_draught",
     "consumable_key": null,
@@ -627,18 +605,18 @@
     "game_item_key": null
   },
   {
-    "id": 58,
+    "id": 56,
     "loot_table_key": "loot_wyrostki_spod_mlyna_4",
     "item_key": "travelers_cloak",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 59,
+    "id": 57,
     "loot_table_key": "loot_herszt_wyrostkow_2",
     "item_key": null,
     "consumable_key": "smoke_bomb",
@@ -649,18 +627,18 @@
     "game_item_key": null
   },
   {
-    "id": 60,
+    "id": 58,
     "loot_table_key": "loot_herszt_wyrostkow_2",
     "item_key": "hourglass",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 61,
+    "id": 59,
     "loot_table_key": "loot_wyrostki_spod_mlyna_5",
     "item_key": null,
     "consumable_key": null,
@@ -671,7 +649,7 @@
     "game_item_key": null
   },
   {
-    "id": 62,
+    "id": 60,
     "loot_table_key": "loot_witek_lysek",
     "item_key": "tpl137_sobering_draught",
     "consumable_key": null,
@@ -682,7 +660,7 @@
     "game_item_key": null
   },
   {
-    "id": 63,
+    "id": 61,
     "loot_table_key": "loot_witek_lysek",
     "item_key": "potion_strength",
     "consumable_key": null,
@@ -693,7 +671,7 @@
     "game_item_key": null
   },
   {
-    "id": 64,
+    "id": 62,
     "loot_table_key": "loot_witek_mlynski_enemy",
     "item_key": "wizard_robe",
     "consumable_key": null,
@@ -704,7 +682,7 @@
     "game_item_key": null
   },
   {
-    "id": 65,
+    "id": 63,
     "loot_table_key": "loot_witek_mlynski_enemy",
     "item_key": "full_plate",
     "consumable_key": null,
@@ -715,7 +693,7 @@
     "game_item_key": null
   },
   {
-    "id": 66,
+    "id": 64,
     "loot_table_key": "loot_witek_mlynski_enemy",
     "item_key": null,
     "consumable_key": null,
@@ -726,18 +704,18 @@
     "game_item_key": null
   },
   {
-    "id": 67,
+    "id": 65,
     "loot_table_key": "loot_herszt_wyrostkow_3",
     "item_key": "tinderbox",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 68,
+    "id": 66,
     "loot_table_key": "loot_herszt_wyrostkow_3",
     "item_key": "tpl122_potion_healing_standard",
     "consumable_key": null,
@@ -748,18 +726,18 @@
     "game_item_key": null
   },
   {
-    "id": 69,
+    "id": 67,
     "loot_table_key": "loot_wyrostki_spod_mlyna_8",
     "item_key": "hunting_horn",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 70,
+    "id": 68,
     "loot_table_key": "loot_wyrostki_spod_mlyna_8",
     "item_key": null,
     "consumable_key": null,
@@ -770,7 +748,7 @@
     "game_item_key": null
   },
   {
-    "id": 71,
+    "id": 69,
     "loot_table_key": "loot_herszt_wyrostkow_4",
     "item_key": null,
     "consumable_key": "focus_crystal",
@@ -781,18 +759,18 @@
     "game_item_key": null
   },
   {
-    "id": 72,
+    "id": 70,
     "loot_table_key": "loot_wyrostki_spod_mlyna_9",
     "item_key": "lantern_hooded",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 73,
+    "id": 71,
     "loot_table_key": "loot_wyrostki_spod_mlyna_9",
     "item_key": null,
     "consumable_key": null,
@@ -803,18 +781,18 @@
     "game_item_key": null
   },
   {
-    "id": 74,
+    "id": 72,
     "loot_table_key": "loot_halwen_herszt_wyrostkow",
     "item_key": "small_chest",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 75,
+    "id": 73,
     "loot_table_key": "loot_halwen_herszt_wyrostkow",
     "item_key": "tpl135_potion_stamina",
     "consumable_key": null,
@@ -825,7 +803,7 @@
     "game_item_key": null
   },
   {
-    "id": 76,
+    "id": 74,
     "loot_table_key": "loot_wyrostki_spod_mlyna_10",
     "item_key": null,
     "consumable_key": "potion_stamina",
@@ -836,7 +814,7 @@
     "game_item_key": null
   },
   {
-    "id": 77,
+    "id": 75,
     "loot_table_key": "loot_wit_srogi",
     "item_key": "mapa_kresow",
     "consumable_key": null,
@@ -847,7 +825,7 @@
     "game_item_key": null
   },
   {
-    "id": 78,
+    "id": 76,
     "loot_table_key": "loot_wit_srogi",
     "item_key": "bear_hide",
     "consumable_key": null,
@@ -858,7 +836,7 @@
     "game_item_key": null
   },
   {
-    "id": 79,
+    "id": 77,
     "loot_table_key": "loot_wit_srogi",
     "item_key": null,
     "consumable_key": "smoke_bomb",
@@ -869,7 +847,7 @@
     "game_item_key": null
   },
   {
-    "id": 80,
+    "id": 78,
     "loot_table_key": "loot_wyrostki_spod_mlyna_11",
     "item_key": "padded_armor",
     "consumable_key": null,
@@ -880,7 +858,7 @@
     "game_item_key": null
   },
   {
-    "id": 81,
+    "id": 79,
     "loot_table_key": "loot_herszt_wyrostkow_harl",
     "item_key": "breastplate",
     "consumable_key": null,
@@ -891,18 +869,18 @@
     "game_item_key": null
   },
   {
-    "id": 82,
+    "id": 80,
     "loot_table_key": "loot_herszt_wyrostkow_harl",
     "item_key": "spyglass",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 83,
+    "id": 81,
     "loot_table_key": "loot_czarny_hask",
     "item_key": null,
     "consumable_key": "scroll_shield",
@@ -913,7 +891,7 @@
     "game_item_key": null
   },
   {
-    "id": 84,
+    "id": 82,
     "loot_table_key": "loot_czarny_hask",
     "item_key": "dragon_scale_shard",
     "consumable_key": null,
@@ -924,7 +902,7 @@
     "game_item_key": null
   },
   {
-    "id": 85,
+    "id": 83,
     "loot_table_key": "loot_rykar_wilkowy",
     "item_key": "dragon_scale_shard",
     "consumable_key": null,
@@ -935,7 +913,7 @@
     "game_item_key": null
   },
   {
-    "id": 86,
+    "id": 84,
     "loot_table_key": "loot_rykar_wilkowy",
     "item_key": null,
     "consumable_key": "potion_giant_strength",
@@ -946,7 +924,7 @@
     "game_item_key": null
   },
   {
-    "id": 87,
+    "id": 85,
     "loot_table_key": "loot_rykar_wilkowy",
     "item_key": null,
     "consumable_key": null,
@@ -957,7 +935,7 @@
     "game_item_key": null
   },
   {
-    "id": 88,
+    "id": 86,
     "loot_table_key": "loot_trupiarz_bezimienny",
     "item_key": null,
     "consumable_key": null,
@@ -968,18 +946,18 @@
     "game_item_key": null
   },
   {
-    "id": 89,
+    "id": 87,
     "loot_table_key": "loot_kultysta_cienia_pod_popiolem",
     "item_key": "hooded_cloak",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 90,
+    "id": 88,
     "loot_table_key": "loot_kultysta_cienia_pod_popiolem",
     "item_key": "great_helm",
     "consumable_key": null,
@@ -990,29 +968,29 @@
     "game_item_key": null
   },
   {
-    "id": 91,
+    "id": 89,
     "loot_table_key": "loot_wynaturzony_trup",
     "item_key": "dice_set",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 92,
+    "id": 90,
     "loot_table_key": "loot_kultysta_popiolu",
     "item_key": "hourglass",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 93,
+    "id": 91,
     "loot_table_key": "loot_kultysta_popiolu",
     "item_key": "tpl132_potion_healing_standard",
     "consumable_key": null,
@@ -1023,18 +1001,18 @@
     "game_item_key": null
   },
   {
-    "id": 94,
+    "id": 92,
     "loot_table_key": "loot_halbrecht_czarny_poborca",
     "item_key": "fishing_net",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 95,
+    "id": 93,
     "loot_table_key": "loot_halbrecht_czarny_poborca",
     "item_key": "tpl138_potion_resistance",
     "consumable_key": null,
@@ -1045,18 +1023,18 @@
     "game_item_key": null
   },
   {
-    "id": 96,
+    "id": 94,
     "loot_table_key": "loot_brat_gerwazy",
     "item_key": "spyglass",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 97,
+    "id": 95,
     "loot_table_key": "loot_brat_gerwazy",
     "item_key": "potion_haste",
     "consumable_key": null,
@@ -1067,7 +1045,7 @@
     "game_item_key": null
   },
   {
-    "id": 98,
+    "id": 96,
     "loot_table_key": "loot_brat_gerwazy",
     "item_key": null,
     "consumable_key": null,
@@ -1078,7 +1056,7 @@
     "game_item_key": null
   },
   {
-    "id": 99,
+    "id": 97,
     "loot_table_key": "loot_prior_severin",
     "item_key": null,
     "consumable_key": "scroll_fireball",
@@ -1089,7 +1067,7 @@
     "game_item_key": null
   },
   {
-    "id": 100,
+    "id": 98,
     "loot_table_key": "loot_prior_severin",
     "item_key": null,
     "consumable_key": "potion_mana_major",
@@ -1100,7 +1078,7 @@
     "game_item_key": null
   },
   {
-    "id": 101,
+    "id": 99,
     "loot_table_key": "loot_prior_severin",
     "item_key": "potion_mana_major",
     "consumable_key": null,
@@ -1111,18 +1089,18 @@
     "game_item_key": null
   },
   {
-    "id": 102,
+    "id": 100,
     "loot_table_key": "loot_popiolowy_straznik",
     "item_key": "manacles",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 103,
+    "id": 101,
     "loot_table_key": "loot_bezimienny_trup",
     "item_key": null,
     "consumable_key": null,
@@ -1133,7 +1111,7 @@
     "game_item_key": null
   },
   {
-    "id": 104,
+    "id": 102,
     "loot_table_key": "loot_kultowy_tropiciel",
     "item_key": "potion_haste",
     "consumable_key": null,
@@ -1144,7 +1122,7 @@
     "game_item_key": null
   },
   {
-    "id": 105,
+    "id": 103,
     "loot_table_key": "loot_kultowy_tropiciel",
     "item_key": "tpl129_mana_potion",
     "consumable_key": null,
@@ -1155,7 +1133,7 @@
     "game_item_key": null
   },
   {
-    "id": 106,
+    "id": 104,
     "loot_table_key": "loot_marek_voss_final",
     "item_key": null,
     "consumable_key": "vial_of_acid",
@@ -1166,7 +1144,7 @@
     "game_item_key": null
   },
   {
-    "id": 107,
+    "id": 105,
     "loot_table_key": "loot_marek_voss_final",
     "item_key": "potion_strength",
     "consumable_key": null,
@@ -1177,7 +1155,7 @@
     "game_item_key": null
   },
   {
-    "id": 108,
+    "id": 106,
     "loot_table_key": "loot_kultysta_popiolu_2",
     "item_key": "mapa_okolic",
     "consumable_key": null,
@@ -1188,7 +1166,7 @@
     "game_item_key": null
   },
   {
-    "id": 109,
+    "id": 107,
     "loot_table_key": "loot_kultysta_popiolu_2",
     "item_key": "hide_armor",
     "consumable_key": null,
@@ -1199,7 +1177,7 @@
     "game_item_key": null
   },
   {
-    "id": 110,
+    "id": 108,
     "loot_table_key": "loot_spaczony_prorok",
     "item_key": "iron_spikes_10",
     "consumable_key": null,
@@ -1210,18 +1188,18 @@
     "game_item_key": null
   },
   {
-    "id": 111,
+    "id": 109,
     "loot_table_key": "loot_spaczony_prorok",
     "item_key": "fishing_rod",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 30,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 112,
+    "id": 110,
     "loot_table_key": "loot_bezimienny_trupiarz",
     "item_key": null,
     "consumable_key": "scroll_magic_bolt",
@@ -1232,7 +1210,7 @@
     "game_item_key": null
   },
   {
-    "id": 113,
+    "id": 111,
     "loot_table_key": "loot_kultysta_popiolu_3",
     "item_key": "arrows",
     "consumable_key": null,
@@ -1243,7 +1221,7 @@
     "game_item_key": null
   },
   {
-    "id": 114,
+    "id": 112,
     "loot_table_key": "loot_kultysta_popiolu_3",
     "item_key": "leather_cap",
     "consumable_key": null,
@@ -1254,7 +1232,7 @@
     "game_item_key": null
   },
   {
-    "id": 115,
+    "id": 113,
     "loot_table_key": "loot_moc_rozbitej_gwiazdy",
     "item_key": null,
     "consumable_key": "potion_haste",
@@ -1265,7 +1243,7 @@
     "game_item_key": null
   },
   {
-    "id": 116,
+    "id": 114,
     "loot_table_key": "loot_kultysta_cienia_pod_popiolem_2",
     "item_key": "potion_mana_minor",
     "consumable_key": null,
@@ -1276,7 +1254,7 @@
     "game_item_key": null
   },
   {
-    "id": 117,
+    "id": 115,
     "loot_table_key": "loot_kultysta_cienia_pod_popiolem_2",
     "item_key": null,
     "consumable_key": null,
@@ -1287,7 +1265,7 @@
     "game_item_key": null
   },
   {
-    "id": 118,
+    "id": 116,
     "loot_table_key": "loot_popielny_trup_straznika",
     "item_key": "scale_mail",
     "consumable_key": null,
@@ -1298,7 +1276,7 @@
     "game_item_key": null
   },
   {
-    "id": 119,
+    "id": 117,
     "loot_table_key": "loot_popielny_trup_straznika",
     "item_key": "focus_crystal",
     "consumable_key": null,
@@ -1309,18 +1287,18 @@
     "game_item_key": null
   },
   {
-    "id": 120,
+    "id": 118,
     "loot_table_key": "loot_szepczacy_odlamek",
     "item_key": "backpack",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 121,
+    "id": 119,
     "loot_table_key": "loot_szepczacy_odlamek",
     "item_key": "mana_potion",
     "consumable_key": null,
@@ -1331,18 +1309,18 @@
     "game_item_key": null
   },
   {
-    "id": 122,
+    "id": 120,
     "loot_table_key": "loot_bezimienny_trup_2",
     "item_key": "belt_pouch",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 123,
+    "id": 121,
     "loot_table_key": "loot_bezimienny_trup_2",
     "item_key": "padded_armor",
     "consumable_key": null,
@@ -1353,7 +1331,7 @@
     "game_item_key": null
   },
   {
-    "id": 124,
+    "id": 122,
     "loot_table_key": "loot_kultysta_popiolu_4",
     "item_key": "tpl142_alchemist_fire",
     "consumable_key": null,
@@ -1364,7 +1342,7 @@
     "game_item_key": null
   },
   {
-    "id": 125,
+    "id": 123,
     "loot_table_key": "loot_popielny_egzekutor",
     "item_key": "half_plate",
     "consumable_key": null,
@@ -1375,7 +1353,7 @@
     "game_item_key": null
   },
   {
-    "id": 126,
+    "id": 124,
     "loot_table_key": "loot_popielny_egzekutor",
     "item_key": null,
     "consumable_key": null,
@@ -1386,18 +1364,18 @@
     "game_item_key": null
   },
   {
-    "id": 127,
+    "id": 125,
     "loot_table_key": "loot_popielny_straznik_2",
     "item_key": "lute",
     "consumable_key": null,
     "weapon_key": null,
-    "weight": 45,
+    "weight": 8,
     "qty_min": 1,
     "qty_max": 1,
     "game_item_key": null
   },
   {
-    "id": 128,
+    "id": 126,
     "loot_table_key": "loot_szczury_grobowe",
     "item_key": "potion_stealth",
     "consumable_key": null,
@@ -1408,7 +1386,7 @@
     "game_item_key": null
   },
   {
-    "id": 129,
+    "id": 127,
     "loot_table_key": "loot_kultowy_zbieracz",
     "item_key": null,
     "consumable_key": "focus_crystal",
@@ -1419,777 +1397,7 @@
     "game_item_key": null
   },
   {
-    "id": 130,
-    "loot_table_key": "loot_bandit",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 131,
-    "loot_table_key": "loot_bandyta_uliczny",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 132,
-    "loot_table_key": "loot_bezimienny_trup",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 133,
-    "loot_table_key": "loot_bezimienny_trup_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 134,
-    "loot_table_key": "loot_bezimienny_trupiarz",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 135,
-    "loot_table_key": "loot_beznamienny_straznik",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 136,
-    "loot_table_key": "loot_brat_gerwazy",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 137,
-    "loot_table_key": "loot_czarny_hask",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 138,
-    "loot_table_key": "loot_enemy",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 139,
-    "loot_table_key": "loot_goblin",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 140,
-    "loot_table_key": "loot_goblin_u31",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 141,
-    "loot_table_key": "loot_guard",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 142,
-    "loot_table_key": "loot_halbrecht_czarny_poborca",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 143,
-    "loot_table_key": "loot_halwen_herszt_wyrostkow",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 144,
-    "loot_table_key": "loot_herszt_wyrostkow",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 145,
-    "loot_table_key": "loot_herszt_wyrostkow_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 146,
-    "loot_table_key": "loot_herszt_wyrostkow_3",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 147,
-    "loot_table_key": "loot_herszt_wyrostkow_4",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 148,
-    "loot_table_key": "loot_herszt_wyrostkow_harl",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 149,
-    "loot_table_key": "loot_kultowy_tropiciel",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 150,
-    "loot_table_key": "loot_kultowy_zbieracz",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 151,
-    "loot_table_key": "loot_kultysta_cienia_pod_popiolem",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 152,
-    "loot_table_key": "loot_kultysta_cienia_pod_popiolem_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 153,
-    "loot_table_key": "loot_kultysta_popiolu",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 154,
-    "loot_table_key": "loot_kultysta_popiolu_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 155,
-    "loot_table_key": "loot_kultysta_popiolu_3",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 156,
-    "loot_table_key": "loot_kultysta_popiolu_4",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 157,
-    "loot_table_key": "loot_marek_voss_final",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 158,
-    "loot_table_key": "loot_moc_rozbitej_gwiazdy",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 159,
-    "loot_table_key": "loot_nozownik_testowy",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 160,
-    "loot_table_key": "loot_ogr",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 161,
-    "loot_table_key": "loot_old_man",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 162,
-    "loot_table_key": "loot_orc",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 163,
-    "loot_table_key": "loot_poor",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 164,
-    "loot_table_key": "loot_popielny_egzekutor",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 165,
-    "loot_table_key": "loot_popielny_straznik",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 166,
-    "loot_table_key": "loot_popielny_straznik_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 167,
-    "loot_table_key": "loot_popielny_trup_straznika",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 168,
-    "loot_table_key": "loot_popielny_wyznawca",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 169,
-    "loot_table_key": "loot_popiolowy_straznik",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 170,
-    "loot_table_key": "loot_rich",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 171,
-    "loot_table_key": "loot_s2_pw_bandyta_lucznik",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 172,
-    "loot_table_key": "loot_s2_pw_custom_stats",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 173,
-    "loot_table_key": "loot_s4_pw_kaplan",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 174,
-    "loot_table_key": "loot_s4_pw_osilek",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 175,
-    "loot_table_key": "loot_skeleton",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 176,
-    "loot_table_key": "loot_spaczony_prorok",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 177,
-    "loot_table_key": "loot_standard",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 178,
-    "loot_table_key": "loot_szczury_grobowe",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 179,
-    "loot_table_key": "loot_szepczacy_odlamek",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 180,
-    "loot_table_key": "loot_thug",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 181,
-    "loot_table_key": "loot_troll",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 182,
-    "loot_table_key": "loot_trupiarz_bezimienny",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 183,
-    "loot_table_key": "loot_unknown_attacker",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 184,
-    "loot_table_key": "loot_wit_srogi",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 185,
-    "loot_table_key": "loot_witek_lysek",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 186,
-    "loot_table_key": "loot_witek_mlynski_enemy",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 187,
-    "loot_table_key": "loot_wolf",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 188,
-    "loot_table_key": "loot_wynaturzony_trup",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 189,
-    "loot_table_key": "loot_wyrostki_spod_mlyna",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 190,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_10",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 191,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_11",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 192,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_2",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 193,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_3",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 194,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_4",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 195,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_5",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 196,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_6",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 197,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_7",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 198,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_8",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 199,
-    "loot_table_key": "loot_wyrostki_spod_mlyna_9",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 200,
+    "id": 128,
     "loot_table_key": "loot_kolekcjoner_kosci",
     "item_key": "scale_mail",
     "consumable_key": null,
@@ -2200,7 +1408,7 @@
     "game_item_key": null
   },
   {
-    "id": 201,
+    "id": 129,
     "loot_table_key": "loot_kolekcjoner_kosci",
     "item_key": "bear_hide",
     "consumable_key": null,
@@ -2211,7 +1419,7 @@
     "game_item_key": null
   },
   {
-    "id": 202,
+    "id": 130,
     "loot_table_key": "loot_brokk_zelazny_slad",
     "item_key": null,
     "consumable_key": null,
@@ -2222,7 +1430,7 @@
     "game_item_key": null
   },
   {
-    "id": 203,
+    "id": 131,
     "loot_table_key": "loot_serce_rezonatora",
     "item_key": "potion_giant_strength",
     "consumable_key": null,
@@ -2233,7 +1441,7 @@
     "game_item_key": null
   },
   {
-    "id": 204,
+    "id": 132,
     "loot_table_key": "loot_serce_rezonatora",
     "item_key": "dragon_scale_shard",
     "consumable_key": null,
@@ -2244,7 +1452,7 @@
     "game_item_key": null
   },
   {
-    "id": 205,
+    "id": 133,
     "loot_table_key": "loot_serce_rezonatora",
     "item_key": null,
     "consumable_key": null,
@@ -2255,29 +1463,7 @@
     "game_item_key": null
   },
   {
-    "id": 206,
-    "loot_table_key": "loot_brokk_zelazny_slad",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 207,
-    "loot_table_key": "loot_kolekcjoner_kosci",
-    "item_key": "fragment_mapy_skarbow",
-    "consumable_key": null,
-    "weapon_key": null,
-    "weight": 4,
-    "qty_min": 1,
-    "qty_max": 1,
-    "game_item_key": "fragment_mapy_skarbow"
-  },
-  {
-    "id": 208,
+    "id": 134,
     "loot_table_key": "loot_tier_weak",
     "item_key": "torch",
     "consumable_key": null,
@@ -2288,7 +1474,7 @@
     "game_item_key": null
   },
   {
-    "id": 209,
+    "id": 135,
     "loot_table_key": "loot_tier_weak",
     "item_key": "bandage",
     "consumable_key": null,
@@ -2299,7 +1485,7 @@
     "game_item_key": null
   },
   {
-    "id": 210,
+    "id": 136,
     "loot_table_key": "loot_tier_weak",
     "item_key": "healing_herb",
     "consumable_key": null,
@@ -2310,7 +1496,7 @@
     "game_item_key": null
   },
   {
-    "id": 211,
+    "id": 137,
     "loot_table_key": "loot_tier_weak",
     "item_key": "waterskin",
     "consumable_key": null,
@@ -2321,7 +1507,7 @@
     "game_item_key": null
   },
   {
-    "id": 212,
+    "id": 138,
     "loot_table_key": "loot_tier_weak",
     "item_key": "potion_healing_minor",
     "consumable_key": null,
@@ -2332,7 +1518,7 @@
     "game_item_key": null
   },
   {
-    "id": 213,
+    "id": 139,
     "loot_table_key": "loot_tier_weak",
     "item_key": null,
     "consumable_key": null,
@@ -2343,7 +1529,29 @@
     "game_item_key": null
   },
   {
-    "id": 214,
+    "id": 140,
+    "loot_table_key": "loot_tier_weak",
+    "item_key": "kiel_szczurzy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 15,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 141,
+    "loot_table_key": "loot_tier_weak",
+    "item_key": "korzen_zmornika",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 12,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 142,
     "loot_table_key": "loot_tier_standard",
     "item_key": "bandage",
     "consumable_key": null,
@@ -2354,7 +1562,7 @@
     "game_item_key": null
   },
   {
-    "id": 215,
+    "id": 143,
     "loot_table_key": "loot_tier_standard",
     "item_key": "potion_healing_minor",
     "consumable_key": null,
@@ -2365,7 +1573,7 @@
     "game_item_key": null
   },
   {
-    "id": 216,
+    "id": 144,
     "loot_table_key": "loot_tier_standard",
     "item_key": "rope_hemp",
     "consumable_key": null,
@@ -2376,7 +1584,7 @@
     "game_item_key": null
   },
   {
-    "id": 217,
+    "id": 145,
     "loot_table_key": "loot_tier_standard",
     "item_key": "torch",
     "consumable_key": null,
@@ -2387,7 +1595,7 @@
     "game_item_key": null
   },
   {
-    "id": 218,
+    "id": 146,
     "loot_table_key": "loot_tier_standard",
     "item_key": "potion_healing_standard",
     "consumable_key": null,
@@ -2398,7 +1606,7 @@
     "game_item_key": null
   },
   {
-    "id": 219,
+    "id": 147,
     "loot_table_key": "loot_tier_standard",
     "item_key": "antidote",
     "consumable_key": null,
@@ -2409,7 +1617,7 @@
     "game_item_key": null
   },
   {
-    "id": 220,
+    "id": 148,
     "loot_table_key": "loot_tier_standard",
     "item_key": null,
     "consumable_key": null,
@@ -2420,7 +1628,51 @@
     "game_item_key": null
   },
   {
-    "id": 221,
+    "id": 149,
+    "loot_table_key": "loot_tier_standard",
+    "item_key": "wolf_pelt",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 15,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 150,
+    "loot_table_key": "loot_tier_standard",
+    "item_key": "ruda_zelaza",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 14,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 151,
+    "loot_table_key": "loot_tier_standard",
+    "item_key": "korzen_zmornika",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 12,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 152,
+    "loot_table_key": "loot_tier_standard",
+    "item_key": "kapelusz_bledunia",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 10,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 153,
     "loot_table_key": "loot_tier_elite",
     "item_key": "potion_healing_standard",
     "consumable_key": null,
@@ -2431,7 +1683,7 @@
     "game_item_key": null
   },
   {
-    "id": 222,
+    "id": 154,
     "loot_table_key": "loot_tier_elite",
     "item_key": "bandage",
     "consumable_key": null,
@@ -2442,7 +1694,7 @@
     "game_item_key": null
   },
   {
-    "id": 223,
+    "id": 155,
     "loot_table_key": "loot_tier_elite",
     "item_key": "potion_mana_standard",
     "consumable_key": null,
@@ -2453,7 +1705,7 @@
     "game_item_key": null
   },
   {
-    "id": 224,
+    "id": 156,
     "loot_table_key": "loot_tier_elite",
     "item_key": "antidote",
     "consumable_key": null,
@@ -2464,7 +1716,7 @@
     "game_item_key": null
   },
   {
-    "id": 225,
+    "id": 157,
     "loot_table_key": "loot_tier_elite",
     "item_key": "potion_resistance",
     "consumable_key": null,
@@ -2475,7 +1727,7 @@
     "game_item_key": null
   },
   {
-    "id": 226,
+    "id": 158,
     "loot_table_key": "loot_tier_elite",
     "item_key": "oil_flask",
     "consumable_key": null,
@@ -2486,7 +1738,7 @@
     "game_item_key": null
   },
   {
-    "id": 227,
+    "id": 159,
     "loot_table_key": "loot_tier_elite",
     "item_key": null,
     "consumable_key": null,
@@ -2497,7 +1749,7 @@
     "game_item_key": null
   },
   {
-    "id": 228,
+    "id": 160,
     "loot_table_key": "loot_tier_elite",
     "item_key": "scale_mail",
     "consumable_key": null,
@@ -2508,7 +1760,51 @@
     "game_item_key": null
   },
   {
-    "id": 229,
+    "id": 161,
+    "loot_table_key": "loot_tier_elite",
+    "item_key": "bear_hide",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 14,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 162,
+    "loot_table_key": "loot_tier_elite",
+    "item_key": "ruda_miedzi",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 12,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 163,
+    "loot_table_key": "loot_tier_elite",
+    "item_key": "esencja_cienia",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 10,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 164,
+    "loot_table_key": "loot_tier_elite",
+    "item_key": "odprysk_obsydianu",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 8,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 165,
     "loot_table_key": "loot_tier_boss",
     "item_key": "potion_healing_standard",
     "consumable_key": null,
@@ -2519,7 +1815,7 @@
     "game_item_key": null
   },
   {
-    "id": 230,
+    "id": 166,
     "loot_table_key": "loot_tier_boss",
     "item_key": "potion_healing_major",
     "consumable_key": null,
@@ -2530,7 +1826,7 @@
     "game_item_key": null
   },
   {
-    "id": 231,
+    "id": 167,
     "loot_table_key": "loot_tier_boss",
     "item_key": "potion_mana_standard",
     "consumable_key": null,
@@ -2541,7 +1837,7 @@
     "game_item_key": null
   },
   {
-    "id": 232,
+    "id": 168,
     "loot_table_key": "loot_tier_boss",
     "item_key": "potion_resistance",
     "consumable_key": null,
@@ -2552,7 +1848,7 @@
     "game_item_key": null
   },
   {
-    "id": 233,
+    "id": 169,
     "loot_table_key": "loot_tier_boss",
     "item_key": null,
     "consumable_key": null,
@@ -2563,7 +1859,7 @@
     "game_item_key": null
   },
   {
-    "id": 234,
+    "id": 170,
     "loot_table_key": "loot_tier_boss",
     "item_key": "scale_mail",
     "consumable_key": null,
@@ -2574,7 +1870,7 @@
     "game_item_key": null
   },
   {
-    "id": 235,
+    "id": 171,
     "loot_table_key": "loot_tier_boss",
     "item_key": "holy_water",
     "consumable_key": null,
@@ -2582,6 +1878,226 @@
     "weight": 15,
     "qty_min": 1,
     "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 172,
+    "loot_table_key": "loot_tier_boss",
+    "item_key": "esencja_cienia",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 15,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 173,
+    "loot_table_key": "loot_tier_boss",
+    "item_key": "esencja_upiora",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 12,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 174,
+    "loot_table_key": "loot_tier_boss",
+    "item_key": "odprysk_obsydianu",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 10,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 175,
+    "loot_table_key": "loot_tier_standard",
+    "item_key": "fragment_mapy_skarbow",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 5,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 176,
+    "loot_table_key": "loot_tier_elite",
+    "item_key": "fragment_mapy_skarbow",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 10,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 177,
+    "loot_table_key": "loot_tier_boss",
+    "item_key": "fragment_mapy_skarbow",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 15,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 178,
+    "loot_table_key": "loot_wolf",
+    "item_key": "kiel_wilczy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 60,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 179,
+    "loot_table_key": "loot_wolf",
+    "item_key": "wolf_pelt",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 45,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 180,
+    "loot_table_key": "loot_rykar_wilkowy",
+    "item_key": "kiel_wilczy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 55,
+    "qty_min": 1,
+    "qty_max": 3,
+    "game_item_key": null
+  },
+  {
+    "id": 181,
+    "loot_table_key": "loot_rykar_wilkowy",
+    "item_key": "wolf_pelt",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 45,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 182,
+    "loot_table_key": "loot_rykar_wilkowy",
+    "item_key": "krew_wilkolaka",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 25,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 183,
+    "loot_table_key": "loot_szczury_grobowe",
+    "item_key": "kiel_szczurzy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 55,
+    "qty_min": 1,
+    "qty_max": 3,
+    "game_item_key": null
+  },
+  {
+    "id": 184,
+    "loot_table_key": "loot_skeleton",
+    "item_key": "bone_dust",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 60,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 185,
+    "loot_table_key": "loot_giant_spider",
+    "item_key": "gruczol_pajeczy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 60,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 186,
+    "loot_table_key": "loot_giant_spider",
+    "item_key": "jedwab_pajeczy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 50,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 187,
+    "loot_table_key": "loot_cave_bear",
+    "item_key": "bear_hide",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 60,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 188,
+    "loot_table_key": "loot_cave_bear",
+    "item_key": "sadlo_niedzwiedzie",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 50,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 189,
+    "loot_table_key": "loot_cave_bear",
+    "item_key": "kiel_wilczy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 20,
+    "qty_min": 1,
+    "qty_max": 1,
+    "game_item_key": null
+  },
+  {
+    "id": 190,
+    "loot_table_key": "loot_giant_rat",
+    "item_key": "kiel_szczurzy",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 60,
+    "qty_min": 1,
+    "qty_max": 2,
+    "game_item_key": null
+  },
+  {
+    "id": 191,
+    "loot_table_key": "loot_lizardman",
+    "item_key": "luska_jaszczura",
+    "consumable_key": null,
+    "weapon_key": null,
+    "weight": 55,
+    "qty_min": 1,
+    "qty_max": 2,
     "game_item_key": null
   }
 ]
