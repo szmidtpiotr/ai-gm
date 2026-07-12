@@ -22,11 +22,13 @@ import {
   useCampaigns,
 } from "@/hooks/useGameData";
 import { apiFetch } from "@/lib/api";
+import { usePublicSkills, type PublicSkill } from "@/hooks/useSheetData";
 import { useAppStore } from "@/store/appStore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  ALL_SKILL_ROWS,
   ARCHETYPE_BONUS,
   RANK_LABEL,
   STAT_KEYS,
@@ -41,6 +43,7 @@ import {
   skillMeta,
   statMod,
   type Archetype,
+  type SkillRow,
   type Race,
   type StatKey,
 } from "@/lib/creation";
@@ -93,6 +96,9 @@ export default function CreateCharacter() {
   const createChar = useCreateCharacter();
   const genIdentity = useGenerateIdentity();
   const finalize = useFinalizeSheet();
+  // Pełny żywy katalog skilli — pula zamiany (↔) w kroku Umiejętności musi
+  // oferować cały game_config_skills, nie tylko rolowaną legacy-pulę arkusza.
+  const { data: skillCatalog } = usePublicSkills();
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -334,6 +340,7 @@ export default function CreateCharacter() {
         )}
         {step === 3 && (
           <StepSkills
+            catalog={skillCatalog ?? []}
             snapshot={snapshot}
             levels={levels}
             swapMap={swapMap}
@@ -677,6 +684,7 @@ function Derived({
 
 // ── Krok 4: Umiejętności ────────────────────────────────────────────────────
 function StepSkills({
+  catalog,
   snapshot,
   levels,
   swapMap,
@@ -687,6 +695,7 @@ function StepSkills({
   onRevert,
   onReset,
 }: {
+  catalog: PublicSkill[];
   snapshot: Record<string, number>;
   levels: Record<string, number>;
   swapMap: Record<string, string>;
@@ -707,9 +716,24 @@ function StepSkills({
         a.key.localeCompare(b.key),
     );
   const visible = new Set(slots.map((r) => swapMap[r.key] || r.key));
-  const candidates = Object.keys(snapshot)
+  // Pula zamiany = cały żywy katalog (game_config_skills) + statyczne etykiety +
+  // klucze arkusza, nie tylko rolowana legacy-pula. Bez tego czarodziej (i każdy
+  // archetyp) widział ~10 legacy-skilli zamiast pełnego katalogu silnika.
+  const catMeta = new Map<string, SkillRow>(
+    catalog.map((s) => [
+      s.key,
+      { key: s.key, label: s.label || s.key, stat: s.linked_stat || "?", hint: s.description || "" },
+    ]),
+  );
+  const meta = (k: string): SkillRow => catMeta.get(k) ?? skillMeta(k);
+  const universe = new Set<string>([
+    ...catalog.map((s) => s.key),
+    ...ALL_SKILL_ROWS.map((r) => r.key),
+    ...Object.keys(snapshot),
+  ]);
+  const candidates = [...universe]
     .filter((k) => !Number(snapshot[k] || 0) && !visible.has(k))
-    .map(skillMeta)
+    .map(meta)
     .sort((a, b) => a.label.localeCompare(b.label));
 
   return (
@@ -727,7 +751,7 @@ function StepSkills({
           const orig = slot.key;
           const swapped = orig in swapMap;
           const curKey = swapped ? swapMap[orig] : orig;
-          const cur = skillMeta(curKey);
+          const cur = meta(curKey);
           const rank = levels[orig] ?? Number(snapshot[orig] || 0);
 
           if (swapSlot === orig) {
