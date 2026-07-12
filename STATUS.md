@@ -6,7 +6,7 @@
 >
 > Trzy sekcje: **CO ROBIMY TERAZ** · **OSTATNIO ZROBIONE** · **UWAŻAJ (pułapki)**.
 
-_Ostatnia aktualizacja: 2026-07-12 (sesja BL-B2/B3 #1334+#1335 — rebalans dropu + komponenty, Krok 8 / bramka S8)_
+_Ostatnia aktualizacja: 2026-07-12 (sesja BL-C1 #1336 — rzemiosło core: przepisy + crafting_service, Krok 9 / bramka S9)_
 
 ---
 
@@ -27,6 +27,7 @@ _Ostatnia aktualizacja: 2026-07-12 (sesja BL-B2/B3 #1334+#1335 — rebalans drop
 ## ✅ OSTATNIO ZROBIONE (ostatnie sesje)
 
 **FAZA BL — Bestie i Łupy 2.0 (milestone #26):** silnik kompozycyjny spotkań + loot 2.0.
+- **#1336 BL-C1 (Krok 9 / bramka S9)** — rzemiosło core (light, wg #1199). Nowa tabela `game_config_recipes` (klucz, `inputs_json` `[{item_key,qty}]`, `output_type`, `output_key`, `service_cost_gold`, `crafter_type` smith/herbalist, `is_hidden` DEFAULT 0 — pole pod BL-D2, tu zawsze 0) + seed 3 przepisów startowych: **mikstura z ziół** (2× `healing_herb` + `korzen_zmornika` → `potion_healing_minor`, 5 gp), **ostrzenie broni +1 dmg** (`kiel_wilczy` + `ruda_zelaza`, afiks `craft_hone` na egzemplarzu — **NIE kumuluje się**, 15 gp), **naprawa pancerza** (`wolf_pelt`×2 → odnowienie durability, 8 gp). `crafting_service.py`: walidacja komponentów → konsumpcja z `character_inventory` → wynik; zniżka krasnoluda (kowalskie oko #969, reuse `DWARF_SHOP_DISCOUNT` 15%) na koszt usługi. Kolumna `npcs.crafter_type` + backfill z heurystyki nazwy (zielar/kowal). Endpointy `GET /api/locations/{id}/crafting` (przepisy lokalnych rzemieślników) + `POST /api/characters/{id}/craft`. 6/6 pytest; live na Demo u zielarki Agaty (brzezino) — krasnolud craft mikstury, koszt 5→4 gp (zniżka), komponenty skonsumowane, mikstura w ekwipunku. Wymagało S8 (#1335 komponenty). review+needs-testing.
 - **#1334 BL-B2 + #1335 BL-B3 (Krok 8 / bramka S8)** — rebalans dropu + komponenty rzemieślnicze. #1334: `fragment_mapy_skarbow` wycięty z 72 tabel per-wróg → TYLKO tierowe (std 5/elite 10/boss 15); narracyjne śmieci (klepsydra/lutnia/wędka) wagi 30-45 → cap 8; standard ≥40% użytkowych. #1335: kolumny `is_component`/`component_type`/`created_by` na `game_config_items`; 20 komponentów (14 nowych Kresy, `created_by='seed'`) — kły/skóry/rudy/esencje/zioła; wpięcie do loot tierowego + tematycznie per-wróg (wilk→kieł/skóra, pająk→gruczoł, szkielet→pył); **zwierzęta dropią komponenty zamiast złota** (loot_wolf/spider/bear/rat gold=0); ŻAR ekwipunek badge 🧩 + sekcja Komponenty; Smart Entry pola component. 2 skrypty idempotentne; pytest 10/10; wolf 30 rzutów → komponenty, gold=0. Wymagało S7 (#1333). review+needs-testing.
 - **#1333 BL-B1 (Krok 7 / bramka S7)** — loot tierowy: drop wroga = **unia** tabeli per-wróg (unikaty) + wspólnej tabeli tierowej (`loot_tier_weak/standard/elite/boss`), deduplikacja po kluczu. Migracja idempotentna wycięła 52 generyki z 79 tabel per-wróg → seed 259→235 wpisów. `loot_tier` bywa zaśmiecony słowami loch-tierów → fallback na enum `tier`. 6/6 pytest, realny drop na Demo. Wymagało S6 (#1345 SMOKE-A pool-widen, zaliczone). review+needs-testing.
 - Wcześniej: #1345 S6 (pool-widen), #1332 rangi wroga, #1331 Power Score, #1330/#1329 admin/anti-repeat.

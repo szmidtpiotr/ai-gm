@@ -39,6 +39,7 @@ from app.api import (
     shop,
     services_shop,
 )
+from app.api.crafting import router as crafting_router
 from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
 from app.api.version import router as version_router
@@ -843,6 +844,7 @@ app.include_router(campaign_helpme.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(combat.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+app.include_router(crafting_router, prefix="/api")  # #1336 BL-C1 — rzemiosło
 app.include_router(inventory.router, prefix="/api")
 app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")

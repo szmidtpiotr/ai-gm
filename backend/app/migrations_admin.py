@@ -6467,6 +6467,115 @@ def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
         logger.warning("treasure_loot_seed_skipped", error=str(e))
 
 
+def _ensure_recipes_schema(conn: sqlite3.Connection) -> None:
+    """#1336 BL-C1 — rzemiosło core: tabela przepisów + seed startowy.
+
+    game_config_recipes: przepis = komponenty (inputs_json) → wynik (output_*),
+    wykonany przez rzemieślnika NPC (crafter_type: smith/herbalist) za opłatą
+    (service_cost_gold). is_hidden — pole pod BL-D2 (przepisy legendarne z lochów),
+    tu ZAWSZE 0. requires_upgrade — hak pod wariant domowy (kuźnia/zielnik w domu
+    bohatera), nullable, nieużywany w tej fazie.
+
+    output_type:
+      • consumable     → mikstura/przedmiot ląduje w character_inventory (output_key)
+      • weapon_upgrade  → jednorazowe +1 dmg na egzemplarzu broni (afiks 'craft_hone',
+                          NIE kumuluje się — jeden na broń)
+      • armor_repair    → naprawa/wzmocnienie pancerza (ze skór)
+
+    Idempotentne: CREATE TABLE IF NOT EXISTS + INSERT OR IGNORE.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS game_config_recipes (
+            key               TEXT PRIMARY KEY,
+            label             TEXT NOT NULL,
+            inputs_json       TEXT NOT NULL DEFAULT '[]',
+            output_type       TEXT NOT NULL DEFAULT 'consumable',
+            output_key        TEXT,
+            output_qty        INTEGER NOT NULL DEFAULT 1,
+            service_cost_gold INTEGER NOT NULL DEFAULT 0,
+            crafter_type      TEXT NOT NULL DEFAULT 'smith',
+            requires_upgrade  TEXT,
+            is_hidden         INTEGER NOT NULL DEFAULT 0,
+            is_active         INTEGER NOT NULL DEFAULT 1,
+            created_by        TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # crafter_type na NPC — który rzemieślnik zna które przepisy (admin step #1199).
+    try:
+        conn.execute("ALTER TABLE npcs ADD COLUMN crafter_type TEXT")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+    # Afiks +1 dmg dla ulepszenia broni — konsumowany przez silnik walki
+    # (_inventory_affix_damage_bonus w combat_service). Jeden na egzemplarz → nie kumuluje.
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json)
+        VALUES ('craft_hone', 'Naostrzona', 1, 'weapon',
+                '{"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":1}]}')
+        """
+    )
+
+    # Seed przepisów startowych (#1199): mikstura z ziół, ostrzenie broni, naprawa pancerza.
+    recipes = [
+        (
+            "herbal_potion_minor",
+            "Mikstura lecznicza (z ziół)",
+            json.dumps([{"item_key": "healing_herb", "qty": 2},
+                        {"item_key": "korzen_zmornika", "qty": 1}], ensure_ascii=False),
+            "consumable", "potion_healing_minor", 1, 5, "herbalist",
+        ),
+        (
+            "weapon_hone_dmg",
+            "Ostrzenie broni (+1 obrażeń)",
+            json.dumps([{"item_key": "kiel_wilczy", "qty": 1},
+                        {"item_key": "ruda_zelaza", "qty": 1}], ensure_ascii=False),
+            "weapon_upgrade", None, 1, 15, "smith",
+        ),
+        (
+            "armor_mend_pelt",
+            "Naprawa pancerza (ze skór)",
+            json.dumps([{"item_key": "wolf_pelt", "qty": 2}], ensure_ascii=False),
+            "armor_repair", None, 1, 8, "smith",
+        ),
+    ]
+    for r in recipes:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_recipes
+            (key, label, inputs_json, output_type, output_key, output_qty,
+             service_cost_gold, crafter_type, is_hidden, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'seed')
+            """,
+            r,
+        )
+
+    # Backfill crafter_type na istniejących NPC z heurystyki nazwy/opisu —
+    # żeby GET /locations/{id}/crafting zwracał przepisy bez ręcznego admina.
+    conn.execute(
+        """
+        UPDATE npcs SET crafter_type = 'herbalist'
+        WHERE crafter_type IS NULL
+          AND (LOWER(label) LIKE '%zielar%' OR LOWER(label) LIKE '%alchemik%'
+               OR LOWER(label) LIKE '%zielni%' OR LOWER(COALESCE(description,'')) LIKE '%zioł%')
+        """
+    )
+    conn.execute(
+        """
+        UPDATE npcs SET crafter_type = 'smith'
+        WHERE crafter_type IS NULL
+          AND (LOWER(label) LIKE '%kowal%' OR LOWER(label) LIKE '%płatnerz%'
+               OR LOWER(label) LIKE '%zbrojmistrz%' OR LOWER(label) LIKE '%rusznikarz%')
+        """
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6630,6 +6739,7 @@ def run_admin_migrations() -> None:
         _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
         _seed_enemy_rank_multipliers(conn)  # #1332 BL-A6 — rangi wariantów wroga
         _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze
+        _ensure_recipes_schema(conn)  # #1336 BL-C1 — przepisy rzemieślnicze + crafter_type
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
