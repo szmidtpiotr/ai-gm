@@ -44,8 +44,10 @@ def _active_campaign(conn):
 def _setup_combat(conn, campaign_id, character_id, *, attacks_per_turn, player_hp=40):
     """Enemy-turn combat with a single enemy whose attacks_per_turn is set.
 
-    Player gets `reaction_used_round=1` so NO reaction window opens this round —
+    Player gets `reaction_locked_round=1` so NO reaction window opens this round —
     the test stays deterministic regardless of the demo character's skills/shield.
+    (#1322: `reaction_used_round` no longer blocks a SINGLE enemy — the lockout flag
+    does, so we use it here to suppress the window in this multiattack test.)
     """
     enemy_slug = "mat_enemy_01"
     combatants = [
@@ -54,7 +56,7 @@ def _setup_combat(conn, campaign_id, character_id, *, attacks_per_turn, player_h
             "hp_current": player_hp, "hp_max": 40, "defense": 11,
             "stats": {"STR": 10, "DEX": 8, "CON": 10},
             "initiative_roll": 5, "conditions": [], "zone": ZONE_ENGAGED,
-            "reaction_used_round": 1,  # blokuje okno reakcji w rundzie 1
+            "reaction_locked_round": 1,  # #1322: blokuje okno reakcji w rundzie 1 (single enemy)
         },
         {
             "id": enemy_slug, "type": "enemy", "enemy_key": "mat_brute",

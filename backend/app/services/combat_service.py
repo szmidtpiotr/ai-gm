@@ -5999,16 +5999,30 @@ def compute_player_attack_dodge_outcome(
     return dodged, (not dodged), dodge_total
 
 
-def _reaction_options(conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int) -> list[str]:
+def _reaction_options(
+    conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int,
+    enemy_count: int | None = None,
+) -> list[str]:
     """SF10 (#633) — które reakcje są DOSTĘPNE dla gracza w tej chwili (model reaktywny).
 
     Zwraca listę opcji do okna reakcji: ``dodge`` (skill dodge ≥ 1), ``shield_block``
     (skill shield_block ≥ 1 + tarcza założona). Pusta lista = brak okna (obrażenia
-    naliczane od razu). Respektuje 1 reakcję/rundę (``reaction_used_round``) i lockout
-    po krytycznej porażce uniku (``reaction_locked_round``)."""
-    if int(p.get("reaction_used_round") or 0) == int(round_n):
-        return []
+    naliczane od razu).
+
+    Limity (#1322):
+      • lockout po KRYTYCZNEJ PORAŻCE uniku (``reaction_locked_round``) — ZAWSZE blokuje
+        całą następną rundę (kara zostaje, decyzja Piotra).
+      • 1 reakcja/rundę (``reaction_used_round``) — tylko przy SWARMIE (≥2 żywych wrogów),
+        żeby nie dało się uchylić przed każdym z wielu ciosów. Przy JEDNYM wrogu reakcja
+        jest dostępna przy każdym jego ataku (single-enemy = brak limitu na rundę).
+        ``enemy_count=None`` → zachowawczo stary limit 1/rundę (gdy wołający nie policzył wrogów).
+    """
+    # Krytyczna porażka uniku — lockout następnej rundy (kara zostaje niezależnie od liczby wrogów).
     if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        return []
+    # Cap 1/rundę tylko przy wielu wrogach; single enemy → reakcja co atak.
+    swarm = enemy_count is None or int(enemy_count) >= 2
+    if swarm and int(p.get("reaction_used_round") or 0) == int(round_n):
         return []
     skills = sheet.get("skills") or {}
     opts: list[str] = []
@@ -6191,6 +6205,7 @@ def _attack_resolve_defense(
     row,
     enemy: dict,
     out: dict,
+    combatants: list[dict] | None = None,
 ) -> bool:
     """Hit determination for enemy attack path.
 
@@ -6199,7 +6214,8 @@ def _attack_resolve_defense(
     Returns hit bool.
     """
     _round_now826 = int(row["round"] or 1)
-    if _reaction_options(conn, ch_id, p, sheet, _round_now826):
+    _enemy_ct = len(_living_enemy_ids(combatants)) if combatants is not None else None
+    if _reaction_options(conn, ch_id, p, sheet, _round_now826, enemy_count=_enemy_ct):
         hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
         out["target_evasion"] = None
     else:
@@ -6246,7 +6262,9 @@ def _attack_try_reaction(
     # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
     # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
     _round_now = int(row["round"] or 1)
-    _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
+    _opts = _reaction_options(
+        conn, ch_id, p, sheet, _round_now, enemy_count=len(_living_enemy_ids(combatants)),
+    )
     if _opts and not p.get("pending_reaction") and not _b16_negated:
         p["pending_reaction"] = {
             "damage": int(dmg),
@@ -7547,7 +7565,7 @@ def _resolve_enemy_attack_turn(
     #  • gracz ma reakcję (dodge/shield + tarcza) → cios dosięga, jedyny test = OKNO REAKCJI
     #    (rozliczane w resolve_reaction / _try_dodge_reaction poniżej); AC pominięte.
     #  • brak reakcji → pojedynczy pasywny unik d20+DEX (symetria z wrogiem).
-    hit = _attack_resolve_defense(attack_roll, raw, pac, conn, ch_id, p, sheet, row, enemy, out)
+    hit = _attack_resolve_defense(attack_roll, raw, pac, conn, ch_id, p, sheet, row, enemy, out, combatants)
 
     _log_dice_roll_combat_resolve(
         source="combat_enemy",
