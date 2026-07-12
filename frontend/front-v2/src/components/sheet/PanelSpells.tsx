@@ -1,7 +1,8 @@
 // F-56 · Czary — banner mana + punkty tajemne + gęsta lista per tier
 // (znane wyróżnione, zablokowane wyszarzone z progiem). Tylko klasy z pulą many.
 // Makieta: zar3-czary.html.
-import { CircleNotch, Lock } from "@phosphor-icons/react";
+import { useState } from "react";
+import { CircleNotch, Lock, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
   groupSpells,
@@ -45,6 +46,7 @@ export function PanelSpells({
   const v = readVitals(sheet);
   const arcane = readArcanePoints(sheet);
   const groups = groupSpells(catalog ?? [], known ?? [], race);
+  const [selected, setSelected] = useState<SpellRow | null>(null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -94,13 +96,28 @@ export function PanelSpells({
               </div>
               <div className="grid grid-cols-1 gap-1.5 lg:grid-cols-2">
                 {g.rows.map((sp) => (
-                  <SpellRowView key={sp.key} sp={sp} unlockLevel={tierUnlockLevel(g.tier)} heroLevel={level} />
+                  <SpellRowView
+                    key={sp.key}
+                    sp={sp}
+                    unlockLevel={tierUnlockLevel(g.tier)}
+                    heroLevel={level}
+                    onSelect={() => setSelected(sp)}
+                  />
                 ))}
               </div>
             </div>
           ))
         )}
       </PanelScroll>
+
+      {selected && (
+        <SpellDetailModal
+          sp={selected}
+          unlockLevel={tierUnlockLevel(selected.tier)}
+          heroLevel={level}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
@@ -109,10 +126,12 @@ function SpellRowView({
   sp,
   unlockLevel,
   heroLevel,
+  onSelect,
 }: {
   sp: SpellRow;
   unlockLevel: number;
   heroLevel: number;
+  onSelect: () => void;
 }) {
   const Icon = SPELL_TYPE_ICON[sp.spell_type] ?? SPELL_TYPE_ICON.narrative;
   const dmg = sp.damage_die ? `${sp.damage_die} obr.` : null;
@@ -120,9 +139,12 @@ function SpellRowView({
   const levelGated = !sp.known && heroLevel < unlockLevel;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${sp.label} — pokaż opis`}
       className={cn(
-        "flex items-center gap-3 rounded-lg border px-3 py-2.5",
+        "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-line-ember",
         sp.known
           ? "border-[rgba(255,122,61,0.2)] bg-player-card"
           : "border-line-soft bg-surface",
@@ -169,6 +191,90 @@ function SpellRowView({
           {levelGated ? `poz. ${unlockLevel}` : "1 pkt"}
         </span>
       )}
+    </button>
+  );
+}
+
+// Modal opisu czaru — otwierany po kliknięciu wiersza. Opis + statystyki.
+function SpellDetailModal({
+  sp,
+  unlockLevel,
+  heroLevel,
+  onClose,
+}: {
+  sp: SpellRow;
+  unlockLevel: number;
+  heroLevel: number;
+  onClose: () => void;
+}) {
+  const Icon = SPELL_TYPE_ICON[sp.spell_type] ?? SPELL_TYPE_ICON.narrative;
+  const dmg = sp.damage_die ? `${sp.damage_die} obr.` : null;
+  const heal = sp.heal_die ? `${sp.heal_die} lecz.` : null;
+  const levelGated = !sp.known && heroLevel < unlockLevel;
+  const desc = (sp.description ?? "").trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-[58] flex items-center justify-center bg-bg/85 p-6 backdrop-blur-sm"
+      data-testid="spell-detail-modal"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-sm rounded-xl border border-line-ember bg-surface p-4 shadow-modal">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Zamknij"
+          className="absolute right-3 top-3 text-text-3 hover:text-text"
+        >
+          <X size={18} />
+        </button>
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border",
+              sp.known
+                ? "border-line-ember bg-[rgba(255,122,61,0.1)] text-ember-glow"
+                : "border-line bg-[rgba(130,167,199,0.1)] text-mana",
+            )}
+          >
+            <Icon size={20} weight={sp.known ? "fill" : "regular"} />
+          </span>
+          <div className="min-w-0">
+            <div className="font-serif text-body font-semibold text-text">{sp.label}</div>
+            <div className="font-ui text-micro uppercase tracking-wide text-text-3">
+              Tier {sp.tier} · {SPELL_TYPE_PL[sp.spell_type] ?? sp.spell_type}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 font-mono text-[11px]">
+          <span className="rounded border border-line-soft px-1.5 py-0.5 text-mana">
+            {sp.mana_cost}◈ mana
+          </span>
+          {dmg && (
+            <span className="rounded border border-line-soft px-1.5 py-0.5 text-danger">{dmg}</span>
+          )}
+          {heal && (
+            <span className="rounded border border-line-soft px-1.5 py-0.5 text-success">{heal}</span>
+          )}
+          {sp.known ? (
+            <span className="rounded border border-line-ember px-1.5 py-0.5 text-ember-glow">
+              R{sp.rank || 1}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded border border-line-soft px-1.5 py-0.5 text-text-3">
+              <Lock size={11} />
+              {levelGated ? `poz. ${unlockLevel}` : "1 pkt"}
+            </span>
+          )}
+        </div>
+
+        <p className="mt-3 font-serif text-label leading-relaxed text-text-2">
+          {desc || "Brak opisu tego czaru."}
+        </p>
+      </div>
     </div>
   );
 }
