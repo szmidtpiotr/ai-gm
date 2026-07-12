@@ -13,6 +13,41 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import type { DefenseReaction } from "@/lib/types";
+
+// WALKA-T2 (#1350): metadane opcji obrony renderowanych z backendowego `defense_options`.
+// Ikona/label/opis per reakcja; kolejność listy = kolejność w `DEFENSE_ORDER`.
+const DEFENSE_META: Record<
+  DefenseReaction,
+  { label: string; desc: string; icon: typeof Shield }
+> = {
+  dodge: {
+    label: "Unik",
+    desc: "test zręczności na następny cios wroga",
+    icon: Wind,
+  },
+  shield_block: {
+    label: "Blok tarczą",
+    desc: "tarcza pochłonie część następnego ciosu",
+    icon: Shield,
+  },
+  arcane_ward: {
+    label: "Arkanowa Bariera (1◈)",
+    desc: "test intelektu za 1 manę — udany neguje cios",
+    icon: Sparkle,
+  },
+  mana_shield: {
+    label: "Tarcza Many",
+    desc: "maną pochłoń obrażenia najbliższego ciosu",
+    icon: DropHalf,
+  },
+};
+const DEFENSE_ORDER: DefenseReaction[] = [
+  "dodge",
+  "shield_block",
+  "arcane_ward",
+  "mana_shield",
+];
 
 export interface SpellAction {
   key: string;
@@ -47,6 +82,7 @@ export function ActionSheet({
   onMove,
   onDeclare,
   onClose,
+  defenseOptions = [],
 }: {
   initialMode?: SheetMode;
   spells: SpellAction[];
@@ -58,8 +94,9 @@ export function ActionSheet({
   onAttack: () => void;
   onCast: (key: string) => void;
   onMove: () => void;
-  onDeclare: (reaction: "dodge" | "shield_block") => void;
+  onDeclare: (reaction: DefenseReaction) => void;
   onClose: () => void;
+  defenseOptions?: string[];
 }) {
   const [mode, setMode] = useState<SheetMode>(initialMode);
   const hasMana = maxMana > 0;
@@ -178,24 +215,29 @@ export function ActionSheet({
 
           {mode === "defense" && (
             <>
-              <Opt
-                variant="eff"
-                icon={<Wind weight="fill" size={19} />}
-                name="Zadeklaruj unik"
-                desc="przygotuj test zręczności na następny cios wroga"
-                cost={null}
-                disabled={busy}
-                onClick={() => onDeclare("dodge")}
-              />
-              <Opt
-                variant="eff"
-                icon={<Shield weight="fill" size={19} />}
-                name="Zadeklaruj blok"
-                desc="tarcza pochłonie część następnego ciosu"
-                cost={null}
-                disabled={busy}
-                onClick={() => onDeclare("shield_block")}
-              />
+              {DEFENSE_ORDER.filter((k) => defenseOptions.includes(k)).map((k) => {
+                const m = DEFENSE_META[k];
+                const Icon = m.icon;
+                return (
+                  <Opt
+                    key={k}
+                    variant="eff"
+                    icon={<Icon weight="fill" size={19} />}
+                    name={m.label}
+                    desc={m.desc}
+                    cost={null}
+                    disabled={busy}
+                    onClick={() => onDeclare(k)}
+                  />
+                );
+              })}
+              {defenseOptions.filter((k) => k in DEFENSE_META).length === 0 && (
+                <div className="px-4 py-6 text-center font-ui text-[12.5px] text-text-3">
+                  Brak wyszkolonych reakcji obronnych.
+                  <br />
+                  Cios wroga rozstrzyga pasywny unik.
+                </div>
+              )}
             </>
           )}
         </div>

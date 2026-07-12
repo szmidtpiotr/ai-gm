@@ -24,6 +24,7 @@ export interface CombatView {
   status: string;
   endedReason: string | null;
   relativeThreat: RelativeThreat | null; // BL-A7 (#1344)
+  defenseOptions: string[]; // WALKA-T2 (#1350): reakcje obronne dostępne graczowi
 }
 
 export function readCombat(cs: CombatState | null | undefined): CombatView | null {
@@ -46,6 +47,9 @@ export function readCombat(cs: CombatState | null | undefined): CombatView | nul
     status: String(cs.status ?? "active"),
     endedReason: (cs.ended_reason as string) ?? null,
     relativeThreat: (cs.relative_threat as RelativeThreat) ?? null,
+    defenseOptions: Array.isArray(cs.defense_options)
+      ? (cs.defense_options as string[])
+      : [],
   };
 }
 

@@ -370,8 +370,12 @@ export interface CombatState {
   ended_reason?: "victory" | "fled" | "player_dead" | null;
   loot_pool?: unknown;
   relative_threat?: RelativeThreat | null; // BL-A7 (#1344)
+  defense_options?: string[]; // WALKA-T2 (#1350): reakcje obronne gracza dla composera
   [k: string]: unknown;
 }
+
+// WALKA-T2 (#1350): typy reakcji obronnej deklarowanych z piguły „Obrona".
+export type DefenseReaction = "dodge" | "shield_block" | "arcane_ward" | "mana_shield";
 
 export interface CombatEnvelope {
   active: boolean;

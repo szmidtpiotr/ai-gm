@@ -41,7 +41,7 @@ export function CombatActionBar({
         disabled={disabled}
         onClick={onMove}
       />
-      <ABtn icon={<Shield size={16} />} label="Unik" disabled={disabled} onClick={onDefense} />
+      <ABtn icon={<Shield size={16} />} label="Obrona" disabled={disabled} onClick={onDefense} />
       <ABtn variant="flee" icon={<PersonSimpleRun size={16} />} label="Uciekaj" disabled={disabled} onClick={onFlee} />
     </div>
   );

@@ -2173,6 +2173,35 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         d["loot_persisted"] = bool(int(row["loot_persisted"] or 0))
     if "post_combat_loot_json" in row.keys():
         d["claimed_loot"] = _parse_loot_pool_column(row["post_combat_loot_json"])
+    # WALKA-T2 (#1350): opcje obrony gracza dla composera („piguła Obrona") — wynik
+    # `_reaction_options()` dla AKTUALNEGO stanu gracza (skille + tarcza + mana + limity
+    # rundy). Frontend nie może zgadywać skilli, więc snapshot je niesie. Best-effort:
+    # błąd/brak gracza/nieaktywna walka → brak klucza (composer pokaże fallback).
+    try:
+        if row["status"] == "active":
+            _pl = _find_combatant(_combatants, "player")
+            _pchid = row["character_id"]
+            if _pl is not None and _pchid:
+                with _conn() as _dc:
+                    _cr = _dc.execute(
+                        "SELECT sheet_json FROM characters WHERE id = ?", (_pchid,)
+                    ).fetchone()
+                    _psheet = (json.loads(_cr["sheet_json"] or "{}")
+                               if _cr and _cr["sheet_json"] else {})
+                    # Nakładka stanu kampanii (żywe HP/mana) — parytet z resolve_reaction.
+                    try:
+                        from app.services.campaign_state_service import (
+                            overlay_sheet_from_campaign_state as _ov_def)
+                        _ov_def(_dc, int(row["campaign_id"]), int(_pchid), _psheet)
+                    except Exception:
+                        pass
+                    _ec = len([c for c in _combatants
+                               if c.get("type") == "enemy" and float(c.get("hp_current") or 0) > 0])
+                    d["defense_options"] = _reaction_options(
+                        _dc, int(_pchid), _pl, _psheet, int(row["round"] or 1),
+                        enemy_count=_ec)
+    except Exception:
+        pass
     return d
 
 
@@ -8574,7 +8603,11 @@ def declare_player_reaction(campaign_id: int, reaction_type: str = "dodge") -> d
     Ponowne wywołanie tego samego typu = anulowanie (toggle off). Wymaga tury gracza oraz
     odpowiedniego skilla rank ≥ 1 (skill-gated feature)."""
     rt = str(reaction_type or "dodge").strip().lower()
-    if rt not in {"dodge", "shield_block"}:
+    # WALKA-T2 (#1350): piguła „Obrona" pre-deklaruje też reakcje magiczne — Arkanowa
+    # Bariera (#1324) i Tarcza Many (#1325). Walidacja many liczona w momencie WYZWOLENIA
+    # (resolvery `_try_arcane_ward_reaction`/`_try_mana_shield_reaction`), nie deklaracji —
+    # tu bramkuje wyłącznie skill rank ≥ 1 (wspólny gate niżej po nazwie skilla == typ reakcji).
+    if rt not in {"dodge", "shield_block", "arcane_ward", "mana_shield"}:
         raise ValueError(f"unknown reaction_type: {rt}")
     with _conn() as conn:
         row = conn.execute(

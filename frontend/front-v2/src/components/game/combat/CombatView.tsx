@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toast";
-import type { CombatState, CharacterDetail } from "@/lib/types";
+import type { CombatState, CharacterDetail, DefenseReaction } from "@/lib/types";
 import type { LogBlock } from "@/lib/game";
 import type { Vitals } from "@/lib/game";
 import {
@@ -370,7 +370,7 @@ export function CombatView({
     }
   }
 
-  async function doDeclare(rt: "dodge" | "shield_block") {
+  async function doDeclare(rt: DefenseReaction) {
     setSheet(null);
     try {
       await import("@/lib/api").then(({ apiFetch }) =>
@@ -379,7 +379,15 @@ export function CombatView({
           body: { reaction_type: rt },
         }),
       );
-      toast(rt === "dodge" ? "Unik zadeklarowany." : "Blok zadeklarowany.", "success");
+      const label =
+        rt === "dodge"
+          ? "Unik"
+          : rt === "shield_block"
+            ? "Blok"
+            : rt === "arcane_ward"
+              ? "Arkanowa Bariera"
+              : "Tarcza Many";
+      toast(`${label} zadeklarowana.`, "success");
     } catch {
       toast("Nie można teraz zadeklarować reakcji.", "danger");
     }
@@ -610,6 +618,7 @@ export function CombatView({
           }}
           onMove={doMove}
           onDeclare={doDeclare}
+          defenseOptions={view.defenseOptions}
           onClose={() => setSheet(null)}
         />
       )}
