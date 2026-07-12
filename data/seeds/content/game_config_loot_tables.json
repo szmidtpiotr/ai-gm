@@ -867,5 +867,49 @@
     "updated_at": "2026-07-02 09:58:03",
     "gold_min": 5,
     "gold_max": 15
+  },
+  {
+    "key": "loot_tier_weak",
+    "label": "Tier: Słaby (wróg weak)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_standard",
+    "label": "Tier: Standardowy (wróg standard)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_elite",
+    "label": "Tier: Elitarny (wróg elite)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
+  },
+  {
+    "key": "loot_tier_boss",
+    "label": "Tier: Boss (wróg boss)",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-12 00:00:00",
+    "updated_at": "2026-07-12 00:00:00",
+    "gold_min": 0,
+    "gold_max": 0
   }
 ]

@@ -506,33 +506,146 @@ def _catalog_entry(conn: sqlite3.Connection, loot: dict[str, Any]) -> tuple[str,
     return None
 
 
+# BL-B1 (#1333): shared tier loot tables. An enemy's drop is the UNION of its
+# per-enemy table (unique/thematic drops — trophies, signature gear) and the
+# shared tier table resolved from the enemy's tier band. Generic supplies
+# (bandages, torches, common potions…) live in the tier tables instead of being
+# duplicated across ~79 per-enemy tables.
+_TIER_TABLE_KEYS: dict[str, str] = {
+    "weak": "loot_tier_weak",
+    "standard": "loot_tier_standard",
+    "elite": "loot_tier_elite",
+    "boss": "loot_tier_boss",
+}
+
+
+def _resolve_tier_table_key(conn: sqlite3.Connection, enemy_row: sqlite3.Row) -> str | None:
+    """Map an enemy to its shared tier loot table key.
+
+    Prefers an explicit `loot_tier` override, falling back to the enemy `tier`
+    enum (weak/standard/elite/boss). Only a value that maps to a real tier band
+    counts — `loot_tier` is historically polluted with dungeon loot-tier words
+    (poor/standard/rich/treasure) on some enemies, so an unrecognized `loot_tier`
+    is skipped in favour of the enemy `tier` enum instead of blocking the union.
+    Returns the tier table key only when that table exists and is active —
+    otherwise None (graceful no-op on legacy/test DBs without tier tables).
+    """
+    tier_key = None
+    for col in ("loot_tier", "tier"):
+        val = _rget(enemy_row, col)
+        if not val:
+            continue
+        candidate = _TIER_TABLE_KEYS.get(str(val).strip().lower())
+        if candidate:
+            tier_key = candidate
+            break
+    if not tier_key:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM game_config_loot_tables WHERE key = ? AND is_active = 1 LIMIT 1",
+            (tier_key,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return tier_key if row else None
+
+
+def _entry_raw_key(row: sqlite3.Row) -> str:
+    """Raw catalog key of a loot entry (weapon > item > consumable, matching XOR)."""
+    return str(
+        (_rget(row, "weapon_key") or _rget(row, "item_key") or _rget(row, "consumable_key") or "")
+    ).strip()
+
+
+def _fetch_table_entries(
+    conn: sqlite3.Connection, table_key: str, *, with_allowed: bool = False
+) -> list[sqlite3.Row]:
+    """Active loot entries for a single table. with_allowed pulls weapon
+    allowed_classes for the MP class-filtered roll."""
+    if with_allowed:
+        sql = """
+            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max,
+                   w.allowed_classes
+            FROM game_config_loot_entries e
+            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+            LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
+            WHERE e.loot_table_key = ? AND t.is_active = 1
+            ORDER BY e.id ASC
+        """
+    else:
+        sql = """
+            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max
+            FROM game_config_loot_entries e
+            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+            WHERE e.loot_table_key = ? AND t.is_active = 1
+            ORDER BY e.id ASC
+        """
+    return conn.execute(sql, (table_key,)).fetchall()
+
+
+def _union_loot_rows(
+    conn: sqlite3.Connection, enemy_row: sqlite3.Row, *, with_allowed: bool = False
+) -> list[sqlite3.Row]:
+    """Per-enemy entries + tier entries, de-duplicated by raw catalog key.
+
+    The per-enemy entry wins on a key collision so a signature drop keeps its
+    tuned weight/quantity instead of being shadowed by the generic tier entry.
+    """
+    per_key = str(_rget(enemy_row, "loot_table_key") or "").strip()
+    rows: list[sqlite3.Row] = []
+    seen: set[str] = set()
+    if per_key:
+        for r in _fetch_table_entries(conn, per_key, with_allowed=with_allowed):
+            rows.append(r)
+            rk = _entry_raw_key(r)
+            if rk:
+                seen.add(rk)
+    tier_key = _resolve_tier_table_key(conn, enemy_row)
+    if tier_key and tier_key != per_key:
+        for r in _fetch_table_entries(conn, tier_key, with_allowed=with_allowed):
+            rk = _entry_raw_key(r)
+            if rk and rk in seen:
+                continue  # dedup: per-enemy signature drop wins
+            rows.append(r)
+            if rk:
+                seen.add(rk)
+    return rows
+
+
+def _fetch_enemy_loot_meta(conn: sqlite3.Connection, ek: str) -> sqlite3.Row | None:
+    """Enemy loot metadata, resilient to DBs missing the tier/loot_tier columns."""
+    for cols in (
+        "loot_table_key, drop_chance, tier, loot_tier",
+        "loot_table_key, drop_chance, tier",
+        "loot_table_key, drop_chance",
+    ):
+        try:
+            return conn.execute(
+                f"SELECT {cols} FROM game_config_enemies WHERE key = ?", (ek,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            continue
+    return None
+
+
 def get_loot_table(enemy_key: str) -> list[dict]:
     """
     Resolve enemy loot table into weighted entries.
-    Returns [] when enemy or loot table is missing.
+
+    BL-B1 (#1333): returns the UNION of the enemy's per-enemy table and its tier
+    table, de-duplicated by catalog key. Returns [] when enemy or per-enemy loot
+    table is missing.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
         return []
 
     with _conn() as conn:
-        enemy = conn.execute(
-            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
-            (ek,),
-        ).fetchone()
-        if not enemy or not enemy["loot_table_key"]:
+        enemy = _fetch_enemy_loot_meta(conn, ek)
+        if not enemy or not _rget(enemy, "loot_table_key"):
             return []
-        table_key = str(enemy["loot_table_key"])
-        rows = conn.execute(
-            """
-            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max
-            FROM game_config_loot_entries e
-            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
-            WHERE e.loot_table_key = ? AND t.is_active = 1
-            ORDER BY e.id ASC
-            """,
-            (table_key,),
-        ).fetchall()
+        rows = _union_loot_rows(conn, enemy, with_allowed=False)
     if not rows:
         return []
     return [_row_to_loot_entry(r) for r in rows]
@@ -599,28 +712,15 @@ def roll_loot_for_class(enemy_key: str, archetype: str) -> list[dict]:
     if not ek:
         return []
     with _conn() as conn:
-        enemy = conn.execute(
-            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
-            (ek,),
-        ).fetchone()
-        if not enemy or not enemy["loot_table_key"]:
+        enemy = _fetch_enemy_loot_meta(conn, ek)
+        if not enemy or not _rget(enemy, "loot_table_key"):
             return []
-        dc = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
+        dc = float(_rget(enemy, "drop_chance") if _rget(enemy, "drop_chance") is not None else 1.0)
         if random.random() > dc:
             return []
-        table_key = str(enemy["loot_table_key"])
-        entries = conn.execute(
-            """
-            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max,
-                   w.allowed_classes
-            FROM game_config_loot_entries e
-            JOIN game_config_loot_tables t ON t.key = e.loot_table_key
-            LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
-            WHERE e.loot_table_key = ? AND t.is_active = 1
-            ORDER BY e.id ASC
-            """,
-            (table_key,),
-        ).fetchall()
+        # BL-B1 (#1333): union per-enemy uniques + tier generics (with weapon
+        # allowed_classes for the class filter below).
+        entries = _union_loot_rows(conn, enemy, with_allowed=True)
     if not entries:
         return []
 
