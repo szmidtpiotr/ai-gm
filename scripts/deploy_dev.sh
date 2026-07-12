@@ -25,8 +25,13 @@ if [ ! -f env.test ]; then
   cp env.test.example env.test
 fi
 
-echo "🐳 [2/3] Restart kontenerów dev..."
+echo "🛠  [2a/3] Budowa ŻAR (front-v2) — dist gitignored, budujemy w kontenerze node..."
+"$REPO_DIR/scripts/build_frontend.sh"
+
+echo "🐳 [2b/3] Restart kontenerów dev..."
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
+# nginx.conf/dist są bind-mountem → wymuś recreate frontendu by załadować zmiany.
+docker compose -f docker-compose.dev.yml up -d --force-recreate frontend
 
 echo "🔍 [3/4] DB Lint — audyt integralności (informacyjny, nie blokujący)..."
 docker compose -f docker-compose.dev.yml exec -T backend python scripts/db_lint.py || true
