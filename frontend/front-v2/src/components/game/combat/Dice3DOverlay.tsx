@@ -17,7 +17,8 @@ export interface DiceJob {
   fumble?: boolean;
   face: number; // wartość do pokazania w kości fallback 2D
   actor?: "player" | "enemy"; // kto rzuca — decyduje czy busy=false po animacji
-  stage?: "attack" | "damage"; // etap dwufazowego rzutu (d20 na trafienie / kość obrażeń)
+  // etap rzutu: d20 na trafienie / kość obrażeń / test uniku / test bloku
+  stage?: "attack" | "damage" | "dodge" | "block";
 }
 
 const MOUNT_ID = "dice3d-mount";
@@ -81,7 +82,15 @@ export function Dice3DOverlay({
   // Akcent czyj rzut + etap — gracz (złoto) vs przeciwnik (krwawy).
   const enemyRoll = job.actor === "enemy";
   const stageLabel =
-    job.stage === "damage" ? "OBRAŻENIA" : job.stage === "attack" ? "NA TRAFIENIE" : null;
+    job.stage === "damage"
+      ? "OBRAŻENIA"
+      : job.stage === "attack"
+        ? "NA TRAFIENIE"
+        : job.stage === "dodge"
+          ? "TEST UNIKU"
+          : job.stage === "block"
+            ? "TEST BLOKU"
+            : null;
 
   return (
     <div

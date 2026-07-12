@@ -404,7 +404,15 @@ export interface CombatActionResult {
   // okno reakcji SF10
   reaction_window?: boolean;
   reaction_options?: string[]; // subset of ["dodge","shield_block"]
-  reaction?: { dodged?: boolean; full_block?: boolean; reduction?: number } | null;
+  reaction?: {
+    dodged?: boolean;
+    full_block?: boolean;
+    reduction?: number;
+    available?: boolean;
+    d20?: number; // surowy rzut testu uniku/bloku — do animacji kości reakcji
+    dodge_total?: number;
+    block_total?: number;
+  } | null;
   // łup / nagrody z zabójczego ciosu (FE10 #1237)
   loot?: LootItem[];
   gold_drop?: number;

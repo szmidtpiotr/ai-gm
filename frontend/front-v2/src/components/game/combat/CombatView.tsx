@@ -156,6 +156,8 @@ export function CombatView({
   const jobSeq = useRef(0);
   const pendingDmgStageRef = useRef<DiceJob | null>(null);
   const pendingReactionRef = useRef<ReactionData | null>(null);
+  // Kolejne okno reakcji (multiattack) do otwarcia PO animacji testu uniku/bloku.
+  const pendingReactionNextRef = useRef<ReactionData | null>(null);
   const enemyTurnRef = useRef(false);
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
@@ -298,6 +300,12 @@ export function CombatView({
     setDiceJob(null);
     // Ostatni etap kości — teraz odsłoń realne HP (po modalu obrażeń).
     setHpFreeze(null);
+    // Po animacji testu uniku/bloku — otwórz kolejne okno reakcji (multiattack).
+    const nextReact = pendingReactionNextRef.current;
+    if (nextReact) {
+      pendingReactionNextRef.current = null;
+      setReaction(nextReact);
+    }
     // busy był true tylko dla tury gracza
     if (!diceJob || diceJob.actor !== "enemy") setBusy(false);
   }
@@ -432,21 +440,47 @@ export function CombatView({
 
   // ── reakcja SF10 ──
   async function onReaction(choice: ReactionChoice) {
+    // Unik/blok = test umiejętności gracza → animuj rzut jak atak (showPlayerDice).
+    // „take" nie ma rzutu. Zamroź HP na czas animacji (dmg rozliczy resolve_reaction).
+    const willAnimate = showPlayerDice && choice !== "take";
+    if (willAnimate) setHpFreeze(snapshotHp());
     try {
       const r = await reactionMut.mutateAsync(choice);
       pushCombatState(r.combat_state);
-      setRolls((p) => [...p, rollFromReaction(r, choice)]);
       setReaction(null);
+      const card = rollFromReaction(r, choice);
       // multiattack: kolejny cios może od razu ponownie otworzyć okno
-      if (r.reaction_window) {
-        setReaction({
-          enemyName: r.enemy_name ?? "Wróg",
-          options: r.reaction_options ?? [],
-          attackRoll: r.attack_roll ?? null,
-          playerDefense: view?.player?.defense ?? null,
+      const nextWindow: ReactionData | null = r.reaction_window
+        ? {
+            enemyName: r.enemy_name ?? "Wróg",
+            options: r.reaction_options ?? [],
+            attackRoll: r.attack_roll ?? null,
+            playerDefense: view?.player?.defense ?? null,
+          }
+        : null;
+      const react = r.reaction ?? {};
+      const testD20 = Number(react.d20 ?? NaN);
+      // Animuj tylko gdy reakcja realnie rzuciła kością (available + jest d20).
+      if (willAnimate && react.available && Number.isFinite(testD20)) {
+        pendingReactionNextRef.current = nextWindow;
+        jobSeq.current += 1;
+        setDiceJob({
+          id: jobSeq.current,
+          notation: "1d20",
+          forced: [testD20],
+          face: testD20,
+          card, // karta wyniku reakcji odsłoni się po animacji testu
+          actor: "player",
+          stage: choice === "dodge" ? "dodge" : "block",
         });
+        return; // karta + realne HP po zakończeniu animacji (onDiceDone)
       }
+      // Bez animacji (take / kość wyłączona / reakcja niedostępna) — wynik od razu.
+      setHpFreeze(null);
+      setRolls((p) => [...p, card]);
+      if (nextWindow) setReaction(nextWindow);
     } catch {
+      setHpFreeze(null);
       setReaction(null);
       toast("Błąd reakcji.", "danger");
     }
