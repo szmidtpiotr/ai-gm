@@ -198,7 +198,7 @@ Audyt przeszedł cały codebase i sklasyfikował pliki jako aktywne / dead / nie
 | Voice service (Piper/TTS/STT) | `voice-service/` | **708 MB** | Outsourcowane, Piper obsolete — zastąpiony własnym rozwiązaniem |
 | Observability stack (Grafana/Loki) | `observability/`, `observability-dev/`, `observability-data/` | **~266 MB** | Zastąpiony własną implementacją w backendzie (2026-06-05) |
 | Legacy admin panel v2 | `frontend/admin_panel_v2/` | małe | Zastąpiony przez v3 |
-| Dead service | `backend/app/services/combat_v2_service.py` | 637 linii | Nigdy nie importowany |
+| ~~Dead service~~ Referencja (#1210) | `backend/app/services/combat_v2_service.py` | 637 linii | **NIE USUWAĆ.** Port w toku (#1210): fear/hit-location/flee wdrożone do `combat_service.py`; death-save ladder czeka na wpięcie po balansie na Sandboxie. Prototyp = referencja do czasu domknięcia. |
 | Temp images | `temp-img/` | 4.6 MB | Scratch space |
 | Output dir | `output/` | 140 KB | Śmieci |
 
@@ -241,7 +241,7 @@ ssh claude@192.168.1.61 'cd /home/piotrszmidt/ai-gm && \
 
 # Na lokalnie (przez sshfs):
 rm -rf frontend/admin_panel_v2/
-rm backend/app/services/combat_v2_service.py
+# combat_v2_service.py — NIE usuwać: port #1210 w toku (patrz notka wyżej), zostaje jako referencja.
 ```
 
 **Migracja admin2 → admin3 (więcej niż `rm`):**
@@ -2630,6 +2630,27 @@ Broń może mieć dodatkowy efekt przy trafieniu: normalne obrażenia ZAWSZE, pl
 
 ---
 
+### #1210 — Mechaniki V2 przeniesione z prototypu (2026-07-11)
+
+Port `combat_v2_service.py` (prototyp, referencja) → `combat_service.py` (żywy #826). Warstwa
+deterministyczna (silnik decyduje, LLM narruje). Wszystkie liczby STARTOWE, strojne na Sandboxie.
+
+| Mechanika | Reguła (wartości startowe) | Status |
+|---|---|---|
+| **Strach / Groza** | Wróg z `fear_aura` przy wejściu do walki wymusza rzut (czysty d20, „los") vs `fear_dc` (dflt 12). Porażka → `frightened`; kolejna porażka eskaluje `frightened → panicked → break`; Nat 1 przeskakuje 2 stopnie; Nat 20 zawsze zdaje. | ✅ wdrożone |
+| **Trafienie w lokację** | Krytyk (Nat 20) rzuca d6 lokacji → warunek na trafionym. Gracz→wróg: `stunned`/`bleeding`/`disarmed`/`hobbled`. Wróg→gracz: `dazed`/`winded`/`arm_wound`/`leg_wound`. Czas 1–3 rundy. | ✅ wdrożone |
+| **Ucieczka (flee)** | Akcja gracza `POST /combat/flee`: opposed DEX (gracz vs najlepszy żywy wróg). `leg_wound` −2, `hobbled` = blokada. Sukces kończy walkę (`fled`), porażka/blokada zużywa turę. | ✅ wdrożone |
+| **Rosnące DC death-save** | Kolejne padnięcie na 0 HP w tej samej walce: DC `[10, 13, 16, 19]` (czysty d20, bez CON). Nat 1 = 2 porażki, `DEATH_SAVE_MAX_FAILURES`=3 porażki = śmierć. Sukces lub porażka <3 → gracz zostaje na 1 HP („dying"). Liczniki `death_save_count`/`death_failures` per-combatant (MP-safe), reset przy `initiate_combat`. | ✅ wdrożone (#1313) — wpięte w oba hooki 0 HP (`_apply_death_save_ladder`), PO nieudanej kondycji `on_zero_hp_save`. Liczby startowe, strojne na Sandboxie. |
+
+6 warunków ran doseedowanych do `game_config_conditions` (deploy-durable: `main.py` RAW_MIGRATIONS
++ `scripts/seed_crit_conditions.py`). `leg_wound`/`hobbled` czytane po kluczu w
+`flee_penalty_from_conditions`; reszta foldu je się w silnik przez `static_stat_modifier` (S18).
+
+Helpery (Sandbox-tunable stałe): `DEATH_SAVE_DC_LADDER`, `HIT_LOCATION_TABLE`,
+`PLAYER_CRIT_CONDITIONS`/`ENEMY_CRIT_CONDITIONS`, `FEAR_LADDER`/`FEAR_DC_DEFAULT`.
+
+---
+
 ## CZĘŚĆ AC — Tryb Multiplayer (gra wieloosobowa)
 
 > **Sesja:** 2026-06-05 — projekt docelowy + audyt istniejącego kodu.
@@ -4544,6 +4565,34 @@ S6 i S7 wewnętrznie niezależne — można równolegle
 4. Seed skilla `shield_block`.
 
 **Weryfikacja:** pytest: redukcja k6+STR, pełne odparcie przy +5, XOR z dodge, durability hit przy crit-fail. Ręcznie: Sandbox — klon z tarczą blokuje, obrażenia w logu zredukowane.
+
+#### S18 — Reakcja: `arcane_ward` (Arkanowa Bariera) — obrona instant maga
+
+> ✅ **Wdrożone (#1324)** — trzecia reakcja w oknie SF10; magiczny odpowiednik Uniku (para z #1325 Tarczą Many = odpowiednik Bloku). Reużywa frameworku reakcji S15/SF10 (`reaction_declared` na combatancie, silnik stopnia S1 `_derive_outcome`, XOR z dodge/shield_block). Helper `_try_arcane_ward_reaction` (`combat_service.py`): test INT (`d20 + INT_mod + skill_rank + proficiency`) przeciw `attack_roll` wroga jako DC — **sukces** (margines ≥ 0) = cios znegowany (0 dmg); **porażka** = pełne obrażenia idą dalej normalną ścieżką #826 (margines + pancerz); **CRITICAL_FAILURE** (margines ≤ −5) = `reaction_locked_round = round + 1` (utrata reakcji w nast. rundzie, parytet Uniku). **Koszt: `ARCANE_WARD_MANA_COST` = 1 mana za PRÓBĘ, schodzi ZAWSZE** (także przy porażce — hazard tej reakcji; debit przez `check_and_deduct_mana`, state-log `cause='reaction_arcane_ward'`). Gate: skill `arcane_ward` (INT, sort_order 42) rank ≥ 1 w `game_config_skills` **ORAZ** `current_mana ≥ koszt` — bez many opcja nie pojawia się w oknie (`_reaction_options`). Limity rund = parytet #1322: swarm (≥2 wrogów) 1 reakcja/rundę, 1 wróg = reakcja co atak. Wpięcie w `resolve_reaction` (choice `arcane_ward`, alias `ward`). Frontend ŻAR: trzeci przycisk w `ReactionModal.tsx` (ikona Sparkle, meta `d20+INT · 1 many`, paleta many), `rollFromReaction` label „BARIERA", typy w `types.ts`. **Bez nowego typu efektu** (reakcja = skill + transient combat state, jak S15/S16) → CZĘŚĆ X / Zasada 4 BEZ ZMIAN. **Rzut ataku wroga (nat 20/nat 1) NIETKNIĘTY** — margines dotyczy testu bariery. Liczby = wartości STARTOWE (Numbers Policy → strój na Sandboxie: `ARCANE_WARD_MANA_COST`). 9/9 pytest + 1/1 Playwright GREEN.
+
+**Cel prostym językiem:** Mag bez tarczy dostaje własną reakcję instant — rozbłysk arkanowej osłony, który za manę może cios całkiem zanegować. Test Intelektu zamiast Zręczności; mana zamiast darmowego uniku (to jego koszt klasy). Domyka lukę: wcześniej mag był bez obrony w momencie, gdy obrywał.
+
+**Dla agenta:**
+1. Reużyj frameworku SF10 (trzecia reakcja — potwierdza generyczność S15/S16). Helper wzorem `_try_dodge_reaction` + debit many.
+2. Test INT vs wynik ataku; sukces = 0 dmg, porażka = pełne, crit-fail = lockout następnej rundy.
+3. Koszt many schodzi zawsze (nawet przy porażce). Gate: skill rank ≥ 1 AND mana ≥ koszt.
+4. Seed skilla `arcane_ward` (INT) do `game_config_skills`.
+
+**Weryfikacja:** pytest: sukces zeruje dmg + mana −1, porażka mana −1, crit-fail lockout, brak many = brak opcji, brak skilla = brak reakcji, backward compat dodge. Ręcznie: mag z `arcane_ward` w walce → okno reakcji pokazuje „Arkanowa Bariera", wybór testuje INT, pasek many spada.
+
+#### S19 — Reakcja: `mana_shield` (Tarcza Many) — deterministyczna absorpcja maną
+
+> ✅ **Wdrożone (#1325)** — czwarta reakcja w oknie SF10; magiczny odpowiednik **Bloku** wojownika (para z #1324 Arkanową Barierą = odpowiednik Uniku). W przeciwieństwie do bariery i bloku **BEZ RZUTU** — świadomy kontrast: wojownik hazarduje rzutem STR, mag KUPUJE PEWNOŚĆ za zasób ofensywny (manę). Helper `_try_mana_shield_reaction` (`combat_service.py`), **model CAP**: twardy limit wydatku many na cios = `MANA_SHIELD_LIMIT_PER_RANK × rank` (startowo 2×rank), przelicznik `R = MANA_SHIELD_ABSORB_PER_MANA` (startowo 2 obr./1 mana). Tarcza pochłania `min(dmg_finalne, spend_cap × R)` gdzie `spend_cap = min(limit, current_mana)`; mag płaci `ceil(pochłonięte / R)` **TYLKO za faktycznie wykorzystaną absorpcję** (niewykorzystany limit nie kosztuje; kryt wroga nie zeżre całej puli — chroni cap). **Punkt w potoku: OSTATNI** — w `resolve_reaction` PO modelu #826 (margines + pancerz) i PO absorpcji B10 (`_apply_absorption`), tuż przed odjęciem HP → „1 mana = R HP uratowane" jest dosłownie prawdą, mana nigdy nie idzie na obrażenia, które pancerz i tak by zjadł. Gate: skill `mana_shield` (INT, sort_order 43) rank ≥ 1 **ORAZ** `current_mana > 0`. **Limit rund: 1/rundę ZAWSZE, także przy JEDNYM wrogu** (odstępstwo od #1322 — deterministyczna mitygacja co atak zrobiłaby z maga lepszego tanka niż wojownik; anty boss-tank) — w `_reaction_options` przez `used_this_round` niezależnie od `swarm`. **Bez rzutu → brak crit-fail → brak lockoutu.** Nat 20 wroga: podwojone obrażenia + pominięty pancerz liczą się normalnie (tarcza działa na kwocie FINALNEJ, cap ogranicza wydatek). Wpięcie w `resolve_reaction` (choice `mana_shield`, alias `mana`). Frontend ŻAR: czwarty przycisk w `ReactionModal.tsx` (ikona ShieldStar, paleta many), `rollFromReaction` label „TARCZA MANY" (pokazuje `−absorbed obr.` + `−mana_spent many`), typy w `types.ts`. Zużycie many `cause='reaction_mana_shield'`. **BEZ nowego typu efektu** → CZĘŚĆ X / Zasada 4 BEZ ZMIAN. Liczby = wartości STARTOWE (Numbers Policy → strój na Sandboxie: `MANA_SHIELD_LIMIT_PER_RANK`, `MANA_SHIELD_ABSORB_PER_MANA`). 14/14 pytest + 1/1 Playwright GREEN.
+
+**Cel prostym językiem:** Mag, który nie zdąży rzucić bariery, może zamiast tego „przyjąć cios w manę zamiast w ciało" — pewnie, bez rzutu. Ile pochłonie, zależy od rangi umiejętności; płaci tylko za to, co realnie wchłonął. Odpowiednik Bloku wojownika: wojownik ryzykuje rzut, mag płaci zasobem za gwarancję.
+
+**Dla agenta:**
+1. Helper wzorem `_try_arcane_ward_reaction`, ale BEZ rzutu — czysta arytmetyka CAP (limit, przelicznik R, ceil za wykorzystane).
+2. Wpięcie OSTATNIE w `resolve_reaction` — po #826 i `_apply_absorption`, na `dmg` FINALNYM.
+3. `_reaction_options`: 1/rundę ZAWSZE (także 1 wróg) — `used_this_round` niezależnie od swarm.
+4. Seed skilla `mana_shield` (INT) do `game_config_skills`.
+
+**Weryfikacja:** pytest: cios 10@rank1 → HP −6/mana −2; cios 3 → pochłonięte 3/mana −2/HP −0; cios 1 → mana −1; kryt 40 → cap 4/mana −2 (pula chroniona); rank 2 → limit 8; mała pula ogranicza; 0 many brak opcji; 1/rundę mimo single-enemy. Ręcznie: mag z `mana_shield` w walce → okno pokazuje „Tarcza Many", wybór ścina obrażenia, pasek many spada; drugi atak w tej samej rundzie → tarcza znika z opcji, Unik/Bariera zostają.
 
 #### S17 — Wrestling: gracz nakłada kondycje wrogom testem przeciwnym ✅ ZROBIONE [#612]
 

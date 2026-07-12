@@ -20,6 +20,12 @@ from app.services import npc_memory_service
 
 SELL_RATIO = 0.5
 
+# #1196 E6 — black-market treasure-map fragment (STARTING price, Sandbox-tunable).
+# The carrier's catalog value_gp stays 0 so it never appears in normal stock;
+# the black market surfaces it with this fixed price instead.
+TREASURE_FRAGMENT_KEY = "fragment_mapy_skarbow"
+TREASURE_FRAGMENT_BM_PRICE = 50
+
 # #973 R4: Kowalskie oko — krasnolud discount (STARTING value, tunable via Sandbox)
 DWARF_SHOP_DISCOUNT = 0.15
 DWARF_REPAIR_COST_GP = 20  # złoto za akcję Reperuj (startowo)
@@ -516,6 +522,14 @@ def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None 
             base = int(cat.get("value_gp") or 0)
             cat["buy_price_gp"] = max(1, int(math.floor(base * eff_buy_mult))) if base > 0 else base
             items.append(cat)
+        # #1196 E6 — black market at night offers a treasure-map fragment (kept out
+        # of the normal catalog so it never leaks into daytime/regular stock).
+        if night_state["is_black_market"] and night_state["open"]:
+            _frag = {"type": "item", "key": TREASURE_FRAGMENT_KEY,
+                     "label": "Fragment mapy skarbów", "value_gp": TREASURE_FRAGMENT_BM_PRICE,
+                     "description": "Podejrzany typ zniża głos: „Kawałek mapy… resztę znajdziesz sam."}
+            _frag["buy_price_gp"] = max(1, int(math.floor(TREASURE_FRAGMENT_BM_PRICE * eff_buy_mult)))
+            items.append(_frag)
         sell_items = _character_sellables(conn, character_id, ratio)
     return {
         "npc": {"id": int(npc["id"]), "key": npc["key"], "label": npc["label"]},
@@ -583,20 +597,28 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         night_state = _shop_open_state(conn, npc, character_id)
         if not night_state["open"]:
             raise ValueError(night_state["reason"] or "shop_closed_night")
+        # #1196 E6 — a treasure-map fragment is offered only at black markets at night.
+        _is_bm_frag = bool(night_state["is_black_market"]
+                           and str(item_key).strip() == TREASURE_FRAGMENT_KEY)
         entries = _effective_shop_entries(conn, npc)
         req_type_norm = _norm_item_type(item_type)
-        allowed = any(
+        allowed = _is_bm_frag or any(
             _norm_item_type(e["type"]) == req_type_norm and e["key"] == str(item_key).strip()
             for e in entries
         )
         if not allowed:
             raise ValueError("item_not_in_shop")
-        cat = _catalog_item(conn, item_type, item_key)
-        if not cat:
-            raise ValueError("price_or_catalog_missing")
-        base_price = int(cat["value_gp"] or 0)
-        if base_price <= 0:
-            raise ValueError("price_or_catalog_missing")
+        if _is_bm_frag:
+            cat = {"type": "item", "key": TREASURE_FRAGMENT_KEY,
+                   "label": "Fragment mapy skarbów", "value_gp": TREASURE_FRAGMENT_BM_PRICE}
+            base_price = TREASURE_FRAGMENT_BM_PRICE
+        else:
+            cat = _catalog_item(conn, item_type, item_key)
+            if not cat:
+                raise ValueError("price_or_catalog_missing")
+            base_price = int(cat["value_gp"] or 0)
+            if base_price <= 0:
+                raise ValueError("price_or_catalog_missing")
         # F10 (#470): CHA modifies actual buy price (discount/markup, symmetric to sell).
         # S6 (#586): jednorazowy rabat z targowania stackuje multiplikatywnie z CHA.
         cha = _get_character_cha(conn, character_id)

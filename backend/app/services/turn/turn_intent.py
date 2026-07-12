@@ -113,7 +113,7 @@ def apply_u7_safety_net(
                 "skill_key": _skill_key_u7,
                 "skill_label": _skill_label(_skill_key_u7),
                 "counter": _get_counter(conn, _skill_key_u7),
-                "modifier_breakdown": calc_skill_modifier_info(_char_sh_u7, _skill_key_u7),
+                "modifier_breakdown": calc_skill_modifier_info(_char_sh_u7, _skill_key_u7, conn=conn, character_id=character.get("id")),
                 "dc": _forced["dc"],
                 "source": "safety_net",
             }

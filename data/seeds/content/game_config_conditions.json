@@ -1,5 +1,17 @@
 [
   {
+    "key": "arm_wound",
+    "label": "Rana ramienia",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"static_stat_modifier\", \"stat\": \"attack_bonus\", \"value\": -1, \"expires\": \"duration_rounds:3\"}]}",
+    "description": "Rozcięte ramię — ręka słabnie. -1 do ataku na 3 rundy.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:3"
+  },
+  {
     "key": "berserk",
     "label": "Berserk",
     "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"behavior_override\",\"behavior\":\"attack_nearest\",\"expires\":\"duration_rounds:6\"},{\"type\":\"static_stat_modifier\",\"stat\":\"attack_bonus\",\"value\":3},{\"type\":\"static_stat_modifier\",\"stat\":\"damage_bonus\",\"value\":3},{\"type\":\"static_stat_modifier\",\"stat\":\"ac\",\"value\":-3},{\"type\":\"periodic_save\",\"stat\":\"WIS\",\"value\":14,\"tick\":\"start_turn\",\"expires\":\"save_success\"}]}",
@@ -106,6 +118,30 @@
     "updated_at": "2026-06-14 13:00:58",
     "stackable": 0,
     "auto_remove": null
+  },
+  {
+    "key": "dazed",
+    "label": "Oszołomiony",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"skip_turn\", \"duration_rounds\": 1}]}",
+    "description": "Cios w głowę zamroczył — traci następną akcję.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:1"
+  },
+  {
+    "key": "disarmed",
+    "label": "Rozbrojony",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"static_stat_modifier\", \"stat\": \"damage_bonus\", \"value\": -2, \"expires\": \"duration_rounds:3\"}]}",
+    "description": "Broń wytrącona z dłoni — ciosy słabsze. -2 do obrażeń na 3 rundy.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:3"
   },
   {
     "key": "empowered",
@@ -216,6 +252,18 @@
     "auto_remove": null
   },
   {
+    "key": "hobbled",
+    "label": "Okulawiony",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"flee_block\", \"expires\": \"duration_rounds:3\"}]}",
+    "description": "Noga bezużyteczna — nie da się uciec. Blokuje ucieczkę na 3 rundy.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:3"
+  },
+  {
     "key": "insane",
     "label": "Obłąkany",
     "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"CHA\",\"value\":-5}]}",
@@ -238,6 +286,18 @@
     "updated_at": "2026-06-14 13:00:58",
     "stackable": 0,
     "auto_remove": null
+  },
+  {
+    "key": "leg_wound",
+    "label": "Rana nogi",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"flee_penalty\", \"value\": -2, \"expires\": \"duration_rounds:3\"}]}",
+    "description": "Rozcięta noga — ucieczka utrudniona. -2 do rzutu na ucieczkę na 3 rundy.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:3"
   },
   {
     "key": "on_fire",
@@ -358,6 +418,18 @@
     "updated_at": "2026-06-11 12:25:21",
     "stackable": 0,
     "auto_remove": "on_duration"
+  },
+  {
+    "key": "winded",
+    "label": "Bez tchu",
+    "effect_json": "{\"schema_version\": 1, \"effect_category\": \"character_condition\", \"effects\": [{\"type\": \"static_stat_modifier\", \"stat\": \"STR\", \"value\": -2, \"expires\": \"duration_rounds:2\"}]}",
+    "description": "Cios w tors wybił powietrze — akcje siłowe słabsze. STR -2 na 2 rundy.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-11 07:29:56",
+    "updated_at": "2026-07-11 07:29:56",
+    "stackable": 0,
+    "auto_remove": "duration_rounds:2"
   },
   {
     "key": "zaskoczony",

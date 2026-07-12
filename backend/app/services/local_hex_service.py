@@ -97,6 +97,74 @@ def get_local_hexes(conn: sqlite3.Connection, hub_location_key: str) -> list[dic
     return [dict(r) for r in rows]
 
 
+def normalize_hub_local_hexes(conn: sqlite3.Connection, hub_key: str) -> int:
+    """Self-heal legacy local hexes sitting outside their hub's coordinate namespace.
+
+    Before 2026-07-07, `_next_local_coords` always used offset 0 (no `base_q`
+    namespacing). Hubs that got some local hexes assigned before that fix and more
+    after it end up with siblings tens of thousands of pixels apart on the local
+    map (one cluster near origin, one in the hub's namespace) — the map then
+    renders as if only one sub-location exists. Idempotent + safe to call on every
+    read: hex_id (and thus every FK / session_flags.local_hex.hex_id reference) is
+    preserved, only q/r are rewritten in place.
+
+    Returns the number of hexes fixed.
+    """
+    hub_hex_id = get_hub_hex_id(conn, hub_key)
+    if hub_hex_id is None:
+        return 0  # hub not anchored to the world map yet — nothing to normalize against
+
+    base_q = (int(hub_hex_id) % 2000) * 30
+    rows = conn.execute(
+        "SELECT id, q, r, location_key FROM world_hexes "
+        "WHERE map_level = 1 AND parent_hex_id = ? AND is_active = 1",
+        (hub_hex_id,),
+    ).fetchall()
+    if not rows:
+        return 0
+
+    ring_dqs = [dq for dq, _dr in _LOCAL_HEX_RING]
+    min_dq, max_dq = min(ring_dqs), max(ring_dqs)
+
+    taken = {(int(r["q"]), int(r["r"])) for r in rows}
+    fixed = 0
+    for row in rows:
+        q, r = int(row["q"]), int(row["r"])
+        if min_dq <= (q - base_q) <= max_dq:
+            continue  # already inside the hub's namespace
+
+        taken.discard((q, r))
+        new_coords: Optional[tuple[int, int]] = None
+        for dq, dr in _LOCAL_HEX_RING:
+            cand = (base_q + dq, dr)
+            if cand not in taken:
+                new_coords = cand
+                break
+        if new_coords is None:
+            n = len(taken)
+            new_coords = (base_q + n // 5, n % 5)
+        taken.add(new_coords)
+        new_q, new_r = new_coords
+
+        conn.execute("UPDATE world_hexes SET q = ?, r = ? WHERE id = ?", (new_q, new_r, row["id"]))
+        conn.execute(
+            """UPDATE game_sessions
+               SET session_flags = json_set(session_flags, '$.local_hex.q', ?, '$.local_hex.r', ?)
+               WHERE json_extract(session_flags, '$.local_hex.hex_id') = ?""",
+            (new_q, new_r, row["id"]),
+        )
+        logger.info(
+            "local_hex_renamespaced",
+            hub_key=hub_key, hex_id=row["id"], location_key=row["location_key"],
+            old_q=q, old_r=r, new_q=new_q, new_r=new_r,
+        )
+        fixed += 1
+
+    if fixed:
+        conn.commit()
+    return fixed
+
+
 def get_local_hex_for_subloc(conn: sqlite3.Connection, sublocation_key: str) -> Optional[dict]:
     """Get the map_level=1 hex assigned to a specific sub-location."""
     row = conn.execute(
@@ -133,12 +201,19 @@ def _next_local_coords(
     else:
         existing = []
     taken = {(int(r["q"]), int(r["r"])) for r in existing}
-    for coords in _LOCAL_HEX_RING:
+    # UNIQUE(q,r,map_level,region) jest region-szeroki, a wiele hubów dzieli region
+    # (RM3: region dziedziczy po hexie-rodzicu). Bez separacji dwa huby kolidowałyby
+    # na (0,0) itd. Namespace per hub = offset q o parent_hex_id*100 (id unikat →
+    # gridy się nie nakładają; LocalMap i tak centruje na heksach, więc absolutne
+    # współrzędne nie mają znaczenia dla renderu).
+    base_q = ((int(parent_hex_id) % 2000) * 30) if parent_hex_id is not None else 0
+    for dq, dr in _LOCAL_HEX_RING:
+        coords = (base_q + dq, dr)
         if coords not in taken:
             return coords
-    # Overflow beyond predefined ring — use row index as offset
+    # Overflow beyond predefined ring — indeksowy fallback w tym samym namespace.
     n = len(taken)
-    return (n // 5, n % 5)
+    return (base_q + n // 5, n % 5)
 
 
 # ── Core assignment ───────────────────────────────────────────────────────────
@@ -167,6 +242,9 @@ def auto_assign_local_hex(
         return None
 
     hub_hex_id = get_hub_hex_id(conn, parent_key)
+    # Heal any legacy hexes (pre-namespace) before assigning new ones — otherwise
+    # a fresh sub-loc would land correctly-namespaced next to scattered old ones.
+    normalize_hub_local_hexes(conn, parent_key)
 
     # Load all active sub-locs ordered by creation (id ASC) for stable ring layout
     sublocs = conn.execute(

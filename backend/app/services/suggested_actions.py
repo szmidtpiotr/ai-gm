@@ -140,6 +140,33 @@ def _build_narrative_actions(
     session_flags: dict,
 ) -> list[SuggestedAction]:
     """Priority: NPCs first, exits, SEARCH, REST — capped at MAX_ACTIONS."""
+    # PM4 #1223: gdy czeka wybór trasy (pending_travel_choice, ustawiony przez
+    # _pm4_maybe_prompt) — pokaż 2 klikalne opcje zamiast pytania tekstem. Tekst
+    # akcji trafia w detect_route_choice (wprost/przełaj→direct, trakt→road).
+    _ptc = session_flags.get("pending_travel_choice")
+    if isinstance(_ptc, dict) and _ptc.get("destination"):
+        _lbl = str(_ptc.get("label") or "cel").strip() or "cel"
+        _hinted = int(_ptc.get("hinted", 0))
+        actions_ptc = [
+            SuggestedAction(
+                label="Na wprost, przełajem",
+                action=f"Idę na wprost, przełajem do {_lbl}.",
+                enabled=True, icon="🌲", type="route_choice",
+            ),
+            SuggestedAction(
+                label="Trzymam się traktu",
+                action=f"Idę traktem do {_lbl}.",
+                enabled=True, icon="🛤️", type="route_choice",
+            ),
+        ]
+        if _hinted >= 1:
+            actions_ptc.append(SuggestedAction(
+                label="Zostaję tutaj",
+                action="Rezygnuję z podróży. Zostaję tutaj.",
+                enabled=True, icon="🏠", type="route_choice",
+            ))
+        return actions_ptc
+
     # PT12 (#1122): a paused journey replaces the normal pills with 3 decision buttons.
     interrupt = _build_travel_interrupt_actions(session_flags)
     if interrupt:
@@ -162,6 +189,49 @@ def _build_narrative_actions(
     if travel_pills:
         actions.extend(travel_pills[:2])
 
+    # Podróż wstrzymana (po obozie/odpoczynku): interrupt_reason zdjęty, ale cel
+    # nadal w travel_plan → pozwól WZNOWIĆ. Bez tego po „Rozbij obóz→Odpocznij"
+    # gracz nie miał jak wrócić na trasę.
+    _tp = session_flags.get("travel_plan")
+    if (
+        isinstance(_tp, dict)
+        and not _tp.get("interrupt_reason")
+        and (_tp.get("destination_hex") or _tp.get("destination_key"))
+        and len(actions) < MAX_ACTIONS
+    ):
+        _dl = str(_tp.get("destination_label") or "").strip()
+        if _dl.startswith("hex (") or not _dl:
+            _dl = ""
+        actions.insert(0, SuggestedAction(
+            label=f"Kontynuuj podróż{(' → ' + _dl) if _dl else ''}",
+            action="TRAVEL_RESUME",
+            enabled=True,
+            icon="🧭",
+            type="travel",
+        ))
+
+    # Bezpieczeństwo liczone raz (potrzebne wcześnie, by REST nie wypadł przez cap).
+    current_hex = session_flags.get("current_hex") or {}
+    hex_q = current_hex.get("q")
+    hex_r = current_hex.get("r")
+    has_hex = hex_q is not None and hex_r is not None
+    safe = _is_safe_for_rest(conn, current_loc_key) or (has_hex and _is_hex_safe_for_rest(conn, hex_q, hex_r))
+
+    # 0) REST wysoko, gdy tu bezpiecznie — w osadzie/gospodzie „Odpocznij" to główna
+    # akcja i nie może wypaść przez cap MAX_ACTIONS zajęty przez NPC/wyjścia/SEARCH.
+    if safe and len(actions) < MAX_ACTIONS:
+        actions.append(SuggestedAction(label="Odpocznij", action="REST:long", enabled=True))
+
+    # #1292: Usługi (nocleg/jedzenie/naprawa/uzdrowienie/stajnia/przewodnik/posłaniec) —
+    # deterministyczny modal, bez narratora. Wysoki priorytet (tuż po REST) żeby nie
+    # wypadł z capu w karczmie/kuźni pełnej NPC-ów i wyjść.
+    if current_loc_key and len(actions) < MAX_ACTIONS:
+        from app.services.location_services import get_available_service_keys
+        if get_available_service_keys(conn, current_loc_key):
+            actions.append(SuggestedAction(
+                label="Usługi", action=f"OPEN_SERVICES:{current_loc_key}", enabled=True, icon="🛎",
+            ))
+
     # 1) NPCs present at current location
     if current_loc_key and len(actions) < MAX_ACTIONS:
         npc_actions = _get_npc_actions(conn, current_loc_key)
@@ -182,13 +252,9 @@ def _build_narrative_actions(
             enabled=True,
         ))
 
-    # 4) REST — safe if EITHER session location OR current hex location allows it
-    current_hex = session_flags.get("current_hex") or {}
-    hex_q = current_hex.get("q")
-    hex_r = current_hex.get("r")
-    has_hex = hex_q is not None and hex_r is not None
-    safe = _is_safe_for_rest(conn, current_loc_key) or (has_hex and _is_hex_safe_for_rest(conn, hex_q, hex_r))
-    if len(actions) < MAX_ACTIONS:
+    # 4) REST (fallback) — gdy nie dodane wyżej (np. niebezpieczna lokacja): pokaż
+    # wyłączone „Odpocznij" z powodem, chyba że już jest na liście.
+    if len(actions) < MAX_ACTIONS and not any(a.action == "REST:long" for a in actions):
         actions.append(SuggestedAction(
             label="Odpocznij",
             action="REST:long",
@@ -258,9 +324,10 @@ def _build_travel_pills(
                     obj_val = (beat.get("objective_value") or "").strip()
                     if not obj_val:
                         continue
-                    # Find hex for this location (by label or key)
+                    # Find hex + display label for this location (by label or key) —
+                    # objective_value is a raw game_locations.key, never show it raw.
                     hex_row = conn.execute(
-                        """SELECT wh.q, wh.r FROM world_hexes wh
+                        """SELECT wh.q, wh.r, gl.label FROM world_hexes wh
                            JOIN game_locations gl ON gl.key = wh.location_key
                            WHERE (gl.label = ? OR gl.key = ?)
                              AND wh.is_active = 1
@@ -270,6 +337,7 @@ def _build_travel_pills(
                     if not hex_row:
                         continue
                     tq, tr = int(hex_row[0]), int(hex_row[1])
+                    dest_label = str(hex_row[2] or "").strip() or obj_val
                     if tq == q_int and tr == r_int:
                         continue  # already here
                     action_key = f"TRAVEL:{tq}:{tr}"
@@ -277,7 +345,7 @@ def _build_travel_pills(
                         continue
                     seen_actions.add(action_key)
                     pills.append(SuggestedAction(
-                        label=f"📜 → {obj_val}",
+                        label=f"📜 → {dest_label}",
                         action=action_key,
                         enabled=True,
                         type="travel",

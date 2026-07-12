@@ -3,10 +3,11 @@
 export const ADMIN_TOKEN_KEY = 'aigm_admin_token';
 
 export class APIError extends Error {
-  constructor(message, status) {
+  constructor(message, status, detail) {
     super(message);
     this.name = 'APIError';
     this.status = status;
+    this.detail = detail;   // surowy detail z odpowiedzi (obiekt/tablica/string)
   }
 }
 
@@ -32,10 +33,11 @@ export async function apiFetch(path, opts = {}) {
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     const det = e.detail;
-    const msg = Array.isArray(det)
-      ? det.map(d => d.msg || JSON.stringify(d)).join('; ')
-      : (det || `HTTP ${r.status}`);
-    throw new APIError(msg, r.status);
+    let msg;
+    if (Array.isArray(det)) msg = det.map(d => d.msg || JSON.stringify(d)).join('; ');
+    else if (det && typeof det === 'object') msg = det.message || JSON.stringify(det);
+    else msg = det || `HTTP ${r.status}`;
+    throw new APIError(msg, r.status, det);
   }
   // Niektóre endpointy zwracają 204/no-body.
   const txt = await r.text();

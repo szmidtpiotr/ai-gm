@@ -292,3 +292,95 @@ footer .brand{display:inline-block;margin-bottom:14px}
 .subscribe-msg{text-align:center;margin-top:14px;font-size:15px;min-height:22px}
 .subscribe-msg.ok{color:#6fcf97}
 .subscribe-msg.err{color:var(--blood)}
+
+/* ── #915 unified auth (nav chip + modal) ─────────────────────────────────── */
+.nav-auth{display:flex;align-items:center;gap:10px;margin-left:auto;margin-right:14px}
+.nav-user{color:var(--gold);font-family:var(--font-disp);font-size:13px;letter-spacing:.4px}
+.nav-login,.nav-logout{background:none;border:1px solid var(--line);color:var(--ink-dim);
+  font-family:var(--font-disp);font-size:12px;letter-spacing:.6px;padding:6px 14px;border-radius:4px;
+  cursor:pointer;transition:all .2s;text-transform:uppercase}
+.nav-login:hover,.nav-logout:hover{color:var(--gold);border-color:var(--gold-dk)}
+.auth-overlay{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.72);
+  align-items:center;justify-content:center;padding:18px}
+.auth-modal{position:relative;width:100%;max-width:400px;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:26px 24px}
+.auth-x{position:absolute;top:12px;right:14px;background:none;border:0;color:var(--ink-dim);
+  font-size:18px;cursor:pointer}
+.auth-tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.auth-tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;color:var(--ink-dim);
+  font-family:var(--font-disp);font-size:13px;letter-spacing:.6px;padding:10px 4px;cursor:pointer;text-transform:uppercase}
+.auth-tabs button.active{color:var(--gold);border-color:var(--gold)}
+.auth-form{display:flex;flex-direction:column;gap:12px}
+.auth-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;letter-spacing:.4px;color:var(--ink-dim)}
+.auth-form input{background:var(--input);border:1px solid var(--line);border-radius:4px;color:var(--ink);
+  padding:11px 12px;font-size:15px}
+.auth-form input:focus{outline:none;border-color:var(--gold-dk)}
+.auth-err{color:var(--blood);font-size:13px;margin:0}
+.auth-submit{margin-top:6px}
+.auth-hint{margin:14px 0 0;text-align:center;font-size:12px;color:var(--ink-dim);font-style:italic}
+
+/* ── #1191 bestiary gallery ───────────────────────────────────────────────── */
+.best-hero{padding:70px 0 40px;text-align:center;background:
+  radial-gradient(ellipse 60% 50% at 50% 0%, var(--gold-glow), transparent 70%), var(--bg)}
+.best-hero h1{font-family:var(--font-disp);font-weight:900;font-size:clamp(34px,6vw,58px);margin:.15em 0}
+.best-hero .sub{max-width:640px;margin:0 auto;color:var(--ink-dim);font-size:17px}
+.best-cta{margin-top:22px}
+.best-main{padding:20px 0 80px}
+.best-status{text-align:center;color:var(--ink-dim);padding:50px 0;font-style:italic}
+.best-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+.best-card{display:flex;flex-direction:column;overflow:hidden;background:var(--panel);
+  border:1px solid var(--line);border-radius:9px;text-align:left;padding:0;color:inherit;font:inherit}
+.best-card.defeated{cursor:pointer;border-color:var(--gold-dk);transition:transform .15s,box-shadow .15s}
+.best-card.defeated:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.best-portrait{position:relative;aspect-ratio:3/4;overflow:hidden;background:var(--bg2)}
+.best-card:not(.defeated) .best-portrait img{filter:grayscale(.55) brightness(.72)}
+.best-portrait img{width:100%;height:100%;object-fit:cover;display:block}
+.best-badge{position:absolute;top:8px;right:8px;background:rgba(10,9,8,.82);color:var(--gold);
+  font-family:var(--font-disp);font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;
+  border:1px solid var(--gold-dk)}
+.best-body{padding:11px 13px 14px}
+.best-name{font-family:var(--font-disp);font-weight:700;font-size:15px;color:var(--ink)}
+.best-teaser{margin-top:5px;font-size:13px;line-height:1.45;color:var(--ink-dim)}
+.best-overlay{display:none;position:fixed;inset:0;z-index:410;background:rgba(0,0,0,.78);
+  align-items:center;justify-content:center;padding:18px}
+.best-modal{position:relative;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--gold-dk);border-radius:11px;padding:24px}
+.best-x{position:absolute;top:12px;right:14px;background:none;border:0;color:var(--ink-dim);font-size:18px;cursor:pointer}
+.best-modal-img{width:100%;max-height:60vh;object-fit:contain;background:var(--bg);border-radius:8px;margin-bottom:14px}
+
+/* ── #1191 bestiary controls + full card ──────────────────────────────────── */
+.best-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0 20px}
+.best-search{flex:1 1 220px;min-width:180px;background:var(--input);border:1px solid var(--line);
+  border-radius:6px;color:var(--ink);padding:10px 13px;font-size:14px}
+.best-search:focus{outline:none;border-color:var(--gold-dk)}
+.best-select{background:var(--input);border:1px solid var(--line);border-radius:6px;color:var(--ink);
+  padding:9px 11px;font-size:13px;cursor:pointer}
+.best-select:focus{outline:none;border-color:var(--gold-dk)}
+.best-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-dim);cursor:pointer;white-space:nowrap}
+.best-count{margin-left:auto;color:var(--ink-dim);font-size:13px;font-variant-numeric:tabular-nums}
+.best-zone{position:absolute;left:8px;bottom:8px;background:rgba(10,9,8,.8);border:1px solid var(--line);
+  border-radius:4px;padding:2px 7px;font-size:13px;line-height:1}
+.card-tags{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px;font-size:12.5px;color:var(--ink-dim)}
+.card-tags span{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:3px 9px}
+.card-tags .card-fear{color:var(--blood);border-color:var(--blood)}
+.card-tier{font-family:var(--font-ui);font-size:12px;letter-spacing:.5px;padding:2px 9px;border-radius:4px;
+  vertical-align:middle;text-transform:uppercase}
+.card-tier.tier-weak{background:#2a3320;color:#a8c98a}
+.card-tier.tier-standard{background:#233042;color:#8ab0d4}
+.card-tier.tier-elite{background:#3a2a12;color:var(--gold)}
+.card-tier.tier-boss{background:#3a1414;color:#e08a8a}
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.card-grid > div{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+.card-grid label{display:block;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-dim);margin-bottom:3px}
+.card-grid b{font-family:var(--font-disp);font-size:19px;color:var(--ink)}
+.card-stats{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px}
+.card-stats > div{text-align:center;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:7px 2px}
+.card-stats b{display:block;font-size:10px;letter-spacing:.5px;color:var(--gold);margin-bottom:2px}
+.card-stats span{font-family:var(--font-disp);font-size:15px;color:var(--ink)}
+.card-locked{margin:10px 0;padding:12px;background:var(--panel2);border:1px dashed var(--line);
+  border-radius:7px;color:var(--ink-dim);font-size:13.5px;text-align:center}
+@media(max-width:520px){.card-stats{grid-template-columns:repeat(4,1fr)}.card-grid{grid-template-columns:repeat(2,1fr)}}
+.best-modal h2{font-family:var(--font-disp);font-weight:900;font-size:26px;margin:0 0 6px}
+.best-modal-meta{color:var(--ink-dim);font-size:13px;margin-bottom:12px}
+.best-modal-lore{font-family:var(--font-flavor);font-size:16px;line-height:1.6;color:var(--ink);white-space:pre-line}
+@media(max-width:620px){.best-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:11px}}

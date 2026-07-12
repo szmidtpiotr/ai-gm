@@ -1734,6 +1734,7 @@ async function _loadForgeTemplates() {
           (t.status !== 'draft' ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">↩ Szkic</button>' : '') +
           '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
           '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeOpenHexPicker(' + t.id + ')">🗺 Przydziel teren</button>' +
+          '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeOpenLocationPlacer(' + t.id + ')">📌 Rozmieszczenie lokacji</button>' +
           (t.status === 'published' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeLaunchCampaignFromTemplate(' + t.id + ')" style="background:var(--green);border-color:var(--green)">🚀 Uruchom kampanię</button>' : '') +
           '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
         '</div>' +
@@ -1921,6 +1922,164 @@ async function forgeOpenHexPicker(id) {
       overlay.remove();
       await _loadForgeTemplates();
     } catch(err) { _showToast(err.message || 'Nie udało się ustawić hexa.', 'error'); }
+  });
+}
+
+// 📌 Rozmieszczenie lokacji — relocate the plan's macro locations on the world map.
+// Fixes: auto-placed locations packed too close → admin drags each to a free hex,
+// or re-scatters them all with a wider spacing. Reused locations keep their hex.
+async function forgeOpenLocationPlacer(id) {
+  const tpl = (_forgeTemplatesCache || []).find(t => t.id === id) || {};
+  let armedKey = null;  // location_key currently being relocated
+
+  async function load() {
+    return apiFetch(`/api/admin/forge/templates/${id}/location-hexes`);
+  }
+
+  let data;
+  try { data = await load(); }
+  catch(e) { _showToast(e.message || 'Nie można wczytać rozmieszczenia.', 'error'); return; }
+
+  const SZ = 24;
+  const h2p = (q, r) => ({ x: SZ * 1.5 * q, y: SZ * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r) });
+  const hexPts = (s) => Array.from({ length: 6 }, (_, i) => {
+    const a = Math.PI / 3 * i;
+    return `${(s * Math.cos(a)).toFixed(1)},${(s * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+  const COL = {
+    free_good:     { fill: '#1f6b3a', stroke: '#34d17a' },
+    free_atypical: { fill: '#7a5a12', stroke: '#e0a92b' },
+    occupied:      { fill: '#3a2020', stroke: '#7a4040' },
+  };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:900px;width:96vw">
+      <div class="modal-head">
+        <span class="modal-title">📌 Rozmieszczenie lokacji — ${_esc(tpl.title || '')}</span>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;gap:12px;padding:14px;align-items:flex-start">
+        <div style="flex:0 0 240px;max-height:64vh;overflow:auto">
+          <div style="font-size:0.75rem;color:var(--t2);margin-bottom:6px">Makro-lokacje planu</div>
+          <div id="flp-list"></div>
+          <button class="btn btn-sm btn-secondary" id="flp-reroll" style="margin-top:10px;width:100%">🎲 Rozrzuć ponownie</button>
+          <div style="font-size:0.68rem;color:var(--t3);margin-top:6px">Rozrzuca WSZYSTKIE makro-lokacje z większym odstępem. Lokacje reużyte z bazy zachowują hex.</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div id="flp-hint" style="font-size:0.75rem;color:var(--amber,#c9a227);margin-bottom:6px">Kliknij „Przenieś" przy lokacji, potem kliknij wolny hex.</div>
+          <div style="border:1px solid var(--border);border-radius:6px;background:#0d1117;overflow:auto;max-height:60vh">
+            <svg id="flp-svg" style="width:100%;height:auto;min-height:340px;display:block"></svg>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Zamknij</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const _LOC_PALETTE = ['#3b82f6', '#a855f7', '#ec4899', '#f97316', '#14b8a6', '#eab308', '#ef4444', '#8b5cf6'];
+
+  function render() {
+    const hexes = data.hexes || [];
+    const locs = data.locations || [];
+    const start = data.start_hex;
+    // map: "q,r" → location index (for markers)
+    const locByHex = {};
+    locs.forEach((l, i) => { if (l.q != null) locByHex[`${l.q},${l.r}`] = i; });
+
+    // sidebar list
+    const listEl = overlay.querySelector('#flp-list');
+    listEl.innerHTML = locs.map((l, i) => {
+      const col = _LOC_PALETTE[i % _LOC_PALETTE.length];
+      const armed = armedKey === l.key;
+      const pos = l.q != null ? `(${l.q}, ${l.r})` : '— brak hexa';
+      return `<div style="border:1px solid ${armed ? 'var(--amber,#e0a92b)' : 'var(--border)'};border-radius:6px;padding:6px 8px;margin-bottom:6px;background:${armed ? '#3a2f10' : 'transparent'}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:10px;height:10px;border-radius:50%;background:${col};display:inline-block;flex:0 0 auto"></span>
+          <span style="font-size:0.8rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(l.name)}</span>
+        </div>
+        <div style="font-size:0.7rem;color:var(--t3);margin:3px 0 5px">${pos}${l.exists ? '' : ' · stub braknie'}</div>
+        <button class="btn btn-sm ${armed ? 'btn-primary' : 'btn-secondary'} flp-move" data-key="${_esc(l.key)}" style="width:100%">${armed ? '⏳ Kliknij hex na mapie' : 'Przenieś'}</button>
+      </div>`;
+    }).join('') || '<div style="font-size:0.75rem;color:var(--t3)">Brak makro-lokacji w planie.</div>';
+
+    // SVG
+    const px = hexes.map(h => h2p(h.q, h.r));
+    const minX = Math.min(...px.map(p => p.x)) - SZ * 2;
+    const minY = Math.min(...px.map(p => p.y)) - SZ * 2;
+    const maxX = Math.max(...px.map(p => p.x)) + SZ * 2;
+    const maxY = Math.max(...px.map(p => p.y)) + SZ * 2;
+    const svg = overlay.querySelector('#flp-svg');
+    svg.setAttribute('viewBox', `0 0 ${(maxX - minX).toFixed(1)} ${(maxY - minY).toFixed(1)}`);
+    svg.innerHTML = hexes.map(h => {
+      const { x, y } = h2p(h.q, h.r);
+      const tx = (x - minX).toFixed(1), ty = (y - minY).toFixed(1);
+      const c = COL[h.status] || COL.occupied;
+      const li = locByHex[`${h.q},${h.r}`];
+      const isStart = start && h.q === start.q && h.r === start.r;
+      const clickable = armedKey && h.status !== 'occupied';
+      let marker = '';
+      if (isStart) marker = `<circle cx="0" cy="0" r="7" fill="#0ea5e9" stroke="#fff" stroke-width="1.5"/><text x="0" y="2.6" text-anchor="middle" font-size="7" fill="#fff" style="pointer-events:none">S</text>`;
+      else if (li != null) { const col = _LOC_PALETTE[li % _LOC_PALETTE.length]; marker = `<circle cx="0" cy="0" r="7" fill="${col}" stroke="#fff" stroke-width="1.3"/><text x="0" y="2.6" text-anchor="middle" font-size="7" fill="#fff" style="pointer-events:none">${li + 1}</text>`; }
+      const title = `(${h.q}, ${h.r}) · ${h.hex_type}${h.label ? ' · ' + h.label : ''}${li != null ? ' · ' + _esc((data.locations[li] || {}).name || '') : (h.status === 'occupied' ? ' · ZAJĘTY' : '')}`;
+      return `<g class="flpx" data-q="${h.q}" data-r="${h.r}" data-status="${h.status}" transform="translate(${tx},${ty})" style="cursor:${clickable ? 'pointer' : 'default'};opacity:${armedKey && h.status === 'occupied' && li == null ? 0.5 : 1}">
+        <title>${title}</title>
+        <polygon points="${hexPts(SZ - 1.5)}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${isStart ? 2 : 0.8}"/>
+        <text x="0" y="3" text-anchor="middle" font-size="5.5" fill="#94a3b8" style="pointer-events:none">${h.q},${h.r}</text>
+        ${marker}
+      </g>`;
+    }).join('');
+  }
+
+  render();
+
+  // arm relocation for a location
+  overlay.querySelector('#flp-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('.flp-move');
+    if (!btn) return;
+    const key = btn.dataset.key;
+    armedKey = (armedKey === key) ? null : key;
+    overlay.querySelector('#flp-hint').textContent = armedKey
+      ? `Przenoszę „${(data.locations.find(l => l.key === armedKey) || {}).name || armedKey}" — kliknij wolny (zielony/żółty) hex.`
+      : 'Kliknij „Przenieś" przy lokacji, potem kliknij wolny hex.';
+    render();
+  });
+
+  // click a hex to place the armed location
+  overlay.querySelector('#flp-svg').addEventListener('click', async (e) => {
+    if (!armedKey) { _showToast('Najpierw kliknij „Przenieś" przy lokacji.', 'warn'); return; }
+    const g = e.target.closest('.flpx');
+    if (!g) return;
+    if (g.dataset.status === 'occupied') { _showToast('Hex zajęty — wybierz wolny.', 'warn'); return; }
+    const q = parseInt(g.dataset.q, 10), r = parseInt(g.dataset.r, 10);
+    try {
+      const res = await apiFetch(`/api/admin/forge/templates/${id}/location-hexes/set`, {
+        method: 'POST', body: JSON.stringify({ location_key: armedKey, q, r }),
+      });
+      _showToast(`Przeniesiono na (${res.q}, ${res.r})${res.atypical ? ' ⚠ nietypowy teren' : ''}`, 'success');
+      armedKey = null;
+      data = await load();
+      overlay.querySelector('#flp-hint').textContent = 'Kliknij „Przenieś" przy lokacji, potem kliknij wolny hex.';
+      render();
+    } catch(err) { _showToast(err.message || 'Nie udało się przenieść lokacji.', 'error'); }
+  });
+
+  // re-scatter all
+  overlay.querySelector('#flp-reroll').addEventListener('click', async () => {
+    try {
+      const res = await apiFetch(`/api/admin/forge/templates/${id}/location-hexes/reroll`, {
+        method: 'POST', body: JSON.stringify({ min_spacing: 3 }),
+      });
+      const nA = (res.assigned || []).length, nR = (res.reused || []).length, nU = (res.unplaced || []).length;
+      _showToast(`Rozrzucono: ${nA} przydzielono, ${nR} reużyto${nU ? `, ${nU} bez miejsca` : ''}.`, nU ? 'warn' : 'success');
+      armedKey = null;
+      data = await load();
+      render();
+    } catch(err) { _showToast(err.message || 'Nie udało się rozrzucić.', 'error'); }
   });
 }
 
@@ -2119,6 +2278,7 @@ async function openTemplateEditor(id) {
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
     _renderTplItems(_tplEditorPlan.key_items || []);
+    _renderTplRewards(_tplEditorPlan.rewards || [], (_tplEditorPlan.acts || []).length);  // #1301
     _renderTplValidation();  // #1109 — plan health panel in Przegląd
     _loadTplDbItems();
     const ep = _tplEditorPlan.engine_private || {};
@@ -3024,6 +3184,47 @@ function _renderTplEndings(endings) {
   ).join('');
 }
 
+// #1301 — read-only reward spine: shows the loot axis (act → reward) with tier badges
+// and flags a campaign that hands out nothing mid-run. Source of truth stays the plan.
+function _renderTplRewards(rewards, actCount) {
+  const el = document.getElementById('tpl-rewards-spine');
+  if (!el) return;
+  rewards = Array.isArray(rewards) ? rewards : [];
+  const TIER = {
+    signature: { label: 'SYGNATURA', color: 'var(--amber)', glyph: '★' },
+    notable:   { label: 'CENNA',     color: 'var(--blue)',  glyph: '◆' },
+    minor:     { label: 'DROBNA',    color: 'var(--t3)',    glyph: '•' },
+  };
+  if (!rewards.length) {
+    el.innerHTML = '<div class="card" style="padding:12px;border-left:3px solid var(--t3)">' +
+      '<div style="font-size:0.8rem;color:var(--t2)">🎁 Brak nagród w planie — wygeneruj plan, aby zbudować kręgosłup łupów.</div></div>';
+    return;
+  }
+  // mid-campaign flag: a reward pinned to a beat (source_beat) counts as in-run
+  const midRun = rewards.filter(r => r && r.source_beat).length;
+  const noMidRun = midRun === 0;
+  const rows = rewards.slice().sort((a,b)=>(a.act||0)-(b.act||0)).map(r => {
+    const t = TIER[r.tier] || TIER.minor;
+    const pending = r.tier === 'signature' && r.category !== 'consumable';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:0.7rem;font-weight:700;color:var(--t3);width:34px">Akt ' + (r.act||'?') + '</span>' +
+      '<span style="font-size:0.68rem;font-weight:700;color:' + t.color + ';width:78px">' + t.glyph + ' ' + t.label + '</span>' +
+      '<span style="flex:1;font-size:0.82rem;color:var(--t1)">' + _esc(r.label||r.key||'—') +
+        (r.mechanical_effect ? ' <span style="color:var(--t3);font-size:0.74rem">— ' + _esc(r.mechanical_effect) + '</span>' : '') + '</span>' +
+      '<span style="font-size:0.66rem;color:var(--t3)">' + _esc(r.category||'') + '</span>' +
+      (pending ? '<span style="font-size:0.64rem;color:var(--amber);border:1px solid var(--amber);border-radius:var(--r);padding:1px 5px">do zatwierdzenia</span>' : '') +
+    '</div>';
+  }).join('');
+  el.innerHTML = '<div class="card" style="padding:12px' + (noMidRun ? ';border-left:3px solid var(--amber)' : '') + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div style="font-size:0.83rem;font-weight:600;color:var(--t1)">🎁 Kręgosłup łupów — oś nagród</div>' +
+      '<div style="font-size:0.72rem;color:var(--t3)">' + rewards.length + ' nagród · ' + (actCount||'?') + ' aktów</div>' +
+    '</div>' +
+    (noMidRun ? '<div style="font-size:0.74rem;color:var(--amber);margin-bottom:8px">⚠ Żadna nagroda nie jest przypięta do beatu — gracz dostanie łup dopiero na końcu. Przypnij nagrody do beatów (source_beat).</div>' : '') +
+    rows +
+  '</div>';
+}
+
 function _addTplReq(endIdx) {
   const input = document.getElementById('tpl-end-req-input-' + endIdx);
   if (!input || !input.value.trim()) return;
@@ -3235,6 +3436,7 @@ async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     _renderTplEnemies(_tplEditorPlan.key_enemies || []);
     _renderTplLocations(_tplEditorPlan.key_locations || []);
     _renderTplEndings(_tplEditorPlan.endings || []);
+    _renderTplRewards(d.rewards || _tplEditorPlan.rewards || [], (_tplEditorPlan.acts || []).length);  // #1301
     _renderTplValidation();  // #1109 — refresh plan health after regeneration
     await _loadTplDbItems();  // #1084 — reload DB items after generate-plan (auto-assigned rewards)
     // #1085 — populate klimat/beat/npc fields from auto-fill (only when currently empty)
@@ -3949,6 +4151,8 @@ function _sectionHtml() {
 
         <!-- Tab: Przedmioty -->
         <div id="tpl-tab-items" style="display:none">
+          <!-- #1301 — kręgosłup łupów (oś nagród akt→nagroda), read-only -->
+          <div id="tpl-rewards-spine" style="margin-bottom:14px"></div>
           <div class="forge-grid-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div class="card" style="padding:14px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -4236,6 +4440,7 @@ window._renderTplValidation = _renderTplValidation;
   window.forgeUnpublishTemplate = forgeUnpublishTemplate;
   window.forgeAutoAllocateHex = forgeAutoAllocateHex;
 window.forgeOpenHexPicker = forgeOpenHexPicker;
+  window.forgeOpenLocationPlacer = forgeOpenLocationPlacer;
   window.forgeLaunchCampaignFromTemplate = forgeLaunchCampaignFromTemplate;
   window.forgeGenerateTplDescription = forgeGenerateTplDescription;
   window._toggleTemplatePublish = _toggleTemplatePublish;

@@ -1225,6 +1225,24 @@ ADMIN_MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # #883 N1 — one-time Telegram easy-click link tokens (/start <token> → chat_id).
+    # DDL mirrored in telegram_link_service.SCHEMA_SQL (keep in sync).
+    """
+    CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        used_at    TEXT
+    )
+    """,
+    # #886 N4 — one overdue-turn email digest per round (de-dup marker).
+    # DDL mirrored in notify_digest_service.SCHEMA_SQL (keep in sync).
+    """
+    CREATE TABLE IF NOT EXISTS round_digest_sent (
+        round_id INTEGER PRIMARY KEY,
+        sent_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -1279,7 +1297,9 @@ ADMIN_SEEDS = [
     ('dodge', 'Unik', 'DEX', 5, 38, 'Reakcja bojowa (S15): po zadeklarowaniu uniku, gdy wróg trafia, postać wykonuje test DEX przeciw wynikowi ataku wroga PRZED obrażeniami. Raz na rundę. Sukces — atak mija (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1, by aktywować przełącznik w walce.'),
     ('shield_block', 'Blok Tarczą', 'STR', 5, 39, 'Reakcja bojowa (S16): postać z założoną tarczą może zadeklarować blok; gdy wróg trafia, wykonuje test STR przeciw wynikowi ataku wroga (DC min. 12) PRZED obrażeniami. Raz na rundę (XOR z unikiem). Sukces — obrażenia zmniejszone o 1k6 + bonus STR; sukces o ≥ +5 — atak całkowicie odparty; porażka — pełne obrażenia; krytyczna porażka — tarcza traci wytrzymałość. Wymaga rank ≥ 1 i założonej tarczy.'),
     ('wrestling', 'Zapasy', 'STR', 5, 40, 'Akcja bojowa (S17): chwyt i obalenie wroga w zwarciu — test przeciwny STR vs STR celu. Sukces — cel schwytany/przewrócony (kondycja slowed); sukces krytyczny (margines ≥ +5) — cel unieruchomiony (stunned 1 rundę); porażka — bez efektu; krytyczna porażka — napastnik sam przewrócony (slowed). Wymaga zwarcia (engaged); konsumuje turę.'),
-    ('dual_wield', 'Walka dwoma broniami', 'DEX', 5, 41, 'Cecha bojowa (#598): trzymając DWIE lekkie bronie (np. dwa sztylety) postać wykonuje drugi atak off-hand w tej samej turze (pełny rzut + pełny mod cechy do obrażeń). Wymaga rank ≥ 1 — bez umiejętności off-hand jest kosmetyczny. Cięższa broń + druga broń w off-hand daje zamiast tego parowanie (+2 do obrony), niezależnie od tej umiejętności.')
+    ('dual_wield', 'Walka dwoma broniami', 'DEX', 5, 41, 'Cecha bojowa (#598): trzymając DWIE lekkie bronie (np. dwa sztylety) postać wykonuje drugi atak off-hand w tej samej turze (pełny rzut + pełny mod cechy do obrażeń). Wymaga rank ≥ 1 — bez umiejętności off-hand jest kosmetyczny. Cięższa broń + druga broń w off-hand daje zamiast tego parowanie (+2 do obrony), niezależnie od tej umiejętności.'),
+    ('arcane_ward', 'Arkanowa Bariera', 'INT', 5, 42, 'Reakcja bojowa (#1324): magiczny odpowiednik Uniku. Po zadeklarowaniu bariery, gdy wróg trafia, postać wykonuje test INT (d20 + INT + ranga + biegłość) przeciw wynikowi ataku wroga PRZED obrażeniami, kosztem 1 many za próbę (mana schodzi ZAWSZE, niezależnie od wyniku). Sukces — cios znegowany (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1 i wystarczającej many. Raz na rundę przy wielu wrogach, przy jednym wrogu przy każdym ataku.'),
+    ('mana_shield', 'Tarcza Many', 'INT', 5, 43, 'Reakcja bojowa (#1325): magiczny odpowiednik Bloku, DETERMINISTYCZNA (bez rzutu). Mag przyjmuje cios w manę zamiast w ciało. Po zadeklarowaniu tarczy, gdy wróg trafia, silnik pochłania obrażenia FINALNE (po pancerzu i marginesie) do limitu 2 × ranga many na cios, przy przeliczniku 2 obrażenia za 1 manę. Postać płaci manę tylko za faktycznie pochłonięte obrażenia (zaokrąglone w górę); niewykorzystany limit nic nie kosztuje, a cap chroni pulę przed krytykiem wroga. Bez rzutu — brak porażki i lockoutu. Wymaga rank ≥ 1 i many > 0. Raz na rundę ZAWSZE — także przy jednym wrogu.')
     """,
     # Translate any pre-existing English labels to Polish (idempotent — only
     # rewrites rows still holding the English defaults so admin renames are kept).
@@ -2525,6 +2545,33 @@ def _backfill_enemy_loot_tables(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_backfill_enemy_loot_tables", count=len(rows))
     except Exception as e:
         logger.warning("admin_migration_backfill_enemy_loot_tables_failed", error=str(e))
+
+
+def _backfill_enemy_loot_entries(conn: sqlite3.Connection) -> None:
+    """#1283 — populate loot entries for active enemies whose loot table exists
+    but has zero entries (e.g. Forge-created story enemies from before the
+    auto-populate fix, or ones left empty by _backfill_enemy_loot_tables above).
+
+    Idempotent: _auto_populate_enemy_loot() no-ops per-enemy once entries exist.
+    """
+    try:
+        from app.services.world_service import _auto_populate_enemy_loot
+
+        rows = conn.execute(
+            """
+            SELECT e.key, e.tier, e.label FROM game_config_enemies e
+            WHERE e.is_active = 1 AND e.loot_table_key IS NOT NULL AND e.loot_table_key != ''
+              AND (SELECT COUNT(*) FROM game_config_loot_entries le
+                    WHERE le.loot_table_key = e.loot_table_key) = 0
+            """
+        ).fetchall()
+        if not rows:
+            return
+        for row in rows:
+            _auto_populate_enemy_loot(conn, row["key"], row["tier"] or "standard", row["label"] or row["key"])
+        logger.info("admin_migration_backfill_enemy_loot_entries", count=len(rows))
+    except Exception as e:
+        logger.warning("admin_migration_backfill_enemy_loot_entries_failed", error=str(e))
 
 
 def _backfill_enemy_stats_json(conn: sqlite3.Connection) -> None:
@@ -6017,6 +6064,217 @@ def _drop_legacy_content_columns_1202(conn: sqlite3.Connection) -> None:
                 )
 
 
+def _ensure_bestiary_schema(conn: sqlite3.Connection) -> None:
+    """#1191 E1 — Bestiariusz: per-character kill counters per enemy type.
+
+    Idempotent. `character_bestiary` aggregates kills across ALL campaigns of a
+    hero (Hero-First model) via character_id. `unlocked_tier` is derived from
+    kills (0 none / 1 basic entry / 2 HP preview / 3 +1 to-hit). `lore_text` on
+    game_config_enemies is optional flavour prose (fallback = description).
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_bestiary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                enemy_key TEXT NOT NULL,
+                kills INTEGER NOT NULL DEFAULT 0,
+                first_kill_at TEXT,
+                last_kill_at TEXT,
+                unlocked_tier INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(character_id, enemy_key)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bestiary_char "
+            "ON character_bestiary(character_id)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("bestiary_schema_skipped", error=str(e))
+    # optional lore column on enemies (idempotent)
+    try:
+        conn.execute("ALTER TABLE game_config_enemies ADD COLUMN lore_text TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        msg = str(e).lower()
+        if "duplicate column" not in msg and "no such table" not in msg:
+            raise
+
+
+def _ensure_rumor_schema(conn: sqlite3.Connection) -> None:
+    """#1191 E4 — Atlas plotki: persistent rumors per character.
+
+    A successful `quest_rumor` social encounter records a rumor pointing at a
+    deterministic target (location / hex / enemy type). Discovering that target
+    later flips status heard→confirmed. Idempotent.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_rumors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                campaign_id INTEGER NOT NULL,
+                rumor_text TEXT NOT NULL,
+                target_type TEXT,
+                target_key TEXT,
+                status TEXT NOT NULL DEFAULT 'heard',
+                heard_at TEXT NOT NULL,
+                confirmed_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rumors_char "
+            "ON character_rumors(character_id, status)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("rumor_schema_skipped", error=str(e))
+
+
+def _ensure_treasure_schema(conn: sqlite3.Connection) -> None:
+    """#1196 E1 — Mapy skarbów: treasure records + per-character map fragments.
+
+    `world_treasures` = one row per map/treasure (identity = id/map_key, NOT name,
+    per D5). `total_parts=1` means the whole map is granted at once (D6). Loot is
+    frozen on completion (D3) and scales with total_parts (D7). Carrier items use
+    item_type='treasure_map' so grant_loot_to_character can intercept them into
+    these tables instead of leaving a dead inventory row. Idempotent.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS world_treasures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                map_key TEXT,
+                label TEXT,
+                hex_q INTEGER NOT NULL,
+                hex_r INTEGER NOT NULL,
+                map_level INTEGER NOT NULL DEFAULT 0,
+                region TEXT,
+                loot_table_key TEXT,
+                loot_snapshot_json TEXT,
+                gold_snapshot INTEGER NOT NULL DEFAULT 0,
+                gold_bonus INTEGER NOT NULL DEFAULT 0,
+                guardian_enemy_key TEXT,
+                dc INTEGER NOT NULL DEFAULT 12,
+                total_parts INTEGER NOT NULL DEFAULT 1,
+                loot_tier_bonus INTEGER NOT NULL DEFAULT 0,
+                gold_mult REAL NOT NULL DEFAULT 1.0,
+                extra_loot_rolls INTEGER NOT NULL DEFAULT 0,
+                character_id INTEGER,
+                campaign_id INTEGER,
+                state TEXT NOT NULL DEFAULT 'buried',
+                created_by TEXT NOT NULL DEFAULT 'generated',
+                created_at TEXT DEFAULT (datetime('now')),
+                found_at TEXT,
+                found_by_character_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_hex "
+            "ON world_treasures(hex_q, hex_r, map_level)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_char "
+            "ON world_treasures(character_id, state)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_world_treasures_mapkey "
+            "ON world_treasures(map_key, character_id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_map_fragments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                campaign_id INTEGER,
+                treasure_id INTEGER NOT NULL,
+                part_no INTEGER NOT NULL,
+                acquired_at TEXT DEFAULT (datetime('now')),
+                source TEXT DEFAULT 'loot',
+                UNIQUE(character_id, treasure_id, part_no)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_char_map_fragments "
+            "ON character_map_fragments(character_id, treasure_id)"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_schema_skipped", error=str(e))
+
+    # Carrier catalog items (item_type='treasure_map' triggers grant interception).
+    # NOTE: detection is key-based (is_treasure_map_key), so game_items.kind stays a
+    # valid enum ('item') — we do NOT touch it (CHECK constraint forbids new values).
+    try:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_items
+                (key, label, item_type, description, value_gp, is_active,
+                 approved, review_status)
+            VALUES
+                ('fragment_mapy_skarbow', 'Fragment mapy skarbów', 'treasure_map',
+                 'Postrzępiony skrawek mapy. Sam w sobie bezużyteczny — dopiero w komplecie zdradza, gdzie ukryto skarb.',
+                 0, 1, 1, 'permanent')
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_items
+                (key, label, item_type, description, value_gp, is_active,
+                 approved, review_status)
+            VALUES
+                ('treasure_map', 'Mapa skarbu', 'treasure_map',
+                 'Wytarta mapa z zaznaczonym X. Prowadzi do ukrytego skarbu gdzieś w świecie.',
+                 0, 1, 1, 'permanent')
+            """
+        )
+        # Existing treasure_map row may still be item_type='quest' — flip it so the
+        # grant interception fires (fixes [SBX-SCN] #1196: unclickable dead item).
+        conn.execute(
+            "UPDATE game_config_items SET item_type='treasure_map' "
+            "WHERE key IN ('treasure_map','fragment_mapy_skarbow')"
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_carrier_seed_skipped", error=str(e))
+
+    # Seed the generic fragment into a handful of non-boss enemy loot tables so it
+    # drops during normal play (weight 4 = ~4%). Idempotent via NOT-present guard.
+    try:
+        tables = conn.execute(
+            """
+            SELECT DISTINCT t.key FROM game_config_loot_tables t
+            JOIN game_config_enemies e ON e.loot_table_key = t.key
+            WHERE t.is_active = 1 AND COALESCE(e.tier, 'standard') != 'boss'
+              AND t.key NOT IN (
+                SELECT loot_table_key FROM game_config_loot_entries
+                WHERE item_key = 'fragment_mapy_skarbow'
+              )
+            ORDER BY t.key ASC LIMIT 20
+            """
+        ).fetchall()
+        for row in tables:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO game_config_loot_entries
+                    (loot_table_key, item_key, weight, qty_min, qty_max, game_item_key)
+                VALUES (?, 'fragment_mapy_skarbow', 4, 1, 1, 'fragment_mapy_skarbow')
+                """,
+                (row["key"],),
+            )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("treasure_loot_seed_skipped", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6111,6 +6369,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
         _backfill_enemy_loot_tables(conn)
+        _backfill_enemy_loot_entries(conn)
         _backfill_enemy_stats_json(conn)
         _ensure_user_llm_settings_mode(conn)
         _ensure_dungeon_tile_l1_columns(conn)
@@ -6131,7 +6390,6 @@ def run_admin_migrations() -> None:
         _ensure_campaign_plan_degraded(conn)
         _patch_campaign_template_beat_objectives(conn)
         _patch_campaign_template_endings_and_optional(conn)  # #1019
-        seed_test_trylogia_template(conn)  # #1021
         _migrate_npc_locations_to_assignments(conn)
         _backfill_game_items(conn)
         _refresh_knowledge_content(conn)  # #594 audit — runs last, wins over re-seeds
@@ -6174,6 +6432,9 @@ def run_admin_migrations() -> None:
         _ensure_encounter_catalog(conn)  # #1130 PT-D4a
         _backfill_local_hex_encounter_chance(conn)  # #1147
         _drop_legacy_content_columns_1202(conn)  # #1202 B — DEV↔PROD schema align
+        _ensure_bestiary_schema(conn)  # #1191 E1 — Bestiariusz kill counters
+        _ensure_rumor_schema(conn)  # #1191 E4 — Atlas plotki
+        _ensure_treasure_schema(conn)  # #1196 E1 — Mapy skarbów
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

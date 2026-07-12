@@ -15,7 +15,6 @@ import json
 import sqlite3
 from typing import Any
 
-from app.services import config_service
 from app.services.dice import DICE_TEST_TO_CONFIG_SKILL_KEY, parse_character_sheet
 
 DB_PATH = "/data/ai_gm.db"
@@ -209,15 +208,26 @@ def _rank_ceiling_for_skill(skill_key: str) -> int:
 
 
 def _skill_known_in_catalog(skill_key: str) -> bool:
-    cfg = config_service.get_runtime_config()
-    keys = {
-        str(s.get("key"))
-        for s in (cfg.get("skills") or [])
-        if isinstance(s, dict) and s.get("key")
-    }
-    # Strict check — no alias expansion. Legacy dice-test names (melee_attack etc.)
-    # must be rejected here so they can't be accidentally re-added via XP spend (#1052).
-    return skill_key in keys
+    # Validate against the LIVE game_config_skills table — the same source the
+    # sheet + advancement UI reads (/mechanics/skills). Using the cached/default
+    # runtime-config snapshot instead diverged: with USE_DB_CONFIG unset the
+    # snapshot is a 13-skill hardcoded list, so DB-only skills (shield_block,
+    # dodge, endurance…) rendered in the UI but were rejected on upgrade. Reading
+    # the table restores the display↔upgrade invariant: any skill the player can
+    # see is upgradeable. Legacy dice-test names (melee_attack etc.) stay rejected
+    # because #1052 removed them from the table — no alias expansion here.
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM game_config_skills WHERE key = ? LIMIT 1",
+                (skill_key,),
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+    except Exception:
+        return False
 
 
 CATCHUP_XP_MULTIPLIER = 1.5  # G26 #807: starting value, tune after playtest

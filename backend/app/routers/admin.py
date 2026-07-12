@@ -1718,7 +1718,7 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative, relic",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
@@ -1787,7 +1787,7 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative, relic",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
@@ -3974,6 +3974,25 @@ def admin_get_campaign_known_npcs(campaign_id: int, _: None = Depends(require_ad
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/enemies")
+def admin_get_campaign_enemies(campaign_id: int, _: None = Depends(require_admin_token)):
+    """#1296 — roster of the campaign's planned enemies + materialization status.
+
+    Mirrors known-npcs: surfaces gm_plan_json.key_enemies joined with
+    game_config_enemies so the admin sees which planned foes are actually playable
+    (materialized + active) vs plan-only fiction (MISSING).
+    """
+    from app.services.world_service import get_campaign_plan_enemies
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        enemies = get_campaign_plan_enemies(conn, campaign_id)
+        return {"enemies": enemies, "count": len(enemies)}
+    finally:
+        conn.close()
+
+
 @router.get("/admin/campaigns/{campaign_id}/tag-error-count")
 def admin_get_tag_error_count(campaign_id: int, _: None = Depends(require_admin_token)):
     """U5 (#528): Return LLM tag error count for a campaign (for Campaign Monitor badge)."""
@@ -4143,7 +4162,7 @@ def admin_create_invite(
         conn.commit()
 
         base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+        invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
 
         return {
             "ok": True,
@@ -4551,7 +4570,7 @@ def player_create_invite(
         inviter_name = (inviter["display_name"] or inviter["username"]) if inviter else "Gracz"
 
         base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+        invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
 
         # Send invite email
         from app.services.email_service import send_invite_email
@@ -4684,7 +4703,7 @@ def admin_send_invite_email(
 
     from app.services.email_service import send_invite_email as _send_invite_email
     base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-    invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+    invite_link = f"{base_url}/graj/rejestracja?invite={code}" if base_url else f"/graj/rejestracja?invite={code}"
     ok = _send_invite_email(
         to=row["email"],
         inviter_name=req.inviter_name,

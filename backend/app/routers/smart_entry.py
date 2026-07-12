@@ -215,6 +215,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "type": "single_choice",
                 "question": "Jaki to rodzaj przedmiotu?",
                 "options": [
+                    {"label": "relic", "description": "Relikt / artefakt — zakładany w slot reliktu, daje pasywne bonusy (staty/AC/umiejętności) z effect_json"},
                     {"label": "armor", "description": "Zbroja / ochrona"},
                     {"label": "accessory", "description": "Akcesoria (pierścień, amulet)"},
                     {"label": "misc", "description": "Różne przedmioty"},
@@ -619,17 +620,34 @@ Dostępne typy efektów (effect_category="gear_bonus"):
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"heal_on_hit","value":2}]}
   ac_bonus      — bonus do Klasy Pancerza z broni/przedmiotu (np. parująca broni, tarcza-miecz)
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"ac_bonus","value":1}]}
-  static_stat_modifier — modyfikator statystyki; wymaga pola "stat"
+  static_stat_modifier — modyfikator statystyki; wymaga pola "stat". DZIAŁA W WALCE I POZA WALKĄ (testy).
                   Dozwolone "stat": 7 statystyk STR|DEX|CON|INT|WIS|CHA|LCK ORAZ cele pochodne ac|attack_bonus|damage_bonus|initiative
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"STR","value":2}]}
-                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"LCK","value":1}]}
-  narrative_only — efekt narracyjny bez mechaniki (opis dla GM)
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"CHA","value":2}]}
+  static_skill_modifier — bonus do UMIEJĘTNOŚCI; wymaga pola "skill". Działa OD ZERA — nadaje umiejętność
+                  nawet gdy bohater jej NIE wykupił (np. magiczny wytrych pozwala otwierać zamki bez wprawy).
+                  Dozwolone "skill" (klucz z game_config_skills): lockpick (otwieranie zamków), stealth (skradanie),
+                  persuasion, deception, intimidation, awareness, investigation, medicine, survival, tracking,
+                  pickpocket, athletics, acrobatics, lore, arcana, haggling, climb, swim i in.
+                  {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_skill_modifier","skill":"lockpick","value":2}]}
+  narrative_only — efekt narracyjny bez mechaniki (opis dla GM). Używaj TYLKO gdy naprawdę brak twardego efektu.
                   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"narrative_only"}]}
 
 Można łączyć wiele typów w jednej tablicy effects[].
 Przykład miecza kradnącego życie i zadającego bonus obrażeń:
   {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":2},{"type":"heal_on_hit","value":1}]}
 Zostaw null jeśli broń nie ma efektów specjalnych.
+
+RELIKTY / ARTEFAKTY (item_type="relic"):
+Gdy admin opisuje PASYWNY przedmiot zakładany przez gracza (daje statystykę, pancerz LUB umiejętność —
+np. "amulet dający +2 CHA", "magiczny wytrych do otwierania zamków", "pierścień skradania"):
+  - USTAW item_type="relic" (NIE "accessory", NIE "misc"),
+  - WYGENERUJ effect_json z realnym efektem (static_stat_modifier / static_skill_modifier / ac_bonus),
+    a NIE narrative_only — relikt ma działać mechanicznie.
+Przykład magicznego wytrycha (otwiera zamki bez umiejętności):
+  item_type="relic", effect_json = {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_skill_modifier","skill":"lockpick","value":2}]}
+Przykład amuletu charyzmy:
+  item_type="relic", effect_json = {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"CHA","value":2}]}
 
 TABELA game_config_spells — zaklęcia Uczonego (NIE mają effect_json):
 - 'key': slug z label (polskie znaki→ascii, spacje→_)

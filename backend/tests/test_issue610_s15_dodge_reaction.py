@@ -170,6 +170,8 @@ def test_resolve_attack_dodge_negates_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared=None, skill_rank=2, attack_bonus=0)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)   # wróg trafia (raw 18) + unik zdany
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win["hit"] is True and win.get("reaction_window") is True
@@ -188,6 +190,8 @@ def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win.get("reaction_window") is True
@@ -204,6 +208,8 @@ def test_resolve_attack_no_skill_no_reaction(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared="dodge", skill_rank=0)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction") is None or out.get("reaction", {}).get("available") is not True
@@ -216,6 +222,8 @@ def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared="dodge", skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     # raw d20 wroga = 18, attack_roll = 18 + attack_bonus 10 = 28 (nietknięte mimo uniku)

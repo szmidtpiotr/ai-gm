@@ -63,6 +63,13 @@ def register_push_subscription(
         save_subscription(uid, {"endpoint": req.endpoint, "keys": req.keys})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # N3 (#885): enable the web_push channel in the dispatcher now that a live
+    # subscription exists — otherwise notify() would skip web_push entirely.
+    try:
+        from app.services import notification_service as ns
+        ns.set_prefs(uid, web_push_enabled=1)
+    except Exception:  # noqa: BLE001 — subscription itself already succeeded
+        logger.warning("web_push_pref_enable_failed", user_id=uid)
     logger.info("push_subscription_registered", user_id=uid)
     return {"status": "ok"}
 
@@ -74,5 +81,22 @@ def remove_push_subscription(
 ):
     uid = _uid(authorization)
     delete_subscription(uid, req.endpoint)
+    # N3 (#885): if that was the last subscription, disable the web_push channel
+    # so the dispatcher stops choosing it and falls through to email.
+    try:
+        from app.services import notification_service as ns
+        from app.services.push_notification_service import _db
+
+        conn = _db()
+        try:
+            remaining = conn.execute(
+                "SELECT COUNT(*) FROM user_push_subscriptions WHERE user_id = ?", (uid,)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        if not remaining:
+            ns.set_prefs(uid, web_push_enabled=0)
+    except Exception:  # noqa: BLE001
+        logger.warning("web_push_pref_disable_failed", user_id=uid)
     logger.info("push_subscription_removed", user_id=uid)
     return {"status": "ok"}

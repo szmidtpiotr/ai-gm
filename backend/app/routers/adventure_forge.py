@@ -404,6 +404,11 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              d.get("tier", "standard"), d.get("damage_type", "physical"),
              now, now),
         )
+        try:
+            from app.services.world_service import _auto_populate_enemy_loot
+            _auto_populate_enemy_loot(conn, key, d.get("tier", "standard"), label)
+        except Exception:
+            pass
         return table, cur.lastrowid
 
     elif htype == "npc":
@@ -1364,6 +1369,11 @@ def _auto_create_forge_enemies(
                     now,
                 ),
             )
+            try:
+                from app.services.world_service import _auto_populate_enemy_loot
+                _auto_populate_enemy_loot(conn, key, tier, e.get("name") or key)
+            except Exception:
+                pass
             created.append({"key": key, "name": e.get("name") or key})
         except Exception:
             pass
@@ -1542,15 +1552,354 @@ def _auto_assign_reward_items(
     return assigned
 
 
+# ── #1301 Reward spine: budget → bespoke signatures + pool notable/minor ───────
+
+def _compute_reward_budget(act_count: int, difficulty_rating: int) -> dict:
+    """Reward budget scaled to campaign scope. All STARTING values (Numbers Policy):
+    a long/hard campaign earns more and higher-rarity loot than a short one-shot.
+    Engine floor — the LLM designs within it, the engine tops up if it undershoots."""
+    ac = max(1, int(act_count or 1))
+    diff = max(1, min(5, int(difficulty_rating or 3)))
+    if ac <= 2:
+        rarity_ceiling = 3
+    elif ac <= 4:
+        rarity_ceiling = 4
+    else:
+        rarity_ceiling = 5
+    if diff >= 4:
+        rarity_ceiling = min(5, rarity_ceiling + 1)
+    return {
+        "signature": 1,
+        "notable": max(1, ac - 1),
+        "minor": ac // 2,
+        "rarity_ceiling": rarity_ceiling,
+    }
+
+
+# Constrained vocabulary → safe weapon effect_json. LLM writes prose in
+# `mechanical_effect`; we never trust it to emit raw effect_json (balance + validity).
+_STAT_KEYWORDS = [
+    ("STR", ("sił", "krzep", "str")),
+    ("DEX", ("zręcz", "zwinn", "dex")),
+    ("CON", ("kondycj", "wytrzym", "con")),
+    ("INT", ("intelig", "wied", "int")),
+    ("WIS", ("mądro", "spost", "wis")),
+    ("CHA", ("charyzm", "urok", "cha")),
+    ("LCK", ("szczęś", "fart", "luck")),
+]
+
+# #1302: prose keyword → skill key (game_config_skills.key). Item relics can GRANT
+# a skill from nothing (magic lockpick → lockpick), even if the hero never bought
+# it. First match wins. Keys must match real game_config_skills.key values.
+_SKILL_KEYWORDS = [
+    ("lockpick", ("wytrych", "zamk", "kłódk", "otwiera zam", "złodziejsk")),
+    ("stealth", ("skrad", "ukryci", "cień", "niewidzial", "cichociem", "bezszelest")),
+    ("persuasion", ("perswa", "przekon", "namow", "dyplomac", "krasomów")),
+    ("deception", ("oszust", "blef", "kłamstw", "podstęp", "iluzj")),
+    ("intimidation", ("zastrasz", "groźb", "onieśmiel", "postrach", "trwog")),
+    ("awareness", ("spostrzeg", "czujn", "uważn", "wyczul")),
+    ("investigation", ("śledztw", "dochodzeni", "badani", "poszlak")),
+    ("medicine", ("lecz", "medyc", "uzdraw", "opatr", "zielarstw")),
+    ("survival", ("przetrwani", "obóz", "puszcz", "dzicz")),
+    ("tracking", ("tropi", "trop", "ślad", "pościg")),
+    ("pickpocket", ("kieszonk", "zwędz")),
+    ("athletics", ("atletyk", "siłow wysił", "krzepa")),
+    ("acrobatics", ("akrobac", "salto", "balans")),
+    ("lore", ("erudycj", "księg wiedz", "uczonoś")),
+    ("arcana", ("arkan", "magiczn wiedz")),
+]
+
+
+def _match_skill_effect(txt: str, rarity: int) -> "dict | None":
+    """First skill keyword hit → static_skill_modifier effect (or None)."""
+    for skill, keys in _SKILL_KEYWORDS:
+        if any(k in txt for k in keys):
+            return {"type": "static_skill_modifier", "skill": skill, "value": 1 if rarity < 5 else 2}
+    return None
+
+
+def _build_signature_effect_json(mechanical_effect: str, rarity: int, category: str) -> "str | None":
+    """Map a signature's prose effect to a valid effect_json.
+
+    #1302: item relics now carry a real PASSIVE hook too (static_stat_modifier /
+    ac_bonus), consumed by equipment_effects_service when the relic is equipped —
+    stats/AC work in combat AND out of combat. Weapons keep their full combat
+    vocabulary (damage_bonus/heal_on_hit/ac_bonus/static_stat_modifier). Consumables
+    stay effect-less here (returns None). The stat keyword mapper is shared."""
+    txt = (mechanical_effect or "").lower()
+    r = max(4, min(5, int(rarity or 4)))
+    effects: list[dict] = []
+
+    if category == "item":
+        # Passive relic: stats + AC + skills (not a weapon → no damage/heal hooks).
+        for stat, keys in _STAT_KEYWORDS:
+            if any(k in txt for k in keys):
+                effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1 if r < 5 else 2})
+                break
+        _sk = _match_skill_effect(txt, r)  # #1302: relikt może NADAĆ umiejętność
+        if _sk:
+            effects.append(_sk)
+        if any(k in txt for k in ("pancerz", "obron", "tarcz", "armor", " ac", "ochron")):
+            effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+        if not effects:
+            # Guarantee a signature relic is mechanically special even if prose was vague.
+            effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+        return json.dumps({"schema_version": 1, "effects": effects}, ensure_ascii=False)
+
+    if category != "weapon":
+        return None
+
+    if any(k in txt for k in ("obraże", "dmg", "damage", "ostrz", "cios", "rani")):
+        effects.append({"type": "damage_bonus", "value": r - 2})  # r4→+2, r5→+3
+    if any(k in txt for k in ("wysysa", "życia", "lifesteal", "wampir", "leczy", "krew")):
+        effects.append({"type": "heal_on_hit", "value": 1 if r < 5 else 2})
+    if any(k in txt for k in ("pancerz", "obron", "tarcz", "armor", " ac")):
+        effects.append({"type": "ac_bonus", "value": 1 if r < 5 else 2})
+    for stat, keys in _STAT_KEYWORDS:
+        if any(k in txt for k in keys):
+            effects.append({"type": "static_stat_modifier", "stat": stat, "value": 1})
+            break
+    _sk = _match_skill_effect(txt, r)  # #1302: broń-relikt może też nadać umiejętność
+    if _sk:
+        effects.append(_sk)
+    if not effects:
+        # Guarantee a signature weapon is mechanically special even if the prose was vague.
+        effects.append({"type": "damage_bonus", "value": r - 2})
+    return json.dumps({"schema_version": 1, "effects": effects}, ensure_ascii=False)
+
+
+def _materialize_plan_rewards(
+    conn: sqlite3.Connection,
+    template_id: int,
+    plan_public: dict,
+    difficulty_rating: int,
+    act_count: int,
+) -> dict:
+    """#1301 — turn plan.rewards[] into real template-scoped game rows and mutate
+    plan_public in place so each reward carries `granted_key` (→ runtime grant) and
+    each linked beat can resolve its reward. Signatures → bespoke PENDING uniques
+    (rarity ≥4, real effect_json). Notable/minor → pool clones by tier. Falls back to
+    pool draws when the LLM under-delivers vs the budget floor."""
+    budget = _compute_reward_budget(act_count, difficulty_rating)
+    now = datetime.utcnow().isoformat()
+    rewards = plan_public.get("rewards") or []
+    if not isinstance(rewards, list):
+        rewards = []
+        plan_public["rewards"] = rewards
+
+    def _uniq(table: str, base: str) -> str:
+        key, i = base, 2
+        while conn.execute(f"SELECT 1 FROM {table} WHERE key = ?", (key,)).fetchone():
+            key = f"{base}_{i}"; i += 1
+        return key
+
+    def _pool_clone(category: str, rmin: int, rmax: int, label_hint: str | None) -> "tuple[str,str] | None":
+        """Clone one random pool row of `category` in [rmin,rmax] as a hidden approved
+        template item. Returns (granted_key, label) or None when the pool is empty."""
+        if category == "weapon":
+            row = conn.execute(
+                "SELECT key,label,damage_die,weapon_type,linked_stat,allowed_classes,rarity,description,note "
+                "FROM game_config_weapons WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+                "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+            if not row:
+                return None
+            nk = _uniq("game_config_weapons", f"tpl{template_id}_{row['key']}")
+            conn.execute(
+                "INSERT INTO game_config_weapons (key,label,damage_die,weapon_type,linked_stat,allowed_classes,"
+                "rarity,description,note,template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,0,1,'permanent',?,?)",
+                (nk, row["label"], row["damage_die"], row["weapon_type"], row["linked_stat"],
+                 row["allowed_classes"], row["rarity"], row["description"], row["note"], template_id, now, now))
+            return nk, row["label"]
+        if category == "consumable":
+            row = conn.execute(
+                "SELECT key,label,effect_type,effect_dice,effect_bonus,effect_target,base_price,rarity,description "
+                "FROM game_config_consumables WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+                "AND is_active=1 AND approved=1 ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+            if not row:
+                return None
+            nk = _uniq("game_config_consumables", f"tpl{template_id}_{row['key']}")
+            conn.execute(
+                "INSERT INTO game_config_consumables (key,label,effect_type,effect_dice,effect_bonus,effect_target,"
+                "base_price,rarity,description,template_id,hidden,ai_generated,approved,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,0,1,?,?)",
+                (nk, row["label"], row["effect_type"] or "misc", row["effect_dice"], row["effect_bonus"] or 0,
+                 row["effect_target"] or "self", row["base_price"] or 0, row["rarity"], row["description"],
+                 template_id, now, now))
+            return nk, row["label"]
+        # item
+        row = conn.execute(
+            "SELECT key,label,item_type,value_gp,rarity,description "
+            "FROM game_config_items WHERE template_id IS NULL AND rarity BETWEEN ? AND ? "
+            "AND is_active=1 AND approved=1 AND item_type != 'armor' ORDER BY RANDOM() LIMIT 1", (rmin, rmax)).fetchone()
+        if not row:
+            return None
+        nk = _uniq("game_config_items", f"tpl{template_id}_{row['key']}")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,"
+            "template_id,hidden,ai_generated,approved,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,0,1,?,?)",
+            (nk, row["label"], row["item_type"], row["value_gp"] or 0, row["rarity"], row["description"],
+             template_id, now, now))
+        return nk, row["label"]
+
+    def _create_signature(rw: dict) -> "str | None":
+        """Create a bespoke PENDING unique from the plan reward. rarity clamped ≥4."""
+        category = (rw.get("category") or "weapon").lower()
+        if category not in ("weapon", "item", "consumable"):
+            category = "weapon"
+        label = (rw.get("label") or "Relikt").strip()
+        rarity = max(4, min(5, int(budget["rarity_ceiling"])))
+        desc = (rw.get("story_hook") or rw.get("mechanical_effect") or "").strip()
+        note = (rw.get("mechanical_effect") or "").strip()
+        base = _slugify(rw.get("key") or label)
+        if category == "weapon":
+            nk = _uniq("game_config_weapons", f"tpl{template_id}_{base}")
+            efx = _build_signature_effect_json(note, rarity, "weapon")
+            conn.execute(
+                "INSERT INTO game_config_weapons (key,label,damage_die,weapon_type,linked_stat,allowed_classes,"
+                "rarity,description,note,effect_json,template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
+                (nk, label, "1d8" if rarity < 5 else "1d10", "melee", "STR", "warrior,rogue,scholar",
+                 rarity, desc, note, efx, template_id, now, now))
+            return nk
+        if category == "consumable":
+            # Consumables have no review_status column → no pending queue; ship functional.
+            nk = _uniq("game_config_consumables", f"tpl{template_id}_{base}")
+            conn.execute(
+                "INSERT INTO game_config_consumables (key,label,effect_type,effect_dice,effect_bonus,effect_target,"
+                "base_price,rarity,description,template_id,hidden,ai_generated,approved,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,1,1,1,?,?)",
+                (nk, label, "heal_hp", "2d6" if rarity < 5 else "3d6", 0, "self", 0, rarity, desc,
+                 template_id, now, now))
+            return nk
+        # #1302: item signature carries a passive effect_json (static_stat_modifier/ac_bonus)
+        # so an equipped relic is mechanically alive, not just flavour.
+        nk = _uniq("game_config_items", f"tpl{template_id}_{base}")
+        efx = _build_signature_effect_json(note, rarity, "item")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,effect_json,"
+            "template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,0,1,0,'pending',?,?)",
+            (nk, label, "relic", 100 * rarity, rarity, desc, note, efx, template_id, now, now))
+        return nk
+
+    def _create_map_item(rw: dict) -> "str | None":
+        """#1308 — materialize a map reward as a functional item whose effect_json
+        reveals the depicted plan locations (mode=location, drift-proof). Ships
+        approved (no review queue) so the reveal works the moment it is granted."""
+        reveals = [str(k) for k in (rw.get("reveals") or []) if k]
+        if not reveals:
+            return None
+        label = (rw.get("label") or "Mapa").strip()
+        desc = (rw.get("story_hook") or rw.get("mechanical_effect") or "").strip()
+        efx = json.dumps(
+            {"effects": [{"type": "map_reveal", "mode": "location", "list": reveals}]},
+            ensure_ascii=False,
+        )
+        nk = _uniq("game_config_items", f"tpl{template_id}_{_slugify(rw.get('key') or label)}")
+        conn.execute(
+            "INSERT INTO game_config_items (key,label,item_type,value_gp,rarity,description,note,effect_json,"
+            "template_id,hidden,ai_generated,approved,review_status,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,1,1,1,'permanent',?,?)",
+            (nk, label, "map", 25, 2, desc, "Odsłania fragment mapy świata.", efx,
+             template_id, now, now))
+        return nk
+
+    summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0,
+               "pending_keys": [], "maps": 0}
+    tier_rarity = {"minor": (1, 2), "notable": (3, 3)}
+
+    # #1308 — map rewards first: any reward flagged is_map / carrying `reveals` becomes
+    # a functional map item (skipped by the tier pool logic below via `granted_key`).
+    for rw in rewards:
+        if isinstance(rw, dict) and not rw.get("granted_key") and (rw.get("is_map") or rw.get("reveals")):
+            gk = _create_map_item(rw)
+            if gk:
+                rw["granted_key"] = gk
+                rw["is_map"] = True
+                rw["category"] = "item"
+                summary["maps"] += 1
+
+    by_tier: dict[str, list] = {"signature": [], "notable": [], "minor": []}
+    for rw in rewards:
+        if isinstance(rw, dict) and rw.get("granted_key"):
+            continue  # already materialized (e.g. map) — don't pool-clone over it
+        if isinstance(rw, dict) and rw.get("tier") in by_tier:
+            by_tier[rw["tier"]].append(rw)
+
+    # Signatures (cap to budget; force ≥budget count).
+    sig_list = by_tier["signature"][: budget["signature"]]
+    if not sig_list and budget["signature"]:
+        # LLM gave none — promote the best notable, else synthesize a generic one.
+        promoted = by_tier["notable"][0] if by_tier["notable"] else {
+            "key": "signature_relict", "label": "Relikt Przygody", "category": "weapon",
+            "act": act_count, "mechanical_effect": "+2 do obrażeń", "tier": "signature"}
+        promoted = dict(promoted); promoted["tier"] = "signature"
+        promoted.setdefault("category", "weapon")
+        rewards.append(promoted)
+        sig_list = [promoted]
+        summary["fallback_added"] += 1
+    for rw in sig_list:
+        gk = _create_signature(rw)
+        if gk:
+            rw["granted_key"] = gk
+            rw["tier"] = "signature"
+            summary["signature"] += 1
+            summary["pending_keys"].append(gk)
+
+    # Notable + minor from pool by tier.
+    for tier in ("notable", "minor"):
+        want = budget[tier]
+        have = by_tier[tier][:want]
+        for rw in have:
+            cat = (rw.get("category") or "item").lower()
+            rmin, rmax = tier_rarity[tier]
+            res = _pool_clone(cat if cat in ("weapon", "item", "consumable") else "item", rmin, rmax, rw.get("label"))
+            if res:
+                rw["granted_key"] = res[0]
+                summary[tier] += 1
+        # Fallback top-up: LLM under-delivered this tier → synth from pool (no source_beat).
+        deficit = want - len(have)
+        for _ in range(max(0, deficit)):
+            rmin, rmax = tier_rarity[tier]
+            res = _pool_clone("weapon" if tier == "notable" else "item", rmin, rmax, None)
+            if res:
+                rewards.append({
+                    "key": _uniq_reward_key(rewards, res[0]), "label": res[1], "tier": tier,
+                    "category": "weapon" if tier == "notable" else "item",
+                    "act": act_count, "granted_key": res[0], "acquisition": "loot",
+                    "story_hook": "", "mechanical_effect": "", "source_beat": None})
+                summary[tier] += 1
+                summary["fallback_added"] += 1
+
+    return summary
+
+
+def _uniq_reward_key(rewards: list, base: str) -> str:
+    existing = {r.get("key") for r in rewards if isinstance(r, dict)}
+    key, i = base, 2
+    while key in existing:
+        key = f"{base}_{i}"; i += 1
+    return key
+
+
 # ── Generate full CampaignPlan for a template ─────────────────────────────────
 
-def _build_generate_plan_system_prompt(act_count: int) -> str:
+def _build_generate_plan_system_prompt(act_count: int, budget: dict | None = None) -> str:
     """Build the generate-plan system prompt with exactly act_count act entries in the schema.
-    Showing the correct number in the example is the only reliable way to get LLMs to honour it."""
+    Showing the correct number in the example is the only reliable way to get LLMs to honour it.
+    `budget` (#1301) tells the LLM how many rewards of each tier to design so the loot spine
+    scales with campaign size; the engine still validates + tops up afterwards."""
+    b = budget or {}
+    sig_n = b.get("signature", 1)
+    not_n = b.get("notable", max(1, act_count - 1))
+    min_n = b.get("minor", act_count // 2)
+    rarity_ceiling = b.get("rarity_ceiling", 4)
     acts_entries = ",\n    ".join(
         f'{{"number": {i}, "title": "string", "summary": "string", '
         '"key_beats": [{"beat_key": "slug_beatu", "summary": "string — co się dzieje", '
-        '"objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false}], '
+        '"objective_type": "kill_enemy", "objective_value": "slug_celu", "optional": false, '
+        '"reward_key": "slug_nagrody lub null"}], '
         '"completed": false}'
         for i in range(1, act_count + 1)
     )
@@ -1581,6 +1930,10 @@ SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w 
   "key_enemies": [
     {{"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}}
   ],
+  "rewards": [
+    {{"key": "slug_nagrody", "label": "Nazwa nagrody", "tier": "signature|notable|minor", "category": "weapon|item|consumable", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "loot|quest_reward|npc_gift|discovery", "story_hook": "czemu ta nagroda pasuje do fabuły", "mechanical_effect": "KONKRETNY efekt — broń: +2 obrażenia / wysysa 1 HP na trafienie; relikt-item: +1 do CHA / +2 pancerz / pozwala otwierać zamki bez wprawy / wyostrza skradanie"}},
+    {{"key": "mapa_slug", "label": "Nazwa mapy", "tier": "minor", "category": "item", "act": 1, "source_beat": "beat_key który ją wydaje", "acquisition": "npc_gift|discovery", "story_hook": "skąd mapa i co przedstawia", "mechanical_effect": "odsłania mapę świata", "is_map": true, "reveals": ["klucz_lokacji_którą_mapa_odsłania", "..."]}}
+  ],
   "active_act": 1,
   "scene_log": [],
   "deviations": [],
@@ -1606,6 +1959,14 @@ ZASADY:
 11. DOMYKALNOŚĆ (KRYTYCZNE): każdy beat krytyczny (optional: false) MUSI dać się domknąć — albo ma "objective_type"+"objective_value" (auto-domknięcie), albo "narrative_close": true (domknięcie sygnałem MG). Beat krytyczny bez żadnego z tych pól zablokuje kampanię. Dla scen czysto fabularnych (walka bez konkretnego wroga w bazie, rozmowa, decyzja) ustaw "narrative_close": true.
 12. PORA STARTOWA: "start_hour" (liczba 0-23) to godzina, o której dzieje się scena otwarcia — wybierz ją ŚWIADOMIE pod klimat pierwszej sceny (gwarna wieczorna karczma → 19-20, świt na trakcie → 6, nocna ucieczka → 23), nie ustawiaj odruchowo poranka. Zegar gry startuje dokładnie o tej godzinie.
 13. STRUKTURA OSADY: jeśli przygoda toczy się w osadzie (wieś/miasteczko) z co najmniej 2 miejscami-budynkami (karczma, kuźnia, młyn, świątynia, sklep...), dodaj do key_locations OSADĘ ze "scale": "hub" (nazwij ją zgodnie z konwencją świata — mieszanka słowiańsko-germańska, np. Czarnstein, Wilczburg), a każdemu budynkowi daj "scale": "sub" + "parent": <klucz huba>. Miejsca POZA osadą (jaskinia, ruiny, leśny obóz, samotna wieża) → "scale": "standalone". Punkt startowy przygody to zwykle sub wewnątrz huba. Beaty visit_location celują w suby/standalone, nie w hub.
+14. NAGRODY (rewards) — KRĘGOSŁUP ŁUPÓW: zaprojektuj DOKŁADNIE {sig_n} nagrodę tieru "signature", {not_n} tieru "notable" i {min_n} tieru "minor". Signature = kluczowy artefakt/relikt fabuły (zwykle powiązany z głównym MacGuffinem przygody), wchodzi w OSTATNIM akcie. Notable = solidny łup na koniec kolejnych aktów. Minor = drobne znaleziska poboczne. Każda nagroda MUSI mieć: unikalny "key" (lowercase_slug), tematyczną "label", "tier", "category", "act" (w którym akcie wchodzi do gry), "story_hook" i "mechanical_effect" (KONKRETNY efekt). Rarity nie ustawiaj — nada je silnik (sufit rarity: {rarity_ceiling}).
+14b. TYPY NAGRÓD — nie każ każdej nagrodzie być bronią. Używaj też category "item" dla RELIKTÓW z PASYWNYM efektem działającym w walce I poza nią (zakładane przez gracza). Relikt-item ("category": "item") może dać:
+   - bonus statystyki (dowolna z 7: STR/DEX/CON/INT/WIS/CHA/LCK) — mechanical_effect np. "+1 do CHA", "+2 do INT";
+   - pancerz — np. "+2 pancerz", "chroni jak lekka zbroja";
+   - UMIEJĘTNOŚĆ działającą OD ZERA (nawet gdy bohater jej nie wykupił) — opisz CZASOWNIKIEM/rzeczownikiem umiejętności, np. "pozwala otwierać zamki bez wprawy" (wytrych), "wyostrza skradanie", "dodaje charyzmy/perswazji w rozmowach", "pomaga tropić", "wspomaga leczenie ran". Silnik przełoży opis na twardy efekt (klucz statystyki/umiejętności) — dlatego pisz konkretnie, słowami wskazującymi statystykę lub umiejętność.
+   Przynajmniej signature powinien mieć wyrazisty, tematyczny efekt pasywny (jeśli to nie broń — zrób go reliktem-itemem ze statystyką lub umiejętnością pasującą do fabuły).
+15. WIĄZANIE NAGRÓD Z BEATAMI: rozłóż nagrody po całej kampanii, NIE tylko na finał. Każdą nagrodę przypnij do konkretnego beatu przez "source_beat" (klucz beatu) ORAZ ustaw temu beatowi pole "reward_key" = "key" tej nagrody. Signature przypnij do beatu krytycznego w ostatnim akcie. Gracz dostaje łup w momencie domknięcia tego beatu — dlatego każdy akt (poza być może pierwszym) powinien wydać co najmniej jedną nagrodę.
+16. MAPY (odsłanianie mgły): jeśli fabuła daje graczowi MAPĘ (np. mapa do lochu/ruin, plan okolicy od NPC), zrób z niej nagrodę z "category": "item", "is_map": true oraz "reveals": [lista kluczy key_locations, które ta mapa POKAZUJE na mapie świata]. Zdobycie takiej mapy odsłania te lokacje we mgle wojny (gracz zobaczy je na mapie). Przypnij ją "source_beat"+"reward_key" jak każdą nagrodę (mapa "do X" wchodzi w akcie, w którym gracz ma ruszyć do X). NIE licz mapy do limitów signature/notable/minor — to osobny, dodatkowy przedmiot narzędziowy.
 """
 
 
@@ -1703,8 +2064,12 @@ def forge_generate_template_plan(
         else:
             final_act_count = 5
 
+        # #1301 — reward budget scaled to campaign scope; feeds the prompt so the LLM
+        # designs the right number of tiers, and the engine validates/tops up afterwards.
+        reward_budget = _compute_reward_budget(final_act_count, tpl["difficulty_rating"])
+
         messages = [
-            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count)},
+            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count, reward_budget)},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -1736,6 +2101,18 @@ def forge_generate_template_plan(
                 # beat lacking objective_type/narrative_close gets a GM narrative close.
                 from app.services.campaign_plan_runtime import ensure_beats_closable
                 ensure_beats_closable(plan_public)
+                # #1301 — materialize the reward spine BEFORE storing the plan so every
+                # reward's `granted_key` (and any fallback top-ups) persist into gm_plan_json;
+                # the runtime beat→grant path (FAZA 4) reads these back from the DB.
+                reward_summary = {"signature": 0, "notable": 0, "minor": 0, "fallback_added": 0, "pending_keys": []}
+                try:
+                    reward_summary = _materialize_plan_rewards(
+                        conn, template_id, plan_public,
+                        difficulty_rating=int(tpl["difficulty_rating"] or 3),
+                        act_count=final_act_count,
+                    )
+                except Exception:
+                    logger.exception("reward_spine_materialize_failed", template_id=template_id)
                 plan_json = json.dumps(plan_public, ensure_ascii=False)
                 conn.execute(
                     "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
@@ -1746,6 +2123,42 @@ def forge_generate_template_plan(
                         "UPDATE campaign_templates SET adventure_idea_id = ? WHERE id = ?",
                         (idea_id, template_id),
                     )
+
+                # #1303 — reconcile required_beats / required_npc_keys against the freshly
+                # regenerated plan. Each regeneration emits brand-new LLM-invented beat_keys
+                # (and often different key_npcs), so a required_* list curated for a PRIOR plan
+                # goes stale: validate_template_publish then reports every orphaned key as a
+                # "missing beat/npc" error (e.g. 23 phantom errors after a regenerate) even
+                # though the new plan is itself valid & winnable. Prune to keys that still exist
+                # in the new plan; keep the surviving subset so an admin's curation isn't lost.
+                try:
+                    new_beat_keys = {
+                        b.get("beat_key")
+                        for a in (plan_public.get("acts") or [])
+                        for b in (a.get("key_beats") or [])
+                        if isinstance(b, dict) and b.get("beat_key")
+                    }
+                    new_npc_keys = {
+                        n.get("key")
+                        for n in (plan_public.get("key_npcs") or [])
+                        if isinstance(n, dict) and n.get("key")
+                    }
+                    prev_beats = json.loads(tpl["required_beats"] or "[]") if "required_beats" in tpl.keys() else []
+                    prev_npcs = json.loads(tpl["required_npc_keys"] or "[]") if "required_npc_keys" in tpl.keys() else []
+                    kept_beats = [b for b in prev_beats if b in new_beat_keys]
+                    kept_npcs = [n for n in prev_npcs if n in new_npc_keys]
+                    if kept_beats != prev_beats:
+                        conn.execute(
+                            "UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
+                            (json.dumps(kept_beats, ensure_ascii=False), template_id),
+                        )
+                    if kept_npcs != prev_npcs:
+                        conn.execute(
+                            "UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
+                            (json.dumps(kept_npcs, ensure_ascii=False), template_id),
+                        )
+                except Exception:
+                    logger.exception("required_keys_reconcile_failed", template_id=template_id)
 
                 # Auto-fill npc keys, beat keys, atmosphere (#1085)
                 # Convert sqlite3.Row → dict so _auto_fill_plan_fields can call .get() (#1081)
@@ -1759,20 +2172,15 @@ def forge_generate_template_plan(
 
                 conn.commit()
 
-                # #1084 — auto-assign reward items (only when no items already linked)
-                auto_items: list[dict] = []
-                try:
-                    existing_items = conn.execute(
-                        "SELECT COUNT(*) FROM game_config_weapons WHERE template_id = ?",
-                        (template_id,),
-                    ).fetchone()[0]
-                    if existing_items == 0:
-                        auto_items = _auto_assign_reward_items(
-                            conn, template_id, tpl["difficulty_rating"]
-                        )
-                        conn.commit()
-                except Exception:
-                    pass  # reward items are non-fatal
+                # #1301 — reward spine already materialized above (before plan store).
+                # Kept `auto_assigned_items` in the response for the forge UI, now sourced
+                # from the plan's rewards[] with their granted_key.
+                auto_items = [
+                    {"category": rw.get("category"), "key": rw.get("granted_key"),
+                     "name": rw.get("label"), "tier": rw.get("tier")}
+                    for rw in (plan_public.get("rewards") or [])
+                    if isinstance(rw, dict) and rw.get("granted_key")
+                ]
 
                 # #1085 — auto-create pending enemies from key_enemies (HP/AC clamped by difficulty)
                 auto_enemies: list[dict] = []
@@ -1809,6 +2217,46 @@ def forge_generate_template_plan(
                 except Exception:
                     pass  # location creation is non-fatal
 
+                # Auto-allocate a start hex at plan-generation time (not just at
+                # publish) so the template — and every location placed relative to
+                # it below — is grounded on the world map from the first draft.
+                start_hex_info: dict | None = None
+                try:
+                    cur_hex = conn.execute(
+                        "SELECT start_hex_q, start_hex_r FROM campaign_templates WHERE id = ?",
+                        (template_id,),
+                    ).fetchone()
+                    if cur_hex and cur_hex["start_hex_q"] is None:
+                        best_hex = _allocate_hex_for_template(conn, template_id)
+                        if best_hex is not None:
+                            conn.execute(
+                                "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
+                                (best_hex["q"], best_hex["r"], template_id),
+                            )
+                            conn.commit()
+                            start_hex_info = {
+                                "q": best_hex["q"], "r": best_hex["r"],
+                                "hex_type": best_hex.get("hex_type"),
+                                "is_fallback": bool(best_hex.get("is_fallback")),
+                            }
+                    elif cur_hex:
+                        start_hex_info = {"q": int(cur_hex["start_hex_q"]),
+                                          "r": int(cur_hex["start_hex_r"])}
+                except Exception:
+                    pass  # start-hex allocation is non-fatal (publish gate is the backstop)
+
+                # Materialize the plan's start location on the start hex AND place
+                # every other macro location on its own free overworld hex, so the
+                # travel engine can route to them. Idempotent, non-fatal.
+                plan_location_hexes: dict | None = None
+                try:
+                    from app.services.template_start_anchor import ensure_template_locations
+                    _tsl = ensure_template_locations(conn, template_id)
+                    if isinstance(_tsl, dict):
+                        plan_location_hexes = _tsl.get("plan_location_hexes")
+                except Exception as _tsl_err:
+                    logger.warning("generate_plan_location_hex_error", error=str(_tsl_err))
+
                 return {
                     "ok": True,
                     "template_id": template_id,
@@ -1820,6 +2268,10 @@ def forge_generate_template_plan(
                     "auto_created_enemies": auto_enemies,
                     "auto_created_npcs": auto_npcs,
                     "auto_created_locations": auto_locations,
+                    "start_hex": start_hex_info,
+                    "plan_location_hexes": plan_location_hexes,
+                    "reward_summary": reward_summary,  # #1301
+                    "rewards": plan_public.get("rewards") or [],  # #1301
                 }
             except Exception as e:
                 last_err = str(e)
@@ -2784,5 +3236,187 @@ def forge_deallocate_hex(template_id: int, _: None = Depends(_require_admin)):
         )
         conn.commit()
         return {"ok": True, "template_id": template_id}
+    finally:
+        conn.close()
+
+
+# ── Plan macro-location placement (admin relocation of world-map locations) ────
+
+@router.get("/templates/{template_id}/location-hexes")
+def forge_location_hexes(template_id: int, _: None = Depends(_require_admin)):
+    """List the plan's overworld macro locations with their current world hex,
+    plus the full hex-availability grid — data for the 'Rozmieszczenie lokacji'
+    map picker so an admin can relocate any location that landed too close."""
+    from app.services.template_start_anchor import _overworld_macro_locations
+    from app.services.hex_location_link import resolve_location_to_hex
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, start_hex_q, start_hex_r, gm_plan_json FROM campaign_templates WHERE id = ?",
+            (template_id,),
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        try:
+            plan = json.loads(tpl["gm_plan_json"] or "{}")
+        except Exception:
+            plan = {}
+        macro = _overworld_macro_locations(plan)
+        labels = {
+            str(l["key"]): str(l.get("name") or l["key"])
+            for l in (plan.get("key_locations") or [])
+            if isinstance(l, dict) and l.get("key")
+        }
+        locations = []
+        for loc in macro:
+            key = str(loc["key"])
+            row = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1", (key,)
+            ).fetchone()
+            hx = resolve_location_to_hex(conn, key) if row else None
+            locations.append({
+                "key": key,
+                "name": labels.get(key, key),
+                "q": hx[0] if hx else None,
+                "r": hx[1] if hx else None,
+                "placed": hx is not None,
+                "exists": row is not None,
+            })
+        start = None
+        if tpl["start_hex_q"] is not None:
+            start = {"q": int(tpl["start_hex_q"]), "r": int(tpl["start_hex_r"])}
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "start_hex": start,
+            "locations": locations,
+            "hexes": _hex_availability(conn, template_id),
+        }
+    finally:
+        conn.close()
+
+
+class SetLocationHexReq(BaseModel):
+    location_key: str
+    q: int
+    r: int
+
+
+@router.post("/templates/{template_id}/location-hexes/set")
+def forge_set_location_hex(
+    template_id: int, req: SetLocationHexReq, _: None = Depends(_require_admin)
+):
+    """Relocate ONE plan macro location to a chosen free overworld hex.
+
+    Rejects a hex occupied by a named POI, another location, or any template's
+    start hex (the location's OWN current hex is allowed — a no-op re-confirm).
+    world_hexes rows are never created/deleted (Kresy map is Piotr-owned)."""
+    from app.services.template_start_anchor import _overworld_macro_locations
+    from app.services.hex_location_link import link_location_to_hex, resolve_location_to_hex
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, gm_plan_json FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        try:
+            plan = json.loads(tpl["gm_plan_json"] or "{}")
+        except Exception:
+            plan = {}
+        macro_keys = {str(l["key"]) for l in _overworld_macro_locations(plan)}
+        if req.location_key not in macro_keys:
+            raise HTTPException(
+                status_code=422,
+                detail="Lokacja nie jest makro-lokacją planu (hub/sub nie są przenoszone tu).",
+            )
+        row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (req.location_key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=422, detail="Lokacja nie istnieje jeszcze w bazie.")
+
+        # Validate the target hex exists on the world map.
+        hx = conn.execute(
+            "SELECT hex_type, label FROM world_hexes "
+            "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 LIMIT 1",
+            (req.q, req.r),
+        ).fetchone()
+        if hx is None:
+            raise HTTPException(status_code=422, detail="Hex nie istnieje na mapie świata.")
+
+        current = resolve_location_to_hex(conn, req.location_key)
+        is_own = current is not None and current == (req.q, req.r)
+        if not is_own:
+            if (hx["label"] or "").strip():
+                raise HTTPException(status_code=409, detail="Hex to nazwany POI — wybierz wolny hex.")
+            # occupied by another active location?
+            occ = conn.execute(
+                "SELECT key FROM game_locations WHERE world_hex_q = ? AND world_hex_r = ? "
+                "AND is_active = 1 AND key != ? LIMIT 1",
+                (req.q, req.r, req.location_key),
+            ).fetchone()
+            if occ:
+                raise HTTPException(status_code=409, detail="Hex zajęty przez inną lokację.")
+            # occupied by any template's start hex?
+            st = conn.execute(
+                "SELECT id FROM campaign_templates WHERE start_hex_q = ? AND start_hex_r = ? LIMIT 1",
+                (req.q, req.r),
+            ).fetchone()
+            if st:
+                raise HTTPException(status_code=409, detail="Hex zajęty jako start szablonu.")
+
+        # release the old hex canon, then claim the new one
+        if current is not None and not is_own:
+            conn.execute(
+                "UPDATE world_hexes SET location_key = NULL "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1",
+                (current[0], current[1]),
+            )
+        link_location_to_hex(conn, req.location_key, req.q, req.r)
+        conn.commit()
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "location_key": req.location_key,
+            "q": req.q, "r": req.r,
+            "hex_type": hx["hex_type"],
+            "atypical": (hx["hex_type"] or "") not in ("town", "plains", "forest"),
+        }
+    finally:
+        conn.close()
+
+
+class RerollLocationHexesReq(BaseModel):
+    min_spacing: int = 3
+
+
+@router.post("/templates/{template_id}/location-hexes/reroll")
+def forge_reroll_location_hexes(
+    template_id: int,
+    req: RerollLocationHexesReq | None = None,
+    _: None = Depends(_require_admin),
+):
+    """Re-scatter ALL of the plan's macro locations with a wider minimum spacing —
+    the fix for auto-placement that packed them too close together."""
+    from app.services.template_start_anchor import ensure_plan_location_hexes
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, start_hex_q FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        if tpl["start_hex_q"] is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Szablon nie ma jeszcze startowego hexa — przydziel start najpierw.",
+            )
+        spacing = max(1, int((req.min_spacing if req else 3)))
+        result = ensure_plan_location_hexes(conn, template_id, force=True, min_spacing=spacing)
+        if result is None:
+            raise HTTPException(status_code=422, detail="Brak makro-lokacji planu do rozmieszczenia.")
+        return {"ok": True, "template_id": template_id, **result}
     finally:
         conn.close()

@@ -56,6 +56,9 @@ class PlotBeat(BaseModel):
     objective_type: Literal["kill_enemy", "visit_location", "talk_to_npc", "find_item"] | None = None
     objective_value: str | None = None
     optional: bool = False
+    # #1301 — reward spine: when this beat closes, the linked reward (by key into
+    # CampaignPlan.rewards[].key) is granted to the player's inventory mid-campaign.
+    reward_key: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -116,6 +119,16 @@ class PlotLocation(BaseModel):
     name: str
     role: str
     visited: bool = False
+    # #1306 — these were silently dropped by model_dump() (the fields the Kuźnia
+    # prompt asks for but the schema never declared). Without `scale`/`parent` the
+    # settlement structure (#1212) is lost on every generated plan → flat fallback
+    # → wrong start_hex (the first visit_location target instead of the town hub).
+    # `hex_q`/`hex_r` let #1307 mirror the placed overworld coords back into the plan.
+    description: str = ""
+    scale: Literal["hub", "sub", "standalone"] | None = None
+    parent: str | None = None
+    hex_q: int | None = None
+    hex_r: int | None = None
 
 
 class PlotEnemy(BaseModel):
@@ -128,6 +141,45 @@ class PlotEnemy(BaseModel):
     damage_die: str = "1d6"
     description: str = ""
     note: str = ""
+
+
+class PlotReward(BaseModel):
+    """#1301 — a story-anchored reward in the plan's loot spine.
+
+    `tier` drives materialization: signature → bespoke unique pushed to pending
+    review (rarity ≥4, real effect_json); notable/minor → pool clone by tier.
+    `act`/`source_beat` drive mid-campaign pacing — the reward enters play when
+    its beat closes, not only at the finale. `mechanical_effect` is a descriptive
+    hint the deterministic mapper turns into a safe effect_json for signatures."""
+    key: str
+    label: str
+    tier: Literal["signature", "notable", "minor"] = "notable"
+    category: Literal["weapon", "item", "consumable"] = "item"
+    act: int = 1
+    source_beat: str | None = None
+    acquisition: Literal["loot", "quest_reward", "npc_gift", "discovery"] = "quest_reward"
+    story_hook: str = ""
+    mechanical_effect: str = ""
+    rarity: int = 3
+    # #1308 — map rewards. `is_map` flags the reward as a fog-of-war map; `reveals`
+    # lists the plan location keys it depicts. Materialization builds an item whose
+    # effect_json carries a map_reveal(mode="location") payload, and the reward-spine
+    # reveals those locations for the campaign the moment the map is obtained.
+    is_map: bool = False
+    reveals: list[str] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, v: Any) -> Any:
+        """Derive a slug key from label when the LLM omits it; tolerate bare strings."""
+        if isinstance(v, str):
+            return {"key": _slugify_beat(v), "label": v}
+        if isinstance(v, dict):
+            d = dict(v)
+            if not d.get("key"):
+                d["key"] = _slugify_beat(str(d.get("label") or d.get("mechanical_effect") or ""))
+            return d
+        return v
 
 
 class EnginePrivate(BaseModel):
@@ -144,6 +196,7 @@ class CampaignPlan(BaseModel):
     key_npcs: list[PlotNPC]
     key_locations: list[PlotLocation]
     key_enemies: list[PlotEnemy] = []
+    rewards: list[PlotReward] = []  # #1301 — loot spine, materialized after gen
     active_act: int = 1
     scene_log: list[str] = []
     deviations: list[str] = []
@@ -224,6 +277,18 @@ SCHEMAT JSON (wypełnij każde pole):
       "visited": false
     }
   ],
+  "key_enemies": [
+    {
+      "key": "enemy_key_slug",
+      "name": "string — nazwa wroga (po polsku)",
+      "tier": "standard",
+      "hp_base": 20,
+      "ac_base": 12,
+      "damage_die": "1d6",
+      "description": "string — wygląd i styl walki",
+      "note": "string — specjalne zdolności (opcjonalnie)"
+    }
+  ],
   "active_act": 1,
   "scene_log": [],
   "deviations": [],
@@ -244,6 +309,7 @@ ZASADY OBOWIĄZKOWE:
 6. Antagonista/główny konflikt musi dotykać co najmniej jednej Słabości bohatera.
 7. Klucze NPC i lokacji (pola "key") muszą być lowercase_slug bez spacji, np. "innkeeper_boris", "loc_graustein".
 8. BEATY (key_beats) to OBIEKTY, nigdy gołe stringi. Każdy beat: "beat_key" (lowercase_slug, unikalny w planie), "summary". Gdzie sensowne dodaj "objective_type" (kill_enemy/visit_location/talk_to_npc/find_item) + "objective_value" (slug celu). "optional": true dla scen pobocznych. Co najmniej jeden beat krytyczny (optional: false) na akt.
+9. WROGOWIE (key_enemies): lista 1-3 głównych antagonistów/bossów kampanii (nie zwykłych wrogów — tylko kluczowe postacie z którymi walka jest częścią fabuły). "key" to lowercase_slug; "tier": weak/standard/elite/boss. Lista może być pusta tylko gdy kampania nie przewiduje żadnej walki.
 """
 
 

@@ -648,6 +648,14 @@ def _trigger_narration_impl(round_id: int) -> None:
         campaign_id = int(row["campaign_id"])
         round_number = int(row["round_number"])
 
+        # #1294 (Warstwa 1) — seed the plan's key_npcs into the known-NPC roster
+        # for MP campaigns too. Idempotent; non-fatal.
+        try:
+            from app.services.npc_memory_service import seed_known_npcs_from_plan
+            seed_known_npcs_from_plan(conn, campaign_id)
+        except Exception:
+            pass
+
         actions = conn.execute(
             "SELECT character_name, action_text, user_id, initiative_roll, character_id "
             "FROM campaign_round_actions WHERE round_id = ? ORDER BY submitted_at",
@@ -699,6 +707,21 @@ def _trigger_narration_impl(round_id: int) -> None:
             ws_context = "[STAN ŚWIATA]\n" + "\n".join(parts) + "\n\n"
     except Exception as e:
         logger.warning("mp_world_state_context_failed", round_id=round_id, error=str(e)[:100])
+
+    # #1296 — parytet z solo: podaj narratorowi MP DOZWOLONE klucze [COMBAT_START]
+    # z planu (reużycie tej samej funkcji co ContextInjector), żeby nie wymyślał
+    # wrogów losowo tylko sięgał po zmaterializowanych, nazwanych przeciwników.
+    try:
+        from app.services.context_injector import build_plan_enemy_keys_block
+        conn_en = _db()
+        try:
+            _enemy_block = build_plan_enemy_keys_block(conn_en, campaign_id)
+        finally:
+            conn_en.close()
+        if _enemy_block:
+            ws_context = (ws_context or "") + _enemy_block + "\n\n"
+    except Exception as e:
+        logger.warning("mp_plan_enemy_keys_failed", round_id=round_id, error=str(e)[:100])
 
     # G5 #789 — sort by initiative, detect conflicts
     action_dicts = [
@@ -970,16 +993,23 @@ def _trigger_narration_impl(round_id: int) -> None:
     except Exception as e:
         logger.warning("mp_world_state_snapshot_failed", campaign_id=campaign_id, error=str(e)[:100])
 
+    # N2b (#884) — fan out over the unified dispatcher (telegram > web_push > email)
+    # instead of web-push-only. Anti-spam: online (in-session) members are skipped.
     try:
-        from app.services.push_notification_service import send_push_to_campaign_players
-        send_push_to_campaign_players(
+        from app.services.notification_service import notify_campaign_players
+        res = notify_campaign_players(
             campaign_id,
+            "twoja_tura",
             "Narracja gotowa 📜",
             "Mistrz Gry opisał rundę. Czas na Twoją kolejną akcję!",
             url="/",
         )
+        logger.info("mp_round_notify", campaign_id=campaign_id,
+                    targeted=len(res.get("targeted", [])),
+                    delivered=len(res.get("delivered", [])),
+                    skipped_online=res.get("skipped_online", 0))
     except Exception as e:
-        logger.warning("push_narration_failed", error=str(e)[:100])
+        logger.warning("mp_round_notify_failed", error=str(e)[:100])
 
 
 def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:

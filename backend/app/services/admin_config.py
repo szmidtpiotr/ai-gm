@@ -27,7 +27,7 @@ KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # może odrzucać formatu, który silnik już obsługuje i którym seedują się mikstury.
 DAMAGE_DIE_RE = re.compile(r"^\d*d\d+([+-]\d+)?$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
-ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative"}
+ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative", "relic"}
 ALLOWED_WEAPON_TYPES = {"melee", "ranged", "spell"}
 ALLOWED_TARGETING_TYPES = {"single", "aoe_radius"}
 ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
@@ -271,12 +271,22 @@ def validate_effect_json_payload(payload: object) -> list[str]:
                     if not rounds_str.isdigit() or int(rounds_str) < 1:
                         errors.append(f"{prefix}.expires duration_rounds must be >= 1")
 
+        skill = effect.get("skill")
+        if skill is not None and not KEY_RE.fullmatch(str(skill).strip().lower()):
+            errors.append(f"{prefix}.skill must be lowercase_snake_case")
+
         value = effect.get("value")
         if effect_type == "static_stat_modifier":
             if not isinstance(value, (int, float)):
                 errors.append(f"{prefix}.value must be a number for static_stat_modifier")
             if stat is None:
                 errors.append(f"{prefix}.stat is required for static_stat_modifier")
+        elif effect_type == "static_skill_modifier":
+            # #1302 — passive skill bonus from equipped gear (relic grants a skill).
+            if not isinstance(value, (int, float)):
+                errors.append(f"{prefix}.value must be a number for static_skill_modifier")
+            if not skill or not str(skill).strip():
+                errors.append(f"{prefix}.skill is required for static_skill_modifier")
         elif effect_type in {"heal_hp", "restore_mana"}:
             if not isinstance(value, (int, float, str)):
                 errors.append(f"{prefix}.value must be a number or dice string for {effect_type}")
@@ -1062,6 +1072,7 @@ def list_weapons() -> list[dict]:
                ammo_key,
                description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
+               image_url, image_gen_prompt,
                COALESCE(campaign_id, NULL) AS campaign_id,
                COALESCE(review_status, 'permanent') AS review_status
         FROM game_config_weapons
@@ -2593,7 +2604,8 @@ def list_consumables() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
-               note, is_active, locked_at, created_at, updated_at
+               note, is_active, locked_at, created_at, updated_at,
+               image_url, image_gen_prompt
         FROM game_config_items
         WHERE item_type = 'consumable'
         ORDER BY label COLLATE NOCASE ASC, key ASC

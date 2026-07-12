@@ -122,16 +122,18 @@ def send_push(
     badge: Optional[str] = None,
     image: Optional[str] = None,
     vibrate: Optional[list] = None,
-) -> None:
+) -> bool:
+    """Push to all of the user's subscriptions. Returns True if ≥1 was delivered
+    (lets the notify() dispatcher fall through to email when web push can't land)."""
     if not _is_configured():
         logger.warning("push_not_configured", user_id=user_id)
-        return
+        return False
 
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
         logger.error("pywebpush_not_installed")
-        return
+        return False
 
     conn = _db()
     try:
@@ -140,7 +142,7 @@ def send_push(
         conn.close()
 
     if not rows:
-        return
+        return False
 
     data: dict = {"title": title, "body": body, "url": url}
     if icon:
@@ -153,6 +155,7 @@ def send_push(
         data["vibrate"] = vibrate
     payload = json.dumps(data)
     stale_endpoints = []
+    delivered = 0
 
     for row in rows:
         subscription_info = {
@@ -166,6 +169,7 @@ def send_push(
                 vapid_private_key=_VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": _VAPID_EMAIL},
             )
+            delivered += 1
             logger.info("push_sent", user_id=user_id, endpoint_prefix=row["endpoint"][:40])
         except Exception as e:
             err_str = str(e)
@@ -185,6 +189,8 @@ def send_push(
             conn.commit()
         finally:
             conn.close()
+
+    return delivered > 0
 
 
 def send_push_to_campaign_players(

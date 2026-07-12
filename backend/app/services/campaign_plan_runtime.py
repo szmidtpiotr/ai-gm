@@ -146,6 +146,8 @@ def mark_beat_visited(
                     beat["visited"] = True
                     beat["visited_at_turn"] = turn_number
                     changed = True
+                    # #1301 — narrative-close beats (signature often pins here) grant too.
+                    _grant_beat_reward(campaign_id, beat, plan, turn_number, conn)
             elif isinstance(beat, str) and beat == beat_key:
                 # Simple string format — convert to dict
                 pass
@@ -289,9 +291,6 @@ def maybe_complete_campaign(
     if already_open:
         return False
 
-    if not is_plan_complete(get_plan(campaign_id, conn)):
-        return False
-
     # #1011 refinement: only active *main* quests block victory. Side quests are
     # optional threads — a legally-skipped side quest must not strand the finale.
     active_quests = conn.execute(
@@ -302,6 +301,31 @@ def maybe_complete_campaign(
     ).fetchone()[0]
     if active_quests > 0:
         return False
+
+    plan = get_plan(campaign_id, conn)
+    trigger = "all_acts_and_quests"
+    if not is_plan_complete(plan):
+        # #1300 — quest-driven finale fallback. The act pointer advances only when
+        # objective-typed beats close via their event hooks, but those hooks match
+        # against plan entities (talk_to_npc / visit_location / find_item keys) that
+        # are frequently never materialized as real game entities (same class as
+        # #1284 for enemies). A player can then finish every main quest — the real
+        # player-facing contract — yet the plan's acts strand, locking a completed
+        # story out of its ending. Open the finale when every main quest is resolved
+        # AND the player has completed at least as many main quests as the plan has
+        # acts (a proportional "story clearly done" signal that cannot fire on an
+        # early-game transient 0-active window). Planless campaigns (num_acts == 0)
+        # still never auto-win.
+        completed_main = conn.execute(
+            "SELECT COUNT(*) FROM character_quests "
+            "WHERE character_id = ? AND campaign_id = ? AND status = 'completed' "
+            "AND COALESCE(quest_type, 'main') = 'main'",
+            (character_id, campaign_id),
+        ).fetchone()[0]
+        num_acts = len((plan or {}).get("acts") or []) if isinstance(plan, dict) else 0
+        if not (num_acts >= 1 and completed_main >= num_acts):
+            return False
+        trigger = "quests_only_beats_stranded"
 
     conn.execute(
         "UPDATE campaigns SET finale_available = 1 WHERE id = ?",
@@ -330,7 +354,7 @@ def maybe_complete_campaign(
         int(campaign_id),
         int(character_id),
         None,
-        {"turn": turn_number, "trigger": "all_acts_and_quests"},
+        {"turn": turn_number, "trigger": trigger},
     )
     logger.info(
         "campaign_finale_available",
@@ -772,6 +796,92 @@ def validate_winnable_plan(plan: dict | None) -> dict:
     }
 
 
+def pop_reward_toasts(campaign_id: int, conn: sqlite3.Connection) -> list:
+    """#1301 — drain the queued reward toasts for a campaign (set by _grant_beat_reward
+    on beat close). Returns the list of narrator lines and clears them so they surface
+    exactly once. Empty list when none pending."""
+    plan = get_plan(campaign_id, conn)
+    if not plan:
+        return []
+    toasts = plan.get("_reward_toasts") or []
+    if not toasts:
+        return []
+    plan["_reward_toasts"] = []
+    try:
+        save_plan(campaign_id, plan, conn)
+    except Exception:
+        logger.exception("pop_reward_toasts_save_failed", campaign_id=campaign_id)
+    return [t for t in toasts if isinstance(t, str)]
+
+
+def _grant_beat_reward(
+    campaign_id: int,
+    beat: dict,
+    plan: dict,
+    turn_number: int,
+    conn: sqlite3.Connection,
+) -> "dict | None":
+    """#1301 — when a beat with `reward_key` closes, grant its linked reward to the
+    party's inventory (mid-campaign loot) and queue a narrator toast on the plan.
+
+    Idempotent via `beat['reward_granted']`. Resolves the reward from plan.rewards[]
+    (materialized at forge time with `granted_key` → a real game_config_* row). Grants
+    to every character in the campaign (story rewards are party-level). Returns the
+    reward info dict when a grant happened, else None."""
+    rk = beat.get("reward_key")
+    if not rk or beat.get("reward_granted"):
+        return None
+    rewards = plan.get("rewards") or []
+    rw = next((r for r in rewards if isinstance(r, dict) and r.get("key") == rk), None)
+    if not rw:
+        return None
+    granted_key = rw.get("granted_key")
+    if not granted_key:
+        return None
+    category = (rw.get("category") or "item").lower()
+    item_type = "weapon" if category == "weapon" else ("consumable" if category == "consumable" else "item")
+    try:
+        from app.services.economy_service import add_to_inventory
+        chars = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ?", (campaign_id,)
+        ).fetchall()
+        granted_any = False
+        for c in chars:
+            cid = c[0] if not isinstance(c, sqlite3.Row) else c["id"]
+            if add_to_inventory(cid, granted_key, 1, source="beat_reward", conn=conn, item_type=item_type):
+                granted_any = True
+        if not granted_any:
+            return None
+    except Exception:
+        logger.exception("beat_reward_grant_failed", campaign_id=campaign_id, reward_key=rk)
+        return None
+    beat["reward_granted"] = True
+    beat["reward_granted_at_turn"] = turn_number
+    label = rw.get("label") or granted_key
+    tier = rw.get("tier") or "notable"
+    tier_word = {"signature": "wyjątkowy", "notable": "cenny", "minor": "drobny"}.get(tier, "")
+    toast = f"🎁 Zdobywasz {tier_word} przedmiot: **{label}**.".replace("  ", " ")
+    plan.setdefault("_reward_toasts", []).append(toast)
+
+    # #1308/#1309 — a map reward does NOT auto-reveal. It lands in the inventory as a
+    # usable item; the PLAYER clicks "Użyj" to open the map and reveal its hexes
+    # (map_reveal_service via /inventory/{id}/use, #1123 — reveal-on-use, Piotr's
+    # decision). Here we only nudge the player that the map is theirs to use.
+    if [k for k in (rw.get("reveals") or []) if k] and rw.get("is_map"):
+        plan["_reward_toasts"].append(
+            f"🗺 Zdobywasz mapę: **{label}**. Użyj jej z ekwipunku, by odsłonić okolicę."
+        )
+    logger.info(
+        "beat_reward_granted",
+        campaign_id=campaign_id,
+        beat_key=beat.get("beat_key"),
+        reward_key=rk,
+        granted_key=granted_key,
+        tier=tier,
+    )
+    return {"label": label, "tier": tier, "category": category, "granted_key": granted_key}
+
+
 def auto_complete_beats_by_event(
     campaign_id: int,
     event_type: str,
@@ -818,6 +928,8 @@ def auto_complete_beats_by_event(
                 event_type=event_type,
                 target=target_name,
             )
+            # #1301 — grant the beat's linked reward mid-campaign (idempotent).
+            _grant_beat_reward(campaign_id, beat, plan, turn_number, conn)
 
     if changed:
         skipped_keys = _check_and_advance_act(plan, conn)
@@ -887,6 +999,32 @@ def auto_complete_talk_to_npc(
             for tok in _strip_pl(key).split("_"):
                 if len(tok) >= 4 and tok in norm_text:
                     engaged = key
+                    break
+            if engaged:
+                break
+
+    # #1300 — plan-aware fallback. When the scene NPC was never registered in
+    # location_npc_assignments (an unmaterialized plan entity — the same gap
+    # #1284 fixed for enemies), the location lookup above can never resolve it,
+    # so the talk_to_npc beat strands forever and blocks the act/finale. Match
+    # the player's text directly against the talk_to_npc beats' own
+    # objective_value keys so each beat is self-sufficient and carries its own
+    # target. Any-act scan (not just the active one) mirrors auto_complete_beats_by_event.
+    if not engaged and player_text:
+        norm_text = _strip_pl(player_text)
+        plan = get_plan(campaign_id, conn)
+        for act in (plan or {}).get("acts", []):
+            for beat in act.get("key_beats", []):
+                if not isinstance(beat, dict) or beat.get("visited"):
+                    continue
+                if beat.get("objective_type") != "talk_to_npc":
+                    continue
+                obj_value = beat.get("objective_value") or ""
+                for tok in _strip_pl(obj_value).split("_"):
+                    if len(tok) >= 4 and tok in norm_text:
+                        engaged = obj_value
+                        break
+                if engaged:
                     break
             if engaged:
                 break
@@ -1006,15 +1144,17 @@ def get_narrator_context_block(campaign_id: int, conn: sqlite3.Connection) -> st
         note = plan.get("deviation_note", "")
         lines.append(f"Deviation: {level}" + (f" — {note}" if note else ""))
 
-    # Key NPCs alive
+    # Key NPCs alive — include role so narrator never confuses identities
     npcs = plan.get("key_npcs", [])
-    alive_npcs = [
-        n.get("name", n.get("key", "?"))
-        for n in npcs
-        if n.get("alive", True) and n.get("importance") in ("critical", "supporting")
-    ]
-    if alive_npcs:
-        lines.append(f"Key NPCs (alive): {', '.join(alive_npcs[:4])}")
+    alive_npc_entries = []
+    for n in npcs:
+        if n.get("alive", True) and n.get("importance") in ("critical", "supporting"):
+            name = n.get("name", n.get("key", "?"))
+            role = (n.get("role") or "").strip()
+            entry = f"{name} [{role}]" if role else name
+            alive_npc_entries.append(entry)
+    if alive_npc_entries:
+        lines.append(f"Key NPCs (alive): {'; '.join(alive_npc_entries[:4])}")
 
     # E9 (#424) — story gravity: nudge the narrator when a beat has stalled.
     try:

@@ -1278,3 +1278,83 @@ def hex_chain_travel(campaign_id: int, req: HexTravelReq,
         raise HTTPException(status_code=_status, detail=e.message)
     finally:
         conn.close()
+
+
+# ── #1196 Treasure placement (admin/event) ───────────────────────────────────
+
+class TreasurePlaceReq(BaseModel):
+    hex_q: int
+    hex_r: int
+    character_id: int
+    campaign_id: Optional[int] = None
+    label: Optional[str] = None
+    loot_table_key: Optional[str] = None
+    guardian_enemy_key: Optional[str] = None
+    dc: int = 12
+    total_parts: int = 1
+    gold_bonus: int = 0
+    loot_tier_bonus: Optional[int] = None
+    gold_mult: Optional[float] = None
+    extra_loot_rolls: Optional[int] = None
+
+
+@router.post("/treasures")
+def place_treasure(req: TreasurePlaceReq, authorization: str | None = Header(default=None)):
+    """#1196 — bury a treasure on a hex and hand the completed map to a hero."""
+    _require_admin(authorization)
+    from app.services import treasure_service
+    conn = _get_db()
+    try:
+        camp = req.campaign_id
+        if camp is None:
+            row = conn.execute(
+                "SELECT campaign_id FROM characters WHERE id = ?", (req.character_id,)
+            ).fetchone()
+            camp = int(row["campaign_id"]) if row and row["campaign_id"] else 0
+        tid = treasure_service.admin_place_treasure(
+            conn, character_id=req.character_id, campaign_id=int(camp or 0),
+            hex_q=req.hex_q, hex_r=req.hex_r, label=req.label,
+            loot_table_key=req.loot_table_key, guardian=req.guardian_enemy_key,
+            dc=req.dc, total_parts=req.total_parts, gold_bonus=req.gold_bonus,
+            loot_tier_bonus=req.loot_tier_bonus, gold_mult=req.gold_mult,
+            extra_loot_rolls=req.extra_loot_rolls,
+        )
+        if tid is None:
+            raise HTTPException(status_code=400, detail="Could not place treasure")
+        return {"ok": True, "treasure_id": tid}
+    finally:
+        conn.close()
+
+
+@router.get("/treasures")
+def list_treasures(state: str | None = Query(default=None),
+                   authorization: str | None = Header(default=None)):
+    """#1196 — list treasures (optionally filtered by state)."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        sql = ("SELECT id, map_key, label, hex_q, hex_r, region, state, total_parts, "
+               "guardian_enemy_key, dc, character_id, created_by, found_at "
+               "FROM world_treasures")
+        params: list[Any] = []
+        if state:
+            sql += " WHERE state = ?"
+            params.append(state)
+        sql += " ORDER BY id DESC LIMIT 500"
+        return {"treasures": [dict(r) for r in conn.execute(sql, params).fetchall()]}
+    finally:
+        conn.close()
+
+
+@router.delete("/treasures/{treasure_id}")
+def delete_treasure(treasure_id: int, authorization: str | None = Header(default=None)):
+    """#1196 — remove a treasure and its fragments."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        conn.execute("DELETE FROM character_map_fragments WHERE treasure_id = ?", (treasure_id,))
+        conn.execute("DELETE FROM world_treasures WHERE id = ?", (treasure_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()

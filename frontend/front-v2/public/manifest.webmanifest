@@ -1,0 +1,35 @@
+{
+  "name": "AI-GM · ŻAR",
+  "short_name": "AI-GM",
+  "description": "Mistrz Gry napędzany AI — twoja przygoda RPG w przeglądarce.",
+  "lang": "pl",
+  "dir": "ltr",
+  "start_url": "/graj/",
+  "scope": "/graj/",
+  "id": "/graj/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14100c",
+  "theme_color": "#14100c",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

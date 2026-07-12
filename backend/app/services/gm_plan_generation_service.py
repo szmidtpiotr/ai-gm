@@ -442,6 +442,25 @@ def generate_initial_gm_plan_v2_with_retries(
             engine_private = plan_public.pop("engine_private", {})
             normalize_plan_beats(plan_public)
             _store_v2_plan(conn, campaign_id, plan_public, engine_private, degraded=False)
+            # #1284 — materialize plan key_enemies into real playable enemies (+ loot)
+            # so Nowa Kampania / Regeneruj-plan campaigns aren't stuck with plan-only
+            # fiction enemies that combat can never resolve. Non-fatal — plan is saved.
+            try:
+                from app.services.world_service import materialize_plan_enemies
+
+                mat = materialize_plan_enemies(conn, plan_public.get("key_enemies") or [])
+                if mat:
+                    logger.info(
+                        "gm_plan_enemies_materialized",
+                        campaign_id=campaign_id,
+                        count=len(mat),
+                    )
+            except Exception as _me:
+                logger.warning(
+                    "gm_plan_enemy_materialize_failed",
+                    campaign_id=campaign_id,
+                    error=str(_me),
+                )
             logger.info(
                 "gm_plan_v2_ok", campaign_id=campaign_id, attempt=attempt, title=plan.title
             )

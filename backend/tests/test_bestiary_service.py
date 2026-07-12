@@ -1,0 +1,347 @@
+"""TDD: #1191 E1 — Bestiariusz: per-character kill counters per enemy type.
+
+Kills aggregate per (character_id, enemy_key). Tier derived from kills:
+1 kill → tier 1, 5 → tier 2 (HP preview), 15 → tier 3 (+1 to-hit).
+Recording a kill must never raise (combat-safe). MP credits only the killer.
+"""
+import sqlite3
+import pytest
+
+from app.services import bestiary_service as bs
+
+
+@pytest.fixture()
+def conn():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute(
+        """
+        CREATE TABLE character_bestiary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id INTEGER NOT NULL,
+            enemy_key TEXT NOT NULL,
+            kills INTEGER NOT NULL DEFAULT 0,
+            first_kill_at TEXT,
+            last_kill_at TEXT,
+            unlocked_tier INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(character_id, enemy_key)
+        )
+        """
+    )
+    c.execute(
+        """
+        CREATE TABLE game_config_enemies (
+            key TEXT PRIMARY KEY, label TEXT, description TEXT,
+            lore_text TEXT, image_url TEXT, hp_base INTEGER, tier TEXT,
+            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1
+        )
+        """
+    )
+    c.executemany(
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań", 12, "1", "permanent", 1),
+         ("orc", "Ork", "Duży drań", 30, "2", "permanent", 1)],
+    )
+    c.commit()
+    yield c
+    c.close()
+
+
+# ─── tier derivation ─────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("kills,tier", [(0, 0), (1, 1), (4, 1), (5, 2), (14, 2), (15, 3), (99, 3)])
+def test_tier_for_kills(kills, tier):
+    assert bs.tier_for_kills(kills) == tier
+
+
+# ─── record_kill ─────────────────────────────────────────────────────────────
+
+def test_first_kill_creates_tier1(conn):
+    r = bs.record_kill(7, "goblin", conn=conn)
+    assert r == {"kills": 1, "unlocked_tier": 1, "tier_up": True}
+    assert bs.get_entry_tier(7, "goblin", conn=conn) == 1
+
+
+def test_kills_accumulate_upsert(conn):
+    for _ in range(5):
+        bs.record_kill(7, "goblin", conn=conn)
+    row = conn.execute(
+        "SELECT kills, unlocked_tier FROM character_bestiary "
+        "WHERE character_id=7 AND enemy_key='goblin'").fetchone()
+    assert row["kills"] == 5
+    assert row["unlocked_tier"] == 2
+
+
+def test_tier_up_flag_only_on_threshold(conn):
+    ups = [bs.record_kill(7, "goblin", conn=conn)["tier_up"] for _ in range(6)]
+    # tier_up at kill #1 (t1) and #5 (t2), not #2,3,4,6
+    assert ups == [True, False, False, False, True, False]
+
+
+def test_tier3_at_15_kills(conn):
+    for _ in range(15):
+        bs.record_kill(7, "orc", conn=conn)
+    assert bs.get_entry_tier(7, "orc", conn=conn) == 3
+    assert bs.hunter_hit_bonus(7, "orc", conn=conn) == 1
+
+
+def test_hunter_bonus_zero_below_tier3(conn):
+    for _ in range(14):
+        bs.record_kill(7, "orc", conn=conn)
+    assert bs.hunter_hit_bonus(7, "orc", conn=conn) == 0
+
+
+def test_kills_isolated_per_character_and_enemy(conn):
+    bs.record_kill(7, "goblin", conn=conn)
+    bs.record_kill(7, "goblin", conn=conn)
+    bs.record_kill(8, "goblin", conn=conn)
+    bs.record_kill(7, "orc", conn=conn)
+    assert conn.execute("SELECT kills FROM character_bestiary WHERE character_id=7 AND enemy_key='goblin'").fetchone()["kills"] == 2
+    assert conn.execute("SELECT kills FROM character_bestiary WHERE character_id=8 AND enemy_key='goblin'").fetchone()["kills"] == 1
+    assert conn.execute("SELECT kills FROM character_bestiary WHERE character_id=7 AND enemy_key='orc'").fetchone()["kills"] == 1
+
+
+# ─── combat-safe no-ops (must never raise) ───────────────────────────────────
+
+@pytest.mark.parametrize("cid,ek", [(None, "goblin"), ("", "goblin"), (7, ""), (7, None), (7, 123)])
+def test_record_kill_noop_on_bad_input(conn, cid, ek):
+    assert bs.record_kill(cid, ek, conn=conn) == {}
+    # nothing written
+    assert conn.execute("SELECT COUNT(*) FROM character_bestiary").fetchone()[0] == 0
+
+
+def test_record_kill_swallows_db_error():
+    # bad connection object → must return {} not raise
+    class Boom:
+        def execute(self, *a, **k):
+            raise sqlite3.OperationalError("boom")
+    assert bs.record_kill(7, "goblin", conn=Boom()) == {}
+
+
+# ─── batch tiers ─────────────────────────────────────────────────────────────
+
+def test_get_entry_tiers_batch(conn):
+    for _ in range(5):
+        bs.record_kill(7, "goblin", conn=conn)
+    bs.record_kill(7, "orc", conn=conn)
+    tiers = bs.get_entry_tiers(7, ["goblin", "orc", "unknown"], conn=conn)
+    assert tiers == {"goblin": 2, "orc": 1, "unknown": 0}
+
+
+# ─── get_bestiary catalogue (locked entries never leak) ──────────────────────
+
+def test_get_bestiary_locked_and_unlocked(conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    for _ in range(5):
+        bs.record_kill(7, "goblin", conn=conn)  # tier 2 → hp visible
+    result = bs.get_bestiary(7)
+    assert result["summary"] == {"unlocked": 1, "total": 2, "pct": 50, "bonus": 0}
+    by_lock = {e.get("locked") for e in result["entries"]}
+    assert by_lock == {True, False}
+    unlocked = next(e for e in result["entries"] if not e["locked"])
+    assert unlocked["name"] == "Goblin"
+    assert unlocked["hp_max"] == 12  # tier >=2 exposes hp
+    locked = next(e for e in result["entries"] if e["locked"])
+    assert locked == {"locked": True}  # NO name/key leak
+
+
+def test_get_bestiary_hides_hp_below_tier2(conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    bs.record_kill(7, "goblin", conn=conn)  # tier 1 only
+    unlocked = next(e for e in bs.get_bestiary(7)["entries"] if not e["locked"])
+    assert "hp_max" not in unlocked
+
+
+def test_get_bestiary_empty_for_unknown_hero(conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    result = bs.get_bestiary(999)
+    assert result["summary"]["unlocked"] == 0
+    assert all(e["locked"] for e in result["entries"])
+
+
+def test_get_bestiary_excludes_non_permanent_from_total(conn, monkeypatch):
+    """#1191 sync fix: pending/discarded/inactive enemies must not inflate total."""
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    conn.executemany(
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) VALUES (?,?,?,?,?,?,?)",
+        [("wip", "WIP", "x", 5, "1", "pending", 1),
+         ("rej", "Rej", "x", 5, "1", "discarded", 1),
+         ("off", "Off", "x", 5, "1", "permanent", 0)],
+    )
+    conn.commit()
+    result = bs.get_bestiary(7)
+    assert result["summary"]["total"] == 2  # only goblin + orc (permanent + active)
+    keys = {e.get("enemy_key") for e in result["entries"] if not e["locked"]}
+    assert "wip" not in keys and "rej" not in keys and "off" not in keys
+
+
+def test_get_bestiary_shows_killed_forge_enemy_as_bonus(conn, monkeypatch):
+    """A killed non-canonical (forge/pending) enemy appears as a campaign_unique
+    bonus entry but does NOT inflate the canonical total."""
+    monkeypatch.setattr(bs, "_conn", lambda: conn)
+    conn.execute(
+        "INSERT INTO game_config_enemies (key,label,description,hp_base,tier,review_status,is_active) "
+        "VALUES ('wicek','Wicek Młynarczyk','Herszt wyrostków',18,'elite','pending',1)")
+    conn.commit()
+    bs.record_kill(7, "wicek", conn=conn)  # hero actually killed the forge boss
+    conn.commit()
+    r = bs.get_bestiary(7)
+    assert r["summary"]["total"] == 2      # canonical denominator unchanged
+    assert r["summary"]["bonus"] == 1
+    bonus = [e for e in r["entries"] if e.get("campaign_unique")]
+    assert len(bonus) == 1
+    assert bonus[0]["name"] == "Wicek Młynarczyk"
+    assert bonus[0]["kills"] == 1
+
+
+# ── MP kill credit: all participants (#1191 follow-up) ───────────────────────
+
+def _kills(conn, cid, ek="goblin"):
+    row = conn.execute(
+        "SELECT kills FROM character_bestiary WHERE character_id=? AND enemy_key=?",
+        (cid, ek)).fetchone()
+    return row["kills"] if row else 0
+
+
+def test_credit_solo_only_killer(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    combatants = [
+        {"id": "player", "type": "player"},
+        {"id": "goblin_01", "type": "enemy", "enemy_key": "goblin"},
+    ]
+    out = {}
+    _credit_bestiary_kill(conn, combatants, 7, 100, "goblin", out)
+    assert _kills(conn, 7) == 1
+
+
+def test_credit_mp_all_participants(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    # 3-player party; killer is player 7. All three get the kill.
+    combatants = [
+        {"id": "player:7", "type": "player"},
+        {"id": "player:8", "type": "player"},
+        {"id": "player:9", "type": "player"},
+        {"id": "orc_01", "type": "enemy", "enemy_key": "goblin"},
+    ]
+    out = {}
+    _credit_bestiary_kill(conn, combatants, 7, 100, "goblin", out)
+    assert _kills(conn, 7) == 1
+    assert _kills(conn, 8) == 1
+    assert _kills(conn, 9) == 1
+    # tier-up surfaced for the killer only
+    assert out.get("bestiary_tier_up", {}).get("enemy_key") == "goblin"
+
+
+def test_credit_noop_without_enemy_key(conn):
+    from app.services.combat_service import _credit_bestiary_kill
+    out = {}
+    _credit_bestiary_kill(conn, [{"id": "player:7", "type": "player"}], 7, 100, "", out)
+    assert conn.execute("SELECT COUNT(*) FROM character_bestiary").fetchone()[0] == 0
+
+
+# ── Showcase bestiary (#1191 / #915): public teaser + per-account enrichment ──
+
+@pytest.fixture()
+def showcase_conn():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(
+        """
+        CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT, UNIQUE(character_id,enemy_key));
+        CREATE TABLE characters (id INTEGER PRIMARY KEY, user_id INTEGER);
+        CREATE TABLE game_config_enemies (
+            key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT,
+            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1,
+            hp_base INTEGER, ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER,
+            attacks_per_turn INTEGER, damage_type TEXT, stats_json TEXT, min_level INTEGER, xp_award INTEGER,
+            fear_aura INTEGER, fear_dc INTEGER);
+        """
+    )
+    _st = '{"STR":12,"DEX":8,"CON":11,"INT":6,"WIS":9,"CHA":7,"LCK":10}'
+    c.executemany(
+        "INSERT INTO game_config_enemies (key,label,description,lore_text,image_url,tier,review_status,is_active,"
+        "hp_base,ac_base,attack_bonus,damage_die,damage_type,stats_json,min_level) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [("goblin", "Goblin", "Mały drań.", "Goblin skrada się nocą. Poluje w zgrai.", "/img/goblin.png", "standard", "permanent", 1, 12, 11, 2, "1d6", "physical", _st, 1),
+         ("orc_mag", "Ork Mag", "Duży drań.", "", "/img/orc.png", "elite", "permanent", 1, 30, 12, 4, "1d8", "magical", _st, 3),
+         ("noimg", "Bezobrazek", "x", "y", None, "weak", "permanent", 1, 5, 10, 0, "1d4", "physical", _st, 1),  # no portrait → excluded
+         ("pending_one", "Oczekujący", "z", "z", "/img/p.png", "standard", "pending", 1, 10, 10, 1, "1d6", "physical", _st, 1),  # excluded
+         ("discarded_one", "Odrzucony", "z", "z", "/img/d.png", "standard", "discarded", 1, 10, 10, 1, "1d6", "physical", _st, 1)],  # excluded
+    )
+    # user 5 has two heroes; hero 1 killed goblin ×3, hero 2 killed goblin ×2
+    c.execute("INSERT INTO characters (id,user_id) VALUES (1,5)")
+    c.execute("INSERT INTO characters (id,user_id) VALUES (2,5)")
+    c.execute("INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) VALUES (1,'goblin',3,1)")
+    c.execute("INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) VALUES (2,'goblin',2,1)")
+    c.commit()
+    yield c
+    c.close()
+
+
+def test_showcase_anon_teaser_no_lore_leak(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(None)
+    assert r["authenticated"] is False
+    assert r["summary"]["total"] == 2  # noimg excluded
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["teaser"] == "Goblin skrada się nocą."   # first sentence only
+    assert gob["defeated"] is False
+    assert "lore_text" not in gob and "description" not in gob  # anon must not get full text
+
+
+def test_showcase_authed_enriches_defeated_aggregated(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(5)
+    assert r["authenticated"] is True
+    assert r["summary"]["defeated"] == 1
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["defeated"] is True
+    assert gob["kills"] == 5            # 3 + 2 across both heroes of the account
+    assert gob["lore_text"]            # full lore unlocked
+    orc = next(e for e in r["entries"] if e["enemy_key"] == "orc_mag")
+    assert orc["defeated"] is False    # not killed → still teaser-only
+    assert "lore_text" not in orc
+    assert "hp_base" not in orc        # undefeated → no stat card
+    assert orc["zone"] == "ranged"     # 'mag' keyword → dystans (coarse, shown to all)
+    assert orc["damage_type"] == "magical"
+
+
+def test_showcase_authed_unknown_user_all_locked(showcase_conn, monkeypatch):
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(999)
+    assert r["summary"]["defeated"] == 0
+    assert all(not e["defeated"] for e in r["entries"])
+
+
+def test_showcase_excludes_pending_and_discarded(showcase_conn, monkeypatch):
+    """Non-permanent enemies (even with a portrait) never reach the showcase."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    keys = {e["enemy_key"] for e in bs.get_showcase_bestiary(None)["entries"]}
+    assert "pending_one" not in keys and "discarded_one" not in keys
+    assert keys == {"goblin", "orc_mag"}
+
+
+def test_showcase_defeated_count_ignores_non_catalogue_kills(showcase_conn, monkeypatch):
+    """A killed key that isn't in the shown catalogue (forge/stale) must NOT
+    inflate summary.defeated (regression: was len(defeated) over raw kills)."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    # user 5's hero 1 also 'killed' a non-catalogue key
+    showcase_conn.execute(
+        "INSERT INTO character_bestiary (character_id,enemy_key,kills,unlocked_tier) "
+        "VALUES (1,'forge_ghost',3,1)")
+    showcase_conn.commit()
+    r = bs.get_showcase_bestiary(5)
+    assert r["summary"]["defeated"] == 1  # only goblin (in catalogue), not forge_ghost
+    assert not any(e["enemy_key"] == "forge_ghost" for e in r["entries"])
+
+
+def test_showcase_defeated_gets_full_card(showcase_conn, monkeypatch):
+    """Defeated enemy exposes the full stat card; coarse fields shown for all."""
+    monkeypatch.setattr(bs, "_conn", lambda: showcase_conn)
+    r = bs.get_showcase_bestiary(5)  # user 5 killed goblin
+    gob = next(e for e in r["entries"] if e["enemy_key"] == "goblin")
+    assert gob["defeated"] is True
+    assert gob["hp_base"] == 12 and gob["ac_base"] == 11
+    assert gob["tier"] == "standard" and gob["damage_die"] == "1d6"
+    assert gob["stats"]["STR"] == 12
+    assert gob["zone"] == "engaged" and gob["damage_type"] == "physical"

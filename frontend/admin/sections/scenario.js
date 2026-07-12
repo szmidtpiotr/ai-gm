@@ -144,7 +144,7 @@ export async function init(panel) {
           ${s.agent_notes ? `<div style="font-size:12px;color:var(--amber,#caa)">📝 ${_esc(s.agent_notes)}</div>` : ''}
           <div style="margin-top:6px">
             <button class="btn" data-watch="${s.campaign_id}">📡 Log</button>
-            <a class="btn" href="/?campaign=${s.campaign_id}" target="_blank"
+            <a class="btn" href="/graj/?campaign=${s.campaign_id}" target="_blank"
                title="Deep-link: otwiera tę kampanię w UI gracza (konto właściciela klona; po zalogowaniu trafiasz prosto do czatu)">▶ Graj</a>
           </div>
         </div>`).join('') : '<div style="color:var(--t3)">Brak aktywnych scenariuszy.</div>';

@@ -80,6 +80,75 @@ class PostProcessResult:
     substitutions_made: int = 0
 
 
+def build_plan_enemy_keys_block(conn: sqlite3.Connection, campaign_id: int) -> str:
+    """#1284/#1296 — surface a campaign's plan-specific enemy keys to the narrator.
+
+    The static system_prompt only lists ~10 generic keys and forbids inventing new
+    ones. Named plan bosses (materialized into game_config_enemies) would otherwise
+    be unreachable — the LLM would map them onto a generic key. Listing the real,
+    playable keys here lets the narrator emit [COMBAT_START:<key>] for the actual
+    boss so _fetch_enemy_row resolves the full stat block + loot instead of a
+    12HP/11AC stand-in.
+
+    Only keys that actually exist and are active in game_config_enemies are listed,
+    so we never point the narrator at a non-playable key. Standalone (not a method)
+    so both the solo ContextInjector and the multiplayer narrator (#1296) reuse it.
+    """
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if not row or not row[0]:
+            return ""
+        plan = json.loads(row[0])
+        plan_enemies = plan.get("key_enemies") or []
+        if not plan_enemies:
+            return ""
+        keys = [str(e.get("key") or "").strip() for e in plan_enemies if isinstance(e, dict)]
+        keys = [k for k in keys if k]
+        if not keys:
+            return ""
+        placeholders = ",".join("?" for _ in keys)
+        live = {
+            r["key"]: dict(r)
+            for r in conn.execute(
+                f"""SELECT key, label, tier FROM game_config_enemies
+                    WHERE key IN ({placeholders}) AND COALESCE(is_active, 1) = 1""",
+                keys,
+            ).fetchall()
+        }
+        if not live:
+            return ""
+    except Exception:
+        return ""
+
+    lines = [
+        "=== WROGOWIE TEJ KAMPANII (dodatkowe DOZWOLONE klucze [COMBAT_START]) ===",
+        "Oprócz standardowych kluczy z kontraktu, w TEJ kampanii możesz też użyć "
+        "poniższych — to konkretni, nazwani przeciwnicy z planu. Gdy walka dotyczy "
+        "którejś z tych postaci, użyj DOKŁADNIE jej klucza (nie mapuj na generyczny "
+        "typ, nie wymyślaj wariantu).",
+        "WAŻNE — SPÓJNOŚĆ IMION: gdy wprowadzasz którąkolwiek z tych postaci do "
+        "NARRACJI (nawet zanim dojdzie do walki), nazywaj ją DOKŁADNIE jej imieniem "
+        "z poniższej listy. NIE wymyślaj dla niej nowego imienia, nazwiska ani "
+        "przydomka — inaczej gracz pozna ją pod jednym imieniem, a karta wroga "
+        "pokaże inne. Lista (imię — klucz [COMBAT_START] — tier):",
+    ]
+    for e in plan_enemies:
+        if not isinstance(e, dict):
+            continue
+        k = str(e.get("key") or "").strip()
+        meta = live.get(k)
+        if not meta:
+            continue
+        name = meta.get("label") or e.get("name") or k
+        tier = meta.get("tier") or e.get("tier") or "standard"
+        lines.append(f"- {name} — klucz: {k} — {tier}")
+    if len(lines) <= 2:
+        return ""
+    return "\n".join(lines)
+
+
 # ── Main class ─────────────────────────────────────────────────────────────
 
 class ContextInjector:
@@ -199,6 +268,7 @@ class ContextInjector:
                 self._build_world_block(session_flags, ingame_hours, player_message, campaign_id),
                 self._build_stale_block(session_flags),
                 self._build_entities_block(npcs, combat_roster),
+                self._build_plan_enemy_keys_block(campaign_id),
                 self._build_mechanic_block(action_type, mechanic_result),
                 self._build_character_state_block(character, active_conditions),
                 self._build_tone_block(tone),
@@ -433,7 +503,7 @@ class ContextInjector:
                 current_location_key=_cur_loc_key,
             )
             if swiat:
-                swiat += f"\nPora: {_time_of_day(ingame_hours)}"
+                swiat += f"\nCzas: {_clock_display(ingame_hours)}"
                 weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
                 if weather:
                     swiat += f"\n{weather}"
@@ -466,7 +536,7 @@ class ContextInjector:
                 lines.append(f"Atmosfera: {atmosphere}")
         else:
             lines.append("Lokacja: nieznana")
-        lines.append(f"Pora: {_time_of_day(ingame_hours)}")
+        lines.append(f"Czas: {_clock_display(ingame_hours)}")
         weather = self._build_weather_line(session_flags, ingame_hours, campaign_id)
         if weather:
             lines.append(weather)
@@ -599,6 +669,15 @@ class ContextInjector:
             lines.append("Brak postaci w tej lokacji.")
 
         return "\n".join(lines)
+
+    def _build_plan_enemy_keys_block(self, campaign_id: int) -> str:
+        """#1284 — surface this campaign's plan-specific enemy keys to the narrator.
+
+        Thin wrapper over the standalone `build_plan_enemy_keys_block` so the same
+        block can be reused by the multiplayer narrator (#1296), which does not go
+        through this injector.
+        """
+        return build_plan_enemy_keys_block(self.conn, campaign_id)
 
     def _build_content_index_block(self, mechanic_result: dict) -> str:
         """Stage 2B-Schema S14: surface AVAILABLE CONTENT + nearby places to the narrator."""
@@ -1126,3 +1205,11 @@ def _time_of_day(ingame_hours: int) -> str:
     if 20 <= hour < 23:
         return "zmierzch"
     return "noc"
+
+
+def _clock_display(ingame_hours: int) -> str:
+    """Full clock string injected into narrator context: 'Dzień 3, 09:00 (rano)'."""
+    h = int(ingame_hours)
+    day = (h // 24) + 1
+    hour = h % 24
+    return f"Dzień {day}, {hour:02d}:00 ({_time_of_day(h)})"

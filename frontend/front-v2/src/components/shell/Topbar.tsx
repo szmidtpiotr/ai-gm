@@ -1,0 +1,196 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Sun,
+  MoonStars,
+  MapTrifold,
+  List,
+  Flame,
+  UserCircle,
+  Scroll,
+  Cloud,
+  CloudRain,
+  CloudFog,
+  CloudSnow,
+  CloudLightning,
+  ThermometerHot,
+} from "@phosphor-icons/react";
+import { Breadcrumb } from "./Breadcrumb";
+import { useAppStore } from "@/store/appStore";
+import { useCampaignClock, useCampaignDetail } from "@/hooks/useGameData";
+import { phaseTheme } from "@/lib/worldClock";
+import { DayArcModal } from "@/components/game/DayArcModal";
+
+// Mini-ikona pogody dla paska (tylko gdy warto sygnalizować — nie „clear").
+const WEATHER_MINI: Record<string, typeof Cloud> = {
+  clouds: Cloud,
+  rain: CloudRain,
+  storm: CloudLightning,
+  fog: CloudFog,
+  snow: CloudSnow,
+  heat: ThermometerHot,
+};
+
+// Delikatny tint per pogoda — czytelniejszy niż szara plamka, drobny sygnał.
+const WEATHER_TINT: Record<string, string> = {
+  clouds: "var(--text-2)",
+  fog: "var(--text-2)",
+  rain: "var(--mana)",
+  snow: "#cdd6ff",
+  storm: "var(--gold)",
+  heat: "var(--ember)",
+};
+
+// Poza grą: marka + breadcrumb + profil.
+// W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
+// BEZ imienia bohatera; HP/Mana są nad dolnym tabbarem (sekcja 5, zamrożone reguły).
+export function Topbar({ inGame }: { inGame: boolean }) {
+  const gameTab = useAppStore((s) => s.gameTab);
+  // F-43: zakładka Mapa niesie własny nagłówek (zegar+pora+lokacja) — chowamy
+  // pasek przygody, by nie dublować zegara (parytet z makietą zar5). KROK 4 (#1235).
+  if (inGame && gameTab === "map") return null;
+
+  return (
+    <header
+      className="sticky top-0 z-40 shrink-0 border-b border-line bg-surface/95 backdrop-blur"
+      style={{ paddingTop: "var(--sa-top)" }}
+    >
+      {inGame ? <GameBar /> : <NavBar />}
+    </header>
+  );
+}
+
+function NavBar() {
+  return (
+    <div className="flex h-14 items-center gap-3 px-4">
+      <Link to="/bohaterowie" className="flex items-center gap-2 shrink-0">
+        <Flame weight="fill" className="text-ember" size={22} />
+        <span className="font-serif text-title text-text">ŻAR</span>
+      </Link>
+      <div className="mx-1 h-4 w-px bg-line" />
+      <div className="min-w-0 flex-1">
+        <Breadcrumb />
+      </div>
+      <Link
+        to="/profil"
+        aria-label="Profil"
+        className="shrink-0 text-text-3 transition-colors hover:text-ember-glow"
+      >
+        <UserCircle size={26} />
+      </Link>
+    </div>
+  );
+}
+
+function GameBar() {
+  const campaignId = useAppStore((s) => s.currentCampaignId) ?? undefined;
+  const setGameTab = useAppStore((s) => s.setGameTab);
+  const toggleGameMenu = useAppStore((s) => s.toggleGameMenu);
+  const clock = useCampaignClock(campaignId);
+  const campaign = useCampaignDetail(campaignId);
+  const [clockOpen, setClockOpen] = useState(false);
+
+  const data = clock.data;
+  const period = data?.period ?? "";
+  // is_night z backendu (bucket 22–05); fallback na regex dla starszej odpowiedzi.
+  const isNight = data?.is_night ?? /noc/i.test(period);
+  const time = data?.hour_str ?? "—:—";
+  const quest = campaign.data?.title ?? "Przygoda";
+  const theme = phaseTheme(data?.hour ?? 9);
+  const weather = data?.weather ?? null;
+  const WeatherMini = weather ? WEATHER_MINI[weather.type] : null;
+
+  return (
+    <div
+      className="flex h-12 items-center gap-3 px-3.5"
+      // C — ambient: delikatny poblask krawędzi wg pory dnia (kontrast temperaturą).
+      style={{ boxShadow: `inset 0 -2px 0 -1px ${theme.ambient}` }}
+    >
+      {/* zegar + pora (stack) — klikalny → popup „Łuk dnia" (#1219 B) */}
+      <button
+        type="button"
+        onClick={() => setClockOpen(true)}
+        aria-label="Zegar świata"
+        className="group -ml-1 flex shrink-0 items-center gap-1.5 rounded-md border-r border-line py-1 pl-1 pr-3 transition-colors hover:bg-white/[.03]"
+      >
+        {/* A — crossfade słońce↔księżyc + kolor pory */}
+        <span className="relative inline-flex h-4 w-4 items-center justify-center">
+          <Sun
+            weight="fill"
+            size={16}
+            className="absolute transition-opacity duration-500"
+            style={{ color: theme.accent, opacity: isNight ? 0 : 1 }}
+          />
+          <MoonStars
+            weight="fill"
+            size={16}
+            className="absolute text-mana transition-opacity duration-500"
+            style={{ opacity: isNight ? 1 : 0 }}
+          />
+        </span>
+        <div className="leading-tight text-left">
+          {/* A — flip/fade przy zmianie godziny (key wymusza re-animację) */}
+          <div
+            key={time}
+            className="font-mono text-label font-semibold text-text animate-fade-in"
+          >
+            {time}
+          </div>
+          <div className="flex items-center gap-1.5 font-ui text-micro text-text-3">
+            <span>{period || "—"}</span>
+            {WeatherMini && (
+              <WeatherMini
+                weight="fill"
+                size={13}
+                className="transition-colors group-hover:text-ember-glow"
+                style={{ color: WEATHER_TINT[weather!.type] ?? "var(--text-2)" }}
+              />
+            )}
+          </div>
+        </div>
+      </button>
+
+      <DayArcModal open={clockOpen} onOpenChange={setClockOpen} clock={data} />
+
+      {/* TYLKO główny quest (reszta w Dzienniku) */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <Scroll className="shrink-0 text-ember" size={15} />
+        <div className="min-w-0">
+          <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.16em] text-text-3">
+            Główne zadanie
+          </div>
+          <div className="truncate font-serif text-label font-semibold text-text">
+            {quest}
+          </div>
+        </div>
+      </div>
+
+      <IconBtn label="Mapa" onClick={() => setGameTab("map")}>
+        <MapTrifold size={18} />
+      </IconBtn>
+      <IconBtn label="Menu" onClick={toggleGameMenu}>
+        <List size={18} />
+      </IconBtn>
+    </div>
+  );
+}
+
+function IconBtn({
+  label,
+  children,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      onClick={onClick}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-bg text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
+    >
+      {children}
+    </button>
+  );
+}

@@ -305,7 +305,7 @@
     <a href="/showcase/#historia">Historia</a>
     <a href="/showcase/#faq">FAQ</a>
     <a href="/showcase/changelog.html">Co nowego</a>
-    <a class="wb-play" href="/">ZAGRAJ</a>
+    <a class="wb-play" href="/graj/">ZAGRAJ</a>
   </nav>
 </div>
 <script>
@@ -385,6 +385,10 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r4-obrona">Pancerz i jak zmniejsza obrażenia</a></li>
           <li><a href="#r4-obrona2">Gdy wróg uderza w ciebie</a></li>
           <li><a href="#r4-strefy">Zwarcie i dystans</a></li>
+          <li><a href="#r4-groza">Groza — test odwagi</a></li>
+          <li><a href="#r4-trafienia">Lokacje trafień</a></li>
+          <li><a href="#r4-lowca">Wiedza łowcy</a></li>
+          <li><a href="#r4-ucieczka">Ucieczka z walki</a></li>
         </ul>
       </li>
       <li class="chap">
@@ -427,6 +431,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r8-hazard">Hazard</a></li>
           <li><a href="#r8-trwalosc">Trwałość i naprawa</a></li>
           <li><a href="#r8-rzemioslo">Rzemiosło i łup</a></li>
+          <li><a href="#r8-relikty">Relikty i pasywne moce</a></li>
         </ul>
       </li>
       <li class="chap">
@@ -449,6 +454,36 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#rasy-kowalskie">Kowalskie oko</a></li>
           <li><a href="#rasy-wzrok">Wzrok górnika</a></li>
           <li><a href="#rasy-rdzen">Rdzeń-magia</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">XI</span><span class="ttl">Podróże, czas i mapa</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r11">Wprowadzenie</a></li>
+          <li><a href="#r11-zegar">Zegar świata</a></li>
+          <li><a href="#r11-czekanie">Czekanie</a></li>
+          <li><a href="#r11-marsz">Marsz i budżet dnia</a></li>
+          <li><a href="#r11-pogoda">Pogoda i tempo marszu</a></li>
+          <li><a href="#r11-spotkania">Spotkania na szlaku</a></li>
+          <li><a href="#r11-zmeczenie">Zmęczenie</a></li>
+          <li><a href="#r11-mapa">Mapa i mgła wojny</a></li>
+          <li><a href="#r11-mapy">Mapy-przedmioty</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">XII</span><span class="ttl">Reputacja i kronika</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r12">Wprowadzenie</a></li>
+          <li><a href="#r12-reputacja">Reputacja w krainie</a></li>
+          <li><a href="#r12-kronika">Kronika bohatera</a></li>
+        </ul>
+      </li>
+      <li class="chap">
+        <button class="chap-h"><span class="rn">XIII</span><span class="ttl">Mapy skarbów</span><span class="caret">▶</span></button>
+        <ul class="subs">
+          <li><a href="#r13">Wprowadzenie</a></li>
+          <li><a href="#r13-fragmenty">Fragmenty i całe mapy</a></li>
+          <li><a href="#r13-wyprawa">Wyprawa i wykopanie</a></li>
         </ul>
       </li>
     </ul>
@@ -1083,6 +1118,12 @@ document.addEventListener('DOMContentLoaded',function(){
         <div class="entry"><h4>Blok Tarczą <span class="badge">STR</span></h4>
           <p>Bojowa reakcja: zastawienie się tarczą, by pochłonąć cios. Skuteczny blok zmniejsza obrażenia trafienia.</p>
           <p class="ex"><span class="pc">„Zasłaniam się tarczą przed ciosem maczugi."</span> Udany blok ścina część obrażeń.</p></div>
+        <div class="entry"><h4>Arkanowa Bariera <span class="badge">INT</span></h4>
+          <p>Bojowa reakcja maga — magiczny odpowiednik Uniku. Gdy wróg trafia, rozbłysk osłony może cios całkowicie zanegować, kosztem odrobiny many. Test Intelektu przeciw sile ciosu: udany — bariera trzyma (0 obrażeń), nieudany — cios przechodzi. Mana schodzi tak czy inaczej, więc bariera to zakład. Wymaga wyuczonej umiejętności i many w puli.</p>
+          <p class="ex"><span class="pc">„Wznoszę arkanową barierę przed nadlatującym toporem."</span> Sukces = 0 obrażeń; koszt 1 many za próbę niezależnie od wyniku.</p></div>
+        <div class="entry"><h4>Tarcza Many <span class="badge">INT</span></h4>
+          <p>Bojowa reakcja maga — magiczny odpowiednik Bloku. Zamiast rzucać barierę i ryzykować, mag <em>przyjmuje cios w manę zamiast w ciało</em> — pewnie, bez rzutu. Tarcza pochłania część obrażeń (2 obrażenia za każdą wydaną manę), do limitu rosnącego z rangą umiejętności. Płacisz manę tylko za to, co realnie pochłonąłeś — a twardy limit sprawia, że nawet potężny krytyk nie wyssie ci całej puli. Działa raz na rundę, także w pojedynku (mag nie może tak tankować co cios). Wymaga wyuczonej umiejętności i many w puli.</p>
+          <p class="ex"><span class="pc">„Rozpraszam cios w tarczy many."</span> Cios 10 obrażeń, ranga 1 → tarcza chłonie 4 (−2 many), 6 dociera do ciała.</p></div>
         <div class="entry"><h4>Zapasy <span class="badge">STR</span></h4>
           <p>Chwyty, obalenia i unieruchamianie przeciwnika bez broni — przydatne, gdy chcesz pojmać, nie zabić.</p>
           <p class="ex"><span class="pc">„Łapię go w pół i przyduszam do ziemi."</span> Przeciwstawny test Siły.</p></div>
@@ -1348,9 +1389,86 @@ document.addEventListener('DOMContentLoaded',function(){
           </div>
           <p class="narr" style="margin-top:14px">Gdybyś zdążył przed ciosem podnieść tarczę (udany
           <strong>Blok Tarczą</strong>) albo wycofać się na dystans, część tych obrażeń w ogóle by do
-          ciebie nie dotarła. W walce liczy się nie tylko to, jak mocno bijesz — ale i ile zdołasz znieść.</p>
+          ciebie nie dotarła. Mag, który nie nosi tarczy, ma własną odpowiedź — <strong>Arkanową Barierę</strong>:
+          rozbłysk osłony za manę, który przy udanym teście Intelektu neguje cios w całości. W walce liczy
+          się nie tylko to, jak mocno bijesz — ale i ile zdołasz znieść.</p>
         </div>
       </div>
+
+      <h2 id="r4-groza">Groza — test odwagi na progu walki</h2>
+      <p>Nie każdy wróg to zbir z pałką. Niektóre stworzenia — nieumarli, demony, potwory z pęknięć
+      Rdzenia — niosą ze sobą <span class="gloss" tabindex="0">Grozę<span class="tip"><span class="tip-h">Groza</span>Aura
+      strachu potężnego wroga. Na starcie walki rzucasz <b>czysty k20</b> (sam los, bez modyfikatorów)
+      przeciw progowi Grozy wroga. Porażka nakłada stan strachu na 2 rundy.</span></span>. Gdy walka z takim
+      przeciwnikiem się zaczyna, zanim padnie pierwszy cios, twój bohater musi wytrzymać jej ciężar.</p>
+      <p>Test jest brutalnie prosty: rzucasz <strong>czysty k20</strong> — sam los, bez cech i umiejętności,
+      bo wobec pierwotnego strachu wszyscy są równi — przeciw progowi Grozy wroga (zwykle <strong>12</strong>,
+      u prawdziwych koszmarów więcej). Naturalna 20 zawsze zdaje. Porażka oznacza <strong>Przestraszenie</strong>
+      na 2 rundy — walczysz z karą, ręka drży. Kolejne oblane testy pchają cię dalej po drabinie strachu:
+      z przestraszenia w <strong>Panikę</strong> (silnik zmusza cię do ucieczki), a z paniki w
+      <strong>Załamanie</strong>. Naturalna 1 przeskakuje od razu dwa stopnie.</p>
+      <p class="aside">Groza dotyczy tylko wrogów, którzy ją mają — wilk czy pijany najemnik nie
+      wystraszy weterana. Ale gdy narrator opisuje, że od przeciwnika bije zimno starsze niż strach,
+      wiedz, że kość już czeka.</p>
+
+      <h2 id="r4-trafienia">Lokacje trafień — dokąd wchodzi krytyk</h2>
+      <p>Zwykły cios rani „ogólnie". Ale <strong>naturalna 20</strong> to nie tylko podwójne obrażenia
+      z pominięciem pancerza — krytyk trafia w <em>konkretną część ciała</em>. Gra rzuca k6 i sprawdza,
+      gdzie wszedł cios: głowa, tors, ramię czy noga. Każda lokacja zostawia po sobie ranę-stan,
+      która działa jeszcze przez kilka rund.</p>
+      <table>
+        <caption>Lokacje trafień krytycznych (k6)</caption>
+        <thead><tr><th>Miejsce</th><th>Gdy TY trafiasz wroga</th><th>Gdy wróg trafia CIEBIE</th></tr></thead>
+        <tbody>
+          <tr><td>Głowa</td><td>Ogłuszenie — wróg traci następną turę</td><td>Oszołomienie — tracisz następną akcję</td></tr>
+          <tr><td>Tors</td><td>Krwawienie — 1 obrażenie na rundę przez 3 rundy</td><td>Zadyszka — kara −2 do akcji siłowych przez 2 rundy</td></tr>
+          <tr><td>Ramię</td><td>Osłabiona ręka — wróg zadaje −2 obrażeń przez 3 rundy</td><td>Rana ramienia — −1 do ataku przez 3 rundy</td></tr>
+          <tr><td>Noga</td><td>Okulawienie — wróg <b>nie może uciec</b> przez 3 rundy</td><td>Rana nogi — −2 do rzutu na ucieczkę przez 3 rundy</td></tr>
+        </tbody>
+      </table>
+      <p>Zasada działa <strong>symetrycznie</strong> — twoje krytyki kaleczą wrogów dokładnie tak samo,
+      jak ich krytyki kaleczą ciebie. Cios w nogę uciekającego przeciwnika potrafi rozstrzygnąć całą walkę.</p>
+
+      <h2 id="r4-lowca">Wiedza łowcy — nagroda za polowanie</h2>
+      <p>Im częściej ubijasz dany <em>typ</em> potwora, tym lepiej go poznajesz. Twój
+      <span class="gloss" tabindex="0">Bestiariusz<span class="tip"><span class="tip-h">Bestiariusz</span>Kolekcja
+      wpisów o pokonanych wrogach — otwierasz ją w karcie postaci, w zakładce
+      <b>Kolekcje</b>. Liczy zabójstwa osobno dla każdego typu wroga i jest wspólny
+      dla bohatera we wszystkich jego kampaniach.</span></span> zlicza ubitych
+      przeciwników każdego rodzaju i odblokowuje wiedzę w trzech progach:</p>
+      <table>
+        <caption>Progi wiedzy łowcy (wartości startowe)</caption>
+        <thead><tr><th>Zabójstwa</th><th>Co zyskujesz</th></tr></thead>
+        <tbody>
+          <tr><td><b>1</b></td><td>Wpis w Bestiariuszu — nazwa, opis i portret wroga</td></tr>
+          <tr><td><b>5</b></td><td><b>Podgląd HP</b> — widzisz punkty życia tego typu wroga w walce</td></tr>
+          <tr><td><b>15</b></td><td><b>+1 do trafienia</b> przeciw temu typowi — wiesz, gdzie uderzyć</td></tr>
+        </tbody>
+      </table>
+      <p>Bonus <strong>+1 do trafienia</strong> dolicza się do twojego wyniku ataku
+      dokładnie tak samo jak biegłość — zobaczysz go na karcie rzutu jako osobny
+      składnik. Dotyczy tylko tego jednego gatunku, który wytrwale tępiłeś. To nagroda
+      za farmienie: powrót do znanego lochu po komplet wpisów realnie się opłaca.</p>
+      <p class="aside">Progi (1 / 5 / 15) i wielkość bonusu (+1) to wartości startowe —
+      Mistrz Gry może je dostroić w Piaskownicy. Zasadę opisuje ten rozdział, ale
+      definiuje ją silnik gry.</p>
+
+      <h2 id="r4-ucieczka">Ucieczka z walki</h2>
+      <p>Czasem najmądrzejszą decyzją jest odwrót. Ucieczka to <span class="gloss" tabindex="0">test
+      przeciwstawny<span class="tip"><span class="tip-h">Test przeciwstawny</span>Obie strony rzucają k20 +
+      modyfikator Zręczności. Uciekasz tylko, gdy twój wynik jest <b>wyższy</b> — remis oznacza,
+      że wróg zdążył zastąpić ci drogę.</span></span> Zręczności: ty rzucasz k20 + swój modyfikator ZRĘ,
+      najgroźniejszy z żywych wrogów rzuca k20 + swój. Wygrywasz tylko <strong>wyższym</strong> wynikiem —
+      remis należy do ścigającego.</p>
+      <div class="degrees">
+        <div class="deg s"><b>Udana ucieczka</b> — walka kończy się natychmiast. Zachowujesz życie,
+        ale nie łup z tej potyczki; wróg zostaje na świecie.</div>
+        <div class="deg f"><b>Nieudana ucieczka</b> — próba <b>kosztuje turę</b>: wróg odcina ci drogę
+        i zaraz atakuje. Nic więcej nie tracisz — ale w tej rundzie już nie uderzysz.</div>
+      </div>
+      <p>Rany mają tu znaczenie: <strong>rana nogi</strong> daje −2 do twojego rzutu na ucieczkę,
+      a <strong>okulawienie</strong> w ogóle odbiera możliwość próby — dopóki stan nie minie, drogi
+      odwrotu nie ma. Działa to też w drugą stronę: okulawiony wróg nie ucieknie przed tobą.</p>
     </section>
 
     <hr class="section-divider">
@@ -1923,6 +2041,26 @@ document.addEventListener('DOMContentLoaded',function(){
       łupów, a szansa na konkretny przedmiot to jego <em>waga</em> w tej tabeli (waga 30 = 30%
       szansy). Złoto z wroga losuje się osobno, z jego własnego widełka. Wysokie Szczęście pochyla te
       losowania na twoją korzyść — dlatego łotrzyk tak ceni tę cechę.</p>
+
+      <h2 id="r8-relikty">Relikty i pasywne moce ekwipunku</h2>
+      <p>Broń zadaje obrażenia, pancerz je zbiera — ale najciekawsze przedmioty robią coś więcej.
+      <span class="gloss" tabindex="0">Relikt<span class="tip"><span class="tip-h">Relikt</span>Przedmiot
+      z pasywną mocą: podnosi cechę, umiejętność albo pancerz samym faktem <b>założenia</b>. Bohater ma
+      dwa dedykowane sloty na relikty, ale moce może nieść każdy założony przedmiot.</span></span> —
+      sygnet, amulet, stare okulary alchemika — daje <strong>pasywną moc</strong>: premię do cechy,
+      umiejętności albo pancerza, która działa cały czas, <em>w walce i poza nią</em>.</p>
+      <ul>
+        <li><strong>Musi być założony.</strong> Przedmiot w plecaku milczy — moc budzi się dopiero na
+        palcu, szyi czy grzbiecie. Na lalce postaci masz <strong>dwa sloty na relikty</strong>, a premie
+        potrafi nieść także zbroja, amulet czy narzędzie.</li>
+        <li><strong>Premie do cech to punkty cechy</strong>, nie gotowe modyfikatory — pierścień „+2 CHA"
+        podnosi Charyzmę z 12 na 14, co daje +1 do modyfikatora. Premie do umiejętności podnoszą rangę,
+        premie do pancerza dodają się do AC.</li>
+        <li><strong>Moce się sumują.</strong> Dwa przedmioty z premią do tej samej cechy działają oba.</li>
+        <li>Premie widzisz wprost na karcie postaci i na przedmiocie w ekwipunku — żadnych ukrytych liczb.</li>
+      </ul>
+      <p class="aside">Relikty znajdujesz w łupach, nagrodach za zadania i u nielicznych kupców. Najcenniejsze
+      są wplecione w samą opowieść — narrator zna ich historię i potrafi ją przy okazji przypomnieć.</p>
     </section>
 
     <hr class="section-divider">
@@ -2118,8 +2256,225 @@ document.addEventListener('DOMContentLoaded',function(){
         <p><em>Ludzki uczony</em> nie może nauczyć się czarów Rdzenia — są zablokowane (race_lock = dwarf). <em>Krasnolud-uczony</em> nie może nauczyć się standardowych czarów arcańskich.</p>
       </div>
 
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ XI — PODRÓŻE, CZAS I MAPA ════════════════ -->
+    <section id="r11">
+      <p class="eyebrow">Rozdział jedenasty</p>
+      <h1><span class="num">XI · Świat</span>Podróże, czas i mapa</h1>
+      <p class="subtitle">Świat mierzy się godzinami marszu</p>
+      <hr class="rule">
+
+      <p class="lede dropcap">Między jedną przygodą a drugą leży droga — i ta droga jest częścią gry.
+      Świat ma zegar, doba ma budżet marszu, teren ma swoją cenę, a mapa odsłania się tylko tam, gdzie
+      naprawdę byłeś. Podróż to nie ekran ładowania: to decyzje, spotkania i zmęczenie.</p>
+
+      <h2 id="r11-zegar">Zegar świata</h2>
+      <p>Gra prowadzi <span class="gloss" tabindex="0">zegar<span class="tip"><span class="tip-h">Zegar gry</span>Każda
+      kampania liczy dni i godziny. Czynności przesuwają wskazówki: podróż wedle godzin marszu, krótki
+      odpoczynek +1 h, długi +8 h. Walka, rozmowa i zakupy nie kosztują czasu.</span></span> od pierwszej
+      tury: wiesz, który to dzień przygody i która godzina. Kampania zaczyna się o porze, którą wyznacza
+      jej opowieść — świt przed napadem, wieczór w gospodzie — a nie o sztywnej dziewiątej rano.</p>
+      <table>
+        <caption>Co przesuwa zegar</caption>
+        <thead><tr><th>Czynność</th><th>Czas</th></tr></thead>
+        <tbody>
+          <tr><td>Podróż między heksami</td><td class="dc">wg godzin marszu</td></tr>
+          <tr><td>Krótki odpoczynek</td><td class="dc">+1 h</td></tr>
+          <tr><td>Długi odpoczynek</td><td class="dc">+8 h</td></tr>
+          <tr><td>Rozbicie obozu</td><td class="dc">+1 h (plus odpoczynek)</td></tr>
+          <tr><td>Walka, rozmowa, zakupy</td><td class="dc">0 h</td></tr>
+        </tbody>
+      </table>
+      <p>Doba dzieli się na pory: <strong>rano</strong> (6–11), <strong>popołudnie</strong> (12–17),
+      <strong>wieczór</strong> (18–21) i <strong>noc</strong> (22–5). Pora dnia to nie dekoracja —
+      narrator ją zna, spotkania nocą są groźniejsze, a niektóre wydarzenia czekają na konkretną godzinę.</p>
+
+      <h2 id="r11-czekanie">Czekanie</h2>
+      <p>Czasem najlepszym ruchem jest przeczekać. Przycisk <strong>Czekaj</strong> pozwala przeskoczyć
+      zegar <strong>do wybranej pory dnia</strong> (do świtu, do zmierzchu — także „do następnego świtu",
+      gdy właśnie świta) albo o <strong>1–24 godziny</strong>. Dwa warunki: musisz być w <em>bezpiecznym
+      miejscu</em> i poza walką. Czekanie tylko przesuwa czas — nie leczy ran i nie odnawia many; od tego
+      jest odpoczynek.</p>
+      <p class="ex"><span class="pc">„Przemytnik zjawi się o zmierzchu? Siadam w kącie gospody i czekam."</span></p>
+
+      <h2 id="r11-marsz">Marsz i budżet dnia</h2>
+      <p>Podróżujesz po mapie heksów. Zwykły teren kosztuje <strong>około godziny marszu na heks</strong>;
+      naprawdę ciężki — pustynia, tundra, ziemie wulkaniczne — odpowiednio więcej. Przy wyruszaniu wybierasz
+      styl podróży: <strong>traktem</strong> (dłużej, ale bezpieczniej — na drodze ryzyko spotkań spada
+      o połowę) albo <strong>na skróty</strong> przez dzicz.</p>
+      <div class="degrees">
+        <div class="deg s"><b>Do 8 godzin marszu</b> — zdrowy dzień drogi. Idziesz, ile chcesz.</div>
+        <div class="deg f"><b>Po 8 godzinach</b> — zmierzch upomina się o nocleg: gra przerywa podróż
+        i pyta, czy rozbijasz obóz, czy maszerujesz w noc. Nocny marsz to spotkania półtora raza częstsze
+        — i pierwszy krok ku zmęczeniu.</div>
+        <div class="deg cf"><b>Po 12 godzinach</b> — ciało odmawia. <b>Obóz przymusowy</b>, gdziekolwiek
+        jesteś; nocleg w dziczy potrafi ściągnąć nocną zasadzkę.</div>
+      </div>
+      <p>Przerwana podróż nie przepada — po spotkaniu, noclegu czy walce gra pamięta trasę i proponuje
+      ruszyć dalej.</p>
+
+      <h2 id="r11-pogoda">Pogoda i tempo marszu</h2>
+      <p>Niebo nad Kresami bywa łaskawe albo złośliwe, i marsz to czuje. Pogoda nie zmienia trasy —
+      zmienia jej cenę w godzinach: im gorsza aura, tym każdy heks pochłania więcej czasu, więc
+      <strong>dzienny budżet ośmiu godzin wyczerpuje się szybciej</strong>, a zmierzch łapie cię bliżej,
+      niż planowałeś.</p>
+      <div class="degrees">
+        <div class="deg s"><b>Pogoda dobra</b> — bezchmurnie lub pochmurno: marsz w normalnym tempie.</div>
+        <div class="deg f"><b>Pogoda trudna</b> — deszcz, mgła albo skwar: heks kosztuje
+        <strong>o ćwierć więcej</strong> czasu.</div>
+        <div class="deg cf"><b>Pogoda groźna</b> — burza lub śnieżyca: heks kosztuje
+        <strong>o połowę więcej</strong> czasu.</div>
+      </div>
+      <p>Cztery równiny, które w słońcu przejdziesz w cztery godziny, w burzy pochłoną sześć — a to często
+      różnica między dojściem do celu przed nocą a rozbijaniem obozu w szczerym polu. Gdy narrator wspomni
+      o zacinającym deszczu czy śnieżnej zawiei, wiedz, że to nie tylko sceneria. Krótkie kroki po lokacji
+      (te po kwadransie) pogody nie liczą.</p>
+      <p class="ex"><span class="pc">„Burza nadciąga od gór — ruszamy teraz, póki trakt jeszcze widać."</span></p>
+
+      <h2 id="r11-spotkania">Spotkania na szlaku</h2>
+      <p>Każdy heks drogi niesie ryzyko spotkania — tym większe, im dzikszy teren. Na trakcie to ledwie
+      <strong>5%</strong>, na równinach 15%, w lesie 30%, na bagnach 40%, a w ruinach aż <strong>60%</strong>.
+      Gdy los padnie, moneta rozstrzyga charakter: <strong>pół na pół</strong> walka albo scena
+      fabularna — wędrowny handlarz, patrol, uchodźcy z historią.</p>
+      <p>W obrębie osad — miast, wiosek, grodów — jesteś bezpieczny: pod ich murami nikt cię nie napadnie
+      z zaskoczenia, a pilnowany trakt bywa niemal równie spokojny.</p>
+
+      <h2 id="r11-zmeczenie">Zmęczenie</h2>
+      <p>Marsz ponad siły zostawia ślad. Stan <strong>Wyczerpanie</strong> (opisany w rozdziale VI) rośnie
+      o poziom za <strong>marsz ponad 8 godzin w ciągu dnia</strong> i o poziom za <strong>dobę bez pełnego
+      noclegu</strong> — do trzech poziomów, każdy to −1 do wszystkich testów, a przy głębszym wyczerpaniu
+      cierpi też inicjatywa i regeneracja. Zdejmuje go dopiero pełny nocleg. Krasnolud, twardszy z natury,
+      <strong>ignoruje pierwszy poziom</strong> zmęczenia.</p>
+
+      <h2 id="r11-mapa">Mapa i mgła wojny</h2>
+      <p>Mapa świata zaczyna się we mgle i odsłania w trzech stanach:</p>
+      <div class="entry-grid two">
+        <div class="entry"><h4>Zarys</h4>
+          <p>Puste, kreskowane heksy na skraju znanego świata. Wiesz, że coś tam jest — nic więcej.</p></div>
+        <div class="entry"><h4>Poznany</h4>
+          <p>Bohater <em>wie</em>, że to miejsce istnieje: widzi typ terenu, a przy osadach i punktach
+          orientacyjnych — nazwę. Wokół ciebie stale świeci <strong>bąbel wiedzy o promieniu 4 heksów</strong>;
+          poznane są też duże osady, rzeki i wszystko, co przebyłeś trasą.</p></div>
+        <div class="entry"><h4>Odkryty</h4>
+          <p>Byłeś tu osobiście. Pełny detal — łącznie z lokacjami i wejściami, których „poznany" heks
+          jeszcze nie zdradza.</p></div>
+        <div class="entry"><h4>Heksy zadań</h4>
+          <p>Miejsca związane z twoją przygodą są na mapie <strong>podświetlone</strong> — cel podróży
+          nie ginie wśród lasów.</p></div>
+      </div>
+
+      <h2 id="r11-mapy">Mapy-przedmioty</h2>
+      <p>Znaleziona w łupie czy kupiona od przemytnika <strong>mapa</strong> to przedmiot w ekwipunku.
+      <strong>Użycie</strong> jej odsłania fragment świata — okolicę, cały region albo konkretne miejsca,
+      wedle tego, co mapa przedstawia — a odsłonięte heksy rozbłyskują na mapie świata. Mapa
+      <em>nie znika</em> po użyciu: zostaje w plecaku jak każda porządna mapa.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════ ROZDZIAŁ XII — REPUTACJA I KRONIKA ════════════════ -->
+    <section id="r12">
+      <p class="eyebrow">Rozdział dwunasty</p>
+      <h1><span class="num">XII · Świat</span>Reputacja i kronika bohatera</h1>
+      <p class="subtitle">Świat pamięta — i bohater też</p>
+      <hr class="rule">
+
+      <p class="lede dropcap">Bohater jest ważniejszy niż pojedyncza kampania. Kraina zapamiętuje jego
+      czyny i wystawia mu rachunek — w cenach, w tonie rozmów, w drzwiach, które się otwierają albo nie.
+      A gdy jedna przygoda się kończy, jej historia nie ginie: trafia do kroniki, którą bohater niesie
+      do następnej.</p>
+
+      <h2 id="r12-reputacja">Reputacja w krainie</h2>
+      <p><span class="gloss" tabindex="0">Reputacja<span class="tip"><span class="tip-h">Reputacja</span>Liczbowa
+      sława bohatera w danej krainie. Zaczynasz od zera (neutralny). Wygrana przygoda buduje, porzucona —
+      rujnuje. Wpływa na ceny, ton NPC i dostęp do niektórych zadań.</span></span> liczy się
+      <strong>osobno dla każdej krainy</strong> — dziś dla Kresów, z kolejnymi regionami dojdą następne
+      rachunki, a w przyszłości także frakcje. Zaczynasz od zera:</p>
+      <table>
+        <caption>Co zmienia reputację (wartości startowe)</caption>
+        <thead><tr><th>Wydarzenie</th><th>Zmiana</th></tr></thead>
+        <tbody>
+          <tr><td>Zwycięsko ukończona kampania</td><td class="dc">+20</td></tr>
+          <tr><td>Śmierć bohatera</td><td class="dc">−5</td></tr>
+          <tr><td>Porzucenie kampanii</td><td class="dc">−15</td></tr>
+        </tbody>
+      </table>
+      <p>Progi sławy: od <strong>+20</strong> jesteś w krainie <em>przyjazny</em>, od <strong>+50</strong> —
+      <em>czczony</em>; od <strong>−20</strong> <em>nielubiany</em>, od <strong>−50</strong> —
+      <em>znienawidzony</em>. Skutki są namacalne:</p>
+      <ul>
+        <li><strong>Ceny u kupców</strong> — każdy punkt reputacji to około 0,4% ceny: dobra sława daje
+        do <strong>25% zniżki</strong>, zła — do <strong>30% narzutu</strong>.</li>
+        <li><strong>Ton świata</strong> — narrator wie, kim jesteś w oczach regionu; przyjaznego bohatera
+        wita się inaczej niż znienawidzonego.</li>
+        <li><strong>Dostęp do zadań</strong> — niektórzy zleceniodawcy nie rozmawiają z byle kim; część
+        treści wymaga minimalnej reputacji.</li>
+      </ul>
+      <p class="aside">Porzucenie przygody po zgarnięciu łupu obniża reputację właśnie po to, by nie
+      opłacało się „farmić" startów. Łup i doświadczenie zostają — ale kraina to zapamięta.</p>
+
+      <h2 id="r12-kronika">Kronika bohatera</h2>
+      <p>Każda zakończona kampania — wygrana, przegrana czy porzucona — staje się <strong>rozdziałem
+      kroniki</strong> bohatera: co osiągnął, ile zdobył, jak skończył. Kronika ma dwie warstwy:
+      <strong>legendę</strong>, zwięzły skrót całego życia postaci, i <strong>ostatnie rozdziały</strong>
+      pamiętane ze szczegółami.</p>
+      <p>Kronika podąża za bohaterem <strong>między kampaniami</strong>. Gdy zaczynasz nową przygodę,
+      Mistrz Gry układa ją ze świadomością twojej przeszłości — weteran, który pokonał nekromantę
+      z Czarnoboru, nie zaczyna świata od czystej karty. Legenda rośnie z każdym rozdziałem; nowy
+      bohater po prostu jeszcze żadnego nie napisał.</p>
+
       <footer>
-        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–X</span><br>
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIII</span><br>
+        Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
+      </footer>
+    </section>
+
+    <!-- ════════════════ XIII · MAPY SKARBÓW ════════════════ -->
+    <section id="r13">
+      <p class="eyebrow">Rozdział XIII</p>
+      <h1><span class="num">XIII</span>Mapy skarbów</h1>
+
+      <p>Czasem los rzuca ci pod nogi wytartą <b>mapę skarbu</b> — pełną, wręczoną przez tajemniczego
+      nieznajomego w karczmie, albo w kawałkach, które trzeba dopiero zebrać. Każda mapa prowadzi do
+      <b>jednego heksu</b> na mapie świata, gdzie ktoś dawno temu ukrył skrytkę. Kto dojdzie na miejsce
+      i przeszuka teren, może ją wykopać — raz. Wykopany skarb znika.</p>
+
+      <h2 id="r13-fragmenty">Fragmenty i całe mapy</h2>
+      <p>Mapa bywa <b>jednoczęściowa</b> — dostajesz ją w całości i od razu jest gotowa do użycia.
+      Bywa też <b>wieloczęściowa</b>: fragmenty wypadają z pokonanych wrogów, można je kupić od
+      podejrzanych typów na nocnym czarnym rynku, albo naprowadzi na nie plotka. Fragmenty tej samej
+      mapy zbierają się razem — w ekwipunku, w sekcji <b>„Mapy skarbów"</b>, widzisz licznik
+      <span class="ex">2/3 części</span>. Dopiero komplet odsłania cel: heks oznaczony wyraźnym
+      <b>✕</b> na mapie świata. <span class="gloss">Im więcej części liczy mapa, tym grubszy łup —
+      wieloczęściowe wyprawy się opłacają.</span></p>
+      <p>Kompletna mapa ma na karcie przycisk <b>„Użyj"</b> — otwiera mapę świata wprost na celu,
+      z podświetlonym heksem skrytki. Obok celu widzisz też <b>odległość w heksach</b> od miejsca,
+      w którym stoisz — zanim ruszysz, wiesz, ile drogi cię czeka. Po wykopaniu skarbu mapa znika
+      z ekwipunku, a znacznik ✕ z mapy świata.</p>
+
+      <h2 id="r13-wyprawa">Wyprawa i wykopanie</h2>
+      <p>Gdy masz komplet, na mapie świata pojawia się znak ✕. Musisz tam <b>dojść</b> — normalną
+      podróżą, z jej kosztem czasu i spotkaniami po drodze (Rozdział XI). Na miejscu rozejrzyj się i
+      po prostu napisz, że <b>kopiesz</b> albo <b>przeszukujesz skrytkę</b>. Zdajesz wtedy test
+      <b>Dochodzenia</b> (Trudność Średnia, DC&nbsp;12) — jak każdy inny test umiejętności (Rozdział III).</p>
+      <div class="card">
+        <p class="card-h">Przykład</p>
+        <p>Twoja mapa wskazuje heks przy Siwych Graniach. Docierasz tam po dniu marszu, wyjmujesz mapę —
+        ✕ wypada właśnie tu. Piszesz: „Rozkopuję ziemię pod przechylonym głazem". Rzut na Dochodzenie:
+        <span class="ex">14 + 3 = 17 ≥ 12 — sukces</span>. Spod kamienia wyłania się okuta skrzynia.</p>
+      </div>
+      <p>Czasem skrytki strzeże <b>strażnik</b> — wtedy najpierw walka, a łup dostajesz po zwycięstwie.
+      Nieudany test nic nie psuje: skarb zostaje w ziemi, możesz próbować dalej. Skrytka nigdy nie
+      jest pusta — <b>zawsze</b> kryje przynajmniej jeden przedmiot i sakiewkę złota; zawartość
+      losuje się w chwili skompletowania mapy i czeka pod ziemią. Po wykopaniu skarb trafia do
+      twojego ekwipunku i sakwy, znak ✕ znika z mapy, a miejsce zostaje odnotowane w
+      <b>Atlasie</b> bohatera.</p>
+
+      <footer>
+        <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIII</span><br>
         Księga Zasad — żywy dokument. Liczby to wartości startowe, strojone w testach.
       </footer>
     </section>

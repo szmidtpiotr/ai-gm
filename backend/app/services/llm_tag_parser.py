@@ -156,6 +156,40 @@ def strip_all_mechanic_tags(text: Optional[str]) -> str:
     return _STRIP_TAG_RE.sub('', str(text)).strip()
 
 
+# ── Leaked JSON-envelope field lines ──────────────────────────────────────────
+# Some models (observed on gpt-5.4) duplicate a top-level envelope field INSIDE
+# the `narrative` string as a bare `key: value` line, e.g. a narrative ending with
+# a literal "location_intent: null" line. These are snake_case identifiers that a
+# Polish narration never legitimately starts a line with, so stripping bare lines
+# whose sole content is `<known_field>: ...` is safe and does not touch prose. The
+# field is still parsed from its real top-level position — only the visible echo is
+# removed. Bare `Roll <skill> d20` cues stay untouched here (they drive the dice
+# popup in turns.py before display).
+_LEAKED_FIELD_NAMES = (
+    "location_intent", "roll_cue", "advance_to_time_of_day", "time_of_day",
+    "grant_item", "grant_items", "combat_start", "npc_action", "location_action",
+    "suggested_actions", "target_label", "target_key", "parent_key",
+)
+_LEAKED_FIELD_RE = re.compile(
+    r'(?im)^[ \t>*\-]*"?(?:' + "|".join(_LEAKED_FIELD_NAMES) + r')"?\s*:.*$'
+)
+# Collapse 3+ newlines left behind after a mid-text line removal down to a blank line.
+_MULTI_BLANK_RE = re.compile(r'\n{3,}')
+
+
+def strip_leaked_json_fields(text: Optional[str]) -> str:
+    """Remove bare `<envelope_field>: value` lines the LLM leaked into narrative prose.
+
+    Only whole lines whose content is a known snake_case envelope key + colon are
+    removed; ordinary prose containing colons is never affected.
+    """
+    if not text:
+        return ''
+    cleaned = _LEAKED_FIELD_RE.sub('', str(text))
+    cleaned = _MULTI_BLANK_RE.sub('\n\n', cleaned)
+    return cleaned.strip()
+
+
 # ── Unknown tag detection ─────────────────────────────────────────────────────
 
 def find_unknown_tags(text: Optional[str]) -> list[str]:

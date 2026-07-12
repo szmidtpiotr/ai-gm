@@ -169,8 +169,8 @@ def _deliver_web_push(user_id, prefs, title, body, url) -> bool:
         conn.close()
     if not n:
         return False
-    pns.send_push(user_id, title, body, url)
-    return True
+    # Real send result → dispatcher falls through to email if no push lands.
+    return bool(pns.send_push(user_id, title, body, url))
 
 
 def _deliver_email(user_id, prefs, title, body, url) -> bool:
@@ -258,6 +258,91 @@ def notify(user_id: int, event: str, payload: dict,
         "delivered": delivered_channel is not None,
         "channel": delivered_channel,
         "attempts": attempts,
+    }
+
+
+# ─── Campaign fan-out (Faza N2b, #884) ───────────────────────────────────────
+
+# Seconds since last_seen under which a member counts as "online" (in-session).
+# Online members are skipped — they already see the game, no need to ping.
+# Starting value; tune per #884 Numbers Policy.
+ONLINE_WINDOW_SECONDS = 60
+
+
+def _campaign_in_quiet_window(campaign_id: int, conn: sqlite3.Connection) -> bool:
+    """Best-effort quiet-window suppression, parity with push fan-out (G27 #808).
+    No-ops if the campaigns row / helper is unavailable (e.g. unit test DB)."""
+    try:
+        camp = conn.execute(
+            "SELECT quiet_start, quiet_end, team_tz FROM campaigns WHERE id=?",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            return False
+        from datetime import datetime, timezone as _tz
+
+        from app.services.quiet_window import _in_quiet_window
+
+        return _in_quiet_window(
+            datetime.now(_tz.utc), camp["quiet_start"], camp["quiet_end"], camp["team_tz"]
+        )
+    except Exception:  # noqa: BLE001 — never block a notification on quiet-window
+        return False
+
+
+def notify_campaign_players(
+    campaign_id: int,
+    event: str,
+    title: str,
+    body: str,
+    url: str = "/",
+    exclude_online: bool = True,
+    exclude_user_ids: Optional[list] = None,
+    db_path: Optional[str] = None,
+) -> dict:
+    """Fan a game event out to a campaign's accepted members via `notify()`.
+
+    Anti-spam: members active within ``ONLINE_WINDOW_SECONDS`` (and any in
+    ``exclude_user_ids``, e.g. the acting player) are skipped. Each remaining
+    member is dispatched over their preferred channel with per-attempt logging.
+    Returns {"targeted": [uid...], "delivered": [uid...], "skipped_online": n}.
+    """
+    excluded = set(int(u) for u in (exclude_user_ids or []))
+    conn = _db(db_path)
+    try:
+        if _campaign_in_quiet_window(campaign_id, conn):
+            logger.info("notify_quiet_window_suppressed", campaign_id=campaign_id, event=event)
+            return {"targeted": [], "delivered": [], "skipped_online": 0, "quiet": True}
+        members = conn.execute(
+            "SELECT user_id FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+            (campaign_id,),
+        ).fetchall()
+        online_ids: set = set()
+        if exclude_online:
+            online = conn.execute(
+                "SELECT user_id FROM campaign_members "
+                "WHERE campaign_id=? AND status='accepted' AND last_seen IS NOT NULL "
+                "AND datetime(last_seen) > datetime('now', ?)",
+                (campaign_id, f"-{ONLINE_WINDOW_SECONDS} seconds"),
+            ).fetchall()
+            online_ids = {int(r["user_id"]) for r in online}
+    finally:
+        conn.close()
+
+    payload = {"title": title, "body": body, "url": url}
+    targeted, delivered = [], []
+    for row in members:
+        uid = int(row["user_id"])
+        if uid in excluded or uid in online_ids:
+            continue
+        targeted.append(uid)
+        res = notify(uid, event, payload, db_path=db_path)
+        if res.get("delivered"):
+            delivered.append(uid)
+    return {
+        "targeted": targeted,
+        "delivered": delivered,
+        "skipped_online": len(online_ids),
     }
 
 

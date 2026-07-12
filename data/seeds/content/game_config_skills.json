@@ -30,6 +30,16 @@
     "trigger_keywords": null
   },
   {
+    "key": "arcane_ward",
+    "label": "Arkanowa Bariera",
+    "linked_stat": "INT",
+    "rank_ceiling": 5,
+    "sort_order": 42,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Reakcja bojowa (#1324): magiczny odpowiednik Uniku. Po zadeklarowaniu bariery, gdy wróg trafia, postać wykonuje test INT (d20 + INT + ranga + biegłość) przeciw wynikowi ataku wroga PRZED obrażeniami, kosztem 1 many za próbę (mana schodzi ZAWSZE, niezależnie od wyniku). Sukces — cios znegowany (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1 i wystarczającej many. Raz na rundę przy wielu wrogach, przy jednym wrogu przy każdym ataku.",
+    "trigger_keywords": null
+  },
+  {
     "key": "athletics",
     "label": "Atletyka",
     "linked_stat": "STR",
@@ -250,6 +260,16 @@
     "trigger_keywords": null
   },
   {
+    "key": "mana_shield",
+    "label": "Tarcza Many",
+    "linked_stat": "INT",
+    "rank_ceiling": 5,
+    "sort_order": 43,
+    "locked_at": "2026-04-14T00:00:00Z",
+    "description": "Reakcja bojowa (#1325): magiczny odpowiednik Bloku, DETERMINISTYCZNA (bez rzutu). Mag przyjmuje cios w manę zamiast w ciało. Po zadeklarowaniu tarczy, gdy wróg trafia, silnik pochłania obrażenia FINALNE (po pancerzu i marginesie) do limitu 2 × ranga many na cios, przy przeliczniku 2 obrażenia za 1 manę. Postać płaci manę tylko za faktycznie pochłonięte obrażenia (zaokrąglone w górę); niewykorzystany limit nic nie kosztuje, a cap chroni pulę przed krytykiem wroga. Bez rzutu — brak porażki i lockoutu. Wymaga rank ≥ 1 i many > 0. Raz na rundę ZAWSZE — także przy jednym wrogu.",
+    "trigger_keywords": null
+  },
+  {
     "key": "medicine",
     "label": "Medycyna",
     "linked_stat": "WIS",
@@ -327,7 +347,7 @@
     "sort_order": 1,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Ciche poruszanie się i unikanie wykrycia. Odpowiada za wymykanie się, skradanie i działanie w cieniu.",
-    "trigger_keywords": "skradam zakradam podkradam przemykam ukradkiem chyłkiem"
+    "trigger_keywords": "skradam zakradam podkradam przemykam ukradkiem chyłkiem zaczaić przyczaić cichaczem niepostrzeżenie"
   },
   {
     "key": "survival",

@@ -39,7 +39,13 @@ _SLOT_VALUES = {
     "back",
     "main_hand",
     "off_hand",
+    # #1302: two dedicated relic slots for passive-effect items.
+    "relic1",
+    "relic2",
 }
+
+# #1302: relic slots in equip order (auto-pick fills the first free one).
+_RELIC_SLOTS = ("relic1", "relic2")
 
 # Stage 5 E1/E2/E4: armor_coverage enum → which slots a single equipped row
 # claims. 'full' anchors to torso but locks all four limbs simultaneously.
@@ -831,9 +837,12 @@ def grant_loot_to_character(
     src = str(source or "loot").strip() or "loot"
     granted: list[dict] = []
     with _conn() as conn:
-        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        ch = conn.execute(
+            "SELECT id, campaign_id FROM characters WHERE id = ?", (cid,)
+        ).fetchone()
         if not ch:
             raise ValueError("character not found")
+        _camp_id = int(ch["campaign_id"] or 0)
 
         # U25 (#575): boss-drop pity — decide once whether this kill forces an affix.
         force_affix = False
@@ -846,6 +855,29 @@ def grant_loot_to_character(
             if not isinstance(raw, dict):
                 continue
             qty = max(1, int(raw.get("quantity") or 1))
+
+            # #1196 D6: treasure-map carriers are intercepted into world_treasures /
+            # character_map_fragments instead of leaving a dead inventory row.
+            _raw_key = str(
+                raw.get("weapon_key") or raw.get("item_key") or raw.get("consumable_key") or ""
+            ).strip()
+            if _raw_key:
+                from app.services import treasure_service
+                if treasure_service.is_treasure_map_key(_raw_key):
+                    prog = treasure_service.grant_map_item(
+                        conn, cid, _camp_id, _raw_key, source=src
+                    )
+                    if prog is not None:
+                        granted.append({
+                            "label": prog.get("map_label") or "Mapa skarbu",
+                            "item_type": "treasure_map",
+                            "quantity": 1,
+                            "source": src,
+                            "key": _raw_key,
+                            "map_progress": prog,
+                        })
+                    continue
+
             cat = _catalog_entry(conn, raw)
             if not cat:
                 logger.warning("loot_catalog_key_missing", character_id=cid, loot_item=raw)
@@ -1076,6 +1108,65 @@ def get_character_inventory(character_id: int) -> list[dict]:
         except sqlite3.OperationalError:
             pass
 
+        # Stat tags for inline display on doll/list: damage die (weapons), AC (armor), effects (relics).
+        stat_tags_by_inv_id: dict[int, list[str]] = {}
+        try:
+            _wk_stat = list({r["weapon_key"] for r in rows if r["weapon_key"]})
+            _ik_stat = list({
+                r["item_key"] for r in rows
+                if r["item_key"] and r["item_key"] != "__narrative__"
+                and str(_rget(r, "item_kind") or "").lower() in ("armor", "relic")
+            })
+            _weapon_stat_d: dict[str, tuple] = {}
+            _item_stat_d: dict[str, dict] = {}
+            if _wk_stat:
+                _ph = ",".join("?" * len(_wk_stat))
+                for _wr in conn.execute(
+                    f"SELECT key, damage_die, linked_stat FROM game_config_weapons WHERE key IN ({_ph})",
+                    _wk_stat,
+                ).fetchall():
+                    _weapon_stat_d[_wr["key"]] = (_wr["damage_die"], _wr["linked_stat"])
+            if _ik_stat:
+                _ph = ",".join("?" * len(_ik_stat))
+                for _ir in conn.execute(
+                    f"SELECT key, ac_bonus, effect_json FROM game_config_items WHERE key IN ({_ph})",
+                    _ik_stat,
+                ).fetchall():
+                    _item_stat_d[_ir["key"]] = {"ac": int(_ir["ac_bonus"] or 0), "ej": _ir["effect_json"]}
+            for _r in rows:
+                _tags: list[str] = []
+                _kind = str(_rget(_r, "item_kind") or "").lower()
+                if _r["weapon_key"] and _r["weapon_key"] in _weapon_stat_d:
+                    _die, _lstat = _weapon_stat_d[_r["weapon_key"]]
+                    if _die and _lstat:
+                        _tags.append(f"{_die} {_lstat}")
+                    elif _die:
+                        _tags.append(str(_die))
+                elif _r["item_key"] and _r["item_key"] in _item_stat_d:
+                    _sd = _item_stat_d[_r["item_key"]]
+                    if _kind == "armor" and _sd["ac"] > 0:
+                        _tags.append(f"+{_sd['ac']} AC")
+                    elif _kind == "relic":
+                        try:
+                            _obj = json.loads(_sd["ej"] or "null")
+                            _effs = _obj.get("effects", []) if isinstance(_obj, dict) else []
+                            for _ef in _effs[:4]:
+                                _et = str(_ef.get("type", ""))
+                                _ev = int(_ef.get("value", 0))
+                                if _et == "static_stat_modifier" and _ef.get("stat"):
+                                    _s = str(_ef["stat"]).upper()
+                                    _tags.append(f"{_s}+{_ev}" if _ev >= 0 else f"{_s}{_ev}")
+                                elif _et == "static_skill_modifier" and _ef.get("skill"):
+                                    _sk = str(_ef["skill"])[:6]
+                                    _tags.append(f"{_sk}+{_ev}" if _ev >= 0 else f"{_sk}{_ev}")
+                                elif _et == "ac_bonus" and _ev:
+                                    _tags.append(f"+{_ev} AC")
+                        except Exception:
+                            pass
+                stat_tags_by_inv_id[int(_r["id"])] = _tags
+        except Exception:
+            pass
+
     from app.services.durability_service import durability_view
 
     out: list[dict] = []
@@ -1102,6 +1193,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "can_use": False,
                 "description": meta.get("description"),
                 "is_narrative": True,
+                "stat_tags": [],
             })
             continue
         is_ammo = False  # #764: amunicja (strzały/bełty) — consumable, ale bez akcji „użyj"
@@ -1195,6 +1287,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
                     else image_url_by_consumable_key.get(key) if item_type == "consumable"
                     else image_url_by_item_key.get(key)
                 ),
+                "stat_tags": stat_tags_by_inv_id.get(int(r["id"]), []),
             }
         )
     return out
@@ -1972,7 +2065,9 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
     # panel admina (heroes.js „Załóż") i ścieżkę cheat. Manekin gracza nie ma slotu 'armor',
     # więc generyczny slot byłby niewidoczny — tu mapujemy go na anatomiczny slot.
     auto_armor = s in ("auto", "armor")
-    if not auto_armor and s not in _SLOT_VALUES:
+    # #1302: 'relic' sentinel = "equip in the first free relic slot".
+    relic_target = s == "relic" or s in _RELIC_SLOTS
+    if not auto_armor and not relic_target and s not in _SLOT_VALUES:
         raise ValueError("invalid slot")
 
     with _conn() as conn:
@@ -2007,7 +2102,23 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
         slots_to_free: list[str] = [s]
         anchor_slot = s
 
-        if is_armor:
+        if relic_target:
+            # #1302: relics are non-weapon, non-armor items worn in a relic slot.
+            if is_weapon or is_armor:
+                raise ValueError("relic slot accepts only non-weapon, non-armor items")
+            if s == "relic":
+                occupied = {
+                    str(r["slot"])
+                    for r in conn.execute(
+                        "SELECT slot FROM character_inventory WHERE character_id = ? AND equipped = 1 "
+                        "AND slot IN (?, ?)",
+                        (cid, *_RELIC_SLOTS),
+                    ).fetchall()
+                }
+                s = next((rs for rs in _RELIC_SLOTS if rs not in occupied), _RELIC_SLOTS[0])
+            anchor_slot = s
+            slots_to_free = [s]
+        elif is_armor:
             if coverage and coverage not in _VALID_ARMOR_COVERAGE:
                 raise ValueError(f"invalid armor_coverage '{coverage}'")
             if auto_armor:

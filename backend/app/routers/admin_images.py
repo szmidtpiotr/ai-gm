@@ -703,6 +703,20 @@ class ItemGenerateRequest(BaseModel):
     prompt: str | None = None  # custom prompt override; None → LLM builds from item metadata
 
 
+@router.get("/item/missing")
+async def list_items_missing_images():
+    """List active items without image_url (for batch generation)."""
+    with sqlite3.connect(_DB_PATH) as c:
+        c.row_factory = sqlite3.Row
+        rows = c.execute(
+            "SELECT key, label, item_type, description, image_url, image_gen_prompt "
+            "FROM game_config_items "
+            "WHERE (image_url IS NULL OR image_url = '') AND is_active = 1 "
+            "ORDER BY key"
+        ).fetchall()
+    return {"items": [dict(r) for r in rows], "count": len(rows)}
+
+
 @router.post("/item/{key}/generate")
 async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=None)):
     """Generate icon for an item. Saves image_url + image_gen_prompt to DB.
@@ -721,8 +735,10 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    # Priority: provided prompt > saved prompt > LLM-built prompt
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    # Priority: provided prompt > (if force: skip cache) > saved prompt > LLM-built prompt
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         item_type = row.get("item_type") or "misc"
@@ -734,7 +750,7 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
             "The user will give you a Polish description of an inventory item. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: item appearance, material, shape, texture, lighting. "
-            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: item_type:{item_type}, rarity:{rarity_label}]\n\n{description}"
@@ -744,15 +760,15 @@ async def generate_item_image(key: str, req: ItemGenerateRequest = Body(default=
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {item_type}, {rarity_label} rarity, dark fantasy item, "
-                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+                "dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
             )
 
-    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    steps = req.steps if req.steps is not None else max(8, int(_read_visual("image_gen.steps", 8)))
     width = req.width if req.width is not None else 512
     height = req.height if req.height is not None else 512
 
@@ -809,7 +825,9 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         weapon_type = row.get("weapon_type") or "melee"
@@ -821,7 +839,7 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
             "The user will give you a Polish description of a weapon or piece of equipment. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: weapon shape, material (steel/wood/bone/magic), rarity glow, dark fantasy style. "
-            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic lighting, dark stone background, detailed fantasy illustration, RPG game icon, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: weapon_type:{weapon_type}, rarity:{rarity_label}]\n\n{description}"
@@ -831,15 +849,15 @@ async def generate_weapon_image(key: str, req: WeaponGenerateRequest = Body(defa
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic lighting, dark stone background, detailed fantasy illustration, RPG game icon, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {weapon_type} weapon, {rarity_label} rarity, dark fantasy, "
-                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+                "dramatic lighting, dark stone background, detailed fantasy illustration, RPG game icon, no text, no UI"
             )
 
-    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    steps = req.steps if req.steps is not None else max(8, int(_read_visual("image_gen.steps", 8)))
     width = req.width if req.width is not None else 512
     height = req.height if req.height is not None else 512
 
@@ -896,7 +914,9 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
     if row.get("image_url") and not req.force:
         return {"status": "skipped", "key": key, "reason": "already has image", "image_url": row["image_url"]}
 
-    saved_prompt = (req.prompt or row.get("image_gen_prompt") or "").strip()
+    saved_prompt = (req.prompt or "").strip()
+    if not saved_prompt and not req.force:
+        saved_prompt = (row.get("image_gen_prompt") or "").strip()
     if not saved_prompt:
         description = (row.get("description") or row.get("label") or key).strip()
         effect_type = row.get("effect_type") or "misc"
@@ -908,7 +928,7 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
             "The user will give you a Polish description of a potion, elixir, food, or consumable item. "
             "Output ONLY a short English comma-separated list of image generation keywords (15-25 words). "
             "Focus on: container shape (vial/flask/jar), liquid color, glowing effect, dark fantasy style. "
-            "End with: dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI. "
+            "End with: dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI. "
             "No explanations. No Polish words. No full sentences. Only English keywords."
         )
         user_msg = f"[Context: effect_type:{effect_type}, rarity:{rarity_label}]\n\n{description}"
@@ -918,15 +938,15 @@ async def generate_consumable_image(key: str, req: ConsumableGenerateRequest = B
                 {"role": "user", "content": user_msg},
             ])
             keywords = reply.strip().strip(".,")
-            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+            saved_prompt = keywords + ", dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
         except Exception:
             label = row.get("label") or key
             saved_prompt = (
                 f"{label}, {effect_type} potion, {rarity_label} rarity, glowing flask, dark fantasy, "
-                "dramatic atmospheric lighting, dark fantasy, isolated on black background, detailed fantasy illustration, no text, no UI"
+                "dramatic atmospheric lighting, dark fantasy, dark stone background, detailed fantasy illustration, no text, no UI"
             )
 
-    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
+    steps = req.steps if req.steps is not None else max(8, int(_read_visual("image_gen.steps", 8)))
     width = req.width if req.width is not None else 512
     height = req.height if req.height is not None else 512
 

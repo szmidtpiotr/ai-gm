@@ -750,6 +750,11 @@ _TRADE_USER_INTENT_RE = re.compile(
     re.IGNORECASE,
 )
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
+# #1292: hidden turn submitted after a Services-modal batch purchase, asking the
+# narrator for flavour text on what was received. Starts with "[" so
+# isVisiblePlayerText() (frontend) hides the player bubble; payment already
+# happened mechanically, so the SPEND_GOLD block must be skipped for this turn.
+_SERVICES_RECEIPT_PREFIX = "[SERVICES_RECEIPT:"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 
@@ -858,6 +863,24 @@ def _run_narrative_travel(
                     "Którą drogę wybierasz?"
                 )
                 _data_q["location_intent"] = None
+                # PM4: zamiast wymuszać wpisanie odpowiedzi — 2 klikalne przyciski.
+                # Tekst akcji trafia w detect_route_choice (wprost→direct, trakt→road).
+                _data_q["suggested_actions"] = [
+                    {
+                        "label": f"Na wprost przez {_terrain}",
+                        "action": f"Idę na wprost, przełajem do {_label}.",
+                        "enabled": True,
+                        "icon": "🌲",
+                        "type": "route_choice",
+                    },
+                    {
+                        "label": "Trzymam się traktu",
+                        "action": f"Idę traktem do {_label}.",
+                        "enabled": True,
+                        "icon": "🛤️",
+                        "type": "route_choice",
+                    },
+                ]
                 logger.info(
                     "narrative_travel_pm4_prompted",
                     campaign_id=campaign_id, location_key=location_key,
@@ -1207,8 +1230,17 @@ def _process_location_intent(
                     (result.resolved_location_id,),
                 ).fetchone()
                 if _loc_row and _loc_row["key"]:
+                    # #1293: only the WORLD map (map_level=0) drives the world pin.
+                    # A settlement sub-location (kuźnia, karczma) has only a LOCAL
+                    # map hex (map_level=1) whose q/r live in a separate coordinate
+                    # space (7000s). Without this filter that local hex was picked
+                    # up here, produced an absurd hex_distance (7343), and the move
+                    # was wrongly promoted to a failing cross-world journey — the
+                    # pin never moved. Sub-location moves must fall through to the
+                    # local_hex sync below, not the world-hex block.
                     _hex_row = conn.execute(
-                        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+                        "SELECT q, r FROM world_hexes WHERE location_key = ? "
+                        "AND is_active = 1 AND COALESCE(map_level, 0) = 0 LIMIT 1",
                         (_loc_row["key"],),
                     ).fetchone()
                     if _hex_row:
@@ -2525,6 +2557,90 @@ def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | N
     return None
 
 
+def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: str) -> dict | None:
+    """#1292: deterministic pre-LLM shortcut — explicit purchase-intent free text at a
+    location that offers game_config_services opens the Services modal directly.
+
+    No LLM call, no turn persisted (mirrors the TRAVEL_RESUME/BUILD_CAMP chip pattern —
+    a mechanical action, not a narrated beat). The SAME modal is also reachable via the
+    "Usługi" suggested_actions chip (suggested_actions.py) without typing anything.
+    Returns a minimal dict for the frontend to open the modal, or None to fall through
+    to the normal narrative/LLM turn flow.
+    """
+    t = text or ""
+    # A SERVICES_RECEIPT turn narrates a purchase ALREADY made via the modal — its
+    # own wording ("zapłacił", "posiłek", ...) would otherwise re-match the checks
+    # below and bounce straight back into re-opening the modal instead of narrating.
+    if t.startswith(_SERVICES_RECEIPT_PREFIX):
+        return None
+    from app.services.spend_gold_service import _FOOD_ORDER_VERB_RE as _svc_order_verb_re
+    from app.services.location_services import SERVICE_NOUN_RE
+    # "co MASZ DO zaoferowania" is a browse-the-menu question — opens on its own.
+    # Any other purchase verb (kupuję/zamawiam/proszę o/...) needs a co-occurring
+    # service noun (nocleg/piwo/naprawa/uzdrowienie/...), else "kupuję miecz" while
+    # standing in a tavern would wrongly open Usługi instead of reaching the narrator.
+    is_browse_ask = bool(re.search(r"\bmasz\s+do\b", t, re.IGNORECASE))
+    has_order_verb = bool(_TRADE_USER_INTENT_RE.search(t) or _svc_order_verb_re.search(t))
+    if not (is_browse_ask or (has_order_verb and SERVICE_NOUN_RE.search(t))):
+        return None
+    loc_key = _current_location_key(conn, campaign_id)
+    if not loc_key:
+        return None
+    from app.services.location_services import get_available_service_keys
+    if not get_available_service_keys(conn, loc_key):
+        return None
+    return {"route": "services_shortcut", "open_services": loc_key, "prose": None}
+
+
+_DIG_INTENT_RE = re.compile(
+    r"\b(kopi[eę]|wykopuj[eę]|odkopuj[eę]|rozkopuj[eę]|przekopuj[eę]|"
+    r"szukam\s+(skrytk|schowk|skarb)|przeszukuj[eę]\s+(skrytk|schowk|ziemi))",
+    re.IGNORECASE,
+)
+
+
+def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
+                        text: str) -> dict | None:
+    """#1196 D4 — deterministic pre-LLM dig action. When the hero stands on a hex
+    holding their completed treasure map and writes a dig/search intent, issue a
+    server-committed search test (investigation). Otherwise fall through so the
+    player can 'dig' narratively anywhere with no cache.
+    """
+    if not text or not _DIG_INTENT_RE.search(text):
+        return None
+    from app.services import treasure_service
+    dig = treasure_service.attempt_dig(conn, campaign_id, int(character["id"]))
+    if not dig.get("eligible"):
+        return None
+    from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+    from app.services.turn.turn_skill_router import _commit_pending_skill_test
+    sk = dig["skill_key"]
+    char_sheet = json.loads(character["sheet_json"] or "{}")
+    mod_info = calc_skill_modifier_info(char_sheet, sk, conn=conn, character_id=int(character["id"]))
+    pending = {
+        "skill_test_id": f"st-{uuid.uuid4().hex[:8]}",
+        "skill_key": sk,
+        "skill_label": _skill_label(sk),
+        "counter": _get_counter(conn, sk),
+        "modifier_breakdown": mod_info,
+        "dc": int(dig["dc"]),
+        "source": "treasure_dig",
+        "treasure_id": int(dig["treasure_id"]),
+    }
+    gs_row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    _sf = json.loads(gs_row["session_flags"] or "{}") if gs_row else {}
+    _sf = _commit_pending_skill_test(pending, _sf)
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(_sf, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    return {"skill_test_pending": pending, "prose": None, "route": "skill_test"}
+
+
 def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
     """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
     if current_key:
@@ -2794,6 +2910,51 @@ def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[st
     return None
 
 
+def _resolve_grant_map_item(
+    conn: sqlite3.Connection, campaign_id: int, label: str
+) -> str | None:
+    """#1310 — a narrator-granted map must be the USABLE materialized map item
+    (``item_type='map'`` + map_reveal ``effect_json`` → "Użyj" button), never a
+    ``misc`` pending narrative row. When the GM hands over a map whose label does
+    not exactly hit the catalog, match it to a plan reward flagged ``is_map`` (by
+    slug of the reward's label or key) and return that reward's ``granted_key``.
+    Returns None when there is no map reward or the key is not a live map item.
+    """
+    if not label:
+        return None
+    try:
+        from app.services.campaign_plan_service import _slugify_beat
+        from app.services.campaign_plan_runtime import get_plan
+    except Exception:
+        return None
+    try:
+        plan = get_plan(campaign_id, conn) or {}
+    except Exception:
+        return None
+    want = _slugify_beat(str(label))
+    if not want:
+        return None
+    for rw in plan.get("rewards") or []:
+        if not isinstance(rw, dict) or not rw.get("is_map"):
+            continue
+        gk = rw.get("granted_key")
+        if not gk:
+            continue
+        slugs = {
+            _slugify_beat(str(rw.get("label") or "")),
+            _slugify_beat(str(rw.get("key") or "")),
+        }
+        if want in slugs:
+            row = conn.execute(
+                "SELECT key FROM game_config_items "
+                "WHERE key = ? AND item_type = 'map' AND is_active = 1 LIMIT 1",
+                (str(gk),),
+            ).fetchone()
+            if row:
+                return str(gk)
+    return None
+
+
 def apply_grant_gold_to_character(
     conn: sqlite3.Connection, *, character_id: int, amount: int,
     source: str = "narrative_gold_grant", campaign_id: int | None = None,
@@ -2862,6 +3023,22 @@ def _grant_narrative_item_to_inventory(
     given_at: str | None = None,
 ) -> None:
     """Store a free-form narrative item directly in character_inventory (T46)."""
+    # #1196 — treasure-map label → treasure system (not a dead narrative row).
+    try:
+        from app.services import treasure_service as _tsv_ni2
+        if _tsv_ni2.looks_like_treasure_map(item_type=item_type, label=label):
+            _crow = conn.execute(
+                "SELECT campaign_id FROM characters WHERE id = ?", (int(character_id),)
+            ).fetchone()
+            _camp = int((_crow[0] if _crow else 0) or 0)
+            _prog = _tsv_ni2.grant_map_item(conn, int(character_id), _camp,
+                                            "treasure_map", source="npc", label=label)
+            if _prog is not None:
+                logger.info("treasure_map_from_narrative_item", character_id=character_id, label=label)
+                return
+    except Exception as _tm_err2:
+        logger.warning("treasure_map_narrative_item_route_failed", label=label, error=str(_tm_err2))
+
     meta: dict = {"item_type": item_type}
     if description:
         meta["description"] = description
@@ -3007,6 +3184,19 @@ def _grant_pending_item(
     Returns the new item key, or None on failure (caller falls back to a plain
     narrative inventory row).
     """
+    # #1196 — LLM/narrator-invented treasure map ("Mapa do skrytki", …) → route
+    # into the treasure system instead of a dead narrative item.
+    try:
+        from app.services import treasure_service as _tsv_ni
+        if _tsv_ni.looks_like_treasure_map(label=label):
+            _prog = _tsv_ni.grant_map_item(conn, int(character_id), int(campaign_id or 0),
+                                           "treasure_map", source="npc", label=label)
+            if _prog is not None:
+                logger.info("treasure_map_from_narrator", character_id=character_id, label=label)
+                return "treasure_map"
+    except Exception as _tm_err:
+        logger.warning("treasure_map_narrator_route_failed", label=label, error=str(_tm_err))
+
     import re as _re
     import time as _time
     slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")
@@ -3684,6 +3874,31 @@ def create_turn_log(
                 "npc_memory_tag_persist_failed",
                 campaign_id=campaign_id,
                 error=str(_nm_err),
+            )
+
+    # #1295 (Warstwa 2) — deterministic closed-vocab capture: any known entity
+    # (plan.key_npcs name ∪ catalog npcs.label) named in the narration is added to
+    # the roster even if the LLM emitted no [NPC_MEMORY]/npc_met tag. Idempotent;
+    # non-fatal. Truly-novel names still rely on the tag (deliberate boundary).
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.npc_memory_service import capture_known_names_in_narration
+
+            _captured = capture_known_names_in_narration(
+                conn, campaign_id, assistant_text, turn_num=int(turn_number)
+            )
+            if _captured:
+                conn.commit()
+                logger.info(
+                    "npc_captured_from_narration",
+                    campaign_id=campaign_id,
+                    count=len(_captured),
+                )
+        except Exception as _cap_err:
+            logger.warning(
+                "npc_capture_from_narration_failed",
+                campaign_id=campaign_id,
+                error=str(_cap_err),
             )
 
     # D6 (#381) — persist Narrative State into session_flags (World State), so the
@@ -4539,6 +4754,19 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     # Snapshot hex after location intent processing (for hex_changed signal)
     _hex_after_enc = _snapshot_hex(conn, campaign_id)
 
+    # #1196 D3 — arriving on the hero's treasure hex → append a search cue so the
+    # player knows to dig here (the deterministic dig intent then resolves it).
+    try:
+        if _hex_after_enc and _hex_after_enc != _hex_before_enc:
+            from app.services import treasure_service as _tsv_arr
+            _cue = _tsv_arr.maybe_treasure_arrival_cue(
+                conn, campaign_id, payload.character_id,
+                int(_hex_after_enc.get("q", 0)), int(_hex_after_enc.get("r", 0)))
+            if _cue:
+                assistant_text = (assistant_text or "") + "\n\n" + _cue
+    except Exception as _arr_err:
+        logger.warning("treasure_arrival_cue_error", error=str(_arr_err))
+
     # ── [SKILL_TEST:] / [TRAP:] tag interception (R1.4 — #874) ─────────────
     _char_sh = json.loads(character["sheet_json"] or "{}")
     assistant_text, _skill_pending_narrator = _intercept_narrator_skill_tags(
@@ -4659,6 +4887,24 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
             logger.info("roll_cue_skipped_combat_roll_turn", campaign_id=campaign_id)
     elif _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
         _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
+        # #1299: the narrator frequently embeds "Roll <skill> d20" as the LAST line
+        # of the `narrative` string instead of emitting a separate `roll_cue` field.
+        # Scan the extracted narrative tail and STRIP the line — otherwise the cue
+        # both leaks into the displayed prose AND never fires the dice popup.
+        if not _raw_cue:
+            import re as _rc_re_j
+            _cue_lines = (_narrative_for_cues or "").rstrip().splitlines()
+            for _i in range(len(_cue_lines) - 1, -1, -1):
+                _ls = _cue_lines[_i].strip()
+                if not _ls:
+                    continue
+                if _rc_re_j.match(r"^Roll\s+.+?\s+d\d+$", _ls, _rc_re_j.IGNORECASE):
+                    _raw_cue = _ls
+                    _narr_str = "\n".join(_cue_lines[:_i]).rstrip()
+                    _narrative_for_cues = _narr_str
+                    clean_assistant = _repack_narrative(clean_assistant, _narr_str, _parsed_json)
+                    logger.info("roll_cue_narrative_tail_json_fallback", cue=_raw_cue)
+                break  # only inspect the last non-empty line
     elif not _parsed_json and not _skill_pending_narrator:
         import re as _rc_re_pre
         _tail_text = (clean_assistant or "").rstrip()
@@ -4728,7 +4974,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                         "skill_key": _sk2,
                         "skill_label": _skill_label(_sk2),
                         "counter": _get_counter(conn, _sk2),
-                        "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2),
+                        "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2, conn=conn, character_id=payload.character_id),
                     }
                     # Store in session
                     try:
@@ -4843,6 +5089,15 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     except Exception as _strip_err:
         logger.warning("narrative_tag_strip_error", error=str(_strip_err))
 
+    # #1301 — surface mid-campaign reward grants queued this turn as narrator toasts.
+    try:
+        from app.services.campaign_plan_runtime import pop_reward_toasts as _pop_toasts
+        _rtoasts = _pop_toasts(campaign_id, conn)
+        if _rtoasts:
+            clean_assistant = (clean_assistant or "").rstrip() + "\n\n" + "\n".join(_rtoasts)
+    except Exception as _rt_err:
+        logger.warning("reward_toast_surface_error", error=str(_rt_err))
+
     # U30.4 (#578): anti-desync guard — flag when the narrator claims travel but no
     # mechanical move happened this turn. Records `travel_narrated_without_move`.
     try:
@@ -4898,13 +5153,27 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
         logger.warning("quest_suggest_nonstream_error", error=str(_qse_ns))
 
     # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
-    try:
-        from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
-        _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
-        _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id)
-        clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
-    except Exception as _sg_ns_err:
-        logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
+    _gold_events_ns: list = []
+    # #1292: SERVICES_RECEIPT turns narrate a purchase ALREADY paid for via the
+    # Services modal (location_services.buy_services_batch) — skip both the tag
+    # parser and the food-safety-net entirely, else a hallucinated [SPEND_GOLD] tag
+    # (or the receipt text itself, which names food/drink words) would charge twice.
+    if not text.startswith(_SERVICES_RECEIPT_PREFIX):
+        try:
+            from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg_ns
+            _sg_ns_narr, _sg_ns_pjson = _extract_narrative_for_cues(clean_assistant)
+            # #1101: collect visible gold_events for the 💰 chat bubble (parity with stream tor)
+            _sg_ns_clean = _apply_sg_ns(_sg_ns_narr, conn, payload.character_id, collect_events=_gold_events_ns)
+            clean_assistant = _repack_narrative(clean_assistant, _sg_ns_clean, _sg_ns_pjson)
+            # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+            from app.services.spend_gold_service import food_purchase_safety_net as _food_net_ns
+            if _food_net_ns(
+                text, conn, payload.character_id,
+                already_charged=bool(_gold_events_ns), collect_events=_gold_events_ns,
+            ):
+                conn.commit()
+        except Exception as _sg_ns_err:
+            logger.warning("spend_gold_nonstream_error", error=str(_sg_ns_err))
 
     # U6 (#530): pre-check grant_item_labels — items going to pending get narration correction
     try:
@@ -4945,6 +5214,22 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     except Exception as _u6_err:
         logger.warning("u6_rejection_correction_error", error=str(_u6_err))
 
+    # Final safety-net: strip every residual mechanic tag from the player-visible
+    # narrative. QUEST_COMPLETE / BEAT_COMPLETE / ARC_ADVANCE are parsed (XP + plan
+    # hooks) but never removed by strip_narrative_tags (which only clears NARRATIVE_*),
+    # so they leaked into the story text. All parsers (XP, quest_suggest, spend_gold,
+    # unknown-tag detection) have run by this point, so a blanket strip is safe and
+    # future-proof against any newly added tag.
+    try:
+        from app.services.llm_tag_parser import (
+            strip_all_mechanic_tags as _strip_all,
+            strip_leaked_json_fields as _strip_leak,
+        )
+        _fin_narr, _fin_pjson = _extract_narrative_for_cues(clean_assistant)
+        clean_assistant = _repack_narrative(clean_assistant, _strip_leak(_strip_all(_fin_narr)), _fin_pjson)
+    except Exception as _fin_strip_err:
+        logger.warning("final_mechanic_tag_strip_error", error=str(_fin_strip_err))
+
     log = _persist_narrative_turn(
         conn=conn,
         campaign_id=campaign_id,
@@ -4958,6 +5243,7 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     for _gil in grant_item_labels:
         _gil_desc = grant_item_descriptions.get(_gil)
         _resolved = _resolve_grant_catalog_item(conn, _gil)
+        _map_key = None if _resolved else _resolve_grant_map_item(conn, campaign_id, _gil)  # #1310
         if _resolved:
             from app.services.loot_service import grant_loot_to_character
             grant_loot_to_character(int(payload.character_id),
@@ -4965,6 +5251,13 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
                                     source="gm_grant_item")
             logger.info("grant_item_catalog", character_id=payload.character_id,
                         item_key=_resolved["item_key"], label=_gil)
+        elif _map_key:
+            from app.services.loot_service import grant_loot_to_character
+            grant_loot_to_character(int(payload.character_id),
+                                    [{"item_key": _map_key, "quantity": 1}],
+                                    source="gm_grant_map")
+            logger.info("grant_item_map", character_id=payload.character_id,
+                        item_key=_map_key, label=_gil)
         elif _is_weapon_label(_gil):
             _grant_narrative_weapon(conn, campaign_id=campaign_id,
                                     character_id=payload.character_id, label=_gil, source="gm")
@@ -5271,6 +5564,30 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
     if locals().get("_finale_transition_ns"):
         out["finale_available"] = True
 
+    # #1086: beat/quest completion chat bubbles — parity with the streaming tor.
+    # ŻAR (front-v2) submits via this non-streaming endpoint, so without this the
+    # "✓ Cel wykonany / ✓ Quest" bubbles never surface in the player UI.
+    try:
+        from app.services.turn_notifications import collect_turn_notifications as _ctn_ns
+        _notif_meta_ns = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key='gm_plan_notifications_enabled' LIMIT 1"
+        ).fetchone()
+        _notif_enabled_ns = str((_notif_meta_ns[0] if _notif_meta_ns else "") or "").strip() not in ("0", "false", "no")
+        _notif_ns = _ctn_ns(campaign_id, int(_xp_turn), conn, enabled=_notif_enabled_ns)
+        if _notif_ns:
+            out.update(_notif_ns)
+    except Exception as _notif_ns_err:
+        logger.warning("turn_notifications_nonstream_error", error=str(_notif_ns_err))
+
+    # C12 (#1101): gold transaction bubbles (SPEND_GOLD success events) — parity with stream.
+    if locals().get("_gold_events_ns"):
+        out["gold_events"] = _gold_events_ns
+
+    # #1312: granted-item chat bubbles — narrator gave the player an item this turn.
+    # Same green band as beat/quest completion (front-v2 CompletionBand).
+    if grant_item_labels:
+        out["granted_items"] = [{"label": _l} for _l in grant_item_labels]
+
     return out
 
 
@@ -5444,6 +5761,26 @@ def create_turn(
                 text=text,
                 turn_id=turn_id,
             )
+
+        # #1196 — pay out a treasure whose guardian has just been defeated
+        # (guarded dig spawns combat; loot is granted once that fight ends).
+        try:
+            from app.services import treasure_service as _tsv_pre
+            from app.services.combat_service import get_active_combat as _gac_pre
+            if _gac_pre(campaign_id) is None:
+                _tsv_pre.consume_pending_treasure_loot(conn, campaign_id, payload.character_id)
+        except Exception:
+            pass
+
+        if not roll_request:
+            _svc_shortcut = _maybe_services_shortcut(conn, campaign_id, text)
+            if _svc_shortcut is not None:
+                return _svc_shortcut
+
+            # #1196 D4 — deterministic dig action (treasure map) before LLM.
+            _dig = _maybe_dig_shortcut(conn, campaign_id, character, text)
+            if _dig is not None:
+                return _with_turn_trace(_dig, turn_id)
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
@@ -6017,7 +6354,7 @@ def create_turn_stream(
                 from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
                 import uuid as _guuid
                 _gate_sheet = json.loads(character["sheet_json"] or "{}")
-                _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation")
+                _gate_mod = calc_skill_modifier_info(_gate_sheet, "intimidation", conn=conn, character_id=payload.character_id)
                 _gate_mod = dict(_gate_mod)
                 _gate_mod["total"] = int(_gate_mod.get("total", 0)) + _gate_adv
                 _gate_mod["advantage_bonus"] = _gate_adv
@@ -6149,7 +6486,7 @@ def create_turn_stream(
                             "skill_key": _pre_match_s,
                             "skill_label": _skill_label(_pre_match_s),
                             "counter": _get_counter(conn, _pre_match_s),
-                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s, conn=conn, character_id=payload.character_id),
                         }
                         gs_row_s = conn.execute(
                             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -6183,6 +6520,22 @@ def create_turn_stream(
                         )
             except Exception as _pre_err_s:
                 logger.warning("pre_llm_keyword_scan_stream_error: %s", str(_pre_err_s))
+
+        # #1292: deterministic services shortcut (stream tor) — see _maybe_services_shortcut.
+        if not roll_request:
+            _svc_shortcut_s = _maybe_services_shortcut(conn, campaign_id, text)
+            if _svc_shortcut_s is not None:
+                _svc_shortcut_json = json.dumps(_svc_shortcut_s, ensure_ascii=False)
+
+                def services_shortcut_stream():
+                    yield f"data: [CMD_JSON]{_svc_shortcut_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    services_shortcut_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
 
         # #777: record turn decision in streaming path (was only in JSON path)
         if not roll_request:
@@ -6702,22 +7055,43 @@ def create_turn_stream(
                 except Exception as _qse:
                     logger.warning("quest_suggest_parse_error", error=str(_qse))
                 # C12/F4: parse [SPEND_GOLD:key] → deduct gold or inject refusal text
-                try:
-                    from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg
-                    _sg_conn = get_db()
+                # #1292: skip entirely for SERVICES_RECEIPT turns (already paid mechanically).
+                if not (user_text_val or "").startswith(_SERVICES_RECEIPT_PREFIX):
                     try:
-                        _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
-                        # #1101: collect visible gold_events for the 💰 chat bubble
-                        _gold_events_s = []
-                        _sg_narr_clean = _apply_sg(
-                            _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
-                        )
-                        _sg_conn.commit()
-                    finally:
-                        _sg_conn.close()
-                    clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
-                except Exception as _sge:
-                    logger.warning("spend_gold_parse_error", error=str(_sge))
+                        from app.services.spend_gold_service import apply_spend_gold_to_narrative as _apply_sg
+                        _sg_conn = get_db()
+                        try:
+                            _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
+                            # #1101: collect visible gold_events for the 💰 chat bubble
+                            _gold_events_s = []
+                            _sg_narr_clean = _apply_sg(
+                                _sg_narr, _sg_conn, character_id_val, collect_events=_gold_events_s
+                            )
+                            # #1292: narrator often forgets to bill a tavern meal/drink → auto-charge.
+                            from app.services.spend_gold_service import food_purchase_safety_net as _food_net_s
+                            _food_net_s(
+                                user_text_val, _sg_conn, character_id_val,
+                                already_charged=bool(_gold_events_s), collect_events=_gold_events_s,
+                            )
+                            _sg_conn.commit()
+                        finally:
+                            _sg_conn.close()
+                        clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
+                    except Exception as _sge:
+                        logger.warning("spend_gold_parse_error", error=str(_sge))
+                # Final safety-net (stream): strip every residual mechanic tag from the
+                # player-visible narrative. QUEST_COMPLETE / BEAT_COMPLETE / ARC_ADVANCE are
+                # parsed from full_raw but never removed by strip_narrative_tags, so they
+                # leaked into the story. All parsers have run here → blanket strip is safe.
+                try:
+                    from app.services.llm_tag_parser import (
+                        strip_all_mechanic_tags as _strip_all_s,
+                        strip_leaked_json_fields as _strip_leak_s,
+                    )
+                    _fin_narr_s, _fin_pjson_s = _extract_narrative_for_cues(clean_text)
+                    clean_text = _repack_narrative(clean_text, _strip_leak_s(_strip_all_s(_fin_narr_s)), _fin_pjson_s)
+                except Exception as _fin_strip_s_err:
+                    logger.warning("final_mechanic_tag_strip_stream_error", error=str(_fin_strip_s_err))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -6770,6 +7144,19 @@ def create_turn_stream(
                         # 2) roll_cue in parsed JSON (if tag intercept didn't fire)
                         if not _sk_pending_s and _parsed_json_s and _text_is_action_attempt(user_text_val):
                             _raw_cue_s = str(_parsed_json_s.get("roll_cue") or "").strip()
+                            # #1299: cue embedded as the last narrative line instead of a
+                            # roll_cue field — scan the narrative tail (parity w/ non-stream).
+                            if not _raw_cue_s:
+                                import re as _rc_re_sj
+                                _narr_sj = str(_parsed_json_s.get("narrative") or "")
+                                for _ls_sj in reversed(_narr_sj.rstrip().splitlines()):
+                                    _lss_sj = _ls_sj.strip()
+                                    if not _lss_sj:
+                                        continue
+                                    if _rc_re_sj.match(r"^Roll\s+.+?\s+d\d+$", _lss_sj, _rc_re_sj.IGNORECASE):
+                                        _raw_cue_s = _lss_sj
+                                        logger.info("roll_cue_narrative_tail_json_fallback_stream", cue=_raw_cue_s)
+                                    break  # only the last non-empty line
                             if _raw_cue_s:
                                 import re as _rc_re_s
                                 _cm_s = _rc_re_s.match(r"^Roll (.+?) d\d+$", _raw_cue_s, _rc_re_s.IGNORECASE)
@@ -6791,6 +7178,45 @@ def create_turn_stream(
                                             "skill_label": _sl(_canonical_s),
                                             "counter": _gc(save_conn, _canonical_s),
                                             "modifier_breakdown": _csmi(_char_sh_s, _canonical_s),
+                                        }
+                        # 3) plain-text tail fallback — LLM emitted plain prose (no JSON
+                        # envelope) ending with an English "Roll <skill> d20" line and no
+                        # [SKILL_TEST] tag. The non-streaming path scans this tail
+                        # (see #53 fix 3); the streaming path previously did not, so these
+                        # turns produced a visible "Roll Stealth d20" line but NO dice
+                        # popup ("brak rzutu"). Mirror the non-streaming tail scan here.
+                        if not _sk_pending_s and not _parsed_json_s and _text_is_action_attempt(user_text_val):
+                            import re as _rc_re_st
+                            _tail_st = (clean_text or "").rstrip()
+                            _cue_line_st = ""
+                            for _line_st in reversed(_tail_st.splitlines()):
+                                _ls_st = _line_st.strip()
+                                if not _ls_st:
+                                    continue
+                                if _rc_re_st.match(r"^Roll\s+.+?\s+d\d+$", _ls_st, _rc_re_st.IGNORECASE):
+                                    _cue_line_st = _ls_st
+                                    logger.info("roll_cue_plain_text_fallback_stream", cue=_cue_line_st)
+                                break  # only inspect the last non-empty line
+                            if _cue_line_st:
+                                _cm_st = _rc_re_st.match(r"^Roll (.+?) d\d+$", _cue_line_st, _rc_re_st.IGNORECASE)
+                                if _cm_st:
+                                    _cue_name_st = _cm_st.group(1).strip()
+                                    _canonical_st = resolve_test_name(_cue_name_st)
+                                    if _canonical_st is None:
+                                        _norm_st = _cue_name_st.lower().replace(" ", "_")
+                                        _cue_db_st = save_conn.execute(
+                                            "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
+                                            (_norm_st,),
+                                        ).fetchone()
+                                        if _cue_db_st:
+                                            _canonical_st = _norm_st
+                                    if _canonical_st and not is_attack_test(_canonical_st) and not _is_combat_class_skill(_canonical_st):
+                                        _sk_pending_s = {
+                                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                                            "skill_key": _canonical_st,
+                                            "skill_label": _sl(_canonical_st),
+                                            "counter": _gc(save_conn, _canonical_st),
+                                            "modifier_breakdown": _csmi(_char_sh_s, _canonical_st),
                                         }
                         if _sk_pending_s and not _skill_test_source_allowed(user_text_val):
                             logger.info("skill_test_skipped_combat_roll_turn",
@@ -6863,6 +7289,7 @@ def create_turn_stream(
                     for _gil in grant_item_labels:
                         _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
+                        _map_key = None if _resolved else _resolve_grant_map_item(save_conn, campaign_id_val, _gil)  # #1310
                         if _resolved:
                             from app.services.loot_service import grant_loot_to_character
                             grant_loot_to_character(int(character_id_val),
@@ -6870,6 +7297,13 @@ def create_turn_stream(
                                                     source="gm_grant_item")
                             logger.info("grant_item_catalog", character_id=character_id_val,
                                         item_key=_resolved["item_key"], label=_gil)
+                        elif _map_key:
+                            from app.services.loot_service import grant_loot_to_character
+                            grant_loot_to_character(int(character_id_val),
+                                                    [{"item_key": _map_key, "quantity": 1}],
+                                                    source="gm_grant_map")
+                            logger.info("grant_item_map", character_id=character_id_val,
+                                        item_key=_map_key, label=_gil)
                         elif _is_weapon_label(_gil):
                             _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
                                                     character_id=character_id_val, label=_gil, source="gm")
@@ -6891,6 +7325,8 @@ def create_turn_stream(
                                 save_conn.commit()
                             except Exception:
                                 pass
+                    # #1312: stash granted-item labels for the [DONE] payload → green bubble.
+                    _granted_items_s = [{"label": _l} for _l in grant_item_labels] if grant_item_labels else []
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
                             save_conn,
@@ -6992,6 +7428,15 @@ def create_turn_stream(
                             save_conn.commit()
                     except Exception as _xs_err2:
                         logger.warning("narrative_xp_hooks_stream_error", error=str(_xs_err2))
+                    # #1301 — drain reward toasts (streaming tor): append to persisted text
+                    # so the grant is recorded on the turn even though the stream already flushed.
+                    try:
+                        from app.services.campaign_plan_runtime import pop_reward_toasts as _pop_toasts2
+                        _rtoasts2 = _pop_toasts2(campaign_id_val, save_conn)
+                        if _rtoasts2:
+                            persisted_assistant_text = (persisted_assistant_text or "").rstrip() + "\n\n" + "\n".join(_rtoasts2)
+                    except Exception as _rt_err2:
+                        logger.warning("reward_toast_surface_stream_error", error=str(_rt_err2))
                     # BUG-04 (stream): parse gm_note / scene_advance / gm_plan_update
                     try:
                         from app.services.gm_plan_schema import normalize_gm_plan
@@ -7107,6 +7552,10 @@ def create_turn_stream(
                     _ge_s = locals().get("_gold_events_s")
                     if _ge_s:
                         done_payload["gold_events"] = _ge_s
+                    # #1312: granted-item green bubbles (parity with non-stream).
+                    _gi_s = locals().get("_granted_items_s")
+                    if _gi_s:
+                        done_payload["granted_items"] = _gi_s
                     # BUG-02: include current clock so frontend updates immediately
                     try:
                         from app.services.clock_service import get_clock_state as _gcs
@@ -7471,6 +7920,20 @@ def resolve_skill_test_endpoint(
         session_flags.pop("pending_skill_test", None)
         session_flags["state"] = "NARRATIVE"
 
+        # #1196 D4 — treasure dig test resolved. On success, pay out the frozen
+        # loot (or spawn the guardian fight). Failure = the cache stays buried.
+        _treasure_reward = None
+        if str(pending.get("source", "")).lower() == "treasure_dig" and \
+                result.get("success") and not result.get("nat1"):
+            try:
+                from app.services import treasure_service as _tsv
+                _treasure_reward = _tsv.resolve_dig_success(
+                    conn, campaign_id, int(payload.character_id),
+                    int(pending.get("treasure_id") or 0),
+                )
+            except Exception as _tderr:
+                logger.warning("treasure_dig_resolve_error", error=str(_tderr))
+
         # S11 (#606): nieudany test z aktywnym `inspired` → stash kontekstu pod przerzut
         # gracza (keep-best). Endpoint /skill-test/reroll rzuca nowy serwerowy d20.
         if result.get("reroll_available"):
@@ -7650,9 +8113,17 @@ def resolve_skill_test_endpoint(
                 "i przewagę gracza, ale NIE umieszczaj żadnych tagów w nawiasach kwadratowych."
             )
         elif str(pending.get("skill_key", "")).lower() == "stealth" and result.get("success"):
+            # #1299: NIE zakładaj walki. Wcześniej hint mówił "przewaga zadziała w momencie
+            # rozpoczęcia walki" → narrator dopisywał "gdy poleje się krew, pierwszy cios…"
+            # przy zwykłym śledzeniu. Opisz sam skutek skradania; wybór kolejnej akcji
+            # (atak/zastraszenie/wycofanie/dalsza obserwacja) należy do gracza (bramka przewagi).
             stealth_hint = (
-                " Skradanie się powiodło — opisz że bohater jest w cieniu, nieświadom wrogów; "
-                "przewaga zaskoczenia zadziała w momencie rozpoczęcia walki."
+                " Skradanie się powiodło — opisz, że bohater pozostaje niezauważony i ma przewagę "
+                "pozycji (cień, dystans, moment zaskoczenia w zanadrzu). NIE zakładaj kolejnej akcji "
+                "gracza (ataku, ciosu, rozmowy) ani rozlewu krwi. Jeśli z deklaracji gracza NIE wynika "
+                "jasno, CO chce osiągnąć skradaniem (atak z zaskoczenia, podsłuch, kradzież, ominięcie, "
+                "obserwacja), ZAKOŃCZ narrację krótkim, naturalnym pytaniem w głosie Mistrza Gry — co "
+                "bohater chce teraz zrobić z tą przewagą — zamiast rozstrzygać to za gracza."
             )
 
         narrator_prompt = (
@@ -7836,6 +8307,8 @@ def resolve_skill_test_endpoint(
         }
         if _adv_gate:
             _resp["advantage_gate"] = _adv_gate
+        if _treasure_reward:
+            _resp["treasure_reward"] = _treasure_reward
         return _resp
     finally:
         conn.close()
@@ -8162,6 +8635,57 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
             logger.warning("fow_known_compute_error", error=str(_fow_err))
             known_coords, label_coords = set(), set()
 
+        # #1311 — POI/quest metadata for discovered hexes. A named location keeps its
+        # name in game_locations.label (world_hexes.label is usually NULL), so resolve
+        # it here; otherwise the map shows location hexes as anonymous terrain. Only for
+        # DISCOVERED hexes — the 'known' fog layer must not leak location identity (PM1).
+        _disc_lks = {
+            all_hexes.get(c, {}).get("location_key") for c in discovered_coords
+        }
+        _disc_lks.discard(None)
+        loc_labels: dict[str, str] = {}
+        if _disc_lks:
+            _ph = ",".join("?" * len(_disc_lks))
+            for _lr in conn.execute(
+                f"SELECT key, label FROM game_locations WHERE is_active = 1 AND key IN ({_ph})",
+                tuple(_disc_lks),
+            ).fetchall():
+                if _lr["label"]:
+                    loc_labels[_lr["key"]] = _lr["label"]
+        # Current quest targets = location keys of not-yet-visited visit_location beats.
+        quest_targets: set = set()
+        try:
+            _prow = conn.execute(
+                "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            _plan = _j.loads(_prow["gm_plan_json"] or "{}") if _prow and _prow["gm_plan_json"] else {}
+            for _act in _plan.get("acts") or []:
+                for _b in (_act.get("key_beats") or []) if isinstance(_act, dict) else []:
+                    if (isinstance(_b, dict)
+                            and _b.get("objective_type") == "visit_location"
+                            and not _b.get("visited")
+                            and _b.get("objective_value")):
+                        quest_targets.add(str(_b["objective_value"]))
+        except Exception:
+            pass
+
+        # #1196 — hexes holding this hero's completed, still-buried treasure map.
+        treasure_coords: set = set()
+        try:
+            _tchar = int(character_id or 0)
+            if _tchar <= 0:
+                _crow = conn.execute(
+                    "SELECT id FROM characters WHERE campaign_id = ? ORDER BY id LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                _tchar = int(_crow["id"]) if _crow else 0
+            if _tchar > 0:
+                from app.services import treasure_service as _tsv_map
+                for _th in _tsv_map.get_treasure_hexes_for_map(conn, _tchar):
+                    treasure_coords.add((int(_th["q"]), int(_th["r"])))
+        except Exception as _tre_err:
+            logger.warning("treasure_map_flag_error", error=str(_tre_err))
+
         # Build result: discovered hexes + adjacent outlines
         result_hexes = []
         outline_coords = set()
@@ -8169,11 +8693,18 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
         for coord in discovered_coords:
             hdata = all_hexes.get(coord, {})
             cd = campaign_data.get(coord, {})
+            _lk = hdata.get("location_key")
             h = {
                 "q": coord[0], "r": coord[1],
                 "hex_type": hdata.get("hex_type", "plains"),
-                "label": cd.get("campaign_label") or hdata.get("label"),
+                "label": cd.get("campaign_label") or hdata.get("label")
+                         or (loc_labels.get(_lk) if _lk else None),
                 "status": "discovered",
+                "location_key": _lk,
+                "is_poi": bool(_lk),
+                "is_quest": bool(_lk and _lk in quest_targets),
+                "has_note": bool(cd.get("campaign_label")),
+                "is_treasure": coord in treasure_coords,
             }
             result_hexes.append(h)
             # Build adjacent unvisited outlines (known hexes render as 'known', not outline)
@@ -8182,9 +8713,16 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 if nb not in discovered_coords and nb not in known_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
+        # #1196 — the hero's treasure hex must be visible even through fog (the map
+        # marker + "Użyj" jump target). Emit it via a dedicated block below; keep it
+        # out of the known/outline/unexplored loops to avoid a duplicate tile.
+        _treasure_only = {tc for tc in treasure_coords if tc not in discovered_coords}
+
         # PM1 (#1220): emit 'known' hexes — terrain visible, label only for
         # landmarks/canonical, NEVER location_key or game_locations data.
         for coord in known_coords:
+            if coord in _treasure_only:
+                continue
             hdata = all_hexes_l0.get(coord, {})
             cd = campaign_data.get(coord, {})
             _label = None
@@ -8213,11 +8751,27 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                         _unexplored_coords.add(nb)
 
         for coord in outline_coords:
+            if coord in _treasure_only:
+                continue
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "outline",
                                   "hex_type": None, "label": None})
         for coord in _unexplored_coords:
+            if coord in _treasure_only:
+                continue
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "unexplored",
                                   "hex_type": None, "label": None})
+
+        # #1196 — dedicated treasure marker tiles (visible through fog so the map
+        # always shows the ✕ goal + the "Użyj" jump has something to centre on).
+        for coord in _treasure_only:
+            hdata = all_hexes_l0.get(coord) or all_hexes.get(coord) or {}
+            result_hexes.append({
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": None,
+                "status": "known",
+                "is_treasure": True,
+            })
 
         # Teleport connections (only where at least one endpoint is discovered)
         teleports = [dict(t) for t in conn.execute(
@@ -8308,15 +8862,209 @@ def _build_done_extra_payload(campaign_id: int, conn) -> dict:
 
 @router.get("/campaigns/{campaign_id}/clock")
 def get_campaign_clock(campaign_id: int):
-    """Current in-game clock state for the campaign — Stage 2A T5.
+    """Current in-game clock state for the campaign — Stage 2A T5 (+#1219 widget).
 
-    Returns `{ingame_hours, day, hour, hour_str, period, display}`.
-    Frontend uses this to render the "Dzień 3, 14:00 Popołudnie" header.
-    Returns a default state (hour 9 = start-of-campaign morning) if no
-    session row exists yet.
+    Base: `{ingame_hours, day, hour, hour_str, period, display}`.
+    Enriched for the world-clock widget:
+      season       — pora roku (pochodna dnia)
+      weather      — {type, type_label, intensity, intensity_label, label,
+                      march_mult, slows_travel, effect} | null (toggle off)
+      is_night     — bool (bucket 22–05)
+      hours_to_night — godziny do 22:00 (0 gdy już noc)
+      night_hint   — deterministyczna podpowiedź nocnej ekonomii | null
+    Frontend uses this to render the "Dzień 3, 14:00 Popołudnie" header
+    plus the clickable day-arc popup (weather, season, night hint).
     """
     from app.services.clock_service import get_clock_state
-    return get_clock_state(campaign_id)
+    state = get_clock_state(campaign_id)
+
+    # Pogoda + pora roku — dane już liczone w silniku (FAZA PT), tu tylko
+    # eksponujemy je w jednej odpowiedzi. Nie wywala zegara, gdy pogoda padnie.
+    try:
+        from app.services import weather_service as ws
+        state["season"] = ws.get_season(int(state.get("day", 1)))
+        weather = None
+        if ws.is_weather_enabled():
+            w = ws.get_weather_state(campaign_id)
+            wtype = str(w.get("type") or "clear")
+            wint = str(w.get("intensity") or "moderate")
+            type_label = ws._WEATHER_PL.get(wtype, wtype)
+            int_label = ws._INTENSITY_PL.get(wint, "")
+            march = ws.weather_march_multiplier(wtype)
+            # Natężenie ma sens tylko dla opadów/temperatury — „silny deszcz" OK,
+            # ale „silny pochmurno/mgła" brzmi źle → dla nich sama nazwa typu.
+            intensity_types = {"rain", "snow", "storm", "heat"}
+            show_int = wint != "moderate" and wtype in intensity_types
+            weather = {
+                "type": wtype,
+                "type_label": type_label,
+                "intensity": wint,
+                "intensity_label": int_label,
+                "label": (f"{int_label} {type_label}".strip()
+                          if show_int else type_label),
+                "march_mult": march,
+                "slows_travel": march > 1.0,
+                "effect": ("marsz wolniejszy" if march > 1.0 else None),
+            }
+        state["weather"] = weather
+    except Exception:
+        state.setdefault("season", None)
+        state.setdefault("weather", None)
+
+    # Nocna ekonomia — godziny do nocy (22:00) + podpowiedź o noclegu.
+    hour = int(state.get("hour", 9))
+    is_night = hour >= 22 or hour < 6
+    state["is_night"] = is_night
+    state["hours_to_night"] = 0 if is_night else (22 - hour)
+    state["night_hint"] = (
+        "Zapada zmierzch — pomyśl o bezpiecznym noclegu."
+        if (not is_night and (22 - hour) <= 3)
+        else None
+    )
+    return state
+
+
+# Deterministyczny komunikat „musisz odpocząć / zapada zmierzch" wyliczany z
+# travel_plan.interrupt_reason — niezależny od tego, czy narrator LLM go opisze.
+_TRAVEL_NOTICE_BY_REASON = {
+    "dusk": {
+        "severity": "warn",
+        "title": "Zapada zmierzch",
+        "message": "Za tobą 8h marszu. Rozbij obóz albo maszeruj dalej — nocny marsz "
+                   "zwiększa ryzyko napaści (×1.5) i pogłębia zmęczenie.",
+    },
+    "forced_camp": {
+        "severity": "danger",
+        "title": "Padasz z sił",
+        "message": "12h marszu wyczerpało cię do cna — wymuszony obóz. Musisz odpocząć, "
+                   "zanim ruszysz w dalszą drogę.",
+    },
+    "encounter": {
+        "severity": "danger",
+        "title": "Zasadzka w drodze",
+        "message": "Ktoś zagrodził ci drogę — dochodzi do starcia. Stań do walki.",
+    },
+}
+
+
+def _travel_notice_for(session_flags: dict) -> dict | None:
+    tp = session_flags.get("travel_plan")
+    if not isinstance(tp, dict):
+        return None
+    reason = str(tp.get("interrupt_reason") or "")
+    base = reason.replace("_prompted", "")  # dusk_prompted → dusk
+    tmpl = _TRAVEL_NOTICE_BY_REASON.get(base)
+    if not tmpl:
+        return None
+    # step + destination → klucz per-etap (front pokazuje modal raz na przerwanie),
+    # can_resume=False dla forced_camp (musi najpierw odpocząć).
+    # Ukryj surowy koordynat („hex (12,-6)") jako cel — bez nazwy → None.
+    dest = tp.get("destination_label")
+    if isinstance(dest, str) and (dest.startswith("hex (") or re.match(r"^\(-?\d+,-?\d+\)$", dest)):
+        dest = None
+    return {
+        "reason": reason,
+        "step": int(tp.get("step_index", 0) or 0),
+        "hours_remaining": float(tp.get("hours_remaining", 0) or 0),
+        "destination_label": dest,
+        "can_resume": not base.startswith("forced_camp"),
+        **tmpl,
+    }
+
+
+@router.get("/campaigns/{campaign_id}/suggested-actions")
+def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = None):
+    """Bieżące podpowiedzi akcji (quick-action chips) dla stanu kampanii.
+
+    POST /turns zwraca `suggested_actions`, ale są ulotne (nie zapisujemy ich
+    per-tura) — po wejściu do gry / odświeżeniu UI nie ma z czego odtworzyć
+    pili. Ten endpoint przelicza je z bieżących `session_flags`, dzięki czemu
+    ekran gry pokazuje podpowiedzi (w tym „Rozbij obóz"/„Odpocznij") od razu.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        sf: dict = {}
+        gs_row = conn.execute(
+            "SELECT id, session_flags, current_location_id FROM game_sessions WHERE campaign_id=? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs_row and gs_row["session_flags"]:
+            sf = json.loads(gs_row["session_flags"] or "{}")
+
+        # Self-heal przerwanej podróży w bezpiecznym miejscu (safe_for_rest):
+        #  • DOTARŁ do celu → wyczyść cały travel_plan (podróż skończona).
+        #  • BEZPIECZNA PAUZA po drodze (obóz/karczma, ale nie cel) → zdejmij tylko
+        #    interrupt_reason (modal przestaje wyskakiwać), ale ZACHOWAJ travel_plan,
+        #    by dało się wznowić („Kontynuuj podróż"). Wcześniej kasowaliśmy cały plan
+        #    przy każdym safe miejscu → po Rozbij obóz gubił się cel = brak powrotu.
+        tp = sf.get("travel_plan")
+        if isinstance(tp, dict) and tp.get("interrupt_reason") and gs_row and gs_row["current_location_id"]:
+            loc_safe = conn.execute(
+                "SELECT safe_for_rest FROM game_locations WHERE id=?",
+                (gs_row["current_location_id"],),
+            ).fetchone()
+            if loc_safe and loc_safe["safe_for_rest"]:
+                dest = tp.get("destination_hex") or {}
+                cur = sf.get("current_hex") or {}
+                arrived = (
+                    cur.get("q") is not None
+                    and dest.get("q") == cur.get("q")
+                    and dest.get("r") == cur.get("r")
+                )
+                if arrived:
+                    sf.pop("travel_plan", None)
+                else:
+                    tp["interrupt_reason"] = None  # pauza — plan zostaje do wznowienia
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags=? WHERE id=?",
+                    (json.dumps(sf, ensure_ascii=False), gs_row["id"]),
+                )
+                conn.commit()
+
+        cid = character_id
+        if cid is None:
+            c_row = conn.execute(
+                "SELECT id FROM characters WHERE campaign_id=? ORDER BY id LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            cid = int(c_row["id"]) if c_row else None
+        if cid is None:
+            return {"suggested_actions": [], "travel_notice": _travel_notice_for(sf)}
+
+        actions = build_suggested_actions(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=int(cid),
+            game_state=sf.get("state", "NARRATIVE"),
+            session_flags=sf,
+        )
+        # can_rest: gracz może odpocząć TYLKO w safe_for_rest (karczma/osada) albo
+        # po rozbiciu obozu. Sensowna tylko na trasie (interrupt); przy zwykłej
+        # narracji REST/pill już respektuje bezpieczeństwo lokacji.
+        can_rest = False
+        if gs_row and gs_row["current_location_id"]:
+            _ls = conn.execute(
+                "SELECT safe_for_rest FROM game_locations WHERE id=?",
+                (gs_row["current_location_id"],),
+            ).fetchone()
+            can_rest = bool(_ls and _ls["safe_for_rest"])
+        notice = _travel_notice_for(sf)
+        if notice is not None:
+            notice["can_rest"] = can_rest
+            # Spójność z modalem: interrupt-pill „Odpocznij" wyłączona, gdy tu nie
+            # bezpiecznie (inaczej klik → 409 not_safe_for_rest, „nic się nie dzieje").
+            if not can_rest:
+                for a in actions:
+                    if (a.get("action") or a.get("text")) == "REST:long":
+                        a["enabled"] = False
+                        a["reason"] = "Odpoczniesz po rozbiciu obozu albo w bezpiecznym miejscu."
+        return {"suggested_actions": actions, "travel_notice": notice}
+    except Exception as exc:  # never break the game screen on chip errors
+        logger.warning("get_suggested_actions_error", campaign_id=campaign_id, error=str(exc))
+        return {"suggested_actions": [], "travel_notice": None}
+    finally:
+        conn.close()
 
 
 @router.post("/campaigns/{campaign_id}/hex-travel")

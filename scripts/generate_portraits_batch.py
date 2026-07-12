@@ -137,7 +137,7 @@ def patch_npc_image(npc_id: int, image_url: str, image_url_raw: str,
 
 
 def build_prompt(entity: dict) -> str:
-    custom = entity.get("image_gen_prompt", "").strip()
+    custom = (entity.get("image_gen_prompt") or "").strip()
     if custom:
         return custom
     label = entity.get("label", entity.get("key", "creature"))

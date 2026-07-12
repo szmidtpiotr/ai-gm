@@ -516,7 +516,19 @@ def _inject_known_npc_memory_context(
     if not messages:
         return
     try:
-        from app.services.npc_memory_service import get_recent_known_npcs, format_known_npcs_block
+        from app.services.npc_memory_service import (
+            get_recent_known_npcs,
+            format_known_npcs_block,
+            seed_known_npcs_from_plan,
+        )
+        # #1294 (Warstwa 1) — seed the plan's key_npcs into the roster before we
+        # read it, so authored NPCs show up even if the LLM never emitted a
+        # [NPC_MEMORY]/npc_met tag. Idempotent → backfills existing campaigns on
+        # their next turn. Non-fatal.
+        try:
+            seed_known_npcs_from_plan(conn, campaign_id)
+        except Exception as _seed_err:
+            logger.warning("known_npc_seed_skipped", campaign_id=campaign_id, error=str(_seed_err))
         rows = get_recent_known_npcs(campaign_id, conn=conn)
         block = format_known_npcs_block(rows)
         if not block:

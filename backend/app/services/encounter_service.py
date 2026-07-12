@@ -107,6 +107,13 @@ def ensure_encounter_enemies_in_db(conn: sqlite3.Connection, encounter: dict) ->
                 "INSERT OR IGNORE INTO game_config_loot_tables (key, label, gold_min, gold_max) VALUES (?,?,?,?)",
                 (loot_key, f"Łupy: {name}", 1, 5),
             )
+            # #1283 — auto-fill item/consumable/weapon entries (gold range above is
+            # respected as-is; the populate helper only touches gold when it's 0/0).
+            try:
+                from app.services.world_service import _auto_populate_enemy_loot
+                _auto_populate_enemy_loot(conn, key, tier, name)
+            except Exception:
+                pass
 
         enemy["enemy_key"] = key
 

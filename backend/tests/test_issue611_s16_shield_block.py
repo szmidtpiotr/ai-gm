@@ -49,6 +49,8 @@ def test_block_success_reduces_damage(monkeypatch):
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 14)
     monkeypatch.setattr(combat_service, "_player_has_shield_equipped", lambda *a, **k: (True, 1))
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 4)  # 1d6 → 4
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [4], "sides": 6, "n": 1})
     p, sheet = _player(skill_rank=2, str_stat=14)   # STR mod +2 + rank 2 → mod_total 4
     res = combat_service._try_shield_block_reaction(
         None, None, p, sheet, attack_roll=15, round_n=1, dmg=10)
@@ -257,6 +259,8 @@ def test_resolve_attack_block_reduces_damage(tmp_path, monkeypatch):
     # raw 14 → wróg trafia (attack_roll 14 ≥ AC 10). Test bloku: 14 + STR2 + rank2 = 18 vs DC 14 → +4
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 14)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)  # dmg 6 ; 1d6 redukcja 6
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win["hit"] is True and win.get("reaction_window") is True
@@ -274,6 +278,8 @@ def test_resolve_attack_block_critfail_hits_durability(tmp_path, monkeypatch):
     # raw 3 → attack_roll 13 (trafia AC 10). Blok: 3 + STR2 + rank2 = 7 vs DC 13 → margines -6 ≤ -5
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 3)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [5], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         combat_service.resolve_attack(1, 0, attacker="enemy")
         out = combat_service.resolve_reaction(1, "block")
@@ -297,6 +303,8 @@ def test_resolve_attack_no_shield_no_reaction(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared="shield_block", skill_rank=2, shield=False)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 14)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction") is None or out["reaction"].get("available") is not True
@@ -308,6 +316,8 @@ def test_resolve_attack_enemy_roll_untouched(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared="shield_block", skill_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["raw_d20"] == 18
@@ -325,6 +335,8 @@ def test_resolve_attack_take_normal_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, declared=None, skill_rank=2)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 18)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         win = combat_service.resolve_attack(1, 0, attacker="enemy")
         assert win.get("reaction_window") is True

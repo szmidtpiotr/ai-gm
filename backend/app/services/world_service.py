@@ -12,6 +12,7 @@ Handles:
 from __future__ import annotations
 
 import json
+import random
 import re
 import sqlite3
 import structlog
@@ -213,16 +214,113 @@ def _get_or_create_location(
         return None
 
 
+_DIACRITIC_MAP = {
+    "ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n",
+    "ó": "o", "ś": "s", "ź": "z", "ż": "z",
+}
+_NUMERIC_SUFFIX_RE = re.compile(r"^(.+?)_\d{4,}$")
+
+
+def _norm_name(s: str) -> str:
+    """Normalize a display name for fuzzy comparison: lowercase, strip diacritics,
+    collapse non-alphanumerics to single spaces."""
+    s = (s or "").lower().strip()
+    s = "".join(_DIACRITIC_MAP.get(ch, ch) for ch in s)
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    return s
+
+
+def _strip_numeric_suffix(key: str) -> str:
+    """Drop an LLM-invented collision suffix like `brunn_936708` -> `brunn`.
+    Only >=4-digit suffixes are stripped so forge keys (`_2`, `_3`) survive."""
+    m = _NUMERIC_SUFFIX_RE.match(key or "")
+    return m.group(1) if m else (key or "")
+
+
+def _load_plan_roster(conn: sqlite3.Connection, campaign_id: int) -> list[dict]:
+    """Return `gm_plan_json.key_npcs` for the campaign (empty on any miss)."""
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+    except Exception:
+        return []
+    if not row or not row[0]:
+        return []
+    try:
+        plan = json.loads(row[0])
+    except Exception:
+        return []
+    roster = plan.get("key_npcs")
+    return roster if isinstance(roster, list) else []
+
+
+def _match_roster(key: str, name: str, roster: list[dict]) -> dict | None:
+    """Match an incoming NPC (LLM key + name) to a plan roster entry.
+    Matches on base-key equality, or when the incoming name/key tokens are a
+    subset of a roster entry's name tokens (so bare "Brunn" -> "Brunn Żelaznoręki")."""
+    base = _strip_numeric_suffix(key)
+    in_tokens = set(_norm_name(name).split()) if name else set()
+    key_tokens = set(_norm_name(base.replace("_", " ")).split())
+    for entry in roster:
+        rkey = (entry.get("key") or "").strip()
+        if not rkey:
+            continue
+        if base == rkey or key == rkey:
+            return entry
+        r_tokens = set(_norm_name(entry.get("name") or "").split())
+        if not r_tokens:
+            continue
+        if in_tokens and in_tokens <= r_tokens:
+            return entry
+        if key_tokens and key_tokens <= r_tokens:
+            return entry
+    return None
+
+
+def _find_npc_by_name(conn: sqlite3.Connection, name: str) -> dict | None:
+    """Find an existing NPC whose label normalizes to the same string (exact
+    full-name match only — conservative, avoids merging distinct characters)."""
+    nn = _norm_name(name)
+    if not nn:
+        return None
+    for row in conn.execute("SELECT key, label FROM npcs").fetchall():
+        if _norm_name(row[1]) == nn:
+            return {"key": row[0], "label": row[1]}
+    return None
+
+
 def _get_or_create_npc(
     conn: sqlite3.Connection, key: str, params: dict, campaign_id: int
 ) -> dict | None:
-    row = conn.execute(
-        "SELECT key, label FROM npcs WHERE key = ?", (key,)
-    ).fetchone()
-    if row:
-        return dict(row)
+    base_key = _strip_numeric_suffix(key)
+    name = params.get("name") or base_key.replace("_", " ").title()
 
-    name = params.get("name", key.replace("_", " ").title())
+    # 1. Exact key match (incoming or suffix-stripped) — existing behavior.
+    for k in dict.fromkeys((key, base_key)):
+        row = conn.execute(
+            "SELECT key, label FROM npcs WHERE key = ?", (k,)
+        ).fetchone()
+        if row:
+            return {"key": row[0], "label": row[1]}
+
+    # 3. Plan-roster precedence: canonicalize to the planned NPC's key.
+    match = _match_roster(key, name, _load_plan_roster(conn, campaign_id))
+    if match:
+        key = (match.get("key") or base_key).strip()
+        name = match.get("name") or name
+        row = conn.execute(
+            "SELECT key, label FROM npcs WHERE key = ?", (key,)
+        ).fetchone()
+        if row:
+            return {"key": row[0], "label": row[1]}
+    else:
+        # 1b. Name-based dedup for ad-hoc NPCs not in the roster.
+        existing = _find_npc_by_name(conn, name)
+        if existing:
+            return existing
+        key = base_key  # 4. store under the suffix-stripped key
+
     role = params.get("role", "neutral").lower()
     personality_raw = params.get("personality", "")
     location_key = params.get("location_key", "")
@@ -313,6 +411,7 @@ def _get_or_create_enemy(
         )
         conn.commit()
         logger.info("create_enemy_tag_processed", key=key, campaign_id=campaign_id)
+        _auto_populate_enemy_loot(conn, key, tier, name)
         return {"key": key, "label": name, "tier": tier, "review_status": "pending_review"}
     except Exception as e:
         logger.warning("create_enemy_failed", key=key, error=str(e))
@@ -1018,11 +1117,16 @@ def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, tier, hp_base, ac_base, attack_bonus, dex_modifier,
-                      damage_die, damage_type, xp_award, drop_chance, min_level,
-                      description, note, image_url, review_status, created_at
-               FROM game_config_enemies WHERE review_status = 'pending_review'
-               ORDER BY rowid DESC LIMIT 100"""
+            """SELECT e.key, e.label, e.tier, e.hp_base, e.ac_base, e.attack_bonus, e.dex_modifier,
+                      e.damage_die, e.damage_type, e.xp_award, e.drop_chance, e.min_level,
+                      e.description, e.note, e.image_url, e.review_status, e.created_at,
+                      e.loot_table_key, lt.gold_min AS loot_gold_min, lt.gold_max AS loot_gold_max,
+                      (SELECT COUNT(*) FROM game_config_loot_entries le
+                        WHERE le.loot_table_key = e.loot_table_key) AS loot_entries_count
+               FROM game_config_enemies e
+               LEFT JOIN game_config_loot_tables lt ON lt.key = e.loot_table_key
+               WHERE e.review_status IN ('pending_review', 'pending')
+               ORDER BY e.rowid DESC LIMIT 200"""
         ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
@@ -1040,7 +1144,10 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
     try:
         conn.execute(f"UPDATE {table} SET review_status = 'permanent' WHERE key = ?", (key,))
         if entity_type == "enemy":
-            _ensure_enemy_loot_table(conn, key)
+            # Safety net for pending enemies created before auto-loot existed at
+            # tag-creation time — no-ops if entries are already there.
+            erow = conn.execute("SELECT tier, label FROM game_config_enemies WHERE key = ?", (key,)).fetchone()
+            _auto_populate_enemy_loot(conn, key, (erow["tier"] if erow else None) or "standard", (erow["label"] if erow else key) or key)
         if entity_type == "weapon":
             # Approve globally: clear campaign_id so weapon is available everywhere
             conn.execute(
@@ -1102,6 +1209,267 @@ def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
         )
     except Exception:
         pass
+
+
+# Starting values (Numbers Policy — Sandbox-tunable, see #1284 loot auto-population).
+# rarity band + gold range sampled from the existing catalog per enemy tier so a
+# freshly LLM-created enemy has a non-empty loot table before an admin ever looks at it.
+_ENEMY_LOOT_TIER_CONFIG = {
+    "weak":     {"rarity": (1, 1), "gold": (1, 5),    "weapon_chance": 0.0,  "n_entries": 2},
+    "standard": {"rarity": (1, 2), "gold": (5, 15),   "weapon_chance": 0.15, "n_entries": 2},
+    "elite":    {"rarity": (2, 3), "gold": (15, 40),  "weapon_chance": 0.35, "n_entries": 3},
+    "boss":     {"rarity": (3, 5), "gold": (40, 100), "weapon_chance": 0.6,  "n_entries": 3},
+}
+
+
+def _auto_populate_enemy_loot(conn: sqlite3.Connection, enemy_key: str, tier: str, label: str) -> None:
+    """Heuristically fill a freshly-created enemy's loot table from the existing
+    item/consumable/weapon catalog, matched by rarity band to the enemy tier.
+    No LLM call — deterministic-cost, safe to run inline during tag processing.
+    Idempotent: no-ops if the loot table already has entries (never clobbers
+    admin edits on re-approve or duplicate tag processing)."""
+    try:
+        cfg = _ENEMY_LOOT_TIER_CONFIG.get(tier, _ENEMY_LOOT_TIER_CONFIG["standard"])
+        _ensure_enemy_loot_table(conn, enemy_key)
+        row = conn.execute(
+            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?", (enemy_key,)
+        ).fetchone()
+        lt_key = row["loot_table_key"] if row else None
+        if not lt_key:
+            return
+
+        existing = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_config_loot_entries WHERE loot_table_key = ?", (lt_key,)
+        ).fetchone()
+        if existing and existing["n"] > 0:
+            return
+
+        gold_row = conn.execute(
+            "SELECT gold_min, gold_max FROM game_config_loot_tables WHERE key = ?", (lt_key,)
+        ).fetchone()
+        if gold_row and (gold_row["gold_min"] or 0) == 0 and (gold_row["gold_max"] or 0) == 0:
+            g_min, g_max = cfg["gold"]
+            conn.execute(
+                "UPDATE game_config_loot_tables SET gold_min = ?, gold_max = ? WHERE key = ?",
+                (g_min, g_max, lt_key),
+            )
+        # upsert_loot_entry() below opens its own connection — commit first so it
+        # can see the loot table row we just ensured/updated on `conn`.
+        conn.commit()
+
+        r_min, r_max = cfg["rarity"]
+        pool = conn.execute(
+            """
+            SELECT * FROM (
+                SELECT key, 'item' AS src FROM game_config_items
+                WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                  AND COALESCE(review_status,'permanent') = 'permanent'
+                  AND item_type NOT IN ('quest', 'narrative')
+                  AND rarity BETWEEN ? AND ?
+                UNION ALL
+                SELECT key, 'consumable' AS src FROM game_config_consumables
+                WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                  AND rarity BETWEEN ? AND ?
+            ) ORDER BY RANDOM() LIMIT 20
+            """,
+            (r_min, r_max, r_min, r_max),
+        ).fetchall()
+        candidates = [dict(r) for r in pool]
+
+        if candidates and random.random() < cfg["weapon_chance"]:
+            wrow = conn.execute(
+                """SELECT key FROM game_config_weapons
+                   WHERE is_active = 1 AND COALESCE(approved,1) = 1 AND COALESCE(hidden,0) = 0
+                     AND COALESCE(review_status,'permanent') = 'permanent'
+                     AND rarity BETWEEN ? AND ?
+                   ORDER BY RANDOM() LIMIT 1""",
+                (r_min, r_max),
+            ).fetchone()
+            if wrow:
+                candidates = candidates[: cfg["n_entries"] - 1] + [{"key": wrow["key"], "src": "weapon"}]
+
+        weights = [45, 30, 20, 15]
+        from app.services.admin_config import upsert_loot_entry
+
+        for i, cand in enumerate(candidates[: cfg["n_entries"]]):
+            kwargs = {"item_key": None, "consumable_key": None, "weapon_key": None}
+            if cand["src"] == "item":
+                kwargs["item_key"] = cand["key"]
+            elif cand["src"] == "consumable":
+                kwargs["consumable_key"] = cand["key"]
+            else:
+                kwargs["weapon_key"] = cand["key"]
+            try:
+                upsert_loot_entry(
+                    lt_key,
+                    weight=weights[i] if i < len(weights) else 15,
+                    qty_min=1,
+                    qty_max=1,
+                    **kwargs,
+                )
+            except ValueError:
+                continue
+        logger.info(
+            "enemy_loot_auto_populated", enemy_key=enemy_key, loot_table_key=lt_key,
+            tier=tier, n_entries=min(len(candidates), cfg["n_entries"]),
+        )
+    except Exception as e:
+        logger.warning("enemy_loot_auto_populate_failed", enemy_key=enemy_key, error=str(e))
+
+
+_PLAN_ENEMY_TIER_XP = {"weak": 10, "standard": 25, "elite": 50, "boss": 150}
+
+
+def materialize_plan_enemies(
+    conn: sqlite3.Connection,
+    enemies: list[dict],
+    *,
+    created_by: str = "llm_plan",
+    template_id: int | None = None,
+    review_status: str = "pending_review",
+) -> list[dict]:
+    """#1284 — turn a GM plan's `key_enemies` into real, playable
+    `game_config_enemies` rows so LLM-planned bosses/enemies are actually usable in
+    combat instead of dead plan-only fiction.
+
+    Used by the Nowa Kampania / Regeneruj-plan auto-plan-gen path
+    (`gm_plan_generation_service.generate_initial_gm_plan_v2_with_retries`). The
+    Kuźnia template path keeps its own `_auto_create_forge_enemies` wrapper (which
+    additionally clamps HP/AC by template difficulty) — left untouched to avoid
+    regression.
+
+    Each NEW enemy is inserted with `review_status='pending_review'` (playable at
+    once via `[COMBAT_START:key]`, and surfaced in admin → Świat → Oczekujące,
+    which already shows loot info per #1283) and gets an auto-populated loot table
+    via `_auto_populate_enemy_loot`. Idempotent: keys that already exist are left
+    untouched. Returns the list of freshly created enemies.
+    """
+    created: list[dict] = []
+    for e in enemies or []:
+        if not isinstance(e, dict):
+            continue
+        key = (e.get("key") or "").strip()
+        if not key:
+            continue
+        name = (e.get("name") or "").strip() or key.replace("_", " ").title()
+        tier = (e.get("tier") or "standard").lower()
+        if tier not in ("weak", "standard", "elite", "boss"):
+            tier = "standard"
+
+        # Sanity clamps — PlotEnemy defaults are already sane, but guard against
+        # LLM hallucinated stats. Starting values (#1284 Numbers Policy).
+        try:
+            hp = int(e.get("hp_base") or 20)
+        except (TypeError, ValueError):
+            hp = 20
+        try:
+            ac = int(e.get("ac_base") or 12)
+        except (TypeError, ValueError):
+            ac = 12
+        hp = max(5, min(hp, 300))
+        ac = max(8, min(ac, 22))
+        damage_die = e.get("damage_die") or "1d6"
+        xp = _PLAN_ENEMY_TIER_XP.get(tier, 25)
+
+        # Idempotent: never touch an existing enemy (may be admin-edited).
+        if conn.execute(
+            "SELECT 1 FROM game_config_enemies WHERE key = ?", (key,)
+        ).fetchone():
+            continue
+
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_enemies
+                   (key, label, tier, hp_base, ac_base, attack_bonus, damage_die,
+                    damage_bonus, attacks_per_turn, xp_award, description, note,
+                    is_active, review_status, created_by, template_id)
+                   VALUES (?, ?, ?, ?, ?, 0, ?, 0, 1, ?, ?, ?, 1, ?, ?, ?)""",
+                (key, name, tier, hp, ac, damage_die, xp,
+                 e.get("description") or "", e.get("note") or "",
+                 review_status, created_by, template_id),
+            )
+            conn.commit()
+            _auto_populate_enemy_loot(conn, key, tier, name)
+            created.append({"key": key, "name": name, "tier": tier})
+            logger.info(
+                "plan_enemy_materialized", enemy_key=key, tier=tier, created_by=created_by
+            )
+        except Exception as ex:
+            logger.warning("plan_enemy_materialize_failed", enemy_key=key, error=str(ex))
+    if created:
+        logger.info("plan_enemies_materialized_batch", count=len(created), created_by=created_by)
+    return created
+
+
+def get_campaign_plan_enemies(
+    conn: sqlite3.Connection, campaign_id: int
+) -> list[dict]:
+    """#1296 — roster of a campaign's planned enemies + materialization status.
+
+    Reads `gm_plan_json.key_enemies` and LEFT-JOINs each against
+    `game_config_enemies` so the admin can see, per enemy: whether it is actually
+    a playable catalog row (`materialized`), its live stats, review status and loot
+    table. Plan-only fiction (never materialized) is returned with
+    `materialized=False` so it can be flagged as non-playable in the UI.
+    """
+    try:
+        row = conn.execute(
+            "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return []
+    if not row or not row[0]:
+        return []
+    try:
+        plan = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    except (TypeError, ValueError):
+        return []
+    plan_enemies = (plan or {}).get("key_enemies") or []
+    if not isinstance(plan_enemies, list):
+        return []
+
+    roster: list[dict] = []
+    for e in plan_enemies:
+        if not isinstance(e, dict):
+            continue
+        key = str(e.get("key") or "").strip()
+        if not key:
+            continue
+        entry: dict = {
+            "key": key,
+            "name": str(e.get("name") or key.replace("_", " ").title()),
+            "tier": e.get("tier") or "standard",
+            "importance": e.get("importance"),
+            "alive": e.get("alive", True),
+            "materialized": False,
+            "hp_base": None,
+            "ac_base": None,
+            "is_active": None,
+            "review_status": None,
+            "loot_table_key": None,
+            "drop_chance": None,
+        }
+        try:
+            cat = conn.execute(
+                """SELECT label, tier, hp_base, ac_base, is_active, review_status,
+                          loot_table_key, drop_chance
+                   FROM game_config_enemies WHERE key = ?""",
+                (key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            cat = None
+        if cat:
+            entry["materialized"] = True
+            entry["name"] = cat["label"] or entry["name"]
+            entry["tier"] = cat["tier"] or entry["tier"]
+            entry["hp_base"] = cat["hp_base"]
+            entry["ac_base"] = cat["ac_base"]
+            entry["is_active"] = cat["is_active"]
+            entry["review_status"] = cat["review_status"]
+            entry["loot_table_key"] = cat["loot_table_key"]
+            entry["drop_chance"] = cat["drop_chance"]
+        roster.append(entry)
+    return roster
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:

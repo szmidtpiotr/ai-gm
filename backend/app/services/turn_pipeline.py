@@ -70,6 +70,27 @@ _MOVE_VERB_PATTERN = _re_tp.compile(
     _re_tp.IGNORECASE | _re_tp.UNICODE,
 )
 
+# ── Temporal idiom guard (prevent solar/clock phrases from triggering direction scan) ───
+# "wschód słońca" (sunrise), "zachód słońca" (sunset), "o północy" (midnight),
+# "w południe" / "po południu" (noon/afternoon) must NOT fire direction keywords.
+# Handles Polish diacritics + ASCII transliterations (wschod slonca etc.).
+_TEMPORAL_IDIOM_RE = _re_tp.compile(
+    # sunrise / sunset
+    r"(?:wsch[oó]d|wschod)\w*\s+(?:s[łl]o[ńn]c|slonc)\w*"
+    r"|(?:zach[oó]d|zachod)\w*\s+(?:s[łl]o[ńn]c|slonc)\w*"
+    # midnight: o północy, przed północą, po północy
+    r"|\bo\s+p[oó][łl]noc\w+"
+    r"|\bprzed\s+p[oó][łl]noc\w+"
+    r"|\bpo\s+p[oó][łl]noc\w+"
+    # noon / afternoon: w południe, o południu, przed południem, po południu
+    r"|\bw\s+po[łl]udni[eu]\b"
+    r"|\bo\s+po[łl]udni\w+"
+    r"|\bprzed\s+po[łl]udni\w+"
+    r"|\bpo\s+po[łl]udni\w+",
+    _re_tp.IGNORECASE | _re_tp.UNICODE,
+)
+
+
 _TRAVEL_NARRATIVE_MARKERS = _re_tp.compile(
     r"\b(wyruszasz?|podróżuj[ea]sz?|wyruszasz?|przemierzasz?|idziesz|wędrujesz?|"
     r"zmierzasz?|docierasz?|przybywa[sj]|wkraczasz?|opuszczasz?|opuszc[za]sz?|"
@@ -90,6 +111,7 @@ def detect_move_intent(
     neighbors: {"north": (q,r), ...} — caller provides reachable neighbors.
     """
     text = player_message.strip().lower()
+    text = _TEMPORAL_IDIOM_RE.sub(" ", text)  # strip "wschód słońca", "w południe", etc.
 
     # Must contain a movement verb
     if not _MOVE_VERB_PATTERN.search(text):
@@ -124,6 +146,7 @@ def detect_vague_move_intent(player_message: str) -> bool:
     instead of inventing a destination.
     """
     text = player_message.strip().lower()
+    text = _TEMPORAL_IDIOM_RE.sub(" ", text)  # strip "wschód słońca", "w południe", etc.
     if not _MOVE_VERB_PATTERN.search(text):
         return False
     for direction_name in _DIRECTION_KEYWORDS:
@@ -362,22 +385,31 @@ def execute_directional_travel(
         _dq_p, _dr_p = int(_dest_p.get("q", 0)), int(_dest_p.get("r", 0))
         _label_p = pending.get("label") or f"hex ({_dq_p},{_dr_p})"
         _hinted = int(pending.get("hinted", 0))
+        if _choice == "cancel" or (_choice is None and _hinted >= 1):
+            # Player explicitly cancelled OR second non-answer → abandon pending travel.
+            flags.pop("pending_travel_choice", None)
+            _pm4_save_flags(conn, campaign_id, flags)
+            return {
+                "executed": False,
+                "system_fact": (
+                    f"\n[SYSTEM: gracz zrezygnował z podróży do {_label_p}. "
+                    "Kontynuuj narrację normalnie — gracz zostaje w obecnej lokacji.]"
+                ),
+                "intent": None,
+            }
         if _choice is None:
-            if _hinted < 1:
-                # Unclear answer — re-hint exactly ONCE, hero stays put.
-                flags["pending_travel_choice"]["hinted"] = _hinted + 1
-                _pm4_save_flags(conn, campaign_id, flags)
-                return {
-                    "executed": False,
-                    "system_fact": (
-                        f"\n[SYSTEM: gracz nie wskazał wyraźnie trasy do {_label_p}. Zapytaj "
-                        "raz jeszcze krótko: prosto przez dzicz (szybciej, groźniej) czy "
-                        "traktem (dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
-                    ),
-                    "intent": None,
-                }
-            # Already re-hinted once → default to direct (no loop).
-            _choice = "direct"
+            # First unclear answer — re-hint exactly once, hero stays put.
+            flags["pending_travel_choice"]["hinted"] = _hinted + 1
+            _pm4_save_flags(conn, campaign_id, flags)
+            return {
+                "executed": False,
+                "system_fact": (
+                    f"\n[SYSTEM: gracz nie wskazał wyraźnie trasy do {_label_p}. Zapytaj "
+                    "raz jeszcze krótko: prosto przez dzicz (szybciej, groźniej) czy "
+                    "traktem (dłużej, bezpieczniej)? NIE opisuj wyruszenia.]"
+                ),
+                "intent": None,
+            }
         # Execute the deferred trip in the chosen mode, then clear the pending flag.
         flags.pop("pending_travel_choice", None)
         _pm4_save_flags(conn, campaign_id, flags)
@@ -1167,9 +1199,26 @@ def pop_local_travel_hint(conn: "sqlite3.Connection", campaign_id: int) -> "str 
                 if _ok
                 else "Sytuacja rozeszła się po kościach, ale zostawiła ślad."
             )
+            # #1191 E4 — a successful quest_rumor leaves a persistent, confirmable
+            # Atlas rumor pointing at a deterministic target. Never breaks the turn.
+            _rumor_line = ""
+            if _ev == "quest_rumor" and _ok:
+                try:
+                    from app.services import rumor_service
+                    _hero = conn.execute(
+                        "SELECT id FROM characters WHERE campaign_id = ? "
+                        "AND COALESCE(is_active,1)=1 ORDER BY id LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if _hero:
+                        _r = rumor_service.create_rumor(campaign_id, _hero["id"], conn=conn)
+                        if _r and _r.get("rumor_text"):
+                            _rumor_line = f" Treść plotki: {_r['rumor_text']}"
+                except Exception as _e:
+                    logger.warning("rumor_hook_failed", error=str(_e))
             hint = (
                 f"\n[SYSTEM: W drodze do {dest_label} zaszło drobne zdarzenie: {_flavor}. "
-                f"{_res} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
+                f"{_res}{_rumor_line} Wpleć to w 1-3 zdaniach; ruch dotarł do celu, NIE zaczynaj walki.]"
             )
         else:
             # combat / combat_escalated — #1147: the fight has to actually HAPPEN

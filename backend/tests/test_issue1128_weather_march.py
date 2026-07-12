@@ -107,6 +107,16 @@ def _mk_conn(weather_flags: dict | None = None):
     return c
 
 
+@pytest.fixture(autouse=True)
+def _no_encounters(monkeypatch):
+    # Determinism: fixture hexes are safe (encounter_chance handled by the #1128
+    # safe-zone fix), but keep encounter rolls fully off so a future data/config
+    # tweak can't flake these time-based assertions. monkeypatch (NOT raw module
+    # assignment) so the stub is torn down and never leaks into other test files.
+    import app.services.hex_travel_service as hts
+    monkeypatch.setattr(hts, "_roll_encounter", lambda *a, **k: False)
+
+
 def _travel(conn, to=(4, 0)):
     from app.services.hex_travel_service import resolve_chain_travel
     return resolve_chain_travel(

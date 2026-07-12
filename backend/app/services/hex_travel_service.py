@@ -220,11 +220,24 @@ def _roll_encounter(
 
     PM4 #1223: ``chance_mult`` scales the final chance (road mode passes
     ROAD_ENCOUNTER_MULT on road hexes to make the trakt safer).
+
+    #1128 fix: an explicit ``0`` — either on the hex (``encounter_chance``) or on
+    its terrain type (``encounter_base_chance``, e.g. town/village/castle) — is a
+    deliberate *safe zone* and short-circuits to no encounter. The old
+    ``or 0.15`` / ``or base`` idioms treated ``0.0`` as "unset", so authored safe
+    hexes and settlements still rolled ~15% (you could be ambushed standing in a
+    town). A genuinely missing/None value still defaults to 0.15.
     """
-    base_chance = float(hex_data.get("encounter_chance") or 0.15)
-    # Adjust by hex type if configured
+    raw_hex = hex_data.get("encounter_chance")
     ht = hex_data.get("hex_type", "plains")
-    type_chance = float(hex_type_cfg.get(ht, {}).get("encounter_base_chance") or base_chance)
+    raw_type = hex_type_cfg.get(ht, {}).get("encounter_base_chance")
+
+    # Explicit 0 anywhere = deliberate safe zone (settlements, authored refuges).
+    if raw_hex == 0 or raw_type == 0:
+        return False
+
+    base_chance = float(raw_hex) if raw_hex is not None else 0.15
+    type_chance = float(raw_type) if raw_type is not None else base_chance
     final_chance = max(base_chance, type_chance) * chance_mult
     return random.random() < final_chance
 
@@ -323,8 +336,10 @@ _PT3_MOVE_VERB_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 _PT3_DEST_RE = re.compile(
-    r"\b(?:do|ku)\s+([A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}"
-    r"(?:\s+[A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,})*)",
+    # #1057: przyimek „na" (idę NA Most na Bystrzycy) + łącznik małą literą w nazwie
+    # („Most na Bystrzycy", „Most Czarnej Rzeki") — inaczej łapało tylko „Most".
+    r"\b(?:do|ku|na)\s+([A-ZŁÓĄĘŚŹĆŃ][a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}"
+    r"(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
     re.UNICODE,
 )
 
@@ -332,7 +347,7 @@ _PT3_DEST_RE = re.compile(
 # nouns allowed (most, rzeka, wioska, trakt, miasto) and the "w stronę / w
 # kierunku" phrasings. Captures 1-4 words after do/ku/w stronę/w kierunku.
 _KNOWN_HEX_DEST_RE = re.compile(
-    r"(?:\bdo\b|\bku\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
+    r"(?:\bdo\b|\bku\b|\bna\b|\bw\s+stron[ęe]\b|\bw\s+kierunku\b)\s+"
     r"([a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{3,}(?:\s+[a-ząćęłńóśźżA-ZŁÓĄĘŚŹĆŃ]{2,}){0,3})",
     re.UNICODE | re.IGNORECASE,
 )
@@ -390,23 +405,44 @@ def resolve_player_text_to_location_key(
 
 # ── PM3 #1222: known-hex descriptive-travel resolver ──────────────────────────
 
+_VOWELS = frozenset("aeiouąęó")
+
+
+def _vowel_ext_ok(ext: str) -> bool:
+    """True when extension looks like a Polish inflection (short, vowel-start)."""
+    return not ext or (len(ext) <= 3 and ext[0] in _VOWELS)
+
+
 def _fuzzy_prefix_match(cand: str, target: str) -> bool:
     """True when two Polish words share enough of a stem to be the same noun.
 
     Handles declension without a full stemmer: "mostu" ↔ "most", "wioski" ↔
     "wioska", "rzeki" ↔ "rzeka". Prefix either way, else a common-prefix stem of
     at least max(3, 60% of the shorter word).
+
+    Guard: when one word is a prefix of the other, the extension must begin with
+    a vowel (normal inflection like -u/-a/-i/-ą). A consonant-start extension
+    indicates a different morpheme (e.g. "karczmarza" starts with "karczma" but
+    the extension "rza" is a person-noun suffix, not an inflection of the
+    place-noun "karczma"). Same guard applied in the fallthrough common-prefix
+    path when the full shorter word is a prefix of the longer word.
     """
     a, b = _normalize(cand), _normalize(target)
     if not a or not b:
         return False
-    if a.startswith(b) or b.startswith(a):
-        return True
+    if a.startswith(b):
+        return _vowel_ext_ok(a[len(b):])
+    if b.startswith(a):
+        return _vowel_ext_ok(b[len(a):])
     n = 0
     for ca, cb in zip(a, b):
         if ca != cb:
             break
         n += 1
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    # When the full shorter word is a common prefix → same vowel-extension guard.
+    if n == len(shorter):
+        return _vowel_ext_ok(longer[len(shorter):])
     return n >= max(3, int(0.6 * min(len(a), len(b))))
 
 
@@ -531,34 +567,39 @@ def resolve_declared_move_target(
 
     # Current hub: the settlement the hero is in (parent of current sub-loc, or the
     # current macro itself). Sub-locations of this hub are the strongest match.
-    hub_id: int | None = None
+    # #1292: sub-locations are linked to their hub via ``parent_key`` (string), NOT
+    # ``parent_id`` — the latter is left NULL when the campaign plan materialises
+    # subs, so the old parent_id logic never matched and the #1254 hub-sub boost was
+    # dead. That let a player's "idę do kuźni" resolve to a floating orphan macro
+    # (e.g. another campaign's "Kuźnia") instead of the plan's "Kuźnia na skraju wsi".
+    hub_key: str | None = None
     try:
         crow = conn.execute(
-            "SELECT gl.id, gl.location_type, gl.parent_id "
+            "SELECT gl.key, gl.location_type, gl.parent_key "
             "FROM game_locations gl JOIN game_sessions gs ON gs.current_location_id = gl.id "
             "WHERE gs.campaign_id = ? AND gl.is_active = 1 LIMIT 1",
             (campaign_id,),
         ).fetchone()
         if crow:
-            hub_id = int(crow["parent_id"]) if (crow["location_type"] == "sub" and crow["parent_id"]) else int(crow["id"])
+            hub_key = crow["parent_key"] if (crow["location_type"] == "sub" and crow["parent_key"]) else crow["key"]
     except Exception:
         pass
 
     rows = conn.execute(
-        "SELECT key, label, location_type, parent_id, world_hex_q FROM game_locations "
+        "SELECT key, label, location_type, parent_key, world_hex_q FROM game_locations "
         "WHERE is_active = 1 AND label IS NOT NULL"
     ).fetchall()
 
     best: tuple[int, float, str, str] | None = None  # (tier, score, key, label)
     hub_sub_exists = any(
-        hub_id is not None and r["parent_id"] == hub_id for r in rows
+        hub_key is not None and r["parent_key"] == hub_key for r in rows
         if _label_matches_tokens(r["label"], cand_tokens)
     )
     for r in rows:
         if not _label_matches_tokens(r["label"], cand_tokens):
             continue
         is_placed = r["world_hex_q"] is not None
-        is_hub_sub = hub_id is not None and r["parent_id"] == hub_id
+        is_hub_sub = hub_key is not None and r["parent_key"] == hub_key
         is_floating_no_hex = (r["location_type"] == "macro") and not is_placed
         # #1254: inside a settlement, never fall onto a floating macro-without-hex.
         if hub_sub_exists and is_floating_no_hex:
@@ -850,7 +891,10 @@ def resolve_chain_travel(
         # PT7: apply night_march encounter multiplier before rolling
         _enc_hex_data = hex_data
         if night_march:
-            _orig_chance = float(hex_data.get("encounter_chance") or 0.15)
+            # #1128: keep explicit 0 (safe hex) safe — don't let `or 0.15`
+            # resurrect a zeroed chance before the night multiplier.
+            _raw = hex_data.get("encounter_chance")
+            _orig_chance = float(_raw) if _raw is not None else 0.15
             _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
         # PM4 #1223: travelling by road (route_mode="road") halves encounters on road hexes.
         _road_mult = (
@@ -1043,6 +1087,10 @@ def resolve_chain_travel(
         ).fetchone()
         if gs_tp:
             sf_tp = json.loads(gs_tp["session_flags"] or "{}")
+
+            # #1057: podróż po świecie = wyjście z wnętrza osady → wyczyść pozycję
+            # lokalną (inaczej submapa/local_hex zostawał na starej sub-lokacji).
+            sf_tp.pop("local_hex", None)
 
             # PT7: Persist updated daily march budget (always, even on full arrival)
             sf_tp["hours_marched_today"] = hours_marched_today
@@ -1877,16 +1925,23 @@ _ROUTE_DIRECT_RE = re.compile(
     r"bezpośredni\w*|bezposredni\w*|krótsz\w*|krotsz\w*|najkrótsz\w*)\b",
     re.IGNORECASE | re.UNICODE,
 )
+_ROUTE_CANCEL_RE = re.compile(
+    r"\b(rezygnuj\w*|zostaj\w*|zostan\w*|anuluj\w*|odwołuj\w*|nie\s+podróżuj\w*|"
+    r"nie\s+ide\w*|nie\s+idę|nie\s+wyruszam|zostań|zostaję|nie\s+teraz)\b",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def detect_route_choice(player_text: str) -> str | None:
     """PM4 #1223: classify a player's answer to the direct/road question.
 
-    Returns "road", "direct", or None when the text picks neither (or both,
-    which is treated as ambiguous — the caller re-hints once then defaults).
+    Returns "road", "direct", "cancel", or None when the text picks neither
+    (or both, which is treated as ambiguous — caller re-hints once then cancels).
     """
     if not player_text:
         return None
+    if _ROUTE_CANCEL_RE.search(player_text):
+        return "cancel"
     road = bool(_ROUTE_ROAD_RE.search(player_text))
     direct = bool(_ROUTE_DIRECT_RE.search(player_text))
     if road and not direct:
@@ -1894,6 +1949,34 @@ def detect_route_choice(player_text: str) -> str | None:
     if direct and not road:
         return "direct"
     return None
+
+
+def estimate_route_hours(
+    from_hex: tuple[int, int],
+    to_hex: tuple[int, int],
+    conn: sqlite3.Connection,
+    route_mode: str = "direct",
+) -> dict[str, Any]:
+    """Realny szacunek podróży = suma `travel_hours` po znalezionej trasie (bez
+    ruchu/commitu). Panel podróży pokazywał heurystykę `perHex×dist` (teren CELU),
+    która rozjeżdżała się z narracją/zegarem. Zwraca {dist, hours}."""
+    dist = hex_distance(from_hex[0], from_hex[1], to_hex[0], to_hex[1])
+    out: dict[str, Any] = {"dist": dist, "hours": float(dist) * 4.0}
+    try:
+        hexes = _load_hex_graph(conn)
+        cfg = _load_hex_type_config(conn)
+        path = find_path(from_hex, to_hex, hexes, cfg, route_mode=route_mode)
+        if not path or len(path) <= 1:
+            return out
+        total = 0.0
+        for c in path[1:]:
+            ht = hexes.get(c, {}).get("hex_type", "plains")
+            total += float((cfg or {}).get(ht, {}).get("travel_hours", 1.0)) or 1.0
+        out["hours"] = round(total, 1)
+        out["dist"] = len(path) - 1
+    except Exception as _er:  # never break UI over an estimate
+        logger.warning("estimate_route_hours_failed", error=str(_er))
+    return out
 
 
 def analyze_route(

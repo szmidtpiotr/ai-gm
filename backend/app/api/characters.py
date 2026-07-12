@@ -1208,6 +1208,36 @@ def get_character_chronicle(character_id: int):
         conn.close()
 
 
+@router.get("/characters/{character_id}/bestiary")
+def get_character_bestiary(character_id: int):
+    """#1191 E3 — Bestiariusz: full enemy catalogue with the hero's unlock tiers.
+
+    Locked entries (0 kills) return only {locked: true} — no name/key leak.
+    """
+    from app.services import bestiary_service
+    return bestiary_service.get_bestiary(character_id)
+
+
+@router.get("/characters/{character_id}/atlas")
+def get_character_atlas(character_id: int):
+    """#1191 E3 — Atlas Kresów: cross-campaign exploration stats for this hero."""
+    from app.services import atlas_service
+    return atlas_service.get_atlas(character_id)
+
+
+@router.get("/characters/{character_id}/treasure-maps")
+def get_character_treasure_maps(character_id: int):
+    """#1196 — treasure maps / fragments the hero is collecting (per treasure_id)."""
+    from app.services import treasure_service
+    import sqlite3
+    conn = sqlite3.connect(treasure_service.TREASURE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return treasure_service.get_treasure_maps(conn, character_id)
+    finally:
+        conn.close()
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.
@@ -1647,7 +1677,8 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
 
     row = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, race
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, race,
+               COALESCE(gold_gp, 0) AS gold_gp
         FROM characters
         WHERE id = ?
         """,
@@ -1674,11 +1705,21 @@ def get_character(character_id: int, _auth: dict | None = Depends(current_user_o
 
     item = dict(row)
     item.setdefault("race", "human")
+    gold_gp = int(item.pop("gold_gp", 0) or 0)
     try:
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
         item["sheet_json"] = {}
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
+    # Gold stored in dedicated column (never in sheet_json) — inject for frontend readVitals
+    item["sheet_json"]["gold_gp"] = gold_gp
+    # #1302: passive relic bonuses so the card can show effective stats ("CHA 12 (+2 z reliktu)").
+    # Non-destructive — raw stats untouched; the UI adds base + bonus.
+    try:
+        from app.services.equipment_effects_service import get_equipment_bonuses
+        item["sheet_json"]["equipment_bonuses"] = get_equipment_bonuses(character_id, conn)
+    except Exception:
+        pass
 
     # Stage 2C X5: include safe_for_rest based on current session location
     item["safe_for_rest"] = False
@@ -1726,18 +1767,26 @@ def get_character_sheet(character_id: int, user_id: int):
         (character_id,),
     ).fetchone()
 
-    conn.close()
-
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Character not found")
     if int(row["user_id"]) != int(user_id):
+        conn.close()
         raise HTTPException(status_code=403, detail="Not your hero")
 
     try:
         sheet_json = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
     except Exception:
         sheet_json = {}
-    return {"sheet_json": _strip_hidden_fields(sheet_json)}
+    sheet_json = _strip_hidden_fields(sheet_json)
+    # #1302: passive relic bonuses for the effective-stats display on the card.
+    try:
+        from app.services.equipment_effects_service import get_equipment_bonuses
+        sheet_json["equipment_bonuses"] = get_equipment_bonuses(character_id, conn)
+    except Exception:
+        pass
+    conn.close()
+    return {"sheet_json": sheet_json}
 
 
 @router.get("/characters/{character_id}/reputation")
@@ -2056,8 +2105,12 @@ def character_rest(
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        # Hero-First używa 'active', starszy kod 'in_campaign' — akceptuj oba (+ loch).
+        # Bez tego odpoczynek 404-ował „Character not in campaign" dla bohaterów 'active'.
         char = conn.execute(
-            "SELECT id, campaign_id FROM characters WHERE id = ? AND status = 'in_campaign'",
+            "SELECT id, campaign_id FROM characters "
+            "WHERE id = ? AND campaign_id IS NOT NULL "
+            "AND status IN ('in_campaign', 'active', 'in_dungeon')",
             (character_id,),
         ).fetchone()
         if not char:
@@ -2071,7 +2124,106 @@ def character_rest(
             err = result.get("error", "unknown")
             code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted", "in_combat") else 500
             raise HTTPException(status_code=code, detail=err)
+        # Snapshot po odpoczynku — inaczej rollback do „teraz" cofał do starszej
+        # lokacji (teleport). Każda akcja zmieniająca stan zapisuje snapshot.
+        try:
+            from app.services.world_state_service import auto_save_snapshot
+            auto_save_snapshot(campaign_id, source=f"rest_{type}")
+        except Exception:
+            pass
         return result
+    finally:
+        conn.close()
+
+
+# ── #1290 WAIT-3 — Czekanie (deterministyczny przeskok czasu) ────────────────
+
+_WAIT_VALID_TARGETS = frozenset({
+    "dawn", "day", "dusk", "night",
+    "next_dawn", "next_day", "next_dusk", "next_night",
+})
+_WAIT_MAX_HOURS = 24  # startowa wartość, tunable via game_config_meta
+
+
+@router.post("/characters/{character_id}/wait")
+def character_wait(
+    character_id: int,
+    target: str | None = Query(None, description="Docelowa pora: dawn/dusk/night/day/next_dawn/…"),
+    hours: int | None = Query(None, ge=1, le=_WAIT_MAX_HOURS, description="Alternatywnie: liczba godzin (1-24)"),
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(default=None),
+):
+    """#1290 WAIT-3 — Deterministyczne czekanie do pory dnia lub przez N godzin.
+
+    Wymaga bezpiecznej lokacji (safe_for_rest). Blokowane w trakcie walki.
+    Nie leczy HP/many — to wyłącznie przeskok zegara.
+
+    Returns: {ok, delta_hours, new_clock: {day, hour, hour_str, period, display}}
+    """
+    resolve_authed_user_id(authorization, user_id)
+
+    if not target and not hours:
+        raise HTTPException(status_code=422, detail="Podaj target (pora dnia) lub hours (liczba godzin)")
+    if target and target not in _WAIT_VALID_TARGETS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Nieprawidłowy target '{target}'. Dozwolone: {sorted(_WAIT_VALID_TARGETS)}",
+        )
+
+    from app.services.rest_service import _is_safe_for_character, _has_active_combat as _in_combat
+    from app.services.clock_service import advance_clock, get_clock_state, minutes_to_reach_phase
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, campaign_id FROM characters "
+            "WHERE id = ? AND campaign_id IS NOT NULL "
+            "AND status IN ('in_campaign', 'active', 'in_dungeon')",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not in campaign")
+        campaign_id = int(char["campaign_id"])
+
+        if _in_combat(campaign_id, conn):
+            raise HTTPException(status_code=409, detail="in_combat")
+
+        if not _is_safe_for_character(character_id, campaign_id, conn):
+            raise HTTPException(status_code=400, detail="not_safe_for_rest")
+
+        clock = get_clock_state(campaign_id, conn=conn)
+        if target:
+            delta_min = minutes_to_reach_phase(clock["hour"], target)
+            if delta_min == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Już jesteś w porze '{target}'. Użyj next_{target} by czekać do kolejnego wystąpienia.",
+                )
+        else:
+            delta_min = (hours or 1) * 60
+
+        new_clock = advance_clock(campaign_id, minutes=delta_min, reason="wait", conn=conn)
+        conn.commit()
+
+        # Snapshot po czekaniu — patrz komentarz w /rest (ochrona przed teleportem).
+        try:
+            from app.services.world_state_service import auto_save_snapshot
+            auto_save_snapshot(campaign_id, source="wait")
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "delta_hours": new_clock.get("delta_hours", 0),
+            "new_clock": {
+                "day": new_clock["day"],
+                "hour": new_clock["hour"],
+                "hour_str": new_clock["hour_str"],
+                "period": new_clock["period"],
+                "display": new_clock["display"],
+            },
+        }
     finally:
         conn.close()
 

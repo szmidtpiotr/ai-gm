@@ -1069,6 +1069,27 @@ def _on_zero_hp_save(
     return None
 
 
+def _apply_death_save_ladder(
+    combatant: dict[str, Any], out: dict[str, Any], *, d20: int | None = None,
+) -> dict[str, Any]:
+    """#1313: rzut na śmierć z rosnącym DC (drabina 10/13/16/19). Wpinany PO nieudanej
+    kondycji `on_zero_hp_save`. Czysty d20 (bez modyfikatorów). Sukces / porażka poniżej
+    ``DEATH_SAVE_MAX_FAILURES`` → gracz zostaje na 1 HP („dying"); tyle porażek → śmierć
+    (nieprzytomność jak dziś). Liczniki (`death_save_count`, `death_failures`) żyją na
+    combatancie (`p`) → per-postać, MP-safe, persystowane przez _persist_combatants.
+    """
+    count = int(combatant.get("death_save_count", 0) or 0) + 1
+    combatant["death_save_count"] = count
+    dc = get_death_save_dc(count)
+    raw = int(d20) if d20 is not None else int(roll_d20())
+    prior_fail = int(combatant.get("death_failures", 0) or 0)
+    res = resolve_death_save_outcome(raw, dc, prior_fail)
+    combatant["death_failures"] = int(res["total_failures"])
+    res["death_save_count"] = count
+    out["death_save"] = res
+    return res
+
+
 # ─── S15 (#610): system reakcji + skill `dodge`. Okno reakcji PRZED aplikacją obrażeń.
 
 def _record_reaction_rolls(campaign_id, character_id, combat_id, round_n, out) -> None:
@@ -1099,6 +1120,19 @@ def _record_reaction_rolls(campaign_id, character_id, combat_id, round_n, out) -
                 outcome="success" if save.get("saved") else "fail",
                 meta={"round": round_n, "stat": save.get("stat"),
                       "condition": save.get("condition_key")},
+            )
+        # #1313: rzut drabiny na śmierć (rosnące DC) → karta UI „death save".
+        ds = out.get("death_save") or {}
+        if ds and ds.get("roll") is not None:
+            _rec_roll(
+                campaign_id=campaign_id, roll_type="death_save", character_id=character_id,
+                combat_id=combat_id, actor="player", notation="1d20",
+                raw_rolls=[int(ds["roll"])], total=int(ds.get("roll") or 0),
+                dc=int(ds.get("dc") or 0),
+                outcome=str(ds.get("outcome") or "").lower(),
+                meta={"round": round_n, "death_save_count": ds.get("death_save_count"),
+                      "total_failures": ds.get("total_failures"),
+                      "nat20": ds.get("nat20"), "nat1": ds.get("nat1")},
             )
     except Exception:
         pass
@@ -1165,6 +1199,178 @@ def _try_dodge_reaction(
         "locked_next_round": locked_next,
         "dex_mod": int(dex_mod),
         "skill_rank": skill_rank,
+    }
+
+
+# ─── #1324: reakcja `arcane_ward` (Arkanowa Bariera) — odpowiednik Uniku dla maga.
+# Test INT vs rzut ataku wroga, opłacany maną (koszt schodzi ZAWSZE, niezależnie od wyniku —
+# to hazard tej reakcji, parytet z „mana wydana na próbę" #1323). Reużywa silnik stopnia S1.
+
+def _try_arcane_ward_reaction(
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    attack_roll: int,
+    round_n: int,
+    *,
+    campaign_id: int | None = None,
+    ch_id: int | None = None,
+    combat_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Okno reakcji Arkanowej Bariery — wołane gdy cios wroga TRAFIŁ, PRZED aplikacją obrażeń.
+
+    Pre-deklaracja (``p['reaction_declared'] == 'arcane_ward'``) konsumowana przy pierwszym
+    trafieniu w rundzie (raz/rundę, XOR z dodge/block). Gate: skill ``arcane_ward`` rank ≥ 1
+    (skill na sheet) ORAZ ``current_mana ≥ ARCANE_WARD_MANA_COST``. Test INT (d20 + INT_mod +
+    skill_rank + proficiency) przeciw WYNIKOWI ATAKU wroga (``attack_roll`` jako DC), stopień
+    liczony silnikiem S1 (``_derive_outcome``):
+      • sukces (margines ≥ 0)        → ``warded=True`` (cios znegowany, 0 obrażeń)
+      • porażka (margines < 0)        → ``warded=False`` (pełne obrażenia idą dalej)
+      • krytyczna porażka (≤ −5)      → ``reaction_locked_round = round_n + 1`` (parytet Uniku)
+
+    Koszt many (``ARCANE_WARD_MANA_COST``, startowo 1) schodzi ZAWSZE przy podjęciu próby —
+    także przy porażce (hazard). Zwraca ``None`` (silnik idzie normalną ścieżką obrażeń), gdy
+    brak deklaracji / brak skilla. Gdy zablokowane w tej rundzie — dict ``available=False``.
+    Gdy brak many mimo deklaracji — dict ``available=False`` (gate, mana nietknięta).
+
+    Rzut ataku wroga (nat 20/nat 1, podwójne obrażenia) NIETKNIĘTY — to osobny rzut; margines
+    dotyczy wyłącznie testu bariery (sam jest testem umiejętności).
+    """
+    if str(p.get("reaction_declared") or "") != "arcane_ward":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("arcane_ward", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Lockout po wcześniejszej krytycznej porażce — deklaracja i tak skonsumowana, mana nietknięta.
+    if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        p.pop("reaction_declared", None)
+        return {"reaction": "arcane_ward", "available": False, "locked": True, "warded": False}
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku/gate'u).
+    p.pop("reaction_declared", None)
+    # Gate many: bez wystarczającej puli bariera niedostępna (mana nie schodzi).
+    cost = int(ARCANE_WARD_MANA_COST)
+    try:
+        current_mana = int((sheet.get("current_mana") if isinstance(sheet, dict) else 0) or 0)
+    except (TypeError, ValueError):
+        current_mana = 0
+    if current_mana < cost:
+        return {"reaction": "arcane_ward", "available": False, "reason": "no_mana",
+                "current_mana": current_mana, "mana_cost": cost}
+    # Debit many ZAWSZE (koszt próby) — best-effort state-log gdy podano kontekst kampanii.
+    from app.services.spell_service import check_and_deduct_mana as _deduct_mana
+    _ok, new_mana = _deduct_mana(
+        sheet, cost, campaign_id=campaign_id, character_id=ch_id,
+        combat_id=combat_id, cause="reaction_arcane_ward",
+    )
+    int_mod = _combatant_stat_modifier(p, sheet=None, stat="INT")  # kondycje na combatancie
+    proficiency = proficiency_bonus(skill_rank)
+    mod_total = int(int_mod) + skill_rank + proficiency
+    d20 = roll_d20()
+    from app.services.skill_service import _derive_outcome  # S1 — jeden silnik stopnia wyniku
+    outcome = _derive_outcome(d20, mod_total, int(attack_roll))
+    warded = bool(outcome["success"])
+    locked_next = outcome["outcome"] == "CRITICAL_FAILURE"
+    if locked_next:
+        p["reaction_locked_round"] = int(round_n) + 1
+    return {
+        "reaction": "arcane_ward",
+        "available": True,
+        "warded": warded,
+        "d20": int(d20),
+        "ward_total": int(outcome["player_total"]),
+        "attack_roll": int(attack_roll),
+        "margin": int(outcome["margin"]),
+        "outcome": outcome["outcome"],
+        "locked_next_round": locked_next,
+        "int_mod": int(int_mod),
+        "skill_rank": skill_rank,
+        "mana_cost": cost,
+        "current_mana": int(new_mana),
+    }
+
+
+# ─── #1325: reakcja `mana_shield` (Tarcza Many) — odpowiednik Bloku dla maga, DETERMINISTYCZNA.
+# Bez rzutu: mag „kupuje pewność" za zasób ofensywny. Model CAP — limit wydatku many na cios =
+# MANA_SHIELD_LIMIT_PER_RANK × rank, przelicznik R = MANA_SHIELD_ABSORB_PER_MANA. Wpinana OSTATNIA
+# w potoku (po #826 i B10), tuż przed odjęciem HP — dlatego bierze `dmg` FINALNE, nie surowe.
+
+def _try_mana_shield_reaction(
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    dmg: int,
+    round_n: int,
+    *,
+    campaign_id: int | None = None,
+    ch_id: int | None = None,
+    combat_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Tarcza Many — deterministyczna absorpcja obrażeń FINALNYCH (po #826/B10) za manę.
+
+    Model CAP (decyzja Piotra, #1325):
+      • twardy limit wydatku many na cios = ``MANA_SHIELD_LIMIT_PER_RANK × rank`` (start 2×rank),
+        dodatkowo ograniczony aktualną pulą many,
+      • przelicznik ``R = MANA_SHIELD_ABSORB_PER_MANA`` (start 2 obr./1 mana),
+      • pochłonięte = ``min(dmg, spend_cap_mana × R)``,
+      • zapłata = ``ceil(pochłonięte / R)`` — TYLKO za faktycznie wykorzystaną absorpcję
+        (niewykorzystany limit nie kosztuje; kryt wroga nie zeżre całej puli — chroni cap).
+
+    Bez rzutu → brak crit-fail → brak lockoutu. Gate: skill ``mana_shield`` rank ≥ 1 ORAZ
+    ``current_mana > 0``. Zwraca ``None`` (silnik idzie normalną ścieżką) gdy brak deklaracji /
+    skilla; ``available=False`` gdy 0 many. Przy ``dmg <= 0`` mana NIE schodzi (nic do pochłonięcia).
+    """
+    if str(p.get("reaction_declared") or "") != "mana_shield":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("mana_shield", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku/gate'u).
+    p.pop("reaction_declared", None)
+    try:
+        current_mana = int((sheet.get("current_mana") if isinstance(sheet, dict) else 0) or 0)
+    except (TypeError, ValueError):
+        current_mana = 0
+    limit_mana = int(MANA_SHIELD_LIMIT_PER_RANK) * skill_rank
+    if current_mana <= 0:
+        return {"reaction": "mana_shield", "available": False, "reason": "no_mana",
+                "current_mana": current_mana, "limit_mana": limit_mana,
+                "damage_before": int(dmg), "damage_after": int(dmg), "absorbed": 0,
+                "mana_spent": 0, "skill_rank": skill_rank}
+    R = int(MANA_SHIELD_ABSORB_PER_MANA)
+    spend_cap_mana = min(limit_mana, current_mana)      # nie wydamy więcej niż limit ani niż mamy
+    absorb_cap = spend_cap_mana * R
+    absorbed = max(0, min(int(dmg), absorb_cap))
+    if absorbed <= 0:
+        # Obrażenia już zjedzone (dmg=0 po pancerzu/absorpcji) — mana nietknięta.
+        return {"reaction": "mana_shield", "available": True, "absorbed": 0, "mana_spent": 0,
+                "damage_before": int(dmg), "damage_after": int(dmg), "limit_mana": limit_mana,
+                "current_mana": current_mana, "skill_rank": skill_rank}
+    mana_spent = (absorbed + R - 1) // R                # ceil — płacimy tylko za wykorzystane
+    from app.services.spell_service import check_and_deduct_mana as _deduct_mana
+    _ok, new_mana = _deduct_mana(
+        sheet, mana_spent, campaign_id=campaign_id, character_id=ch_id,
+        combat_id=combat_id, cause="reaction_mana_shield",
+    )
+    damage_after = max(0, int(dmg) - absorbed)
+    return {
+        "reaction": "mana_shield",
+        "available": True,
+        "absorbed": int(absorbed),
+        "mana_spent": int(mana_spent),
+        "damage_before": int(dmg),
+        "damage_after": int(damage_after),
+        "limit_mana": int(limit_mana),
+        "absorb_per_mana": R,
+        "skill_rank": skill_rank,
+        "current_mana": int(new_mana),
     }
 
 
@@ -1717,6 +1923,10 @@ def _create_pending_combat_enemy(
             (enemy_key, name),
         )
         logger.info("combat_pending_enemy_created", enemy_key=enemy_key)
+        # #1283 — same auto-loot heuristic as the [CREATE_ENEMY] tag path: this
+        # combat-triggered creation is the one that actually fires in live play.
+        from app.services.world_service import _auto_populate_enemy_loot
+        _auto_populate_enemy_loot(conn, enemy_key, "standard", name)
     except Exception as e:  # pragma: no cover - defensive
         logger.warning("combat_pending_enemy_create_failed", enemy_key=enemy_key, error=str(e))
         return None
@@ -1876,6 +2086,20 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         if isinstance(_pr, dict) and "damage" in _pr:
             _pr = {k: v for k, v in _pr.items() if k != "damage"}
             _c["pending_reaction"] = _pr
+    # #1191 E2 — "wiedza łowcy" tier 2: expose enemy HP for types the hero has
+    # hunted enough. Flag each enemy combatant; MP uses the row owner's tiers.
+    try:
+        from app.services import bestiary_service as _bs
+        _hero_id = row["character_id"]
+        _eks = [str(_c.get("enemy_key") or "") for _c in _combatants
+                if _c.get("type") == "enemy" and _c.get("enemy_key")]
+        if _hero_id and _eks:
+            _tiers = _bs.get_entry_tiers(_hero_id, _eks)
+            for _c in _combatants:
+                if _c.get("type") == "enemy" and _c.get("enemy_key"):
+                    _c["hp_visible"] = _tiers.get(str(_c["enemy_key"]), 0) >= _bs.HP_VISIBLE_TIER
+    except Exception:
+        pass
     d: dict[str, Any] = {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
@@ -2722,6 +2946,8 @@ def _resolve_aoe_single_target(
 
     if dead:
         ek = str(tgt.get("enemy_key") or "")
+        # #1191 — Bestiariusz: credit kill (AOE path; solo=killer, MP=all).
+        _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
         # U25 (#575): flaga boss kill (pity timer afiksów)
         if str(tgt.get("tier") or "").strip().lower() == "boss":
             try:
@@ -4505,7 +4731,21 @@ def initiate_combat(
         _ov_sc(conn, campaign_id, int(character_id), sheet)
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
-        dex_mod = _stat_mod(sheet, "DEX")
+        # #1302: passive bonuses from ALL equipped items (armour/relic/amulet/off-hand)
+        # — AC + stats work in combat exactly like out of combat. Main-hand weapon is
+        # EXCLUDED here because it's applied separately below (avoid double-count).
+        # Applied to AC, the seven ability stats, and DEX-driven initiative.
+        try:
+            from app.services.equipment_effects_service import get_equipment_bonuses as _get_equip_bonuses
+            _relic = _get_equip_bonuses(int(character_id), conn, exclude_slots=("main_hand",))
+        except Exception:
+            _relic = {"stats": {}, "skills": {}, "ac": 0}
+        _relic_ac = int(_relic.get("ac") or 0)
+        if _relic_ac:
+            ac += _relic_ac
+        _relic_stats = _relic.get("stats") or {}
+        dex_mod = (int(_ability_stats_seven(sheet).get("DEX", 10) or 10)
+                   + int(_relic_stats.get("DEX", 0) or 0) - 10) // 2
         # PT-D1 (#1124): od 2 stacków zmęczenia gorsza inicjatywa.
         from app.services.fatigue_service import compute_initiative_penalty
         init_player = roll_d20() + dex_mod + compute_initiative_penalty(_sheet_conditions(sheet), race=sheet.get("race"))
@@ -4538,6 +4778,11 @@ def initiate_combat(
             for _st, _delta in _amods.items():
                 if _st in ability_stats:
                     ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + _delta
+        # #1302: relic static_stat_modifier — equipped relic-slot items raise stats in combat.
+        if _relic_stats:
+            for _st, _delta in _relic_stats.items():
+                if _st in ability_stats:
+                    ability_stats[_st] = int(ability_stats.get(_st, 10) or 10) + int(_delta or 0)
 
         combatants: list[dict[str, Any]] = [
             {
@@ -4551,6 +4796,8 @@ def initiate_combat(
                 "initiative_roll": init_player,
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
+                "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
+                "death_failures": 0,
             }
         ]
 
@@ -4645,6 +4892,10 @@ def initiate_combat(
         turn_order = [t[0] for t in turn_slots]
         current = turn_order[0] if turn_order else "player"
 
+        # #1210: Strach/Groza przy wejściu do walki — wróg z fear_aura wymusza rzut
+        # (czysty d20, „los") vs fear_dc; porażka nakłada frightened na gracza PRZED zapisem.
+        _fear_entry = apply_fear_on_entry(conn, campaign_id, combatants)
+
         conn.execute("DELETE FROM active_combat WHERE campaign_id = ?", (campaign_id,))
         _save_combat_row(
             conn,
@@ -4719,6 +4970,28 @@ def initiate_combat(
         set_world_state_flags(campaign_id, scene_enemies=enemy_entries)
     except Exception:
         pass
+
+    # #1210: dołącz wynik testu Grozy do zwrotki (narrator/UI); zaloguj gdy strach padł.
+    if _fear_entry is not None:
+        out["fear_on_entry"] = _fear_entry
+        if _fear_entry.get("condition"):
+            try:
+                with _conn() as _fc:
+                    _cid_row = _fc.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ?", (campaign_id,)
+                    ).fetchone()
+                    if _cid_row:
+                        _cid = int(_cid_row["id"])
+                        log_combat_turn(
+                            _fc, combat_id=_cid, campaign_id=campaign_id,
+                            turn_number=_next_combat_log_sequence(_fc, _cid),
+                            actor="system", event_type="fear",
+                            roll_value=int(_fear_entry.get("roll") or 0),
+                            narrative=json.dumps(_fear_entry, ensure_ascii=False),
+                        )
+                        _fc.commit()
+            except Exception:
+                pass
 
     return out
 
@@ -5097,6 +5370,40 @@ def _mp_player_char_id(actor_id: str) -> int | None:
         return None
 
 
+def _credit_bestiary_kill(conn, combatants, killer_ch_id, campaign_id, enemy_key, out) -> None:
+    """#1191 — record an enemy kill in the Bestiariusz + confirm matching rumors.
+
+    Solo: credits the killer. MP (#1191 follow-up): credits EVERY player that
+    took part in the fight — all `player:{id}` combatants, alive or downed —
+    per Piotr's decision (shared trophy). Never raises into the combat turn.
+    """
+    if not enemy_key:
+        return
+    try:
+        from app.services.bestiary_service import record_kill
+        credited: list[int] = []
+        if _is_mp_combat(combatants):
+            for c in combatants:
+                if c.get("type") == "player":
+                    cid = _mp_player_char_id(str(c.get("id") or ""))
+                    if cid is not None:
+                        credited.append(cid)
+        if not credited and killer_ch_id:
+            credited = [int(killer_ch_id)]
+        for cid in dict.fromkeys(credited):  # dedup, preserve order
+            bk = record_kill(cid, enemy_key, conn=conn)
+            # surface tier-up for the killer so the UI can toast
+            if killer_ch_id and cid == int(killer_ch_id) and bk.get("tier_up"):
+                out.setdefault("bestiary_tier_up", {
+                    "enemy_key": enemy_key,
+                    "unlocked_tier": bk.get("unlocked_tier"),
+                })
+        from app.services import rumor_service as _rs
+        _rs.confirm_rumors_for(campaign_id, "enemy", enemy_key, conn=conn)
+    except Exception:
+        pass
+
+
 def initiate_combat_mp(
     campaign_id: int,
     character_ids: list[int],
@@ -5163,6 +5470,8 @@ def initiate_combat_mp(
                 "initiative_roll": init_roll,
                 "conditions": _sheet_conditions(sheet),
                 "zone": _default_zone_for_player(sheet),
+                "death_save_count": 0,   # #1313: reset drabiny na śmierć (per walka)
+                "death_failures": 0,
             })
             # Tie-break: lower list index wins (first player in list wins ties)
             turn_slots.append((actor_id, init_roll, idx))
@@ -5419,6 +5728,301 @@ MARGIN_DAMAGE_BONUS = 1       # +1 dmg za próg (BACKUP w #826: +1 KOŚĆ — gd
 ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = część `ac_base`/AC ponad
                               # nieopancerzony próg (AC 10). OFFSET=0 → literalne ac_base ze spec #826
                               # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
+ARCANE_WARD_MANA_COST = 1     # #1324: koszt many za PRÓBĘ Arkanowej Bariery (schodzi ZAWSZE,
+                              # niezależnie od wyniku testu). Wartość STARTOWA — strój na Sandboxie.
+# #1325: Tarcza Many — deterministyczna absorpcja obrażeń opłacana maną (model CAP). Startowe:
+MANA_SHIELD_LIMIT_PER_RANK = 2   # twardy limit wydatku many na cios = LIMIT × rank (anty boss-tank)
+MANA_SHIELD_ABSORB_PER_MANA = 2  # przelicznik R — ile obrażeń pochłania 1 mana (start 2 obr./mana)
+
+
+# ─── #1210: mechaniki V2 (port z combat_v2_service.py) ───────────────────────
+# Warstwa deterministyczna — silnik decyduje, LLM narruje po rozliczeniu.
+# Wszystkie liczby STARTOWE (Numbers Policy #826), strojne na Sandboxie.
+
+# Death-save: rosnące DC za każde padnięcie na 0 HP w tej samej walce (czysty d20, bez CON).
+DEATH_SAVE_DC_LADDER = [10, 13, 16, 19]
+DEATH_SAVE_MAX_FAILURES = 3   # 3. porażka = śmierć
+
+# Groza: domyślne DC rzutu WIS gdy wróg ma fear_aura ale nie ma własnego fear_dc.
+FEAR_DC_DEFAULT = 12
+# Eskalacja strachu — kolejna porażka przesuwa o jeden stopień (Nat 1 o dwa).
+FEAR_LADDER = [None, "frightened", "panicked", "break"]
+FEAR_CONDITION_DURATION = 2   # rundy
+
+# Hit-location (d6) przy krytyku → warunek na trafionym.
+HIT_LOCATION_TABLE = {
+    1: "head",
+    2: "torso",
+    3: "right_arm",
+    4: "left_arm",
+    5: "right_leg",
+    6: "left_leg",
+}
+# Krytyk WROGA w gracza (on_player=True): (condition_key, rundy).
+PLAYER_CRIT_CONDITIONS = {
+    "head":      ("dazed",     1),   # traci następną akcję
+    "torso":     ("winded",    2),   # -2 do akcji siłowych
+    "right_arm": ("arm_wound", 3),   # -1 do ataku
+    "left_arm":  ("arm_wound", 3),
+    "right_leg": ("leg_wound", 3),   # -2 do rzutu na ucieczkę
+    "left_leg":  ("leg_wound", 3),
+}
+# Krytyk GRACZA we wroga (on_player=False): (condition_key, rundy).
+ENEMY_CRIT_CONDITIONS = {
+    "head":      ("stunned",  1),    # pomija turę
+    "torso":     ("bleeding", 3),    # DoT 1/rundę
+    "right_arm": ("disarmed", 3),    # -2 do obrażeń
+    "left_arm":  ("disarmed", 3),
+    "right_leg": ("hobbled",  3),    # nie może uciec
+    "left_leg":  ("hobbled",  3),
+}
+# Modyfikatory ucieczki od warunków na uciekającym (pkt 2 wpływa na pkt 4).
+FLEE_CONDITION_PENALTY = {"leg_wound": -2}   # kara do opposed-DEX
+FLEE_BLOCKING_CONDITIONS = {"hobbled"}       # całkowicie blokują ucieczkę
+
+
+def get_death_save_dc(death_save_count: int) -> int:
+    """DC rzutu na przeżycie za N-te padnięcie na 0 HP w tej walce (1-indeksowane).
+    Poza drabiną → zostaje na ostatnim (najwyższym) szczeblu."""
+    idx = min(int(death_save_count) - 1, len(DEATH_SAVE_DC_LADDER) - 1)
+    return DEATH_SAVE_DC_LADDER[max(0, idx)]
+
+
+def resolve_death_save_outcome(d20: int, dc: int, current_failures: int) -> dict[str, Any]:
+    """Czysty d20 (bez modyfikatorów). Nat 20 = przeżycie, Nat 1 = 2 porażki,
+    zwykła porażka = 1. ``DEATH_SAVE_MAX_FAILURES`` porażek = śmierć."""
+    d20 = int(d20)
+    nat20 = d20 == 20
+    nat1 = d20 == 1
+    success = nat20 or (not nat1 and d20 >= int(dc))
+    failures_added = 0 if success else (2 if nat1 else 1)
+    total_failures = int(current_failures) + failures_added
+    dead = total_failures >= DEATH_SAVE_MAX_FAILURES
+    if success:
+        outcome = "SURVIVED"
+    elif dead:
+        outcome = "DEAD"
+    else:
+        outcome = "FAILED"
+    return {
+        "outcome": outcome,
+        "roll": d20,
+        "dc": int(dc),
+        "success": success,
+        "nat20": nat20,
+        "nat1": nat1,
+        "failures_added": failures_added,
+        "total_failures": total_failures,
+        "dead": dead,
+        "hp_restored": 1 if (success and not dead) else 0,
+    }
+
+
+def crit_location_from_d6(d6: int) -> str:
+    """d6 → nazwa trafionej lokacji."""
+    return HIT_LOCATION_TABLE[int(d6)]
+
+
+def crit_condition_for_location(location: str, *, on_player: bool) -> tuple[str, int]:
+    """Zwraca (condition_key, rundy) dla lokacji. on_player=True → warunek na graczu
+    (krytyk wroga), False → warunek na wrogu (krytyk gracza)."""
+    table = PLAYER_CRIT_CONDITIONS if on_player else ENEMY_CRIT_CONDITIONS
+    return table[location]
+
+
+def resolve_fear_outcome(d20: int, dc: int, current_fear: str | None) -> dict[str, Any]:
+    """Rzut WIS na Grozę (czysty d20, „los" per decyzje projektowe). 3-stopniowa
+    eskalacja: None → frightened → panicked → break. Nat 1 przeskakuje 2 stopnie,
+    Nat 20 zawsze zdaje."""
+    d20 = int(d20)
+    nat20 = d20 == 20
+    nat1 = d20 == 1
+    success = nat20 or (not nat1 and d20 >= int(dc))
+    if success:
+        return {"outcome": "SUCCESS", "roll": d20, "dc": int(dc),
+                "condition": None, "nat20": nat20, "nat1": nat1}
+    try:
+        cur_idx = FEAR_LADDER.index(current_fear)
+    except ValueError:
+        cur_idx = 0
+    step = 2 if nat1 else 1
+    new_idx = min(cur_idx + step, len(FEAR_LADDER) - 1)
+    new_idx = max(new_idx, 1)  # porażka zawsze co najmniej frightened
+    return {
+        "outcome": "FAILURE",
+        "roll": d20,
+        "dc": int(dc),
+        "condition": FEAR_LADDER[new_idx],
+        "duration_rounds": FEAR_CONDITION_DURATION,
+        "nat20": nat20,
+        "nat1": nat1,
+    }
+
+
+def flee_penalty_from_conditions(conditions: list) -> tuple[int, bool]:
+    """(kara do rzutu, zablokowane) na podstawie warunków uciekającego.
+    hobbled → blokada; leg_wound → -2. Warunki jako listy dictów {key:...}."""
+    penalty = 0
+    blocked = False
+    for c in conditions or []:
+        key = str((c or {}).get("key") if isinstance(c, dict) else c or "").strip().lower()
+        if key in FLEE_BLOCKING_CONDITIONS:
+            blocked = True
+        penalty += FLEE_CONDITION_PENALTY.get(key, 0)
+    return penalty, blocked
+
+
+def resolve_flee_outcome(player_total: int, enemy_total: int) -> dict[str, Any]:
+    """Opposed DEX: ucieczka gdy rzut gracza > rzut wroga (obrońca wygrywa remis)."""
+    fled = int(player_total) > int(enemy_total)
+    return {
+        "outcome": "SUCCESS" if fled else "FAILURE",
+        "player_total": int(player_total),
+        "enemy_total": int(enemy_total),
+        "fled": fled,
+    }
+
+
+# ─── #1210: warstwa DB/pętla — łączy logikę z żywym modelem #826 (MP-safe) ───
+
+def _roll_d6() -> int:
+    return random.randint(1, 6)
+
+
+def _apply_crit_condition_inplace(
+    conn: sqlite3.Connection, combatant: dict, condition_key: str
+) -> bool:
+    """Dołóż warunek z katalogu (effect_json + czas trwania) do listy conditions
+    combatanta IN-PLACE. Caller persystuje combatants. Zwraca True gdy dodano nowy.
+    Reużywa `_build_condition_entry` — ten sam mechaniczny wpis co [APPLY_CONDITION]."""
+    conds = combatant.get("conditions")
+    if not isinstance(conds, list):
+        conds = []
+    key_lo = str(condition_key).strip().lower()
+    if any(isinstance(c, dict) and str(c.get("key", "")).strip().lower() == key_lo for c in conds):
+        combatant["conditions"] = conds
+        return False  # już obecny — nie duplikujemy
+    entry = _build_condition_entry(conn, key_lo, applied_at="crit_hit_location")
+    if entry is None:
+        combatant["conditions"] = conds
+        return False  # brak w katalogu (invalid_reference)
+    conds.append(entry)
+    combatant["conditions"] = conds
+    return True
+
+
+def roll_crit_hit_location(
+    conn: sqlite3.Connection, target: dict, *, on_player: bool
+) -> dict[str, Any]:
+    """#1210 pkt 2 — na krytyku (Nat 20) rzuca lokalizację (d6) i dokłada warunek
+    na trafionym combatancie IN-PLACE. on_player=True → gracz (krytyk wroga),
+    False → wróg (krytyk gracza). Zwraca info do narratora."""
+    d6 = _roll_d6()
+    location = crit_location_from_d6(d6)
+    cond_key, duration = crit_condition_for_location(location, on_player=on_player)
+    applied = _apply_crit_condition_inplace(conn, target, cond_key)
+    return {
+        "location": location,
+        "d6": d6,
+        "condition": cond_key,
+        "duration_rounds": duration,
+        "applied": applied,
+        "on_player": on_player,
+    }
+
+
+def apply_fear_on_entry(
+    conn: sqlite3.Connection, campaign_id: int, combatants: list[dict]
+) -> dict[str, Any] | None:
+    """#1210 pkt 1 — Strach/Groza przy wejściu do walki. Jeśli któryś wróg ma
+    `fear_aura`, gracz rzuca (czysty d20 — „los", per decyzja projektowa prototypu)
+    przeciw najwyższemu `fear_dc`. Porażka → frightened (eskalacja przy kolejnych
+    porażkach w turach). Mutuje combatanta gracza IN-PLACE. Zwraca info lub None."""
+    fear_dc = 0
+    source_name = None
+    seen: dict[str, tuple[int, int]] = {}
+    for c in combatants:
+        if not isinstance(c, dict) or c.get("type") != "enemy":
+            continue
+        ek = str(c.get("enemy_key") or "").strip()
+        if not ek:
+            continue
+        if ek not in seen:
+            row = conn.execute(
+                "SELECT fear_aura, fear_dc, label FROM game_config_enemies WHERE key = ?",
+                (ek,),
+            ).fetchone()
+            aura = int((row["fear_aura"] if row else 0) or 0)
+            dc = int((row["fear_dc"] if row else FEAR_DC_DEFAULT) or FEAR_DC_DEFAULT)
+            seen[ek] = (aura, dc)
+            if aura and dc > fear_dc:
+                fear_dc = dc
+                source_name = (row["label"] if row else None) or c.get("name") or ek
+        else:
+            aura, dc = seen[ek]
+            if aura and dc > fear_dc:
+                fear_dc = dc
+    if fear_dc <= 0:
+        return None  # brak aury strachu
+    player = _find_active_player_combatant(combatants) or _find_combatant(combatants, "player")
+    if not player:
+        return None
+    raw = roll_d20()
+    out = resolve_fear_outcome(raw, fear_dc, current_fear=None)
+    out["fear_source"] = source_name
+    if out.get("condition"):
+        _apply_crit_condition_inplace(conn, player, out["condition"])
+    return out
+
+
+def resolve_player_flee(campaign_id: int) -> dict[str, Any]:
+    """#1210 pkt 4 — akcja gracza: ucieczka z walki. Opposed DEX (gracz vs najlepszy
+    żywy wróg), modyfikowany warunkami: leg_wound -2, hobbled = blokada. Sukces kończy
+    walkę (`end_combat` reason='fled'); porażka/blokada zużywa turę."""
+    snap = get_active_combat(campaign_id)
+    if not snap:
+        return {"ok": False, "reason": "no_active_combat"}
+    combatants = snap.get("combatants") or []
+    player = _find_active_player_combatant(combatants) or _find_combatant(combatants, "player")
+    if not player:
+        return {"ok": False, "reason": "player_not_found"}
+
+    penalty, blocked = flee_penalty_from_conditions(player.get("conditions") or [])
+    if blocked:
+        try:
+            advance_turn(campaign_id)
+        except Exception:
+            pass
+        return {
+            "ok": True, "fled": False, "blocked": True, "reason": "hobbled",
+            "combat_state": load_combat_snapshot(campaign_id),
+        }
+
+    player_dex = _combatant_stat_modifier(player, sheet=None, stat="DEX")
+    max_enemy_dex = 0
+    for c in combatants:
+        if isinstance(c, dict) and c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0:
+            max_enemy_dex = max(max_enemy_dex, _combatant_stat_modifier(c, sheet=None, stat="DEX"))
+
+    raw_p = roll_d20()
+    raw_e = roll_d20()
+    player_total = raw_p + player_dex + penalty
+    enemy_total = raw_e + max_enemy_dex
+    out = resolve_flee_outcome(player_total, enemy_total)
+    out.update({
+        "ok": True,
+        "player_raw": raw_p, "player_dex_mod": player_dex, "flee_penalty": penalty,
+        "enemy_raw": raw_e, "enemy_dex_mod": max_enemy_dex, "blocked": False,
+    })
+    if out["fled"]:
+        end_combat(campaign_id, "fled")
+    else:
+        try:
+            advance_turn(campaign_id)
+        except Exception:
+            pass
+    out["combat_state"] = load_combat_snapshot(campaign_id)
+    return out
 
 
 def _armor_value(defense_stat: int) -> int:
@@ -5572,16 +6176,31 @@ def compute_player_attack_dodge_outcome(
     return dodged, (not dodged), dodge_total
 
 
-def _reaction_options(conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int) -> list[str]:
+def _reaction_options(
+    conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int,
+    enemy_count: int | None = None,
+) -> list[str]:
     """SF10 (#633) — które reakcje są DOSTĘPNE dla gracza w tej chwili (model reaktywny).
 
     Zwraca listę opcji do okna reakcji: ``dodge`` (skill dodge ≥ 1), ``shield_block``
     (skill shield_block ≥ 1 + tarcza założona). Pusta lista = brak okna (obrażenia
-    naliczane od razu). Respektuje 1 reakcję/rundę (``reaction_used_round``) i lockout
-    po krytycznej porażce uniku (``reaction_locked_round``)."""
-    if int(p.get("reaction_used_round") or 0) == int(round_n):
-        return []
+    naliczane od razu).
+
+    Limity (#1322):
+      • lockout po KRYTYCZNEJ PORAŻCE uniku (``reaction_locked_round``) — ZAWSZE blokuje
+        całą następną rundę (kara zostaje, decyzja Piotra).
+      • 1 reakcja/rundę (``reaction_used_round``) — tylko przy SWARMIE (≥2 żywych wrogów),
+        żeby nie dało się uchylić przed każdym z wielu ciosów. Przy JEDNYM wrogu reakcja
+        jest dostępna przy każdym jego ataku (single-enemy = brak limitu na rundę).
+        ``enemy_count=None`` → zachowawczo stary limit 1/rundę (gdy wołający nie policzył wrogów).
+    """
+    # Krytyczna porażka uniku — lockout następnej rundy (kara zostaje niezależnie od liczby wrogów).
     if int(p.get("reaction_locked_round") or 0) == int(round_n):
+        return []
+    # Cap 1/rundę tylko przy wielu wrogach; single enemy → reakcja co atak.
+    used_this_round = int(p.get("reaction_used_round") or 0) == int(round_n)
+    swarm = enemy_count is None or int(enemy_count) >= 2
+    if swarm and used_this_round:
         return []
     skills = sheet.get("skills") or {}
     opts: list[str] = []
@@ -5595,6 +6214,23 @@ def _reaction_options(conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int)
             has_shield, _ = _player_has_shield_equipped(conn, ch_id)
             if has_shield:
                 opts.append("shield_block")
+    except (TypeError, ValueError):
+        pass
+    # #1324: Arkanowa Bariera — gate: skill arcane_ward ≥ 1 ORAZ mana ≥ koszt próby.
+    try:
+        if int(skills.get("arcane_ward", 0) or 0) >= 1:
+            current_mana = int(sheet.get("current_mana", 0) or 0)
+            if current_mana >= int(ARCANE_WARD_MANA_COST):
+                opts.append("arcane_ward")
+    except (TypeError, ValueError):
+        pass
+    # #1325: Tarcza Many — gate: skill mana_shield ≥ 1 ORAZ mana > 0. Limit 1/rundę ZAWSZE
+    # (także przy JEDNYM wrogu — odstępstwo od #1322, anty boss-tank): jeśli reakcja zużyta
+    # w tej rundzie, tarcza znika z opcji niezależnie od liczby wrogów.
+    try:
+        if int(skills.get("mana_shield", 0) or 0) >= 1 and not used_this_round:
+            if int(sheet.get("current_mana", 0) or 0) > 0:
+                opts.append("mana_shield")
     except (TypeError, ValueError):
         pass
     return opts
@@ -5764,6 +6400,7 @@ def _attack_resolve_defense(
     row,
     enemy: dict,
     out: dict,
+    combatants: list[dict] | None = None,
 ) -> bool:
     """Hit determination for enemy attack path.
 
@@ -5772,7 +6409,8 @@ def _attack_resolve_defense(
     Returns hit bool.
     """
     _round_now826 = int(row["round"] or 1)
-    if _reaction_options(conn, ch_id, p, sheet, _round_now826):
+    _enemy_ct = len(_living_enemy_ids(combatants)) if combatants is not None else None
+    if _reaction_options(conn, ch_id, p, sheet, _round_now826, enemy_count=_enemy_ct):
         hit = raw != 1  # tylko Nat 1 wroga pudłuje; resztę rozstrzyga okno reakcji
         out["target_evasion"] = None
     else:
@@ -5819,7 +6457,9 @@ def _attack_try_reaction(
     # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
     # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
     _round_now = int(row["round"] or 1)
-    _opts = _reaction_options(conn, ch_id, p, sheet, _round_now)
+    _opts = _reaction_options(
+        conn, ch_id, p, sheet, _round_now, enemy_count=len(_living_enemy_ids(combatants)),
+    )
     if _opts and not p.get("pending_reaction") and not _b16_negated:
         p["pending_reaction"] = {
             "damage": int(dmg),
@@ -5862,6 +6502,9 @@ def _attack_try_reaction(
             out["reaction"] = _dodge
             if _dodge.get("dodged"):
                 dmg = 0
+                # Top-level flaga dla frontendu — pomija animację kości obrażeń
+                # i pokazuje UNIKASZ zamiast −0 HP (parytet ze ścieżką gracza).
+                out["dodged"] = True
         else:
             # S16 (#611): jeśli unik nie zadeklarowany, sprawdź blok tarczą (XOR — jedna
             # reakcja/rundę). Redukcja/odparcie obrażeń PRZED aplikacją; rzut ataku wroga
@@ -6072,6 +6715,9 @@ def _attack_apply_effects(
     if _a_conds:
         _prev_conds = list(out.get("weapon_conditions_applied") or [])
         out["weapon_conditions_applied"] = _prev_conds + _a_conds
+    # #1210: krytyk gracza (Nat 20) → trafienie w lokację → warunek na wrogu.
+    if player_raw == 20:
+        out["crit_hit_location"] = roll_crit_hit_location(conn, enemy, on_player=False)
     return dmg
 
 
@@ -6378,6 +7024,16 @@ def _resolve_player_attack_turn(
             out["durability_attack_penalty"] = _dur_atk_pen
     except Exception:
         pass
+    # #1191 E2 — "wiedza łowcy": +1 to-hit vs an enemy type the hero has hunted
+    # to tier 3 (15 kills). Mirrors proficiency; shown in the roll breakdown.
+    try:
+        from app.services.bestiary_service import hunter_hit_bonus as _hunter_fn
+        _hunter_bonus = _hunter_fn(ch_id, card_key, conn=conn)
+        if _hunter_bonus:
+            roll_result = int(roll_result) + _hunter_bonus
+            out["hunter_knowledge_bonus"] = _hunter_bonus
+    except Exception:
+        pass
     player_nat20 = player_raw == 20
     player_nat1 = player_raw == 1
     dodge_roll: dict[str, Any] | None = None
@@ -6552,6 +7208,8 @@ def _resolve_player_attack_turn(
         if dead:
             enemy["dead"] = True
             ek = str(enemy.get("enemy_key") or "")
+            # #1191 — Bestiariusz: credit kill (solo=killer, MP=all participants).
+            _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
             # U25 (#575): flag boss kills so post-combat loot claim can drive
             # the affix pity timer (guaranteed affix after a dry streak).
             if str(enemy.get("tier") or "").strip().lower() == "boss":
@@ -7102,7 +7760,7 @@ def _resolve_enemy_attack_turn(
     #  • gracz ma reakcję (dodge/shield + tarcza) → cios dosięga, jedyny test = OKNO REAKCJI
     #    (rozliczane w resolve_reaction / _try_dodge_reaction poniżej); AC pominięte.
     #  • brak reakcji → pojedynczy pasywny unik d20+DEX (symetria z wrogiem).
-    hit = _attack_resolve_defense(attack_roll, raw, pac, conn, ch_id, p, sheet, row, enemy, out)
+    hit = _attack_resolve_defense(attack_roll, raw, pac, conn, ch_id, p, sheet, row, enemy, out, combatants)
 
     _log_dice_roll_combat_resolve(
         source="combat_enemy",
@@ -7145,7 +7803,15 @@ def _resolve_enemy_attack_turn(
             logger.warning("armor_durability_decrement_error", error=str(_dur_err))
         expr = (enemy.get("damage_dice") or "1d6").strip().lower()
         # S18 (#613): berserk damage_bonus (+3) foldowane generycznie.
-        dmg = roll_damage_dice(expr, _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus"))
+        # Rzut detaliczny (jak w _attack_compute_damage) — frontend potrzebuje
+        # pojedynczych wyników kości (damage_rolls) do animacji NdX obrażeń wroga.
+        _dmg_detail = roll_dice_detailed(expr)
+        _dmg_mod = _combatant_stat_modifier(enemy, sheet=None, stat="damage_bonus")
+        dmg = (max(0, sum(_dmg_detail["rolls"]) + _dmg_mod)
+               if _dmg_detail["rolls"] else max(0, _dmg_mod))
+        out["damage_die"] = _dmg_detail["die"] or expr
+        out["damage_rolls"] = _dmg_detail["rolls"]
+        out["damage_modifier"] = _dmg_mod
         dmg, _dodge, _block, _react_early = _attack_try_reaction(
             p, row, out, conn, ch_id, sheet, attack_roll, raw, enemy, combatants, campaign_id, dmg,
         )
@@ -7177,6 +7843,11 @@ def _resolve_enemy_attack_turn(
                 out["on_zero_hp_save"] = save_res
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
+            # #1313: brak ratunku kondycją → rzut drabiny na śmierć (rosnące DC).
+            if next_hp <= 0 and not (save_res and save_res.get("saved")):
+                _ds = _apply_death_save_ladder(p, out)
+                if not _ds["dead"]:
+                    next_hp = 1   # SURVIVED lub FAILED<3 → zostaje na 1 HP („dying")
         _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), int(row["round"] or 1), out)
         # #853: strukturalny rejestr — obrażenia wroga na graczu
         try:
@@ -7210,6 +7881,9 @@ def _resolve_enemy_attack_turn(
                                                         "enemy_name": out.get("enemy_name")})
             except Exception:
                 pass
+        # #1210: krytyk wroga (Nat 20) → trafienie w lokację → warunek na graczu.
+        if raw == 20:
+            out["crit_hit_location"] = roll_crit_hit_location(conn, p, on_player=True)
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp
@@ -7423,7 +8097,11 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
     ch = str(choice or "take").strip().lower()
     if ch == "block":
         ch = "shield_block"
-    if ch not in {"take", "dodge", "shield_block"}:
+    if ch == "ward":
+        ch = "arcane_ward"
+    if ch == "mana":
+        ch = "mana_shield"
+    if ch not in {"take", "dodge", "shield_block", "arcane_ward", "mana_shield"}:
         raise ValueError(f"unknown reaction choice: {choice}")
 
     with _conn() as conn:
@@ -7458,6 +8136,8 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                                "enemy_name": str(pending.get("enemy_name") or "Wróg")}
         _dodge = None
         _block = None
+        _ward = None
+        _mshield = None
 
         if ch == "dodge":
             p["reaction_declared"] = "dodge"
@@ -7473,6 +8153,18 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["reaction"] = _block
                 if _block.get("available"):
                     dmg = int(_block.get("damage_after", dmg))
+        elif ch == "arcane_ward":
+            # #1324: Arkanowa Bariera — test INT za manę; sukces = 0 obrażeń.
+            p["reaction_declared"] = "arcane_ward"
+            _ward = _try_arcane_ward_reaction(
+                p, sheet, attack_roll, round_n,
+                campaign_id=campaign_id, ch_id=ch_id, combat_id=int(row["id"]),
+            )
+            if _ward is not None:
+                out["reaction"] = _ward
+                if _ward.get("available") and _ward.get("warded"):
+                    dmg = 0
+        # ch == "mana_shield": #1325 — absorpcja liczona OSTATNIA (po #826 i B10), patrz niżej.
         # ch == "take": dmg bez zmian
 
         # zużycie reakcji w rundzie + zamknięcie okna
@@ -7502,6 +8194,18 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
 
         # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
         dmg = _apply_absorption(p, dmg, out)
+        # #1325: Tarcza Many — punkt OSTATNI potoku. Deterministyczna absorpcja many na obrażeniach
+        # FINALNYCH (po #826 i B10), tuż przed odjęciem HP → „1 mana = R HP uratowane" dosłownie.
+        if ch == "mana_shield":
+            p["reaction_declared"] = "mana_shield"
+            _mshield = _try_mana_shield_reaction(
+                p, sheet, dmg, round_n,
+                campaign_id=campaign_id, ch_id=ch_id, combat_id=int(row["id"]),
+            )
+            if _mshield is not None:
+                out["reaction"] = _mshield
+                if _mshield.get("available"):
+                    dmg = int(_mshield.get("damage_after", dmg))
         out["damage"] = dmg
         prev = int(p.get("hp_current", 0) or 0)
         next_hp = max(0, prev - dmg)
@@ -7511,6 +8215,11 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["on_zero_hp_save"] = save_res
                 if save_res.get("saved") and save_res.get("hp"):
                     next_hp = int(save_res["hp"])
+            # #1313: brak ratunku kondycją → rzut drabiny na śmierć (ścieżka reakcji).
+            if next_hp <= 0 and not (save_res and save_res.get("saved")):
+                _ds = _apply_death_save_ladder(p, out)
+                if not _ds["dead"]:
+                    next_hp = 1   # SURVIVED lub FAILED<3 → zostaje na 1 HP („dying")
         _record_reaction_rolls(campaign_id, ch_id, int(row["id"]), round_n, out)
         # #761: rejestr zmiany HP gracza (cios wroga — ścieżka reakcji)
         if next_hp != prev:
@@ -7522,6 +8231,9 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                                                         "enemy_name": out.get("enemy_name")})
             except Exception:
                 pass
+        # #1210: krytyk wroga (Nat 20 z pending) → lokacja → warunek na graczu (ścieżka reakcji).
+        if bool(pending.get("nat20")):
+            out["crit_hit_location"] = roll_crit_hit_location(conn, p, on_player=True)
         p["hp_current"] = next_hp
         sheet["current_hp"] = next_hp
         out["player_hp_remaining"] = next_hp
@@ -7530,17 +8242,22 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         _save_char_sheet(conn, campaign_id, ch_id, sheet)
 
         cid = int(row["id"])
-        # log reakcji (unik/blok) — Sandbox/UI pokazuje test i wynik
-        _react = _dodge if _dodge is not None else _block
+        # log reakcji (unik/blok/bariera) — Sandbox/UI pokazuje test i wynik
+        _react = (_dodge if _dodge is not None else
+                  (_block if _block is not None else
+                   (_ward if _ward is not None else _mshield)))
         if _react is not None and _react.get("available"):
             tn_r = _next_combat_log_sequence(conn, cid)
             log_combat_turn(
                 conn, combat_id=cid, campaign_id=campaign_id, turn_number=tn_r,
                 actor="player", event_type="reaction",
-                roll_value=int(_react.get("dodge_total") or _react.get("block_total") or 0),
+                roll_value=int(_react.get("dodge_total") or _react.get("block_total")
+                               or _react.get("ward_total") or 0),
                 damage=int(out.get("damage") or 0), hp_after=next_hp,
                 target_id="player", target_name=str(p.get("name") or "Bohater"),
-                hit=bool(_react.get("dodged") or _react.get("full_block") or (_react.get("reduction") or 0) > 0),
+                hit=bool(_react.get("dodged") or _react.get("warded") or _react.get("full_block")
+                         or (_react.get("reduction") or 0) > 0
+                         or (_react.get("absorbed") or 0) > 0),
                 narrative=json.dumps({**_react, "choice": ch}, ensure_ascii=False),
             )
         else:

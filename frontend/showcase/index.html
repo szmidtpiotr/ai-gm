@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/showcase.css?v=12">
+<link rel="stylesheet" href="assets/css/showcase.css?v=14">
 </head>
 <body>
 
@@ -36,12 +36,14 @@
     <a href="#jak-gra">Jak się gra</a>
     <a href="#multiplayer">Multiplayer</a>
     <a href="#swiat">Świat</a>
+    <a href="bestiariusz.html">Bestiariusz</a>
     <a href="/rules/">Księga Zasad</a>
     <a href="#historia">Historia</a>
     <a href="#faq">FAQ</a>
     <a href="changelog.html">Co nowego</a>
   </div>
-  <a class="nav-cta" href="/">ZAGRAJ</a>
+  <span class="nav-auth" id="nav-auth"></span>
+  <a class="nav-cta" href="/graj/">ZAGRAJ</a>
   <button class="nav-toggle" aria-label="Menu">☰</button>
 </div></nav>
 
@@ -52,7 +54,7 @@
   <p class="sub">Mroczne fantasy RPG prowadzone przez sztuczną inteligencję. Rzucasz kośćmi, walczysz, podejmujesz decyzje — a opowieść reaguje na każdy twój ruch.</p>
   <div class="ornament"></div>
   <div class="hero-cta">
-    <a class="btn btn-gold" href="/">Rozpocznij przygodę</a>
+    <a class="btn btn-gold" href="/graj/">Rozpocznij przygodę</a>
     <a class="btn btn-ghost" href="/rules/">Otwórz Księgę Zasad</a>
   </div>
 </div></header>
@@ -89,7 +91,7 @@
       <li>Realne kości k20 i mechanika rozstrzygają akcje</li>
       <li>Gra pamięta wszystko, co zrobiłeś — AI nie zmyśla faktów z powietrza</li>
       <li>Prawdziwa walka z pancerzem i obrażeniami, magia z ryzykiem, łupy i punkty doświadczenia</li>
-      <li>Eksploracja lochów na mapie, gra solo lub z przyjaciółmi</li>
+      <li>Mapa świata z mgłą wojny, podróże, lochy — gra solo lub z przyjaciółmi</li>
     </ul></div>
   </div>
 </div></section>
@@ -141,6 +143,9 @@
     <div class="mech reveal"><div class="ic">⚔️</div><h4>Walka strefowa</h4><p>Walczysz w zwarciu lub z dystansu. Jeden rzut decyduje, czy cios trafia — pancerz zmniejsza otrzymane obrażenia.</p></div>
     <div class="mech reveal"><div class="ic">✨</div><h4>Magia uczonego</h4><p>Czary kosztują manę i mają różne poziomy mocy. Każde zaklęcie niesie ryzyko — im potężniejsze, tym niebezpieczniejsze w użyciu. Krasnolud-uczony ma własną, surowszą odmianę: Rdzeń-magia, mocniejsza, ale bardziej ryzykowna.</p></div>
     <div class="mech reveal"><div class="ic">🛡️</div><h4>Cechy i warunki</h4><p>Twój bohater ma siedem cech określających, w czym jest dobry. Każde zadanie ma swoją trudność — od banalnego po legendarny wyczyn.</p></div>
+    <div class="mech reveal"><div class="ic">🗺️</div><h4>Podróże i mapa</h4><p>Świat odkrywasz heks po heksie — mgła wojny ustępuje tam, gdzie byłeś. Wybierasz trakt albo skróty przez dzicz, rozbijasz obóz, a długi marsz kosztuje zmęczenie.</p></div>
+    <div class="mech reveal"><div class="ic">🌧️</div><h4>Pogoda i pory dnia</h4><p>Zegar świata tyka, a niebo ma znaczenie: deszcz i mgła spowalniają marsz, burza i śnieżyca jeszcze mocniej — zła aura wyczerpuje dzienny budżet drogi i sprowadza zmierzch szybciej. W osadach jesteś bezpieczny.</p></div>
+    <div class="mech reveal"><div class="ic">🏅</div><h4>Reputacja i legenda</h4><p>Kraina pamięta twoje czyny: dobra sława daje zniżki u kupców i przychylność NPC, zła — narzuty i wrogość. Bohater żyje dłużej niż jedna przygoda.</p></div>
   </div>
   <div style="text-align:center"><a class="btn btn-gold" href="/rules/">Otwórz pełną Księgę Zasad →</a></div>
 </div></section>
@@ -155,9 +160,9 @@
     <div class="faq-item"><button class="faq-q">Gram sam czy z innymi?<span class="chev">▾</span></button><div class="faq-a"><p>Jedno i drugie — solo albo wspólna sesja multiplayer tym samym bohaterem.</p></div></div>
   </div>
   <div class="roadmap" id="roadmap-list">
-    <div class="road-col s0"><h3>Gotowe</h3><ul><li>Silnik kości, walka strefowa, magia</li><li>Lochy kafelkowe i multiplayer</li><li>Żywa Księga Zasad</li></ul></div>
-    <div class="road-col s1"><h3>W toku</h3><ul><li>Balans klas</li><li>Strona-wizytówka</li><li>Refaktor silnika</li></ul></div>
-    <div class="road-col s2"><h3>Planowane</h3><ul><li>Głos i obrazy offline</li><li>Nieludzkie ludy</li><li>Mapa wielu krain</li><li>Eksport przygody jako książka</li></ul></div>
+    <div class="road-col s0"><h3>Gotowe</h3><ul><li>Silnik kości, walka strefowa, magia</li><li>Podróże 2.0 i mapa świata</li><li>Krasnoludy, reputacja, relikty</li><li>Lochy kafelkowe i multiplayer</li><li>Nowy interfejs gracza + samouczek</li><li>Żywa Księga Zasad</li></ul></div>
+    <div class="road-col s1"><h3>W toku</h3><ul><li>Balans klas</li><li>Kuźnia przygód</li><li>Refaktor silnika</li></ul></div>
+    <div class="road-col s2"><h3>Planowane</h3><ul><li>Głos i obrazy offline</li><li>Kolejne ludy — elfy i inne</li><li>Mapa wielu krain</li><li>Eksport przygody jako książka</li></ul></div>
   </div>
 </div></section>
 
@@ -194,6 +199,26 @@
 
 <!-- Umami analytics (#914 W13) — self-hosted on :3100 -->
 <script defer src="http://192.168.1.61:3100/script.js" data-website-id="b3e65e72-07bf-4a0b-b860-783cf1a0dc95"></script>
+<script src="assets/js/showcase-auth.js?v=1"></script>
 <script src="assets/js/showcase.js?v=13"></script>
+<script>
+  // #915 — nav auth chip (login / user + logout), shared game session.
+  (function () {
+    var el = document.getElementById("nav-auth");
+    if (!el || !window.AIGMAuth) return;
+    var esc = function (s) { return String(s || "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+    window.AIGMAuth.onChange(function (u) {
+      if (u) {
+        el.innerHTML = '<span class="nav-user">▸ ' + esc(u.displayName || u.username) +
+          '</span><button class="nav-logout" type="button">Wyloguj</button>';
+        el.querySelector(".nav-logout").onclick = function () { window.AIGMAuth.logout(); };
+      } else {
+        el.innerHTML = '<button class="nav-login" type="button">Zaloguj</button>';
+        el.querySelector(".nav-login").onclick = function () { window.AIGMAuth.openLogin(); };
+      }
+    });
+  })();
+</script>
 </body>
 </html>

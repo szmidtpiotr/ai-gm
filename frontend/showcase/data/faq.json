@@ -2,10 +2,11 @@
   "faq": [
     { "q": "Czym właściwie jest AI-GM?", "a": "Mrocznym fantasy RPG, w którym Mistrza Gry zastępuje sztuczna inteligencja. To pełna gra z systemami — kości, walka, magia, rozwój postaci — a nie zwykła rozmowa z chatbotem." },
     { "q": "Czy to po polsku?", "a": "Tak. Cała narracja, mechaniki i interfejs są po polsku. Świat i klimat budowane są pod polskiego gracza." },
+    { "q": "Czy trudno zacząć?", "a": "Nie. Po stworzeniu pierwszego bohatera gra sama proponuje krótką przygodę-samouczek „Pierwsze Kroki”, która uczy podstaw: rozmowy z Mistrzem Gry, rzutów kośćmi, walki i ekwipunku. Możesz ją też pominąć i ruszyć od razu w świat." },
     { "q": "Czy muszę mieć własny klucz do AI?", "a": "Możesz grać korzystając z własnego konta u dostawcy AI (wtedy ty kontrolujesz koszty i dane) albo skorzystać z gotowej, hostowanej wersji gry — bez konfiguracji." },
     { "q": "Gram sam czy z innymi?", "a": "Jedno i drugie. Możesz prowadzić solową przygodę albo zaprosić znajomych do wspólnej sesji multiplayer — ten sam bohater działa w obu trybach." },
-    { "q": "Czy zagram na telefonie?", "a": "Tak. Interfejs jest responsywny i działa w przeglądarce na telefonie, tablecie i komputerze." },
-    { "q": "Czy moje wybory naprawdę coś zmieniają?", "a": "Tak. Gra zapamiętuje każdą twoją decyzję — postacie, które spotkałeś, miejsca, które odwiedziłeś, i skutki twoich wyborów. Świat reaguje na to, co zrobiłeś." },
+    { "q": "Czy zagram na telefonie?", "a": "Tak. Interfejs jest responsywny i działa w przeglądarce na telefonie, tablecie i komputerze. Grę możesz też zainstalować jak aplikację (PWA), a o swojej turze dostaniesz powiadomienie — na Telegramie, pushem lub e-mailem." },
+    { "q": "Czy moje wybory naprawdę coś zmieniają?", "a": "Tak. Gra zapamiętuje każdą twoją decyzję — postacie, które spotkałeś, miejsca, które odwiedziłeś, i skutki twoich wyborów. Bohater buduje reputację w krainie, a świat odnosi się do niego zgodnie z nią." },
     { "q": "Ile to kosztuje?", "a": "Projekt jest w aktywnym rozwoju. Na własnym kluczu LLM grasz na koszt swojego dostawcy AI; szczegóły modelu hostowanego pojawią się tutaj, gdy dojrzeją." }
   ]
 }

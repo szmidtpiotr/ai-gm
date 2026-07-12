@@ -107,15 +107,37 @@ def _opponent_modifier(opponent: dict, stat: str) -> int:
 
 # ── Modifier calculation ──────────────────────────────────────────────────────
 
-def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
-    """Return full modifier breakdown for the Roll Popup."""
+def calc_skill_modifier_info(sheet: dict, skill_key: str, conn=None, character_id=None) -> dict:
+    """Return full modifier breakdown for the Roll Popup.
+
+    #1302 — when ``conn`` + ``character_id`` are supplied, passive bonuses from
+    equipped relics are folded in: stat POINTS raise the governing stat (then the
+    modifier is recomputed) and skill points raise the rank. Proficiency stays
+    keyed to the BASE rank (locked rule: +2 at rank≥3, relics don't grant it).
+    Without conn/character_id the function is pure — identical to the old behaviour.
+    """
     stats = sheet.get("stats") or {}
     skills = sheet.get("skills") or {}
     governing_stat = _skill_stat(skill_key)
-    stat_val = int(stats.get(governing_stat, 10))
-    stat_mod = stat_modifier(stat_val)
-    skill_rank = int(skills.get(skill_key, 0))
-    proficiency = proficiency_bonus(skill_rank)
+    base_stat_val = int(stats.get(governing_stat, 10))
+    base_skill_rank = int(skills.get(skill_key, 0))
+    proficiency = proficiency_bonus(base_skill_rank)
+
+    equip_stat_pts = 0
+    equip_skill_pts = 0
+    if conn is not None and character_id is not None:
+        try:
+            from app.services.equipment_effects_service import get_equipment_bonuses
+            eb = get_equipment_bonuses(int(character_id), conn)
+            equip_stat_pts = int(eb["stats"].get(governing_stat, 0))
+            equip_skill_pts = int(eb["skills"].get(str(skill_key).lower(), 0))
+        except Exception:
+            equip_stat_pts = 0
+            equip_skill_pts = 0
+
+    stat_mod = stat_modifier(base_stat_val + equip_stat_pts)
+    skill_rank = base_skill_rank + equip_skill_pts
+    equipment_bonus = (stat_mod - stat_modifier(base_stat_val)) + equip_skill_pts
     # PT-D1 (#1124): zmęczenie (exhausted) obniża sumę KAŻDEGO testu o poziom stacka.
     # Data-driven (prymityw test_penalty); krasnolud ignoruje 1. stack.
     try:
@@ -130,6 +152,7 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
         "stat_mod": stat_mod,
         "proficiency": proficiency,
         "fatigue_penalty": fatigue_penalty,
+        "equipment_bonus": equipment_bonus,
         "total": total,
     }
 

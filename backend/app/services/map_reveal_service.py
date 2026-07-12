@@ -15,7 +15,7 @@ from typing import Any
 
 DB_PATH = "/data/ai_gm.db"
 
-_MODES = {"radius", "region", "hexes"}
+_MODES = {"radius", "region", "hexes", "location"}
 
 
 def _conn() -> sqlite3.Connection:
@@ -114,19 +114,69 @@ def compute_reveal_hexes(conn: sqlite3.Connection, payload: dict[str, Any]) -> l
                     continue
         return _dedup(out)
 
+    if mode == "location":
+        # #1308 — reveal the overworld hex(es) of named plan locations. Reads the
+        # canon (`world_hexes.location_key` via resolve_location_to_hex) so it never
+        # drifts when a location is re-placed — unlike hard-coded (q, r) pairs.
+        raw = payload.get("list") or payload.get("locations") or payload.get("keys") or []
+        if not isinstance(raw, list):
+            return []
+        from app.services.hex_location_link import resolve_location_to_hex
+        out2: list[tuple[int, int]] = []
+        for key in raw:
+            if not key:
+                continue
+            hx = resolve_location_to_hex(conn, str(key))
+            if hx is not None:
+                out2.append((int(hx[0]), int(hx[1])))
+        return _dedup(out2)
+
     return []
 
 
+def _table_cols(conn: sqlite3.Connection, table: str) -> set[str]:
+    try:
+        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    except sqlite3.Error:
+        return set()
+
+
 def reveal_hexes(conn: sqlite3.Connection, campaign_id: int, hexes: list[tuple[int, int]]) -> int:
-    """Mark each ``(q, r)`` discovered for the campaign. Idempotent. Returns count."""
+    """Mark each ``(q, r)`` discovered for the campaign. Idempotent. Returns count.
+
+    #1308 — also sets the FOW ``known`` flag and backfills
+    ``world_hexes.discovered_in_campaign_id`` so BOTH fog systems (per-campaign
+    ``campaign_hex_data`` and the legacy ``world_hexes`` overlay, unioned as
+    known∪discovered by #1220/#1293) agree. Column writes are guarded so the
+    minimal #1123 test schema (no ``known``/``discovered_in_campaign_id``) still
+    passes.
+    """
+    has_known = "known" in _table_cols(conn, "campaign_hex_data")
+    has_disc_cid = "discovered_in_campaign_id" in _table_cols(conn, "world_hexes")
     n = 0
     for q, r in hexes:
-        conn.execute(
-            """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
-               VALUES (?,?,?,1)
-               ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
-            (int(campaign_id), int(q), int(r)),
-        )
+        if has_known:
+            conn.execute(
+                """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered, known)
+                   VALUES (?,?,?,1,1)
+                   ON CONFLICT(campaign_id, hex_q, hex_r)
+                   DO UPDATE SET discovered = 1, known = 1""",
+                (int(campaign_id), int(q), int(r)),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
+                   VALUES (?,?,?,1)
+                   ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
+                (int(campaign_id), int(q), int(r)),
+            )
+        if has_disc_cid:
+            conn.execute(
+                "UPDATE world_hexes SET discovered_in_campaign_id = ? "
+                "WHERE q = ? AND r = ? AND map_level = 0 AND is_active = 1 "
+                "AND discovered_in_campaign_id IS NULL",
+                (int(campaign_id), int(q), int(r)),
+            )
         n += 1
     return n
 

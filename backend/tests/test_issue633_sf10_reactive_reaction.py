@@ -29,7 +29,7 @@ from app.services import combat_service
 # ─── DB fixture (wzorzec z #611) ──────────────────────────────────────────────
 
 def _combat_db(tmp_path, *, dodge_rank=0, shield_block_rank=0, shield=False,
-               attack_bonus=10, round_n=1, reaction_used_round=0):
+               attack_bonus=10, round_n=1, reaction_used_round=0, second_enemy=False):
     db = tmp_path / "sf10.db"
     player = {
         "id": "player", "type": "player", "name": "Aldric",
@@ -47,7 +47,19 @@ def _combat_db(tmp_path, *, dodge_rank=0, shield_block_rank=0, shield=False,
     sheet = {"stats": player["stats"], "current_hp": 20, "max_hp": 20,
              "defense": {"base": 10}, "conditions": [],
              "skills": {"dodge": dodge_rank, "shield_block": shield_block_rank}}
-    combatants = json.dumps([player, enemy], ensure_ascii=False).replace("'", "''")
+    # #1322: cap 1/rundę działa tylko przy ≥2 żywych wrogach (swarm). Test capa musi
+    # mieć drugiego wroga; single enemy = reakcja dostępna przy każdym ataku.
+    combatant_list = [player, enemy]
+    order = ["bandit", "player"]
+    if second_enemy:
+        combatant_list.append({
+            "id": "bandit2", "type": "enemy", "enemy_key": "bandit", "name": "Bandit II",
+            "hp_current": 40, "hp_max": 40, "attack_bonus": attack_bonus,
+            "damage_dice": "1d8", "zone": "engaged",
+        })
+        order = ["bandit", "bandit2", "player"]
+    combatants = json.dumps(combatant_list, ensure_ascii=False).replace("'", "''")
+    turn_order_json = json.dumps(order).replace("'", "''")
     sj = json.dumps(sheet, ensure_ascii=False).replace("'", "''")
     conn = sqlite3.connect(str(db))
     try:
@@ -68,7 +80,7 @@ def _combat_db(tmp_path, *, dodge_rank=0, shield_block_rank=0, shield=False,
           combatants TEXT, status TEXT DEFAULT 'active', ended_reason TEXT, location_tag TEXT,
           loot_pool TEXT, created_at TEXT, updated_at TEXT);
         INSERT INTO active_combat (campaign_id,character_id,round,turn_order,current_turn,combatants,status)
-          VALUES (1,1,{round_n},'["bandit","player"]','bandit','{combatants}','active');
+          VALUES (1,1,{round_n},'{turn_order_json}','bandit','{combatants}','active');
         CREATE TABLE combat_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, combat_id INTEGER, campaign_id INTEGER,
           turn_number REAL, actor TEXT, event_type TEXT, roll_value INTEGER, damage INTEGER, hp_after INTEGER,
           target_id TEXT, target_name TEXT, hit INTEGER, narrative TEXT,
@@ -115,6 +127,8 @@ def test_hit_opens_reaction_window_not_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)        # attack_roll 20 trafia
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is True
@@ -136,6 +150,8 @@ def test_resolve_reaction_take_applies_full_damage(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         combat_service.resolve_attack(1, 0, attacker="enemy")
         out = combat_service.resolve_reaction(1, "take")
@@ -150,6 +166,8 @@ def test_resolve_reaction_dodge_success_negates(tmp_path, monkeypatch):
     """choice=dodge z wysokim rzutem → 0 obrażeń."""
     db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=0)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 7)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [7], "sides": 6, "n": 1})
     # atak: raw 10 → attack_roll 10 (trafia AC 10); unik: 18 + DEX2 + rank2 = 22 vs 10 → sukces
     rolls = iter([10, 18])
     monkeypatch.setattr(combat_service, "roll_d20", lambda: next(rolls))
@@ -174,6 +192,8 @@ def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
     db = _combat_db(tmp_path, dodge_rank=0, shield_block_rank=0, shield=False, attack_bonus=10)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 5)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [5], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out["hit"] is True
@@ -186,18 +206,56 @@ def test_no_skill_no_shield_applies_damage_immediately(tmp_path, monkeypatch):
 # ─── 1 reakcja/rundę ──────────────────────────────────────────────────────────
 
 def test_one_reaction_per_round(tmp_path, monkeypatch):
-    """Reakcja już zużyta w tej rundzie → drugi cios bez okna, obrażenia od razu.
+    """#1322: cap 1/rundę działa PRZY SWARMIE (≥2 wrogów). Reakcja zużyta w rundzie →
+    drugi cios (od drugiego wroga) bez okna, obrażenia od razu.
 
     #826: reakcja zużyta → ścieżka bez reakcji (pasywny unik d20+DEX 12 < atak 20 → trafia).
     6 baza + 2 margines (atak 20 − pac 10), pancerz 0 → 8."""
-    db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1, reaction_used_round=1)
+    db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1,
+                    reaction_used_round=1, second_enemy=True)
     monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
     monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
     with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
         out = combat_service.resolve_attack(1, 0, attacker="enemy")
     assert out.get("reaction_window") is not True
     assert out["damage"] == 8          # 6 baza + 2 margines (#826)
     assert _combatant_hp(db) == 12
+
+
+def test_single_enemy_reaction_available_every_attack(tmp_path, monkeypatch):
+    """#1322: przy JEDNYM wrogu cap 1/rundę NIE obowiązuje — mimo reaction_used_round=1
+    okno reakcji otwiera się na kolejny cios (single enemy = obrona co atak)."""
+    db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=1, reaction_used_round=1)
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
+    with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
+        out = combat_service.resolve_attack(1, 0, attacker="enemy")
+    assert out.get("reaction_window") is True
+    assert "dodge" in (out.get("reaction_options") or [])
+
+
+def test_dodge_critfail_lockout_blocks_even_single_enemy(tmp_path, monkeypatch):
+    """#1322: lockout po krytycznej porażce uniku ZOSTAJE — blokuje całą następną rundę
+    nawet przy jednym wrogu (kara utrzymana, decyzja Piotra)."""
+    db = _combat_db(tmp_path, dodge_rank=2, attack_bonus=10, round_n=3)
+    # ustaw lockout na bieżącą rundę (jak po CRITICAL_FAILURE uniku w rundzie 2)
+    conn = sqlite3.connect(str(db))
+    row = conn.execute("SELECT combatants FROM active_combat WHERE campaign_id=1").fetchone()
+    combs = json.loads(row[0])
+    for c in combs:
+        if c["id"] == "player":
+            c["reaction_locked_round"] = 3
+    conn.execute("UPDATE active_combat SET combatants=? WHERE campaign_id=1",
+                 (json.dumps(combs),))
+    conn.commit(); conn.close()
+    monkeypatch.setattr(combat_service, "roll_d20", lambda: 10)
+    monkeypatch.setattr(combat_service, "roll_damage_dice", lambda *a, **k: 6)
+    monkeypatch.setattr(combat_service, "roll_dice_detailed",
+                        lambda *a, **k: {"die": "1d6", "rolls": [6], "sides": 6, "n": 1})
+    with patch.object(combat_service, "COMBAT_DB_PATH", str(db)):
+        out = combat_service.resolve_attack(1, 0, attacker="enemy")
+    assert out.get("reaction_window") is not True   # lockout → brak okna mimo 1 wroga
 
 
 # ─── #826: gracz z reakcją dostaje OKNO uniku nawet na słaby cios ──────────────

@@ -349,7 +349,7 @@ async function _loadItems() {
     const d = await apiFetch('/api/admin/items');
     const items = (d.items||[]).filter(it => it.item_type!=='armor' && it.item_type!=='consumable');
     if (!items.length) { tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--t3)">Brak przedmiotów</td></tr>`; return; }
-    const typeMap = {tool:{l:'Narzędzie',c:'badge-slate'}, magic:{l:'Magiczne',c:'badge-blue'}, special:{l:'Specjalne',c:'badge-amber'}, quest:{l:'Questowe',c:'badge-red'}};
+    const typeMap = {tool:{l:'Narzędzie',c:'badge-slate'}, magic:{l:'Magiczne',c:'badge-blue'}, special:{l:'Specjalne',c:'badge-amber'}, quest:{l:'Questowe',c:'badge-red'}, relic:{l:'⭐ Relikt',c:'badge-blue'}};
     tbody.innerHTML = items.map(it => {
       const t = typeMap[it.item_type] || {l:it.item_type||'—',c:'badge-slate'};
       const enc = encodeURIComponent(JSON.stringify(it));
@@ -430,7 +430,11 @@ const _EFFECT_TYPES = [
   },
   {
     value: 'static_stat_modifier', label: 'Modyfikator statystyki', fields: ['stat', 'value'],
-    tooltip: 'Modyfikator statystyki aplikowany na start walki (liczba całkowita, może być ujemna).\nNp. +2 = bonus do statystyki, -1 = klątwa/osłabienie.',
+    tooltip: 'Bonus do statystyki z założonego przedmiotu — działa w walce I poza walką (testy).\nWartość = PUNKTY statystyki (np. +2 do CHA: 12→14). Ujemna = klątwa.',
+  },
+  {
+    value: 'static_skill_modifier', label: 'Modyfikator umiejętności ⭐', fields: ['skill', 'value'],
+    tooltip: 'Bonus do rangi umiejętności z założonego przedmiotu (np. magiczny wytrych → lockpick +2).\nDziała nawet gdy postać NIE ma wykupionej umiejętności — nadaje ją od zera. Klucz umiejętności = game_config_skills.key (np. lockpick, stealth, persuasion).',
   },
   {
     value: 'apply_condition', label: 'Aplikuj kondycję', fields: ['condition_key', 'duration_rounds'],
@@ -508,6 +512,10 @@ function _buildExtraFields(tdef, e) {
       return `<select class="form-input effect-stat" style="width:80px" title="${_esc(tdef.tooltip||'')}">
         ${_STATS.map(s => `<option${e.stat===s?' selected':''}>${s}</option>`).join('')}
       </select>`;
+    }
+    if (f === 'skill') {
+      // #1302: klucz umiejętności (game_config_skills.key). Wolny tekst — admin wpisuje np. lockpick.
+      return `<input class="form-input effect-skill" type="text" placeholder="np. lockpick, stealth, persuasion" value="${_esc(e.skill||'')}" style="width:190px" title="${_esc(tdef.tooltip||'')}">`;
     }
     if (f === 'condition_key') {
       const conds = _conditionsCache || [];
@@ -595,6 +603,9 @@ function _readEffects(container, effectTypesHint) {
     }
     if (tdef.fields.includes('stat')) {
       e.stat = row.querySelector('.effect-stat')?.value || 'STR';
+    }
+    if (tdef.fields.includes('skill')) {
+      e.skill = (row.querySelector('.effect-skill')?.value || '').trim().toLowerCase();
     }
     if (tdef.fields.includes('condition_key')) {
       e.condition_key = (row.querySelector('.effect-cond-key')?.value || '').trim();
@@ -1044,6 +1055,70 @@ async function _deleteSpell(key, btn) {
 }
 
 // ── Image modal ────────────────────────────────────────────────────────────────
+// ── Batch image generation (weapons / items / consumables) ───────────────────
+async function _contentBatchGen(cfg) {
+  let list;
+  try {
+    const r = await apiFetch(cfg.missingUrl);
+    list = r[cfg.listField] || [];
+  } catch(ex) {
+    showToast('Błąd pobierania listy: ' + (ex.message || ''), 'error'); return;
+  }
+  if (!list.length) { showToast(cfg.noneMsg, 'success'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'content-batch-gen-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(520px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <strong>${cfg.title}</strong>
+      <button id="cbg-cancel-btn" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:12px 16px;overflow-y:auto;flex:1">
+      <div id="cbg-status" style="font-size:0.82rem;color:var(--t3);margin-bottom:10px">Znaleziono <strong>${list.length}</strong> ${cfg.foundNoun} bez obrazu. Kliknij Start.</div>
+      <div id="cbg-log" style="font-family:monospace;font-size:0.75rem;line-height:1.8;max-height:340px;overflow-y:auto"></div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <button id="cbg-start-btn" class="btn btn-primary" style="flex:1">▶ Start</button>
+      <button onclick="document.getElementById('content-batch-gen-modal')?.remove()" class="btn btn-secondary">Zamknij</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  let aborted = false;
+  document.getElementById('cbg-cancel-btn').onclick = () => { aborted = true; overlay.remove(); };
+
+  const log = document.getElementById('cbg-log');
+  const status = document.getElementById('cbg-status');
+  const _log = (msg, color = 'var(--t2)') => {
+    const div = document.createElement('div');
+    div.style.color = color; div.textContent = msg;
+    log.appendChild(div); log.scrollTop = log.scrollHeight;
+  };
+
+  document.getElementById('cbg-start-btn').onclick = async () => {
+    document.getElementById('cbg-start-btn').disabled = true;
+    document.getElementById('cbg-start-btn').textContent = '⏳ Generuję…';
+    let done = 0, skipped = 0, errors = 0;
+    for (const it of list) {
+      if (aborted) { _log('— Przerwano.', 'var(--warning)'); break; }
+      const lbl = it.label || it.key;
+      status.innerHTML = `Postęp: <strong>${done + skipped + errors}/${list.length}</strong> — aktualne: ${lbl}`;
+      _log(`▶ ${lbl}…`);
+      try {
+        const r = await apiFetch(cfg.genUrl(it), {method: 'POST', body: JSON.stringify({})});
+        if (r.status === 'skipped') { _log(`  ↳ pominięto (ma już obraz)`, 'var(--t3)'); skipped++; }
+        else { _log(`  ↳ ✓ wygenerowano`, 'var(--success)'); done++; }
+      } catch(ex) {
+        _log(`  ↳ ✗ błąd: ${ex.message || '?'}`, 'var(--danger)'); errors++;
+      }
+    }
+    status.innerHTML = `Gotowe: <strong>${done}</strong> wygenerowanych, ${skipped} pominiętych, ${errors} błędów.`;
+    document.getElementById('cbg-start-btn').textContent = '✓ Zakończono';
+    if (done > 0) cfg.reload();
+  };
+}
+
 async function _openItemImageModal(key, encData, tableType) {
   const item = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
   const endpointMap = { weapon:'/api/admin/weapons', item:'/api/admin/items', consumable:'/api/admin/consumables', armor:'/api/admin/items' };
@@ -1505,6 +1580,7 @@ function _sectionHtml() {
       <div class="toolbar">
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj broni…" data-filter-for="weapons-table"></div>
         <div class="toolbar-right">
+          <button class="btn btn-secondary btn-sm" id="batch-gen-weapons-btn">⚡ Generuj brakujące</button>
           <button class="btn-toggle-details" data-details-for="weapons-table">Szczegóły</button>
         </div>
       </div>
@@ -1555,7 +1631,10 @@ function _sectionHtml() {
     <div class="stab-panel" id="stab-items">
       <div class="toolbar">
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj przedmiotów…" data-filter-for="items-table"></div>
-        <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="items-table">Szczegóły</button></div>
+        <div class="toolbar-right">
+          <button class="btn btn-secondary btn-sm" id="batch-gen-items-btn">⚡ Generuj brakujące</button>
+          <button class="btn-toggle-details" data-details-for="items-table">Szczegóły</button>
+        </div>
       </div>
       <div class="data-table--cards table-wrap">
         <table class="data-table" id="items-table">
@@ -1574,7 +1653,10 @@ function _sectionHtml() {
     <div class="stab-panel" id="stab-consumables">
       <div class="toolbar">
         <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj konsumabli…" data-filter-for="consumables-table"></div>
-        <div class="toolbar-right"><button class="btn-toggle-details" data-details-for="consumables-table">Szczegóły</button></div>
+        <div class="toolbar-right">
+          <button class="btn btn-secondary btn-sm" id="batch-gen-consumables-btn">⚡ Generuj brakujące</button>
+          <button class="btn-toggle-details" data-details-for="consumables-table">Szczegóły</button>
+        </div>
       </div>
       <div class="data-table--cards table-wrap">
         <table class="data-table" id="consumables-table">
@@ -1705,6 +1787,35 @@ export async function init(panel) {
 
   // Kreator AI button
   root.querySelector('#content-kreator-btn')?.addEventListener('click', _openSmartEntryForCurrentTab);
+
+  // Batch image generation buttons
+  root.querySelector('#batch-gen-weapons-btn')?.addEventListener('click', () => _contentBatchGen({
+    missingUrl: '/api/admin/images/weapon/missing',
+    listField: 'weapons',
+    genUrl: w => `/api/admin/images/weapon/${encodeURIComponent(w.key)}/generate`,
+    title: '⚡ Generowanie obrazów broni',
+    noneMsg: 'Cała broń ma już obrazy!',
+    foundNoun: 'broni',
+    reload: () => { _loaded.delete('weapons'); _loadWeapons(); },
+  }));
+  root.querySelector('#batch-gen-items-btn')?.addEventListener('click', () => _contentBatchGen({
+    missingUrl: '/api/admin/images/item/missing',
+    listField: 'items',
+    genUrl: it => `/api/admin/images/item/${encodeURIComponent(it.key)}/generate`,
+    title: '⚡ Generowanie obrazów przedmiotów',
+    noneMsg: 'Wszystkie przedmioty mają już obrazy!',
+    foundNoun: 'przedmiotów',
+    reload: () => { _loaded.delete('items'); _loadItems(); },
+  }));
+  root.querySelector('#batch-gen-consumables-btn')?.addEventListener('click', () => _contentBatchGen({
+    missingUrl: '/api/admin/images/consumable/missing',
+    listField: 'consumables',
+    genUrl: c => `/api/admin/images/consumable/${encodeURIComponent(c.key)}/generate`,
+    title: '⚡ Generowanie obrazów konsumabli',
+    noneMsg: 'Wszystkie konsumable mają już obrazy!',
+    foundNoun: 'konsumabli',
+    reload: () => { _loaded.delete('consumables'); _loadConsumables(); },
+  }));
 
   // Smart-entry auto-refresh
   window.addEventListener('smart-entry-saved', _onSmartEntrySaved);
