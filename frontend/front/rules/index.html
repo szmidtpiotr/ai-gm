@@ -494,6 +494,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r14-zbieranie">Zbieranie ziół</a></li>
           <li><a href="#r14-przepisy">Przepisy u rzemieślnika</a></li>
           <li><a href="#r14-ulepszenie">Ulepszenie broni</a></li>
+          <li><a href="#r14-sety">Sety ekwipunku</a></li>
         </ul>
       </li>
     </ul>
@@ -2582,9 +2583,46 @@ document.addEventListener('DOMContentLoaded',function(){
       <b>tylko raz</b>: raz naostrzonego miecza nie da się naostrzyć na +2. Prosty, płytki zysk —
       taki właśnie ma być. Ulepszoną broń możesz od razu sprawdzić w Piaskownicy admina, zanim
       wyruszysz w bój.</p>
-      <p class="aside">Rzemiosło jest z założenia <b>płytkie</b> — żadnych drzewek rozwoju ani zawodu
+      <p class="aside">Trzon rzemiosła jest z założenia <b>płytki</b> — żadnych drzewek rozwoju ani zawodu
       rzemieślnika dla bohatera. Ma jeden cel: domknąć pętlę <em>łup → ekonomia</em>, żeby nic, co
-      zdejmiesz z wroga czy zbierzesz w trawie, nie było bezużyteczne.</p>
+      zdejmiesz z wroga czy zbierzesz w trawie, nie było bezużyteczne. Nadbudowa nad tym trzonem — sety
+      poniżej — daje głębszy powód, by łupić po komplet.</p>
+
+      <h2 id="r14-sety">Sety ekwipunku</h2>
+      <figure class="illus right"><img src="img/skl-crafting.png" alt="Komplet dopasowanego ekwipunku łowcy" onerror="this.closest('figure').style.display='none'"><figcaption>Pojedynczy trofej to drobiazg — komplet zaczyna działać jak jedno.</figcaption></figure>
+      <p>Niektóre części ekwipunku należą do <span class="gloss" tabindex="0">setu<span class="tip"><span class="tip-h">Set ekwipunku</span>Rodzina
+      dopasowanych przedmiotów (np. „Strój Wilczego Łowcy"). Nosisz ich kilka naraz i dostajesz bonus
+      za <b>komplet</b> — tym większy, im więcej części masz założonych. Bonus <b>znika</b>, gdy zdejmiesz
+      część i spadniesz poniżej progu.</span></span> — rodziny dopasowanych trofeów. Każda część działa
+      sama z siebie jak zwykły przedmiot, ale gdy założysz ich <strong>kilka z tej samej rodziny</strong>,
+      set budzi się do życia i dosypuje <strong>bonus za komplet</strong>.</p>
+      <p>Bonus rośnie <strong>progami</strong> liczonymi w liczbie <em>założonych</em> części: zwykle
+      <b>2 części</b> odblokowują pierwszy próg, a <b>3 części</b> — mocniejszy, kumulujący się z poprzednim.
+      Jedna część to jeszcze nie komplet — nic nie daje. Bonusy to te same efekty co przy
+      <span class="gloss" tabindex="0">reliktach<span class="tip"><span class="tip-h">Efekt jak relikt</span>Punkty
+      cechy (np. +1 ZR), rangi umiejętności (np. +1 Przetrwanie) albo płaskie punkty pancerza. Liczone
+      w <b>punktach</b>, nie w gotowych modyfikatorach — patrz Rozdział o ekwipunku.</span></span>: punkt
+      cechy, ranga umiejętności albo pancerz. <b>Zdejmij część</b> — jeśli spadniesz poniżej progu,
+      bonus gaśnie natychmiast.</p>
+      <p>Części setów zdobywasz tak jak resztę łupu: <b>wypadają</b> z mocniejszych wrogów i bossów (tabele
+      tierowe), część można <b>wykuć</b> u rzemieślnika z odpowiednich komponentów, a z czasem kupić
+      w gildii kupieckiej. Ile setów naraz? <b>Tyle, na ile starczy slotów</b> — nie ma sztucznej blokady
+      „jeden set naraz". Aktywny komplet i jego progi widzisz na <b>karcie postaci</b> w sekcji
+      „Komplet ekwipunku", a Mistrz Gry może dostroić wartości w Piaskownicy.</p>
+      <div class="card">
+        <p class="card-h">Przykład · Strój Wilczego Łowcy</p>
+        <table class="test-card">
+          <tbody>
+            <tr><td>Części</td><td class="dc">Płaszcz · Sztylet · Totem (3)</td></tr>
+            <tr><td>Próg 2 części</td><td class="dc" style="color:#9bb56a">+1 Zręczność</td></tr>
+            <tr><td>Próg 3 części</td><td class="dc" style="color:#9bb56a">+1 ZR, +1 Przetrwanie, +1 pancerz</td></tr>
+            <tr><td>1 część</td><td class="dc" style="color:#c07a64">brak bonusu</td></tr>
+          </tbody>
+        </table>
+        <p class="ex">Masz założony płaszcz i sztylet (2 części) → aktywny próg 2: <b>+1 ZR</b>. Dokładasz
+        totem (3 części) → wskakuje próg 3: teraz <b>+1 ZR, +1 Przetrwanie i +1 pancerz</b>. Sprzedasz
+        sztylet → zostają 2 części, wracasz do samego <b>+1 ZR</b>.</p>
+      </div>
 
       <footer>
         <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIV</span><br>

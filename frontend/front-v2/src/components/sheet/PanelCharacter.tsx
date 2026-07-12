@@ -24,6 +24,8 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
   const conditions = readConditions(sheet);
   // #1302: pasywne bonusy z założonych reliktów (staty), by pokazać wartość efektywną.
   const relicStats = readRelicStatBonus(sheet);
+  // #1340: sety ekwipunku — komplet noszonych części → aktywne progi bonusów.
+  const sets = readEquipmentSets(sheet);
   // Podświetlamy atrybuty z najwyższym modyfikatorem (jak w makiecie).
   const maxMod = Math.max(0, ...STAT_KEYS.map((k) => mods[k] ?? 0));
 
@@ -108,6 +110,55 @@ export function PanelCharacter({ sheet }: { sheet: HeroSheet | undefined }) {
           })}
         </div>
       </section>
+
+      {sets.length > 0 && (
+        <section className="mb-6">
+          <SecHead>Komplet ekwipunku</SecHead>
+          <div className="flex flex-col gap-2">
+            {sets.map((s) => (
+              <div
+                key={s.key}
+                className="rounded-md border border-line-soft bg-surface px-3.5 py-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-ui text-label font-semibold text-text">{s.label}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 font-mono text-[10px] font-medium",
+                      s.active_threshold
+                        ? "bg-[rgba(255,122,61,0.14)] text-ember-glow"
+                        : "bg-inset text-text-3",
+                    )}
+                  >
+                    {s.worn}/{s.total} części
+                  </span>
+                </div>
+                {s.description && (
+                  <p className="mt-1 font-serif text-micro leading-relaxed text-text-3">
+                    {s.description}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-col gap-1">
+                  {s.thresholds.map((t) => (
+                    <div
+                      key={t.n}
+                      className={cn(
+                        "flex items-start gap-2 text-micro",
+                        t.active ? "text-ember-glow" : "text-text-3",
+                      )}
+                    >
+                      <span className="font-mono font-semibold">
+                        {t.active ? "●" : "○"} {t.n} cz.
+                      </span>
+                      <span className="font-ui">{t.effects.map(fmtSetEffect).join(" · ") || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mb-6">
         <SecHead>Stan</SecHead>
@@ -222,6 +273,54 @@ function readRelicStatBonus(sheet: HeroSheet | undefined): Record<string, number
     if (Number.isFinite(n) && n !== 0) out[k.toUpperCase()] = n;
   }
   return out;
+}
+
+// #1340: set ekwipunku z backendu (sheet.equipment_bonuses.sets).
+type SetEffect = { type: string; value: number; stat?: string; skill?: string };
+type SetThreshold = { n: number; active: boolean; effects: SetEffect[] };
+type EquipmentSet = {
+  key: string;
+  label: string;
+  description: string;
+  worn: number;
+  total: number;
+  active_threshold: number | null;
+  thresholds: SetThreshold[];
+};
+
+function readEquipmentSets(sheet: HeroSheet | undefined): EquipmentSet[] {
+  const eq = (((sheet ?? {}) as Record<string, unknown>).equipment_bonuses ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const raw = eq.sets;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+    .map((s) => ({
+      key: String(s.key ?? ""),
+      label: String(s.label ?? s.key ?? ""),
+      description: String(s.description ?? ""),
+      worn: Number(s.worn ?? 0),
+      total: Number(s.total ?? 0),
+      active_threshold:
+        s.active_threshold == null ? null : Number(s.active_threshold),
+      thresholds: Array.isArray(s.thresholds)
+        ? (s.thresholds as Record<string, unknown>[]).map((t) => ({
+            n: Number(t.n ?? 0),
+            active: Boolean(t.active),
+            effects: Array.isArray(t.effects) ? (t.effects as SetEffect[]) : [],
+          }))
+        : [],
+    }));
+}
+
+function fmtSetEffect(e: SetEffect): string {
+  const v = (e.value >= 0 ? "+" : "") + e.value;
+  if (e.type === "static_stat_modifier") return `${v} ${e.stat ?? ""}`.trim();
+  if (e.type === "static_skill_modifier") return `${v} ${e.skill ?? ""} (umiej.)`.trim();
+  if (e.type === "ac_bonus") return `${v} pancerz`;
+  return `${e.type} ${v}`;
 }
 
 function readStatValue(sheet: HeroSheet | undefined, k: string): number {

@@ -1465,6 +1465,229 @@ def admin_delete_recipe(key: str, _: None = Depends(require_admin_token)):
         conn.close()
 
 
+# ── #1340 BL-D1 — sety ekwipunku (CRUD) ────────────────────────────────────
+_SET_EFFECT_TYPES = {"static_stat_modifier", "static_skill_modifier", "ac_bonus"}
+_STAT_KEYS_SET = {"STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"}
+
+
+def _normalize_set_pieces(pieces) -> str:
+    """Lista kluczy item/weapon (albo JSON string) → znormalizowany JSON string."""
+    if pieces is None:
+        return "[]"
+    raw = pieces
+    if isinstance(pieces, str):
+        try:
+            raw = json.loads(pieces or "[]")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=422, detail="pieces_json nie jest poprawnym JSON")
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=422, detail="pieces musi być listą kluczy części")
+    out = [str(p).strip() for p in raw if str(p).strip()]
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _validate_set_effects(effs) -> list:
+    out = []
+    for e in effs if isinstance(effs, list) else []:
+        if not isinstance(e, dict):
+            continue
+        etype = str(e.get("type") or "").strip()
+        if etype not in _SET_EFFECT_TYPES:
+            raise HTTPException(status_code=422, detail=f"typ efektu musi być jednym z {sorted(_SET_EFFECT_TYPES)}")
+        try:
+            val = int(e.get("value") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="value efektu musi być liczbą")
+        eff = {"type": etype, "value": val}
+        if etype == "static_stat_modifier":
+            stat = str(e.get("stat") or "").strip().upper()
+            if stat not in _STAT_KEYS_SET:
+                raise HTTPException(status_code=422, detail=f"stat musi być jednym z {sorted(_STAT_KEYS_SET)}")
+            eff["stat"] = stat
+        elif etype == "static_skill_modifier":
+            sk = str(e.get("skill") or e.get("stat") or "").strip().lower()
+            if not sk:
+                raise HTTPException(status_code=422, detail="static_skill_modifier wymaga pola 'skill'")
+            eff["skill"] = sk
+        out.append(eff)
+    return out
+
+
+def _normalize_set_bonuses(bonuses) -> str:
+    """{"2": [efekty], "3": [efekty]} (albo JSON string) → znormalizowany JSON.
+
+    Progi = klucze liczbowe ≥ 2 (próg 1 nie ma sensu — 1 część nie jest kompletem).
+    """
+    if bonuses is None:
+        return "{}"
+    raw = bonuses
+    if isinstance(bonuses, str):
+        try:
+            raw = json.loads(bonuses or "{}")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=422, detail="bonuses_json nie jest poprawnym JSON")
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="bonuses musi być mapą próg→efekty")
+    out: dict[str, list] = {}
+    for tk, effs in raw.items():
+        try:
+            n = int(tk)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="próg musi być liczbą (np. \"2\")")
+        if n < 2:
+            raise HTTPException(status_code=422, detail="próg bonusu musi być ≥ 2 części")
+        out[str(n)] = _validate_set_effects(effs)
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _set_row_to_dict(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    try:
+        d["pieces"] = json.loads(d.get("pieces_json") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        d["pieces"] = []
+    try:
+        d["bonuses"] = json.loads(d.get("bonuses_json") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        d["bonuses"] = {}
+    return d
+
+
+class SetCreateReq(BaseModel):
+    key: str
+    label: str
+    description: str | None = None
+    pieces: object = Field(default_factory=list)   # list[str] lub JSON string
+    bonuses: object = Field(default_factory=dict)  # {próg: [efekty]} lub JSON string
+    is_active: bool = True
+
+
+class SetPatchReq(BaseModel):
+    label: str | None = None
+    description: str | None = None
+    pieces: object | None = None
+    pieces_json: str | None = None
+    bonuses: object | None = None
+    bonuses_json: str | None = None
+    is_active: bool | None = None
+
+
+@router.get("/admin/sets")
+def admin_sets(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT * FROM game_config_sets ORDER BY label").fetchall()
+        return {"items": [_set_row_to_dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/sets/{key}/wearers")
+def admin_set_wearers(key: str, _: None = Depends(require_admin_token)):
+    """Podgląd „kto nosi ile części" — postacie z ≥1 założoną częścią setu."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        srow = conn.execute("SELECT pieces_json FROM game_config_sets WHERE key = ?", (key,)).fetchone()
+        if not srow:
+            raise HTTPException(status_code=404, detail="Set nie istnieje")
+        try:
+            pieces = [str(p).strip() for p in json.loads(srow["pieces_json"] or "[]")]
+        except (json.JSONDecodeError, TypeError):
+            pieces = []
+        pieces = [p for p in pieces if p]
+        if not pieces:
+            return {"total_pieces": 0, "wearers": []}
+        ph = ",".join("?" for _ in pieces)
+        rows = conn.execute(
+            f"""SELECT c.id AS character_id, c.name AS name, c.campaign_id AS campaign_id,
+                       COUNT(*) AS worn
+                FROM character_inventory ci
+                JOIN characters c ON c.id = ci.character_id
+                WHERE ci.equipped = 1
+                  AND (ci.item_key IN ({ph}) OR ci.weapon_key IN ({ph}))
+                GROUP BY c.id ORDER BY worn DESC""",
+            pieces + pieces,
+        ).fetchall()
+        return {"total_pieces": len(pieces), "wearers": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/sets")
+def admin_create_set(req: SetCreateReq, _: None = Depends(require_admin_token)):
+    key = str(req.key or "").strip()
+    if not re.fullmatch(r"[a-z0-9_]{1,60}", key):
+        raise HTTPException(status_code=422, detail="key musi być lowercase_snake_case (1-60 znaków)")
+    if not str(req.label or "").strip():
+        raise HTTPException(status_code=422, detail="label nie może być pusty")
+    pieces_json = _normalize_set_pieces(req.pieces)
+    bonuses_json = _normalize_set_bonuses(req.bonuses)
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if conn.execute("SELECT 1 FROM game_config_sets WHERE key = ?", (key,)).fetchone():
+            raise HTTPException(status_code=409, detail="Set o tym kluczu już istnieje")
+        conn.execute(
+            """INSERT INTO game_config_sets
+               (key, label, description, pieces_json, bonuses_json, is_active, created_by)
+               VALUES (?,?,?,?,?,?,?)""",
+            (key, req.label.strip(), (req.description or None),
+             pieces_json, bonuses_json, 1 if req.is_active else 0, "admin_manual"),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM game_config_sets WHERE key = ?", (key,)).fetchone()
+        return {"item": _set_row_to_dict(row)}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/sets/{key}")
+def admin_patch_set(key: str, req: SetPatchReq, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if not conn.execute("SELECT 1 FROM game_config_sets WHERE key = ?", (key,)).fetchone():
+            raise HTTPException(status_code=404, detail="Set nie istnieje")
+        sets: list[str] = []
+        vals: list = []
+        if req.label is not None:
+            sets.append("label = ?"); vals.append(req.label.strip())
+        if req.description is not None:
+            sets.append("description = ?"); vals.append(req.description or None)
+        _pieces_src = req.pieces if req.pieces is not None else req.pieces_json
+        if _pieces_src is not None:
+            sets.append("pieces_json = ?"); vals.append(_normalize_set_pieces(_pieces_src))
+        _bonuses_src = req.bonuses if req.bonuses is not None else req.bonuses_json
+        if _bonuses_src is not None:
+            sets.append("bonuses_json = ?"); vals.append(_normalize_set_bonuses(_bonuses_src))
+        if req.is_active is not None:
+            sets.append("is_active = ?"); vals.append(1 if req.is_active else 0)
+        if sets:
+            sets.append("updated_at = datetime('now')")
+            vals.append(key)
+            conn.execute(f"UPDATE game_config_sets SET {', '.join(sets)} WHERE key = ?", vals)
+            conn.commit()
+        out = conn.execute("SELECT * FROM game_config_sets WHERE key = ?", (key,)).fetchone()
+        return {"item": _set_row_to_dict(out)}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/sets/{key}")
+def admin_delete_set(key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM game_config_sets WHERE key = ?", (key,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Set nie istnieje")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.post("/admin/weapons")
 def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_token)):
     try:

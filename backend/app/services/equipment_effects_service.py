@@ -136,45 +136,175 @@ def _equipped_effect_lists(
     return out
 
 
+def _apply_effect(e: dict, stats: dict[str, int], skills: dict[str, int], ac_ref: list[int]) -> None:
+    """Fold one passive effect dict into the running stat/skill/ac accumulators."""
+    etype = str(e.get("type") or "").strip()
+    try:
+        val = int(e.get("value") or 0)
+    except (TypeError, ValueError):
+        return
+    if not val:
+        return
+    if etype == "static_stat_modifier":
+        stat = str(e.get("stat") or "").strip().upper()
+        if stat in _STAT_KEYS:
+            stats[stat] = stats.get(stat, 0) + val
+    elif etype == "static_skill_modifier":
+        sk = str(e.get("skill") or e.get("stat") or "").strip().lower()
+        if sk:
+            skills[sk] = skills.get(sk, 0) + val
+    elif etype == "ac_bonus":
+        ac_ref[0] += val
+
+
+def _worn_piece_keys(character_id: int, conn: sqlite3.Connection) -> set[str]:
+    """Set of item/weapon/game_item keys the character has EQUIPPED.
+
+    Set detection counts every equipped slot — it ignores ``exclude_slots`` used
+    by the per-item effect aggregation, because a set bonus is a separate layer
+    (not the piece's own effect_json), so a set weapon in main_hand still counts.
+    """
+    queries = [
+        "SELECT item_key, weapon_key, game_item_key FROM character_inventory "
+        "WHERE character_id = ? AND equipped = 1",
+        "SELECT item_key, weapon_key FROM character_inventory "
+        "WHERE character_id = ? AND equipped = 1",
+    ]
+    rows = None
+    for q in queries:
+        try:
+            rows = conn.execute(q, (character_id,)).fetchall()
+            break
+        except sqlite3.OperationalError:
+            continue
+    out: set[str] = set()
+    for r in rows or []:
+        for col in ("item_key", "weapon_key", "game_item_key"):
+            k = _row_get(r, col)
+            if k:
+                out.add(str(k).strip())
+    return out
+
+
+def get_active_sets(character_id: int, conn: sqlite3.Connection) -> list[dict]:
+    """#1340 — equipment sets: which sets the character has partial/full pieces of.
+
+    Returns a list (one per set with ≥1 worn piece) of::
+
+        {key, label, description, worn: int, total: int,
+         active_threshold: int | None, next_threshold: int | None,
+         thresholds: [{n, active, effects}], effects: [effects of active threshold]}
+
+    ``active_threshold`` is the highest bonus tier whose piece-count ≤ worn.
+    Never raises; returns ``[]`` if the table is absent or nothing matches.
+    """
+    try:
+        cid = int(character_id)
+    except (TypeError, ValueError):
+        return []
+    try:
+        set_rows = conn.execute(
+            "SELECT key, label, description, pieces_json, bonuses_json "
+            "FROM game_config_sets WHERE is_active = 1"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    if not set_rows:
+        return []
+
+    worn = _worn_piece_keys(cid, conn)
+    out: list[dict] = []
+    for sr in set_rows:
+        try:
+            pieces = json.loads(_row_get(sr, "pieces_json") or "[]")
+        except (ValueError, TypeError):
+            pieces = []
+        piece_keys = [str(p).strip() for p in pieces if str(p).strip()]
+        if not piece_keys:
+            continue
+        n_worn = sum(1 for p in piece_keys if p in worn)
+        if n_worn <= 0:
+            continue
+        try:
+            bonuses = json.loads(_row_get(sr, "bonuses_json") or "{}")
+        except (ValueError, TypeError):
+            bonuses = {}
+        if not isinstance(bonuses, dict):
+            bonuses = {}
+        # Numeric thresholds sorted ascending; keys arrive as JSON strings.
+        thresholds_raw: list[tuple[int, list]] = []
+        for tk, effs in bonuses.items():
+            try:
+                n = int(tk)
+            except (TypeError, ValueError):
+                continue
+            thresholds_raw.append((n, effs if isinstance(effs, list) else []))
+        thresholds_raw.sort(key=lambda t: t[0])
+
+        active_threshold = None
+        active_effects: list = []
+        next_threshold = None
+        tinfo = []
+        for n, effs in thresholds_raw:
+            is_active = n_worn >= n
+            if is_active:
+                active_threshold = n
+                active_effects = effs
+            elif next_threshold is None:
+                next_threshold = n
+            tinfo.append({"n": n, "active": is_active, "effects": effs})
+        out.append(
+            {
+                "key": str(_row_get(sr, "key") or ""),
+                "label": str(_row_get(sr, "label") or ""),
+                "description": _row_get(sr, "description") or "",
+                "worn": n_worn,
+                "total": len(piece_keys),
+                "active_threshold": active_threshold,
+                "next_threshold": next_threshold,
+                "thresholds": tinfo,
+                "effects": active_effects,
+            }
+        )
+    return out
+
+
 def get_equipment_bonuses(
     character_id: int, conn: sqlite3.Connection, exclude_slots: "tuple[str, ...]" = ()
 ) -> dict:
     """Aggregate ALL equipped-item passive effects into one bundle.
 
-    Returns ``{"stats": {STAT: points}, "skills": {skill: rank}, "ac": int}``.
-    Empty dicts / 0 when nothing worn carries effects. Never raises. Only passive
-    types are read here — weapon-only `damage_bonus`/`heal_on_hit` are ignored.
-    Pass ``exclude_slots`` to skip slots already handled elsewhere (combat passes
-    ``('main_hand',)`` because it applies the main-hand weapon separately).
+    Returns ``{"stats": {STAT: points}, "skills": {skill: rank}, "ac": int,
+    "sets": [...]}``. Empty dicts / 0 when nothing worn carries effects. Never
+    raises. Only passive types are read here — weapon-only
+    `damage_bonus`/`heal_on_hit` are ignored. Pass ``exclude_slots`` to skip
+    slots already handled elsewhere (combat passes ``('main_hand',)`` because it
+    applies the main-hand weapon separately).
+
+    #1340: equipment-set completion bonuses are folded in on top of per-item
+    relic effects. Set piece-counting ignores ``exclude_slots`` (a set weapon in
+    main_hand still counts toward its set), so combat sees set bonuses too.
     """
     stats: dict[str, int] = {}
     skills: dict[str, int] = {}
-    ac = 0
+    ac_ref = [0]
     try:
         cid = int(character_id)
     except (TypeError, ValueError):
-        return {"stats": stats, "skills": skills, "ac": ac}
+        return {"stats": stats, "skills": skills, "ac": 0, "sets": []}
 
     for effects in _equipped_effect_lists(cid, conn, exclude_slots):
         for e in effects:
-            etype = str(e.get("type") or "").strip()
-            try:
-                val = int(e.get("value") or 0)
-            except (TypeError, ValueError):
-                continue
-            if not val:
-                continue
-            if etype == "static_stat_modifier":
-                stat = str(e.get("stat") or "").strip().upper()
-                if stat in _STAT_KEYS:
-                    stats[stat] = stats.get(stat, 0) + val
-            elif etype == "static_skill_modifier":
-                sk = str(e.get("skill") or e.get("stat") or "").strip().lower()
-                if sk:
-                    skills[sk] = skills.get(sk, 0) + val
-            elif etype == "ac_bonus":
-                ac += val
-    return {"stats": stats, "skills": skills, "ac": ac}
+            _apply_effect(e, stats, skills, ac_ref)
+
+    # #1340 — set completion: add the active-threshold effects of each worn set.
+    active_sets = get_active_sets(cid, conn)
+    for s in active_sets:
+        for e in s.get("effects") or []:
+            if isinstance(e, dict):
+                _apply_effect(e, stats, skills, ac_ref)
+
+    return {"stats": stats, "skills": skills, "ac": ac_ref[0], "sets": active_sets}
 
 
 def get_effective_stat_bonuses(character_id: int, conn: sqlite3.Connection) -> dict[str, int]:

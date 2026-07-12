@@ -462,6 +462,145 @@ async function _loadRecipes() {
   } catch(e) { tbody.innerHTML = _errRow(9, e.message); }
 }
 
+// #1340 BL-D1 — sety ekwipunku (game_config_sets). Bonusy za komplet; silnik
+// (#1302) wykrywa noszone części i dokłada agregat progu do puli reliktów.
+const _SET_EFFECT_LABEL = {
+  static_stat_modifier: 'stat', static_skill_modifier: 'umiejętność', ac_bonus: 'AC',
+};
+function _fmtSetEffect(e) {
+  if (!e || typeof e !== 'object') return '';
+  const v = e.value >= 0 ? '+' + e.value : String(e.value);
+  if (e.type === 'static_stat_modifier') return `${v} ${_esc(e.stat || '?')}`;
+  if (e.type === 'static_skill_modifier') return `${v} ${_esc(e.skill || '?')} (umiej.)`;
+  if (e.type === 'ac_bonus') return `${v} AC`;
+  return `${_esc(e.type)} ${v}`;
+}
+function _fmtSetBonuses(bonuses) {
+  if (!bonuses || typeof bonuses !== 'object') return '—';
+  const parts = Object.keys(bonuses).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b)
+    .map(n => `<b>${n}cz.</b> ${(bonuses[String(n)] || []).map(_fmtSetEffect).join(', ') || '—'}`);
+  return parts.join(' · ') || '—';
+}
+
+async function _loadSets() {
+  const tbody = document.querySelector('#sets-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _loading(6);
+  try {
+    const d = await apiFetch('/api/admin/sets');
+    const items = d.items || [];
+    const badge = document.querySelector('#content-tabs .stab[data-tab="sets"] span');
+    if (badge) badge.textContent = `(${items.length})`;
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak setów — użyj ＋ Nowy set</td></tr>`; return; }
+    tbody.innerHTML = items.map(s => {
+      const enc = encodeURIComponent(JSON.stringify(s));
+      const pieces = Array.isArray(s.pieces) ? s.pieces : [];
+      const piecesTxt = pieces.map(_esc).join(', ') || '—';
+      return `<tr data-key="${_esc(s.key)}" data-rjson="${enc}">
+        <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(s.key)}</td>
+        <td class="td-sticky td-name" data-label="Nazwa">${_esc(s.label || s.key)}</td>
+        <td class="td-muted" data-label="Części" style="font-size:0.74rem">${piecesTxt} <span style="color:var(--t3)">(${pieces.length})</span></td>
+        <td class="td-muted" data-label="Progi" style="font-size:0.74rem">${_fmtSetBonuses(s.bonuses)}</td>
+        <td class="detail-col">${(s.is_active === 0 || s.is_active === false) ? '<span class="badge badge-slate">○</span>' : '<span class="badge badge-green">●</span>'}</td>
+        <td class="td-actions">
+          <button class="btn-icon" title="Kto nosi" onclick="window._contentSetWearers('${_esc(s.key)}','${_esc(s.label || s.key)}')">👥</button>
+          <button class="btn-icon" title="Edytuj" onclick="window._contentSetEdit('${encodeURIComponent(s.key)}')">✎</button>
+          <button class="btn-icon danger" title="Usuń" onclick="window._contentSetDelete('${_esc(s.key)}',this)">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+    _restoreDetailsToggle('sets-table');
+  } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+}
+
+async function _openSetModal(existing) {
+  const isEdit = !!existing;
+  const piecesStr = Array.isArray(existing?.pieces) ? existing.pieces.join('\n') : '';
+  const bonusesStr = existing?.bonuses ? JSON.stringify(existing.bonuses, null, 2)
+    : JSON.stringify({ "2": [{ type: "static_stat_modifier", stat: "DEX", value: 1 }],
+                       "3": [{ type: "ac_bonus", value: 1 }] }, null, 2);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:600px">
+    <div class="modal-head">
+      <span class="modal-title">${isEdit ? 'Edytuj set' : 'Nowy set ekwipunku'}</span>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:12px 16px">
+      ${isEdit ? `<div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">Klucz: <code>${_esc(existing.key)}</code></div>` : `
+      <div class="form-row"><label class="form-label">Klucz *</label>
+        <input class="form-input" name="key" type="text" placeholder="np. wolf_hunter"></div>`}
+      <div class="form-row"><label class="form-label">Nazwa *</label>
+        <input class="form-input" name="label" type="text" value="${_esc(existing?.label || '')}"></div>
+      <div class="form-row"><label class="form-label">Opis</label>
+        <textarea class="form-input" name="description" rows="2">${_esc(existing?.description || '')}</textarea></div>
+      <div class="form-row"><label class="form-label">Części (klucze item/weapon, jeden na linię)</label>
+        <textarea class="form-input" name="pieces" rows="4" placeholder="wolf_hide_cloak\nwolf_fang_dagger">${_esc(piecesStr)}</textarea></div>
+      <div class="form-row"><label class="form-label">Bonusy per próg (JSON — efekty jak relikty, wartości w PUNKTACH)</label>
+        <textarea class="form-input" name="bonuses" rows="9" style="font-family:monospace;font-size:0.72rem">${_esc(bonusesStr)}</textarea>
+        <div style="font-size:0.68rem;color:var(--t3);margin-top:4px">Typy: static_stat_modifier {stat,value} · static_skill_modifier {skill,value} · ac_bonus {value}. Próg = liczba części ≥ 2.</div></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;margin-top:4px">
+        <input type="checkbox" name="is_active" ${(existing?.is_active === 0 || existing?.is_active === false) ? '' : 'checked'}> Aktywny</label>
+    </div>
+    <div class="modal-foot" style="padding:10px 16px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-primary btn-sm" id="set-save-btn">Zapisz</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#set-save-btn').addEventListener('click', async () => {
+    const g = n => overlay.querySelector(`[name="${n}"]`);
+    const pieces = (g('pieces').value || '').split('\n').map(s => s.trim()).filter(Boolean);
+    let bonuses;
+    try { bonuses = JSON.parse(g('bonuses').value || '{}'); }
+    catch { showToast('Bonusy: niepoprawny JSON', 'error'); return; }
+    const body = {
+      label: (g('label').value || '').trim(),
+      description: (g('description').value || '').trim(),
+      pieces, bonuses,
+      is_active: g('is_active').checked,
+    };
+    try {
+      if (isEdit) {
+        await apiFetch(`/api/admin/sets/${encodeURIComponent(existing.key)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        body.key = (g('key').value || '').trim();
+        await apiFetch('/api/admin/sets', { method: 'POST', body: JSON.stringify(body) });
+      }
+      overlay.remove();
+      showToast('Set zapisany', 'success');
+      _loaded.delete('sets'); _loadSets();
+    } catch(e) { showToast(e.message || 'Błąd zapisu', 'error'); }
+  });
+}
+
+async function _deleteSet(key, btn) {
+  if (!confirm(`Usunąć set „${key}"?`)) return;
+  try {
+    await apiFetch(`/api/admin/sets/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    showToast('Set usunięty', 'success');
+    btn?.closest('tr')?.remove();
+  } catch(e) { showToast(e.message || 'Błąd usuwania', 'error'); }
+}
+
+async function _openSetWearersModal(key, label) {
+  try {
+    const d = await apiFetch(`/api/admin/sets/${encodeURIComponent(key)}/wearers`);
+    const rows = (d.wearers || []).map(w =>
+      `<tr><td>${_esc(w.name || ('#' + w.character_id))}</td><td class="td-mono">${w.worn}/${d.total_pieces}</td><td class="td-muted">${w.campaign_id ? 'kampania #' + w.campaign_id : '—'}</td></tr>`
+    ).join('') || `<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--t3)">Nikt nie nosi części tego setu</td></tr>`;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:460px">
+      <div class="modal-head"><span class="modal-title">Kto nosi: ${_esc(label)}</span>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="padding:12px 16px">
+        <table class="data-table"><thead><tr><th>Postać</th><th>Części</th><th>Gdzie</th></tr></thead>
+        <tbody>${rows}</tbody></table></div></div>`;
+    document.body.appendChild(overlay);
+  } catch(e) { showToast(e.message || 'Błąd', 'error'); }
+}
+
 // ── Effects Builder (F3 #463) ──────────────────────────────────────────────
 const _EFFECT_TYPES = [
   {
@@ -878,7 +1017,7 @@ async function _loadSpells() {
 
 function _loadTab(tab) {
   if (_loaded.has(tab)) return;
-  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes, recipes:_loadRecipes };
+  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes, recipes:_loadRecipes, sets:_loadSets };
   const fn = fns[tab];
   if (!fn) return;
   _loaded.add(tab);
@@ -1623,6 +1762,7 @@ function _sectionHtml() {
       <button class="stab" data-tab="spells">Czary <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="affixes">Afiksy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="recipes">Przepisy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
+      <button class="stab" data-tab="sets">Sety <span style="font-size:0.7rem;color:var(--t3)"></span></button>
     </div>
 
     <!-- Broń -->
@@ -1794,6 +1934,23 @@ function _sectionHtml() {
         </table>
       </div>
     </div>
+
+    <!-- Sety ekwipunku (#1340 BL-D1) -->
+    <div class="stab-panel" id="stab-sets">
+      <div class="toolbar">
+        <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj setów…" data-filter-for="sets-table"></div>
+        <button class="btn btn-primary btn-sm" id="add-set-btn">＋ Nowy set</button>
+      </div>
+      <div class="data-table--cards table-wrap">
+        <table class="data-table" id="sets-table">
+          <thead><tr>
+            <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th>
+            <th>Części</th><th>Progi bonusów</th><th class="detail-col">Aktywny</th><th class="td-actions">Akcje</th>
+          </tr></thead>
+          <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </section>`;
 }
@@ -1856,6 +2013,17 @@ export async function init(panel) {
 
   // Recipe add button (#1338 BL-C3) — tworzenie przez Kreator AI (Smart Entry).
   root.querySelector('#add-recipe-btn')?.addEventListener('click', () => _openSmartEntry('game_config_recipes'));
+
+  // Set add button (#1340 BL-D1) — dedykowany modal (pieces + bonuses JSON).
+  root.querySelector('#add-set-btn')?.addEventListener('click', () => _openSetModal(null));
+  window._contentSetEdit = async encKey => {
+    const key = decodeURIComponent(encKey);
+    const d = await apiFetch('/api/admin/sets').catch(() => null);
+    const rec = d?.items?.find(s => s.key === key);
+    if (rec) _openSetModal(rec);
+  };
+  window._contentSetDelete = (key, btn) => _deleteSet(key, btn);
+  window._contentSetWearers = (key, label) => _openSetWearersModal(key, label);
 
   // Kreator AI button
   root.querySelector('#content-kreator-btn')?.addEventListener('click', _openSmartEntryForCurrentTab);

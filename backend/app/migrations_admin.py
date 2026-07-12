@@ -6576,6 +6576,69 @@ def _ensure_recipes_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_sets_schema(conn: sqlite3.Connection) -> None:
+    """#1340 BL-D1 — sety ekwipunku: bonusy za komplet.
+
+    game_config_sets: definicja setu = lista części (pieces_json: klucze
+    item/weapon) → bonusy per próg liczby noszonych części (bonuses_json:
+    {"2": [efekty], "3": [efekty]}). Efekty w tym samym formacie co relikty
+    #1302 (`static_stat_modifier` w PUNKTACH statu, `static_skill_modifier`
+    w rangach umiejętności, `ac_bonus` we flat AC). Silnik już istnieje —
+    `equipment_effects_service.get_equipment_bonuses` wykrywa komplet i dokłada
+    agregat progu do puli reliktów. Sety to DANE, nie nowy kod efektów.
+
+    Części pozyskiwane przez: drop (tabele tierowe/boss), craft (przepisy
+    BL-C1 z output = część setu), zakup (gildia BL-D3, później). Max 1 aktywny
+    set? NIE — limit wynika ze slotów ekwipunku, bez sztucznych blokad (start).
+
+    Idempotentne: CREATE TABLE IF NOT EXISTS + INSERT OR IGNORE.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS game_config_sets (
+            key          TEXT PRIMARY KEY,
+            label        TEXT NOT NULL,
+            description  TEXT,
+            pieces_json  TEXT NOT NULL DEFAULT '[]',
+            bonuses_json TEXT NOT NULL DEFAULT '{}',
+            is_active    INTEGER NOT NULL DEFAULT 1,
+            created_by   TEXT,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # Set demonstracyjny (Numbers Policy: wartości startowe, sandbox-tunable).
+    # Strój Wilczego Łowcy — części z dropu wilczej watahy (wolf_pelt komponent
+    # → craft) + broń. 2 części: +DEX punkt; 3 części: +łowiectwo (survival) +AC.
+    demo_pieces = json.dumps(
+        ["wolf_hide_cloak", "wolf_fang_dagger", "wolf_totem_charm"],
+        ensure_ascii=False,
+    )
+    demo_bonuses = json.dumps(
+        {
+            "2": [{"type": "static_stat_modifier", "stat": "DEX", "value": 1}],
+            "3": [
+                {"type": "static_stat_modifier", "stat": "DEX", "value": 1},
+                {"type": "static_skill_modifier", "skill": "survival", "value": 1},
+                {"type": "ac_bonus", "value": 1},
+            ],
+        },
+        ensure_ascii=False,
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_config_sets
+            (key, label, description, pieces_json, bonuses_json, created_by)
+        VALUES ('wolf_hunter', 'Strój Wilczego Łowcy',
+                'Komplet z trofeów wilczej watahy — im więcej części, tym bliżej łowca zwierzęcej czujności.',
+                ?, ?, 'seed')
+        """,
+        (demo_pieces, demo_bonuses),
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6740,6 +6803,7 @@ def run_admin_migrations() -> None:
         _seed_enemy_rank_multipliers(conn)  # #1332 BL-A6 — rangi wariantów wroga
         _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze
         _ensure_recipes_schema(conn)  # #1336 BL-C1 — przepisy rzemieślnicze + crafter_type
+        _ensure_sets_schema(conn)  # #1340 BL-D1 — sety ekwipunku (bonusy za komplet)
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point
