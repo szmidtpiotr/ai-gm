@@ -4,6 +4,47 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.9.0 — 2026-07-12 — Mapy skarbów + Bestiariusz i Atlas + reakcje maga w walce + żywe kości
+
+Kontynuacja po v1.8.0 (batch „ŻAR głównym frontem"). Ta wersja dokłada dwa duże systemy treści — **mapy skarbów** i **Bestiariusz + Atlas Kresów** — oraz pogłębia walkę o reakcje maga, animacje kości i strefy bezpieczne w podróży.
+
+### Added — Mapy skarbów (#1196)
+
+- Nowy typ przedmiotu: **mapa skarbu**. Zdobyta z łupu lub wymyślona przez narratora trafia do osobnej sekcji **„Mapy skarbów"** w ekwipunku (nie miesza się ze zwykłymi rzeczami).
+- Przycisk **„Użyj"** otwiera mapę świata, centruje i podświetla docelowy hex znacznikiem **X** (widoczny nawet przez mgłę wojny). Karta mapy pokazuje region i dystans podróży, nigdy surowych współrzędnych.
+- **Kopanie** skarbu to test umiejętności (investigation) na właściwym hexie; wypłata złota + gwarantowany niepusty łup, skalowany liczbą zebranych fragmentów.
+- **Czarny rynek** i podpowiedzi narratora przy przybyciu w pobliże skarbu; admin może **zakopać skarb** z panelu budowania świata.
+
+### Added — Bestiariusz, Atlas Kresów i Kolekcje (#1191, #915)
+
+- **Bestiariusz** — trofea za pokonane bestie (progi 1/5/15), unikatowe wpisy per kampania, portrety wrogów generowane wsadowo (FLUX, 29 sztuk).
+- **Atlas Kresów** — odkrywane lokacje zapisują się na krzyż między kampaniami.
+- Panel **Kolekcje** w ŻAR + rozdziały w Księdze Zasad; wyszukiwarka/filtry/sort na wizytówce z pełną kartą statystyk.
+- **Multiplayer:** zaliczenie zabójstwa liczy się wszystkim uczestnikom walki; ujednolicona autoryzacja publicznych widoków (#915).
+
+### Added — reakcje maga w walce (#1322, #1324, #1325)
+
+- **Arkanowa Bariera** — instant-reakcja maga (odpowiednik Uniku wojownika): rzut INT, 1 mana za próbę.
+- **Tarcza Many** — deterministyczna absorpcja obrażeń za manę (CAP 2× rangi zaklęcia), zawsze 1×/rundę.
+- Reguła reakcji **1/rundę tylko przy przewadze liczebnej** (swarm); przy jednym wrogu mag reaguje na każdy atak (#1322).
+- Wpięcie **drabiny testów śmierci** (DC 10/13/16/19) do żywego przepływu na 0 HP (#1313).
+
+### Added — żywe kości i pasek świata
+
+- **Animacja kości obrażeń wroga** w walce ŻAR — parytet z rzutami gracza (#1318); popup kości przy narracyjnych testach (#1299); dwustopniowe rzuty nie zdradzają obrażeń zbyt wcześnie; nakładkę kości można dotknąć w każdej fazie, by pominąć animację.
+- **Widget zegara świata** — ożywiony pasek + popup „Łuk dnia"; jaśniejsza mini-ikona pogody z tintem per aura (#1219).
+- Czary — klik wiersza otwiera modal z opisem (F-56).
+
+### Fixed
+
+- **Pogoda i osady (#1128):** zła pogoda spowalnia marsz; osady to strefy bezpieczne (jawne `encounter_chance=0` = brak zasadzki).
+- Rozwijanie umiejętności waliduje się względem żywej tabeli `game_config_skills`, nie zamrożonej konfiguracji runtime (#1320); pula zamiany skilli w kreatorze ŻAR oferuje pełny katalog, nie legacy-pulę.
+- HP aktualizuje się dopiero po modalu obrażeń; obrażenia jako „N Obr." zamiast „-N HP".
+- Publiczny endpoint ponownej wysyłki weryfikacji rozbraja zakleszczenie bramki logowania (#895).
+- Scenario Sandbox ▶ Graj: deep-link i historia tur bez błędnej bramki właściciela (#1211, #1314).
+
+---
+
 ## v1.8.0 — 2026-07-11 — ŻAR głównym interfejsem + relikty + powiadomienia + głębia walki + samouczek
 
 Duża wersja po v1.6.0 (numer v1.7.0 zajęty przez publiczny wpis o reputacji w changelogu wizytówki). Główne motywy: **ŻAR staje się głównym frontem gry**, przedmioty z pasywnymi mocami (relikty), wielokanałowe powiadomienia o turze, port głębi walki z combat_v2 oraz samouczek dla nowych graczy.
