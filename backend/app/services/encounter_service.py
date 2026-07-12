@@ -38,6 +38,15 @@ _COMPOSITION_PATTERNS = ("solo", "wataha", "herszt")
 _COMPOSITION_PATTERN_WEIGHTS = (0.35, 0.40, 0.25)
 _TIER_RANK = {"weak": 0, "standard": 1, "elite": 2, "boss": 3}
 
+# ── BL-A3 (#1329) — pamięć spotkań anti-repeat ────────────────────────────────
+# session_flags.recent_encounters = lista sygnatur ostatnich spotkań (index 0 =
+# NAJNOWSZE). Sygnatura = posortowany, unikalny zestaw enemy_key ('a+b'). Kandydat
+# obecny w historii → kara wagi ×penalty; sygnatura == OSTATNIA → twarda blokada
+# (chyba że brak alternatyw). STARTING VALUES (Numbers Policy) — głębia i kara
+# strojlne z game_config_meta (encounter_recent_depth / encounter_repeat_penalty).
+RECENT_ENCOUNTER_DEPTH = 5
+REPEAT_WEIGHT_PENALTY = 0.25
+
 
 def _slugify(text: str) -> str:
     text = unicodedata.normalize("NFD", str(text).lower())
@@ -216,10 +225,13 @@ def maybe_inject_encounter(
             # game_config_meta). Gdy los wskaże kompozycję i pula global/permanent
             # dla terenu+pasma nie jest pusta — buduj spotkanie z wrogów; inaczej
             # (albo pusta pula) spadamy do katalogu szablonów (bez marnowania tury).
+            # BL-A3 (#1329) — sygnatury ostatnich spotkań tej kampanii → anti-repeat
+            # w OBU torach (kompozycja + katalog).
+            recent_sigs = recent_signatures(sf)
             if random.random() < _composition_split(conn):
                 try:
                     composed = encounter_composer(
-                        conn, level=_cat_level, hex_type=hex_type
+                        conn, level=_cat_level, hex_type=hex_type, recent_sigs=recent_sigs
                     )
                 except Exception:
                     composed = None
@@ -230,7 +242,7 @@ def maybe_inject_encounter(
             cat_row = None
             try:
                 from app.services import encounter_catalog_service as _cat
-                cat_row = _cat.draw_combat(conn, hex_type, _cat_level)
+                cat_row = _cat.draw_combat(conn, hex_type, _cat_level, recent_sigs=recent_sigs)
             except Exception:
                 cat_row = None
             if cat_row is not None:
@@ -283,6 +295,7 @@ def maybe_inject_encounter(
                 if enc.get("enemies"):
                     enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
                 sf["active_encounter"] = enc
+                record_encounter_signature(conn, sf, enc.get("enemies"))  # BL-A3 #1329
                 conn.execute(
                     "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                     (json.dumps(sf, ensure_ascii=False), campaign_id),
@@ -378,6 +391,7 @@ def _fire_catalog_combat(
     if enc.get("enemies"):
         enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
     sf["active_encounter"] = enc
+    record_encounter_signature(conn, sf, enc.get("enemies"))  # BL-A3 #1329
     conn.execute(
         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
         (json.dumps(sf, ensure_ascii=False), campaign_id),
@@ -427,6 +441,7 @@ def _fire_composed_combat(
     if enc.get("enemies"):
         enc["enemies"] = _scale_enemy_counts(enc["enemies"], party_size)
     sf["active_encounter"] = enc
+    record_encounter_signature(conn, sf, enc.get("enemies"))  # BL-A3 #1329
     conn.execute(
         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
         (json.dumps(sf, ensure_ascii=False), campaign_id),
@@ -699,6 +714,58 @@ def _composition_split(conn: sqlite3.Connection) -> float:
     return min(1.0, max(0.0, v))
 
 
+# ── BL-A3 (#1329) — sygnatury i pamięć spotkań ───────────────────────────────
+
+def encounter_signature(enemies) -> str:
+    """Sygnatura spotkania = posortowany, unikalny zestaw enemy_key ('a+b').
+
+    Fallback do `name` gdy brak enemy_key (spotkania szablonowe przed ensure_*).
+    Pusta lista / brak kluczy → '' (nie zapisywana do historii)."""
+    keys = sorted({
+        str((e.get("enemy_key") or e.get("name") or "")).strip()
+        for e in (enemies or [])
+        if (e.get("enemy_key") or e.get("name"))
+    })
+    return "+".join(k for k in keys if k)
+
+
+def _recent_depth(conn: sqlite3.Connection) -> int:
+    return max(1, int(_meta_float(conn, "encounter_recent_depth", RECENT_ENCOUNTER_DEPTH)))
+
+
+def _repeat_penalty(conn: sqlite3.Connection) -> float:
+    return min(1.0, max(0.0, _meta_float(conn, "encounter_repeat_penalty", REPEAT_WEIGHT_PENALTY)))
+
+
+def recent_signatures(sf: dict) -> list[str]:
+    """Lista sygnatur ostatnich spotkań z session_flags (index 0 = najnowsze)."""
+    v = (sf or {}).get("recent_encounters")
+    return [str(x) for x in v if x] if isinstance(v, list) else []
+
+
+def record_encounter_signature(conn: sqlite3.Connection, sf: dict, enemies) -> None:
+    """Dopisz sygnaturę spotkania na początek historii, przytnij do głębi.
+
+    Mutuje `sf` (bez zapisu do DB — robi to wywołujący w tym samym UPDATE, dzięki
+    czemu pamięć nie wycieka między kampaniami: żyje w session_flags danej kampanii)."""
+    sig = encounter_signature(enemies)
+    if not sig:
+        return
+    hist = recent_signatures(sf)
+    hist.insert(0, sig)
+    sf["recent_encounters"] = hist[: _recent_depth(conn)]
+
+
+def _penalized_choice(items: list[dict], rng, penalty_keys: set, penalty: float):
+    """rng.choice z karą wagi ×penalty dla itemów, których `key` jest w penalty_keys."""
+    if not items:
+        return None
+    weights = [penalty if d.get("key") in penalty_keys else 1.0 for d in items]
+    if sum(weights) <= 0:
+        weights = [1.0] * len(items)
+    return rng.choices(items, weights=weights, k=1)[0]
+
+
 def eligible_enemy_pool(
     conn: sqlite3.Connection, *, level: int, hex_type: str | None
 ) -> list[dict]:
@@ -760,39 +827,28 @@ def _pick_pattern(pool: list[dict], rng) -> str:
     return rng.choices(patterns, weights=weights, k=1)[0]
 
 
-def encounter_composer(
-    conn: sqlite3.Connection,
-    *,
-    level: int,
-    hex_type: str | None,
-    rng=random,
-) -> dict | None:
-    """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
-
-    Wzorce: `solo` (1 wróg ~budżet), `wataha` (2–4 × ten sam), `herszt+poplecznicy`
-    (1 wyższy tier + 2–3 niżsi). Zwraca dict `active_encounter` albo None gdy pula
-    pusta. Liczebność jeszcze BEZ skalowania #824 — to robi się na wyniku.
-    """
-    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type)
-    if not pool:
-        return None
-    budget = threat_budget_for_level(conn, level)
+def _compose_enemies(
+    pool: list[dict], budget: float, rng, penalty_keys: set, penalty: float
+) -> tuple[str, list[dict]]:
+    """Jedno złożenie spotkania: wybór wzorca + wrogów. Kara wagi ×penalty (BL-A3
+    #1329) dla wrogów obecnych w historii przy losowanych wyborach. Zwraca
+    (pattern, enemies)."""
     pattern = _pick_pattern(pool, rng)
 
-    enemies: list[dict] = []
     if pattern == "solo":
         # wróg najbliższy budżetowi (górny pułap 1.25×), preferuj mocniejszych
         fits = [d for d in pool if d["threat"] <= budget * 1.25]
-        chosen = max(fits, key=lambda d: d["threat"]) if fits else min(pool, key=lambda d: d["threat"])
-        # trochę różnorodności: losuj spośród najmocniejszych pasujących
-        top = sorted(fits or pool, key=lambda d: d["threat"], reverse=True)[:4]
-        chosen = rng.choice(top) if top else chosen
+        base_pool = fits or pool
+        top = sorted(base_pool, key=lambda d: d["threat"], reverse=True)[:4]
+        chosen = _penalized_choice(top, rng, penalty_keys, penalty) or max(
+            base_pool, key=lambda d: d["threat"]
+        )
         enemies = [_enc_enemy(chosen, 1)]
 
     elif pattern == "wataha":
         # słabsza połowa puli → gromada 2–4 tego samego wroga pod budżet
         weaker = sorted(pool, key=lambda d: d["threat"])[: max(1, len(pool) // 2)]
-        base = rng.choice(weaker)
+        base = _penalized_choice(weaker, rng, penalty_keys, penalty) or weaker[0]
         n = int(round(budget / max(1.0, base["threat"])))
         n = min(4, max(2, n))
         enemies = [_enc_enemy(base, n)]
@@ -807,11 +863,60 @@ def encounter_composer(
         if not minion_pool:
             enemies = [_enc_enemy(leader, 1)]
         else:
-            minion = rng.choice(minion_pool)
+            minion = _penalized_choice(minion_pool, rng, penalty_keys, penalty) or minion_pool[0]
             remaining = max(0.0, budget - leader["threat"])
             n = int(round(remaining / max(1.0, minion["threat"])))
             n = min(3, max(2, n))
             enemies = [_enc_enemy(leader, 1), _enc_enemy(minion, n)]
+
+    return pattern, enemies
+
+
+def encounter_composer(
+    conn: sqlite3.Connection,
+    *,
+    level: int,
+    hex_type: str | None,
+    rng=random,
+    recent_sigs: list[str] | None = None,
+) -> dict | None:
+    """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
+
+    Wzorce: `solo` (1 wróg ~budżet), `wataha` (2–4 × ten sam), `herszt+poplecznicy`
+    (1 wyższy tier + 2–3 niżsi). Zwraca dict `active_encounter` albo None gdy pula
+    pusta. Liczebność jeszcze BEZ skalowania #824 — to robi się na wyniku.
+
+    BL-A3 (#1329): `recent_sigs` (sygnatury ostatnich spotkań, index 0 = ostatnie)
+    → kara wagi ×penalty dla wrogów z historii + twarda blokada sygnatury identycznej
+    z OSTATNIM spotkaniem (chyba że brak alternatyw po kilku próbach).
+    """
+    pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type)
+    if not pool:
+        return None
+    budget = threat_budget_for_level(conn, level)
+    recent_sigs = recent_sigs or []
+    last_sig = recent_sigs[0] if recent_sigs else None
+    penalty = _repeat_penalty(conn)
+    penalty_keys: set[str] = set()
+    for s in recent_sigs:
+        penalty_keys.update(s.split("+"))
+
+    pattern: str | None = None
+    enemies: list[dict] | None = None
+    fallback: tuple[str, list[dict]] | None = None
+    for _ in range(6):  # twarda blokada powtórki z rzędu (chyba że brak alternatyw)
+        p, e = _compose_enemies(pool, budget, rng, penalty_keys, penalty)
+        if not e:
+            continue
+        if fallback is None:
+            fallback = (p, e)
+        if encounter_signature(e) != last_sig:
+            pattern, enemies = p, e
+            break
+    if enemies is None:
+        if not fallback:
+            return None
+        pattern, enemies = fallback
 
     threat_spent = round(
         sum(next((d["threat"] for d in pool if d["key"] == e["enemy_key"]), 0.0) * e["count"]

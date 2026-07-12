@@ -174,10 +174,62 @@ def _weighted_pick(rows: list[sqlite3.Row], rng) -> Optional[sqlite3.Row]:
     return pool[-1]
 
 
+# ── BL-A3 (#1329) — anti-repeat w torze katalogu ─────────────────────────────
+REPEAT_WEIGHT_PENALTY = 0.25   # kara wagi dla rekordu obecnego w historii spotkań
+
+
+def _combat_signature(row: sqlite3.Row) -> str:
+    """Sygnatura combatu z payloadu = posortowany, unikalny zestaw enemy_key ('a+b')."""
+    try:
+        payload = json.loads(row["payload_json"] or "{}")
+    except (TypeError, ValueError):
+        return ""
+    keys = sorted({
+        str(e.get("enemy_key") or "").strip()
+        for e in (payload.get("enemies") or []) if e.get("enemy_key")
+    })
+    return "+".join(k for k in keys if k)
+
+
+def _weighted_pick_penalized(
+    rows: list[sqlite3.Row], rng, penalty_keys: set, penalty: float
+) -> Optional[sqlite3.Row]:
+    """Jak _weighted_pick, ale rekord z enemy_key w penalty_keys dostaje wagę ×penalty."""
+    pool = [r for r in rows if float(r["weight"]) > 0]
+    if not pool:
+        return None
+
+    def _eff(row: sqlite3.Row) -> float:
+        w = float(row["weight"])
+        sig = _combat_signature(row)
+        if sig and any(k in penalty_keys for k in sig.split("+")):
+            w *= penalty
+        return max(0.0, w)
+
+    weights = [_eff(r) for r in pool]
+    total = sum(weights)
+    if total <= 0:  # kara wyzerowała wszystko → wróć do surowych wag
+        weights = [float(r["weight"]) for r in pool]
+        total = sum(weights)
+    r = rng.random() * total
+    acc = 0.0
+    for row, w in zip(pool, weights):
+        acc += w
+        if r < acc:
+            return row
+    return pool[-1]
+
+
 def draw_combat(
-    conn: sqlite3.Connection, biome: str, level: int, rng=random
+    conn: sqlite3.Connection, biome: str, level: int, rng=random,
+    recent_sigs: Optional[list] = None,
 ) -> Optional[dict]:
-    """Wylosuj encounter combat dla biomu/poziomu. Pusto → None (fallback do hardcode)."""
+    """Wylosuj encounter combat dla biomu/poziomu. Pusto → None (fallback do hardcode).
+
+    BL-A3 (#1329): `recent_sigs` (sygnatury ostatnich spotkań, index 0 = ostatnie)
+    → twarda blokada rekordu o sygnaturze identycznej z OSTATNIM spotkaniem (chyba
+    że brak alternatyw) + kara wagi ×REPEAT_WEIGHT_PENALTY dla rekordów z historii.
+    """
     try:
         rows = conn.execute(
             """SELECT * FROM game_config_encounters
@@ -187,7 +239,21 @@ def draw_combat(
         ).fetchall()
     except sqlite3.OperationalError:
         return None
-    picked = _weighted_pick(rows, rng)
+    if not rows:
+        return None
+    recent_sigs = recent_sigs or []
+    if not recent_sigs:
+        picked = _weighted_pick(rows, rng)
+        return _row_to_dict(picked) if picked else None
+    last_sig = recent_sigs[0]
+    penalty_keys: set = set()
+    for s in recent_sigs:
+        penalty_keys.update(str(s).split("+"))
+    # twarda blokada powtórki z rzędu (chyba że to jedyna opcja)
+    eligible = [r for r in rows if _combat_signature(r) != last_sig] if last_sig else rows
+    if not eligible:
+        eligible = rows
+    picked = _weighted_pick_penalized(eligible, rng, penalty_keys, REPEAT_WEIGHT_PENALTY)
     return _row_to_dict(picked) if picked else None
 
 
