@@ -35,6 +35,7 @@ import {
 import type { WorldHex } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TravelCinematic } from "./TravelCinematic";
+import { DayArcModal } from "./DayArcModal";
 
 const VB_W = 340;
 const VB_H = 320;
@@ -115,11 +116,13 @@ export function WorldMap({
   const currentHex = map.data?.current_hex ?? null;
 
   const period = clock.data?.period ?? "";
-  const isNight = /noc/i.test(period);
+  const isNight = clock.data?.is_night ?? /noc/i.test(period);
   const time = clock.data?.hour_str ?? "—:—";
   const dayLabel = clock.data
     ? `Dzień ${clock.data.day} · ${period || "—"}`
     : "—";
+  // #1219 — klik w zegar nagłówka Mapy otwiera popup „Łuk dnia" (parytet z paskiem gry).
+  const [clockOpen, setClockOpen] = useState(false);
   const locationLabel =
     character.data?.current_location_label ?? "W drodze przez Kresy";
 
@@ -279,7 +282,12 @@ export function WorldMap({
           className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5"
           style={{ paddingTop: "max(10px, var(--sa-top))" }}
         >
-          <div className="flex shrink-0 flex-col border-r border-line pr-3 leading-tight">
+          <button
+            type="button"
+            onClick={() => setClockOpen(true)}
+            aria-label="Zegar świata"
+            className="flex shrink-0 flex-col items-start rounded-md border-r border-line pr-3 leading-tight transition-colors hover:bg-white/[.03]"
+          >
             <span className="font-mono text-body font-semibold text-text">
               {time}
             </span>
@@ -291,7 +299,8 @@ export function WorldMap({
               )}
               {dayLabel}
             </span>
-          </div>
+          </button>
+          <DayArcModal open={clockOpen} onOpenChange={setClockOpen} clock={clock.data} />
           <div className="min-w-0 flex-1">
             <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.16em] text-text-3">
               Jesteś w

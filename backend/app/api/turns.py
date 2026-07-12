@@ -8862,15 +8862,66 @@ def _build_done_extra_payload(campaign_id: int, conn) -> dict:
 
 @router.get("/campaigns/{campaign_id}/clock")
 def get_campaign_clock(campaign_id: int):
-    """Current in-game clock state for the campaign — Stage 2A T5.
+    """Current in-game clock state for the campaign — Stage 2A T5 (+#1219 widget).
 
-    Returns `{ingame_hours, day, hour, hour_str, period, display}`.
-    Frontend uses this to render the "Dzień 3, 14:00 Popołudnie" header.
-    Returns a default state (hour 9 = start-of-campaign morning) if no
-    session row exists yet.
+    Base: `{ingame_hours, day, hour, hour_str, period, display}`.
+    Enriched for the world-clock widget:
+      season       — pora roku (pochodna dnia)
+      weather      — {type, type_label, intensity, intensity_label, label,
+                      march_mult, slows_travel, effect} | null (toggle off)
+      is_night     — bool (bucket 22–05)
+      hours_to_night — godziny do 22:00 (0 gdy już noc)
+      night_hint   — deterministyczna podpowiedź nocnej ekonomii | null
+    Frontend uses this to render the "Dzień 3, 14:00 Popołudnie" header
+    plus the clickable day-arc popup (weather, season, night hint).
     """
     from app.services.clock_service import get_clock_state
-    return get_clock_state(campaign_id)
+    state = get_clock_state(campaign_id)
+
+    # Pogoda + pora roku — dane już liczone w silniku (FAZA PT), tu tylko
+    # eksponujemy je w jednej odpowiedzi. Nie wywala zegara, gdy pogoda padnie.
+    try:
+        from app.services import weather_service as ws
+        state["season"] = ws.get_season(int(state.get("day", 1)))
+        weather = None
+        if ws.is_weather_enabled():
+            w = ws.get_weather_state(campaign_id)
+            wtype = str(w.get("type") or "clear")
+            wint = str(w.get("intensity") or "moderate")
+            type_label = ws._WEATHER_PL.get(wtype, wtype)
+            int_label = ws._INTENSITY_PL.get(wint, "")
+            march = ws.weather_march_multiplier(wtype)
+            # Natężenie ma sens tylko dla opadów/temperatury — „silny deszcz" OK,
+            # ale „silny pochmurno/mgła" brzmi źle → dla nich sama nazwa typu.
+            intensity_types = {"rain", "snow", "storm", "heat"}
+            show_int = wint != "moderate" and wtype in intensity_types
+            weather = {
+                "type": wtype,
+                "type_label": type_label,
+                "intensity": wint,
+                "intensity_label": int_label,
+                "label": (f"{int_label} {type_label}".strip()
+                          if show_int else type_label),
+                "march_mult": march,
+                "slows_travel": march > 1.0,
+                "effect": ("marsz wolniejszy" if march > 1.0 else None),
+            }
+        state["weather"] = weather
+    except Exception:
+        state.setdefault("season", None)
+        state.setdefault("weather", None)
+
+    # Nocna ekonomia — godziny do nocy (22:00) + podpowiedź o noclegu.
+    hour = int(state.get("hour", 9))
+    is_night = hour >= 22 or hour < 6
+    state["is_night"] = is_night
+    state["hours_to_night"] = 0 if is_night else (22 - hour)
+    state["night_hint"] = (
+        "Zapada zmierzch — pomyśl o bezpiecznym noclegu."
+        if (not is_night and (22 - hour) <= 3)
+        else None
+    )
+    return state
 
 
 # Deterministyczny komunikat „musisz odpocząć / zapada zmierzch" wyliczany z

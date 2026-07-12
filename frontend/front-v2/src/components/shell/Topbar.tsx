@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Sun,
@@ -7,10 +8,28 @@ import {
   Flame,
   UserCircle,
   Scroll,
+  Cloud,
+  CloudRain,
+  CloudFog,
+  CloudSnow,
+  CloudLightning,
+  ThermometerHot,
 } from "@phosphor-icons/react";
 import { Breadcrumb } from "./Breadcrumb";
 import { useAppStore } from "@/store/appStore";
 import { useCampaignClock, useCampaignDetail } from "@/hooks/useGameData";
+import { phaseTheme } from "@/lib/worldClock";
+import { DayArcModal } from "@/components/game/DayArcModal";
+
+// Mini-ikona pogody dla paska (tylko gdy warto sygnalizować — nie „clear").
+const WEATHER_MINI: Record<string, typeof Cloud> = {
+  clouds: Cloud,
+  rain: CloudRain,
+  storm: CloudLightning,
+  fog: CloudFog,
+  snow: CloudSnow,
+  heat: ThermometerHot,
+};
 
 // Poza grą: marka + breadcrumb + profil.
 // W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
@@ -59,26 +78,68 @@ function GameBar() {
   const toggleGameMenu = useAppStore((s) => s.toggleGameMenu);
   const clock = useCampaignClock(campaignId);
   const campaign = useCampaignDetail(campaignId);
+  const [clockOpen, setClockOpen] = useState(false);
 
-  const period = clock.data?.period ?? "";
-  const isNight = /noc/i.test(period);
-  const time = clock.data?.hour_str ?? "—:—";
+  const data = clock.data;
+  const period = data?.period ?? "";
+  // is_night z backendu (bucket 22–05); fallback na regex dla starszej odpowiedzi.
+  const isNight = data?.is_night ?? /noc/i.test(period);
+  const time = data?.hour_str ?? "—:—";
   const quest = campaign.data?.title ?? "Przygoda";
+  const theme = phaseTheme(data?.hour ?? 9);
+  const weather = data?.weather ?? null;
+  const WeatherMini = weather ? WEATHER_MINI[weather.type] : null;
 
   return (
-    <div className="flex h-12 items-center gap-3 px-3.5">
-      {/* zegar + pora (stack) — z prawym separatorem */}
-      <div className="flex shrink-0 items-center gap-1.5 border-r border-line pr-3">
-        {isNight ? (
-          <MoonStars weight="fill" className="text-mana" size={16} />
-        ) : (
-          <Sun weight="fill" className="text-gold" size={16} />
-        )}
-        <div className="leading-tight">
-          <div className="font-mono text-label font-semibold text-text">{time}</div>
-          <div className="font-ui text-micro text-text-3">{period || "—"}</div>
+    <div
+      className="flex h-12 items-center gap-3 px-3.5"
+      // C — ambient: delikatny poblask krawędzi wg pory dnia (kontrast temperaturą).
+      style={{ boxShadow: `inset 0 -2px 0 -1px ${theme.ambient}` }}
+    >
+      {/* zegar + pora (stack) — klikalny → popup „Łuk dnia" (#1219 B) */}
+      <button
+        type="button"
+        onClick={() => setClockOpen(true)}
+        aria-label="Zegar świata"
+        className="group -ml-1 flex shrink-0 items-center gap-1.5 rounded-md border-r border-line py-1 pl-1 pr-3 transition-colors hover:bg-white/[.03]"
+      >
+        {/* A — crossfade słońce↔księżyc + kolor pory */}
+        <span className="relative inline-flex h-4 w-4 items-center justify-center">
+          <Sun
+            weight="fill"
+            size={16}
+            className="absolute transition-opacity duration-500"
+            style={{ color: theme.accent, opacity: isNight ? 0 : 1 }}
+          />
+          <MoonStars
+            weight="fill"
+            size={16}
+            className="absolute text-mana transition-opacity duration-500"
+            style={{ opacity: isNight ? 1 : 0 }}
+          />
+        </span>
+        <div className="leading-tight text-left">
+          {/* A — flip/fade przy zmianie godziny (key wymusza re-animację) */}
+          <div
+            key={time}
+            className="font-mono text-label font-semibold text-text animate-fade-in"
+          >
+            {time}
+          </div>
+          <div className="flex items-center gap-1 font-ui text-micro text-text-3">
+            <span>{period || "—"}</span>
+            {WeatherMini && (
+              <WeatherMini
+                weight="fill"
+                size={11}
+                className="text-text-3 opacity-80 transition-colors group-hover:text-ember-glow"
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </button>
+
+      <DayArcModal open={clockOpen} onOpenChange={setClockOpen} clock={data} />
 
       {/* TYLKO główny quest (reszta w Dzienniku) */}
       <div className="flex min-w-0 flex-1 items-center gap-2">

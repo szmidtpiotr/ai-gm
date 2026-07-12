@@ -128,6 +128,17 @@ export interface Chronicle {
 // ── F-12 ekran gry (KROK 4 #1233) ────────────────────────────────────────────
 
 // GET /campaigns/{id}/clock — zegar świata gry (sekcja 8, strumień).
+export interface WeatherState {
+  type: string; // "clear" | "clouds" | "rain" | "storm" | "fog" | "snow" | "heat"
+  type_label: string; // "deszcz"
+  intensity: string; // "light" | "moderate" | "heavy"
+  intensity_label: string; // "słaby" | "umiarkowany" | "silny"
+  label: string; // "silny deszcz" | "mgła"
+  march_mult: number; // 1.0 = brak wpływu na marsz
+  slows_travel: boolean;
+  effect: string | null; // "marsz wolniejszy" | null
+}
+
 export interface ClockState {
   ingame_hours: number;
   day: number;
@@ -135,6 +146,12 @@ export interface ClockState {
   hour_str: string; // "22:00"
   period: string; // "Rano" | "Popołudnie" | "Wieczór" | "Noc"
   display: string; // "Dzień 3, 14:00 Popołudnie"
+  // #1219 widget — pola opcjonalne (starszy backend ich nie zwraca):
+  season?: string | null; // "wiosna" | "lato" | "jesień" | "zima"
+  weather?: WeatherState | null;
+  is_night?: boolean;
+  hours_to_night?: number;
+  night_hint?: string | null;
 }
 
 // GET /characters/{id} — pełny bohater (paski HP/Mana + rail atrybutów).
