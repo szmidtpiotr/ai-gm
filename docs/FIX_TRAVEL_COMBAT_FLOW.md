@@ -252,6 +252,112 @@ Backend w oknie zdarzenia zwracał same 200 (resolve-attack, enemy-turn, GET /co
 
 ---
 
+## T5 — Sekwencja i czytelność tur walki (analiza 2026-07-12, druga runda)
+
+**Zgłoszenie Piotra (oczekiwany flow):** (1) inicjatywa z animacją + wynik wroga + kto
+zaczyna; (2) rzut na trafienie z widocznym testem obrony wroga (czemu trafiłem / czemu
+uniknął); (3) trafienie → osobny rzut na obrażenia → odjęcie HP; (4) tura wroga: przy
+trafieniu modal przyjmij/unik/blok → test reakcji → dopiero wtedy obrażenia; (5) pętla.
+Symptomy: (A) klik unik/blok, a HP już odjęte; (B) modal rzutu przy ataku gracza czasem
+w ogóle się nie pokazuje.
+
+**Kluczowe ustalenie: silnik (backend) już implementuje ten flow niemal 1:1.
+Gubi go warstwa prezentacji w ŻAR.** Fakty:
+
+1. **Inicjatywa** — obie strony rzucają (`initiate_combat`, `combat_service.py:4881`
+   gracz, `:4972` wróg), oba wyniki SĄ w snapshotcie (`initiative_roll` na combatancie),
+   remis wygrywa gracz (`:5028`). Frontend: zero animacji, zero banera „kto zaczyna" —
+   tylko statyczny złoty chip z liczbą przy portrecie (`CombatBanner.tsx:218-220`).
+   Dane są, prezentacji brak.
+2. **Obrona wroga to RZUT, nie statyczne AC** — `compute_player_attack_dodge_outcome`
+   (`combat_service.py:6298`): wróg rzuca d20+DEX przeciw atakowi gracza. Response
+   `resolve-attack` niesie komplet: `player_raw_d20`, `attack_total`, `dodge_roll
+   {raw, modifier, total, verdict}`, `hit`, `dodged`, `damage_rolls`,
+   `margin_damage_bonus`, `armor_reduction`. Karta w feedzie rozróżnia „WRÓG UNIKA"
+   vs „PUDŁO" (`lib/combat.ts:99-114`; „PUDŁO" tylko przy Nat 1). Ale **overlay kości
+   NIE pokazuje rzutu obrony wroga liczbowo** — gracz nie widzi „twój atak 16 vs unik
+   wroga 14", stąd „mało czytelne czemu trafił lub nie".
+3. **Rzut obrażeń jest osobnym etapem** — overlay dwustopniowy: d20 „NA TRAFIENIE",
+   potem kość obrażeń przy trafieniu (`CombatView.tsx:260-286`), wynik maskowany do
+   końca animacji. Działa — ale patrz symptom B niżej.
+4. **Okno reakcji: backend ODRACZA obrażenia — nie ma żadnego „odjął i odda".**
+   `_attack_try_reaction` (`combat_service.py:6602-6635`) zapisuje
+   `pending_reaction {damage, attack_roll, options…}` i robi early-return PRZED mutacją
+   HP (zapis HP w `:8029` nieosiągalny na tej ścieżce); router wstrzymuje turę
+   (`awaiting_reaction`, `combat.py:276-279`). HP mutuje się WYŁĄCZNIE w
+   `resolve_reaction` (`:8379`), po teście wybranej reakcji. Snapshot polla w otwartym
+   oknie niesie HP sprzed ciosu, a `pending_reaction.damage` jest wycinany
+   (`_row_to_combat_dict :2101-2107`) — nic nie wycieka z backendu.
+
+**Symptom A (HP odjęte „przed" wyborem) — przyczyny frontendowe:**
+
+- `hpFreeze` (zamrożenie wyświetlanego HP, `CombatView.tsx:84-98`) jest zakładany
+  **tylko na ścieżce animowanej**: przy reakcji dopiero gdy
+  `willAnimate = showPlayerDice && choice !== "take"` (`:465`). Gdy preferencja kości
+  wyłączona / wybór „przyjmij" / reakcja `available=false` → po response mutacji
+  `useCombatMutation.onSuccess` (`useCombat.ts:51-57`) + `pushCombatState` (`:468`)
+  wpychają zredukowane HP do cache i pasek/rail spada NATYCHMIAST, zanim gracz
+  przeczyta kartę wyniku → wrażenie „już odjęte".
+- Ścieżka `showEnemyDice` OFF otwiera ReactionModal w ogóle bez freeze (`:411-413`) —
+  działa tylko dzięki odroczeniu backendowemu; każdy przyszły refactor to rozjedzie.
+- Dodatkowo trafienia BEZ okna reakcji (postać nie ma żadnej opcji z `_reaction_options`
+  — np. mag bez skilla `dodge`, bez many na barierę): silnik sam rzuca
+  `player_evasion` (d20+DEX, widoczne w `combat_turns.narrative`) i od razu aplikuje
+  obrażenia — gracz widzi tylko spadek HP, bez modalu i bez informacji, że automatyczny
+  unik zawiódł. W sesji Drundora (walka #502, event 3140: atak 19 vs AC 11,
+  `player_evasion {raw:3,+1=4}`, −7 HP) dokładnie to zaszło. To się miesza percepcyjnie
+  z oknami reakcji → „czasem modal jest, czasem HP samo spada".
+
+**Symptom B (brak modalu rzutu przy ataku gracza) — przyczyny:**
+
+- Overlay kości gracza jest CAŁKOWICIE warunkowy od preferencji
+  `gamePrefShowPlayerDice` (`appStore.ts:18,178`, przełącznik w `GameMenu.tsx:119`,
+  default ON): gdy OFF → tylko mała karta w logu, zero modalu (`CombatView.tsx:287-290`).
+- `r.blocked` (poza zasięgiem / brak many) → sam toast, bez rzutu (`:234-246`).
+- Błąd requestu → catch z toastem, bez modalu (`:291-295`).
+- Do sprawdzenia u Piotra: czy preferencja kości nie została wyłączona w menu gry.
+
+**Zmiany (wszystko frontend poza 5e-opcją):**
+
+1. **5a Karta inicjatywy**: na starcie walki (po/równolegle z modalem zasadzki z T1)
+   pokaż sekwencję „Inicjatywa: Ty {X} vs {wróg} {Y} — zaczynasz / zaczyna wróg"
+   (dane już w snapshotcie; opcjonalnie animacja d20 obu rzutów). Może być karta w
+   feedzie + krótki banner, nie musi być modal.
+2. **5b Czytelny wynik trafienia**: etap „NA TRAFIENIE" overlaya pokazuje OBIE liczby:
+   atak gracza (d20+mod=total) vs obrona wroga (d20+DEX=total) + werdykt
+   („wróg uniknął: 14 ≥ 16? nie → trafienie"). Karta w feedzie analogicznie z liczbami.
+   Semantyka zostaje (#826: obrona = rzut, zwykłe pudło = udany unik wroga).
+3. **5c Freeze HP przez całe okno reakcji**: zamrożenie wyświetlanego HP od momentu
+   `reaction_window=true` do zakończenia PREZENTACJI wyniku reakcji — niezależnie od
+   `showPlayerDice`/`showEnemyDice`/wyboru „przyjmij". Ujednolicić: jeden tor
+   window→choice→test→obrażenia→reveal HP, z animacją lub bez (bez animacji = te same
+   karty, tylko natychmiast).
+4. **5d Wynik reakcji zawsze widoczny**: po kliknięciu unik/blok pokaż test reakcji
+   (rzut + próg + sukces/porażka), potem obrażenia (0 przy sukcesie), dopiero potem
+   spadek paska. Ścieżka animowana już tak działa (`onDiceDone :321`) — wyrównać
+   nieanimowaną.
+5. **5e Auto-unik bez okna**: gdy silnik rozstrzyga cios automatycznym `player_evasion`
+   (brak opcji reakcji), pokaż to jawnie w karcie: „Automatyczny unik: 4 vs atak 19 —
+   trafiony, −7 HP". Teraz ta informacja ginie (jest tylko w narrative eventu).
+   Opcjonalnie backend: dodać `player_evasion` do response `enemy-turn` jeśli
+   nie jest jeszcze przekazywany wprost.
+6. **(higiena)** Timeout 8 s auto-„przyjmij" w ReactionModal (`ReactionModal.tsx:41`)
+   → po timeout pokaż wyraźnie „czas minął — przyjąłeś cios", nie cichy spadek HP.
+
+**Weryfikacja:** Playwright z `showPlayerDice` ON i OFF: (a) start walki → karta
+inicjatywy z obiema wartościami; (b) atak gracza → widoczne atak vs unik wroga;
+(c) trafienie wroga w gracza z oknem → HP na pasku NIE zmienia się do rozstrzygnięcia
+reakcji (obie preferencje kości); (d) cios bez okna → karta auto-uniku.
+DB: `combat_turns.hp_after` dla eventu `reaction_window` = HP sprzed ciosu (już tak jest
+— regresja pilnowana testem).
+
+**Uwaga porządkowa (do T4):** wiersz `active_combat` jest KASOWANY przy starcie
+kolejnej walki w kampanii (potwierdzone: start #502 usunął #501). Stan „ended" żyje
+w DB tylko do następnej walki — kolejny powód, by wynik+loot dostarczać frontowi
+niezwłocznie i nie polegać na późniejszym odczycie.
+
+---
+
 ## Kolejność wdrożenia i zakres issue
 
 | Task | Priorytet | Sugerowane issue | Zależności |
@@ -259,6 +365,7 @@ Backend w oknie zdarzenia zwracał same 200 (resolve-attack, enemy-turn, GET /co
 | T4 walka znika | **P0** | osobne issue, backend+frontend | brak |
 | T1 modal zasadzki | P1 | osobne issue | snapshot #1344 (jest) |
 | T2 obrona maga | P1 | osobne issue | #1324/#1325 (są) |
+| T5 sekwencja/czytelność tur | P1 | osobne issue (5a-5e można ciąć na podtaski) | T2 zwiększy częstość okien reakcji |
 | T3 sheet czarów | P2 | osobne issue (+ data-fix rdzen_shield w tym samym) | brak |
 
 Konwencje: implementation-record issue per task (szablon #18), `enhancement`+`needs-testing`,
