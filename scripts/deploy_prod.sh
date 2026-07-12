@@ -66,8 +66,15 @@ else
   git pull --ff-only origin main
 fi
 
-echo "🐳 [4/5] Restart kontenerów PROD..."
+echo "🛠  [4a/5] Budowa ŻAR (front-v2) — dist gitignored, budujemy w kontenerze node..."
+"$REPO_DIR/scripts/build_frontend.sh"
+
+echo "🐳 [4b/5] Restart kontenerów PROD..."
 compose up -d --build --remove-orphans
+# nginx.conf + statyczne assety idą bind-mountem; `up -d` sam NIE recreuje frontendu
+# gdy jego definicja bez zmian, więc zmiana nginx.conf/dist nie zostałaby załadowana
+# (nginx czyta conf przy starcie). Wymuś recreate, by /graj/ + routing były aktualne.
+compose up -d --force-recreate frontend
 
 echo "⏳ [5/5] Healthcheck backendu (max 120s)..."
 for i in $(seq 1 24); do
