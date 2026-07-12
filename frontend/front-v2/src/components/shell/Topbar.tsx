@@ -31,6 +31,16 @@ const WEATHER_MINI: Record<string, typeof Cloud> = {
   heat: ThermometerHot,
 };
 
+// Delikatny tint per pogoda — czytelniejszy niż szara plamka, drobny sygnał.
+const WEATHER_TINT: Record<string, string> = {
+  clouds: "var(--text-2)",
+  fog: "var(--text-2)",
+  rain: "var(--mana)",
+  snow: "#cdd6ff",
+  storm: "var(--gold)",
+  heat: "var(--ember)",
+};
+
 // Poza grą: marka + breadcrumb + profil.
 // W grze: kompaktowy „pasek przygody" (zegar+pora stack · tylko główny quest · mapa · menu).
 // BEZ imienia bohatera; HP/Mana są nad dolnym tabbarem (sekcja 5, zamrożone reguły).
@@ -126,13 +136,14 @@ function GameBar() {
           >
             {time}
           </div>
-          <div className="flex items-center gap-1 font-ui text-micro text-text-3">
+          <div className="flex items-center gap-1.5 font-ui text-micro text-text-3">
             <span>{period || "—"}</span>
             {WeatherMini && (
               <WeatherMini
                 weight="fill"
-                size={11}
-                className="text-text-3 opacity-80 transition-colors group-hover:text-ember-glow"
+                size={13}
+                className="transition-colors group-hover:text-ember-glow"
+                style={{ color: WEATHER_TINT[weather!.type] ?? "var(--text-2)" }}
               />
             )}
           </div>
