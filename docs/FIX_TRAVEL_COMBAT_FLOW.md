@@ -308,6 +308,17 @@ Gubi go warstwa prezentacji w ŻAR.** Fakty:
   `player_evasion {raw:3,+1=4}`, −7 HP) dokładnie to zaszło. To się miesza percepcyjnie
   z oknami reakcji → „czasem modal jest, czasem HP samo spada".
 
+**Doprecyzowanie od Piotra (2026-07-12): obie animacje kości ma WŁĄCZONE.** Czyli
+symptom A wystąpił mimo ścieżki animowanej — do zbadania przy wdrożeniu dodatkowo:
+(a) wyścig `useCombatMutation.onSuccess` (cache z obniżonym HP zapisany PRZED startem
+animacji — czy każdy element poza bannerem/railem na pewno czyta przez `view` z freeze,
+np. karta w feedzie, DeathScreen, VitalsRail w innych rozdzielczościach);
+(b) ścieżka „przyjmij" (bez animacji z definicji, freeze nie zakładany);
+(c) ciosy BEZ okna reakcji (auto `player_evasion` — patrz 5e, u maga bez skilla `dodge`
+to WIĘKSZOŚĆ trafień) — HP spada bez żadnego modalu, co gracz skleja percepcyjnie
+z oknami reakcji. Symptom B analogicznie: skoro preferencja ON, przyczyną są ścieżki
+`blocked`/błąd requestu albo race — do reprodukcji z otwartą konsolą.
+
 **Symptom B (brak modalu rzutu przy ataku gracza) — przyczyny:**
 
 - Overlay kości gracza jest CAŁKOWICIE warunkowy od preferencji
@@ -336,11 +347,17 @@ Gubi go warstwa prezentacji w ŻAR.** Fakty:
    (rzut + próg + sukces/porażka), potem obrażenia (0 przy sukcesie), dopiero potem
    spadek paska. Ścieżka animowana już tak działa (`onDiceDone :321`) — wyrównać
    nieanimowaną.
-5. **5e Auto-unik bez okna**: gdy silnik rozstrzyga cios automatycznym `player_evasion`
-   (brak opcji reakcji), pokaż to jawnie w karcie: „Automatyczny unik: 4 vs atak 19 —
-   trafiony, −7 HP". Teraz ta informacja ginie (jest tylko w narrative eventu).
-   Opcjonalnie backend: dodać `player_evasion` do response `enemy-turn` jeśli
-   nie jest jeszcze przekazywany wprost.
+5. **5e Okno reakcji ZAWSZE — silnik nigdy nie rozstrzyga za gracza** (decyzja
+   designowa Piotra, 2026-07-12): przy KAŻDYM trafieniu wroga w gracza otwiera się
+   okno reakcji, nawet gdy jedyną dostępną opcją jest „Przyjmij cios" (postać bez
+   skilli obronnych / bez many / cap reakcji w rundzie #1322 wyczerpany — wtedy opcje
+   obronne wyszarzone z powodem, „Przyjmij" aktywne). Automatyczna ścieżka
+   `player_evasion` (silnik sam rzuca unik i aplikuje obrażenia, bez pytania)
+   **wylatuje z trybu single-player** — zamiast niej normalne okno. Backend:
+   `_attack_try_reaction` otwiera okno także przy pustych `_reaction_options`
+   (opcja `take` zawsze); ścieżka auto-evasion zostaje wyłącznie tam, gdzie nie ma
+   aktywnego gracza (MP sweep nieobecnych — zweryfikować przy wdrożeniu).
+   Uwaga: to zmiana zasad gracza → wpis w Księdze Zasad w tym samym PR.
 6. **(higiena)** Timeout 8 s auto-„przyjmij" w ReactionModal (`ReactionModal.tsx:41`)
    → po timeout pokaż wyraźnie „czas minął — przyjąłeś cios", nie cichy spadek HP.
 
@@ -358,6 +375,50 @@ niezwłocznie i nie polegać na późniejszym odczycie.
 
 ---
 
+## T6 — Loot po zwycięstwie: zawsze modal, zawsze coś wypada
+
+**Decyzja designowa Piotra (2026-07-12):** gracz po zwycięstwie MUSI dostać modal
+lootu — także gdy losowanie dało zero (wtedy jasny komunikat „nie miał nic przy
+sobie"). Preferencja: **zawsze powinno coś wypaść**, choćby bezwartościowy/narracyjny
+drobiazg — puste ręce bez słowa = gracz czuje się oszukany.
+
+**Dowód problemu:** walka #502 (bandyta, `drop_chance=0.8`, `loot_wolf`-style tabela
+`loot_bandit`) zakończona victory z `loot_pool='[]'` — i zero informacji w UI
+(dodatkowo modal zwycięstwa w ogóle nie wystąpił — to T4; T6 zakłada, że T4 przywróci
+modal, i definiuje jego treść przy pustym lootcie).
+
+**Zmiany:**
+
+1. **Backend — gwarantowany drop minimalny**: w `loot_service.roll_loot()` /
+   miejscu składania `loot_pool` przy victory: gdy wynik losowania pusty (nietrafiony
+   `drop_chance` albo pusta tabela), dorzuć pozycję z **puli narracyjnych drobiazgów**
+   (nowa tabela lootu `loot_trash_common`, seedowana: np. „zniszczony mieszek
+   (3 miedziaki)", „szczerbaty nóż", „kościana kostka do gry", „strzęp mapy bez
+   wartości" — pozycje `game_config_items` z `is_active=1`, wartość 0–1 gp,
+   oznaczone narracyjnie). Alternatywnie minimalny rzut złota 1d4 miedziaków.
+   Wybór wariantu (przedmiot vs miedziaki vs mix) — do decyzji przy wdrożeniu,
+   wartości STARTING. Seed przez git (content-as-code #1202), `created_by='seed'`.
+2. **Backend — flaga w payloadzie**: `loot_pool` w snapshotcie końca walki dostaje
+   rozróżnienie: `rolled` (z tabeli wroga) vs `consolation` (drop minimalny) —
+   front może opisać drobiazg innym tonem („W sakwie tylko śmieci: …").
+3. **Frontend — modal lootu zawsze po victory** (zależność: T4 pkt 1-2 musi najpierw
+   przywrócić dostarczanie stanu ended): trzy warianty treści:
+   (a) normalny loot → lista jak dotąd; (b) tylko consolation → „Przeszukujesz ciało.
+   Niewiele przy sobie miał: {drobiazg}"; (c) awaryjnie pusto (nie powinno się już
+   zdarzyć) → „Nie miał nic przy sobie". Zero cichych przejść do chatu.
+4. **Dungeony/MP**: sprawdzić, czy loot z pokoi lochów i walk MP idzie tą samą
+   ścieżką `roll_loot` — jeśli tak, drop minimalny obejmie je automatycznie;
+   jeśli nie, wyrównać w osobnym issue.
+
+**Numbers Policy:** szansa 100% na drop minimalny przy pustym losowaniu, wartość
+0–1 gp / 1d4 miedziaków — wartości startowe do tuningu.
+
+**Weryfikacja:** pytest: `roll_loot` z wymuszonym pudłem `drop_chance` → pool
+niepusty, pozycja oznaczona `consolation`. Playwright: victory → modal ZAWSZE,
+wariant (b) przy pustym losowaniu. Księga Zasad: dopisek w rozdziale o łupach.
+
+---
+
 ## Kolejność wdrożenia i zakres issue
 
 | Task | Priorytet | Sugerowane issue | Zależności |
@@ -365,7 +426,8 @@ niezwłocznie i nie polegać na późniejszym odczycie.
 | T4 walka znika | **P0** | osobne issue, backend+frontend | brak |
 | T1 modal zasadzki | P1 | osobne issue | snapshot #1344 (jest) |
 | T2 obrona maga | P1 | osobne issue | #1324/#1325 (są) |
-| T5 sekwencja/czytelność tur | P1 | osobne issue (5a-5e można ciąć na podtaski) | T2 zwiększy częstość okien reakcji |
+| T5 sekwencja/czytelność tur + zawsze-pytaj | P1 | osobne issue (5a-5e można ciąć na podtaski) | T2 zwiększy częstość okien reakcji |
+| T6 loot: zawsze modal + drop minimalny | P1 | osobne issue | T4 (dostarczenie stanu ended) |
 | T3 sheet czarów | P2 | osobne issue (+ data-fix rdzen_shield w tym samym) | brak |
 
 Konwencje: implementation-record issue per task (szablon #18), `enhancement`+`needs-testing`,
