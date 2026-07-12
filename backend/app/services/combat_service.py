@@ -1293,6 +1293,87 @@ def _try_arcane_ward_reaction(
     }
 
 
+# ─── #1325: reakcja `mana_shield` (Tarcza Many) — odpowiednik Bloku dla maga, DETERMINISTYCZNA.
+# Bez rzutu: mag „kupuje pewność" za zasób ofensywny. Model CAP — limit wydatku many na cios =
+# MANA_SHIELD_LIMIT_PER_RANK × rank, przelicznik R = MANA_SHIELD_ABSORB_PER_MANA. Wpinana OSTATNIA
+# w potoku (po #826 i B10), tuż przed odjęciem HP — dlatego bierze `dmg` FINALNE, nie surowe.
+
+def _try_mana_shield_reaction(
+    p: dict[str, Any],
+    sheet: dict[str, Any] | None,
+    dmg: int,
+    round_n: int,
+    *,
+    campaign_id: int | None = None,
+    ch_id: int | None = None,
+    combat_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Tarcza Many — deterministyczna absorpcja obrażeń FINALNYCH (po #826/B10) za manę.
+
+    Model CAP (decyzja Piotra, #1325):
+      • twardy limit wydatku many na cios = ``MANA_SHIELD_LIMIT_PER_RANK × rank`` (start 2×rank),
+        dodatkowo ograniczony aktualną pulą many,
+      • przelicznik ``R = MANA_SHIELD_ABSORB_PER_MANA`` (start 2 obr./1 mana),
+      • pochłonięte = ``min(dmg, spend_cap_mana × R)``,
+      • zapłata = ``ceil(pochłonięte / R)`` — TYLKO za faktycznie wykorzystaną absorpcję
+        (niewykorzystany limit nie kosztuje; kryt wroga nie zeżre całej puli — chroni cap).
+
+    Bez rzutu → brak crit-fail → brak lockoutu. Gate: skill ``mana_shield`` rank ≥ 1 ORAZ
+    ``current_mana > 0``. Zwraca ``None`` (silnik idzie normalną ścieżką) gdy brak deklaracji /
+    skilla; ``available=False`` gdy 0 many. Przy ``dmg <= 0`` mana NIE schodzi (nic do pochłonięcia).
+    """
+    if str(p.get("reaction_declared") or "") != "mana_shield":
+        return None
+    skills = (sheet.get("skills") if isinstance(sheet, dict) else None) or {}
+    try:
+        skill_rank = int(skills.get("mana_shield", 0) or 0)
+    except (TypeError, ValueError):
+        skill_rank = 0
+    if skill_rank < 1:
+        p.pop("reaction_declared", None)
+        return None
+    # Konsumuj pre-deklarację (raz/rundę — niezależnie od wyniku/gate'u).
+    p.pop("reaction_declared", None)
+    try:
+        current_mana = int((sheet.get("current_mana") if isinstance(sheet, dict) else 0) or 0)
+    except (TypeError, ValueError):
+        current_mana = 0
+    limit_mana = int(MANA_SHIELD_LIMIT_PER_RANK) * skill_rank
+    if current_mana <= 0:
+        return {"reaction": "mana_shield", "available": False, "reason": "no_mana",
+                "current_mana": current_mana, "limit_mana": limit_mana,
+                "damage_before": int(dmg), "damage_after": int(dmg), "absorbed": 0,
+                "mana_spent": 0, "skill_rank": skill_rank}
+    R = int(MANA_SHIELD_ABSORB_PER_MANA)
+    spend_cap_mana = min(limit_mana, current_mana)      # nie wydamy więcej niż limit ani niż mamy
+    absorb_cap = spend_cap_mana * R
+    absorbed = max(0, min(int(dmg), absorb_cap))
+    if absorbed <= 0:
+        # Obrażenia już zjedzone (dmg=0 po pancerzu/absorpcji) — mana nietknięta.
+        return {"reaction": "mana_shield", "available": True, "absorbed": 0, "mana_spent": 0,
+                "damage_before": int(dmg), "damage_after": int(dmg), "limit_mana": limit_mana,
+                "current_mana": current_mana, "skill_rank": skill_rank}
+    mana_spent = (absorbed + R - 1) // R                # ceil — płacimy tylko za wykorzystane
+    from app.services.spell_service import check_and_deduct_mana as _deduct_mana
+    _ok, new_mana = _deduct_mana(
+        sheet, mana_spent, campaign_id=campaign_id, character_id=ch_id,
+        combat_id=combat_id, cause="reaction_mana_shield",
+    )
+    damage_after = max(0, int(dmg) - absorbed)
+    return {
+        "reaction": "mana_shield",
+        "available": True,
+        "absorbed": int(absorbed),
+        "mana_spent": int(mana_spent),
+        "damage_before": int(dmg),
+        "damage_after": int(damage_after),
+        "limit_mana": int(limit_mana),
+        "absorb_per_mana": R,
+        "skill_rank": skill_rank,
+        "current_mana": int(new_mana),
+    }
+
+
 # ─── S16 (#611): reakcja `shield_block` — druga reakcja w systemie (reużywa frameworku S15).
 
 def _player_has_shield_equipped(conn: Any, char_id: int | None) -> tuple[bool, int | None]:
@@ -5649,6 +5730,9 @@ ARMOR_REDUCTION_OFFSET = 10   # pancerz = max(0, ac_base − OFFSET); 10 = czę�
                               # (zeruje słabe ciosy → ratuje min 1 dmg). Strój na Sandboxie.
 ARCANE_WARD_MANA_COST = 1     # #1324: koszt many za PRÓBĘ Arkanowej Bariery (schodzi ZAWSZE,
                               # niezależnie od wyniku testu). Wartość STARTOWA — strój na Sandboxie.
+# #1325: Tarcza Many — deterministyczna absorpcja obrażeń opłacana maną (model CAP). Startowe:
+MANA_SHIELD_LIMIT_PER_RANK = 2   # twardy limit wydatku many na cios = LIMIT × rank (anty boss-tank)
+MANA_SHIELD_ABSORB_PER_MANA = 2  # przelicznik R — ile obrażeń pochłania 1 mana (start 2 obr./mana)
 
 
 # ─── #1210: mechaniki V2 (port z combat_v2_service.py) ───────────────────────
@@ -6114,8 +6198,9 @@ def _reaction_options(
     if int(p.get("reaction_locked_round") or 0) == int(round_n):
         return []
     # Cap 1/rundę tylko przy wielu wrogach; single enemy → reakcja co atak.
+    used_this_round = int(p.get("reaction_used_round") or 0) == int(round_n)
     swarm = enemy_count is None or int(enemy_count) >= 2
-    if swarm and int(p.get("reaction_used_round") or 0) == int(round_n):
+    if swarm and used_this_round:
         return []
     skills = sheet.get("skills") or {}
     opts: list[str] = []
@@ -6137,6 +6222,15 @@ def _reaction_options(
             current_mana = int(sheet.get("current_mana", 0) or 0)
             if current_mana >= int(ARCANE_WARD_MANA_COST):
                 opts.append("arcane_ward")
+    except (TypeError, ValueError):
+        pass
+    # #1325: Tarcza Many — gate: skill mana_shield ≥ 1 ORAZ mana > 0. Limit 1/rundę ZAWSZE
+    # (także przy JEDNYM wrogu — odstępstwo od #1322, anty boss-tank): jeśli reakcja zużyta
+    # w tej rundzie, tarcza znika z opcji niezależnie od liczby wrogów.
+    try:
+        if int(skills.get("mana_shield", 0) or 0) >= 1 and not used_this_round:
+            if int(sheet.get("current_mana", 0) or 0) > 0:
+                opts.append("mana_shield")
     except (TypeError, ValueError):
         pass
     return opts
@@ -8005,7 +8099,9 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         ch = "shield_block"
     if ch == "ward":
         ch = "arcane_ward"
-    if ch not in {"take", "dodge", "shield_block", "arcane_ward"}:
+    if ch == "mana":
+        ch = "mana_shield"
+    if ch not in {"take", "dodge", "shield_block", "arcane_ward", "mana_shield"}:
         raise ValueError(f"unknown reaction choice: {choice}")
 
     with _conn() as conn:
@@ -8041,6 +8137,7 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         _dodge = None
         _block = None
         _ward = None
+        _mshield = None
 
         if ch == "dodge":
             p["reaction_declared"] = "dodge"
@@ -8067,6 +8164,7 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 out["reaction"] = _ward
                 if _ward.get("available") and _ward.get("warded"):
                     dmg = 0
+        # ch == "mana_shield": #1325 — absorpcja liczona OSTATNIA (po #826 i B10), patrz niżej.
         # ch == "take": dmg bez zmian
 
         # zużycie reakcji w rundzie + zamknięcie okna
@@ -8096,6 +8194,18 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
 
         # B10 (#657): pula absorpcji tarczy pochłania obrażenia PRZED HP (po uniku/bloku).
         dmg = _apply_absorption(p, dmg, out)
+        # #1325: Tarcza Many — punkt OSTATNI potoku. Deterministyczna absorpcja many na obrażeniach
+        # FINALNYCH (po #826 i B10), tuż przed odjęciem HP → „1 mana = R HP uratowane" dosłownie.
+        if ch == "mana_shield":
+            p["reaction_declared"] = "mana_shield"
+            _mshield = _try_mana_shield_reaction(
+                p, sheet, dmg, round_n,
+                campaign_id=campaign_id, ch_id=ch_id, combat_id=int(row["id"]),
+            )
+            if _mshield is not None:
+                out["reaction"] = _mshield
+                if _mshield.get("available"):
+                    dmg = int(_mshield.get("damage_after", dmg))
         out["damage"] = dmg
         prev = int(p.get("hp_current", 0) or 0)
         next_hp = max(0, prev - dmg)
@@ -8133,7 +8243,9 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
 
         cid = int(row["id"])
         # log reakcji (unik/blok/bariera) — Sandbox/UI pokazuje test i wynik
-        _react = _dodge if _dodge is not None else (_block if _block is not None else _ward)
+        _react = (_dodge if _dodge is not None else
+                  (_block if _block is not None else
+                   (_ward if _ward is not None else _mshield)))
         if _react is not None and _react.get("available"):
             tn_r = _next_combat_log_sequence(conn, cid)
             log_combat_turn(
@@ -8144,7 +8256,8 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
                 damage=int(out.get("damage") or 0), hp_after=next_hp,
                 target_id="player", target_name=str(p.get("name") or "Bohater"),
                 hit=bool(_react.get("dodged") or _react.get("warded") or _react.get("full_block")
-                         or (_react.get("reduction") or 0) > 0),
+                         or (_react.get("reduction") or 0) > 0
+                         or (_react.get("absorbed") or 0) > 0),
                 narrative=json.dumps({**_react, "choice": ch}, ensure_ascii=False),
             )
         else:

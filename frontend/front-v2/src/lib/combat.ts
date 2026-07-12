@@ -161,7 +161,7 @@ export function toHitStageCard(full: RollCardData, hit: boolean): RollCardData {
  * Jasno mówi czy unik/blok się udał + koloruje wg skutku dla Ciebie. */
 export function rollFromReaction(
   r: CombatActionResult,
-  choice: "take" | "dodge" | "block" | "ward",
+  choice: "take" | "dodge" | "block" | "ward" | "mana",
 ): RollCardData {
   const react = r.reaction || {};
   const dmg = Number(r.damage ?? 0);
@@ -173,7 +173,9 @@ export function rollFromReaction(
         ? "BLOK"
         : choice === "ward"
           ? "BARIERA"
-          : "CIOS";
+          : choice === "mana"
+            ? "TARCZA MANY"
+            : "CIOS";
   cells.push({ k: "Reakcja", v: label, sum: true });
 
   let resV: string;
@@ -202,6 +204,17 @@ export function rollFromReaction(
     } else {
       resV = `BARIERA PRZEBITA · ${dmg} Obr.`; // test nieudany — cios przechodzi, mana i tak zeszła
       tone = "bad";
+    }
+  } else if (choice === "mana") {
+    // #1325: Tarcza Many — deterministyczna absorpcja many; płacisz tylko za pochłonięte.
+    const absorbed = Number(react.absorbed ?? 0);
+    const spent = Number(react.mana_spent ?? 0);
+    if (dmg <= 0) {
+      resV = `TARCZA MANY · 0 Obr. · −${spent} many`; // cios pochłonięty w całości
+      tone = "ok";
+    } else {
+      resV = `TARCZA MANY · −${absorbed} Obr. · ${dmg} przeszło · −${spent} many`;
+      tone = "warn";
     }
   } else {
     resV = `CIOS · ${dmg} Obr.`; // przyjąłeś na klatę

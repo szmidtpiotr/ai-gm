@@ -2,10 +2,10 @@
 // Timer-ring odlicza; brak wyboru = auto „Przyjmij cios" (parytet z silnikiem, choice
 // default „take"). Liczba obrażeń CELOWO ukryta — wybór pozostaje zakładem (decyzja Piotra).
 import { useEffect, useRef, useState } from "react";
-import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle } from "@phosphor-icons/react";
+import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle, ShieldStar } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
-export type ReactionChoice = "take" | "dodge" | "block" | "ward";
+export type ReactionChoice = "take" | "dodge" | "block" | "ward" | "mana";
 
 export interface ReactionData {
   enemyName: string;
@@ -51,6 +51,7 @@ export function ReactionModal({
   const hasDodge = data.options.includes("dodge");
   const hasBlock = data.options.includes("shield_block");
   const hasWard = data.options.includes("arcane_ward"); // #1324: Arkanowa Bariera
+  const hasManaShield = data.options.includes("mana_shield"); // #1325: Tarcza Many
 
   return (
     <div
@@ -144,6 +145,21 @@ export function ReactionModal({
               onClick={() => fire("ward")}
             />
           )}
+          {hasManaShield && (
+            <Choice
+              variant="mana"
+              icon={<ShieldStar weight="fill" size={21} />}
+              name="Tarcza Many"
+              desc="Bez rzutu — pochłaniasz część ciosu maną (2 obr. za 1 manę, limit z rangi)."
+              meta={
+                <>
+                  za manę
+                  <br />1/rundę
+                </>
+              }
+              onClick={() => fire("mana")}
+            />
+          )}
           <Choice
             variant="take"
             icon={<HandPalm weight="fill" size={21} />}
@@ -194,20 +210,20 @@ function Choice({
   meta,
   onClick,
 }: {
-  variant: "dodge" | "block" | "ward" | "take";
+  variant: "dodge" | "block" | "ward" | "mana" | "take";
   icon: React.ReactNode;
   name: string;
   desc: string;
   meta: React.ReactNode;
   onClick: () => void;
 }) {
-  // #1324: bariera dzieli paletę many (niebieski) z unikiem — obie to test „całość albo nic".
+  // #1324/#1325: bariera i tarcza many dzielą paletę many (niebieski) — obie płacą maną.
   const tint =
     variant === "take"
       ? "border-[rgba(232,96,79,.3)]"
       : variant === "block"
         ? "border-line-ember"
-        : variant === "ward"
+        : variant === "ward" || variant === "mana"
           ? "border-[rgba(130,167,199,.35)]"
           : "border-line";
   const iconCls =

@@ -108,7 +108,7 @@ export function useEnemyTurn(campaignId: number | undefined) {
 
 /** POST /combat/resolve-reaction — SF10 Przyjmij/Unik/Blok/Bariera (#1324). */
 export function useResolveReaction(campaignId: number | undefined) {
-  return useCombatMutation<"take" | "dodge" | "block" | "ward">(campaignId, (choice) =>
+  return useCombatMutation<"take" | "dodge" | "block" | "ward" | "mana">(campaignId, (choice) =>
     apiFetch<CombatActionResult>(
       `/campaigns/${campaignId}/combat/resolve-reaction`,
       { method: "POST", body: { choice } },

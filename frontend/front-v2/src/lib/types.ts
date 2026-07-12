@@ -403,7 +403,7 @@ export interface CombatActionResult {
   player_incapacitated?: boolean;
   // okno reakcji SF10
   reaction_window?: boolean;
-  reaction_options?: string[]; // subset of ["dodge","shield_block","arcane_ward"]
+  reaction_options?: string[]; // subset of ["dodge","shield_block","arcane_ward","mana_shield"]
   reaction?: {
     dodged?: boolean;
     full_block?: boolean;
@@ -414,8 +414,10 @@ export interface CombatActionResult {
     dodge_total?: number;
     block_total?: number;
     ward_total?: number; // #1324
+    absorbed?: number; // #1325: Tarcza Many — ile obrażeń pochłonięto maną
+    mana_spent?: number; // #1325: ile many faktycznie wydano (ceil pochłonięte / R)
     mana_cost?: number; // #1324: koszt many pobrany za próbę bariery
-    current_mana?: number; // #1324: pula many po reakcji
+    current_mana?: number; // #1324/#1325: pula many po reakcji
   } | null;
   // łup / nagrody z zabójczego ciosu (FE10 #1237)
   loot?: LootItem[];
