@@ -113,10 +113,21 @@ export default function Game() {
   const { toast } = useToast();
   // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
   const combatState = useCombatState(campaignId);
+  const combatSnap = combatState.data?.combat ?? null;
   const activeCombat =
-    combatState.data?.active && combatState.data.combat?.status === "active"
-      ? combatState.data.combat
+    combatState.data?.active && combatSnap?.status === "active"
+      ? combatSnap
       : null;
+  // #1348 T4: koniec walki może przyjść pollem (GET /combat zwraca teraz snapshot ended).
+  // Trzymaj ekran walki ZAMONTOWANY przez stan ended, aż gracz obsłuży wynik (modal
+  // zwycięstwa/lootu/śmierci lub toast). Bez tego przejście active→ended odmontowywało
+  // CombatView zanim modal się pokazał → cichy powrót do chatu, zero lootu.
+  const [ackCombatId, setAckCombatId] = useState<number | null>(null);
+  const endedCombat =
+    combatSnap && combatSnap.status === "ended" && combatSnap.id != null && combatSnap.id !== ackCombatId
+      ? combatSnap
+      : null;
+  const combatForView = activeCombat ?? endedCombat;
   // FE15 (#1264): tryb drużynowy → rundy MP zamiast solowego turn-flow (walka MP osobno).
   const isMp = campaign.data?.mode === "multiplayer";
   // FE16 (#1265): tryb lochu → eksploracja kafelkowa (HUD/d-pad/mapa) + walka + boss.
@@ -655,18 +666,20 @@ export default function Game() {
           vitals={vitals}
           stats={stats}
         />
-      ) : gameTab === "story" && activeCombat ? (
+      ) : gameTab === "story" && combatForView ? (
         // FE9 walka (#1236): baner + pasek akcji + reakcja SF10 + kość 3D.
+        // #1348: `combatForView` = aktywna LUB świeżo zakończona (do potwierdzenia) walka.
         <CombatView
           campaignId={campaignId!}
           character={character.data}
-          combat={activeCombat}
+          combat={combatForView}
           blocks={blocks}
           typing={submit.isPending}
           vitals={vitals}
           stats={stats}
           onSend={send}
           sending={submit.isPending}
+          onEnded={(id) => setAckCombatId(id)}
         />
       ) : gameTab === "story" ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

@@ -9262,7 +9262,39 @@ def _advance_turn_impl(campaign_id: int) -> str:
                 pass
             return "wipe"
 
-        # Build living: skip hp<=0 actors AND knocked players
+        # #1348 T4 + #330: end-of-combat detection from `combatants` (source of truth),
+        # NOT from `turn_order`. Building `living` off `turn_order` let an alive enemy that
+        # was absent from turn_order fabricate a false victory (living=[player] → len<=1).
+        # Count survivors from combatants; victory is already handled above by
+        # `_all_enemies_dead`, so a survivor-count ≤1 with an enemy still standing means
+        # the player is the one who fell → player_dead (never victory with HP>0 enemy).
+        living_ct = [
+            c for c in combatants
+            if int(c.get("hp_current", 0) or 0) > 0 and not c.get("knocked")
+        ]
+        # Telemetry: an alive combatant missing from turn_order is the #1348 desync.
+        _order_set = {str(t) for t in order}
+        if any(str(c.get("id")) not in _order_set for c in living_ct):
+            logger.warning(
+                "combat_turn_order_desync",
+                campaign_id=campaign_id,
+                living=[str(c.get("id")) for c in living_ct],
+                turn_order=order,
+            )
+
+        if len(living_ct) <= 1:
+            enemy_alive = any(c.get("type") == "enemy" for c in living_ct)
+            reason = "player_dead" if enemy_alive else "victory"
+            _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason=reason)
+            conn.commit()
+            # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
+            try:
+                set_world_state_flags(campaign_id, scene_enemies=[])
+            except Exception:
+                pass
+            return "ended"
+
+        # Rotation list follows turn_order (living actors only, for turn sequencing).
         living: list[str] = []
         for tid in order:
             c = _find_combatant(combatants, tid)
@@ -9273,16 +9305,9 @@ def _advance_turn_impl(campaign_id: int) -> str:
             if c.get("knocked"):
                 continue
             living.append(tid)
-
-        if len(living) <= 1:
-            _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason="victory")
-            conn.commit()
-            # HF-1 (#523): clear scene_enemies — this path bypasses end_combat()
-            try:
-                set_world_state_flags(campaign_id, scene_enemies=[])
-            except Exception:
-                pass
-            return "ended"
+        if not living:
+            # turn_order fully desynced from survivors → rotate over combatant ids instead
+            living = [str(c.get("id")) for c in living_ct]
 
         cur = row["current_turn"]
         rnd = int(row["round"] or 1)

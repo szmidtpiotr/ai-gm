@@ -54,10 +54,11 @@ export function CombatView({
   sending,
   dungeon = false,
   onDungeonDeath,
+  onEnded,
 }: {
   campaignId: number;
   character: CharacterDetail | undefined;
-  combat: CombatState; // aktywny snapshot (Game.tsx wchodzi tu tylko gdy active)
+  combat: CombatState; // aktywny LUB świeżo zakończony snapshot (#1348: Game trzyma zamontowane do ack)
   blocks: LogBlock[];
   typing: boolean;
   vitals: Vitals;
@@ -67,6 +68,10 @@ export function CombatView({
   // FE16 (#1265): w lochu śmierć = przywrócenie punktu kontrolnego, nie ekran śmierci.
   dungeon?: boolean;
   onDungeonDeath?: () => void;
+  // #1348 T4: sygnał do Game.tsx że gracz obsłużył koniec walki (modal zamknięty /
+  // toast pokazany) → dopiero teraz rodzic może odmontować ekran walki. Bez tego
+  // przejście active→ended odmontowywało CombatView ZANIM modal wyniku zdążył się pokazać.
+  onEnded?: (combatId: number) => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -449,7 +454,12 @@ export function CombatView({
         }
       })
       .catch(() => {
+        // #1348 T4: nie połykaj błędu tury wroga po cichu. Zwolnij zamrożenie HP,
+        // pokaż komunikat i wymuś ponowny odczyt stanu (poll). Błąd/undefined NIE może
+        // wyzerować activeCombat — trzymamy ostatni znany snapshot (react-query keep data).
         setHpFreeze(null);
+        toast("Błąd tury wroga — ponawiam odczyt stanu walki.", "danger");
+        qc.invalidateQueries({ queryKey: ["combat", campaignId] });
       })
       .finally(() => {
         enemyTurnRef.current = false;
@@ -511,13 +521,18 @@ export function CombatView({
       endedRef.current = true;
       const reason = view.endedReason ?? "";
       // FE16 (#1265): śmierć w lochu → przywrócenie punktu kontrolnego (nie ekran śmierci).
+      const endedId = Number(live?.id ?? combat?.id ?? 0);
       if (reason === "player_dead" && dungeon && onDungeonDeath) {
         onDungeonDeath();
+        onEnded?.(endedId); // brak modalu w lochu → od razu zwolnij ekran walki
       } else if (reason === "victory" || reason === "player_dead") {
         // victory / player_dead → pełny modal (CombatOutcomes); fled → tylko toast.
+        // NIE wołamy onEnded tutaj — dopiero po zamknięciu modalu (onDismiss), żeby
+        // rodzic nie odmontował ekranu walki zanim gracz zobaczy wynik (#1348).
         setOutcome({ reason, combat: live });
       } else {
         toast(reason === "fled" ? "Walka zakończona — ucieczka." : "Walka zakończona.", "info");
+        onEnded?.(endedId); // toast-only koniec → zwolnij ekran walki od razu
       }
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
@@ -614,6 +629,8 @@ export function CombatView({
           goldGain={goldAccumRef.current}
           onDismiss={() => {
             setOutcome(null);
+            // #1348 T4: teraz — po zamknięciu modalu wyniku — pozwól Game.tsx odmontować ekran walki.
+            onEnded?.(Number(outcome.combat?.id ?? 0));
             qc.invalidateQueries({ queryKey: ["combat", campaignId] });
             qc.invalidateQueries({ queryKey: ["character"] });
             qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });

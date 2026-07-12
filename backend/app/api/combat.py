@@ -88,11 +88,19 @@ def post_start_combat(campaign_id: int, body: CombatStartRequest):
 
 @router.get("/campaigns/{campaign_id}/combat")
 def get_combat(campaign_id: int):
-    """Active combat only. When none, 200 + active:false (avoid 404 spam from UI polling)."""
-    st = combat.get_active_combat(campaign_id)
+    """Latest combat snapshot for the campaign (any status), 200 + active flag.
+
+    #1348 T4: the old version filtered status='active' → after a combat ended it returned
+    {active:false, combat:null} and NEVER surfaced ended_reason/loot_pool. The frontend
+    polled this every 2s, so any end observed via poll unmounted the combat UI silently
+    (no victory/loot/death modal). Now we return the last combat row regardless of status;
+    `active` is computed from status=='active'. The client decides (by combat_id) whether
+    it has already handled the ended snapshot, and keeps the outcome modal alive on the
+    active→ended transition."""
+    st = combat.load_combat_snapshot(campaign_id)
     if not st:
         return {"active": False, "combat": None}
-    return {"active": True, "combat": st}
+    return {"active": st.get("status") == "active", "combat": st}
 
 
 @router.get("/campaigns/{campaign_id}/combat/turns")
