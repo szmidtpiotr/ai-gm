@@ -6639,6 +6639,122 @@ def _ensure_sets_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_wolf_hunter_content(conn: sqlite3.Connection) -> None:
+    """#1347 BL-D1 fix — treść części setu `wolf_hunter` + źródła zdobycia.
+
+    Silnik setów (#1340) jest sprawny, ale set `wolf_hunter` był „ślepy": jego
+    3 klucze części nie istniały NIGDZIE jako zdobywalna zawartość (brak w
+    katalogu items/weapons, w loot, w recepturach). Pętli „farm→craft→set" nie
+    dało się domknąć normalną grą. Ten seed wiąże zawartość:
+
+      1) Katalog — 3 części z sensownym slotem/statami:
+         • wolf_hide_cloak  — pancerz na plecy (armor_coverage='back'), +1 AC
+         • wolf_totem_charm — relikt (slot relic*), przedmiot dekoracyjny setu
+         • wolf_fang_dagger — sztylet DEX/finesse (broń)
+      2) Drop — pospolity Wilk (loot_wolf) daje płaszcz + totem (⇒ 2/3 z samej
+         farmy pospolitych wilków), boss Rykar Wilkowy (loot_rykar_wilkowy)
+         daje wszystkie 3 (w tym sztylet) → domknięcie na 3/3.
+      3) Craft — receptury z komponentów wilczej watahy (wolf_pelt/kiel_wilczy/
+         krew_wilkolaka), wykonywane przez kowala. output_type='consumable' bo
+         crafting_service grantuje NOWY egzemplarz tylko tą gałęzią (grant_loot
+         rozpoznaje item vs weapon z katalogu).
+
+    Numbers Policy: wartości części/wagi dropu = startowe, sandbox-tunable.
+    Idempotentne: INSERT OR IGNORE (klucze + unikalne indeksy loot).
+    """
+    # 1) Katalog — części jako itemy (płaszcz, totem) + broń (sztylet).
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_config_items
+            (key, label, item_type, description, value_gp, ac_bonus,
+             armor_coverage, rarity, created_by)
+        VALUES ('wolf_hide_cloak', 'Płaszcz z wilczej skóry', 'armor',
+                'Płaszcz uszyty z grubej wilczej skóry — część Stroju Wilczego Łowcy.',
+                60, 1, 'back', 2, 'seed')
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_config_items
+            (key, label, item_type, description, value_gp, ac_bonus,
+             rarity, created_by)
+        VALUES ('wolf_totem_charm', 'Totem wilczej watahy', 'relic',
+                'Amulet z kłów i kości watahy — część Stroju Wilczego Łowcy.',
+                55, 0, 2, 'seed')
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_config_weapons
+            (key, label, damage_die, weapon_type, linked_stat, allowed_classes,
+             finesse, weapon_slot, value_gp, description, rarity)
+        VALUES ('wolf_fang_dagger', 'Sztylet z wilczego kła', '1d4', 'melee',
+                'DEX', '["warrior","scholar","rogue","ranger"]', 1, 'main_hand',
+                70, 'Sztylet z wyostrzonego wilczego kła — część Stroju Wilczego Łowcy.', 2)
+        """
+    )
+
+    # 2) Drop — pospolity wilk (2 części) + boss (wszystkie 3, w tym sztylet).
+    loot_entries = [
+        # (loot_table_key, item_key, weapon_key, weight)
+        ("loot_wolf", "wolf_hide_cloak", None, 12),
+        ("loot_wolf", "wolf_totem_charm", None, 8),
+        ("loot_rykar_wilkowy", "wolf_hide_cloak", None, 15),
+        ("loot_rykar_wilkowy", "wolf_totem_charm", None, 12),
+        ("loot_rykar_wilkowy", None, "wolf_fang_dagger", 25),
+    ]
+    for table_key, item_key, weapon_key, weight in loot_entries:
+        # Wpinaj tylko gdy tabela loot istnieje (graceful na starych/testowych DB).
+        exists = conn.execute(
+            "SELECT 1 FROM game_config_loot_tables WHERE key = ? LIMIT 1", (table_key,)
+        ).fetchone()
+        if not exists:
+            continue
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_loot_entries
+                (loot_table_key, item_key, weapon_key, weight, qty_min, qty_max)
+            VALUES (?, ?, ?, ?, 1, 1)
+            """,
+            (table_key, item_key, weapon_key, weight),
+        )
+
+    # 3) Craft — receptury z komponentów wilczej watahy (kowal). output_type=
+    # 'consumable' bo tylko ta gałąź craftu grantuje nowy egzemplarz (grant_loot
+    # rozpoznaje item vs weapon z katalogu po output_key).
+    recipes = [
+        (
+            "craft_wolf_hide_cloak", "Płaszcz z wilczej skóry (craft)",
+            json.dumps([{"item_key": "wolf_pelt", "qty": 2}], ensure_ascii=False),
+            "consumable", "wolf_hide_cloak", 20,
+        ),
+        (
+            "craft_wolf_fang_dagger", "Sztylet z wilczego kła (craft)",
+            json.dumps([{"item_key": "kiel_wilczy", "qty": 2},
+                        {"item_key": "ruda_zelaza", "qty": 1}], ensure_ascii=False),
+            "consumable", "wolf_fang_dagger", 30,
+        ),
+        (
+            "craft_wolf_totem_charm", "Totem wilczej watahy (craft)",
+            json.dumps([{"item_key": "wolf_pelt", "qty": 1},
+                        {"item_key": "kiel_wilczy", "qty": 1},
+                        {"item_key": "krew_wilkolaka", "qty": 1}], ensure_ascii=False),
+            "consumable", "wolf_totem_charm", 25,
+        ),
+    ]
+    for key, label, inputs, out_type, out_key, cost in recipes:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_recipes
+                (key, label, inputs_json, output_type, output_key, output_qty,
+                 service_cost_gold, crafter_type, is_hidden, created_by)
+            VALUES (?, ?, ?, ?, ?, 1, ?, 'smith', 0, 'seed')
+            """,
+            (key, label, inputs, out_type, out_key, cost),
+        )
+    conn.commit()
+
+
 def _ensure_experiment_schema(conn: sqlite3.Connection) -> None:
     """#1341 BL-D2 — eksperymenty gracza: ukryte receptury + trwałe odkrycia.
 
@@ -7009,6 +7125,7 @@ def run_admin_migrations() -> None:
         _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze
         _ensure_recipes_schema(conn)  # #1336 BL-C1 — przepisy rzemieślnicze + crafter_type
         _ensure_sets_schema(conn)  # #1340 BL-D1 — sety ekwipunku (bonusy za komplet)
+        _ensure_wolf_hunter_content(conn)  # #1347 — treść części setu wolf_hunter + źródła zdobycia
         _ensure_experiment_schema(conn)  # #1341 BL-D2 — eksperymenty: ukryte receptury + odkrycia
         _ensure_guild_merchant_schema(conn)  # #1342 BL-D3 — gildia kupiecka + no_trade
     except sqlite3.OperationalError as e:
