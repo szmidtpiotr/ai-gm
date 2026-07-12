@@ -43,6 +43,17 @@ _COMPOSITION_PATTERNS = ("solo", "wataha", "herszt")
 _COMPOSITION_PATTERN_WEIGHTS = (0.35, 0.40, 0.25)
 _TIER_RANK = {"weak": 0, "standard": 1, "elite": 2, "boss": 3}
 
+# ── #1345 (SMOKE-A P1) — fallback poszerzający pulę wrogów ─────────────────────
+# Dane pasm poziomów mają dziury na górze skali (np. cap lvl 10 = same bossy z
+# terenem → pusta / jednotierowa pula → spotkania niewygrywalne albo brak). Gdy pula
+# po filtrze terenu < POOL_MIN_SIZE, poszerzaj OKNO POZIOMÓW o ±delta (do
+# POOL_WIDEN_MAX_DELTA), trzymając scope='global'+permanent i teren. Dopiero gdy
+# nadal za mało — LUZUJ teren (ostateczność, logowane), bo lepszy lekko nietrafiony
+# teren niż pustka i zejście do legacy szablonów. STARTING VALUES (Numbers Policy),
+# strojlne z game_config_meta. Content-fix (pełny bestiariusz lvl 6-10) osobno.
+POOL_MIN_SIZE = 6
+POOL_WIDEN_MAX_DELTA = 4
+
 # ── BL-A3 (#1329) — pamięć spotkań anti-repeat ────────────────────────────────
 # session_flags.recent_encounters = lista sygnatur ostatnich spotkań (index 0 =
 # NAJNOWSZE). Sygnatura = posortowany, unikalny zestaw enemy_key ('a+b'). Kandydat
@@ -811,34 +822,29 @@ def _penalized_choice(items: list[dict], rng, penalty_keys: set, penalty: float)
     return rng.choices(items, weights=weights, k=1)[0]
 
 
-def eligible_enemy_pool(
-    conn: sqlite3.Connection, *, level: int, hex_type: str | None
-) -> list[dict]:
-    """BL-A2 (#1328) — pula wrogów do kompozycji.
+def _query_scoped_enemies(conn: sqlite3.Connection, lo: int, hi: int) -> list[dict]:
+    """Wrogowie world_scope='global'+permanent+active, których pasmo poziomów
+    PRZECINA okno [lo, hi]. NULL min/max = brak ograniczenia z danej strony."""
+    rows = conn.execute(
+        """
+        SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+               damage_bonus, attacks_per_turn, tier, min_level, max_level,
+               terrain_tags
+        FROM game_config_enemies
+        WHERE world_scope = 'global'
+          AND review_status = 'permanent'
+          AND is_active = 1
+          AND (min_level IS NULL OR min_level <= ?)
+          AND (max_level IS NULL OR max_level >= ?)
+        """,
+        (int(hi), int(lo)),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
-    TYLKO world_scope='global' AND review_status='permanent' AND is_active=1
-    (nigdy template/campaign/pending) + dopasowanie terenu (hex_type∈terrain_tags,
-    pusty terrain_tags = generyczny wróg) + pasmo poziomów (min_level/max_level;
-    NULL = brak ograniczenia). Każdy rekord dostaje policzone `threat`.
-    """
-    try:
-        rows = conn.execute(
-            """
-            SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
-                   damage_bonus, attacks_per_turn, tier, min_level, max_level,
-                   terrain_tags
-            FROM game_config_enemies
-            WHERE world_scope = 'global'
-              AND review_status = 'permanent'
-              AND is_active = 1
-              AND (min_level IS NULL OR min_level <= ?)
-              AND (max_level IS NULL OR max_level >= ?)
-            """,
-            (int(level), int(level)),
-        ).fetchall()
-    except sqlite3.OperationalError:
-        return []
 
+def _filter_by_terrain(rows: list[dict], hex_type: str | None) -> list[dict]:
+    """Zostaw wrogów pasujących do terenu (pusty terrain_tags = generyczny) i policz
+    `threat`. Zwraca NOWĄ listę (bezpieczne do wielokrotnego wywołania)."""
     lt = (hex_type or "").strip().lower()
     out: list[dict] = []
     for r in rows:
@@ -849,6 +855,51 @@ def eligible_enemy_pool(
         d["threat"] = enemy_threat_value(d)
         out.append(d)
     return out
+
+
+def eligible_enemy_pool(
+    conn: sqlite3.Connection, *, level: int, hex_type: str | None
+) -> list[dict]:
+    """BL-A2 (#1328) — pula wrogów do kompozycji.
+
+    TYLKO world_scope='global' AND review_status='permanent' AND is_active=1
+    (nigdy template/campaign/pending) + dopasowanie terenu (hex_type∈terrain_tags,
+    pusty terrain_tags = generyczny wróg) + pasmo poziomów (min_level/max_level;
+    NULL = brak ograniczenia). Każdy rekord dostaje policzone `threat`.
+
+    #1345 (SMOKE-A P1): gdy pula < POOL_MIN_SIZE (dziura pasm — np. cap lvl 10 =
+    same bossy), poszerz OKNO POZIOMÓW o ±delta (do POOL_WIDEN_MAX_DELTA) trzymając
+    scope i teren; przy delta=0 i wystarczającej puli zachowanie bez zmian. Gdy
+    nadal za mało po max delta — LUZUJ teren (ostateczność, logowane)."""
+    try:
+        min_size = max(1, int(_meta_float(conn, "encounter_pool_min_size", POOL_MIN_SIZE)))
+        max_delta = max(0, int(_meta_float(conn, "encounter_pool_widen_max_delta", POOL_WIDEN_MAX_DELTA)))
+
+        best: list[dict] = []
+        for delta in range(0, max_delta + 1):
+            rows = _query_scoped_enemies(conn, level - delta, level + delta)
+            pool = _filter_by_terrain(rows, hex_type)
+            if len(pool) > len(best):
+                best = pool
+            if len(best) >= min_size:
+                return best  # dość wrogów — teren uszanowany
+
+        # Ostateczność: ŻADEN wróg w paśmie nie pasuje do terenu (pusto) — luzuj
+        # teren, byle nie pustka (inaczej composer spada do legacy szablonów). Małą,
+        # ale niepustą pulę terenową zostawiamy — teren ważniejszy niż dobicie do min.
+        if not best:
+            relaxed = _filter_by_terrain(
+                _query_scoped_enemies(conn, level - max_delta, level + max_delta), None
+            )
+            if len(relaxed) > len(best):
+                logger.info(
+                    "encounter_pool_terrain_relaxed",
+                    level=level, hex_type=hex_type, size=len(relaxed),
+                )
+                best = relaxed
+        return best
+    except sqlite3.OperationalError:
+        return []
 
 
 def _enc_enemy(d: dict, count: int, rank: str | None = None) -> dict:

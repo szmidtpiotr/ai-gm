@@ -25,6 +25,11 @@ def _schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
         """
     )
+    # #1345: te testy sprawdzają RDZEŃ filtra (pasmo+teren) przy delta=0 — wyłącz
+    # poszerzanie puli (min_size=1), fallback #1345 pokrywa test_1345_pool_fallback.
+    conn.execute(
+        "INSERT INTO game_config_meta (key,value) VALUES ('encounter_pool_min_size','1')"
+    )
     # 6 kwalifikujących się wrogów w lesie lvl 1 (global+permanent+active)
     good = [
         ("wolf", "Wilk", 10, 12, 3, "1d6", 0, 1, "standard", 1, 2, "forest,hills"),
@@ -116,7 +121,9 @@ class TestEncounterComposer(unittest.TestCase):
 
     def test_empty_pool_returns_none(self):
         from app.services.encounter_service import encounter_composer
-        self.assertIsNone(encounter_composer(self.conn, level=1, hex_type="swamp"))
+        # #1345: teren bez wroga (swamp) jest teraz LUZOWANY, nie None. Pustka →
+        # composer None tylko gdy w paśmie NIE MA żadnego wroga (poziom poza skalą).
+        self.assertIsNone(encounter_composer(self.conn, level=99, hex_type="forest"))
 
     def test_composed_enemies_only_from_pool(self):
         from app.services.encounter_service import encounter_composer
