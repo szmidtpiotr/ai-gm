@@ -8,7 +8,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:25:21",
-    "updated_at": "2026-07-06 06:56:36",
+    "updated_at": "2026-07-12 11:07:16",
     "hp_base": 8,
     "starting_stats_json": "{\"STR\":10,\"DEX\":12,\"CON\":10,\"INT\":10,\"WIS\":10,\"CHA\":10,\"LCK\":11}"
   },
@@ -21,7 +21,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:16:53",
-    "updated_at": "2026-07-06 06:56:36",
+    "updated_at": "2026-07-12 11:07:16",
     "hp_base": 6,
     "starting_stats_json": "{\"STR\":10,\"DEX\":10,\"CON\":10,\"INT\":12,\"WIS\":11,\"CHA\":10,\"LCK\":10}"
   },
@@ -34,7 +34,7 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:16:53",
-    "updated_at": "2026-07-06 06:56:36",
+    "updated_at": "2026-07-12 11:07:16",
     "hp_base": 12,
     "starting_stats_json": "{\"STR\":12,\"DEX\":10,\"CON\":11,\"INT\":10,\"WIS\":10,\"CHA\":10,\"LCK\":10}"
   }
