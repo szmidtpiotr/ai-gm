@@ -6639,6 +6639,91 @@ def _ensure_sets_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_experiment_schema(conn: sqlite3.Connection) -> None:
+    """#1341 BL-D2 — eksperymenty gracza: ukryte receptury + trwałe odkrycia.
+
+    ZASADA ŻELAZNA: wynik eksperymentu ZAWSZE pochodzi z receptury autorowanej
+    przez admina (`is_hidden=1`). Silnik liczy sygnaturę kombinacji komponentów
+    → dopasowuje do ukrytych receptur → test `trade_craft` (DC wg tieru). LLM
+    NIGDY nie generuje statów przedmiotu; kombinacja spoza puli = tylko fuszerka.
+
+    Dodaje:
+      • `game_config_recipes.craft_tier` — 'easy'|'medium'|'hard' (DC 8/12/16);
+        determinuje trudność testu eksperymentu. Widoczne przepisy: 'medium'.
+      • `character_recipes` — trwały log odkryć (character_id, recipe_key,
+        discovered_at). Odkryta receptura pojawia się na liście przepisów gracza.
+      • Seed 3 ukrytych receptur (różne tiery) pod E2E i grę.
+
+    Idempotentne: ALTER … (duplicate column → ignore) + CREATE IF NOT EXISTS +
+    INSERT OR IGNORE.
+    """
+    # 1) craft_tier na przepisach — trudność testu eksperymentu.
+    try:
+        conn.execute(
+            "ALTER TABLE game_config_recipes ADD COLUMN craft_tier TEXT NOT NULL DEFAULT 'medium'"
+        )
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+    # 2) Trwały log odkryć per postać.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS character_recipes (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id  INTEGER NOT NULL,
+            recipe_key    TEXT NOT NULL,
+            discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE (character_id, recipe_key)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_character_recipes_char "
+        "ON character_recipes (character_id)"
+    )
+
+    # 3) Seed ukrytych receptur (is_hidden=1) — pula do odkrywania. Numbers Policy:
+    #    tier→DC startowy, komponenty z puli #1335. Wynik = consumable (deterministyczny
+    #    grant przez loot_service, parytet z craftem BL-C1).
+    hidden = [
+        # (key, label, inputs, output_key, tier)
+        (
+            "hidden_maslo_troki",
+            "Maść z tłuszczu i sierści",
+            [{"item_key": "wolf_pelt", "qty": 1}, {"item_key": "sadlo_niedzwiedzie", "qty": 1}],
+            "potion_stamina", "easy",
+        ),
+        (
+            "hidden_elixir_zywotnosci",
+            "Eliksir żywotności",
+            [{"item_key": "healing_herb", "qty": 2},
+             {"item_key": "korzen_zmornika", "qty": 1},
+             {"item_key": "ruda_miedzi", "qty": 1}],
+            "potion_healing_standard", "medium",
+        ),
+        (
+            "hidden_eliksir_cienia",
+            "Eliksir cienia",
+            [{"item_key": "esencja_cienia", "qty": 1},
+             {"item_key": "jedwab_pajeczy", "qty": 1},
+             {"item_key": "odprysk_obsydianu", "qty": 1}],
+            "potion_stealth", "hard",
+        ),
+    ]
+    for key, label, inputs, out_key, tier in hidden:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_recipes
+                (key, label, inputs_json, output_type, output_key, output_qty,
+                 service_cost_gold, crafter_type, craft_tier, is_hidden, created_by)
+            VALUES (?, ?, ?, 'consumable', ?, 1, 0, 'herbalist', ?, 1, 'seed')
+            """,
+            (key, label, json.dumps(inputs, ensure_ascii=False), out_key, tier),
+        )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6804,6 +6889,7 @@ def run_admin_migrations() -> None:
         _ensure_item_component_columns(conn)  # #1335 BL-B3 — komponenty rzemieślnicze
         _ensure_recipes_schema(conn)  # #1336 BL-C1 — przepisy rzemieślnicze + crafter_type
         _ensure_sets_schema(conn)  # #1340 BL-D1 — sety ekwipunku (bonusy za komplet)
+        _ensure_experiment_schema(conn)  # #1341 BL-D2 — eksperymenty: ukryte receptury + odkrycia
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

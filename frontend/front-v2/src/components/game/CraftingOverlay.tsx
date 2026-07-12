@@ -3,6 +3,7 @@
 // bez narratora. Lista przepisów z podświetleniem „starczy komponentów", licznikiem
 // have/need na każdym składniku, opłatą usługi i przyciskiem Wytwórz. Po craftcie
 // unieważniamy postać+ekwipunek → liczniki i złoto odświeżają się na żywo.
+import { useMemo, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   CheckCircle,
@@ -12,7 +13,12 @@ import {
   Flask,
   Hammer,
   Leaf,
+  Minus,
+  Plus,
+  Skull,
+  Sparkle,
   Sword,
+  Warning,
   Wrench,
   X,
   type Icon,
@@ -21,14 +27,24 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
 import { useInventory } from "@/hooks/useSheetData";
-import { useLocationCrafting, useCraft } from "@/hooks/useCrafting";
 import {
+  useLocationCrafting,
+  useCraft,
+  useExperiment,
+  useCharacterRecipes,
+} from "@/hooks/useCrafting";
+import {
+  experimentOutcomeLabel,
   hasAllComponents,
   outputTypeLabel,
   ownedQty,
   type CraftRecipe,
+  type ExperimentResult,
 } from "@/lib/crafting";
 import { useToast } from "@/components/ui/toast";
+
+// #1341 BL-D2 — koszt jednej próby eksperymentu (Numbers Policy, patrz backend).
+const EXPERIMENT_COST_GOLD = 10;
 
 export function CraftingOverlay() {
   const locationKey = useAppStore((s) => s.crafting);
@@ -67,6 +83,7 @@ function CraftingBody({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const [tab, setTab] = useState<"recipes" | "experiment">("recipes");
   const crafting = useLocationCrafting(locationKey, characterId);
   const inventory = useInventory(characterId);
   const character = useCharacter(characterId);
@@ -119,30 +136,328 @@ function CraftingBody({
         </button>
       </header>
 
-      {/* ── Lista przepisów ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5 [scrollbar-width:thin]">
-        {crafting.isLoading ? (
-          <Loading />
-        ) : crafting.isError || !data ? (
-          <Empty>Rzemieślnik nie ma dziś nic do zaproponowania.</Empty>
-        ) : !data.recipes.length ? (
-          <Empty>Brak dostępnych przepisów w tej lokacji.</Empty>
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {data.recipes.map((r) => (
-              <RecipeCard
-                key={r.key}
-                recipe={r}
-                inv={inv}
-                gold={gold}
-                busy={craft.isPending}
-                onCraft={() => onCraft(r)}
-              />
+      {/* ── Zakładki: Przepisy / Eksperyment (#1341 BL-D2) ── */}
+      <div className="flex flex-none gap-1 border-b border-line bg-surface px-3 pt-2">
+        <TabButton active={tab === "recipes"} onClick={() => setTab("recipes")} icon={Hammer}>
+          Przepisy
+        </TabButton>
+        <TabButton active={tab === "experiment"} onClick={() => setTab("experiment")} icon={Flask}>
+          Eksperyment
+        </TabButton>
+      </div>
+
+      {tab === "recipes" ? (
+        /* ── Lista przepisów ── */
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5 [scrollbar-width:thin]">
+          {crafting.isLoading ? (
+            <Loading />
+          ) : crafting.isError || !data ? (
+            <Empty>Rzemieślnik nie ma dziś nic do zaproponowania.</Empty>
+          ) : !data.recipes.length ? (
+            <Empty>Brak dostępnych przepisów w tej lokacji.</Empty>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {data.recipes.map((r) => (
+                <RecipeCard
+                  key={r.key}
+                  recipe={r}
+                  inv={inv}
+                  gold={gold}
+                  busy={craft.isPending}
+                  onCraft={() => onCraft(r)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <ExperimentPanel characterId={characterId} inv={inv} gold={gold} />
+      )}
+    </>
+  );
+}
+
+// ── #1341 BL-D2 — panel eksperymentu: wybór 2–4 komponentów → dramatyczny wynik ──
+function ExperimentPanel({
+  characterId,
+  inv,
+  gold,
+}: {
+  characterId: number;
+  inv: { key: string; quantity: number; label?: string; kind?: string }[] | undefined;
+  gold: number;
+}) {
+  const { toast } = useToast();
+  const experiment = useExperiment(characterId);
+  const recipes = useCharacterRecipes(characterId);
+  const [picked, setPicked] = useState<Record<string, number>>({});
+  const [result, setResult] = useState<ExperimentResult | null>(null);
+
+  // Wskazywalne komponenty: stosy z ekwipunku (qty > 0). Bez broni wyposażonej.
+  const stacks = useMemo(
+    () => (inv ?? []).filter((i) => (i.quantity || 0) > 0),
+    [inv],
+  );
+  const count = Object.keys(picked).length;
+  const enoughGold = gold >= EXPERIMENT_COST_GOLD;
+  const validCount = count >= 2 && count <= 4;
+  const canRun = validCount && enoughGold && !experiment.isPending;
+
+  function toggle(key: string, max: number) {
+    setPicked((p) => {
+      const next = { ...p };
+      if (key in next) delete next[key];
+      else if (Object.keys(next).length < 4) next[key] = Math.min(1, max);
+      return next;
+    });
+  }
+  function setQty(key: string, qty: number, max: number) {
+    setPicked((p) => ({ ...p, [key]: Math.max(1, Math.min(qty, max)) }));
+  }
+
+  function run() {
+    const components = Object.entries(picked).map(([item_key, qty]) => ({ item_key, qty }));
+    experiment.mutate(components, {
+      onSuccess: (res) => {
+        setResult(res);
+        setPicked({});
+        const tone: "success" | "danger" = res.outcome === "discovery" ? "success" : "danger";
+        toast(res.message ?? experimentOutcomeLabel(res.outcome), tone);
+      },
+      onError: (e) => toast(e instanceof Error ? e.message : "Eksperyment nieudany", "danger"),
+    });
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5 [scrollbar-width:thin]">
+      {/* Objaśnienie ryzyka */}
+      <div className="mb-3 flex items-start gap-2 rounded-lg border border-line-soft bg-[rgba(255,122,61,0.06)] px-3 py-2.5 text-micro text-text-2">
+        <Warning weight="fill" size={16} className="mt-px flex-none text-ember-glow" />
+        <span>
+          Wskaż <b>2–4 składniki</b> i zaryzykuj. Właściwa kombinacja może odkryć zapomnianą recepturę.
+          Pomyłka to zmarnowane materiały — a w rzadkich razach coś gorszego.
+        </span>
+      </div>
+
+      {/* Wynik ostatniej próby */}
+      {result && <ExperimentResultCard result={result} onDismiss={() => setResult(null)} />}
+
+      {/* Wybór komponentów */}
+      {stacks.length === 0 ? (
+        <Empty>Nie masz składników do eksperymentów. Zbieraj zioła i komponenty z łupów.</Empty>
+      ) : (
+        <div className="flex flex-col gap-1.5" data-testid="experiment-components">
+          {stacks.map((it) => {
+            const sel = it.key in picked;
+            return (
+              <div
+                key={it.key}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors",
+                  sel
+                    ? "border-[rgba(168,201,131,0.45)] bg-[rgba(168,201,131,0.08)]"
+                    : "border-line bg-mech-card",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggle(it.key, it.quantity)}
+                  className={cn(
+                    "flex h-8 w-8 flex-none items-center justify-center rounded-md border",
+                    sel
+                      ? "border-success bg-[rgba(168,201,131,0.16)] text-success"
+                      : "border-line bg-bg text-text-3 hover:border-line-ember",
+                  )}
+                  aria-label={sel ? "Odznacz" : "Wybierz"}
+                >
+                  {sel ? <CheckCircle weight="fill" size={16} /> : <Cube size={15} />}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-label font-medium text-text">
+                    {it.label ?? prettify(it.key)}
+                  </div>
+                  <div className="font-mono text-[10px] text-text-3">posiadasz: {it.quantity}</div>
+                </div>
+                {sel && (
+                  <div className="flex flex-none items-center gap-1">
+                    <Stepper
+                      onClick={() => setQty(it.key, (picked[it.key] ?? 1) - 1, it.quantity)}
+                      disabled={(picked[it.key] ?? 1) <= 1}
+                      icon={Minus}
+                    />
+                    <span className="w-6 text-center font-mono text-label font-semibold text-text">
+                      {picked[it.key] ?? 1}
+                    </span>
+                    <Stepper
+                      onClick={() => setQty(it.key, (picked[it.key] ?? 1) + 1, it.quantity)}
+                      disabled={(picked[it.key] ?? 1) >= it.quantity}
+                      icon={Plus}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pasek akcji */}
+      <div className="sticky bottom-0 mt-3 flex items-center gap-2 border-t border-line bg-bg pt-3">
+        <div className="flex flex-1 items-center gap-1.5 font-mono text-label">
+          <span className={cn("font-semibold", validCount ? "text-success" : "text-text-3")}>
+            {count}/4 wybrane
+          </span>
+          <span className="text-text-3">·</span>
+          <span className="flex items-center gap-1 text-gold">
+            <Coins weight="fill" size={13} /> {EXPERIMENT_COST_GOLD} zł
+          </span>
+        </div>
+        <button
+          type="button"
+          data-testid="experiment-run"
+          disabled={!canRun}
+          onClick={run}
+          className={cn(
+            "flex items-center gap-1.5 rounded-md px-4 py-2 font-ui text-micro font-semibold transition-colors",
+            canRun
+              ? "bg-gradient-to-br from-[#d1602c] to-ember text-white hover:brightness-110"
+              : "cursor-not-allowed border border-line bg-bg text-text-3",
+          )}
+        >
+          {experiment.isPending ? (
+            <CircleNotch className="animate-spin" size={14} />
+          ) : (
+            <Flask weight="fill" size={14} />
+          )}
+          {!validCount ? "Wybierz 2–4" : !enoughGold ? "Za mało złota" : "Eksperymentuj"}
+        </button>
+      </div>
+
+      {/* Odkryte receptury */}
+      {(recipes.data?.discovered.length ?? 0) > 0 && (
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center gap-1.5 font-ui text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            <Sparkle weight="fill" size={12} className="text-gold" /> Odkryte receptury
+          </div>
+          <div className="flex flex-wrap gap-1.5" data-testid="discovered-recipes">
+            {recipes.data!.discovered.map((d) => (
+              <span
+                key={d.recipe_key}
+                className="rounded-pill border border-[rgba(212,175,55,0.4)] bg-[rgba(212,175,55,0.1)] px-2.5 py-1 font-ui text-[11px] text-gold"
+              >
+                {d.label ?? d.recipe_key}
+              </span>
             ))}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExperimentResultCard({
+  result,
+  onDismiss,
+}: {
+  result: ExperimentResult;
+  onDismiss: () => void;
+}) {
+  const isDiscovery = result.outcome === "discovery";
+  const isFumble = result.outcome === "fumble";
+  const Ico = isDiscovery ? Sparkle : isFumble ? Skull : Warning;
+  return (
+    <div
+      data-testid="experiment-result"
+      data-outcome={result.outcome}
+      className={cn(
+        "mb-3 rounded-xl border p-3",
+        isDiscovery
+          ? "border-[rgba(212,175,55,0.5)] bg-[rgba(212,175,55,0.08)]"
+          : isFumble
+            ? "border-line-danger bg-[rgba(232,96,79,0.08)]"
+            : "border-line-soft bg-surface",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Ico
+          weight="fill"
+          size={20}
+          className={isDiscovery ? "text-gold" : isFumble ? "text-danger" : "text-ember-glow"}
+        />
+        <div className="flex-1 font-serif text-title font-semibold text-text">
+          {experimentOutcomeLabel(result.outcome)}
+        </div>
+        <button onClick={onDismiss} aria-label="Zamknij wynik" className="text-text-3 hover:text-text">
+          <X size={15} />
+        </button>
       </div>
-    </>
+      {result.message && <p className="mt-1.5 text-body text-text-2">{result.message}</p>}
+      {result.roll && (
+        <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[11px] text-text-3">
+          <span className="rounded-sm border border-line-soft px-1.5 py-0.5">
+            🎲 {result.roll.raw} + {result.roll.modifier} = {result.roll.total}
+          </span>
+          <span className="rounded-sm border border-line-soft px-1.5 py-0.5">DC {result.roll.dc}</span>
+          {result.roll.is_nat20 && <span className="text-gold">Nat 20!</span>}
+          {result.roll.is_nat1 && <span className="text-danger">Nat 1!</span>}
+        </div>
+      )}
+      {typeof result.self_damage === "number" && result.self_damage > 0 && (
+        <div className="mt-1.5 font-mono text-micro text-danger">−{result.self_damage} HP</div>
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon: Ico,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: Icon;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 font-ui text-micro font-semibold transition-colors",
+        active
+          ? "border-ember text-ember-glow"
+          : "border-transparent text-text-3 hover:text-text-2",
+      )}
+    >
+      <Ico weight={active ? "fill" : "regular"} size={15} />
+      {children}
+    </button>
+  );
+}
+
+function Stepper({
+  onClick,
+  disabled,
+  icon: Ico,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  icon: Icon;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex h-6 w-6 items-center justify-center rounded border border-line bg-bg text-text-2",
+        disabled ? "opacity-30" : "hover:border-line-ember hover:text-ember-glow",
+      )}
+    >
+      <Ico size={12} />
+    </button>
   );
 }
 

@@ -495,6 +495,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <li><a href="#r14-przepisy">Przepisy u rzemieślnika</a></li>
           <li><a href="#r14-ulepszenie">Ulepszenie broni</a></li>
           <li><a href="#r14-sety">Sety ekwipunku</a></li>
+          <li><a href="#r14-eksperymenty">Eksperymenty przy tyglu</a></li>
         </ul>
       </li>
     </ul>
@@ -2623,6 +2624,36 @@ document.addEventListener('DOMContentLoaded',function(){
         totem (3 części) → wskakuje próg 3: teraz <b>+1 ZR, +1 Przetrwanie i +1 pancerz</b>. Sprzedasz
         sztylet → zostają 2 części, wracasz do samego <b>+1 ZR</b>.</p>
       </div>
+
+      <h2 id="r14-eksperymenty">Eksperymenty przy tyglu</h2>
+      <p>Poza gotowymi przepisami rzemieślnik pozwala ci <b>zaryzykować</b>. W zakładce
+      <b>„Eksperyment"</b> wskazujesz <strong>2–4 składniki</strong> i wnosisz opłatę — a potem
+      wrzucasz je do tygla, nie wiedząc, co z tego wyjdzie. To jedyna droga do
+      <span class="gloss" tabindex="0">ukrytych receptur<span class="tip"><span class="tip-h">Ukryta receptura</span>Przepis,
+      którego nie widać na liście rzemieślnika, dopóki go <b>nie odkryjesz</b>. Zdefiniował go Mistrz Gry —
+      efekt eksperymentu <b>zawsze</b> pochodzi z takiej receptury, nigdy nie jest wymyślany na poczekaniu.</span></span>:
+      przepisów, których nie kupisz i nie zobaczysz, póki sam na nie nie trafisz.</p>
+      <p>Silnik składa twoje składniki w <em>kombinację</em> i sprawdza, czy pasuje do którejś ukrytej
+      receptury. Jeśli <b>pasuje</b>, robisz <span class="gloss" tabindex="0">test Rzemiosła<span class="tip"><span class="tip-h">Test Rzemiosła (trade_craft)</span>Rzut
+      k20 + modyfikator Rzemiosła przeciw progowi trudności receptury: <b>łatwa 8</b>, <b>średnia 12</b>,
+      <b>trudna 16</b>. Kość 20 to zawsze sukces, kość 1 to zawsze wpadka.</span></span>. Wynik decyduje:</p>
+      <div class="card">
+        <p class="card-h">Eksperyment · możliwe wyniki</p>
+        <table class="test-card">
+          <tbody>
+            <tr><td>Trafienie + sukces</td><td class="dc" style="color:#9bb56a">przedmiot z receptury + <b>trwałe odkrycie</b> (przepis ląduje na twojej liście na stałe)</td></tr>
+            <tr><td>Trafienie + porażka</td><td class="dc" style="color:#c8a24a">tracisz <b>połowę</b> składników, receptura pozostaje tajemnicą</td></tr>
+            <tr><td>Kość 1 na trafieniu</td><td class="dc" style="color:#c07a64">fuszerka — jak pudło poniżej</td></tr>
+            <tr><td>Pudło (brak dopasowania)</td><td class="dc" style="color:#c07a64">tabela fuszerek: strata składników · bezwartościowy stop · 1k4 obrażeń · (rzadko) przeklęty stop</td></tr>
+          </tbody>
+        </table>
+        <p class="ex">Odkryta receptura zostaje z tobą — kolejnym razem uwarzysz to samo bez zgadywania.
+        Ale pamiętaj: z tygla <b>nigdy</b> nie wyjdzie przedmiot, którego Mistrz Gry wcześniej nie ułożył.
+        Losowe mieszanie „na chybił trafił" daje co najwyżej fuszerkę.</p>
+      </div>
+      <p class="aside">Skąd wiedzieć, co mieszać? Nasłuchuj. <b>Plotki w karczmie</b> potrafią zdradzić
+      składniki zapomnianej receptury — wtedy eksperyment przestaje być czystym hazardem, a staje się
+      tropem do rozwikłania.</p>
 
       <footer>
         <span class="draft">Wersja robocza · Wstęp + Rozdziały I–XIV</span><br>

@@ -119,6 +119,40 @@ def _pick_target(conn: sqlite3.Connection, campaign_id: int,
     if enemy_cands:
         return random.choice(enemy_cands)
 
+    # 3 — #1341 BL-D2: karczemna plotka zdradzająca SKŁADNIKI ukrytej receptury,
+    # której bohater jeszcze nie odkrył. Cel deterministyczny (klucz receptury z
+    # DB — zamknięte słownictwo, nie free-text LLM). Składniki wypisane w plotce,
+    # ale receptura odkrywa się dopiero przez udany eksperyment.
+    try:
+        discovered = {
+            r["recipe_key"]
+            for r in conn.execute(
+                "SELECT recipe_key FROM character_recipes WHERE character_id = ?",
+                (character_id,),
+            ).fetchall()
+        }
+        recipe_rows = conn.execute(
+            "SELECT key, label, inputs_json FROM game_config_recipes "
+            "WHERE is_active = 1 AND is_hidden = 1"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        discovered, recipe_rows = set(), []
+    recipe_cands = []
+    for r in recipe_rows:
+        if r["key"] in discovered or ("recipe", r["key"]) in open_targets:
+            continue
+        try:
+            comp = [str(e.get("item_key")) for e in json.loads(r["inputs_json"] or "[]")
+                    if isinstance(e, dict) and e.get("item_key")]
+        except (json.JSONDecodeError, TypeError):
+            comp = []
+        label = r["label"] or r["key"]
+        if comp:
+            label = f"{label} (składniki: {', '.join(comp)})"
+        recipe_cands.append({"target_type": "recipe", "target_key": r["key"], "label": label})
+    if recipe_cands:
+        return random.choice(recipe_cands)
+
     return None
 
 
@@ -127,6 +161,8 @@ _FLAVOUR = {
     "enemy": "Przy kuflu ktoś klnie na {label} — mówią, że grasują gdzieś w okolicy.",
     "treasure_site": "Ktoś przy ogniu wspomina, że resztę takiej mapy jak twoja "
                      "widziano nieopodal — może uda się dokończyć zbiór.",
+    "recipe": "Stary rzemieślnik przy kuflu mamrocze o zapomnianej recepturze: {label}. "
+              "Podobno trzeba zmieszać to przy tyglu we właściwych proporcjach.",
     None: "Krążą po karczmie plotki i niesprawdzone wieści — nic konkretnego.",
 }
 

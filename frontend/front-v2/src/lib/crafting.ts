@@ -42,6 +42,76 @@ export interface CraftResult {
   damage_bonus?: number;
 }
 
+// ── #1341 BL-D2 — eksperymenty: ukryte receptury + fuszerki ───────────────────
+
+export interface ExperimentComponent {
+  item_key: string;
+  qty: number;
+}
+
+export type ExperimentOutcome = "discovery" | "failure" | "fumble";
+
+export interface ExperimentResult {
+  ok: boolean;
+  outcome: ExperimentOutcome;
+  matched: boolean;
+  experiment_cost_gold: number;
+  gold_after?: number | null;
+  components: ExperimentComponent[];
+  consumed?: ExperimentComponent[];
+  message?: string;
+  // discovery
+  recipe_key?: string;
+  recipe_label?: string;
+  output_key?: string | null;
+  output_qty?: number;
+  discovered?: boolean;
+  // roll (tylko przy dopasowaniu)
+  roll?: {
+    skill: string;
+    dc: number;
+    tier: string;
+    raw: number;
+    modifier: number;
+    total: number;
+    is_nat20: boolean;
+    is_nat1: boolean;
+  };
+  // fumble
+  fumble?: "loss" | "slag" | "damage" | "cursed";
+  self_damage?: number;
+  hp_after?: number;
+  cursed_item?: { name: string; flaw: string };
+}
+
+export interface DiscoveredRecipe {
+  recipe_key: string;
+  discovered_at: string;
+  label?: string | null;
+  craft_tier?: string | null;
+  output_type?: string | null;
+  output_key?: string | null;
+}
+
+export interface CharacterRecipes {
+  character_id: number;
+  discovered: DiscoveredRecipe[];
+}
+
+/** Etykieta wyniku eksperymentu — dramatyczny nagłówek panelu rezultatu. */
+export function experimentOutcomeLabel(o: ExperimentOutcome): string {
+  switch (o) {
+    case "discovery":
+      return "Odkrycie!";
+    case "failure":
+      return "Receptura się wymyka";
+    case "fumble":
+      return "Fuszerka";
+    default:
+      return o;
+  }
+}
+
 /** Ile sztuk komponentu `item_key` posiada bohater (suma stosów z ekwipunku). */
 export function ownedQty(inv: { key: string; quantity: number }[] | undefined, itemKey: string): number {
   if (!inv) return 0;

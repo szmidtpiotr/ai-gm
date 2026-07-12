@@ -1300,8 +1300,11 @@ def admin_delete_affix(key: str, _: None = Depends(require_admin_token)):
 _RECIPE_OUTPUT_TYPES = {"consumable", "weapon_upgrade", "armor_repair"}
 _RECIPE_COLS = (
     "key", "label", "inputs_json", "output_type", "output_key", "output_qty",
-    "service_cost_gold", "crafter_type", "requires_upgrade", "is_hidden", "is_active",
+    "service_cost_gold", "crafter_type", "requires_upgrade", "craft_tier",
+    "is_hidden", "is_active",
 )
+# #1341 BL-D2 — tier eksperymentu (DC 8/12/16); tylko dla ukrytych receptur ma znaczenie.
+_RECIPE_TIERS = {"easy", "medium", "hard"}
 
 
 def _normalize_recipe_inputs(inputs) -> str:
@@ -1336,6 +1339,7 @@ class RecipeCreateReq(BaseModel):
     output_qty: int = 1
     service_cost_gold: int = 0
     crafter_type: str = "smith"
+    craft_tier: str = "medium"
     is_hidden: bool = False
     is_active: bool = True
 
@@ -1349,6 +1353,7 @@ class RecipePatchReq(BaseModel):
     output_qty: int | None = None
     service_cost_gold: int | None = None
     crafter_type: str | None = None
+    craft_tier: str | None = None
     is_hidden: bool | None = None
     is_active: bool | None = None
 
@@ -1384,6 +1389,9 @@ def admin_create_recipe(req: RecipeCreateReq, _: None = Depends(require_admin_to
         raise HTTPException(status_code=422, detail="label nie może być pusty")
     if req.output_type not in _RECIPE_OUTPUT_TYPES:
         raise HTTPException(status_code=422, detail=f"output_type musi być jednym z {sorted(_RECIPE_OUTPUT_TYPES)}")
+    tier = (req.craft_tier or "medium").strip().lower()
+    if tier not in _RECIPE_TIERS:
+        raise HTTPException(status_code=422, detail=f"craft_tier musi być jednym z {sorted(_RECIPE_TIERS)}")
     inputs_json = _normalize_recipe_inputs(req.inputs)
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -1394,13 +1402,13 @@ def admin_create_recipe(req: RecipeCreateReq, _: None = Depends(require_admin_to
         conn.execute(
             """INSERT INTO game_config_recipes
                (key, label, inputs_json, output_type, output_key, output_qty,
-                service_cost_gold, crafter_type, is_hidden, is_active, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                service_cost_gold, crafter_type, craft_tier, is_hidden, is_active, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 key, req.label.strip(), inputs_json, req.output_type,
                 (req.output_key or None), int(req.output_qty or 1),
                 int(req.service_cost_gold or 0), (req.crafter_type or "smith").strip(),
-                1 if req.is_hidden else 0, 1 if req.is_active else 0, "admin_manual",
+                tier, 1 if req.is_hidden else 0, 1 if req.is_active else 0, "admin_manual",
             ),
         )
         conn.commit()
@@ -1437,6 +1445,11 @@ def admin_patch_recipe(key: str, req: RecipePatchReq, _: None = Depends(require_
             sets.append("service_cost_gold = ?"); vals.append(int(req.service_cost_gold))
         if req.crafter_type is not None:
             sets.append("crafter_type = ?"); vals.append(req.crafter_type.strip())
+        if req.craft_tier is not None:
+            _t = req.craft_tier.strip().lower()
+            if _t not in _RECIPE_TIERS:
+                raise HTTPException(status_code=422, detail=f"craft_tier musi być jednym z {sorted(_RECIPE_TIERS)}")
+            sets.append("craft_tier = ?"); vals.append(_t)
         if req.is_hidden is not None:
             sets.append("is_hidden = ?"); vals.append(1 if req.is_hidden else 0)
         if req.is_active is not None:
@@ -1463,6 +1476,13 @@ def admin_delete_recipe(key: str, _: None = Depends(require_admin_token)):
         return {"ok": True}
     finally:
         conn.close()
+
+
+@router.get("/admin/characters/{character_id}/discovered-recipes")
+def admin_character_discovered_recipes(character_id: int, _: None = Depends(require_admin_token)):
+    """#1341 BL-D2 — podgląd odkryć eksperymentów danej postaci (admin)."""
+    from app.services.crafting_service import list_character_recipes
+    return list_character_recipes(character_id)
 
 
 # ── #1340 BL-D1 — sety ekwipunku (CRUD) ────────────────────────────────────
