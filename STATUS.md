@@ -6,7 +6,7 @@
 >
 > Trzy sekcje: **CO ROBIMY TERAZ** · **OSTATNIO ZROBIONE** · **UWAŻAJ (pułapki)**.
 
-_Ostatnia aktualizacja: 2026-07-12 (sesja BL-B1 #1333 — loot 2.0 tiery)_
+_Ostatnia aktualizacja: 2026-07-12 (sesja BL-B2/B3 #1334+#1335 — rebalans dropu + komponenty, Krok 8 / bramka S8)_
 
 ---
 
@@ -27,6 +27,7 @@ _Ostatnia aktualizacja: 2026-07-12 (sesja BL-B1 #1333 — loot 2.0 tiery)_
 ## ✅ OSTATNIO ZROBIONE (ostatnie sesje)
 
 **FAZA BL — Bestie i Łupy 2.0 (milestone #26):** silnik kompozycyjny spotkań + loot 2.0.
+- **#1334 BL-B2 + #1335 BL-B3 (Krok 8 / bramka S8)** — rebalans dropu + komponenty rzemieślnicze. #1334: `fragment_mapy_skarbow` wycięty z 72 tabel per-wróg → TYLKO tierowe (std 5/elite 10/boss 15); narracyjne śmieci (klepsydra/lutnia/wędka) wagi 30-45 → cap 8; standard ≥40% użytkowych. #1335: kolumny `is_component`/`component_type`/`created_by` na `game_config_items`; 20 komponentów (14 nowych Kresy, `created_by='seed'`) — kły/skóry/rudy/esencje/zioła; wpięcie do loot tierowego + tematycznie per-wróg (wilk→kieł/skóra, pająk→gruczoł, szkielet→pył); **zwierzęta dropią komponenty zamiast złota** (loot_wolf/spider/bear/rat gold=0); ŻAR ekwipunek badge 🧩 + sekcja Komponenty; Smart Entry pola component. 2 skrypty idempotentne; pytest 10/10; wolf 30 rzutów → komponenty, gold=0. Wymagało S7 (#1333). review+needs-testing.
 - **#1333 BL-B1 (Krok 7 / bramka S7)** — loot tierowy: drop wroga = **unia** tabeli per-wróg (unikaty) + wspólnej tabeli tierowej (`loot_tier_weak/standard/elite/boss`), deduplikacja po kluczu. Migracja idempotentna wycięła 52 generyki z 79 tabel per-wróg → seed 259→235 wpisów. `loot_tier` bywa zaśmiecony słowami loch-tierów → fallback na enum `tier`. 6/6 pytest, realny drop na Demo. Wymagało S6 (#1345 SMOKE-A pool-widen, zaliczone). review+needs-testing.
 - Wcześniej: #1345 S6 (pool-widen), #1332 rangi wroga, #1331 Power Score, #1330/#1329 admin/anti-repeat.
 
