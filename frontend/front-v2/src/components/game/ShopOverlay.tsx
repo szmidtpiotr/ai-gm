@@ -23,7 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useShop, useBuyItem, useSellItem } from "@/hooks/useShop";
-import { isRareGood, type ShopBuyItem, type ShopSellItem } from "@/lib/shop";
+import { isRareGood, componentTypeLabel, type ShopBuyItem, type ShopSellItem } from "@/lib/shop";
 import { useToast } from "@/components/ui/toast";
 
 export function ShopOverlay() {
@@ -158,7 +158,17 @@ function ShopBody({
         ) : shop.isError || !data ? (
           <Empty>Handlarz nie ma teraz nic dla Ciebie.</Empty>
         ) : tab === "buy" ? (
-          <BuyGrid items={data.items} gold={gold} busy={buy.isPending} onBuy={onBuy} />
+          <>
+            {data.is_guild && (
+              <div className="mb-3 rounded-md border border-line-ember bg-[rgba(255,122,61,0.07)] px-3 py-2 text-micro text-text-2">
+                <span className="font-semibold text-ember-glow">Gildia Kupiecka — Komponenty.</span>{" "}
+                Skup 40% · sprzedaż 150%. Asortyment rotuje z każdym dniem gry
+                {typeof data.game_day === "number" ? ` (dzień ${data.game_day + 1})` : ""}. Trofea bossów
+                (bind-on-drop) zdobędziesz tylko z farmienia.
+              </div>
+            )}
+            <BuyGrid items={data.items} gold={gold} busy={buy.isPending} onBuy={onBuy} />
+          </>
         ) : (
           <SellList items={data.sell_items} busy={sell.isPending} onSell={onSell} />
         )}
@@ -208,6 +218,11 @@ function BuyGrid({
               <div className={cn("min-w-0 text-label font-semibold leading-tight", rare && "text-rare")}>
                 {it.label}
                 {rare && " ◆"}
+                {it.is_component && (
+                  <span className="ml-1.5 rounded-full border border-line bg-bg px-1.5 py-0.5 align-middle font-mono text-[9px] font-normal text-text-3">
+                    🧩 {componentTypeLabel(it.component_type)}
+                  </span>
+                )}
               </div>
             </div>
             {it.description && (

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.services import shop_service
+from app.services import guild_shop_service
 from app.services import night_economy_service as night_econ
 
 router = APIRouter(tags=["shop"])
@@ -39,6 +40,11 @@ def _map_shop_error(e: ValueError) -> HTTPException:
         return HTTPException(status_code=403, detail=night_econ.SHOP_CLOSED_MSG)
     if "black_market_day" in msg:
         return HTTPException(status_code=403, detail=night_econ.BLACK_MARKET_DAY_MSG)
+    # #1342 gildia kupiecka
+    if "npc_not_guild" in msg:
+        return HTTPException(status_code=404, detail="NPC is not a guild merchant")
+    if "component_no_trade" in msg:
+        return HTTPException(status_code=403, detail="Ten komponent jest niehandlowalny (tylko z farmienia)")
     return HTTPException(status_code=400, detail=str(e))
 
 
@@ -55,6 +61,58 @@ def get_shop(npc_id: int, character_id: int = Query(...), location_key: str | No
 def get_shop_by_key(npc_key: str, character_id: int = Query(...), location_key: str | None = Query(None)):
     try:
         data = shop_service.get_shop_inventory_by_key(npc_key=npc_key, character_id=character_id, location_key=location_key)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise _map_shop_error(e) from e
+
+
+# ── #1342 BL-D3 — Gildia kupiecka: handel komponentami ─────────────────────────
+
+class GuildBuyRequest(BaseModel):
+    character_id: int
+    item_key: str
+
+
+class GuildSellRequest(BaseModel):
+    character_id: int
+    inventory_id: int
+
+
+@router.get("/guild-shop/{npc_id}")
+def get_guild_shop(npc_id: int, character_id: int = Query(...)):
+    try:
+        data = guild_shop_service.get_guild_shop(npc_id=npc_id, character_id=character_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise _map_shop_error(e) from e
+
+
+@router.get("/guild-shop/by-key/{npc_key}")
+def get_guild_shop_by_key(npc_key: str, character_id: int = Query(...)):
+    try:
+        data = guild_shop_service.get_guild_shop_by_key(npc_key=npc_key, character_id=character_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise _map_shop_error(e) from e
+
+
+@router.post("/guild-shop/{npc_id}/buy")
+def post_guild_buy(npc_id: int, body: GuildBuyRequest):
+    try:
+        data = guild_shop_service.buy_component(
+            character_id=body.character_id, npc_id=npc_id, item_key=body.item_key,
+        )
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise _map_shop_error(e) from e
+
+
+@router.post("/guild-shop/{npc_id}/sell")
+def post_guild_sell(npc_id: int, body: GuildSellRequest):
+    try:
+        data = guild_shop_service.sell_component(
+            character_id=body.character_id, npc_id=npc_id, inventory_id=body.inventory_id,
+        )
         return {"ok": True, "data": data}
     except ValueError as e:
         raise _map_shop_error(e) from e

@@ -6724,6 +6724,126 @@ def _ensure_experiment_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+# Komponenty rzadkie/bossowe — bind-on-drop (tylko z farmienia, NIE do handlu w gildii).
+_NO_TRADE_COMPONENTS = (
+    "krew_wilkolaka",       # posoka wilkołaka (elite/boss)
+    "esencja_cienia",       # esencja cienia (elite/boss)
+    "esencja_upiora",       # esencja upiora (boss)
+    "dragon_scale_shard",   # odłamek smoczej łuski (legendarny, rarity 3)
+)
+
+# Placówki Gildii Kupieckiej (#1342). npc_type='merchant' (CHECK dopuszcza tylko
+# neutral/merchant/quest_giver/ally) + flaga is_guild_merchant=1 rozróżnia je od
+# zwykłych kupców. Konwencja Kresów: MIX słowiańsko-germański, klucz słowiański.
+_GUILD_MERCHANTS = [
+    # (npc_key, label, location_key, description)
+    ("gildia_kupiecka_volhynia", "Faktor Gildii — Radomir Waga", "volhynia_gildia_kupcow",
+     "Faktor Gildii Kupieckiej w Volhynii: waży komponenty na mosiężnej szali i płaci "
+     "grosze za surowiec, lecz każdy łowca bestii wie, że tu opchnie kły i skóry bez "
+     "gadania. Rzadkich, bossowych trofeów nie tknie — te zostają w plecaku myśliwego."),
+    ("gildia_kupiecka_brzezino", "Faktor Gildii — Kunegunda Rączka", "brzezino",
+     "Objazdowa faktorka Gildii z kantorkiem przy trakcie w Brzezinie. Skupuje pospolite "
+     "komponenty rzemieślnicze i wystawia na sprzedaż to, czego akurat brakuje w kuźniach."),
+    ("gildia_kupiecka_strazyn", "Faktor Gildii — Bruno Miech", "strazyn",
+     "Kwatermistrz Gildii Kupieckiej w Strzegwacht. Za murami twierdzy handluje rudą, "
+     "kłami i esencjami — asortyment rotuje z dnia na dzień, jak przychodzą karawany."),
+]
+
+
+def _ensure_guild_merchant_schema(conn: sqlite3.Connection) -> None:
+    """#1342 BL-D3 — Gildia kupiecka: handel komponentami + ochrona pętli farmienia.
+
+    Dodaje:
+      • ``game_config_items.no_trade`` (0/1) — komponenty rzadkie/bossowe są
+        bind-on-drop (zdobywane TYLKO z farmienia, gildia ich nie handluje).
+      • ``npcs.is_guild_merchant`` (0/1) — flaga placówki Gildii Kupieckiej
+        (npc_type zostaje 'merchant' — CHECK nie dopuszcza nowych wartości).
+      • Seed 2–3 placówek gildii w osadach Kresów + wpięcie w
+        ``location_npc_assignments`` i re-sync ``game_locations.npc_keys``.
+
+    Idempotentne: ALTER (duplicate column → ignore) + UPDATE + INSERT OR IGNORE.
+    Silnik cen żyje w ``guild_shop_service`` (asymetria 40%/150%, rotacja per dzień).
+    """
+    # 1) Kolumny.
+    for sql in (
+        "ALTER TABLE game_config_items ADD COLUMN no_trade INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE npcs ADD COLUMN is_guild_merchant INTEGER NOT NULL DEFAULT 0",
+    ):
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+    # 2) Flaga no_trade na komponentach rzadkich/bossowych (self-healing: re-run
+    #    każdorazowo przywraca flagę, gdyby seed_content zresetował ją z JSON-a).
+    conn.execute(
+        "UPDATE game_config_items SET no_trade = 1 WHERE key IN "
+        f"({','.join('?' for _ in _NO_TRADE_COMPONENTS)})",
+        _NO_TRADE_COMPONENTS,
+    )
+
+    # 2b) Komponenty muszą być aktywne, by dało się nimi handlować (i by catalog je
+    #     rozwiązał). Seed #1335 utworzył 14 nowych komponentów Kresów z is_active=0
+    #     (usterka szablonu _base_item_template) — aktywujemy wycenione komponenty.
+    #     Nie leakują do zwykłych sklepów (te czytają game_items, nie game_config_items).
+    conn.execute(
+        "UPDATE game_config_items SET is_active = 1 "
+        "WHERE is_component = 1 AND COALESCE(is_active, 1) = 0 "
+        "AND COALESCE(price_gp, value_gp, 0) > 0"
+    )
+
+    # 3) Seed placówek gildii (INSERT OR IGNORE — nigdy nie nadpisuje ręcznych edycji).
+    _persona = ("Rzeczowy i szorstki. Waży każdy grosz. Skupuje tanio, sprzedaje drogo — "
+                "i nie targuje się o bossowe trofea, bo tych po prostu nie bierze.")
+    for npc_key, label, _loc, desc in _GUILD_MERCHANTS:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO npcs
+                (key, label, npc_type, description, personality_json,
+                 personality_prompt, is_shop, is_guild_merchant, shop_inventory_json,
+                 is_active, review_status, keyword_triggers)
+            VALUES (?, ?, 'merchant', ?, '{}', ?,
+                    1, 1, '[]', 1, 'permanent', '["gildia","kupiec","komponent","faktor"]')
+            """,
+            (npc_key, label, desc, _persona),
+        )
+    # Backfill flagi na wypadek, gdyby placówka istniała już bez is_guild_merchant.
+    guild_keys = tuple(k for k, *_ in _GUILD_MERCHANTS)
+    conn.execute(
+        "UPDATE npcs SET is_guild_merchant = 1, is_shop = 1 WHERE key IN "
+        f"({','.join('?' for _ in guild_keys)})",
+        guild_keys,
+    )
+
+    # 4) Wpięcie w lokacje + re-sync npc_keys (parytet z admin mapą i read-path silnika).
+    touched: set[str] = set()
+    for npc_key, _label, loc, _desc in _GUILD_MERCHANTS:
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO location_npc_assignments
+                     (location_key, npc_key, assignment_type, is_active)
+                   VALUES (?, ?, 'resident', 1)""",
+                (loc, npc_key),
+            )
+            touched.add(loc)
+        except sqlite3.OperationalError:
+            pass
+    for loc in touched:
+        try:
+            npc_keys = [r[0] for r in conn.execute(
+                "SELECT npc_key FROM location_npc_assignments "
+                "WHERE location_key=? AND is_active=1 ORDER BY npc_key", (loc,))]
+            conn.execute(
+                "UPDATE game_locations SET npc_keys=? WHERE key=?",
+                (json.dumps(npc_keys, ensure_ascii=False), loc),
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -6890,6 +7010,7 @@ def run_admin_migrations() -> None:
         _ensure_recipes_schema(conn)  # #1336 BL-C1 — przepisy rzemieślnicze + crafter_type
         _ensure_sets_schema(conn)  # #1340 BL-D1 — sety ekwipunku (bonusy za komplet)
         _ensure_experiment_schema(conn)  # #1341 BL-D2 — eksperymenty: ukryte receptury + odkrycia
+        _ensure_guild_merchant_schema(conn)  # #1342 BL-D3 — gildia kupiecka + no_trade
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

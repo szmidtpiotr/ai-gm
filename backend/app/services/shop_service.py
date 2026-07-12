@@ -496,9 +496,25 @@ def _effective_shop_entries(conn: sqlite3.Connection, npc: sqlite3.Row) -> list[
         return []
 
 
+def _is_guild_npc(conn: sqlite3.Connection, npc_id: int) -> bool:
+    """#1342: czy NPC to placówka Gildii Kupieckiej (osobna kolumna, nie w _load_shop_npc)."""
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(is_guild_merchant, 0) AS g FROM npcs WHERE id = ?", (int(npc_id),)
+        ).fetchone()
+        return bool(row and int(row["g"] or 0) == 1)
+    except sqlite3.OperationalError:
+        return False
+
+
 def get_shop_inventory(npc_id: int, character_id: int, location_key: str | None = None) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
+        # #1342: placówka gildii → istniejący widok sklepu, ale asortyment komponentów
+        # z asymetrią cen i rotacją per dzień (delegacja; lazy import — cykl modułów).
+        if _is_guild_npc(conn, int(npc["id"])):
+            from app.services import guild_shop_service
+            return guild_shop_service.get_guild_shop(int(npc["id"]), character_id)
         cha = _get_character_cha(conn, character_id)
         char_level = _get_character_level(conn, character_id)
         # S6 (#586): podgląd jednorazowego rabatu z targowania (bez konsumpcji).
@@ -590,6 +606,10 @@ def _reputation_buy_multiplier(conn, character_id: int, npc_id: int | None = Non
 def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
+        # #1342: zakup u gildii → silnik komponentów (asymetria + rotacja + no_trade).
+        if _is_guild_npc(conn, int(npc["id"])):
+            from app.services import guild_shop_service
+            return guild_shop_service.buy_component(character_id, int(npc["id"]), item_key)
         # #1183: remember which campaign this purchase belongs to, so the merchant
         # NPC's purchase_count can be bumped after the sale succeeds.
         buy_campaign_id = _campaign_id_for_character(conn, character_id)
@@ -694,6 +714,10 @@ def sell_item(character_id: int, inventory_id: int, npc_id: int | None = None) -
         if npc_id is not None:
             try:
                 npc = _load_shop_npc(conn, int(npc_id))
+                # #1342: sprzedaż gildii → skup komponentów 40% (no_trade odrzucone).
+                if _is_guild_npc(conn, int(npc["id"])):
+                    from app.services import guild_shop_service
+                    return guild_shop_service.sell_component(character_id, int(npc["id"]), int(inventory_id))
                 night_state = _shop_open_state(conn, npc, character_id)
                 if not night_state["open"]:
                     raise ValueError(night_state["reason"] or "shop_closed_night")
