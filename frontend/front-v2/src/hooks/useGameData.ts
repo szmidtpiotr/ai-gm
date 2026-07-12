@@ -11,6 +11,7 @@ import type {
   Hero,
   IdentityPreview,
   LlmSettings,
+  RelativeThreat,
   SkillTestResolveResponse,
   SuggestedAction,
   TravelResult,
@@ -31,6 +32,11 @@ export interface TravelNotice {
   can_resume: boolean;
   /** Czy gracz może odpocząć TU (safe_for_rest / karczma / po obozie). */
   can_rest?: boolean;
+  /** WALKA-T1 (#1349): dla zasadzki (reason=encounter) — wróg do pokazania w modalu.
+   *  Brak (null/undefined) → generyczny modal jak dotąd (nieznany/pusty enemy_key). */
+  enemy?: { key: string; label: string; image_url: string | null; count: number } | null;
+  /** WALKA-T1 (#1349): wskaźnik zagrożenia zasadzki (glyph/label/tier), surowy ratio ukryty. */
+  relative_threat?: RelativeThreat | null;
 }
 
 /** GET /campaigns/{id}/suggested-actions — bieżące podpowiedzi akcji (chips) +

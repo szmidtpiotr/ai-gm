@@ -50,6 +50,7 @@ import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
 import { CharacterSheet } from "@/components/sheet/CharacterSheet";
 import { CombatView } from "@/components/game/combat/CombatView";
+import { EnemyRevealVisual } from "@/components/game/combat/EnemyRevealVisual";
 import { Dice3DOverlay, type DiceJob } from "@/components/game/combat/Dice3DOverlay";
 import { DungeonView } from "@/components/game/dungeon/DungeonView";
 import { MpGame } from "@/components/game/mp/MpGame";
@@ -480,6 +481,25 @@ export default function Game() {
     ackInterrupt.current = key;
     setInterruptModal(travelNotice);
   }, [travelNotice]);
+  // WALKA-T1 (#1349): gdy modal zasadzki (reason=encounter) się pojawił, karta
+  // „Nieznany napastnik" (EnemyRevealCard) dla walki, która zaraz wystartuje, ma się
+  // NIE pokazać (dublet overlayów). Uzbrajamy flagę przy modalu zasadzki, a gdy pojawi
+  // się combat_id — wiążemy go jako „reveal już pokazany". Licząc z travelNotice +
+  // activeCombat.id (nie z kolejności efektów) unikamy race'u opisanego w spec.
+  const armedEncounterRef = useRef(false);
+  const [suppressRevealCombatId, setSuppressRevealCombatId] = useState<number | null>(null);
+  useEffect(() => {
+    if (travelNotice && String(travelNotice.reason).startsWith("encounter")) {
+      armedEncounterRef.current = true;
+    }
+  }, [travelNotice?.reason, travelNotice?.step]);
+  useEffect(() => {
+    const cid = activeCombat?.id;
+    if (cid && armedEncounterRef.current) {
+      setSuppressRevealCombatId(cid);
+      armedEncounterRef.current = false;
+    }
+  }, [activeCombat?.id]);
   // PM4: modal wyboru trasy również po wejściu/odświeżeniu (pending_travel_choice
   // przetrwa jako suggested_actions type=route_choice), nie tylko po submicie tury.
   const routeAck = useRef<string | null>(null);
@@ -680,6 +700,7 @@ export default function Game() {
           onSend={send}
           sending={submit.isPending}
           onEnded={(id) => setAckCombatId(id)}
+          suppressRevealCombatId={suppressRevealCombatId}
         />
       ) : gameTab === "story" ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -815,6 +836,16 @@ function TravelInterruptModal({
             </div>
           </div>
         </div>
+        {/* WALKA-T1 (#1349): zasadzka z danymi wroga → obrazek + badge zagrożenia
+            (współdzielony z EnemyRevealCard). Karta „Nieznany napastnik" wyciszona (Game). */}
+        {notice.enemy && (
+          <EnemyRevealVisual
+            name={notice.enemy.label || notice.enemy.key}
+            imageUrl={notice.enemy.image_url}
+            threat={notice.relative_threat ?? null}
+            restCount={Math.max(0, (notice.enemy.count ?? 1) - 1)}
+          />
+        )}
         <div className="px-5 py-4">
           <p className="font-serif text-prose leading-relaxed text-text-2">{notice.message}</p>
           {dest && (

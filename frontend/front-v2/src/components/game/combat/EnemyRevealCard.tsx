@@ -5,14 +5,7 @@
 // liczba NIGDY nie pokazana (parytet z ukrytym Power Score). Fallback gdy brak image_url.
 import { Sword, X } from "@phosphor-icons/react";
 import type { Combatant, RelativeThreat } from "@/lib/types";
-
-function others(n: number): string {
-  // 2-4 → "inni", 5+ → "innych" (polska odmiana liczebnika)
-  const last = n % 10;
-  const tens = n % 100;
-  if (n >= 2 && n <= 4 && !(tens >= 12 && tens <= 14)) return `i ${n} innych`;
-  return `i ${n} ${last === 1 ? "inny" : "innych"}`;
-}
+import { EnemyRevealVisual } from "./EnemyRevealVisual";
 
 export function EnemyRevealCard({
   enemies,
@@ -46,38 +39,12 @@ export function EnemyRevealCard({
           <X size={18} />
         </button>
 
-        {/* wskaźnik zagrożenia — glyph + label, BEZ surowej liczby */}
-        {threat && (
-          <div
-            className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-pill border border-line-danger bg-bg/80 px-2.5 py-1 backdrop-blur"
-            data-testid="reveal-threat"
-          >
-            <span className="text-[15px] leading-none">{threat.glyph}</span>
-            <span className="font-ui text-[11px] font-bold uppercase tracking-[0.06em] text-text">
-              {threat.label}
-            </span>
-          </div>
-        )}
-
-        {img ? (
-          <img
-            src={img}
-            alt={String(name)}
-            className="aspect-[4/3] w-full object-cover"
-          />
-        ) : (
-          <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-mech-card text-text-3">
-            <Sword size={40} weight="duotone" />
-            <span className="font-ui text-[11px] uppercase tracking-wide">Brak wizerunku</span>
-          </div>
-        )}
-
-        <div className="border-t border-line px-4 py-3 text-center">
-          <div className="font-serif text-body font-semibold text-text">{name}</div>
-          {rest > 0 && (
-            <div className="mt-0.5 font-ui text-[12px] text-text-3">{others(rest)}</div>
-          )}
-        </div>
+        <EnemyRevealVisual
+          name={String(name)}
+          imageUrl={img}
+          threat={threat}
+          restCount={rest}
+        />
 
         <button
           type="button"

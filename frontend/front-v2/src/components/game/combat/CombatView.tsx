@@ -55,6 +55,7 @@ export function CombatView({
   dungeon = false,
   onDungeonDeath,
   onEnded,
+  suppressRevealCombatId = null,
 }: {
   campaignId: number;
   character: CharacterDetail | undefined;
@@ -72,6 +73,9 @@ export function CombatView({
   // toast pokazany) → dopiero teraz rodzic może odmontować ekran walki. Bez tego
   // przejście active→ended odmontowywało CombatView ZANIM modal wyniku zdążył się pokazać.
   onEnded?: (combatId: number) => void;
+  // WALKA-T1 (#1349): id walki, dla której karta pojawienia wroga (EnemyRevealCard)
+  // ma być wyciszona — bo modal zasadzki w drodze już pokazał wroga (dedup overlayów).
+  suppressRevealCombatId?: number | null;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -178,6 +182,12 @@ export function CombatView({
   useEffect(() => {
     const cid = live?.id;
     if (!cid || live?.status !== "active") return;
+    // #1349: walka z zasadzki w drodze — modal podróży już pokazał wroga, więc
+    // oznacz combat jako „odsłonięty" i NIE pokazuj drugiej karty (dedup overlayów).
+    if (suppressRevealCombatId != null && cid === suppressRevealCombatId) {
+      revealedRef.current.add(cid);
+      return;
+    }
     if (revealedRef.current.has(cid)) return;
     const enemies = (live.combatants ?? []).filter(
       (c) => c.type === "enemy" && Number(c.hp_current ?? 0) > 0,
@@ -185,7 +195,7 @@ export function CombatView({
     if (!enemies.length) return;
     revealedRef.current.add(cid);
     setReveal(enemies);
-  }, [live?.id, live?.status]);
+  }, [live?.id, live?.status, suppressRevealCombatId]);
 
   // Cel: trzymaj się żywego wroga; przeskocz na kolejnego po zabiciu.
   useEffect(() => {

@@ -9049,7 +9049,54 @@ _TRAVEL_NOTICE_BY_REASON = {
 }
 
 
-def _travel_notice_for(session_flags: dict) -> dict | None:
+def _encounter_enemy_notice(
+    conn: "sqlite3.Connection", campaign_id: int, enemy_key: str
+) -> dict | None:
+    """WALKA-T1 (#1349): dane wroga dla modalu zasadzki.
+
+    Zwraca {enemy:{key,label,image_url,count}, relative_threat:{glyph,label,tier},
+    message} zbudowane ze STAŁEGO statblocku (`game_config_enemies`) + wskaźnika
+    zagrożenia (jak #1344 — wartość stała, nie z rankowanego combatanta). Do gracza
+    trafia TYLKO glyph+label+tier (surowy ratio ukryty). None gdy enemy_key
+    pusty/nieznany → caller zostaje przy generycznym stringu. Nigdy nie rzuca.
+    """
+    key = str(enemy_key or "").strip()
+    if not key or conn is None or campaign_id is None:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT label, image_url FROM game_config_enemies WHERE key = ? LIMIT 1",
+            (key,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    if not row:
+        return None
+    label = (row["label"] if "label" in row.keys() else None) or key
+    image_url = row["image_url"] if "image_url" in row.keys() else None
+
+    rt_out = None
+    try:
+        from app.services import threat_display_service as _tds
+
+        _rt = _tds.relative_threat(conn, campaign_id, [{"type": "enemy", "enemy_key": key}])
+        if _rt:
+            rt_out = {k: _rt[k] for k in ("glyph", "label", "tier")}
+    except Exception:
+        rt_out = None
+
+    return {
+        "enemy": {"key": key, "label": label, "image_url": image_url, "count": 1},
+        "relative_threat": rt_out,
+        "message": f"{label} stanął ci na drodze. Stań do walki.",
+    }
+
+
+def _travel_notice_for(
+    session_flags: dict,
+    conn: "sqlite3.Connection | None" = None,
+    campaign_id: int | None = None,
+) -> dict | None:
     tp = session_flags.get("travel_plan")
     if not isinstance(tp, dict):
         return None
@@ -9064,7 +9111,7 @@ def _travel_notice_for(session_flags: dict) -> dict | None:
     dest = tp.get("destination_label")
     if isinstance(dest, str) and (dest.startswith("hex (") or re.match(r"^\(-?\d+,-?\d+\)$", dest)):
         dest = None
-    return {
+    notice = {
         "reason": reason,
         "step": int(tp.get("step_index", 0) or 0),
         "hours_remaining": float(tp.get("hours_remaining", 0) or 0),
@@ -9072,6 +9119,15 @@ def _travel_notice_for(session_flags: dict) -> dict | None:
         "can_resume": not base.startswith("forced_camp"),
         **tmpl,
     }
+    # WALKA-T1 (#1349): dla zasadzki dołóż dane wroga (obrazek, nazwa, wskaźnik) i
+    # nadpisz generyczny message. Dostępne tylko gdy caller poda conn+campaign_id;
+    # fallback na generyczny szablon, gdy enemy_key pusty/nieznany. Filtr `_prompted`
+    # obejmuje base=="encounter" (nie ma wariantu encounter_prompted, ale spójnie).
+    if base == "encounter":
+        enemy_notice = _encounter_enemy_notice(conn, campaign_id, tp.get("enemy_key"))
+        if enemy_notice:
+            notice.update(enemy_notice)
+    return notice
 
 
 @router.get("/campaigns/{campaign_id}/suggested-actions")
@@ -9132,7 +9188,7 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
             ).fetchone()
             cid = int(c_row["id"]) if c_row else None
         if cid is None:
-            return {"suggested_actions": [], "travel_notice": _travel_notice_for(sf)}
+            return {"suggested_actions": [], "travel_notice": _travel_notice_for(sf, conn, campaign_id)}
 
         actions = build_suggested_actions(
             conn=conn,
@@ -9151,7 +9207,7 @@ def get_campaign_suggested_actions(campaign_id: int, character_id: int | None = 
                 (gs_row["current_location_id"],),
             ).fetchone()
             can_rest = bool(_ls and _ls["safe_for_rest"])
-        notice = _travel_notice_for(sf)
+        notice = _travel_notice_for(sf, conn, campaign_id)
         if notice is not None:
             notice["can_rest"] = can_rest
             # Spójność z modalem: interrupt-pill „Odpocznij" wyłączona, gdy tu nie
