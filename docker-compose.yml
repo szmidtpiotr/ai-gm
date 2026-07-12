@@ -34,6 +34,11 @@ services:
       - APP_BASE_URL=${APP_BASE_URL:-https://aigm.studio-colorbox.com}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm.db}
       - ADMIN_IMPORT_BACKUP_DIR=${ADMIN_IMPORT_BACKUP_DIR:-/backups/imports}
+      # Telegram bot — turn notifications + easy-click linking (#602/#883). Bot now
+      # lives on PROD (repointed from DEV); values injected from .env, never committed.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
