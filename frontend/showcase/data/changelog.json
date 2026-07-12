@@ -2,6 +2,21 @@
   "generated_from": "CHANGELOG.md",
   "entries": [
     {
+      "version": "v1.9.0",
+      "date": "2026-07-12",
+      "when": "lipiec 2026",
+      "title": "Bestiariusz i Atlas, mag broni się w walce, żywe kości",
+      "highlights": [
+        "Bestiariusz i Atlas Kresów: zdobywaj trofea za pokonane bestie, a odkryte miejsca zapisują się na krzyż między kampaniami — panel Kolekcje pokazuje twoje odkrycia z pełnymi kartami statystyk",
+        "Mag broni się w walce: Arkanowa Bariera to błyskawiczna reakcja (odpowiednik uniku wojownika) za odrobinę many, a Tarcza Many pochłania część obrażeń kosztem many",
+        "Żywe kości w walce: rzuty obrażeń wroga są teraz animowane tak samo jak twoje, a przy narracyjnych testach umiejętności wyskakuje kość — nakładkę można dotknąć, by pominąć animację",
+        "Pogoda ma znaczenie: burza i śnieg spowalniają marsz, a osady są bezpiecznymi przystaniami — koniec zasadzek w środku miasta",
+        "Zegar świata na pasku z podglądem „Łuk dnia” i czytelniejszą ikoną aury pogody",
+        "Mapy skarbów dopięte: przycisk „Użyj” otwiera mapę świata i podświetla skrytkę znacznikiem X, kopanie to test umiejętności z gwarantowanym łupem, a fragmenty map kupisz też na czarnym rynku",
+        "Trofea multiplayer: zaliczenie zabójstwa liczy się wszystkim uczestnikom walki, nie tylko zadającemu ostatni cios"
+      ]
+    },
+    {
       "version": "v1.8.0",
       "date": "2026-07-11",
       "when": "lipiec 2026",
