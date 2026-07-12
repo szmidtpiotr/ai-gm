@@ -219,6 +219,7 @@ def auto_screen_queue(entity_type: str, dry_run: bool = False):
 class ReviewAction(BaseModel):
     action: str  # "approve" or "discard"
     generate_sublocs: list[str] | None = None  # #995: subtypes to auto-generate (location approve only)
+    world_scope: str | None = None  # BL-A4 #1330: enemy approve scope (global|template|campaign)
 
 
 class WeaponPatchReq(_BaseModel):
@@ -281,7 +282,7 @@ def review_entity(entity_type: str, key: str, req: ReviewAction):
     conn = _get_db()
     try:
         if req.action == "approve":
-            ok = approve_entity(conn, entity_type, key)
+            ok = approve_entity(conn, entity_type, key, world_scope=req.world_scope)
         else:
             ok = discard_entity(conn, entity_type, key)
 

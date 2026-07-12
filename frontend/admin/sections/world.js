@@ -598,11 +598,38 @@ async function _loadBestiaryPending() {
       } catch { return '—'; }
     };
     const _pn = (label, key) => `<div class="td-name">${_esc(label||key)}</div><div class="td-muted" style="font-size:0.7rem;margin-top:1px">${_esc(key)}</div>`;
-    const mkNpcRow = p => `<tr>
+    // BL-A4 (#1330) — źródło rekordu (skąd pochodzi) → badge + klucz do filtra.
+    const _srcKey = (p) => {
+      if (p.template_id) return 'template';
+      const cb = String(p.created_by||'').toLowerCase();
+      if (cb === 'llm_plan') return 'llm_plan';
+      if (cb === 'forge') return 'forge';
+      if (cb === 'seed') return 'seed';
+      return 'other';
+    };
+    const _srcBadge = (p) => {
+      const k = _srcKey(p);
+      if (k === 'template') {
+        const t = p.template_title ? _esc(p.template_title) : `Szablon #${_esc(p.template_id)}`;
+        return `<span class="badge" style="background:rgba(180,140,60,.16);color:#d9b061" title="Szablon #${_esc(p.template_id)}">📜 ${t}</span>`;
+      }
+      if (k === 'llm_plan') return '<span class="badge" style="background:rgba(120,90,200,.16);color:#b49cff">🤖 plan LLM</span>';
+      if (k === 'forge')    return '<span class="badge" style="background:rgba(60,150,150,.16);color:#5cc6c6">⚒ Kuźnia</span>';
+      if (k === 'seed')     return '<span class="badge" style="background:rgba(90,160,90,.16);color:#7fd07f">🌱 seed</span>';
+      return '<span class="td-muted">—</span>';
+    };
+    // BL-A4 (#1330) — wybór zasięgu wroga przy approve; szablonowy wróg domyślnie 'template'.
+    const _scopeSel = (p) => {
+      const def = p.template_id ? 'template' : (p.world_scope || 'global');
+      const opt = (v,l) => `<option value="${v}"${v===def?' selected':''}>${l}</option>`;
+      return `<select class="form-input scope-sel" id="scope-${_esc(p.key)}" style="height:26px;padding:2px 4px;font-size:0.7rem;width:auto;display:inline-block;margin-right:4px" title="Zasięg w świecie przy zatwierdzeniu">${opt('global','🌍 Świat')}${opt('template','📜 Szablon')}${opt('campaign','🎯 Kampania')}</select>`;
+    };
+    const mkNpcRow = p => `<tr class="pending-row" data-src="${_srcKey(p)}">
       <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="npc" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.name||p.key)}">${_pn(p.label||p.name, p.key)}</td>
       <td data-sort-val="NPC" data-label="Typ"><span class="badge badge-green">NPC</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.npc_type||p.role||'')}" data-label="Rola">${_esc(p.npc_type||p.role||'—')}</td>
+      <td data-sort-val="${_srcKey(p)}" data-label="Źródło">${_srcBadge(p)}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||p.backstory||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.backstory||'')}">${_esc((p.description||p.backstory||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
@@ -611,24 +638,27 @@ async function _loadBestiaryPending() {
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('npc','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    const mkEnemyRow = p => `<tr>
+    const mkEnemyRow = p => `<tr class="pending-row" data-src="${_srcKey(p)}">
       <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="enemy" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Wróg" data-label="Typ"><span class="badge badge-red">Wróg</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.tier||'')}" data-label="Tier">${_esc(p.tier||'—')}</td>
+      <td data-sort-val="${_srcKey(p)}" data-label="Źródło">${_srcBadge(p)}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
+        ${_scopeSel(p)}
         <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="window._worldPendingEditEnemy(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
-        <button class="btn-icon success" title="Zatwierdź" onclick="window._worldReviewEntity('enemy','${_esc(p.key)}','approve',this)">✓</button>
+        <button class="btn-icon success" title="Zatwierdź (zasięg z listy obok)" onclick="window._worldApproveEnemyScope('${_esc(p.key)}',this)">✓</button>
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('enemy','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    const mkWeaponRow = p => `<tr>
+    const mkWeaponRow = p => `<tr class="pending-row" data-src="${_srcKey(p)}">
       <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="weapon" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Broń" data-label="Typ"><span class="badge badge-amber">Broń</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.weapon_type||p.damage_die||'')}" data-label="Rola">${_esc(p.weapon_type||p.damage_die||'—')}</td>
+      <td data-sort-val="${_srcKey(p)}" data-label="Źródło">${_srcBadge(p)}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
@@ -637,13 +667,14 @@ async function _loadBestiaryPending() {
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('weapon','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    const mkItemRow = p => `<tr>
+    const mkItemRow = p => `<tr class="pending-row" data-src="${_srcKey(p)}">
       <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="item" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="${p.pending_category==='trivial'?'Drobiazg':'Przedmiot'}" data-label="Typ">${p.pending_category==='trivial'
         ? '<span class="badge" style="background:rgba(120,120,120,0.18);color:var(--t3)" title="Heurystyka: wygląda na śmieć narracyjny (U6)">🍂 Drobiazg</span>'
         : '<span class="badge badge-blue">Przedmiot</span>'}</td>
       <td class="td-muted" data-sort-val="${_esc(p.item_type||'')}" data-label="Rola">${_esc(p.item_type||'—')}</td>
+      <td data-sort-val="${_srcKey(p)}" data-label="Źródło">${_srcBadge(p)}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||p.note||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
@@ -652,11 +683,12 @@ async function _loadBestiaryPending() {
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('item','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    const mkLocationRow = p => `<tr>
+    const mkLocationRow = p => `<tr class="pending-row" data-src="${_srcKey(p)}">
       <td class="col-check"><input type="checkbox" class="pending-row-check" data-type="location" data-key="${_esc(p.key)}" onchange="rowCheck('pending')"></td>
       <td class="td-sticky" data-sort-val="${_esc(p.label||p.key)}">${_pn(p.label, p.key)}</td>
       <td data-sort-val="Lokacja" data-label="Typ"><span class="badge badge-green" style="background:rgba(60,120,200,0.15);color:#7aadff">Lokacja</span></td>
       <td class="td-muted" data-sort-val="${_esc(p.location_type||p.location_subtype||'')}" data-label="Typ lok.">${_esc(p.location_subtype||p.location_type||'—')}</td>
+      <td data-sort-val="${_srcKey(p)}" data-label="Źródło">${_srcBadge(p)}</td>
       <td class="td-muted" data-sort-val="${_esc((p.description||'').slice(0,70))}" data-label="Opis" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||'')}">${_esc((p.description||'').slice(0,70)||'—')}</td>
       <td class="td-muted" data-sort-val="${_esc(p.created_at||'')}" data-label="Data" style="font-size:0.78rem;white-space:nowrap">${_formatDate(p.created_at)}</td>
       <td class="td-actions">
@@ -664,12 +696,24 @@ async function _loadBestiaryPending() {
         <button class="btn-icon danger" title="Odrzuć" onclick="window._worldReviewEntity('location','${_esc(p.key)}','discard',this)">✕</button>
       </td>
     </tr>`;
-    container.innerHTML = `<div class="data-table--cards table-wrap"><table class="data-table" id="bestiary-pending-table">
+    container.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label style="font-size:0.75rem;color:var(--t3)">Źródło:</label>
+      <select class="form-input" style="height:28px;width:auto;font-size:0.78rem" onchange="window._worldFilterPendingSource(this)">
+        <option value="">Wszystkie</option>
+        <option value="template">📜 Szablon</option>
+        <option value="llm_plan">🤖 plan LLM</option>
+        <option value="forge">⚒ Kuźnia</option>
+        <option value="seed">🌱 seed</option>
+        <option value="other">— inne</option>
+      </select>
+    </div>
+    <div class="data-table--cards table-wrap"><table class="data-table" id="bestiary-pending-table">
       <thead><tr>
         <th class="col-check"><input type="checkbox" id="pending-check-all" onchange="toggleAll('pending', this)"></th>
         <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
         <th><div class="th-inner">Typ</div></th>
         <th><div class="th-inner">Rola/Tier/Typ lok.</div></th>
+        <th><div class="th-inner">Źródło</div></th>
         <th><div class="th-inner">Opis</div></th>
         <th><div class="th-inner">Data utworzenia</div></th>
         <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
@@ -682,11 +726,28 @@ async function _loadBestiaryPending() {
   }
 }
 
-async function reviewEntityBestiary(entityType, key, action, btn) {
+// BL-A4 (#1330) — approve wroga z wybranym zasięgiem świata (select obok przycisku).
+function _approveEnemyWithScope(key, btn) {
+  const sel = document.getElementById(`scope-${key}`);
+  const scope = sel ? sel.value : null;
+  return reviewEntityBestiary('enemy', key, 'approve', btn, scope);
+}
+
+// BL-A4 (#1330) — filtr wierszy Oczekujących po źródle.
+function _filterPendingSource(sel) {
+  const v = sel.value;
+  document.querySelectorAll('#bestiary-pending-table tbody tr.pending-row').forEach(tr => {
+    tr.style.display = (!v || tr.dataset.src === v) ? '' : 'none';
+  });
+}
+
+async function reviewEntityBestiary(entityType, key, action, btn, worldScope = null) {
   if (!confirm(`${action === 'approve' ? 'Zatwierdź' : 'Odrzuć'} "${key}"?`)) return;
   btn.disabled = true; btn.textContent = '⏳';
   try {
-    await apiFetch(`/api/admin/world/review/${entityType}/${key}`, { method: 'POST', body: JSON.stringify({ action }) });
+    const body = { action };
+    if (worldScope) body.world_scope = worldScope;  // BL-A4 #1330
+    await apiFetch(`/api/admin/world/review/${entityType}/${key}`, { method: 'POST', body: JSON.stringify(body) });
     _showToast(action === 'approve' ? 'Zatwierdzono.' : 'Odrzucono.', 'success');
     _loaded.delete('pending');
     await _loadBestiaryPending();
@@ -1733,6 +1794,8 @@ export async function init(panel) {
   window._worldShopInv        = (id, btn) => openShopInventoryModal(id, btn);
   window._worldNpcImage       = (id, enc) => openNpcImageModal(id, enc);
   window._worldReviewEntity   = (type, key, action, btn) => reviewEntityBestiary(type, key, action, btn);
+  window._worldApproveEnemyScope = (key, btn) => _approveEnemyWithScope(key, btn);
+  window._worldFilterPendingSource = (sel) => _filterPendingSource(sel);
   window._worldPendingEditNpc   = (p) => openPendingNpcEditModal(p);
   window._worldSavePendingNpc   = (key, btn) => savePendingNpc(key, btn);
   window._worldPendingEditEnemy = (p) => openPendingEnemyEditModal(p);

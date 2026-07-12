@@ -1115,6 +1115,28 @@ def get_pending_npcs(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
+    # BL-A4 (#1330) — pełne zapytanie z kolumnami źródła (created_by/template_id/
+    # world_scope) + JOIN tytułu szablonu. Na starym/minimalnym schemacie (brak tych
+    # kolumn lub tabeli campaign_templates) degraduje do zapytania legacy — zero regresji.
+    try:
+        rows = conn.execute(
+            """SELECT e.key, e.label, e.tier, e.hp_base, e.ac_base, e.attack_bonus, e.dex_modifier,
+                      e.damage_die, e.damage_type, e.xp_award, e.drop_chance, e.min_level,
+                      e.description, e.note, e.image_url, e.review_status, e.created_at,
+                      e.created_by, e.template_id, e.world_scope,
+                      t.title AS template_title,
+                      e.loot_table_key, lt.gold_min AS loot_gold_min, lt.gold_max AS loot_gold_max,
+                      (SELECT COUNT(*) FROM game_config_loot_entries le
+                        WHERE le.loot_table_key = e.loot_table_key) AS loot_entries_count
+               FROM game_config_enemies e
+               LEFT JOIN game_config_loot_tables lt ON lt.key = e.loot_table_key
+               LEFT JOIN campaign_templates t ON t.id = e.template_id
+               WHERE e.review_status IN ('pending_review', 'pending')
+               ORDER BY e.rowid DESC LIMIT 200"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        pass
     try:
         rows = conn.execute(
             """SELECT e.key, e.label, e.tier, e.hp_base, e.ac_base, e.attack_bonus, e.dex_modifier,
@@ -1133,7 +1155,9 @@ def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
-def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
+def approve_entity(
+    conn: sqlite3.Connection, entity_type: str, key: str, world_scope: str | None = None
+) -> bool:
     table = {
         "location": "game_locations", "npc": "npcs",
         "enemy": "game_config_enemies", "weapon": "game_config_weapons",
@@ -1144,6 +1168,13 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
     try:
         conn.execute(f"UPDATE {table} SET review_status = 'permanent' WHERE key = ?", (key,))
         if entity_type == "enemy":
+            # BL-A4 (#1330) — admin decyduje zasięg wroga przy approve. Szablonowy
+            # wróg (template_id ustawiony) domyślnie NIE trafia do świata globalnego.
+            if world_scope in ("global", "template", "campaign"):
+                conn.execute(
+                    "UPDATE game_config_enemies SET world_scope = ? WHERE key = ?",
+                    (world_scope, key),
+                )
             # Safety net for pending enemies created before auto-loot existed at
             # tag-creation time — no-ops if entries are already there.
             erow = conn.execute("SELECT tier, label FROM game_config_enemies WHERE key = ?", (key,)).fetchone()
