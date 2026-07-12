@@ -1,6 +1,6 @@
 // FE9 walka (#1236) — pochodne stanu walki: karty rzutów combat (F-52), progi
 // HP dla paska w banerze (F-53), etykiety stref. Źródło: makieta zar7-walka/zar7-kosc.
-import type { CombatActionResult, CombatState, Combatant } from "@/lib/types";
+import type { CombatActionResult, CombatState, Combatant, RelativeThreat } from "@/lib/types";
 import type { RollCardData } from "@/lib/types";
 
 // ── HP bar (parytet ze starym `_woundThresholds`) ────────────────────────────
@@ -23,6 +23,7 @@ export interface CombatView {
   ranged: Combatant[]; // DYSTANS
   status: string;
   endedReason: string | null;
+  relativeThreat: RelativeThreat | null; // BL-A7 (#1344)
 }
 
 export function readCombat(cs: CombatState | null | undefined): CombatView | null {
@@ -44,6 +45,7 @@ export function readCombat(cs: CombatState | null | undefined): CombatView | nul
     ranged,
     status: String(cs.status ?? "active"),
     endedReason: (cs.ended_reason as string) ?? null,
+    relativeThreat: (cs.relative_threat as RelativeThreat) ?? null,
   };
 }
 

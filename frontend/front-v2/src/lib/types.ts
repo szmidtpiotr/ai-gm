@@ -351,6 +351,14 @@ export interface Combatant {
   [k: string]: unknown;
 }
 
+// BL-A7 (#1344) — relatywny wskaźnik zagrożenia grupy (glyph+label; surowy ratio ukryty).
+export interface RelativeThreat {
+  glyph: string; // 🟢/🟡/🔴/💀
+  label: string; // słaby / wyrównany / groźny / zabójczy
+  tier: string; // trivial / even / dangerous / deadly
+  count?: number;
+}
+
 // Snapshot walki (GET /campaigns/{id}/combat → { active, combat }).
 export interface CombatState {
   id?: number;
@@ -361,6 +369,7 @@ export interface CombatState {
   status?: "active" | "ended";
   ended_reason?: "victory" | "fled" | "player_dead" | null;
   loot_pool?: unknown;
+  relative_threat?: RelativeThreat | null; // BL-A7 (#1344)
   [k: string]: unknown;
 }
 

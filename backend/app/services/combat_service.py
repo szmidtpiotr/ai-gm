@@ -2133,6 +2133,40 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    # BL-A7 (#1344): karta pojawienia wroga w ŻAR — dołącz portret (image_url) brakującym
+    # wrogom (JOIN po enemy_key, gdy combatant JSON go nie ma) oraz grupowy relatywny
+    # wskaźnik zagrożenia. Do gracza trafia TYLKO glyph+label+tier (surowy ratio ukryty,
+    # parytet z ukrytym Power Score). Wszystko best-effort — błąd nie psuje snapshotu.
+    try:
+        _enemy_cs = [c for c in _combatants if c.get("type") == "enemy"]
+        if _enemy_cs:
+            from app.services import threat_display_service as _tds
+            with _conn() as _tc:
+                _need = {
+                    str(c.get("enemy_key"))
+                    for c in _enemy_cs
+                    if c.get("enemy_key") and not c.get("image_url")
+                }
+                if _need:
+                    _ph = ",".join("?" * len(_need))
+                    _imgs = {
+                        r["key"]: r["image_url"]
+                        for r in _tc.execute(
+                            f"SELECT key, image_url FROM game_config_enemies WHERE key IN ({_ph})",
+                            tuple(_need),
+                        ).fetchall()
+                    }
+                    for c in _enemy_cs:
+                        if not c.get("image_url") and c.get("enemy_key") in _imgs:
+                            c["image_url"] = _imgs[c["enemy_key"]]
+                _alive = [c for c in _enemy_cs if float(c.get("hp_current") or 0) > 0]
+                _rt = _tds.relative_threat(_tc, row["campaign_id"], _alive or _enemy_cs)
+                if _rt:
+                    d["relative_threat"] = {
+                        k: _rt[k] for k in ("glyph", "label", "tier", "count")
+                    }
+    except Exception:
+        pass
     if "loot_pool" in row.keys():
         d["loot_pool"] = _read_loot_pool_from_row(row)
     if "loot_persisted" in row.keys():

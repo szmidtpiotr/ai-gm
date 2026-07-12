@@ -38,7 +38,9 @@ import { CombatActionBar } from "./CombatActionBar";
 import { ActionSheet, type SheetMode, type SpellAction } from "./ActionSheet";
 import { ReactionModal, type ReactionChoice, type ReactionData } from "./ReactionModal";
 import { Dice3DOverlay, type DiceJob } from "./Dice3DOverlay";
+import { EnemyRevealCard } from "./EnemyRevealCard";
 import { CombatOutcomes } from "../outcomes/CombatOutcomes";
+import type { Combatant } from "@/lib/types";
 
 export function CombatView({
   campaignId,
@@ -153,6 +155,9 @@ export function CombatView({
   const [busy, setBusy] = useState(false);
   // FE10 (#1237): modal wyniku walki (victory/player_dead) + akumulatory nagród.
   const [outcome, setOutcome] = useState<{ reason: string; combat: CombatState } | null>(null);
+  // BL-A7 (#1344): karta pojawienia wroga — once per combat_id (jak seenTiles w DungeonView).
+  const [reveal, setReveal] = useState<Combatant[] | null>(null);
+  const revealedRef = useRef<Set<number>>(new Set());
   const jobSeq = useRef(0);
   const pendingDmgStageRef = useRef<DiceJob | null>(null);
   const pendingReactionRef = useRef<ReactionData | null>(null);
@@ -162,6 +167,20 @@ export function CombatView({
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
   const xpAccumRef = useRef(0);
+
+  // Karta pojawienia wroga: pierwszy render aktywnej walki danego combat_id → odsłoń
+  // portret + wskaźnik zagrożenia. Dismiss → normalny widok. Once-per-combat_id (ref).
+  useEffect(() => {
+    const cid = live?.id;
+    if (!cid || live?.status !== "active") return;
+    if (revealedRef.current.has(cid)) return;
+    const enemies = (live.combatants ?? []).filter(
+      (c) => c.type === "enemy" && Number(c.hp_current ?? 0) > 0,
+    );
+    if (!enemies.length) return;
+    revealedRef.current.add(cid);
+    setReveal(enemies);
+  }, [live?.id, live?.status]);
 
   // Cel: trzymaj się żywego wroga; przeskocz na kolejnego po zabiciu.
   useEffect(() => {
@@ -567,6 +586,15 @@ export function CombatView({
           onMove={doMove}
           onDeclare={doDeclare}
           onClose={() => setSheet(null)}
+        />
+      )}
+
+      {/* BL-A7 (#1344): karta pojawienia wroga (obrazek + nazwa + wskaźnik zagrożenia) */}
+      {reveal && (
+        <EnemyRevealCard
+          enemies={reveal}
+          threat={view?.relativeThreat ?? null}
+          onClose={() => setReveal(null)}
         />
       )}
 

@@ -43,6 +43,17 @@ export function CombatBanner({
         <span className="rounded-pill border border-line bg-bg px-2 py-0.5 font-mono text-[11px] text-text-2">
           Runda {view.round}
         </span>
+        {/* BL-A7 (#1344): mały wskaźnik zagrożenia na czas walki — refresher do decyzji o ucieczce */}
+        {view.relativeThreat && (
+          <span
+            className="flex items-center gap-1 rounded-pill border border-line-danger bg-bg px-2 py-0.5 font-ui text-[10px] font-bold uppercase tracking-[0.06em] text-text-2"
+            title={`Zagrożenie: ${view.relativeThreat.label}`}
+            data-testid="banner-threat"
+          >
+            <span className="text-[12px] leading-none">{view.relativeThreat.glyph}</span>
+            {view.relativeThreat.label}
+          </span>
+        )}
         <span
           className={cn(
             "ml-auto flex items-center gap-1 font-ui text-[10.5px] font-bold uppercase tracking-[0.12em]",

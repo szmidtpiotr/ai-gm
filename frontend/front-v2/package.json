@@ -1,7 +1,7 @@
 {
   "name": "ai-gm-front-v2",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "AI-GM player frontend v2 — ŻAR design system (React 18 + Vite + Tailwind + shadcn/ui)",
   "scripts": {
