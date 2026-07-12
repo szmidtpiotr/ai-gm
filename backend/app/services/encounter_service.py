@@ -29,8 +29,13 @@ THREAT_W_HP = 1.0           # waga punktów życia w wartości zagrożenia wroga
 THREAT_W_DPR = 2.0          # waga średnich obrażeń/turę (dpr)
 THREAT_W_ATK = 1.0          # waga premii do trafienia
 THREAT_W_AC = 0.5           # waga redukcji z pancerza (ac_base − 10)
-THREAT_BUDGET_BASE = 30.0        # budżet zagrożenia na poziomie 1 (≈1 silny/2 słabych)
+THREAT_BUDGET_BASE = 30.0        # budżet zagrożenia dla power 1 (≈1 silny/2 słabych)
 THREAT_BUDGET_PER_LEVEL = 25.0   # przyrost budżetu na każdy poziom bohatera powyżej 1
+# BL-A5 (#1331) — budżet celuje teraz w Power Score, nie sam poziom. Domyślny
+# przyrost/pkt power = przyrost/poziom (goły bohater: power≈level → parytet ze starym
+# f(level); ekwipunek/rangi/czary podnoszą power → twardsze spotkanie bez skalowania
+# statystyk wroga). Strojlne z game_config_meta (encounter_threat_budget_per_power).
+THREAT_BUDGET_PER_POWER = 25.0
 COMPOSITION_BASE_PROB = 0.5      # bazowa szansa odpalenia kompozycji (× dwell), parytet z szablonem
 DEFAULT_COMPOSITION_SPLIT = 0.5  # szansa: kompozycja vs ręczny szablon (start 50/50)
 # Wzorce kompozycji i ich wagi losowania (herszt wymaga ≥2 różnych tierów).
@@ -230,8 +235,11 @@ def maybe_inject_encounter(
             recent_sigs = recent_signatures(sf)
             if random.random() < _composition_split(conn):
                 try:
+                    # BL-A5 (#1331) — budżet f(power); None → composer spada do f(level).
+                    _hero_power = _hero_power_for_campaign(conn, campaign_id, _cat_level)
                     composed = encounter_composer(
-                        conn, level=_cat_level, hex_type=hex_type, recent_sigs=recent_sigs
+                        conn, level=_cat_level, hex_type=hex_type,
+                        recent_sigs=recent_sigs, power=_hero_power,
                     )
                 except Exception:
                     composed = None
@@ -700,12 +708,49 @@ def threat_budget_for_level(conn: sqlite3.Connection, level: int) -> float:
     """BL-A2 (#1328) — budżet zagrożenia dla poziomu bohatera (solo baseline).
 
     f(level) = base + per_level × (level − 1). Skalowanie liczebności per drużyna
-    (#824) działa NA wyniku kompozycji, więc budżet celuje w solo. BL-A5 podmieni na
-    f(Power Score). base/per_level strojlne z game_config_meta.
+    (#824) działa NA wyniku kompozycji, więc budżet celuje w solo. base/per_level
+    strojlne z game_config_meta. Fallback gdy Power Score niedostępny (BL-A5).
     """
     base = _meta_float(conn, "encounter_threat_budget_base", THREAT_BUDGET_BASE)
     per = _meta_float(conn, "encounter_threat_budget_per_level", THREAT_BUDGET_PER_LEVEL)
     return max(1.0, base + per * (max(1, int(level or 1)) - 1))
+
+
+def threat_budget_for_power(conn: sqlite3.Connection, power: float) -> float:
+    """BL-A5 (#1331) — budżet zagrożenia dla Power Score bohatera (solo baseline).
+
+    f(power) = base + per_power × (power − 1). Ta sama `base` co f(level), osobny
+    przyrost/pkt power (encounter_threat_budget_per_power). Skalowanie liczebności
+    per drużyna (#824) nadal działa NA wyniku kompozycji, więc budżet celuje w solo.
+    """
+    base = _meta_float(conn, "encounter_threat_budget_base", THREAT_BUDGET_BASE)
+    per = _meta_float(conn, "encounter_threat_budget_per_power", THREAT_BUDGET_PER_POWER)
+    return max(1.0, base + per * (max(1.0, float(power or 1.0)) - 1.0))
+
+
+def _hero_power_for_campaign(
+    conn: sqlite3.Connection, campaign_id: int, fallback_level: int
+) -> float | None:
+    """BL-A5 (#1331) — Power Score aktywnego bohatera kampanii (solo baseline).
+
+    Bierze bohatera o poziomie skalującym drużynę (#807: max-1 w MP, solo lvl w
+    solo) — spójnie z f(level). None gdy brak bohatera / błąd → composer spada do
+    f(level) (zero regresji względem BL-A2)."""
+    try:
+        row = conn.execute(
+            "SELECT id, sheet_json FROM characters "
+            "WHERE campaign_id = ? AND is_active = 1 "
+            "ORDER BY CAST(COALESCE(json_extract(sheet_json,'$.level'),1) AS INTEGER) DESC, id "
+            "LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return None
+        from app.services.power_service import compute_power_score
+        sheet = json.loads(row["sheet_json"] or "{}")
+        return compute_power_score(conn, int(row["id"]), sheet)["score"]
+    except Exception:
+        return None
 
 
 def _composition_split(conn: sqlite3.Connection) -> float:
@@ -879,6 +924,7 @@ def encounter_composer(
     hex_type: str | None,
     rng=random,
     recent_sigs: list[str] | None = None,
+    power: float | None = None,
 ) -> dict | None:
     """BL-A2 (#1328) — złóż spotkanie z puli wrogów pod budżet zagrożenia.
 
@@ -889,11 +935,18 @@ def encounter_composer(
     BL-A3 (#1329): `recent_sigs` (sygnatury ostatnich spotkań, index 0 = ostatnie)
     → kara wagi ×penalty dla wrogów z historii + twarda blokada sygnatury identycznej
     z OSTATNIM spotkaniem (chyba że brak alternatyw po kilku próbach).
+
+    BL-A5 (#1331): `power` (Power Score bohatera) steruje budżetem — f(power) zamiast
+    f(level). Pula wrogów nadal filtrowana pasmem POZIOMÓW (min/max_level), bo pasma
+    to dane wroga; f(power) skaluje tylko ILE budżetu wydać. None → fallback f(level).
     """
     pool = eligible_enemy_pool(conn, level=level, hex_type=hex_type)
     if not pool:
         return None
-    budget = threat_budget_for_level(conn, level)
+    if power is not None:
+        budget = threat_budget_for_power(conn, power)
+    else:
+        budget = threat_budget_for_level(conn, level)
     recent_sigs = recent_sigs or []
     last_sig = recent_sigs[0] if recent_sigs else None
     penalty = _repeat_penalty(conn)
@@ -924,6 +977,16 @@ def encounter_composer(
         2,
     )
     label = enemies[0]["name"] if len(enemies) == 1 and enemies[0]["count"] == 1 else "Grupa wrogów"
+    logger.info(
+        "encounter_composed",
+        pattern=pattern,
+        budget_basis="power" if power is not None else "level",
+        power=round(float(power), 1) if power is not None else None,
+        level=level,
+        threat_budget=round(budget, 2),
+        threat_spent=threat_spent,
+        enemies=[f"{e['enemy_key']}×{e['count']}" for e in enemies],
+    )
     return {
         "label": label,
         "source": "composed",
@@ -931,6 +994,7 @@ def encounter_composer(
         "enemies": enemies,
         "threat_budget": round(budget, 2),
         "threat_spent": threat_spent,
+        "power_score": round(float(power), 1) if power is not None else None,
     }
 
 

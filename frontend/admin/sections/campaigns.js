@@ -529,6 +529,7 @@ function filterTableGeneric(input, tableId, nameClass) {
               <div class="info-row"><span class="info-key">Postać</span><span class="info-val">${_esc(c.char_name||'—')}</span></div>
               <div class="info-row"><span class="info-key">Archetyp</span><span class="info-val">${_esc(archMap[c.char_archetype]||c.char_archetype||'—')}</span></div>
               <div class="info-row"><span class="info-key">Poziom</span><span class="info-val mono">${c.char_level??'—'}</span></div>
+              <div class="info-row" title="Power Score — miara siły postaci (poziom + broń + pancerz + rangi + czary + relikty). Steruje budżetem spotkań. Niewidoczny dla gracza."><span class="info-key">⚡ Power Score</span><span class="info-val mono">${c.char_power_score??'—'}</span></div>
               <div class="info-row"><span class="info-key">Lokacja</span><span class="info-val">${_esc(c.char_location||'—')}</span></div>
               <div class="info-row"><span class="info-key">Tury</span><span class="info-val mono">${c.turn_count??'—'}</span></div>
               <div class="info-row"><span class="info-key">Gracz</span><span class="info-val">${_esc(c.owner_username||'—')}</span></div>

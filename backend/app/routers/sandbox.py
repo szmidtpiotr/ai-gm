@@ -259,6 +259,12 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
             (clone_id,),
         ).fetchone()
         sheet = json.loads(clone_row["sheet_json"] or "{}")
+        # BL-A5 (#1331) — Power Score klona do karty Sandboxa.
+        try:
+            from app.services.power_service import compute_power_score
+            _power = compute_power_score(c, int(clone_id), sheet).get("score")
+        except Exception:
+            _power = None
 
     return {
         "campaign_id": campaign_id,
@@ -270,6 +276,7 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
             "name": clone_row["name"],
             "archetype": sheet.get("archetype"),
             "level": int(sheet.get("level") or 1),
+            "power_score": _power,
             "hp": int(sheet.get("current_hp") or sheet.get("max_hp") or 0),
             "max_hp": int(sheet.get("max_hp") or 0),
             "mana": int(sheet.get("current_mana") or 0),
@@ -353,12 +360,23 @@ def get_character_full(character_id: int) -> dict[str, Any]:
     except Exception:
         spells = []
 
+    # BL-A5 (#1331) — Power Score + rozbicie do raportu (📋 Kopiuj raport) i tuningu.
+    power = None
+    try:
+        from app.services.power_service import compute_power_score
+        with _conn() as c:
+            power = compute_power_score(c, character_id, sheet)
+    except Exception:
+        power = None
+
     return {
         "id": row["id"],
         "name": row["name"],
         "gold_gp": row["gold_gp"] or 0,
         "archetype": sheet.get("archetype"),
         "level": int(sheet.get("level") or 1),
+        "power_score": (power or {}).get("score"),
+        "power_breakdown": (power or {}).get("breakdown"),
         "stats": sheet.get("stats") or {},
         "skills": sheet.get("skills") or {},
         "hp": int(sheet.get("current_hp") or 0),

@@ -2343,6 +2343,17 @@ def admin_list_campaigns(
     return {"items": list_campaigns_by_owner(owner_id)}
 
 
+def _safe_power_score(conn, char_id, sheet):
+    """BL-A5 (#1331) — Power Score bohatera dla monitora; None gdy brak / błąd."""
+    if not char_id:
+        return None
+    try:
+        from app.services.power_service import compute_power_score
+        return compute_power_score(conn, int(char_id), sheet)["score"]
+    except Exception:
+        return None
+
+
 @router.get("/admin/campaigns/live")
 def admin_campaigns_live(_: None = Depends(require_admin_token)):
     """All campaigns with character, location, last turn snippet, and scene progress."""
@@ -2431,6 +2442,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
                 "char_status": r["char_status"],
                 "char_archetype": sheet.get("archetype"),
                 "char_level": sheet.get("level"),
+                "char_power_score": _safe_power_score(conn, r["char_id"], sheet),
                 "char_current_hp": sheet.get("current_hp"),
                 "char_max_hp": sheet.get("max_hp"),
                 "char_conditions": conditions_raw,

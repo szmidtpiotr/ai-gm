@@ -282,6 +282,10 @@ function buildReport() {
     lines.push("## Bohater");
     lines.push(`**${ch.name}** — ${ch.archetype || "?"} Lv${ch.level} · 💰 ${ch.gold_gp || 0} GP`);
     lines.push(`HP: ${ch.hp}/${ch.max_hp}${ch.max_mana ? `  ·  Mana: ${ch.mana}/${ch.max_mana}` : ""}`);
+    if (ch.power_score != null) {
+      const pb = ch.power_breakdown || {};
+      lines.push(`⚡ Power Score: **${ch.power_score}**${pb.weighted ? `  (lvl ${pb.level} · broń ${pb.avg_weapon_damage} · pancerz ${pb.armor_reduction} · rangi ${pb.combat_skill_ranks} · czar T${pb.max_spell_tier} · relikt ${pb.relic_stat_points})` : ""}`);
+    }
     const statParts = Object.entries(ch.stats || {}).map(([k, v]) => `${k} ${v}`);
     if (statParts.length) lines.push(`Stats: ${statParts.join(" · ")}`);
     if (Array.isArray(ch.conditions) && ch.conditions.length) {
@@ -1083,7 +1087,7 @@ function renderSheet(panel) {
   host.innerHTML = `
     <div class="sbx-sheet-head">
       <div class="sbx-sheet-name">${esc(ch.name)} <small>${esc(ch.archetype || "?")} Lv${ch.level}</small></div>
-      <div class="sbx-sheet-gold">💰 ${ch.gold_gp || 0} GP</div>
+      <div class="sbx-sheet-gold">${ch.power_score != null ? `<span title="Power Score — miara siły postaci; steruje budżetem spotkań">⚡ ${ch.power_score}</span> · ` : ""}💰 ${ch.gold_gp || 0} GP</div>
     </div>
 
     <div class="sbx-bars">
