@@ -1293,6 +1293,178 @@ def admin_delete_affix(key: str, _: None = Depends(require_admin_token)):
         raise HTTPException(status_code=404, detail="Affix not found") from None
 
 
+# ── Recipes CRUD (#1338 BL-C3) ────────────────────────────────────────────────
+# Self-contained CRUD dla game_config_recipes (rzemiosło light, #1199/#1336).
+# Tabela żyje w /data/ai_gm.db (ADMIN_SQLITE_PATH). Odbicie wzorca weapons/items.
+
+_RECIPE_OUTPUT_TYPES = {"consumable", "weapon_upgrade", "armor_repair"}
+_RECIPE_COLS = (
+    "key", "label", "inputs_json", "output_type", "output_key", "output_qty",
+    "service_cost_gold", "crafter_type", "requires_upgrade", "is_hidden", "is_active",
+)
+
+
+def _normalize_recipe_inputs(inputs) -> str:
+    """Przyjmij listę [{item_key,qty}] albo string JSON → znormalizowany JSON string."""
+    if inputs is None:
+        return "[]"
+    raw = inputs
+    if isinstance(inputs, str):
+        try:
+            raw = json.loads(inputs or "[]")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=422, detail="inputs_json nie jest poprawnym JSON")
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=422, detail="inputs musi być listą składników")
+    out = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        item_key = str(e.get("item_key") or "").strip()
+        qty = int(e.get("qty") or e.get("quantity") or 1)
+        if item_key and qty > 0:
+            out.append({"item_key": item_key, "qty": qty})
+    return json.dumps(out, ensure_ascii=False)
+
+
+class RecipeCreateReq(BaseModel):
+    key: str
+    label: str
+    inputs: object = Field(default_factory=list)  # list[{item_key,qty}] lub JSON string
+    output_type: str = "consumable"
+    output_key: str | None = None
+    output_qty: int = 1
+    service_cost_gold: int = 0
+    crafter_type: str = "smith"
+    is_hidden: bool = False
+    is_active: bool = True
+
+
+class RecipePatchReq(BaseModel):
+    label: str | None = None
+    inputs: object | None = None
+    inputs_json: str | None = None  # alias przyjmowany z generycznego modalu admina
+    output_type: str | None = None
+    output_key: str | None = None
+    output_qty: int | None = None
+    service_cost_gold: int | None = None
+    crafter_type: str | None = None
+    is_hidden: bool | None = None
+    is_active: bool | None = None
+
+
+def _recipe_row_to_dict(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    try:
+        d["inputs"] = json.loads(d.get("inputs_json") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        d["inputs"] = []
+    return d
+
+
+@router.get("/admin/recipes")
+def admin_recipes(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM game_config_recipes ORDER BY crafter_type, label"
+        ).fetchall()
+        return {"items": [_recipe_row_to_dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/recipes")
+def admin_create_recipe(req: RecipeCreateReq, _: None = Depends(require_admin_token)):
+    key = str(req.key or "").strip()
+    if not re.fullmatch(r"[a-z0-9_]{1,60}", key):
+        raise HTTPException(status_code=422, detail="key musi być lowercase_snake_case (1-60 znaków)")
+    if not str(req.label or "").strip():
+        raise HTTPException(status_code=422, detail="label nie może być pusty")
+    if req.output_type not in _RECIPE_OUTPUT_TYPES:
+        raise HTTPException(status_code=422, detail=f"output_type musi być jednym z {sorted(_RECIPE_OUTPUT_TYPES)}")
+    inputs_json = _normalize_recipe_inputs(req.inputs)
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        exists = conn.execute("SELECT 1 FROM game_config_recipes WHERE key = ?", (key,)).fetchone()
+        if exists:
+            raise HTTPException(status_code=409, detail="Przepis o tym kluczu już istnieje")
+        conn.execute(
+            """INSERT INTO game_config_recipes
+               (key, label, inputs_json, output_type, output_key, output_qty,
+                service_cost_gold, crafter_type, is_hidden, is_active, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                key, req.label.strip(), inputs_json, req.output_type,
+                (req.output_key or None), int(req.output_qty or 1),
+                int(req.service_cost_gold or 0), (req.crafter_type or "smith").strip(),
+                1 if req.is_hidden else 0, 1 if req.is_active else 0, "admin_manual",
+            ),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM game_config_recipes WHERE key = ?", (key,)).fetchone()
+        return {"item": _recipe_row_to_dict(row)}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/recipes/{key}")
+def admin_patch_recipe(key: str, req: RecipePatchReq, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT 1 FROM game_config_recipes WHERE key = ?", (key,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Przepis nie istnieje")
+        sets: list[str] = []
+        vals: list = []
+        if req.label is not None:
+            sets.append("label = ?"); vals.append(req.label.strip())
+        _inputs_src = req.inputs if req.inputs is not None else req.inputs_json
+        if _inputs_src is not None:
+            sets.append("inputs_json = ?"); vals.append(_normalize_recipe_inputs(_inputs_src))
+        if req.output_type is not None:
+            if req.output_type not in _RECIPE_OUTPUT_TYPES:
+                raise HTTPException(status_code=422, detail=f"output_type musi być jednym z {sorted(_RECIPE_OUTPUT_TYPES)}")
+            sets.append("output_type = ?"); vals.append(req.output_type)
+        if req.output_key is not None:
+            sets.append("output_key = ?"); vals.append(req.output_key or None)
+        if req.output_qty is not None:
+            sets.append("output_qty = ?"); vals.append(int(req.output_qty))
+        if req.service_cost_gold is not None:
+            sets.append("service_cost_gold = ?"); vals.append(int(req.service_cost_gold))
+        if req.crafter_type is not None:
+            sets.append("crafter_type = ?"); vals.append(req.crafter_type.strip())
+        if req.is_hidden is not None:
+            sets.append("is_hidden = ?"); vals.append(1 if req.is_hidden else 0)
+        if req.is_active is not None:
+            sets.append("is_active = ?"); vals.append(1 if req.is_active else 0)
+        if sets:
+            sets.append("updated_at = datetime('now')")
+            vals.append(key)
+            conn.execute(f"UPDATE game_config_recipes SET {', '.join(sets)} WHERE key = ?", vals)
+            conn.commit()
+        out = conn.execute("SELECT * FROM game_config_recipes WHERE key = ?", (key,)).fetchone()
+        return {"item": _recipe_row_to_dict(out)}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/recipes/{key}")
+def admin_delete_recipe(key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM game_config_recipes WHERE key = ?", (key,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Przepis nie istnieje")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.post("/admin/weapons")
 def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_token)):
     try:

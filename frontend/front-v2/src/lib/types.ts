@@ -196,6 +196,8 @@ export interface TurnResponse {
   granted_items?: Array<{ label: string }>;
   /** #1292 — deterministyczny skrót: otwórz modal Usługi zamiast narracji (bez LLM). */
   open_services?: string;
+  /** #1338 BL-C3 — deterministyczny skrót: otwórz modal Rzemiosła (klucz lokacji). */
+  open_crafting?: string;
   [k: string]: unknown;
 }
 

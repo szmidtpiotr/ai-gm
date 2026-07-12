@@ -44,6 +44,7 @@ import { EndedCampaignScreen } from "@/components/game/outcomes/EndedCampaignScr
 import { Journal } from "@/components/game/journal/Journal";
 import { ShopOverlay } from "@/components/game/ShopOverlay";
 import { ServicesOverlay } from "@/components/game/ServicesOverlay";
+import { CraftingOverlay } from "@/components/game/CraftingOverlay";
 import { CommandPalette } from "@/components/game/CommandPalette";
 import { BugReportFab } from "@/components/game/BugReportFab";
 import { RecapOverlay } from "@/components/game/RecapOverlay";
@@ -78,6 +79,7 @@ export default function Game() {
   const currentUser = useAppStore((s) => s.currentUser);
   const openShop = useAppStore((s) => s.openShop);
   const openServices = useAppStore((s) => s.openServices);
+  const openCrafting = useAppStore((s) => s.openCrafting);
   const openAdvancement = useAppStore((s) => s.openAdvancement);
   const openWait = useAppStore((s) => s.openWait);
   const closeWait = useAppStore((s) => s.closeWait);
@@ -178,6 +180,11 @@ export default function Game() {
     // tylko otwórz modal Usług.
     if (resp.open_services) {
       openServices(resp.open_services);
+      return;
+    }
+    // #1338 BL-C3: deterministyczny skrót → otwórz modal Rzemiosła (bez LLM).
+    if (resp.open_crafting) {
+      openCrafting(resp.open_crafting);
       return;
     }
     // #1299: silnik zdecydował o narracyjnym rzucie — backend zwraca skill_test_pending
@@ -351,6 +358,11 @@ export default function Game() {
     // #1292: modal Usług — deterministyczny, zero LLM. Klucz lokacji zaszyty w akcji.
     if (act.startsWith("OPEN_SERVICES:")) {
       openServices(act.slice("OPEN_SERVICES:".length));
+      return;
+    }
+    // #1338 BL-C3: modal Rzemiosła — deterministyczny, klucz lokacji w akcji.
+    if (act.startsWith("OPEN_CRAFTING:")) {
+      openCrafting(act.slice("OPEN_CRAFTING:".length));
       return;
     }
     if (act.startsWith("WAIT:")) {
@@ -597,6 +609,9 @@ export default function Game() {
 
       {/* #1292: modal Usług — deterministyczny (chip "Usługi" / skrót tekstowy), omija LLM */}
       <ServicesOverlay />
+
+      {/* #1338 BL-C3: modal Rzemiosła — deterministyczny (chip "Rzemiosło"), omija LLM */}
+      <CraftingOverlay />
 
       {/* FE14 (#1263): paleta komend (Ctrl+/) · recap przy wejściu · FAB testera */}
       <CommandPalette />

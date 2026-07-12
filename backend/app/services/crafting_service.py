@@ -277,6 +277,19 @@ def get_location_crafting(loc_ref: str | int) -> dict:
         conn.close()
 
 
+def location_has_crafting(loc_ref: str | int) -> bool:
+    """True gdy w lokacji jest rzemieślnik z ≥1 dostępnym (jawnym) przepisem.
+
+    Używane przez suggested_actions do wystawienia chipu „Rzemiosło" (#1338 BL-C3),
+    analogicznie do „Usługi". Nieistniejąca lokacja / brak crafterów → False.
+    """
+    try:
+        data = get_location_crafting(loc_ref)
+    except CraftError:
+        return False
+    return bool(data.get("recipes"))
+
+
 def craft(
     character_id: int,
     recipe_key: str,

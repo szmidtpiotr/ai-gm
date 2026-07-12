@@ -232,6 +232,15 @@ def _build_narrative_actions(
                 label="Usługi", action=f"OPEN_SERVICES:{current_loc_key}", enabled=True, icon="🛎",
             ))
 
+    # #1338 BL-C3: Rzemiosło — deterministyczny modal craftu (bez narratora),
+    # gdy w lokacji jest rzemieślnik (kowal/zielarz) z jawnym przepisem.
+    if current_loc_key and len(actions) < MAX_ACTIONS:
+        from app.services.crafting_service import location_has_crafting
+        if location_has_crafting(current_loc_key):
+            actions.append(SuggestedAction(
+                label="Rzemiosło", action=f"OPEN_CRAFTING:{current_loc_key}", enabled=True, icon="🔨",
+            ))
+
     # 1) NPCs present at current location
     if current_loc_key and len(actions) < MAX_ACTIONS:
         npc_actions = _get_npc_actions(conn, current_loc_key)

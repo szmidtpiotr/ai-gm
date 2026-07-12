@@ -99,6 +99,8 @@ export interface AppState {
   shop: ShopContext | null;
   /** #1292 — otwarty modal Usług (klucz lokacji) albo null. Mechaniczny, omija LLM. */
   services: string | null;
+  /** #1338 BL-C3 — otwarty modal Rzemiosła (klucz lokacji) albo null. Deterministyczny. */
+  crafting: string | null;
   /** #1292 — po zamknięciu modala Usług: ukryta tura proszona o narrację odbioru
    *  (zakup już opłacony mechanicznie). Game.tsx konsumuje i czyści. */
   servicesReceiptPending: string | null;
@@ -132,6 +134,8 @@ export interface AppState {
   closeShop: () => void;
   openServices: (locationKey: string) => void;
   closeServices: () => void;
+  openCrafting: (locationKey: string) => void;
+  closeCrafting: () => void;
   setServicesReceiptPending: (text: string | null) => void;
   openPalette: () => void;
   closePalette: () => void;
@@ -189,6 +193,7 @@ export const useAppStore = create<AppState>((set) => ({
   mapView: "auto",
   shop: null,
   services: null,
+  crafting: null,
   servicesReceiptPending: null,
   paletteOpen: false,
   gameMenuOpen: false,
@@ -206,7 +211,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) =>
       s.currentCampaignId === currentCampaignId
         ? { currentCampaignId }
-        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, gameMenuOpen: false, finishFlow: "idle" },
+        : { currentCampaignId, gameTab: "story", mapReveal: null, mapView: "auto", shop: null, services: null, crafting: null, gameMenuOpen: false, finishFlow: "idle" },
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
@@ -216,6 +221,8 @@ export const useAppStore = create<AppState>((set) => ({
   closeShop: () => set({ shop: null }),
   openServices: (locationKey) => set({ services: locationKey }),
   closeServices: () => set({ services: null }),
+  openCrafting: (locationKey) => set({ crafting: locationKey }),
+  closeCrafting: () => set({ crafting: null }),
   setServicesReceiptPending: (servicesReceiptPending) => set({ servicesReceiptPending }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
@@ -244,6 +251,7 @@ export const useAppStore = create<AppState>((set) => ({
       gameTab: "story",
       shop: null,
       services: null,
+      crafting: null,
       servicesReceiptPending: null,
       activeCombat: null,
       dungeonRunState: null,
@@ -256,6 +264,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentCampaignId: null,
       shop: null,
       services: null,
+      crafting: null,
       servicesReceiptPending: null,
       activeCombat: null,
       dungeonRunState: null,

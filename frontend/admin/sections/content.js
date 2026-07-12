@@ -114,6 +114,19 @@ const _ROW_REGISTRY = {
       {name:'description', label:'Opis',          type:'textarea'},
       {name:'effect_json', label:'Efekty on-use', type:'effect_json_builder', effectTypes:'consumable'},
     ], reload: () => { _loaded.delete('consumables'); _loadConsumables(); } },
+  // #1338 BL-C3 — przepisy rzemiosła (game_config_recipes). Edycja/usuwanie w tabeli;
+  // tworzenie przez Kreator AI (Smart Entry) — inputs_json jako tablica JSON.
+  'recipes-table': { endpoint:'/api/admin/recipes', keyField:'key', fields:[
+      {name:'label',            label:'Nazwa',            type:'text'},
+      {name:'crafter_type',     label:'Rzemieślnik',      type:'text'},
+      {name:'output_type',      label:'Typ wyniku',       type:'text'},
+      {name:'output_key',       label:'Klucz wyniku',     type:'text'},
+      {name:'output_qty',       label:'Ilość wyniku',     type:'number', min:1},
+      {name:'service_cost_gold',label:'Opłata (gp)',      type:'number', min:0},
+      {name:'inputs_json',      label:'Składniki (JSON)', type:'textarea'},
+      {name:'is_hidden',        label:'Ukryty',           type:'checkbox'},
+      {name:'is_active',        label:'Aktywny',          type:'checkbox'},
+    ], reload: () => { _loaded.delete('recipes'); _loadRecipes(); } },
 };
 
 function _wireRowActions(tableId) {
@@ -412,6 +425,41 @@ async function _loadConsumables() {
     _wireRowActions('consumables-table');
     _restoreDetailsToggle('consumables-table');
   } catch(e) { tbody.innerHTML = _errRow(13, e.message); }
+}
+
+// #1338 BL-C3 — przepisy rzemiosła (game_config_recipes)
+async function _loadRecipes() {
+  const tbody = document.querySelector('#recipes-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _loading(9);
+  try {
+    const d = await apiFetch('/api/admin/recipes');
+    const items = d.items || [];
+    if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak przepisów — użyj 🤖 Kreator AI</td></tr>`; return; }
+    const crafterBadge = t => { const m={smith:'badge-slate',herbalist:'badge-green'}; const l={smith:'Kowal',herbalist:'Zielarz'}; return `<span class="badge ${m[t]||'badge-slate'}">${l[t]||t||'—'}</span>`; };
+    const outBadge = t => { const m={consumable:'badge-blue',weapon_upgrade:'badge-amber',armor_repair:'badge-purple'}; const l={consumable:'Mikstura',weapon_upgrade:'Ulepszenie',armor_repair:'Naprawa'}; return `<span class="badge ${m[t]||'badge-slate'}">${l[t]||t}</span>`; };
+    tbody.innerHTML = items.map(r => {
+      const enc = encodeURIComponent(JSON.stringify(r));
+      const inputs = Array.isArray(r.inputs) ? r.inputs.map(i => `${_esc(i.item_key)}×${i.qty}`).join(', ') : '—';
+      const out = r.output_type === 'consumable' ? `${_esc(r.output_key||'—')}${(r.output_qty>1)?' ×'+r.output_qty:''}` : '—';
+      return `<tr data-key="${_esc(r.key)}" data-rjson="${enc}">
+        <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(r.key)}</td>
+        <td class="td-sticky td-name" data-label="Nazwa">${_esc(r.label||r.key)}</td>
+        <td data-label="Rzemieślnik">${crafterBadge(r.crafter_type)}</td>
+        <td data-label="Typ wyniku">${outBadge(r.output_type)}</td>
+        <td class="td-muted" data-label="Wynik">${out}</td>
+        <td class="td-muted" data-label="Składniki" style="font-size:0.74rem">${inputs}</td>
+        <td class="td-mono" data-label="Opłata">${r.service_cost_gold!=null?r.service_cost_gold+' gp':'—'}</td>
+        <td class="detail-col">${r.is_active===0||r.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}${(r.is_hidden===1||r.is_hidden===true)?' <span class="badge badge-amber">ukryty</span>':''}</td>
+        <td class="td-actions">
+          <button class="btn-icon" title="Edytuj">✎</button>
+          <button class="btn-icon danger" title="Usuń">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+    _wireRowActions('recipes-table');
+    _restoreDetailsToggle('recipes-table');
+  } catch(e) { tbody.innerHTML = _errRow(9, e.message); }
 }
 
 // ── Effects Builder (F3 #463) ──────────────────────────────────────────────
@@ -830,7 +878,7 @@ async function _loadSpells() {
 
 function _loadTab(tab) {
   if (_loaded.has(tab)) return;
-  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes };
+  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes, recipes:_loadRecipes };
   const fn = fns[tab];
   if (!fn) return;
   _loaded.add(tab);
@@ -1215,6 +1263,7 @@ const SE_TABLE_LABELS = {
   game_config_armor:      'Zbroja',
   game_config_loot_tables:'Tabele Łupów',
   game_config_spells:     'Czary',
+  game_config_recipes:    'Przepisy',
 };
 const SE_SUPPORTED = Object.keys(SE_TABLE_LABELS);
 
@@ -1549,7 +1598,7 @@ function _closeSmartEntry() { if (_seOverlay) _seOverlay.classList.remove('visib
 
 function _openSmartEntryForCurrentTab() {
   const activeTab = document.querySelector('#content-tabs .stab.active')?.dataset?.tab || 'weapons';
-  const map = { weapons:'game_config_weapons', items:'game_config_items', consumables:'game_config_consumables', armor:'game_config_armor', loot:'game_config_loot_tables', spells:'game_config_spells' };
+  const map = { weapons:'game_config_weapons', items:'game_config_items', consumables:'game_config_consumables', armor:'game_config_armor', loot:'game_config_loot_tables', spells:'game_config_spells', recipes:'game_config_recipes' };
   const table = map[activeTab];
   if (!table) { showToast('Kreator AI nie obsługuje tej zakładki.', 'warn'); return; }
   _openSmartEntry(table);
@@ -1573,6 +1622,7 @@ function _sectionHtml() {
       <button class="stab" data-tab="loot">Tabele łupów <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="spells">Czary <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="affixes">Afiksy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
+      <button class="stab" data-tab="recipes">Przepisy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
     </div>
 
     <!-- Broń -->
@@ -1726,6 +1776,24 @@ function _sectionHtml() {
         </table>
       </div>
     </div>
+
+    <!-- Przepisy (#1338 BL-C3) -->
+    <div class="stab-panel" id="stab-recipes">
+      <div class="toolbar">
+        <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj przepisów…" data-filter-for="recipes-table"></div>
+        <button class="btn btn-primary btn-sm" id="add-recipe-btn">🤖 Nowy przepis</button>
+      </div>
+      <div class="data-table--cards table-wrap">
+        <table class="data-table" id="recipes-table">
+          <thead><tr>
+            <th class="detail-col">Klucz</th><th class="td-sticky">Nazwa</th>
+            <th>Rzemieślnik</th><th>Typ wyniku</th><th>Wynik</th><th>Składniki</th>
+            <th style="width:80px">Opłata</th><th class="detail-col">Aktywny</th><th class="td-actions">Akcje</th>
+          </tr></thead>
+          <tbody><tr><td colspan="9" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </section>`;
 }
@@ -1739,6 +1807,7 @@ function _onSmartEntrySaved(e) {
   else if (t === 'game_config_armor')   { _loaded.delete('armor'); _loadArmor(); }
   else if (t === 'game_config_loot_tables') { _loaded.delete('loot'); _loadLootTables(); }
   else if (t === 'game_config_spells')      { _loaded.delete('spells'); _loadSpells(); }
+  else if (t === 'game_config_recipes')     { _loaded.delete('recipes'); _loadRecipes(); }
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────────
@@ -1784,6 +1853,9 @@ export async function init(panel) {
 
   // Affix add button (F3 #463)
   root.querySelector('#add-affix-btn')?.addEventListener('click', () => _openAffixModal(null));
+
+  // Recipe add button (#1338 BL-C3) — tworzenie przez Kreator AI (Smart Entry).
+  root.querySelector('#add-recipe-btn')?.addEventListener('click', () => _openSmartEntry('game_config_recipes'));
 
   // Kreator AI button
   root.querySelector('#content-kreator-btn')?.addEventListener('click', _openSmartEntryForCurrentTab);

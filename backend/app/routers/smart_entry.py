@@ -72,6 +72,7 @@ WRITABLE_TABLES = {
     "game_config_enemies",
     "game_config_spells",
     "game_locations",
+    "game_config_recipes",
 }
 
 READ_ONLY_TABLES = {
@@ -546,6 +547,67 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             },
         },
     },
+    # #1338 BL-C3 — przepisy rzemiosła (game_config_recipes). Bohater dostarcza
+    # komponenty, rzemieślnik NPC (kowal/zielarz) wytwarza za opłatą.
+    "game_config_recipes": {
+        "required": ["key", "label", "output_type", "crafter_type"],
+        "optional": ["inputs_json", "output_key", "output_qty", "service_cost_gold", "is_hidden", "is_active"],
+        "fields": {
+            "key": {
+                "type": "text",
+                "question": "Unikalny klucz (slug) przepisu, np. 'herbal_potion_minor'.",
+            },
+            "label": {
+                "type": "text",
+                "question": "Nazwa przepisu wyświetlana graczowi.",
+            },
+            "output_type": {
+                "type": "single_choice",
+                "question": "Co wytwarza ten przepis?",
+                "options": [
+                    {"label": "consumable", "description": "Mikstura / przedmiot do ekwipunku"},
+                    {"label": "weapon_upgrade", "description": "Ulepszenie broni (+1 obrażeń, afiks craft_hone)"},
+                    {"label": "armor_repair", "description": "Naprawa założonego pancerza"},
+                ],
+            },
+            "crafter_type": {
+                "type": "single_choice",
+                "question": "Jaki rzemieślnik wykonuje ten przepis?",
+                "options": [
+                    {"label": "smith", "description": "Kowal — broń, pancerz"},
+                    {"label": "herbalist", "description": "Zielarz — mikstury, zioła"},
+                ],
+            },
+            "inputs_json": {
+                "type": "textarea",
+                "question": "Składniki jako tablica JSON, np. '[{\"item_key\": \"healing_herb\", \"qty\": 2}]'.",
+            },
+            "output_key": {
+                "type": "text",
+                "question": "Klucz wyniku dla typu 'consumable' (klucz konsumabli), np. 'potion_healing_minor'. Puste dla ulepszenia/naprawy.",
+            },
+            "output_qty": {
+                "type": "number",
+                "question": "Ile sztuk wyniku (dla consumable)?",
+                "min": 1,
+                "max": 20,
+            },
+            "service_cost_gold": {
+                "type": "number",
+                "question": "Opłata rzemieślnika w złocie (0-500).",
+                "min": 0,
+                "max": 500,
+            },
+            "is_hidden": {
+                "type": "boolean",
+                "question": "Ukryty przepis (legendarny, niedostępny w tej fazie)? Zwykle NIE.",
+            },
+            "is_active": {
+                "type": "boolean",
+                "question": "Przepis aktywny (dostępny w grze)?",
+            },
+        },
+    },
 }
 
 
@@ -811,6 +873,11 @@ def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
         "location_type": "Typ lokacji", "location_subtype": "Podtyp",
         "biome": "Biom", "parent_key": "Lokacja nadrzędna",
         "safe_for_rest": "Bezpieczna do odpoczynku", "rules": "Reguły (JSON)",
+        # Recipes (#1338 BL-C3)
+        "output_type": "Typ wyniku", "crafter_type": "Rzemieślnik",
+        "inputs_json": "Składniki (JSON)", "output_key": "Klucz wyniku",
+        "output_qty": "Ilość wyniku", "service_cost_gold": "Opłata (gp)",
+        "is_hidden": "Ukryty", "is_active": "Aktywny",
     }
 
     fields = []
