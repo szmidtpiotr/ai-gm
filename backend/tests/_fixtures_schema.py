@@ -47,7 +47,13 @@ def enemies_table_sql() -> str:
       image_url TEXT,
       image_url_raw TEXT,
       image_gen_prompt TEXT,
-      min_level INTEGER DEFAULT 1
+      min_level INTEGER DEFAULT 1,
+      created_by TEXT,
+      template_id TEXT,
+      lore_text TEXT,
+      terrain_tags TEXT,
+      max_level INTEGER,
+      world_scope TEXT
     );
     """
 
@@ -344,6 +350,127 @@ def skill_risk_categories_table_sql() -> str:
     """
 
 
+def riddles_table_sql() -> str:
+    """CREATE dla game_config_riddles."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_riddles (
+      key TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      answer_alts TEXT NOT NULL DEFAULT '[]',
+      hints TEXT NOT NULL DEFAULT '[]',
+      difficulty INTEGER NOT NULL DEFAULT 1,
+      theme TEXT NOT NULL DEFAULT 'general',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """
+
+
+def services_table_sql() -> str:
+    """CREATE dla game_config_services."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_services (
+      key TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      cost_gp INTEGER NOT NULL DEFAULT 0,
+      description TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """
+
+
+def xp_rewards_table_sql() -> str:
+    """CREATE dla game_config_xp_rewards."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_xp_rewards (
+      key TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      xp_amount INTEGER NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      locked_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """
+
+
+def dc_table_sql() -> str:
+    """CREATE dla game_config_dc."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_dc (
+      key TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      value INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      locked_at TEXT,
+      description TEXT
+    );
+    """
+
+
+def xp_awards_table_sql() -> str:
+    """CREATE dla game_config_xp_awards."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_xp_awards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      source_key TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      xp_amount INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      is_locked INTEGER NOT NULL DEFAULT 0,
+      locked_at TEXT DEFAULT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """
+
+
+def recipes_table_sql() -> str:
+    """CREATE dla game_config_recipes."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_recipes (
+      key TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      inputs_json TEXT NOT NULL DEFAULT '[]',
+      output_type TEXT NOT NULL DEFAULT 'consumable',
+      output_key TEXT,
+      output_qty INTEGER NOT NULL DEFAULT 1,
+      service_cost_gold INTEGER NOT NULL DEFAULT 0,
+      crafter_type TEXT NOT NULL DEFAULT 'smith',
+      requires_upgrade TEXT,
+      is_hidden INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      craft_tier TEXT NOT NULL DEFAULT 'medium'
+    );
+    """
+
+
+def factions_table_sql() -> str:
+    """CREATE dla game_config_factions."""
+    return """
+    CREATE TABLE IF NOT EXISTS game_config_factions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      faction_type TEXT NOT NULL DEFAULT 'guild',
+      description TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """
+
+
 # Rejestr tabel — rozszerzony w 918-A2 o weapons, items, consumables, spells, conditions, skills, affixes, meta.
 _TABLE_SQL = {
     "game_config_enemies": enemies_table_sql,
@@ -361,6 +488,13 @@ _TABLE_SQL = {
     "game_config_loot_tables": loot_tables_table_sql,
     "game_config_loot_entries": loot_entries_table_sql,
     "game_config_skill_risk_categories": skill_risk_categories_table_sql,
+    "game_config_riddles": riddles_table_sql,
+    "game_config_services": services_table_sql,
+    "game_config_xp_rewards": xp_rewards_table_sql,
+    "game_config_dc": dc_table_sql,
+    "game_config_xp_awards": xp_awards_table_sql,
+    "game_config_recipes": recipes_table_sql,
+    "game_config_factions": factions_table_sql,
 }
 
 

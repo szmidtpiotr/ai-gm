@@ -123,7 +123,7 @@ def is_fstring(text, schema_start):
 
 
 def add_import(text):
-    """Insert 'from _fixtures_schema import table_sql' after last sys.path.insert."""
+    """Insert import after last sys.path.insert / __future__ / first normal import."""
     if "_fixtures_schema" in text:
         return text
     lines = text.split("\n")
@@ -131,16 +131,23 @@ def add_import(text):
     for i, line in enumerate(lines):
         if "sys.path.insert" in line:
             insert_after = i
+    if insert_after is None:
+        last_future = first_import = None
+        for i, line in enumerate(lines):
+            s = line.strip()
+            if s.startswith("from __future__"):
+                last_future = i
+            elif (s.startswith("import ") or s.startswith("from ")) and first_import is None:
+                first_import = i
+        if last_future is not None:
+            insert_after = last_future
+        elif first_import is not None:
+            lines.insert(first_import, IMPORT_LINE)
+            return "\n".join(lines)
     if insert_after is not None:
         lines.insert(insert_after + 1, IMPORT_LINE)
     else:
-        # Fallback: after first import or after docstring
-        for i, line in enumerate(lines):
-            if line.startswith("import ") or line.startswith("from "):
-                lines.insert(i, IMPORT_LINE)
-                break
-        else:
-            lines.insert(0, IMPORT_LINE)
+        lines.insert(0, IMPORT_LINE)
     return "\n".join(lines)
 
 
