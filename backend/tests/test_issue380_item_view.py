@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as ls
 
@@ -22,27 +23,15 @@ def _make_db(tmp: Path) -> None:
         CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT);
         INSERT INTO characters (id, name) VALUES (7, 'Hero');
 
-        CREATE TABLE game_config_weapons (
-          key TEXT PRIMARY KEY, label TEXT, weapon_type TEXT, damage_die TEXT,
-          linked_stat TEXT, description TEXT, value_gp INTEGER DEFAULT 0, note TEXT
-        );
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons (key,label,weapon_type,damage_die,linked_stat,description,value_gp,note)
         VALUES ('rusty_sword','Zardzewiały miecz','melee','1d8','STR','Stary, ale ostry.',12,'krwawienie');
 
-        CREATE TABLE game_config_items (
-          key TEXT PRIMARY KEY, label TEXT, item_type TEXT, description TEXT,
-          value_gp INTEGER DEFAULT 0, ac_bonus INTEGER DEFAULT 0, armor_coverage TEXT,
-          effect_type TEXT, effect_dice TEXT, effect_bonus INTEGER DEFAULT 0,
-          effect_target TEXT, note TEXT
-        );
+        """ + table_sql("game_config_items") + """
         INSERT INTO game_config_items (key,label,item_type,description,value_gp,ac_bonus,armor_coverage)
         VALUES ('leather_armor','Skórzana zbroja','armor','Lekka ochrona torsu.',20,2,'torso');
 
-        CREATE TABLE game_config_consumables (
-          key TEXT PRIMARY KEY, label TEXT, description TEXT, effect_type TEXT,
-          effect_dice TEXT, effect_bonus INTEGER DEFAULT 0, effect_target TEXT,
-          base_price INTEGER DEFAULT 0, note TEXT
-        );
+        """ + table_sql("game_config_consumables") + """
         INSERT INTO game_config_consumables (key,label,description,effect_type,effect_dice,effect_target,base_price)
         VALUES ('health_potion','Mikstura zdrowia','Przywraca HP.','heal','2d4','self',15);
 

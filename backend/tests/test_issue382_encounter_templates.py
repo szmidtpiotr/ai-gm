@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 
 def _schema(conn: sqlite3.Connection) -> None:
@@ -88,8 +89,7 @@ class TestEncounterSafetyAndConfig(unittest.TestCase):
         self.conn = sqlite3.connect(":memory:"); self.conn.row_factory = sqlite3.Row
         self.conn.executescript(
             """
-            CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT,
-                                           updated_at TEXT DEFAULT (datetime('now')));
+            """ + table_sql("game_config_meta") + """
             CREATE TABLE game_locations (
               id INTEGER PRIMARY KEY, key TEXT, label TEXT, safe_for_rest INTEGER DEFAULT 0,
               location_subtype TEXT, is_active INTEGER DEFAULT 1
