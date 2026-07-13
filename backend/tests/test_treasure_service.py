@@ -1,5 +1,6 @@
 """#1196 Mapy skarbów — treasure_service unit tests (E2 core)."""
 
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -36,19 +37,9 @@ def _make_db() -> sqlite3.Connection:
             q INTEGER, r INTEGER, map_level INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
             location_key TEXT, region TEXT, encounter_pool TEXT
         );
-        CREATE TABLE game_config_loot_tables (
-            key TEXT PRIMARY KEY, is_active INTEGER DEFAULT 1,
-            gold_min INTEGER DEFAULT 0, gold_max INTEGER DEFAULT 0
-        );
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, loot_table_key TEXT, item_key TEXT,
-            consumable_key TEXT, weapon_key TEXT, weight INTEGER, qty_min INTEGER,
-            qty_max INTEGER, game_item_key TEXT
-        );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, tier TEXT DEFAULT 'standard', is_active INTEGER DEFAULT 1,
-            loot_table_key TEXT
-        );
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT);
         CREATE TABLE characters (id INTEGER PRIMARY KEY, campaign_id INTEGER, gold INTEGER DEFAULT 0);
         """

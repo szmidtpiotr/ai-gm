@@ -10,6 +10,7 @@ Mechanika decyduje, LLM narruje (game_mechanics.md CZĘŚĆ 10).
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -50,11 +51,7 @@ def db():
             wall_clock_at TEXT NOT NULL DEFAULT (datetime('now')),
             reverted_at TEXT
         );
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         """
     )
     # Hero: campaign 100, 200 gold, DEX 16 (+3), WIS 8 (-1), level 1

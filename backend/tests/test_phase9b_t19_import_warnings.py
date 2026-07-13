@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import admin_config_transfer as transfer_mod
 
@@ -28,71 +29,15 @@ def _init_transfer_db(path: Path) -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE game_config_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            );
+            """ + table_sql("game_config_meta") + """
             INSERT INTO game_config_meta(key, value) VALUES ('config_version', '1.0.0');
 
-            CREATE TABLE game_config_stats (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                description TEXT,
-                sort_order INTEGER,
-                locked_at TEXT
-            );
-            CREATE TABLE game_config_skills (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                linked_stat TEXT,
-                rank_ceiling INTEGER,
-                sort_order INTEGER,
-                locked_at TEXT,
-                description TEXT
-            );
-            CREATE TABLE game_config_dc (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                value INTEGER,
-                sort_order INTEGER,
-                locked_at TEXT,
-                description TEXT
-            );
-            CREATE TABLE game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                damage_die TEXT,
-                linked_stat TEXT,
-                allowed_classes TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_enemies (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                hp_base INTEGER,
-                ac_base INTEGER,
-                attack_bonus INTEGER,
-                dex_modifier INTEGER,
-                damage_die TEXT,
-                description TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER,
-                locked_at TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            );
+            """ + table_sql("game_config_stats") + """
+            """ + table_sql("game_config_skills") + """
+            """ + table_sql("game_config_dc") + """
+            """ + table_sql("game_config_weapons") + """
+            """ + table_sql("game_config_enemies") + """
+            """ + table_sql("game_config_conditions") + """
             """
         )
         conn.commit()

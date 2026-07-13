@@ -12,6 +12,7 @@ import json
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 from app.services import shop_service
 
@@ -35,29 +36,9 @@ def _make_db() -> sqlite3.Connection:
             location_tags TEXT DEFAULT NULL, kind TEXT DEFAULT 'item',
             item_data TEXT DEFAULT '{}', is_active INTEGER DEFAULT 1
         );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, item_type TEXT DEFAULT 'misc',
-            description TEXT DEFAULT '', price_gp INTEGER DEFAULT NULL,
-            value_gp INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
-            approved INTEGER DEFAULT 1, rarity INTEGER DEFAULT 1,
-            allowed_classes TEXT DEFAULT '[]', min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT DEFAULT '1d6',
-            linked_stat TEXT DEFAULT 'STR', allowed_classes TEXT DEFAULT '[]',
-            is_active INTEGER DEFAULT 1, description TEXT DEFAULT '',
-            weapon_type TEXT DEFAULT 'melee', value_gp INTEGER DEFAULT 0,
-            price_gp INTEGER DEFAULT 0, min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT DEFAULT '',
-            base_price INTEGER DEFAULT 0, price_gp INTEGER DEFAULT 0,
-            is_active INTEGER DEFAULT 1, approved INTEGER DEFAULT 1,
-            rarity INTEGER DEFAULT 1, min_level INTEGER DEFAULT 1,
-            location_tags TEXT DEFAULT NULL
-        );
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_consumables") + """
         CREATE TABLE characters (
             id INTEGER PRIMARY KEY, gold_gp INTEGER DEFAULT 0,
             sheet_json TEXT DEFAULT '{}', campaign_id INTEGER DEFAULT NULL

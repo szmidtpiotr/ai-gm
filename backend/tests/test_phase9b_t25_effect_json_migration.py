@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import admin_config as admin_cfg
 from app.services import loot_service as loot_mod
@@ -29,33 +30,9 @@ def _init_admin_db_without_effect_columns(path: Path) -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE game_config_loot_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                loot_table_key TEXT,
-                item_key TEXT,
-                weapon_key TEXT
-            );
+            """ + table_sql("game_config_loot_entries") + """
 
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                item_type TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                weight_kg REAL NOT NULL DEFAULT 0.0,
-                allowed_classes TEXT NOT NULL DEFAULT '[]',
-                ac_bonus INTEGER NOT NULL DEFAULT 0,
-                armor_coverage TEXT DEFAULT 'torso',
-                charges INTEGER NOT NULL DEFAULT 1,
-                effect_json TEXT,
-                ai_generated INTEGER NOT NULL DEFAULT 0,
-                approved INTEGER NOT NULL DEFAULT 1,
-                note TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
+            """ + table_sql("game_config_items") + """
             """
         )
         conn.commit()
@@ -76,47 +53,13 @@ def _init_loot_db_without_effect_columns(path: Path) -> None:
                 gold_gp INTEGER NOT NULL DEFAULT 0
             );
 
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                item_type TEXT NOT NULL DEFAULT 'misc',
-                description TEXT NOT NULL DEFAULT '',
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                weight_kg REAL NOT NULL DEFAULT 0.0,
-                charges INTEGER NOT NULL DEFAULT 1,
-                effect_json TEXT,
-                approved INTEGER NOT NULL DEFAULT 1,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_items") + """
 
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                stackable INTEGER NOT NULL DEFAULT 0
-            );
+            """ + table_sql("game_config_conditions") + """
 
-            CREATE TABLE game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_weapons") + """
 
-            CREATE TABLE game_config_consumables (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                description TEXT,
-                base_price INTEGER NOT NULL DEFAULT 0,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_target TEXT NOT NULL DEFAULT 'self',
-                effect_json TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_consumables") + """
 
             CREATE TABLE character_inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

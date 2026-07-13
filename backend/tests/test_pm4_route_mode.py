@@ -21,6 +21,7 @@ import sqlite3
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_hexes (
@@ -108,9 +109,7 @@ CREATE TABLE IF NOT EXISTS campaign_turns (
     assistant_text TEXT,
     turn_number INTEGER
 );
-CREATE TABLE IF NOT EXISTS game_config_meta (
-    key TEXT PRIMARY KEY, value TEXT
-);
+""" + table_sql("game_config_meta") + """
 """
 
 

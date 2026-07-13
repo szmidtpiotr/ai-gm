@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api import turns as turns_mod
 from app.api.turns import create_turn_log
@@ -21,7 +22,7 @@ from app.services.history_summary_service import (
 
 def _schema_t10() -> str:
     return """
-    CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+    """ + table_sql("game_config_meta") + """
     INSERT INTO game_config_meta (key, value) VALUES
         ('summary_rollup_cooldown_turns', '3'),
         ('summary_auto_ensure_every_n_narrative_turns', '1');
@@ -67,7 +68,7 @@ def test_get_auto_ensure_interval_meta():
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_meta") + """
         """
     )
     assert (

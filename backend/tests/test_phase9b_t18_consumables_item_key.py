@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.api.inventory import router as inventory_router
 from app.services import loot_service as loot_mod
@@ -31,58 +32,13 @@ def _seed_db(path: Path) -> None:
                 gold_gp INTEGER NOT NULL DEFAULT 0
             );
 
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                item_type TEXT NOT NULL DEFAULT 'misc',
-                description TEXT NOT NULL DEFAULT '',
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                price_gp INTEGER DEFAULT NULL,
-                weight REAL NOT NULL DEFAULT 0.0,
-                weight_kg REAL NOT NULL DEFAULT 0.0,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_target TEXT NOT NULL DEFAULT 'self',
-                charges INTEGER NOT NULL DEFAULT 1,
-                effect_json TEXT,
-                min_level INTEGER DEFAULT 1,
-                location_tags TEXT,
-                approved INTEGER NOT NULL DEFAULT 1,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_items") + """
 
-            CREATE TABLE game_config_conditions (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                effect_json TEXT NOT NULL,
-                description TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                stackable INTEGER NOT NULL DEFAULT 0
-            );
+            """ + table_sql("game_config_conditions") + """
 
-            CREATE TABLE game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_weapons") + """
 
-            CREATE TABLE game_config_consumables (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                description TEXT,
-                base_price INTEGER NOT NULL DEFAULT 0,
-                price_gp INTEGER DEFAULT NULL,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_target TEXT NOT NULL DEFAULT 'self',
-                effect_json TEXT,
-                min_level INTEGER DEFAULT 1,
-                location_tags TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_consumables") + """
 
             CREATE TABLE character_inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

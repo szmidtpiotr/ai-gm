@@ -6,6 +6,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -15,32 +16,7 @@ def _make_enemy_db() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            hp_base INTEGER NOT NULL DEFAULT 10,
-            ac_base INTEGER NOT NULL DEFAULT 10,
-            attack_bonus INTEGER NOT NULL DEFAULT 0,
-            dex_modifier INTEGER NOT NULL DEFAULT 0,
-            damage_die TEXT NOT NULL DEFAULT '1d6',
-            tier TEXT NOT NULL DEFAULT 'standard',
-            attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-            damage_bonus INTEGER NOT NULL DEFAULT 0,
-            damage_type TEXT NOT NULL DEFAULT 'physical',
-            xp_award INTEGER NOT NULL DEFAULT 0,
-            conditions_immune TEXT NOT NULL DEFAULT '[]',
-            skills_json TEXT NOT NULL DEFAULT '{}',
-            stats_json TEXT NOT NULL DEFAULT '{}',
-            loot_table_key TEXT,
-            drop_chance REAL DEFAULT 1.0,
-            note TEXT,
-            description TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            loot_tier TEXT,
-            locked_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
     conn.execute("""
         INSERT INTO game_config_enemies (key, label, hp_base, ac_base, attack_bonus, damage_die)

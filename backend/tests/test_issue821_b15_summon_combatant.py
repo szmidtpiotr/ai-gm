@@ -25,6 +25,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _fixtures_schema import table_sql
 
 from app.services import combat_service
 
@@ -98,22 +99,15 @@ def _solo_combat_db(
           roll_value INTEGER, damage INTEGER, hp_after INTEGER,
           target_id TEXT, target_name TEXT, hit INTEGER, narrative TEXT,
           created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
-        CREATE TABLE game_config_conditions (key TEXT PRIMARY KEY, label TEXT, effect_json TEXT,
-          is_active INTEGER DEFAULT 1, stackable INTEGER DEFAULT 0);
+        """ + table_sql("game_config_conditions") + """
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1,
           learned_at_level INTEGER DEFAULT 1, use_count INTEGER DEFAULT 0);
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, label TEXT, spell_type TEXT,
-          effect_type TEXT, effect_stat TEXT, effect_duration INTEGER, mana_cost INTEGER,
-          tier INTEGER, damage_die TEXT, heal_die TEXT, effect_json TEXT,
-          is_active INTEGER DEFAULT 1, aoe INTEGER DEFAULT 0);
+        """ + table_sql("game_config_spells") + """
         INSERT INTO game_config_spells
           (key,label,spell_type,mana_cost,tier,effect_json,is_active) VALUES
           ('summon_familiar','Przywołaj Chowańca','summon',2,2,'{fam_eff}',1),
           ('summon_elemental','Przywołaj Żywiołaka','summon',4,3,'{ele_eff}',1);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
-          ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, dex_modifier INTEGER,
-          skills_json TEXT, stats_json TEXT, tier TEXT, loot_table_key TEXT,
-          drop_chance REAL, xp_award INTEGER);
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies
           (key,label,hp_base,ac_base,attack_bonus,damage_die,dex_modifier,tier,xp_award)
           VALUES ('goblin','Goblin',20,10,0,'1d4',0,'minion',10);
