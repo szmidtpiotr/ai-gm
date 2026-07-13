@@ -11,32 +11,13 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 
 def _schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
-        CREATE TABLE game_config_enemies (
-          key TEXT PRIMARY KEY,
-          label TEXT NOT NULL,
-          hp_base INTEGER NOT NULL,
-          ac_base INTEGER NOT NULL,
-          attack_bonus INTEGER NOT NULL,
-          damage_die TEXT NOT NULL,
-          description TEXT,
-          is_active INTEGER NOT NULL DEFAULT 1,
-          tier TEXT NOT NULL DEFAULT 'standard',
-          attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-          damage_bonus INTEGER NOT NULL DEFAULT 0,
-          xp_award INTEGER NOT NULL DEFAULT 0,
-          loot_table_key TEXT,
-          drop_chance REAL NOT NULL DEFAULT 1.0,
-          dex_modifier INTEGER NOT NULL DEFAULT 0,
-          skills_json TEXT,
-          stats_json TEXT,
-          image_url TEXT,
-          review_status TEXT NOT NULL DEFAULT 'permanent'
-        );
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies
           (key, label, hp_base, ac_base, attack_bonus, damage_die, tier, xp_award, review_status)
         VALUES ('goblin', 'Goblin', 8, 10, 2, 'd6', 'weak', 10, 'permanent');

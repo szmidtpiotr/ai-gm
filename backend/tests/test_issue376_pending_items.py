@@ -11,28 +11,13 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 
 def _schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
-        CREATE TABLE game_config_items (
-          key          TEXT PRIMARY KEY,
-          label        TEXT NOT NULL,
-          item_type    TEXT NOT NULL DEFAULT 'misc',
-          description  TEXT NOT NULL DEFAULT '',
-          value_gp     INTEGER NOT NULL DEFAULT 0,
-          effect_json  TEXT,
-          is_active    INTEGER NOT NULL DEFAULT 1,
-          weight_kg    REAL NOT NULL DEFAULT 0.0,
-          note         TEXT,
-          ai_generated INTEGER NOT NULL DEFAULT 0,
-          approved     INTEGER NOT NULL DEFAULT 1,
-          review_status TEXT,
-          campaign_id  INTEGER,
-          created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
-        );
+        """ + table_sql("game_config_items") + """
         INSERT INTO game_config_items (key, label, item_type, is_active, approved)
         VALUES ('healing_herb', 'Zioło lecznicze', 'misc', 1, 1);
 

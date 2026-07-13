@@ -14,6 +14,7 @@ import sys
 import os
 import sqlite3
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS characters (
@@ -39,27 +40,9 @@ CREATE TABLE IF NOT EXISTS character_inventory (
     durability_max INTEGER,
     affixes_json TEXT NOT NULL DEFAULT '[]'
 );
-CREATE TABLE IF NOT EXISTS game_config_weapons (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    damage_die TEXT NOT NULL DEFAULT '1d6',
-    linked_stat TEXT NOT NULL DEFAULT 'STR',
-    allowed_classes TEXT NOT NULL DEFAULT '[]',
-    is_active INTEGER NOT NULL DEFAULT 1
-);
-CREATE TABLE IF NOT EXISTS game_config_items (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    item_type TEXT NOT NULL DEFAULT 'misc',
-    value_gp INTEGER NOT NULL DEFAULT 0,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
-CREATE TABLE IF NOT EXISTS game_config_consumables (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    base_price INTEGER NOT NULL DEFAULT 0,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
+""" + table_sql("game_config_weapons") + """
+""" + table_sql("game_config_items") + """
+""" + table_sql("game_config_consumables") + """
 """
 
 
