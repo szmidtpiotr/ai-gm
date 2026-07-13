@@ -16,6 +16,7 @@ import {
   livingEnemies,
   rollFromPlayerAttack,
   rollFromEnemyAttack,
+  rollFromEnemyZoneChange,
   rollFromReaction,
   toHitStageCard,
 } from "@/lib/combat";
@@ -262,6 +263,23 @@ export function CombatView({
       // combat_state już w cache (mutacja onSuccess) — tura wroga odpali po zamknięciu kości.
       pushCombatState(r.combat_state);
       if (showPlayerDice) {
+        // Czar leczący: brak testu trafienia (auto-sukces, backend nie rzuca d20) —
+        // animuj od razu kość leczenia (np. 1d8) lądującą na wyniku z backendu.
+        const healDie = r.heal_die ?? r.damage_die;
+        if (r.spell_type === "heal" && r.heal_rolls?.length && healDie) {
+          pendingDmgStageRef.current = null;
+          jobSeq.current += 1;
+          setDiceJob({
+            id: jobSeq.current,
+            notation: healDie,
+            forced: r.heal_rolls,
+            face: r.heal_rolls[0] ?? 1,
+            card,
+            actor: "player",
+            stage: "damage",
+          });
+          return;
+        }
         // Kość obrażeń (k6/k8…) jako drugi etap po d20.
         if (r.hit && !r.dodged && r.damage_rolls?.length && r.damage_die) {
           jobSeq.current += 1;
@@ -397,6 +415,15 @@ export function CombatView({
       .mutateAsync()
       .then((r) => {
         pushCombatState(r.combat_state);
+        // Doskok/odskok melee — tura wroga BEZ ataku i bez rzutu: karta ruchu
+        // zamiast fantomowego „ATAK — PUDŁO", bez animacji kości.
+        if (r.zone_change) {
+          pendingReactionRef.current = null;
+          pendingDmgStageRef.current = null;
+          setHpFreeze(null);
+          setRolls((p) => [...p, rollFromEnemyZoneChange(r)]);
+          return;
+        }
         const d20 = Number(r.raw_d20 ?? 0);
         if (r.reaction_window) {
           // SF10: okno reakcji — ale najpierw pokazujemy animację d20 wroga (gdy włączona),

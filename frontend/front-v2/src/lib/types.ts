@@ -434,6 +434,16 @@ export interface CombatActionResult {
   spell_type?: "heal" | "effect" | "attack" | "attack_aoe" | string;
   heal_amount?: number;
   heal_rolls?: number[];
+  heal_die?: string; // czar leczący: kość leczenia (backend NIE ustawia damage_die)
+  // Tura wroga bez ataku: doskok/odskok melee (zjada turę). Frontend renderuje
+  // kartę RUCH zamiast fantomowego „ATAK — PUDŁO".
+  zone_change?: {
+    actor_id?: string;
+    from?: string;
+    to?: string;
+    charged?: boolean;
+    fled?: boolean;
+  } | null;
   player_hp_remaining?: number;
   player_incapacitated?: boolean;
   // okno reakcji SF10

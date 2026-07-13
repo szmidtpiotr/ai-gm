@@ -119,9 +119,10 @@ export function rollFromPlayerAttack(
     resV = "PUDŁO";
     tone = "warn";
   } else if (r.spell_type === "heal") {
-    // Kości leczenia (np. 1d8) przed sumą.
-    if (r.heal_rolls?.length && r.damage_die) {
-      const sides = Number(r.damage_die.split("d")[1] || 6);
+    // Kości leczenia (np. 1d8) przed sumą — backend przysyła `heal_die`, nie `damage_die`.
+    const healDie = r.heal_die ?? r.damage_die;
+    if (r.heal_rolls?.length && healDie) {
+      const sides = Number(healDie.split("d")[1] || 6);
       for (const rv of r.heal_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
     }
     label = "Lecz.";
@@ -174,6 +175,31 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   });
   const name = String(r.enemy_name || "Wróg").toUpperCase();
   return { actor: "enemy", title: `${name} — ATAK`, cells, crit, fumble };
+}
+
+/** Tura wroga bez ataku: melee doskakuje do gracza / odskakuje na dystans (zjada turę).
+ * Bez tej karty odpowiedź `zone_change` wpadała w rollFromEnemyAttack i renderowała
+ * fantomowe „ATAK — PUDŁO" (bez kolumn d20), sugerując dodatkowy atak wroga. */
+export function rollFromEnemyZoneChange(r: CombatActionResult): RollCardData {
+  const zc = r.zone_change || {};
+  const toEngaged = String(zc.to || "engaged") === "engaged";
+  const name = String(r.enemy_name || "Wróg").toUpperCase();
+  return {
+    actor: "enemy",
+    title: `${name} — RUCH`,
+    cells: [
+      { k: "Akcja", v: toEngaged ? "DOSKOK" : "ODSKOK", sum: true },
+      {
+        k: "Skutek",
+        v: toEngaged
+          ? "wchodzi w zwarcie · bez ataku"
+          : "odskakuje na dystans · bez ataku",
+        res: true,
+        tone: "warn",
+      },
+    ],
+    fumble: false,
+  };
 }
 
 /** Etap d20 (na trafienie) dwuetapowej animacji kości: karta BEZ kości i wartości

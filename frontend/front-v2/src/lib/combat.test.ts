@@ -111,3 +111,52 @@ describe("backward compatibility", () => {
     expect(result(card)?.v).toBe("4 Obr.");
   });
 });
+
+// ─── WALKA-FIX: heal die + karta ruchu wroga (zone_change) ────────────────────
+// Bug 1: czar leczący — backend przysyła `heal_die` (nie `damage_die`), więc karta
+// nie pokazywała kości leczenia i front nie miał czego animować.
+// Bug 2: doskok melee (`zone_change`) renderował się jako fantomowe „ATAK — PUDŁO".
+import { rollFromEnemyZoneChange } from "./combat";
+
+describe("heal die na karcie czaru leczącego", () => {
+  it("kość leczenia z heal_die widoczna (k8) mimo braku damage_die", () => {
+    const r: CombatActionResult = {
+      hit: true,
+      spell_type: "heal",
+      heal_amount: 8,
+      heal_rolls: [5],
+      heal_die: "1d8",
+      // damage_die celowo BRAK — backend heal path go nie ustawia
+    };
+    const card = rollFromPlayerAttack(r, "LECZNICZY DOTYK");
+    expect(cell(card, "k8")?.v).toBe("5");
+    expect(result(card)?.v).toBe("+8 HP");
+  });
+});
+
+describe("rollFromEnemyZoneChange — karta ruchu zamiast fantomowego ataku", () => {
+  it("doskok do zwarcia: tytuł RUCH, akcja DOSKOK, bez PUDŁO", () => {
+    const r: CombatActionResult = {
+      enemy_name: "Bandyta",
+      hit: false,
+      damage: 0,
+      zone_change: { actor_id: "bandit_01", from: "ranged", to: "engaged", charged: true },
+    };
+    const card = rollFromEnemyZoneChange(r);
+    expect(card.title).toBe("BANDYTA — RUCH");
+    expect(card.actor).toBe("enemy");
+    expect(cell(card as never, "Akcja")?.v).toBe("DOSKOK");
+    const res = card.cells.find((c) => c.res);
+    expect(res?.v).toContain("bez ataku");
+    expect(card.cells.some((c) => c.v === "PUDŁO")).toBe(false);
+  });
+
+  it("odskok na dystans (fled): akcja ODSKOK", () => {
+    const r: CombatActionResult = {
+      enemy_name: "Bandyta",
+      zone_change: { from: "engaged", to: "ranged", fled: true },
+    };
+    const card = rollFromEnemyZoneChange(r);
+    expect(cell(card as never, "Akcja")?.v).toBe("ODSKOK");
+  });
+});
