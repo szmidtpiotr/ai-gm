@@ -2990,6 +2990,7 @@ def _resolve_aoe_single_target(
     damage_die: str, int_mod: int, player_nat20: bool,
     loot_pool_accum: list[dict[str, Any]], out: dict[str, Any],
     attack_total: int = 0,
+    combatants: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Rozlicza jeden cel AoE: damage, death, loot, XP, log. Zwraca hit_info."""
     _aoe_detail = roll_dice_detailed(damage_die)
@@ -3044,7 +3045,9 @@ def _resolve_aoe_single_target(
     if dead:
         ek = str(tgt.get("enemy_key") or "")
         # #1191 — Bestiariusz: credit kill (AOE path; solo=killer, MP=all).
-        _credit_bestiary_kill(conn, combatants, ch_id, campaign_id, ek, out)
+        # `combatants` przychodzi parametrem — wcześniej NameError wywalał CAŁE
+        # rozliczenie zabójczego ciosu AoE (regresja #1191, test_issue659).
+        _credit_bestiary_kill(conn, combatants or [tgt], ch_id, campaign_id, ek, out)
         # U25 (#575): flaga boss kill (pity timer afiksów)
         if str(tgt.get("tier") or "").strip().lower() == "boss":
             try:
@@ -3203,8 +3206,11 @@ def _resolve_aoe_spell_in_combat(
 
     # 2. Nat 1 → miscast (pełna mana stracona)
     if player_nat1:
-        _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
-        _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        try:
+            _char_race_row = conn.execute("SELECT race FROM characters WHERE id=?", (int(row["character_id"]),)).fetchone()
+            _char_race = ((_char_race_row["race"] if _char_race_row else None) or "human")
+        except sqlite3.OperationalError:  # izolowane fikstury bez kolumny race
+            _char_race = "human"
         _miscast = spell_service.resolve_miscast(sheet, enemy, conn, race=_char_race)
         out["miscast"] = _miscast
         out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
@@ -3297,6 +3303,7 @@ def _resolve_aoe_spell_in_combat(
             damage_die, int_mod, player_nat20,
             loot_pool_accum, out,
             attack_total=attack_total,
+            combatants=combatants,
         )
         aoe_hits.append(hit_info)
 
@@ -9485,26 +9492,39 @@ def _scholar_restore_mana_after_combat(
     conn: sqlite3.Connection, character_id: int, sheet: dict, reason: str,
     campaign_id: int | None = None,
 ) -> None:
-    """Layer 2 balance fix: Scholar recovers mana after each combat (victory or flee)."""
+    """Layer 2 balance fix: Scholar recovers mana after each combat (victory or flee).
+
+    UWAGA (#1368): operuj na ŚWIEŻYM arkuszu z DB, nie na przekazanym snapshot'cie —
+    caller trzyma sheet załadowany na początku tury, a między nim a tym wywołaniem
+    grant_character_xp (enemy_defeat) już przeładował i zapisał arkusz z nowym XP.
+    Zapis stalego snapshotu nadpisywał xp_available/xp_lifetime_earned — mag ze
+    zużytą maną NIGDY nie dostawał XP za walki (przy pełnej manie gate current>=max
+    maskował bug wczesnym returnem).
+    """
     try:
         archetype = str(sheet.get("archetype") or "").strip().lower()
         if archetype != "scholar":
             return
-        current = int(sheet.get("current_mana", 0) or 0)
-        maximum = int(sheet.get("max_mana", 0) or 0)
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (int(character_id),)
+        ).fetchone()
+        db_sheet = parse_character_sheet(row["sheet_json"]) if row else sheet
+        current = int(db_sheet.get("current_mana", 0) or 0)
+        maximum = int(db_sheet.get("max_mana", 0) or 0)
         if maximum <= 0 or current >= maximum:
             return
-        int_stat = int((sheet.get("stats") or {}).get("INT", 10) or 10)
+        int_stat = int((db_sheet.get("stats") or {}).get("INT", 10) or 10)
         int_mod = (int_stat - 10) // 2
         restore = max(1, int_mod * 2)
         new_mana = min(maximum, current + restore)
-        sheet["current_mana"] = new_mana
+        db_sheet["current_mana"] = new_mana
+        sheet["current_mana"] = new_mana  # zsynchronizuj widok callera (out/current_mana)
         if campaign_id is not None:
-            _save_char_sheet(conn, campaign_id, int(character_id), sheet)
+            _save_char_sheet(conn, campaign_id, int(character_id), db_sheet)
         else:
             conn.execute(
                 "UPDATE characters SET sheet_json = ? WHERE id = ?",
-                (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+                (json.dumps(db_sheet, ensure_ascii=False), int(character_id)),
             )
         conn.commit()
         logger.info("scholar_mana_restored_after_combat",

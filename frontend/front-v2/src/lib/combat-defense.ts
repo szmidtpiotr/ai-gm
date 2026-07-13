@@ -69,7 +69,9 @@ export function defenseReasonText(reason: string | null | undefined): string | n
     case "cap_reached":
       return "limit reakcji w tej rundzie";
     case "locked":
-      return "zablokowane po nieudanym uniku";
+      // Lockout dotyczy KAŻDEJ reakcji po krytycznie nieudanej (unik/bariera,
+      // margines ≤ −5) — trwa do końca bieżącej rundy (#1322/#1324).
+      return "krytycznie nieudana reakcja — zablokowane do końca rundy";
     default:
       return null;
   }
