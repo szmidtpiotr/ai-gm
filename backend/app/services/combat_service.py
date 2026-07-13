@@ -7827,6 +7827,8 @@ def _resolve_enemy_attack_turn(
             _log_behavior({"target_id": str(cur)})
             _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
             conn.commit()
+            # Kontrakt #232: ścieżki tury wroga NIE advance'ują wewnętrznie —
+            # caller (post_enemy_turn / pętla MP) robi dokładnie JEDEN advance.
             out["combat_state"] = load_combat_snapshot(campaign_id)
             return out
 
@@ -7839,6 +7841,7 @@ def _resolve_enemy_attack_turn(
             _log_behavior({"target_id": str(cur), "from": old_zone, "to": ZONE_RANGED})
             _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
             conn.commit()
+            # Kontrakt #232: bez wewnętrznego advance — caller advance'uje raz.
             out["combat_state"] = load_combat_snapshot(campaign_id)
             return out
 
@@ -7872,6 +7875,7 @@ def _resolve_enemy_attack_turn(
                                "damage": int(dmg_b), "hit": bool(hit_b)})
                 _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
                 conn.commit()
+                # Kontrakt #232: bez wewnętrznego advance — caller advance'uje raz.
                 out["combat_state"] = load_combat_snapshot(campaign_id)
                 return out
         # _action == "normal" (k4=4) lub cel=gracz → przelot do normalnej ścieżki ataku na gracza.
@@ -7911,7 +7915,8 @@ def _resolve_enemy_attack_turn(
         )
         _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
         conn.commit()
-        advance_turn(campaign_id)
+        # Kontrakt #232: bez wewnętrznego advance — post_enemy_turn advance'uje raz;
+        # podwójny advance przeskakiwał turę gracza (walka wisiała na turze wroga).
         out["combat_state"] = load_combat_snapshot(campaign_id)
         return out
 
@@ -7950,7 +7955,10 @@ def _resolve_enemy_attack_turn(
         )
         _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
         conn.commit()
-        advance_turn(campaign_id)
+        # Kontrakt #232 (test_issue232): doskok NIE advance'uje wewnętrznie —
+        # post_enemy_turn robi dokładnie jeden advance. Podwójny advance oddawał
+        # turę z powrotem temu samemu wrogowi (doskok + atak pod rząd, gracz
+        # pomijany; w ŻAR walka wisiała na turze wroga).
         out["combat_state"] = load_combat_snapshot(campaign_id)
         return out
 

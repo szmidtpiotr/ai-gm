@@ -191,18 +191,21 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
  * fantomowe „ATAK — PUDŁO" (bez kolumn d20), sugerując dodatkowy atak wroga. */
 export function rollFromEnemyZoneChange(r: CombatActionResult): RollCardData {
   const zc = r.zone_change || {};
-  const toEngaged = String(zc.to || "engaged") === "engaged";
   const name = String(r.enemy_name || "Wróg").toUpperCase();
+  // Strefy są absolutne (engaged/ranged), ale doskok (charged) zawsze prowadzi DO
+  // strefy gracza — gracz na dystansie też dostaje "doskok do ranged". Rozróżniaj
+  // po fladze `fled` (panika/odwrót), nie po docelowej strefie.
+  const fled = !!zc.fled;
   return {
     actor: "enemy",
     title: `${name} — RUCH`,
     cells: [
-      { k: "Akcja", v: toEngaged ? "DOSKOK" : "ODSKOK", sum: true },
+      { k: "Akcja", v: fled ? "ODSKOK" : "DOSKOK", sum: true },
       {
         k: "Skutek",
-        v: toEngaged
-          ? "wchodzi w zwarcie · bez ataku"
-          : "odskakuje na dystans · bez ataku",
+        v: fled
+          ? "odskakuje na dystans · bez ataku"
+          : "dopada cię · bez ataku",
         res: true,
         tone: "warn",
       },

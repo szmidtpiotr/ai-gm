@@ -221,3 +221,13 @@ describe("buildCombatEpilogueText", () => {
     expect(t).toContain("wrogami");
   });
 });
+
+  it("doskok do gracza NA DYSTANSIE (charged, to=ranged): DOSKOK, nie ODSKOK", () => {
+    const r: CombatActionResult = {
+      enemy_name: "Bandyta",
+      zone_change: { from: "engaged", to: "ranged", charged: true },
+    };
+    const card = rollFromEnemyZoneChange(r);
+    expect(cell(card as never, "Akcja")?.v).toBe("DOSKOK");
+    expect(card.cells.find((c) => c.res)?.v).toContain("dopada");
+  });
