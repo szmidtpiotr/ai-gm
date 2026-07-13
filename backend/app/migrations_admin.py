@@ -1682,7 +1682,7 @@ ADMIN_SEEDS = [
     """
     UPDATE game_config_enemies
     SET tier = 'weak', attacks_per_turn = 1, damage_bonus = 1,
-        damage_type = 'physical', xp_award = 3
+        damage_type = 'physical', xp_award = 27
     WHERE key = 'goblin'
     """,
     """
@@ -6024,9 +6024,15 @@ def _ensure_enemy_terrain_scope_bands(conn: sqlite3.Connection) -> None:
     }
 
     try:
+        # Legacy one-time backfill dla ORYGINALNEGO bestiariusza. NIE dotykaj
+        # contentu zarządzanego seedami (created_by='seed', np. #1346/#1369): tam
+        # NULL terrain_tags jest INTENCJONALNY (wróg generyczny — pasuje do każdego
+        # terenu), a pasma ustawia własny seed. Bez tego filtra boot-migracja co
+        # restart nadpisywała generycznych na 'wilderness' i psuła pasma (#1346).
         rows = conn.execute(
             "SELECT key, tier, hp_base FROM game_config_enemies "
-            "WHERE world_scope = 'global' AND terrain_tags IS NULL"
+            "WHERE world_scope = 'global' AND terrain_tags IS NULL "
+            "AND COALESCE(created_by, '') != 'seed'"
         ).fetchall()
     except sqlite3.OperationalError as e:
         logger.debug("enemy_terrain_band_pass_skipped", reason=str(e))
