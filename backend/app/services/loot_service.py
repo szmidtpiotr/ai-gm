@@ -180,18 +180,21 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
                         THEN json_extract(gi.item_data, '$.armor_coverage')
                         ELSE NULL END AS gi_armor_coverage,
                    {col_effect_json}, {col_effect_type}, {col_effect_dice},
-                   CASE WHEN ci.weapon_key IS NOT NULL THEN gi.label ELSE NULL END AS weapon_label,
+                   -- #1347 follow-up: broń istniejąca tylko w game_config_weapons (bez wiersza
+                   -- w game_items, np. wolf_fang_dagger z seeda) pokazywała surowy klucz —
+                   -- fallback na katalog konfiguracyjny gcw.
+                   CASE WHEN ci.weapon_key IS NOT NULL THEN COALESCE(gi.label, gcw.label) ELSE NULL END AS weapon_label,
                    CASE WHEN ci.weapon_key IS NOT NULL
-                        THEN json_extract(gi.weapon_data, '$.weapon_slot')
+                        THEN COALESCE(json_extract(gi.weapon_data, '$.weapon_slot'), gcw.weapon_slot)
                         ELSE NULL END AS gw_weapon_slot,
                    CASE WHEN ci.weapon_key IS NOT NULL
-                        THEN json_extract(gi.weapon_data, '$.finesse')
+                        THEN COALESCE(json_extract(gi.weapon_data, '$.finesse'), gcw.finesse)
                         ELSE NULL END AS gw_finesse,
                    CASE WHEN ci.weapon_key IS NOT NULL
                         THEN json_extract(gi.weapon_data, '$.light')
                         ELSE NULL END AS gw_light,
                    CASE WHEN ci.weapon_key IS NOT NULL
-                        THEN json_extract(gi.weapon_data, '$.two_handed')
+                        THEN COALESCE(json_extract(gi.weapon_data, '$.two_handed'), gcw.two_handed)
                         ELSE NULL END AS gw_two_handed,
                    CASE WHEN ci.consumable_key IS NOT NULL THEN gi.label ELSE NULL END AS consumable_label,
                    CASE WHEN ci.weapon_key IS NULL AND ci.consumable_key IS NULL
@@ -205,6 +208,9 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
             -- w game_items — bez tego fallbacku item_type='map' ginęło i plecak nie pokazywał „Użyj".
             LEFT JOIN game_config_items gci ON gci.key = ci.item_key
                 AND ci.weapon_key IS NULL AND ci.consumable_key IS NULL
+            LEFT JOIN game_config_weapons gcw ON ci.weapon_key IS NOT NULL
+                AND gcw.key = CASE WHEN ci.weapon_key LIKE 'weapon_%'
+                                   THEN SUBSTR(ci.weapon_key, 8) ELSE ci.weapon_key END
             LEFT JOIN game_items gi ON gi.key = COALESCE(
                 NULLIF(TRIM(COALESCE(
                     CASE WHEN ci.weapon_key LIKE 'weapon_%' THEN SUBSTR(ci.weapon_key, 8)

@@ -1550,6 +1550,7 @@ def update_weapon(
     note: str | None = None,
     effect_json: str | None = None,
     weapon_slot: str | None = None,
+    rarity: int | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1561,7 +1562,7 @@ def update_weapon(
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                    two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
-                   is_active, locked_at, created_at, updated_at
+                   rarity, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1624,13 +1625,20 @@ def update_weapon(
         else:
             final_weapon_slot = current.get("weapon_slot") or ("two_handed" if final_two else "main_hand")
 
+        if rarity is not None:
+            final_rarity = int(rarity)
+            if not 1 <= final_rarity <= 5:
+                raise ValueError("invalid_rarity")
+        else:
+            final_rarity = current.get("rarity")
+
         conn.execute(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
                 two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
                 value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?, weapon_slot = ?,
-                is_active = ?, updated_at = datetime('now')
+                rarity = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
             (
@@ -1651,6 +1659,7 @@ def update_weapon(
                 final_note,
                 final_effect_json,
                 final_weapon_slot,
+                final_rarity,
                 final_is_active,
                 safe_key,
             ),
@@ -1661,7 +1670,7 @@ def update_weapon(
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                    two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
-                   is_active, locked_at, created_at, updated_at
+                   rarity, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -2414,6 +2423,7 @@ def update_item(
     ai_generated: int | None = None,
     approved: int | None = None,
     note: str | None = None,
+    rarity: int | None = None,
     image_url: str | None = None,
     image_gen_prompt: str | None = None,
 ) -> dict:
@@ -2427,7 +2437,7 @@ def update_item(
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
-                   note, is_active, locked_at, created_at, updated_at,
+                   note, rarity, is_active, locked_at, created_at, updated_at,
                    image_url, image_gen_prompt
             FROM game_config_items WHERE key = ?
             """,
@@ -2492,6 +2502,12 @@ def update_item(
         _cur_appr = current.get("approved")
         final_appr = int(approved) if approved is not None else (int(_cur_appr) if _cur_appr is not None else 1)
         final_note = note if note is not None else current.get("note")
+        if rarity is not None:
+            final_rarity = int(rarity)
+            if not 1 <= final_rarity <= 5:
+                raise ValueError("invalid_rarity")
+        else:
+            final_rarity = current.get("rarity")
         final_image_url = image_url if image_url is not None else current.get("image_url")
         final_image_gen_prompt = image_gen_prompt if image_gen_prompt is not None else current.get("image_gen_prompt")
 
@@ -2501,7 +2517,7 @@ def update_item(
             SET label = ?, item_type = ?, description = ?, value_gp = ?, weight_kg = ?,
                 allowed_classes = ?, ac_bonus = ?, armor_coverage = ?,
                 charges = ?, effect_json = ?, ai_generated = ?, approved = ?,
-                note = ?, is_active = ?, image_url = ?, image_gen_prompt = ?,
+                note = ?, rarity = ?, is_active = ?, image_url = ?, image_gen_prompt = ?,
                 updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -2519,6 +2535,7 @@ def update_item(
                 final_ai,
                 final_appr,
                 final_note,
+                final_rarity,
                 final_active,
                 final_image_url,
                 final_image_gen_prompt,
@@ -2531,7 +2548,7 @@ def update_item(
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
-                   note, is_active, locked_at, created_at, updated_at,
+                   note, rarity, is_active, locked_at, created_at, updated_at,
                    image_url, image_gen_prompt
             FROM game_config_items WHERE key = ?
             """,
@@ -2676,6 +2693,8 @@ def update_consumable(
     note: str | None,
     is_active: bool | None,
     new_key: str | None = None,
+    effect_json: str | None = None,
+    rarity: int | None = None,
     force: bool,
 ) -> dict:
     """DEPRECATED 8H — updates game_config_items row for consumable catalog entries."""
@@ -2726,7 +2745,7 @@ def update_consumable(
             item_type=None,
             description=description,
             value_gp=base_price,
-            effect_json=None,
+            effect_json=effect_json,
             is_active=is_active,
             force=force,
             weight_kg=weight_kg,
@@ -2740,6 +2759,7 @@ def update_consumable(
             ai_generated=None,
             approved=None,
             note=note,
+            rarity=rarity,
         )
         return _consumable_row_as_legacy_dict(updated)
     finally:

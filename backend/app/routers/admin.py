@@ -332,6 +332,7 @@ class WeaponPatchReq(BaseModel):
     note: str | None = None
     effect_json: str | None = None
     weapon_slot: str | None = None  # Stage 5
+    rarity: int | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -479,6 +480,7 @@ class ItemPatchReq(BaseModel):
     ai_generated: int | None = None
     approved: int | None = None
     note: str | None = None
+    rarity: int | None = None
     is_active: bool | None = None
     force: bool = False
     image_url: str | None = None
@@ -563,7 +565,10 @@ class ConsumablePatchReq(BaseModel):
     weight_kg: float | None = None
     charges: int | None = None
     value_gp: int | None = None  # było base_price (8H)
+    base_price: int | None = None  # alias z admin UI (modal edycji wysyła base_price)
+    effect_json: str | None = None
     note: str | None = None
+    rarity: int | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -1789,6 +1794,7 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             note=req.note,
             effect_json=req.effect_json,
             weapon_slot=req.weapon_slot,
+            rarity=req.rarity,
             is_active=req.is_active,
             force=req.force,
         )
@@ -1826,6 +1832,8 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
                 status_code=422,
                 detail="weapon_slot must be one of: main_hand, two_handed, off_hand_only, either",
             ) from None
+        if str(e) == "invalid_rarity":
+            raise HTTPException(status_code=422, detail="rarity must be between 1 and 5") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
 
 
@@ -2186,6 +2194,7 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             ai_generated=req.ai_generated,
             approved=req.approved,
             note=req.note,
+            rarity=req.rarity,
             is_active=req.is_active,
             force=req.force,
             image_url=req.image_url,
@@ -2230,6 +2239,8 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
         if str(e) in ("invalid_allowed_classes", "invalid_proficiency_classes"):
             raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
+        if str(e) == "invalid_rarity":
+            raise HTTPException(status_code=422, detail="rarity must be between 1 and 5") from None
         raise HTTPException(status_code=422, detail="Invalid item payload") from None
 
 
@@ -2320,8 +2331,10 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             effect_target=req.effect_target,
             weight_kg=req.weight_kg,
             charges=req.charges,
-            base_price=req.value_gp,
+            base_price=req.base_price if req.base_price is not None else req.value_gp,
+            effect_json=req.effect_json,
             note=req.note,
+            rarity=req.rarity,
             is_active=req.is_active,
             force=req.force,
         )
@@ -2359,6 +2372,8 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
                 status_code=422,
                 detail="armor_coverage must be one of: head, torso, limb_arm, limb_leg, full",
             ) from None
+        if str(e) == "invalid_rarity":
+            raise HTTPException(status_code=422, detail="rarity must be between 1 and 5") from None
         raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
 
 

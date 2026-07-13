@@ -251,6 +251,7 @@ export interface InventoryItem {
   can_use: boolean;
   weapon_slot: string | null;
   is_light: boolean | null;
+  armor_coverage?: string | null;
   covered_slots: string[];
   durability: { current: number; max: number; pct: number; broken: boolean } | null;
   image_url: string | null;
@@ -266,6 +267,9 @@ export const DOLL_SLOTS = [
   { slot: "head", label: "Głowa" },
   { slot: "amulet", label: "Amulet" },
   { slot: "chest", label: "Tors" },
+  // #1347 follow-up: pancerze z armor_coverage='back' (np. płaszcz z setu wilczego
+  // łowcy) lądowały w slocie bez reprezentacji w UI — przedmiot znikał z widoku.
+  { slot: "back", label: "Plecy" },
   { slot: "main_hand", label: "Broń" },
   { slot: "off_hand", label: "2. ręka" },
   { slot: "hands", label: "Dłonie" },
@@ -282,6 +286,9 @@ const SLOT_ALIASES: Record<string, string> = {
   torso: "chest",
   body: "chest",
   chest: "chest",
+  back: "back",
+  cloak: "back",
+  cape: "back",
   weapon: "main_hand",
   main_hand: "main_hand",
   off_hand: "off_hand",
@@ -356,6 +363,12 @@ export function targetSlotFor(it: InventoryItem): string | null {
     return "main_hand";
   }
   if (t === "armor") {
+    // armor_coverage jest zawsze obecne dla pancerza; covered_slots API wypełnia
+    // dopiero po założeniu (full/two-handed), więc dla plecaka byłoby puste.
+    const cov = (it.armor_coverage || "").toLowerCase();
+    if (cov && cov !== "full" && cov !== "limb_arm" && cov !== "limb_leg") {
+      return SLOT_ALIASES[cov] ?? cov;
+    }
     const c = it.covered_slots?.[0];
     if (c) return SLOT_ALIASES[c] ?? c;
     return "chest";

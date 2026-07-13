@@ -76,6 +76,8 @@ const DOLL_POS: Record<string, { top: string; left: string; small?: boolean }> =
   head: { top: "11%", left: "50%" },
   amulet: { top: "25%", left: "50%", small: true },
   chest: { top: "39%", left: "50%" },
+  // #1347 follow-up: plecy (płaszcz) — mały slot przy lewym ramieniu.
+  back: { top: "25%", left: "17%", small: true },
   main_hand: { top: "41%", left: "15%" },
   off_hand: { top: "41%", left: "85%" },
   hands: { top: "57%", left: "81%" },

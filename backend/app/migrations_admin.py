@@ -6833,6 +6833,20 @@ def _ensure_wolf_hunter_content(conn: sqlite3.Connection) -> None:
             """,
             (key, label, inputs, out_type, out_key, cost),
         )
+
+    # 4) Dual-write do game_items (U11c) — bez tego wiersza inventory pokazuje
+    #    surowy klucz (get_character_inventory czyta label z game_items).
+    try:
+        from app.services.game_items_service import sync_from_legacy
+
+        for tbl, k in (
+            ("game_config_items", "wolf_hide_cloak"),
+            ("game_config_items", "wolf_totem_charm"),
+            ("game_config_weapons", "wolf_fang_dagger"),
+        ):
+            sync_from_legacy(conn, tbl, k)
+    except Exception:
+        pass  # non-fatal — SQL fallback w loot_service pokrywa brakujące wiersze
     conn.commit()
 
 
