@@ -40,6 +40,8 @@ import { ReactionModal, type ReactionChoice, type ReactionData } from "./Reactio
 import { Dice3DOverlay, type DiceJob } from "./Dice3DOverlay";
 import { EnemyRevealCard } from "./EnemyRevealCard";
 import { useEnemyReveal } from "./useEnemyReveal";
+import { InitiativeCard } from "./InitiativeCard";
+import { useInitiativeCard } from "./useInitiativeCard";
 import { CombatOutcomes } from "../outcomes/CombatOutcomes";
 
 export function CombatView({
@@ -180,6 +182,11 @@ export function CombatView({
   // portret + wskaźnik zagrożenia. Dismiss → normalny widok. Once-per-combat_id.
   // Logika w useEnemyReveal (testowalna — regresja race'u #1355).
   const { reveal, dismissReveal } = useEnemyReveal(live, suppressRevealCombatId);
+
+  // WALKA-T5-FIX-a (#1356): karta inicjatywy na starcie walki — oba rzuty + kto zaczyna.
+  // Latch once-per-combat_id; pokazujemy PO karcie pojawienia wroga (dopiero gdy reveal
+  // zamknięty), by dwa overlaye się nie nakładały. Zasadzka (suppressReveal) → od razu.
+  const { initiative, dismissInitiative } = useInitiativeCard(live);
 
   // Cel: trzymaj się żywego wroga; przeskocz na kolejnego po zabiciu.
   useEffect(() => {
@@ -614,6 +621,11 @@ export function CombatView({
           threat={view?.relativeThreat ?? null}
           onClose={dismissReveal}
         />
+      )}
+
+      {/* WALKA-T5-FIX-a (#1356): karta inicjatywy — dopiero po zamknięciu karty pojawienia wroga */}
+      {initiative && !reveal && (
+        <InitiativeCard data={initiative} onClose={dismissInitiative} />
       )}
 
       {reaction && <ReactionModal data={reaction} onChoose={onReaction} />}
