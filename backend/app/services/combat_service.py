@@ -8373,6 +8373,18 @@ def resolve_reaction(campaign_id: int, choice: str = "take") -> dict[str, Any]:
         dmg = int(pending.get("damage") or 0)
         out: dict[str, Any] = {"attacker": "enemy", "hit": True, "reaction_resolved": True,
                                "enemy_name": str(pending.get("enemy_name") or "Wróg")}
+
+        # WALKA-T2-FIX-b (#1361): wybór != 'take' MUSI być w available `options` z okna reakcji
+        # (zapisane przy otwarciu jako available-only). Resolvery `_try_*` gate'ują skill/locked/
+        # no_shield/no_mana, ale ŻADEN nie re-sprawdza capu 1/rundę (#1322) — opcja wyszarzona
+        # `cap_reached` wysłana ręcznie (devtools) była w pełni stosowana. Jedno miejsce zamiast
+        # per-resolver: niedostępny wybór → degradacja do 'take' + flaga `reaction_rejected`.
+        # Tolerancyjnie wobec starego pending bez klucza 'options' (sprzed #1359): brak walidacji.
+        _avail_opts = pending.get("options")
+        if ch != "take" and isinstance(_avail_opts, list) and ch not in _avail_opts:
+            out["reaction_rejected"] = {"choice": ch, "available": list(_avail_opts)}
+            ch = "take"
+
         _dodge = None
         _block = None
         _ward = None
