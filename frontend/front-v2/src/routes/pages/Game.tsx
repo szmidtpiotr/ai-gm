@@ -481,25 +481,46 @@ export default function Game() {
     ackInterrupt.current = key;
     setInterruptModal(travelNotice);
   }, [travelNotice]);
-  // WALKA-T1 (#1349): gdy modal zasadzki (reason=encounter) się pojawił, karta
-  // „Nieznany napastnik" (EnemyRevealCard) dla walki, która zaraz wystartuje, ma się
-  // NIE pokazać (dublet overlayów). Uzbrajamy flagę przy modalu zasadzki, a gdy pojawi
-  // się combat_id — wiążemy go jako „reveal już pokazany". Licząc z travelNotice +
-  // activeCombat.id (nie z kolejności efektów) unikamy race'u opisanego w spec.
+  // WALKA-T1-FIX (#1355): gdy modal zasadzki (reason=encounter Z KONKRETNYM wrogiem)
+  // się pojawił, karta „Nieznany napastnik" (EnemyRevealCard) dla walki, która zaraz
+  // wystartuje, ma się NIE pokazać (dublet overlayów). Wyliczamy wyciszenie
+  // SYNCHRONICZNIE w renderze (useMemo, nie useEffect) — dzięki temu prop jest już
+  // PRAWDZIWY przy montowaniu CombatView. #1349 robił to w useEffect rodzica, który
+  // odpalał PO efekcie reveal w dziecku (race) → karta zdążyła się pokazać.
   const armedEncounterRef = useRef(false);
-  const [suppressRevealCombatId, setSuppressRevealCombatId] = useState<number | null>(null);
   useEffect(() => {
-    if (travelNotice && String(travelNotice.reason).startsWith("encounter")) {
+    // Uzbrajamy na obecnym WROGU (travelNotice.enemy), nie na samym reason=encounter —
+    // inaczej przy nieznanym wrogu (modal nic nie pokazał) karta byłaby błędnie tłumiona.
+    if (
+      travelNotice &&
+      String(travelNotice.reason).startsWith("encounter") &&
+      travelNotice.enemy
+    ) {
       armedEncounterRef.current = true;
     }
-  }, [travelNotice?.reason, travelNotice?.step]);
+  }, [travelNotice?.reason, travelNotice?.step, travelNotice?.enemy]);
   useEffect(() => {
-    const cid = activeCombat?.id;
-    if (cid && armedEncounterRef.current) {
-      setSuppressRevealCombatId(cid);
-      armedEncounterRef.current = false;
-    }
+    // Reset uzbrojenia po zakończeniu walki (cid→null), by kolejna walka z NARRACJI
+    // nie była błędnie wyciszona. Odpala się tylko przy ZMIANIE activeCombat?.id.
+    if (!activeCombat?.id) armedEncounterRef.current = false;
   }, [activeCombat?.id]);
+  const suppressRevealCombatId = useMemo(() => {
+    const cid = activeCombat?.id;
+    if (!cid) return null;
+    // Uzbrojone w POPRZEDNIM cyklu (modal zasadzki pokazał wroga) — ref jest już truthy
+    // zanim CombatView się zamontuje.
+    if (armedEncounterRef.current) return cid;
+    // Fallback: travelNotice i combat pojawiły się w TYM SAMYM renderze (efekt
+    // uzbrajający jeszcze nie zdążył) — czytamy travelNotice wprost.
+    if (
+      travelNotice &&
+      String(travelNotice.reason).startsWith("encounter") &&
+      travelNotice.enemy
+    ) {
+      return cid;
+    }
+    return null;
+  }, [activeCombat?.id, travelNotice]);
   // PM4: modal wyboru trasy również po wejściu/odświeżeniu (pending_travel_choice
   // przetrwa jako suggested_actions type=route_choice), nie tylko po submicie tury.
   const routeAck = useRef<string | null>(null);
