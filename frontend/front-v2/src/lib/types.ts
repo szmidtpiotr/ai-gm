@@ -370,8 +370,18 @@ export interface CombatState {
   ended_reason?: "victory" | "fled" | "player_dead" | null;
   loot_pool?: unknown;
   relative_threat?: RelativeThreat | null; // BL-A7 (#1344)
-  defense_options?: string[]; // WALKA-T2 (#1350): reakcje obronne gracza dla composera
+  defense_options?: string[]; // WALKA-T2 (#1350): reakcje obronne DOSTĘPNE (available-only)
+  // WALKA-T2-FIX (#1359): WSZYSTKIE obrony wg posiadanych skilli + available + reason,
+  // żeby UI wyszarzyło niedostępne z powodem zamiast je ukrywać.
+  defense_options_detailed?: DefenseOptionDetailWire[];
   [k: string]: unknown;
+}
+
+// WALKA-T2-FIX (#1359): kształt wpisu detailed z backendu (patrz lib/combat-defense.ts).
+export interface DefenseOptionDetailWire {
+  key: string;
+  available: boolean;
+  reason: string | null;
 }
 
 // WALKA-T2 (#1350): typy reakcji obronnej deklarowanych z piguły „Obrona".
@@ -428,7 +438,8 @@ export interface CombatActionResult {
   player_incapacitated?: boolean;
   // okno reakcji SF10
   reaction_window?: boolean;
-  reaction_options?: string[]; // subset of ["dodge","shield_block","arcane_ward","mana_shield"]
+  reaction_options?: string[]; // DOSTĘPNE (available-only) — bramka okna reakcji
+  reaction_options_detailed?: DefenseOptionDetailWire[]; // #1359: wszystkie + available + reason
   reaction?: {
     dodged?: boolean;
     full_block?: boolean;

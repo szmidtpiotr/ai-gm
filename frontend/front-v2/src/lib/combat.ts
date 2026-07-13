@@ -2,6 +2,7 @@
 // HP dla paska w banerze (F-53), etykiety stref. Źródło: makieta zar7-walka/zar7-kosc.
 import type { CombatActionResult, CombatState, Combatant, RelativeThreat } from "@/lib/types";
 import type { RollCardData } from "@/lib/types";
+import { normalizeDefenseDetails, type DefenseOptionDetail } from "@/lib/combat-defense";
 
 // ── HP bar (parytet ze starym `_woundThresholds`) ────────────────────────────
 export function hpTier(cur: number, max: number): "hi" | "mid" | "lo" {
@@ -24,7 +25,9 @@ export interface CombatView {
   status: string;
   endedReason: string | null;
   relativeThreat: RelativeThreat | null; // BL-A7 (#1344)
-  defenseOptions: string[]; // WALKA-T2 (#1350): reakcje obronne dostępne graczowi
+  defenseOptions: string[]; // WALKA-T2 (#1350): reakcje obronne DOSTĘPNE (available-only)
+  // WALKA-T2-FIX (#1359): wszystkie obrony wg skilli + available + reason (wyszarzanie w UI)
+  defenseOptionsDetailed: DefenseOptionDetail[];
 }
 
 export function readCombat(cs: CombatState | null | undefined): CombatView | null {
@@ -50,6 +53,10 @@ export function readCombat(cs: CombatState | null | undefined): CombatView | nul
     defenseOptions: Array.isArray(cs.defense_options)
       ? (cs.defense_options as string[])
       : [],
+    defenseOptionsDetailed: normalizeDefenseDetails(
+      cs.defense_options_detailed,
+      Array.isArray(cs.defense_options) ? (cs.defense_options as string[]) : [],
+    ),
   };
 }
 

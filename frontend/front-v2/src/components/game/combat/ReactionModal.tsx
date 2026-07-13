@@ -1,18 +1,45 @@
-// SF10 reakcja (#1236 / #633) — okno uniku/bloku. Makieta: zar6-reakcja.html.
+// SF10 reakcja (#1236 / #633) — okno uniku/bloku/bariery/tarczy many. Makieta: zar6-reakcja.html.
 // Timer-ring odlicza; brak wyboru = auto „Przyjmij cios" (parytet z silnikiem, choice
 // default „take"). Liczba obrażeń CELOWO ukryta — wybór pozostaje zakładem (decyzja Piotra).
+// WALKA-T2-FIX (#1359): niedostępne reakcje (np. Tarcza Many bez many) są WYSZARZONE z powodem,
+// nie ukryte — etykiety/opisy ze wspólnego lib/combat-defense.ts (parytet z pigułą Obrona).
 import { useEffect, useRef, useState } from "react";
 import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle, ShieldStar } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import type { DefenseReaction } from "@/lib/types";
+import {
+  DEFENSE_META,
+  DEFENSE_ORDER,
+  DEFENSE_KEY_TO_CHOICE,
+  defenseReasonText,
+  normalizeDefenseDetails,
+  type DefenseOptionDetail,
+} from "@/lib/combat-defense";
 
 export type ReactionChoice = "take" | "dodge" | "block" | "ward" | "mana";
 
 export interface ReactionData {
   enemyName: string;
-  options: string[]; // subset of ["dodge","shield_block"]
+  options: string[]; // DOSTĘPNE klucze (available-only) — wstecznie zgodne
+  optionsDetailed?: DefenseOptionDetail[]; // #1359: wszystkie + available + reason (wyszarzanie)
   attackRoll?: number | null;
   playerDefense?: number | null;
 }
+
+// #1359: ikona per reakcja (etykieta/opis = wspólne combat-defense.ts).
+const REACTION_ICON: Record<DefenseReaction, typeof Wind> = {
+  dodge: Wind,
+  shield_block: ShieldCheck,
+  arcane_ward: Sparkle,
+  mana_shield: ShieldStar,
+};
+// Wariant kolorystyczny Choice per reakcja.
+const REACTION_VARIANT: Record<DefenseReaction, "dodge" | "block" | "ward" | "mana"> = {
+  dodge: "dodge",
+  shield_block: "block",
+  arcane_ward: "ward",
+  mana_shield: "mana",
+};
 
 const WINDOW_S = 8; // parytet z front/ (combat_ui.js: left=8 → auto-take)
 const RING_LEN = 113; // 2πr, r=18
@@ -49,10 +76,10 @@ export function ReactionModal({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const offset = RING_LEN * (1 - left / WINDOW_S);
-  const hasDodge = data.options.includes("dodge");
-  const hasBlock = data.options.includes("shield_block");
-  const hasWard = data.options.includes("arcane_ward"); // #1324: Arkanowa Bariera
-  const hasManaShield = data.options.includes("mana_shield"); // #1325: Tarcza Many
+  // #1359: wszystkie posiadane reakcje (available + reason); fallback do available-only.
+  const details = normalizeDefenseDetails(data.optionsDetailed, data.options);
+  const detailByKey = new Map(details.map((d) => [d.key, d]));
+  const ownedDefenses = DEFENSE_ORDER.filter((k) => detailByKey.has(k));
 
   return (
     <div
@@ -109,64 +136,32 @@ export function ReactionModal({
           </div>
         </div>
 
-        {/* wybory */}
+        {/* wybory — #1359: posiadane reakcje; niedostępne wyszarzone z powodem */}
         <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1">
-          {hasDodge && (
-            <Choice
-              variant="dodge"
-              icon={<Wind weight="fill" size={21} />}
-              name="Unik"
-              desc="Test zręczności — całość albo nic. Sukces = 0 obrażeń."
-              meta={<>d20+DEX</>}
-              onClick={() => fire("dodge")}
-            />
-          )}
-          {hasBlock && (
-            <Choice
-              variant="block"
-              icon={<ShieldCheck weight="fill" size={21} />}
-              name="Blok"
-              desc="Tarcza pochłania część obrażeń."
-              meta={<>tarcza</>}
-              onClick={() => fire("block")}
-            />
-          )}
-          {hasWard && (
-            <Choice
-              variant="ward"
-              icon={<Sparkle weight="fill" size={21} />}
-              name="Arkanowa Bariera"
-              desc="Test intelektu — całość albo nic. Sukces = 0 obrażeń. Mana schodzi zawsze."
-              meta={
-                <>
-                  d20+INT
-                  <br />1 many
-                </>
-              }
-              onClick={() => fire("ward")}
-            />
-          )}
-          {hasManaShield && (
-            <Choice
-              variant="mana"
-              icon={<ShieldStar weight="fill" size={21} />}
-              name="Tarcza Many"
-              desc="Bez rzutu — pochłaniasz część ciosu maną (2 obr. za 1 manę, limit z rangi)."
-              meta={
-                <>
-                  za manę
-                  <br />1/rundę
-                </>
-              }
-              onClick={() => fire("mana")}
-            />
-          )}
+          {ownedDefenses.map((k) => {
+            const meta = DEFENSE_META[k];
+            const Icon = REACTION_ICON[k];
+            const detail = detailByKey.get(k)!;
+            const reason = detail.available ? null : defenseReasonText(detail.reason);
+            return (
+              <Choice
+                key={k}
+                variant={REACTION_VARIANT[k]}
+                icon={<Icon weight="fill" size={21} />}
+                name={meta.label}
+                desc={reason ? `Niedostępne — ${reason}.` : meta.reactionDesc}
+                meta={meta.reactionMeta}
+                disabled={!detail.available}
+                onClick={() => fire(DEFENSE_KEY_TO_CHOICE[k])}
+              />
+            );
+          })}
           <Choice
             variant="take"
             icon={<HandPalm weight="fill" size={21} />}
             name="Przyjmij cios"
             desc="Bez rzutu — obrywasz pełne, ale zachowujesz akcję."
-            meta={<>pełny cios</>}
+            meta="pełny cios"
             onClick={() => fire("take")}
           />
         </div>
@@ -209,6 +204,7 @@ function Choice({
   name,
   desc,
   meta,
+  disabled = false,
   onClick,
 }: {
   variant: "dodge" | "block" | "ward" | "mana" | "take";
@@ -216,6 +212,7 @@ function Choice({
   name: string;
   desc: string;
   meta: React.ReactNode;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   // #1324/#1325: bariera i tarcza many dzielą paletę many (niebieski) — obie płacą maną.
@@ -243,9 +240,11 @@ function Choice({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         "flex w-full items-center gap-3 rounded-md border bg-surface px-3.5 py-3 text-left transition-colors hover:border-ember",
         tint,
+        disabled && "cursor-not-allowed opacity-45 hover:border-[inherit]",
       )}
     >
       <span

@@ -404,6 +404,7 @@ export function CombatView({
           const reactionData: ReactionData = {
             enemyName: r.enemy_name ?? "Wróg",
             options: r.reaction_options ?? [],
+            optionsDetailed: r.reaction_options_detailed, // #1359: wyszarzanie niedostępnych
             attackRoll: r.attack_roll ?? null,
             playerDefense: view.player?.defense ?? null,
           };
@@ -494,6 +495,7 @@ export function CombatView({
         ? {
             enemyName: r.enemy_name ?? "Wróg",
             options: r.reaction_options ?? [],
+            optionsDetailed: r.reaction_options_detailed, // #1359
             attackRoll: r.attack_roll ?? null,
             playerDefense: view?.player?.defense ?? null,
           }
@@ -612,6 +614,7 @@ export function CombatView({
           onMove={doMove}
           onDeclare={doDeclare}
           defenseOptions={view.defenseOptions}
+          defenseOptionsDetailed={view.defenseOptionsDetailed}
           onClose={() => setSheet(null)}
         />
       )}

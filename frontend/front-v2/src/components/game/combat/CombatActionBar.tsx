@@ -1,5 +1,5 @@
 // F-24 pasek akcji walki (#1236). Makieta: zar7-walka.html (actrow).
-// Atak (primary) / Czar / Zbliż↔Cofnij / Unik / Uciekaj. Composer prozy renderuje CombatView obok.
+// Atak (primary) / Czar / Zbliż↔Cofnij / Obrona / Uciekaj. Composer prozy renderuje CombatView obok.
 import {
   Sword,
   Sparkle,

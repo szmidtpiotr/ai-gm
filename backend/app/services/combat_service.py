@@ -2207,9 +2207,14 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
                         pass
                     _ec = len([c for c in _combatants
                                if c.get("type") == "enemy" and float(c.get("hp_current") or 0) > 0])
-                    d["defense_options"] = _reaction_options(
+                    # WALKA-T2-FIX (#1359): pełna lista (available+reason) do wyszarzenia w UI;
+                    # `defense_options` (available-only) zostaje dla wstecznej zgodności.
+                    d["defense_options_detailed"] = _reaction_options_detailed(
                         _dc, int(_pchid), _pl, _psheet, int(row["round"] or 1),
                         enemy_count=_ec)
+                    d["defense_options"] = [
+                        o["key"] for o in d["defense_options_detailed"] if o["available"]
+                    ]
     except Exception:
         pass
     return d
@@ -6358,64 +6363,100 @@ def compute_player_attack_dodge_outcome(
     return dodged, (not dodged), dodge_total
 
 
+def _reaction_options_detailed(
+    conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int,
+    enemy_count: int | None = None,
+) -> list[dict]:
+    """WALKA-T2-FIX (#1359) — WSZYSTKIE reakcje wg POSIADANYCH skilli, każda z flagą
+    ``available`` + ``reason``, żeby frontend mógł wyszarzyć niedostępne z powodem
+    (zamiast je ukrywać). Kolejność: dodge, shield_block, arcane_ward, mana_shield.
+
+    Każdy wpis: ``{"key": str, "available": bool, "reason": str | None}``.
+    ``reason`` gdy niedostępne: ``locked`` (lockout po nieudanym uniku, #1322),
+    ``cap_reached`` (limit 1/rundę), ``no_shield`` (brak założonej tarczy),
+    ``no_mana`` (za mało many na próbę). Opcje bez posiadanego skilla są POMIJANE
+    (lista = wg posiadanych skilli, nie katalog wszystkich reakcji).
+
+    Bazę dostępności (`_reaction_options`) wyprowadzamy z tej listy — patrz niżej.
+    """
+    locked = int(p.get("reaction_locked_round") or 0) == int(round_n)
+    used_this_round = int(p.get("reaction_used_round") or 0) == int(round_n)
+    swarm = enemy_count is None or int(enemy_count) >= 2
+    # Cap 1/rundę dla dodge/shield/ward tylko przy SWARMIE; single enemy → reakcja co atak.
+    cap_general = swarm and used_this_round
+    skills = sheet.get("skills") or {}
+
+    def _owned(key: str) -> bool:
+        try:
+            return int(skills.get(key, 0) or 0) >= 1
+        except (TypeError, ValueError):
+            return False
+
+    out: list[dict] = []
+
+    # dodge — skill dodge ≥ 1.
+    if _owned("dodge"):
+        reason = "locked" if locked else "cap_reached" if cap_general else None
+        out.append({"key": "dodge", "available": reason is None, "reason": reason})
+
+    # shield_block — skill shield_block ≥ 1 ORAZ tarcza założona.
+    if _owned("shield_block"):
+        has_shield = False
+        try:
+            has_shield, _ = _player_has_shield_equipped(conn, ch_id)
+        except (TypeError, ValueError):
+            has_shield = False
+        reason = (
+            "locked" if locked
+            else "no_shield" if not has_shield
+            else "cap_reached" if cap_general
+            else None
+        )
+        out.append({"key": "shield_block", "available": reason is None, "reason": reason})
+
+    # #1324: Arkanowa Bariera — skill arcane_ward ≥ 1 ORAZ mana ≥ koszt próby.
+    if _owned("arcane_ward"):
+        current_mana = int(sheet.get("current_mana", 0) or 0)
+        reason = (
+            "locked" if locked
+            else "no_mana" if current_mana < int(ARCANE_WARD_MANA_COST)
+            else "cap_reached" if cap_general
+            else None
+        )
+        out.append({"key": "arcane_ward", "available": reason is None, "reason": reason})
+
+    # #1325: Tarcza Many — skill mana_shield ≥ 1 ORAZ mana > 0. Limit 1/rundę ZAWSZE
+    # (także przy JEDNYM wrogu — odstępstwo od #1322, anty boss-tank).
+    if _owned("mana_shield"):
+        current_mana = int(sheet.get("current_mana", 0) or 0)
+        reason = (
+            "locked" if locked
+            else "no_mana" if current_mana <= 0
+            else "cap_reached" if used_this_round
+            else None
+        )
+        out.append({"key": "mana_shield", "available": reason is None, "reason": reason})
+
+    return out
+
+
 def _reaction_options(
     conn: Any, ch_id: int, p: dict, sheet: dict, round_n: int,
     enemy_count: int | None = None,
 ) -> list[str]:
     """SF10 (#633) — które reakcje są DOSTĘPNE dla gracza w tej chwili (model reaktywny).
 
-    Zwraca listę opcji do okna reakcji: ``dodge`` (skill dodge ≥ 1), ``shield_block``
-    (skill shield_block ≥ 1 + tarcza założona). Pusta lista = brak okna (obrażenia
-    naliczane od razu).
-
-    Limity (#1322):
-      • lockout po KRYTYCZNEJ PORAŻCE uniku (``reaction_locked_round``) — ZAWSZE blokuje
-        całą następną rundę (kara zostaje, decyzja Piotra).
-      • 1 reakcja/rundę (``reaction_used_round``) — tylko przy SWARMIE (≥2 żywych wrogów),
-        żeby nie dało się uchylić przed każdym z wielu ciosów. Przy JEDNYM wrogu reakcja
-        jest dostępna przy każdym jego ataku (single-enemy = brak limitu na rundę).
-        ``enemy_count=None`` → zachowawczo stary limit 1/rundę (gdy wołający nie policzył wrogów).
+    Zwraca listę DOSTĘPNYCH kluczy reakcji (do bramek okna reakcji). Pusta lista = brak
+    dostępnej reakcji (przy pustym oknie single-player i tak otwiera się „Przyjmij", #1351).
+    Wyprowadzona z `_reaction_options_detailed` (#1359) — filtr do available=True; zachowanie
+    identyczne jak przed #1359 (limity #1322: lockout ZAWSZE, cap 1/rundę przy swarmie; mana_shield
+    cap 1/rundę zawsze). ``enemy_count=None`` → zachowawczo stary limit 1/rundę.
     """
-    # Krytyczna porażka uniku — lockout następnej rundy (kara zostaje niezależnie od liczby wrogów).
-    if int(p.get("reaction_locked_round") or 0) == int(round_n):
-        return []
-    # Cap 1/rundę tylko przy wielu wrogach; single enemy → reakcja co atak.
-    used_this_round = int(p.get("reaction_used_round") or 0) == int(round_n)
-    swarm = enemy_count is None or int(enemy_count) >= 2
-    if swarm and used_this_round:
-        return []
-    skills = sheet.get("skills") or {}
-    opts: list[str] = []
-    try:
-        if int(skills.get("dodge", 0) or 0) >= 1:
-            opts.append("dodge")
-    except (TypeError, ValueError):
-        pass
-    try:
-        if int(skills.get("shield_block", 0) or 0) >= 1:
-            has_shield, _ = _player_has_shield_equipped(conn, ch_id)
-            if has_shield:
-                opts.append("shield_block")
-    except (TypeError, ValueError):
-        pass
-    # #1324: Arkanowa Bariera — gate: skill arcane_ward ≥ 1 ORAZ mana ≥ koszt próby.
-    try:
-        if int(skills.get("arcane_ward", 0) or 0) >= 1:
-            current_mana = int(sheet.get("current_mana", 0) or 0)
-            if current_mana >= int(ARCANE_WARD_MANA_COST):
-                opts.append("arcane_ward")
-    except (TypeError, ValueError):
-        pass
-    # #1325: Tarcza Many — gate: skill mana_shield ≥ 1 ORAZ mana > 0. Limit 1/rundę ZAWSZE
-    # (także przy JEDNYM wrogu — odstępstwo od #1322, anty boss-tank): jeśli reakcja zużyta
-    # w tej rundzie, tarcza znika z opcji niezależnie od liczby wrogów.
-    try:
-        if int(skills.get("mana_shield", 0) or 0) >= 1 and not used_this_round:
-            if int(sheet.get("current_mana", 0) or 0) > 0:
-                opts.append("mana_shield")
-    except (TypeError, ValueError):
-        pass
-    return opts
+    return [
+        o["key"]
+        for o in _reaction_options_detailed(conn, ch_id, p, sheet, round_n, enemy_count)
+        if o["available"]
+    ]
 
 
 def _record_ammo_spent(conn, campaign_id: int, ammo_key: str, n: int = 1) -> None:
@@ -6644,9 +6685,13 @@ def _attack_try_reaction(
     # Unik/Blok). Rozliczenie w `resolve_reaction`. Rzut ataku wroga już rozstrzygnięty
     # (nat 20/nat 1 nietknięte). Brak opcji → spada niżej do natychmiastowego naliczenia.
     _round_now = int(row["round"] or 1)
-    _opts = _reaction_options(
-        conn, ch_id, p, sheet, _round_now, enemy_count=len(_living_enemy_ids(combatants)),
+    _enemy_ct_react = len(_living_enemy_ids(combatants))
+    # WALKA-T2-FIX (#1359): detailed niesie niedostępne (available=False + reason) do wyszarzenia
+    # w modalu reakcji; `_opts` (available-only) steruje bramką okna jak dotąd.
+    _opts_detailed = _reaction_options_detailed(
+        conn, ch_id, p, sheet, _round_now, enemy_count=_enemy_ct_react,
     )
+    _opts = [o["key"] for o in _opts_detailed if o["available"]]
     # T5-5e (#1351): single-player → okno reakcji ZAWSZE, nawet przy pustych `_opts`
     # (postać bez skilli / cap #1322 wyczerpany / lockout → jedyna decyzja „Przyjmij").
     # MP zachowuje starą bramkę (okno tylko gdy realne opcje; reszta = auto-evasion).
@@ -6657,6 +6702,7 @@ def _attack_try_reaction(
             "attack_roll": int(attack_roll),
             "round": _round_now,
             "options": _opts,
+            "options_detailed": _opts_detailed,  # #1359: wyszarzanie niedostępnych w modalu
             "nat20": bool(raw == 20),  # #826: Nat 20 pomija pancerz przy rozliczeniu reakcji
             "enemy_name": str(enemy.get("name") or enemy.get("enemy_key") or "Wróg"),
         }
@@ -6679,6 +6725,7 @@ def _attack_try_reaction(
         out["hit"] = True
         out["reaction_window"] = True
         out["reaction_options"] = _opts
+        out["reaction_options_detailed"] = _opts_detailed  # #1359
         out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg")
         out["combat_state"] = load_combat_snapshot(campaign_id)
         return dmg, None, None, out

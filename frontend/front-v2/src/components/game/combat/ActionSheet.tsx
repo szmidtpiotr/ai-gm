@@ -16,40 +16,21 @@ import {
 import { cn } from "@/lib/utils";
 import type { DefenseReaction } from "@/lib/types";
 import { SPELL_TYPE_ORDER, spellTypeLabel } from "@/lib/spells";
+import {
+  DEFENSE_META,
+  DEFENSE_ORDER,
+  defenseReasonText,
+  normalizeDefenseDetails,
+  type DefenseOptionDetail,
+} from "@/lib/combat-defense";
 
-// WALKA-T2 (#1350): metadane opcji obrony renderowanych z backendowego `defense_options`.
-// Ikona/label/opis per reakcja; kolejność listy = kolejność w `DEFENSE_ORDER`.
-const DEFENSE_META: Record<
-  DefenseReaction,
-  { label: string; desc: string; icon: typeof Shield }
-> = {
-  dodge: {
-    label: "Unik",
-    desc: "test zręczności na następny cios wroga",
-    icon: Wind,
-  },
-  shield_block: {
-    label: "Blok tarczą",
-    desc: "tarcza pochłonie część następnego ciosu",
-    icon: Shield,
-  },
-  arcane_ward: {
-    label: "Arkanowa Bariera (1◈)",
-    desc: "test intelektu za 1 manę — udany neguje cios",
-    icon: Sparkle,
-  },
-  mana_shield: {
-    label: "Tarcza Many",
-    desc: "maną pochłoń obrażenia najbliższego ciosu",
-    icon: DropHalf,
-  },
+// WALKA-T2-FIX (#1359): ikona per reakcja (etykiety/opisy = wspólne combat-defense.ts).
+const DEFENSE_ICON: Record<DefenseReaction, typeof Shield> = {
+  dodge: Wind,
+  shield_block: Shield,
+  arcane_ward: Sparkle,
+  mana_shield: DropHalf,
 };
-const DEFENSE_ORDER: DefenseReaction[] = [
-  "dodge",
-  "shield_block",
-  "arcane_ward",
-  "mana_shield",
-];
 
 export interface SpellAction {
   key: string;
@@ -79,6 +60,7 @@ export function ActionSheet({
   onDeclare,
   onClose,
   defenseOptions = [],
+  defenseOptionsDetailed,
 }: {
   initialMode?: SheetMode;
   spells: SpellAction[];
@@ -93,7 +75,11 @@ export function ActionSheet({
   onDeclare: (reaction: DefenseReaction) => void;
   onClose: () => void;
   defenseOptions?: string[];
+  defenseOptionsDetailed?: DefenseOptionDetail[];
 }) {
+  // #1359: preferuj detailed (available+reason); fallback do available-only (stary backend).
+  const defenseDetails = normalizeDefenseDetails(defenseOptionsDetailed, defenseOptions);
+  const defenseByKey = new Map(defenseDetails.map((d) => [d.key, d]));
   // WALKA-T3: tryb jest ustalony przez pigułę composera — bez przełącznika w sheecie.
   const mode = initialMode;
   const hasMana = maxMana > 0;
@@ -196,23 +182,28 @@ export function ActionSheet({
 
           {mode === "defense" && (
             <>
-              {DEFENSE_ORDER.filter((k) => defenseOptions.includes(k)).map((k) => {
+              {/* #1359: renderuj WSZYSTKIE posiadane obrony; niedostępne = szare + powód. */}
+              {DEFENSE_ORDER.filter((k) => defenseByKey.has(k)).map((k) => {
                 const m = DEFENSE_META[k];
-                const Icon = m.icon;
+                const Icon = DEFENSE_ICON[k];
+                const detail = defenseByKey.get(k)!;
+                const reason = detail.available
+                  ? null
+                  : defenseReasonText(detail.reason);
                 return (
                   <Opt
                     key={k}
                     variant="eff"
                     icon={<Icon weight="fill" size={19} />}
                     name={m.label}
-                    desc={m.desc}
+                    desc={reason ? `niedostępne — ${reason}` : m.sheetDesc}
                     cost={null}
-                    disabled={busy}
-                    onClick={() => onDeclare(k)}
+                    disabled={busy || !detail.available}
+                    onClick={() => detail.available && onDeclare(k)}
                   />
                 );
               })}
-              {defenseOptions.filter((k) => k in DEFENSE_META).length === 0 && (
+              {defenseByKey.size === 0 && (
                 <div className="px-4 py-6 text-center font-ui text-[12.5px] text-text-3">
                   Brak wyszkolonych reakcji obronnych.
                   <br />
