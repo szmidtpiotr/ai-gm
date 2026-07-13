@@ -15,26 +15,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 from app.services import loot_service as ls
 
 
 _SCHEMA = """
-CREATE TABLE game_config_loot_tables (
-  key TEXT PRIMARY KEY, label TEXT, description TEXT DEFAULT '',
-  is_active INTEGER DEFAULT 1, gold_min INTEGER DEFAULT 0, gold_max INTEGER DEFAULT 0
-);
-CREATE TABLE game_config_loot_entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  loot_table_key TEXT NOT NULL,
-  item_key TEXT, consumable_key TEXT, weapon_key TEXT,
-  weight INTEGER DEFAULT 10, qty_min INTEGER DEFAULT 1, qty_max INTEGER DEFAULT 1
-);
-CREATE TABLE game_config_enemies (
-  key TEXT PRIMARY KEY, loot_table_key TEXT, drop_chance REAL DEFAULT 1.0,
-  tier TEXT DEFAULT 'standard', loot_tier TEXT
-);
-CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT, is_active INTEGER DEFAULT 1, allowed_classes TEXT);
+""" + table_sql("game_config_loot_tables") + """
+""" + table_sql("game_config_loot_entries") + """
+""" + table_sql("game_config_enemies") + """
+""" + table_sql("game_config_weapons") + """
 
 -- per-enemy table (only a single low-weight entry so a miss is easy to force)
 INSERT INTO game_config_loot_tables (key, label) VALUES ('loot_bandit', 'Bandyta');

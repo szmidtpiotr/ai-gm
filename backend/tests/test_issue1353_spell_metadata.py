@@ -4,6 +4,7 @@ Rdzeń-Tarcza ma w bazie spell_type='attack' zamiast 'defense', a opisy czarów
 krasnoludzkich są przycięte (stale INSERT OR IGNORE nigdy ich nie odświeżył).
 Migracja `_fix_1353_spell_metadata` musi to naprawić na istniejących bazach.
 """
+from _fixtures_schema import table_sql
 import sqlite3
 
 import pytest
@@ -16,11 +17,7 @@ def _stale_db() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.execute(
         """
-        CREATE TABLE game_config_spells (
-            key TEXT PRIMARY KEY, label TEXT, tier INTEGER, mana_cost INTEGER,
-            spell_type TEXT NOT NULL DEFAULT 'attack', damage_die TEXT, heal_die TEXT,
-            description TEXT, is_active INTEGER DEFAULT 1, race_lock TEXT
-        )
+        """ + table_sql("game_config_spells") + """
         """
     )
     rows = [
