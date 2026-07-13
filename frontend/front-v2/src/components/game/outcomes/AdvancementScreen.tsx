@@ -147,7 +147,7 @@ export function AdvancementScreen({
           ) : (
             <MagicTab
               characterId={characterId}
-              race={sheet?.race as string | undefined}
+              race={character.data?.race}
               avail={avail}
               disabled={busy || inCombat}
               onLearn={(k) => learnSpell.mutate(k, { onError: onErr })}
