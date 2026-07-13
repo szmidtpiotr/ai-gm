@@ -189,6 +189,7 @@ export function toHitStageCard(full: RollCardData, hit: boolean): RollCardData {
 export function rollFromReaction(
   r: CombatActionResult,
   choice: "take" | "dodge" | "block" | "ward" | "mana",
+  timedOut = false, // #1358: take z wygaśnięcia okna (8s) — karta odróżnialna od ręcznego
 ): RollCardData {
   const react = r.reaction || {};
   const dmg = Number(r.damage ?? 0);
@@ -244,7 +245,10 @@ export function rollFromReaction(
       tone = "warn";
     }
   } else {
-    resV = `CIOS · ${dmg} Obr.`; // przyjąłeś na klatę
+    // #1358: rozróżnij ręczny „Przyjmij cios" od cichego wygaśnięcia okna (8s).
+    resV = timedOut
+      ? `CIOS · ${dmg} Obr. · czas minął`
+      : `CIOS · ${dmg} Obr.`; // przyjąłeś na klatę
     tone = "bad";
   }
   cells.push({ k: "Skutek", v: resV, res: true, tone });

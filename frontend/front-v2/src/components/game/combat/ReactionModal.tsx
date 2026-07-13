@@ -22,15 +22,16 @@ export function ReactionModal({
   onChoose,
 }: {
   data: ReactionData;
-  onChoose: (c: ReactionChoice) => void;
+  // #1358: drugi arg `auto` = wybór z wygaśnięcia okna (timeout), nie z kliknięcia.
+  onChoose: (c: ReactionChoice, auto?: boolean) => void;
 }) {
   const [left, setLeft] = useState(WINDOW_S);
   const firedRef = useRef(false);
 
-  function fire(c: ReactionChoice) {
+  function fire(c: ReactionChoice, auto = false) {
     if (firedRef.current) return;
     firedRef.current = true;
-    onChoose(c);
+    onChoose(c, auto);
   }
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function ReactionModal({
       setLeft((v) => {
         if (v <= 1) {
           window.clearInterval(iv);
-          fire("take"); // brak wyboru → przyjmij cios
+          fire("take", true); // brak wyboru → przyjmij cios (#1358: oznacz jako timeout)
           return 0;
         }
         return v - 1;

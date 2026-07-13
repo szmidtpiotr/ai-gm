@@ -477,16 +477,18 @@ export function CombatView({
   }, [view?.currentTurn, view?.isPlayerTurn, view?.status, busy, diceJob, reaction]);
 
   // ── reakcja SF10 ──
-  async function onReaction(choice: ReactionChoice) {
+  async function onReaction(choice: ReactionChoice, auto = false) {
     // Unik/blok = test umiejętności gracza → animuj rzut jak atak (showPlayerDice).
     // „take" nie ma rzutu. Zamroź HP na czas animacji (dmg rozliczy resolve_reaction).
     const willAnimate = showPlayerDice && choice !== "take";
     if (willAnimate) setHpFreeze(snapshotHp());
+    // #1358: timeout okna (8s) nie może być cichy — jawny komunikat zamiast samego spadku HP.
+    if (auto) toast("Czas minął — przyjąłeś cios.", "danger");
     try {
       const r = await reactionMut.mutateAsync(choice);
       pushCombatState(r.combat_state);
       setReaction(null);
-      const card = rollFromReaction(r, choice);
+      const card = rollFromReaction(r, choice, auto);
       // multiattack: kolejny cios może od razu ponownie otworzyć okno
       const nextWindow: ReactionData | null = r.reaction_window
         ? {
