@@ -177,6 +177,12 @@ export function CombatView({
   // Kolejne okno reakcji (multiattack) do otwarcia PO animacji testu uniku/bloku.
   const pendingReactionNextRef = useRef<ReactionData | null>(null);
   const enemyTurnRef = useRef(false);
+  // Race modalu końca walki: onSuccess mutacji wpisuje status=ended do cache ZANIM
+  // .then ustawi diceJob — efekt końca potrafił odpalić w tym oknie (modal nad
+  // kręcącymi się kośćmi). Ref ustawiany SYNCHRONICZNIE przed mutateAsync, gdy
+  // wiemy że animacja nastąpi; czyszczony na każdej ścieżce bez kości oraz w
+  // finalnym onDiceDone. Efekt końca czyta go obok diceJob/reaction.
+  const diceIncomingRef = useRef(false);
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
   const xpAccumRef = useRef(0);
@@ -229,7 +235,10 @@ export function CombatView({
     setBusy(true);
     // Zamroź wyświetlane HP zanim mutacja wpisze nowy stan do cache (onSuccess) —
     // HP na pasku/liczbach zmieni się dopiero po modalu obrażeń.
-    if (showPlayerDice) setHpFreeze(snapshotHp());
+    if (showPlayerDice) {
+      setHpFreeze(snapshotHp());
+      diceIncomingRef.current = true; // gate modalu końca — PRZED wpisem ended do cache
+    }
     // Pre-roll d20 po stronie klienta (parytet z front/: /api/gm/dice) — kość 3D
     // ląduje na tej samej wartości, którą backend liczy do trafienia (raw_d20).
     const d20 = 1 + Math.floor(Math.random() * 20);
@@ -250,6 +259,7 @@ export function CombatView({
           "danger",
         );
         setHpFreeze(null);
+        diceIncomingRef.current = false;
         setBusy(false);
         return; // tura NIE skonsumowana
       }
@@ -317,6 +327,7 @@ export function CombatView({
     } catch {
       toast("Błąd akcji.", "danger");
       setHpFreeze(null);
+      diceIncomingRef.current = false;
       setBusy(false);
     }
   }
@@ -333,6 +344,7 @@ export function CombatView({
     const pendingReaction = pendingReactionRef.current;
     if (pendingReaction) {
       pendingReactionRef.current = null;
+      diceIncomingRef.current = false; // dalej gate'uje otwarte okno reakcji
       if (diceJob) setRolls((p) => [...p, diceJob.card]);
       setDiceJob(null);
       // Okno reakcji: HP jeszcze nietknięte (dmg pending) — zwolnij zamrożenie,
@@ -343,6 +355,7 @@ export function CombatView({
     }
     if (diceJob) setRolls((p) => [...p, diceJob.card]);
     setDiceJob(null);
+    diceIncomingRef.current = false; // sekwencja kości domknięta — modal końca może wejść
     // Ostatni etap kości — teraz odsłoń realne HP (po modalu obrażeń).
     setHpFreeze(null);
     // Po animacji testu uniku/bloku — otwórz kolejne okno reakcji (multiattack).
@@ -412,7 +425,10 @@ export function CombatView({
     enemyTurnRef.current = true;
     // Zamroź HP zanim tura wroga wpisze nowy stan do cache — pasek/liczby
     // zmienią się dopiero po modalu obrażeń wroga.
-    if (showEnemyDice) setHpFreeze(snapshotHp());
+    if (showEnemyDice) {
+      setHpFreeze(snapshotHp());
+      diceIncomingRef.current = true; // gate modalu końca — PRZED wpisem ended do cache
+    }
     enemyTurn
       .mutateAsync()
       .then((r) => {
@@ -422,6 +438,7 @@ export function CombatView({
         if (r.zone_change) {
           pendingReactionRef.current = null;
           pendingDmgStageRef.current = null;
+          diceIncomingRef.current = false;
           setHpFreeze(null);
           setRolls((p) => [...p, rollFromEnemyZoneChange(r)]);
           return;
@@ -453,6 +470,7 @@ export function CombatView({
               fumble: d20 === 1,
             });
           } else {
+            diceIncomingRef.current = false; // gate przejmuje otwarte okno reakcji
             setReaction(reactionData);
           }
         } else {
@@ -496,6 +514,7 @@ export function CombatView({
         // #1348 T4: nie połykaj błędu tury wroga po cichu. Zwolnij zamrożenie HP,
         // pokaż komunikat i wymuś ponowny odczyt stanu (poll). Błąd/undefined NIE może
         // wyzerować activeCombat — trzymamy ostatni znany snapshot (react-query keep data).
+        diceIncomingRef.current = false;
         setHpFreeze(null);
         toast("Błąd tury wroga — ponawiam odczyt stanu walki.", "danger");
         qc.invalidateQueries({ queryKey: ["combat", campaignId] });
@@ -511,7 +530,10 @@ export function CombatView({
     // Unik/blok = test umiejętności gracza → animuj rzut jak atak (showPlayerDice).
     // „take" nie ma rzutu. Zamroź HP na czas animacji (dmg rozliczy resolve_reaction).
     const willAnimate = showPlayerDice && choice !== "take";
-    if (willAnimate) setHpFreeze(snapshotHp());
+    if (willAnimate) {
+      setHpFreeze(snapshotHp());
+      diceIncomingRef.current = true; // gate modalu końca (śmierć po reakcji) — przed mutacją
+    }
     // #1358: timeout okna (8s) nie może być cichy — jawny komunikat zamiast samego spadku HP.
     if (auto) toast("Czas minął — przyjąłeś cios.", "danger");
     try {
@@ -547,10 +569,12 @@ export function CombatView({
         return; // karta + realne HP po zakończeniu animacji (onDiceDone)
       }
       // Bez animacji (take / kość wyłączona / reakcja niedostępna) — wynik od razu.
+      diceIncomingRef.current = false;
       setHpFreeze(null);
       setRolls((p) => [...p, card]);
       if (nextWindow) setReaction(nextWindow);
     } catch {
+      diceIncomingRef.current = false;
       setHpFreeze(null);
       setReaction(null);
       toast("Błąd reakcji.", "danger");
@@ -563,7 +587,10 @@ export function CombatView({
     // (d20 + kość obrażeń) jeszcze się kręcą — modal wyniku czeka aż animacje
     // i okno reakcji się domkną (diceJob → null w onDiceDone), inaczej zasłania
     // ostatni rzut i „obliczenia pod spodem".
-    if (diceJob || reaction) return;
+    // diceIncomingRef domyka RACE: onSuccess mutacji wpisuje ended do cache i ten
+    // efekt potrafi odpalić ZANIM .then zdąży ustawić diceJob — ref jest ustawiany
+    // synchronicznie przed mutateAsync, więc gate trzyma także w tym oknie.
+    if (diceJob || reaction || diceIncomingRef.current) return;
     if (view?.status === "ended" && !endedRef.current) {
       endedRef.current = true;
       const reason = view.endedReason ?? "";
