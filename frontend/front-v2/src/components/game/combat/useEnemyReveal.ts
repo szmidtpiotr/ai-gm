@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Combatant } from "@/lib/types";
+import { hasSeenCombat, markSeenCombat } from "./combat-seen";
+
+/** Namespace latcha „widziane" (sessionStorage) — karta pojawienia wroga. */
+const NS = "aigm:revealSeen";
 
 /** Minimalny kształt „żywego" stanu walki potrzebny do decyzji o karcie pojawienia. */
 export interface RevealLive {
@@ -16,13 +20,15 @@ export interface RevealLive {
  *    (zasadzka w drodze: modal podróży już pokazał wroga — dedup overlayów),
  *  - `suppressRevealCombatId` dojeżdżający PÓŹNIEJ (race: efekt dziecka odpalił przed
  *    efektem rodzica) → safety-net czyści już pokazaną kartę.
+ *
+ * #1360: latch „odsłonięty" trwały (sessionStorage) — przeżywa F5 w środku walki,
+ * więc karta pojawienia wroga nie wyskakuje ponownie po odświeżeniu.
  */
 export function useEnemyReveal(
   live: RevealLive | null | undefined,
   suppressRevealCombatId: number | null,
 ) {
   const [reveal, setReveal] = useState<Combatant[] | null>(null);
-  const revealedRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const cid = live?.id;
@@ -30,18 +36,18 @@ export function useEnemyReveal(
     // #1349/#1355: walka z zasadzki — modal podróży już pokazał wroga, więc oznacz
     // combat jako „odsłonięty" i NIE pokazuj drugiej karty (dedup overlayów).
     if (suppressRevealCombatId != null && cid === suppressRevealCombatId) {
-      revealedRef.current.add(cid);
+      markSeenCombat(NS, cid);
       // #1355 safety-net: gdy suppress dojechał PO tym, jak karta zdążyła się pokazać
       // (race: efekt dziecka przed efektem rodzica), skasuj już pokazaną kartę.
       setReveal(null);
       return;
     }
-    if (revealedRef.current.has(cid)) return;
+    if (hasSeenCombat(NS, cid)) return;
     const enemies = (live.combatants ?? []).filter(
       (c) => c.type === "enemy" && Number(c.hp_current ?? 0) > 0,
     );
     if (!enemies.length) return;
-    revealedRef.current.add(cid);
+    markSeenCombat(NS, cid);
     setReveal(enemies);
   }, [live?.id, live?.status, suppressRevealCombatId]);
 

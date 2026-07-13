@@ -4,7 +4,7 @@
  * + kto zaczyna. Dane już są w snapshotcie (`initiative_roll` gracza i wroga + `turn_order`),
  * brakowało tylko prezentacji. Hook latchuje dane raz per combat_id (jak useEnemyReveal).
  */
-import { it, expect } from "vitest";
+import { it, expect, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useInitiativeCard, type InitiativeLive } from "./useInitiativeCard";
 import type { Combatant } from "@/lib/types";
@@ -33,6 +33,9 @@ const combat = (id: number, turn_order: string[]): InitiativeLive => ({
   current_turn: turn_order[0],
   combatants: [player, wolf],
 });
+
+// Latch #1360 persystuje w sessionStorage — czyścimy między testami dla izolacji.
+beforeEach(() => sessionStorage.clear());
 
 // ─── Test główny: oba wyniki + gracz zaczyna ─────────────────────────────────
 
@@ -67,6 +70,32 @@ it("#1356: karta raz na walkę — po dismiss nie wraca dla tego samego combat_i
     result.current.initiative,
     "ta sama walka nie odsłania karty inicjatywy drugi raz",
   ).toBeNull();
+});
+
+// ─── #1360: F5 w środku walki (unmount+remount) — realny scenariusz ─────────
+
+it("#1360: F5 w środku walki → karta inicjatywy NIE wraca dla tego samego combat_id", () => {
+  // Pierwsze wejście do walki — karta się pokazuje i zostaje „widziana".
+  const { result, unmount } = renderHook(() => useInitiativeCard(combat(20, ["player", "wilk"])));
+  expect(result.current.initiative, "start walki → karta jest").not.toBeNull();
+  // F5 = pełny unmount hooka, a potem świeży mount z tym samym combat_id (runda 3+).
+  unmount();
+  const remount = renderHook(() => useInitiativeCard(combat(20, ["player", "wilk"])));
+  expect(
+    remount.result.current.initiative,
+    "po F5 w trakcie tej samej walki karta inicjatywy nie może wyskoczyć ponownie",
+  ).toBeNull();
+});
+
+it("#1360: nowa walka po F5 → karta inicjatywy działa normalnie (inny combat_id)", () => {
+  const first = renderHook(() => useInitiativeCard(combat(21, ["player", "wilk"])));
+  expect(first.result.current.initiative).not.toBeNull();
+  first.unmount();
+  const second = renderHook(() => useInitiativeCard(combat(22, ["player", "wilk"])));
+  expect(
+    second.result.current.initiative,
+    "nowa walka (inny combat_id) nadal odsłania kartę inicjatywy",
+  ).not.toBeNull();
 });
 
 // ─── Brak wrogów → brak karty ────────────────────────────────────────────────

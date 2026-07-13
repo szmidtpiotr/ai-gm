@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Combatant } from "@/lib/types";
+import { hasSeenCombat, markSeenCombat } from "./combat-seen";
+
+/** Namespace latcha „widziane" (sessionStorage) — karta inicjatywy. */
+const NS = "aigm:initSeen";
 
 /** Minimalny kształt „żywego" stanu walki potrzebny do karty inicjatywy. */
 export interface InitiativeLive {
@@ -22,16 +26,16 @@ export interface InitiativeData {
  * (`initiative_roll` na kombatantach, `turn_order` z silnika — combat_service.py),
  * brakowało wyłącznie prezentacji. Latch once-per-combat_id (wzorzec useEnemyReveal):
  * kto-zaczyna zamrażamy przy PIERWSZYM aktywnym snapshotcie, zanim auto-driver tury
- * wroga zdąży przesunąć `current_turn`.
+ * wroga zdąży przesunąć `current_turn`. Latch trwały (sessionStorage) — #1360:
+ * przeżywa F5 w środku walki, więc karta nie wyskakuje ponownie po odświeżeniu.
  */
 export function useInitiativeCard(live: InitiativeLive | null | undefined) {
   const [initiative, setInitiative] = useState<InitiativeData | null>(null);
-  const seenRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const cid = live?.id;
     if (!cid || live?.status !== "active") return;
-    if (seenRef.current.has(cid)) return;
+    if (hasSeenCombat(NS, cid)) return;
     const combatants = live.combatants ?? [];
     const player = combatants.find((c) => c.type === "player") ?? null;
     const enemies = combatants.filter(
@@ -42,7 +46,7 @@ export function useInitiativeCard(live: InitiativeLive | null | undefined) {
     // fallback current_turn. Latchujemy tu, bo tura wroga może zaraz przesunąć current_turn.
     const first = (live.turn_order && live.turn_order[0]) || live.current_turn || "player";
     const starter: "player" | "enemy" = String(first) === "player" ? "player" : "enemy";
-    seenRef.current.add(cid);
+    markSeenCombat(NS, cid);
     setInitiative({
       player: { roll: player.initiative_roll ?? null },
       enemies: enemies.map((e) => ({

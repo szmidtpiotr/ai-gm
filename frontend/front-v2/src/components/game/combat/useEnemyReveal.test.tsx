@@ -4,7 +4,7 @@
  * Bug: efekt dziecka (reveal) odpalał przed efektem rodzica (suppress) → prop był null
  * przy montażu → karta się pokazała i już nie znikała (brak safety-netu setReveal(null)).
  */
-import { describe, it, expect } from "vitest";
+import { it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useEnemyReveal, type RevealLive } from "./useEnemyReveal";
 import type { Combatant } from "@/lib/types";
@@ -25,6 +25,9 @@ const activeCombat = (id: number): RevealLive => ({
     enemy,
   ],
 });
+
+// Latch #1360 persystuje w sessionStorage — czyścimy między testami dla izolacji.
+beforeEach(() => sessionStorage.clear());
 
 // ─── Test główny: race — suppress dojeżdża PO montażu ────────────────────────
 
@@ -58,4 +61,17 @@ it("#1355: walka z narracji (suppress=null) → EnemyRevealCard dalej się pokaz
   const { result } = renderHook(() => useEnemyReveal(activeCombat(99), null));
   expect(result.current.reveal, "narracyjna walka nadal odsłania kartę wroga").not.toBeNull();
   expect(result.current.reveal?.[0].name).toBe("Wilk");
+});
+
+// ─── #1360: F5 w środku walki (unmount+remount) — karta pojawienia nie wraca ─
+
+it("#1360: F5 w środku walki → karta pojawienia wroga NIE wraca dla tego samego combat_id", () => {
+  const { result, unmount } = renderHook(() => useEnemyReveal(activeCombat(120), null));
+  expect(result.current.reveal, "start walki → karta pojawienia jest").not.toBeNull();
+  unmount(); // F5 = pełny unmount, potem świeży mount tej samej walki (runda 3+)
+  const remount = renderHook(() => useEnemyReveal(activeCombat(120), null));
+  expect(
+    remount.result.current.reveal,
+    "po F5 w trakcie tej samej walki karta pojawienia nie może wyskoczyć ponownie",
+  ).toBeNull();
 });
