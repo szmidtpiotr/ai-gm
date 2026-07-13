@@ -18,6 +18,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from _fixtures_schema import table_sql
 
 from app.migrations_admin import (  # noqa: E402
     _ensure_sets_schema,
@@ -35,49 +36,13 @@ def _build_schema(conn: sqlite3.Connection) -> None:
     """Minimalny schemat tabel dotykanych przez seed contentu setu."""
     conn.executescript(
         """
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT NOT NULL DEFAULT '', value_gp INTEGER NOT NULL DEFAULT 0,
-            effect_json TEXT, is_active INTEGER NOT NULL DEFAULT 1,
-            ac_bonus INTEGER NOT NULL DEFAULT 0, armor_coverage TEXT DEFAULT 'torso',
-            rarity INTEGER NOT NULL DEFAULT 1, is_component INTEGER NOT NULL DEFAULT 0,
-            no_trade INTEGER NOT NULL DEFAULT 0, created_by TEXT
-        );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT NOT NULL,
-            weapon_type TEXT NOT NULL DEFAULT 'melee', linked_stat TEXT NOT NULL,
-            allowed_classes TEXT NOT NULL, finesse INTEGER NOT NULL DEFAULT 0,
-            weapon_slot TEXT DEFAULT 'main_hand', value_gp INTEGER NOT NULL DEFAULT 0,
-            description TEXT NOT NULL DEFAULT '', is_active INTEGER NOT NULL DEFAULT 1,
-            rarity INTEGER NOT NULL DEFAULT 1, effect_json TEXT DEFAULT NULL
-        );
-        CREATE TABLE game_config_loot_tables (
-            key TEXT PRIMARY KEY, label TEXT, is_active INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT NOT NULL,
-            item_key TEXT, consumable_key TEXT, weapon_key TEXT,
-            weight INTEGER NOT NULL DEFAULT 10,
-            qty_min INTEGER NOT NULL DEFAULT 1, qty_max INTEGER NOT NULL DEFAULT 1,
-            CHECK (
-                (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
-            )
-        );
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
         CREATE UNIQUE INDEX ux_le_item ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL;
         CREATE UNIQUE INDEX ux_le_weap ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
-        CREATE TABLE game_config_recipes (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL,
-            inputs_json TEXT NOT NULL DEFAULT '[]',
-            output_type TEXT NOT NULL DEFAULT 'consumable', output_key TEXT,
-            output_qty INTEGER NOT NULL DEFAULT 1, service_cost_gold INTEGER NOT NULL DEFAULT 0,
-            crafter_type TEXT NOT NULL DEFAULT 'smith', is_hidden INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1, craft_tier TEXT NOT NULL DEFAULT 'medium',
-            created_by TEXT
-        );
+        """ + table_sql("game_config_recipes") + """
         CREATE TABLE character_inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER NOT NULL,
             item_key TEXT, weapon_key TEXT, consumable_key TEXT,

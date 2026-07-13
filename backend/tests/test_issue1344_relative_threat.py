@@ -5,6 +5,7 @@ Wskaźnik porównuje STAŁY statblock grupy do rosnącego Power Score (nie rubbe
 Grupa liczona sumarycznie (nie per-sztuka). Surowy ratio ukryty przed graczem —
 snapshot walki odsłania tylko glyph+label+tier.
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -23,14 +24,12 @@ def _db() -> sqlite3.Connection:
         CREATE TABLE character_inventory (id INTEGER PRIMARY KEY, character_id INTEGER,
             item_key TEXT, weapon_key TEXT, consumable_key TEXT, game_item_key TEXT,
             quantity INTEGER DEFAULT 1, equipped INTEGER DEFAULT 0, slot TEXT);
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, damage_die TEXT, effect_json TEXT);
-        CREATE TABLE game_config_items (key TEXT PRIMARY KEY, ac_bonus INTEGER DEFAULT 0, effect_json TEXT);
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, tier INTEGER);
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_spells") + """
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1);
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, hp_base INTEGER, ac_base INTEGER,
-            attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER DEFAULT 0,
-            attacks_per_turn INTEGER DEFAULT 1, image_url TEXT);
+        """ + table_sql("game_config_meta") + """
+        """ + table_sql("game_config_enemies") + """
         """
     )
     return c

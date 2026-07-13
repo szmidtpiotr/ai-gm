@@ -3,6 +3,7 @@
 Testy jednostkowe herb_gathering_service: wykrycie intencji, DC wg terenu,
 cooldown per hex/dzień, oraz rozstrzygnięcie sukces / porażka / Nat20 / Nat1.
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -19,7 +20,7 @@ def _make_db() -> sqlite3.Connection:
         """
         CREATE TABLE game_sessions (campaign_id INTEGER, session_flags TEXT);
         CREATE TABLE world_hexes (q INTEGER, r INTEGER, hex_type TEXT, map_level INTEGER);
-        CREATE TABLE game_config_items (key TEXT, component_type TEXT, rarity INTEGER, is_active INTEGER DEFAULT 1);
+        """ + table_sql("game_config_items") + """
         CREATE TABLE game_items (key TEXT, is_active INTEGER DEFAULT 1);
         CREATE TABLE characters (id INTEGER, sheet_json TEXT);
         """
