@@ -1071,14 +1071,23 @@ def _compose_enemies(
         else:
             minion = _penalized_choice(minion_pool, rng, penalty_map) or minion_pool[0]
             remaining = max(0.0, budget - leader["threat"])
-            n = int(round(remaining / max(1.0, minion["threat"])))
-            n = min(3, max(2, n))
+            # #1377 (residuum #1346): ilu poplecznikow MIEŚCI się w budżecie. Floor,
+            # nie round — nigdy nie przekraczaj budżetu (dawne max(2,·) dokładało 2
+            # poplecznikow nawet gdy boss-lider sam zżarł cały budżet → spotkanie nie
+            # do wygrania dla squishy bohatera).
+            affordable = int(remaining // max(1.0, minion["threat"]))
             # BL-A6: herszt (najmocniejszy) dostaje rangę, gdy sam budżet lidera go nie domyka.
             leader_rank = _rank_for_budget(
                 conn, budget, float(leader["threat"]),
                 is_pool_top=float(leader["threat"]) >= pool_top_threat,
             )
-            enemies = [_enc_enemy(leader, 1, leader_rank), _enc_enemy(minion, n)]
+            if affordable < 2:
+                # lider (często boss) zżera budżet → herszt degeneruje do samotnego
+                # lidera zamiast dokładać poplecznika ponad budżet.
+                enemies = [_enc_enemy(leader, 1, leader_rank)]
+            else:
+                n = min(3, affordable)
+                enemies = [_enc_enemy(leader, 1, leader_rank), _enc_enemy(minion, n)]
 
     return pattern, enemies
 
