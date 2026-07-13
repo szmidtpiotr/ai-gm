@@ -32,6 +32,7 @@ import {
   useResolveReaction,
 } from "@/hooks/useCombat";
 import { useSpells, useSpellCatalog } from "@/hooks/useSheetData";
+import { canRaceLearnSpell } from "@/lib/spells";
 import { NarrationLog } from "../NarrationLog";
 import { Composer } from "../Composer";
 import { VitalsRail } from "../Vitals";
@@ -175,6 +176,9 @@ export function CombatView({
     const known = new Map((spells.data ?? []).map((k) => [k.spell_key, k]));
     return (catalog.data ?? [])
       .filter((c) => known.has(c.key))
+      // #1372 — krasnolud rzuca wyłącznie Rdzeń-magię; ludzkie czary z legacy-grantów
+      // (złe dane sprzed race-gate) nie mogą wpaść do arkusza walki. Lustro sheetu.
+      .filter((c) => canRaceLearnSpell(character?.race, c.race_lock))
       .map((c) => {
         const k = known.get(c.key)!;
         return {
@@ -191,7 +195,7 @@ export function CombatView({
         };
       })
       .sort((a, b) => a.mana_cost - b.mana_cost);
-  }, [spells.data, catalog.data, vitals.mana]);
+  }, [spells.data, catalog.data, vitals.mana, character?.race]);
 
   // ── stan UI walki ──
   const [rolls, setRolls] = useState<RollCardData[]>([]);

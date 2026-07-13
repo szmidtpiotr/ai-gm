@@ -981,6 +981,18 @@ async function _loadLootTables() {
   } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
 }
 
+// #1373 — race_lock CSV → badge per rasa. Pusty = legacy pula ludzka.
+function _raceLockList(rl) {
+  const raw = String(rl || '').trim().toLowerCase();
+  const list = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : ['human'];
+  return list.length ? list : ['human'];
+}
+function _raceLockBadges(rl) {
+  return _raceLockList(rl).map(r => r === 'dwarf'
+    ? '<span class="badge badge-amber">⛏ krasnolud</span>'
+    : '<span class="badge badge-slate">ludzie</span>').join(' ');
+}
+
 async function _loadSpells() {
   const tbody = document.querySelector('#spells-table tbody');
   if (!tbody) return;
@@ -994,7 +1006,7 @@ async function _loadSpells() {
       <td class="detail-col td-mono" style="font-size:0.72rem">${_esc(sp.key)}</td>
       <td class="td-sticky td-name" data-label="Nazwa">${_esc(sp.label||sp.key)}</td>
       <td data-label="Szkoła"><span class="badge ${schoolBadge(sp.key)}">${_esc(sp.spell_type||'magiczny')}</span></td>
-      <td data-label="Rasa">${sp.race_lock==='dwarf' ? '<span class="badge badge-amber">⛏ krasnolud</span>' : '<span class="badge badge-slate">ludzie</span>'}</td>
+      <td data-label="Rasa">${_raceLockBadges(sp.race_lock)}</td>
       <td class="td-mono" data-label="Tier" style="text-align:center">${sp.tier??'—'}</td>
       <td class="td-mono" data-label="Mana" style="text-align:center">${sp.mana_cost??'—'}</td>
       <td class="td-mono" data-label="Obrażenia">${sp.damage_die||'—'}</td>
@@ -1148,10 +1160,10 @@ function _openSpellForm(prefill, onSubmit) {
   overlay.className = 'modal-overlay open';
   const stype = p.spell_type || 'attack';
   const tzone = p.target_zone || 'any';
-  const rlock = p.race_lock || '';
+  const rlist = _raceLockList(p.race_lock); // ['human'] gdy pusty (legacy)
   const sopt = (v,lbl) => `<option value="${v}" ${stype===v?'selected':''}>${lbl}</option>`;
   const zopt = (v,lbl) => `<option value="${v}" ${tzone===v?'selected':''}>${lbl}</option>`;
-  const ropt = (v,lbl) => `<option value="${v}" ${rlock===v?'selected':''}>${lbl}</option>`;
+  const rchk = (v,lbl) => `<label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" name="race_${v}" ${rlist.includes(v)?'checked':''}> ${lbl}</label>`;
   const STATS = ['STR','DEX','CON','INT','WIS','CHA'];
   overlay.innerHTML = `<div class="modal-box" style="width:520px">
     <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj czar' : 'Nowy czar'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
@@ -1163,7 +1175,7 @@ function _openSpellForm(prefill, onSubmit) {
         <div class="form-row"><label class="form-label">Tier (1-5)</label><input class="form-input" name="tier" type="number" value="${p.tier??1}" min="1" max="5"></div>
         <div class="form-row"><label class="form-label">Koszt many (1-10)</label><input class="form-input" name="mana_cost" type="number" value="${p.mana_cost??1}" min="0" max="10"></div>
         <div class="form-row"><label class="form-label">Strefa celu</label><select class="form-input" name="target_zone">${zopt('any','Dowolna')}${zopt('self','Tylko siebie')}${zopt('engaged','Zwarcie')}${zopt('ranged','Dystans')}</select></div>
-        <div class="form-row"><label class="form-label">Rasa (kto może się uczyć)</label><select class="form-input" name="race_lock">${ropt('','Ludzie (pula wspólna)')}${ropt('dwarf','⛏ Krasnolud (Rdzeń-magia)')}</select></div>
+        <div class="form-row"><label class="form-label">Rasy (kto może się uczyć)</label><div style="display:flex;gap:16px;padding-top:6px">${rchk('human','Ludzie')}${rchk('dwarf','⛏ Krasnolud')}</div></div>
         <div class="form-row"><label class="form-label">Kość obrażeń</label><input class="form-input" name="damage_die" value="${_esc(p.damage_die||'')}" placeholder="np. 2d6"></div>
         <div class="form-row"><label class="form-label">Kość leczenia</label><input class="form-input" name="heal_die" value="${_esc(p.heal_die||'')}" placeholder="np. 2d6"></div>
         <div class="form-row"><label class="form-label">Stat obrony celu</label><select class="form-input" name="effect_stat"><option value="" ${!p.effect_stat?'selected':''}>—</option>${STATS.map(s=>`<option value="${s}" ${p.effect_stat===s?'selected':''}>${s}</option>`).join('')}</select></div>
@@ -1206,7 +1218,7 @@ function _openSpellForm(prefill, onSubmit) {
       rank2_json: val('rank2_json')||null,
       rank3_json: val('rank3_json')||null,
       description: val('description')||null,
-      race_lock: val('race_lock')||null,
+      race_lock: ['human','dwarf'].filter(r => overlay.querySelector(`[name="race_${r}"]`).checked).join(',') || null,
     };
     overlay.remove();
     await onSubmit(data);

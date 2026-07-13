@@ -566,19 +566,22 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
                 char_race = str(sj_row["race"] or "human").strip().lower()
             except Exception:
                 char_level = 1
-        # #975 R6: race_lock — czary rasowe są ekskluzywne
+        # #975 R6 / #1373: race_lock = lista ras (CSV) dopuszczonych do nauki.
+        # Pusty/NULL = legacy "pula ludzka" → tylko human (krasnolud wykluczony).
         spell_race_lock = None
         try:
             spell_race_lock = spell["race_lock"]
         except Exception:
             pass
-        if spell_race_lock and spell_race_lock != char_race:
-            raise ValueError(
-                f"Czar '{spell_key}' jest ekskluzywny dla rasy '{spell_race_lock}' "
-                f"(twoja rasa: '{char_race}')."
-            )
-        # Human spells (no race_lock) are not available to dwarves — dwarves use Rdzeń-magia only
-        if not spell_race_lock and char_race == "dwarf":
+        raw_lock = str(spell_race_lock or "").strip().lower()
+        allowed_races = [r.strip() for r in raw_lock.split(",") if r.strip()] or ["human"]
+        if char_race not in allowed_races:
+            if raw_lock:
+                pretty = " / ".join(allowed_races)
+                raise ValueError(
+                    f"Czar '{spell_key}' jest dostępny dla ras: {pretty} "
+                    f"(twoja rasa: '{char_race}')."
+                )
             raise ValueError(
                 f"Czar '{spell_key}' jest dostępny tylko dla ludzi. "
                 f"Krasnolud może uczyć się wyłącznie czarów Rdzeń-magii (race_lock=dwarf)."

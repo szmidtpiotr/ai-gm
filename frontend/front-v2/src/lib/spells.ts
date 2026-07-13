@@ -36,19 +36,26 @@ export function spellTypeLabel(spellType: string): string {
   return SPELL_TYPE_PL[spellType] ?? spellType;
 }
 
-// #975 R6 — lustro backendowej reguły `spell_service.learn_spell` (race_lock).
-// Bohater widzi/uczy się TYLKO czarów, które faktycznie może poznać:
-//  • czar z race_lock innej rasy → zablokowany,
-//  • krasnolud (dwarf) uczy się WYŁĄCZNIE czarów Rdzeń-magii (race_lock=dwarf),
-//    więc czary bez race_lock (ludzkie) są dla niego niedostępne.
-// Nieznana rasa traktowana jak „human" (zgodnie z domyślną wartością backendu).
+// #975 R6 / #1373 — lustro backendowej reguły `spell_service.learn_spell`.
+// `race_lock` = lista ras dopuszczonych do nauki, rozdzielona przecinkami
+// ("human", "dwarf", "human,dwarf"). Bohater widzi/uczy się czaru wtedy i tylko
+// wtedy, gdy jego rasa jest na liście.
+//   • pusty/NULL race_lock = legacy „pula ludzka" → traktowany jak ["human"]
+//     (krasnolud wykluczony — używa wyłącznie Rdzeń-magii),
+//   • "dwarf" = tylko krasnolud, "human,dwarf" = obie rasy.
+// Nieznana rasa traktowana jak „human" (domyślna wartość backendu).
+export function raceLockList(raceLock: string | undefined | null): string[] {
+  const raw = (raceLock ?? "").trim().toLowerCase();
+  const list = raw
+    ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["human"];
+  return list.length ? list : ["human"];
+}
+
 export function canRaceLearnSpell(
   race: string | undefined | null,
   raceLock: string | undefined | null,
 ): boolean {
-  const r = (race ?? "").trim().toLowerCase();
-  const lock = (raceLock ?? "").trim().toLowerCase();
-  if (lock && lock !== r) return false; // ekskluzywny dla innej rasy
-  if (!lock && r === "dwarf") return false; // krasnolud → tylko Rdzeń-magia
-  return true;
+  const r = (race ?? "").trim().toLowerCase() || "human";
+  return raceLockList(raceLock).includes(r);
 }

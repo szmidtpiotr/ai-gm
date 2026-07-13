@@ -3852,19 +3852,27 @@ _SPELL_COLUMNS = [
 ]
 _SPELL_TYPES = {"attack", "heal", "defense", "effect", "attack_aoe"}
 _SPELL_ZONES = {"any", "self", "engaged", "ranged"}
-# race_lock: NULL/"" = pula ludzka (krasnolud NIE może się uczyć — patrz
-# spell_service.learn_spell #975 R6); "dwarf" = wyłącznie Rdzeń-magia krasnoludów.
-_SPELL_RACES = {"", "human", "dwarf"}
+# race_lock (#1373): lista ras (CSV) dopuszczonych do nauki czaru.
+#   NULL/"" = legacy pula ludzka (krasnolud wykluczony — spell_service.learn_spell),
+#   "human" / "dwarf" / "human,dwarf" = jawna lista ras.
+_SPELL_RACES = {"human", "dwarf"}
 
 
 def _normalize_race_lock(value) -> str | None:
-    race = str(value or "").strip().lower()
-    if race not in _SPELL_RACES:
+    """Zwaliduj i znormalizuj CSV ras → posortowany CSV bez duplikatów, albo None."""
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None  # legacy "pula ludzka"
+    races = [r.strip() for r in raw.split(",") if r.strip()]
+    bad = [r for r in races if r not in _SPELL_RACES]
+    if bad:
         raise HTTPException(
             status_code=422,
-            detail=f"race_lock must be one of: {', '.join(sorted(r or '(brak)' for r in _SPELL_RACES))}",
+            detail=f"race_lock zawiera nieznane rasy: {', '.join(bad)} "
+                   f"(dozwolone: {', '.join(sorted(_SPELL_RACES))})",
         )
-    return race or None
+    ordered = [r for r in sorted(_SPELL_RACES) if r in races]
+    return ",".join(ordered) or None
 
 
 @router.get("/admin/spells")
