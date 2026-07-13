@@ -14,6 +14,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from _fixtures_schema import table_sql
 
 from app.services.loot_service import _ensure_char_durability  # noqa: E402
 
@@ -34,12 +35,8 @@ def conn():
             key TEXT PRIMARY KEY, kind TEXT, rarity INTEGER DEFAULT 1,
             weapon_data TEXT, is_active INTEGER DEFAULT 1
         );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, rarity INTEGER DEFAULT 1, durability_base INTEGER
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, item_type TEXT, rarity INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
         INSERT INTO game_items (key, kind, rarity) VALUES
             ('cloak', 'armor', 2), ('dagger', 'weapon', 2), ('totem', 'item', 2);
         INSERT INTO game_config_weapons (key, rarity, durability_base) VALUES

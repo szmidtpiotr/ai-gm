@@ -9,6 +9,7 @@ Cztery mechanizmy naprawcze (diagnoza w #1369):
 
 Testy budują własną bazę in-memory (game_config_enemies) — deterministyczne, bez DEV DB.
 """
+from _fixtures_schema import table_sql
 import random
 import sqlite3
 
@@ -33,12 +34,7 @@ def _mk_conn(enemies: list[dict]) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(
         """
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, hp_base INT, ac_base INT,
-            attack_bonus INT, damage_die TEXT, damage_bonus INT,
-            attacks_per_turn INT, tier TEXT, min_level INT, max_level INT,
-            terrain_tags TEXT, world_scope TEXT, review_status TEXT, is_active INT
-        )
+        """ + table_sql("game_config_enemies") + """
         """
     )
     for e in enemies:

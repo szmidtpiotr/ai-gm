@@ -9,6 +9,7 @@ w pełni stosowana → obejście capu SF10.
 Fix: wybór != 'take' MUSI być w `pending['options']`; inaczej degradacja do 'take' + flaga
 `reaction_rejected`. Jedno miejsce pokrywa wszystkie powody (cap/mana/shield/lockout).
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 from unittest.mock import patch
@@ -60,7 +61,7 @@ def _combat_db(tmp_path, *, dodge_rank=0, shield_block_rank=0, shield=False,
           name TEXT, system_id TEXT, sheet_json TEXT);
         INSERT INTO characters (id,campaign_id,user_id,name,system_id,sheet_json)
           VALUES (1,1,1,'Aldric','fantasy','{sj}');
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT);
+        """ + table_sql("game_config_weapons") + """
         INSERT INTO game_config_weapons (key,label) VALUES ('wooden_shield','Drewniana Tarcza');
         CREATE TABLE character_inventory (id INTEGER PRIMARY KEY AUTOINCREMENT,
           character_id INTEGER, weapon_key TEXT, item_key TEXT, equipped INTEGER DEFAULT 0,
