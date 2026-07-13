@@ -3848,10 +3848,23 @@ def campaign_designer_generate_entity(
 _SPELL_COLUMNS = [
     "key", "label", "tier", "mana_cost", "spell_type", "damage_die", "heal_die",
     "effect_stat", "effect_type", "effect_duration", "target_zone", "aoe",
-    "description", "rank2_json", "rank3_json", "is_active",
+    "description", "rank2_json", "rank3_json", "is_active", "race_lock",
 ]
 _SPELL_TYPES = {"attack", "heal", "defense", "effect", "attack_aoe"}
 _SPELL_ZONES = {"any", "self", "engaged", "ranged"}
+# race_lock: NULL/"" = pula ludzka (krasnolud NIE może się uczyć — patrz
+# spell_service.learn_spell #975 R6); "dwarf" = wyłącznie Rdzeń-magia krasnoludów.
+_SPELL_RACES = {"", "human", "dwarf"}
+
+
+def _normalize_race_lock(value) -> str | None:
+    race = str(value or "").strip().lower()
+    if race not in _SPELL_RACES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"race_lock must be one of: {', '.join(sorted(r or '(brak)' for r in _SPELL_RACES))}",
+        )
+    return race or None
 
 
 @router.get("/admin/spells")
@@ -3883,8 +3896,8 @@ def admin_create_spell(req: dict = Body(...), _: None = Depends(require_admin_to
             """INSERT INTO game_config_spells
                (key, label, tier, mana_cost, spell_type, damage_die, heal_die,
                 effect_stat, effect_type, effect_duration, target_zone, aoe,
-                description, rank2_json, rank3_json, is_active)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                description, rank2_json, rank3_json, is_active, race_lock)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 key, label,
                 int(req.get("tier") or 1),
@@ -3901,6 +3914,7 @@ def admin_create_spell(req: dict = Body(...), _: None = Depends(require_admin_to
                 req.get("rank2_json") or None,
                 req.get("rank3_json") or None,
                 1 if req.get("is_active", 1) else 0,
+                _normalize_race_lock(req.get("race_lock")),
             ),
         )
         conn.commit()
@@ -3919,6 +3933,8 @@ def admin_update_spell(spell_key: str, req: dict = Body(...), _: None = Depends(
         raise HTTPException(status_code=400, detail="No valid fields to update")
     if "spell_type" in updates and updates["spell_type"] not in _SPELL_TYPES:
         raise HTTPException(status_code=422, detail=f"spell_type must be one of: {', '.join(_SPELL_TYPES)}")
+    if "race_lock" in updates:
+        updates["race_lock"] = _normalize_race_lock(updates["race_lock"])
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     try:
         sets = ", ".join(f"{k} = ?" for k in updates)

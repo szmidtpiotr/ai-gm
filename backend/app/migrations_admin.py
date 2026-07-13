@@ -5752,37 +5752,37 @@ def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
     dwarf_spells = [
         {
             "key": "vein_tremor", "label": "Żyłowy Wstrząs", "tier": 1, "mana_cost": 1,
-            "spell_type": "attack",
+            "spell_type": "attack", "damage_die": "2d6",
             "description": "2d6 dmg fizycznych (wstrząs ziemi) + wróg prone (DC 10 CON).",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "rdzen_pulse", "label": "Rdzeń-Puls", "tier": 2, "mana_cost": 2,
-            "spell_type": "attack",
+            "spell_type": "attack", "damage_die": "2d4",
             "description": "2d4 dmg obszarowe (wszyscy wrogowie) + ogłuszenie 1 tura.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "vein_bleed", "label": "Żyłokrwawienie", "tier": 3, "mana_cost": 3,
-            "spell_type": "attack",
+            "spell_type": "attack", "damage_die": "3d6",
             "description": "3d6 dmg ignoruje AC (Rdzeń przebija zbroję).",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "rdzen_shield", "label": "Rdzeń-Tarcza", "tier": 2, "mana_cost": 2,
-            "spell_type": "defense",
+            "spell_type": "defense", "damage_die": None,
             "description": "Absorb następny atak (anuluj dmg). Chaotyczna tarcza Rdzenia.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "deep_quake", "label": "Trzęsienie Głębinowe", "tier": 4, "mana_cost": 4,
-            "spell_type": "attack",
+            "spell_type": "attack", "damage_die": "2d8",
             "description": "2d8 dmg obszarowe + prone (brak save). ZAWSZE −1d4 HP casteru.",
             "is_active": 1, "race_lock": "dwarf",
         },
         {
             "key": "black_vein", "label": "Czarna Żyła", "tier": 5, "mana_cost": 5,
-            "spell_type": "attack",
+            "spell_type": "attack", "damage_die": "4d8",
             "description": "4d8 dmg + zatrucie Rdzenia (−2 HP/tura, 3 tury, ignoruje odporności).",
             "is_active": 1, "race_lock": "dwarf",
         },
@@ -5792,9 +5792,9 @@ def _seed_dwarf_spells(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO game_config_spells
-                    (key, label, tier, mana_cost, spell_type, description, is_active, race_lock)
+                    (key, label, tier, mana_cost, spell_type, damage_die, description, is_active, race_lock)
                 VALUES
-                    (:key, :label, :tier, :mana_cost, :spell_type, :description, :is_active, :race_lock)
+                    (:key, :label, :tier, :mana_cost, :spell_type, :damage_die, :description, :is_active, :race_lock)
                 """,
                 sp,
             )
@@ -5845,6 +5845,32 @@ def _fix_1353_spell_metadata(conn: sqlite3.Connection) -> None:
                     "UPDATE game_config_spells SET description = ? WHERE key = ?",
                     (description, key),
                 )
+        except Exception:
+            pass
+    conn.commit()
+
+
+def _fix_dwarf_spell_dice(conn: sqlite3.Connection) -> None:
+    """#1372 — kości obrażeń Rdzeń-czarów w kolumnie damage_die.
+
+    Seed #975 R6 wpisał kości tylko w opisie (description), zostawiając
+    damage_die=NULL. Silnik walki (combat_service) czyta damage_die z fallbackiem
+    '1d6' — więc black_vein opisany jako 4d8 faktycznie rzucał 1d6, a UI nie
+    pokazywało kości. Tu jawny UPDATE zgodny z opisami; idempotentne.
+    """
+    dice = [
+        ("vein_tremor", "2d6"),
+        ("rdzen_pulse", "2d4"),
+        ("vein_bleed", "3d6"),
+        ("deep_quake", "2d8"),
+        ("black_vein", "4d8"),
+    ]
+    for key, die in dice:
+        try:
+            conn.execute(
+                "UPDATE game_config_spells SET damage_die = ? WHERE key = ?",
+                (die, key),
+            )
         except Exception:
             pass
     conn.commit()
@@ -7158,6 +7184,7 @@ def run_admin_migrations() -> None:
         _ensure_showcase_subscribers(conn)  # #914 W13
         _ensure_character_race_column(conn)  # #970 R1
         _seed_dwarf_spells(conn)  # #975 R6
+        _fix_dwarf_spell_dice(conn)  # #1372 — damage_die Rdzeń-czarów (silnik rzucał fallback 1d6)
         _fix_1353_spell_metadata(conn)  # #1353 WALKA-T3 — rdzen_shield→defense + opisy
         _ensure_enemy_min_level(conn)  # #1023
         _ensure_enemy_terrain_scope_bands(conn)  # #1327 BL-A1
