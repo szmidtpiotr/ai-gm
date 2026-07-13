@@ -203,3 +203,21 @@ describe("rollFromEnemyAttack przy oknie reakcji", () => {
     expect(card.cells.some((c) => c.k === "k6")).toBe(true);
   });
 });
+
+// ─── Epilog walki: ukryta tura po zwycięstwie ─────────────────────────────────
+import { buildCombatEpilogueText, COMBAT_EPILOGUE_PREFIX } from "./combat";
+
+describe("buildCombatEpilogueText", () => {
+  it("zaczyna się od prefiksu (dymek gracza ukryty, guard backendu) i wymienia wrogów", () => {
+    const t = buildCombatEpilogueText(["Bandyta", "Wilk"]);
+    expect(t.startsWith(COMBAT_EPILOGUE_PREFIX)).toBe(true);
+    expect(t).toContain("Bandyta, Wilk");
+    expect(t.endsWith("]")).toBe(true);
+  });
+
+  it("pusta lista wrogów nie psuje tekstu", () => {
+    const t = buildCombatEpilogueText([]);
+    expect(t.startsWith(COMBAT_EPILOGUE_PREFIX)).toBe(true);
+    expect(t).toContain("wrogami");
+  });
+});

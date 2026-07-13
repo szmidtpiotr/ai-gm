@@ -298,4 +298,24 @@ export function rollFromReaction(
   return { actor: "enemy", title: `${name} — ATAK`, cells, fumble: false };
 }
 
+// ── Epilog walki — ukryta tura narracyjna po zwycięstwie ─────────────────────
+// Musi zaczynać się dokładnie od tego prefiksu — backend (turns.py
+// _COMBAT_EPILOGUE_PREFIX) po nim pomija detekcję intencji walki (żeby epilog
+// nie odpalił nowej walki przez keyword-regexy), a NarrationLog ukrywa dymek
+// gracza (tekst od "[" nie jest renderowany). Wzorzec: SERVICES_RECEIPT (#1292).
+export const COMBAT_EPILOGUE_PREFIX = "[COMBAT_EPILOGUE:";
+
+/** Tekst ukrytej tury proszącej narratora o epilog po wygranej walce.
+ * Mechanika (HP/XP/łup) już rozliczona przez /combat — ta tura tylko narruje. */
+export function buildCombatEpilogueText(enemyNames: string[]): string {
+  const foes = enemyNames.filter(Boolean).join(", ") || "wrogami";
+  return (
+    `${COMBAT_EPILOGUE_PREFIX} Bohater właśnie wygrał walkę z: ${foes}. ` +
+    "Opisz krótko prozą (2–4 zdania) pokłosie starcia — pole walki, oddech bohatera, " +
+    "wrażenie po zwycięstwie — i płynnie wróć do sceny. Łupy i XP już rozliczone " +
+    "mechanicznie — nie przyznawaj nagród. Nie wszczynaj nowej walki, nie wywołuj " +
+    "testów, nie decyduj za gracza.]"
+  );
+}
+
 export { fmt };

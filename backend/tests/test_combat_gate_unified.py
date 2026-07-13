@@ -302,3 +302,30 @@ def test_no_injection_when_combat_already_active():
     conn.commit()
     out = _ensure_combat_start_tag(conn, 1, "Atakuję goblina!", "Goblin naciera.")
     assert "[COMBAT_START" not in out, out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (e) combat epilogue — hidden post-victory turn must never re-fire combat
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_epilogue_turn_never_injects_combat_start():
+    """ŻAR submits a hidden [COMBAT_EPILOGUE: ...] turn after the victory modal.
+    Its wording (and the LLM's aftermath prose) mentions the fight — the guard
+    must return the narration untouched even with aggressive keywords around."""
+    from app.api.turns import _ensure_combat_start_tag, _COMBAT_EPILOGUE_PREFIX
+    conn = _make_db()
+    _seed_session(conn, 1)
+    conn.execute("INSERT INTO game_config_enemies (key, label) VALUES ('bandit', 'Bandyta')")
+    conn.execute("INSERT INTO campaign_turns (campaign_id, assistant_text) VALUES (1, 'Bandyta zagradza ci drogę!')")
+    conn.commit()
+    player = (
+        f"{_COMBAT_EPILOGUE_PREFIX} Bohater właśnie wygrał walkę z: Bandyta. "
+        "Opisz krótko prozą pokłosie starcia.]"
+    )
+    aftermath = (
+        "Bandyta leży martwy na trakcie, a jego zakrwawiony nóż toczy się do rowu. "
+        "Oddychasz ciężko, wciąż czując furię walki, gotów zaatakować każdego, kto się zbliży."
+    )
+    out = _ensure_combat_start_tag(conn, 1, player, aftermath)
+    assert out == aftermath
+    assert "[COMBAT_START" not in out

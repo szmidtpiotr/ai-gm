@@ -104,6 +104,9 @@ export interface AppState {
   /** #1292 — po zamknięciu modala Usług: ukryta tura proszona o narrację odbioru
    *  (zakup już opłacony mechanicznie). Game.tsx konsumuje i czyści. */
   servicesReceiptPending: string | null;
+  /** Po zamknięciu modalu zwycięstwa: ukryta tura prosząca narratora o epilog walki
+   *  (mechanika już rozliczona przez /combat). Game.tsx konsumuje i czyści. */
+  combatEpiloguePending: string | null;
   /** FE14 (#1263 / F-44) — paleta komend otwarta (Ctrl+/ albo ikona w composerze). */
   paletteOpen: boolean;
   /** FE19 (#1268 / F-77) — menu ☰ ekranu gry otwarte. */
@@ -137,6 +140,7 @@ export interface AppState {
   openCrafting: (locationKey: string) => void;
   closeCrafting: () => void;
   setServicesReceiptPending: (text: string | null) => void;
+  setCombatEpiloguePending: (text: string | null) => void;
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
@@ -195,6 +199,7 @@ export const useAppStore = create<AppState>((set) => ({
   services: null,
   crafting: null,
   servicesReceiptPending: null,
+  combatEpiloguePending: null,
   paletteOpen: false,
   gameMenuOpen: false,
   advancementOpen: false,
@@ -224,6 +229,7 @@ export const useAppStore = create<AppState>((set) => ({
   openCrafting: (locationKey) => set({ crafting: locationKey }),
   closeCrafting: () => set({ crafting: null }),
   setServicesReceiptPending: (servicesReceiptPending) => set({ servicesReceiptPending }),
+  setCombatEpiloguePending: (combatEpiloguePending) => set({ combatEpiloguePending }),
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
@@ -253,6 +259,7 @@ export const useAppStore = create<AppState>((set) => ({
       services: null,
       crafting: null,
       servicesReceiptPending: null,
+      combatEpiloguePending: null,
       activeCombat: null,
       dungeonRunState: null,
     });
@@ -266,6 +273,7 @@ export const useAppStore = create<AppState>((set) => ({
       services: null,
       crafting: null,
       servicesReceiptPending: null,
+      combatEpiloguePending: null,
       activeCombat: null,
       dungeonRunState: null,
     }),

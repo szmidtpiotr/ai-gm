@@ -17,6 +17,7 @@ import {
   rollFromPlayerAttack,
   rollFromEnemyAttack,
   rollFromEnemyZoneChange,
+  buildCombatEpilogueText,
   rollFromReaction,
   toHitStageCard,
 } from "@/lib/combat";
@@ -85,6 +86,7 @@ export function CombatView({
   const characterId = character?.id;
   const showPlayerDice = useAppStore((s) => s.gamePrefShowPlayerDice);
   const showEnemyDice  = useAppStore((s) => s.gamePrefShowEnemyDice);
+  const setCombatEpiloguePending = useAppStore((s) => s.setCombatEpiloguePending);
 
   // Query pollowany co 2s (tylko gdy aktywna) — Game.tsx już go trzyma, tu współdzielony.
   const combatQ = useCombatState(campaignId);
@@ -681,6 +683,15 @@ export function CombatView({
           goldGain={goldAccumRef.current}
           onDismiss={() => {
             setOutcome(null);
+            // Zwycięstwo poza lochem → ukryta tura-epilog: narrator opisuje pokłosie
+            // walki (bez niej gra milknie po modalu, jakby walka się zbugowała).
+            // Loch ma własny flow (drzwi/boss), śmierć — ekran śmierci.
+            if (outcome.reason === "victory" && !dungeon) {
+              const foes = (outcome.combat?.combatants ?? [])
+                .filter((c) => c.type === "enemy")
+                .map((c) => String(c.name || c.enemy_key || "").trim());
+              setCombatEpiloguePending(buildCombatEpilogueText(foes));
+            }
             // #1348 T4: teraz — po zamknięciu modalu wyniku — pozwól Game.tsx odmontować ekran walki.
             onEnded?.(Number(outcome.combat?.id ?? 0));
             qc.invalidateQueries({ queryKey: ["combat", campaignId] });

@@ -632,6 +632,11 @@ def _ensure_combat_start_tag(
     # against the player without emitting a tag (#520 reverse direction) OR when
     # the movement engine rolled a travel/local encounter that must not fizzle
     # (#1146/#1147 — the narrator kept describing a peaceful march instead).
+    # Combat epilogue is narration about a fight that ALREADY ended — never a
+    # declaration of a new one; without this guard its wording (and the LLM's
+    # aftermath prose) could re-fire combat via the keyword regexes below.
+    if (player_text or "").startswith(_COMBAT_EPILOGUE_PREFIX):
+        return assistant_text
     player_intent = _player_combat_intent(player_text)
     narrative_combat = bool(_AGGRESSION_NARRATIVE_RE.search(_normalize_pl(assistant_text or "")))
     pending_enemy = _pending_engine_encounter_enemy(conn, campaign_id)
@@ -755,6 +760,12 @@ GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 # isVisiblePlayerText() (frontend) hides the player bubble; payment already
 # happened mechanically, so the SPEND_GOLD block must be skipped for this turn.
 _SERVICES_RECEIPT_PREFIX = "[SERVICES_RECEIPT:"
+# Hidden turn submitted by the ŻAR client after the victory modal closes, asking the
+# narrator for a post-combat epilogue (combat itself is resolved mechanically via the
+# /combat endpoints and produces no narrative turn of its own). Starts with "[" so the
+# player bubble stays hidden. Combat-intent detection must skip it — the epilogue text
+# mentions the fight, which would otherwise re-trigger [COMBAT_START] via keyword regex.
+_COMBAT_EPILOGUE_PREFIX = "[COMBAT_EPILOGUE:"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 

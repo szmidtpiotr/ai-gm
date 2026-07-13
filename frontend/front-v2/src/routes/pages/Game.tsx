@@ -309,6 +309,18 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servicesReceiptPending, characterId]);
 
+  // Po zamknięciu modalu zwycięstwa — ukryta tura prosi narratora o epilog walki
+  // (mechanika już rozliczona przez /combat; bez tej tury po walce panuje cisza).
+  const combatEpiloguePending = useAppStore((s) => s.combatEpiloguePending);
+  const setCombatEpiloguePending = useAppStore((s) => s.setCombatEpiloguePending);
+  useEffect(() => {
+    if (combatEpiloguePending && characterId) {
+      submit.mutate({ characterId, text: combatEpiloguePending }, { onSuccess: applyResponse });
+      setCombatEpiloguePending(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combatEpiloguePending, characterId]);
+
   // F-80 (#1268): klik w chip. Mechaniczne akcje (podróż/obóz/odpoczynek) omijają
   // narratora i wołają dedykowane endpointy; reszta idzie jako akcja tury.
   function chipError(err: unknown) {
