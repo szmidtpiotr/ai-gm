@@ -70,6 +70,20 @@ function fmt(mod: number): string {
   return (mod >= 0 ? "+" : "") + mod;
 }
 
+/** WALKA-T5-FIX-b (#1357): komórka „Unik" — rzut uniku wroga (d20+DEX=suma) tak,
+ * by gracz widział OBIE strony liczbowo i wiedział CZEMU trafił lub nie. Zwraca []
+ * gdy backend nie przysłał `dodge_roll` (leczenie, Nat1 gracza, stary backend). */
+function dodgeCells(r: CombatActionResult): RollCardData["cells"] {
+  const dr = r.dodge_roll;
+  if (!dr) return [];
+  const total = Number(dr.total ?? NaN);
+  if (!Number.isFinite(total)) return [];
+  const raw = Number(dr.raw ?? NaN);
+  const mod = Number(dr.modifier ?? 0);
+  const v = Number.isFinite(raw) ? `${raw}${fmt(mod)}=${total}` : String(total);
+  return [{ k: "Unik", v }];
+}
+
 /** Rzut ataku/czaru gracza → karta (prawo/ember). Nat20 crit, Nat1 fumble.
  * Kolumna wyniku jest jawna: TRAFIENIE/−X HP (zielony), WRÓG UNIKA / PUDŁO (złoty). */
 export function rollFromPlayerAttack(
@@ -83,6 +97,8 @@ export function rollFromPlayerAttack(
   const cells: RollCardData["cells"] = [];
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Suma", v: String(total), sum: true });
+  // #1357: obie strony liczbowo — dorzuć unik wroga zaraz po sumie ataku gracza.
+  cells.push(...dodgeCells(r));
 
   // Etykieta + wartość + kolor zależają od tego, co realnie się stało z Twoim ciosem.
   let label = "Wynik";
@@ -90,6 +106,10 @@ export function rollFromPlayerAttack(
   let tone: "ok" | "bad" | "warn";
   if (r.blocked) {
     resV = r.mana_insufficient ? "ZA MAŁO MANY" : "POZA ZASIĘGIEM";
+    tone = "warn";
+  } else if (fumble) {
+    // #826: „PUDŁO" tylko przy Nat 1 gracza (własna kompromitacja), nie przy uniku wroga.
+    resV = "PUDŁO";
     tone = "warn";
   } else if (r.spell_type === "heal") {
     // Kości leczenia (np. 1d8) przed sumą.
@@ -101,7 +121,8 @@ export function rollFromPlayerAttack(
     resV = `+${r.heal_amount ?? 0} HP`;
     tone = "ok";
   } else if (r.dodged) {
-    resV = "WRÓG UNIKA"; // przeciwnik uchylił się przed Twoim ciosem
+    // przeciwnik uchylił się przed Twoim ciosem; Nat 20 uniku = unik krytyczny (#1357).
+    resV = r.dodge_roll?.verdict === "perfect_dodge" ? "WRÓG UNIKA (KRYT.)" : "WRÓG UNIKA";
     tone = "warn";
   } else if (r.hit) {
     // Kości obrażeń (np. 2d6) widoczne przed sumą.

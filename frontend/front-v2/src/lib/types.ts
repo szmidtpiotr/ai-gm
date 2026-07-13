@@ -408,6 +408,16 @@ export interface CombatActionResult {
   damage_rolls?: number[];
   damage_multiplier?: number;
   dodged?: boolean;
+  // WALKA-T5-FIX-b (#1357): rzut uniku wroga na atak gracza — do pokazania OBU
+  // liczb na karcie (Twój atak vs unik wroga) + werdykt. Źródło: combat_service.py.
+  dodge_roll?: {
+    raw?: number; // surowy d20 wroga
+    modifier?: number; // DEX mod wroga
+    total?: number; // raw + modifier
+    dodged?: boolean;
+    player_roll?: number; // suma ataku gracza (== attack_total)
+    verdict?: "hit" | "perfect_dodge" | "fumble_dodge" | "dodged" | string;
+  } | null;
   enemy_dead?: boolean;
   mana_spent?: number;
   mana_after?: number;
