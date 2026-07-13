@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from _fixtures_schema import table_sql
 
 from app.migrations_admin import (  # noqa: E402
     _ensure_recipe_loot_schema,
@@ -51,49 +52,20 @@ def _build_pre_schema(conn: sqlite3.Connection) -> None:
             price_gp REAL DEFAULT 0, created_by TEXT DEFAULT 'seed',
             approved INTEGER DEFAULT 1, is_active INTEGER DEFAULT 1
         );
-        CREATE TABLE game_config_recipes (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL,
-            inputs_json TEXT NOT NULL DEFAULT '[]',
-            output_type TEXT NOT NULL DEFAULT 'consumable', output_key TEXT,
-            output_qty INTEGER NOT NULL DEFAULT 1, service_cost_gold INTEGER NOT NULL DEFAULT 0,
-            crafter_type TEXT NOT NULL DEFAULT 'smith', is_hidden INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1, craft_tier TEXT NOT NULL DEFAULT 'medium',
-            created_by TEXT
-        );
+        """ + table_sql("game_config_recipes") + """
         CREATE TABLE character_recipes (
             id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER NOT NULL,
             recipe_key TEXT NOT NULL,
             discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE (character_id, recipe_key)
         );
-        CREATE TABLE game_config_sets (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, pieces_json TEXT DEFAULT '[]',
-            bonuses_json TEXT DEFAULT '{}', is_active INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_loot_tables (
-            key TEXT PRIMARY KEY, label TEXT, gold_min INTEGER DEFAULT 0,
-            gold_max INTEGER DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
-            item_key TEXT, consumable_key TEXT, weapon_key TEXT,
-            game_item_key TEXT,
-            weight INTEGER NOT NULL DEFAULT 10,
-            qty_min INTEGER NOT NULL DEFAULT 1, qty_max INTEGER NOT NULL DEFAULT 1,
-            CHECK (
-                (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
-            )
-        );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, loot_table_key TEXT, drop_chance REAL DEFAULT 1.0,
-            tier TEXT DEFAULT 'standard'
-        );
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT, allowed_classes TEXT, is_active INTEGER DEFAULT 1);
-        CREATE TABLE game_config_consumables (key TEXT PRIMARY KEY, label TEXT, is_active INTEGER DEFAULT 1);
-        CREATE TABLE game_config_items (key TEXT PRIMARY KEY, label TEXT, item_type TEXT DEFAULT 'misc', is_active INTEGER DEFAULT 1);
+        """ + table_sql("game_config_sets") + """
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
+        """ + table_sql("game_config_enemies") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_consumables") + """
+        """ + table_sql("game_config_items") + """
 
         -- Wróg + tabela tieru standard (na nią seed dokłada receptury lootowe).
         INSERT INTO game_config_loot_tables (key, label) VALUES ('loot_tier_standard', 'Tier standard');

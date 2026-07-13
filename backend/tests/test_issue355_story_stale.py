@@ -5,6 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from _fixtures_schema import table_sql
 
 from app.services.context_injector import ContextInjector
 
@@ -48,9 +49,7 @@ def _make_conn():
             id INTEGER PRIMARY KEY, character_id INTEGER,
             condition_type TEXT, severity TEXT, expires_at INTEGER
         );
-        CREATE TABLE game_config_conditions (
-            id INTEGER PRIMARY KEY, key TEXT, label TEXT, description TEXT
-        );
+        """ + table_sql("game_config_conditions") + """
     """)
     conn.execute("INSERT INTO characters VALUES (1, 'Bohater', '{\"current_hp\":10,\"max_hp\":10,\"archetype\":\"warrior\"}', 'warrior')")
     conn.execute("INSERT INTO campaigns VALUES (1, 'mroczny', NULL)")

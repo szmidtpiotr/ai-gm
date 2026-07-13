@@ -7,6 +7,7 @@ Tests for spend_gold_service.py:
 """
 import sys
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import sqlite3
 import pytest
@@ -26,12 +27,7 @@ def test_db():
 
     # Create game_config_services table
     conn.execute("""
-        CREATE TABLE game_config_services (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            cost_gp INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1
-        )
+        """ + table_sql("game_config_services") + """
     """)
 
     # Create characters table with minimal fields
