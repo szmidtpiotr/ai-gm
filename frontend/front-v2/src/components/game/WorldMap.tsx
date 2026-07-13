@@ -242,7 +242,9 @@ export function WorldMap({
             currentHex && h.q === currentHex.q && h.r === currentHex.r,
         ) ?? null,
       ),
-      hours: estimate?.hours ?? null,
+      // Ten sam backendowy szacunek co w popupie (heurystyka terenu celu ×
+      // dystans potrafi pokazać 36 h tam, gdzie trasa realnie zajmuje 7 h).
+      hours: travelEst.data?.hours ?? estimate?.hours ?? null,
       atmosphere: null,
     });
     travel.mutate(
