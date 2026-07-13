@@ -4,6 +4,7 @@ Targeted pytest (never the full suite). Verifies the idempotent backfill +
 data-pass in migrations_admin._ensure_enemy_terrain_scope_bands against a
 minimal in-memory-style DB copy.
 """
+from _fixtures_schema import table_sql
 import sqlite3
 
 import app.migrations_admin as m
@@ -13,17 +14,7 @@ def _make_db(path):
     conn = sqlite3.connect(path)
     conn.execute(
         """
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            tier TEXT NOT NULL DEFAULT 'standard',
-            hp_base INTEGER NOT NULL DEFAULT 10,
-            min_level INTEGER NOT NULL DEFAULT 1,
-            created_by TEXT,
-            template_id INTEGER,
-            terrain_tags TEXT,
-            max_level INTEGER,
-            world_scope TEXT NOT NULL DEFAULT 'global'
-        )
+        """ + table_sql("game_config_enemies") + """
         """
     )
     rows = [

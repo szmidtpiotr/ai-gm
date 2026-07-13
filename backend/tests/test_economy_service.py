@@ -1,6 +1,7 @@
 """
 Tests for Economy Service — Phase 06 Tasks 20-26
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import pytest
@@ -30,35 +31,13 @@ def db():
             amount INTEGER, source_key TEXT, detail TEXT,
             turn_number INTEGER, created_at TEXT DEFAULT '2026-01-01'
         );
-        CREATE TABLE game_config_xp_awards (
-            id INTEGER PRIMARY KEY, category TEXT, source_key TEXT UNIQUE,
-            label TEXT, xp_amount INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT, item_type TEXT DEFAULT 'misc',
-            effect_json TEXT, value_gp INTEGER DEFAULT 0, ac_bonus INTEGER DEFAULT 0
-        );
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT, damage_die TEXT DEFAULT 'd6',
-            weapon_type TEXT DEFAULT 'melee', value_gp INTEGER DEFAULT 0
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT,
-            effect_type TEXT, effect_dice TEXT, effect_bonus INTEGER DEFAULT 0,
-            base_price INTEGER DEFAULT 0
-        );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, tier TEXT DEFAULT 'standard',
-            loot_table_key TEXT, drop_chance REAL DEFAULT 1.0
-        );
-        CREATE TABLE game_config_loot_tables (
-            key TEXT PRIMARY KEY, label TEXT, gold_min INTEGER DEFAULT 0, gold_max INTEGER DEFAULT 5
-        );
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT, item_key TEXT, weapon_key TEXT,
-            consumable_key TEXT, weight INTEGER DEFAULT 100, qty_min INTEGER DEFAULT 1, qty_max INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_xp_awards") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_consumables") + """
+        """ + table_sql("game_config_enemies") + """
+        """ + table_sql("game_config_loot_tables") + """
+        """ + table_sql("game_config_loot_entries") + """
         CREATE TABLE game_locations (id INTEGER PRIMARY KEY, key TEXT UNIQUE, label TEXT);
         CREATE TABLE combat_loot (
             id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id INTEGER, character_id INTEGER,

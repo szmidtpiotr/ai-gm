@@ -4,6 +4,7 @@ Verifies path generation with door matching, dead-end detection, and content
 resolution. Uses in-memory SQLite with a minimal schema slice.
 """
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -42,32 +43,12 @@ CREATE TABLE dungeon_tiles (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE TABLE game_config_enemies (
-    key TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    hp_base INTEGER DEFAULT 5,
-    ac_base INTEGER DEFAULT 8,
-    attack_bonus INTEGER DEFAULT 0,
-    damage_die TEXT DEFAULT '1d6',
-    damage_bonus INTEGER DEFAULT 0,
-    dex_modifier INTEGER DEFAULT 0,
-    tier TEXT DEFAULT 'common',
-    stats_json TEXT DEFAULT NULL
-);
+""" + table_sql("game_config_enemies") + """
 
-CREATE TABLE game_config_items (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_consumables (key TEXT PRIMARY KEY, label TEXT NOT NULL);
-CREATE TABLE game_config_riddles (
-    key TEXT PRIMARY KEY,
-    text TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    answer_alts TEXT DEFAULT '[]',
-    hints TEXT DEFAULT '[]',
-    difficulty INTEGER DEFAULT 1,
-    theme TEXT DEFAULT 'general',
-    is_active INTEGER DEFAULT 1
-);
+""" + table_sql("game_config_items") + """
+""" + table_sql("game_config_weapons") + """
+""" + table_sql("game_config_consumables") + """
+""" + table_sql("game_config_riddles") + """
 """
 
 

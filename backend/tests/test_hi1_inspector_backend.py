@@ -8,6 +8,7 @@ REUSE: wszystko w admin_cheat.py. Testy są samowystarczalne (własny schemat w 
 """
 
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -71,12 +72,7 @@ def _seed_schema(db_path: str) -> None:
               performed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE game_config_conditions (
-              key TEXT PRIMARY KEY,
-              label TEXT NOT NULL DEFAULT '',
-              description TEXT,
-              is_active INTEGER NOT NULL DEFAULT 1
-            );
+            """ + table_sql("game_config_conditions") + """
 
             INSERT INTO game_config_conditions(key, label, is_active) VALUES
               ('blessed', 'Błogosławiony', 1),

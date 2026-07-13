@@ -5,6 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 os.environ.setdefault("AIGM_E2E_LITE", "1")
 
 import pytest
@@ -66,11 +67,7 @@ def _make_db(tmp_path):
             turn_number INTEGER,
             granted_by_user_id INTEGER DEFAULT 0
         );
-        CREATE TABLE game_config_meta (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE,
-            value TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         INSERT INTO campaigns VALUES (1, 'TestCamp', 1);
         INSERT INTO game_locations VALUES (1, 'inn', 'Karczma', 1, 1);
         INSERT INTO game_sessions VALUES (1, 1, 1, '{}', 8);

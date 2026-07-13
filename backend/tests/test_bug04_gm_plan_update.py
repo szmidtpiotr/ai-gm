@@ -1,5 +1,6 @@
 """BUG-04 — gm_note / scene_advance / gm_plan_update hooks in create_turn_log."""
 
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -73,7 +74,7 @@ def db():
             turn_number INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now'))
         );
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE npcs (id INTEGER PRIMARY KEY, key TEXT, name TEXT);
         CREATE TABLE campaign_known_npcs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

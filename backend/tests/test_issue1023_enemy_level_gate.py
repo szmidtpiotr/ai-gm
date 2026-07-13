@@ -5,6 +5,7 @@ import sys
 import pytest
 
 sys.path.insert(0, '/app')
+from _fixtures_schema import table_sql
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -25,13 +26,7 @@ def _mem_enemies(enemies):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            tier TEXT NOT NULL DEFAULT 'standard',
-            min_level INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
     conn.execute("""
         CREATE TABLE characters (
@@ -189,12 +184,7 @@ def _resolve_conn():
         CREATE TABLE campaign_turns (id INTEGER, campaign_id INTEGER, assistant_text TEXT)
     """)
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT,
-            is_active INTEGER DEFAULT 1,
-            min_level INTEGER DEFAULT 1
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
     conn.execute("INSERT INTO game_config_enemies VALUES ('undead_champion', 'Nieumarły Mistrz', 1, 6)")
     conn.execute("INSERT INTO game_config_enemies VALUES ('bandit', 'Bandyta', 1, 1)")

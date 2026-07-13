@@ -10,6 +10,7 @@ Covers:
 """
 
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import sqlite3
 
@@ -19,63 +20,13 @@ import pytest
 def _minimal_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
-        CREATE TABLE IF NOT EXISTS game_config_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            label TEXT NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT,
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            weight_kg REAL NOT NULL DEFAULT 0.0,
-            allowed_classes TEXT NOT NULL DEFAULT '[]',
-            ac_bonus INTEGER NOT NULL DEFAULT 0,
-            effect_type TEXT,
-            effect_dice TEXT,
-            effect_bonus INTEGER NOT NULL DEFAULT 0,
-            effect_target TEXT NOT NULL DEFAULT 'self',
-            charges INTEGER NOT NULL DEFAULT 1,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            approved INTEGER NOT NULL DEFAULT 1,
-            note TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            locked_at TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        );
+        """ + table_sql("game_config_items") + """
 
-        CREATE TABLE IF NOT EXISTS game_config_weapons (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            label TEXT NOT NULL,
-            damage_die TEXT NOT NULL DEFAULT '1d4',
-            linked_stat TEXT NOT NULL DEFAULT 'STR',
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            approved INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
+        """ + table_sql("game_config_weapons") + """
 
-        CREATE TABLE IF NOT EXISTS game_config_loot_tables (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            label TEXT
-        );
+        """ + table_sql("game_config_loot_tables") + """
 
-        CREATE TABLE IF NOT EXISTS game_config_loot_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            loot_table_key TEXT NOT NULL
-                REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
-            item_key   TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
-            weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
-            currency_code TEXT,
-            weight INTEGER NOT NULL DEFAULT 10,
-            qty_min INTEGER NOT NULL DEFAULT 1,
-            qty_max INTEGER NOT NULL DEFAULT 1,
-            CONSTRAINT loot_xor CHECK (
-                (CASE WHEN item_key   IS NOT NULL THEN 1 ELSE 0 END +
-                 CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
-            )
-        );
+        """ + table_sql("game_config_loot_entries") + """
 
         CREATE TABLE IF NOT EXISTS characters (
             id INTEGER PRIMARY KEY,
@@ -341,21 +292,7 @@ class TestItemCatalogForPrompt:
         conn.row_factory = sqlite3.Row
         conn.execute(
             """
-            CREATE TABLE game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL,
-                item_type TEXT NOT NULL DEFAULT 'misc',
-                value_gp INTEGER NOT NULL DEFAULT 0,
-                ac_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_type TEXT,
-                effect_dice TEXT,
-                effect_bonus INTEGER NOT NULL DEFAULT 0,
-                effect_target TEXT NOT NULL DEFAULT 'self',
-                charges INTEGER NOT NULL DEFAULT 1,
-                approved INTEGER NOT NULL DEFAULT 1,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                description TEXT
-            )
+            """ + table_sql("game_config_items") + """
             """
         )
         conn.commit()

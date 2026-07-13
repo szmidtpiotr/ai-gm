@@ -5,6 +5,7 @@ completed) — hex discovery itself is per-campaign. Rumors: successful
 quest_rumor records a deterministic-target rumor; discovering the target
 confirms it.
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 import pytest
@@ -25,7 +26,7 @@ def conn():
         CREATE TABLE world_hexes (id INTEGER PRIMARY KEY AUTOINCREMENT, q INTEGER, r INTEGER, map_level INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, region TEXT, location_key TEXT);
         CREATE TABLE game_locations (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, is_active INTEGER DEFAULT 1, world_hex_q INTEGER, world_hex_r INTEGER);
         CREATE TABLE campaigns (id INTEGER PRIMARY KEY, gm_plan_json TEXT);
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, tier TEXT);
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT);
         CREATE TABLE character_rumors (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, campaign_id INTEGER, rumor_text TEXT, target_type TEXT, target_key TEXT, status TEXT DEFAULT 'heard', heard_at TEXT, confirmed_at TEXT);
         """

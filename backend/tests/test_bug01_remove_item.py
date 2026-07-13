@@ -1,5 +1,6 @@
 """BUG-01 — remove_item JSON signal removes item from character_inventory."""
 
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -57,10 +58,7 @@ def db():
             turn_number INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now'))
         );
-        CREATE TABLE IF NOT EXISTS game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
+        """ + table_sql("game_config_meta") + """
         CREATE TABLE IF NOT EXISTS npcs (
             id INTEGER PRIMARY KEY,
             key TEXT,

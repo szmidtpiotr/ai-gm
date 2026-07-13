@@ -1,6 +1,7 @@
 """Phase 8G Admin Commands — backend cheat API tests."""
 
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import json
 import sqlite3
@@ -44,21 +45,11 @@ def _seed_schema(db_path: str) -> None:
               ended_reason TEXT
             );
 
-            CREATE TABLE game_config_weapons (
-              key TEXT PRIMARY KEY,
-              label TEXT NOT NULL DEFAULT ''
-            );
+            """ + table_sql("game_config_weapons") + """
 
-            CREATE TABLE game_config_items (
-              key TEXT PRIMARY KEY,
-              label TEXT NOT NULL DEFAULT '',
-              item_type TEXT NOT NULL DEFAULT 'misc'
-            );
+            """ + table_sql("game_config_items") + """
 
-            CREATE TABLE game_config_consumables (
-              key TEXT PRIMARY KEY,
-              label TEXT NOT NULL DEFAULT ''
-            );
+            """ + table_sql("game_config_consumables") + """
 
             INSERT INTO characters(id, campaign_id, location, sheet_json, gold_gp)
             VALUES (
@@ -172,10 +163,7 @@ def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
     try:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS game_config_weapons (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT ''
-            )
+            """ + table_sql("game_config_weapons") + """
             """
         )
         conn.execute(
@@ -217,15 +205,8 @@ def test_add_item_prefers_consumable_catalog_over_wrong_items_row(client_with_au
     try:
         conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT '',
-                item_type TEXT NOT NULL DEFAULT 'misc'
-            );
-            CREATE TABLE IF NOT EXISTS game_config_consumables (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT ''
-            );
+            """ + table_sql("game_config_items") + """
+            """ + table_sql("game_config_consumables") + """
             INSERT INTO game_config_items (key, label, item_type)
             VALUES ('hp_conflict', 'Wrong catalog row', 'quest');
             INSERT INTO game_config_consumables (key, label)
@@ -265,15 +246,8 @@ def test_add_item_uses_item_key_for_consumables_8h(client_with_auth):
     try:
         conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT '',
-                item_type TEXT NOT NULL DEFAULT 'misc'
-            );
-            CREATE TABLE IF NOT EXISTS game_config_consumables (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT ''
-            );
+            """ + table_sql("game_config_items") + """
+            """ + table_sql("game_config_consumables") + """
             INSERT INTO game_config_items (key, label, item_type)
             VALUES ('g_test_potion', 'GP item', 'consumable');
             INSERT INTO game_config_consumables (key, label)
@@ -312,11 +286,7 @@ def test_add_item_explicit_consumable_hint_uses_item_key_8h(client_with_auth):
     try:
         conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS game_config_items (
-                key TEXT PRIMARY KEY,
-                label TEXT NOT NULL DEFAULT '',
-                item_type TEXT NOT NULL DEFAULT 'misc'
-            );
+            """ + table_sql("game_config_items") + """
             INSERT INTO game_config_items (key, label, item_type)
             VALUES ('only_item_potion', 'Only item', 'consumable');
             """

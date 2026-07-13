@@ -4,6 +4,7 @@ w sheet_json. Bez tego admin nie widzi (i nie może nadać) skilli spoza puli
 kreatora — np. arcane_ward / mana_shield (#1324/#1325)."""
 
 from __future__ import annotations
+from _fixtures_schema import table_sql
 
 import sqlite3
 
@@ -33,10 +34,7 @@ def _seed_schema(db_path: str) -> None:
               gold_gp INTEGER NOT NULL DEFAULT 0
             );
 
-            CREATE TABLE game_config_skills (
-              key TEXT PRIMARY KEY,
-              label TEXT NOT NULL DEFAULT ''
-            );
+            """ + table_sql("game_config_skills") + """
 
             INSERT INTO characters(id, name, campaign_id, user_id, sheet_json, gold_gp)
             VALUES (

@@ -4,6 +4,7 @@ Kills aggregate per (character_id, enemy_key). Tier derived from kills:
 1 kill → tier 1, 5 → tier 2 (HP preview), 15 → tier 3 (+1 to-hit).
 Recording a kill must never raise (combat-safe). MP credits only the killer.
 """
+from _fixtures_schema import table_sql
 import sqlite3
 import pytest
 
@@ -30,11 +31,7 @@ def conn():
     )
     c.execute(
         """
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, description TEXT,
-            lore_text TEXT, image_url TEXT, hp_base INTEGER, tier TEXT,
-            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1
-        )
+        """ + table_sql("game_config_enemies") + """
         """
     )
     c.executemany(
@@ -249,12 +246,7 @@ def showcase_conn():
         """
         CREATE TABLE character_bestiary (id INTEGER PRIMARY KEY AUTOINCREMENT, character_id INTEGER, enemy_key TEXT, kills INTEGER, unlocked_tier INTEGER, first_kill_at TEXT, last_kill_at TEXT, UNIQUE(character_id,enemy_key));
         CREATE TABLE characters (id INTEGER PRIMARY KEY, user_id INTEGER);
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, description TEXT, lore_text TEXT, image_url TEXT, tier TEXT,
-            review_status TEXT DEFAULT 'permanent', is_active INTEGER DEFAULT 1,
-            hp_base INTEGER, ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER,
-            attacks_per_turn INTEGER, damage_type TEXT, stats_json TEXT, min_level INTEGER, xp_award INTEGER,
-            fear_aura INTEGER, fear_dc INTEGER);
+        """ + table_sql("game_config_enemies") + """
         """
     )
     _st = '{"STR":12,"DEX":8,"CON":11,"INT":6,"WIS":9,"CHA":7,"LCK":10}'
