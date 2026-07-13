@@ -9057,6 +9057,16 @@ _TRAVEL_NOTICE_BY_REASON = {
         "title": "Zasadzka w drodze",
         "message": "Ktoś zagrodził ci drogę — dochodzi do starcia. Stań do walki.",
     },
+    # PO wygranej walce w drodze (deferred prompt odpalił → reason=encounter_prompted).
+    # Bez własnego szablonu wpadał w bazowy "encounter" — modal wyglądał jak NOWA
+    # zasadzka z jednym przyciskiem „Walcz" (który wznawiał podróż!), zero opcji
+    # odpoczynku. Tu gracz ma dostać wybór: obóz/odpoczynek albo dalsza droga.
+    "encounter_prompted": {
+        "severity": "warn",
+        "title": "Walka za tobą",
+        "message": "Starcie na szlaku wygrane, ale rany i zmęczenie zostają. Rozbij "
+                   "obóz i odpocznij, by odzyskać siły — albo ruszaj dalej do celu.",
+    },
 }
 
 
@@ -9113,7 +9123,9 @@ def _travel_notice_for(
         return None
     reason = str(tp.get("interrupt_reason") or "")
     base = reason.replace("_prompted", "")  # dusk_prompted → dusk
-    tmpl = _TRAVEL_NOTICE_BY_REASON.get(base)
+    # Pełny reason ma pierwszeństwo (encounter_prompted = PO walce, własny szablon);
+    # fallback do bazy dla dusk_prompted/forced_camp_prompted (dzielą szablon z bazą).
+    tmpl = _TRAVEL_NOTICE_BY_REASON.get(reason) or _TRAVEL_NOTICE_BY_REASON.get(base)
     if not tmpl:
         return None
     # step + destination → klucz per-etap (front pokazuje modal raz na przerwanie),
@@ -9134,7 +9146,9 @@ def _travel_notice_for(
     # nadpisz generyczny message. Dostępne tylko gdy caller poda conn+campaign_id;
     # fallback na generyczny szablon, gdy enemy_key pusty/nieznany. Filtr `_prompted`
     # obejmuje base=="encounter" (nie ma wariantu encounter_prompted, ale spójnie).
-    if base == "encounter":
+    # Tylko PRZED walką (reason=encounter) — po walce (encounter_prompted) wróg już
+    # pokonany, obrazek/badge zagrożenia byłyby mylące.
+    if reason == "encounter":
         enemy_notice = _encounter_enemy_notice(conn, campaign_id, tp.get("enemy_key"))
         if enemy_notice:
             notice.update(enemy_notice)

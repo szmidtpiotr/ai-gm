@@ -8,6 +8,7 @@ import {
   ArrowsInLineHorizontal,
   Shield,
   Fire,
+  Flask,
   Heart,
   DropHalf,
   Wind,
@@ -44,6 +45,14 @@ export interface SpellAction {
   affordable: boolean;
 }
 
+/** Zużywalny z plecaka pokazywany w arkuszu czarów (mikstury HP/many itd.).
+ * Użycie NIE zjada tury — parytet z użyciem przez zakładkę Ekwipunek. */
+export interface PotionAction {
+  id: number; // inventory_id
+  label: string;
+  quantity: number;
+}
+
 export type SheetMode = "attack" | "spell" | "move" | "defense";
 
 export function ActionSheet({
@@ -61,6 +70,8 @@ export function ActionSheet({
   onClose,
   defenseOptions = [],
   defenseOptionsDetailed,
+  potions = [],
+  onUsePotion,
 }: {
   initialMode?: SheetMode;
   spells: SpellAction[];
@@ -76,6 +87,8 @@ export function ActionSheet({
   onClose: () => void;
   defenseOptions?: string[];
   defenseOptionsDetailed?: DefenseOptionDetail[];
+  potions?: PotionAction[];
+  onUsePotion?: (inventoryId: number, label: string) => void;
 }) {
   // #1359: preferuj detailed (available+reason); fallback do available-only (stary backend).
   const defenseDetails = normalizeDefenseDetails(defenseOptionsDetailed, defenseOptions);
@@ -163,6 +176,29 @@ export function ActionSheet({
                 </div>
               ))
             ))}
+
+          {/* Mikstury/zużywalne z plecaka — dostępne bez wychodzenia do Ekwipunku.
+              Użycie nie zjada tury (parytet z zakładką Ekwipunek). */}
+          {mode === "spell" && potions.length > 0 && (
+            <div className="mb-1">
+              <div className="mb-1.5 mt-1 flex items-center gap-2.5 font-ui text-[10px] font-bold uppercase tracking-[0.16em] text-ember after:h-px after:flex-1 after:bg-line-soft after:content-['']">
+                Mikstury i zużywalne
+              </div>
+              {potions.map((p) => (
+                <Opt
+                  key={p.id}
+                  variant="heal"
+                  icon={<Flask weight="fill" size={19} />}
+                  name={p.label}
+                  desc="użycie nie zjada tury"
+                  meta={`×${p.quantity}`}
+                  cost={null}
+                  disabled={busy}
+                  onClick={() => onUsePotion?.(p.id, p.label)}
+                />
+              ))}
+            </div>
+          )}
 
           {mode === "move" && (
             <Opt

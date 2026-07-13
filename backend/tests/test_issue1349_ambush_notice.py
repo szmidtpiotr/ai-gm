@@ -123,3 +123,35 @@ def test_dusk_notice_unaffected():
     )
     assert notice["title"] == "Zapada zmierzch"
     assert "enemy" not in notice
+
+
+# ── PO wygranej walce (encounter_prompted): własny szablon, bez danych wroga ──
+# Bez tego notice wpadał w bazowy szablon "encounter" — modal po walce wyglądał
+# jak NOWA zasadzka z jednym przyciskiem „Walcz" (wznawiał podróż), zero opcji
+# odpoczynku i regeneracji HP/many.
+
+def test_encounter_prompted_notice_offers_rest_not_fight():
+    c = _db()
+    _hero(c, 1, 100, level=1)
+    _enemy(c, "bandit", "Bandyta", hp=20, ac=12, atk=3, die="d6")
+    notice = turns._travel_notice_for(_sf("encounter_prompted", "bandit"), conn=c, campaign_id=100)
+    assert notice is not None
+    assert notice["reason"] == "encounter_prompted"
+    # własny szablon post-walkowy, NIE zasadzka
+    assert notice["title"] == "Walka za tobą"
+    assert "Zasadzka" not in notice["title"]
+    assert notice["severity"] == "warn"
+    assert notice["can_resume"] is True
+    # wróg pokonany — bez bloku enemy/relative_threat (mylące po walce)
+    assert "enemy" not in notice
+    assert "relative_threat" not in notice
+
+
+def test_encounter_notice_unchanged_before_combat():
+    # regresja: pre-walkowy encounter dalej niesie wroga i szablon zasadzki
+    c = _db()
+    _hero(c, 1, 100, level=1)
+    _enemy(c, "bandit", "Bandyta", hp=20, ac=12, atk=3, die="d6")
+    notice = turns._travel_notice_for(_sf("encounter", "bandit"), conn=c, campaign_id=100)
+    assert notice["title"] == "Zasadzka w drodze"
+    assert notice["enemy"]["key"] == "bandit"

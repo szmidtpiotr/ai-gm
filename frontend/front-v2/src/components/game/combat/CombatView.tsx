@@ -37,7 +37,8 @@ import { Composer } from "../Composer";
 import { VitalsRail } from "../Vitals";
 import { CombatBanner } from "./CombatBanner";
 import { CombatActionBar } from "./CombatActionBar";
-import { ActionSheet, type SheetMode, type SpellAction } from "./ActionSheet";
+import { ActionSheet, type PotionAction, type SheetMode, type SpellAction } from "./ActionSheet";
+import { useInventory, useUseItem } from "@/hooks/useSheetData";
 import { ReactionModal, type ReactionChoice, type ReactionData } from "./ReactionModal";
 import { Dice3DOverlay, type DiceJob } from "./Dice3DOverlay";
 import { EnemyRevealCard } from "./EnemyRevealCard";
@@ -136,6 +137,36 @@ export function CombatView({
   const flee = useFlee(campaignId);
   const enemyTurn = useEnemyTurn(campaignId);
   const reactionMut = useResolveReaction(campaignId);
+  // Mikstury w arkuszu czarów: zużywalne z plecaka (can_use), bez komponentów
+  // rzemieślniczych. Użycie NIE zjada tury — parytet z zakładką Ekwipunek.
+  const inventory = useInventory(characterId);
+  const useItem = useUseItem(characterId);
+  const potionActions: PotionAction[] = useMemo(
+    () =>
+      (inventory.data ?? [])
+        .filter(
+          (i) =>
+            i.can_use && i.item_type === "consumable" && i.quantity > 0 && !i.is_component,
+        )
+        .map((i) => ({ id: i.id, label: i.label, quantity: i.quantity })),
+    [inventory.data],
+  );
+
+  async function doUsePotion(inventoryId: number, label: string) {
+    setSheet(null);
+    setBusy(true);
+    try {
+      await useItem.mutateAsync(inventoryId);
+      // HP z mikstury musi dojechać do banera walki (combatant hp_current jest
+      // źródłem prawdy w walce — loot_service synchronizuje, my odświeżamy odczyt).
+      qc.invalidateQueries({ queryKey: ["combat", campaignId] });
+      toast(`${label} — użyto.`, "success");
+    } catch {
+      toast("Nie udało się użyć przedmiotu.", "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Lista czarów bojowych (znane × katalog), koszt/ranga/afford.
   const spells = useSpells(characterId);
@@ -676,6 +707,8 @@ export function CombatView({
           onDeclare={doDeclare}
           defenseOptions={view.defenseOptions}
           defenseOptionsDetailed={view.defenseOptionsDetailed}
+          potions={potionActions}
+          onUsePotion={doUsePotion}
           onClose={() => setSheet(null)}
         />
       )}

@@ -849,7 +849,10 @@ function TravelInterruptModal({
   const alreadyCamped = notice.reason === "camped";
   // Spotkanie w drodze = zasadzka → przycisk WALCZ (startuje walkę); obóz/odpoczynek
   // nie mają sensu pod atakiem. onResume dla encountera inicjuje walkę (backend).
-  const isEncounter = notice.reason.startsWith("encounter");
+  // WYŁĄCZNIE exact "encounter" (PRZED walką) — "encounter_prompted" to stan PO
+  // wygranej walce: normalny układ Kontynuuj/Odpocznij/Rozbij obóz (bez tego modal
+  // wyglądał jak nowa zasadzka z jednym przyciskiem „Walcz", który wznawiał podróż).
+  const isEncounter = notice.reason === "encounter";
   // Odpoczynek możliwy tylko w bezpiecznym miejscu (karczma/osada) lub po obozie.
   const canRest = !isEncounter && (alreadyCamped || notice.can_rest === true);
   // Obóz oferujemy, gdy tu NIE bezpiecznie i jeszcze nie rozbity (to on odblokuje rest).
