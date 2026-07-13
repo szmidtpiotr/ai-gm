@@ -2,6 +2,7 @@
 // czary (grupy per tier), ekwipunek (sylwetka + plecak), reputacja, opis.
 // Reguły mechaniki (bonus, biegłość, tiery reputacji) = game_mechanics.md / config.
 import type { HeroSheet } from "@/lib/types";
+import { canRaceLearnSpell } from "@/lib/spells";
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === "string" ? Number(v) : (v as number);
@@ -219,7 +220,8 @@ export function groupSpells(
   const knownMap = new Map(known.map((k) => [k.spell_key, k]));
   const byTier = new Map<number, SpellRow[]>();
   for (const sp of catalog) {
-    if (sp.race_lock && race && sp.race_lock !== race) continue;
+    // #975 R6 — pokazuj tylko czary, których bohater może się faktycznie nauczyć.
+    if (!canRaceLearnSpell(race, sp.race_lock)) continue;
     const k = knownMap.get(sp.key);
     const tier = num(sp.tier, 1);
     const row: SpellRow = { ...sp, tier, known: !!k, rank: k?.rank ?? 0 };

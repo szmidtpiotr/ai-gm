@@ -35,3 +35,20 @@ export const SPELL_TYPE_ORDER: string[] = [
 export function spellTypeLabel(spellType: string): string {
   return SPELL_TYPE_PL[spellType] ?? spellType;
 }
+
+// #975 R6 — lustro backendowej reguły `spell_service.learn_spell` (race_lock).
+// Bohater widzi/uczy się TYLKO czarów, które faktycznie może poznać:
+//  • czar z race_lock innej rasy → zablokowany,
+//  • krasnolud (dwarf) uczy się WYŁĄCZNIE czarów Rdzeń-magii (race_lock=dwarf),
+//    więc czary bez race_lock (ludzkie) są dla niego niedostępne.
+// Nieznana rasa traktowana jak „human" (zgodnie z domyślną wartością backendu).
+export function canRaceLearnSpell(
+  race: string | undefined | null,
+  raceLock: string | undefined | null,
+): boolean {
+  const r = (race ?? "").trim().toLowerCase();
+  const lock = (raceLock ?? "").trim().toLowerCase();
+  if (lock && lock !== r) return false; // ekskluzywny dla innej rasy
+  if (!lock && r === "dwarf") return false; // krasnolud → tylko Rdzeń-magia
+  return true;
+}

@@ -15,6 +15,7 @@ import {
 } from "@/hooks/useOutcomes";
 import { usePublicSkills, useSpells, useSpellCatalog } from "@/hooks/useSheetData";
 import { readStats } from "@/lib/game";
+import { canRaceLearnSpell } from "@/lib/spells";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { HeroSheet } from "@/lib/types";
@@ -278,7 +279,8 @@ function MagicTab({
 
   const knownMap = new Map((known.data ?? []).map((k) => [k.spell_key, k.rank]));
   const rows = (catalog.data ?? [])
-    .filter((sp) => !(sp.race_lock && race && sp.race_lock !== race))
+    // #975 R6 — tylko czary uczalne przez rasę bohatera (lustro backendu).
+    .filter((sp) => canRaceLearnSpell(race, sp.race_lock))
     .map((sp) => ({ ...sp, rank: knownMap.get(sp.key) ?? 0 }))
     .sort((a, b) => Number(b.rank > 0) - Number(a.rank > 0) || (a.tier - b.tier) || (a.mana_cost - b.mana_cost));
 
@@ -296,7 +298,10 @@ function MagicTab({
             <span className="min-w-0 flex-1">
               <span className="block truncate font-ui text-label text-text">{sp.label}</span>
               <span className="font-mono text-[10px] text-text-3">
-                T{sp.tier} · {sp.mana_cost} many{isKnown ? ` · R${sp.rank}` : " · nieznane"}
+                T{sp.tier} · {sp.mana_cost} many
+                {sp.damage_die && <span className="text-danger"> · {sp.damage_die} obr.</span>}
+                {sp.heal_die && <span className="text-success"> · {sp.heal_die} lecz.</span>}
+                {isKnown ? ` · R${sp.rank}` : " · nieznane"}
               </span>
             </span>
             <BuyBtn
