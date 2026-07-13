@@ -4,6 +4,7 @@ Rytuał końca sesji: goły bohater lvl 1 vs wyekwipowany lvl 5 — power WYRAŹ
 przy tym samym systemie liczenia; budżet spotkania rośnie z power; wagi z meta stroją
 wynik bez zmiany kodu.
 """
+from _fixtures_schema import table_sql
 import json
 import sqlite3
 
@@ -23,11 +24,11 @@ def _db() -> sqlite3.Connection:
         CREATE TABLE character_inventory (id INTEGER PRIMARY KEY, character_id INTEGER,
             item_key TEXT, weapon_key TEXT, consumable_key TEXT, game_item_key TEXT,
             quantity INTEGER DEFAULT 1, equipped INTEGER DEFAULT 0, slot TEXT);
-        CREATE TABLE game_config_weapons (key TEXT PRIMARY KEY, damage_die TEXT, effect_json TEXT);
-        CREATE TABLE game_config_items (key TEXT PRIMARY KEY, ac_bonus INTEGER DEFAULT 0, effect_json TEXT);
-        CREATE TABLE game_config_spells (key TEXT PRIMARY KEY, tier INTEGER);
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_spells") + """
         CREATE TABLE character_spells (character_id INTEGER, spell_key TEXT, rank INTEGER DEFAULT 1);
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_meta") + """
         """
     )
     return c
@@ -126,10 +127,7 @@ def test_composer_budget_uses_power_when_given():
     c = _db()
     c.executescript(
         """
-        CREATE TABLE game_config_enemies (key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER,
-            ac_base INTEGER, attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER,
-            attacks_per_turn INTEGER, tier TEXT, min_level INTEGER, max_level INTEGER,
-            terrain_tags TEXT, world_scope TEXT, review_status TEXT, is_active INTEGER);
+        """ + table_sql("game_config_enemies") + """
         """
     )
     c.execute("INSERT INTO game_config_enemies VALUES "

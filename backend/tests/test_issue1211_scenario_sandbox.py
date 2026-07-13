@@ -15,6 +15,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 # ─── Hermetic in-memory DB ───────────────────────────────────────────────────
@@ -428,9 +429,7 @@ def test_prepare_strips_engine_owned_session_flags():
 
 def _mk_catalog(db):
     db.executescript("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT, tier TEXT, is_active INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_enemies") + """
         CREATE TABLE npcs (
             id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, label TEXT,
             npc_type TEXT DEFAULT 'neutral', is_shop INTEGER DEFAULT 0,

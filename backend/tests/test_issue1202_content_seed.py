@@ -17,6 +17,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _fixtures_schema import table_sql
 
 from app.migrations_admin import (  # noqa: E402
     _LEGACY_CONTENT_COLUMNS_1202,
@@ -32,15 +33,9 @@ def _build_legacy_db():
     conn = sqlite3.connect(":memory:")
     conn.executescript(
         """
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT,
-            image_prompt TEXT, durability_base INTEGER,
-            image_url TEXT, image_gen_prompt TEXT);
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT,
-            image_prompt TEXT, durability_base INTEGER);
-        CREATE TABLE game_config_loot_entries (
-            id INTEGER PRIMARY KEY, loot_table_key TEXT, currency_code TEXT);
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_loot_entries") + """
         CREATE TABLE game_dungeons (
             key TEXT PRIMARY KEY, label TEXT, difficulty_config_json TEXT);
         CREATE TABLE game_locations (
@@ -101,7 +96,7 @@ def _build_content_db(path):
     conn.executescript(
         """
         CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
-        CREATE TABLE game_config_stats (key TEXT PRIMARY KEY, label TEXT);
+        """ + table_sql("game_config_stats") + """
         CREATE TABLE npcs (
             id INTEGER PRIMARY KEY, key TEXT, label TEXT, review_status TEXT);
         CREATE TABLE game_locations (

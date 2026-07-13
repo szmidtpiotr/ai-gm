@@ -11,18 +11,14 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _fixtures_schema import table_sql
 
 
 def _schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
-        CREATE TABLE game_config_enemies (
-          key TEXT PRIMARY KEY, label TEXT, hp_base INTEGER, ac_base INTEGER,
-          attack_bonus INTEGER, damage_die TEXT, damage_bonus INTEGER,
-          attacks_per_turn INTEGER, tier TEXT, min_level INTEGER, max_level INTEGER,
-          terrain_tags TEXT, world_scope TEXT, review_status TEXT, is_active INTEGER
-        );
-        CREATE TABLE game_config_meta (key TEXT PRIMARY KEY, value TEXT);
+        """ + table_sql("game_config_enemies") + """
+        """ + table_sql("game_config_meta") + """
         """
     )
     # #1345: te testy sprawdzają RDZEŃ filtra (pasmo+teren) przy delta=0 — wyłącz

@@ -22,6 +22,7 @@ import sys
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 # ── #1146: fallback pool ──────────────────────────────────────────────────────
@@ -72,11 +73,7 @@ def _make_conn() -> sqlite3.Connection:
             campaign_id INTEGER NOT NULL,
             status TEXT NOT NULL DEFAULT 'active'
         );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1
-        );
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies (key, label) VALUES
             ('goblin', 'Goblin'), ('bandit', 'Bandyta'),
             ('unknown_attacker', 'Nieznany napastnik');
