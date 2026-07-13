@@ -843,6 +843,12 @@ def admin_character_full(
         sheet = json.loads(row["sheet_json"] or "{}")
         campaign_id = int(row["campaign_id"] or 0)
         locked, lock_reason = character_inspector_live_lock(conn, campaign_id)
+        # Skille: unia pełnego katalogu z rankami arkusza — arkusz przechowuje tylko
+        # podzbiór z kreatora, a Inspektor musi móc nadać KAŻDY skill (np. arcane_ward,
+        # mana_shield), więc brakujące klucze katalogu dostają rangę 0.
+        skills = {k: int(v or 0) for k, v in (sheet.get("skills") or {}).items()}
+        for cat_row in conn.execute("SELECT key FROM game_config_skills"):
+            skills.setdefault(cat_row["key"], 0)
     finally:
         conn.close()
 
@@ -874,7 +880,7 @@ def admin_character_full(
         "owner_id": row["user_id"],
         "stats": stats,
         "stat_modifiers": stat_modifiers,
-        "skills": sheet.get("skills") or {},
+        "skills": skills,
         "hp": int(sheet.get("current_hp") or 0),
         "max_hp": int(sheet.get("max_hp") or 0),
         "mana": int(sheet.get("current_mana") or 0),
