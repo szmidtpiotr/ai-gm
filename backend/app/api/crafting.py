@@ -17,10 +17,12 @@ router = APIRouter(tags=["Crafting"])
 
 
 @router.get("/locations/{loc_ref}/crafting")
-def location_crafting(loc_ref: str):
-    """Przepisy dostępne u rzemieślników w lokacji (loc_ref = klucz lub id)."""
+def location_crafting(loc_ref: str, character_id: int | None = Query(None)):
+    """Przepisy dostępne u rzemieślników w lokacji (loc_ref = klucz lub id).
+
+    #1375: character_id dokłada receptury lootowe znane graczowi (usługa u rzemieślnika)."""
     try:
-        return crafting_service.get_location_crafting(loc_ref)
+        return crafting_service.get_location_crafting(loc_ref, character_id=character_id)
     except CraftError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
@@ -28,6 +30,7 @@ def location_crafting(loc_ref: str):
 class CraftRequest(BaseModel):
     recipe_key: str
     target_inventory_id: int | None = None
+    mode: str = "self"  # #1375: 'self' (skill) | 'service' (zlecenie, ×1.5, bez skilla)
     user_id: int | None = None
 
 
@@ -45,6 +48,7 @@ def craft_recipe(
             character_id,
             body.recipe_key,
             target_inventory_id=body.target_inventory_id,
+            mode=body.mode,
         )
     except CraftError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)

@@ -2067,12 +2067,18 @@ def _preview_loot_from_roll_items(
             qty = max(1, int(raw.get("quantity") or 1))
             key = ""
             item_type = "item"
+            recipe_key = ""
             if raw.get("weapon_key"):
                 key = str(raw.get("weapon_key") or "").strip()
                 item_type = "weapon"
             elif raw.get("consumable_key"):
                 key = str(raw.get("consumable_key") or "").strip()
                 item_type = "consumable"
+            elif raw.get("recipe_key"):
+                # #1375: receptura jako drop — przenieś recipe_key do granta (nauka/duplikat).
+                recipe_key = str(raw.get("recipe_key") or "").strip()
+                key = recipe_key
+                item_type = "recipe"
             elif raw.get("item_key"):
                 key = str(raw.get("item_key") or "").strip()
                 item_type = "item"
@@ -2080,11 +2086,17 @@ def _preview_loot_from_roll_items(
                 continue
             # T6 (#1352): narracyjny fallback consolation ma gotową etykietę (item_key
             # '__narrative__' nie ma wpisu w katalogu) — użyj jej zamiast key.replace.
-            label = (
-                str(raw.get("label") or "").strip()
-                or _lookup_loot_label(conn, item_type, key)
-                or key.replace("_", " ")
-            )
+            if item_type == "recipe":
+                _rl = conn.execute(
+                    "SELECT label FROM game_config_recipes WHERE key = ? LIMIT 1", (key,)
+                ).fetchone()
+                label = str(raw.get("label") or (_rl["label"] if _rl else "") or key.replace("_", " "))
+            else:
+                label = (
+                    str(raw.get("label") or "").strip()
+                    or _lookup_loot_label(conn, item_type, key)
+                    or key.replace("_", " ")
+                )
             entry = {
                 "label": label,
                 "item_type": item_type,
@@ -2093,6 +2105,8 @@ def _preview_loot_from_roll_items(
                 "key": key,
                 "enemy_loot_tier": loot_tier if item_type == "weapon" else None,
             }
+            if recipe_key:
+                entry["recipe_key"] = recipe_key  # #1375 — grant learns/dupes it
             # T6 (#1352): przenieś znacznik rolled/consolation do loot_pool, żeby front
             # mógł dobrać ton modala („Niewiele przy sobie miał: …").
             origin = raw.get("origin")
@@ -3065,7 +3079,8 @@ def _resolve_aoe_single_target(
                 )
                 _loot_tier = str(tgt.get("loot_tier") or "") or None
                 # T6 (#1352): każde ciało coś ma — consolation gdy losowanie puste.
-                loot_items = roll_loot_with_consolation(ek)
+                # #1375: ch_id → ×2 boost nieodkrytych receptur.
+                loot_items = roll_loot_with_consolation(ek, character_id=ch_id)
                 tgt_loot = (
                     _preview_loot_from_roll_items(loot_items, loot_tier=_loot_tier, conn=conn)
                     if loot_items else []
@@ -7504,7 +7519,8 @@ def _resolve_player_attack_turn(
                     else:
                         # Solo path — T6 (#1352): consolation zapewnia niepusty loot_pool
                         # (rolled) albo jeden narracyjny drobiazg (consolation).
-                        loot_items = roll_loot_with_consolation(ek)
+                        # #1375: ch_id → ×2 boost nieodkrytych receptur.
+                        loot_items = roll_loot_with_consolation(ek, character_id=ch_id)
                         loot = (
                             _preview_loot_from_roll_items(loot_items, loot_tier=_enemy_loot_tier, conn=conn)
                             if loot_items else []

@@ -518,7 +518,7 @@ class LootTableDeleteReq(BaseModel):
 
 class LootEntryReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    source_type: str  # "item" | "weapon" | "consumable"
+    source_type: str  # "item" | "weapon" | "consumable" | "recipe" (#1375)
     source_key: str
     weight: int = 10
     qty_min: int = 1
@@ -528,8 +528,8 @@ class LootEntryReq(BaseModel):
     def _validate_source(self) -> "LootEntryReq":
         st = (self.source_type or "").strip().lower()
         sk = (self.source_key or "").strip()
-        if st not in ("item", "weapon", "consumable"):
-            raise ValueError("source_type must be item, weapon, or consumable")
+        if st not in ("item", "weapon", "consumable", "recipe"):
+            raise ValueError("source_type must be item, weapon, consumable, or recipe")
         if not sk:
             raise ValueError("source_key is required")
         self.source_type = st
@@ -2511,10 +2511,12 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
         # consumables live in game_config_items (item_type='consumable') → stored as item_key
         item_key = req.source_key if req.source_type in ("item", "consumable") else None
         weapon_key = req.source_key if req.source_type == "weapon" else None
+        recipe_key = req.source_key if req.source_type == "recipe" else None  # #1375
         row = upsert_loot_entry(
             key,
             item_key=item_key,
             weapon_key=weapon_key,
+            recipe_key=recipe_key,
             weight=req.weight,
             qty_min=req.qty_min,
             qty_max=req.qty_max,
@@ -2528,6 +2530,8 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
             raise HTTPException(status_code=422, detail="source_key must reference an existing item or consumable") from None
         if err == "weapon_not_found":
             raise HTTPException(status_code=422, detail="source_key must reference an existing weapon") from None
+        if err == "recipe_not_found":
+            raise HTTPException(status_code=422, detail="source_key must reference an existing recipe") from None
         if err == "invalid_loot_entry_source":
             raise HTTPException(status_code=422, detail="Invalid loot entry source") from None
         if err == "invalid_weight":

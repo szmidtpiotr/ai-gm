@@ -2982,24 +2982,27 @@ def delete_loot_table(key: str, *, force: bool) -> None:
 
 
 _LOOT_ENTRY_SELECT = """
-    SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key,
+    SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key, e.recipe_key,
            e.weight, e.qty_min, e.qty_max,
            i.label AS item_label,
            c.label AS consumable_label,
            w.label AS weapon_label,
-           COALESCE(i.label, c.label, w.label) AS source_label,
+           rc.label AS recipe_label,
+           COALESCE(i.label, c.label, w.label, rc.label) AS source_label,
            CASE
                WHEN e.weapon_key IS NOT NULL THEN 'weapon'
                WHEN e.consumable_key IS NOT NULL THEN 'consumable'
+               WHEN e.recipe_key IS NOT NULL THEN 'recipe'
                WHEN i.item_type = 'consumable' THEN 'consumable'
                WHEN e.item_key IS NOT NULL THEN 'item'
                ELSE 'item'
            END AS source_type,
-           COALESCE(e.item_key, e.consumable_key, e.weapon_key) AS source_key
+           COALESCE(e.item_key, e.consumable_key, e.weapon_key, e.recipe_key) AS source_key
     FROM game_config_loot_entries e
     LEFT JOIN game_config_items i ON i.key = e.item_key
     LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
     LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
+    LEFT JOIN game_config_recipes rc ON rc.key = e.recipe_key
 """
 
 
@@ -3026,6 +3029,7 @@ def upsert_loot_entry(
     item_key: str | None = None,
     consumable_key: str | None = None,
     weapon_key: str | None = None,
+    recipe_key: str | None = None,
     weight: int,
     qty_min: int,
     qty_max: int,
@@ -3034,7 +3038,8 @@ def upsert_loot_entry(
     ik = _validate_key(item_key) if item_key and str(item_key).strip() else None
     ck = _validate_key(consumable_key) if consumable_key and str(consumable_key).strip() else None
     wk = _validate_key(weapon_key) if weapon_key and str(weapon_key).strip() else None
-    if sum(1 for x in (ik, ck, wk) if x is not None) != 1:
+    rk = _validate_key(recipe_key) if recipe_key and str(recipe_key).strip() else None
+    if sum(1 for x in (ik, ck, wk, rk) if x is not None) != 1:
         raise ValueError("invalid_loot_entry_source")
     if weight < 1 or weight > 100:
         raise ValueError("invalid_weight")
@@ -3073,7 +3078,7 @@ def upsert_loot_entry(
                 (lt, ck, weight, qty_min, qty_max),
             )
             row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.consumable_key = ?", (lt, ck))
-        else:
+        elif wk is not None:
             if not _fetch_one(conn, "SELECT key FROM game_config_weapons WHERE key = ?", (wk,)):
                 raise ValueError("weapon_not_found")
             conn.execute(
@@ -3086,6 +3091,20 @@ def upsert_loot_entry(
                 (lt, wk, weight, qty_min, qty_max),
             )
             row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.weapon_key = ?", (lt, wk))
+        else:
+            # #1375: receptura jako drop lootu (4-way XOR recipe_key).
+            if not _fetch_one(conn, "SELECT key FROM game_config_recipes WHERE key = ?", (rk,)):
+                raise ValueError("recipe_not_found")
+            conn.execute(
+                """
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, recipe_key, weight, qty_min, qty_max)
+                VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?)
+                ON CONFLICT(loot_table_key, recipe_key) WHERE recipe_key IS NOT NULL DO UPDATE SET
+                    weight = excluded.weight, qty_min = excluded.qty_min, qty_max = excluded.qty_max
+                """,
+                (lt, rk, weight, qty_min, qty_max),
+            )
+            row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.recipe_key = ?", (lt, rk))
         conn.commit()
         return dict(row) if row else {}
     finally:

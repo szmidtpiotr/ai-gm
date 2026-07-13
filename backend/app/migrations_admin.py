@@ -6663,6 +6663,196 @@ def _ensure_recipes_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _upgrade_loot_entries_four_way_xor(conn: sqlite3.Connection) -> None:
+    """#1375 BL-E1 — 3-way XOR → 4-way: dodaj recipe_key (receptura jako drop).
+
+    Loot entry może teraz wskazywać dokładnie jeden z: item_key / consumable_key /
+    weapon_key / recipe_key. Wymaga przebudowy tabeli (SQLite nie umie zmienić CHECK
+    in-place). Zachowuje wszystkie istniejące kolumny (game_item_key, currency_code)
+    wykryte przez PRAGMA. Idempotentne — pomija gdy recipe_key już istnieje.
+    """
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
+    ).fetchone():
+        return
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+    if "recipe_key" in cols:
+        return
+    if "weapon_key" not in cols or "consumable_key" not in cols:
+        # 4-way opiera się na 3-way — poczekaj aż tamta migracja dołoży kolumny.
+        logger.info("admin_migration_loot_entries_four_way_deferred")
+        return
+    has_gik = "game_item_key" in cols
+    has_currency = "currency_code" in cols
+    logger.info("admin_migration_upgrade_loot_entries_four_way_xor")
+    gik_col = "game_item_key TEXT,\n" if has_gik else ""
+    cur_col = "currency_code TEXT,\n" if has_currency else ""
+    gik_name = "game_item_key, " if has_gik else ""
+    cur_name = "currency_code, " if has_currency else ""
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.executescript(
+            f"""
+            DROP INDEX IF EXISTS idx_loot_entries_table;
+            DROP INDEX IF EXISTS ux_loot_entries_item;
+            DROP INDEX IF EXISTS ux_loot_entries_consumable;
+            DROP INDEX IF EXISTS ux_loot_entries_weapon;
+            DROP INDEX IF EXISTS ux_loot_entries_recipe;
+            CREATE TABLE game_config_loot_entries_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+                item_key TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
+                consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE,
+                weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
+                recipe_key TEXT REFERENCES game_config_recipes(key) ON DELETE CASCADE,
+                {gik_col}{cur_col}weight INTEGER NOT NULL DEFAULT 10,
+                qty_min INTEGER NOT NULL DEFAULT 1,
+                qty_max INTEGER NOT NULL DEFAULT 1,
+                CHECK (
+                    (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN recipe_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+                )
+            );
+            INSERT INTO game_config_loot_entries_new
+                (id, loot_table_key, item_key, consumable_key, weapon_key, recipe_key,
+                 {gik_name}{cur_name}weight, qty_min, qty_max)
+            SELECT id, loot_table_key, item_key,
+                   CASE WHEN typeof(consumable_key) = 'null' THEN NULL ELSE consumable_key END,
+                   CASE WHEN typeof(weapon_key) = 'null' THEN NULL ELSE weapon_key END,
+                   NULL,
+                   {gik_name}{cur_name}weight, qty_min, qty_max
+            FROM game_config_loot_entries;
+            DROP TABLE game_config_loot_entries;
+            ALTER TABLE game_config_loot_entries_new RENAME TO game_config_loot_entries;
+            CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+                ON game_config_loot_entries(loot_table_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_item
+                ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_consumable
+                ON game_config_loot_entries(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
+                ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_recipe
+                ON game_config_loot_entries(loot_table_key, recipe_key) WHERE recipe_key IS NOT NULL;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _ensure_recipe_loot_schema(conn: sqlite3.Connection) -> None:
+    """#1375 BL-E1 — receptury jako drop lootu + trzy rozłączne pule.
+
+    Dokłada:
+      • game_config_recipes.availability (crafter/experiment/loot) — backfill z is_hidden.
+      • game_config_recipes.set_key (FK do game_config_sets) — grupowanie w zakładce.
+      • character_recipes.source (loot/experiment/craft) — skąd znana receptura.
+      • loot_entries.recipe_key (4-way XOR) — przez _upgrade_loot_entries_four_way_xor.
+      • przedmioty „Zbędny zwój receptury" per tier (sprzedawalne — duplikat dropu).
+      • seed pilotu: receptury lootowe setu Wilczego Łowcy (availability='loot').
+
+    Idempotentne: ADD COLUMN ze swallow duplicate + backfill WHERE ... IS NULL +
+    INSERT OR IGNORE.
+    """
+    # 1) game_config_recipes: availability + set_key (nullable → idempotentny backfill).
+    for ddl in (
+        "ALTER TABLE game_config_recipes ADD COLUMN availability TEXT",
+        "ALTER TABLE game_config_recipes ADD COLUMN set_key TEXT",
+    ):
+        try:
+            conn.execute(ddl)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+    # Backfill availability ze starego is_hidden (tylko puste — nie klobruj 'loot').
+    conn.execute(
+        """
+        UPDATE game_config_recipes
+        SET availability = CASE WHEN COALESCE(is_hidden, 0) = 1 THEN 'experiment' ELSE 'crafter' END
+        WHERE availability IS NULL OR TRIM(availability) = ''
+        """
+    )
+
+    # 2) character_recipes.source (skąd znana). Backfill istniejących → 'experiment'
+    #    (jedyna dotychczasowa ścieżka odkrycia to eksperyment #1341).
+    try:
+        conn.execute("ALTER TABLE character_recipes ADD COLUMN source TEXT")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower() and "no such table" not in str(e).lower():
+            raise
+    try:
+        conn.execute(
+            "UPDATE character_recipes SET source = 'experiment' "
+            "WHERE source IS NULL OR TRIM(source) = ''"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # 3) loot_entries → 4-way XOR (recipe_key).
+    _upgrade_loot_entries_four_way_xor(conn)
+
+    # 4) Przedmioty „Zbędny zwój receptury" per tier — sprzedawalny duplikat dropu.
+    #    Numbers Policy (wartości startowe): 25% typowego service_cost, min 5 gp.
+    scrolls = [
+        ("spare_recipe_scroll_easy", "Zbędny zwój receptury (pospolity)", 5.0),
+        ("spare_recipe_scroll_medium", "Zbędny zwój receptury", 10.0),
+        ("spare_recipe_scroll_hard", "Zbędny zwój receptury (rzadki)", 20.0),
+    ]
+    _scroll_desc = ("Powielony zwój znanej już receptury — bez wartości dla ciebie, "
+                    "lecz rzemieślnik lub gildia go odkupią.")
+    for key, label, price in scrolls:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_items
+            (key, kind, label, description, price_gp, created_by, approved, is_active)
+            VALUES (?, 'item', ?, ?, ?, 'seed', 1, 1)
+            """,
+            (key, label, _scroll_desc, price),
+        )
+
+    # 5) Seed pilotu: receptury lootowe setu Wilczego Łowcy (availability='loot',
+    #    set_key='wolf_hunter'). Wynik = części setu z _ensure_wolf_hunter_content.
+    #    Duplikat dropu znanej receptury → zwój (grant_loot obsługuje).
+    loot_recipes = [
+        ("recipe_wolf_hide_cloak", "Receptura: Płaszcz z wilczej skóry",
+         json.dumps([{"item_key": "wolf_pelt", "qty": 3}], ensure_ascii=False),
+         "armor", "wolf_hide_cloak", 40, "easy"),
+        ("recipe_wolf_fang_dagger", "Receptura: Sztylet z wilczego kła",
+         json.dumps([{"item_key": "kiel_wilczy", "qty": 2},
+                     {"item_key": "ruda_zelaza", "qty": 1}], ensure_ascii=False),
+         "weapon", "wolf_fang_dagger", 55, "medium"),
+        ("recipe_wolf_totem_charm", "Receptura: Totem wilczego ducha",
+         json.dumps([{"item_key": "wolf_pelt", "qty": 2},
+                     {"item_key": "kiel_wilczy", "qty": 3}], ensure_ascii=False),
+         "item", "wolf_totem_charm", 60, "hard"),
+    ]
+    for key, label, inputs, otype, okey, cost, tier in loot_recipes:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_recipes
+            (key, label, inputs_json, output_type, output_key, output_qty,
+             service_cost_gold, crafter_type, is_hidden, availability, set_key,
+             craft_tier, created_by)
+            VALUES (?, ?, ?, ?, ?, 1, ?, 'smith', 0, 'loot', 'wolf_hunter', ?, 'seed')
+            """,
+            (key, label, inputs, otype, okey, cost, tier),
+        )
+        # Wpis lootowy na wspólnej tabeli tieru standardowego (wilki tieru standard).
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO game_config_loot_entries
+            (loot_table_key, recipe_key, weight, qty_min, qty_max)
+            SELECT 'loot_tier_standard', ?, 6, 1, 1
+            WHERE EXISTS (SELECT 1 FROM game_config_loot_tables WHERE key = 'loot_tier_standard')
+            """,
+            (key,),
+        )
+    conn.commit()
+
+
 def _ensure_sets_schema(conn: sqlite3.Connection) -> None:
     """#1340 BL-D1 — sety ekwipunku: bonusy za komplet.
 
@@ -7231,6 +7421,7 @@ def run_admin_migrations() -> None:
         _ensure_wolf_hunter_content(conn)  # #1347 — treść części setu wolf_hunter + źródła zdobycia
         _ensure_experiment_schema(conn)  # #1341 BL-D2 — eksperymenty: ukryte receptury + odkrycia
         _ensure_guild_merchant_schema(conn)  # #1342 BL-D3 — gildia kupiecka + no_trade
+        _ensure_recipe_loot_schema(conn)  # #1375 BL-E1 — receptury jako drop lootu + pule availability
     except sqlite3.OperationalError as e:
         # #1163 — a helper referenced a table/column another runner adds later
         # (fresh DB, cyclic graph). Defer the remainder of this pass; the fix-point

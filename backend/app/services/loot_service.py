@@ -439,6 +439,7 @@ def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
         "item_key": row["item_key"],
         "weapon_key": row["weapon_key"],
         "consumable_key": row["consumable_key"],
+        "recipe_key": _rget(row, "recipe_key"),  # #1375 — receptura jako drop
         "chance": chance,
         "quantity_min": max(1, int(row["qty_min"] or 1)),
         "quantity_max": max(1, int(row["qty_max"] or 1)),
@@ -558,10 +559,21 @@ def _resolve_tier_table_key(conn: sqlite3.Connection, enemy_row: sqlite3.Row) ->
 
 
 def _entry_raw_key(row: sqlite3.Row) -> str:
-    """Raw catalog key of a loot entry (weapon > item > consumable, matching XOR)."""
+    """Raw catalog key of a loot entry (weapon > item > consumable > recipe, matching XOR)."""
     return str(
-        (_rget(row, "weapon_key") or _rget(row, "item_key") or _rget(row, "consumable_key") or "")
+        (_rget(row, "weapon_key") or _rget(row, "item_key") or _rget(row, "consumable_key")
+         or _rget(row, "recipe_key") or "")
     ).strip()
+
+
+def _loot_entries_has_recipe(conn: sqlite3.Connection) -> bool:
+    """#1375: czy loot_entries ma kolumnę recipe_key (4-way XOR). Odporne na stare/
+    testowe schematy 3-way — brak kolumny → receptury po prostu nie wypadają."""
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+        return "recipe_key" in cols
+    except sqlite3.OperationalError:
+        return False
 
 
 def _fetch_table_entries(
@@ -569,9 +581,10 @@ def _fetch_table_entries(
 ) -> list[sqlite3.Row]:
     """Active loot entries for a single table. with_allowed pulls weapon
     allowed_classes for the MP class-filtered roll."""
+    rk = "e.recipe_key," if _loot_entries_has_recipe(conn) else "NULL AS recipe_key,"
     if with_allowed:
-        sql = """
-            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max,
+        sql = f"""
+            SELECT e.item_key, e.weapon_key, e.consumable_key, {rk} e.weight, e.qty_min, e.qty_max,
                    w.allowed_classes
             FROM game_config_loot_entries e
             JOIN game_config_loot_tables t ON t.key = e.loot_table_key
@@ -580,8 +593,8 @@ def _fetch_table_entries(
             ORDER BY e.id ASC
         """
     else:
-        sql = """
-            SELECT e.item_key, e.weapon_key, e.consumable_key, e.weight, e.qty_min, e.qty_max
+        sql = f"""
+            SELECT e.item_key, e.weapon_key, e.consumable_key, {rk} e.weight, e.qty_min, e.qty_max
             FROM game_config_loot_entries e
             JOIN game_config_loot_tables t ON t.key = e.loot_table_key
             WHERE e.loot_table_key = ? AND t.is_active = 1
@@ -657,11 +670,31 @@ def get_loot_table(enemy_key: str) -> list[dict]:
     return [_row_to_loot_entry(r) for r in rows]
 
 
-def roll_loot(enemy_key: str) -> list[dict]:
+# #1375 BL-E1 — anty-frustracja RNG: nieodkryta receptura dostaje ×2 wagę dropu
+# (Numbers Policy, sandbox-tunable). Wymaga kontekstu postaci (co już zna).
+RECIPE_UNDISCOVERED_WEIGHT_BOOST = 2.0
+
+
+def _known_recipe_keys(conn: sqlite3.Connection, character_id: int) -> set[str]:
+    """Klucze receptur już znanych przez postać (character_recipes)."""
+    try:
+        rows = conn.execute(
+            "SELECT recipe_key FROM character_recipes WHERE character_id = ?",
+            (int(character_id),),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return set()
+    return {str(r["recipe_key"]).strip() for r in rows if _rget(r, "recipe_key")}
+
+
+def roll_loot(enemy_key: str, character_id: int | None = None) -> list[dict]:
     """
     Roll each loot-table entry independently for enemy_key.
     Returns [] when enemy or loot table is missing, drop_chance gate fails, or no entry rolls.
     drop_chance (0.0–1.0) is an outer gate: if it fails, no items roll at all.
+
+    #1375: gdy podano character_id, nieodkryte receptury (recipe_key nie w
+    character_recipes) dostają ×RECIPE_UNDISCOVERED_WEIGHT_BOOST szansę dropu.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
@@ -671,19 +704,23 @@ def roll_loot(enemy_key: str) -> list[dict]:
             "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
             (ek,),
         ).fetchone()
-    if not enemy or not enemy["loot_table_key"]:
-        return []
-    dc = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
-    if random.random() > dc:
-        return []
-
-    entries = get_loot_table(ek)
-    if not entries:
-        return []
+        if not enemy or not enemy["loot_table_key"]:
+            return []
+        dc = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
+        if random.random() > dc:
+            return []
+        entries = get_loot_table(ek)
+        if not entries:
+            return []
+        known = _known_recipe_keys(conn, character_id) if character_id is not None else set()
 
     rolled: list[dict] = []
     for entry in entries:
-        if random.random() > float(entry.get("chance") or 0.0):
+        chance = float(entry.get("chance") or 0.0)
+        rkey = str(entry.get("recipe_key") or "").strip()
+        if rkey and character_id is not None and rkey not in known:
+            chance = min(1.0, chance * RECIPE_UNDISCOVERED_WEIGHT_BOOST)
+        if random.random() > chance:
             continue
         qmin = max(1, int(entry.get("quantity_min") or 1))
         qmax = max(qmin, int(entry.get("quantity_max") or qmin))
@@ -693,6 +730,7 @@ def roll_loot(enemy_key: str) -> list[dict]:
                 "item_key": entry.get("item_key"),
                 "weapon_key": entry.get("weapon_key"),
                 "consumable_key": entry.get("consumable_key"),
+                "recipe_key": entry.get("recipe_key"),
                 "quantity": qty,
             }
         )
@@ -752,18 +790,20 @@ def _roll_consolation_drop(conn: sqlite3.Connection) -> dict:
     }
 
 
-def roll_loot_with_consolation(enemy_key: str) -> list[dict]:
+def roll_loot_with_consolation(enemy_key: str, character_id: int | None = None) -> list[dict]:
     """T6 (#1352) — roll_loot() z gwarancją minimalnego dropu.
 
     Zawsze niepusty dla realnego wroga: trafione łupy → origin='rolled'; jeśli
     losowanie dało zero → dokładnie jedna pozycja origin='consolation'. Pusty/nieznany
     klucz → [] (bez consolation dla nie-wroga). Solo victory path walki używa tej
     funkcji zamiast surowego roll_loot(). Dungeon/MP → osobne issue (spec T6 pkt 4).
+
+    #1375: character_id przekazywany do roll_loot dla ×2 boostu nieodkrytych receptur.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
         return []
-    rolled = roll_loot(ek)
+    rolled = roll_loot(ek, character_id=character_id)
     if rolled:
         for r in rolled:
             r["origin"] = "rolled"
@@ -1048,6 +1088,89 @@ def _resolve_game_item_key(conn: sqlite3.Connection, key: str) -> str | None:
     return k if row else None
 
 
+# #1375 BL-E1 — mapowanie tieru receptury → sprzedawalny zwój (duplikat dropu).
+_RECIPE_SCROLL_BY_TIER = {
+    "easy": "spare_recipe_scroll_easy",
+    "medium": "spare_recipe_scroll_medium",
+    "hard": "spare_recipe_scroll_hard",
+}
+
+
+def _grant_recipe_drop(
+    conn: sqlite3.Connection, character_id: int, recipe_key: str, source: str
+) -> dict | None:
+    """Obsłuż drop receptury (#1375). Zwraca kartę do `granted` albo None gdy
+    receptura nie istnieje. Pierwszy raz → nauka; duplikat → zwój do plecaka."""
+    rec = conn.execute(
+        "SELECT key, label, set_key, craft_tier, availability FROM game_config_recipes "
+        "WHERE key = ? AND is_active = 1 LIMIT 1",
+        (recipe_key,),
+    ).fetchone()
+    if not rec:
+        logger.warning("loot_recipe_key_missing", character_id=character_id, recipe_key=recipe_key)
+        return None
+    label = str(rec["label"] or recipe_key)
+    known = conn.execute(
+        "SELECT 1 FROM character_recipes WHERE character_id = ? AND recipe_key = ? LIMIT 1",
+        (int(character_id), recipe_key),
+    ).fetchone()
+    if not known:
+        # Pierwszy egzemplarz → automatyczna, trwała nauka (bez wymogu skilla).
+        conn.execute(
+            "INSERT OR IGNORE INTO character_recipes (character_id, recipe_key, source) "
+            "VALUES (?, ?, 'loot')",
+            (int(character_id), recipe_key),
+        )
+        return {
+            "label": label,
+            "item_type": "recipe",
+            "quantity": 1,
+            "source": source,
+            "key": recipe_key,
+            "recipe_learned": True,
+            "set_key": rec["set_key"],
+            "message": (f"📜 Znalazłeś recepturę: {label} — możesz ją wykonać samodzielnie "
+                        "(Rzemiosło) lub zlecić rzemieślnikowi."),
+        }
+    # Duplikat → sprzedawalny zwój wg tieru receptury.
+    tier = str(rec["craft_tier"] or "medium").strip().lower()
+    scroll_key = _RECIPE_SCROLL_BY_TIER.get(tier, _RECIPE_SCROLL_BY_TIER["medium"])
+    scroll = conn.execute(
+        "SELECT key, label FROM game_items WHERE key = ? AND is_active = 1 LIMIT 1",
+        (scroll_key,),
+    ).fetchone()
+    if not scroll:
+        return None
+    existing = conn.execute(
+        "SELECT id, quantity FROM character_inventory "
+        "WHERE character_id = ? AND item_key = ? AND weapon_key IS NULL AND consumable_key IS NULL "
+        "ORDER BY id ASC LIMIT 1",
+        (int(character_id), scroll_key),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE character_inventory SET quantity = ? WHERE id = ?",
+            (int(existing["quantity"] or 0) + 1, int(existing["id"])),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO character_inventory "
+            "(character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json) "
+            "VALUES (?, ?, NULL, NULL, 1, 0, NULL, ?, ?)",
+            (int(character_id), scroll_key, source,
+             json.dumps({"duplicate_recipe_key": recipe_key}, ensure_ascii=False)),
+        )
+    return {
+        "label": str(scroll["label"] or scroll_key),
+        "item_type": "item",
+        "quantity": 1,
+        "source": source,
+        "key": scroll_key,
+        "recipe_duplicate_of": recipe_key,
+        "message": f"Masz już recepturę „{label}” — zbędny zwój możesz sprzedać rzemieślnikowi.",
+    }
+
+
 def grant_loot_to_character(
     character_id: int,
     loot_items: list[dict],
@@ -1091,6 +1214,16 @@ def grant_loot_to_character(
             if not isinstance(raw, dict):
                 continue
             qty = max(1, int(raw.get("quantity") or 1))
+
+            # #1375 BL-E1: receptura jako drop — NIE trafia do plecaka. Pierwsza →
+            # automatyczna nauka (character_recipes, source='loot'). Duplikat znanej →
+            # sprzedawalny „Zbędny zwój receptury" per tier (bez rerollu).
+            _recipe_key = str(raw.get("recipe_key") or "").strip()
+            if _recipe_key:
+                rec = _grant_recipe_drop(conn, cid, _recipe_key, src)
+                if rec is not None:
+                    granted.append(rec)
+                continue
 
             # #1196 D6: treasure-map carriers are intercepted into world_treasures /
             # character_map_fragments instead of leaving a dead inventory row.

@@ -145,14 +145,55 @@ def _get_character(conn: sqlite3.Connection, character_id: int) -> sqlite3.Row:
     return row
 
 
-def _service_cost(recipe: sqlite3.Row, race: str) -> int:
-    """Koszt usługi po zniżce rasowej krasnoluda (kowalskie oko)."""
+def _service_cost(recipe: sqlite3.Row, race: str, multiplier: float = 1.0) -> int:
+    """Koszt usługi: bazowy × multiplier (narzut usługi rzemieślnika #1375) po
+    zniżce rasowej krasnoluda (kowalskie oko)."""
     base = int(recipe["service_cost_gold"] or 0)
     if base <= 0:
         return 0
+    base = int(round(base * float(multiplier)))
     if str(race or "").strip().lower() == "dwarf":
         base = int(round(base * (1.0 - DWARF_SHOP_DISCOUNT)))
     return max(0, base)
+
+
+# #1375 BL-E1 — narzut usługi rzemieślnika vs samodzielny craft (Numbers Policy,
+# sandbox-tunable): skill ma się opłacać, usługa = wygoda za dopłatą.
+SERVICE_MARKUP = 1.5
+
+
+def _row_has(row: sqlite3.Row, col: str) -> bool:
+    try:
+        return col in row.keys()
+    except Exception:
+        return False
+
+
+def _recipe_availability(recipe: sqlite3.Row) -> str:
+    val = recipe["availability"] if _row_has(recipe, "availability") else None
+    return (str(val or "").strip().lower() or "crafter")
+
+
+def _recipe_known(conn: sqlite3.Connection, character_id: int, recipe_key: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM character_recipes WHERE character_id = ? AND recipe_key = ? LIMIT 1",
+        (int(character_id), str(recipe_key).strip()),
+    ).fetchone()
+    return row is not None
+
+
+def _trade_craft_rank(conn: sqlite3.Connection, character_id: int) -> int:
+    """Efektywna ranga trade_craft bohatera (z arkusza + ekwipunku)."""
+    sheet = _load_sheet(conn, character_id)
+    try:
+        from app.services.skill_service import calc_skill_modifier_info
+        info = calc_skill_modifier_info(
+            sheet, "trade_craft", conn=conn, character_id=int(character_id)
+        )
+        return int(info.get("skill_rank") or 0)
+    except Exception:
+        skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
+        return int(skills.get("trade_craft", 0) or 0)
 
 
 def _pick_upgrade_weapon(
@@ -196,12 +237,15 @@ def _affix_keys(row: sqlite3.Row) -> list[str]:
 
 # ── Publiczne API ────────────────────────────────────────────────────────────
 
-def get_location_crafting(loc_ref: str | int) -> dict:
+def get_location_crafting(loc_ref: str | int, character_id: int | None = None) -> dict:
     """Przepisy dostępne u rzemieślników w danej lokacji.
 
     loc_ref: klucz LUB numeryczne id lokacji. Zbiera crafter_type wszystkich
     NPC-rzemieślników przypisanych do lokacji (npc_keys + npc_locations +
-    location_npc_assignments), zwraca przepisy pasujących typów (is_hidden=0).
+    location_npc_assignments), zwraca przepisy pasujących typów (availability='crafter').
+
+    #1375: gdy podano character_id, dokłada receptury lootowe ZNANE przez gracza —
+    rzemieślnik wykona je jako usługę (koszt ×1.5, bez testu skilla).
     """
     conn = _conn()
     try:
@@ -274,7 +318,8 @@ def get_location_crafting(loc_ref: str | int) -> dict:
                 SELECT key, label, inputs_json, output_type, output_key, output_qty,
                        service_cost_gold, crafter_type
                 FROM game_config_recipes
-                WHERE is_active = 1 AND is_hidden = 0 AND crafter_type IN ({ph})
+                WHERE is_active = 1 AND COALESCE(availability,'crafter') = 'crafter'
+                  AND crafter_type IN ({ph})
                 ORDER BY crafter_type, key
                 """,
                 tuple(crafter_types),
@@ -284,6 +329,30 @@ def get_location_crafting(loc_ref: str | int) -> dict:
                     d["inputs"] = json.loads(d.pop("inputs_json") or "[]")
                 except (json.JSONDecodeError, TypeError):
                     d["inputs"] = []
+                d["availability"] = "crafter"
+                recipes.append(d)
+
+        # #1375: receptury lootowe znane graczowi — usługa u dowolnego rzemieślnika.
+        if character_id is not None and crafter_types:
+            for r in conn.execute(
+                """
+                SELECT r.key, r.label, r.inputs_json, r.output_type, r.output_key,
+                       r.output_qty, r.service_cost_gold, r.crafter_type
+                FROM character_recipes cr
+                JOIN game_config_recipes r ON r.key = cr.recipe_key
+                WHERE cr.character_id = ? AND r.is_active = 1
+                  AND COALESCE(r.availability,'crafter') = 'loot'
+                ORDER BY r.key
+                """,
+                (int(character_id),),
+            ).fetchall():
+                d = dict(r)
+                try:
+                    d["inputs"] = json.loads(d.pop("inputs_json") or "[]")
+                except (json.JSONDecodeError, TypeError):
+                    d["inputs"] = []
+                d["availability"] = "loot"
+                d["service_cost_gold_hire"] = int(round(int(r["service_cost_gold"] or 0) * SERVICE_MARKUP))
                 recipes.append(d)
 
         return {
@@ -313,18 +382,37 @@ def craft(
     character_id: int,
     recipe_key: str,
     target_inventory_id: int | None = None,
+    mode: str = "self",
 ) -> dict:
     """Wykonaj przepis: waliduj komponenty+złoto → konsumuj → wytwórz wynik.
 
+    mode (#1375):
+      • 'self'    — samodzielny craft. Dla receptury lootowej wymaga trade_craft ≥1.
+      • 'service' — zlecenie rzemieślnikowi: BEZ testu skilla, koszt × SERVICE_MARKUP.
+    Receptury lootowe (availability='loot') w obu trybach wymagają, by gracz je znał.
+
     Rzuca CraftError(400) przy braku komponentów/złota lub gdy ulepszenie broni
-    już nałożone (nie kumuluje się).
+    już nałożone (nie kumuluje się); CraftError(403) przy braku skilla/wiedzy.
     """
+    mode = "service" if str(mode or "").strip().lower() == "service" else "self"
     conn = _conn()
     try:
         recipe = _load_recipe(conn, recipe_key)
         char = _get_character(conn, character_id)
         race = str(char["race"] or "human").strip().lower()
         inputs = _parse_inputs(recipe)
+
+        # #1375 — bramka pul availability. Loot recipe = musi być znana; self wymaga skilla.
+        availability = _recipe_availability(recipe)
+        if availability == "loot":
+            if not _recipe_known(conn, character_id, recipe_key):
+                raise CraftError(403, "Nie znasz tej receptury — zdobądź ją z lootu.")
+            if mode == "self" and _trade_craft_rank(conn, character_id) < 1:
+                raise CraftError(
+                    403,
+                    "Samodzielne wykonanie wymaga Rzemiosła (trade_craft) rangi ≥1 — "
+                    "albo zleć rzemieślnikowi.",
+                )
 
         # 1) Walidacja komponentów (przed jakąkolwiek mutacją).
         missing: list[str] = []
@@ -343,8 +431,8 @@ def craft(
             if WEAPON_HONE_AFFIX in _affix_keys(upgrade_target):
                 raise CraftError(400, "Ta broń jest już naostrzona — ulepszenie nie kumuluje się.")
 
-        # 3) Koszt usługi (po zniżce krasnoluda) i walidacja złota.
-        cost = _service_cost(recipe, race)
+        # 3) Koszt usługi (po zniżce krasnoluda; narzut ×1.5 gdy zlecenie) i walidacja złota.
+        cost = _service_cost(recipe, race, SERVICE_MARKUP if mode == "service" else 1.0)
         cur_gold = int(char["gold_gp"] or 0)
         if cur_gold < cost:
             raise CraftError(400, f"Niewystarczające złoto: potrzeba {cost} gp, masz {cur_gold} gp.")
@@ -360,16 +448,21 @@ def craft(
 
         # 6) Wytworzenie wyniku.
         result: dict[str, Any] = {"output_type": output_type}
-        if output_type == "consumable":
+        if output_type in ("consumable", "item", "weapon", "armor"):
+            # #1375: receptury lootowe produkują części setu (weapon/armor/item) — nie
+            # tylko konsumowalne. Klucz w polu wg typu, katalog i tak rozstrzyga kind.
             out_key = str(recipe["output_key"] or "").strip()
             out_qty = max(1, int(recipe["output_qty"] or 1))
             if not out_key:
                 raise CraftError(400, "Przepis nie ma zdefiniowanego wyniku.")
             conn.commit()  # utrwal konsumpcję+złoto przed grantem (osobne połączenie)
             from app.services.loot_service import grant_loot_to_character
+            key_field = {"weapon": "weapon_key", "consumable": "consumable_key"}.get(
+                output_type, "item_key"
+            )
             granted = grant_loot_to_character(
                 int(character_id),
-                [{"consumable_key": out_key, "quantity": out_qty}],
+                [{key_field: out_key, "quantity": out_qty}],
                 source="craft",
             )
             result["granted"] = granted
@@ -428,6 +521,8 @@ def craft(
         ).fetchone()
         result.update({
             "ok": True,
+            "mode": mode,
+            "availability": availability,
             "recipe_key": recipe["key"],
             "recipe_label": recipe["label"],
             "service_cost_gold": cost,
@@ -560,23 +655,121 @@ def _roll_fumble(conn: sqlite3.Connection, character_id: int, sheet: dict, tag: 
     return result
 
 
+def _item_label(conn: sqlite3.Connection, item_key: str) -> str:
+    """Polska etykieta komponentu z katalogu (game_items → fallback klucz)."""
+    try:
+        row = conn.execute(
+            "SELECT label FROM game_items WHERE key = ? LIMIT 1", (item_key,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    return str(row["label"]) if row and row["label"] else item_key.replace("_", " ")
+
+
+def _recipe_card(conn: sqlite3.Connection, character_id: int, r: sqlite3.Row,
+                 discovered_at: str | None, source: str | None, can_self: bool) -> dict:
+    """Karta odkrytej receptury: wynik + wejścia z licznikami posiadanych komponentów."""
+    inputs = []
+    for inp in _parse_inputs(r):
+        owned = _owned_component_qty(conn, character_id, inp["item_key"])
+        inputs.append({
+            "item_key": inp["item_key"],
+            "label": _item_label(conn, inp["item_key"]),
+            "qty": inp["qty"],
+            "owned": owned,
+            "enough": owned >= inp["qty"],
+        })
+    availability = _recipe_availability(r)
+    return {
+        "recipe_key": r["key"],
+        "label": r["label"],
+        "availability": availability,
+        "source": source,
+        "discovered_at": discovered_at,
+        "craft_tier": r["craft_tier"] if _row_has(r, "craft_tier") else None,
+        "set_key": r["set_key"] if _row_has(r, "set_key") else None,
+        "output_type": r["output_type"],
+        "output_key": r["output_key"],
+        "output_qty": int(r["output_qty"] or 1),
+        "service_cost_gold": int(r["service_cost_gold"] or 0),
+        "service_cost_gold_hire": int(round(int(r["service_cost_gold"] or 0) * SERVICE_MARKUP)),
+        "inputs": inputs,
+        "can_craft_now": all(i["enough"] for i in inputs) and bool(inputs),
+        "requires_skill_self": availability == "loot",
+        "can_self_craft": (availability != "loot") or can_self,
+    }
+
+
 def list_character_recipes(character_id: int) -> dict:
-    """Trwale odkryte receptury bohatera (BL-D2). Zwraca listę z etykietą przepisu."""
+    """#1375 — receptury bohatera pogrupowane po secie, z postępem i licznikami komponentów.
+
+    Zakładka Receptury w ŻAR pojawia się dopiero gdy has_any=True (≥1 nauczona).
+    Nieodkryte części setu = tylko licznik (undiscovered), bez nazw. Receptury bez
+    setu → sekcja loose ("Luźne receptury").
+    """
+    cid = int(character_id)
     conn = _conn()
     try:
+        can_self = _trade_craft_rank(conn, cid) >= 1
+        # Odporne na starsze schematy (bez cr.source) — reszta pól przez r.* + _row_has.
+        cr_cols = {row[1] for row in conn.execute("PRAGMA table_info(character_recipes)")}
+        src_expr = "cr.source" if "source" in cr_cols else "NULL AS source"
         rows = conn.execute(
-            """
-            SELECT cr.recipe_key, cr.discovered_at,
-                   r.label, r.craft_tier, r.output_type, r.output_key
+            f"""
+            SELECT cr.recipe_key AS recipe_key, cr.discovered_at AS discovered_at,
+                   {src_expr}, r.*
             FROM character_recipes cr
-            LEFT JOIN game_config_recipes r ON r.key = cr.recipe_key
-            WHERE cr.character_id = ?
+            JOIN game_config_recipes r ON r.key = cr.recipe_key
+            WHERE cr.character_id = ? AND r.is_active = 1
             ORDER BY cr.discovered_at DESC
             """,
-            (int(character_id),),
+            (cid,),
         ).fetchall()
-        out = [dict(r) for r in rows]
-        return {"character_id": int(character_id), "discovered": out}
+
+        by_set: dict[str, list[dict]] = {}
+        loose: list[dict] = []
+        discovered_flat: list[dict] = []
+        for r in rows:
+            src = r["source"] if _row_has(r, "source") else None
+            card = _recipe_card(conn, cid, r, r["discovered_at"], src, can_self)
+            discovered_flat.append(card)
+            sk = str(card.get("set_key") or "").strip()
+            if sk:
+                by_set.setdefault(sk, []).append(card)
+            else:
+                loose.append(card)
+
+        # Postęp setów: total = wszystkie aktywne receptury z tym set_key.
+        sets_out: list[dict] = []
+        for sk, cards in by_set.items():
+            total_row = conn.execute(
+                "SELECT COUNT(*) AS n FROM game_config_recipes WHERE set_key = ? AND is_active = 1",
+                (sk,),
+            ).fetchone()
+            total = int(total_row["n"] or 0) if total_row else len(cards)
+            set_row = conn.execute(
+                "SELECT label FROM game_config_sets WHERE key = ? LIMIT 1", (sk,)
+            ).fetchone()
+            sets_out.append({
+                "set_key": sk,
+                "set_label": str(set_row["label"]) if set_row and set_row["label"] else sk,
+                "discovered": cards,
+                "discovered_count": len(cards),
+                "total": total,
+                "undiscovered": max(0, total - len(cards)),
+                "complete": len(cards) >= total,
+            })
+        sets_out.sort(key=lambda s: s["set_label"])
+
+        return {
+            "character_id": cid,
+            "has_any": bool(rows),
+            "can_self_craft": can_self,
+            "service_markup": SERVICE_MARKUP,
+            "sets": sets_out,
+            "loose": loose,
+            "discovered": discovered_flat,  # back-compat płaska lista (BL-D2 #1341)
+        }
     finally:
         conn.close()
 

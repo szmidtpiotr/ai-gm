@@ -11,10 +11,12 @@ import {
   useEquipItem,
 } from "@/hooks/useSheetData";
 import { readVitals } from "@/lib/game";
+import { useCharacterRecipes } from "@/hooks/useCrafting";
 import { visibleSheetTabs } from "./tabs";
 import { PanelCharacter } from "./PanelCharacter";
 import { PanelSpells } from "./PanelSpells";
 import { PanelInventory } from "./PanelInventory";
+import { PanelRecipes } from "./PanelRecipes";
 import { PanelReputation } from "./PanelReputation";
 import { PanelCollections } from "./PanelCollections";
 
@@ -33,8 +35,11 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
   const catalog = useSpellCatalog(panel === "spells");
   const reputation = useReputation(panel === "reputation" ? characterId : undefined);
   const equip = useEquipItem(characterId);
+  // #1375 — zakładka Receptury widoczna dopiero po nauczeniu pierwszej receptury.
+  const recipes = useCharacterRecipes(characterId);
+  const hasRecipes = !!recipes.data?.has_any;
 
-  const tabs = visibleSheetTabs(hasMana);
+  const tabs = visibleSheetTabs(hasMana, hasRecipes);
   // Panel „spells" znika dla nie-maga → cofnij na Postać.
   const active: GameTab = tabs.some((t) => t.key === panel) ? panel : "character";
 
@@ -63,6 +68,7 @@ export function CharacterSheet({ characterId }: { characterId: number | undefine
           onEquip={(id, slot) => equip.mutate({ inventoryId: id, slot })}
         />
       )}
+      {active === "recipes" && <PanelRecipes characterId={characterId} />}
       {active === "reputation" && <PanelReputation sheet={sheet} reputation={reputation.data} />}
       {active === "collections" && <PanelCollections characterId={characterId} />}
     </div>

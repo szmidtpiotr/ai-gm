@@ -56,6 +56,7 @@ import { DungeonView } from "@/components/game/dungeon/DungeonView";
 import { MpGame } from "@/components/game/mp/MpGame";
 import { AdvancementScreen } from "@/components/game/outcomes/AdvancementScreen";
 import { useCombatState } from "@/hooks/useCombat";
+import { useCharacterRecipes } from "@/hooks/useCrafting";
 import { detectShop } from "@/lib/game";
 
 // FE14 (#1263): czytelne nazwy ekranów do auto-kontekstu bug-reportu.
@@ -101,6 +102,7 @@ export default function Game() {
     campaigns.data?.find((c) => c.id === campaignId)?.character_id ?? undefined;
   const characterId = listCharacterId ?? storeHeroId ?? undefined;
   const character = useCharacter(characterId ?? undefined);
+  const recipesGate = useCharacterRecipes(characterId ?? undefined); // #1375 gating zakładki
   const stream = useTurnStream(campaignId);
   const submit = useSubmitTurn(campaignId);
   // #1299: narracyjny test umiejętności — kość 3D jak w walce (Dice3DOverlay).
@@ -687,7 +689,7 @@ export default function Game() {
       {skillJob && <Dice3DOverlay job={skillJob} onDone={onSkillDiceDone} />}
 
       {/* Desktop: lewy pionowy rail przełącza Opowieść ↔ panele karty postaci */}
-      <GameRail hasMana={vitals.hasMana} />
+      <GameRail hasMana={vitals.hasMana} hasRecipes={!!recipesGate.data?.has_any} />
 
       {gameTab === "map" ? (
         // FAZA ML: w osadzie z sub-lokacjami domyślnie mapa lokalna; „Świat"/„Osada"

@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/appStore";
 import { useCharacter } from "@/hooks/useGameData";
+import { useCharacterRecipes } from "@/hooks/useCrafting";
 import { readVitals } from "@/lib/game";
 import { VitalBars } from "@/components/game/Vitals";
 import {
@@ -19,10 +20,15 @@ export function TabBar({ inGame }: { inGame: boolean }) {
   const setGameTab = useAppStore((s) => s.setGameTab);
   const heroId = useAppStore((s) => s.currentHeroId) ?? undefined;
   const character = useCharacter(inGame ? heroId : undefined);
+  const recipes = useCharacterRecipes(inGame ? heroId : undefined); // #1375 gating
   if (!inGame) return null;
 
   const vitals = readVitals(character.data?.sheet_json);
-  const scrollable = [...visibleSheetTabs(vitals.hasMana), MAP_TAB, JOURNAL_TAB];
+  const scrollable = [
+    ...visibleSheetTabs(vitals.hasMana, !!recipes.data?.has_any),
+    MAP_TAB,
+    JOURNAL_TAB,
+  ];
 
   return (
     <nav

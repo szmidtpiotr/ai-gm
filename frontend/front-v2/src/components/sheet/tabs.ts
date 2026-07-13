@@ -8,6 +8,7 @@ import {
   BookOpenText,
   FlagBanner,
   MapTrifold,
+  Scroll,
   Shield,
   Sparkle,
   type Icon,
@@ -20,22 +21,28 @@ export interface GameTabDef {
   icon: Icon;
   /** true = wymaga puli many (Czary — tylko klasy magiczne). */
   manaOnly?: boolean;
+  /** true = widoczna dopiero po nauczeniu ≥1 receptury (#1375 BL-E1). */
+  recipesOnly?: boolean;
 }
 
 export const STORY_TAB: GameTabDef = { key: "story", label: "Opowieść", icon: BookOpen };
 
-// 4 panele karty postaci — Postać wchłonęła Umiejętności (jedna zakładka).
+// Panele karty postaci — Postać wchłonęła Umiejętności (jedna zakładka).
 export const SHEET_TABS: GameTabDef[] = [
   { key: "character", label: "Postać", icon: Shield },
   { key: "spells", label: "Czary", icon: Sparkle, manaOnly: true },
   { key: "inventory", label: "Ekwipunek", icon: Backpack },
+  // #1375 — Receptury: pojawia się po nauczeniu pierwszej receptury (loot/eksperyment).
+  { key: "recipes", label: "Receptury", icon: Scroll, recipesOnly: true },
   { key: "reputation", label: "Reputacja & opis", icon: FlagBanner },
   // #1191 — Bestiariusz + Atlas Kresów (kolekcje odkryć, cross-kampanijne).
   { key: "collections", label: "Kolekcje", icon: BookBookmark },
 ];
 
-export function visibleSheetTabs(hasMana: boolean): GameTabDef[] {
-  return SHEET_TABS.filter((t) => !t.manaOnly || hasMana);
+export function visibleSheetTabs(hasMana: boolean, hasRecipes = false): GameTabDef[] {
+  return SHEET_TABS.filter(
+    (t) => (!t.manaOnly || hasMana) && (!t.recipesOnly || hasRecipes),
+  );
 }
 
 // F-43 Mapa świata — zakładka na poziomie gry (po panelach karty, jak w makiecie

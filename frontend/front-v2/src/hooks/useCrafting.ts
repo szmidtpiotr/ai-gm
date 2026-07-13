@@ -24,6 +24,7 @@ export function useLocationCrafting(locationKey: string | undefined, characterId
 interface CraftVars {
   characterId: number;
   recipeKey: string;
+  mode?: "self" | "service"; // #1375: zlecenie rzemieślnikowi vs samodzielny craft
 }
 
 /** POST /characters/{id}/craft — waliduje komponenty+złoto → konsumuje → wytwarza. */
@@ -33,12 +34,13 @@ export function useCraft(locationKey: string | undefined, characterId: number | 
     mutationFn: (v: CraftVars) =>
       apiFetch<CraftResult>(`/characters/${v.characterId}/craft`, {
         method: "POST",
-        body: { recipe_key: v.recipeKey },
+        body: { recipe_key: v.recipeKey, mode: v.mode ?? "self" },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["crafting", locationKey, characterId] });
       qc.invalidateQueries({ queryKey: ["character", characterId] });
       qc.invalidateQueries({ queryKey: ["inventory", characterId] });
+      qc.invalidateQueries({ queryKey: ["character-recipes", characterId] });
     },
   });
 }

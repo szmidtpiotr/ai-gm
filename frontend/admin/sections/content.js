@@ -1072,6 +1072,7 @@ async function _openLootEntriesModal(tableKey, tableLabel) {
       if (!entries.length) { tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--t3)">Brak wpisów</td></tr>`; return; }
       const typeBadge = e => {
         if (e.weapon_key) return `<span class="badge badge-amber">broń</span>`;
+        if (e.recipe_key) return `<span class="badge badge-violet">receptura</span>`;
         if (e.item_key) return `<span class="badge badge-blue">przedmiot</span>`;
         return `<span class="badge badge-green">konsumable</span>`;
       };
@@ -1110,7 +1111,7 @@ function _openAddLootEntryModal(tableKey, onSaved) {
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Typ źródła</label>
         <select class="form-input" name="source_type">
-          <option value="item">Przedmiot</option><option value="weapon">Broń</option><option value="consumable">Konsumable</option>
+          <option value="item">Przedmiot</option><option value="weapon">Broń</option><option value="consumable">Konsumable</option><option value="recipe">Receptura (#1375)</option>
         </select>
       </div>
       <div class="form-row"><label class="form-label">Klucz źródła *</label><input class="form-input" name="source_key" placeholder="np. sword_basic"></div>

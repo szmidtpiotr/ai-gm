@@ -10,10 +10,15 @@ import {
   type GameTabDef,
 } from "@/components/sheet/tabs";
 
-export function GameRail({ hasMana }: { hasMana: boolean }) {
+export function GameRail({ hasMana, hasRecipes = false }: { hasMana: boolean; hasRecipes?: boolean }) {
   const active = useAppStore((s) => s.gameTab);
   const setGameTab = useAppStore((s) => s.setGameTab);
-  const tabs: GameTabDef[] = [STORY_TAB, ...visibleSheetTabs(hasMana), MAP_TAB, JOURNAL_TAB];
+  const tabs: GameTabDef[] = [
+    STORY_TAB,
+    ...visibleSheetTabs(hasMana, hasRecipes),
+    MAP_TAB,
+    JOURNAL_TAB,
+  ];
 
   return (
     <nav

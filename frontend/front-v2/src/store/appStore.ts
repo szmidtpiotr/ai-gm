@@ -61,6 +61,7 @@ export type GameTab =
   | "character"
   | "spells"
   | "inventory"
+  | "recipes"
   | "reputation"
   | "collections"
   | "map"

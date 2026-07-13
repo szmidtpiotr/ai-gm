@@ -93,10 +93,57 @@ export interface DiscoveredRecipe {
   output_key?: string | null;
 }
 
+// ── #1375 BL-E1 — zakładka Receptury: karty z licznikami komponentów + sety ────
+
+export interface RecipeCardInput {
+  item_key: string;
+  label: string;
+  qty: number;
+  owned: number;
+  enough: boolean;
+}
+
+export interface RecipeCard {
+  recipe_key: string;
+  label: string;
+  availability: string; // 'crafter' | 'experiment' | 'loot'
+  source?: string | null;
+  discovered_at?: string | null;
+  craft_tier?: string | null;
+  set_key?: string | null;
+  output_type: string;
+  output_key?: string | null;
+  output_qty: number;
+  service_cost_gold: number;
+  service_cost_gold_hire: number;
+  inputs: RecipeCardInput[];
+  can_craft_now: boolean;
+  requires_skill_self: boolean;
+  can_self_craft: boolean;
+}
+
+export interface RecipeSetGroup {
+  set_key: string;
+  set_label: string;
+  discovered: RecipeCard[];
+  discovered_count: number;
+  total: number;
+  undiscovered: number;
+  complete: boolean;
+}
+
 export interface CharacterRecipes {
   character_id: number;
-  discovered: DiscoveredRecipe[];
+  has_any: boolean;
+  can_self_craft: boolean;
+  service_markup: number;
+  sets: RecipeSetGroup[];
+  loose: RecipeCard[];
+  discovered: DiscoveredRecipe[]; // back-compat (BL-D2 #1341)
 }
+
+/** Tryb wykonania receptury lootowej: samodzielnie (skill) lub zlecenie (×1.5). */
+export type CraftMode = "self" | "service";
 
 /** Etykieta wyniku eksperymentu — dramatyczny nagłówek panelu rezultatu. */
 export function experimentOutcomeLabel(o: ExperimentOutcome): string {
