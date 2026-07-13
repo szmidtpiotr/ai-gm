@@ -4,6 +4,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 # ─── Test główny 1: CampaignPlan zachowuje key_enemies po walidacji ───────────
@@ -86,28 +87,7 @@ def test_auto_create_forge_enemies_inserts_pending_rows():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            hp_base INTEGER NOT NULL,
-            ac_base INTEGER NOT NULL,
-            attack_bonus INTEGER NOT NULL DEFAULT 0,
-            dex_modifier INTEGER NOT NULL DEFAULT 0,
-            damage_die TEXT NOT NULL,
-            description TEXT,
-            note TEXT,
-            tier TEXT NOT NULL DEFAULT 'standard',
-            damage_type TEXT NOT NULL DEFAULT 'physical',
-            attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-            damage_bonus INTEGER NOT NULL DEFAULT 0,
-            xp_award INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            review_status TEXT NOT NULL DEFAULT 'permanent',
-            created_by TEXT DEFAULT NULL,
-            template_id INTEGER DEFAULT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
 
     enemies = [
@@ -147,28 +127,7 @@ def test_auto_create_forge_enemies_handles_key_conflict():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            hp_base INTEGER NOT NULL DEFAULT 20,
-            ac_base INTEGER NOT NULL DEFAULT 12,
-            attack_bonus INTEGER NOT NULL DEFAULT 0,
-            dex_modifier INTEGER NOT NULL DEFAULT 0,
-            damage_die TEXT NOT NULL DEFAULT '1d6',
-            description TEXT,
-            note TEXT,
-            tier TEXT NOT NULL DEFAULT 'standard',
-            damage_type TEXT NOT NULL DEFAULT 'physical',
-            attacks_per_turn INTEGER NOT NULL DEFAULT 1,
-            damage_bonus INTEGER NOT NULL DEFAULT 0,
-            xp_award INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            review_status TEXT NOT NULL DEFAULT 'permanent',
-            created_by TEXT DEFAULT NULL,
-            template_id INTEGER DEFAULT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
     conn.execute("INSERT INTO game_config_enemies (key, label, damage_die) VALUES ('goblin', 'Goblin stary', '1d4')")
 
@@ -267,19 +226,7 @@ def test_auto_create_forge_enemies_applies_clamp():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("""
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL,
-            hp_base INTEGER NOT NULL, ac_base INTEGER NOT NULL,
-            attack_bonus INTEGER NOT NULL DEFAULT 0, dex_modifier INTEGER NOT NULL DEFAULT 0,
-            damage_die TEXT NOT NULL, description TEXT, note TEXT,
-            tier TEXT NOT NULL DEFAULT 'standard', damage_type TEXT NOT NULL DEFAULT 'physical',
-            attacks_per_turn INTEGER NOT NULL DEFAULT 1, damage_bonus INTEGER NOT NULL DEFAULT 0,
-            xp_award INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
-            review_status TEXT NOT NULL DEFAULT 'permanent',
-            created_by TEXT DEFAULT NULL, template_id INTEGER DEFAULT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
+        """ + table_sql("game_config_enemies") + """
     """)
 
     # Difficulty=1, standard — LLM halucynuje HP=100 i AC=20

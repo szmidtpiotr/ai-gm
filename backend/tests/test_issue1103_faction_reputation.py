@@ -5,6 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import pytest
 
@@ -30,16 +31,7 @@ def _scratch_conn():
 
     # game_config_factions — new table for #1103
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS game_config_factions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
-            name TEXT NOT NULL,
-            faction_type TEXT NOT NULL DEFAULT 'guild'
-                CHECK(faction_type IN ('guild', 'clan', 'order')),
-            description TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
+        """ + table_sql("game_config_factions") + """
     """)
 
     # npcs with faction_key column

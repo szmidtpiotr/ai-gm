@@ -5,6 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 import pytest
 
@@ -16,58 +17,9 @@ def _make_db() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            damage_die TEXT NOT NULL DEFAULT '1d6',
-            weapon_type TEXT NOT NULL DEFAULT 'melee',
-            linked_stat TEXT NOT NULL DEFAULT 'STR',
-            allowed_classes TEXT NOT NULL DEFAULT 'warrior',
-            rarity INTEGER NOT NULL DEFAULT 1,
-            description TEXT NOT NULL DEFAULT '',
-            note TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            review_status TEXT DEFAULT 'permanent',
-            created_at TEXT NOT NULL DEFAULT 'now',
-            updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL,
-            hidden INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT NOT NULL DEFAULT '',
-            value_gp INTEGER NOT NULL DEFAULT 0,
-            rarity INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT 'now',
-            updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL,
-            hidden INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY,
-            label TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            effect_type TEXT NOT NULL DEFAULT 'misc',
-            effect_dice TEXT,
-            effect_bonus INTEGER NOT NULL DEFAULT 0,
-            effect_target TEXT NOT NULL DEFAULT 'self',
-            base_price INTEGER NOT NULL DEFAULT 0,
-            rarity INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT 'now',
-            updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL,
-            hidden INTEGER NOT NULL DEFAULT 0
-        );
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_consumables") + """
     """)
     # Seed global pool (no template_id)
     conn.execute("INSERT INTO game_config_weapons (key,label,rarity) VALUES ('sword','Miecz',1)")
@@ -165,33 +117,9 @@ def test_no_items_no_crash():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript("""
-        CREATE TABLE game_config_weapons (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, damage_die TEXT NOT NULL DEFAULT '1d6',
-            weapon_type TEXT NOT NULL DEFAULT 'melee', linked_stat TEXT NOT NULL DEFAULT 'STR',
-            allowed_classes TEXT NOT NULL DEFAULT 'warrior', rarity INTEGER NOT NULL DEFAULT 1,
-            description TEXT NOT NULL DEFAULT '', note TEXT, is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1, ai_generated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT 'now', updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL, hidden INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_items (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, item_type TEXT NOT NULL DEFAULT 'misc',
-            description TEXT NOT NULL DEFAULT '', value_gp INTEGER NOT NULL DEFAULT 0,
-            rarity INTEGER NOT NULL DEFAULT 1, is_active INTEGER NOT NULL DEFAULT 1,
-            approved INTEGER NOT NULL DEFAULT 1, ai_generated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT 'now', updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL, hidden INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE game_config_consumables (
-            key TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
-            effect_type TEXT NOT NULL DEFAULT 'misc', effect_dice TEXT,
-            effect_bonus INTEGER NOT NULL DEFAULT 0, effect_target TEXT NOT NULL DEFAULT 'self',
-            base_price INTEGER NOT NULL DEFAULT 0, rarity INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1, approved INTEGER NOT NULL DEFAULT 1,
-            ai_generated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT 'now', updated_at TEXT NOT NULL DEFAULT 'now',
-            template_id INTEGER DEFAULT NULL, hidden INTEGER NOT NULL DEFAULT 0
-        );
+        """ + table_sql("game_config_weapons") + """
+        """ + table_sql("game_config_items") + """
+        """ + table_sql("game_config_consumables") + """
     """)
     # No items in DB — should return empty list, no exception
     result = auto_assign(conn, template_id=99, difficulty_rating=2)

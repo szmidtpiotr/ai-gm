@@ -10,6 +10,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 # ─── FAZA 1: _player_combat_intent ───────────────────────────────────────────
 
@@ -66,12 +67,7 @@ def _make_conn_with_pending_surprise(enemy_key: str = "straznik") -> sqlite3.Con
             campaign_id INTEGER,
             status TEXT
         );
-        CREATE TABLE game_config_enemies (
-            key TEXT PRIMARY KEY,
-            label TEXT,
-            is_active INTEGER DEFAULT 1,
-            min_level INTEGER DEFAULT 1
-        );
+        """ + table_sql("game_config_enemies") + """
         INSERT INTO game_config_enemies (key, label, is_active, min_level)
         VALUES ('{enemy_key}', 'Straznik', 1, 1);
         CREATE TABLE campaign_known_npcs (

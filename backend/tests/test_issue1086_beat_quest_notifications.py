@@ -4,6 +4,7 @@ import sqlite3
 import sys
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -26,10 +27,7 @@ def _make_db():
             id INTEGER PRIMARY KEY,
             gm_plan_json TEXT
         );
-        CREATE TABLE game_config_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
+        """ + table_sql("game_config_meta") + """
     """)
     return conn
 

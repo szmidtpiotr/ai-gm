@@ -11,6 +11,7 @@ import sqlite3
 import pytest
 
 sys.path.insert(0, "/app")
+from _fixtures_schema import table_sql
 
 from app.services import map_reveal_service  # noqa: E402
 
@@ -150,25 +151,8 @@ CREATE TABLE character_inventory (
     consumable_key TEXT,
     quantity INTEGER NOT NULL DEFAULT 1
 );
-CREATE TABLE game_config_items (
-    key TEXT PRIMARY KEY,
-    label TEXT,
-    item_type TEXT,
-    effect_json TEXT,
-    effect_type TEXT,
-    effect_dice TEXT,
-    effect_bonus INTEGER,
-    effect_target TEXT
-);
-CREATE TABLE game_config_consumables (
-    key TEXT PRIMARY KEY,
-    label TEXT,
-    effect_json TEXT,
-    effect_type TEXT,
-    effect_dice TEXT,
-    effect_bonus INTEGER,
-    effect_target TEXT
-);
+""" + table_sql("game_config_items") + """
+""" + table_sql("game_config_consumables") + """
 """
 
 
