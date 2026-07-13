@@ -15,14 +15,7 @@ import {
 import { readVitals } from "@/lib/game";
 import type { HeroSheet } from "@/lib/types";
 import { PanelScroll, SPELL_TYPE_ICON } from "./sheetUi";
-
-const SPELL_TYPE_PL: Record<string, string> = {
-  attack: "atak",
-  attack_aoe: "atak · obszar",
-  heal: "leczenie",
-  defense: "ochrona",
-  narrative: "użytkowe",
-};
+import { SPELL_TYPE_PL } from "@/lib/spells";
 
 function pct(v: number, max: number) {
   return max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0;

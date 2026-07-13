@@ -149,6 +149,8 @@ export function CombatView({
           damage_die: c.damage_die,
           heal_die: c.heal_die,
           spell_type: c.spell_type,
+          // WALKA-T3 (#1353): opis czaru dojeżdża do sheetu (dotąd wycinany).
+          description: c.description ?? null,
           affordable: vitals.mana >= c.mana_cost,
         };
       })

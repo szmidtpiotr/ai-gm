@@ -1,6 +1,7 @@
 // F-24/F-25/F-26 · arkusz akcji/czarów (#1236). Makieta: zar6-akcja.html.
-// Tryby (Atak/Czar/Ruch/Obrona) + lista czarów (koszt many / ranga). Wysuwany z dołu.
-import { useState } from "react";
+// WALKA-T3 (#1353): brak paska tabów — sheet otwiera się w trybie z piguły composera
+// (dubel usunięty). Tryb czar: lista grupowana po spell_type z nagłówkami PL + opis
+// czaru pod nazwą (kości/mana jako meta). Surowy enum nie jest już nigdzie fallbackiem.
 import {
   Sword,
   Sparkle,
@@ -14,6 +15,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { DefenseReaction } from "@/lib/types";
+import { SPELL_TYPE_ORDER, spellTypeLabel } from "@/lib/spells";
 
 // WALKA-T2 (#1350): metadane opcji obrony renderowanych z backendowego `defense_options`.
 // Ikona/label/opis per reakcja; kolejność listy = kolejność w `DEFENSE_ORDER`.
@@ -57,17 +59,11 @@ export interface SpellAction {
   damage_die: string | null;
   heal_die: string | null;
   spell_type: string;
+  description: string | null;
   affordable: boolean;
 }
 
 export type SheetMode = "attack" | "spell" | "move" | "defense";
-
-const MODES: Array<{ key: SheetMode; label: string; icon: typeof Sword }> = [
-  { key: "attack", label: "Atak", icon: Sword },
-  { key: "spell", label: "Czar", icon: Sparkle },
-  { key: "move", label: "Ruch", icon: ArrowsInLineHorizontal },
-  { key: "defense", label: "Obrona", icon: Shield },
-];
 
 export function ActionSheet({
   initialMode = "spell",
@@ -98,7 +94,8 @@ export function ActionSheet({
   onClose: () => void;
   defenseOptions?: string[];
 }) {
-  const [mode, setMode] = useState<SheetMode>(initialMode);
+  // WALKA-T3: tryb jest ustalony przez pigułę composera — bez przełącznika w sheecie.
+  const mode = initialMode;
   const hasMana = maxMana > 0;
 
   return (
@@ -139,32 +136,8 @@ export function ActionSheet({
           </button>
         </div>
 
-        {/* tryby */}
-        <div className="flex gap-0.5 px-3.5 pb-1 pt-2.5">
-          {MODES.filter((m) => m.key !== "spell" || hasMana).map((m) => {
-            const on = mode === m.key;
-            const Icon = m.icon;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setMode(m.key)}
-                className={cn(
-                  "flex flex-1 flex-col items-center gap-1 rounded-md border px-1 py-2 font-ui text-[11px] font-semibold transition-colors",
-                  on
-                    ? "border-line-ember bg-[rgba(255,122,61,.1)] text-ember-glow"
-                    : "border-transparent text-text-3",
-                )}
-              >
-                <Icon size={19} weight={on ? "fill" : "regular"} />
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* zawartość trybu */}
-        <div className="min-h-0 overflow-y-auto px-3.5 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* zawartość trybu (tryb ustalony przez pigułę composera — bez tabów) */}
+        <div className="min-h-0 overflow-y-auto px-3.5 pb-1 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {mode === "attack" && (
             <Opt
               variant="atk"
@@ -181,19 +154,27 @@ export function ActionSheet({
             (spells.length === 0 ? (
               <Empty>Ta postać nie zna czarów bojowych.</Empty>
             ) : (
-              spells.map((sp) => (
-                <Opt
-                  key={sp.key}
-                  variant={sp.heal_die ? "heal" : sp.spell_type === "attack" || sp.spell_type === "attack_aoe" ? "atk" : "eff"}
-                  icon={spellIcon(sp)}
-                  name={sp.label}
-                  desc={spellDesc(sp)}
-                  cost={sp.mana_cost}
-                  rank={sp.rank}
-                  affordable={sp.affordable}
-                  disabled={busy || !sp.affordable}
-                  onClick={() => onCast(sp.key)}
-                />
+              groupSpellsByType(spells).map(([type, list]) => (
+                <div key={type} className="mb-1">
+                  <div className="mb-1.5 flex items-center gap-2.5 font-ui text-[10px] font-bold uppercase tracking-[0.16em] text-ember after:h-px after:flex-1 after:bg-line-soft after:content-['']">
+                    {spellTypeLabel(type)}
+                  </div>
+                  {list.map((sp) => (
+                    <Opt
+                      key={sp.key}
+                      variant={sp.heal_die ? "heal" : sp.spell_type === "attack" || sp.spell_type === "attack_aoe" ? "atk" : "eff"}
+                      icon={spellIcon(sp)}
+                      name={sp.label}
+                      desc={(sp.description ?? "").trim()}
+                      meta={spellMeta(sp)}
+                      cost={sp.mana_cost}
+                      rank={sp.rank}
+                      affordable={sp.affordable}
+                      disabled={busy || !sp.affordable}
+                      onClick={() => onCast(sp.key)}
+                    />
+                  ))}
+                </div>
               ))
             ))}
 
@@ -258,11 +239,33 @@ function spellIcon(sp: SpellAction) {
   return <Sparkle weight="fill" size={19} />;
 }
 
-function spellDesc(sp: SpellAction): string {
+// Meta wiersza czaru: kości obr./lecz. (mana pokazana osobno jako badge po prawej).
+function spellMeta(sp: SpellAction): string {
   const parts: string[] = [];
   if (sp.damage_die) parts.push(`${sp.damage_die} obr.`);
   if (sp.heal_die) parts.push(`${sp.heal_die} lecz.`);
-  return parts.join(" · ") || sp.spell_type;
+  return parts.join(" · ");
+}
+
+// Grupuj czary po spell_type w kolejności SPELL_TYPE_ORDER; puste sekcje pomijane.
+// Nieznane typy (defensywnie) trafiają na koniec — nigdy nie gubimy czaru.
+function groupSpellsByType(spells: SpellAction[]): Array<[string, SpellAction[]]> {
+  const byType = new Map<string, SpellAction[]>();
+  for (const sp of spells) {
+    const t = sp.spell_type || "narrative";
+    const arr = byType.get(t) ?? [];
+    arr.push(sp);
+    byType.set(t, arr);
+  }
+  const ordered: Array<[string, SpellAction[]]> = [];
+  for (const t of SPELL_TYPE_ORDER) {
+    const list = byType.get(t);
+    if (list && list.length) ordered.push([t, list]);
+  }
+  for (const [t, list] of byType) {
+    if (!SPELL_TYPE_ORDER.includes(t)) ordered.push([t, list]);
+  }
+  return ordered;
 }
 
 function Opt({
@@ -270,6 +273,7 @@ function Opt({
   icon,
   name,
   desc,
+  meta,
   cost,
   rank,
   affordable = true,
@@ -280,6 +284,7 @@ function Opt({
   icon: React.ReactNode;
   name: string;
   desc: string;
+  meta?: string;
   cost: number | null;
   rank?: number;
   affordable?: boolean;
@@ -307,7 +312,14 @@ function Opt({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block font-ui text-body font-semibold text-text">{name}</span>
-        <span className="mt-0.5 block font-mono text-[10.5px] text-text-3">{desc}</span>
+        {desc && (
+          <span className="mt-0.5 block font-ui text-[11.5px] leading-snug text-text-2">
+            {desc}
+          </span>
+        )}
+        {meta && (
+          <span className="mt-0.5 block font-mono text-[10.5px] text-text-3">{meta}</span>
+        )}
       </span>
       {cost != null && (
         <span className="flex shrink-0 flex-col items-end gap-1">
