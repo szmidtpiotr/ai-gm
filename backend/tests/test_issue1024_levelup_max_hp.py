@@ -246,3 +246,60 @@ class TestVitalityBackfill:
         from app.services.vitality_service import calculate_mana
         result = calculate_mana("scholar", 12, 4)
         assert result == 12
+
+
+class TestLevelUpFromCombatXp:
+    """#1370 — XP z walk (enemy_defeat) idzie prosto do xp_lifetime_earned, bez
+    pending_xp. Stary gate `pending_xp > 0` nigdy nie przeliczał poziomu takiemu
+    bohaterowi — max HP/mana stały w miejscu mimo setek XP z walk."""
+
+    def test_scholar_levels_up_from_combat_xp_without_pending(self, tmp_path):
+        conn = _make_db(tmp_path)
+        # Scholar INT=16 (mod +3): lvl1 mana=11. lifetime=311 (progi: lvl2=100,
+        # lvl3=250) → po odpoczynku lvl 3, mana 11+3+3=17. pending_xp == 0!
+        sheet_json = _make_sheet(
+            archetype="scholar", level=1, max_hp=40, current_hp=30,
+            max_mana=11, current_mana=5, con=12, int_stat=16,
+            pending_xp=0, xp_lifetime=311, xp_available=48,
+        )
+        conn.execute(
+            "INSERT INTO characters (campaign_id, user_id, name, sheet_json) VALUES (1,1,'Mag',?)",
+            (sheet_json,),
+        )
+        char_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        from app.services.rest_service import perform_long_rest
+        result = perform_long_rest(conn, char_id, 1)
+
+        assert result["ok"] is True, f"Long rest failed: {result}"
+        sheet = json.loads(conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()["sheet_json"])
+        assert sheet["level"] == 3, f"Oczekiwano level=3, dostano {sheet['level']}"
+        assert sheet["max_mana"] == 17, f"Oczekiwano max_mana=17 (11+3+3), dostano {sheet['max_mana']}"
+        assert sheet["current_mana"] == 17
+
+    def test_lifetime_not_double_counted_on_rest_with_pending(self, tmp_path):
+        conn = _make_db(tmp_path)
+        # grant_pending_xp doliczył lifetime przy nadaniu: lifetime=100 ZAWIERA
+        # pending=100. Po odpoczynku lifetime MUSI zostać 100 (nie 200).
+        sheet_json = _make_sheet(
+            archetype="rogue", level=1, max_hp=10, current_hp=5, con=14,
+            pending_xp=100, xp_lifetime=100, xp_available=0,
+        )
+        conn.execute(
+            "INSERT INTO characters (campaign_id, user_id, name, sheet_json) VALUES (1,1,'Rogue',?)",
+            (sheet_json,),
+        )
+        char_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        from app.services.rest_service import perform_long_rest
+        assert perform_long_rest(conn, char_id, 1)["ok"] is True
+        sheet = json.loads(conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()["sheet_json"])
+        assert sheet["xp_lifetime_earned"] == 100, (
+            f"lifetime podwójnie policzony: {sheet['xp_lifetime_earned']}"
+        )
+        assert sheet["xp_available"] == 100
+        assert sheet["level"] == 2

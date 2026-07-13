@@ -195,33 +195,37 @@ def perform_long_rest(
     xp_available = int(sheet.get("xp_available") or 0)
     xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
 
-    # #1024: level-up check. grant_pending_xp already updated xp_lifetime_earned
-    # to include pending XP — compute the correct level from it now.
+    # #1024 + #1370: poziom przeliczany przy KAŻDYM długim odpoczynku z PEŁNEGO
+    # lifetime XP (baza + odblokowywane teraz pending). XP z walk (enemy_defeat)
+    # trafia bezpośrednio do xp_lifetime_earned, BEZ pending_xp — stary gate
+    # `pending_xp > 0` nigdy nie podnosił poziomu bohaterowi żyjącemu z walk
+    # (max HP/mana stały w miejscu mimo setek XP).
     new_max_hp = max_hp
     new_max_mana = max_mana
     leveled_up = False
     new_level = int(sheet.get("level") or 1)
 
-    if pending_xp > 0:
-        from app.services.xp_service import level_from_xp, get_xp_level_thresholds
-        from app.services.vitality_service import apply_level_up
-        old_level = new_level
-        thresholds = get_xp_level_thresholds(conn)
-        new_level = level_from_xp(xp_lifetime, thresholds)
-        level_ups = max(0, new_level - old_level)
-        if level_ups > 0:
-            archetype = str(sheet.get("archetype") or "warrior").lower()
-            stats = sheet.get("stats") or {}
-            con = int(stats.get("CON", 10) or 10)
-            int_stat = int(stats.get("INT", 10) or 10)
-            for _ in range(level_ups):
-                new_max_hp, new_max_mana = apply_level_up(
-                    archetype, new_max_hp, new_max_mana, con, int_stat
-                )
-            sheet["level"] = new_level
-            sheet["max_hp"] = new_max_hp
-            sheet["max_mana"] = new_max_mana
-            leveled_up = True
+    from app.services.xp_service import level_from_xp, get_xp_level_thresholds
+    from app.services.vitality_service import apply_level_up
+    old_level = new_level
+    thresholds = get_xp_level_thresholds(conn)
+    # xp_lifetime_earned zawiera już pending (grant_pending_xp dolicza od razu).
+    # max() — poziom nigdy nie spada (np. ręczny grant poziomu z admina).
+    new_level = max(old_level, level_from_xp(xp_lifetime, thresholds))
+    level_ups = max(0, new_level - old_level)
+    if level_ups > 0:
+        archetype = str(sheet.get("archetype") or "warrior").lower()
+        stats = sheet.get("stats") or {}
+        con = int(stats.get("CON", 10) or 10)
+        int_stat = int(stats.get("INT", 10) or 10)
+        for _ in range(level_ups):
+            new_max_hp, new_max_mana = apply_level_up(
+                archetype, new_max_hp, new_max_mana, con, int_stat
+            )
+        sheet["level"] = new_level
+        sheet["max_hp"] = new_max_hp
+        sheet["max_mana"] = new_max_mana
+        leveled_up = True
 
     # PT-D1 (#1124): przy 3 stackach zmęczenia odpoczynek regeneruje o połowę mniej HP/many.
     # Mnożnik liczony PRZED wyczyszczeniem zmęczenia (odpoczynek najpierw leczy, potem budzi wypoczętego).
@@ -233,8 +237,9 @@ def perform_long_rest(
     sheet["current_mana"] = min(new_max_mana, mana_before + max(0, mana_healed))
     sheet["pending_xp"] = 0
     sheet["xp_available"] = xp_available + pending_xp
-    if pending_xp:
-        sheet["xp_lifetime_earned"] = xp_lifetime + pending_xp
+    # UWAGA (#1370): xp_lifetime_earned NIE rośnie tutaj — grant_pending_xp doliczył
+    # lifetime już przy nadaniu; ponowne dodanie pending podwójnie liczyło XP
+    # (utajona inflacja lifetime przy każdym odpoczynku z pending > 0).
     sheet["short_rests_used"] = 0
     sheet["death_saves_failed"] = 0
 
