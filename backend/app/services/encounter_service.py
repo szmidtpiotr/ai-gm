@@ -812,19 +812,89 @@ def record_encounter_signature(conn: sqlite3.Connection, sf: dict, enemies) -> N
     sf["recent_encounters"] = hist[: _recent_depth(conn)]
 
 
-def _penalized_choice(items: list[dict], rng, penalty_keys: set, penalty: float):
-    """rng.choice z karą wagi ×penalty dla itemów, których `key` jest w penalty_keys."""
+def _build_penalty_map(recent_sigs: list[str], penalty: float) -> dict[str, float]:
+    """BL #1369 — mapa key→mnożnik wagi z historii spotkań. Klucz w N kolejnych
+    spotkaniach dostaje karę `penalty**N` (2 powtórki z rzędu → mocniejsza kara niż
+    jedna). Puste sygnatury pomijane."""
+    from collections import Counter
+
+    counts: Counter = Counter()
+    for s in recent_sigs or []:
+        for k in str(s).split("+"):
+            k = k.strip()
+            if k:
+                counts[k] += 1
+    return {k: penalty ** c for k, c in counts.items()}
+
+
+def _penalized_choice(items: list[dict], rng, penalty_map: dict[str, float]):
+    """rng.choice z karą wagi z `penalty_map` (key→mnożnik; brak = 1.0)."""
     if not items:
         return None
-    weights = [penalty if d.get("key") in penalty_keys else 1.0 for d in items]
+    weights = [float(penalty_map.get(d.get("key"), 1.0)) for d in items]
     if sum(weights) <= 0:
         weights = [1.0] * len(items)
     return rng.choices(items, weights=weights, k=1)[0]
 
 
+# ── BL #1369 — słownik terenów: hex_type (world_hexes) → tag wroga (terrain_tags) ──
+# `world_hexes.hex_type` używa wartości spoza słownika `terrain_tags` wrogów
+# (bridge/snow/tundra/heath/lake/sea/coast/village/town/przelecz/grania). Bez
+# mapowania filtr terenu na takim hexie daje PUSTKĘ → relax-to-all (śmieci +
+# off-theme). Most (bridge) = pierwsza walka Piotra. Wody → `river` (jedyny tag
+# wodny w słowniku wrogów). Klucz spoza mapy przechodzi bez zmian (np. 'forest').
+_HEX_TYPE_TO_TERRAIN = {
+    "bridge": "road",
+    "przelecz": "mountain",
+    "grania": "mountain",
+    "snow": "plains",
+    "tundra": "plains",
+    "heath": "plains",
+    "river": "river",
+    "lake": "river",
+    "sea": "river",
+    "coast": "river",
+    "village": "city",
+    "town": "city",
+}
+
+
+def _normalize_hex_terrain(hex_type: str | None) -> str | None:
+    """Sprowadź `hex_type` z world_hexes do słownika `terrain_tags` wrogów (#1369).
+
+    Nieznany/pusty → None (brak filtra terenu); znany tag przechodzi bez zmian."""
+    lt = (hex_type or "").strip().lower()
+    if not lt:
+        return None
+    return _HEX_TYPE_TO_TERRAIN.get(lt, lt)
+
+
+# ── BL #1369 — guard puli: wrogowie testowi/placeholdery NIGDY do puli spotkań ──
+# Rekordy z testów/importów oznaczone permanent+global zaśmiecają pulę poz. 1-2
+# (Starzec, „enemy", s2_pw_*, s4_pw_*, goblin_u31). Wzór #941 (test-location
+# pollution): guard po kluczu przy budowaniu puli — działa niezależnie od tego,
+# czy rekord został w DB przeklasyfikowany.
+_TEST_ENEMY_KEYS = {"enemy", "unknown_attacker", "old_man"}
+_TEST_ENEMY_PREFIXES = ("s1_pw_", "s2_pw_", "s3_pw_", "s4_pw_", "s5_pw_")
+_TEST_ENEMY_SUFFIX_RE = re.compile(r"_u\d+$")
+
+
+def _is_test_enemy_key(key: str | None) -> bool:
+    """True dla kluczy testowych/placeholderów, których nie wolno losować w grze."""
+    k = (key or "").strip().lower()
+    if not k:
+        return False
+    if k in _TEST_ENEMY_KEYS:
+        return True
+    if k.startswith(_TEST_ENEMY_PREFIXES):
+        return True
+    return bool(_TEST_ENEMY_SUFFIX_RE.search(k))
+
+
 def _query_scoped_enemies(conn: sqlite3.Connection, lo: int, hi: int) -> list[dict]:
     """Wrogowie world_scope='global'+permanent+active, których pasmo poziomów
-    PRZECINA okno [lo, hi]. NULL min/max = brak ograniczenia z danej strony."""
+    PRZECINA okno [lo, hi]. NULL min/max = brak ograniczenia z danej strony.
+    #1369: rekordy testowe/placeholdery odsiane guardem po kluczu."""
     rows = conn.execute(
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
@@ -839,13 +909,14 @@ def _query_scoped_enemies(conn: sqlite3.Connection, lo: int, hi: int) -> list[di
         """,
         (int(hi), int(lo)),
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [dict(r) for r in rows if not _is_test_enemy_key(r["key"])]
 
 
 def _filter_by_terrain(rows: list[dict], hex_type: str | None) -> list[dict]:
     """Zostaw wrogów pasujących do terenu (pusty terrain_tags = generyczny) i policz
-    `threat`. Zwraca NOWĄ listę (bezpieczne do wielokrotnego wywołania)."""
-    lt = (hex_type or "").strip().lower()
+    `threat`. Zwraca NOWĄ listę (bezpieczne do wielokrotnego wywołania).
+    #1369: `hex_type` normalizowany słownikiem terenów przed porównaniem."""
+    lt = _normalize_hex_terrain(hex_type)
     out: list[dict] = []
     for r in rows:
         d = dict(r)
@@ -953,11 +1024,11 @@ def _pick_pattern(pool: list[dict], rng) -> str:
 
 
 def _compose_enemies(
-    conn: sqlite3.Connection, pool: list[dict], budget: float, rng, penalty_keys: set, penalty: float
+    conn: sqlite3.Connection, pool: list[dict], budget: float, rng, penalty_map: dict[str, float]
 ) -> tuple[str, list[dict]]:
-    """Jedno złożenie spotkania: wybór wzorca + wrogów. Kara wagi ×penalty (BL-A3
-    #1329) dla wrogów obecnych w historii przy losowanych wyborach. Zwraca
-    (pattern, enemies)."""
+    """Jedno złożenie spotkania: wybór wzorca + wrogów. Kara wagi z `penalty_map`
+    (BL-A3 #1329, eskalacja #1369) dla wrogów obecnych w historii przy losowanych
+    wyborach. Zwraca (pattern, enemies)."""
     pattern = _pick_pattern(pool, rng)
     pool_top_threat = max((d["threat"] for d in pool), default=0.0)  # BL-A6
 
@@ -966,7 +1037,7 @@ def _compose_enemies(
         fits = [d for d in pool if d["threat"] <= budget * 1.25]
         base_pool = fits or pool
         top = sorted(base_pool, key=lambda d: d["threat"], reverse=True)[:4]
-        chosen = _penalized_choice(top, rng, penalty_keys, penalty) or max(
+        chosen = _penalized_choice(top, rng, penalty_map) or max(
             base_pool, key=lambda d: d["threat"]
         )
         # BL-A6 (#1332): budżet mocno przewyższa najmocniejszego → ranga zamiast tieru.
@@ -979,7 +1050,7 @@ def _compose_enemies(
     elif pattern == "wataha":
         # słabsza połowa puli → gromada 2–4 tego samego wroga pod budżet
         weaker = sorted(pool, key=lambda d: d["threat"])[: max(1, len(pool) // 2)]
-        base = _penalized_choice(weaker, rng, penalty_keys, penalty) or weaker[0]
+        base = _penalized_choice(weaker, rng, penalty_map) or weaker[0]
         n = int(round(budget / max(1.0, base["threat"])))
         n = min(4, max(2, n))
         enemies = [_enc_enemy(base, n)]
@@ -998,7 +1069,7 @@ def _compose_enemies(
             )
             enemies = [_enc_enemy(leader, 1, leader_rank)]
         else:
-            minion = _penalized_choice(minion_pool, rng, penalty_keys, penalty) or minion_pool[0]
+            minion = _penalized_choice(minion_pool, rng, penalty_map) or minion_pool[0]
             remaining = max(0.0, budget - leader["threat"])
             n = int(round(remaining / max(1.0, minion["threat"])))
             n = min(3, max(2, n))
@@ -1045,20 +1116,27 @@ def encounter_composer(
     recent_sigs = recent_sigs or []
     last_sig = recent_sigs[0] if recent_sigs else None
     penalty = _repeat_penalty(conn)
-    penalty_keys: set[str] = set()
-    for s in recent_sigs:
-        penalty_keys.update(s.split("+"))
+    penalty_map = _build_penalty_map(recent_sigs, penalty)
+
+    # BL #1369 — twardy blok po ENEMY_KEY (nie tylko sygnaturze). Przy puli ≥3
+    # RÓŻNYCH kluczy odrzuć spotkanie dzielące którykolwiek klucz z OSTATNIM (blokada
+    # „bandyta za bandytą", której blok sygnatury nie łapał: bandit×1 vs bandit×2 to
+    # różne sygnatury). Przy puli <3 blok wyłączony — brak alternatyw.
+    distinct_keys = {d["key"] for d in pool}
+    last_keys = set(last_sig.split("+")) if last_sig else set()
+    hard_block_keys = last_keys if len(distinct_keys) >= 3 else set()
 
     pattern: str | None = None
     enemies: list[dict] | None = None
     fallback: tuple[str, list[dict]] | None = None
-    for _ in range(6):  # twarda blokada powtórki z rzędu (chyba że brak alternatyw)
-        p, e = _compose_enemies(conn, pool, budget, rng, penalty_keys, penalty)
+    for _ in range(8):  # twarda blokada powtórki (sygnatura + klucz), o ile są alternatywy
+        p, e = _compose_enemies(conn, pool, budget, rng, penalty_map)
         if not e:
             continue
         if fallback is None:
             fallback = (p, e)
-        if encounter_signature(e) != last_sig:
+        e_keys = {x["enemy_key"] for x in e}
+        if encounter_signature(e) != last_sig and not (hard_block_keys & e_keys):
             pattern, enemies = p, e
             break
     if enemies is None:

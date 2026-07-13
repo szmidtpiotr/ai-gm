@@ -154,7 +154,8 @@ def test_compose_solo_assigns_rank_when_overbudget():
     conn = _meta_conn()
     pool = [{"key": "bandit", "label": "Bandyta", "tier": "standard", "threat": 20.0}]
     # budżet 50 >> 20 → elitarny (2.5×)
-    pattern, enemies = es._compose_enemies(conn, pool, 50.0, __import__("random"), set(), 1.0)
+    # #1369: sygnatura _compose_enemies zmieniona na penalty_map (dict key→mnożnik).
+    pattern, enemies = es._compose_enemies(conn, pool, 50.0, __import__("random"), {})
     assert pattern in ("solo", "wataha", "herszt")
     if pattern == "solo":
         assert enemies[0].get("rank") == "elitarny"
