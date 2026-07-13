@@ -123,6 +123,9 @@ export interface InventoryItemDetail {
     effect_value: number | null;
     effect_dice: string | null;
   };
+  armor?: { ac_bonus: number; coverage: string | null };
+  // #1347 follow-up — zhumanizowane efekty on-equip/on-use (staty, AC, kondycje).
+  effects?: Array<{ text: string; kind: "ac" | "stat" | "skill" | "condition" | "other" }>;
   affixes?: Array<{ key: string; label: string; bonus_stat?: string; bonus_value?: number }>;
 }
 

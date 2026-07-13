@@ -693,13 +693,18 @@ function ItemDetailBody({
               <span className="rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-2">×{detail.quantity}</span>
             )}
           </div>
-          {detail.weapon && (
+          {detail.weapon && (detail.weapon.damage_die || detail.weapon.linked_stat) && (
             <div className="mt-2 font-mono text-[11px] text-text-2">
               {detail.weapon.damage_die && <span>obrażenia: <strong className="text-ember-glow">{detail.weapon.damage_die}</strong></span>}
               {detail.weapon.linked_stat && <span className="ml-2">cecha: {detail.weapon.linked_stat}</span>}
               {!!detail.weapon.attack_bonus && (
                 <span className="ml-2">trafienie: {detail.weapon.attack_bonus > 0 ? "+" : ""}{detail.weapon.attack_bonus}</span>
               )}
+            </div>
+          )}
+          {detail.armor && (
+            <div className="mt-2 font-mono text-[11px] text-text-2">
+              pancerz: <strong className="text-ember-glow">{detail.armor.ac_bonus > 0 ? "+" : ""}{detail.armor.ac_bonus} AC</strong>
             </div>
           )}
         </div>
@@ -715,6 +720,27 @@ function ItemDetailBody({
         <div className="rounded-md border border-line-ember bg-[rgba(255,122,61,0.06)] px-3.5 py-3">
           <div className="mb-1 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-ember">Zdolności specjalne</div>
           <p className="font-serif text-[13px] leading-relaxed text-text-2">{detail.note}</p>
+        </div>
+      )}
+
+      {detail.effects && detail.effects.length > 0 && (
+        <div>
+          <div className="mb-1.5 font-ui text-[9px] font-bold uppercase tracking-[0.12em] text-ember">Efekty</div>
+          <div className="flex flex-wrap gap-1.5">
+            {detail.effects.map((e, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "rounded border px-2 py-1 font-mono text-[10px]",
+                  e.kind === "condition"
+                    ? "border-danger/50 bg-[rgba(220,60,60,0.1)] text-danger"
+                    : "border-ember/50 bg-[rgba(255,122,61,0.1)] text-ember-glow",
+                )}
+              >
+                {e.text}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 

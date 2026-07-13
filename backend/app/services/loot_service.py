@@ -1517,6 +1517,94 @@ def _resolve_affixes(affix_keys: list, conn: sqlite3.Connection) -> list:
     return result
 
 
+_STAT_PL = {
+    "STR": "Siła", "DEX": "Zręczność", "CON": "Kondycja", "INT": "Intelekt",
+    "WIS": "Roztropność", "CHA": "Charyzma", "LCK": "Szczęście",
+}
+
+
+def _humanize_equip_effects(
+    effect_json_raw: str | None,
+    conn: sqlite3.Connection,
+    *,
+    ac_bonus: int = 0,
+) -> list[dict]:
+    """#1347 follow-up — parse effect_json (+ armor ac_bonus) → PL chips for the
+    item-detail modal. Returns [{text, kind}] where kind ∈
+    {ac, stat, skill, condition, other}. Never raises; empty list on garbage.
+
+    Modal wcześniej pokazywał tylko opis — wartości efektów (Krwawienie, +AC,
+    +staty) siedziały w effect_json i nie były renderowane.
+    """
+    out: list[dict] = []
+    if ac_bonus and int(ac_bonus) != 0:
+        out.append({"text": f"Pancerz {int(ac_bonus):+d}", "kind": "ac"})
+
+    try:
+        parsed = json.loads(effect_json_raw) if effect_json_raw else None
+    except (ValueError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        effects = parsed.get("effects") if isinstance(parsed.get("effects"), list) else []
+    elif isinstance(parsed, list):
+        effects = parsed
+    else:
+        effects = []
+
+    cond_labels: dict[str, str] = {}
+    for e in effects:
+        if not isinstance(e, dict):
+            continue
+        etype = str(e.get("type") or "").strip().lower()
+        val = e.get("value")
+        try:
+            ival = int(val) if val is not None else None
+        except (TypeError, ValueError):
+            ival = None
+
+        if etype == "ac_bonus" and ival is not None:
+            out.append({"text": f"Pancerz {ival:+d}", "kind": "ac"})
+        elif etype == "static_stat_modifier" and ival is not None:
+            stat = str(e.get("stat") or "").strip().upper()
+            name = _STAT_PL.get(stat, stat or "?")
+            out.append({"text": f"{name} {ival:+d}", "kind": "stat"})
+        elif etype == "static_skill_modifier" and ival is not None:
+            skill = str(e.get("skill") or e.get("stat") or "").strip()
+            out.append({"text": f"{skill} {ival:+d} ⭐", "kind": "skill"})
+        elif etype in ("apply_condition", "remove_condition"):
+            ckey = str(e.get("condition_key") or "").strip()
+            if ckey and ckey not in cond_labels:
+                row = conn.execute(
+                    "SELECT label FROM game_config_conditions WHERE key = ?", (ckey,)
+                ).fetchone()
+                cond_labels[ckey] = (row and _rget(row, "label")) or ckey
+            label = cond_labels.get(ckey, ckey or "kondycja")
+            dur = e.get("duration_rounds")
+            try:
+                idur = int(dur) if dur is not None else None
+            except (TypeError, ValueError):
+                idur = None
+            if idur:
+                if idur == 1:
+                    word = "runda"
+                elif 2 <= idur % 10 <= 4 and not 12 <= idur % 100 <= 14:
+                    word = "rundy"
+                else:
+                    word = "rund"
+                suffix = f" ({idur} {word})"
+            else:
+                suffix = ""
+            verb = "Zdejmuje" if etype == "remove_condition" else "Nakłada"
+            out.append({"text": f"{verb}: {label}{suffix}", "kind": "condition"})
+        elif etype in ("heal_hp", "restore_mana", "damage_enemy"):
+            v = e.get("value")
+            vtxt = f" {v}" if v not in (None, "", 0) else ""
+            base = {"heal_hp": "Leczy HP", "restore_mana": "Przywraca manę",
+                    "damage_enemy": "Obrażenia wrogowi"}[etype]
+            out.append({"text": f"{base}{vtxt}", "kind": "other"})
+    return out
+
+
 def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
     """D5 (#380) — full detail for one inventory entry, for the item-view modal.
 
@@ -1571,6 +1659,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "weapon_type": _rget(w, "weapon_type"),
                         "attack_bonus": int(_rget(w, "attack_bonus", 0) or 0),
                     },
+                    "effects": _humanize_equip_effects(_rget(w, "effect_json"), conn),
                     "affixes": affixes,
                     "durability": _dur,
                 }
@@ -1602,6 +1691,7 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "effect_bonus": int(_rget(c, "effect_bonus", 0) or 0),
                         "effect_target": _rget(c, "effect_target"),
                     },
+                    "effects": _humanize_equip_effects(_rget(c, "effect_json"), conn),
                 }
 
         # Catalog item (incl. armor)
@@ -1620,9 +1710,10 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                     "note": _rget(it, "note"),
                     "image_url": _rget(it, "image_url"),
                 }
+                _ac = int(_rget(it, "ac_bonus", 0) or 0)
                 if item_type == "armor":
                     detail["armor"] = {
-                        "ac_bonus": int(_rget(it, "ac_bonus", 0) or 0),
+                        "ac_bonus": _ac,
                         "coverage": _rget(it, "armor_coverage"),
                     }
                     detail["durability"] = _dur
@@ -1633,6 +1724,11 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
                         "effect_bonus": int(_rget(it, "effect_bonus", 0) or 0),
                         "effect_target": _rget(it, "effect_target"),
                     }
+                # #1347 follow-up: humanizuj effect_json (staty/skille/kondycje) +
+                # dołóż AC z kolumny dla zbroi — modal renderuje sekcję „Efekty".
+                detail["effects"] = _humanize_equip_effects(
+                    _rget(it, "effect_json"), conn, ac_bonus=_ac if item_type == "armor" else 0
+                )
                 return detail
 
         # Narrative fallback
