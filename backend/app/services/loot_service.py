@@ -975,6 +975,63 @@ def _starter_durability(conn: sqlite3.Connection, key: str, item_type: str) -> i
     return base
 
 
+def _ensure_char_durability(conn: sqlite3.Connection, character_id: int) -> int:
+    """#1347 follow-up — lazy self-heal: nadaj pełną trwałość założonym/plecakowym
+    broniom i zbrojom, które weszły do ekwipunku ścieżką omijającą init trwałości
+    (admin cheat, craft, seed setu, klon scenariusza). Bez tego modal/lista NIE
+    pokazują paska trwałości, a mechanika zużycia w ogóle ich nie widzi
+    (filtr ``durability_max IS NOT NULL``).
+
+    Dotyka tylko wierszy z NULL durability_max → idempotentne, tanie po pierwszym
+    przebiegu. Wołane na wejściu każdego odczytu ekwipunku. Zwraca liczbę
+    naprawionych wierszy.
+    """
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, weapon_key, item_key FROM character_inventory
+            WHERE character_id = ? AND durability_max IS NULL
+              AND (weapon_key IS NOT NULL OR item_key IS NOT NULL)
+            """,
+            (int(character_id),),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return 0  # testowe bazy bez kolumn trwałości
+    updated = 0
+    for r in rows:
+        if _rget(r, "weapon_key"):
+            key, item_type = _rget(r, "weapon_key"), "weapon"
+        elif _rget(r, "item_key") and _rget(r, "item_key") != "__narrative__":
+            ikey = _rget(r, "item_key")
+            # Tylko realna zbroja dostaje trwałość — relikty/questowe/materiały nie.
+            kind = None
+            it = conn.execute(
+                "SELECT kind FROM game_items WHERE key = ? AND is_active = 1", (ikey,)
+            ).fetchone()
+            if it:
+                kind = str(_rget(it, "kind") or "").lower()
+            else:
+                gci = conn.execute(
+                    "SELECT item_type FROM game_config_items WHERE key = ?", (ikey,)
+                ).fetchone()
+                kind = str(_rget(gci, "item_type") or "").lower() if gci else None
+            if kind != "armor":
+                continue
+            key, item_type = ikey, "armor"
+        else:
+            continue
+        dur = _starter_durability(conn, key, item_type)
+        if dur:
+            conn.execute(
+                "UPDATE character_inventory SET durability_current = ?, durability_max = ? WHERE id = ?",
+                (dur, dur, int(_rget(r, "id"))),
+            )
+            updated += 1
+    if updated:
+        conn.commit()
+    return updated
+
+
 def _resolve_game_item_key(conn: sqlite3.Connection, key: str) -> str | None:
     """#573: map a catalog key to the unified game_items key (same namespace after the
     U11a backfill). Returns the key when it exists in game_items, else None."""
@@ -1215,6 +1272,8 @@ def get_character_inventory(character_id: int) -> list[dict]:
         ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
         if not ch:
             raise ValueError("character not found")
+        # #1347 follow-up: self-heal trwałości broni/zbroi bez init (pasek w liście + modalu).
+        _ensure_char_durability(conn, cid)
         # U11b (#557): game_items ma effect_json top-level i json_extract dla effect_type/dice
         try:
             rows = conn.execute(
@@ -1617,6 +1676,9 @@ def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
     cid = int(character_id)
     iid = int(inventory_id)
     with _conn() as conn:
+        # #1347 follow-up: nadaj trwałość broni/zbroi wprowadzonej ścieżką bez init,
+        # zanim odczytasz wiersz — inaczej modal nie pokaże paska trwałości.
+        _ensure_char_durability(conn, cid)
         ci = conn.execute(
             "SELECT * FROM character_inventory WHERE id = ? AND character_id = ?",
             (iid, cid),
