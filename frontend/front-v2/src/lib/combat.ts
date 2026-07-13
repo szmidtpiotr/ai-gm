@@ -161,17 +161,26 @@ export function rollFromEnemyAttack(r: CombatActionResult): RollCardData {
   if (Number.isFinite(d20)) cells.push({ k: "d20", v: String(d20) });
   if (Number.isFinite(total)) cells.push({ k: "Atak", v: String(total), sum: true });
   if (Number.isFinite(ac)) cells.push({ k: "Obr.", v: String(ac) });
-  // Kości obrażeń wroga (np. 1d6) widoczne gdy trafił.
   const hit = !!r.hit && !r.dodged;
-  if (hit && r.damage_rolls?.length && r.damage_die) {
+  // Okno reakcji: obrażenia rozliczy dopiero karta reakcji — bez kości obrażeń
+  // (zakład „Cios: ?" z ReactionModal) i bez mylącego „0 Obr.".
+  const windowPending = hit && !!r.reaction_window;
+  // Kości obrażeń wroga (np. 1d6) widoczne gdy trafił i wynik jest ostateczny.
+  if (hit && !windowPending && r.damage_rolls?.length && r.damage_die) {
     const sides = Number(r.damage_die.split("d")[1] || 6);
     for (const rv of r.damage_rolls) cells.push({ k: `k${sides}`, v: String(rv) });
   }
   cells.push({
     k: "Wynik",
-    v: r.dodged ? "UNIKASZ" : r.hit ? `${r.damage ?? 0} Obr.` : "PUDŁO",
+    v: r.dodged
+      ? "UNIKASZ"
+      : windowPending
+        ? "TRAFIA · reakcja?"
+        : r.hit
+          ? `${r.damage ?? 0} Obr.`
+          : "PUDŁO",
     res: true,
-    tone: hit ? "bad" : "ok",
+    tone: windowPending ? "warn" : hit ? "bad" : "ok",
   });
   const name = String(r.enemy_name || "Wróg").toUpperCase();
   return { actor: "enemy", title: `${name} — ATAK`, cells, crit, fumble };

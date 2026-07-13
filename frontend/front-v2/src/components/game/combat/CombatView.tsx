@@ -557,6 +557,11 @@ export function CombatView({
 
   // ── koniec walki: modale wyników (F-27..F-32) lub toast (ucieczka) ──
   useEffect(() => {
+    // Stan „ended" ląduje w cache od razu po zabójczym ciosie, gdy kości 3D
+    // (d20 + kość obrażeń) jeszcze się kręcą — modal wyniku czeka aż animacje
+    // i okno reakcji się domkną (diceJob → null w onDiceDone), inaczej zasłania
+    // ostatni rzut i „obliczenia pod spodem".
+    if (diceJob || reaction) return;
     if (view?.status === "ended" && !endedRef.current) {
       endedRef.current = true;
       const reason = view.endedReason ?? "";
@@ -584,7 +589,7 @@ export function CombatView({
       xpAccumRef.current = 0;
       setOutcome(null);
     }
-  }, [view?.status, view?.endedReason, campaignId, qc, toast, live]);
+  }, [view?.status, view?.endedReason, campaignId, qc, toast, live, diceJob, reaction]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

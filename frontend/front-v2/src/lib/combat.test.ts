@@ -160,3 +160,46 @@ describe("rollFromEnemyZoneChange — karta ruchu zamiast fantomowego ataku", ()
     expect(cell(card as never, "Akcja")?.v).toBe("ODSKOK");
   });
 });
+
+// ─── Okno reakcji: karta ataku wroga nie zdradza obrażeń i nie pokazuje „0 Obr." ─
+import { rollFromEnemyAttack } from "./combat";
+
+describe("rollFromEnemyAttack przy oknie reakcji", () => {
+  it("trafienie z reaction_window: TRAFIA · reakcja?, bez kości obrażeń i bez 0 Obr.", () => {
+    const r: CombatActionResult = {
+      enemy_name: "Bandyta",
+      hit: true,
+      dodged: false,
+      raw_d20: 16,
+      attack_roll: 16,
+      target_ac: 11,
+      damage: 0, // dmg rozliczy karta reakcji
+      damage_die: "1d8",
+      damage_rolls: [3],
+      reaction_window: true,
+    };
+    const card = rollFromEnemyAttack(r);
+    const res = card.cells.find((c) => c.res);
+    expect(res?.v).toBe("TRAFIA · reakcja?");
+    expect(res?.tone).toBe("warn");
+    // kość obrażeń ukryta — zakład „Cios: ?" z modalu reakcji
+    expect(card.cells.some((c) => c.k === "k8")).toBe(false);
+    expect(card.cells.some((c) => c.v === "0 Obr.")).toBe(false);
+  });
+
+  it("trafienie BEZ okna reakcji: wynik ostateczny z kością obrażeń", () => {
+    const r: CombatActionResult = {
+      enemy_name: "Bandyta",
+      hit: true,
+      dodged: false,
+      raw_d20: 14,
+      attack_roll: 15,
+      damage: 4,
+      damage_die: "1d6",
+      damage_rolls: [4],
+    };
+    const card = rollFromEnemyAttack(r);
+    expect(card.cells.find((c) => c.res)?.v).toBe("4 Obr.");
+    expect(card.cells.some((c) => c.k === "k6")).toBe(true);
+  });
+});
