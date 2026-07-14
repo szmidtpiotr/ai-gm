@@ -610,11 +610,14 @@ function HexTile({
     fill = color ? mix(color, 0.42) : "#1a2028";
     stroke = "rgba(130,167,199,.35)";
   } else {
-    // outline / unexplored — mgła wojny
+    // outline / unexplored — mgła wojny. Kontur MUSI być widoczny: to jest
+    // klikalna krawędź eksploracji (klik → podróż w nieznane). Przy .08/0.6 siatka
+    // była praktycznie niewidoczna na ciemnym tle → gracz nie wiedział, że można
+    // tam kliknąć. Wypełnienie zostaje ciemne (teren ukryty — tajemnica fog).
     fill = "#171009";
-    stroke = "rgba(242,232,216,.08)";
+    stroke = "rgba(242,232,216,.28)";
     dash = "4 4";
-    opacity = 0.6;
+    opacity = 0.9;
   }
 
   // Nazwane heksy (osady/landmarki) wyróżniamy: obwódka pod ikoną + jaśniejszy
