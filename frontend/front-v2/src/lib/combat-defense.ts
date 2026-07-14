@@ -69,9 +69,11 @@ export function defenseReasonText(reason: string | null | undefined): string | n
     case "cap_reached":
       return "limit reakcji w tej rundzie";
     case "locked":
-      // Lockout dotyczy KAŻDEJ reakcji po krytycznie nieudanej (unik/bariera,
-      // margines ≤ −5) — trwa do końca bieżącej rundy (#1322/#1324).
-      return "krytycznie nieudana reakcja — zablokowane do końca rundy";
+      // Lockout dotyczy KAŻDEJ reakcji po TWOIM krytycznie nieudanym rzucie
+      // obronnym (unik/bariera, margines ≤ −5) — trwa do końca bieżącej rundy
+      // (#1322/#1324). Copy #1383: jasno że to WŁASNY spalony rzut, nie krytyk
+      // wroga, i że stan mija w następnej rundzie.
+      return "twój nieudany rzut obronny wytrącił Cię z równowagi — obrony wrócą w następnej rundzie";
     default:
       return null;
   }

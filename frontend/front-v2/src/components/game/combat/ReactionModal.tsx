@@ -4,7 +4,7 @@
 // WALKA-T2-FIX (#1359): niedostępne reakcje (np. Tarcza Many bez many) są WYSZARZONE z powodem,
 // nie ukryte — etykiety/opisy ze wspólnego lib/combat-defense.ts (parytet z pigułą Obrona).
 import { useEffect, useRef, useState } from "react";
-import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle, ShieldStar } from "@phosphor-icons/react";
+import { Wind, ShieldCheck, HandPalm, PawPrint, Sparkle, ShieldStar, LockSimple } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { DefenseReaction } from "@/lib/types";
 import {
@@ -143,15 +143,19 @@ export function ReactionModal({
             const Icon = REACTION_ICON[k];
             const detail = detailByKey.get(k)!;
             const reason = detail.available ? null : defenseReasonText(detail.reason);
+            // #1383: lockout (spalony własny rzut) dostaje wyraźny stan wizualny —
+            // kłódka + tint danger — odróżnialny od zwykłego "brak many"/"brak tarczy".
+            const locked = !detail.available && detail.reason === "locked";
             return (
               <Choice
                 key={k}
                 variant={REACTION_VARIANT[k]}
-                icon={<Icon weight="fill" size={21} />}
+                icon={locked ? <LockSimple weight="fill" size={21} /> : <Icon weight="fill" size={21} />}
                 name={meta.label}
                 desc={reason ? `Niedostępne — ${reason}.` : meta.reactionDesc}
-                meta={meta.reactionMeta}
+                meta={locked ? "zablokowane" : meta.reactionMeta}
                 disabled={!detail.available}
+                locked={locked}
                 onClick={() => fire(DEFENSE_KEY_TO_CHOICE[k])}
               />
             );
@@ -205,6 +209,7 @@ function Choice({
   desc,
   meta,
   disabled = false,
+  locked = false,
   onClick,
 }: {
   variant: "dodge" | "block" | "ward" | "mana" | "take";
@@ -213,25 +218,30 @@ function Choice({
   desc: string;
   meta: React.ReactNode;
   disabled?: boolean;
+  locked?: boolean; // #1383: spalony własny rzut — wyraźny stan danger + kłódka
   onClick: () => void;
 }) {
   // #1324/#1325: bariera i tarcza many dzielą paletę many (niebieski) — obie płacą maną.
-  const tint =
-    variant === "take"
+  // #1383: lockout ma własny tint danger — nie myli się z "brak many/tarczy".
+  const tint = locked
+    ? "border-line-danger"
+    : variant === "take"
       ? "border-[rgba(232,96,79,.3)]"
       : variant === "block"
         ? "border-line-ember"
         : variant === "ward" || variant === "mana"
           ? "border-[rgba(130,167,199,.35)]"
           : "border-line";
-  const iconCls =
-    variant === "take"
+  const iconCls = locked
+    ? "bg-[rgba(232,96,79,.12)] text-danger-glow"
+    : variant === "take"
       ? "bg-[rgba(232,96,79,.12)] text-danger-glow"
       : variant === "block"
         ? "bg-[rgba(255,122,61,.12)] text-ember-glow"
         : "bg-[rgba(130,167,199,.14)] text-mana";
-  const metaCls =
-    variant === "take"
+  const metaCls = locked
+    ? "text-danger"
+    : variant === "take"
       ? "text-danger"
       : variant === "block"
         ? "text-ember-glow"
@@ -245,6 +255,8 @@ function Choice({
         "flex w-full items-center gap-3 rounded-md border bg-surface px-3.5 py-3 text-left transition-colors hover:border-ember",
         tint,
         disabled && "cursor-not-allowed opacity-45 hover:border-[inherit]",
+        // #1383: lockout czytelniejszy niż zwykłe wyszarzenie — mniej ściemniony.
+        locked && "opacity-70",
       )}
     >
       <span

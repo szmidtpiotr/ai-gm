@@ -310,7 +310,11 @@ export function rollFromReaction(
       resV = "UNIK UDANY · 0 Obr."; // uchyliłeś się w całości
       tone = "ok";
     } else {
-      resV = `UNIK NIEUDANY · ${dmg} Obr.`; // nie zdążyłeś — cios dosięga
+      // #1383: krytyczna porażka (margines ≤ −5) spala obrony do końca rundy —
+      // dopisz to na karcie, by gracz skojarzył przyczynę z zablokowanym modalem.
+      resV = react.locked_next_round
+        ? `UNIK NIEUDANY · ${dmg} Obr. · obrony spalone do końca rundy`
+        : `UNIK NIEUDANY · ${dmg} Obr.`; // nie zdążyłeś — cios dosięga
       tone = "bad";
     }
   } else if (choice === "block") {
@@ -327,7 +331,10 @@ export function rollFromReaction(
       resV = "BARIERA · 0 Obr."; // cios rozbił się o magiczną osłonę
       tone = "ok";
     } else {
-      resV = `BARIERA PRZEBITA · ${dmg} Obr.`; // test nieudany — cios przechodzi, mana i tak zeszła
+      // #1383: krytyczna porażka bariery też spala obrony do końca rundy.
+      resV = react.locked_next_round
+        ? `BARIERA PRZEBITA · ${dmg} Obr. · obrony spalone do końca rundy`
+        : `BARIERA PRZEBITA · ${dmg} Obr.`; // test nieudany — cios przechodzi, mana i tak zeszła
       tone = "bad";
     }
   } else if (choice === "mana") {

@@ -480,6 +480,7 @@ export interface CombatActionResult {
     mana_spent?: number; // #1325: ile many faktycznie wydano (ceil pochłonięte / R)
     mana_cost?: number; // #1324: koszt many pobrany za próbę bariery
     current_mana?: number; // #1324/#1325: pula many po reakcji
+    locked_next_round?: boolean; // #1383: krytyczna porażka reakcji — obrony spalone do końca rundy
   } | null;
   // łup / nagrody z zabójczego ciosu (FE10 #1237)
   loot?: LootItem[];
