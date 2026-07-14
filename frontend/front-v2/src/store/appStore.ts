@@ -93,6 +93,10 @@ export interface AppState {
   /** #1309 — użycie przedmiotu-mapy: heksy do „wjechania" animacją na mapie świata.
    *  `ts` pozwala retriggerować animację przy powtórnym odsłonięciu tych samych heksów. */
   mapReveal: { hexes: [number, number][]; ts: number } | null;
+  /** #1381 — trwa animacja przeskoku pina po trasie na mapie świata. Gdy true,
+   *  Game.tsx wstrzymuje modal zasadzki (travel_notice), żeby nie wyskoczył PRZED
+   *  końcem animacji. Ustawiany/gaszony przez WorldMap. */
+  travelAnimating: boolean;
   /** #1196 — wymuszenie mapy ŚWIATA (nie lokalnej osady) po kliknięciu „Użyj" na
    *  mapie skarbu. Czytane wprost w renderze — niezależne od efektu forceWorldMap. */
   mapView: "auto" | "world";
@@ -130,6 +134,7 @@ export interface AppState {
   setGameTab: (t: GameTab) => void;
   /** #1309 — ustaw heksy do animacji odsłonięcia (stempluje świeży ts). */
   setMapReveal: (hexes: [number, number][]) => void;
+  setTravelAnimating: (v: boolean) => void;
   /** #1196 — wyczyść po skonsumowaniu (inaczej każde otwarcie mapy re-centruje). */
   clearMapReveal: () => void;
   /** #1196 — wymuś/zwolnij mapę świata. */
@@ -195,6 +200,7 @@ export const useAppStore = create<AppState>((set) => ({
   currentCampaignId: null,
   gameTab: "story",
   mapReveal: null,
+  travelAnimating: false,
   mapView: "auto",
   shop: null,
   services: null,
@@ -221,6 +227,7 @@ export const useAppStore = create<AppState>((set) => ({
     ),
   setGameTab: (gameTab) => set({ gameTab }),
   setMapReveal: (hexes) => set({ mapReveal: { hexes, ts: Date.now() } }),
+  setTravelAnimating: (v) => set({ travelAnimating: v }),
   clearMapReveal: () => set({ mapReveal: null }),
   setMapView: (mapView) => set({ mapView }),
   openShop: (shop) => set({ shop }),

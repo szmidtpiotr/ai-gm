@@ -435,11 +435,14 @@ export function useTravel(campaignId: number | undefined) {
     onSuccess: (_data, v) => {
       if (!v.deferMap) {
         qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+        // #1381 — suggested-actions też odroczone: jego travel_notice odpala modal
+        // zasadzki. Bez tego modal wyskakiwał PRZED końcem animacji hop. WorldMap
+        // unieważnia je dopiero po animacji (wtedy modal pojawia się na czas).
+        qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
       }
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
-      qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
       qc.invalidateQueries({ queryKey: ["local-map", campaignId] });
     },
   });

@@ -508,16 +508,21 @@ export default function Game() {
   // (klucz reason:step). Baner nad composerem zostaje jako trwałe przypomnienie.
   const [interruptModal, setInterruptModal] = useState<TravelNoticeData | null>(null);
   const ackInterrupt = useRef<string | null>(null);
+  // #1381 — gdy trwa animacja przeskoku pina na mapie, wstrzymaj modal zasadzki,
+  // żeby nie wyskoczył PRZED końcem animacji. WorldMap gasi flagę i unieważnia
+  // suggested-actions po animacji → efekt re-uruchamia się i modal pojawia się na czas.
+  const travelAnimating = useAppStore((s) => s.travelAnimating);
   useEffect(() => {
     if (!travelNotice) {
       ackInterrupt.current = null;
       return;
     }
+    if (travelAnimating) return; // modal poczeka na koniec animacji hop
     const key = `${travelNotice.reason}:${travelNotice.step}`;
     if (ackInterrupt.current === key) return;
     ackInterrupt.current = key;
     setInterruptModal(travelNotice);
-  }, [travelNotice]);
+  }, [travelNotice, travelAnimating]);
   // WALKA-T1-FIX (#1355): gdy modal zasadzki (reason=encounter Z KONKRETNYM wrogiem)
   // się pojawił, karta „Nieznany napastnik" (EnemyRevealCard) dla walki, która zaraz
   // wystartuje, ma się NIE pokazać (dublet overlayów). Wyliczamy wyciszenie

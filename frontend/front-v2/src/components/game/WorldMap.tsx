@@ -75,6 +75,7 @@ export function WorldMap({
   // Lokalny set seedowany z mapReveal.ts, kasowany po ~2,5 s (koniec animacji).
   const mapReveal = useAppStore((s) => s.mapReveal);
   const clearMapReveal = useAppStore((s) => s.clearMapReveal);
+  const setTravelAnimating = useAppStore((s) => s.setTravelAnimating);
   const [revealSet, setRevealSet] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     if (!mapReveal?.hexes?.length) {
@@ -260,11 +261,12 @@ export function WorldMap({
           setSelected(null); // schowaj panel — animacja gra na czystej mapie
           if (route.length < 2) {
             // Trasa 0/1-heksowa (np. teleport / sąsiad) → bez animacji: odśwież
-            // mapę, a jeśli była zasadzka — od razu wznów (→ walka).
+            // mapę i suggested-actions (przy zasadzce → modal zasadzki ze zdjęciem).
             qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
-            if (encHex) onResume?.();
+            qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
             return;
           }
+          setTravelAnimating(true); // #1381 — wstrzymaj modal zasadzki na czas animacji
           setAnim({ route, step: 0, encounterHex: encHex });
         },
         // onError: błąd zostaje w panelu (travel.isError) — panel wciąż otwarty.
@@ -273,26 +275,26 @@ export function WorldMap({
   };
 
   // #1381 — sterownik animacji: co HOP_MS przesuwa pin o jeden heks. Po dojściu
-  // do końca trasy: (a) zasadzka → krótka pauza z ⚔, potem wejście w walkę
-  // (onResume → /travel-resume → combat_started); (b) cel → odśwież mapę (pin
-  // ląduje na celu, mgła wzdłuż trasy odsłonięta). world-map celowo NIE jest
-  // unieważniana w hooku useTravel — inaczej pin przeskoczyłby na cel przed
-  // animacją; komponent steruje odświeżeniem dopiero po jej zakończeniu.
+  // do końca trasy: (a) zasadzka → pauza z ⚔, potem unieważnij suggested-actions →
+  // modal zasadzki ze zdjęciem pojawia się DOPIERO teraz (nie w trakcie animacji);
+  // gracz klika „Stań do walki" w modalu → onResume → /travel-resume → walka.
+  // (b) cel → odśwież mapę (pin ląduje na celu, mgła wzdłuż trasy odsłonięta).
+  // world-map/suggested-actions celowo NIE są unieważniane w hooku useTravel —
+  // inaczej pin przeskoczyłby / modal wyskoczyłby przed końcem animacji.
   useEffect(() => {
     if (!anim) return;
     if (anim.step >= anim.route.length - 1) {
-      if (anim.encounterHex) {
-        const t = setTimeout(() => {
+      const t = setTimeout(
+        () => {
           setAnim(null);
+          setTravelAnimating(false); // odblokuj modal zasadzki (Game.tsx)
           qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
-          onResume?.();
-        }, ENCOUNTER_PAUSE_MS);
-        return () => clearTimeout(t);
-      }
-      const t = setTimeout(() => {
-        setAnim(null);
-        qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
-      }, 220);
+          if (anim.encounterHex) {
+            qc.invalidateQueries({ queryKey: ["suggested-actions", campaignId] });
+          }
+        },
+        anim.encounterHex ? ENCOUNTER_PAUSE_MS : 220,
+      );
       return () => clearTimeout(t);
     }
     const t = setTimeout(
@@ -300,7 +302,10 @@ export function WorldMap({
       HOP_MS,
     );
     return () => clearTimeout(t);
-  }, [anim, campaignId, qc, onResume]);
+  }, [anim, campaignId, qc, setTravelAnimating]);
+
+  // #1381 — bezpiecznik: jeśli gracz opuści mapę w trakcie animacji, odblokuj modal.
+  useEffect(() => () => setTravelAnimating(false), [setTravelAnimating]);
 
   // Podczas animacji kamera podąża za wędrującym pinem (inaczej trasa mogłaby
   // wyjść poza kadr). Poza animacją: focus „Użyj" mapy skarbu, else pozycja gracza.
