@@ -41,8 +41,15 @@ export function MpGame({
   useEffect(() => () => reset(), [reset]);
 
   const endRef = useRef<HTMLDivElement>(null);
+  // Pierwszy scroll po wejściu = natychmiastowy skok na ostatnią wiadomość,
+  // kolejne (nowy blok) płynne.
+  const didInitialScroll = useRef(false);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    endRef.current?.scrollIntoView({
+      behavior: didInitialScroll.current ? "smooth" : "auto",
+      block: "end",
+    });
+    if (blocks.length > 0) didInitialScroll.current = true;
   }, [blocks.length]);
 
   return (

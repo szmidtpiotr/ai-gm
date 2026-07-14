@@ -24,10 +24,20 @@ export function NarrationLog({
   className?: string;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
+  // Pierwszy scroll po wejściu na zakładkę = natychmiastowy skok na ostatnią
+  // wiadomość (bez animacji przewijania od początku). Kolejne (nowy blok /
+  // „GM pisze…") płynne.
+  const didInitialScroll = useRef(false);
 
   // Auto-scroll na dół gdy dochodzi nowy blok / pojawia się „GM pisze…".
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    endRef.current?.scrollIntoView({
+      behavior: didInitialScroll.current ? "smooth" : "auto",
+      block: "end",
+    });
+    // Oznacz init dopiero gdy mamy realną treść — inaczej pusty mount zjadłby
+    // natychmiastowy skok i pierwsze wczytane bloki przewinęłyby się animowane.
+    if (blocks.length > 0) didInitialScroll.current = true;
   }, [blocks.length, typing, pendingRoll, combatRolls?.length]);
 
   const lastRollIdx = lastIndex(blocks, (b) => b.kind === "roll");
