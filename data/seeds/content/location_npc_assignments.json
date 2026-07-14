@@ -502,5 +502,29 @@
     "assignment_type": "visitor",
     "notes": "#1080 onboarding — Goran gości w karczmie startowej dla sceny handlu",
     "is_active": 1
+  },
+  {
+    "id": 32696,
+    "location_key": "volhynia_gildia_kupcow",
+    "npc_key": "gildia_kupiecka_volhynia",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 32697,
+    "location_key": "brzezino",
+    "npc_key": "gildia_kupiecka_brzezino",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
+  },
+  {
+    "id": 32698,
+    "location_key": "strazyn",
+    "npc_key": "gildia_kupiecka_strazyn",
+    "assignment_type": "resident",
+    "notes": null,
+    "is_active": 1
   }
 ]

@@ -67,9 +67,15 @@ CONTENT_TABLES = [
 # to BOTH the snapshot SELECT and the pre-insert DELETE, so any campaign /
 # gameplay row on the target is neither exported to git nor deleted on apply.
 CANON_FILTERS = {
+    # #1382/#941 — test-suite pollution (test_*, __test_*, dup_test_* …) is not
+    # canon: excluded from snapshot (never lands in git) AND from the pre-insert
+    # DELETE (junk rows on the target are left alone; cleanup is a separate task).
     "game_locations": (
         "source_campaign_id IS NULL "
-        "AND (review_status IS NULL OR review_status != 'pending_review')"
+        "AND (review_status IS NULL OR review_status != 'pending_review') "
+        "AND key NOT LIKE 'test\\_%' ESCAPE '\\' "
+        "AND key NOT LIKE '\\_\\_test%' ESCAPE '\\' "
+        "AND key NOT LIKE '%\\_test\\_%' ESCAPE '\\'"
     ),
     "npcs": "(review_status IS NULL OR review_status != 'pending_review')",
 }

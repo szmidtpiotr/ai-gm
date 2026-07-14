@@ -1,5 +1,27 @@
 [
   {
+    "key": "loot_bagienna_jedza",
+    "label": "Łupy: Bagienna Jędza",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_bagienny_topielec",
+    "label": "Łupy: Bagienny Topielec",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
     "key": "loot_bandit",
     "label": "Łupy: Bandyta",
     "description": "",
@@ -66,6 +88,28 @@
     "gold_max": 15
   },
   {
+    "key": "loot_bladzacy_upior",
+    "label": "Łupy: Błądzący Upiór",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_borik_zelazny_zapis",
+    "label": "Łupy: Borik Żelazny Zapis",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-13 07:24:38",
+    "gold_min": 15,
+    "gold_max": 40
+  },
+  {
     "key": "loot_brat_gerwazy",
     "label": "Łupy: Brat Gerwazy",
     "description": "",
@@ -94,9 +138,9 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 5,
+    "gold_max": 15
   },
   {
     "key": "loot_czarny_hask",
@@ -108,6 +152,17 @@
     "updated_at": "2026-07-08 11:23:10",
     "gold_min": 15,
     "gold_max": 40
+  },
+  {
+    "key": "loot_dziki_pies",
+    "label": "Łupy: Dziki Pies",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:12:43",
+    "updated_at": "2026-07-13 16:12:43",
+    "gold_min": 1,
+    "gold_max": 6
   },
   {
     "key": "loot_enemy",
@@ -127,9 +182,9 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 1,
+    "gold_max": 5
   },
   {
     "key": "loot_giant_spider",
@@ -138,9 +193,9 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 5,
+    "gold_max": 15
   },
   {
     "key": "loot_goblin",
@@ -253,6 +308,39 @@
     "gold_max": 40
   },
   {
+    "key": "loot_hetman_rozbojcow",
+    "label": "Łupy: Hetman Rozbójców",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_kamienny_wojownik",
+    "label": "Łupy: Kamienny Wojownik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_klusownik",
+    "label": "Łupy: Kłusownik",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:12:43",
+    "updated_at": "2026-07-13 16:12:43",
+    "gold_min": 1,
+    "gold_max": 6
+  },
+  {
     "key": "loot_kolekcjoner_kosci",
     "label": "Łupy: Kolekcjoner Kości",
     "description": "",
@@ -358,9 +446,20 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-07-12 00:00:00",
-    "updated_at": "2026-07-12 00:00:00",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 5,
+    "gold_max": 15
+  },
+  {
+    "key": "loot_lowca_rubiezy",
+    "label": "Łupy: Łowca Rubieży",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
   },
   {
     "key": "loot_marek_voss_final",
@@ -385,15 +484,26 @@
     "gold_max": 15
   },
   {
-    "key": "loot_nozownik_testowy",
-    "label": "Łupy: Nozownik Testowy",
+    "key": "loot_mrozny_wilkolak",
+    "label": "Łupy: Mroźny Wilkołak",
     "description": "",
     "is_active": 1,
     "locked_at": null,
-    "created_at": "2026-06-20 10:37:17",
-    "updated_at": "2026-06-20 10:37:17",
-    "gold_min": 5,
-    "gold_max": 15
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
+    "key": "loot_najemny_zabojca",
+    "label": "Łupy: Najemny Zabójca",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
   },
   {
     "key": "loot_ogr",
@@ -403,6 +513,17 @@
     "locked_at": null,
     "created_at": "2026-06-13 16:14:05",
     "updated_at": "2026-06-13 16:14:05",
+    "gold_min": 5,
+    "gold_max": 15
+  },
+  {
+    "key": "loot_okaleczony_lowca",
+    "label": "Łupy: Okaleczony łowca",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-13 07:24:38",
     "gold_min": 5,
     "gold_max": 15
   },
@@ -418,6 +539,17 @@
     "gold_max": 5
   },
   {
+    "key": "loot_opat_popiolu",
+    "label": "Łupy: Opat Popiołu",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 07:24:38",
+    "updated_at": "2026-07-13 07:24:38",
+    "gold_min": 40,
+    "gold_max": 100
+  },
+  {
     "key": "loot_orc",
     "label": "Łupy: Ork",
     "description": "",
@@ -427,6 +559,17 @@
     "updated_at": "2026-06-11 12:19:44",
     "gold_min": 2,
     "gold_max": 15
+  },
+  {
+    "key": "loot_pijawczy_roj",
+    "label": "Łupy: Pijawczy Rój",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:12:43",
+    "updated_at": "2026-07-13 16:12:43",
+    "gold_min": 1,
+    "gold_max": 6
   },
   {
     "key": "loot_poor",
@@ -528,6 +671,17 @@
     "gold_max": 25
   },
   {
+    "key": "loot_rozbojnik_traktowy",
+    "label": "Łupy: Rozbójnik Traktowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
+  },
+  {
     "key": "loot_rykar_wilkowy",
     "label": "Łupy: Rykar Wilkowy",
     "description": "",
@@ -537,6 +691,17 @@
     "updated_at": "2026-07-08 11:31:42",
     "gold_min": 0,
     "gold_max": 0
+  },
+  {
+    "key": "loot_rzeczny_oprych",
+    "label": "Łupy: Rzeczny Oprych",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
   },
   {
     "key": "loot_s2_pw_bandyta_lucznik",
@@ -633,9 +798,9 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:19:44",
-    "updated_at": "2026-06-11 12:19:44",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 5,
+    "gold_max": 15
   },
   {
     "key": "loot_spaczony_prorok",
@@ -658,6 +823,17 @@
     "updated_at": "2026-06-11 14:57:09",
     "gold_min": 3,
     "gold_max": 12
+  },
+  {
+    "key": "loot_stepowy_grasant",
+    "label": "Łupy: Stepowy Grasant",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:43",
+    "updated_at": "2026-07-13 16:39:43",
+    "gold_min": 3,
+    "gold_max": 20
   },
   {
     "key": "loot_szczury_grobowe",
@@ -737,6 +913,17 @@
     "gold_max": 0
   },
   {
+    "key": "loot_trash_common",
+    "label": "Łupy: Drobiazgi (consolation)",
+    "description": "T6 (#1352): gwarantowany drop minimalny po zwycięstwie.",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 00:00:00",
+    "updated_at": "2026-07-13 00:00:00",
+    "gold_min": 0,
+    "gold_max": 1
+  },
+  {
     "key": "loot_treasure",
     "label": "Skarb",
     "description": "Cenne łupy — boss lub specjalny cel.",
@@ -781,6 +968,17 @@
     "gold_max": 10
   },
   {
+    "key": "loot_wilk_stepowy",
+    "label": "Łupy: Wilk Stepowy",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:12:43",
+    "updated_at": "2026-07-13 16:12:43",
+    "gold_min": 1,
+    "gold_max": 6
+  },
+  {
     "key": "loot_wit_srogi",
     "label": "Łupy: Wit Srogi",
     "description": "",
@@ -820,9 +1018,20 @@
     "is_active": 1,
     "locked_at": null,
     "created_at": "2026-06-11 12:19:44",
-    "updated_at": "2026-06-11 12:19:44",
-    "gold_min": 0,
-    "gold_max": 0
+    "updated_at": "2026-07-13 16:57:02",
+    "gold_min": 5,
+    "gold_max": 15
+  },
+  {
+    "key": "loot_wynaturzona_bestia",
+    "label": "Łupy: Wynaturzona Bestia",
+    "description": "",
+    "is_active": 1,
+    "locked_at": null,
+    "created_at": "2026-07-13 16:39:44",
+    "updated_at": "2026-07-13 16:39:44",
+    "gold_min": 3,
+    "gold_max": 20
   },
   {
     "key": "loot_wynaturzony_trup",
@@ -957,14 +1166,14 @@
     "gold_max": 15
   },
   {
-    "key": "loot_trash_common",
-    "label": "Łupy: Drobiazgi (consolation)",
-    "description": "T6 (#1352): gwarantowany drop minimalny po zwycięstwie.",
+    "key": "loot_zbieg",
+    "label": "Łupy: Zbieg",
+    "description": "",
     "is_active": 1,
     "locked_at": null,
-    "created_at": "2026-07-13 00:00:00",
-    "updated_at": "2026-07-13 00:00:00",
-    "gold_min": 0,
-    "gold_max": 1
+    "created_at": "2026-07-13 16:12:43",
+    "updated_at": "2026-07-13 16:12:43",
+    "gold_min": 1,
+    "gold_max": 6
   }
 ]

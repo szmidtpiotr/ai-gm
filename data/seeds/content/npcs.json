@@ -10,7 +10,7 @@
     "shop_inventory_json": "[{\"type\":\"weapon\",\"key\":\"shortsword\"},{\"type\":\"item\",\"key\":\"health_potion\"},{\"type\":\"item\",\"key\":\"torch\"}]",
     "is_active": 1,
     "created_at": "2026-06-11 12:16:53",
-    "updated_at": "2026-07-12 11:07:16",
+    "updated_at": "2026-07-14 14:37:11",
     "is_quest_giver": 0,
     "is_ally": 0,
     "personality_prompt": null,
@@ -22,7 +22,9 @@
     "image_url": "/images/tiles/aigm_1781768444_aigm_00622_.png",
     "image_url_raw": null,
     "image_gen_prompt": "traveling merchant, friendly middle-aged man, weathered face, kind eyes, practical layered tunic, wool cloak, leather satchel, belt pouches, simple goods bundles, rustic charm, approachable smile, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2,
@@ -47,7 +49,9 @@
     "image_url": "/images/tiles/aigm_1781768843_aigm_00644_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper woman, friendly knowing smile, observant eyes, rustic dress, linen apron, rolled sleeves, tavern hostess, neatly tied hair, welcoming posture, cozy atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3,
@@ -72,7 +76,9 @@
     "image_url": "/images/tiles/aigm_1781768619_aigm_00632_.png",
     "image_url_raw": null,
     "image_gen_prompt": "mysterious mage, wise middle-aged man, piercing eyes, trimmed beard, ornate dark robes, arcane embroidery, glowing amulet, hooded cloak, inviting expression, enigmatic smile, weathered hands, magical aura, quest giver, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4,
@@ -85,7 +91,7 @@
     "shop_inventory_json": "[{\"type\":\"weapon\",\"key\":\"shortsword\"},{\"type\":\"weapon\",\"key\":\"shortbow\"},{\"type\":\"armor\",\"key\":\"leatherarmor\"}]",
     "is_active": 1,
     "created_at": "2026-06-11 12:16:53",
-    "updated_at": "2026-07-12 11:07:16",
+    "updated_at": "2026-07-14 14:37:11",
     "is_quest_giver": 0,
     "is_ally": 0,
     "personality_prompt": null,
@@ -97,7 +103,9 @@
     "image_url": "/images/tiles/aigm_1781768654_aigm_00634_.png",
     "image_url_raw": null,
     "image_gen_prompt": "burly blacksmith merchant, middle-aged man, soot-smudged face, strong arms, leather apron, rolled sleeves, chainmail accents, tool belt, hammer at waist, friendly confident expression, rustic forge atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "smith",
+    "is_guild_merchant": 0
   },
   {
     "id": 73,
@@ -122,7 +130,9 @@
     "image_url": "/images/tiles/aigm_1781769052_aigm_00655_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elderly blacksmith, rugged face, gray beard, soot-stained skin, strong build, weathered hands, leather apron, rolled sleeves, simple tunic, iron tools, calm expression, trustworthy, village craftsman, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 74,
@@ -147,7 +157,9 @@
     "image_url": "/images/tiles/aigm_1781768531_aigm_00627_.png",
     "image_url_raw": null,
     "image_gen_prompt": "wise quiet healer, elderly male apothecary, gentle eyes, weathered face, simple monk robes, ember-colored sash, leather potion satchel, herbal vials, healing hands, calm expression, humble posture, monastery background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 75,
@@ -172,7 +184,9 @@
     "image_url": "/images/tiles/aigm_1781768860_aigm_00645_.png",
     "image_url_raw": null,
     "image_gen_prompt": "wealthy merchant woman, coastal trade magnate, elegant noble features, confident friendly smile, rich embroidered gown, layered silk fabrics, gold jewelry, signet rings, travel cloak, refined posture, shrewd eyes, prosperous aura, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 76,
@@ -197,7 +211,9 @@
     "image_url": "/images/tiles/aigm_1781768728_aigm_00638_.png",
     "image_url_raw": null,
     "image_gen_prompt": "royal guard commander, middle-aged man, stern but approachable expression, polished plate armor, blue and gold tabard, royal insignia, cape, confident posture, weathered face, short dark hair, trimmed beard, trustworthy presence, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 77,
@@ -222,7 +238,9 @@
     "image_url": "/images/tiles/aigm_1781768461_aigm_00623_.png",
     "image_url_raw": null,
     "image_gen_prompt": "royal chronicler, middle-aged scholar, intelligent eyes, calm expression, neatly trimmed beard, elegant court robes, embroidered velvet mantle, parchment scrolls, ink-stained fingers, noble bearing, refined historian, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 78,
@@ -247,7 +265,9 @@
     "image_url": "/images/tiles/aigm_1781768957_aigm_00650_.png",
     "image_url_raw": null,
     "image_gen_prompt": "Volhynian blacksmith merchant, sturdy middle-aged man, soot-smudged face, short dark beard, practical leather apron, layered linen tunic, polished trade armor pieces, decorative swords, confident friendly expression, bustling forge ambiance, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 79,
@@ -272,7 +292,9 @@
     "image_url": "/images/tiles/aigm_1781769070_aigm_00656_.png",
     "image_url_raw": null,
     "image_gen_prompt": "seasoned apothecary merchant, subtle poison expert, antidote specialist, discreet herbal trader, middle-aged, keen intelligent eyes, calm friendly expression, weathered hands, layered robes, leather satchel, herb pouches, glass vials, rustic fantasy shopkeeper, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "herbalist",
+    "is_guild_merchant": 0
   },
   {
     "id": 80,
@@ -297,7 +319,9 @@
     "image_url": "/images/tiles/aigm_1781768512_aigm_00626_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged merchant guildmaster, wealthy dignified man, sharp intelligent eyes, neatly trimmed beard, luxurious embroidered doublet, fur-lined cloak, gold rings, ledger pouch, confident friendly expression, affluent city noble, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 81,
@@ -322,7 +346,9 @@
     "image_url": "/images/tiles/aigm_1781768937_aigm_00649_.png",
     "image_url_raw": null,
     "image_gen_prompt": "port blacksmith woman, sturdy build, soot-smudged skin, braided dark hair, rolled-up sleeves, leather apron, practical work clothes, hammer at belt, calm knowing smile, weathered hands, harbor forge atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 82,
@@ -347,7 +373,9 @@
     "image_url": "/images/tiles/aigm_1781768567_aigm_00629_.png",
     "image_url_raw": null,
     "image_gen_prompt": "retired ship surgeon, weathered middle-aged man, sharp observant eyes, neatly trimmed gray beard, sea-worn face, practical dark coat, leather satchel, stained linen shirt, skilled hands, calm guarded expression, subtle maritime details, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 83,
@@ -372,7 +400,9 @@
     "image_url": "/images/tiles/aigm_1781768746_aigm_00639_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elderly harbor captain, weathered face, gray beard, salt-streaked hair, keen eyes, sturdy sea coat, brass buttons, nautical scarf, rolled treasure maps, trustworthy smile, coastal veteran, seafarer, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 84,
@@ -397,7 +427,9 @@
     "image_url": "/images/tiles/aigm_1781768420_aigm_00621_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elderly abbess, monastery prioress, compassionate healer, stern expression, welcoming pilgrims, sacred duty, white and gold robes, ember sigil, prayer beads, holy aura, candlelit fantasy clergy, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 85,
@@ -422,7 +454,9 @@
     "image_url": "/images/tiles/aigm_1781768548_aigm_00628_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elderly monk archivist, kindly face, calm eyes, humble smile, tonsured hair, weathered hands, simple brown robes, leather satchel, ancient manuscripts, relic collector, scholarly aura, monastery library, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 86,
@@ -447,7 +481,9 @@
     "image_url": "/images/tiles/aigm_1781769089_aigm_00657_.png",
     "image_url_raw": null,
     "image_gen_prompt": "burly coastal blacksmith, middle-aged man, weathered face, broad shoulders, strong hands, salt-streaked beard, practical leather apron, rolled sleeves, iron tools, anchor maker, sturdy work clothes, calm friendly expression, harbor atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 87,
@@ -472,7 +508,9 @@
     "image_url": "/images/tiles/aigm_1781768690_aigm_00636_.png",
     "image_url_raw": null,
     "image_gen_prompt": "sea herbalist, poison expert, weathered healer, middle-aged woman, salt-touched skin, calm intelligent eyes, braided gray hair, layered coastal robes, shell amulets, herb pouches, gentle expression, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 88,
@@ -497,7 +535,9 @@
     "image_url": "/images/tiles/aigm_1781768601_aigm_00631_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elderly fisherman, weathered face, gray beard, sea-worn skin, humble wool cap, heavy knit sweater, patched coat, salt-stained trousers, calm concerned expression, coastal village charm, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 89,
@@ -522,7 +562,9 @@
     "image_url": "/images/tiles/aigm_1781769034_aigm_00654_.png",
     "image_url_raw": null,
     "image_gen_prompt": "rugged village blacksmith, middle-aged man, broad shoulders, soot-smudged face, kind eyes, short beard, worn leather apron, rolled sleeves, simple wool shirt, sturdy hands, calm smile, rustic workshop, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "smith",
+    "is_guild_merchant": 0
   },
   {
     "id": 90,
@@ -547,7 +589,9 @@
     "image_url": "/images/tiles/aigm_1781768977_aigm_00651_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged village elder, Slavic features, weathered face, short graying beard, calm worried expression, simple wool tunic, fur-lined vest, leather belt, rustic cloak, humble authority, concerned eyes, forest village atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 91,
@@ -572,7 +616,9 @@
     "image_url": "/images/tiles/aigm_1781769109_aigm_00658_.png",
     "image_url_raw": null,
     "image_gen_prompt": "forest herbalist, middle-aged woman, weathered face, kind eyes, practical hooded cloak, earth-toned linen dress, leather satchel, bundles of herbs, small vials, calm expression, rustic charm, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "herbalist",
+    "is_guild_merchant": 0
   },
   {
     "id": 92,
@@ -597,7 +643,9 @@
     "image_url": "/images/tiles/aigm_1781768673_aigm_00635_.png",
     "image_url_raw": null,
     "image_gen_prompt": "rugged middle-aged dwarf man, sturdy build, soot-smudged face, braided beard, calloused hands, miner-blacksmith hybrid, leather apron, heavy work tunic, iron tools, forge hammer, pickaxe, practical belt, friendly confident expression, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 93,
@@ -622,7 +670,9 @@
     "image_url": "/images/tiles/aigm_1781769129_aigm_00659_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged herbalist merchant, mountain dweller, weathered face, kind eyes, wool cloak, layered tunic, leather satchel, herb bundles, healing stones, potion vials, practical hands, calm expression, rustic alpine market, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "herbalist",
+    "is_guild_merchant": 0
   },
   {
     "id": 94,
@@ -647,7 +697,9 @@
     "image_url": "/images/tiles/aigm_1781769016_aigm_00653_.png",
     "image_url_raw": null,
     "image_gen_prompt": "seasoned miner, rugged middle-aged man, weathered face, short beard, kind tired eyes, soot-smudged skin, sturdy leather vest, worn work shirt, miner’s cap, pickaxe at side, cautious friendly expression, underground dwarven mine ambiance, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 95,
@@ -672,7 +724,9 @@
     "image_url": "/images/tiles/aigm_1781768808_aigm_00642_.png",
     "image_url_raw": null,
     "image_gen_prompt": "fortress blacksmith, sturdy middle-aged man, broad shoulders, soot-smudged face, short dark hair, trimmed beard, leather apron, chainmail sleeves, heavy work gloves, calm friendly expression, forge background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 96,
@@ -697,7 +751,9 @@
     "image_url": "/images/tiles/aigm_1781768789_aigm_00641_.png",
     "image_url_raw": null,
     "image_gen_prompt": "seasoned fortress commander, middle-aged man, stern but approachable, weathered face, short dark hair, trimmed beard, steel breastplate, fur-lined cloak, border garrison uniform, insignia badge, alert eyes, confident posture, rugged hands, frontier stronghold background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 97,
@@ -722,7 +778,9 @@
     "image_url": "/images/tiles/aigm_1781768636_aigm_00633_.png",
     "image_url_raw": null,
     "image_gen_prompt": "fortress medic, rugged middle-aged man, weathered face, stern but kind expression, rolled sleeves, stained leather apron, practical tunic, bandages, herbal satchel, bone saw, rough healer’s tools, resilient posture, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 98,
@@ -747,7 +805,9 @@
     "image_url": "/images/tiles/aigm_1781768495_aigm_00625_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, sturdy build, weathered face, knowing eyes, friendly smirk, short beard, rolled-up sleeves, rustic tavern clothes, apron, well-worn vest, approachable, shrewd, cozy atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 99,
@@ -772,7 +832,9 @@
     "image_url": "/images/tiles/aigm_1781768709_aigm_00637_.png",
     "image_url_raw": null,
     "image_gen_prompt": "humble village blacksmith, cooper artisan, sturdy middle-aged man, soot-smudged face, honest kind eyes, simple work clothes, leather apron, rolled sleeves, calloused hands, friendly expression, rustic workshop atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "smith",
+    "is_guild_merchant": 0
   },
   {
     "id": 100,
@@ -797,7 +859,9 @@
     "image_url": "/images/tiles/aigm_1781768478_aigm_00624_.png",
     "image_url_raw": null,
     "image_gen_prompt": "village wise woman, rural healer, middle-aged woman, weathered kind face, skeptical gentle expression, herbal satchel, dried herbs, simple linen dress, wool shawl, rustic amulets, earthy colors, cottagecore, subtle magical charm, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "herbalist",
+    "is_guild_merchant": 0
   },
   {
     "id": 101,
@@ -822,7 +886,9 @@
     "image_url": "/images/tiles/aigm_1781768997_aigm_00652_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged village elder, calm face, worried eyes, rugged features, weathered skin, short graying hair, simple wool tunic, fur-lined vest, leather belt, humble rural attire, gentle expression, rustic authority, village background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 102,
@@ -847,7 +913,9 @@
     "image_url": "/images/tiles/aigm_1781768898_aigm_00647_.png",
     "image_url_raw": null,
     "image_gen_prompt": "legendary ascetic, elderly man, weathered face, long white beard, piercing wise eyes, calm gentle expression, humble robes, worn cloak, solitary hermit, ancient sage, mystical aura, forest shrine, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 103,
@@ -872,7 +940,9 @@
     "image_url": "/images/tiles/aigm_1781769148_aigm_00660_.png",
     "image_url_raw": null,
     "image_gen_prompt": "solitary steppe hunter, rugged middle-aged man, weathered face, sharp eyes, trimmed beard, fur-lined leather coat, wolf pelt mantle, practical belts, travel-worn boots, calm expression, vigilant demeanor, windswept grassland atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 312,
@@ -897,7 +967,9 @@
     "image_url": "/images/tiles/aigm_1781768826_aigm_00643_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper woman, sturdy build, kind face, chestnut braided hair, simple linen dress, rustic apron, rolled sleeves, wooden mug, welcoming smile, cozy tavern atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 313,
@@ -922,7 +994,9 @@
     "image_url": "/images/tiles/aigm_1781768584_aigm_00630_.png",
     "image_url_raw": null,
     "image_gen_prompt": "male ghost, translucent nobleman, pale ethereal skin, elegant tattered aristocratic robes, silver embroidery, faint spectral glow, calm expression, hollow gentle eyes, wispy hair, mysterious aura, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 315,
@@ -947,7 +1021,9 @@
     "image_url": "/images/tiles/aigm_1781768770_aigm_00640_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, sturdy build, friendly face, short beard, rolled-up sleeves, rustic linen shirt, leather apron, tavern keeper attire, welcoming smile, warm eyes, cozy atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 316,
@@ -972,7 +1048,9 @@
     "image_url": "/images/tiles/aigm_1781768918_aigm_00648_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged parent, gentle face, kind eyes, humble clothing, simple tunic, wool shawl, practical apron, soft smile, caring expression, approachable, village commoner, earthy tones, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 317,
@@ -997,7 +1075,9 @@
     "image_url": "/images/tiles/aigm_1781768879_aigm_00646_.png",
     "image_url_raw": null,
     "image_gen_prompt": "underground dweller, cavern resident, rugged human, earthy skin tones, practical layered tunic, leather vest, hooded cloak, miner accessories, calm expression, approachable face, subtle smile, rocky cave ambiance, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2652,
@@ -1022,7 +1102,9 @@
     "image_url": "/images/tiles/aigm_1783534256_aigm_00909_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged customs officer, toll collector, sharp eyes, cunning expression, neatly trimmed beard, weathered face, practical dark wool coat, leather ledger satchel, coin pouch, ink-stained fingers, river bridge tollhouse, observant, calculating, subtle smirk, grounded medieval fantasy, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2669,
@@ -1047,7 +1129,9 @@
     "image_url": "/images/tiles/aigm_1783534327_aigm_00913_.png",
     "image_url_raw": null,
     "image_gen_prompt": "elder swamp witch, gaunt woman, tangled silver hair, sharp cheekbones, piercing amber eyes, weathered skin, crooked smile, layered mossy robes, bone talismans, herbal charms, mysterious, unsettling yet wise, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2670,
@@ -1072,7 +1156,9 @@
     "image_url": "/images/tiles/aigm_1783534291_aigm_00911_.png",
     "image_url_raw": null,
     "image_gen_prompt": "hunched middle-aged man, singed beard, weathered face, tired kind eyes, village elder, rugged cloak, patched tunic, ash-stained clothes, solemn expression, resilient presence, burnt village backdrop, camp leader, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2671,
@@ -1097,7 +1183,9 @@
     "image_url": "/images/tiles/aigm_1783534379_aigm_00916_.png",
     "image_url_raw": null,
     "image_gen_prompt": "swamp herbalist woman, muddy tangled hair, weathered face, knowing eyes, subtle smile, marsh-dweller, rustic layered robes, mossy shawl, potion vials, herb bundles, mysterious charm, friendly merchant, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": "herbalist",
+    "is_guild_merchant": 0
   },
   {
     "id": 2672,
@@ -1122,7 +1210,9 @@
     "image_url": "/images/tiles/aigm_1783534274_aigm_00910_.png",
     "image_url_raw": null,
     "image_gen_prompt": "sturdy lumberjack, broad-shouldered, weathered face, sawdust in hair, three-fingered left hand, rough beard, simple linen shirt, leather vest, work apron, rolled sleeves, calm wary expression, rustic village sawmill, streamside atmosphere, earthy tones, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2673,
@@ -1147,7 +1237,9 @@
     "image_url": "/images/tiles/aigm_1783534149_aigm_00903_.png",
     "image_url_raw": null,
     "image_gen_prompt": "plump innkeeper, middle-aged man, round cheerful face, rosy cheeks, friendly smile, sturdy build, simple rustic tunic, stained apron, rolled sleeves, tavern warmth, fish stew pot, cozy riverside inn, watchful eyes, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 2674,
@@ -1172,7 +1264,9 @@
     "image_url": "/images/tiles/aigm_1783534014_aigm_00895_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, Slavic features, ruddy face, broad build, thick beard, kind tired eyes, worn linen shirt, leather apron, rustic vest, honey mead brewer, uneasy smile, village tavern warmth, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3179,
@@ -1197,7 +1291,9 @@
     "image_url": "/images/tiles/aigm_1783534031_aigm_00896_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged village blacksmith, sturdy build, soot-smudged face, broad shoulders, calloused hands, leather apron, rolled sleeves, simple linen shirt, iron tools, calm expression, trustworthy, rustic forge background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3180,
@@ -1222,7 +1318,9 @@
     "image_url": "/images/tiles/aigm_1783534309_aigm_00912_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young male apprentice, blacksmith apprentice, anxious witness, frightened expression, nervous eyes, tousled brown hair, simple work tunic, leather apron, soot-smudged clothes, humble village artisan, tense posture, rustic fantasy setting, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3181,
@@ -1247,7 +1345,9 @@
     "image_url": "/images/tiles/aigm_1783534064_aigm_00898_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, sturdy build, weathered face, cautious eyes, trimmed beard, humble wool tunic, stained apron, leather belt, tavern keeper, guarded expression, subtle tension, rustic charm, discreet demeanor, village tavern interior, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3182,
@@ -1272,7 +1372,9 @@
     "image_url": "/images/tiles/aigm_1783534361_aigm_00915_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young street gang leader, teenage ruffian, millside delinquent, rugged face, bruised pride, defiant expression, scruffy hair, patched vest, worn shirt, leather belt, fingerless gloves, sly posture, rustic village background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3183,
@@ -1297,7 +1399,9 @@
     "image_url": "/images/tiles/aigm_1783534099_aigm_00900_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young teenage boy, smallest of the gang, nervous expression, insecure posture, scruffy hair, thin build, worn street clothes, patched tunic, simple trousers, cautious eyes, vulnerable demeanor, subtle toughness, humble background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3187,
@@ -1322,7 +1426,9 @@
     "image_url": "/images/tiles/aigm_1783534116_aigm_00901_.png",
     "image_url_raw": null,
     "image_gen_prompt": "scrawny teenage village tough, thin build, awkward posture, rough peasant clothes, patched tunic, worn trousers, dusty boots, nervous smirk, timid eyes, messy hair, rustic background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3190,
@@ -1347,7 +1453,9 @@
     "image_url": "/images/tiles/aigm_1783534238_aigm_00908_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, sturdy build, weathered face, cautious eyes, trimmed beard, humble linen shirt, wool vest, leather apron, tavern setting, knowing expression, guarded smile, rustic charm, local influence, subtle tension, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3191,
@@ -1372,7 +1480,9 @@
     "image_url": "/images/tiles/aigm_1783534081_aigm_00899_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young delinquent, scrawny teenage boy, nervous expression, wary eyes, messy short hair, worn street clothes, patched tunic, cheap vest, bruised knuckles, uneasy posture, vulnerable look, rough peasant style, muted earthy colors, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3198,
@@ -1397,7 +1507,9 @@
     "image_url": "/images/tiles/aigm_1783534184_aigm_00905_.png",
     "image_url_raw": null,
     "image_gen_prompt": "helpful ally, gentle guide, approachable expression, calm smile, wise eyes, travel-worn face, sturdy cloak, leather tunic, practical belts, medieval fantasy attire, trustworthy presence, welcoming posture, rustic charm, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3245,
@@ -1422,7 +1534,9 @@
     "image_url": "/images/tiles/aigm_1783534133_aigm_00902_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, cautious gossip broker, sturdy build, weathered face, short brown hair, trimmed beard, observant eyes, humble tavern clothes, linen shirt, wool vest, apron, calm expression, friendly demeanor, cozy tavern atmosphere, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3246,
@@ -1447,7 +1561,9 @@
     "image_url": "/images/tiles/aigm_1783534204_aigm_00906_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young teenage boy, smallest of the gang, slight build, nervous expression, uncertain eyes, scruffy hair, worn village clothes, patched tunic, timid posture, vulnerable demeanor, subtle tension, rustic fantasy setting, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3247,
@@ -1472,7 +1588,9 @@
     "image_url": "/images/tiles/aigm_1783534048_aigm_00897_.png",
     "image_url_raw": null,
     "image_gen_prompt": "offended teenage gang leader, millside delinquent, lean adolescent boy, defiant posture, resentful expression, tousled hair, worn village clothes, patched vest, rough boots, scruffy charm, rustic background, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3414,
@@ -1497,7 +1615,9 @@
     "image_url": "/images/tiles/aigm_1783534167_aigm_00904_.png",
     "image_url_raw": null,
     "image_gen_prompt": "middle-aged innkeeper, cautious expression, observant eyes, sturdy build, weathered face, trimmed beard, rustic linen shirt, wool vest, leather apron, tavern ambiance, discreet demeanor, approachable, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3416,
@@ -1522,7 +1642,9 @@
     "image_url": "/images/tiles/aigm_1783534344_aigm_00914_.png",
     "image_url_raw": null,
     "image_gen_prompt": "street urchin gang leader, teenage boy, lean build, mischievous grin, sharp eyes, tousled hair, patched rustic clothes, worn vest, rolled sleeves, millside rogue, scrappy charm, confident stance, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 3614,
@@ -1547,7 +1669,9 @@
     "image_url": "/images/tiles/aigm_1783534221_aigm_00907_.png",
     "image_url_raw": null,
     "image_gen_prompt": "young street tough, vulnerable weak link, teenage boy, lean build, nervous expression, wary eyes, scruffy hair, patched urban fantasy clothes, worn leather vest, simple shirt, guarded posture, rough but harmless, character portrait, warm fantasy lighting, detailed illustration, no text, no UI, character portrait, warm fantasy lighting, detailed illustration, no text, no UI",
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4095,
@@ -1572,7 +1696,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4096,
@@ -1597,7 +1723,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4097,
@@ -1622,7 +1750,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4098,
@@ -1647,7 +1777,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4104,
@@ -1672,7 +1804,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4105,
@@ -1697,7 +1831,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4106,
@@ -1722,7 +1858,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4120,
@@ -1747,7 +1885,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4121,
@@ -1772,7 +1912,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4122,
@@ -1797,7 +1939,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4128,
@@ -1822,7 +1966,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4129,
@@ -1847,7 +1993,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4130,
@@ -1872,7 +2020,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4140,
@@ -1897,7 +2047,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4141,
@@ -1922,7 +2074,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4142,
@@ -1947,7 +2101,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4156,
@@ -1972,7 +2128,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4157,
@@ -1997,7 +2155,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4158,
@@ -2022,7 +2182,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4184,
@@ -2047,7 +2209,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4185,
@@ -2072,7 +2236,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4186,
@@ -2097,7 +2263,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4192,
@@ -2122,7 +2290,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4193,
@@ -2147,7 +2317,9 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
   },
   {
     "id": 4194,
@@ -2172,6 +2344,89 @@
     "image_url": null,
     "image_url_raw": null,
     "image_gen_prompt": null,
-    "faction_key": null
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 0
+  },
+  {
+    "id": 4498,
+    "key": "gildia_kupiecka_volhynia",
+    "label": "Faktor Gildii — Radomir Waga",
+    "npc_type": "merchant",
+    "description": "Faktor Gildii Kupieckiej w Volhynii: waży komponenty na mosiężnej szali i płaci grosze za surowiec, lecz każdy łowca bestii wie, że tu opchnie kły i skóry bez gadania. Rzadkich, bossowych trofeów nie tknie — te zostają w plecaku myśliwego.",
+    "personality_json": "{}",
+    "is_shop": 1,
+    "shop_inventory_json": "[]",
+    "is_active": 1,
+    "created_at": "2026-07-12 22:52:51",
+    "updated_at": "2026-07-12 22:52:51",
+    "is_quest_giver": 0,
+    "is_ally": 0,
+    "personality_prompt": "Rzeczowy i szorstki. Waży każdy grosz. Skupuje tanio, sprzedaje drogo — i nie targuje się o bossowe trofea, bo tych po prostu nie bierze.",
+    "keyword_triggers": "[\"gildia\",\"kupiec\",\"komponent\",\"faktor\"]",
+    "review_status": "permanent",
+    "is_dead": 0,
+    "is_crafter": 0,
+    "stats_json": null,
+    "image_url": null,
+    "image_url_raw": null,
+    "image_gen_prompt": null,
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 1
+  },
+  {
+    "id": 4499,
+    "key": "gildia_kupiecka_brzezino",
+    "label": "Faktor Gildii — Kunegunda Rączka",
+    "npc_type": "merchant",
+    "description": "Objazdowa faktorka Gildii z kantorkiem przy trakcie w Brzezinie. Skupuje pospolite komponenty rzemieślnicze i wystawia na sprzedaż to, czego akurat brakuje w kuźniach.",
+    "personality_json": "{}",
+    "is_shop": 1,
+    "shop_inventory_json": "[]",
+    "is_active": 1,
+    "created_at": "2026-07-12 22:52:51",
+    "updated_at": "2026-07-12 22:52:51",
+    "is_quest_giver": 0,
+    "is_ally": 0,
+    "personality_prompt": "Rzeczowy i szorstki. Waży każdy grosz. Skupuje tanio, sprzedaje drogo — i nie targuje się o bossowe trofea, bo tych po prostu nie bierze.",
+    "keyword_triggers": "[\"gildia\",\"kupiec\",\"komponent\",\"faktor\"]",
+    "review_status": "permanent",
+    "is_dead": 0,
+    "is_crafter": 0,
+    "stats_json": null,
+    "image_url": null,
+    "image_url_raw": null,
+    "image_gen_prompt": null,
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 1
+  },
+  {
+    "id": 4500,
+    "key": "gildia_kupiecka_strazyn",
+    "label": "Faktor Gildii — Bruno Miech",
+    "npc_type": "merchant",
+    "description": "Kwatermistrz Gildii Kupieckiej w Strzegwacht. Za murami twierdzy handluje rudą, kłami i esencjami — asortyment rotuje z dnia na dzień, jak przychodzą karawany.",
+    "personality_json": "{}",
+    "is_shop": 1,
+    "shop_inventory_json": "[]",
+    "is_active": 1,
+    "created_at": "2026-07-12 22:52:51",
+    "updated_at": "2026-07-12 22:52:51",
+    "is_quest_giver": 0,
+    "is_ally": 0,
+    "personality_prompt": "Rzeczowy i szorstki. Waży każdy grosz. Skupuje tanio, sprzedaje drogo — i nie targuje się o bossowe trofea, bo tych po prostu nie bierze.",
+    "keyword_triggers": "[\"gildia\",\"kupiec\",\"komponent\",\"faktor\"]",
+    "review_status": "permanent",
+    "is_dead": 0,
+    "is_crafter": 0,
+    "stats_json": null,
+    "image_url": null,
+    "image_url_raw": null,
+    "image_gen_prompt": null,
+    "faction_key": null,
+    "crafter_type": null,
+    "is_guild_merchant": 1
   }
 ]

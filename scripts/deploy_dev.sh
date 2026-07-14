@@ -6,6 +6,32 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# #1382 — FAZA 0: auto-snapshot treści PRZED pullem i seed-apply.
+# Edycje Piotra w adminie żyją tylko w DB; seed_content.py --apply (niżej) robi
+# DELETE+INSERT z git-seedów i by je wymazał. Snapshot DB -> data/seeds/content
+# + commit sprawia, że stan admina staje się częścią gita ZANIM cokolwiek
+# nadpiszemy. Gdy snapshot się nie uda, seed-apply jest pomijany (ochrona).
+echo "📸 [0/4] Auto-snapshot treści (edycje admina -> git)..."
+CONTENT_SNAPSHOT_OK=0
+if [ -f data-dev/ai_gm.db ]; then
+  if python3 scripts/snapshot_content.py --db data-dev/ai_gm.db --out data/seeds/content; then
+    CONTENT_SNAPSHOT_OK=1
+    git add data/seeds/content
+    if ! git diff --cached --quiet -- data/seeds/content; then
+      git commit -m "chore(content): auto-snapshot edycji admina przed deployem (#1382)" -- data/seeds/content
+      git push origin develop || echo "⚠️  Push snapshotu nie wyszedł — commit został lokalnie, push ręcznie."
+    else
+      echo "   Brak zmian treści względem gita."
+    fi
+  else
+    echo "⚠️  Snapshot treści NIE powiódł się — seed-apply zostanie pominięty."
+  fi
+else
+  # Świeże środowisko bez DB — seed z gita jest wtedy pożądany.
+  CONTENT_SNAPSHOT_OK=1
+  echo "   Brak data-dev/ai_gm.db — pomijam snapshot (świeża instalacja)."
+fi
+
 echo "⬇️  [1/3] Pull z develop..."
 git fetch origin
 git checkout develop
@@ -48,8 +74,12 @@ for i in $(seq 1 12); do
     echo "🗺  Seed mapy świata (Kresy) — odtworzy z docs/world/world_map_seed.json jeśli world_hexes puste..."
     python3 scripts/seed_world_map.py
     echo "📚 Seed treści gry (#1202) — git seedy -> DB (kanon; wiersze kampanijne nietknięte)..."
-    cp data-dev/ai_gm.db "backups/ai_gm_dev_pre_seed_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
-    python3 scripts/seed_content.py --apply --db data-dev/ai_gm.db --seeds data/seeds/content || true
+    if [ "$CONTENT_SNAPSHOT_OK" = "1" ]; then
+      cp data-dev/ai_gm.db "backups/ai_gm_dev_pre_seed_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
+      python3 scripts/seed_content.py --apply --db data-dev/ai_gm.db --seeds data/seeds/content || true
+    else
+      echo "⚠️  Pomijam seed-apply — snapshot w FAZIE 0 padł (ochrona edycji admina, #1382)."
+    fi
     echo "   Dev: http://localhost:3002"
     exit 0
   fi
