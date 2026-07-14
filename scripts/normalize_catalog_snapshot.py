@@ -48,7 +48,7 @@ ALLOWED_COLUMNS: dict[str, frozenset[str]] = {
         {"key", "label", "description", "sort_order", "locked_at", "created_at", "updated_at"}
     ),
     "game_config_skills": frozenset(
-        {"key", "label", "linked_stat", "rank_ceiling", "sort_order", "locked_at", "description", "created_at", "updated_at"}
+        {"key", "label", "linked_stat", "rank_ceiling", "sort_order", "locked_at", "description", "created_at", "updated_at", "rank_cost_json"}
     ),
     "game_config_dc": frozenset(
         {"key", "label", "value", "description", "sort_order", "locked_at", "created_at", "updated_at"}

@@ -7,7 +7,8 @@
     "sort_order": 15,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Zwinność i równowaga w ruchu — przewroty, balansowanie na krawędzi, łapanie się w upadku.",
-    "trigger_keywords": "salto przewrót akrobacj balansuję balansować"
+    "trigger_keywords": "salto przewrót akrobacj balansuję balansować",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "alchemy",
@@ -17,7 +18,8 @@
     "sort_order": 29,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Warzenie mikstur, trucizn i kwasów. Sukces — substancja gotowa; krytyczna porażka — wybuch lub zatrucie twórcy. Efekt narracyjny (crafting mechaniczny: poza zakresem).",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "arcana",
@@ -27,7 +29,8 @@
     "sort_order": 11,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "arcane_ward",
@@ -37,7 +40,8 @@
     "sort_order": 42,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Reakcja bojowa (#1324): magiczny odpowiednik Uniku. Po zadeklarowaniu bariery, gdy wróg trafia, postać wykonuje test INT (d20 + INT + ranga + biegłość) przeciw wynikowi ataku wroga PRZED obrażeniami, kosztem 1 many za próbę (mana schodzi ZAWSZE, niezależnie od wyniku). Sukces — cios znegowany (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1 i wystarczającej many. Raz na rundę przy wielu wrogach, przy jednym wrogu przy każdym ataku.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150, \"4\": 400, \"5\": 1200}"
   },
   {
     "key": "athletics",
@@ -47,7 +51,8 @@
     "sort_order": 2,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wysiłek fizyczny: bieganie, skoki, wspinaczka i dźwiganie.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "attack",
@@ -57,7 +62,8 @@
     "sort_order": 4,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "awareness",
@@ -67,7 +73,8 @@
     "sort_order": 6,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "bribe",
@@ -77,7 +84,8 @@
     "sort_order": 24,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Oferta pieniędzy lub dóbr za przysługę (test przeciw WIS celu, wymaga zadeklarowania kwoty). Sukces — łapówka przyjęta; krytyczna porażka — odmowa i zgłoszenie próby.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "charm",
@@ -87,7 +95,8 @@
     "sort_order": 22,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Zjednanie kogoś i dobre wrażenie (test przeciw WIS celu). Sukces — NPC przychylny; krytyczny — sojusznik na scenę; krytyczna porażka — podejrzliwość.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "climb",
@@ -97,7 +106,8 @@
     "sort_order": 21,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wspinaczka na ściany, klify i maszty; DC zależy od powierzchni, lina je obniża. Porażka — brak postępu; krytyczna — upadek i obrażenia.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "deception",
@@ -107,7 +117,8 @@
     "sort_order": 17,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wprowadzanie w błąd słowem lub gestem — kłamanie, blefowanie, granie roli.",
-    "trigger_keywords": "blefuję oszukuję oszukać ściemniam kłamię podszywam"
+    "trigger_keywords": "blefuję oszukuję oszukać ściemniam kłamię podszywam",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "disguise",
@@ -117,7 +128,8 @@
     "sort_order": 34,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Udawanie kogoś innego strojem i zachowaniem (przy podejrzeniu test przeciw WIS). Sukces — nierozpoznany; krytyczna porażka — natychmiastowe zdemaskowanie.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "dodge",
@@ -127,7 +139,8 @@
     "sort_order": 38,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Reakcja bojowa (S15): po zadeklarowaniu uniku, gdy wróg trafia, postać wykonuje test DEX przeciw wynikowi ataku wroga PRZED obrażeniami. Raz na rundę. Sukces — atak mija (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1, by aktywować przełącznik w walce.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "dual_wield",
@@ -137,7 +150,8 @@
     "sort_order": 41,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Cecha bojowa (#598): dwie lekkie bronie → drugi atak off-hand (wymaga rank≥1).",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "endurance",
@@ -147,7 +161,8 @@
     "sort_order": 19,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Długotrwały wysiłek fizyczny (marsz, praca, walka na głodzie) i obrona przed kondycjami fizycznymi. Porażka — kondycja wyczerpania; krytyczna — 2 poziomy i przymus postoju.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "gamble",
@@ -157,7 +172,8 @@
     "sort_order": 37,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Gra w kości, karty lub inny hazard o złoto (test CHA przeciw CHA najsilniejszego gracza przy stole; DC 12 amatorzy, DC 20 zawodowcy). Stawkę deklaruje gracz, kwoty rozstrzyga mechanika. Sukces — wygrywa stawkę; krytyczny — podwójną stawkę; porażka — traci stawkę; krytyczna porażka — traci stawkę i pada na niego oskarżenie o oszustwo. Maks. kilka gier na scenę.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "gossip",
@@ -167,7 +183,8 @@
     "sort_order": 23,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Zbieranie i rozsiewanie plotek wśród miejscowych. Sukces — jedna przydatna informacja; krytyczny — dwie lub sekret; krytyczna porażka — błędna plotka albo zdemaskowanie.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "haggling",
@@ -177,7 +194,8 @@
     "sort_order": 36,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Negocjowanie ceny towaru lub usługi (test przeciw CHA kupca; raz na transakcję). Sukces — cena obniżona o 10–25%; krytyczny — o 30–50% lub bonus od sprzedawcy; krytyczna porażka — sprzedawca obrażony, cena rośnie i dalsze targowanie u niego niemożliwe. Wynik nakłada jednorazowy rabat na najbliższe kupno/sprzedaż.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "initiative",
@@ -187,7 +205,8 @@
     "sort_order": 3,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Szybka reakcja i gotowość do działania. Odpowiada za tempo i pierwszeństwo w niebezpiecznych chwilach.",
-    "trigger_keywords": ""
+    "trigger_keywords": "",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "insight",
@@ -197,7 +216,8 @@
     "sort_order": 16,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Czytanie intencji i emocji rozmówcy — wykrywanie kłamstwa, oceny czyichś motywów.",
-    "trigger_keywords": "wyczytać intencj przejrzeć podstęp zamiarów"
+    "trigger_keywords": "wyczytać intencj przejrzeć podstęp zamiarów",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "intimidation",
@@ -207,7 +227,8 @@
     "sort_order": 8,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "investigation",
@@ -217,7 +238,8 @@
     "sort_order": 13,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "language",
@@ -227,7 +249,8 @@
     "sort_order": 26,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Rozumienie obcej mowy lub tekstu. Sukces — sens uchwycony; krytyczna porażka — błędna interpretacja przeciwna do prawdy.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "lockpick",
@@ -237,7 +260,8 @@
     "sort_order": 14,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Otwieranie zamków bez klucza — wytrychem, improwizowanym narzędziem lub gołymi rękami.",
-    "trigger_keywords": "wytrych sforsować wytrychem wytrychami"
+    "trigger_keywords": "wytrych sforsować wytrychem wytrychami",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "lore",
@@ -247,7 +271,8 @@
     "sort_order": 10,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "magic_sense",
@@ -257,7 +282,8 @@
     "sort_order": 30,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wyczuwanie obecności zaklęć, artefaktów, klątw i portali. Sukces — źródło i kierunek; krytyczny — szkoła i cel; krytyczna porażka — fałszywe wrażenie.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "mana_shield",
@@ -267,7 +293,8 @@
     "sort_order": 43,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Reakcja bojowa (#1325): magiczny odpowiednik Bloku, DETERMINISTYCZNA (bez rzutu). Mag przyjmuje cios w manę zamiast w ciało. Po zadeklarowaniu tarczy, gdy wróg trafia, silnik pochłania obrażenia FINALNE (po pancerzu i marginesie) do limitu 2 × ranga many na cios, przy przeliczniku 2 obrażenia za 1 manę. Postać płaci manę tylko za faktycznie pochłonięte obrażenia (zaokrąglone w górę); niewykorzystany limit nic nie kosztuje, a cap chroni pulę przed krytykiem wroga. Bez rzutu — brak porażki i lockoutu. Wymaga rank ≥ 1 i many > 0. Raz na rundę ZAWSZE — także przy jednym wrogu.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150, \"4\": 400, \"5\": 1200}"
   },
   {
     "key": "medicine",
@@ -277,7 +304,8 @@
     "sort_order": 12,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.",
-    "trigger_keywords": "opatrzyć opatrunek bandażuję bandażuje"
+    "trigger_keywords": "opatrzyć opatrunek bandażuję bandażuje",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "nature",
@@ -287,7 +315,8 @@
     "sort_order": 28,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Rozpoznawanie roślin, zwierząt, pogody, naturalnych trucizn i terenu. Sukces — identyfikacja i właściwości; krytyczna porażka — błędne rozpoznanie (trujący grzyb).",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "persuasion",
@@ -297,7 +326,8 @@
     "sort_order": 7,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "pickpocket",
@@ -307,7 +337,8 @@
     "sort_order": 33,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Kradzież z kieszeni niezauważona (test przeciw WIS ofiary). Sukces — łup zdobyty; krytyczna porażka — złapanie na gorącym uczynku.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "riding",
@@ -317,7 +348,8 @@
     "sort_order": 18,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wsiadanie i kontrola wierzchowca, ryzykowne manewry konne (galop przez tłum, skok). Sukces — manewr czysty; porażka — utrata akcji ruchu; krytyczna — wypadnięcie z siodła, obrażenia + ogłuszenie.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "sailing",
@@ -327,7 +359,8 @@
     "sort_order": 32,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Sterowanie łodzią, nawigacja i żagle (INT nawigacja; manewry w sztormie — narracyjnie DEX). Sukces — kurs utrzymany; krytyczna porażka — uszkodzenie statku lub utrata kursu.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "shield_block",
@@ -337,7 +370,8 @@
     "sort_order": 39,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Reakcja bojowa (S16): postać z założoną tarczą może zadeklarować blok; gdy wróg trafia, wykonuje test STR przeciw wynikowi ataku wroga (DC min. 12) PRZED obrażeniami. Raz na rundę (XOR z unikiem). Sukces — obrażenia zmniejszone o 1k6 + bonus STR; sukces o ≥ +5 — atak całkowicie odparty; porażka — pełne obrażenia; krytyczna porażka — tarcza traci wytrzymałość. Wymaga rank ≥ 1 i założonej tarczy.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "stealth",
@@ -347,7 +381,8 @@
     "sort_order": 1,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Ciche poruszanie się i unikanie wykrycia. Odpowiada za wymykanie się, skradanie i działanie w cieniu.",
-    "trigger_keywords": "skradam zakradam podkradam przemykam ukradkiem chyłkiem zaczaić przyczaić cichaczem niepostrzeżenie"
+    "trigger_keywords": "skradam zakradam podkradam przemykam ukradkiem chyłkiem zaczaić przyczaić cichaczem niepostrzeżenie",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "survival",
@@ -357,7 +392,8 @@
     "sort_order": 9,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.",
-    "trigger_keywords": "zbieram zioła zbieranie ziół zrywam zioła szukam ziół zielarstwo nazbierać zioła zbieram rośliny zbieram grzyby"
+    "trigger_keywords": "zbieram zioła zbieranie ziół zrywam zioła szukam ziół zielarstwo nazbierać zioła zbieram rośliny zbieram grzyby",
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "swim",
@@ -367,7 +403,8 @@
     "sort_order": 20,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Pływanie wpław, walka z prądem, tonięcie (STR; długie przeprawy w ciężkim ekwipunku — narracyjnie CON). Porażka — utrata postępów; krytyczna — postać zaczyna tonąć.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "theology",
@@ -377,7 +414,8 @@
     "sort_order": 27,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wiedza o religiach, kultach, rytuałach i klątwach. Sukces — poprawna identyfikacja; krytyczny — ukryty szczegół; krytyczna porażka — obraza bóstwa lub kapłanów.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "torture",
@@ -387,7 +425,8 @@
     "sort_order": 35,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wydobywanie informacji groźbą i presją (CHA psychologiczne, przeciw CON jeńca; brutalny wariant STR narracyjnie). Sukces — jeniec mówi; krytyczna porażka — jeniec milknie lub umiera, informacje bezużyteczne.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "tracking",
@@ -397,7 +436,8 @@
     "sort_order": 31,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Śledzenie śladów ludzi i zwierząt w terenie. Sukces — ślad odnaleziony; krytyczny — liczebność, czas i kondycja grupy; krytyczna porażka — błędny trop.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "trade_craft",
@@ -407,7 +447,8 @@
     "sort_order": 25,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Wyrób i naprawa przedmiotów. Sukces — przedmiot gotowy; krytyczna porażka — utrata materiałów lub narzędzi. Efekt narracyjny (crafting mechaniczny: poza zakresem).",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "two_handed",
@@ -417,7 +458,8 @@
     "sort_order": 5,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Biegłość w prowadzeniu ciężkiej broni dwuręcznej bez utraty kontroli nad ciosem.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   },
   {
     "key": "wrestling",
@@ -427,6 +469,7 @@
     "sort_order": 40,
     "locked_at": "2026-04-14T00:00:00Z",
     "description": "Akcja bojowa (S17): chwyt i obalenie wroga w zwarciu — test przeciwny STR vs STR celu. Sukces — cel schwytany/przewrócony (kondycja slowed); sukces krytyczny (margines ≥ +5) — cel unieruchomiony (stunned 1 rundę); porażka — bez efektu; krytyczna porażka — napastnik sam przewrócony (slowed). Wymaga zwarcia (engaged); konsumuje turę.",
-    "trigger_keywords": null
+    "trigger_keywords": null,
+    "rank_cost_json": "{\"1\": 100, \"2\": 75, \"3\": 150}"
   }
 ]
