@@ -14,9 +14,11 @@ import {
   Minus,
   Star,
   Sun,
+  Sword,
   X,
   XCircle,
 } from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useCampaignClock,
   useCharacter,
@@ -34,8 +36,12 @@ import {
 } from "@/lib/worldmap";
 import type { WorldHex } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { TravelCinematic } from "./TravelCinematic";
 import { DayArcModal } from "./DayArcModal";
+
+// #1381 — animacja przeskoku pina po trasie (podróż z mapy dzieje się NA mapie,
+// bez pełnoekranowej cinematyki). Wartości startowe (patrz Numbers Policy #1381).
+const HOP_MS = 320; // czas jednego przeskoku pina / heks
+const ENCOUNTER_PAUSE_MS = 650; // pauza z ⚔ zanim gra wejdzie w walkę
 
 const VB_W = 340;
 const VB_H = 320;
@@ -196,12 +202,15 @@ export function WorldMap({
   };
 
   // ── selection / travel ─────────────────────────────────────────────────────
+  const qc = useQueryClient();
   const [selected, setSelected] = useState<WorldHex | null>(null);
-  const [cinematic, setCinematic] = useState<{
-    destLabel: string;
-    fromLabel: string | null;
-    hours: number | null;
-    atmosphere: string | null;
+  // #1381 — stan animacji przeskoku pina. `route` = faktycznie przebyty odcinek
+  // trasy (origin → arrived_hex); `step` = indeks aktualnego heksa; `encounterHex`
+  // = heks zasadzki (gdy podróż przerwał encounter).
+  const [anim, setAnim] = useState<{
+    route: Array<{ q: number; r: number }>;
+    step: number;
+    encounterHex: { q: number; r: number } | null;
   } | null>(null);
 
   // Klik w heks otwiera modal opcji: bieżący heks → akcje lokalne (osada/odpoczynek/
@@ -229,51 +238,75 @@ export function WorldMap({
   );
   const estHours = travelEst.data?.hours ?? estimate?.hours ?? 0;
 
+  // #1381 — podróż z mapy: zamiast pełnoekranowej cinematyki animujemy przeskok
+  // pina po trasie NA mapie. Backend zwraca `path` (pełna trasa), `arrived_hex`
+  // (gdzie realnie stanął) oraz `encounter`/`encounter_hex` (zasadzka).
   const startTravel = () => {
-    if (!selected) return;
-    const terrainName = selected.hex_type
-      ? hexTypes[selected.hex_type]?.label
-      : null;
-    setCinematic({
-      destLabel: realLabel(selected) || terrainName || "celu",
-      fromLabel: realLabel(
-        hexes.find(
-          (h) =>
-            currentHex && h.q === currentHex.q && h.r === currentHex.r,
-        ) ?? null,
-      ),
-      // Ten sam backendowy szacunek co w popupie (heurystyka terenu celu ×
-      // dystans potrafi pokazać 36 h tam, gdzie trasa realnie zajmuje 7 h).
-      hours: travelEst.data?.hours ?? estimate?.hours ?? null,
-      atmosphere: null,
-    });
+    if (!selected || travel.isPending || anim) return;
+    const destQ = selected.q;
+    const destR = selected.r;
     travel.mutate(
-      { characterId, q: selected.q, r: selected.r },
+      { characterId, q: destQ, r: destR, deferMap: true },
       {
         onSuccess: (res) => {
-          const atmo = res.hex_data?.atmosphere ?? null;
-          // Zastąp szacunek REALNYM czasem z backendu (suma wag terenu po trasie),
-          // by liczba w cinematyce zgadzała się z zegarem/narracją.
-          const realHours =
-            typeof res.total_hours === "number" ? res.total_hours : null;
-          setCinematic((c) =>
-            c ? { ...c, atmosphere: atmo, hours: realHours ?? c.hours } : c,
+          const fullPath = Array.isArray(res.path) ? res.path : [];
+          const arr = res.arrived_hex ?? { q: destQ, r: destR };
+          // Przytnij trasę do faktycznie przebytego odcinka (origin → arrived_hex).
+          const arrIdx = fullPath.findIndex(
+            (h) => h.q === arr.q && h.r === arr.r,
           );
+          const route = arrIdx >= 0 ? fullPath.slice(0, arrIdx + 1) : fullPath;
+          const encHex = res.encounter ? (res.encounter_hex ?? arr) : null;
+          setSelected(null); // schowaj panel — animacja gra na czystej mapie
+          if (route.length < 2) {
+            // Trasa 0/1-heksowa (np. teleport / sąsiad) → bez animacji: odśwież
+            // mapę, a jeśli była zasadzka — od razu wznów (→ walka).
+            qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+            if (encHex) onResume?.();
+            return;
+          }
+          setAnim({ route, step: 0, encounterHex: encHex });
         },
+        // onError: błąd zostaje w panelu (travel.isError) — panel wciąż otwarty.
       },
     );
-    setSelected(null);
   };
 
-  // Auto-domknięcie cinematyki po zakończeniu podróży (min. czas na pasek).
+  // #1381 — sterownik animacji: co HOP_MS przesuwa pin o jeden heks. Po dojściu
+  // do końca trasy: (a) zasadzka → krótka pauza z ⚔, potem wejście w walkę
+  // (onResume → /travel-resume → combat_started); (b) cel → odśwież mapę (pin
+  // ląduje na celu, mgła wzdłuż trasy odsłonięta). world-map celowo NIE jest
+  // unieważniana w hooku useTravel — inaczej pin przeskoczyłby na cel przed
+  // animacją; komponent steruje odświeżeniem dopiero po jej zakończeniu.
   useEffect(() => {
-    if (cinematic && !travel.isPending) {
-      const t = setTimeout(() => setCinematic(null), 1300);
+    if (!anim) return;
+    if (anim.step >= anim.route.length - 1) {
+      if (anim.encounterHex) {
+        const t = setTimeout(() => {
+          setAnim(null);
+          qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+          onResume?.();
+        }, ENCOUNTER_PAUSE_MS);
+        return () => clearTimeout(t);
+      }
+      const t = setTimeout(() => {
+        setAnim(null);
+        qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+      }, 220);
       return () => clearTimeout(t);
     }
-  }, [cinematic, travel.isPending]);
+    const t = setTimeout(
+      () => setAnim((a) => (a ? { ...a, step: a.step + 1 } : a)),
+      HOP_MS,
+    );
+    return () => clearTimeout(t);
+  }, [anim, campaignId, qc, onResume]);
 
-  const viewCenter = focusPx ?? center;
+  // Podczas animacji kamera podąża za wędrującym pinem (inaczej trasa mogłaby
+  // wyjść poza kadr). Poza animacją: focus „Użyj" mapy skarbu, else pozycja gracza.
+  const viewCenter = anim
+    ? hexToPixel(anim.route[anim.step].q, anim.route[anim.step].r)
+    : (focusPx ?? center);
   const groupTransform = `translate(${VB_W / 2 + pan.x} ${VB_H / 2 + pan.y}) scale(${zoom}) translate(${-viewCenter.x} ${-viewCenter.y})`;
 
   return (
@@ -377,7 +410,12 @@ export function WorldMap({
                     </feMerge>
                   </filter>
                 </defs>
-                <g transform={groupTransform}>
+                <g
+                  transform={groupTransform}
+                  // #1381 — podczas animacji kamera podąża za pinem: płynne
+                  // przesunięcie transformacji o jeden heks co HOP_MS.
+                  style={anim ? { transition: `transform ${HOP_MS}ms linear` } : undefined}
+                >
                   {hexes.map((h) => (
                     <HexTile
                       key={`${h.q},${h.r}`}
@@ -400,6 +438,54 @@ export function WorldMap({
                       onClick={() => selectHex(h)}
                     />
                   ))}
+                  {/* #1381 — nakładka animacji podróży: linia trasy + wędrujący
+                      pin + ⚔ na heksie zasadzki. */}
+                  {anim && (() => {
+                    const cur = anim.route[anim.step];
+                    const p = hexToPixel(cur.q, cur.r);
+                    const atEnd = anim.step >= anim.route.length - 1;
+                    const encPx =
+                      anim.encounterHex && atEnd
+                        ? hexToPixel(anim.encounterHex.q, anim.encounterHex.r)
+                        : null;
+                    return (
+                      <g style={{ pointerEvents: "none" }}>
+                        <polyline
+                          points={anim.route
+                            .map((h) => {
+                              const pp = hexToPixel(h.q, h.r);
+                              return `${pp.x},${pp.y}`;
+                            })
+                            .join(" ")}
+                          fill="none"
+                          stroke="rgba(169,198,221,.45)"
+                          strokeWidth={1.6}
+                          strokeDasharray="3 3"
+                        />
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={6.5}
+                          fill="var(--ember)"
+                          stroke="#fff"
+                          strokeWidth={1.4}
+                          filter="url(#hexglow)"
+                        />
+                        {encPx && (
+                          <foreignObject
+                            x={encPx.x - 12}
+                            y={encPx.y - 32}
+                            width={24}
+                            height={24}
+                          >
+                            <div className="flex h-full w-full items-center justify-center animate-pulse">
+                              <Sword size={20} color="#e8604f" weight="fill" />
+                            </div>
+                          </foreignObject>
+                        )}
+                      </g>
+                    );
+                  })()}
                 </g>
               </svg>
             )}
@@ -547,18 +633,6 @@ export function WorldMap({
             )}
           </div>
         </div>
-      )}
-
-      {cinematic && (
-        <TravelCinematic
-          destLabel={cinematic.destLabel}
-          atmosphere={cinematic.atmosphere}
-          fromLabel={cinematic.fromLabel}
-          hours={cinematic.hours}
-          isNight={isNight}
-          time={time}
-          onDone={() => setCinematic(null)}
-        />
       )}
     </div>
   );

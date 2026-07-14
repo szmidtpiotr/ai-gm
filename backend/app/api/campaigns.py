@@ -1351,9 +1351,13 @@ def travel_resume(campaign_id: int):
 
         flags = json.loads(gs["session_flags"] or "{}")
         tp = flags.get("travel_plan")
-        reason = str(tp.get("interrupt_reason") or "") if isinstance(tp, dict) else ""
-        if not reason:
+        # #1381 (Bug 2): wznawiaj TAKŻE plan „spauzowany" (interrupt_reason puste —
+        # np. po self-heal na bezpiecznym heksie / po odpoczynku). Wcześniej pusty
+        # reason dawał 409, mimo że pigułka „Kontynuuj podróż" i tak się renderowała
+        # → klik = błąd → nic. 409 tylko gdy naprawdę nie ma dokąd wznawiać.
+        if not isinstance(tp, dict) or not tp.get("destination_hex"):
             raise HTTPException(status_code=409, detail="Brak przerwanej podróży do wznowienia.")
+        reason = str(tp.get("interrupt_reason") or "")
         if reason.startswith("forced_camp"):
             raise HTTPException(status_code=409, detail="Bohater padł ze zmęczenia — najpierw odpocznij.")
 

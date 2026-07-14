@@ -942,6 +942,27 @@ def resolve_chain_travel(
 
     # Update character's current hex in session_flags
     _region_unlocked: dict[str, str] | None = None
+
+    # #1381 (Bug 1) — GWARANTOWANY awans pina. Zapis pozycji MUSI nastąpić zanim
+    # ruszy kruchy kod enrichmentu lokacji poniżej (SELECT-y game_locations,
+    # placement engine): jeśli tamten rzuci wyjątkiem, wpada w `except: pass` i
+    # `set_position` w środku bloku zostaje POMINIĘTY → bohater utyka na heksie
+    # startowym. Wtedy zwycięstwo znaczy encounter_cleared dla złego heksa, a
+    # kolejne `travel-resume` liczy trasę znów od startu → ta sama zasadzka w
+    # kółko („Kontynuuj podróż nie działa"). Osobny, commitowany zapis pina tutaj
+    # rozłącza awans pozycji od enrichmentu — enrichment dokłada tylko location_id.
+    try:
+        from app.services.location_state_service import set_position as _set_pos_pin
+        _set_pos_pin(
+            conn,
+            campaign_id=campaign_id,
+            current_hex={"q": arrived_hex[0], "r": arrived_hex[1]},
+            clear_local_hex=True,
+        )
+        conn.commit()
+    except Exception as _pin_err:
+        logger.warning("pin_advance_failed", campaign_id=campaign_id, error=str(_pin_err))
+
     try:
         gs = conn.execute(
             "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",

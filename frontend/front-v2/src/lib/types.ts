@@ -298,6 +298,10 @@ export interface TravelResult {
   total_hours?: number;
   clock?: ClockState | null;
   arrived_hex?: { q: number; r: number } | null;
+  /** #1381 — pełna trasa A* (origin → cel); front animuje przeskok pina po niej. */
+  path?: Array<{ q: number; r: number }>;
+  /** #1381 — heks, na którym wypadła zasadzka (gdy encounter przerwał podróż). */
+  encounter_hex?: { q: number; r: number } | null;
   hex_data?: {
     hex_type?: string | null;
     label?: string | null;

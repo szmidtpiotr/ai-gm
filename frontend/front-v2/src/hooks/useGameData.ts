@@ -420,13 +420,22 @@ export function useTravelEstimate(
 export function useTravel(campaignId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { characterId: number; q: number; r: number }) =>
+    mutationFn: (v: {
+      characterId: number;
+      q: number;
+      r: number;
+      /** #1381 — WorldMap animuje przeskok pina i sam unieważni mapę po
+       * animacji; bez tego pin przeskoczyłby na cel przed animacją. */
+      deferMap?: boolean;
+    }) =>
       apiFetch<TravelResult>(`/campaigns/${campaignId}/travel`, {
         method: "POST",
         body: { character_id: v.characterId, target_hex: { q: v.q, r: v.r } },
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+    onSuccess: (_data, v) => {
+      if (!v.deferMap) {
+        qc.invalidateQueries({ queryKey: ["world-map", campaignId] });
+      }
       qc.invalidateQueries({ queryKey: ["clock", campaignId] });
       qc.invalidateQueries({ queryKey: ["turn-stream", campaignId] });
       qc.invalidateQueries({ queryKey: ["character"] });
