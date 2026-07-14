@@ -221,6 +221,12 @@ export function CombatView({
   const endedRef = useRef(false);
   const goldAccumRef = useRef(0);
   const xpAccumRef = useRef(0);
+  // Zerowanie akumulatorów wiążemy z combat_id (nie ze `status==='active'`).
+  // Silnik kończy walkę w dwóch krokach (death → osobny `end`), więc zabójczy
+  // cios wraca chwilę ze `status==='active'`; reset w tej gałęzi kasował świeżo
+  // dodane XP/złoto → modal pokazywał +0 mimo faktycznego grantu (łup/lifetime
+  // były OK, bo czytane z payloadu/serwera). Reset tylko przy nowym combat_id.
+  const combatIdRef = useRef<number | null>(null);
 
   // Karta pojawienia wroga: pierwszy render aktywnej walki danego combat_id → odsłoń
   // portret + wskaźnik zagrożenia. Dismiss → normalny widok. Once-per-combat_id.
@@ -649,9 +655,16 @@ export function CombatView({
     }
     if (view?.status === "active") {
       endedRef.current = false;
-      goldAccumRef.current = 0;
-      xpAccumRef.current = 0;
       setOutcome(null);
+      // Reset nagród TYLKO przy nowej walce (zmiana combat_id), nie na każdym
+      // renderze active — inaczej dwuetapowa finalizacja kasowała XP/złoto
+      // dodane zabójczym ciosem (patrz combatIdRef).
+      const cid = live?.id ?? null;
+      if (cid != null && cid !== combatIdRef.current) {
+        combatIdRef.current = cid;
+        goldAccumRef.current = 0;
+        xpAccumRef.current = 0;
+      }
     }
   }, [view?.status, view?.endedReason, campaignId, qc, toast, live, diceJob, reaction]);
 
