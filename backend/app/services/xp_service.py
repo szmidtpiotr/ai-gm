@@ -121,6 +121,52 @@ def _load_rank_costs(conn: sqlite3.Connection) -> dict[int, int]:
     return out if out else dict(DEFAULT_RANK_UP_COSTS)
 
 
+def _coerce_rank_cost_json(raw: object) -> dict[int, int]:
+    """Parse a per-skill rank_cost_json value into {target_rank: cost}.
+
+    Accepts a JSON string, a dict, or None/empty. Keeps only positive int costs
+    keyed by positive int ranks. Returns {} when nothing usable — the caller then
+    falls back to the global/default cost table (#1382).
+    """
+    if raw is None:
+        return {}
+    data: object = raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            data = json.loads(s)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[int, int] = {}
+    for k, v in data.items():
+        try:
+            rank = int(k)
+            cost = int(v)
+        except (TypeError, ValueError):
+            continue
+        if rank >= 1 and cost > 0:
+            out[rank] = cost
+    return out
+
+
+def _load_skill_rank_cost(conn: sqlite3.Connection, skill_key: str) -> dict[int, int]:
+    """Per-skill override cost table for `skill_key`, or {} when none set (#1382)."""
+    try:
+        row = conn.execute(
+            "SELECT rank_cost_json FROM game_config_skills WHERE key = ? LIMIT 1",
+            (skill_key,),
+        ).fetchone()
+    except Exception:
+        return {}
+    if not row:
+        return {}
+    return _coerce_rank_cost_json(row[0])
+
+
 def _load_stat_point_costs(conn: sqlite3.Connection) -> dict[int, int]:
     row = conn.execute(
         "SELECT value FROM game_config_meta WHERE key = 'xp_stat_point_costs' LIMIT 1"
@@ -397,10 +443,15 @@ def spend_skill_rank_up(
         raise ValueError("skill_at_ceiling")
 
     new_rank = current + 1
-    costs = _load_rank_costs(conn)
-    cost = int(costs.get(new_rank, 0))
-    if cost <= 0:
-        cost = int(DEFAULT_RANK_UP_COSTS.get(new_rank, 999999))
+    # #1382 — per-skill override wins; else global meta; else built-in default.
+    per_skill = _load_skill_rank_cost(conn, sk)
+    if new_rank in per_skill:
+        cost = int(per_skill[new_rank])
+    else:
+        costs = _load_rank_costs(conn)
+        cost = int(costs.get(new_rank, 0))
+        if cost <= 0:
+            cost = int(DEFAULT_RANK_UP_COSTS.get(new_rank, 999999))
 
     xp = int(sheet.get("xp_available") or 0)
     if xp < cost:
@@ -517,6 +568,19 @@ def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, An
         "SELECT MIN(rank_ceiling) FROM game_config_skills WHERE rank_ceiling > 0"
     ).fetchone()
     sk_ceil = int(sk_ceil_row[0] or 3) if sk_ceil_row and sk_ceil_row[0] else 3
+    # #1382 — per-skill cost overrides so the UI can show the true upgrade price.
+    skill_overrides: dict[str, dict[str, int]] = {}
+    try:
+        rows = conn.execute(
+            "SELECT key, rank_cost_json FROM game_config_skills "
+            "WHERE rank_cost_json IS NOT NULL AND TRIM(rank_cost_json) != ''"
+        ).fetchall()
+        for r in rows:
+            pc = _coerce_rank_cost_json(r[1])
+            if pc:
+                skill_overrides[r[0]] = {str(k): pc[k] for k in sorted(pc)}
+    except Exception:
+        pass
     return {
         "xp_available": int(sheet.get("xp_available") or 0),
         "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
@@ -524,6 +588,7 @@ def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, An
         "stat_point_costs": {str(k): st_costs[k] for k in sorted(st_costs.keys())},
         "stat_value_ceiling": st_ceil,
         "skill_rank_ceiling": sk_ceil,
+        "skill_rank_cost_overrides": skill_overrides,
     }
 
 

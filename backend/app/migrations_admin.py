@@ -2824,6 +2824,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE campaign_ideas ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", "v2-campaign-ideas-is-active")
     _exec("ALTER TABLE game_config_weapons ADD COLUMN effect_json TEXT DEFAULT NULL", "v2-weapon-effect-json")
     _exec("ALTER TABLE game_config_skills ADD COLUMN trigger_keywords TEXT DEFAULT NULL", "v2-skill-trigger-keywords")
+    # #1382 — per-skill, per-rank XP upgrade cost override (JSON {target_rank: cost}).
+    # NULL = inherit global game_config_meta.xp_skill_rank_costs → DEFAULT_RANK_UP_COSTS.
+    _exec("ALTER TABLE game_config_skills ADD COLUMN rank_cost_json TEXT DEFAULT NULL", "v2-skill-rank-cost-json")
 
     # ── Task 26: Scholar Spells ───────────────────────────────────────────────
     _exec("""

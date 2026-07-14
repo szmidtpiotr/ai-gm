@@ -166,6 +166,8 @@ class SkillPatchReq(BaseModel):
     sort_order: int | None = None
     description: str | None = None
     trigger_keywords: str | None = None
+    # #1382 — per-skill per-rank XP cost override ({rank: cost}); null clears it.
+    rank_cost_json: dict | str | None = None
     force: bool = False
 
 
@@ -178,6 +180,7 @@ class SkillCreateReq(BaseModel):
     sort_order: int | None = None
     description: str | None = ""
     trigger_keywords: str | None = None
+    rank_cost_json: dict | str | None = None  # #1382
 
     @field_validator("sort_order", mode="before")
     @classmethod
@@ -1160,6 +1163,7 @@ def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_toke
             sort_order=req.sort_order,
             description=(req.description or "").strip() if req.description is not None else None,
             trigger_keywords=(req.trigger_keywords or "").strip() or None,
+            rank_cost_json=req.rank_cost_json,
         )
         return {"item": item}
     except ValueError as e:
@@ -1169,6 +1173,8 @@ def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_toke
             raise HTTPException(status_code=422, detail="linked_stat must reference an existing stat key") from None
         if str(e) == "invalid_rank_ceiling":
             raise HTTPException(status_code=422, detail="rank_ceiling must be >= 1") from None
+        if str(e) == "invalid_rank_cost_json":
+            raise HTTPException(status_code=422, detail="rank_cost_json must be an object {rank>=1: cost>0}") from None
         raise HTTPException(status_code=422, detail="Invalid skill payload") from None
 
 
@@ -2574,8 +2580,9 @@ def admin_patch_stat(key: str, req: StatPatchReq, _: None = Depends(require_admi
 @router.patch("/admin/skills/{key}")
 def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_admin_token)):
     try:
-        item = update_skill(
-            key,
+        # #1382 — only forward rank_cost_json when the client actually sent it, so a
+        # partial PATCH (e.g. label only) doesn't wipe an existing override.
+        kwargs = dict(
             label=req.label,
             linked_stat=req.linked_stat,
             rank_ceiling=req.rank_ceiling,
@@ -2584,6 +2591,9 @@ def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_ad
             trigger_keywords=req.trigger_keywords,
             force=req.force,
         )
+        if "rank_cost_json" in req.model_fields_set:
+            kwargs["rank_cost_json"] = req.rank_cost_json
+        item = update_skill(key, **kwargs)
         return {"item": item}
     except KeyError:
         raise HTTPException(status_code=404, detail="Skill not found") from None
@@ -2594,6 +2604,8 @@ def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_ad
             raise HTTPException(status_code=422, detail="linked_stat must reference an existing stat key") from None
         if str(e) == "invalid_rank_ceiling":
             raise HTTPException(status_code=422, detail="rank_ceiling must be >= 1") from None
+        if str(e) == "invalid_rank_cost_json":
+            raise HTTPException(status_code=422, detail="rank_cost_json must be an object {rank>=1: cost>0}") from None
         raise HTTPException(status_code=422, detail="Invalid skill payload") from None
 
 

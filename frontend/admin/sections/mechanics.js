@@ -99,7 +99,7 @@ async function _loadSkills(root) {
       <td class="td-mono" data-label="Klucz">${_esc(s.key)}</td>
       <td class="td-name" data-label="Nazwa">${_esc(s.label||s.key)}</td>
       <td data-label="Statystyka"><span class="badge badge-blue">${_esc(s.linked_stat||'—')}</span></td>
-      <td class="td-mono" data-label="Maks. rang">${s.rank_ceiling??'—'}</td>
+      <td class="td-mono" data-label="Maks. rang">${s.rank_ceiling??'—'}${Object.keys(_parseRankCost(s.rank_cost_json)).length ? ` <span class="badge badge-amber" title="Własny koszt XP za rangę">💰</span>` : ''}</td>
       <td class="td-muted" data-label="Słowa klucz." style="font-size:0.72rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.trigger_keywords||'')}">${_esc(s.trigger_keywords||'—')}</td>
       <td class="td-muted" data-label="Opis">${_esc((s.description||'').slice(0,60)||'—')}</td>
       <td data-label="Zablokowany">${s.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
@@ -285,6 +285,40 @@ async function _openEditSkillModal(root, key) {
   });
 }
 
+// #1382 — parse rank_cost_json (string from DB or already-parsed object) → {rank:cost}.
+function _parseRankCost(raw) {
+  if (!raw) return {};
+  let obj = raw;
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return {};
+    try { obj = JSON.parse(s); } catch { return {}; }
+  }
+  if (typeof obj !== 'object' || Array.isArray(obj)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const rank = parseInt(k, 10), cost = parseInt(v, 10);
+    if (rank >= 1 && cost > 0) out[rank] = cost;
+  }
+  return out;
+}
+
+// #1382 — one small numeric input per rank 1..ceiling; empty = inherit global cost.
+function _rankCostInputs(p) {
+  const ceiling = Math.max(1, parseInt(p.rank_ceiling, 10) || 5);
+  const existing = _parseRankCost(p.rank_cost_json);
+  let html = '';
+  for (let r = 1; r <= ceiling; r++) {
+    const val = existing[r] != null ? existing[r] : '';
+    html += `<div style="display:flex;flex-direction:column;align-items:center">
+      <span style="font-size:0.7rem;color:var(--muted,#888)">rang ${r}</span>
+      <input class="form-input skill-rank-cost" data-rank="${r}" type="number" min="1"
+             value="${val}" placeholder="dom." style="width:64px;text-align:center">
+    </div>`;
+  }
+  return html;
+}
+
 function _openSkillForm(root, prefill, stats, onSubmit) {
   const p = prefill || {};
   const overlay = document.createElement('div');
@@ -298,6 +332,10 @@ function _openSkillForm(root, prefill, stats, onSubmit) {
       <div class="form-row"><label class="form-label">Maks. rang</label><input class="form-input" name="rank_ceiling" type="number" value="${p.rank_ceiling??5}" min="1"></div>
       <div class="form-row"><label class="form-label">Opis</label><textarea class="form-input" name="description" rows="2">${_esc(p.description||'')}</textarea></div>
       <div class="form-row"><label class="form-label">Trigger keywords</label><input class="form-input" name="trigger_keywords" value="${_esc(p.trigger_keywords||'')}" placeholder="miecz,broń — oddzielone przecinkami"></div>
+      <div class="form-row">
+        <label class="form-label">Koszt XP za rangę <span style="font-weight:400;color:var(--muted,#888)">(puste = wartość domyślna)</span></label>
+        <div id="skill-rank-costs" style="display:flex;flex-wrap:wrap;gap:8px">${_rankCostInputs(p)}</div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
@@ -312,10 +350,17 @@ function _openSkillForm(root, prefill, stats, onSubmit) {
     const rank_ceiling = parseInt(overlay.querySelector('[name="rank_ceiling"]').value, 10);
     const description = overlay.querySelector('[name="description"]').value.trim();
     const trigger_keywords = overlay.querySelector('[name="trigger_keywords"]').value.trim();
+    // #1382 — collect per-rank overrides; empty inputs inherit the global cost.
+    const rank_cost = {};
+    overlay.querySelectorAll('.skill-rank-cost').forEach(inp => {
+      const r = inp.dataset.rank; const v = parseInt(inp.value, 10);
+      if (Number.isFinite(v) && v > 0) rank_cost[r] = v;
+    });
+    const rank_cost_json = Object.keys(rank_cost).length ? rank_cost : null;
     if (!key) { showToast('Klucz jest wymagany.', 'error'); return; }
     if (!label) { showToast('Nazwa jest wymagana.', 'error'); return; }
     overlay.remove();
-    await onSubmit({ key, label, linked_stat, rank_ceiling, description: description||null, trigger_keywords: trigger_keywords||null });
+    await onSubmit({ key, label, linked_stat, rank_ceiling, description: description||null, trigger_keywords: trigger_keywords||null, rank_cost_json });
   });
 }
 

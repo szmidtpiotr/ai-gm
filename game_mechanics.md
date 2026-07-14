@@ -655,6 +655,14 @@ Wszystkie opcje dostępne tylko podczas **długiego odpoczynku** (już tak zdefi
 | Upgrade zaklęcia R2 | Uczony | 50 XP | - |
 | Upgrade zaklęcia R3 | Uczony | 100 XP | - |
 
+> **Koszt per-umiejętność (#1382).** Domyślnie koszt rangi zależy tylko od docelowej rangi
+> (globalna tabela `game_config_meta.xp_skill_rank_costs`, fallback `{1:50,2:100,3:200,4:400,5:1200}`)
+> i jest identyczny dla każdej umiejętności. Admin może **nadpisać koszt per-umiejętność**
+> w kolumnie `game_config_skills.rank_cost_json` (JSON `{docelowa_ranga: koszt}`, np. `{"1":250,"2":500}`),
+> edytowalnej w panelu **Mechanika → Umiejętności**. Kolejność rozwiązywania kosztu:
+> per-umiejętność → globalna tabela → wbudowany fallback. Puste pole = dziedziczy wartość globalną.
+> Wszystkie liczby są wartościami startowymi, strojonymi w adminie.
+
 **Tabela progresji statystyki (+1 STR):**
 
 Koszt rośnie z obecnym poziomem statystyki:

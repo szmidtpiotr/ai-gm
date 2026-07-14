@@ -8,6 +8,47 @@ from app.services.actor_stats import stats_for_actor, validate_stats_json
 
 DB_PATH = "/data/ai_gm.db"
 
+# #1382 — distinguishes "field omitted in PATCH" (leave as-is) from "field sent as
+# null" (clear the override). None is a meaningful value, so it cannot be the default.
+_UNSET = object()
+
+
+def _normalize_rank_cost_json(raw: object) -> str | None:
+    """#1382 — validate a per-skill rank cost override → canonical JSON string or None.
+
+    Accepts a JSON string / dict / None / "". Requires a flat object of
+    {rank(int>=1): cost(int>0)}. Empty object or blank → None (inherit global).
+    Raises ValueError("invalid_rank_cost_json") on any malformed input so the
+    endpoint can surface a 422 instead of persisting garbage.
+    """
+    if raw is None:
+        return None
+    data: object = raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            data = json.loads(s)
+        except (json.JSONDecodeError, ValueError):
+            raise ValueError("invalid_rank_cost_json") from None
+    if not isinstance(data, dict):
+        raise ValueError("invalid_rank_cost_json")
+    out: dict[str, int] = {}
+    for k, v in data.items():
+        try:
+            rank = int(k)
+            cost = int(v)
+        except (TypeError, ValueError):
+            raise ValueError("invalid_rank_cost_json") from None
+        if rank < 1 or cost <= 0:
+            raise ValueError("invalid_rank_cost_json")
+        out[str(rank)] = cost
+    if not out:
+        return None
+    return json.dumps({k: out[k] for k in sorted(out, key=int)}, ensure_ascii=False)
+
+
 # U10 — effect_schema.json = pojedyncze źródło prawdy formatu effect_json.
 # Walidator wczytuje enumy stąd; literały poniżej to fallback gdy plik brak.
 _EFFECT_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "effect_schema.json"
@@ -752,7 +793,7 @@ def list_stats() -> list[dict]:
 def list_skills() -> list[dict]:
     return _fetch_all(
         """
-        SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords
+        SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords, rank_cost_json
         FROM game_config_skills
         ORDER BY sort_order ASC, key ASC
         """
@@ -1196,6 +1237,7 @@ def update_skill(
     sort_order: int | None,
     description: str | None,
     trigger_keywords: str | None = None,
+    rank_cost_json: object = _UNSET,
     force: bool,
 ) -> dict:
     conn = sqlite3.connect(DB_PATH)
@@ -1204,7 +1246,7 @@ def update_skill(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords, rank_cost_json
             FROM game_config_skills WHERE key = ?
             """,
             (key,),
@@ -1223,6 +1265,12 @@ def update_skill(
         if final_rank < 1:
             raise ValueError("invalid_rank_ceiling")
 
+        # #1382 — sentinel: only touch the override when the caller sends the field.
+        if rank_cost_json is _UNSET:
+            final_rank_cost = current.get("rank_cost_json")
+        else:
+            final_rank_cost = _normalize_rank_cost_json(rank_cost_json)
+
         updates = {
             "label": label if label is not None else current["label"],
             "linked_stat": final_linked_stat,
@@ -1230,11 +1278,12 @@ def update_skill(
             "sort_order": sort_order if sort_order is not None else current["sort_order"],
             "description": description if description is not None else current.get("description"),
             "trigger_keywords": trigger_keywords if trigger_keywords is not None else current.get("trigger_keywords"),
+            "rank_cost_json": final_rank_cost,
         }
         conn.execute(
             """
             UPDATE game_config_skills
-            SET label = ?, linked_stat = ?, rank_ceiling = ?, sort_order = ?, description = ?, trigger_keywords = ?
+            SET label = ?, linked_stat = ?, rank_ceiling = ?, sort_order = ?, description = ?, trigger_keywords = ?, rank_cost_json = ?
             WHERE key = ?
             """,
             (
@@ -1244,13 +1293,14 @@ def update_skill(
                 updates["sort_order"],
                 updates["description"],
                 updates["trigger_keywords"],
+                updates["rank_cost_json"],
                 key,
             ),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords, rank_cost_json
             FROM game_config_skills WHERE key = ?
             """,
             (key,),
@@ -1322,9 +1372,13 @@ def create_skill(
     sort_order: int | None = None,
     description: str | None = None,
     trigger_keywords: str | None = None,
+    rank_cost_json: object = _UNSET,
 ) -> dict:
     if rank_ceiling < 1:
         raise ValueError("invalid_rank_ceiling")
+
+    # #1382 — normalize/validate override up front (raises invalid_rank_cost_json).
+    norm_rank_cost = None if rank_cost_json is _UNSET else _normalize_rank_cost_json(rank_cost_json)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1345,15 +1399,15 @@ def create_skill(
 
         conn.execute(
             """
-            INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+            INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords, rank_cost_json)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
             """,
-            (key, label, linked_stat, rank_ceiling, so, description or "", trigger_keywords),
+            (key, label, linked_stat, rank_ceiling, so, description or "", trigger_keywords, norm_rank_cost),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description, trigger_keywords, rank_cost_json
             FROM game_config_skills WHERE key = ?
             """,
             (key,),
