@@ -10,7 +10,21 @@ import {
   useBestiary,
   useAtlas,
   type BestiaryEntry,
+  type BestiaryKnowledge,
 } from "@/hooks/useSheetData";
+
+// Etykiety strefy walki + typu obrażeń — lustro showcase (bestiariusz.js).
+const ZONE_LABEL: Record<string, string> = { engaged: "⚔ Zwarcie", ranged: "🏹 Dystans" };
+const DMG_LABEL: Record<string, string> = {
+  physical: "fizyczny",
+  fire: "ognisty",
+  cold: "mrozem",
+  poison: "trucizną",
+  arcane: "magiczny",
+  holy: "święty",
+  necrotic: "nekrotyczny",
+  lightning: "błyskawicą",
+};
 
 type SubTab = "bestiary" | "atlas";
 
@@ -61,7 +75,14 @@ function Bestiary({ characterId }: { characterId: number | undefined }) {
 
   if (isLoading) return <Loading />;
   const s = data?.summary;
-  const entries = data?.entries ?? [];
+  const knowledge = data?.knowledge;
+  // #1384 — odkryci wrogowie na górę: wg tieru wiedzy malejąco, potem liczby
+  // zabójstw; sylwetki „???" spadają na koniec.
+  const entries = [...(data?.entries ?? [])].sort((a, b) => {
+    if (a.locked !== b.locked) return a.locked ? 1 : -1;
+    const t = (b.unlocked_tier ?? 0) - (a.unlocked_tier ?? 0);
+    return t || (b.kills ?? 0) - (a.kills ?? 0);
+  });
 
   return (
     <>
@@ -88,7 +109,7 @@ function Bestiary({ characterId }: { characterId: number | undefined }) {
           ),
         )}
       </div>
-      {open && <BestiaryModal entry={open} onClose={() => setOpen(null)} />}
+      {open && <BestiaryModal entry={open} knowledge={knowledge} onClose={() => setOpen(null)} />}
     </>
   );
 }
@@ -106,7 +127,7 @@ function BestiaryCard({ entry, onClick }: { entry: BestiaryEntry; onClick: () =>
     >
       <div className="relative flex-1 overflow-hidden bg-bg/60">
         {entry.image_url ? (
-          <img src={entry.image_url} alt={entry.name ?? ""} className="h-full w-full object-cover" />
+          <img src={entry.image_url} alt={entry.name ?? ""} className="h-full w-full object-cover object-top" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Skull size={30} weight="fill" className="text-label opacity-30" />
@@ -141,16 +162,95 @@ function BestiaryCard({ entry, onClick }: { entry: BestiaryEntry; onClick: () =>
   );
 }
 
-function BestiaryModal({ entry, onClose }: { entry: BestiaryEntry; onClose: () => void }) {
+// Kafel statystyki bojowej — etykieta u góry, wartość pod spodem (jak showcase).
+function StatBox({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-line-soft bg-bg/40 px-3 py-2">
+      <div className="font-ui text-[9.5px] font-bold uppercase tracking-widest text-label">{label}</div>
+      <div className="mt-0.5 font-display text-lg text-text">{value}</div>
+    </div>
+  );
+}
+
+// 3-stopniowy tor wiedzy łowcy: 📖 Wpis(1) → 👁 Podgląd HP(5) → ⚔ +1 trafienie(15).
+// Pokazuje osiągnięte progi i ile zabójstw do następnego (#1384).
+function HunterTrack({
+  tier,
+  kills,
+  next,
+  knowledge,
+}: {
+  tier: number;
+  kills: number;
+  next?: number | null;
+  knowledge?: BestiaryKnowledge;
+}) {
+  const hpT = knowledge?.hp_tier ?? 2;
+  const bonT = knowledge?.bonus_tier ?? 3;
+  const bonus = knowledge?.bonus ?? 1;
+  const steps = [
+    { t: 1, icon: Skull, label: "Wpis" },
+    { t: hpT, icon: Eye, label: "Podgląd HP" },
+    { t: bonT, icon: Sword, label: `+${bonus} do trafienia` },
+  ];
+  const nextLabel = steps.find((st) => st.t > tier)?.label;
+  return (
+    <div className="mb-3">
+      <div className="flex gap-1.5">
+        {steps.map((st) => {
+          const on = tier >= st.t;
+          return (
+            <div
+              key={st.t}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-1 rounded-lg border px-1.5 py-2 text-center transition-colors",
+                on ? "border-ember/40 bg-ember/10 text-ember" : "border-line-soft bg-bg/30 text-label opacity-50",
+              )}
+            >
+              <st.icon size={16} weight="fill" />
+              <span className="font-ui text-[9px] font-bold uppercase leading-tight tracking-wide">{st.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      {next != null && nextLabel && (
+        <div className="mt-1.5 text-center text-[11px] text-label">
+          Jeszcze <b className="text-ember">{Math.max(0, next - kills)}</b> do: {nextLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BestiaryModal({
+  entry,
+  knowledge,
+  onClose,
+}: {
+  entry: BestiaryEntry;
+  knowledge?: BestiaryKnowledge;
+  onClose: () => void;
+}) {
   const tier = entry.unlocked_tier ?? 1;
-  const badge = tierBadge(tier);
+  const hpT = knowledge?.hp_tier ?? 2;
+  const bonT = knowledge?.bonus_tier ?? 3;
+  const showStats = tier >= hpT;
+  const showAbilities = tier >= bonT;
+  const zoneTxt = entry.zone ? ZONE_LABEL[entry.zone] : null;
+  const dmgTxt = entry.damage_type ? (DMG_LABEL[entry.damage_type] ?? entry.damage_type) : null;
+  const armour = entry.ac_base != null ? Math.max(0, entry.ac_base - 10) : null;
+  const dmg = entry.damage_die
+    ? `${entry.damage_die}${entry.damage_bonus ? `+${entry.damage_bonus}` : ""}`
+    : null;
+  const statOrder = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-mech bg-surface p-5"
+        className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-mech bg-surface p-5"
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -160,22 +260,53 @@ function BestiaryModal({ entry, onClose }: { entry: BestiaryEntry; onClose: () =
           </button>
         </div>
         {entry.image_url && (
+          // object-contain + max-h — cały portret bez przycinania (fix #1384).
           <img
             src={entry.image_url}
             alt={entry.name ?? ""}
-            className="mb-3 aspect-square w-full rounded-lg object-cover"
+            className="mb-3 max-h-[55vh] w-full rounded-lg bg-bg/60 object-contain"
           />
         )}
-        <div className={cn("mb-3 inline-flex items-center gap-1.5 text-[12px]", badge.cls)}>
-          <badge.icon size={15} weight="fill" /> Wiedza łowcy: {badge.label}
+        {/* Chipy: strefa · typ ataku · liczba pokonań · unikat kampanijny */}
+        <div className="mb-3 flex flex-wrap gap-1.5 text-[11px]">
+          {zoneTxt && <span className="rounded border border-line-soft bg-bg/40 px-2 py-0.5 text-label">{zoneTxt}</span>}
+          {dmgTxt && <span className="rounded border border-line-soft bg-bg/40 px-2 py-0.5 text-label">Atak: {dmgTxt}</span>}
+          <span className="rounded border border-line-soft bg-bg/40 px-2 py-0.5 text-label">✦ pokonany {entry.kills}×</span>
+          {entry.campaign_unique && (
+            <span className="rounded border border-ember/40 bg-ember/10 px-2 py-0.5 font-bold uppercase tracking-wide text-ember">kampania</span>
+          )}
         </div>
-        <p className="mb-3 whitespace-pre-line text-[14px] leading-relaxed text-prose">
+
+        <HunterTrack tier={tier} kills={entry.kills ?? 0} next={entry.next_threshold} knowledge={knowledge} />
+
+        {/* Statblok bojowy — od tieru „podgląd HP" (#1384). */}
+        {showStats && (
+          <div className="mb-3 grid grid-cols-3 gap-1.5">
+            {entry.hp_max != null && <StatBox label="HP" value={entry.hp_max} />}
+            {armour != null && <StatBox label="Pancerz" value={armour} />}
+            {entry.attack_bonus != null && <StatBox label="Atak" value={`+${entry.attack_bonus}`} />}
+            {dmg && <StatBox label="Obrażenia" value={dmg} />}
+            {entry.attacks_per_turn != null && <StatBox label="Ataki/turę" value={entry.attacks_per_turn} />}
+            {entry.min_level != null && <StatBox label="Poziom" value={entry.min_level} />}
+            {entry.xp_award != null && <StatBox label="XP" value={entry.xp_award} />}
+          </div>
+        )}
+
+        {/* Rząd cech — od najwyższego tieru wiedzy. */}
+        {showAbilities && entry.stats && (
+          <div className="mb-3 grid grid-cols-7 gap-1">
+            {statOrder.map((k) => (
+              <div key={k} className="rounded border border-line-soft bg-bg/40 py-1 text-center">
+                <div className="font-ui text-[8.5px] font-bold uppercase tracking-wide text-label">{k}</div>
+                <div className="text-[13px] font-bold text-text">{entry.stats?.[k] ?? "–"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="whitespace-pre-line text-[14px] leading-relaxed text-prose">
           {entry.lore_text || entry.description}
         </p>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line-soft pt-3 text-[13px] text-label">
-          <span>Pokonanych: <b className="text-text">{entry.kills}</b></span>
-          {entry.hp_max != null && <span>HP: <b className="text-text">{entry.hp_max}</b></span>}
-        </div>
       </div>
     </div>
   );

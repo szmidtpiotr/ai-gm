@@ -224,10 +224,31 @@ export interface BestiaryEntry {
   next_threshold?: number | null;
   hp_max?: number | null;
   campaign_unique?: boolean;
+  // #1384 — statblock ujawniany progresywnie z tierem wiedzy łowcy.
+  zone?: "engaged" | "ranged";
+  damage_type?: string | null;
+  min_level?: number | null;
+  xp_award?: number | null;
+  // tier ≥ 2 (podgląd HP)
+  ac_base?: number | null;
+  attack_bonus?: number | null;
+  damage_die?: string | null;
+  damage_bonus?: number | null;
+  attacks_per_turn?: number | null;
+  // tier ≥ 3 (+1 do trafienia)
+  stats?: Record<string, number> | null;
+  hunter_bonus?: number | null;
+}
+export interface BestiaryKnowledge {
+  tiers: Record<string, number>;
+  hp_tier: number;
+  bonus_tier: number;
+  bonus: number;
 }
 export interface BestiaryResponse {
   entries: BestiaryEntry[];
   summary: { unlocked: number; total: number; pct: number; bonus?: number };
+  knowledge?: BestiaryKnowledge;
 }
 
 /** GET /characters/{id}/bestiary — pełny katalog wrogów + progresja wiedzy. */

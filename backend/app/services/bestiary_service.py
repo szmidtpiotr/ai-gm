@@ -18,6 +18,7 @@ rather than aborting a turn.
 
 from __future__ import annotations
 
+import json as _json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
@@ -204,7 +205,9 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
         # player's completion total/pct reflects catalogue they can actually
         # encounter (#1191 sync fix).
         enemies = c.execute(
-            "SELECT key, label, description, lore_text, image_url, hp_base, tier "
+            "SELECT key, label, description, lore_text, image_url, hp_base, tier, "
+            "ac_base, attack_bonus, damage_die, damage_bonus, attacks_per_turn, "
+            "damage_type, stats_json, min_level, xp_award "
             "FROM game_config_enemies "
             "WHERE COALESCE(review_status, 'permanent') = 'permanent' "
             "AND COALESCE(is_active, 1) = 1 "
@@ -220,6 +223,7 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
         }
         def _unlocked_entry(e, p, campaign_unique=False):
             tier = int(p["unlocked_tier"])
+            kills = int(p["kills"])
             entry = {
                 "locked": False,
                 "enemy_key": e["key"],
@@ -227,13 +231,33 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
                 "description": e["description"],
                 "lore_text": e["lore_text"] or e["description"],
                 "image_url": e["image_url"],
-                "kills": int(p["kills"]),
+                "kills": kills,
                 "unlocked_tier": tier,
                 "first_kill_at": p["first_kill_at"],
-                "next_threshold": _next_threshold(int(p["kills"])),
+                "next_threshold": _next_threshold(kills),
+                # Coarse combat descriptors — known from the first kill (tier 1).
+                "zone": _enemy_zone(e["key"], e["label"]),
+                "damage_type": e["damage_type"] or "physical",
+                "min_level": e["min_level"],
+                "xp_award": e["xp_award"],
             }
+            # Tier 2 ("wiedza łowcy"): full combat statblock — HP, armour, attack,
+            # damage, attacks/turn. Mirrors the showcase card so a hunted enemy
+            # reveals what you're up against (#1384).
             if tier >= HP_VISIBLE_TIER:
                 entry["hp_max"] = e["hp_base"]
+                entry["ac_base"] = e["ac_base"]
+                entry["attack_bonus"] = e["attack_bonus"]
+                entry["damage_die"] = e["damage_die"]
+                entry["damage_bonus"] = e["damage_bonus"]
+                entry["attacks_per_turn"] = e["attacks_per_turn"]
+            # Tier 3: the 7-stat row + the +1 to-hit hunter bonus is now live.
+            if tier >= HUNTER_BONUS_TIER:
+                try:
+                    entry["stats"] = _json.loads(e["stats_json"]) if e["stats_json"] else {}
+                except (TypeError, ValueError):
+                    entry["stats"] = {}
+                entry["hunter_bonus"] = HUNTER_BONUS
             if campaign_unique:
                 entry["campaign_unique"] = True
             return entry
@@ -262,7 +286,9 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
         if bonus_keys:
             ph = ",".join("?" for _ in bonus_keys)
             for e in c.execute(
-                f"SELECT key, label, description, lore_text, image_url, hp_base, tier "
+                f"SELECT key, label, description, lore_text, image_url, hp_base, tier, "
+                f"ac_base, attack_bonus, damage_die, damage_bonus, attacks_per_turn, "
+                f"damage_type, stats_json, min_level, xp_award "
                 f"FROM game_config_enemies WHERE key IN ({ph})",
                 (*bonus_keys,),
             ).fetchall():
@@ -270,7 +296,15 @@ def get_bestiary(character_id: Any) -> dict[str, Any]:
                 bonus += 1
 
         return {"entries": entries,
-                "summary": {"unlocked": unlocked, "total": total, "pct": pct, "bonus": bonus}}
+                "summary": {"unlocked": unlocked, "total": total, "pct": pct, "bonus": bonus},
+                # Knowledge-tier ladder so the client can render the progress
+                # tracker generically (wpis@1 / podgląd HP@5 / +1 trafienie@15).
+                "knowledge": {
+                    "tiers": BESTIARY_TIER_KILLS,
+                    "hp_tier": HP_VISIBLE_TIER,
+                    "bonus_tier": HUNTER_BONUS_TIER,
+                    "bonus": HUNTER_BONUS,
+                }}
     except Exception as e:
         logger.warning("bestiary_get_failed", error=str(e))
         return {"entries": [], "summary": {"unlocked": 0, "total": 0, "pct": 0}}
