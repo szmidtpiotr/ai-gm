@@ -1,6 +1,12 @@
 // FE9 walka (#1236) — pochodne stanu walki: karty rzutów combat (F-52), progi
 // HP dla paska w banerze (F-53), etykiety stref. Źródło: makieta zar7-walka/zar7-kosc.
-import type { CombatActionResult, CombatState, Combatant, RelativeThreat } from "@/lib/types";
+import type {
+  CombatActionResult,
+  CombatCondition,
+  CombatState,
+  Combatant,
+  RelativeThreat,
+} from "@/lib/types";
 import type { RollCardData } from "@/lib/types";
 import { normalizeDefenseDetails, type DefenseOptionDetail } from "@/lib/combat-defense";
 
@@ -63,6 +69,52 @@ export function readCombat(cs: CombatState | null | undefined): CombatView | nul
 export function isCombatantActive(c: Combatant, currentTurn: string): boolean {
   const id = String(c.id ?? c.combatant_id ?? "");
   return id !== "" && id === String(currentTurn);
+}
+
+// ── #1385 rozwijany panel combatanta ─────────────────────────────────────────
+
+// Obrona = REDUKCJA obrażeń, nie próg trafienia (#826). Silnik:
+// armor = max(0, ac_base − ARMOR_REDUCTION_OFFSET), offset startowo 10 (Sandbox-tunable).
+// Panel to podgląd — pokazujemy szacunek wg wartości startowej; min 1 dmg/hit i pominięcie
+// przy Nat 20 rozlicza silnik, nie UI.
+export const ARMOR_REDUCTION_OFFSET = 10;
+export function armorReduction(defense: number | null | undefined): number {
+  const ac = Number(defense ?? 0);
+  return Number.isFinite(ac) ? Math.max(0, ac - ARMOR_REDUCTION_OFFSET) : 0;
+}
+
+// TTL kondycji: `duration_rounds` jest DEKREMENTOWANE co turę (combat_service
+// _tick_duration_countdown) → to liczba pozostałych rund, nie oryginalna. Część
+// kondycji nie ma czasu (poziomowe/permanentne) → zwraca null.
+export function conditionTtl(cd: CombatCondition): number | null {
+  const dr = (cd as Record<string, unknown>).duration_rounds;
+  const n = typeof dr === "number" ? dr : Number(dr);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function conditionLevel(cd: CombatCondition): number {
+  const lvl = cd.runtime?.level;
+  const n = typeof lvl === "number" ? lvl : Number(lvl);
+  return Number.isFinite(n) && n > 1 ? n : 1;
+}
+
+// #1385 telegraf zamiaru wroga (v1: heurystyka po strefach, ZERO backendu). To
+// PRZEWIDYWANIE dla gracza — silnik i tak liczy doskok w turze wroga. Wróg w tej
+// samej strefie co gracz → uderzy; na dystansie (gracz w zwarciu) → ostrzał;
+// w zwarciu gdy gracz na dystansie → melee musi doskoczyć.
+export interface EnemyIntent {
+  glyph: string;
+  label: string;
+}
+export function enemyIntent(
+  enemy: Combatant,
+  playerZone: "engaged" | "ranged",
+): EnemyIntent | null {
+  if (Number(enemy.hp_current ?? 0) <= 0) return null;
+  const ez = String(enemy.zone || "engaged") === "ranged" ? "ranged" : "engaged";
+  if (ez === playerZone) return { glyph: "⚡", label: "Szykuje atak" };
+  if (ez === "ranged") return { glyph: "🏹", label: "Ostrzeliwuje z dystansu" };
+  return { glyph: "⚡", label: "Zbliża się do ciebie" };
 }
 
 export function livingEnemies(view: CombatView): Combatant[] {

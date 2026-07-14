@@ -133,6 +133,20 @@ export function CombatView({
     return { ...vitals, hp: p.hp_current, maxHp: p.hp_max ?? vitals.maxHp };
   }, [view?.player, vitals]);
 
+  // #1385 — dodatkowe parametry gracza dla rozwijanego panelu combatanta (mana +
+  // modyfikatory statów). Mod = floor((stat−10)/2) wg wzoru silnika (stat_modifier);
+  // relikty pomijamy (podgląd bojowy quick-ref, nie arkusz).
+  const playerExtra = useMemo(
+    () => ({
+      mana: vitals.mana,
+      maxMana: vitals.maxMana,
+      hasMana: vitals.hasMana,
+      level: vitals.level,
+      statMods: stats.map((s) => ({ k: s.k, mod: Math.floor((s.v - 10) / 2) })),
+    }),
+    [vitals.mana, vitals.maxMana, vitals.hasMana, vitals.level, stats],
+  );
+
   const attack = useResolveAttack(campaignId);
   const zoneChange = useZoneChange(campaignId);
   const flee = useFlee(campaignId);
@@ -675,6 +689,7 @@ export function CombatView({
           view={view}
           selectedTargetId={targetId}
           onSelectTarget={setTargetId}
+          playerExtra={playerExtra}
         />
       )}
 

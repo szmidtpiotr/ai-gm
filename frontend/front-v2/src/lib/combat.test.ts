@@ -7,7 +7,14 @@
  * tylko przy Nat 1 gracza.
  */
 import { describe, it, expect } from "vitest";
-import { rollFromPlayerAttack, toHitStageCard } from "./combat";
+import {
+  rollFromPlayerAttack,
+  toHitStageCard,
+  armorReduction,
+  conditionTtl,
+  conditionLevel,
+  enemyIntent,
+} from "./combat";
 import type { CombatActionResult } from "@/lib/types";
 
 // Pomocnik: znajdź komórkę po etykiecie.
@@ -231,3 +238,37 @@ describe("buildCombatEpilogueText", () => {
     expect(cell(card as never, "Akcja")?.v).toBe("DOSKOK");
     expect(card.cells.find((c) => c.res)?.v).toContain("dopada");
   });
+
+// ─── #1385 rozwijany panel combatanta — helpery ──────────────────────────────
+
+describe("#1385 combatant detail helpers", () => {
+  it("armorReduction = max(0, AC-10) wg #826", () => {
+    expect(armorReduction(13)).toBe(3);
+    expect(armorReduction(11)).toBe(1);
+    expect(armorReduction(10)).toBe(0);
+    expect(armorReduction(5)).toBe(0);
+    expect(armorReduction(null)).toBe(0);
+  });
+
+  it("conditionTtl czyta duration_rounds (pozostałe rundy), null gdy brak", () => {
+    expect(conditionTtl({ key: "bleed", duration_rounds: 3 } as never)).toBe(3);
+    expect(conditionTtl({ key: "bleed", duration_rounds: 0 } as never)).toBe(null);
+    expect(conditionTtl({ key: "mark" } as never)).toBe(null);
+  });
+
+  it("conditionLevel czyta runtime.level (>1), inaczej 1", () => {
+    expect(conditionLevel({ key: "poison", runtime: { level: 3 } })).toBe(3);
+    expect(conditionLevel({ key: "poison", runtime: { level: 1 } })).toBe(1);
+    expect(conditionLevel({ key: "poison" })).toBe(1);
+  });
+
+  it("enemyIntent: ta sama strefa → atak; przeciwna → doskok/ostrzał", () => {
+    const eng = { id: "g", type: "enemy", hp_current: 5, zone: "engaged" } as never;
+    const rng = { id: "a", type: "enemy", hp_current: 5, zone: "ranged" } as never;
+    expect(enemyIntent(eng, "engaged")?.label).toBe("Szykuje atak");
+    expect(enemyIntent(eng, "ranged")?.label).toBe("Zbliża się do ciebie");
+    expect(enemyIntent(rng, "engaged")?.label).toBe("Ostrzeliwuje z dystansu");
+    // martwy wróg → brak zamiaru
+    expect(enemyIntent({ ...eng, hp_current: 0 }, "engaged")).toBe(null);
+  });
+});
