@@ -244,4 +244,15 @@ def charge_fatigue(conn, character_id: int, *, campaign_id: int | None = None, r
         )
     except Exception:
         return 0
+    # #1379 — dymek o narastającym zmęczeniu (dotąd nieme; wpływa na testy).
+    if level > 0:
+        try:
+            from app.services import system_events as _se
+            _se.emit(
+                "fatigue",
+                f"Wyczerpanie (poziom {level}) — kary do testów, odpocznij",
+                dedupe_key="fatigue",
+            )
+        except Exception:
+            pass
     return level

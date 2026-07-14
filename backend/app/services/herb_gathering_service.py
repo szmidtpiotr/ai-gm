@@ -269,7 +269,15 @@ def _apply_poison_damage(conn: sqlite3.Connection, character_id: int, campaign_i
             )
         except Exception:
             pass
-        return before - after
+        _dmg = before - after
+        # #1379 — dymek o obrażeniach z trującego zioła (dotąd tylko proza).
+        if _dmg > 0:
+            try:
+                from app.services import system_events as _se
+                _se.emit("hp_loss", f"−{_dmg} HP — trujące zioło")
+            except Exception:
+                pass
+        return _dmg
     except Exception as e:
         logger.warning("herb_poison_damage_error", error=str(e))
         return 0

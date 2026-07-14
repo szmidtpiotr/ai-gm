@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import random
@@ -5706,7 +5707,30 @@ def _ct_post_llm(conn, campaign_id, payload, campaign, character, text, result, 
 # POST turn (non-streaming)
 # ---------------------------------------------------------------------------
 
+def _with_system_events(fn):
+    """#1379 — bus komunikatów systemowych aktywny na czas handlera tury.
+
+    Serwisy wołają `system_events.emit(...)` bez znajomości busa (contextvar).
+    Po zwróceniu dict-a doklejamy `system_events` = konwersja pól legacy
+    (granted_items / gold_events / completed_*) + świeżo wyemitowane zdarzenia.
+    """
+    from app.services import system_events as _se
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _se.use_turn_bus() as _bus:
+            result = fn(*args, **kwargs)
+        if isinstance(result, dict):
+            events = _se.events_from_legacy(result) + _bus.drain()
+            if events:
+                result["system_events"] = events
+        return result
+
+    return wrapper
+
+
 @router.post("/campaigns/{campaign_id}/turns")
+@_with_system_events
 def create_turn(
     campaign_id: int,
     payload: TurnCreate,
@@ -6799,6 +6823,11 @@ def create_turn_stream(
                 _stream_ctx["ui_trace_id"] = ui_tid
             bind_context(**_stream_ctx)
 
+            # #1379 — aktywuj bus komunikatów systemowych dla tego generatora;
+            # serwisy wołane w trakcie tury emitują przez contextvar (se.emit).
+            from app.services import system_events as _se
+            _se_bus = _se.new_turn_bus()
+
             combat_before = cs_snap.get_active_combat(campaign_id_val)
             combat_was_active = bool(combat_before) and str(
                 combat_before.get("current_turn") or ""
@@ -7852,6 +7881,15 @@ def create_turn_stream(
                         _notif_conn.close()
             except Exception as _notif_err:
                 logger.warning("turn_notifications_error", error=str(_notif_err))
+
+            # #1379 — jednolity strumień komunikatów systemowych: konwersja pól
+            # legacy (gold_events/granted_items/completed_*) + zdarzenia z busa.
+            try:
+                _sys_events = _se.events_from_legacy(done_payload) + _se_bus.drain()
+                if _sys_events:
+                    done_payload["system_events"] = _sys_events
+            except Exception as _se_err:
+                logger.warning("system_events_error", error=str(_se_err))
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 

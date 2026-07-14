@@ -126,7 +126,35 @@ def decrement_weapon_durability_on_attack(conn, char_id: int) -> None:
                 "UPDATE character_inventory SET durability_current = MAX(0, durability_current - 1) WHERE id = ?",
                 (row["id"],),
             )
+            # #1379 — komunikat tylko przy zniszczeniu (0), nie co trafienie (anty-spam).
+            _emit_durability_event(row, cur - 1, is_weapon=True)
     conn.commit()
+
+
+def _emit_durability_event(row, new_cur: int, *, is_weapon: bool) -> None:
+    """Emituje dymek durability: zniszczenie (0) lub uszkodzenie (spadek do połowy)."""
+    try:
+        from app.services import system_events as _se
+        label = None
+        for k in ("name", "label", "weapon_key", "item_key"):
+            try:
+                if k in row.keys() and row[k]:
+                    label = str(row[k])
+                    break
+            except Exception:
+                continue
+        label = label or ("Broń" if is_weapon else "Zbroja")
+        mx = int(row["durability_max"] or 1)
+        if new_cur <= 0:
+            _se.emit("item_broken", f"{label} zniszczona!", dedupe_key=f"broken:{label}")
+        elif mx and new_cur == mx // 2:
+            _se.emit(
+                "durability",
+                f"{label} uszkodzona ({new_cur}/{mx}) — kara",
+                dedupe_key=f"dur:{label}",
+            )
+    except Exception:
+        pass
 
 
 def decrement_armor_durability_on_hit(conn, char_id: int) -> None:
@@ -141,6 +169,8 @@ def decrement_armor_durability_on_hit(conn, char_id: int) -> None:
                 "UPDATE character_inventory SET durability_current = MAX(0, durability_current - 1) WHERE id = ?",
                 (row["id"],),
             )
+            # #1379 — komunikat tylko przy zniszczeniu (0), nie co trafienie.
+            _emit_durability_event(row, cur - 1, is_weapon=False)
     conn.commit()
 
 

@@ -9326,6 +9326,12 @@ def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any
                     if gold >= gold_floor:
                         penalty = max(1, int(gold * pct))
                         change_gold(conn, char_id, -penalty, "wipe_penalty", campaign_id=campaign_id)
+                        # #1379 — kara złota po porażce (dotąd nieme).
+                        try:
+                            from app.services import system_events as _se
+                            _se.emit("gold_loss", f"−{penalty} zł — utracone po porażce")
+                        except Exception:
+                            pass
             except Exception:
                 pass
 

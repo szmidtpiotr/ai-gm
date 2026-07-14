@@ -73,6 +73,12 @@ def apply_robbery(conn, char_id: int) -> dict:
             meta={"percent": pct, "gold_stolen": stolen},
         )
         conn.commit()
+        # #1379 — strata złota z rabunku była dotąd tylko w prozie; teraz dymek.
+        try:
+            from app.services import system_events as _se
+            _se.emit("gold_loss", f"−{stolen} zł — okradziono cię!")
+        except Exception:
+            pass
 
     narrative_hint = (
         f"Bandyci napadli cię i skradli {stolen} złota ({pct}% twojego majątku). "

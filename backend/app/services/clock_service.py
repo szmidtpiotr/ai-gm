@@ -295,6 +295,21 @@ def advance_clock(
             flags["ingame_hours"] = new_hours
             flags["clock_history"] = history
 
+            # #1379 — dymek przy zapadnięciu nocy / nastaniu świtu (dotąd nieme;
+            # zmienia zasady: sklepy, groźniejsze drogi).
+            try:
+                _old_night = _time_of_day_label(old_hours % 24) == "Noc"
+                _new_night = _time_of_day_label(new_hours % 24) == "Noc"
+                if _new_night and not _old_night:
+                    from app.services import system_events as _se
+                    _se.emit("night", "Zapada noc — sklepy zamknięte, drogi groźniejsze",
+                             dedupe_key="daynight")
+                elif _old_night and not _new_night:
+                    from app.services import system_events as _se
+                    _se.emit("dawn", "Nastał świt", dedupe_key="daynight")
+            except Exception:
+                pass
+
         # #580: keep the legacy `ingame_hours` column in sync with the authoritative
         # session_flags value, so direct column readers never see a stale time-of-day.
         conn.execute(

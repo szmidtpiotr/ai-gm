@@ -240,31 +240,46 @@ export default function Game() {
     // F-72 (#1267): lektor czyta świeżą narrację GM (no-op gdy TTS wyłączony).
     if (typeof resp.prose === "string" && resp.prose.trim()) voice.speak(resp.prose);
     // #1086 port: dymki ukończenia questa/beatu (nie zapisywane w historii tur).
-    const newBlocks: LogBlock[] = [
-      ...(resp.completed_beats ?? []).map((b) => ({
+    // #1379: backend zwraca `system_events` = konwersja pól legacy (beats/quests/
+    // items/gold) + nowe komunikaty (XP, strata złota, kondycje, durability, noc…).
+    // Gdy pole jest obecne — jest SUPERSETEM, więc renderujemy TYLKO je (inaczej
+    // podwójne dymki). Starszy backend bez tego pola → fallback na gałęzie legacy.
+    let newBlocks: LogBlock[];
+    if (resp.system_events && resp.system_events.length) {
+      newBlocks = resp.system_events.map((ev) => ({
         kind: "completion" as const,
-        id: `cmp-${completionSeq.current++}`,
-        text: `✓ Cel wykonany: ${b.label ?? b.key}`,
-      })),
-      ...(resp.completed_quests ?? []).map((q) => ({
-        kind: "completion" as const,
-        id: `cmp-${completionSeq.current++}`,
-        text: q.xp ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`,
-      })),
-      // #1312: dostany przedmiot — ten sam zielony dymek co ukończenie beatu/questa.
-      ...(resp.granted_items ?? []).map((it) => ({
-        kind: "completion" as const,
-        id: `cmp-${completionSeq.current++}`,
-        text: `🎒 Otrzymano: ${it.label}`,
-      })),
-      // C12 (#1101): dymki transakcji złotem (SPEND_GOLD success events).
-      ...(resp.gold_events ?? []).map((ev) => ({
-        kind: "gold" as const,
-        id: `gold-${completionSeq.current++}`,
-        delta: ev.delta,
-        label: ev.label,
-      })),
-    ];
+        id: `sys-${completionSeq.current++}`,
+        text: ev.icon ? `${ev.icon} ${ev.text}` : ev.text,
+        tone: ev.tone,
+        icon: ev.icon,
+      }));
+    } else {
+      newBlocks = [
+        ...(resp.completed_beats ?? []).map((b) => ({
+          kind: "completion" as const,
+          id: `cmp-${completionSeq.current++}`,
+          text: `✓ Cel wykonany: ${b.label ?? b.key}`,
+        })),
+        ...(resp.completed_quests ?? []).map((q) => ({
+          kind: "completion" as const,
+          id: `cmp-${completionSeq.current++}`,
+          text: q.xp ? `✓ Quest: ${q.title} — +${q.xp} XP` : `✓ Quest: ${q.title}`,
+        })),
+        // #1312: dostany przedmiot — ten sam zielony dymek co ukończenie beatu/questa.
+        ...(resp.granted_items ?? []).map((it) => ({
+          kind: "completion" as const,
+          id: `cmp-${completionSeq.current++}`,
+          text: `🎒 Otrzymano: ${it.label}`,
+        })),
+        // C12 (#1101): dymki transakcji złotem (SPEND_GOLD success events).
+        ...(resp.gold_events ?? []).map((ev) => ({
+          kind: "gold" as const,
+          id: `gold-${completionSeq.current++}`,
+          delta: ev.delta,
+          label: ev.label,
+        })),
+      ];
+    }
     // Żyją tylko do końca TEJ tury — trwały zapis jest w Dzienniku (Zadania/Wątki/
     // Kronika), więc nadpisujemy (nie doklejamy), inaczej stary dymek wisi w oknie
     // czatu w nieskończoność, przesuwając się pod każdą kolejną turę.

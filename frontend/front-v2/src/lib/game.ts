@@ -69,8 +69,13 @@ export type LogBlock =
   | { kind: "gm"; id: string; text: string; turn: number }
   | { kind: "system"; id: string; text: string }
   | { kind: "roll"; id: string; roll: RollCardData }
-  | { kind: "completion"; id: string; text: string }
+  // #1379: `tone`/`icon` opcjonalne — completion band koloruje wg tonu zdarzenia
+  // systemowego (success/info/warning/danger); brak = domyślny zielony (beat/quest).
+  | { kind: "completion"; id: string; text: string; tone?: SystemEventTone; icon?: string }
   | { kind: "gold"; id: string; delta: number; label: string };
+
+// #1379 — ton komunikatu systemowego steruje kolorem środkowego dymka.
+export type SystemEventTone = "success" | "info" | "warning" | "danger";
 
 // Sztuczne komendy / puste akcje otwierające — nie pokazujemy jako dymka gracza.
 function isVisiblePlayerText(t: string | null | undefined): boolean {

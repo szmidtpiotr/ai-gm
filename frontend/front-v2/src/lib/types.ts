@@ -179,6 +179,15 @@ export interface SuggestedAction {
   [k: string]: unknown;
 }
 
+// #1379 — jedno zdarzenie systemowe (środkowy dymek poza narracją).
+export interface SystemEvent {
+  kind: string; // maszynowa kategoria (xp, gold_loss, condition_applied, night…)
+  icon: string; // emoji wiodące
+  tone: "success" | "info" | "warning" | "danger"; // kolor obramowania dymka
+  text: string; // gotowy polski komunikat
+  dedupe_key?: string | null;
+}
+
 // Odpowiedź POST /campaigns/{id}/turns (podzbiór używany przez ekran gry).
 export interface TurnResponse {
   turn_number?: number;
@@ -194,6 +203,9 @@ export interface TurnResponse {
   gold_events?: Array<{ delta: number; label: string; source?: string; service_key?: string }>;
   /** #1312 — narrator granted an item this turn → green bubble (like beat/quest). */
   granted_items?: Array<{ label: string }>;
+  /** #1379 — ujednolicony strumień komunikatów systemowych (XP, strata złota,
+   * kondycje, durability, noc, nowy quest…). Jedno pole, jeden środkowy dymek. */
+  system_events?: SystemEvent[];
   /** #1292 — deterministyczny skrót: otwórz modal Usługi zamiast narracji (bez LLM). */
   open_services?: string;
   /** #1338 BL-C3 — deterministyczny skrót: otwórz modal Rzemiosła (klucz lokacji). */

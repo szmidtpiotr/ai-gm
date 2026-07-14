@@ -307,6 +307,13 @@ def grant_pending_xp(
         )
     except Exception:
         pass  # audit row is best-effort
+    # #1379 — komunikat systemowy: gracz widzi skąd ma XP (dotąd nieme).
+    try:
+        from app.services import system_events as _se
+        _txt = f"+{amount} XP — {reason}" if reason else f"+{amount} XP"
+        _se.emit("xp", _txt)
+    except Exception:
+        pass
     return {"granted": amount, "pending_xp": pending, "xp_lifetime_earned": lifetime}
 
 

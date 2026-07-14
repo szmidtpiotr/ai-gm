@@ -167,6 +167,12 @@ def persist_quest_to_character_quests(
         created_turn=turn_number,
         beat_key=link,
     )
+    # #1379 — moment „przyjąłeś zadanie" (dotąd tylko cichy pasek questów).
+    try:
+        from app.services import system_events as _se
+        _se.emit("quest_new", f"Nowe zadanie: {title}", dedupe_key=f"quest_new:{title}")
+    except Exception:
+        pass
     return True
 
 

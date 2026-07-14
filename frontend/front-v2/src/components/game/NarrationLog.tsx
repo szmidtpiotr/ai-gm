@@ -43,7 +43,7 @@ export function NarrationLog({
           case "system":
             return <SystemBand key={b.id} text={b.text} />;
           case "completion":
-            return <CompletionBand key={b.id} text={b.text} />;
+            return <CompletionBand key={b.id} text={b.text} tone={b.tone} />;
           case "gold":
             return <GoldBubble key={b.id} delta={b.delta} label={b.label} />;
           case "roll":
@@ -123,10 +123,25 @@ function GoldBubble({ delta, label }: { delta: number; label: string }) {
   );
 }
 
-// Ukończenie questa/beatu — zielona ramka, ✓ prefix, mono.
-function CompletionBand({ text }: { text: string }) {
+// Komunikat systemowy (środkowy dymek) — kolor wg tonu (#1379).
+// Domyślnie zielony (beat/quest/XP = success); info=niebieski, warning=bursztyn,
+// danger=czerwony (strata złota, zniszczenie sprzętu, obrażenia).
+const COMPLETION_TONE: Record<string, string> = {
+  success: "border-emerald-500/40 bg-emerald-500/5 text-emerald-400",
+  info: "border-sky-500/40 bg-sky-500/5 text-sky-300",
+  warning: "border-amber-500/40 bg-amber-500/5 text-amber-300",
+  danger: "border-red-500/40 bg-red-500/5 text-red-300",
+};
+
+function CompletionBand({ text, tone }: { text: string; tone?: string }) {
+  const cls = COMPLETION_TONE[tone ?? "success"] ?? COMPLETION_TONE.success;
   return (
-    <div className="mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-1.5 font-mono text-micro text-emerald-400 animate-fade-in">
+    <div
+      className={cn(
+        "mx-auto mb-3.5 flex max-w-[94%] items-center justify-center gap-2 rounded-md border px-3 py-1.5 font-mono text-micro animate-fade-in",
+        cls,
+      )}
+    >
       {text}
     </div>
   );
