@@ -273,7 +273,15 @@ export default function Game() {
 
   function send(text: string) {
     if (!characterId) return;
-    submit.mutate({ characterId, text }, { onSuccess: applyResponse });
+    submit.mutate({ characterId, text }, { onSuccess: applyResponse, onError: submitError });
+  }
+
+  // #1378: turn submission previously had no onError anywhere — an LLM failure
+  // (budget exhausted, timeout, provider down) just left the composer stuck
+  // with no feedback. Backend now returns a reason-specific Polish message
+  // (see api.ts extractMessage), surfaced here as a toast.
+  function submitError(err: unknown) {
+    toast(err instanceof Error ? err.message : "Nie udało się wysłać akcji.", "danger");
   }
 
   // #1299: animacja kości skończona → rozwiąż test na serwerze (autorytatywny
@@ -305,7 +313,7 @@ export default function Game() {
   const setServicesReceiptPending = useAppStore((s) => s.setServicesReceiptPending);
   useEffect(() => {
     if (servicesReceiptPending && characterId) {
-      submit.mutate({ characterId, text: servicesReceiptPending }, { onSuccess: applyResponse });
+      submit.mutate({ characterId, text: servicesReceiptPending }, { onSuccess: applyResponse, onError: submitError });
       setServicesReceiptPending(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,7 +325,7 @@ export default function Game() {
   const setCombatEpiloguePending = useAppStore((s) => s.setCombatEpiloguePending);
   useEffect(() => {
     if (combatEpiloguePending && characterId) {
-      submit.mutate({ characterId, text: combatEpiloguePending }, { onSuccess: applyResponse });
+      submit.mutate({ characterId, text: combatEpiloguePending }, { onSuccess: applyResponse, onError: submitError });
       setCombatEpiloguePending(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -458,7 +466,7 @@ export default function Game() {
       openedRef.current = true;
       submit.mutate(
         { characterId, text: "__AI_GM_OPEN" },
-        { onSuccess: applyResponse },
+        { onSuccess: applyResponse, onError: submitError },
       );
     }
   }, [characterId, stream.isSuccess, stream.data, submit]);

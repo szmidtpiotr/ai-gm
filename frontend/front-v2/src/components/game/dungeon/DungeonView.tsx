@@ -143,7 +143,10 @@ export function DungeonView({
       !submit.isPending
     ) {
       openedRef.current = true;
-      submit.mutate({ characterId, text: "__AI_GM_OPEN" });
+      submit.mutate(
+        { characterId, text: "__AI_GM_OPEN" },
+        { onError: (e) => toast((e as Error).message || "Błąd otwarcia lochu", "danger") },
+      );
     }
   }, [stream.isSuccess, stream.data, submit, characterId]);
 
@@ -354,7 +357,12 @@ export function DungeonView({
             typing={submit.isPending}
             vitals={vitals}
             stats={stats}
-            onSend={(t) => submit.mutate({ characterId, text: t })}
+            onSend={(t) =>
+              submit.mutate(
+                { characterId, text: t },
+                { onError: (e) => toast((e as Error).message || "Błąd akcji", "danger") },
+              )
+            }
             sending={submit.isPending}
             dungeon
             onDungeonDeath={onDungeonDeath}
@@ -406,7 +414,12 @@ export function DungeonView({
       )}
 
       <Composer
-        onSend={(t) => submit.mutate({ characterId, text: t })}
+        onSend={(t) =>
+              submit.mutate(
+                { characterId, text: t },
+                { onError: (e) => toast((e as Error).message || "Błąd akcji", "danger") },
+              )
+            }
         disabled={submit.isPending}
         chips={[]}
         onChip={() => {}}

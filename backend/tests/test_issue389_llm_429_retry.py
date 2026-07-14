@@ -122,8 +122,10 @@ def test_openai_stream_gives_up_after_max_retries():
             api_key="sk-test",
         ))
 
-    error_chunks = [r for r in results if "[ERROR]" in r]
+    # Contract updated by #1378: sanitized sentinel instead of raw [ERROR] body.
+    error_chunks = [r for r in results if "[LLM_UNAVAILABLE:" in r]
     assert len(error_chunks) == 1, f"Expected exactly one error after max retries, got: {results}"
+    assert not any("[ERROR]" in r for r in results), "raw [ERROR] sentinel should no longer be used (#1378)"
 
 
 def test_openai_stream_non_429_error_no_retry():
@@ -166,7 +168,8 @@ def test_openai_stream_non_429_error_no_retry():
         ))
 
     assert call_count == 1, f"Should not retry 401, got {call_count} attempts"
-    error_chunks = [r for r in results if "[ERROR]" in r]
+    # Contract updated by #1378: sanitized sentinel instead of raw [ERROR] body.
+    error_chunks = [r for r in results if "[LLM_UNAVAILABLE:" in r]
     assert len(error_chunks) == 1
 
 

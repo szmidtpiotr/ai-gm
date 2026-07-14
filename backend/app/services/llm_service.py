@@ -35,6 +35,80 @@ class LLMConfigError(RuntimeError):
     """
 
 
+class LLMUnavailableError(RuntimeError):
+    """A classified, player-safe LLM provider failure (#1378).
+
+    Unlike a bare RuntimeError (which historically carried the raw provider
+    response body straight into player-facing 502s / SSE frames),
+    player_message is always a pre-approved Polish sentence — the raw
+    detail is kept only in the exception args for server-side logging,
+    never surfaced to the client.
+    """
+
+    def __init__(self, reason: str, player_message: str, detail: str = ""):
+        super().__init__(f"LLM unavailable ({reason}): {detail}"[:1200])
+        self.reason = reason
+        self.player_message = player_message
+
+
+# Player-safe message per classified reason (#1378) — Polish, no internal detail.
+PLAYER_MESSAGES: dict[str, str] = {
+    "budget_exhausted": "Serwer wyczerpał dzienny limit AI. Administrator został powiadomiony — spróbuj ponownie później.",
+    "rate_limited": "Mistrz Gry jest chwilowo przeciążony. Spróbuj ponownie za chwilę.",
+    "timeout": "Mistrz Gry nie odpowiada (przekroczono czas). Spróbuj ponownie.",
+    "provider_down": "Mistrz Gry chwilowo niedostępny. Spróbuj ponownie za chwilę.",
+    "config_error": "Błąd konfiguracji AI po stronie serwera. Skontaktuj się z administratorem.",
+}
+
+# Substrings providers use to signal budget/quota exhaustion (OpenAI's
+# insufficient_quota code and equivalent human-readable phrasing).
+_BUDGET_SIGNATURES = (
+    "insufficient_quota",
+    "exceeded your current quota",
+    "billing_hard_limit_reached",
+    "exceeded_quota",
+)
+
+
+def _classify_llm_failure(kind: str, status_code: int | None, body: str) -> str:
+    """Map a raw provider failure to one of the #1378 reason codes.
+
+    kind: "timeout" | "http" | "connection" | "config".
+    For kind=="http", status_code + body decide between budget_exhausted /
+    rate_limited / config_error / provider_down.
+    """
+    if kind == "timeout":
+        return "timeout"
+    if kind == "connection":
+        return "provider_down"
+    if kind == "config":
+        return "config_error"
+    low = (body or "").lower()
+    if status_code in (401, 403, 429) and any(sig in low for sig in _BUDGET_SIGNATURES):
+        return "budget_exhausted"
+    if status_code == 429:
+        return "rate_limited"
+    if status_code in (401, 403):
+        return "config_error"
+    return "provider_down"
+
+
+def _maybe_alert_admin_budget_exhausted(provider: str, model: str, detail: str) -> None:
+    """Page the admin's Telegram when the configured LLM budget/quota runs out (#1378).
+
+    Never breaks the request over an alerting failure — logs and swallows.
+    """
+    try:
+        from app.services.notification_service import send_admin_alert
+
+        send_admin_alert(
+            "AI-GM: wyczerpany budżet/limit LLM",
+            f"Provider {provider} ({model}) zwrócił błąd budżetu/limitu.\n\n{_trim_error_message(detail)}",
+        )
+    except Exception as exc:  # pragma: no cover - defensive, alerting must never break a turn
+        logger.warning("admin_alert_failed", error=str(exc))
+
+
 def _ensure_runtime_hydrated() -> None:
     """Lazy-load the active stored preset into this process's runtime config.
 
@@ -363,6 +437,7 @@ class OllamaDriver:
                             break
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
+            reason = _classify_llm_failure("timeout", None, "")
             logger.error(
                 "llm_timeout",
                 model=model,
@@ -370,9 +445,11 @@ class OllamaDriver:
                 duration_ms=_duration_ms(started_at),
                 error_message=str(exc),
             )
-            yield f"data: [ERROR] LLM timeout: {exc}\n\n"
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text if exc.response is not None else str(exc)
+            status = exc.response.status_code if exc.response is not None else None
+            reason = _classify_llm_failure("http", status, detail)
             logger.error(
                 "llm_error",
                 model=model,
@@ -380,8 +457,11 @@ class OllamaDriver:
                 duration_ms=_duration_ms(started_at),
                 error_message=_trim_error_message(detail),
             )
-            yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
+            if reason == "budget_exhausted":
+                _maybe_alert_admin_budget_exhausted("ollama", model, detail)
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
         except httpx.RequestError as exc:
+            reason = _classify_llm_failure("connection", None, "")
             logger.error(
                 "llm_error",
                 model=model,
@@ -389,7 +469,7 @@ class OllamaDriver:
                 duration_ms=_duration_ms(started_at),
                 error_message=str(exc),
             )
-            yield f"data: [ERROR] LLM connection error: {exc}\n\n"
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
 
     @staticmethod
     def health(base_url: str, api_key: str) -> dict[str, Any]:
@@ -477,6 +557,8 @@ class OpenAIDriver:
                     attempt += 1
                     continue
                 detail = exc.response.text if exc.response is not None else str(exc)
+                status = exc.response.status_code if exc.response is not None else None
+                reason = _classify_llm_failure("http", status, detail)
                 logger.error(
                     "llm_error",
                     model=model,
@@ -484,9 +566,12 @@ class OpenAIDriver:
                     duration_ms=_duration_ms(started_at),
                     error_message=_trim_error_message(detail),
                 )
-                yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
+                if reason == "budget_exhausted":
+                    _maybe_alert_admin_budget_exhausted("openai", model, detail)
+                yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
                 return
             except httpx.TimeoutException as exc:
+                reason = _classify_llm_failure("timeout", None, "")
                 logger.error(
                     "llm_timeout",
                     model=model,
@@ -494,9 +579,10 @@ class OpenAIDriver:
                     duration_ms=_duration_ms(started_at),
                     error_message=str(exc),
                 )
-                yield f"data: [ERROR] LLM timeout: {exc}\n\n"
+                yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
                 return
             except httpx.RequestError as exc:
+                reason = _classify_llm_failure("connection", None, "")
                 logger.error(
                     "llm_error",
                     model=model,
@@ -504,9 +590,10 @@ class OpenAIDriver:
                     duration_ms=_duration_ms(started_at),
                     error_message=str(exc),
                 )
-                yield f"data: [ERROR] LLM connection error: {exc}\n\n"
+                yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
                 return
             except Exception as exc:
+                reason = "provider_down"
                 logger.error(
                     "llm_error",
                     model=model,
@@ -514,7 +601,7 @@ class OpenAIDriver:
                     duration_ms=_duration_ms(started_at),
                     error_message=str(exc),
                 )
-                yield f"data: [ERROR] LLM error: {exc}\n\n"
+                yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
                 return
 
     @staticmethod
@@ -603,22 +690,29 @@ class AzureDriver:
                                 yield f"data: {token.replace(chr(10), '\\n')}\n\n"
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
+            reason = _classify_llm_failure("timeout", None, "")
             logger.error("llm_timeout", model=model, llm_provider="azure",
                          duration_ms=_duration_ms(started_at), error_message=str(exc))
-            yield f"data: [ERROR] LLM timeout: {exc}\n\n"
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text if exc.response is not None else str(exc)
+            status = exc.response.status_code if exc.response is not None else None
+            reason = _classify_llm_failure("http", status, detail)
             logger.error("llm_error", model=model, llm_provider="azure",
                          duration_ms=_duration_ms(started_at), error_message=_trim_error_message(detail))
-            yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
+            if reason == "budget_exhausted":
+                _maybe_alert_admin_budget_exhausted("azure", model, detail)
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
         except httpx.RequestError as exc:
+            reason = _classify_llm_failure("connection", None, "")
             logger.error("llm_error", model=model, llm_provider="azure",
                          duration_ms=_duration_ms(started_at), error_message=str(exc))
-            yield f"data: [ERROR] LLM connection error: {exc}\n\n"
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
         except Exception as exc:
+            reason = "provider_down"
             logger.error("llm_error", model=model, llm_provider="azure",
                          duration_ms=_duration_ms(started_at), error_message=str(exc))
-            yield f"data: [ERROR] LLM error: {exc}\n\n"
+            yield f"data: [LLM_UNAVAILABLE:{reason}]\n\n"
 
     @staticmethod
     def health(base_url: str, api_key: str) -> dict[str, Any]:
@@ -672,8 +766,11 @@ def generate_chat(
     started_at = time.perf_counter()
     logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=False)
     if provider in ("openai", "azure") and not (effective.get("api_key") or "").strip():
-        raise RuntimeError(
-            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+        reason = "config_error"
+        raise LLMUnavailableError(
+            reason,
+            PLAYER_MESSAGES[reason],
+            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server.",
         )
     _llm_err: str | None = None
     _result: str | None = None
@@ -687,7 +784,8 @@ def generate_chat(
         else:
             raise RuntimeError(f"Unknown LLM provider: {provider}")
     except httpx.TimeoutException as exc:
-        _llm_err = "timeout"
+        reason = _classify_llm_failure("timeout", None, "")
+        _llm_err = reason
         logger.error(
             "llm_timeout",
             model=resolved_model,
@@ -695,10 +793,12 @@ def generate_chat(
             duration_ms=_duration_ms(started_at),
             error_message=str(exc),
         )
-        raise RuntimeError(f"LLM timeout: {exc}") from exc
+        raise LLMUnavailableError(reason, PLAYER_MESSAGES[reason], str(exc)) from exc
     except httpx.HTTPStatusError as exc:
-        _llm_err = "http_error"
         detail = exc.response.text if exc.response is not None else str(exc)
+        status = exc.response.status_code if exc.response is not None else None
+        reason = _classify_llm_failure("http", status, detail)
+        _llm_err = reason
         logger.error(
             "llm_error",
             model=resolved_model,
@@ -706,9 +806,12 @@ def generate_chat(
             duration_ms=_duration_ms(started_at),
             error_message=_trim_error_message(detail),
         )
-        _raise_llm_http_error(exc)
+        if reason == "budget_exhausted":
+            _maybe_alert_admin_budget_exhausted(provider, resolved_model, detail)
+        raise LLMUnavailableError(reason, PLAYER_MESSAGES[reason], detail) from exc
     except httpx.RequestError as exc:
-        _llm_err = "connection_error"
+        reason = _classify_llm_failure("connection", None, "")
+        _llm_err = reason
         logger.error(
             "llm_error",
             model=resolved_model,
@@ -716,7 +819,7 @@ def generate_chat(
             duration_ms=_duration_ms(started_at),
             error_message=str(exc),
         )
-        raise RuntimeError(f"LLM connection error: {exc}") from exc
+        raise LLMUnavailableError(reason, PLAYER_MESSAGES[reason], str(exc)) from exc
     except RuntimeError as exc:
         _llm_err = str(exc)[:120]
         logger.error(
@@ -754,8 +857,11 @@ def generate_chat_stream(
     provider = effective["provider"]
     logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=True)
     if provider in ("openai", "azure") and not (effective.get("api_key") or "").strip():
-        raise RuntimeError(
-            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+        reason = "config_error"
+        raise LLMUnavailableError(
+            reason,
+            PLAYER_MESSAGES[reason],
+            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server.",
         )
     if provider == "ollama":
         yield from OllamaDriver.generate_stream(effective["base_url"], resolved_model, messages, effective["api_key"])

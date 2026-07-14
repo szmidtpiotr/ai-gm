@@ -29,6 +29,11 @@ logger = get_logger(__name__)
 
 _TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
+# Ops alert channel (#1378) — independent of player notify prefs. Configure via
+# ADMIN_ALERT_TELEGRAM_CHAT_ID so infra alerts (e.g. LLM budget exhausted) reach
+# the admin even when no player has telegram linked yet.
+_ADMIN_ALERT_CHAT_ID = os.getenv("ADMIN_ALERT_TELEGRAM_CHAT_ID", "")
+
 DEFAULT_CHANNEL_ORDER = "telegram,web_push,email"
 _VALID_CHANNELS = ("telegram", "web_push", "email")
 
@@ -141,6 +146,19 @@ def send_telegram(chat_id, title: str, body: str) -> bool:
     except Exception as e:  # noqa: BLE001 — never break the turn loop
         logger.error("telegram_send_failed", error=str(e)[:120])
         return False
+
+
+def send_admin_alert(title: str, body: str) -> bool:
+    """Ops alert to the admin's Telegram (#1378) — independent of per-player prefs.
+
+    Used for infra conditions the admin must know about even if no player is
+    online to notice (e.g. the configured LLM provider ran out of budget).
+    No-op (logged, no raise) if ADMIN_ALERT_TELEGRAM_CHAT_ID is unset.
+    """
+    if not _ADMIN_ALERT_CHAT_ID:
+        logger.warning("admin_alert_not_configured", title=title)
+        return False
+    return send_telegram(_ADMIN_ALERT_CHAT_ID, title, body)
 
 
 def _deliver_telegram(user_id, prefs, title, body, url) -> bool:

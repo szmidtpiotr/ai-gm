@@ -49,6 +49,8 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      # #1378 — ops alert (LLM budget exhausted etc.), independent of player prefs.
+      - ADMIN_ALERT_TELEGRAM_CHAT_ID=${ADMIN_ALERT_TELEGRAM_CHAT_ID:-}
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       # #866 — public base URL for email links (invite / verify / reset).

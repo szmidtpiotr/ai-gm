@@ -36,7 +36,33 @@ from app.services.llm_service import (
     generate_chat_stream,
     get_effective_config,
     get_health,
+    LLMUnavailableError,
 )
+
+
+def _llm_error_http_detail(exc: Exception) -> dict | str:
+    """Map a caught LLM failure to a player-safe 502 detail body (#1378).
+
+    LLMUnavailableError carries its own classified reason + a pre-approved
+    Polish message; any other RuntimeError falls back to its plain message
+    (already safe — these are app-level errors like 'Unknown LLM provider',
+    never raw provider response bodies).
+    """
+    if isinstance(exc, LLMUnavailableError):
+        return {"error_code": exc.reason, "message": exc.player_message}
+    return str(exc)
+
+
+def _llm_error_sse_chunk(exc: Exception) -> str:
+    """Map a caught LLM failure to a player-safe SSE error chunk (#1378).
+
+    Mirrors _llm_error_http_detail for the streaming /helpme path — the
+    frontend recognizes the [LLM_UNAVAILABLE:<reason>] sentinel the same
+    way it does for the main narrative stream.
+    """
+    if isinstance(exc, LLMUnavailableError):
+        return f"data: [LLM_UNAVAILABLE:{exc.reason}]\n\n"
+    return f"data: [ERROR] {exc}\n\n"
 from app.api.slash_command_registry import COMMAND_REGISTRY
 from app.services.client_ui_config import (
     get_public_help_command_texts,
@@ -4765,7 +4791,7 @@ def _ct_inline_commands(conn, campaign_id, payload, campaign, character, text, t
                 model=model_h,
             )
         except RuntimeError as e:
-            raise HTTPException(status_code=502, detail=str(e)) from None
+            raise HTTPException(status_code=502, detail=_llm_error_http_detail(e)) from None
         msg = (out.get("message") or "").strip()
         if not msg:
             raise HTTPException(status_code=502, detail="Empty /helpme response")
@@ -6026,7 +6052,7 @@ def create_turn(
         )
 
     except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=_llm_error_http_detail(e))
     finally:
         conn.close()
         turn_lock.release(_lock_key)
@@ -6100,10 +6126,10 @@ def create_turn_stream(
                     model=model_h,
                 )
             except RuntimeError as e:
-                err = str(e)
+                err_chunk = _llm_error_sse_chunk(e)
 
                 def helpme_err_stream():
-                    yield f"data: [ERROR] {err}\n\n"
+                    yield err_chunk
 
                 return StreamingResponse(
                     helpme_err_stream(),
@@ -6966,7 +6992,7 @@ def create_turn_stream(
                 model=model,
                 llm_config=llm_config,
             ):
-                if chunk.startswith("data: [ERROR]"):
+                if chunk.startswith("data: [ERROR]") or chunk.startswith("data: [LLM_UNAVAILABLE:"):
                     yield chunk
                     return
                 if chunk.startswith("data: [DONE]"):
@@ -7847,7 +7873,7 @@ def create_turn_stream(
         )
 
     except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=_llm_error_http_detail(e))
     finally:
         conn.close()
         # Ścieżki krótkie (helpme/roll/command/gate) i błędy zwalniają tutaj; ścieżka
