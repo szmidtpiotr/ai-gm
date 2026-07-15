@@ -355,6 +355,33 @@ export default function Game() {
           const gate = r.advantage_gate?.options;
           setChips(normalizeChips(gate && gate.length ? gate : r.suggested_actions));
           if (typeof r.prose === "string" && r.prose.trim()) voice.speak(r.prose);
+          // #1337: zbieranie ziół rozstrzyga się TU (nie w applyResponse), więc
+          // przyznane zioła trzeba wyrenderować jako zielone dymki ręcznie —
+          // inaczej gracz nie widział, że coś trafiło do plecaka.
+          const herb = r.herb_reward;
+          if (herb) {
+            const pills: LogBlock[] = [];
+            for (const h of herb.herbs ?? []) {
+              const label = String(h.label ?? "").trim();
+              if (!label) continue;
+              const qty = Number(h.quantity ?? 1);
+              pills.push({
+                kind: "completion",
+                id: `herb-${completionSeq.current++}`,
+                text: `🎒 Otrzymano: ${label}${qty > 1 ? ` ×${qty}` : ""}`,
+                tone: "success",
+              });
+            }
+            if (Number(herb.damage) > 0) {
+              pills.push({
+                kind: "completion",
+                id: `herb-${completionSeq.current++}`,
+                text: `🥀 Trujące zioło — tracisz ${Number(herb.damage)} HP`,
+                tone: "danger",
+              });
+            }
+            if (pills.length) setCompletionBlocks(pills);
+          }
         },
         onError: (e) =>
           toast(e instanceof Error ? e.message : "Nie udało się rozwiązać testu.", "danger"),

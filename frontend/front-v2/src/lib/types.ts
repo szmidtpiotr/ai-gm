@@ -255,6 +255,14 @@ export interface SkillTestResolveResponse {
     options?: SuggestedAction[];
     [k: string]: unknown;
   } | null;
+  // #1337 BL-C2: wynik zbierania ziół — przyznane zioła (do zielonych dymków),
+  // trująca pomyłka (Nat1 → obrażenie), rzadki okaz (Nat20).
+  herb_reward?: {
+    herbs?: Array<{ label?: string; quantity?: number; [k: string]: unknown }>;
+    rare?: string | null;
+    damage?: number;
+    outcome?: string;
+  } | null;
   [k: string]: unknown;
 }
 
