@@ -184,7 +184,7 @@ function ExperimentPanel({
   gold,
 }: {
   characterId: number;
-  inv: { key: string; quantity: number; label?: string; kind?: string }[] | undefined;
+  inv: { key: string; quantity: number; label?: string; kind?: string; is_component?: boolean }[] | undefined;
   gold: number;
 }) {
   const { toast } = useToast();
@@ -193,9 +193,12 @@ function ExperimentPanel({
   const [picked, setPicked] = useState<Record<string, number>>({});
   const [result, setResult] = useState<ExperimentResult | null>(null);
 
-  // Wskazywalne komponenty: stosy z ekwipunku (qty > 0). Bez broni wyposażonej.
+  // Wskazywalne komponenty: tylko materiały rzemieślnicze (is_component, #1335).
+  // Broń/zbroja/consumable leżą w innych kolumnach ekwipunku niż item_key —
+  // backend liczy posiadanie komponentów wyłącznie po item_key, więc pokazanie
+  // ich tutaj kończy się błędem "Brak komponentów" (np. wooden_shield 0/1).
   const stacks = useMemo(
-    () => (inv ?? []).filter((i) => (i.quantity || 0) > 0),
+    () => (inv ?? []).filter((i) => i.is_component && (i.quantity || 0) > 0),
     [inv],
   );
   const count = Object.keys(picked).length;
