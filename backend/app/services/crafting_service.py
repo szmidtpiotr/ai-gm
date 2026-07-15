@@ -31,6 +31,22 @@ from app.services.shop_service import DWARF_SHOP_DISCOUNT
 # w migracji _ensure_recipes_schema). Silnik walki sumuje jego damage_bonus.
 WEAPON_HONE_AFFIX = "craft_hone"
 
+# ── #1391 — hybrydowa dostępność rzemiosła (design: „auto do każdej osady") ──────
+# Craft NIE wymaga już ręcznie przypisanego NPC. crafter_type wyprowadzamy z:
+#   (a) subtype/label KONKRETNEJ lokacji (parytet z serwisem blacksmith_repair),
+#   (b) przynależności do PRAWDZIWEJ osady (hub) → auto kowal + zielarka.
+# Dzicz (macro bez cywilizowanych sublokacji i bez safe_for_rest) → nic.
+# Nazwane NPC (Goran, Zielarka Agata…) dalej działają — inferencja tylko je uzupełnia.
+_SMITH_SUBTYPES = ("smithy", "forge")
+_HERBALIST_SUBTYPES = ("herbalist", "apothecary", "alchemist")
+_SMITH_KW = ("smithy", "blacksmith", "kowal", "forge", "kuznia", "kuźnia")
+_HERBALIST_KW = ("zielar", "znachor", "aptek", "herbalist", "alchemi")
+# subtype świadczące, że macro to zamieszkana osada (nie sam las/bagno/ruina).
+_SETTLEMENT_SUBTYPES = (
+    "village", "town", "city", "hamlet", "tavern", "inn",
+    "market", "shop", "port", "castle", "fortress", "monastery", "slum",
+)
+
 # ── #1341 BL-D2 — eksperymenty: liczby startowe (Numbers Policy, sandbox-tunable) ──
 # Opłata za jedną próbę eksperymentu (materiały tygla + czas rzemieślnika).
 EXPERIMENT_COST_GOLD = 10
@@ -235,6 +251,55 @@ def _affix_keys(row: sqlite3.Row) -> list[str]:
     return [str(k).strip() for k in keys if str(k or "").strip()]
 
 
+# ── #1391 hybryda: inferencja crafter_type z lokacji/osady ──────────────────────
+
+def _loc_full(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT key, label, location_type, location_subtype, parent_key, "
+        "COALESCE(safe_for_rest, 0) AS safe_for_rest "
+        "FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+        (key,),
+    ).fetchone()
+
+
+def _is_real_settlement(conn: sqlite3.Connection, hub: sqlite3.Row | None) -> bool:
+    """Hub to zamieszkana osada, gdy: sam jest safe_for_rest, ma osadowy subtype,
+    albo ma ≥1 sublokację o osadowym subtypie. Dzicz (las/bagno/ruina) → False."""
+    if hub is None:
+        return False
+    if int(hub["safe_for_rest"] or 0) == 1:
+        return True
+    st = str(hub["location_subtype"] or "").strip().lower()
+    if st in _SETTLEMENT_SUBTYPES:
+        return True
+    kids = conn.execute(
+        "SELECT location_subtype FROM game_locations WHERE parent_key = ? AND is_active = 1",
+        (hub["key"],),
+    ).fetchall()
+    return any(str(k["location_subtype"] or "").strip().lower() in _SETTLEMENT_SUBTYPES for k in kids)
+
+
+def _infer_crafter_types(conn: sqlite3.Connection, loc: sqlite3.Row) -> set[str]:
+    """crafter_type wyprowadzony z lokacji (bez wiersza NPC). Zwraca podzbiór
+    {'smith','herbalist'} — patrz komentarz przy stałych _SMITH_KW/_SETTLEMENT_SUBTYPES."""
+    types: set[str] = set()
+    hay = (str(loc["label"] or "") + " " + str(loc["location_subtype"] or "")).lower()
+    st = str(loc["location_subtype"] or "").strip().lower()
+    # (a) subtype/label tej konkretnej lokacji (np. sublokacja 'smithy').
+    if st in _SMITH_SUBTYPES or any(k in hay for k in _SMITH_KW):
+        types.add("smith")
+    if st in _HERBALIST_SUBTYPES or any(k in hay for k in _HERBALIST_KW):
+        types.add("herbalist")
+    # (b) poziom osady: sub → hub = rodzic; macro → sam. Prawdziwa osada = oboje.
+    hub = loc
+    if str(loc["location_type"] or "") == "sub" and loc["parent_key"]:
+        hub = _loc_full(conn, loc["parent_key"]) or loc
+    if _is_real_settlement(conn, hub):
+        types.add("smith")
+        types.add("herbalist")
+    return types
+
+
 # ── Publiczne API ────────────────────────────────────────────────────────────
 
 def get_location_crafting(loc_ref: str | int, character_id: int | None = None) -> dict:
@@ -309,6 +374,13 @@ def get_location_crafting(loc_ref: str | int, character_id: int | None = None) -
                         crafter_types.add(str(r["crafter_type"]).strip())
             except sqlite3.OperationalError:
                 pass
+
+        # #1391 hybryda — dołóż crafter_type z subtype/label + poziomu osady.
+        # Dzięki temu każda kuźnia-sublokacja i każda prawdziwa osada oferuje
+        # rzemiosło bez ręcznie przypisanego NPC (parytet z serwisem usług).
+        full = _loc_full(conn, loc_key)
+        if full is not None:
+            crafter_types |= _infer_crafter_types(conn, full)
 
         recipes: list[dict] = []
         if crafter_types:

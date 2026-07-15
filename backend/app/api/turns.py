@@ -2621,6 +2621,23 @@ def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | N
     return None
 
 
+# #1391 — czasowniki dążenia/chęci/potrzeby. Naturalna narracja „idę do kowala",
+# „chciałbym naprawić sprzęt", „potrzebuję noclegu" nie zawiera czasownika ZAKUPU
+# (kupuję/zamawiam), więc bez tego intercept milczał i narrator (który NIE umie
+# otworzyć modala usług) przejmował turę. Te czasowniki + rzeczownik-usługa też
+# otwierają modal. Bramka lokalizacji (get_available_service_keys) dalej chroni
+# przed fałszywką w dziczy.
+_SERVICE_INTENT_VERB_RE = re.compile(
+    r"\b("
+    r"id[eę]|ide|udaj[eę]\s+si[eę]|udaje\s+sie|kieruj[eę]\s+si[eę]|"
+    r"podchodz[eę]|podejd[zź]\w*|wchodz[eę]|wejd[zź]\w*|zbli[żz]am\s+si[eę]|"
+    r"chc[eę]|chcia[łl]\w*|potrzebuj[eę]|szukam|wybieram\s+si[eę]|"
+    r"zanios\w*|zanie[śs]\w*|nios[eę]"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
 def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: str) -> dict | None:
     """#1292: deterministic pre-LLM shortcut — explicit purchase-intent free text at a
     location that offers game_config_services opens the Services modal directly.
@@ -2644,8 +2661,13 @@ def _maybe_services_shortcut(conn: sqlite3.Connection, campaign_id: int, text: s
     # service noun (nocleg/piwo/naprawa/uzdrowienie/...), else "kupuję miecz" while
     # standing in a tavern would wrongly open Usługi instead of reaching the narrator.
     is_browse_ask = bool(re.search(r"\bmasz\s+do\b", t, re.IGNORECASE))
-    has_order_verb = bool(_TRADE_USER_INTENT_RE.search(t) or _svc_order_verb_re.search(t))
-    if not (is_browse_ask or (has_order_verb and SERVICE_NOUN_RE.search(t))):
+    # #1391: zakup (kupuję/zamawiam) LUB dążenie/chęć (idę do/chciałbym/potrzebuję).
+    has_intent_verb = bool(
+        _TRADE_USER_INTENT_RE.search(t)
+        or _svc_order_verb_re.search(t)
+        or _SERVICE_INTENT_VERB_RE.search(t)
+    )
+    if not (is_browse_ask or (has_intent_verb and SERVICE_NOUN_RE.search(t))):
         return None
     loc_key = _current_location_key(conn, campaign_id)
     if not loc_key:
