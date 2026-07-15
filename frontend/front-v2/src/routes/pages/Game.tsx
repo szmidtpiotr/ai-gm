@@ -25,6 +25,7 @@ import { FinaleCard, FinaleFlow } from "@/components/game/FinaleFlow";
 import {
   buildLog,
   chipsFromTurns,
+  isVisiblePlayerText,
   normalizeChips,
   readStats,
   readVitals,
@@ -163,6 +164,12 @@ export default function Game() {
   // #1086 port: ulotne bąbelki ukończenia questa/beatu — nie są zapisywane w historii tur.
   const [completionBlocks, setCompletionBlocks] = useState<LogBlock[]>([]);
   const completionSeq = useRef(0);
+  // Optimistyczne echo akcji gracza: dymek pojawia się NATYCHMIAST po wysłaniu,
+  // nie czeka na odpowiedź LLM (wcześniej znikał aż do narracji GM — a przy teście
+  // umiejętności bywał gubiony na dobre). Zdejmowany dopiero, gdy tura utrwali się
+  // w strumieniu (dedup po tekście); przy błędzie tury — cofany.
+  const [optimistic, setOptimistic] = useState<{ id: number; text: string }[]>([]);
+  const optSeq = useRef(0);
   // FAZA ML: mapa lokalna osady. Domyślnie pokazujemy ją w hubie z sub-lokacjami;
   // forceWorldMap = gracz kliknął „Świat" i chce zobaczyć mapę świata.
   const [forceWorldMap, setForceWorldMap] = useState(false);
@@ -288,7 +295,20 @@ export default function Game() {
 
   function send(text: string) {
     if (!characterId) return;
-    submit.mutate({ characterId, text }, { onSuccess: applyResponse, onError: submitError });
+    // Echo widocznej akcji gracza od razu (pomijamy sentinele/rzuty `__…`/`[…]`).
+    const echo = text.trim();
+    const optId = isVisiblePlayerText(echo) ? ++optSeq.current : null;
+    if (optId !== null) setOptimistic((o) => [...o, { id: optId, text: echo }]);
+    submit.mutate(
+      { characterId, text },
+      {
+        onSuccess: applyResponse,
+        onError: (err) => {
+          if (optId !== null) setOptimistic((o) => o.filter((e) => e.id !== optId));
+          submitError(err);
+        },
+      },
+    );
   }
 
   // #1378: turn submission previously had no onError anywhere — an LLM failure
@@ -486,9 +506,40 @@ export default function Game() {
     }
   }, [characterId, stream.isSuccess, stream.data, submit]);
 
+  const persistedBlocks = useMemo(
+    () => buildLog(stream.data?.turns ?? []),
+    [stream.data?.turns],
+  );
+  // Teksty akcji już utrwalone w strumieniu — echo optymistyczne dla nich zdejmujemy,
+  // by nie dublować dymka. To, czego backend nie zapisał (np. tor testu umiejętności
+  // gubi słowa gracza), zostaje widoczne jako echo.
+  const persistedPlayerTexts = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of persistedBlocks) if (b.kind === "player") s.add(b.text);
+    return s;
+  }, [persistedBlocks]);
+  const shownOptimistic = useMemo(
+    () => optimistic.filter((e) => !persistedPlayerTexts.has(e.text)),
+    [optimistic, persistedPlayerTexts],
+  );
+  // Przytnij stan (nie tylko widok), gdy tura się utrwaliła — inaczej tablica rośnie.
+  useEffect(() => {
+    setOptimistic((o) => {
+      const next = o.filter((e) => !persistedPlayerTexts.has(e.text));
+      return next.length === o.length ? o : next;
+    });
+  }, [persistedPlayerTexts]);
   const blocks = useMemo(
-    () => [...buildLog(stream.data?.turns ?? []), ...completionBlocks],
-    [stream.data?.turns, completionBlocks],
+    () => [...persistedBlocks, ...completionBlocks],
+    [persistedBlocks, completionBlocks],
+  );
+  // Widok Opowieści: echo akcji gracza dopisane pod narracją (nowa akcja = najniżej).
+  const storyBlocks = useMemo<LogBlock[]>(
+    () => [
+      ...blocks,
+      ...shownOptimistic.map((e) => ({ kind: "player" as const, id: `opt-${e.id}`, text: e.text })),
+    ],
+    [blocks, shownOptimistic],
   );
   // Chipy: świeże z ostatniego submitu, inaczej z ostatniej tury w strumieniu,
   // a gdy tura ich nie niosła (backend nie zapisuje suggested_actions per-tura) —
@@ -770,7 +821,7 @@ export default function Game() {
           <div className="flex min-h-0 min-w-0 flex-1">
             <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <NarrationLog
-                blocks={blocks}
+                blocks={storyBlocks}
                 pendingRoll={pendingRoll}
                 typing={submit.isPending || resolveSkill.isPending}
                 heroName={character.data?.name}

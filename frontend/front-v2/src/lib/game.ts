@@ -78,7 +78,7 @@ export type LogBlock =
 export type SystemEventTone = "success" | "info" | "warning" | "danger";
 
 // Sztuczne komendy / puste akcje otwierające — nie pokazujemy jako dymka gracza.
-function isVisiblePlayerText(t: string | null | undefined): boolean {
+export function isVisiblePlayerText(t: string | null | undefined): boolean {
   if (!t) return false;
   const s = t.trim();
   if (!s) return false;
@@ -327,9 +327,44 @@ export function rollFromRzutLine(text: string | null | undefined): RollCardData 
   return { actor: "player", title: `TEST: ${label.toUpperCase()}`, cells, crit: nat20, fumble: nat1 };
 }
 
+// Syntetyczna tura ruchu po mapie (_record_travel_turn w hex_travel_service):
+// user_text = "[Podróż mapą — …]", assistant_text = {"narrative":"Podróżujesz…"}.
+// Nie jest to narracja GM — to komunikat informacyjny (teren/miejsce/czas), więc
+// renderujemy go jako zielony dymek systemowy (parytet z „🎒 Otrzymano"), nie prozę.
+const TRAVEL_TURN_MARKER = "[Podróż mapą";
+
+function travelNarrative(assistant: string | null | undefined): string {
+  const raw = (assistant || "").trim();
+  let msg = "";
+  if (raw.startsWith("{")) {
+    try {
+      const o = JSON.parse(raw) as Record<string, unknown>;
+      const f = o.narrative ?? o.narration;
+      if (typeof f === "string") msg = f.trim();
+    } catch {
+      msg = cleanProse(raw);
+    }
+  }
+  if (!msg) msg = cleanProse(raw);
+  // „3.0 h" → „3 h" (backend zwraca float godzin).
+  return msg.replace(/(\d+)\.0(\s*h)\b/g, "$1$2");
+}
+
 export function buildLog(turns: TurnHistoryEntry[]): LogBlock[] {
   const blocks: LogBlock[] = [];
   for (const t of turns) {
+    // Ruch po mapie → zielony dymek informacyjny (nie dymek GM ani gracza).
+    if ((t.user_text || "").startsWith(TRAVEL_TURN_MARKER)) {
+      const msg = travelNarrative(t.assistant_text);
+      if (msg)
+        blocks.push({
+          kind: "completion",
+          id: `trv-${t.turn_number}`,
+          text: `🧭 ${msg}`,
+          tone: "success",
+        });
+      continue;
+    }
     if (isVisiblePlayerText(t.user_text)) {
       blocks.push({
         kind: "player",
