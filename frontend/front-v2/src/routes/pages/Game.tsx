@@ -857,8 +857,14 @@ export default function Game() {
           </div>
 
           {/* PT7/F-80: deterministyczny baner podróży (zmierzch / padasz z sił) —
-              niezależny od narracji LLM; znika po Odpocznij/Rozbij obóz. */}
-          {travelNotice && <TravelNotice notice={travelNotice} />}
+              niezależny od narracji LLM; znika po Odpocznij/Rozbij obóz.
+              lg:pr-[310px] = szerokość VitalsRail — baner centruje się nad kolumną
+              czatu (jak dymki), nie nad całą szerokością (wyglądał na przesunięty). */}
+          {travelNotice && (
+            <div className="lg:pr-[310px]">
+              <TravelNotice notice={travelNotice} />
+            </div>
+          )}
 
           <Composer
             onSend={send}

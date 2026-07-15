@@ -2723,7 +2723,26 @@ def _maybe_herb_shortcut(conn: sqlite3.Connection, campaign_id: int, character: 
         (json.dumps(_sf, ensure_ascii=False), campaign_id),
     )
     conn.commit()
-    return {"skill_test_pending": pending, "prose": None, "route": "skill_test"}
+    # Utrwal słowa gracza jako turę (parytet ze skanerem keywordów w
+    # turn_skill_router). Bez tego wiersza dymek gracza nie istnieje w strumieniu:
+    # /skill-test/resolve zapisuje tylko "[Rzut:…]", więc w logu brakowało akcji
+    # PRZED kartą testu (a echo optymistyczne wisiało na dole bez dedupu).
+    _log = create_turn_log(
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=int(character["id"]),
+        user_text=text,
+        assistant_text=None,
+        route="skill_test_keyword",
+    )
+    conn.commit()
+    return {
+        "id": _log["id"],
+        "turn_number": _log["turn_number"],
+        "skill_test_pending": pending,
+        "prose": None,
+        "route": "skill_test",
+    }
 
 
 def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: dict,
@@ -2765,7 +2784,24 @@ def _maybe_dig_shortcut(conn: sqlite3.Connection, campaign_id: int, character: d
         (json.dumps(_sf, ensure_ascii=False), campaign_id),
     )
     conn.commit()
-    return {"skill_test_pending": pending, "prose": None, "route": "skill_test"}
+    # Jak w _maybe_herb_shortcut: utrwal słowa gracza, by dymek akcji istniał
+    # w logu PRZED kartą testu i przetrwał F5.
+    _log = create_turn_log(
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=int(character["id"]),
+        user_text=text,
+        assistant_text=None,
+        route="skill_test_keyword",
+    )
+    conn.commit()
+    return {
+        "id": _log["id"],
+        "turn_number": _log["turn_number"],
+        "skill_test_pending": pending,
+        "prose": None,
+        "route": "skill_test",
+    }
 
 
 def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
