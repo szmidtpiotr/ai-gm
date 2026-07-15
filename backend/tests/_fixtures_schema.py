@@ -70,6 +70,7 @@ def weapons_table_sql() -> str:
       allowed_classes TEXT,
       two_handed INTEGER DEFAULT 0,
       finesse INTEGER DEFAULT 0,
+      light INTEGER DEFAULT NULL,
       range_m INTEGER,
       targeting TEXT DEFAULT 'single',
       aoe_radius_m REAL,

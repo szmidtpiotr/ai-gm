@@ -76,6 +76,19 @@ const _ROW_REGISTRY = {
       {name:'label',      label:'Nazwa',        type:'text'},
       {name:'weapon_type',label:'Typ',          type:'text'},
       {name:'damage_die', label:'Kość obrażeń', type:'text'},
+      // #1397: slot + flagi walki — dwuręczna (jedna wielka broń, 2 sloty, skill two_handed)
+      // vs oburęczność (dwie LEKKIE bronie, skill dual_wield).
+      {name:'weapon_slot',label:'Slot', type:'select', options:[
+        {value:'main_hand',    label:'Główna ręka'},
+        {value:'two_handed',   label:'Dwuręczna (2H — zajmuje obie ręce)'},
+        {value:'off_hand_only',label:'Tylko pomocnicza'},
+        {value:'either',       label:'Dowolna ręka'},
+      ]},
+      {name:'finesse',    label:'Finezyjna (DEX zamiast STR)', type:'checkbox'},
+      // light=NULL w DB = fallback na finesse; checkbox pokazuje stan EFEKTYWNY,
+      // żeby zapis nie wyłączał lekkości sztyletom bez jawnej decyzji admina.
+      {name:'light',      label:'Lekka (kwalifikuje do Oburęczności — 2 ataki)', type:'checkbox',
+        derive: rec => rec.light == null ? (!!rec.finesse && !rec.two_handed) : !!rec.light},
       {name:'weight_kg',  label:'Waga (kg)',    type:'number', step:'0.1'},
       {name:'value_gp',   label:'Cena (gp)',    type:'number'},
       {name:'rarity',     label:'Rzadkość (1-5)', type:'number', min:1, max:5},
@@ -156,7 +169,7 @@ async function _openGenericEditModal(cfg, record) {
   const efxState = {}; // field.name → current effects[]
 
   const fieldsHtml = cfg.fields.map(f => {
-    const v = record[f.name];
+    const v = f.derive ? f.derive(record) : record[f.name];
     if (f.type === 'effect_json_builder') {
       const existingEffects = (() => {
         try {
@@ -172,6 +185,11 @@ async function _openGenericEditModal(cfg, record) {
     }
     if (f.type === 'checkbox') {
       return `<div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="${f.name}" ${v?'checked':''}> ${_esc(f.label)}</label></div>`;
+    }
+    if (f.type === 'select') {
+      const opts = (f.options || []).map(o =>
+        `<option value="${_esc(o.value)}" ${String(v ?? '') === o.value ? 'selected' : ''}>${_esc(o.label)}</option>`).join('');
+      return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><select class="form-input" name="${f.name}">${opts}</select></div>`;
     }
     if (f.type === 'textarea') {
       return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><textarea class="form-input" name="${f.name}" rows="2">${_esc(v||'')}</textarea></div>`;

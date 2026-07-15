@@ -1201,6 +1201,10 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_loot_entries ADD COLUMN game_item_key TEXT",
     # #764: ammunition link — ranged weapon → required ammo consumable key
     "ALTER TABLE game_config_weapons ADD COLUMN ammo_key TEXT",
+    # #1397: explicit 'light' flag for dual-wield (Oburęczność) eligibility.
+    # NULL = fallback na heurystykę finesse (dotychczasowe zachowanie),
+    # 0/1 = jawna decyzja admina. Honorowane przez weapon_rules.is_light_weapon.
+    "ALTER TABLE game_config_weapons ADD COLUMN light INTEGER DEFAULT NULL",
     # #602 N0/N2 — multichannel notification prefs + delivery log.
     # player_notify_prefs = per-player opt-in (telegram > web_push > email),
     # notify_delivery_log = per-attempt audit for the unified notify() dispatcher.
@@ -1297,7 +1301,7 @@ ADMIN_SEEDS = [
     ('dodge', 'Unik', 'DEX', 5, 38, 'Reakcja bojowa (S15): po zadeklarowaniu uniku, gdy wróg trafia, postać wykonuje test DEX przeciw wynikowi ataku wroga PRZED obrażeniami. Raz na rundę. Sukces — atak mija (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1, by aktywować przełącznik w walce.'),
     ('shield_block', 'Blok Tarczą', 'STR', 5, 39, 'Reakcja bojowa (S16): postać z założoną tarczą może zadeklarować blok; gdy wróg trafia, wykonuje test STR przeciw wynikowi ataku wroga (DC min. 12) PRZED obrażeniami. Raz na rundę (XOR z unikiem). Sukces — obrażenia zmniejszone o 1k6 + bonus STR; sukces o ≥ +5 — atak całkowicie odparty; porażka — pełne obrażenia; krytyczna porażka — tarcza traci wytrzymałość. Wymaga rank ≥ 1 i założonej tarczy.'),
     ('wrestling', 'Zapasy', 'STR', 5, 40, 'Akcja bojowa (S17): chwyt i obalenie wroga w zwarciu — test przeciwny STR vs STR celu. Sukces — cel schwytany/przewrócony (kondycja slowed); sukces krytyczny (margines ≥ +5) — cel unieruchomiony (stunned 1 rundę); porażka — bez efektu; krytyczna porażka — napastnik sam przewrócony (slowed). Wymaga zwarcia (engaged); konsumuje turę.'),
-    ('dual_wield', 'Walka dwoma broniami', 'DEX', 5, 41, 'Cecha bojowa (#598): trzymając DWIE lekkie bronie (np. dwa sztylety) postać wykonuje drugi atak off-hand w tej samej turze (pełny rzut + pełny mod cechy do obrażeń). Wymaga rank ≥ 1 — bez umiejętności off-hand jest kosmetyczny. Cięższa broń + druga broń w off-hand daje zamiast tego parowanie (+2 do obrony), niezależnie od tej umiejętności.'),
+    ('dual_wield', 'Oburęczność', 'DEX', 5, 41, 'Cecha bojowa (#598): trzymając DWIE lekkie bronie (np. dwa sztylety) postać wykonuje drugi atak off-hand w tej samej turze (pełny rzut + pełny mod cechy do obrażeń). Wymaga rank ≥ 1 — bez umiejętności off-hand jest kosmetyczny. Cięższa broń + druga broń w off-hand daje zamiast tego parowanie (+2 do obrony), niezależnie od tej umiejętności. NIE mylić z Bronią dwuręczną (two_handed) — tam chodzi o jedną wielką broń trzymaną w dwóch rękach.'),
     ('arcane_ward', 'Arkanowa Bariera', 'INT', 5, 42, 'Reakcja bojowa (#1324): magiczny odpowiednik Uniku. Po zadeklarowaniu bariery, gdy wróg trafia, postać wykonuje test INT (d20 + INT + ranga + biegłość) przeciw wynikowi ataku wroga PRZED obrażeniami, kosztem 1 many za próbę (mana schodzi ZAWSZE, niezależnie od wyniku). Sukces — cios znegowany (0 obrażeń); porażka — normalne obrażenia; krytyczna porażka — utrata reakcji w następnej rundzie. Wymaga rank ≥ 1 i wystarczającej many. Raz na rundę przy wielu wrogach, przy jednym wrogu przy każdym ataku.'),
     ('mana_shield', 'Tarcza Many', 'INT', 5, 43, 'Reakcja bojowa (#1325): magiczny odpowiednik Bloku, DETERMINISTYCZNA (bez rzutu). Mag przyjmuje cios w manę zamiast w ciało. Po zadeklarowaniu tarczy, gdy wróg trafia, silnik pochłania obrażenia FINALNE (po pancerzu i marginesie) do limitu 2 × ranga many na cios, przy przeliczniku 2 obrażenia za 1 manę. Postać płaci manę tylko za faktycznie pochłonięte obrażenia (zaokrąglone w górę); niewykorzystany limit nic nie kosztuje, a cap chroni pulę przed krytykiem wroga. Bez rzutu — brak porażki i lockoutu. Wymaga rank ≥ 1 i many > 0. Raz na rundę ZAWSZE — także przy jednym wrogu.')
     """,
@@ -1317,6 +1321,10 @@ ADMIN_SEEDS = [
     """,
     """
     UPDATE game_config_skills SET label = 'Broń dwuręczna'     WHERE key = 'two_handed'    AND label = 'Two-Handed'
+    """,
+    # #1397: rename mylącego labelu — oburęczność (2 lekkie bronie) ≠ broń dwuręczna (1 wielka broń).
+    """
+    UPDATE game_config_skills SET label = 'Oburęczność'        WHERE key = 'dual_wield'    AND label = 'Walka dwoma broniami'
     """,
     """
     UPDATE game_config_skills SET label = 'Spostrzegawczość'   WHERE key = 'awareness'     AND label = 'Awareness'

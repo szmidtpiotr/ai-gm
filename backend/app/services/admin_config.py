@@ -1109,7 +1109,7 @@ def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
+               two_handed, finesse, light, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
                ammo_key,
                description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
@@ -1494,6 +1494,7 @@ def create_weapon(
     note: str | None = None,
     effect_json: str | None = None,
     weapon_slot: str | None = None,
+    light: bool | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_damage_die = _validate_damage_die(damage_die)
@@ -1531,10 +1532,10 @@ def create_weapon(
             """
             INSERT INTO game_config_weapons (
                 key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                two_handed, finesse, light, range_m, targeting, aoe_radius_m, magic_school,
                 value_gp, weight_kg, description, note, effect_json, weapon_slot,
                 is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1545,6 +1546,7 @@ def create_weapon(
                 safe_allowed_classes,
                 1 if two_handed else 0,
                 1 if finesse else 0,
+                None if light is None else (1 if light else 0),
                 range_m,
                 safe_targeting,
                 safe_aoe_radius_m,
@@ -1562,7 +1564,7 @@ def create_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   two_handed, finesse, light, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
@@ -1606,6 +1608,7 @@ def update_weapon(
     effect_json: str | None = None,
     weapon_slot: str | None = None,
     rarity: int | None = None,
+    light: bool | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1615,7 +1618,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   two_handed, finesse, light, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
                    rarity, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
@@ -1644,6 +1647,8 @@ def update_weapon(
         final_desc = description if description is not None else (current.get("description") or "")
         final_two = (1 if two_handed else 0) if two_handed is not None else int(current.get("two_handed", 0))
         final_finesse = (1 if finesse else 0) if finesse is not None else int(current.get("finesse", 0))
+        # #1397: light może być jawnie NULL (fallback na finesse) — nie zerujemy przy braku zmiany.
+        final_light = (1 if light else 0) if light is not None else current.get("light")
         if range_m is not None:
             final_range_m = int(range_m)
         else:
@@ -1691,7 +1696,7 @@ def update_weapon(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
-                two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
+                two_handed = ?, finesse = ?, light = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
                 value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?, weapon_slot = ?,
                 rarity = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
@@ -1704,6 +1709,7 @@ def update_weapon(
                 final_allowed_classes,
                 final_two,
                 final_finesse,
+                final_light,
                 final_range_m,
                 final_targeting,
                 final_aoe_radius_m,
@@ -1723,7 +1729,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   two_handed, finesse, light, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
                    rarity, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?

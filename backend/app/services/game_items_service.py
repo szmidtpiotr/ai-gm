@@ -82,6 +82,7 @@ def get_weapon_row(conn: sqlite3.Connection, key: str) -> dict[str, Any] | None:
                    json_extract(weapon_data, '$.weapon_type')  AS weapon_type,
                    json_extract(weapon_data, '$.two_handed')   AS two_handed,
                    json_extract(weapon_data, '$.finesse')      AS finesse,
+                   json_extract(weapon_data, '$.light')        AS light,
                    json_extract(weapon_data, '$.range_m')      AS range_m,
                    json_extract(weapon_data, '$.weapon_slot')  AS weapon_slot,
                    effect_json
@@ -154,7 +155,7 @@ def upsert_from_weapon(conn: sqlite3.Connection, key: str) -> bool:
             """SELECT key, label, description, value_gp, effect_json, rarity, min_level,
                       location_tags, approved, is_active, weight_kg, note, locked_at,
                       damage_die, weapon_type, linked_stat, allowed_classes, two_handed,
-                      finesse, range_m, targeting, aoe_radius_m, magic_school, weapon_slot
+                      finesse, light, range_m, targeting, aoe_radius_m, magic_school, weapon_slot
                FROM game_config_weapons WHERE key = ?""",
             (k,),
         ).fetchone()
@@ -170,6 +171,7 @@ def upsert_from_weapon(conn: sqlite3.Connection, key: str) -> bool:
         "allowed_classes": row["allowed_classes"],
         "two_handed": row["two_handed"],
         "finesse": row["finesse"],
+        "light": row["light"],
         "range_m": row["range_m"],
         "targeting": row["targeting"],
         "aoe_radius_m": row["aoe_radius_m"],
