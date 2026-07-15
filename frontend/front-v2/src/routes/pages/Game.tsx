@@ -126,7 +126,27 @@ export default function Game() {
   // Trzymaj ekran walki ZAMONTOWANY przez stan ended, aż gracz obsłuży wynik (modal
   // zwycięstwa/lootu/śmierci lub toast). Bez tego przejście active→ended odmontowywało
   // CombatView zanim modal się pokazał → cichy powrót do chatu, zero lootu.
-  const [ackCombatId, setAckCombatId] = useState<number | null>(null);
+  // GET /combat zwraca zakończoną walkę BEZ KOŃCA (dopóki żywa w bazie), a ack był
+  // tylko w stanie komponentu → po F5 modal zwycięstwa + ukryta tura [COMBAT_EPILOGUE]
+  // odpalały się PONOWNIE za każdym przeładowaniem (pętla epilogów). Trzymamy ack w
+  // localStorage per-kampania, inicjalizowany synchronicznie (przed efektami), by po
+  // F5 zakończona walka nie wskrzeszała modala.
+  const ackKey = campaignId ? `aigm:combat-ack:${campaignId}` : null;
+  const [ackCombatId, setAckCombatId] = useState<number | null>(() => {
+    if (typeof window === "undefined" || !ackKey) return null;
+    const v = window.localStorage.getItem(ackKey);
+    return v ? Number(v) : null;
+  });
+  const ackCombat = (id: number) => {
+    setAckCombatId(id);
+    if (ackKey) {
+      try {
+        window.localStorage.setItem(ackKey, String(id));
+      } catch {
+        /* storage niedostępny — degradacja do stanu w pamięci */
+      }
+    }
+  };
   const endedCombat =
     combatSnap && combatSnap.status === "ended" && combatSnap.id != null && combatSnap.id !== ackCombatId
       ? combatSnap
@@ -813,7 +833,7 @@ export default function Game() {
           stats={stats}
           onSend={send}
           sending={submit.isPending}
-          onEnded={(id) => setAckCombatId(id)}
+          onEnded={ackCombat}
           suppressRevealCombatId={suppressRevealCombatId}
         />
       ) : gameTab === "story" ? (

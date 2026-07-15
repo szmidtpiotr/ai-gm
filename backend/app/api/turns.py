@@ -2677,7 +2677,22 @@ def _maybe_herb_shortcut(conn: sqlite3.Connection, campaign_id: int, character: 
         return None
     plan = _herb.prepare_gather(conn, campaign_id)
     if plan.get("cooldown_hit"):
-        return {"prose": plan.get("msg"), "route": "herb_cooldown"}
+        # Utrwal turę, inaczej odmowa (cooldown) nie trafia do strumienia i w UI
+        # „nic się nie dzieje" — dymek gracza wisi bez odpowiedzi. Zapisujemy słowa
+        # gracza + krótki komunikat GM, żeby pokazał się w logu i przetrwał F5.
+        _msg = plan.get("msg") or _herb.COOLDOWN_MSG
+        _tn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
+            "VALUES (?,?,?,?,?,?,datetime('now'))",
+            (campaign_id, int(character["id"]), int(_tn), text,
+             json.dumps({"narrative": _msg}, ensure_ascii=False), "herb_cooldown"),
+        )
+        conn.commit()
+        return {"prose": _msg, "route": "herb_cooldown", "turn_number": int(_tn)}
 
     from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
     from app.services.turn.turn_skill_router import _commit_pending_skill_test
