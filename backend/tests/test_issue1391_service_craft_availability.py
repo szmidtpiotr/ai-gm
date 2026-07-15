@@ -75,6 +75,14 @@ def _intercept(text, loc_key="rudnik_smithy"):
     "chcę naprawić broń",
     "potrzebuję noclegu",
     "podchodzę do kowala",
+    # #1394 — prośby/pytania do NPC (naprawisz/napraw/możesz) też otwierają modal
+    "czy naprawisz moją broń",
+    "czy naprawisz moja bron",
+    "naprawisz mi broń?",
+    "napraw mi broń",
+    "możesz naprawić broń",
+    "mógłbyś naprawić mój miecz",
+    "czy masz wolny pokój na nocleg",
 ])
 def test_intent_verb_opens_services_modal(text):
     res = _intercept(text)
@@ -93,6 +101,9 @@ def test_no_service_noun_falls_through():
     # Sama chęć bez rzeczownika-usługi → narrator, nie modal.
     assert _intercept("idę przed siebie") is None
     assert _intercept("opowiadam strażnikowi legendę") is None
+    # #1394: pytanie „czy…" bez rzeczownika-usługi też nie może otwierać modala.
+    assert _intercept("czy dotarłem na miejsce") is None
+    assert _intercept("czy widzę wroga") is None
 
 
 def test_wilderness_guarded():

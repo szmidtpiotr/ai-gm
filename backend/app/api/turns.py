@@ -2621,18 +2621,31 @@ def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | N
     return None
 
 
-# #1391 — czasowniki dążenia/chęci/potrzeby. Naturalna narracja „idę do kowala",
-# „chciałbym naprawić sprzęt", „potrzebuję noclegu" nie zawiera czasownika ZAKUPU
+# #1391/#1394 — czasowniki dążenia/chęci/potrzeby + prośby/pytania do NPC.
+# Naturalna narracja „idę do kowala", „chciałbym naprawić sprzęt", „czy naprawisz
+# moją broń", „napraw mi broń", „możesz dać pokój" nie zawiera czasownika ZAKUPU
 # (kupuję/zamawiam), więc bez tego intercept milczał i narrator (który NIE umie
 # otworzyć modala usług) przejmował turę. Te czasowniki + rzeczownik-usługa też
 # otwierają modal. Bramka lokalizacji (get_available_service_keys) dalej chroni
 # przed fałszywką w dziczy.
+#
+# Dwie grupy:
+#  (1) czasowniki dążenia/chęci/prośby — otwierają w parze z DOWOLNYM rzeczownikiem
+#      usługi (nocleg/piwo/koń/kowal…), np. „czy masz pokój na nocleg".
+#  (2) jednoznaczne czasowniki-usługi (napraw/ulecz/uzdrów) — same są intencją;
+#      nikt nie „naprawia"/„uzdrawia" nic kupowalnie-dwuznacznego, więc „napraw mi
+#      broń" / „naprawisz?" wystarcza (mimo braku czy/proszę).
 _SERVICE_INTENT_VERB_RE = re.compile(
     r"\b("
+    # (1) dążenie / chęć / potrzeba
     r"id[eę]|ide|udaj[eę]\s+si[eę]|udaje\s+sie|kieruj[eę]\s+si[eę]|"
     r"podchodz[eę]|podejd[zź]\w*|wchodz[eę]|wejd[zź]\w*|zbli[żz]am\s+si[eę]|"
     r"chc[eę]|chcia[łl]\w*|potrzebuj[eę]|szukam|wybieram\s+si[eę]|"
-    r"zanios\w*|zanie[śs]\w*|nios[eę]"
+    r"zanios\w*|zanie[śs]\w*|nios[eę]|"
+    # (1b) prośba / pytanie do NPC
+    r"czy|mo[żz]e\w*|m[oó]g[łl]\w*|prosz[eę]|zechc\w*|dasz|daj|zajmij|zajmiesz|"
+    # (2) jednoznaczne czasowniki-usługi (samowystarczalne)
+    r"napraw\w*|ulecz\w*|wylecz\w*|uzdr[oó]w\w*|opatrz\w*|podkuj\w*"
     r")\b",
     re.IGNORECASE,
 )
