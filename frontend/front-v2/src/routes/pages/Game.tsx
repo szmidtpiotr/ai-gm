@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CircleNotch, Hourglass, MoonStars, Path, Warning } from "@phosphor-icons/react";
+import { arcPoint, arcProgress, phaseTheme, SEASON_ICON, SEASON_PL } from "@/lib/worldClock";
+import { cn } from "@/lib/utils";
 import {
   useBuildCamp,
+  useCampaignClock,
   useCampaignDetail,
   useCampaigns,
   useCharacter,
@@ -34,7 +37,7 @@ import {
   type Chip,
   type LogBlock,
 } from "@/lib/game";
-import type { RollCardData, SkillTestPending, TurnResponse } from "@/lib/types";
+import type { ClockState, RollCardData, SkillTestPending, TurnResponse } from "@/lib/types";
 import { NarrationLog } from "@/components/game/NarrationLog";
 import { Composer } from "@/components/game/Composer";
 import { VitalsRail } from "@/components/game/Vitals";
@@ -114,6 +117,7 @@ export default function Game() {
   const restLong = useRestLong(campaignId, characterId, currentUser?.id);
   const waitMutation = useWait(campaignId, characterId, currentUser?.id);
   const travel = useTravel(campaignId);
+  const clock = useCampaignClock(campaignId);
   const { toast } = useToast();
   // FE9 (#1236): stan walki — poll tylko gdy aktywna. Aktywna → ekran walki.
   const combatState = useCombatState(campaignId);
@@ -761,6 +765,7 @@ export default function Game() {
       {/* #1291 WAIT-4: modal wyboru pory czekania. */}
       {waitOpen && (
         <WaitModal
+          clock={clock.data}
           onPick={(act) => { closeWait(); onChip({ label: "Czekaj", text: act, action: act }, shownChips); }}
           onClose={closeWait}
         />
@@ -1121,32 +1126,138 @@ const WAIT_OPTIONS = [
   { label: "6 godzin", action: "WAIT:hours:6", icon: "⌛" },
 ];
 
-function WaitModal({ onPick, onClose }: { onPick: (act: string) => void; onClose: () => void }) {
+// #1390 — docelowa godzina animacji dysku dla wybranej opcji czekania (wizualnie;
+// autorytatywny zegar dojeżdża z backendu). hours:N liczone od bieżącej godziny.
+function waitTargetHour(action: string, cur: number): number {
+  const a = action.replace(/^WAIT:/, "");
+  const m = a.match(/^hours:(\d+)$/);
+  if (m) return (cur + Number(m[1])) % 24;
+  switch (a) {
+    case "next_dawn": return 6;
+    case "day": return 12;
+    case "dusk": return 19;
+    case "next_night": return 22;
+    default: return cur;
+  }
+}
+
+// #1390 — modal czekania z łukiem doby (jak DayArcModal): pokazuje AKTUALNĄ godzinę
+// (gracz nie musi widzieć zegara topbaru, który modal przysłaniał), a po wyborze
+// czasu animuje słońce/księżyc wędrujące po horyzoncie do docelowej pory, po czym
+// wykonuje akcję. Overlay lżejszy (bg-black/50), by tło nie gasło całkiem.
+function WaitModal({
+  clock,
+  onPick,
+  onClose,
+}: {
+  clock: ClockState | null | undefined;
+  onPick: (act: string) => void;
+  onClose: () => void;
+}) {
+  const curHour = clock?.hour ?? 9;
+  const [pending, setPending] = useState<{ action: string; targetHour: number } | null>(null);
+  // t dysku na łuku: start = bieżąca godzina; po wyborze animujemy do docelowej.
+  const [t, setT] = useState(() => arcProgress(curHour).t);
+  const displayHour = pending?.targetHour ?? curHour;
+  const theme = phaseTheme(displayHour);
+  const body = arcProgress(displayHour).body;
+
+  function choose(action: string) {
+    if (pending) return;
+    const targetHour = waitTargetHour(action, curHour);
+    setPending({ action, targetHour });
+    // uruchom animację w kolejnej klatce (transition na transformie dysku)
+    requestAnimationFrame(() => setT(arcProgress(targetHour).t));
+    // po animacji — wykonaj czekanie (autorytatywny zegar odświeży się z backendu)
+    window.setTimeout(() => onPick(action), 1150);
+  }
+
+  // Geometria łuku (kompaktowa) — viewBox 0 0 300 148.
+  const CX = 150, CY = 130, R = 118;
+  const pos = arcPoint(t, CX, CY, R);
+  const gradId = "wait-sky";
+
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center p-6" data-testid="wait-modal">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-[2] w-full max-w-[380px] overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
-        <div className="flex items-center gap-3 border-b border-line bg-surface px-5 py-4">
-          <Hourglass weight="fill" size={22} className="text-ember-glow" />
-          <div className="min-w-0">
-            <div className="font-ui text-[9px] font-semibold uppercase tracking-[0.18em] text-text-3">
-              Czekanie
-            </div>
-            <div className="font-serif text-title font-semibold text-text">Jak długo czekasz?</div>
+      <div className="absolute inset-0 bg-black/50" onClick={pending ? undefined : onClose} />
+      <div className="relative z-[2] w-full max-w-[380px] overflow-hidden rounded-xl border border-line-ember bg-gradient-to-b from-[#211811] to-[#171009] shadow-2xl">
+        {/* Łuk doby ze słońcem/księżycem — animowany po wyborze */}
+        <div className="relative">
+          <svg viewBox="0 0 300 148" className="block w-full">
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={theme.sky[0]} />
+                <stop offset="55%" stopColor={theme.sky[1]} />
+                <stop offset="100%" stopColor={theme.sky[2]} />
+              </linearGradient>
+              <radialGradient id="wait-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={body === "sun" ? "#ffd27a" : "#cdd6ff"} stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#000" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <path d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY} Z`} fill={`url(#${gradId})`}
+              style={{ transition: "fill 900ms ease" }} />
+            <path d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`} fill="none"
+              stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" strokeDasharray="3 5" />
+            <line x1={CX - R - 8} y1={CY} x2={CX + R + 8} y2={CY} stroke="rgba(255,255,255,0.28)" strokeWidth="1.5" />
+            <g style={{ transform: `translate(${pos.x - CX}px, ${pos.y - CY}px)`, transition: "transform 1050ms cubic-bezier(.4,0,.2,1)" }}>
+              <circle cx={CX} cy={CY} r="26" fill="url(#wait-glow)" />
+              <circle cx={CX} cy={CY} r="12" fill={body === "sun" ? "#ffcf6b" : "#e6ebff"}
+                stroke={body === "sun" ? "#ffe6a8" : "#ffffff"} strokeWidth="1" />
+              {body === "moon" && <circle cx={CX + 4} cy={CY - 3} r="10" fill={theme.sky[0]} />}
+            </g>
+          </svg>
+        </div>
+
+        {/* Odczyt: aktualna (lub docelowa w trakcie animacji) godzina + dzień/pora roku */}
+        <div className="border-t border-line px-5 pt-3">
+          <div className="flex items-baseline gap-2">
+            <span className="font-serif text-title-lg font-semibold text-text">
+              {pending ? formatHour(displayHour) : clock?.hour_str ?? formatHour(curHour)}
+            </span>
+            <span className="font-ui text-label font-semibold uppercase tracking-wide" style={{ color: theme.accent }}>
+              {theme.label}
+            </span>
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-micro text-text-3">
+            {clock?.day != null && <span>Dzień {clock.day}</span>}
+            {clock?.season && (
+              <>
+                <span className="opacity-40">·</span>
+                <span>{SEASON_ICON[clock.season] ?? ""} {SEASON_PL[clock.season] ?? clock.season}</span>
+              </>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 p-4">
-          {WAIT_OPTIONS.map((o) => (
-            <button
-              key={o.action}
-              type="button"
-              onClick={() => onPick(o.action)}
-              className="flex items-center gap-2 rounded-md border border-line bg-bg px-3 py-2.5 font-ui text-body font-semibold text-text-2 transition-colors hover:border-line-ember hover:text-ember-glow"
-            >
-              <span aria-hidden>{o.icon}</span>
-              {o.label}
-            </button>
-          ))}
+
+        <div className="flex items-center gap-2 px-5 pb-1 pt-3">
+          <Hourglass weight="fill" size={16} className="text-ember-glow" />
+          <div className="font-serif text-body font-semibold text-text">
+            {pending ? "Czas mija…" : "Jak długo czekasz?"}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-4 pt-2">
+          {WAIT_OPTIONS.map((o) => {
+            const active = pending?.action === o.action;
+            return (
+              <button
+                key={o.action}
+                type="button"
+                disabled={!!pending}
+                onClick={() => choose(o.action)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border px-3 py-2.5 font-ui text-body font-semibold transition-colors",
+                  active
+                    ? "border-ember bg-ember/[0.14] text-ember-glow"
+                    : "border-line bg-black/20 text-text-2 hover:border-line-ember hover:text-ember-glow",
+                  pending && !active && "opacity-40",
+                )}
+              >
+                <span aria-hidden>{o.icon}</span>
+                {o.label}
+              </button>
+            );
+          })}
         </div>
         <div className="border-t border-line px-5 pb-4 pt-2 text-center font-ui text-micro text-text-3">
           Czekanie nie leczy HP. Wymaga bezpiecznej lokacji.
@@ -1154,4 +1265,9 @@ function WaitModal({ onPick, onClose }: { onPick: (act: string) => void; onClose
       </div>
     </div>
   );
+}
+
+function formatHour(h: number): string {
+  const hh = ((Math.round(h) % 24) + 24) % 24;
+  return `${String(hh).padStart(2, "0")}:00`;
 }
