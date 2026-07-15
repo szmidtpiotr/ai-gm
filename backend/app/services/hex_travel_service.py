@@ -2119,6 +2119,82 @@ class TravelError(Exception):
         self.message = message
 
 
+def maybe_narrate_arrival(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+    result: dict,
+    arrived_full: bool,
+) -> None:
+    """#1393 — krótka scena LLM po dotarciu do NAZWANEJ lokacji (wieś/miasto/nazwane
+    miejsce). Puste hexy dziczy zostają przy samym zielonym pillu podróży. 1–2 zdania.
+
+    Persystuje turę BEZPOŚREDNIO (proza generowana inline) — nie idzie przez pipeline
+    tur, więc nie odpali detekcji walki/skilli ani shortcutów. Wołane z map-travel
+    (/travel) i z travel-resume; ścieżka opisowa („idę do wsi") narruje sama i tu NIE
+    wchodzi (record_turn/ narrate_arrival=False).
+    """
+    if not arrived_full:
+        return
+    hd = result.get("hex_data") or {}
+    loc_key = hd.get("location_key")
+    if not loc_key:
+        return  # tylko nazwane lokacje — dzicz zostaje przy zielonym pillu
+    if result.get("encounter"):
+        return
+    label = hd.get("label") or str(loc_key)
+    try:
+        from app.services.user_llm_settings import get_user_llm_settings_full
+        from app.services.llm_service import generate_chat
+        from app.services.world_service import process_create_tags, get_current_location_info
+
+        _row = conn.execute(
+            "SELECT user_id FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        _uid = int(_row["user_id"]) if _row and _row["user_id"] is not None else 0
+        llm_config = get_user_llm_settings_full(_uid)
+
+        _desc = ""
+        try:
+            _loc = get_current_location_info(conn, campaign_id) or {}
+            _desc = str(_loc.get("description") or hd.get("atmosphere") or "").strip()
+        except Exception:
+            _desc = str(hd.get("atmosphere") or "").strip()
+        _ctx = f"Miejsce: {label}." + (f" Opis miejsca: {_desc[:400]}" if _desc else "")
+        _prompt = (
+            f"{_ctx}\n\nBohater właśnie dociera tu po podróży. Opisz krótko prozą "
+            f"(1–2 zdania) samo przybycie: pierwszy widok i atmosferę miejsca. Klimat "
+            f"dark fantasy, po polsku. NIE podawaj liczb ani kości, NIE używaj żadnych "
+            f"tagów mechanicznych, NIE wszczynaj walki, NIE wywołuj testów, NIE decyduj "
+            f"za gracza."
+        )
+        prose = (generate_chat(
+            messages=[{"role": "user", "content": _prompt}],
+            llm_config=llm_config,
+            call_type="arrival_narration",
+            campaign_id=campaign_id,
+        ) or "").strip()
+        if not prose:
+            return
+        try:
+            prose, _ = process_create_tags(prose, conn, campaign_id)
+        except Exception:
+            pass
+        _tn = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at) "
+            "VALUES (?,?,?,?,?,?,datetime('now'))",
+            (campaign_id, character_id, int(_tn), f"[Przybycie: {label}]",
+             json.dumps({"narrative": prose}, ensure_ascii=False), "narrative"),
+        )
+        conn.commit()
+    except Exception as _arr_err:
+        logger.warning("arrival_narration_failed", error=str(_arr_err), campaign_id=campaign_id)
+
+
 def execute_travel(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -2127,6 +2203,7 @@ def execute_travel(
     actor: int,
     record_turn: bool = True,
     route_mode: str = "direct",
+    narrate_arrival: bool = False,
 ) -> dict[str, Any]:
     """#1244 (R4): the single travel pipeline every endpoint delegates to.
 
@@ -2241,5 +2318,17 @@ def execute_travel(
             _record_travel_turn(conn, campaign_id, character_id, result)
         except Exception as _trec_err:  # noqa: BLE001
             logger.warning("travel_turn_record_failed", error=str(_trec_err), campaign_id=campaign_id)
+
+    # #1393 — po pełnym dotarciu do nazwanej lokacji: krótka scena LLM (tylko dla
+    # map-travel/resume; opisowa podróż narruje sama). Pełne dojście = arrived_hex
+    # == cel i brak zasadzki.
+    if narrate_arrival and result.get("ok"):
+        _arr = result.get("arrived_hex") or {}
+        _arrived_full = (
+            int(_arr.get("q", dest_q + 1)) == dest_q
+            and int(_arr.get("r", dest_r + 1)) == dest_r
+            and not result.get("encounter")
+        )
+        maybe_narrate_arrival(conn, campaign_id, character_id, result, _arrived_full)
 
     return result

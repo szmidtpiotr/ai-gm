@@ -9060,7 +9060,7 @@ def player_travel(campaign_id: int, payload: TravelPayload):
 
     conn = open_conn()
     try:
-        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id, narrate_arrival=True)
     except TravelError as e:
         _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
         raise HTTPException(status_code=_status, detail=e.message)
@@ -9378,7 +9378,7 @@ def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
     target = {"hex": {"q": payload.destination_q, "r": payload.destination_r}}
     conn = open_conn()
     try:
-        return execute_travel(conn, campaign_id, target, actor=payload.character_id)
+        return execute_travel(conn, campaign_id, target, actor=payload.character_id, narrate_arrival=True)
     except TravelError as e:
         _status = {"character_not_found": 404, "location_not_placed": 400}.get(e.code, 422)
         raise HTTPException(status_code=_status, detail=e.message)

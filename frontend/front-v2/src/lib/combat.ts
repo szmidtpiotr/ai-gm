@@ -373,8 +373,8 @@ export function buildCombatEpilogueText(enemyNames: string[]): string {
   const foes = enemyNames.filter(Boolean).join(", ") || "wrogami";
   return (
     `${COMBAT_EPILOGUE_PREFIX} Bohater właśnie wygrał walkę z: ${foes}. ` +
-    "Opisz krótko prozą (2–4 zdania) pokłosie starcia — pole walki, oddech bohatera, " +
-    "wrażenie po zwycięstwie — i płynnie wróć do sceny. Łupy i XP już rozliczone " +
+    "Opisz BARDZO krótko prozą — MAKSYMALNIE 1–2 zdania (nie więcej!) — pokłosie " +
+    "starcia i płynnie wróć do sceny. Bez rozwlekłych opisów. Łupy i XP już rozliczone " +
     "mechanicznie — nie przyznawaj nagród. Nie wszczynaj nowej walki, nie wywołuj " +
     "testów, nie decyduj za gracza.]"
   );

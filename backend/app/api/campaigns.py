@@ -1448,6 +1448,15 @@ def travel_resume(campaign_id: int):
         arrived_full = (
             int(arr.get("q", dq)) == dq and int(arr.get("r", dr)) == dr and not enc
         )
+        # #1393 — po pełnym dotarciu do nazwanej lokacji: krótka scena LLM przybycia
+        # (resume nie zapisywał żadnej tury dotarcia; combat epilog był jedyną narracją).
+        if arrived_full:
+            try:
+                from app.services.hex_travel_service import maybe_narrate_arrival
+                maybe_narrate_arrival(conn, campaign_id, int(char["id"]), tr, True)
+            except Exception as _arr_e:
+                logger.warning("resume_arrival_narration_failed", error=str(_arr_e))
+
         if arrived_full:
             message = f"🧭 Wznawiasz podróż i docierasz do celu: {dest_label}."
         elif enc:
