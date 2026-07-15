@@ -204,6 +204,14 @@ DAILY_SOFT_CAP = 8.0        # hours — dusk prompt threshold
 DAILY_HARD_CAP = 12.0       # hours — forced camp threshold
 NIGHT_ENCOUNTER_MULT = 1.5  # encounter chance multiplier when night_march=True
 
+# #1390 — częstotliwość spotkań w podróży (Numbers Policy — Sandbox-tunable STARTING).
+# Skumulowana szansa spotkania na CAŁĄ podróż jest capowana: bez tego długa trasa
+# przez las/bagno (0.3–0.4/hex) dawała ~76–90% gwarancji walki za każdym razem, bo
+# rzut leci PER HEX. Cap ≈ „max 1 walka na wyprawę, długa trasa groźniejsza, ale bez
+# pewniaka". Nocny marsz łamie cooldown (świadome ryzyko).
+TRIP_ENCOUNTER_CAP = 0.35       # max skumulowana P(spotkanie) na jedną podróż
+ENCOUNTER_DAY_COOLDOWN = True   # po walce-zasadzce brak dalszych rzutów tego dnia gry
+
 # PM4 #1223: Route-mode tuning — Numbers Policy (Sandbox-tunable STARTING values).
 # route_mode="road" biases A* onto `road` hexes (cheaper per-hex cost) and halves
 # the encounter chance while ON a road hex. "direct" = classic shortest terrain path.
@@ -213,20 +221,23 @@ ROAD_CHOICE_MIN_HEXES = 2    # ask direct/road only when destination is farther 
 ROAD_DETOUR_RADIUS = 3       # a road within this many hexes of the direct path = viable trakt
 
 
-def _roll_encounter(
+def _encounter_chance(
     hex_data: dict, hex_type_cfg: dict[str, dict], chance_mult: float = 1.0
-) -> bool:
-    """Roll encounter for a hex. Returns True if encounter triggers.
+) -> float:
+    """Finalna P(spotkanie) dla hexa (0..1). Wspólne dla rzutu i sumy trasy (#1390).
 
-    PM4 #1223: ``chance_mult`` scales the final chance (road mode passes
-    ROAD_ENCOUNTER_MULT on road hexes to make the trakt safer).
+    PM4 #1223: ``chance_mult`` skaluje wynik (droga/noc/cap podróży).
 
-    #1128 fix: an explicit ``0`` — either on the hex (``encounter_chance``) or on
-    its terrain type (``encounter_base_chance``, e.g. town/village/castle) — is a
-    deliberate *safe zone* and short-circuits to no encounter. The old
-    ``or 0.15`` / ``or base`` idioms treated ``0.0`` as "unset", so authored safe
-    hexes and settlements still rolled ~15% (you could be ambushed standing in a
-    town). A genuinely missing/None value still defaults to 0.15.
+    #1128: jawne ``0`` — na hexie (``encounter_chance``) LUB na terenie
+    (``encounter_base_chance``, np. town/village/castle) — to świadoma *strefa
+    bezpieczna* i zeruje szansę (bez tego seed-blanket wskrzeszałby ~15% w mieście).
+
+    #1390: TEREN = źródło prawdy. ``hex_type_config`` to strojona tabela tierów
+    zagrożenia (road 0.05, forest 0.3, swamp 0.4, ruins 0.6, dungeon 1.0). Per-hex
+    ``encounter_chance`` to zaszumiony blanket z seeda (0.15/0.2 na WSZYSTKICH
+    5000+ hexach) — dawne ``max(hex, teren)`` kasowało bezpieczne tereny (droga
+    0.05 → 0.15, 3× groźniej niż w designie). Hex nadpisuje teren TYLKO gdy teren
+    nie ma konfiguracji (fallback). Brak obu → 0.15.
     """
     raw_hex = hex_data.get("encounter_chance")
     ht = hex_data.get("hex_type", "plains")
@@ -234,12 +245,22 @@ def _roll_encounter(
 
     # Explicit 0 anywhere = deliberate safe zone (settlements, authored refuges).
     if raw_hex == 0 or raw_type == 0:
-        return False
+        return 0.0
 
-    base_chance = float(raw_hex) if raw_hex is not None else 0.15
-    type_chance = float(raw_type) if raw_type is not None else base_chance
-    final_chance = max(base_chance, type_chance) * chance_mult
-    return random.random() < final_chance
+    if raw_type is not None:
+        chance = float(raw_type)
+    elif raw_hex is not None:
+        chance = float(raw_hex)
+    else:
+        chance = 0.15
+    return max(0.0, chance * chance_mult)
+
+
+def _roll_encounter(
+    hex_data: dict, hex_type_cfg: dict[str, dict], chance_mult: float = 1.0
+) -> bool:
+    """Roll encounter for a hex. Returns True if encounter triggers."""
+    return random.random() < _encounter_chance(hex_data, hex_type_cfg, chance_mult)
 
 
 # #1146: hex-level pools are data-authored and mostly empty (the canonical seed
@@ -729,6 +750,7 @@ def resolve_chain_travel(
     # kept playing without sleeping got an immediate dusk-interrupt on EVERY later
     # trip, crawling 1 hex per command forever. A new in-game day = fresh budget and
     # night_march cleared (morning is no longer a night march).
+    _cur_day = 1  # #1390: domyślny dzień gdy zegar niedostępny (używany przez cooldown spotkań)
     try:
         from app.services.clock_service import get_clock_state as _get_clock
         _cur_day = int(_get_clock(campaign_id, conn=conn).get("day", 1))
@@ -886,23 +908,46 @@ def resolve_chain_travel(
             return "dusk"
         return None
 
-    def _world_roll_risk(step: MovementStep) -> dict | None:
-        hex_data = step.data
-        # PT7: apply night_march encounter multiplier before rolling
-        _enc_hex_data = hex_data
+    # #1390 Fix 2 — cooldown spotkań: po walce-zasadzce nie roluj już tego dnia gry
+    # (nocny marsz łamie — świadome ryzyko). last_encounter_day stemplowany niżej.
+    _last_enc_day = _sf_budget.get("last_encounter_day")
+    _encounter_suppressed = bool(
+        ENCOUNTER_DAY_COOLDOWN
+        and not night_march
+        and _last_enc_day is not None
+        and int(_last_enc_day) == int(_cur_day)
+    )
+
+    # Mnożnik per-krok (noc × droga) — wspólny dla sumy trasy i rzutu.
+    def _step_mult(hex_data: dict) -> float:
+        m = 1.0
         if night_march:
-            # #1128: keep explicit 0 (safe hex) safe — don't let `or 0.15`
-            # resurrect a zeroed chance before the night multiplier.
-            _raw = hex_data.get("encounter_chance")
-            _orig_chance = float(_raw) if _raw is not None else 0.15
-            _enc_hex_data = {**hex_data, "encounter_chance": min(1.0, _orig_chance * NIGHT_ENCOUNTER_MULT)}
-        # PM4 #1223: travelling by road (route_mode="road") halves encounters on road hexes.
-        _road_mult = (
-            ROAD_ENCOUNTER_MULT
-            if route_mode == "road" and hex_data.get("hex_type") == "road"
-            else 1.0
+            m *= NIGHT_ENCOUNTER_MULT
+        if route_mode == "road" and hex_data.get("hex_type") == "road":
+            m *= ROAD_ENCOUNTER_MULT
+        return m
+
+    # #1390 Fix 3 — cap na CAŁĄ podróż. Rzut leci per hex (stop na 1. trafieniu),
+    # więc długa trasa kumulowała szansę do ~pewniaka. Sumujemy efektywne szanse
+    # kroków (te, na których naprawdę rolujemy: nie origin, nie cleared) i jeśli
+    # suma > CAP, skalujemy każdą szansę tak, by suma ≈ CAP (P(trasy) ≤ CAP, bo
+    # 1−∏(1−p) ≤ Σp). Krótka trasa (< CAP) bez zmian.
+    _trip_cap_mult = 1.0
+    if not _encounter_suppressed:
+        _base_sum = sum(
+            _encounter_chance(s.data, hex_type_cfg, chance_mult=_step_mult(s.data))
+            for s in steps[1:]
+            if not s.cleared
         )
-        if _roll_encounter(_enc_hex_data, hex_type_cfg, chance_mult=_road_mult):
+        if _base_sum > TRIP_ENCOUNTER_CAP:
+            _trip_cap_mult = TRIP_ENCOUNTER_CAP / _base_sum
+
+    def _world_roll_risk(step: MovementStep) -> dict | None:
+        if _encounter_suppressed:
+            return None
+        hex_data = step.data
+        _mult = _step_mult(hex_data) * _trip_cap_mult
+        if _roll_encounter(hex_data, hex_type_cfg, chance_mult=_mult):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:
                 return {
@@ -931,6 +976,25 @@ def resolve_chain_travel(
     encounter_hex = arrived_hex if _outcome.interrupt_reason == "encounter" else None
     _budget_interrupt = _outcome.interrupt_reason in ("dusk", "forced_camp")
     _budget_reason = _outcome.interrupt_reason if _budget_interrupt else None
+
+    # #1390 Fix 2 — spotkanie wypadło → ostemplеj dzień gry, by kolejne rzuty tego
+    # dnia były wyciszone (aż do nowego dnia / odpoczynku). Persist do session_flags.
+    if encounter_result:
+        try:
+            _sf_stamp_row = conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _sf_stamp_row:
+                _sf_stamp = json.loads(_sf_stamp_row["session_flags"] or "{}")
+                _sf_stamp["last_encounter_day"] = int(_cur_day)
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(_sf_stamp, ensure_ascii=False), _sf_stamp_row["id"]),
+                )
+                conn.commit()
+        except Exception as _enc_stamp_err:
+            logger.warning("encounter_cooldown_stamp_failed", error=str(_enc_stamp_err))
 
     # Stage 2B R4: deactivate any temp_camp_* on the hex the player just left.
     if arrived_hex != from_hex:
