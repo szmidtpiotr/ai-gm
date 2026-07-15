@@ -52,7 +52,15 @@ COOLDOWN_MSG = "To miejsce jest już ogołocone z ziół — wróć innego dnia.
 # Rdzenie słów-kluczy (na tekście bez znaków diakrytycznych, lowercase).
 _VERB_STEMS = ("zbier", "zryw", "nazbier", "uzbier", "poszuk", "szuk", "zna",
                "wykop", "pozbier", "zdzier")
-_OBJ_STEMS = ("ziol", "ziel", "roslin", "grzyb", "zielarz", "zielarstw")
+# #1394: obiekt = ROŚLINA, nigdy OSOBA. Rdzeń "ziel"/"zielarz" łapał „zielarkę"
+# („gdzie znajdę zielarkę?" + rdzeń czasownika "zna" w „znajdę" → fałszywy test
+# zbierania zamiast odpowiedzi narratora). "ziele"/"zielsk" nie matchują
+# "zielark*"/"zielarz*" (piąty znak), więc pytania o NPC idą do LLM.
+_OBJ_STEMS = ("ziol", "ziele", "zielsk", "roslin", "grzyb")
+# Twarda blokada: tekst wspomina zielarza/zielarkę (OSOBĘ) → interakcja z NPC
+# (szukanie, zakup, rozmowa), nie zbieranie w polu — nawet gdy pada też słowo
+# zielne („poszukam zielarki, może ma zioła"). Narrator/modal obsłuży.
+_PERSON_STEMS = ("zielark", "zielarz")
 
 _PL_MAP = str.maketrans("ąćęłńóśźż", "acelnoszz")
 
@@ -69,6 +77,8 @@ def is_gather_intent(text: str) -> bool:
     """
     n = _norm(text)
     if not n:
+        return False
+    if any(p in n for p in _PERSON_STEMS):
         return False
     if not any(v in n for v in _VERB_STEMS):
         return False

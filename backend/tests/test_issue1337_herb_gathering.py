@@ -65,6 +65,7 @@ def _seed_herbs(conn, with_rare=False):
     "szukam ziół leczniczych",
     "zbieram rośliny na skraju lasu",
     "nazbierać grzybów",
+    "zrywam ziele nad rzeką",
 ])
 def test_intent_positive(text):
     assert herb.is_gather_intent(text) is True
@@ -75,6 +76,15 @@ def test_intent_positive(text):
     "zioła leżą w mojej torbie",   # obiekt bez czasownika
     "biegnę przez las",            # czasownik-ruch, brak obiektu zielnego
     "",
+    # #1394 — pytania o OSOBĘ (zielarkę/zielarza) to interakcja z NPC, nie
+    # zbieranie: rdzeń "zna" („znajdę") + "ziel" („zielarke") dawał fałszywy
+    # test Przetrwania w środku kuźni zamiast odpowiedzi narratora.
+    "gdzie znajdę zielarkę?",
+    "gdzie znajde zielarke",
+    "szukam zielarki",
+    "idę do zielarza",
+    "poszukam zielarki, może ma zioła",  # person-guard bije słowo zielne
+    "znam zielarza w wiosce",
 ])
 def test_intent_negative(text):
     assert herb.is_gather_intent(text) is False
