@@ -40,7 +40,9 @@ export function EnemyRevealVisual({
       )}
 
       {imageUrl ? (
-        <img src={imageUrl} alt={name} className="aspect-[4/3] w-full object-cover" />
+        // Portrety wrogów są pionowe (576×1024) — object-contain + max-h zamiast
+        // aspect-[4/3]/object-cover, żeby nie przycinać do samego środka (fix jak #1384).
+        <img src={imageUrl} alt={name} className="max-h-[42vh] w-full bg-bg/60 object-contain" />
       ) : (
         <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-mech-card text-text-3">
           <Sword size={40} weight="duotone" />
