@@ -3073,6 +3073,13 @@ def _resolve_aoe_single_target(
                 pass
         # Loot + złoto
         if ek and ch_id:
+            # #1390 — zwolnij lock TEJ transakcji przed zagnieżdżonym grantem łupu
+            # (loot_service._conn()), inaczej WAL single-writer → „database is locked"
+            # → pusty loot_pool. Patrz bliźniak w resolve_attack.
+            try:
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
             try:
                 from app.services.loot_service import (
                     apply_character_gold_delta, roll_gold_drop, roll_loot_with_consolation,
@@ -7481,6 +7488,16 @@ def _resolve_player_attack_turn(
                 except sqlite3.OperationalError:
                     pass
             if ek and ch_id:
+                # #1390 — łup/złoto liczą się przez WŁASNE połączenia SQLite
+                # (loot_service._conn()). WAL = jeden pisarz: dopóki TA transakcja
+                # trzyma lock (niezacommitowane zapisy obrażeń/efektów/kill), zagnieżdżony
+                # zapis łupu nie dostaje locka → po busy_timeout leci „database is locked",
+                # a szeroki except niżej zjada wyjątek → PUSTY loot_pool + 0 złota
+                # (modal „Nie miał nic przy sobie."). Commit zwalnia lock PRZED grantem.
+                try:
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass
                 try:
                     from app.services.loot_service import (
                         apply_character_gold_delta,
