@@ -632,6 +632,70 @@
     .th-inner:has(.sort-icon) { cursor: pointer; user-select: none; }
     .th-inner:has(.sort-icon):hover .sort-icon { opacity: 0.8; }
 
+    /* Hybrid column filter (text input + ▾ dropdown) — #591/#1027 rebuild */
+    .col-filter-wrap {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      width: 100%;
+    }
+    .col-filter-input {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.7rem;
+      padding: 2px 4px;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 4px 0 0 4px;
+      background: var(--canvas);
+      color: var(--t1);
+    }
+    .col-filter-input:focus { outline: none; border-color: var(--blue); }
+    .col-filter-input:not(:placeholder-shown) {
+      border-color: var(--blue-border);
+      background: var(--blue-light);
+    }
+    .col-filter-toggle {
+      flex: 0 0 auto;
+      width: 18px;
+      padding: 0;
+      font-size: 0.6rem;
+      line-height: 1;
+      border: 1px solid var(--border);
+      border-radius: 0 4px 4px 0;
+      background: var(--surface);
+      color: var(--t2);
+      cursor: pointer;
+    }
+    .col-filter-toggle:hover { background: var(--blue-light); color: var(--blue-text); }
+    .col-filter-menu {
+      position: fixed;
+      z-index: 1000;
+      overflow-y: auto;
+      background: var(--canvas);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+      padding: 3px;
+      font-size: 0.76rem;
+    }
+    .col-filter-opt {
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--t1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 360px;
+    }
+    .col-filter-opt:hover { background: var(--blue-light); color: var(--blue-text); }
+    .col-filter-opt.active { background: var(--blue-light); color: var(--blue-text); font-weight: 600; }
+    .col-filter-opt-clear { color: var(--t3); font-style: italic; border-bottom: 1px solid var(--border); border-radius: 4px 4px 0 0; margin-bottom: 2px; }
+    .col-filter-opt-empty { color: var(--t3); cursor: default; }
+    .col-filter-opt-empty:hover { background: none; color: var(--t3); }
+
     /* Checkbox column */
     th.col-check, td.col-check {
       width: 40px;

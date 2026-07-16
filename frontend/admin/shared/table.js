@@ -89,7 +89,8 @@ export function initSortableTable(tableOrId) {
       // Sort tbody rows
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
-      const rows = Array.from(tbody.querySelectorAll('tr:not([style*="display: none"])'));
+      // Sort ALL rows (filtered-out ones too) so clearing a filter keeps sorted order.
+      const rows = Array.from(tbody.querySelectorAll('tr'));
 
       // Auto-detect numeric
       const numeric = rows.every(r => {
@@ -176,11 +177,11 @@ export function enableColumnResize(tableOrId) {
 }
 
 /**
- * #1027 — per-column text filter. Injects a filter row of <input> boxes under the
- * header; typing a word hides rows whose cell in that column does NOT contain it as a
- * substring (case + Polish-diacritic insensitive). Multiple column inputs combine with
- * AND. Works for async-loaded data (no value prepopulation needed). Idempotent.
- * Supersedes the #591 exact-match <select> dropdowns.
+ * #1027 → hybrid rebuild — per-column filter: text <input> (substring, case +
+ * Polish-diacritic insensitive) PLUS a ▾ button opening a dropdown of the column's
+ * distinct values (built lazily from the current tbody, so async-loaded data works).
+ * Picking a value filters by exact match; typing switches back to substring mode.
+ * Multiple column filters combine with AND. Idempotent.
  */
 export function enableColumnFilters(tableOrId) {
   const table = _resolveTable(tableOrId);
@@ -206,24 +207,125 @@ export function enableColumnFilters(tableOrId) {
     const label = (th.querySelector('.th-inner') || th).textContent?.trim().toLowerCase() || '';
     const skip = th.classList.contains('col-check') || label === 'akcje' || label === 'actions' || !label;
     if (!skip) {
+      const wrap = document.createElement('div');
+      wrap.className = 'col-filter-wrap';
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'col-filter-input';
       input.dataset.colIdx = String(colIdx);
       input.placeholder = 'filtruj…';
-      input.style.cssText = 'width:100%;font-size:0.7rem;padding:2px 4px;box-sizing:border-box';
       // Debounce ~150 ms (starting value) so filtering doesn't fire per keystroke.
       let t = null;
       input.addEventListener('input', () => {
+        delete input.dataset.exact;  // typing = substring mode
         clearTimeout(t);
         t = setTimeout(() => _applyColFilters(table), 150);
       });
       input.addEventListener('click', e => e.stopPropagation());  // don't trigger header sort
-      cell.appendChild(input);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'col-filter-toggle';
+      btn.textContent = '▾';
+      btn.title = 'Wybierz wartość z listy';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        _toggleFilterMenu(table, colIdx, input, btn);
+      });
+      wrap.appendChild(input);
+      wrap.appendChild(btn);
+      cell.appendChild(wrap);
     }
     filterRow.appendChild(cell);
   });
   thead.appendChild(filterRow);
+}
+
+// ── Dropdown menu for the hybrid column filter ────────────────────────────────
+let _openMenu = null;
+
+function _closeFilterMenu() {
+  if (!_openMenu) return;
+  _openMenu.remove();
+  _openMenu = null;
+  document.removeEventListener('click', _onDocClick, true);
+  window.removeEventListener('scroll', _onAnyScroll, true);
+  window.removeEventListener('resize', _closeFilterMenu);
+}
+
+function _onDocClick(e) {
+  if (_openMenu && !_openMenu.contains(e.target)) _closeFilterMenu();
+}
+
+function _onAnyScroll(e) {
+  // Scrolling inside the menu itself must not close it.
+  if (_openMenu && _openMenu.contains(e.target)) return;
+  _closeFilterMenu();
+}
+
+function _toggleFilterMenu(table, colIdx, input, btn) {
+  const reopenSame = _openMenu && _openMenu._forInput === input;
+  _closeFilterMenu();
+  if (reopenSame) return;  // second click on the same ▾ = close only
+
+  // Distinct values from the CURRENT tbody (data may have loaded/changed since wire-up).
+  const tbody = table.querySelector('tbody');
+  const seen = new Map();  // normalized → first display form
+  Array.from(tbody?.querySelectorAll('tr') || []).forEach(row => {
+    const td = row.querySelectorAll('td')[colIdx];
+    const raw = (td?.textContent || '').trim();
+    if (!raw) return;
+    const norm = _normalizePL(raw);
+    if (!seen.has(norm)) seen.set(norm, raw);
+  });
+  const values = Array.from(seen.values())
+    .sort((a, b) => a.localeCompare(b, 'pl', { numeric: true, sensitivity: 'base' }));
+
+  const menu = document.createElement('div');
+  menu.className = 'col-filter-menu';
+  menu._forInput = input;
+
+  const addOpt = (labelText, { clear = false, active = false } = {}) => {
+    const opt = document.createElement('div');
+    opt.className = 'col-filter-opt' + (clear ? ' col-filter-opt-clear' : '') + (active ? ' active' : '');
+    opt.textContent = labelText;
+    opt.addEventListener('click', () => {
+      if (clear) {
+        input.value = '';
+        delete input.dataset.exact;
+      } else {
+        input.value = labelText;
+        input.dataset.exact = '1';  // dropdown pick = exact match
+      }
+      _applyColFilters(table);
+      _closeFilterMenu();
+    });
+    menu.appendChild(opt);
+  };
+
+  addOpt('— wszystkie —', { clear: true, active: !input.value });
+  values.forEach(v => addOpt(v, { active: input.dataset.exact === '1' && input.value === v }));
+  if (!values.length) {
+    const empty = document.createElement('div');
+    empty.className = 'col-filter-opt col-filter-opt-empty';
+    empty.textContent = '(brak wartości)';
+    menu.appendChild(empty);
+  }
+
+  // Fixed positioning under the button — escapes the table's overflow container.
+  const r = btn.getBoundingClientRect();
+  const cellR = btn.closest('th')?.getBoundingClientRect();
+  document.body.appendChild(menu);
+  const w = Math.max(menu.offsetWidth, cellR ? cellR.width : 0);
+  menu.style.minWidth = w + 'px';
+  const left = Math.min(cellR ? cellR.left : r.left, window.innerWidth - menu.offsetWidth - 8);
+  menu.style.left = Math.max(4, left) + 'px';
+  menu.style.top = (r.bottom + 2) + 'px';
+  menu.style.maxHeight = Math.max(120, window.innerHeight - r.bottom - 16) + 'px';
+
+  _openMenu = menu;
+  document.addEventListener('click', _onDocClick, true);
+  window.addEventListener('scroll', _onAnyScroll, true);
+  window.addEventListener('resize', _closeFilterMenu);
 }
 
 // Lowercase + strip Polish diacritics so "miecz" matches "Miecz", "łuk" matches "luk".
@@ -240,14 +342,17 @@ function _applyColFilters(table) {
   const tbody = table.querySelector('tbody');
   if (!filterRow || !tbody) return;
   const inputs = Array.from(filterRow.querySelectorAll('th')).map(th => th.querySelector('input'));
-  const needles = inputs.map(inp => _normalizePL((inp?.value || '').trim()));
+  const filters = inputs.map(inp => ({
+    needle: _normalizePL((inp?.value || '').trim()),
+    exact: inp?.dataset.exact === '1',
+  }));
   Array.from(tbody.querySelectorAll('tr')).forEach(row => {
     const cells = row.querySelectorAll('td');
     let show = true;
-    needles.forEach((needle, i) => {
-      if (!needle) return;
+    filters.forEach((f, i) => {
+      if (!f.needle) return;
       const txt = _normalizePL((cells[i]?.textContent || '').trim());
-      if (!txt.includes(needle)) show = false;
+      if (f.exact ? txt !== f.needle : !txt.includes(f.needle)) show = false;
     });
     row.style.display = show ? '' : 'none';
   });

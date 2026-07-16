@@ -6,7 +6,7 @@
   <title>AI-GM — Admin (modular)</title>
   <!-- Wygląd dziedziczony z admin3 (light theme, komponenty). Link PRZED inline <style>,
        żeby drobne reguły skorupy (placeholder/banner) mogły nadpisać kolizje. -->
-  <link rel="stylesheet" href="./shared/components.css?v=5">
+  <link rel="stylesheet" href="./shared/components.css?v=6">
   <style>
     /* Skorupa-specyficzne — reszta z components.css (.shell/.sidebar/.topbar/.main/.nav-item). */
     .sidebar-logo-name small { display:block; color:var(--t3); font-weight:400; font-size:.62rem; letter-spacing:0; }
@@ -125,7 +125,7 @@
   <script type="module">
     import { apiFetch } from './shared/api.js';
     import { showToast } from './shared/toast.js';
-    import { initSortableTable, enhanceTable } from './shared/table.js?v=7';
+    import { initSortableTable, enhanceTable } from './shared/table.js?v=8';
 
     // 18 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
     const SECTIONS = [
