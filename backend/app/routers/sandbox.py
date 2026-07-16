@@ -456,6 +456,8 @@ def get_mp_balance() -> dict[str, Any]:
         "wipe_gold_pct_by_level": dict(mb.WIPE_GOLD_PCT_BY_LEVEL),
         "wipe_gold_floor": mb.WIPE_GOLD_FLOOR,
         "wipe_hp_pct": mb.WIPE_HP_PCT,
+        "wipe_xp_pct_by_level": dict(mb.WIPE_XP_PCT_BY_LEVEL),   # #1068
+        "wipe_xp_floor": mb.WIPE_XP_FLOOR,                        # #1068
         "mp_difficulty_scale_by_count": {str(k): v for k, v in mb.MP_DIFFICULTY_SCALE_BY_COUNT.items()},
         "mp_loot_scale_by_count": {str(k): v for k, v in mb.MP_LOOT_SCALE_BY_COUNT.items()},
     }
@@ -482,6 +484,12 @@ def patch_mp_balance(body: dict = Body(...)) -> dict[str, Any]:
     if "wipe_hp_pct" in body:
         mb.WIPE_HP_PCT = float(body["wipe_hp_pct"])
         updated.append("wipe_hp_pct")
+    if "wipe_xp_pct_by_level" in body:   # #1068
+        mb.WIPE_XP_PCT_BY_LEVEL.update(body["wipe_xp_pct_by_level"])
+        updated.append("wipe_xp_pct_by_level")
+    if "wipe_xp_floor" in body:          # #1068
+        mb.WIPE_XP_FLOOR = int(body["wipe_xp_floor"])
+        updated.append("wipe_xp_floor")
     if "mp_difficulty_scale_by_count" in body:
         mb.MP_DIFFICULTY_SCALE_BY_COUNT.update(
             {int(k): float(v) for k, v in body["mp_difficulty_scale_by_count"].items()}

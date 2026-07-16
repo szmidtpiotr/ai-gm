@@ -9308,6 +9308,8 @@ def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any
     pct = _mb.get_wipe_gold_pct(avg_level)
     gold_floor = int(_mb.WIPE_GOLD_FLOOR)
     hp_pct = float(_mb.WIPE_HP_PCT)
+    xp_pct = _mb.get_wipe_xp_pct(avg_level)   # #1068 — XP penalty %
+    xp_floor = int(_mb.WIPE_XP_FLOOR)
 
     for c in player_combs:
         cid = _mp_player_char_id(str(c.get("id") or ""))
@@ -9331,6 +9333,18 @@ def _apply_mp_wipe(campaign_id: int, conn: Any, combatants: list[dict], row: Any
                     from app.services.campaign_state_service import overlay_sheet_from_campaign_state as _ov
                     _ov(conn, campaign_id, char_id, wipe_sheet)
                     wipe_sheet["current_hp"] = revival_hp
+                    # #1068 — XP penalty: deduct % of the spendable pool (xp_available)
+                    # only. Lifetime XP / level are never touched (no de-levelling).
+                    # Players below WIPE_XP_FLOOR are exempt.
+                    xp_avail = int(wipe_sheet.get("xp_available") or 0)
+                    if xp_pct > 0 and xp_avail >= xp_floor:
+                        xp_penalty = max(1, int(xp_avail * xp_pct))
+                        wipe_sheet["xp_available"] = max(0, xp_avail - xp_penalty)
+                        try:
+                            from app.services import system_events as _se
+                            _se.emit("xp_loss", f"−{xp_penalty} XP — utracone po porażce")
+                        except Exception:
+                            pass
                     _save_char_sheet(conn, campaign_id, char_id, wipe_sheet)
             except Exception:
                 pass

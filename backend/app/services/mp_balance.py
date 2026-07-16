@@ -15,6 +15,17 @@ WIPE_GOLD_PCT_BY_LEVEL: dict[str, float] = {
 WIPE_GOLD_FLOOR: int = 50    # players with < this gold are exempt from penalty
 WIPE_HP_PCT: float = 0.50    # revive at this fraction of max HP after wipe
 
+# XP loss % on party wipe (#1068), keyed by avg level bracket. Mirrors the gold
+# table so the two consequences scale together; level 4-7 lands on the issue's
+# "flat 20%". Deducted from xp_available only — lifetime XP / levels untouched.
+WIPE_XP_PCT_BY_LEVEL: dict[str, float] = {
+    "1-3": 0.10,
+    "4-7": 0.20,
+    "8+":  0.30,
+}
+
+WIPE_XP_FLOOR: int = 10      # players with < this xp_available are exempt from XP penalty
+
 # ── Difficulty scaling by active player count ─────────────────────────────────
 # Multiplier applied to enemy HP and attack on MP rounds.
 # Direction spec: fewer players = harder, better loot. Starting neutral (1.0).
@@ -45,6 +56,15 @@ def get_wipe_gold_pct(avg_level: int) -> float:
     if avg_level <= 7:
         return WIPE_GOLD_PCT_BY_LEVEL["4-7"]
     return WIPE_GOLD_PCT_BY_LEVEL["8+"]
+
+
+def get_wipe_xp_pct(avg_level: int) -> float:
+    """XP loss fraction for party wipe based on average party level (#1068)."""
+    if avg_level <= 3:
+        return WIPE_XP_PCT_BY_LEVEL["1-3"]
+    if avg_level <= 7:
+        return WIPE_XP_PCT_BY_LEVEL["4-7"]
+    return WIPE_XP_PCT_BY_LEVEL["8+"]
 
 
 def _clamp_count(player_count: int, table: dict[int, float]) -> float:
