@@ -470,7 +470,7 @@ const _ROW_REGISTRY = {
       const childCount = hasKids ? ` <span style="color:var(--t3);font-size:0.72rem">(${children.length})</span>` : '';
       const regionLabel = l.region ? _esc(l.region) : '<span class="td-muted">(brak)</span>';
       return `<tr data-key="${_esc(l.key)}" data-rjson="${enc}">
-        <td class="col-check"><input type="checkbox"></td>
+        <td class="col-check"><input type="checkbox" class="loc-check" data-key="${_esc(l.key)}"></td>
         <td class="td-sticky td-name"><span style="display:inline-block;width:${indent}px"></span>${caret}<span style="font-weight:${depth===0?'600':'normal'}">${_esc(l.label||l.key)}</span>${childCount}</td>
         <td>${locBadge(l.location_type)}</td>
         <td class="td-region" data-region="${_esc(l.region||'')}" style="font-size:0.78rem;color:var(--t2)">${regionLabel}</td>
@@ -517,7 +517,66 @@ const _ROW_REGISTRY = {
       });
       _renderLocTree();
       _wireRowActions('locations-table');
+      _wireLocSelection();
     } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
+  }
+
+  // ── Masowe usuwanie zaznaczonych lokacji ───────────────────────────────────
+  function _checkedLocKeys() {
+    return [...document.querySelectorAll('#locations-table .loc-check:checked')].map(c => c.dataset.key);
+  }
+  function _updateLocSel() {
+    const n = _checkedLocKeys().length;
+    const btn = document.getElementById('loc-bulk-del');
+    const cnt = document.getElementById('loc-sel-count');
+    if (cnt) cnt.textContent = n;
+    if (btn) btn.style.display = n > 0 ? '' : 'none';
+    const all = document.getElementById('loc-check-all');
+    if (all) {
+      const boxes = document.querySelectorAll('#locations-table .loc-check');
+      all.checked = boxes.length > 0 && n === boxes.length;
+      all.indeterminate = n > 0 && n < boxes.length;
+    }
+  }
+  function _wireLocSelection() {
+    const table = document.getElementById('locations-table');
+    if (table && !table._selWired) {
+      table._selWired = true;
+      // Delegacja — przeżywa re-render tbody (rozwijanie drzewa).
+      table.addEventListener('change', e => {
+        if (e.target.classList.contains('loc-check')) _updateLocSel();
+      });
+    }
+    const all = document.getElementById('loc-check-all');
+    if (all && !all._wired) {
+      all._wired = true;
+      all.addEventListener('change', () => {
+        document.querySelectorAll('#locations-table .loc-check').forEach(c => { c.checked = all.checked; });
+        _updateLocSel();
+      });
+    }
+    const btn = document.getElementById('loc-bulk-del');
+    if (btn && !btn._wired) { btn._wired = true; btn.addEventListener('click', _locBulkDelete); }
+    _updateLocSel();
+  }
+  async function _locBulkDelete() {
+    const keys = _checkedLocKeys();
+    if (!keys.length) return;
+    if (!confirm(`Usunąć ${keys.length} zaznaczonych lokacji? Podlokacje zostaną usunięte razem z rodzicem.`)) return;
+    const btn = document.getElementById('loc-bulk-del');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    let ok = 0; const failed = [];
+    // Sekwencyjnie — brak endpointu bulk; force=true czyści rodziców z podlokacjami.
+    for (const key of keys) {
+      try {
+        await apiFetch(`/api/locations/${encodeURIComponent(key)}?force=true`, { method: 'DELETE' });
+        ok++;
+      } catch (e) { failed.push(key); }
+    }
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    _showToast(`Usunięto ${ok}/${keys.length}.` + (failed.length ? ` Nieudane: ${failed.length}.` : ''), failed.length ? 'warn' : 'success');
+    _worldLoaded.delete('locations');
+    _loadLocations();
   }
 
   // U28 — Floating lokacje
@@ -2562,12 +2621,13 @@ function _sectionHtml() {
               <option value="koronne_niziny">Koronne Niziny</option>
               <option value="wybrzeze_lez">Wybrzeże Łez</option>
             </select>
+            <button id="loc-bulk-del" class="btn btn-sm" style="display:none;margin-left:auto;background:#7f1d1d;color:#fca5a5;border:1px solid #dc2626" title="Usuń wszystkie zaznaczone lokacje">🗑 Usuń zaznaczone (<span id="loc-sel-count">0</span>)</button>
           </div>
           <div class="table-wrap" style="max-height:calc(100vh - 280px);overflow-y:auto">
             <table class="data-table" id="locations-table">
               <thead>
                 <tr>
-                  <th class="col-check"><input type="checkbox"></th>
+                  <th class="col-check"><input type="checkbox" id="loc-check-all" title="Zaznacz wszystkie"></th>
                   <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
                   <th><div class="th-inner">Typ</div></th>
                   <th><div class="th-inner">Kraina</div></th>
