@@ -89,3 +89,9 @@ mag-game-screen*.png
 .fuse_hidden*
 # WFRP reference docs — agent read-only data, not repo content
 docs/WFRP_4ed_Core.*
+
+# Obsidian vault — per-machine workspace state, never commit
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian/cache
+vault/.trash/

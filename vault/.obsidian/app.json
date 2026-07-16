@@ -1,0 +1,9 @@
+{
+  "newFileLocation": "folder",
+  "newFileFolderPath": "00-inbox",
+  "attachmentFolderPath": "_zalaczniki",
+  "alwaysUpdateLinks": true,
+  "showLineNumber": false,
+  "spellcheck": true,
+  "spellcheckLanguages": ["pl", "en-US"]
+}
