@@ -244,6 +244,13 @@ export function CombatView({
   // dodane XP/złoto → modal pokazywał +0 mimo faktycznego grantu (łup/lifetime
   // były OK, bo czytane z payloadu/serwera). Reset tylko przy nowym combat_id.
   const combatIdRef = useRef<number | null>(null);
+  // Bilans starcia (modal końca): sumaryczne obrażenia ZADANE (spadki HP wrogów) i
+  // OTRZYMANE (spadki HP gracza). Liczone ze spadków HP w kolejnych snapshotach —
+  // path-agnostic (atak / off-hand / AoE / reakcja / multiattack), bo każdy tor i
+  // tak przepycha combat_state. hpPrevRef trzyma ostatnie HP per combatant.
+  const hpPrevRef = useRef<Map<string, number>>(new Map());
+  const dmgDealtRef = useRef(0);
+  const dmgTakenRef = useRef(0);
 
   // Karta pojawienia wroga: pierwszy render aktywnej walki danego combat_id → odsłoń
   // portret + wskaźnik zagrożenia. Dismiss → normalny widok. Once-per-combat_id.
@@ -283,6 +290,30 @@ export function CombatView({
     }
     qc.invalidateQueries({ queryKey: ["character"] });
   }
+
+  // Zlicz obrażenia ze spadków HP w snapshocie (idempotentne: prev→cur, powtórny
+  // ten sam stan daje spadek 0). Gracz stracił HP → OTRZYMANE; wróg stracił → ZADANE.
+  // Sojusznicy (summon) pomijani. Wołane z efektu na `live` (realne HP, nie zamrożone).
+  function trackHp(cs: CombatState | null | undefined) {
+    if (!cs?.combatants) return;
+    for (const c of cs.combatants) {
+      if (c?.id == null) continue;
+      const id = String(c.id);
+      const cur = Number(c.hp_current ?? 0);
+      const prev = hpPrevRef.current.get(id);
+      if (prev != null && cur < prev) {
+        const drop = prev - cur;
+        if (c.type === "player") dmgTakenRef.current += drop;
+        else if (c.type === "enemy") dmgDealtRef.current += drop;
+      }
+      hpPrevRef.current.set(id, cur);
+    }
+  }
+
+  useEffect(() => {
+    trackHp(live);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   // #598 dual-wield: rozbij POJEDYNCZY atak gracza na etapy kości (d20 + ewentualna
   // kość obrażeń). Ostatni etap ataku ma pushCardOnDone → jego karta wpada do logu.
@@ -734,6 +765,9 @@ export function CombatView({
         combatIdRef.current = cid;
         goldAccumRef.current = 0;
         xpAccumRef.current = 0;
+        dmgDealtRef.current = 0;
+        dmgTakenRef.current = 0;
+        hpPrevRef.current = new Map();
       }
     }
   }, [view?.status, view?.endedReason, campaignId, qc, toast, live, diceJob, reaction]);
@@ -829,6 +863,8 @@ export function CombatView({
           endedCombat={outcome.combat}
           xpGain={xpAccumRef.current}
           goldGain={goldAccumRef.current}
+          dmgDealt={dmgDealtRef.current}
+          dmgTaken={dmgTakenRef.current}
           onDismiss={() => {
             setOutcome(null);
             // Zwycięstwo poza lochem → ukryta tura-epilog: narrator opisuje pokłosie

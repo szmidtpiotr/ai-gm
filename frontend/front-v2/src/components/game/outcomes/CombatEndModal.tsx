@@ -10,6 +10,7 @@ import {
   TreasureChest,
   Flask,
   Sword,
+  Shield,
   Scroll,
   HandGrabbing,
 } from "@phosphor-icons/react";
@@ -22,6 +23,8 @@ export function CombatEndModal({
   subtitle,
   xpGain,
   goldGain,
+  dmgDealt,
+  dmgTaken,
   hp,
   maxHp,
   lifetime,
@@ -34,6 +37,8 @@ export function CombatEndModal({
   subtitle: string;
   xpGain: number;
   goldGain: number;
+  dmgDealt?: number;
+  dmgTaken?: number;
   hp: number;
   maxHp: number;
   lifetime: number;
@@ -79,6 +84,24 @@ export function CombatEndModal({
           <StatCell icon={<Coins weight="fill" size={18} />} v={`+${goldGain}`} k="Złoto" tone="gold" />
           <StatCell icon={<Heart weight="fill" size={18} />} v={`${hp}/${maxHp}`} k="Zdrowie" />
         </div>
+
+        {/* bilans starcia: obrażenia zadane vs otrzymane (spadki HP w trakcie walki) */}
+        {(typeof dmgDealt === "number" || typeof dmgTaken === "number") && (
+          <div className="flex border-b border-line-soft px-3 py-2.5" data-testid="combat-damage-balance">
+            <BalanceCell
+              icon={<Sword weight="fill" size={15} />}
+              v={String(dmgDealt ?? 0)}
+              k="Zadane obrażenia"
+              tone="dealt"
+            />
+            <BalanceCell
+              icon={<Shield weight="fill" size={15} />}
+              v={String(dmgTaken ?? 0)}
+              k="Otrzymane obrażenia"
+              tone="taken"
+            />
+          </div>
+        )}
 
         {/* pasek XP z przyrostem */}
         <div className="border-b border-line-soft px-[18px] py-3.5">
@@ -195,6 +218,30 @@ function StatCell({
         {v}
       </div>
       <div className="mt-0.5 font-ui text-[9px] uppercase tracking-[0.12em] text-text-3">{k}</div>
+    </div>
+  );
+}
+
+function BalanceCell({
+  icon,
+  v,
+  k,
+  tone,
+}: {
+  icon: React.ReactNode;
+  v: string;
+  k: string;
+  tone: "dealt" | "taken";
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center gap-2 border-r border-line-soft px-2 last:border-r-0">
+      <span className={cn(tone === "dealt" ? "text-ember-glow" : "text-danger")}>{icon}</span>
+      <div className="text-center">
+        <div className={cn("font-mono text-[15px] font-semibold leading-none", tone === "dealt" ? "text-text" : "text-danger")}>
+          {v}
+        </div>
+        <div className="mt-1 font-ui text-[9px] uppercase tracking-[0.12em] text-text-3">{k}</div>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,8 @@ export function CombatOutcomes({
   endedCombat,
   xpGain,
   goldGain,
+  dmgDealt,
+  dmgTaken,
   onDismiss,
 }: {
   campaignId: number;
@@ -42,6 +44,8 @@ export function CombatOutcomes({
   endedCombat: CombatState;
   xpGain: number;
   goldGain: number;
+  dmgDealt?: number;
+  dmgTaken?: number;
   onDismiss: () => void;
 }) {
   const navigate = useNavigate();
@@ -182,6 +186,8 @@ export function CombatOutcomes({
       subtitle={`${defeated.join(" i ") || "Wrogowie"} pokonani · ${rounds} ${roundWord(rounds)}`}
       xpGain={xpGain}
       goldGain={goldGain}
+      dmgDealt={dmgDealt}
+      dmgTaken={dmgTaken}
       hp={vit.hp}
       maxHp={vit.maxHp}
       lifetime={lifetime}
